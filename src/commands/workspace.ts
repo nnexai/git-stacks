@@ -75,7 +75,7 @@ export function registerWorkspaceCommands(program: Command) {
 
   program
     .command("open <name>")
-    .description("Open a workspace (VSCode, IntelliJ, cmux)")
+    .description("Open a workspace (VSCode, IntelliJ, cmux, tmux)")
     .option("--no-ide", "Skip opening IDEs")
     .option("--no-cmux", "Skip cmux session")
     .action(async (name: string, opts: { ide: boolean; cmux: boolean }) => {

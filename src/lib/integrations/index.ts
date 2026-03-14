@@ -1,6 +1,7 @@
 import { vscodeIntegration } from "./vscode"
 import { intellijIntegration } from "./intellij"
 import { cmuxIntegration } from "./cmux"
+import { tmuxIntegration } from "./tmux"
 
 export { type Integration, type IntegrationContext, resolveEnabledGlobally } from "./types"
 
@@ -8,4 +9,4 @@ export { type Integration, type IntegrationContext, resolveEnabledGlobally } fro
  * All registered integrations, in the order they run (generate → open).
  * Add new integrations here and in their own file — no other files need touching.
  */
-export const integrations = [vscodeIntegration, intellijIntegration, cmuxIntegration]
+export const integrations = [vscodeIntegration, intellijIntegration, cmuxIntegration, tmuxIntegration]
