@@ -44,3 +44,34 @@ export async function isBranchGoneOnRemote(mainPath: string, branch: string): Pr
     .nothrow()
   return result.exitCode !== 0
 }
+
+export async function getMergeConflicts(
+  repoPath: string,
+  baseBranch: string,
+  branch: string
+): Promise<string[]> {
+  const result = await $`git -C ${repoPath} merge-tree --write-tree ${baseBranch} ${branch}`
+    .quiet()
+    .nothrow()
+  if (result.exitCode === 0) return []
+  // Parse conflict file paths from stdout (lines starting with "CONFLICT")
+  return result.stdout
+    .toString()
+    .split("\n")
+    .filter((l) => l.startsWith("CONFLICT"))
+    .map((l) => l.replace(/^CONFLICT \([^)]+\): /, "").trim())
+    .filter(Boolean)
+}
+
+export async function mergeNoFF(
+  repoPath: string,
+  baseBranch: string,
+  branch: string
+): Promise<void> {
+  await $`git -C ${repoPath} checkout ${baseBranch}`
+  await $`git -C ${repoPath} merge --no-ff ${branch}`
+}
+
+export async function deleteLocalBranch(repoPath: string, branch: string): Promise<void> {
+  await $`git -C ${repoPath} branch -d ${branch}`.quiet().nothrow()
+}

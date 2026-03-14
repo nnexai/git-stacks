@@ -2,7 +2,7 @@ import { Command } from "commander"
 
 const STACK_SUBCMDS = "new init edit list show"
 const STACK_NAME_CMDS = "edit show"
-const TOP_LEVEL = "new clone open list status clean remove stack config completion"
+const TOP_LEVEL = "new clone open list status clean remove merge stack config completion"
 
 function bashCompletion(): string {
   return `# bash completion for ws
@@ -53,6 +53,16 @@ _ws_complete() {
       return 0
       ;;
     remove)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--force" -- "$cur"))
+      else
+        local names
+        names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')
+        COMPREPLY=($(compgen -W "$names" -- "$cur"))
+      fi
+      return 0
+      ;;
+    merge)
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "--force" -- "$cur"))
       else
@@ -118,6 +128,11 @@ _ws() {
             '--force[Skip dirty worktree check]' \\
             ': :_ws_workspaces'
           ;;
+        merge)
+          _arguments \\
+            '--force[Skip dirty worktree check]' \\
+            ': :_ws_workspaces'
+          ;;
         stack)
           _ws_stack ;;
         completion)
@@ -137,6 +152,7 @@ _ws_top_commands() {
     'status:Show workspace status'
     'clean:Remove worktrees for a workspace'
     'remove:Permanently remove a workspace'
+    'merge:Merge worktree branches and clean workspace'
     'stack:Manage stack definitions'
     'config:View and edit global configuration'
     'completion:Generate shell completion scripts'
@@ -198,7 +214,7 @@ function __ws_stacks
 end
 
 function __ws_no_subcommand
-  not __fish_seen_subcommand_from new clone open list status clean remove stack config completion
+  not __fish_seen_subcommand_from new clone open list status clean remove merge stack config completion
 end
 
 # Top-level completions
@@ -209,12 +225,13 @@ complete -c ws -f -n __ws_no_subcommand -a list      -d 'List all workspaces'
 complete -c ws -f -n __ws_no_subcommand -a status    -d 'Show workspace status'
 complete -c ws -f -n __ws_no_subcommand -a clean     -d 'Remove worktrees for a workspace'
 complete -c ws -f -n __ws_no_subcommand -a remove    -d 'Permanently remove a workspace'
+complete -c ws -f -n __ws_no_subcommand -a merge     -d 'Merge worktree branches and clean workspace'
 complete -c ws -f -n __ws_no_subcommand -a stack     -d 'Manage stack definitions'
 complete -c ws -f -n __ws_no_subcommand -a config    -d 'View and edit global configuration'
 complete -c ws -f -n __ws_no_subcommand -a completion -d 'Generate shell completion scripts'
 
 # Workspace name completions
-for cmd in clone open status clean remove
+for cmd in clone open status clean remove merge
   complete -c ws -f -n "__fish_seen_subcommand_from $cmd" -a "(__ws_workspaces)"
 end
 
@@ -228,6 +245,9 @@ complete -c ws -f -n '__fish_seen_subcommand_from clean' -l force -d 'Skip dirty
 
 # Flags for remove
 complete -c ws -f -n '__fish_seen_subcommand_from remove' -l force -d 'Skip dirty worktree check'
+
+# Flags for merge
+complete -c ws -f -n '__fish_seen_subcommand_from merge' -l force -d 'Skip dirty worktree check'
 
 # Stack subcommands
 complete -c ws -f -n '__fish_seen_subcommand_from stack; and not __fish_seen_subcommand_from new init edit list show' \\

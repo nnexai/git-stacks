@@ -18,6 +18,10 @@ import {
   createWorktree,
   removeWorktree,
   isBranchGoneOnRemote,
+  checkBranchExists,
+  getMergeConflicts,
+  mergeNoFF,
+  deleteLocalBranch,
 } from "../lib/git"
 import { integrations, type IntegrationContext } from "../lib/integrations"
 import { runWorkspaceNew } from "../tui/workspace-wizard"
@@ -385,5 +389,108 @@ export function registerWorkspaceCommands(program: Command) {
 
       unlinkSync(workspacePath(name))
       console.log(`Workspace '${name}' removed.`)
+    })
+
+  program
+    .command("merge <name>")
+    .description("Merge all worktree branches into their base branches, then clean workspace")
+    .option("--force", "Skip dirty worktree check")
+    .action(async (name: string, opts: { force?: boolean }) => {
+      if (!workspaceExists(name)) {
+        console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
+        process.exit(1)
+      }
+
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+      const workspace = readWorkspace(name)
+      const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+
+      if (!opts.force) {
+        const dirty = await getDirtyWorktrees(workspace)
+        if (dirty.length > 0) {
+          console.error(`Aborting: dirty worktrees: ${dirty.join(", ")}`)
+          console.error("Use --force to skip this check.")
+          process.exit(1)
+        }
+      }
+
+      // Resolve base branch for each worktree repo
+      const repoBases: { repo: (typeof worktreeRepos)[number]; baseBranch: string }[] = []
+      for (const repo of worktreeRepos) {
+        let baseBranch = "main"
+        try {
+          const stack = readStack(repo.stack)
+          baseBranch = stack.repos.find((r) => r.name === repo.name)?.default_branch ?? "main"
+        } catch {
+          // stack missing, fall back to "main"
+        }
+        repoBases.push({ repo, baseBranch })
+      }
+
+      // Conflict pre-check
+      const conflicting: string[] = []
+      for (const { repo, baseBranch } of repoBases) {
+        const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
+        if (!branchExists) continue
+        const conflicts = await getMergeConflicts(repo.main_path, baseBranch, workspace.branch)
+        if (conflicts.length > 0) {
+          conflicting.push(`  ${repo.name}: ${conflicts.join(", ")}`)
+        }
+      }
+      if (conflicting.length > 0) {
+        console.error("Aborting: merge conflicts detected:")
+        for (const line of conflicting) console.error(line)
+        process.exit(1)
+      }
+
+      // Show plan
+      console.log(`\nMerge plan for '${name}' [${workspace.branch}]:`)
+      for (const { repo, baseBranch } of repoBases) {
+        console.log(`  ${repo.name}  →  ${baseBranch}`)
+      }
+
+      const ok = await p.confirm({
+        message: `Merge and clean workspace '${name}'?`,
+        initialValue: false,
+      })
+      if (p.isCancel(ok) || !ok) {
+        console.log("Cancelled.")
+        return
+      }
+
+      // Merge
+      for (const { repo, baseBranch } of repoBases) {
+        const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
+        if (!branchExists) {
+          console.log(`  skip  ${repo.name} (branch '${workspace.branch}' not found)`)
+          continue
+        }
+        await mergeNoFF(repo.main_path, baseBranch, workspace.branch)
+        console.log(`  merged  ${repo.name}  →  ${baseBranch}`)
+      }
+
+      // pre_remove hooks
+      try {
+        await runPreRemoveHooks(workspace, tasksDir)
+      } catch (err) {
+        console.error(`pre_remove hook failed: ${err}`)
+        process.exit(1)
+      }
+
+      // Remove worktrees
+      for (const repo of worktreeRepos) {
+        if (!existsSync(repo.task_path)) continue
+        await removeWorktree(repo.main_path, repo.task_path)
+      }
+
+      // Delete local branches
+      for (const { repo } of repoBases) {
+        await deleteLocalBranch(repo.main_path, workspace.branch)
+      }
+
+      const wsPath = workspacePath(name)
+      console.log(`\nDone. Config kept at ${wsPath}`)
+      console.log(`Run \`ws open ${name}\` to recreate worktrees.`)
     })
 }
