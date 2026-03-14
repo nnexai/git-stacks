@@ -18,10 +18,9 @@ export async function focusTmuxSession(name: string): Promise<void> {
   }
 }
 
-// Creates a new detached tmux session rooted at cwd, then focuses it.
+// Creates a new detached tmux session rooted at cwd.
 export async function createTmuxSession(cwd: string, name: string): Promise<void> {
   await $`tmux new-session -d -s ${name} -c ${cwd}`.quiet().nothrow()
-  await focusTmuxSession(name)
 }
 
 // Opens a tmux session: focuses if it already exists, otherwise creates one.
