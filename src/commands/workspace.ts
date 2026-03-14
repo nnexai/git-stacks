@@ -1,11 +1,69 @@
 import { Command } from "commander"
 import * as p from "@clack/prompts"
-import { existsSync } from "fs"
-import { listWorkspaces, readWorkspace, workspaceExists, readGlobalConfig } from "../lib/config"
+import { existsSync, unlinkSync } from "fs"
+import { join } from "path"
+import {
+  listWorkspaces,
+  readWorkspace,
+  readStack,
+  workspaceExists,
+  workspacePath,
+  readGlobalConfig,
+  type Workspace,
+} from "../lib/config"
 import { getTasksDir } from "../lib/paths"
-import { isRepoDirty, getCurrentBranch, createWorktree, removeWorktree } from "../lib/git"
+import {
+  isRepoDirty,
+  getCurrentBranch,
+  createWorktree,
+  removeWorktree,
+  isBranchGoneOnRemote,
+} from "../lib/git"
 import { integrations, type IntegrationContext } from "../lib/integrations"
 import { runWorkspaceNew } from "../tui/workspace-wizard"
+import { runHooks } from "../lib/lifecycle"
+
+async function runPreRemoveHooks(workspace: Workspace, tasksDir: string): Promise<void> {
+  const baseEnv = {
+    WS_WORKSPACE: workspace.name,
+    WS_BRANCH: workspace.branch,
+    WS_TASKS_DIR: tasksDir,
+  }
+
+  // Deduplicate stack names and load them
+  const stackNames = [...new Set(workspace.repos.map((r) => r.stack))]
+  const stacksByName = new Map<string, Awaited<ReturnType<typeof readStack>>>()
+  for (const name of stackNames) {
+    try {
+      stacksByName.set(name, readStack(name))
+    } catch {
+      // stack deleted or missing, skip its hooks
+    }
+  }
+
+  // Stack-level pre_remove hooks (once per stack)
+  for (const [stackName, stack] of stacksByName) {
+    if (!stack.hooks?.pre_remove?.length) continue
+    const wsDir = join(tasksDir, workspace.name)
+    await runHooks(stack.hooks.pre_remove, wsDir, { ...baseEnv, WS_STACK: stackName })
+  }
+
+  // Per-repo pre_remove hooks
+  for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
+    const stack = stacksByName.get(repo.stack)
+    if (!stack) continue
+    const stackRepo = stack.repos.find((r) => r.name === repo.name)
+    if (!stackRepo?.hooks?.pre_remove?.length) continue
+    const cwd = existsSync(repo.task_path) ? repo.task_path : repo.main_path
+    await runHooks(stackRepo.hooks.pre_remove, cwd, {
+      ...baseEnv,
+      WS_STACK: repo.stack,
+      WS_REPO_NAME: repo.name,
+      WS_REPO_PATH: repo.task_path,
+      WS_MAIN_PATH: repo.main_path,
+    })
+  }
+}
 
 export function registerWorkspaceCommands(program: Command) {
   program
@@ -103,9 +161,74 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("clean <name>")
-    .description("Remove worktrees for a workspace (config is kept)")
-    .action(async (name: string) => {
+    .command("clean [name]")
+    .description("Remove worktrees for a workspace (config is kept), or --gone to remove all with deleted remote branches")
+    .option("--gone", "Remove workspaces whose upstream branches are deleted")
+    .action(async (name: string | undefined, opts: { gone?: boolean }) => {
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+
+      if (opts.gone) {
+        // --- ws clean --gone ---
+        const allWorkspaces = listWorkspaces()
+        if (allWorkspaces.length === 0) {
+          console.log("No workspaces found.")
+          return
+        }
+
+        const spinner = p.spinner()
+        spinner.start("Checking remote branches")
+        const goneWorkspaces: Workspace[] = []
+        for (const ws of allWorkspaces) {
+          const rep = ws.repos.find((r) => r.mode === "worktree")
+          if (!rep) continue
+          if (await isBranchGoneOnRemote(rep.main_path, ws.branch)) {
+            goneWorkspaces.push(ws)
+          }
+        }
+        spinner.stop(`Checked ${allWorkspaces.length} workspace(s)`)
+
+        if (goneWorkspaces.length === 0) {
+          console.log("No gone workspaces found.")
+          return
+        }
+
+        console.log("\nGone workspaces:")
+        for (const ws of goneWorkspaces) {
+          console.log(`  ${ws.name.padEnd(24)} ${ws.branch}`)
+        }
+
+        const ok = await p.confirm({
+          message: `Remove ${goneWorkspaces.length} gone workspace(s)? (worktrees + config)`,
+          initialValue: false,
+        })
+        if (p.isCancel(ok) || !ok) {
+          console.log("Cancelled.")
+          return
+        }
+
+        for (const ws of goneWorkspaces) {
+          try {
+            await runPreRemoveHooks(ws, tasksDir)
+          } catch (err) {
+            console.error(`pre_remove hook failed for '${ws.name}': ${err}`)
+            process.exit(1)
+          }
+          for (const repo of ws.repos.filter((r) => r.mode === "worktree")) {
+            if (!existsSync(repo.task_path)) continue
+            await removeWorktree(repo.main_path, repo.task_path)
+          }
+          unlinkSync(workspacePath(ws.name))
+          console.log(`  removed  ${ws.name}`)
+        }
+        return
+      }
+
+      // --- ws clean <name> ---
+      if (!name) {
+        console.error("Usage: ws clean <name> [--gone]")
+        process.exit(1)
+      }
       if (!workspaceExists(name)) {
         console.error(`Workspace '${name}' not found.`)
         process.exit(1)
@@ -121,6 +244,13 @@ export function registerWorkspaceCommands(program: Command) {
       }
 
       const workspace = readWorkspace(name)
+      try {
+        await runPreRemoveHooks(workspace, tasksDir)
+      } catch (err) {
+        console.error(`pre_remove hook failed: ${err}`)
+        process.exit(1)
+      }
+
       for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
         if (!existsSync(repo.task_path)) {
           console.log(`  skip  ${repo.name} (already removed)`)
@@ -132,5 +262,44 @@ export function registerWorkspaceCommands(program: Command) {
 
       console.log(`\nDone. Config kept at ~/.config/ws/workspaces/${name}.yml`)
       console.log(`Run \`ws open ${name}\` to recreate worktrees.`)
+    })
+
+  program
+    .command("remove <name>")
+    .description("Permanently remove a workspace (worktrees + config YAML)")
+    .action(async (name: string) => {
+      if (!workspaceExists(name)) {
+        console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
+        process.exit(1)
+      }
+
+      const ok = await p.confirm({
+        message: `Permanently remove workspace '${name}' (worktrees + config)?`,
+        initialValue: false,
+      })
+      if (p.isCancel(ok) || !ok) {
+        console.log("Cancelled.")
+        return
+      }
+
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+      const workspace = readWorkspace(name)
+
+      try {
+        await runPreRemoveHooks(workspace, tasksDir)
+      } catch (err) {
+        console.error(`pre_remove hook failed: ${err}`)
+        process.exit(1)
+      }
+
+      for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
+        if (!existsSync(repo.task_path)) continue
+        await removeWorktree(repo.main_path, repo.task_path)
+        console.log(`  removed  ${repo.name}`)
+      }
+
+      unlinkSync(workspacePath(name))
+      console.log(`Workspace '${name}' removed.`)
     })
 }

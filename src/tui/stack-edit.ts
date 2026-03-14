@@ -41,6 +41,8 @@ export async function runStackEdit(name: string) {
         { value: "add-scan", label: "Add repos from directory", hint: "scan and pick" },
         { value: "remove", label: "Remove repos" },
         { value: "edit-repo", label: "Edit a repo", hint: "type, mode, path" },
+        { value: "hooks", label: "Edit stack hooks", hint: "post_create / pre_remove" },
+        { value: "repo-files", label: "Edit repo file ops", hint: "copy / symlink on worktree create" },
         { value: "description", label: "Change description" },
         { value: "done", label: "Done" },
       ],
@@ -224,6 +226,134 @@ export async function runStackEdit(name: string) {
           if (!p.isCancel(pathRaw)) repo.path = expandHome((pathRaw as string).trim())
         }
         p.log.success(`Updated ${repoName}`)
+        break
+      }
+
+      case "hooks": {
+        const phaseRaw = await p.select({
+          message: "Edit hooks for phase",
+          options: [
+            {
+              value: "post_create" as const,
+              label: "post_create",
+              hint: `current: ${stack.hooks?.post_create?.length ?? 0} command(s)`,
+            },
+            {
+              value: "pre_remove" as const,
+              label: "pre_remove",
+              hint: `current: ${stack.hooks?.pre_remove?.length ?? 0} command(s)`,
+            },
+          ],
+        })
+        if (p.isCancel(phaseRaw)) break
+        const phase = phaseRaw as "post_create" | "pre_remove"
+
+        const existing = stack.hooks?.[phase] ?? []
+        if (existing.length > 0) {
+          p.log.info(
+            `Current commands:\n${existing.map((c, i) => `  ${i + 1}. ${c}`).join("\n")}`
+          )
+        }
+
+        const hooksAction = await p.select({
+          message: `${phase} — action`,
+          options: [
+            { value: "add", label: "Add command" },
+            { value: "clear", label: "Clear all" },
+            { value: "cancel", label: "Cancel" },
+          ],
+        })
+        if (p.isCancel(hooksAction) || hooksAction === "cancel") break
+
+        if (hooksAction === "clear") {
+          if (!stack.hooks) stack.hooks = {}
+          stack.hooks[phase] = []
+          p.log.success(`Cleared ${phase} hooks`)
+        } else if (hooksAction === "add") {
+          const cmdRaw = await safeText({
+            message: `Add ${phase} command`,
+            placeholder: "echo $WS_WORKSPACE",
+            validate: (v) => (v.trim() ? undefined : "Required"),
+          })
+          if (!p.isCancel(cmdRaw) && cmdRaw) {
+            if (!stack.hooks) stack.hooks = {}
+            if (!stack.hooks[phase]) stack.hooks[phase] = []
+            stack.hooks[phase]!.push((cmdRaw as string).trim())
+            p.log.success("Added command")
+          }
+        }
+        break
+      }
+
+      case "repo-files": {
+        if (stack.repos.length === 0) {
+          p.log.warn("No repos to edit.")
+          break
+        }
+        const repoNameRaw = await p.select({
+          message: "Select repo",
+          options: stack.repos.map((r) => ({
+            value: r.name,
+            label: r.name,
+            hint: `${r.type} · ${r.default_mode}`,
+          })),
+        })
+        if (p.isCancel(repoNameRaw)) break
+        const repoName = repoNameRaw as string
+        const repo = stack.repos.find((r) => r.name === repoName)!
+
+        const opRaw = await p.select({
+          message: `${repoName} — file operation`,
+          options: [
+            {
+              value: "copy" as const,
+              label: "copy",
+              hint: `current: ${repo.files?.copy?.length ?? 0} file(s)`,
+            },
+            {
+              value: "symlink" as const,
+              label: "symlink",
+              hint: `current: ${repo.files?.symlink?.length ?? 0} file(s)`,
+            },
+          ],
+        })
+        if (p.isCancel(opRaw)) break
+        const op = opRaw as "copy" | "symlink"
+
+        const existingFiles = repo.files?.[op] ?? []
+        if (existingFiles.length > 0) {
+          p.log.info(
+            `Current files:\n${existingFiles.map((f, i) => `  ${i + 1}. ${f}`).join("\n")}`
+          )
+        }
+
+        const filesAction = await p.select({
+          message: `${op} — action`,
+          options: [
+            { value: "add", label: "Add file path" },
+            { value: "clear", label: "Clear all" },
+            { value: "cancel", label: "Cancel" },
+          ],
+        })
+        if (p.isCancel(filesAction) || filesAction === "cancel") break
+
+        if (filesAction === "clear") {
+          if (!repo.files) repo.files = {}
+          repo.files[op] = []
+          p.log.success(`Cleared ${op} files`)
+        } else if (filesAction === "add") {
+          const pathRaw = await safeText({
+            message: `Add file to ${op}`,
+            placeholder: ".env",
+            validate: (v) => (v.trim() ? undefined : "Required"),
+          })
+          if (!p.isCancel(pathRaw) && pathRaw) {
+            if (!repo.files) repo.files = {}
+            if (!repo.files[op]) repo.files[op] = []
+            repo.files[op]!.push((pathRaw as string).trim())
+            p.log.success("Added file")
+          }
+        }
         break
       }
 

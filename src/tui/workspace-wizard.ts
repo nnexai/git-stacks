@@ -12,6 +12,8 @@ import {
 import { getTasksDir } from "../lib/paths"
 import { createWorktree } from "../lib/git"
 import { integrations, type IntegrationContext } from "../lib/integrations"
+import { runHooks } from "../lib/lifecycle"
+import { applyFileOperations } from "../lib/files"
 
 function cancel(): never {
   p.cancel("Cancelled.")
@@ -144,6 +146,53 @@ export async function runWorkspaceNew(nameArg?: string) {
     }
 
     spinner.stop(`${worktreeRepos.length} worktree(s) created`)
+  }
+
+  // Apply file ops and post_create hooks
+  const wsDir = join(tasksDir, wsName)
+  const baseEnv = {
+    WS_WORKSPACE: wsName,
+    WS_BRANCH: branch,
+    WS_TASKS_DIR: tasksDir,
+  }
+
+  const hooksSpinner = p.spinner()
+  hooksSpinner.start("Running post_create hooks")
+  try {
+    for (const stack of selectedStacks) {
+      for (const wsRepo of repos.filter((r) => r.mode === "worktree" && r.stack === stack.name)) {
+        const stackRepo = stack.repos.find((r) => r.name === wsRepo.name)
+        if (!stackRepo) continue
+
+        const repoEnv = {
+          ...baseEnv,
+          WS_STACK: stack.name,
+          WS_REPO_NAME: wsRepo.name,
+          WS_REPO_PATH: wsRepo.task_path,
+          WS_MAIN_PATH: wsRepo.main_path,
+        }
+
+        if (stackRepo.files?.copy?.length || stackRepo.files?.symlink?.length) {
+          hooksSpinner.message(`files: ${wsRepo.name}`)
+          applyFileOperations(stackRepo, wsRepo.task_path)
+        }
+
+        if (stackRepo.hooks?.post_create?.length) {
+          hooksSpinner.message(`hooks: ${wsRepo.name}`)
+          await runHooks(stackRepo.hooks.post_create, wsRepo.task_path, repoEnv)
+        }
+      }
+
+      if (stack.hooks?.post_create?.length) {
+        hooksSpinner.message(`hooks: ${stack.name} (stack)`)
+        await runHooks(stack.hooks.post_create, wsDir, { ...baseEnv, WS_STACK: stack.name })
+      }
+    }
+    hooksSpinner.stop("post_create hooks done")
+  } catch (err) {
+    hooksSpinner.stop("Hook failed")
+    p.log.error(String(err))
+    process.exit(1)
   }
 
   // Collect integration settings from selected stacks

@@ -15,12 +15,24 @@ import {
 export const RepoTypeSchema = z.enum(["java", "typescript", "other"])
 export type RepoType = z.infer<typeof RepoTypeSchema>
 
+const HooksSchema = z.object({
+  post_create: z.array(z.string()).optional(),
+  pre_remove: z.array(z.string()).optional(),
+})
+
 export const StackRepoSchema = z.object({
   name: z.string(),
   path: z.string(),
   type: RepoTypeSchema.default("other"),
   default_mode: z.enum(["trunk", "worktree"]).default("worktree"),
   default_branch: z.string().default("main"),
+  hooks: HooksSchema.optional(),
+  files: z
+    .object({
+      copy: z.array(z.string()).optional(),
+      symlink: z.array(z.string()).optional(),
+    })
+    .optional(),
 })
 export type StackRepo = z.infer<typeof StackRepoSchema>
 
@@ -29,6 +41,7 @@ export const StackSchema = z.object({
   description: z.string().optional(),
   repos: z.array(StackRepoSchema).default([]),
   integrations: z.record(z.unknown()).optional(),
+  hooks: HooksSchema.optional(),
 })
 export type Stack = z.infer<typeof StackSchema>
 

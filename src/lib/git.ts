@@ -37,3 +37,10 @@ export async function getCurrentBranch(repoPath: string): Promise<string> {
   const result = await $`git -C ${repoPath} rev-parse --abbrev-ref HEAD`.text()
   return result.trim()
 }
+
+export async function isBranchGoneOnRemote(mainPath: string, branch: string): Promise<boolean> {
+  const result = await $`git -C ${mainPath} ls-remote --exit-code --heads origin ${branch}`
+    .quiet()
+    .nothrow()
+  return result.exitCode !== 0
+}
