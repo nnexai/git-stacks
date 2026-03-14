@@ -37,8 +37,8 @@ export const tmuxIntegration: Integration = {
       if (created) {
         await applyPaneLayout(ctx)
       }
-      await focusTmuxSession(ctx.workspace.name)
       spinner.stop("tmux session ready")
+      await focusTmuxSession(ctx.workspace.name)
     } catch (err) {
       spinner.stop("tmux unavailable — skipped")
       p.log.warn(`tmux: ${String(err)}`)

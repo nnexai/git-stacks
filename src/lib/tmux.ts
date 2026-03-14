@@ -25,12 +25,12 @@ export async function createTmuxSession(cwd: string, name: string): Promise<void
 
 // Opens a tmux session: focuses if it already exists, otherwise creates one.
 // Returns { created: true } when a new session was made.
+// Caller is responsible for focusing after any layout has been applied.
 export async function openTmuxSession(
   name: string,
   tasksDir: string
 ): Promise<{ created: boolean }> {
   if (await tmuxSessionExists(name)) {
-    await focusTmuxSession(name)
     return { created: false }
   }
 
@@ -43,8 +43,9 @@ export async function openTmuxSession(
 
 // Returns the global pane ID (e.g. "%0") of the first pane in the session.
 export async function getTmuxMainPane(session: string): Promise<string> {
-  const result = await $`tmux display-message -t ${session} -p #{pane_id}`.quiet().nothrow()
-  return result.text().trim() || "%0"
+  const fmt = "#{pane_id}"
+  const result = await $`tmux list-panes -t ${session} -F ${fmt}`.quiet().nothrow()
+  return result.text().trim().split("\n")[0] || "%0"
 }
 
 // Splits a window in the given session and returns the new pane ID, or null on failure.
@@ -54,9 +55,10 @@ export async function addTmuxPane(session: string, direction = "down"): Promise<
   const isVertical = direction === "down" || direction === "up"
   const isBefore = direction === "up" || direction === "left"
   const splitFlag = isVertical ? "-v" : "-h"
+  const fmt = "#{pane_id}"
   const result = isBefore
-    ? await $`tmux split-window -t ${session} ${splitFlag} -b -P -F #{pane_id}`.quiet().nothrow()
-    : await $`tmux split-window -t ${session} ${splitFlag} -P -F #{pane_id}`.quiet().nothrow()
+    ? await $`tmux split-window -t ${session} ${splitFlag} -b -P -F ${fmt}`.quiet().nothrow()
+    : await $`tmux split-window -t ${session} ${splitFlag} -P -F ${fmt}`.quiet().nothrow()
   if (result.exitCode !== 0) return null
   return result.text().trim() || null
 }
