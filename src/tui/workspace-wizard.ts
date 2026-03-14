@@ -35,7 +35,7 @@ export async function runWorkspaceNew(nameArg?: string) {
   // Name
   const nameRaw = await safeText({
     message: "Workspace name (ticket or purpose)",
-    initialValue: nameArg ?? "",
+    fallbackValue: nameArg || undefined,
     validate: (v) => {
       if (!v.trim()) return "Required"
       if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
@@ -47,14 +47,14 @@ export async function runWorkspaceNew(nameArg?: string) {
   // Branch
   const branchRaw = await safeText({
     message: "Branch name",
-    initialValue: `feature/${wsName}`,
+    fallbackValue: `feature/${wsName}`,
     validate: (v) => (v.trim() ? undefined : "Required"),
   })
   if (p.isCancel(branchRaw)) cancel()
   const branch = (branchRaw as string).trim()
 
   // Description
-  const descRaw = await safeText({ message: "Description (optional)", initialValue: "" })
+  const descRaw = await safeText({ message: "Description (optional)" })
   if (p.isCancel(descRaw)) cancel()
   const description = (descRaw as string).trim()
 

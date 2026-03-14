@@ -34,7 +34,7 @@ export async function promptSingleRepo(opts?: {
 }): Promise<StackRepo | null> {
   const repoNameRaw = await safeText({
     message: "Repo name",
-    initialValue: opts?.initialName ?? "",
+    fallbackValue: opts?.initialName || undefined,
     validate: (v) => (v.trim() ? undefined : "Required"),
   })
   if (p.isCancel(repoNameRaw)) return null
@@ -42,7 +42,7 @@ export async function promptSingleRepo(opts?: {
 
   const repoPathRaw = await safeText({
     message: "Path to main clone",
-    initialValue: opts?.initialPath ?? "",
+    fallbackValue: opts?.initialPath || undefined,
     placeholder: "~/workspaces/main/my-repo",
     validate: (v) => {
       const expanded = expandHome(v.trim())
@@ -72,7 +72,7 @@ export async function promptSingleRepo(opts?: {
 
   const defaultBranchRaw = await safeText({
     message: "Default base branch",
-    initialValue: opts?.initialBranch ?? currentBranch,
+    fallbackValue: opts?.initialBranch ?? currentBranch,
     validate: (v) => (v.trim() ? undefined : "Required"),
   })
   if (p.isCancel(defaultBranchRaw)) return null
@@ -99,7 +99,7 @@ export async function runStackNew() {
   if (p.isCancel(nameRaw)) cancel()
   const name = (nameRaw as string).trim()
 
-  const descRaw = await safeText({ message: "Description (optional)", initialValue: "" })
+  const descRaw = await safeText({ message: "Description (optional)" })
   if (p.isCancel(descRaw)) cancel()
 
   const repos: StackRepo[] = []
@@ -234,7 +234,7 @@ export async function runStackInit(dirArg?: string) {
     const current = branchMap.get(name) ?? "main"
     const fixedRaw = await safeText({
       message: `${name} — correct base branch`,
-      initialValue: current,
+      fallbackValue: current,
       validate: (v) => (v.trim() ? undefined : "Required"),
     })
     if (p.isCancel(fixedRaw)) cancel()
@@ -269,7 +269,7 @@ export async function runStackInit(dirArg?: string) {
   const suggestedName = basename(dir)
   const nameRaw = await safeText({
     message: "Stack name",
-    initialValue: suggestedName,
+    fallbackValue: suggestedName,
     validate: (v) => {
       if (!v.trim()) return "Required"
       if (stackExists(v.trim())) return `Stack '${v.trim()}' already exists`
@@ -278,7 +278,7 @@ export async function runStackInit(dirArg?: string) {
   if (p.isCancel(nameRaw)) cancel()
   const name = (nameRaw as string).trim()
 
-  const descRaw = await safeText({ message: "Description (optional)", initialValue: "" })
+  const descRaw = await safeText({ message: "Description (optional)" })
   if (p.isCancel(descRaw)) cancel()
 
   const repos: StackRepo[] = selected.map((r) => ({

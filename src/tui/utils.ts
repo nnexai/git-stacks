@@ -2,8 +2,26 @@ import * as p from "@clack/prompts"
 
 // @clack/prompts p.text returns undefined (not "") when the user presses Enter
 // on an empty field, regardless of initialValue. This wrapper normalises it.
-export async function safeText(opts: Parameters<typeof p.text>[0]): Promise<string | symbol> {
-  const raw = await p.text(opts)
+//
+// fallbackValue replaces the broken initialValue pattern:
+//   - sets placeholder (renders synchronously as grey hint) if none provided
+//   - sets defaultValue (applied on finalize when field is left empty)
+//   - wraps validate so required-checks see the effective value
+export async function safeText(
+  opts: Parameters<typeof p.text>[0] & { fallbackValue?: string }
+): Promise<string | symbol> {
+  const { fallbackValue, ...textOpts } = opts
+
+  if (fallbackValue) {
+    if (!textOpts.placeholder) textOpts.placeholder = fallbackValue
+    textOpts.defaultValue = fallbackValue
+    if (textOpts.validate) {
+      const orig = textOpts.validate
+      textOpts.validate = (v) => orig(v || fallbackValue)
+    }
+  }
+
+  const raw = await p.text(textOpts)
   if (typeof raw === "symbol") return raw
-  return (raw as string | undefined) ?? ""
+  return (raw as string | undefined) ?? fallbackValue ?? ""
 }
