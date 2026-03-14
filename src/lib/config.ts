@@ -45,6 +45,10 @@ export const StackSchema = z.object({
 })
 export type Stack = z.infer<typeof StackSchema>
 
+const WorkspaceRepoHooksSchema = z.object({
+  pre_open: z.array(z.string()).optional(),
+})
+
 export const WorkspaceRepoSchema = z.object({
   name: z.string(),
   stack: z.string(),
@@ -52,6 +56,7 @@ export const WorkspaceRepoSchema = z.object({
   mode: z.enum(["trunk", "worktree"]),
   main_path: z.string(),
   task_path: z.string(),
+  hooks: WorkspaceRepoHooksSchema.optional(),
 })
 export type WorkspaceRepo = z.infer<typeof WorkspaceRepoSchema>
 
@@ -61,12 +66,17 @@ export const WorkspaceSettingsSchema = z.object({
 })
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettingsSchema>
 
+const WorkspaceHooksSchema = z.object({
+  pre_open: z.array(z.string()).optional(),
+})
+
 export const WorkspaceSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   branch: z.string(),
   created: z.string(),
   cmux_workspace_id: z.string().optional(),
+  hooks: WorkspaceHooksSchema.optional(),
   settings: WorkspaceSettingsSchema.optional(),
   repos: z.array(WorkspaceRepoSchema).default([]),
 })

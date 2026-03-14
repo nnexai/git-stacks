@@ -1,7 +1,7 @@
 import * as p from "@clack/prompts"
 import { z } from "zod"
 import { join } from "path"
-import { openCmuxWorkspace, addCmuxPane, sendToCmuxSurface, getCmuxMainSurface, focusCmuxSurface } from "../cmux"
+import { openCmuxWorkspace, addCmuxPane, addCmuxSurface, sendToCmuxSurface, getCmuxMainPane, focusCmuxSurface } from "../cmux"
 import { writeWorkspace, workspaceExists, readWorkspace } from "../config"
 import { resolveEnabled, type Integration, type IntegrationContext } from "./types"
 
@@ -9,6 +9,7 @@ const surfaceSchema = z.object({
   repo: z.string().optional(),
   cwd: z.string().optional(),
   command: z.string().optional(),
+  focus: z.boolean().optional(),
 })
 
 const paneSchema = z.object({
@@ -69,23 +70,36 @@ async function applyPaneLayout(ref: string, ctx: IntegrationContext): Promise<vo
   if (!parsed.success || !parsed.data.panes?.length) return
 
   const wsRoot = join(ctx.tasksDir, ctx.workspace.name)
-  const mainSurfaceRef = await getCmuxMainSurface(ref)
+  const mainPane = await getCmuxMainPane(ref)
   let focusRef: string | null = null
 
   for (const pane of parsed.data.panes) {
     const isMainPane = pane.direction === undefined
-    const paneFirstSurface = isMainPane
-      ? mainSurfaceRef
-      : await addCmuxPane(ref, pane.direction)
+    let currentPaneRef: string
+    let paneFirstSurfaceRef: string
 
-    if (!paneFirstSurface) continue
-
-    if (pane.focus) focusRef = paneFirstSurface
+    if (isMainPane) {
+      currentPaneRef = mainPane.paneRef
+      paneFirstSurfaceRef = mainPane.surfaceRef
+    } else {
+      const newPane = await addCmuxPane(ref, pane.direction)
+      if (!newPane) continue
+      currentPaneRef = newPane.paneRef
+      paneFirstSurfaceRef = newPane.surfaceRef
+    }
 
     for (let i = 0; i < pane.surfaces.length; i++) {
       const surface = pane.surfaces[i]
-      const surfaceRef = i === 0 ? paneFirstSurface : await addCmuxPane(ref, pane.direction)
-      if (!surfaceRef) continue
+      let surfaceRef: string
+      if (i === 0) {
+        surfaceRef = paneFirstSurfaceRef
+      } else {
+        const newSurface = await addCmuxSurface(ref, currentPaneRef)
+        if (!newSurface) continue
+        surfaceRef = newSurface
+      }
+
+      if (surface.focus) focusRef = surfaceRef
 
       const cwd = surface.repo
         ? (ctx.workspace.repos.find((r) => r.name === surface.repo)?.task_path ?? wsRoot)

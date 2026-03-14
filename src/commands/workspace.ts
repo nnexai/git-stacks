@@ -116,6 +116,39 @@ export function registerWorkspaceCommands(program: Command) {
         spinner.stop(`${missing.length} worktree(s) recreated`)
       }
 
+      const baseEnv = {
+        WS_WORKSPACE: workspace.name,
+        WS_BRANCH: workspace.branch,
+        WS_TASKS_DIR: tasksDir,
+      }
+
+      if (workspace.hooks?.pre_open?.length) {
+        const spinner = p.spinner()
+        for (const cmd of workspace.hooks.pre_open) {
+          spinner.start(`pre_open: ${cmd}`)
+          await runHooks([cmd], join(tasksDir, name), baseEnv)
+        }
+        spinner.stop("pre_open hooks done")
+      }
+
+      const repoHooks = workspace.repos.filter((r) => r.hooks?.pre_open?.length)
+      if (repoHooks.length > 0) {
+        const spinner = p.spinner()
+        for (const repo of repoHooks) {
+          const repoEnv = {
+            ...baseEnv,
+            WS_REPO_NAME: repo.name,
+            WS_REPO_PATH: repo.task_path,
+            WS_MAIN_PATH: repo.main_path,
+          }
+          for (const cmd of repo.hooks!.pre_open!) {
+            spinner.start(`pre_open [${repo.name}]: ${cmd}`)
+            await runHooks([cmd], repo.task_path, repoEnv)
+          }
+        }
+        spinner.stop("pre_open hooks done")
+      }
+
       const ctx: IntegrationContext = { workspace, tasksDir, config }
 
       for (const integration of integrations) {

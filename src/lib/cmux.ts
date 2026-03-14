@@ -74,10 +74,25 @@ export async function openCmuxWorkspace(
   return { ref, created: true }
 }
 
-// Creates a new pane in an existing cmux workspace.
-// Returns the surface ref (e.g. "surface:2") or null on failure.
-export async function addCmuxPane(wsRef: string, direction = "down"): Promise<string | null> {
+// Creates a new split pane in an existing cmux workspace.
+// Returns both the pane ref and its initial surface ref, or null on failure.
+export async function addCmuxPane(
+  wsRef: string,
+  direction = "down"
+): Promise<{ paneRef: string; surfaceRef: string } | null> {
   const result = await $`cmux new-pane --direction ${direction} --workspace ${wsRef}`.quiet().nothrow()
+  if (result.exitCode !== 0) return null
+  const text = result.text().trim()
+  const paneRef = text.match(/pane:\d+/)?.[0]
+  const surfaceRef = text.match(/surface:\d+/)?.[0]
+  if (!paneRef || !surfaceRef) return null
+  return { paneRef, surfaceRef }
+}
+
+// Creates a new surface (tab) within an existing pane.
+// Returns the new surface ref, or null on failure.
+export async function addCmuxSurface(wsRef: string, paneRef: string): Promise<string | null> {
+  const result = await $`cmux new-surface --pane ${paneRef} --workspace ${wsRef}`.quiet().nothrow()
   if (result.exitCode !== 0) return null
   return result.text().trim().match(/surface:\d+/)?.[0] ?? null
 }
@@ -88,19 +103,27 @@ export async function sendToCmuxSurface(wsRef: string, surfaceRef: string, text:
   await $`cmux send --workspace ${wsRef} --surface ${surfaceRef} ${text}`.quiet().nothrow()
 }
 
-// Focuses a specific surface (pane) within a cmux workspace.
+// Focuses a specific surface (tab) within a cmux workspace.
 export async function focusCmuxSurface(wsRef: string, surfaceRef: string): Promise<boolean> {
-  const result = await $`cmux select-surface --workspace ${wsRef} --surface ${surfaceRef}`.quiet().nothrow()
+  const result = await $`cmux move-surface --surface ${surfaceRef} --workspace ${wsRef} --focus true`.quiet().nothrow()
   return result.exitCode === 0
 }
 
-// Returns the surface ref of the main (initial) pane in a workspace.
-// Falls back to "surface:1" if cmux list-panes is unavailable.
-export async function getCmuxMainSurface(wsRef: string): Promise<string> {
-  const result = await $`cmux list-panes --workspace ${wsRef}`.quiet().nothrow()
-  if (result.exitCode === 0) {
-    const match = result.text().trim().match(/surface:\d+/)
-    if (match) return match[0]
+// Returns the pane ref and surface ref of the main (initial) pane in a workspace.
+export async function getCmuxMainPane(wsRef: string): Promise<{ paneRef: string; surfaceRef: string }> {
+  const panesResult = await $`cmux list-panes --workspace ${wsRef}`.quiet().nothrow()
+  let paneRef = "pane:1"
+  if (panesResult.exitCode === 0) {
+    const match = panesResult.text().trim().match(/pane:\d+/)
+    if (match) paneRef = match[0]
   }
-  return "surface:1"
+
+  const surfacesResult = await $`cmux list-pane-surfaces --workspace ${wsRef} --pane ${paneRef}`.quiet().nothrow()
+  let surfaceRef = "surface:1"
+  if (surfacesResult.exitCode === 0) {
+    const match = surfacesResult.text().trim().match(/surface:\d+/)
+    if (match) surfaceRef = match[0]
+  }
+
+  return { paneRef, surfaceRef }
 }
