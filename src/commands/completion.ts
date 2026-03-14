@@ -1,9 +1,8 @@
 import { Command } from "commander"
 
-const WORKSPACE_CMDS = "open status clean"
 const STACK_SUBCMDS = "new init edit list show"
 const STACK_NAME_CMDS = "edit show"
-const TOP_LEVEL = "new open list status clean stack config completion"
+const TOP_LEVEL = "new open list status clean remove stack config completion"
 
 function bashCompletion(): string {
   return `# bash completion for ws
@@ -21,10 +20,40 @@ _ws_complete() {
   fi
 
   case "\${words[1]}" in
-    ${WORKSPACE_CMDS.split(" ").join("|")})
+    open)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--no-ide --no-cmux" -- "$cur"))
+      else
+        local names
+        names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')
+        COMPREPLY=($(compgen -W "$names" -- "$cur"))
+      fi
+      return 0
+      ;;
+    status)
       local names
       names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')
       COMPREPLY=($(compgen -W "$names" -- "$cur"))
+      return 0
+      ;;
+    clean)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--gone --force" -- "$cur"))
+      else
+        local names
+        names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')
+        COMPREPLY=($(compgen -W "$names" -- "$cur"))
+      fi
+      return 0
+      ;;
+    remove)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--force" -- "$cur"))
+      else
+        local names
+        names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')
+        COMPREPLY=($(compgen -W "$names" -- "$cur"))
+      fi
       return 0
       ;;
     stack)
@@ -62,8 +91,25 @@ _ws() {
   case $state in
     subcmd)
       case $words[1] in
-        open|status|clean)
+        open)
+          _arguments \\
+            '--no-ide[Skip opening IDEs]' \\
+            '--no-cmux[Skip cmux session]' \\
+            ': :_ws_workspaces'
+          ;;
+        status)
           _ws_workspaces ;;
+        clean)
+          _arguments \\
+            '--gone[Remove workspaces with deleted remote branches]' \\
+            '--force[Skip dirty worktree check]' \\
+            ':: :_ws_workspaces'
+          ;;
+        remove)
+          _arguments \\
+            '--force[Skip dirty worktree check]' \\
+            ': :_ws_workspaces'
+          ;;
         stack)
           _ws_stack ;;
         completion)
@@ -81,6 +127,7 @@ _ws_top_commands() {
     'list:List all workspaces'
     'status:Show workspace status'
     'clean:Remove worktrees for a workspace'
+    'remove:Permanently remove a workspace'
     'stack:Manage stack definitions'
     'config:View and edit global configuration'
     'completion:Generate shell completion scripts'
@@ -142,7 +189,7 @@ function __ws_stacks
 end
 
 function __ws_no_subcommand
-  not __fish_seen_subcommand_from new open list status clean stack config completion
+  not __fish_seen_subcommand_from new open list status clean remove stack config completion
 end
 
 # Top-level completions
@@ -151,14 +198,26 @@ complete -c ws -f -n __ws_no_subcommand -a open      -d 'Open a workspace'
 complete -c ws -f -n __ws_no_subcommand -a list      -d 'List all workspaces'
 complete -c ws -f -n __ws_no_subcommand -a status    -d 'Show workspace status'
 complete -c ws -f -n __ws_no_subcommand -a clean     -d 'Remove worktrees for a workspace'
+complete -c ws -f -n __ws_no_subcommand -a remove    -d 'Permanently remove a workspace'
 complete -c ws -f -n __ws_no_subcommand -a stack     -d 'Manage stack definitions'
 complete -c ws -f -n __ws_no_subcommand -a config    -d 'View and edit global configuration'
 complete -c ws -f -n __ws_no_subcommand -a completion -d 'Generate shell completion scripts'
 
 # Workspace name completions
-for cmd in open status clean
+for cmd in open status clean remove
   complete -c ws -f -n "__fish_seen_subcommand_from $cmd" -a "(__ws_workspaces)"
 end
+
+# Flags for open
+complete -c ws -f -n '__fish_seen_subcommand_from open' -l no-ide  -d 'Skip opening IDEs'
+complete -c ws -f -n '__fish_seen_subcommand_from open' -l no-cmux -d 'Skip cmux session'
+
+# Flags for clean
+complete -c ws -f -n '__fish_seen_subcommand_from clean' -l gone  -d 'Remove workspaces with deleted remote branches'
+complete -c ws -f -n '__fish_seen_subcommand_from clean' -l force -d 'Skip dirty worktree check'
+
+# Flags for remove
+complete -c ws -f -n '__fish_seen_subcommand_from remove' -l force -d 'Skip dirty worktree check'
 
 # Stack subcommands
 complete -c ws -f -n '__fish_seen_subcommand_from stack; and not __fish_seen_subcommand_from new init edit list show' \\
