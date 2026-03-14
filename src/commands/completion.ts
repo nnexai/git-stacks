@@ -2,7 +2,7 @@ import { Command } from "commander"
 
 const STACK_SUBCMDS = "new init edit list show"
 const STACK_NAME_CMDS = "edit show"
-const TOP_LEVEL = "new open list status clean remove stack config completion"
+const TOP_LEVEL = "new clone open list status clean remove stack config completion"
 
 function bashCompletion(): string {
   return `# bash completion for ws
@@ -20,6 +20,12 @@ _ws_complete() {
   fi
 
   case "\${words[1]}" in
+    clone)
+      local names
+      names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')
+      COMPREPLY=($(compgen -W "$names" -- "$cur"))
+      return 0
+      ;;
     open)
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "--no-ide --no-cmux" -- "$cur"))
@@ -91,6 +97,8 @@ _ws() {
   case $state in
     subcmd)
       case $words[1] in
+        clone)
+          _ws_workspaces ;;
         open)
           _arguments \\
             '--no-ide[Skip opening IDEs]' \\
@@ -123,6 +131,7 @@ _ws_top_commands() {
   local cmds
   cmds=(
     'new:Create a new workspace'
+    'clone:Clone a workspace with a new name and branch'
     'open:Open a workspace'
     'list:List all workspaces'
     'status:Show workspace status'
@@ -189,11 +198,12 @@ function __ws_stacks
 end
 
 function __ws_no_subcommand
-  not __fish_seen_subcommand_from new open list status clean remove stack config completion
+  not __fish_seen_subcommand_from new clone open list status clean remove stack config completion
 end
 
 # Top-level completions
 complete -c ws -f -n __ws_no_subcommand -a new       -d 'Create a new workspace'
+complete -c ws -f -n __ws_no_subcommand -a clone     -d 'Clone a workspace with a new name and branch'
 complete -c ws -f -n __ws_no_subcommand -a open      -d 'Open a workspace'
 complete -c ws -f -n __ws_no_subcommand -a list      -d 'List all workspaces'
 complete -c ws -f -n __ws_no_subcommand -a status    -d 'Show workspace status'
@@ -204,7 +214,7 @@ complete -c ws -f -n __ws_no_subcommand -a config    -d 'View and edit global co
 complete -c ws -f -n __ws_no_subcommand -a completion -d 'Generate shell completion scripts'
 
 # Workspace name completions
-for cmd in open status clean remove
+for cmd in clone open status clean remove
   complete -c ws -f -n "__fish_seen_subcommand_from $cmd" -a "(__ws_workspaces)"
 end
 

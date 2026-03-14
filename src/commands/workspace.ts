@@ -21,6 +21,7 @@ import {
 } from "../lib/git"
 import { integrations, type IntegrationContext } from "../lib/integrations"
 import { runWorkspaceNew } from "../tui/workspace-wizard"
+import { runWorkspaceClone } from "../tui/workspace-clone"
 import { runHooks } from "../lib/lifecycle"
 
 async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
@@ -80,6 +81,13 @@ export function registerWorkspaceCommands(program: Command) {
     .description("Create a new workspace interactively")
     .action(async (name?: string) => {
       await runWorkspaceNew(name)
+    })
+
+  program
+    .command("clone [source]")
+    .description("Clone a workspace with a new name and branch")
+    .action(async (source?: string) => {
+      await runWorkspaceClone(source)
     })
 
   program
