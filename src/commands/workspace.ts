@@ -23,6 +23,15 @@ import { integrations, type IntegrationContext } from "../lib/integrations"
 import { runWorkspaceNew } from "../tui/workspace-wizard"
 import { runHooks } from "../lib/lifecycle"
 
+async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
+  const dirty: string[] = []
+  for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
+    if (!existsSync(repo.task_path)) continue
+    if (await isRepoDirty(repo.task_path)) dirty.push(repo.name)
+  }
+  return dirty
+}
+
 async function runPreRemoveHooks(workspace: Workspace, tasksDir: string): Promise<void> {
   const baseEnv = {
     WS_WORKSPACE: workspace.name,
@@ -164,7 +173,8 @@ export function registerWorkspaceCommands(program: Command) {
     .command("clean [name]")
     .description("Remove worktrees for a workspace (config is kept), or --gone to remove all with deleted remote branches")
     .option("--gone", "Remove workspaces whose upstream branches are deleted")
-    .action(async (name: string | undefined, opts: { gone?: boolean }) => {
+    .option("--force", "Skip dirty worktree check")
+    .action(async (name: string | undefined, opts: { gone?: boolean; force?: boolean }) => {
       const config = readGlobalConfig()
       const tasksDir = getTasksDir(config.workspace_root)
 
@@ -191,6 +201,19 @@ export function registerWorkspaceCommands(program: Command) {
         if (goneWorkspaces.length === 0) {
           console.log("No gone workspaces found.")
           return
+        }
+
+        if (!opts.force) {
+          const dirtyEntries: string[] = []
+          for (const ws of goneWorkspaces) {
+            const dirty = await getDirtyWorktrees(ws)
+            if (dirty.length > 0) dirtyEntries.push(`  ${ws.name}: ${dirty.join(", ")}`)
+          }
+          if (dirtyEntries.length > 0) {
+            console.error("Aborting: dirty worktrees found:\n" + dirtyEntries.join("\n"))
+            console.error("Use --force to skip this check.")
+            process.exit(1)
+          }
         }
 
         console.log("\nGone workspaces:")
@@ -234,6 +257,17 @@ export function registerWorkspaceCommands(program: Command) {
         process.exit(1)
       }
 
+      const workspace = readWorkspace(name)
+
+      if (!opts.force) {
+        const dirty = await getDirtyWorktrees(workspace)
+        if (dirty.length > 0) {
+          console.error(`Aborting: dirty worktrees: ${dirty.join(", ")}`)
+          console.error("Use --force to skip this check.")
+          process.exit(1)
+        }
+      }
+
       const ok = await p.confirm({
         message: `Remove all worktrees for '${name}'? Config is kept.`,
         initialValue: false,
@@ -243,7 +277,6 @@ export function registerWorkspaceCommands(program: Command) {
         return
       }
 
-      const workspace = readWorkspace(name)
       try {
         await runPreRemoveHooks(workspace, tasksDir)
       } catch (err) {
@@ -267,10 +300,24 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("remove <name>")
     .description("Permanently remove a workspace (worktrees + config YAML)")
-    .action(async (name: string) => {
+    .option("--force", "Skip dirty worktree check")
+    .action(async (name: string, opts: { force?: boolean }) => {
       if (!workspaceExists(name)) {
         console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
         process.exit(1)
+      }
+
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+      const workspace = readWorkspace(name)
+
+      if (!opts.force) {
+        const dirty = await getDirtyWorktrees(workspace)
+        if (dirty.length > 0) {
+          console.error(`Aborting: dirty worktrees: ${dirty.join(", ")}`)
+          console.error("Use --force to skip this check.")
+          process.exit(1)
+        }
       }
 
       const ok = await p.confirm({
@@ -281,10 +328,6 @@ export function registerWorkspaceCommands(program: Command) {
         console.log("Cancelled.")
         return
       }
-
-      const config = readGlobalConfig()
-      const tasksDir = getTasksDir(config.workspace_root)
-      const workspace = readWorkspace(name)
 
       try {
         await runPreRemoveHooks(workspace, tasksDir)
