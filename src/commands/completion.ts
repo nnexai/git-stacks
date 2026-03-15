@@ -2,7 +2,7 @@ import { Command } from "commander"
 
 const STACK_SUBCMDS = "new init edit list show"
 const STACK_NAME_CMDS = "edit show"
-const TOP_LEVEL = "new clone open list status clean remove merge cd stack config completion"
+const TOP_LEVEL = "new clone open list status clean remove merge manage cd stack config completion"
 
 function bashCompletion(): string {
   return `# bash completion for ws
@@ -183,6 +183,7 @@ _ws_top_commands() {
     'clean:Remove worktrees for a workspace'
     'remove:Permanently remove a workspace'
     'merge:Merge worktree branches and clean workspace'
+    'manage:Interactive workspace dashboard'
     'cd:Print path to a workspace directory'
     'stack:Manage stack definitions'
     'config:View and edit global configuration'
@@ -255,7 +256,7 @@ function __ws_stacks
 end
 
 function __ws_no_subcommand
-  not __fish_seen_subcommand_from new clone open list status clean remove merge cd stack config completion
+  not __fish_seen_subcommand_from new clone open list status clean remove merge manage cd stack config completion
 end
 
 # Top-level completions
@@ -267,6 +268,7 @@ complete -c ws -f -n __ws_no_subcommand -a status    -d 'Show workspace status'
 complete -c ws -f -n __ws_no_subcommand -a clean     -d 'Remove worktrees for a workspace'
 complete -c ws -f -n __ws_no_subcommand -a remove    -d 'Permanently remove a workspace'
 complete -c ws -f -n __ws_no_subcommand -a merge     -d 'Merge worktree branches and clean workspace'
+complete -c ws -f -n __ws_no_subcommand -a manage    -d 'Interactive workspace dashboard'
 complete -c ws -f -n __ws_no_subcommand -a cd        -d 'Print path to a workspace directory'
 complete -c ws -f -n __ws_no_subcommand -a stack     -d 'Manage stack definitions'
 complete -c ws -f -n __ws_no_subcommand -a config    -d 'View and edit global configuration'

@@ -1,0 +1,29 @@
+import type { Workspace } from "../../lib/config"
+
+export type RepoStatus = {
+  name: string
+  exists: boolean
+  dirty: boolean
+  branch: string
+  mode: "trunk" | "worktree"
+}
+
+export type WorkspaceStatus =
+  | { state: "pending" }
+  | { state: "loading" }
+  | { state: "loaded"; repos: RepoStatus[]; hasDirty: boolean; hasMissing: boolean }
+  | { state: "error"; message: string }
+
+export type WorkspaceEntry = {
+  workspace: Workspace
+  status: WorkspaceStatus
+}
+
+export type Action = "open" | "status" | "edit" | "clean" | "remove" | "merge"
+
+export type UIView =
+  | { view: "list" }
+  | { view: "action-menu"; index: number }
+  | { view: "confirm"; index: number; action: Action; batch?: boolean }
+  | { view: "progress"; message: string }
+  | { view: "detail-status"; index: number }
