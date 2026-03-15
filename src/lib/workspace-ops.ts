@@ -217,6 +217,12 @@ export async function mergeWorkspace(
     return { ok: false, error: `Merge conflicts:\n  ${conflicting.join("\n  ")}` }
   }
 
+  try {
+    await runPreRemoveHooks(workspace, tasksDir)
+  } catch (err) {
+    return { ok: false, error: `pre_remove hook failed: ${err}` }
+  }
+
   // Merge
   for (const { repo, baseBranch } of repoBases) {
     const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
@@ -228,12 +234,6 @@ export async function mergeWorkspace(
     onProgress?.(`merged  ${repo.name}  →  ${baseBranch}`)
   }
 
-  try {
-    await runPreRemoveHooks(workspace, tasksDir)
-  } catch (err) {
-    return { ok: false, error: `pre_remove hook failed: ${err}` }
-  }
-
   for (const repo of worktreeRepos) {
     if (!existsSync(repo.task_path)) continue
     await removeWorktree(repo.main_path, repo.task_path)
@@ -243,6 +243,7 @@ export async function mergeWorkspace(
     await deleteLocalBranch(repo.main_path, workspace.branch)
   }
 
+  unlinkSync(workspacePath(name))
   onProgress?.(`Merged and cleaned '${name}'.`)
   return { ok: true }
 }
