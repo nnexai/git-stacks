@@ -16,8 +16,10 @@ export const RepoTypeSchema = z.enum(["java", "typescript", "other"])
 export type RepoType = z.infer<typeof RepoTypeSchema>
 
 const HooksSchema = z.object({
+  pre_create: z.array(z.string()).optional(),
   post_create: z.array(z.string()).optional(),
   pre_remove: z.array(z.string()).optional(),
+  post_open: z.array(z.string()).optional(),
 })
 
 export const StackRepoSchema = z.object({
@@ -26,6 +28,7 @@ export const StackRepoSchema = z.object({
   type: RepoTypeSchema.default("other"),
   default_mode: z.enum(["trunk", "worktree"]).default("worktree"),
   default_branch: z.string().default("main"),
+  sync_strategy: z.enum(["rebase", "merge"]).optional(),
   hooks: HooksSchema.optional(),
   files: z
     .object({
@@ -42,6 +45,8 @@ export const StackSchema = z.object({
   repos: z.array(StackRepoSchema).default([]),
   integrations: z.record(z.unknown()).optional(),
   hooks: HooksSchema.optional(),
+  env: z.record(z.string()).optional(),
+  env_file: z.string().optional(),
 })
 export type Stack = z.infer<typeof StackSchema>
 
@@ -68,6 +73,8 @@ export type WorkspaceSettings = z.infer<typeof WorkspaceSettingsSchema>
 
 const WorkspaceHooksSchema = z.object({
   pre_open: z.array(z.string()).optional(),
+  post_open: z.array(z.string()).optional(),
+  post_merge: z.array(z.string()).optional(),
 })
 
 export const WorkspaceSchema = z.object({
@@ -79,6 +86,8 @@ export const WorkspaceSchema = z.object({
   hooks: WorkspaceHooksSchema.optional(),
   settings: WorkspaceSettingsSchema.optional(),
   repos: z.array(WorkspaceRepoSchema).default([]),
+  env: z.record(z.string()).optional(),
+  env_file: z.string().optional(),
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 

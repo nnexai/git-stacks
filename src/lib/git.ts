@@ -75,3 +75,39 @@ export async function mergeNoFF(
 export async function deleteLocalBranch(repoPath: string, branch: string): Promise<void> {
   await $`git -C ${repoPath} branch -d ${branch}`.quiet().nothrow()
 }
+
+export async function fetchOrigin(repoPath: string): Promise<void> {
+  await $`git -C ${repoPath} fetch origin`.quiet()
+}
+
+export async function rebaseBranch(
+  repoPath: string,
+  upstream: string
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await $`git -C ${repoPath} rebase ${upstream}`.quiet().nothrow()
+  if (result.exitCode === 0) return { ok: true }
+  // Abort failed rebase
+  await $`git -C ${repoPath} rebase --abort`.quiet().nothrow()
+  return { ok: false, error: result.stderr.toString().trim() }
+}
+
+export async function mergeBranchFF(
+  repoPath: string,
+  branch: string
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await $`git -C ${repoPath} merge --no-ff ${branch}`.quiet().nothrow()
+  if (result.exitCode === 0) return { ok: true }
+  // Abort failed merge
+  await $`git -C ${repoPath} merge --abort`.quiet().nothrow()
+  return { ok: false, error: result.stderr.toString().trim() }
+}
+
+export async function getCommitsBehind(
+  repoPath: string,
+  base: string,
+  head: string
+): Promise<number> {
+  const result = await $`git -C ${repoPath} rev-list --count ${head}..${base}`.quiet().nothrow()
+  if (result.exitCode !== 0) return 0
+  return parseInt(result.stdout.toString().trim(), 10) || 0
+}

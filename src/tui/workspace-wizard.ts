@@ -1,5 +1,5 @@
 import * as p from "@clack/prompts"
-import { mkdirSync, existsSync } from "fs"
+import { mkdirSync, existsSync, writeFileSync } from "fs"
 import { safeText } from "./utils"
 import { join } from "path"
 import {
@@ -125,6 +125,45 @@ export async function runWorkspaceNew(nameArg?: string) {
     process.exit(0)
   }
 
+  // Run pre_create hooks before creating worktrees
+  const preCreateBaseEnv = {
+    WS_WORKSPACE: wsName,
+    WS_BRANCH: branch,
+    WS_TASKS_DIR: tasksDir,
+  }
+
+  for (const stack of selectedStacks) {
+    // Stack-level pre_create
+    if (stack.hooks?.pre_create?.length) {
+      const stackEnv = { ...preCreateBaseEnv, WS_STACK: stack.name }
+      try {
+        await runHooks(stack.hooks.pre_create, tasksDir, stackEnv)
+      } catch (err) {
+        p.cancel(`pre_create hook failed: ${err}`)
+        process.exit(1)
+      }
+    }
+
+    // Repo-level pre_create
+    for (const wsRepo of repos.filter(r => r.mode === "worktree" && r.stack === stack.name)) {
+      const stackRepo = stack.repos.find(r => r.name === wsRepo.name)
+      if (!stackRepo?.hooks?.pre_create?.length) continue
+      const repoEnv = {
+        ...preCreateBaseEnv,
+        WS_STACK: stack.name,
+        WS_REPO_NAME: wsRepo.name,
+        WS_WORKTREE_PATH: wsRepo.task_path,
+        WS_MAIN_PATH: wsRepo.main_path,
+      }
+      try {
+        await runHooks(stackRepo.hooks.pre_create, wsRepo.main_path, repoEnv)
+      } catch (err) {
+        p.cancel(`pre_create hook failed for ${wsRepo.name}: ${err}`)
+        process.exit(1)
+      }
+    }
+  }
+
   // Create worktrees
   const worktreeRepos = repos.filter((r) => r.mode === "worktree")
   if (worktreeRepos.length > 0) {
@@ -148,6 +187,23 @@ export async function runWorkspaceNew(nameArg?: string) {
     spinner.stop(`${worktreeRepos.length} worktree(s) created`)
   }
 
+  // Write env files if configured
+  const envFileName = selectedStacks.find(s => s.env_file)?.env_file
+  if (envFileName) {
+    const mergedEnvVars: Record<string, string> = {}
+    for (const stack of selectedStacks) {
+      if (stack.env) Object.assign(mergedEnvVars, stack.env)
+    }
+    const content = Object.entries(mergedEnvVars)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n") + "\n"
+    for (const repo of worktreeRepos) {
+      if (existsSync(repo.task_path)) {
+        writeFileSync(join(repo.task_path, envFileName), content, "utf-8")
+      }
+    }
+  }
+
   // Apply file ops and post_create hooks
   const wsDir = join(tasksDir, wsName)
   const baseEnv = {
@@ -155,6 +211,13 @@ export async function runWorkspaceNew(nameArg?: string) {
     WS_BRANCH: branch,
     WS_TASKS_DIR: tasksDir,
   }
+
+  // Merge stack env vars into hook environment
+  const envOverlay: Record<string, string> = {}
+  for (const stack of selectedStacks) {
+    if (stack.env) Object.assign(envOverlay, stack.env)
+  }
+  const enrichedBaseEnv = { ...baseEnv, ...envOverlay }
 
   const hooksSpinner = p.spinner()
   hooksSpinner.start("Running post_create hooks")
@@ -165,7 +228,7 @@ export async function runWorkspaceNew(nameArg?: string) {
         if (!stackRepo) continue
 
         const repoEnv = {
-          ...baseEnv,
+          ...enrichedBaseEnv,
           WS_STACK: stack.name,
           WS_REPO_NAME: wsRepo.name,
           WS_REPO_PATH: wsRepo.task_path,
@@ -185,7 +248,7 @@ export async function runWorkspaceNew(nameArg?: string) {
 
       if (stack.hooks?.post_create?.length) {
         hooksSpinner.message(`hooks: ${stack.name} (stack)`)
-        await runHooks(stack.hooks.post_create, wsDir, { ...baseEnv, WS_STACK: stack.name })
+        await runHooks(stack.hooks.post_create, wsDir, { ...enrichedBaseEnv, WS_STACK: stack.name })
       }
     }
     hooksSpinner.stop("post_create hooks done")

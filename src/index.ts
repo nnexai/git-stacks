@@ -4,10 +4,11 @@ import { stackCommand } from "./commands/stack"
 import { registerWorkspaceCommands } from "./commands/workspace"
 import { configCommand } from "./commands/config"
 import { createCompletionCommand } from "./commands/completion"
+import { doctorCommand } from "./commands/doctor"
 
 const program = new Command()
 
-program.name("ws").description("Git worktree workspace manager").version("0.1.0")
+program.name("ws").description("Git worktree workspace manager").version("0.1.0").enablePositionalOptions()
 
 program.addCommand(stackCommand)
 registerWorkspaceCommands(program)
@@ -20,6 +21,8 @@ program
     const { runDashboard } = await import("./tui/dashboard/run")
     await runDashboard()
   })
+
+program.addCommand(doctorCommand)
 
 // Register last — program tree must be fully populated before the action runs
 program.addCommand(createCompletionCommand(program))

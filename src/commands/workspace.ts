@@ -1,6 +1,7 @@
 import { Command } from "commander"
 import * as p from "@clack/prompts"
 import { existsSync, unlinkSync } from "fs"
+import { join } from "path"
 import {
   listWorkspaces,
   readWorkspace,
@@ -21,6 +22,9 @@ import {
   removeWorkspace,
   mergeWorkspace,
   openWorkspace,
+  getWorkspaceListInfo,
+  renameWorkspace,
+  syncWorkspace,
 } from "../lib/workspace-ops"
 
 export function registerWorkspaceCommands(program: Command) {
@@ -54,18 +58,62 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("list")
     .description("List all workspaces")
-    .action(() => {
+    .option("--sort <key>", "Sort by: date, name, status", "date")
+    .option("--json", "Output as JSON")
+    .option("--status", "Check dirty status (slower)")
+    .action(async (opts: { sort: string; json?: boolean; status?: boolean }) => {
       const workspaces = listWorkspaces()
       if (workspaces.length === 0) {
         console.log("No workspaces. Run `ws new` to create one.")
         return
       }
+
+      const infos = await Promise.all(
+        workspaces.map((ws) => getWorkspaceListInfo(ws, !!opts.status))
+      )
+
+      // Sort
+      if (opts.sort === "name") {
+        infos.sort((a, b) => a.name.localeCompare(b.name))
+      } else if (opts.sort === "status" && opts.status) {
+        infos.sort((a, b) => {
+          if (a.dirty === b.dirty) return new Date(b.created).getTime() - new Date(a.created).getTime()
+          if (a.dirty && !b.dirty) return -1
+          if (!a.dirty && b.dirty) return 1
+          return new Date(b.created).getTime() - new Date(a.created).getTime()
+        })
+      } else {
+        // default: date descending (newest first)
+        infos.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(infos, null, 2))
+        return
+      }
+
       console.log("")
-      for (const ws of workspaces) {
-        const wt = ws.repos.filter((r) => r.mode === "worktree").length
-        const tr = ws.repos.filter((r) => r.mode === "trunk").length
+      for (const info of infos) {
+        let dirtyIndicator: string
+        if (info.dirty === null) {
+          dirtyIndicator = "?"
+        } else if (info.dirty) {
+          dirtyIndicator = `~ ${info.dirtyRepos.join(" ")}`
+        } else {
+          // Check if any worktree task_paths were missing
+          const ws = workspaces.find((w) => w.name === info.name)!
+          const missingPaths = ws.repos.some(
+            (r) => r.mode === "worktree" && !existsSync(r.task_path)
+          )
+          dirtyIndicator = missingPaths ? "\u2717" : "\u2713"
+        }
+
+        const desc = info.description.length > 40
+          ? info.description.slice(0, 40)
+          : info.description
+
         console.log(
-          `  ${ws.name.padEnd(24)} ${ws.branch.padEnd(40)} ${wt}wt ${tr}tr  ${ws.created}`
+          `  ${info.name.padEnd(20)} ${info.branch.padEnd(32)} ${dirtyIndicator.padEnd(16)} ${info.age.padEnd(6)} ${desc}`
         )
       }
     })
@@ -265,6 +313,143 @@ export function registerWorkspaceCommands(program: Command) {
       if (!result.ok) {
         console.error(result.error)
         process.exit(1)
+      }
+    })
+
+  program
+    .command("run <name> [repo]")
+    .description("Run a command or shell inside a workspace")
+    .option("--all-repos", "Run command in every worktree repo sequentially")
+    .passThroughOptions()
+    .action(async (name: string, repo: string | undefined, opts: { allRepos?: boolean }) => {
+      if (!workspaceExists(name)) {
+        console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
+        process.exit(1)
+      }
+
+      const workspace = readWorkspace(name)
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+
+      // Parse extra args after "--"
+      const dashDashIdx = process.argv.indexOf("--")
+      const extraArgs = dashDashIdx >= 0 ? process.argv.slice(dashDashIdx + 1) : []
+      const shellCmd = extraArgs.join(" ")
+
+      if (opts.allRepos) {
+        if (!shellCmd) {
+          console.error("Cannot open interactive shell with --all-repos. Provide a command after --.")
+          process.exit(1)
+        }
+
+        const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+        if (worktreeRepos.length === 0) {
+          console.error(`No worktree repos in workspace '${name}'.`)
+          process.exit(1)
+        }
+
+        for (const r of worktreeRepos) {
+          console.log(`\n==> ${r.name}`)
+          const proc = Bun.spawn(["sh", "-c", shellCmd], {
+            cwd: r.task_path,
+            stdio: ["inherit", "inherit", "inherit"],
+          })
+          const exitCode = await proc.exited
+          if (exitCode !== 0) {
+            process.exit(exitCode)
+          }
+        }
+        return
+      }
+
+      // Determine cwd
+      let cwd: string
+      if (repo) {
+        const found = workspace.repos.find((r) => r.name === repo)
+        if (!found) {
+          console.error(`Repo '${repo}' not found in workspace '${name}'.`)
+          process.exit(1)
+        }
+        cwd = found.task_path
+      } else {
+        cwd = join(tasksDir, name)
+      }
+
+      if (!shellCmd) {
+        // Open interactive shell
+        const shell = process.env.SHELL || "sh"
+        const proc = Bun.spawn([shell], {
+          cwd,
+          stdio: ["inherit", "inherit", "inherit"],
+        })
+        const exitCode = await proc.exited
+        process.exit(exitCode)
+      } else {
+        const proc = Bun.spawn(["sh", "-c", shellCmd], {
+          cwd,
+          stdio: ["inherit", "inherit", "inherit"],
+        })
+        const exitCode = await proc.exited
+        process.exit(exitCode)
+      }
+    })
+
+  program
+    .command("rename <old> <new>")
+    .description("Rename a workspace")
+    .action(async (oldName: string, newName: string) => {
+      const result = await renameWorkspace(oldName, newName, (msg) => console.log(`  ${msg}`))
+      if (!result.ok) {
+        console.error(result.error)
+        process.exit(1)
+      }
+      console.log(`\nRenamed '${oldName}' → '${newName}'.`)
+    })
+
+  program
+    .command("sync [name]")
+    .description("Sync workspace branches with upstream base branches")
+    .option("--all", "Sync all workspaces")
+    .option("--strategy <strategy>", "Sync strategy: rebase or merge")
+    .option("--best-effort", "Skip conflicting repos instead of aborting")
+    .action(async (name: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean }) => {
+      const strategy = opts.strategy as "rebase" | "merge" | undefined
+
+      if (opts.all) {
+        const workspaces = listWorkspaces()
+        if (workspaces.length === 0) {
+          console.log("No workspaces.")
+          return
+        }
+        let hasFailures = false
+        for (const ws of workspaces) {
+          console.log(`\n  ${ws.name}  [${ws.branch}]`)
+          const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort }, (msg) => console.log(`    ${msg}`))
+          if (!result.ok) {
+            hasFailures = true
+            if (result.error) console.error(`    ${result.error}`)
+          }
+        }
+        if (hasFailures) process.exit(1)
+        return
+      }
+
+      if (!name) {
+        console.error("Usage: ws sync <name> [--all]")
+        process.exit(1)
+      }
+
+      const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort }, (msg) => console.log(`  ${msg}`))
+      if (!result.ok) {
+        if (result.error) console.error(result.error)
+        if (result.skipped.length > 0) {
+          console.log(`\nTip: use \`ws run ${name} <repo> -- lazygit\` to resolve conflicts`)
+        }
+        process.exit(1)
+      }
+
+      if (result.synced.length === 0 && result.skipped.length === 0) {
+        console.log("Nothing to sync.")
       }
     })
 }
