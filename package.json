@@ -1,14 +1,33 @@
 {
-  "name": "ws",
+  "name": "git-ws",
   "version": "0.1.0",
-  "description": "Git worktree workspace manager",
+  "description": "Git worktree workspace manager — stacks, workspaces, and multi-repo orchestration",
+  "license": "MIT",
+  "author": "nnexai",
+  "keywords": [
+    "git",
+    "worktree",
+    "workspace",
+    "multi-repo",
+    "stack",
+    "cli",
+    "bun",
+    "developer-tools"
+  ],
   "type": "module",
   "bin": {
     "ws": "./src/index.ts"
   },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "bun run src/index.ts",
-    "test": "bun test tests/"
+    "test": "bun test tests/",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run typecheck && bun test"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.0",
