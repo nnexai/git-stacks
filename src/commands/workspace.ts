@@ -392,6 +392,30 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
+    .command("cd <name> [repo]")
+    .description("Print path to a workspace (or repo within it) — use via shell function")
+    .action((name: string, repo?: string) => {
+      if (!workspaceExists(name)) {
+        console.error(`Workspace '${name}' not found.`)
+        process.exit(1)
+      }
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+      const workspace = readWorkspace(name)
+
+      if (repo) {
+        const found = workspace.repos.find((r) => r.name === repo)
+        if (!found) {
+          console.error(`Repo '${repo}' not found in workspace '${name}'.`)
+          process.exit(1)
+        }
+        process.stdout.write(found.task_path + "\n")
+      } else {
+        process.stdout.write(join(tasksDir, name) + "\n")
+      }
+    })
+
+  program
     .command("merge <name>")
     .description("Merge all worktree branches into their base branches, then clean workspace")
     .option("--force", "Skip dirty worktree check")
