@@ -61,7 +61,7 @@ export async function runWorkspaceClone(sourceArg?: string) {
   // New branch
   const branchRaw = await safeText({
     message: "Branch name",
-    initialValue: `feature/${newName}`,
+    fallbackValue: `feature/${newName}`,
     validate: (v) => (v.trim() ? undefined : "Required"),
   })
   if (p.isCancel(branchRaw)) cancel()
