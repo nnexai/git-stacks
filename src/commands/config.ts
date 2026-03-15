@@ -17,8 +17,7 @@ export const configCommand = new Command("config")
 
     const wsRootRaw = await safeText({
       message: "Workspace root",
-      initialValue: config.workspace_root,
-      placeholder: "~/workspaces",
+      fallbackValue: config.workspace_root,
     })
     if (p.isCancel(wsRootRaw)) cancel()
 

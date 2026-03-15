@@ -2,11 +2,22 @@ import { Command } from "commander"
 
 const STACK_SUBCMDS = "new init edit list show"
 const STACK_NAME_CMDS = "edit show"
-const TOP_LEVEL = "new clone open list status clean remove merge stack config completion"
+const TOP_LEVEL = "new clone open list status clean remove merge cd stack config completion"
 
 function bashCompletion(): string {
   return `# bash completion for ws
 # Add to ~/.bashrc:  eval "$(ws completion bash)"
+
+# Shell wrapper — enables \`ws cd\` to change the current directory
+ws() {
+  if [[ "$1" == "cd" ]]; then
+    local dir
+    dir=$(command ws "$@") && builtin cd "$dir"
+  else
+    command ws "$@"
+  fi
+}
+
 _ws_complete() {
   local cur prev words cword
   COMPREPLY=()
@@ -72,6 +83,12 @@ _ws_complete() {
       fi
       return 0
       ;;
+    cd)
+      local names
+      names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')
+      COMPREPLY=($(compgen -W "$names" -- "$cur"))
+      return 0
+      ;;
     stack)
       if [[ \${COMP_CWORD} -eq 2 ]]; then
         COMPREPLY=($(compgen -W "${STACK_SUBCMDS}" -- "$cur"))
@@ -96,6 +113,17 @@ function zshCompletion(): string {
   return `#compdef ws
 # zsh completion for ws
 # Add to ~/.zshrc:  eval "$(ws completion zsh)"
+
+# Shell wrapper — enables \`ws cd\` to change the current directory
+ws() {
+  if [[ "$1" == "cd" ]]; then
+    local dir
+    dir=$(command ws "$@") && builtin cd "$dir"
+  else
+    command ws "$@"
+  fi
+}
+
 _ws() {
   local context state line
   typeset -A opt_args
@@ -133,6 +161,8 @@ _ws() {
             '--force[Skip dirty worktree check]' \\
             ': :_ws_workspaces'
           ;;
+        cd)
+          _ws_workspaces ;;
         stack)
           _ws_stack ;;
         completion)
@@ -153,6 +183,7 @@ _ws_top_commands() {
     'clean:Remove worktrees for a workspace'
     'remove:Permanently remove a workspace'
     'merge:Merge worktree branches and clean workspace'
+    'cd:Print path to a workspace directory'
     'stack:Manage stack definitions'
     'config:View and edit global configuration'
     'completion:Generate shell completion scripts'
@@ -199,6 +230,16 @@ function fishCompletion(): string {
   return `# fish completion for ws
 # Add to ~/.config/fish/config.fish:  ws completion fish | source
 
+# Shell wrapper — enables \`ws cd\` to change the current directory
+function ws
+  if test (count $argv) -ge 1; and test "$argv[1]" = "cd"
+    set -l dir (command ws $argv)
+    and cd $dir
+  else
+    command ws $argv
+  end
+end
+
 function __ws_workspaces
   set -l ws_dir "$HOME/.config/ws/workspaces"
   if test -d $ws_dir
@@ -214,7 +255,7 @@ function __ws_stacks
 end
 
 function __ws_no_subcommand
-  not __fish_seen_subcommand_from new clone open list status clean remove merge stack config completion
+  not __fish_seen_subcommand_from new clone open list status clean remove merge cd stack config completion
 end
 
 # Top-level completions
@@ -226,12 +267,13 @@ complete -c ws -f -n __ws_no_subcommand -a status    -d 'Show workspace status'
 complete -c ws -f -n __ws_no_subcommand -a clean     -d 'Remove worktrees for a workspace'
 complete -c ws -f -n __ws_no_subcommand -a remove    -d 'Permanently remove a workspace'
 complete -c ws -f -n __ws_no_subcommand -a merge     -d 'Merge worktree branches and clean workspace'
+complete -c ws -f -n __ws_no_subcommand -a cd        -d 'Print path to a workspace directory'
 complete -c ws -f -n __ws_no_subcommand -a stack     -d 'Manage stack definitions'
 complete -c ws -f -n __ws_no_subcommand -a config    -d 'View and edit global configuration'
 complete -c ws -f -n __ws_no_subcommand -a completion -d 'Generate shell completion scripts'
 
 # Workspace name completions
-for cmd in clone open status clean remove merge
+for cmd in clone open status clean remove merge cd
   complete -c ws -f -n "__fish_seen_subcommand_from $cmd" -a "(__ws_workspaces)"
 end
 

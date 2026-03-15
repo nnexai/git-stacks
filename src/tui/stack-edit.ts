@@ -126,7 +126,7 @@ export async function runStackEdit(name: string) {
           const currentBranch = await getCurrentBranch(discovered.path).catch(() => "main")
           const branchRaw = await safeText({
             message: `${repoName} — default base branch`,
-            initialValue: currentBranch,
+            fallbackValue: currentBranch,
             validate: (v) => (v.trim() ? undefined : "Required"),
           })
           if (p.isCancel(branchRaw)) continue
@@ -210,14 +210,14 @@ export async function runStackEdit(name: string) {
         } else if (fieldRaw === "branch") {
           const branchRaw = await safeText({
             message: "New default base branch",
-            initialValue: repo.default_branch ?? "main",
+            fallbackValue: repo.default_branch ?? "main",
             validate: (v) => (v.trim() ? undefined : "Required"),
           })
           if (!p.isCancel(branchRaw)) repo.default_branch = (branchRaw as string).trim()
         } else if (fieldRaw === "path") {
           const pathRaw = await safeText({
             message: "New path",
-            initialValue: repo.path,
+            fallbackValue: repo.path,
             validate: (v) => {
               const expanded = expandHome(v.trim())
               if (!existsSync(expanded)) return `Path does not exist: ${expanded}`
@@ -360,7 +360,7 @@ export async function runStackEdit(name: string) {
       case "description": {
         const descRaw = await safeText({
           message: "Description",
-          initialValue: stack.description ?? "",
+          fallbackValue: stack.description || undefined,
         })
         if (!p.isCancel(descRaw)) {
           stack.description = (descRaw as string).trim() || undefined

@@ -48,7 +48,7 @@ export const vscodeIntegration: Integration = {
     if (parsed.cmd !== "code" && parsed.cmd !== "code-insiders") {
       const customRaw = await safeText({
         message: "Custom VSCode binary (leave blank to use selection above)",
-        initialValue: parsed.cmd,
+        fallbackValue: parsed.cmd,
       })
       if (p.isCancel(customRaw)) return null
       if ((customRaw as string).trim()) cmd = (customRaw as string).trim()
