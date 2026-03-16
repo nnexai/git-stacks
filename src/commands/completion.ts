@@ -7,11 +7,12 @@ export function createCompletionCommand(program: Command): Command {
     .argument("[shell]", "Shell type: bash, zsh, or fish")
     .action((shell?: string) => {
       if (!shell) {
-        console.log("Usage: ws completion [bash|zsh|fish]")
+        const n = program.name()
+        console.log(`Usage: ${n} completion [bash|zsh|fish]`)
         console.log("\nAdd to your shell profile:")
-        console.log('  bash:  eval "$(ws completion bash)"')
-        console.log('  zsh:   eval "$(ws completion zsh)"')
-        console.log("  fish:  ws completion fish | source")
+        console.log(`  bash:  eval "$(${n} completion bash)"`)
+        console.log(`  zsh:   eval "$(${n} completion zsh)"`)
+        console.log(`  fish:  ${n} completion fish | source`)
         return
       }
       switch (shell) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { Command } from "commander"
+import { basename } from "path"
 import { stackCommand } from "./commands/stack"
 import { registerWorkspaceCommands } from "./commands/workspace"
 import { configCommand } from "./commands/config"
@@ -8,7 +9,10 @@ import { doctorCommand } from "./commands/doctor"
 
 const program = new Command()
 
-program.name("ws").description("Git worktree workspace manager").version("0.1.0").enablePositionalOptions()
+const rawName = basename(process.argv[1])
+const binName = rawName.endsWith(".ts") || rawName.endsWith(".js") ? "git-stacks" : rawName
+
+program.name(binName).description("Git worktree workspace manager").version("0.1.1").enablePositionalOptions()
 
 program.addCommand(stackCommand)
 registerWorkspaceCommands(program)
