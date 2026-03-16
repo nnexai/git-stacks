@@ -14,7 +14,7 @@ No build step — Bun executes TypeScript source directly. The `@/*` path alias 
 
 ## Architecture
 
-`ws` is a CLI tool that manages git worktrees across multiple repos. It has two core concepts:
+`git-stacks` is a CLI tool that manages git worktrees across multiple repos. It has two core concepts:
 
 **Stacks** — named templates describing a set of repos (paths, types, default modes). Stored as YAML at `~/.config/ws/stacks/{name}.yml`.
 
@@ -28,11 +28,11 @@ The global config is at `~/.config/ws/config.yml`. The default `workspace_root` 
 src/
   index.ts              — commander entrypoint, registers all commands
   commands/
-    workspace.ts        — ws new|clone|open|list|status|clean|remove|cd|merge|run|rename|sync commands
-    stack.ts            — ws stack * subcommands (thin wrappers over tui/)
-    doctor.ts           — ws doctor — health check and drift detection
-    config.ts           — ws config [show] interactive config wizard
-    completion.ts       — ws completion [bash|zsh|fish] shell completion output
+    workspace.ts        — git-stacks new|clone|open|list|status|clean|remove|cd|merge|run|rename|sync commands
+    stack.ts            — git-stacks stack * subcommands (thin wrappers over tui/)
+    doctor.ts           — git-stacks doctor — health check and drift detection
+    config.ts           — git-stacks config [show] interactive config wizard
+    completion.ts       — git-stacks completion [bash|zsh|fish] shell completion output
   lib/
     config.ts           — Zod schemas + YAML read/write for stacks, workspaces, global config
     paths.ts            — all path constants and helpers (single source of truth)
@@ -50,10 +50,10 @@ src/
   tui/
     stack-wizard.ts     — interactive prompts for `stack new` and `stack init`
     stack-edit.ts       — interactive editor for `stack edit`
-    workspace-wizard.ts — interactive prompts for `ws new`
-    workspace-clone.ts  — interactive prompts for `ws clone`
+    workspace-wizard.ts — interactive prompts for `git-stacks new`
+    workspace-clone.ts  — interactive prompts for `git-stacks clone`
     utils.ts            — safeText() wrapper normalising @clack/prompts empty-string quirk
-    dashboard/          — interactive TUI for `ws manage` (SolidJS-based)
+    dashboard/          — interactive TUI for `git-stacks manage` (SolidJS-based)
 tests/
   helpers.ts            — makeTmpDir/cleanup/touch/write filesystem helpers
   lib/                  — unit tests (bun:test, Jest-compatible API)
@@ -64,7 +64,7 @@ tests/
 - All YAML I/O goes through `src/lib/config.ts`; schemas are Zod-validated on read.
 - I/O tests redirect `process.env.HOME` before dynamically importing config to isolate the config directory.
 - `src/tui/utils.ts:safeText` must be used instead of `p.text` directly because `@clack/prompts` returns `undefined` (not `""`) on empty input.
-- **Integration plugin system**: `ws open` and `ws new` loop over `integrations` from `src/lib/integrations/index.ts`. To add a new integration: create `src/lib/integrations/my-tool.ts` implementing `Integration`, register it in `index.ts`. No other files need to change.
+- **Integration plugin system**: `git-stacks open` and `git-stacks new` loop over `integrations` from `src/lib/integrations/index.ts`. To add a new integration: create `src/lib/integrations/my-tool.ts` implementing `Integration`, register it in `index.ts`. No other files need to change.
 - Each integration stores its config under `globalConfig.integrations[id]` (a `Record<string, unknown>`) and parses it internally with its own Zod schema.
 - Per-workspace overrides: add `settings.integrations.<id>.enabled: false` to the workspace YAML.
 - IntelliJ integration's `applies()` returns false when no Java repos are present — it is skipped entirely rather than generating empty artifacts.
