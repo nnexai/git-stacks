@@ -1,5 +1,10 @@
 import * as p from "@clack/prompts"
 
+export function cancel(): never {
+  p.cancel("Cancelled.")
+  process.exit(0)
+}
+
 // @clack/prompts p.text returns undefined (not "") when the user presses Enter
 // on an empty field, regardless of initialValue. This wrapper normalises it.
 //

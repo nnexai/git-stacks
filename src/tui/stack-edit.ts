@@ -3,20 +3,9 @@ import { existsSync } from "fs"
 import { readStack, writeStack, stackExists, expandHome } from "../lib/config"
 import { safeText } from "./utils"
 import type { RepoType } from "../lib/config"
-import { promptSingleRepo } from "./stack-wizard"
+import { promptSingleRepo, TYPE_OPTIONS, MODE_OPTIONS } from "./stack-wizard"
 import { scanForRepos } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
-
-const TYPE_OPTIONS = [
-  { value: "java" as RepoType, label: "Java" },
-  { value: "typescript" as RepoType, label: "TypeScript" },
-  { value: "other" as RepoType, label: "Other" },
-]
-
-const MODE_OPTIONS = [
-  { value: "worktree" as const, label: "Worktree", hint: "create a branch" },
-  { value: "trunk" as const, label: "Trunk", hint: "reference main clone as context" },
-]
 
 export async function runStackEdit(name: string) {
   if (!stackExists(name)) {

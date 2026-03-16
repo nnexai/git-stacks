@@ -1,7 +1,7 @@
 import * as p from "@clack/prompts"
 import { mkdirSync, existsSync } from "fs"
 import { join } from "path"
-import { safeText } from "./utils"
+import { safeText, cancel } from "./utils"
 import {
   listWorkspaces,
   readWorkspace,
@@ -12,11 +12,6 @@ import {
 import { getTasksDir } from "../lib/paths"
 import { createWorktree } from "../lib/git"
 import { integrations, type IntegrationContext } from "../lib/integrations"
-
-function cancel(): never {
-  p.cancel("Cancelled.")
-  process.exit(0)
-}
 
 export async function runWorkspaceClone(sourceArg?: string) {
   p.intro("Clone workspace")

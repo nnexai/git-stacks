@@ -6,20 +6,17 @@ import type { StackRepo, RepoType } from "../lib/config"
 import { getMainDir } from "../lib/paths"
 import { scanForRepos, detectRepoType } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
-import { safeText } from "./utils"
+import { safeText, cancel } from "./utils"
 
-export function cancel(): never {
-  p.cancel("Cancelled.")
-  process.exit(0)
-}
+export { cancel }
 
-const TYPE_OPTIONS = [
+export const TYPE_OPTIONS = [
   { value: "java" as RepoType, label: "Java" },
   { value: "typescript" as RepoType, label: "TypeScript" },
   { value: "other" as RepoType, label: "Other" },
 ]
 
-const MODE_OPTIONS = [
+export const MODE_OPTIONS = [
   { value: "worktree" as const, label: "Worktree", hint: "create a branch" },
   { value: "trunk" as const, label: "Trunk", hint: "reference main clone as context" },
 ]

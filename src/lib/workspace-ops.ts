@@ -70,12 +70,12 @@ export async function getWorkspaceListInfo(
   const dirtyRepos: string[] = []
 
   if (checkStatus) {
-    for (const repo of worktreeRepos) {
-      if (!existsSync(repo.task_path)) continue
-      if (await isRepoDirty(repo.task_path)) {
-        dirtyRepos.push(repo.name)
-      }
-    }
+    const results = await Promise.all(
+      worktreeRepos
+        .filter((repo) => existsSync(repo.task_path))
+        .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
+    )
+    dirtyRepos.push(...results.filter((r) => r.dirty).map((r) => r.name))
     dirty = dirtyRepos.length > 0
   }
 
@@ -142,12 +142,12 @@ export type RepoStatus = {
 }
 
 export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
-  const dirty: string[] = []
-  for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
-    if (!existsSync(repo.task_path)) continue
-    if (await isRepoDirty(repo.task_path)) dirty.push(repo.name)
-  }
-  return dirty
+  const results = await Promise.all(
+    workspace.repos
+      .filter((r) => r.mode === "worktree" && existsSync(r.task_path))
+      .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
+  )
+  return results.filter((r) => r.dirty).map((r) => r.name)
 }
 
 export async function runPreRemoveHooks(workspace: Workspace, tasksDir: string): Promise<void> {
@@ -157,15 +157,7 @@ export async function runPreRemoveHooks(workspace: Workspace, tasksDir: string):
     WS_TASKS_DIR: tasksDir,
   }
 
-  const stackNames = [...new Set(workspace.repos.map((r) => r.stack))]
-  const stacksByName = new Map<string, ReturnType<typeof readStack>>()
-  for (const name of stackNames) {
-    try {
-      stacksByName.set(name, readStack(name))
-    } catch {
-      // stack deleted or missing, skip its hooks
-    }
-  }
+  const stacksByName = loadWorkspaceStacks(workspace)
 
   // Compute merged env for hook enrichment
   const mergedEnvVars = mergeEnv(workspace, stacksByName)
@@ -194,14 +186,16 @@ export async function runPreRemoveHooks(workspace: Workspace, tasksDir: string):
 }
 
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
-  const results: RepoStatus[] = []
-  for (const repo of workspace.repos) {
-    const exists = existsSync(repo.task_path)
-    const dirty = exists && repo.mode === "worktree" ? await isRepoDirty(repo.task_path) : false
-    const branch = exists && repo.mode === "worktree" ? await getCurrentBranch(repo.task_path) : "—"
-    results.push({ name: repo.name, exists, dirty, branch, mode: repo.mode })
-  }
-  return results
+  return Promise.all(
+    workspace.repos.map(async (repo) => {
+      const exists = existsSync(repo.task_path)
+      const [dirty, branch] =
+        exists && repo.mode === "worktree"
+          ? await Promise.all([isRepoDirty(repo.task_path), getCurrentBranch(repo.task_path)])
+          : [false, "—"]
+      return { name: repo.name, exists, dirty, branch, mode: repo.mode }
+    })
+  )
 }
 
 export async function cleanWorkspace(
@@ -302,17 +296,12 @@ export async function mergeWorkspace(
   }
 
   // Resolve base branches
-  const repoBases: { repo: (typeof worktreeRepos)[number]; baseBranch: string }[] = []
-  for (const repo of worktreeRepos) {
-    let baseBranch = "main"
-    try {
-      const stack = readStack(repo.stack)
-      baseBranch = stack.repos.find((r) => r.name === repo.name)?.default_branch ?? "main"
-    } catch {
-      // stack missing
-    }
-    repoBases.push({ repo, baseBranch })
-  }
+  const stacks = loadWorkspaceStacks(workspace)
+  const repoBases = worktreeRepos.map((repo) => {
+    const stack = stacks.get(repo.stack)
+    const baseBranch = stack?.repos.find((r) => r.name === repo.name)?.default_branch ?? "main"
+    return { repo, baseBranch }
+  })
 
   // Conflict pre-check
   const conflicting: string[] = []
@@ -354,9 +343,7 @@ export async function mergeWorkspace(
     await deleteLocalBranch(repo.main_path, workspace.branch)
   }
 
-  // Load stacks before deleting workspace YAML
-  const mergeStacks = loadWorkspaceStacks(workspace)
-  const mergedMergeEnv = mergeEnv(workspace, mergeStacks)
+  const mergedMergeEnv = mergeEnv(workspace, stacks)
 
   unlinkSync(workspacePath(name))
 
@@ -549,49 +536,33 @@ export async function syncWorkspace(
     return { ok: true, synced: [], skipped: [] }
   }
 
-  // Resolve base branches and strategies from stacks
-  const repoInfos: Array<{
-    repo: typeof worktreeRepos[number]
-    baseBranch: string
-    strategy: "rebase" | "merge"
-  }> = []
+  // Resolve base branches and strategies from stacks (single read per stack)
+  const stacks = loadWorkspaceStacks(workspace)
+  const repoInfos = worktreeRepos.map((repo) => {
+    const stackRepo = stacks.get(repo.stack)?.repos.find((r) => r.name === repo.name)
+    const baseBranch = stackRepo?.default_branch ?? "main"
+    const stackStrategy = stackRepo?.sync_strategy as "rebase" | "merge" | undefined
+    return { repo, baseBranch, strategy: opts.strategy ?? stackStrategy ?? "rebase" }
+  })
 
-  for (const repo of worktreeRepos) {
-    let baseBranch = "main"
-    let stackStrategy: "rebase" | "merge" | undefined
-    try {
-      const stack = readStack(repo.stack)
-      const stackRepo = stack.repos.find(r => r.name === repo.name)
-      baseBranch = stackRepo?.default_branch ?? "main"
-      stackStrategy = stackRepo?.sync_strategy as "rebase" | "merge" | undefined
-    } catch { /* stack missing */ }
-    repoInfos.push({
-      repo,
-      baseBranch,
-      strategy: opts.strategy ?? stackStrategy ?? "rebase",
-    })
-  }
-
-  // Fetch all repos first
+  // Fetch all repos in parallel
   onProgress?.("Fetching from origin...")
-  for (const { repo } of repoInfos) {
-    if (!existsSync(repo.task_path)) continue
-    try {
-      await fetchOrigin(repo.task_path)
-    } catch {
-      // fetch failed, will handle below
-    }
-  }
+  await Promise.all(
+    repoInfos
+      .filter(({ repo }) => existsSync(repo.task_path))
+      .map(({ repo }) => fetchOrigin(repo.task_path).catch(() => {}))
+  )
 
-  // Dry-run conflict check
-  const conflicts: Array<{ repo: string; files: string[] }> = []
-  for (const { repo, baseBranch } of repoInfos) {
-    if (!existsSync(repo.task_path)) continue
-    const conflictFiles = await getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch)
-    if (conflictFiles.length > 0) {
-      conflicts.push({ repo: repo.name, files: conflictFiles })
-    }
-  }
+  // Dry-run conflict check in parallel
+  const conflictResults = await Promise.all(
+    repoInfos
+      .filter(({ repo }) => existsSync(repo.task_path))
+      .map(async ({ repo, baseBranch }) => ({
+        repo: repo.name,
+        files: await getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
+      }))
+  )
+  const conflicts = conflictResults.filter((r) => r.files.length > 0)
 
   // In strict mode, abort if any conflicts
   if (!opts.bestEffort && conflicts.length > 0) {

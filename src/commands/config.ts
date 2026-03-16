@@ -1,13 +1,8 @@
 import { Command } from "commander"
 import * as p from "@clack/prompts"
 import { readGlobalConfig, writeGlobalConfig } from "../lib/config"
-import { safeText } from "../tui/utils"
+import { safeText, cancel } from "../tui/utils"
 import { integrations, resolveEnabledGlobally } from "../lib/integrations"
-
-function cancel(): never {
-  p.cancel("Cancelled.")
-  process.exit(0)
-}
 
 export const configCommand = new Command("config")
   .description("View and edit global ws configuration")
