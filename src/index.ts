@@ -22,6 +22,11 @@ program
   .command("manage")
   .description("Interactive workspace dashboard")
   .action(async () => {
+    // Register the Bun solid plugin programmatically so the dashboard works
+    // when running via `bunx` or global install (where bunfig.toml preload is absent).
+    const { plugin } = await import("bun")
+    const { default: solidPlugin } = await import("@opentui/solid/bun-plugin")
+    plugin(solidPlugin)
     const { runDashboard } = await import("./tui/dashboard/run")
     await runDashboard()
   })
