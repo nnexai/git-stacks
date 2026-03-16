@@ -55,25 +55,25 @@ function buildTree(program: Command): CommandNode[] {
 
 // ─── Bash ────────────────────────────────────────────────────────────────────
 
-function bashDynamicLookup(type: DynamicCompletion, indent: string): string {
+function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string): string {
   if (type === "workspace") {
     return (
       `${indent}local names\n` +
-      `${indent}names=$(ls "$HOME/.config/ws/workspaces" 2>/dev/null | sed 's/\\.yml$//')\n` +
+      `${indent}names=$(ls "$HOME/.config/${name}/workspaces" 2>/dev/null | sed 's/\\.yml$//')\n` +
       `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
     )
   }
   if (type === "stack") {
     return (
       `${indent}local names\n` +
-      `${indent}names=$(ls "$HOME/.config/ws/stacks" 2>/dev/null | sed 's/\\.yml$//')\n` +
+      `${indent}names=$(ls "$HOME/.config/${name}/stacks" 2>/dev/null | sed 's/\\.yml$//')\n` +
       `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
     )
   }
   return ""
 }
 
-function bashCaseBody(node: CommandNode): string {
+function bashCaseBody(node: CommandNode, name: string): string {
   const { subcommands, options, dynamic } = node
 
   if (subcommands.length > 0) {
@@ -90,7 +90,7 @@ function bashCaseBody(node: CommandNode): string {
     for (const [dynType, names] of byDynamic) {
       const pattern = names.length === 1 ? names[0] : `@(${names.join("|")})`
       out += `      elif [[ \${COMP_CWORD} -eq 3 ]] && [[ "\${words[2]}" == ${pattern} ]]; then\n`
-      out += bashDynamicLookup(dynType, "        ")
+      out += bashDynamicLookup(dynType, "        ", name)
     }
     out += "      fi\n"
     return out
@@ -106,13 +106,13 @@ function bashCaseBody(node: CommandNode): string {
       `      if [[ "$cur" == -* ]]; then\n` +
       `        COMPREPLY=($(compgen -W "${flagsStr}" -- "$cur"))\n` +
       `      else\n` +
-      bashDynamicLookup(dynamic, "        ") +
+      bashDynamicLookup(dynamic, "        ", name) +
       `      fi\n`
     )
   }
 
   if (dynamic) {
-    return bashDynamicLookup(dynamic, "      ")
+    return bashDynamicLookup(dynamic, "      ", name)
   }
 
   return ""
@@ -153,7 +153,7 @@ export function generateBash(program: Command): string {
   out += '  case "${words[1]}" in\n'
 
   for (const node of nodes) {
-    const body = bashCaseBody(node)
+    const body = bashCaseBody(node, name)
     if (!body) continue
     out += `    ${node.name})\n`
     out += body
@@ -291,13 +291,13 @@ export function generateZsh(program: Command): string {
   out += "}\n"
   out += "\n"
   out += `_${id}_workspaces() {\n`
-  out += `  local ws_dir="$HOME/.config/ws/workspaces"\n`
+  out += `  local ws_dir="$HOME/.config/${name}/workspaces"\n`
   out += `  local workspaces=(\${ws_dir}/*.yml(N:t:r))\n`
   out += `  _values 'workspace' $workspaces\n`
   out += `}\n`
   out += "\n"
   out += `_${id}_stacks() {\n`
-  out += `  local stacks_dir="$HOME/.config/ws/stacks"\n`
+  out += `  local stacks_dir="$HOME/.config/${name}/stacks"\n`
   out += `  local stacks=(\${stacks_dir}/*.yml(N:t:r))\n`
   out += `  _values 'stack' $stacks\n`
   out += `}\n`
@@ -338,14 +338,14 @@ export function generateFish(program: Command): string {
   out += "end\n"
   out += "\n"
   out += `function __${id}_workspaces\n`
-  out += `  set -l ws_dir "$HOME/.config/ws/workspaces"\n`
+  out += `  set -l ws_dir "$HOME/.config/${name}/workspaces"\n`
   out += "  if test -d $ws_dir\n"
   out += "    ls $ws_dir | sed 's/\\.yml$//'\n"
   out += "  end\n"
   out += "end\n"
   out += "\n"
   out += `function __${id}_stacks\n`
-  out += `  set -l stacks_dir "$HOME/.config/ws/stacks"\n`
+  out += `  set -l stacks_dir "$HOME/.config/${name}/stacks"\n`
   out += "  if test -d $stacks_dir\n"
   out += "    ls $stacks_dir | sed 's/\\.yml$//'\n"
   out += "  end\n"

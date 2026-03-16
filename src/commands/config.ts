@@ -1,6 +1,7 @@
 import { Command } from "commander"
 import * as p from "@clack/prompts"
 import { readGlobalConfig, writeGlobalConfig } from "../lib/config"
+import { GLOBAL_CONFIG_FILE, HOME } from "../lib/paths"
 import { safeText, cancel } from "../tui/utils"
 import { integrations, resolveEnabledGlobally } from "../lib/integrations"
 
@@ -71,6 +72,6 @@ configCommand
         : ""
       console.log(`  ${enabled ? "✓" : "✗"}  ${integration.id.padEnd(10)} ${extras}`)
     }
-    console.log(`\nConfig: ~/.config/ws/config.yml`)
+    console.log(`\nConfig: ${GLOBAL_CONFIG_FILE.replace(HOME, "~")}`)
     console.log(`Per-workspace overrides: add settings.integrations.<id>.enabled to the workspace YAML.`)
   })

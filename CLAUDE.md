@@ -16,11 +16,11 @@ No build step — Bun executes TypeScript source directly. The `@/*` path alias 
 
 `git-stacks` is a CLI tool that manages git worktrees across multiple repos. It has two core concepts:
 
-**Stacks** — named templates describing a set of repos (paths, types, default modes). Stored as YAML at `~/.config/ws/stacks/{name}.yml`.
+**Stacks** — named templates describing a set of repos (paths, types, default modes). Stored as YAML at `~/.config/git-stacks/stacks/{name}.yml`.
 
-**Workspaces** — task/ticket-scoped instances created from stacks. Each workspace has a branch name; repos can be in `worktree` mode (a git worktree is created at `{workspace_root}/tasks/{workspace_name}/{repo_name}`) or `trunk` mode (the main clone path is referenced directly). Stored at `~/.config/ws/workspaces/{name}.yml`.
+**Workspaces** — task/ticket-scoped instances created from stacks. Each workspace has a branch name; repos can be in `worktree` mode (a git worktree is created at `{workspace_root}/tasks/{workspace_name}/{repo_name}`) or `trunk` mode (the main clone path is referenced directly). Stored at `~/.config/git-stacks/workspaces/{name}.yml`.
 
-The global config is at `~/.config/ws/config.yml`. The default `workspace_root` is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
+The global config is at `~/.config/git-stacks/config.yml`. The default `workspace_root` is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
 
 ### Source layout
 
