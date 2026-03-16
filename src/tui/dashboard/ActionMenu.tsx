@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { For } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { Action } from "./types"

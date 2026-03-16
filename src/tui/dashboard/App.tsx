@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { createSignal, createMemo, Show } from "solid-js"
 import { useKeyboard, useRenderer } from "@opentui/solid"
 import { spawn } from "bun"

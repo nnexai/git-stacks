@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 type Props = {
   count: number
 }

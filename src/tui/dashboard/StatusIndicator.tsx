@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import "opentui-spinner/solid"
 import { Switch, Match } from "solid-js"
 import type { WorkspaceStatus } from "./types"

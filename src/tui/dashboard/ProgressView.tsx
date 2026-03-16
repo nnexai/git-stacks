@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import "opentui-spinner/solid"
 import { For, Show } from "solid-js"
 

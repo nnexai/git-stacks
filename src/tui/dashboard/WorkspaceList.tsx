@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { For, Show, createMemo } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { WorkspaceRow } from "./WorkspaceRow"

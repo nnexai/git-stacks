@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { StatusIndicator } from "./StatusIndicator"
 import type { WorkspaceEntry } from "./types"
 

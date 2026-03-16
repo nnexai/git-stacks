@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { For, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { WorkspaceEntry } from "./types"
