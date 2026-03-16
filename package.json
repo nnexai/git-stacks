@@ -1,5 +1,5 @@
 {
-  "name": "git-ws",
+  "name": "git-stacks",
   "version": "0.1.0",
   "description": "Git worktree workspace manager — stacks, workspaces, and multi-repo orchestration",
   "license": "MIT",
@@ -16,7 +16,7 @@
   ],
   "type": "module",
   "bin": {
-    "ws": "./src/index.ts"
+    "git-stacks": "./src/index.ts"
   },
   "files": [
     "src",
