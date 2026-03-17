@@ -120,7 +120,7 @@ export async function runStackNew() {
     process.exit(0)
   }
 
-  writeStack({ name, description: (descRaw as string).trim() || undefined, repos })
+  writeStack({ name, schema_version: "1", description: (descRaw as string).trim() || undefined, repos })
   p.outro(`Stack '${name}' saved with ${repos.length} repo(s).`)
 }
 
@@ -287,6 +287,6 @@ export async function runStackInit(dirArg?: string) {
     default_branch: branchOverrides.get(r.name) ?? branchMap.get(r.name) ?? "main",
   }))
 
-  writeStack({ name, description: (descRaw as string).trim() || undefined, repos })
+  writeStack({ name, schema_version: "1", description: (descRaw as string).trim() || undefined, repos })
   p.outro(`Stack '${name}' initialized with ${repos.length} repo(s).`)
 }

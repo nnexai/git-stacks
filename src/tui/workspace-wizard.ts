@@ -297,6 +297,7 @@ export async function runWorkspaceNew(nameArg?: string) {
   // Save config
   const workspace = {
     name: wsName,
+    schema_version: "1",
     description: description || undefined,
     branch,
     created: new Date().toISOString().split("T")[0],
