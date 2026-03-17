@@ -1,4 +1,4 @@
-import { existsSync, unlinkSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, unlinkSync, readFileSync, writeFileSync, lstatSync } from "fs"
 import { join } from "path"
 import { parse } from "yaml"
 import {
@@ -118,19 +118,51 @@ export function mergeEnv(
 export function writeEnvFiles(
   workspace: Workspace,
   stacks: Map<string, Stack>,
-  mergedEnv: Record<string, string>
+  mergedEnv: Record<string, string>,
+  onWarn?: (msg: string) => void
 ): void {
   const envFileName = workspace.env_file
     ?? [...stacks.values()].find(s => s.env_file)?.env_file
   if (!envFileName) return
 
-  const content = Object.entries(mergedEnv)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("\n") + "\n"
-
   for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
     if (!existsSync(repo.task_path)) continue
-    writeFileSync(join(repo.task_path, envFileName), content, "utf-8")
+    const targetPath = join(repo.task_path, envFileName)
+
+    // Guard: if the env file is a symlink, skip and warn — never write through a symlink
+    try {
+      const stat = lstatSync(targetPath)
+      if (stat.isSymbolicLink()) {
+        onWarn?.(`skipping env file write: ${targetPath} is a symlink`)
+        continue
+      }
+    } catch {
+      // targetPath does not exist yet — fall through to create it
+    }
+
+    let content: string
+    if (existsSync(targetPath)) {
+      // Merge: walk existing lines, update matching config keys in-place, preserve rest
+      const existing = readFileSync(targetPath, "utf-8")
+      const written = new Set<string>()
+      const lines = existing.replace(/\n$/, "").split("\n").map(line => {
+        const m = line.match(/^([^=\s#][^=]*)=(.*)$/)
+        if (m && m[1] in mergedEnv) {
+          written.add(m[1])
+          return `${m[1]}=${mergedEnv[m[1]]}`
+        }
+        return line
+      })
+      // Append config keys not already in the file
+      for (const [k, v] of Object.entries(mergedEnv)) {
+        if (!written.has(k)) lines.push(`${k}=${v}`)
+      }
+      content = lines.join("\n") + "\n"
+    } else {
+      content = Object.entries(mergedEnv).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
+    }
+
+    writeFileSync(targetPath, content, "utf-8")
   }
 }
 
