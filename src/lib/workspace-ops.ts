@@ -1,4 +1,4 @@
-import { existsSync, unlinkSync, readFileSync, renameSync, writeFileSync } from "fs"
+import { existsSync, unlinkSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { parse } from "yaml"
 import {
@@ -224,13 +224,23 @@ export async function cleanWorkspace(
     return { ok: false, error: `pre_remove hook failed: ${err}` }
   }
 
+  // Stage: attempt all worktree removals, collect failures (BUG-02 fix)
+  const failures: string[] = []
   for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
     if (!existsSync(repo.task_path)) {
       onProgress?.(`skip  ${repo.name} (already removed)`)
       continue
     }
-    await removeWorktree(repo.main_path, repo.task_path)
-    onProgress?.(`removed  ${repo.name}`)
+    try {
+      await removeWorktree(repo.main_path, repo.task_path)
+      onProgress?.(`removed  ${repo.name}`)
+    } catch (err) {
+      failures.push(`${repo.name}: ${err}`)
+    }
+  }
+
+  if (failures.length > 0) {
+    return { ok: false, error: `Failed to clean worktrees:\n  ${failures.join("\n  ")}` }
   }
 
   return { ok: true }
@@ -262,10 +272,21 @@ export async function removeWorkspace(
     return { ok: false, error: `pre_remove hook failed: ${err}` }
   }
 
+  // Stage: attempt all worktree removals, collect failures (BUG-02 fix)
+  const failures: string[] = []
   for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
     if (!existsSync(repo.task_path)) continue
-    await removeWorktree(repo.main_path, repo.task_path)
-    onProgress?.(`removed  ${repo.name}`)
+    try {
+      await removeWorktree(repo.main_path, repo.task_path)
+      onProgress?.(`removed  ${repo.name}`)
+    } catch (err) {
+      failures.push(`${repo.name}: ${err}`)
+    }
+  }
+
+  // Commit: only delete YAML if all removals succeeded
+  if (failures.length > 0) {
+    return { ok: false, error: `Failed to remove worktrees:\n  ${failures.join("\n  ")}` }
   }
 
   unlinkSync(workspacePath(name))
@@ -323,14 +344,17 @@ export async function mergeWorkspace(
     return { ok: false, error: `pre_remove hook failed: ${err}` }
   }
 
-  // Merge
+  // Merge (BUG-01 fix: check result and return early on failure -- YAML preserved)
   for (const { repo, baseBranch } of repoBases) {
     const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
     if (!branchExists) {
       onProgress?.(`skip  ${repo.name} (branch '${workspace.branch}' not found)`)
       continue
     }
-    await mergeNoFF(repo.main_path, baseBranch, workspace.branch)
+    const result = await mergeNoFF(repo.main_path, baseBranch, workspace.branch)
+    if (!result.ok) {
+      return { ok: false, error: `Merge failed for ${repo.name}: ${result.error}` }
+    }
     onProgress?.(`merged  ${repo.name}  →  ${baseBranch}`)
   }
 
@@ -479,14 +503,25 @@ export async function renameWorkspace(
   const config = readGlobalConfig()
   const tasksDir = getTasksDir(config.workspace_root)
   const workspace = readWorkspace(oldName)
-  const oldTaskDir = join(tasksDir, oldName)
-  const newTaskDir = join(tasksDir, newName)
 
-  if (existsSync(oldTaskDir)) {
-    renameSync(oldTaskDir, newTaskDir)
-    onProgress?.(`renamed  ${oldTaskDir} → ${newTaskDir}`)
+  // Re-register worktrees at new paths (BUG-03 fix: use git commands, not renameSync)
+  const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+
+  for (const repo of worktreeRepos) {
+    const oldWorktreePath = repo.task_path
+    const newWorktreePath = oldWorktreePath.replace(
+      join(tasksDir, oldName),
+      join(tasksDir, newName)
+    )
+
+    if (existsSync(oldWorktreePath)) {
+      await removeWorktree(repo.main_path, oldWorktreePath)
+      await createWorktree(repo.main_path, newWorktreePath, workspace.branch)
+      onProgress?.(`re-registered  ${repo.name}`)
+    }
   }
 
+  // Update workspace metadata
   workspace.name = newName
   for (const repo of workspace.repos) {
     if (repo.task_path.includes(join(tasksDir, oldName))) {
