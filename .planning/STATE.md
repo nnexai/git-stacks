@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in-progress
-stopped_at: Completed 01-foundation 01-01-PLAN.md
-last_updated: "2026-03-17T21:10:00.000Z"
+status: executing
+stopped_at: Completed 01-foundation 01-03-PLAN.md
+last_updated: "2026-03-17T21:29:04.804Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 20
 ---
 
@@ -50,6 +50,7 @@ Progress: [██░░░░░░░░] 20%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01-foundation P03 | 2 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -62,6 +63,9 @@ Recent decisions affecting current work:
 - Roadmap creation: Safety (SAFE-*) kept as a separate phase after Foundation — not merged in, per ordering requirement
 - 01-01: Use `git init -b main` to force default branch name regardless of host git config — ensures test reproducibility across environments
 - 01-01: Each describe block owns its own tmp/repo lifecycle (beforeEach/afterEach) to prevent cross-test contamination
+- [Phase 01-03]: completion subcommand bypasses git version check so shell completions work without git
+- [Phase 01-03]: integration binary guards use which <cmd> and silent early-return -- missing optional tools is normal, not an error
+- [Phase 01-03]: doctor uses warn icon for optional tools (code, idea, tmux, cmux) and fail icon only for required git
 
 ### Roadmap Evolution
 
@@ -78,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T21:10:00.000Z
-Stopped at: Completed 01-foundation 01-01-PLAN.md
-Resume file: .planning/phases/01-foundation/01-01-SUMMARY.md
+Last session: 2026-03-17T21:29:04.800Z
+Stopped at: Completed 01-foundation 01-03-PLAN.md
+Resume file: None

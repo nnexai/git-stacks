@@ -20,9 +20,9 @@
 
 ### Foundation — Prerequisites
 
-- [ ] **PREREQ-01**: On startup, git is verified to be installed and meets the minimum required version (2.24+ for worktree support); a clear error is shown if not met, with install instructions
-- [ ] **PREREQ-02**: Each integration checks for its required binary at `applies()` time before generating artifacts or launching — missing binary causes that integration to be skipped with a debug-level note (not an error)
-- [ ] **PREREQ-03**: `doctor` reports missing runtime dependencies (git version, integration binaries: `code`, `code-insiders`, `idea`, `tmux`, `cmux`) with suggested install commands
+- [x] **PREREQ-01**: On startup, git is verified to be installed and meets the minimum required version (2.24+ for worktree support); a clear error is shown if not met, with install instructions
+- [x] **PREREQ-02**: Each integration checks for its required binary at `applies()` time before generating artifacts or launching — missing binary causes that integration to be skipped with a debug-level note (not an error)
+- [x] **PREREQ-03**: `doctor` reports missing runtime dependencies (git version, integration binaries: `code`, `code-insiders`, `idea`, `tmux`, `cmux`) with suggested install commands
 
 ### Foundation — Bug Fixes
 
@@ -105,9 +105,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PREREQ-01 | Phase 1 | Pending |
-| PREREQ-02 | Phase 1 | Pending |
-| PREREQ-03 | Phase 1 | Pending |
+| PREREQ-01 | Phase 1 | Complete |
+| PREREQ-02 | Phase 1 | Complete |
+| PREREQ-03 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 1 | Complete |
 | TEST-03 | Phase 1 | Pending |
