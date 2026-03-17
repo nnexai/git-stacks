@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-17T23:05:42.574Z"
+stopped_at: Completed 02-safety-01-PLAN.md
+last_updated: "2026-03-17T23:30:01.769Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
   percent: 20
 ---
 
@@ -57,6 +57,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01.2-version-command P01 | 2 | 2 tasks | 3 files |
 | Phase 01.1-file-and-folder-copy-symlink-support P01 | 3 | 3 tasks | 5 files |
 | Phase 01.1-file-and-folder-copy-symlink-support P02 | 3 | 3 tasks | 2 files |
+| Phase 02-safety P01 | 5 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,9 @@ Recent decisions affecting current work:
 - [Phase 01.1-02]: workspace.files unavailable during new (YAML not written), so applyFileOpsForWorkspace receives {} as Workspace - only stack.files applies at workspace-instance level during creation
 - [Phase 01.1-02]: File op errors during new are fatal (process.exit), during open they are non-fatal warnings via onProgress - open is idempotent and forgiving
 - [Phase 01.1-02]: writeEnvFiles uses lstatSync (not existsSync) for symlink detection and merge semantics - config keys updated in-place, manual keys/comments preserved
+- [Phase 02-safety]: warnExternalFiles checks entry path itself (after expandHome) for being absolute and outside wsDir — not the flattened destination
+- [Phase 02-safety]: dryRun short-circuit placed after external warnings but before hooks in remove and clean ops
+- [Phase 02-safety]: renameWorkspace opts param defaults to {} for backward compatibility with existing call sites
 
 ### Roadmap Evolution
 
@@ -102,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T23:05:42.572Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-safety/02-CONTEXT.md
+Last session: 2026-03-17T23:30:01.767Z
+Stopped at: Completed 02-safety-01-PLAN.md
+Resume file: None

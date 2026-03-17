@@ -67,12 +67,12 @@
 
 ### File Operations — Cleanup (Phase 2 wiring)
 
-- [ ] **FILES-16**: `files.ts` exposes a `warnExternalFiles()` function that inspects resolved file destinations and emits a visible warning for any that fall outside the workspace root or task directory — these are not deleted (they were placed outside the managed area and the user must handle them manually)
-- [ ] **FILES-17**: `warnExternalFiles()` is called by `removeWorkspace()` and `cleanWorkspace()` before teardown proceeds — files inside the workspace are cleaned up naturally when the workspace directory is removed; only external destinations need explicit user attention
+- [x] **FILES-16**: `files.ts` exposes a `warnExternalFiles()` function that inspects resolved file destinations and emits a visible warning for any that fall outside the workspace root or task directory — these are not deleted (they were placed outside the managed area and the user must handle them manually)
+- [x] **FILES-17**: `warnExternalFiles()` is called by `removeWorkspace()` and `cleanWorkspace()` before teardown proceeds — files inside the workspace are cleaned up naturally when the workspace directory is removed; only external destinations need explicit user attention
 
 ### Destructive Operation Safety
 
-- [ ] **SAFE-01**: `remove`, `clean`, and `merge` support a `--dry-run` flag that shows what would be done without making changes — output includes any external file destinations that would be left behind with a warning
+- [x] **SAFE-01**: `remove`, `clean`, and `merge` support a `--dry-run` flag that shows what would be done without making changes — output includes any external file destinations that would be left behind with a warning
 - [ ] **SAFE-02**: `remove` and `clean` without `--force` prompt for confirmation before executing destructive operations
 - [ ] **SAFE-03**: `--force` flag behavior is consistent across all destructive commands (`remove`, `clean`, `merge`, `rename`)
 
@@ -180,9 +180,9 @@
 | SCHEMA-04 | Phase 01.1 | Complete |
 | IDEMPOTENT-01 | Phase 01.1 | Complete |
 | IDEMPOTENT-02 | Phase 01.1 | Complete |
-| FILES-16 | Phase 01.1 (engine) / Phase 2 (wiring) | Pending |
-| FILES-17 | Phase 2 | Pending |
-| SAFE-01 | Phase 2 | Pending |
+| FILES-16 | Phase 01.1 (engine) / Phase 2 (wiring) | Complete |
+| FILES-17 | Phase 2 | Complete |
+| SAFE-01 | Phase 2 | Complete |
 | SAFE-02 | Phase 2 | Pending |
 | SAFE-03 | Phase 2 | Pending |
 | DESIGN-01 | Phase 3 | Pending |
