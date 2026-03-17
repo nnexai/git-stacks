@@ -13,10 +13,10 @@
 
 ### Foundation — Config Robustness
 
-- [ ] **CONF-01**: A corrupt or outdated YAML file in `workspaces/` or `stacks/` does not crash `list` or any other command — it logs a warning to stderr and skips that entry
-- [ ] **CONF-02**: All new schema fields use `.optional()` or `.default()` — no new required fields can break existing user config files on upgrade
-- [ ] **CONF-03**: A `schema_version` field is added to Stack and Workspace YAML schemas, with a documented migration strategy for future breaking changes
-- [ ] **CONF-04**: Zod validation errors surface as human-readable field-level messages (e.g., "repos[0].path: expected string, got undefined") not raw stack traces
+- [x] **CONF-01**: A corrupt or outdated YAML file in `workspaces/` or `stacks/` does not crash `list` or any other command — it logs a warning to stderr and skips that entry
+- [x] **CONF-02**: All new schema fields use `.optional()` or `.default()` — no new required fields can break existing user config files on upgrade
+- [x] **CONF-03**: A `schema_version` field is added to Stack and Workspace YAML schemas, with a documented migration strategy for future breaking changes
+- [x] **CONF-04**: Zod validation errors surface as human-readable field-level messages (e.g., "repos[0].path: expected string, got undefined") not raw stack traces
 
 ### Foundation — Prerequisites
 
@@ -111,10 +111,10 @@
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 1 | Complete |
 | TEST-03 | Phase 1 | Pending |
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
-| CONF-03 | Phase 1 | Pending |
-| CONF-04 | Phase 1 | Pending |
+| CONF-01 | Phase 1 | Complete |
+| CONF-02 | Phase 1 | Complete |
+| CONF-03 | Phase 1 | Complete |
+| CONF-04 | Phase 1 | Complete |
 | BUG-01 | Phase 1 | Pending |
 | BUG-02 | Phase 1 | Pending |
 | BUG-03 | Phase 1 | Pending |
