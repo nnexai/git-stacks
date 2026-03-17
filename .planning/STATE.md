@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-17T20:59:59.331Z"
+stopped_at: Phase 1.1 context gathered
+last_updated: "2026-03-17T21:21:48.179Z"
 last_activity: 2026-03-17 — Roadmap created
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -61,6 +61,10 @@ Recent decisions affecting current work:
 - Roadmap creation: REPO-* and TMPL-* placed in Phase 3 as conditional on DESIGN-01/DESIGN-02 outcome
 - Roadmap creation: Safety (SAFE-*) kept as a separate phase after Foundation — not merged in, per ordering requirement
 
+### Roadmap Evolution
+
+- Phase 01.1 inserted after Phase 1: File and folder copy/symlink support between repos for large binary sharing (URGENT)
+
 ### Pending Todos
 
 None yet.
@@ -72,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T20:59:59.328Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-foundation/01-CONTEXT.md
+Last session: 2026-03-17T21:21:48.176Z
+Stopped at: Phase 1.1 context gathered
+Resume file: .planning/phases/01.1-file-and-folder-copy-symlink-support-between-repos-for-large-binary-sharing/01.1-CONTEXT.md
