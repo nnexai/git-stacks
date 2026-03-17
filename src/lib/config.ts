@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { ZodError } from "zod"
 import { parse, stringify } from "yaml"
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs"
 import { join, dirname } from "path"
@@ -9,6 +10,17 @@ import {
   DEFAULT_WORKSPACE_ROOT,
   expandHome,
 } from "./paths"
+
+// --- Error formatting ---
+
+export function formatZodError(err: ZodError): string {
+  return err.issues
+    .map((issue) => {
+      const path = issue.path.join(".")
+      return path ? `${path}: ${issue.message}` : issue.message
+    })
+    .join("; ")
+}
 
 // --- Schemas ---
 
@@ -41,6 +53,8 @@ export type StackRepo = z.infer<typeof StackRepoSchema>
 
 export const StackSchema = z.object({
   name: z.string(),
+  // Migration strategy: bump default when schema changes; read-time migration functions keyed by version
+  schema_version: z.string().default("1"),
   description: z.string().optional(),
   repos: z.array(StackRepoSchema).default([]),
   integrations: z.record(z.unknown()).optional(),
@@ -79,6 +93,8 @@ const WorkspaceHooksSchema = z.object({
 
 export const WorkspaceSchema = z.object({
   name: z.string(),
+  // Migration strategy: bump default when schema changes; read-time migration functions keyed by version
+  schema_version: z.string().default("1"),
   description: z.string().optional(),
   branch: z.string(),
   created: z.string(),
@@ -107,7 +123,14 @@ function ensureDir(dir: string) {
 // Use structural typing to avoid Zod's internal generic complexity
 function readYaml<T>(path: string, schema: { parse: (data: unknown) => T }): T {
   const raw = readFileSync(path, "utf-8")
-  return schema.parse(parse(raw))
+  try {
+    return schema.parse(parse(raw))
+  } catch (err) {
+    if (err && typeof err === "object" && "issues" in err) {
+      throw new Error(`Invalid config at ${path}: ${formatZodError(err as ZodError)}`)
+    }
+    throw err
+  }
 }
 
 function writeYaml(path: string, data: unknown) {
@@ -147,9 +170,22 @@ export function writeStack(stack: Stack) {
 
 export function listStacks(): Stack[] {
   if (!existsSync(STACKS_DIR)) return []
-  return readdirSync(STACKS_DIR)
-    .filter((f) => f.endsWith(".yml"))
-    .map((f) => readStack(f.replace(".yml", "")))
+  const results: Stack[] = []
+  for (const f of readdirSync(STACKS_DIR).filter((f) => f.endsWith(".yml"))) {
+    const name = f.replace(".yml", "")
+    try {
+      const raw = readFileSync(stackPath(name), "utf-8")
+      const parsed = StackSchema.safeParse(parse(raw))
+      if (parsed.success) {
+        results.push(parsed.data)
+      } else {
+        console.error(`[git-stacks] Skipping corrupt stack '${name}': ${formatZodError(parsed.error)}`)
+      }
+    } catch (err) {
+      console.error(`[git-stacks] Skipping unreadable stack '${name}': ${err}`)
+    }
+  }
+  return results
 }
 
 // --- Workspaces ---
@@ -173,9 +209,22 @@ export function writeWorkspace(workspace: Workspace) {
 
 export function listWorkspaces(): Workspace[] {
   if (!existsSync(WORKSPACES_DIR)) return []
-  return readdirSync(WORKSPACES_DIR)
-    .filter((f) => f.endsWith(".yml"))
-    .map((f) => readWorkspace(f.replace(".yml", "")))
+  const results: Workspace[] = []
+  for (const f of readdirSync(WORKSPACES_DIR).filter((f) => f.endsWith(".yml"))) {
+    const name = f.replace(".yml", "")
+    try {
+      const raw = readFileSync(workspacePath(name), "utf-8")
+      const parsed = WorkspaceSchema.safeParse(parse(raw))
+      if (parsed.success) {
+        results.push(parsed.data)
+      } else {
+        console.error(`[git-stacks] Skipping corrupt workspace '${name}': ${formatZodError(parsed.error)}`)
+      }
+    } catch (err) {
+      console.error(`[git-stacks] Skipping unreadable workspace '${name}': ${err}`)
+    }
+  }
+  return results
 }
 
 export { expandHome }
