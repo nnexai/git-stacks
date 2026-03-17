@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01.2-01-PLAN.md
-last_updated: "2026-03-17T22:08:12.375Z"
+stopped_at: Completed 01.1-01-PLAN.md
+last_updated: "2026-03-17T22:38:33.557Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 20
 ---
 
@@ -55,6 +55,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01-foundation P04 | 2 | 2 tasks | 3 files |
 | Phase 01-foundation P05 | 10 | 1 tasks | 1 files |
 | Phase 01.2-version-command P01 | 2 | 2 tasks | 3 files |
+| Phase 01.1-file-and-folder-copy-symlink-support P01 | 3 | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [Phase 01-foundation]: 01-05: Use unique prefixed names for workspace/stack YAML isolation -- paths.ts resolves HOME at module load time, making HOME redirect ineffective after first import
 - [Phase 01.2-01]: Use import.meta.dir + '/../../package.json' to locate package.json relative to src/lib/version.ts — survives bun link installs
 - [Phase 01.2-01]: Use .quiet().nothrow() on git commands in getVersionString so CLI works cleanly outside any git repo
+- [Phase 01.1-01]: Use lstatSync not existsSync for destination check — lstatSync returns true for dangling symlinks, existsSync does not
+- [Phase 01.1-01]: Zero-match glob produces warning in ApplyResult not error — zero-match is often intentional in config
+- [Phase 01.1-01]: Deprecated applyFileOperations kept as shim — Plan 02 will replace the workspace-wizard.ts call site
 
 ### Roadmap Evolution
 
@@ -94,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T22:00:23.693Z
-Stopped at: Completed 01.2-01-PLAN.md
+Last session: 2026-03-17T22:38:33.555Z
+Stopped at: Completed 01.1-01-PLAN.md
 Resume file: None
