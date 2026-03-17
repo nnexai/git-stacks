@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync, rmSync } from "fs"
-import { join } from "path"
+import { join, dirname } from "path"
 import { execSync } from "child_process"
 
 export function makeTmpDir(prefix = "ws-test"): string {
@@ -26,6 +26,23 @@ export function write(base: string, rel: string, content: string) {
   const p = join(base, rel)
   mkdirSync(join(p, ".."), { recursive: true })
   writeFileSync(p, content)
+}
+
+/**
+ * Create a directory tree from a flat map of relative paths to contents.
+ * Paths ending with "/" create directories. Others create files with the given content.
+ * Example: makeFileTree(base, { "a/b.txt": "hello", "c/": "" })
+ */
+export function makeFileTree(base: string, entries: Record<string, string>) {
+  for (const [rel, content] of Object.entries(entries)) {
+    if (rel.endsWith("/")) {
+      mkdirSync(join(base, rel), { recursive: true })
+    } else {
+      const full = join(base, rel)
+      mkdirSync(dirname(full), { recursive: true })
+      writeFileSync(full, content)
+    }
+  }
 }
 
 export function makeGitRepo(base: string, name = "repo"): string {
