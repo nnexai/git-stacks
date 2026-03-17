@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { existsSync, readFileSync, lstatSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
-import { makeTmpDir, cleanup, makeFileTree, write, touch, mkdir } from "../helpers"
+import { makeTmpDir, cleanup, makeFileTree, write, mkdir } from "../helpers"
 import {
   applyEntry,
   expandGlob,
@@ -12,7 +12,6 @@ import {
   processFileList,
   applyFileOpsForRepo,
   applyFileOpsForWorkspace,
-  dstExists,
 } from "../../src/lib/files"
 import type { StackRepo, Stack, WorkspaceRepo, Workspace } from "../../src/lib/config"
 

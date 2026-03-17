@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
-import { StackSchema, WorkspaceSchema, WorkspaceRepoSchema, FilesSchema, formatZodError, listStacks, listWorkspaces } from "../../src/lib/config"
+import { StackSchema, WorkspaceSchema, WorkspaceRepoSchema, formatZodError, listStacks, listWorkspaces } from "../../src/lib/config"
 import { STACKS_DIR, WORKSPACES_DIR } from "../../src/lib/paths"
 import { makeTmpDir, cleanup } from "../helpers"
 
