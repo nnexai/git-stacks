@@ -1,5 +1,5 @@
 import * as p from "@clack/prompts"
-import { mkdirSync, existsSync, writeFileSync } from "fs"
+import { mkdirSync, existsSync, writeFileSync, lstatSync } from "fs"
 import { safeText, cancel } from "./utils"
 import { join } from "path"
 import {
@@ -234,9 +234,15 @@ export async function runWorkspaceNew(nameArg?: string) {
   if (envFileName) {
     const content = Object.entries(stackEnv).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
     for (const repo of worktreeRepos) {
-      if (existsSync(repo.task_path)) {
-        writeFileSync(join(repo.task_path, envFileName), content, "utf-8")
-      }
+      if (!existsSync(repo.task_path)) continue
+      const targetPath = join(repo.task_path, envFileName)
+      try {
+        if (lstatSync(targetPath).isSymbolicLink()) {
+          p.log.warn(`skipping env file write: ${targetPath} is a symlink`)
+          continue
+        }
+      } catch { /* file doesn't exist yet, safe to write */ }
+      writeFileSync(targetPath, content, "utf-8")
     }
   }
 
