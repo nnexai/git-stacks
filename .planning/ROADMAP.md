@@ -29,7 +29,24 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Core git operations (createWorktree, removeWorktree, mergeNoFF, rebaseBranch) are covered by integration tests using real local git repos — regressions are caught before they reach users
   4. git-stacks fails fast with a clear install instruction when git is absent or below version 2.24
   5. mergeWorkspace, removeWorkspace, and renameWorkspace cannot leave workspace YAML deleted or git worktrees unregistered after a mid-operation failure
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Test infrastructure: makeGitRepo helper + git.ts integration tests (TEST-01, TEST-02)
+- [ ] 01-02-PLAN.md — Config resilience: formatZodError, safeParse, schema_version, shape guard (CONF-01-04)
+- [ ] 01-03-PLAN.md — Prerequisite checks: git version check, integration binary guards, doctor reporting (PREREQ-01-03)
+- [ ] 01-04-PLAN.md — Bug fixes: mergeNoFF detached HEAD, atomic merge/remove/clean/rename (BUG-01-04)
+- [ ] 01-05-PLAN.md — Workspace lifecycle integration tests (TEST-03)
+
+### Phase 01.1: File and folder copy/symlink support between repos for large binary sharing (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 1
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 01.1 to break down)
 
 ### Phase 2: Safety
 **Goal**: Users can safely run remove, clean, and merge knowing exactly what will happen before it does, with consistent --force semantics across all destructive commands
@@ -75,7 +92,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/5 | Planned | - |
 | 2. Safety | 0/TBD | Not started | - |
 | 3. Design and Conditional Implementation | 0/TBD | Not started | - |
 | 4. UX and Execution | 0/TBD | Not started | - |
