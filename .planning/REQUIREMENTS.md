@@ -26,10 +26,10 @@
 
 ### Foundation — Bug Fixes
 
-- [ ] **BUG-01**: `mergeWorkspace` is atomic — the workspace YAML is not deleted until all repo merges succeed; a mid-way failure leaves the workspace record intact with a recoverable error
-- [ ] **BUG-02**: `removeWorkspace` and `cleanWorkspace` use a stage-then-commit pattern — state is not permanently mutated until all operations succeed
-- [ ] **BUG-03**: `renameWorkspace` re-registers git worktrees at their new paths via `git worktree remove` + `git worktree add` instead of a bare filesystem rename
-- [ ] **BUG-04**: A failed `mergeNoFF` does not leave the main clone stranded on the base branch — on merge failure, the clone is restored to its original branch (via rollback or a temporary-worktree approach that avoids touching the main clone HEAD)
+- [x] **BUG-01**: `mergeWorkspace` is atomic — the workspace YAML is not deleted until all repo merges succeed; a mid-way failure leaves the workspace record intact with a recoverable error
+- [x] **BUG-02**: `removeWorkspace` and `cleanWorkspace` use a stage-then-commit pattern — state is not permanently mutated until all operations succeed
+- [x] **BUG-03**: `renameWorkspace` re-registers git worktrees at their new paths via `git worktree remove` + `git worktree add` instead of a bare filesystem rename
+- [x] **BUG-04**: A failed `mergeNoFF` does not leave the main clone stranded on the base branch — on merge failure, the clone is restored to its original branch (via rollback or a temporary-worktree approach that avoids touching the main clone HEAD)
 
 ### Destructive Operation Safety
 
@@ -115,10 +115,10 @@
 | CONF-02 | Phase 1 | Complete |
 | CONF-03 | Phase 1 | Complete |
 | CONF-04 | Phase 1 | Complete |
-| BUG-01 | Phase 1 | Pending |
-| BUG-02 | Phase 1 | Pending |
-| BUG-03 | Phase 1 | Pending |
-| BUG-04 | Phase 1 | Pending |
+| BUG-01 | Phase 1 | Complete |
+| BUG-02 | Phase 1 | Complete |
+| BUG-03 | Phase 1 | Complete |
+| BUG-04 | Phase 1 | Complete |
 | SAFE-01 | Phase 2 | Pending |
 | SAFE-02 | Phase 2 | Pending |
 | SAFE-03 | Phase 2 | Pending |

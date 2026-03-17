@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-foundation 01-02-PLAN.md
-last_updated: "2026-03-17T21:31:04.937Z"
+stopped_at: Completed 01-foundation 01-04-PLAN.md
+last_updated: "2026-03-17T21:37:57.902Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 20
 ---
 
@@ -52,6 +52,7 @@ Progress: [██░░░░░░░░] 20%
 *Updated after each plan completion*
 | Phase 01-foundation P03 | 2 | 2 tasks | 4 files |
 | Phase 01-foundation P02 | 3 min | 2 tasks | 2 files |
+| Phase 01-foundation P04 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,8 @@ Recent decisions affecting current work:
 - [Phase 01-03]: doctor uses warn icon for optional tools (code, idea, tmux, cmux) and fail icon only for required git
 - [Phase 01-foundation]: 01-02: Use try/catch with 'issues' check in readYaml to detect ZodError without changing generic type — backward compatible with all callers
 - [Phase 01-foundation]: 01-02: Write corrupt YAML tests directly to STACKS_DIR with _test-prefixed names — Bun module cache makes process.env.HOME redirect ineffective once paths.ts is loaded
+- [Phase 01-foundation]: mergeNoFF uses update-ref to advance base branch ref in detached HEAD worktree -- no git checkout on main clone; matches rebaseBranch Result type pattern
+- [Phase 01-foundation]: renameWorkspace replaces renameSync with per-repo removeWorktree + createWorktree to keep git internal registry consistent
 
 ### Roadmap Evolution
 
@@ -85,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T21:31:04.931Z
-Stopped at: Completed 01-foundation 01-02-PLAN.md
+Last session: 2026-03-17T21:37:57.898Z
+Stopped at: Completed 01-foundation 01-04-PLAN.md
 Resume file: None
