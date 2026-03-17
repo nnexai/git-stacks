@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "fs"
+import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { StackSchema, WorkspaceSchema, WorkspaceRepoSchema, formatZodError, listStacks, listWorkspaces } from "../../src/lib/config"
 import { STACKS_DIR, WORKSPACES_DIR } from "../../src/lib/paths"
-import { makeTmpDir, cleanup, write } from "../helpers"
+import { makeTmpDir, cleanup } from "../helpers"
 
 // --- Schema parsing ---
 
@@ -92,11 +92,11 @@ describe("stack file I/O", () => {
     process.env.HOME = tmp
     const { writeStack, readStack } = await import("../../src/lib/config")
 
-    const stack = {
+    const stack = StackSchema.parse({
       name: "test-stack",
       description: "My stack",
-      repos: [{ name: "repo-a", path: "/main/repo-a", type: "java" as const, default_mode: "worktree" as const, default_branch: "develop" }],
-    }
+      repos: [{ name: "repo-a", path: "/main/repo-a", type: "java", default_mode: "worktree", default_branch: "develop" }],
+    })
 
     writeStack(stack)
     const loaded = readStack("test-stack")
