@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 01.2 context gathered
-last_updated: "2026-03-17T21:47:17.602Z"
+stopped_at: Completed 01.2-01-PLAN.md
+last_updated: "2026-03-17T22:00:23.697Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 2
+  total_plans: 7
+  completed_plans: 6
   percent: 20
 ---
 
@@ -54,6 +54,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01-foundation P02 | 3 min | 2 tasks | 2 files |
 | Phase 01-foundation P04 | 2 | 2 tasks | 3 files |
 | Phase 01-foundation P05 | 10 | 1 tasks | 1 files |
+| Phase 01.2-version-command P01 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 01-foundation]: mergeNoFF uses update-ref to advance base branch ref in detached HEAD worktree -- no git checkout on main clone; matches rebaseBranch Result type pattern
 - [Phase 01-foundation]: renameWorkspace replaces renameSync with per-repo removeWorktree + createWorktree to keep git internal registry consistent
 - [Phase 01-foundation]: 01-05: Use unique prefixed names for workspace/stack YAML isolation -- paths.ts resolves HOME at module load time, making HOME redirect ineffective after first import
+- [Phase 01.2-01]: Use import.meta.dir + '/../../package.json' to locate package.json relative to src/lib/version.ts — survives bun link installs
+- [Phase 01.2-01]: Use .quiet().nothrow() on git commands in getVersionString so CLI works cleanly outside any git repo
 
 ### Roadmap Evolution
 
@@ -91,6 +94,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T21:45:36.876Z
-Stopped at: Phase 01.2 context gathered
-Resume file: .planning/phases/01.2-small-addition-to-add-a-version-command-that-shows-published-version-and-git-commit-hash-should-also-work-then-running-from-source-via-bun-link/01.2-CONTEXT.md
+Last session: 2026-03-17T22:00:23.693Z
+Stopped at: Completed 01.2-01-PLAN.md
+Resume file: None

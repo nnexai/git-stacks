@@ -33,7 +33,7 @@
 
 ### Version Information
 
-- [ ] **VER-01**: `git-stacks -V` / `--version` shows the version from `package.json` plus the git commit hash (with `-dirty` suffix when working tree has uncommitted changes) when running from source; shows version only (no hash) when installed globally via npm
+- [x] **VER-01**: `git-stacks -V` / `--version` shows the version from `package.json` plus the git commit hash (with `-dirty` suffix when working tree has uncommitted changes) when running from source; shows version only (no hash) when installed globally via npm
 
 ### Destructive Operation Safety
 
@@ -123,7 +123,7 @@
 | BUG-02 | Phase 1 | Complete |
 | BUG-03 | Phase 1 | Complete |
 | BUG-04 | Phase 1 | Complete |
-| VER-01 | Phase 01.2 | Pending |
+| VER-01 | Phase 01.2 | Complete |
 | SAFE-01 | Phase 2 | Pending |
 | SAFE-02 | Phase 2 | Pending |
 | SAFE-03 | Phase 2 | Pending |
