@@ -34,6 +34,14 @@ const HooksSchema = z.object({
   post_open: z.array(z.string()).optional(),
 })
 
+export const FilesSchema = z
+  .object({
+    copy: z.array(z.string()).optional(),
+    symlink: z.array(z.string()).optional(),
+  })
+  .optional()
+export type Files = z.infer<typeof FilesSchema>
+
 export const StackRepoSchema = z.object({
   name: z.string(),
   path: z.string(),
@@ -42,12 +50,7 @@ export const StackRepoSchema = z.object({
   default_branch: z.string().default("main"),
   sync_strategy: z.enum(["rebase", "merge"]).optional(),
   hooks: HooksSchema.optional(),
-  files: z
-    .object({
-      copy: z.array(z.string()).optional(),
-      symlink: z.array(z.string()).optional(),
-    })
-    .optional(),
+  files: FilesSchema,
 })
 export type StackRepo = z.infer<typeof StackRepoSchema>
 
@@ -61,6 +64,7 @@ export const StackSchema = z.object({
   hooks: HooksSchema.optional(),
   env: z.record(z.string()).optional(),
   env_file: z.string().optional(),
+  files: FilesSchema,
 })
 export type Stack = z.infer<typeof StackSchema>
 
@@ -76,6 +80,7 @@ export const WorkspaceRepoSchema = z.object({
   main_path: z.string(),
   task_path: z.string(),
   hooks: WorkspaceRepoHooksSchema.optional(),
+  files: FilesSchema,
 })
 export type WorkspaceRepo = z.infer<typeof WorkspaceRepoSchema>
 
@@ -104,6 +109,7 @@ export const WorkspaceSchema = z.object({
   repos: z.array(WorkspaceRepoSchema).default([]),
   env: z.record(z.string()).optional(),
   env_file: z.string().optional(),
+  files: FilesSchema,
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 

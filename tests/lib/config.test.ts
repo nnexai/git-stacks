@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
-import { StackSchema, WorkspaceSchema, WorkspaceRepoSchema, formatZodError, listStacks, listWorkspaces } from "../../src/lib/config"
+import { StackSchema, WorkspaceSchema, WorkspaceRepoSchema, FilesSchema, formatZodError, listStacks, listWorkspaces } from "../../src/lib/config"
 import { STACKS_DIR, WORKSPACES_DIR } from "../../src/lib/paths"
 import { makeTmpDir, cleanup } from "../helpers"
 
@@ -264,5 +264,69 @@ describe("corrupt YAML handling", () => {
     // Syntactically invalid YAML is skipped
     const names = (result ?? []).map((s) => s.name)
     expect(names).not.toContain(`${TEST_PREFIX}syntax-err`)
+  })
+})
+
+// --- FilesSchema extensions ---
+
+describe("FilesSchema extensions", () => {
+  // SCHEMA-01: StackSchema backward compat — files: absent
+  test("SCHEMA-01: StackSchema parses without files: field (backward compat)", () => {
+    const result = StackSchema.parse({ name: "s" })
+    expect(result.files).toBeUndefined()
+  })
+
+  // SCHEMA-02: WorkspaceSchema backward compat — files: absent
+  test("SCHEMA-02: WorkspaceSchema parses without files: field (backward compat)", () => {
+    const result = WorkspaceSchema.parse({ name: "w", branch: "b", created: "2026-01-01" })
+    expect(result.files).toBeUndefined()
+  })
+
+  // SCHEMA-03: WorkspaceRepoSchema backward compat — files: absent
+  test("SCHEMA-03: WorkspaceRepoSchema parses without files: field (backward compat)", () => {
+    const result = WorkspaceRepoSchema.parse({
+      name: "r",
+      stack: "s",
+      type: "other",
+      mode: "worktree",
+      main_path: "/m",
+      task_path: "/t",
+    })
+    expect(result.files).toBeUndefined()
+  })
+
+  // SCHEMA-04: All three schemas parse with files: present
+  test("SCHEMA-04: StackSchema parses with files: present", () => {
+    const result = StackSchema.parse({
+      name: "s",
+      files: { copy: [".env"], symlink: ["node_modules"] },
+    })
+    expect(result.files?.copy).toEqual([".env"])
+    expect(result.files?.symlink).toEqual(["node_modules"])
+  })
+
+  test("SCHEMA-04: WorkspaceSchema parses with files: present", () => {
+    const result = WorkspaceSchema.parse({
+      name: "w",
+      branch: "b",
+      created: "2026-01-01",
+      files: { copy: [".env"], symlink: ["node_modules"] },
+    })
+    expect(result.files?.copy).toEqual([".env"])
+    expect(result.files?.symlink).toEqual(["node_modules"])
+  })
+
+  test("SCHEMA-04: WorkspaceRepoSchema parses with files: present", () => {
+    const result = WorkspaceRepoSchema.parse({
+      name: "r",
+      stack: "s",
+      type: "other",
+      mode: "worktree",
+      main_path: "/m",
+      task_path: "/t",
+      files: { copy: [".env"], symlink: ["node_modules"] },
+    })
+    expect(result.files?.copy).toEqual([".env"])
+    expect(result.files?.symlink).toEqual(["node_modules"])
   })
 })
