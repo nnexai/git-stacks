@@ -67,7 +67,11 @@ Plans:
   1. Running remove, clean, or merge with --dry-run prints every action that would execute and exits without modifying any files or git state
   2. Running remove or clean without --force prompts for explicit confirmation before any destructive action occurs
   3. --force flag suppresses confirmation prompts identically across remove, clean, merge, and rename — no command behaves differently
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Ops layer: warnExternalFiles + dryRun on all four ops functions (SAFE-01, FILES-16, FILES-17)
+- [ ] 02-02-PLAN.md — Command layer: --dry-run flags, --force prompt gating, rename gains both flags (SAFE-02, SAFE-03)
 
 ### Phase 3: Design and Conditional Implementation
 **Goal**: A documented decision exists on whether Stacks are replaced, renamed, or supplemented by a Repo Registry + Template model — and the chosen model is implemented (REPO-* and TMPL-* execute only if DESIGN-01 and DESIGN-02 conclude they are in scope)
@@ -106,6 +110,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Foundation | 4/5 | In Progress|  |
 | 01.1. File ops | 2/2 | Complete    | 2026-03-17 |
 | 01.2. Version command | 1/1 | Complete    | 2026-03-17 |
-| 2. Safety | 0/TBD | Not started | - |
+| 2. Safety | 0/2 | Not started | - |
 | 3. Design and Conditional Implementation | 0/TBD | Not started | - |
 | 4. UX and Execution | 0/TBD | Not started | - |
