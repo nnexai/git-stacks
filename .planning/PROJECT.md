@@ -53,6 +53,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Multi-agent use case**: The isolation model (one workspace per task) makes this naturally compatible with AI agents working in parallel. Agents creating new worktrees currently see them as fresh projects — context persistence across workspace recreations is an open problem for later.
 - **Inspiration**: workmux, cmux — the feel should be fast, composable, and frictionless like those tools.
 
+## Versioning
+
+**Package version:** This roadmap targets the `v0.2.0` npm release. The project is staying on zerover (`0.x`) until core primitives are fully settled (the Stacks-vs-Templates design decision is the main gate).
+
+**GSD epic naming:** The GSD planning system calls this work "v1" internally (first planned milestone). This does not mean semver v1.0. When the GSD roadmap says "v1 requirements," it means requirements for this milestone — not a public API stability promise.
+
+**Version gate for 1.0:** Not planned until: core primitives decided, destructive ops hardened, programmatic API stabilized.
+
 ## Constraints
 
 - **Runtime**: Bun — no Node.js compatibility required; use Bun APIs freely (`$`, `spawn`, `Bun.file`)
