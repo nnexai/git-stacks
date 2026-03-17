@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
+import { execSync } from "child_process"
 
 export function makeTmpDir(prefix = "ws-test"): string {
   const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -25,4 +26,17 @@ export function write(base: string, rel: string, content: string) {
   const p = join(base, rel)
   mkdirSync(join(p, ".."), { recursive: true })
   writeFileSync(p, content)
+}
+
+export function makeGitRepo(base: string, name = "repo"): string {
+  const repoPath = join(base, name)
+  mkdirSync(repoPath, { recursive: true })
+  const opts = { cwd: repoPath, stdio: "pipe" as const }
+  execSync("git init -b main", opts)
+  execSync('git config user.email "test@example.com"', opts)
+  execSync('git config user.name "Test User"', opts)
+  writeFileSync(join(repoPath, "README.md"), "init\n")
+  execSync("git add .", opts)
+  execSync('git commit -m "init"', opts)
+  return repoPath
 }
