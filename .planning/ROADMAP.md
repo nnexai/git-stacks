@@ -104,7 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/5 | In Progress|  |
-| 01.1. File ops | 2/2 | Complete   | 2026-03-17 |
+| 01.1. File ops | 2/2 | Complete    | 2026-03-17 |
 | 01.2. Version command | 1/1 | Complete    | 2026-03-17 |
 | 2. Safety | 0/TBD | Not started | - |
 | 3. Design and Conditional Implementation | 0/TBD | Not started | - |
