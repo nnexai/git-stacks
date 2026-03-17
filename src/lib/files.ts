@@ -187,7 +187,7 @@ export function applyFileOpsForWorkspace(
 export function warnExternalFiles(
   workspace: Workspace,
   stacks: Map<string, Stack>,
-  wsInstanceRoot: string,
+  _wsInstanceRoot: string,
   tasksDir: string
 ): string[] {
   const warnings: string[] = []
@@ -197,23 +197,17 @@ export function warnExternalFiles(
     return resolvedPath === wsDir || resolvedPath.startsWith(wsDir + "/")
   }
 
-  function checkEntry(entry: string, destDir: string): void {
+  function checkEntry(entry: string): void {
     if (isGlobPattern(entry)) {
-      // Glob patterns expand against destDir — destinations are all inside destDir
-      // which is either wsInstanceRoot (inside wsDir) or a task_path (inside wsDir)
-      // No external destinations possible from glob patterns in this context
+      // Glob patterns always expand into destinations inside their destDir,
+      // which is always within the workspace boundary
       return
     }
     const expanded = expandHome(entry)
-    if (isAbsolute(expanded)) {
-      // Absolute path: the destination is join(destDir, basename(expanded))
-      // But the SOURCE being absolute and outside wsDir is the key concern —
-      // warn when the resolved absolute entry path falls outside the workspace
-      if (!isInternal(expanded)) {
-        warnings.push(`Warning: external destination ${expanded} was not removed`)
-      }
+    if (isAbsolute(expanded) && !isInternal(expanded)) {
+      warnings.push(`Warning: external destination ${expanded} was not removed`)
     }
-    // Relative paths always resolve to destDir/<entry>, so always internal
+    // Relative paths always resolve inside destDir, so always internal
   }
 
   // Collect all workspace-level files (deduplicate across stacks by using a Set for seen entries)
@@ -224,7 +218,7 @@ export function warnExternalFiles(
     for (const entry of [...merged.copy, ...merged.symlink]) {
       if (!seenWsEntries.has(entry)) {
         seenWsEntries.add(entry)
-        checkEntry(entry, wsInstanceRoot)
+        checkEntry(entry)
       }
     }
   }
@@ -235,7 +229,7 @@ export function warnExternalFiles(
     for (const entry of [...merged.copy, ...merged.symlink]) {
       if (!seenWsEntries.has(entry)) {
         seenWsEntries.add(entry)
-        checkEntry(entry, wsInstanceRoot)
+        checkEntry(entry)
       }
     }
   }
@@ -245,9 +239,8 @@ export function warnExternalFiles(
     const stack = stacks.get(wsRepo.stack)
     const stackRepo = stack?.repos.find(r => r.name === wsRepo.name)
     const merged = mergeFiles(stackRepo?.files, wsRepo.files)
-    const destDir = wsRepo.task_path
     for (const entry of [...merged.copy, ...merged.symlink]) {
-      checkEntry(entry, destDir)
+      checkEntry(entry)
     }
   }
 

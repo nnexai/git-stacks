@@ -25,8 +25,6 @@ import {
 } from "../../src/lib/workspace-ops"
 import { GLOBAL_CONFIG_FILE } from "../../src/lib/paths"
 
-// Additional imports for dry-run and FILES-17 tests
-import { workspacePath as wsPath } from "../../src/lib/config"
 
 // Unique suffix per test file run to avoid collisions between parallel test runs
 const FILE_RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -570,7 +568,7 @@ describe("dry-run", () => {
     const wsName = uniqueWsName("remove-ext")
     const stackName = uniqueStackName()
 
-    const { repos, wsRoot, tasksDir } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     // Re-write workspace YAML with an external symlink target
     const { readWorkspace } = await import("../../src/lib/config")
