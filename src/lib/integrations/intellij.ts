@@ -17,6 +17,8 @@ export const intellijIntegration: Integration = {
 
   async open(_ctx, artifactPath) {
     if (!artifactPath) return
+    const check = await $`which idea`.quiet().nothrow()
+    if (check.exitCode !== 0) return
     await $`idea ${artifactPath}`.quiet().nothrow()
   },
 

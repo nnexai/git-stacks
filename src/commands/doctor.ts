@@ -27,6 +27,11 @@ function icon(type: Issue["icon"]): string {
   }
 }
 
+async function checkBinary(cmd: string): Promise<boolean> {
+  const result = await $`which ${cmd}`.quiet().nothrow()
+  return result.exitCode === 0
+}
+
 /** Dirs under tasks/ that have no matching workspace YAML. */
 function findOrphanedTaskDirs(tasksDir: string, workspaces: Workspace[]): Issue[] {
   if (!existsSync(tasksDir)) return []
@@ -212,7 +217,40 @@ export const doctorCommand = new Command("doctor")
       }
     }
 
-    if (wsIssueCount === 0 && deadRepoPaths.length === 0) {
+    // --- Runtime dependency checks ---
+    const binaries = [
+      { name: "git", required: true, install: "https://git-scm.com" },
+      { name: "code", required: false, install: "https://code.visualstudio.com" },
+      { name: "code-insiders", required: false, install: "https://code.visualstudio.com/insiders" },
+      { name: "idea", required: false, install: "https://www.jetbrains.com/idea" },
+      { name: "tmux", required: false, install: "https://github.com/tmux/tmux" },
+      { name: "cmux", required: false, install: "https://github.com/nicholasgasior/cmux" },
+    ]
+
+    const binaryIssues: Issue[] = []
+    for (const { name, required, install } of binaries) {
+      const found = await checkBinary(name)
+      if (!found) {
+        binaryIssues.push({
+          icon: required ? "fail" : "warn",
+          entity: name,
+          message: "not found",
+          fix: `Install: ${install}`,
+        })
+      }
+    }
+
+    if (binaryIssues.length > 0) {
+      console.log(`\n  Runtime dependencies:`)
+      for (const issue of binaryIssues) {
+        console.log(`  ${icon(issue.icon)}  ${issue.entity}  (${issue.message})`)
+        if (issue.fix) {
+          console.log(`       \u2192 ${issue.fix}`)
+        }
+      }
+    }
+
+    if (wsIssueCount === 0 && deadRepoPaths.length === 0 && binaryIssues.length === 0) {
       console.log("\n  Everything looks good!")
     }
 

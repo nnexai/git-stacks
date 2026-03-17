@@ -27,6 +27,11 @@ export const vscodeIntegration: Integration = {
   async open(ctx, artifactPath) {
     if (!artifactPath) return
     const { cmd } = getConfig(ctx)
+    const check = await $`which ${cmd}`.quiet().nothrow()
+    if (check.exitCode !== 0) {
+      // Binary not found -- skip silently (debug-level, not an error)
+      return
+    }
     await $`${cmd} ${artifactPath}`.quiet().nothrow()
   },
 
