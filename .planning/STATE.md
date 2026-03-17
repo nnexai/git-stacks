@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-safety-01-PLAN.md
-last_updated: "2026-03-17T23:30:01.769Z"
+stopped_at: Completed 02-safety-02-PLAN.md
+last_updated: "2026-03-17T23:45:51.218Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 20
 ---
 
@@ -58,6 +58,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01.1-file-and-folder-copy-symlink-support P01 | 3 | 3 tasks | 5 files |
 | Phase 01.1-file-and-folder-copy-symlink-support P02 | 3 | 3 tasks | 2 files |
 | Phase 02-safety P01 | 5 | 2 tasks | 5 files |
+| Phase 02-safety P02 | 10 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,8 @@ Recent decisions affecting current work:
 - [Phase 02-safety]: warnExternalFiles checks entry path itself (after expandHome) for being absolute and outside wsDir — not the flattened destination
 - [Phase 02-safety]: dryRun short-circuit placed after external warnings but before hooks in remove and clean ops
 - [Phase 02-safety]: renameWorkspace opts param defaults to {} for backward compatibility with existing call sites
+- [Phase 02-safety]: --gone + --dry-run deferred per CONTEXT.md — the --gone path in clean gets --force prompt gating but not --dry-run support
+- [Phase 02-safety]: Destructive command pattern: .option('--force') + .option('--dry-run') + if (!opts.force && !opts.dryRun) { p.confirm } — consistent across remove, clean, merge, rename
 
 ### Roadmap Evolution
 
@@ -106,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T23:30:01.767Z
-Stopped at: Completed 02-safety-01-PLAN.md
+Last session: 2026-03-17T23:45:51.216Z
+Stopped at: Completed 02-safety-02-PLAN.md
 Resume file: None

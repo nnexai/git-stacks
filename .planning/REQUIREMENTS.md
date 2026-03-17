@@ -73,8 +73,8 @@
 ### Destructive Operation Safety
 
 - [x] **SAFE-01**: `remove`, `clean`, and `merge` support a `--dry-run` flag that shows what would be done without making changes — output includes any external file destinations that would be left behind with a warning
-- [ ] **SAFE-02**: `remove` and `clean` without `--force` prompt for confirmation before executing destructive operations
-- [ ] **SAFE-03**: `--force` flag behavior is consistent across all destructive commands (`remove`, `clean`, `merge`, `rename`)
+- [x] **SAFE-02**: `remove` and `clean` without `--force` prompt for confirmation before executing destructive operations
+- [x] **SAFE-03**: `--force` flag behavior is consistent across all destructive commands (`remove`, `clean`, `merge`, `rename`)
 
 ### Design Evaluation
 
@@ -183,8 +183,8 @@
 | FILES-16 | Phase 01.1 (engine) / Phase 2 (wiring) | Complete |
 | FILES-17 | Phase 2 | Complete |
 | SAFE-01 | Phase 2 | Complete |
-| SAFE-02 | Phase 2 | Pending |
-| SAFE-03 | Phase 2 | Pending |
+| SAFE-02 | Phase 2 | Complete |
+| SAFE-03 | Phase 2 | Complete |
 | DESIGN-01 | Phase 3 | Pending |
 | DESIGN-02 | Phase 3 | Pending |
 | REPO-01 | Phase 3 (conditional) | Pending |

@@ -13,7 +13,7 @@ The PoC is working. This roadmap hardens it into a tool you can trust: stable co
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation** - Stable config schemas, test infrastructure, and live bug fixes — the PoC becomes trustworthy
-- [ ] **Phase 2: Safety** - Destructive operations (remove, clean, merge) gain dry-run, confirmation, and consistent --force behavior
+- [x] **Phase 2: Safety** - Destructive operations (remove, clean, merge) gain dry-run, confirmation, and consistent --force behavior (completed 2026-03-17)
 - [ ] **Phase 3: Design and Conditional Implementation** - Evaluate Stack vs Repo-Registry/Template model, then implement the winning model (REPO-* and TMPL-* contingent on DESIGN outcome)
 - [ ] **Phase 4: UX and Execution** - Actionable errors, --json output, doctor --fix, richer list columns, and parallel run
 
@@ -110,6 +110,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Foundation | 4/5 | In Progress|  |
 | 01.1. File ops | 2/2 | Complete    | 2026-03-17 |
 | 01.2. Version command | 1/1 | Complete    | 2026-03-17 |
-| 2. Safety | 1/2 | In Progress|  |
+| 2. Safety | 2/2 | Complete   | 2026-03-17 |
 | 3. Design and Conditional Implementation | 0/TBD | Not started | - |
 | 4. UX and Execution | 0/TBD | Not started | - |
