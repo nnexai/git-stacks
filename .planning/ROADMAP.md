@@ -50,13 +50,14 @@ Plans:
 
 ### Phase 01.1: File and folder copy/symlink support between repos for large binary sharing (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Stack and workspace configs support a `files:` block with `copy` and `symlink` arrays that handle files, folders, and glob patterns at two independent levels (workspace-instance and per-repo), with loud-fail error semantics and idempotent re-application on both `new` and `open`
+**Requirements**: FILES-01, FILES-02, FILES-03, FILES-04, FILES-05, FILES-06, FILES-07, FILES-08, FILES-09, FILES-10, FILES-11, FILES-12, FILES-13, FILES-14, FILES-15, SCHEMA-01, SCHEMA-02, SCHEMA-03, SCHEMA-04, IDEMPOTENT-01, IDEMPOTENT-02
 **Depends on:** Phase 1
-**Plans:** 4/5 plans executed
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 01.1 to break down)
+- [ ] 01.1-01-PLAN.md — Core file ops engine: schema extensions, files.ts rewrite, full test coverage
+- [ ] 01.1-02-PLAN.md — Wire file ops into workspace-wizard.ts (new) and workspace-ops.ts (open)
 
 ### Phase 2: Safety
 **Goal**: Users can safely run remove, clean, and merge knowing exactly what will happen before it does, with consistent --force semantics across all destructive commands
@@ -103,6 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/5 | In Progress|  |
+| 01.1. File ops | 0/2 | Not started | - |
 | 01.2. Version command | 1/1 | Complete   | 2026-03-17 |
 | 2. Safety | 0/TBD | Not started | - |
 | 3. Design and Conditional Implementation | 0/TBD | Not started | - |

@@ -35,6 +35,36 @@
 
 - [x] **VER-01**: `git-stacks -V` / `--version` shows the version from `package.json` plus the git commit hash (with `-dirty` suffix when working tree has uncommitted changes) when running from source; shows version only (no hash) when installed globally via npm
 
+### File Operations — Copy/Symlink Support (Phase 01.1)
+
+- [ ] **FILES-01**: `copy` operation copies a single file from source to destination
+- [ ] **FILES-02**: `copy` operation copies a folder tree recursively using `cpSync` with `recursive: true`
+- [ ] **FILES-03**: `symlink` operation creates a file symlink from destination pointing to source
+- [ ] **FILES-04**: `symlink` operation creates a directory symlink from destination pointing to source
+- [ ] **FILES-05**: Glob pattern `.env.*` expands to matching dotfiles (requires `dot: true` in `Bun.Glob`)
+- [ ] **FILES-06**: Glob pattern `secrets/**` expands to all files under the matched directory
+- [ ] **FILES-07**: A glob pattern matching zero files produces a warning (not an error)
+- [ ] **FILES-08**: When destination already exists, the operation is skipped silently (source is not checked)
+- [ ] **FILES-09**: When destination is missing and source is missing, a loud error is returned
+- [ ] **FILES-10**: When destination is missing and source exists, the operation is applied
+- [ ] **FILES-11**: Source paths starting with `~/` are expanded via `expandHome()` from `paths.ts`
+- [ ] **FILES-12**: Absolute source paths are used as-is (no resolution against base directory)
+- [ ] **FILES-13**: Workspace-instance level `files:` applies to the workspace root directory, not individual repo directories
+- [ ] **FILES-14**: Per-repo level `files:` resolves relative source paths against the repo's `main_path` and applies to `task_path`
+- [ ] **FILES-15**: Stack `files:` and workspace `files:` merge additively (arrays concatenated, not replaced)
+
+### File Operations — Schema Compatibility (Phase 01.1)
+
+- [ ] **SCHEMA-01**: `StackSchema` parses successfully when `files:` field is absent (backward compatibility)
+- [ ] **SCHEMA-02**: `WorkspaceSchema` parses successfully when `files:` field is absent (backward compatibility)
+- [ ] **SCHEMA-03**: `WorkspaceRepoSchema` parses successfully when `files:` field is absent (backward compatibility)
+- [ ] **SCHEMA-04**: All three schemas parse successfully when `files:` field is present with `copy` and `symlink` arrays
+
+### File Operations — Idempotency (Phase 01.1)
+
+- [ ] **IDEMPOTENT-01**: Re-applying `copy` on already-copied files does not produce an error (destination exists, skip)
+- [ ] **IDEMPOTENT-02**: Re-applying `symlink` on already-created symlinks does not produce an error (destination exists, skip)
+
 ### Destructive Operation Safety
 
 - [ ] **SAFE-01**: `remove`, `clean`, and `merge` support a `--dry-run` flag that shows what would be done without making changes
@@ -124,6 +154,27 @@
 | BUG-03 | Phase 1 | Complete |
 | BUG-04 | Phase 1 | Complete |
 | VER-01 | Phase 01.2 | Complete |
+| FILES-01 | Phase 01.1 | Pending |
+| FILES-02 | Phase 01.1 | Pending |
+| FILES-03 | Phase 01.1 | Pending |
+| FILES-04 | Phase 01.1 | Pending |
+| FILES-05 | Phase 01.1 | Pending |
+| FILES-06 | Phase 01.1 | Pending |
+| FILES-07 | Phase 01.1 | Pending |
+| FILES-08 | Phase 01.1 | Pending |
+| FILES-09 | Phase 01.1 | Pending |
+| FILES-10 | Phase 01.1 | Pending |
+| FILES-11 | Phase 01.1 | Pending |
+| FILES-12 | Phase 01.1 | Pending |
+| FILES-13 | Phase 01.1 | Pending |
+| FILES-14 | Phase 01.1 | Pending |
+| FILES-15 | Phase 01.1 | Pending |
+| SCHEMA-01 | Phase 01.1 | Pending |
+| SCHEMA-02 | Phase 01.1 | Pending |
+| SCHEMA-03 | Phase 01.1 | Pending |
+| SCHEMA-04 | Phase 01.1 | Pending |
+| IDEMPOTENT-01 | Phase 01.1 | Pending |
+| IDEMPOTENT-02 | Phase 01.1 | Pending |
 | SAFE-01 | Phase 2 | Pending |
 | SAFE-02 | Phase 2 | Pending |
 | SAFE-03 | Phase 2 | Pending |
@@ -145,10 +196,10 @@
 | RUN-01 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 34 total
-- Mapped to phases: 34
+- v1 requirements: 55 total
+- Mapped to phases: 55
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 — added VER-01 for phase 01.2 version command*
+*Last updated: 2026-03-17 — added FILES-*, SCHEMA-*, IDEMPOTENT-* for phase 01.1 file operations*
