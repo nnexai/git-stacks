@@ -38,6 +38,16 @@ Plans:
 - [ ] 01-04-PLAN.md — Bug fixes: mergeNoFF detached HEAD, atomic merge/remove/clean/rename (BUG-01-04)
 - [ ] 01-05-PLAN.md — Workspace lifecycle integration tests (TEST-03)
 
+### Phase 01.2: small addition to add a version command that shows published version and git commit hash - should also work then running from source via bun link (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 1
+**Plans:** 5/5 plans complete
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 01.2 to break down)
+
 ### Phase 01.1: File and folder copy/symlink support between repos for large binary sharing (INSERTED)
 
 **Goal:** [Urgent work - to be planned]

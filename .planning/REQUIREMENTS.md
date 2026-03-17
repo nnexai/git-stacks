@@ -9,7 +9,7 @@
 
 - [x] **TEST-01**: Developer can add git integration tests using a `makeGitRepo(tmpDir)` helper that creates a real local git repo in a temp directory
 - [x] **TEST-02**: Core git operations (createWorktree, removeWorktree, mergeNoFF, rebaseBranch, getCommitsBehind) have integration test coverage with real git repos
-- [ ] **TEST-03**: Workspace lifecycle critical paths (open, clean, remove, merge) have integration tests that catch the known partial-failure bugs
+- [x] **TEST-03**: Workspace lifecycle critical paths (open, clean, remove, merge) have integration tests that catch the known partial-failure bugs
 
 ### Foundation — Config Robustness
 
@@ -110,7 +110,7 @@
 | PREREQ-03 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 1 | Complete |
-| TEST-03 | Phase 1 | Pending |
+| TEST-03 | Phase 1 | Complete |
 | CONF-01 | Phase 1 | Complete |
 | CONF-02 | Phase 1 | Complete |
 | CONF-03 | Phase 1 | Complete |
