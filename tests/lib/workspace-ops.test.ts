@@ -10,7 +10,8 @@ import {
   workspacePath,
   stackPath,
   writeGlobalConfig,
-  readGlobalConfig,
+  StackSchema,
+  WorkspaceSchema,
 } from "../../src/lib/config"
 import {
   createWorktree,
@@ -101,31 +102,31 @@ async function setupWorkspaceFixture(
   const branchName = "feature/test"
 
   // Write stack YAML
-  writeStack({
+  writeStack(StackSchema.parse({
     name: stackName,
     repos: repos.map((r) => ({
       name: r.name,
       path: r.repoPath,
-      type: "other" as const,
-      default_mode: "worktree" as const,
+      type: "other",
+      default_mode: "worktree",
       default_branch: "main",
     })),
-  })
+  }))
 
   // Write workspace YAML
-  writeWorkspace({
+  writeWorkspace(WorkspaceSchema.parse({
     name: wsName,
     branch: branchName,
     created: new Date().toISOString(),
     repos: repos.map((r) => ({
       name: r.name,
       stack: stackName,
-      type: "other" as const,
-      mode: "worktree" as const,
+      type: "other",
+      mode: "worktree",
       main_path: r.repoPath,
       task_path: r.worktreePath,
     })),
-  })
+  }))
 
   // Create actual worktrees in git
   for (const repo of repos) {
@@ -390,7 +391,7 @@ describe("renameWorkspace", () => {
     const stackName = uniqueStackName()
 
     // Set up fixture with 1 worktree repo
-    const { repos, tasksDir } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     // Now add a trunk repo to the workspace YAML by re-writing it
     const trunkRepoPath = makeGitRepo(join(tmp, "workspaces", "main"), "trunk-repo")
