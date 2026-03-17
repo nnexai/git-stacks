@@ -8,12 +8,13 @@ import {
   workspaceExists,
   readGlobalConfig,
   type WorkspaceRepo,
+  type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
 import { createWorktree } from "../lib/git"
 import { integrations, type IntegrationContext } from "../lib/integrations"
 import { runHooks } from "../lib/lifecycle"
-import { applyFileOperations } from "../lib/files"
+import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
 
 export async function runWorkspaceNew(nameArg?: string) {
   p.intro("New workspace")
@@ -189,7 +190,46 @@ export async function runWorkspaceNew(nameArg?: string) {
   }
   const enrichedBaseEnv = { ...baseEnv, ...stackEnv }
 
-  // Write env files if configured
+  const wsDir = join(tasksDir, wsName)
+
+  const opsSpinner = p.spinner()
+  opsSpinner.start("Applying file ops")
+
+  // STEP 1: Per-repo file ops (Level 2) — all repos first
+  for (const stack of selectedStacks) {
+    for (const wsRepo of repos.filter((r) => r.mode === "worktree" && r.stack === stack.name)) {
+      const stackRepo = stack.repos.find((r) => r.name === wsRepo.name)
+      if (!stackRepo) continue
+      opsSpinner.message(`files: ${wsRepo.name}`)
+      const fileResult = applyFileOpsForRepo(stackRepo, wsRepo)
+      if (!fileResult.ok) {
+        opsSpinner.stop(`File operation failed for ${wsRepo.name}`)
+        p.log.error(fileResult.error)
+        process.exit(1)
+      }
+      if (fileResult.warnings) {
+        for (const w of fileResult.warnings) p.log.warn(w)
+      }
+    }
+  }
+
+  // STEP 2: Workspace-instance file ops (Level 1) — once per stack, targets wsDir
+  // workspace.files is not available yet (YAML not written), so only stack.files applies here.
+  for (const stack of selectedStacks) {
+    const wsFileResult = applyFileOpsForWorkspace(stack, {} as Workspace, wsDir)
+    if (!wsFileResult.ok) {
+      opsSpinner.stop("Workspace file operation failed")
+      p.log.error(wsFileResult.error)
+      process.exit(1)
+    }
+    if (wsFileResult.warnings) {
+      for (const w of wsFileResult.warnings) p.log.warn(w)
+    }
+  }
+
+  opsSpinner.stop("File ops done")
+
+  // STEP 3: Write env files — after file ops, before hooks
   const envFileName = selectedStacks.find((s) => s.env_file)?.env_file
   if (envFileName) {
     const content = Object.entries(stackEnv).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
@@ -200,9 +240,7 @@ export async function runWorkspaceNew(nameArg?: string) {
     }
   }
 
-  // Apply file ops and post_create hooks
-  const wsDir = join(tasksDir, wsName)
-
+  // STEP 4: post_create hooks — after file ops and env files
   const hooksSpinner = p.spinner()
   hooksSpinner.start("Running post_create hooks")
   try {
@@ -217,11 +255,6 @@ export async function runWorkspaceNew(nameArg?: string) {
           WS_REPO_NAME: wsRepo.name,
           WS_REPO_PATH: wsRepo.task_path,
           WS_MAIN_PATH: wsRepo.main_path,
-        }
-
-        if (stackRepo.files?.copy?.length || stackRepo.files?.symlink?.length) {
-          hooksSpinner.message(`files: ${wsRepo.name}`)
-          applyFileOperations(stackRepo, wsRepo.task_path)
         }
 
         if (stackRepo.hooks?.post_create?.length) {
