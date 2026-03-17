@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01.1-01-PLAN.md
-last_updated: "2026-03-17T22:38:33.557Z"
+stopped_at: Completed 01.1-02-PLAN.md
+last_updated: "2026-03-17T22:44:21.951Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 20
 ---
 
@@ -56,6 +56,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01-foundation P05 | 10 | 1 tasks | 1 files |
 | Phase 01.2-version-command P01 | 2 | 2 tasks | 3 files |
 | Phase 01.1-file-and-folder-copy-symlink-support P01 | 3 | 3 tasks | 5 files |
+| Phase 01.1-file-and-folder-copy-symlink-support P02 | 3 | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 01.1-01]: Use lstatSync not existsSync for destination check — lstatSync returns true for dangling symlinks, existsSync does not
 - [Phase 01.1-01]: Zero-match glob produces warning in ApplyResult not error — zero-match is often intentional in config
 - [Phase 01.1-01]: Deprecated applyFileOperations kept as shim — Plan 02 will replace the workspace-wizard.ts call site
+- [Phase 01.1-02]: workspace.files unavailable during new (YAML not written), so applyFileOpsForWorkspace receives {} as Workspace - only stack.files applies at workspace-instance level during creation
+- [Phase 01.1-02]: File op errors during new are fatal (process.exit), during open they are non-fatal warnings via onProgress - open is idempotent and forgiving
+- [Phase 01.1-02]: writeEnvFiles uses lstatSync (not existsSync) for symlink detection and merge semantics - config keys updated in-place, manual keys/comments preserved
 
 ### Roadmap Evolution
 
@@ -98,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T22:38:33.555Z
-Stopped at: Completed 01.1-01-PLAN.md
+Last session: 2026-03-17T22:44:21.950Z
+Stopped at: Completed 01.1-02-PLAN.md
 Resume file: None

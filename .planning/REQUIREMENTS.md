@@ -65,9 +65,14 @@
 - [x] **IDEMPOTENT-01**: Re-applying `copy` on already-copied files does not produce an error (destination exists, skip)
 - [x] **IDEMPOTENT-02**: Re-applying `symlink` on already-created symlinks does not produce an error (destination exists, skip)
 
+### File Operations — Cleanup (Phase 2 wiring)
+
+- [ ] **FILES-16**: `files.ts` exposes a `warnExternalFiles()` function that inspects resolved file destinations and emits a visible warning for any that fall outside the workspace root or task directory — these are not deleted (they were placed outside the managed area and the user must handle them manually)
+- [ ] **FILES-17**: `warnExternalFiles()` is called by `removeWorkspace()` and `cleanWorkspace()` before teardown proceeds — files inside the workspace are cleaned up naturally when the workspace directory is removed; only external destinations need explicit user attention
+
 ### Destructive Operation Safety
 
-- [ ] **SAFE-01**: `remove`, `clean`, and `merge` support a `--dry-run` flag that shows what would be done without making changes
+- [ ] **SAFE-01**: `remove`, `clean`, and `merge` support a `--dry-run` flag that shows what would be done without making changes — output includes any external file destinations that would be left behind with a warning
 - [ ] **SAFE-02**: `remove` and `clean` without `--force` prompt for confirmation before executing destructive operations
 - [ ] **SAFE-03**: `--force` flag behavior is consistent across all destructive commands (`remove`, `clean`, `merge`, `rename`)
 
@@ -175,6 +180,8 @@
 | SCHEMA-04 | Phase 01.1 | Complete |
 | IDEMPOTENT-01 | Phase 01.1 | Complete |
 | IDEMPOTENT-02 | Phase 01.1 | Complete |
+| FILES-16 | Phase 01.1 (engine) / Phase 2 (wiring) | Pending |
+| FILES-17 | Phase 2 | Pending |
 | SAFE-01 | Phase 2 | Pending |
 | SAFE-02 | Phase 2 | Pending |
 | SAFE-03 | Phase 2 | Pending |
@@ -196,10 +203,10 @@
 | RUN-01 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 55 total
-- Mapped to phases: 55
+- v1 requirements: 57 total
+- Mapped to phases: 57
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 — added FILES-*, SCHEMA-*, IDEMPOTENT-* for phase 01.1 file operations*
+*Last updated: 2026-03-17 — added FILES-16, FILES-17 for file cleanup on workspace remove/clean*
