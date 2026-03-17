@@ -38,15 +38,15 @@ Plans:
 - [ ] 01-04-PLAN.md — Bug fixes: mergeNoFF detached HEAD, atomic merge/remove/clean/rename (BUG-01-04)
 - [ ] 01-05-PLAN.md — Workspace lifecycle integration tests (TEST-03)
 
-### Phase 01.2: small addition to add a version command that shows published version and git commit hash - should also work then running from source via bun link (INSERTED)
+### Phase 01.2: Version command enhancement (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** The -V/--version flag shows the real package.json version and git commit hash (with dirty flag) when running from source, replacing the hardcoded out-of-sync version string
+**Requirements**: VER-01
 **Depends on:** Phase 1
-**Plans:** 5/5 plans complete
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 01.2 to break down)
+- [ ] 01.2-01-PLAN.md — Dynamic version string from package.json + git hash + dirty flag (VER-01)
 
 ### Phase 01.1: File and folder copy/symlink support between repos for large binary sharing (INSERTED)
 
@@ -103,6 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/5 | In Progress|  |
+| 01.2. Version command | 0/1 | Not started | - |
 | 2. Safety | 0/TBD | Not started | - |
 | 3. Design and Conditional Implementation | 0/TBD | Not started | - |
 | 4. UX and Execution | 0/TBD | Not started | - |

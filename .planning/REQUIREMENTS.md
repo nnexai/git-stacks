@@ -31,6 +31,10 @@
 - [x] **BUG-03**: `renameWorkspace` re-registers git worktrees at their new paths via `git worktree remove` + `git worktree add` instead of a bare filesystem rename
 - [x] **BUG-04**: A failed `mergeNoFF` does not leave the main clone stranded on the base branch — on merge failure, the clone is restored to its original branch (via rollback or a temporary-worktree approach that avoids touching the main clone HEAD)
 
+### Version Information
+
+- [ ] **VER-01**: `git-stacks -V` / `--version` shows the version from `package.json` plus the git commit hash (with `-dirty` suffix when working tree has uncommitted changes) when running from source; shows version only (no hash) when installed globally via npm
+
 ### Destructive Operation Safety
 
 - [ ] **SAFE-01**: `remove`, `clean`, and `merge` support a `--dry-run` flag that shows what would be done without making changes
@@ -119,6 +123,7 @@
 | BUG-02 | Phase 1 | Complete |
 | BUG-03 | Phase 1 | Complete |
 | BUG-04 | Phase 1 | Complete |
+| VER-01 | Phase 01.2 | Pending |
 | SAFE-01 | Phase 2 | Pending |
 | SAFE-02 | Phase 2 | Pending |
 | SAFE-03 | Phase 2 | Pending |
@@ -140,10 +145,10 @@
 | RUN-01 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 33 total
-- Mapped to phases: 33
+- v1 requirements: 34 total
+- Mapped to phases: 34
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after 01-01 completion (TEST-01, TEST-02 marked complete)*
+*Last updated: 2026-03-17 — added VER-01 for phase 01.2 version command*
