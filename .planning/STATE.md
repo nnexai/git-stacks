@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-foundation 01-05-PLAN.md
-last_updated: "2026-03-17T21:42:44.272Z"
+stopped_at: Phase 01.2 context gathered
+last_updated: "2026-03-17T21:45:36.881Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
@@ -91,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T21:42:44.269Z
-Stopped at: Completed 01-foundation 01-05-PLAN.md
-Resume file: None
+Last session: 2026-03-17T21:45:36.876Z
+Stopped at: Phase 01.2 context gathered
+Resume file: .planning/phases/01.2-small-addition-to-add-a-version-command-that-shows-published-version-and-git-commit-hash-should-also-work-then-running-from-source-via-bun-link/01.2-CONTEXT.md
