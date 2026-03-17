@@ -1,4 +1,5 @@
 import { $ } from "bun"
+import { join } from "path"
 
 export async function checkBranchExists(repoPath: string, branch: string): Promise<boolean> {
   const result = await $`git -C ${repoPath} rev-parse --verify ${branch}`.quiet().nothrow()
@@ -67,9 +68,40 @@ export async function mergeNoFF(
   repoPath: string,
   baseBranch: string,
   branch: string
-): Promise<void> {
-  await $`git -C ${repoPath} checkout ${baseBranch}`
-  await $`git -C ${repoPath} merge --no-ff ${branch}`
+): Promise<{ ok: boolean; error?: string }> {
+  // Resolve base branch SHA for detached HEAD
+  const shaResult = await $`git -C ${repoPath} rev-parse ${baseBranch}`.quiet().nothrow()
+  if (shaResult.exitCode !== 0) {
+    return { ok: false, error: `Cannot resolve ${baseBranch}: ${shaResult.stderr.toString().trim()}` }
+  }
+  const baseSha = shaResult.stdout.toString().trim()
+
+  // Temp worktree path as sibling of repo dir
+  const tmpPath = join(repoPath, `../.gs-merge-${Date.now()}`)
+
+  // Add detached worktree at base SHA
+  const addResult = await $`git -C ${repoPath} worktree add --detach ${tmpPath} ${baseSha}`.quiet().nothrow()
+  if (addResult.exitCode !== 0) {
+    return { ok: false, error: `Cannot create temp worktree: ${addResult.stderr.toString().trim()}` }
+  }
+
+  try {
+    // Perform the merge in the temp worktree
+    const mergeResult = await $`git -C ${tmpPath} merge --no-ff ${branch}`.quiet().nothrow()
+    if (mergeResult.exitCode !== 0) {
+      await $`git -C ${tmpPath} merge --abort`.quiet().nothrow()
+      return { ok: false, error: mergeResult.stderr.toString().trim() }
+    }
+
+    // Update the base branch ref to point to the merge commit
+    const newHead = (await $`git -C ${tmpPath} rev-parse HEAD`.quiet()).stdout.toString().trim()
+    await $`git -C ${repoPath} update-ref refs/heads/${baseBranch} ${newHead}`.quiet()
+
+    return { ok: true }
+  } finally {
+    // Always clean up temp worktree (--force handles dirty state from failed merge)
+    await $`git -C ${repoPath} worktree remove ${tmpPath} --force`.quiet().nothrow()
+  }
 }
 
 export async function deleteLocalBranch(repoPath: string, branch: string): Promise<void> {

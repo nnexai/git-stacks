@@ -133,14 +133,52 @@ describe("mergeNoFF", () => {
     execSync("git add .", opts)
     execSync('git commit -m "add feature"', opts)
 
-    // mergeNoFF checks out baseBranch and merges — uses git checkout internally
-    await mergeNoFF(repoPath, "main", "feature/y")
+    const result = await mergeNoFF(repoPath, "main", "feature/y")
+    expect(result.ok).toBe(true)
 
     // The feature commit should now be reachable from main
-    const log = execSync("git -C " + repoPath + " log --oneline", {
+    const log = execSync("git -C " + repoPath + " log --oneline main", {
       stdio: "pipe",
     }).toString()
     expect(log).toContain("add feature")
+  })
+
+  test("does not disturb main clone working tree (detached HEAD temp worktree pattern)", async () => {
+    // Verify the main clone stays on its original branch (no git checkout is run)
+    const branchBefore = execSync("git -C " + repoPath + " rev-parse --abbrev-ref HEAD", {
+      stdio: "pipe",
+    }).toString().trim()
+    expect(branchBefore).toBe("main")
+
+    const wtPath = join(tmp, "wt", "feature-z")
+    await createWorktree(repoPath, wtPath, "feature/z")
+
+    const opts = { cwd: wtPath, stdio: "pipe" as const }
+    writeFileSync(join(wtPath, "newfile.txt"), "new\n")
+    execSync("git add .", opts)
+    execSync('git commit -m "feature z commit"', opts)
+
+    const result = await mergeNoFF(repoPath, "main", "feature/z")
+    expect(result.ok).toBe(true)
+
+    // Main clone still on main branch (no checkout occurred that changed branches)
+    const branchAfter = execSync("git -C " + repoPath + " rev-parse --abbrev-ref HEAD", {
+      stdio: "pipe",
+    }).toString().trim()
+    expect(branchAfter).toBe("main")
+
+    // main branch ref should have advanced to include the merge commit
+    const mainLog = execSync("git -C " + repoPath + " log --oneline main", {
+      stdio: "pipe",
+    }).toString()
+    expect(mainLog).toContain("feature z commit")
+  })
+
+  test("returns error result on non-existent base branch", async () => {
+    const result = await mergeNoFF(repoPath, "nonexistent-base", "main")
+    expect(result.ok).toBe(false)
+    expect(result.error).toBeDefined()
+    expect(result.error!.length).toBeGreaterThan(0)
   })
 })
 
