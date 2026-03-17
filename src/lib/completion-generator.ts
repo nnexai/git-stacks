@@ -10,6 +10,8 @@ const DYNAMIC_COMPLETIONS: Record<string, DynamicCompletion> = {
   remove:       "workspace",
   merge:        "workspace",
   rename:       "workspace",
+  run:          "workspace",
+  sync:         "workspace",
   cd:           "workspace",
   "stack.edit": "stack",
   "stack.show": "stack",
