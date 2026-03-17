@@ -29,7 +29,7 @@ import {
 } from "./git"
 import { integrations, type IntegrationContext } from "./integrations"
 import { runHooks } from "./lifecycle"
-import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "./files"
+import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
 
 export type ProgressCallback = (message: string) => void
 
@@ -233,7 +233,7 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
 
 export async function cleanWorkspace(
   name: string,
-  opts: { force?: boolean },
+  opts: { force?: boolean; dryRun?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -249,6 +249,24 @@ export async function cleanWorkspace(
     if (dirty.length > 0) {
       return { ok: false, error: `Dirty worktrees: ${dirty.join(", ")}` }
     }
+  }
+
+  // External file warnings (FILES-17) — emitted in both dry-run and real runs
+  const stacks = loadWorkspaceStacks(workspace)
+  const wsDir = join(tasksDir, workspace.name)
+  const externalWarnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+  for (const w of externalWarnings) {
+    onProgress?.(w)
+  }
+
+  // Dry-run short-circuit — skip hooks, just describe what would happen
+  if (opts.dryRun) {
+    for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
+      if (!existsSync(repo.task_path)) continue
+      onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
+    }
+    onProgress?.("Dry run complete. No changes made.")
+    return { ok: true }
   }
 
   try {
@@ -281,7 +299,7 @@ export async function cleanWorkspace(
 
 export async function removeWorkspace(
   name: string,
-  opts: { force?: boolean },
+  opts: { force?: boolean; dryRun?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -297,6 +315,25 @@ export async function removeWorkspace(
     if (dirty.length > 0) {
       return { ok: false, error: `Dirty worktrees: ${dirty.join(", ")}` }
     }
+  }
+
+  // External file warnings (FILES-17) — emitted in both dry-run and real runs
+  const stacks = loadWorkspaceStacks(workspace)
+  const wsDir = join(tasksDir, workspace.name)
+  const externalWarnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+  for (const w of externalWarnings) {
+    onProgress?.(w)
+  }
+
+  // Dry-run short-circuit — skip hooks, just describe what would happen
+  if (opts.dryRun) {
+    for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
+      if (!existsSync(repo.task_path)) continue
+      onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
+    }
+    onProgress?.(`[dry-run] would delete config: workspaces/${name}.yml`)
+    onProgress?.("Dry run complete. No changes made.")
+    return { ok: true }
   }
 
   try {
@@ -330,7 +367,7 @@ export async function removeWorkspace(
 
 export async function mergeWorkspace(
   name: string,
-  opts: { force?: boolean },
+  opts: { force?: boolean; dryRun?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -357,7 +394,7 @@ export async function mergeWorkspace(
     return { repo, baseBranch }
   })
 
-  // Conflict pre-check
+  // Conflict pre-check (runs in both dry-run and real — read-only)
   const conflicting: string[] = []
   for (const { repo, baseBranch } of repoBases) {
     const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
@@ -369,6 +406,22 @@ export async function mergeWorkspace(
   }
   if (conflicting.length > 0) {
     return { ok: false, error: `Merge conflicts:\n  ${conflicting.join("\n  ")}` }
+  }
+
+  // Dry-run short-circuit — skip hooks, just describe what would happen
+  if (opts.dryRun) {
+    for (const { repo, baseBranch } of repoBases) {
+      onProgress?.(`[dry-run] would merge ${workspace.branch} into ${baseBranch} (${repo.name})`)
+    }
+    for (const repo of worktreeRepos) {
+      if (existsSync(repo.task_path)) {
+        onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
+      }
+      onProgress?.(`[dry-run] would delete branch: ${workspace.branch} (${repo.name})`)
+    }
+    onProgress?.(`[dry-run] would delete config: workspaces/${name}.yml`)
+    onProgress?.("Dry run complete. No changes made.")
+    return { ok: true }
   }
 
   try {
@@ -548,6 +601,7 @@ export async function openWorkspace(
 export async function renameWorkspace(
   oldName: string,
   newName: string,
+  opts: { force?: boolean; dryRun?: boolean } = {},
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(oldName)) {
@@ -563,6 +617,20 @@ export async function renameWorkspace(
 
   // Re-register worktrees at new paths (BUG-03 fix: use git commands, not renameSync)
   const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+
+  // Dry-run short-circuit — just describe what would happen
+  if (opts.dryRun) {
+    for (const repo of worktreeRepos) {
+      const oldPath = repo.task_path
+      const newPath = oldPath.replace(join(tasksDir, oldName), join(tasksDir, newName))
+      if (existsSync(oldPath)) {
+        onProgress?.(`[dry-run] would re-register worktree: ${oldPath} -> ${newPath} (${repo.name})`)
+      }
+    }
+    onProgress?.(`[dry-run] would rename config: ${oldName}.yml -> ${newName}.yml`)
+    onProgress?.("Dry run complete. No changes made.")
+    return { ok: true }
+  }
 
   for (const repo of worktreeRepos) {
     const oldWorktreePath = repo.task_path

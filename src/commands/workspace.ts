@@ -398,7 +398,7 @@ export function registerWorkspaceCommands(program: Command) {
     .command("rename <old> <new>")
     .description("Rename a workspace")
     .action(async (oldName: string, newName: string) => {
-      const result = await renameWorkspace(oldName, newName, (msg) => console.log(`  ${msg}`))
+      const result = await renameWorkspace(oldName, newName, {}, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(result.error)
         process.exit(1)
