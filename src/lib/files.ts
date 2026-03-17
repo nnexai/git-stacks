@@ -175,6 +175,86 @@ export function applyFileOpsForWorkspace(
 }
 
 /**
+ * Identify file entries that reference paths outside the workspace's task directory boundary.
+ * Warns when a files.copy or files.symlink entry is an absolute path (including ~/...)
+ * that resolves to a location outside the workspace root (wsDir = join(tasksDir, workspace.name)).
+ * Reasons purely from path math — never checks filesystem existence (Pitfall 4).
+ *
+ * Checks both workspace-instance level file ops (across all stacks) and per-repo
+ * file ops (for worktree-mode repos). Returns warning strings for any destination
+ * that is NOT inside join(tasksDir, workspace.name).
+ */
+export function warnExternalFiles(
+  workspace: Workspace,
+  stacks: Map<string, Stack>,
+  wsInstanceRoot: string,
+  tasksDir: string
+): string[] {
+  const warnings: string[] = []
+  const wsDir = join(tasksDir, workspace.name)
+
+  function isInternal(resolvedPath: string): boolean {
+    return resolvedPath === wsDir || resolvedPath.startsWith(wsDir + "/")
+  }
+
+  function checkEntry(entry: string, destDir: string): void {
+    if (isGlobPattern(entry)) {
+      // Glob patterns expand against destDir — destinations are all inside destDir
+      // which is either wsInstanceRoot (inside wsDir) or a task_path (inside wsDir)
+      // No external destinations possible from glob patterns in this context
+      return
+    }
+    const expanded = expandHome(entry)
+    if (isAbsolute(expanded)) {
+      // Absolute path: the destination is join(destDir, basename(expanded))
+      // But the SOURCE being absolute and outside wsDir is the key concern —
+      // warn when the resolved absolute entry path falls outside the workspace
+      if (!isInternal(expanded)) {
+        warnings.push(`Warning: external destination ${expanded} was not removed`)
+      }
+    }
+    // Relative paths always resolve to destDir/<entry>, so always internal
+  }
+
+  // Collect all workspace-level files (deduplicate across stacks by using a Set for seen entries)
+  // Workspace-instance level: iterate each stack, merge with workspace.files
+  const seenWsEntries = new Set<string>()
+  for (const [, stack] of stacks) {
+    const merged = mergeFiles(stack.files, workspace.files)
+    for (const entry of [...merged.copy, ...merged.symlink]) {
+      if (!seenWsEntries.has(entry)) {
+        seenWsEntries.add(entry)
+        checkEntry(entry, wsInstanceRoot)
+      }
+    }
+  }
+
+  // If stacks map is empty but workspace has files, still check workspace files
+  if (stacks.size === 0) {
+    const merged = mergeFiles(undefined, workspace.files)
+    for (const entry of [...merged.copy, ...merged.symlink]) {
+      if (!seenWsEntries.has(entry)) {
+        seenWsEntries.add(entry)
+        checkEntry(entry, wsInstanceRoot)
+      }
+    }
+  }
+
+  // Per-repo level: iterate worktree repos
+  for (const wsRepo of workspace.repos.filter(r => r.mode === "worktree")) {
+    const stack = stacks.get(wsRepo.stack)
+    const stackRepo = stack?.repos.find(r => r.name === wsRepo.name)
+    const merged = mergeFiles(stackRepo?.files, wsRepo.files)
+    const destDir = wsRepo.task_path
+    for (const entry of [...merged.copy, ...merged.symlink]) {
+      checkEntry(entry, destDir)
+    }
+  }
+
+  return warnings
+}
+
+/**
  * @deprecated Use applyFileOpsForRepo instead.
  * Kept for backward compatibility with the existing call site in workspace-wizard.ts.
  * Applies file operations using only the stack repo's files config (no workspace merge).
