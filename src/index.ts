@@ -1,11 +1,29 @@
 #!/usr/bin/env bun
 import { Command } from "commander"
 import { basename } from "path"
+import { $ } from "bun"
 import { stackCommand } from "./commands/stack"
 import { registerWorkspaceCommands } from "./commands/workspace"
 import { configCommand } from "./commands/config"
 import { createCompletionCommand } from "./commands/completion"
 import { doctorCommand } from "./commands/doctor"
+
+async function checkGitVersion(): Promise<void> {
+  const result = await $`git --version`.quiet().nothrow()
+  if (result.exitCode !== 0) {
+    console.error("git-stacks: git is not installed. Visit https://git-scm.com to install.")
+    process.exit(1)
+  }
+  const match = result.stdout.toString().match(/(\d+)\.(\d+)/)
+  if (!match) return
+  const [major, minor] = [parseInt(match[1]), parseInt(match[2])]
+  if (major < 2 || (major === 2 && minor < 24)) {
+    console.error(
+      `git-stacks: git >= 2.24 required (found ${major}.${minor}). Visit https://git-scm.com to install.`
+    )
+    process.exit(1)
+  }
+}
 
 const program = new Command()
 
@@ -41,4 +59,9 @@ if (process.argv.length <= 2) {
   process.argv.push("manage")
 }
 
+// Skip git check for completion subcommand (shell completions must work even without git)
+const subcommand = process.argv[2]
+if (subcommand !== "completion") {
+  await checkGitVersion()
+}
 program.parse()
