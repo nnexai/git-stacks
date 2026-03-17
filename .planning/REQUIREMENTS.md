@@ -7,8 +7,8 @@
 
 ### Foundation — Tests
 
-- [ ] **TEST-01**: Developer can add git integration tests using a `makeGitRepo(tmpDir)` helper that creates a real local git repo in a temp directory
-- [ ] **TEST-02**: Core git operations (createWorktree, removeWorktree, mergeNoFF, rebaseBranch, getCommitsBehind) have integration test coverage with real git repos
+- [x] **TEST-01**: Developer can add git integration tests using a `makeGitRepo(tmpDir)` helper that creates a real local git repo in a temp directory
+- [x] **TEST-02**: Core git operations (createWorktree, removeWorktree, mergeNoFF, rebaseBranch, getCommitsBehind) have integration test coverage with real git repos
 - [ ] **TEST-03**: Workspace lifecycle critical paths (open, clean, remove, merge) have integration tests that catch the known partial-failure bugs
 
 ### Foundation — Config Robustness
@@ -108,8 +108,8 @@
 | PREREQ-01 | Phase 1 | Pending |
 | PREREQ-02 | Phase 1 | Pending |
 | PREREQ-03 | Phase 1 | Pending |
-| TEST-01 | Phase 1 | Pending |
-| TEST-02 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
+| TEST-02 | Phase 1 | Complete |
 | TEST-03 | Phase 1 | Pending |
 | CONF-01 | Phase 1 | Pending |
 | CONF-02 | Phase 1 | Pending |
@@ -146,4 +146,4 @@
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after roadmap creation*
+*Last updated: 2026-03-17 after 01-01 completion (TEST-01, TEST-02 marked complete)*

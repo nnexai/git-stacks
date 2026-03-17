@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 5 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Test infrastructure: makeGitRepo helper + git.ts integration tests (TEST-01, TEST-02)
+- [x] 01-01-PLAN.md — Test infrastructure: makeGitRepo helper + git.ts integration tests (TEST-01, TEST-02)
 - [ ] 01-02-PLAN.md — Config resilience: formatZodError, safeParse, schema_version, shape guard (CONF-01-04)
 - [ ] 01-03-PLAN.md — Prerequisite checks: git version check, integration binary guards, doctor reporting (PREREQ-01-03)
 - [ ] 01-04-PLAN.md — Bug fixes: mergeNoFF detached HEAD, atomic merge/remove/clean/rename (BUG-01-04)
@@ -92,7 +92,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/5 | Planned | - |
+| 1. Foundation | 1/5 | In progress | - |
 | 2. Safety | 0/TBD | Not started | - |
 | 3. Design and Conditional Implementation | 0/TBD | Not started | - |
 | 4. UX and Execution | 0/TBD | Not started | - |

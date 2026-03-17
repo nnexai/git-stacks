@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1.1 context gathered
-last_updated: "2026-03-17T21:21:48.179Z"
-last_activity: 2026-03-17 — Roadmap created
+status: in-progress
+stopped_at: Completed 01-foundation 01-01-PLAN.md
+last_updated: "2026-03-17T21:10:00.000Z"
+last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 1
+  percent: 20
 ---
 
 # Project State
@@ -25,28 +25,28 @@ See: .planning/PROJECT.md (updated 2026-03-17)
 
 ## Current Position
 
-Phase: 1 of 4 (Foundation)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-17 — Roadmap created
+Phase: 1 of 5 (Foundation)
+Plan: 1 of TBD in current phase (01-01 complete)
+Status: In progress
+Last activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 5 min
+- Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-foundation | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: none yet
+- Last 5 plans: 01-01 (5 min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -60,6 +60,8 @@ Recent decisions affecting current work:
 
 - Roadmap creation: REPO-* and TMPL-* placed in Phase 3 as conditional on DESIGN-01/DESIGN-02 outcome
 - Roadmap creation: Safety (SAFE-*) kept as a separate phase after Foundation — not merged in, per ordering requirement
+- 01-01: Use `git init -b main` to force default branch name regardless of host git config — ensures test reproducibility across environments
+- 01-01: Each describe block owns its own tmp/repo lifecycle (beforeEach/afterEach) to prevent cross-test contamination
 
 ### Roadmap Evolution
 
@@ -76,6 +78,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T21:21:48.176Z
-Stopped at: Phase 1.1 context gathered
-Resume file: .planning/phases/01.1-file-and-folder-copy-symlink-support-between-repos-for-large-binary-sharing/01.1-CONTEXT.md
+Last session: 2026-03-17T21:10:00.000Z
+Stopped at: Completed 01-foundation 01-01-PLAN.md
+Resume file: .planning/phases/01-foundation/01-01-SUMMARY.md
