@@ -143,8 +143,9 @@ export function registerWorkspaceCommands(program: Command) {
     .command("clean [name]")
     .description("Remove worktrees for a workspace (config is kept), or --gone to remove all with deleted remote branches")
     .option("--gone", "Remove workspaces whose upstream branches are deleted")
-    .option("--force", "Skip dirty worktree check")
-    .action(async (name: string | undefined, opts: { gone?: boolean; force?: boolean }) => {
+    .option("--force", "Skip dirty worktree check and confirmation")
+    .option("--dry-run", "Show what would be done without making changes")
+    .action(async (name: string | undefined, opts: { gone?: boolean; force?: boolean; dryRun?: boolean }) => {
       if (opts.gone) {
         // --- ws clean --gone ---
         const config = readGlobalConfig()
@@ -190,13 +191,15 @@ export function registerWorkspaceCommands(program: Command) {
           console.log(`  ${ws.name.padEnd(24)} ${ws.branch}`)
         }
 
-        const ok = await p.confirm({
-          message: `Remove ${goneWorkspaces.length} gone workspace(s)? (worktrees + config)`,
-          initialValue: false,
-        })
-        if (p.isCancel(ok) || !ok) {
-          console.log("Cancelled.")
-          return
+        if (!opts.force) {
+          const ok = await p.confirm({
+            message: `Remove ${goneWorkspaces.length} gone workspace(s)? (worktrees + config)`,
+            initialValue: false,
+          })
+          if (p.isCancel(ok) || !ok) {
+            console.log("Cancelled.")
+            return
+          }
         }
 
         for (const ws of goneWorkspaces) {
@@ -222,13 +225,15 @@ export function registerWorkspaceCommands(program: Command) {
         process.exit(1)
       }
 
-      const ok = await p.confirm({
-        message: `Remove all worktrees for '${name}'? Config is kept.`,
-        initialValue: false,
-      })
-      if (p.isCancel(ok) || !ok) {
-        console.log("Cancelled.")
-        return
+      if (!opts.force && !opts.dryRun) {
+        const ok = await p.confirm({
+          message: `Remove all worktrees for '${name}'? Config is kept.`,
+          initialValue: false,
+        })
+        if (p.isCancel(ok) || !ok) {
+          console.log("Cancelled.")
+          return
+        }
       }
 
       const result = await cleanWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
@@ -243,20 +248,23 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("remove <name>")
     .description("Permanently remove a workspace (worktrees + config YAML)")
-    .option("--force", "Skip dirty worktree check")
-    .action(async (name: string, opts: { force?: boolean }) => {
+    .option("--force", "Skip dirty worktree check and confirmation")
+    .option("--dry-run", "Show what would be done without making changes")
+    .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
       if (!workspaceExists(name)) {
         console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
         process.exit(1)
       }
 
-      const ok = await p.confirm({
-        message: `Permanently remove workspace '${name}' (worktrees + config)?`,
-        initialValue: false,
-      })
-      if (p.isCancel(ok) || !ok) {
-        console.log("Cancelled.")
-        return
+      if (!opts.force && !opts.dryRun) {
+        const ok = await p.confirm({
+          message: `Permanently remove workspace '${name}' (worktrees + config)?`,
+          initialValue: false,
+        })
+        if (p.isCancel(ok) || !ok) {
+          console.log("Cancelled.")
+          return
+        }
       }
 
       const result = await removeWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
@@ -293,20 +301,23 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("merge <name>")
     .description("Merge all worktree branches into their base branches, then clean workspace")
-    .option("--force", "Skip dirty worktree check")
-    .action(async (name: string, opts: { force?: boolean }) => {
+    .option("--force", "Skip dirty worktree check and confirmation")
+    .option("--dry-run", "Show what would be done without making changes")
+    .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
       if (!workspaceExists(name)) {
         console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
         process.exit(1)
       }
 
-      const ok = await p.confirm({
-        message: `Merge and clean workspace '${name}'?`,
-        initialValue: false,
-      })
-      if (p.isCancel(ok) || !ok) {
-        console.log("Cancelled.")
-        return
+      if (!opts.force && !opts.dryRun) {
+        const ok = await p.confirm({
+          message: `Merge and clean workspace '${name}'?`,
+          initialValue: false,
+        })
+        if (p.isCancel(ok) || !ok) {
+          console.log("Cancelled.")
+          return
+        }
       }
 
       const result = await mergeWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
@@ -397,13 +408,28 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("rename <old> <new>")
     .description("Rename a workspace")
-    .action(async (oldName: string, newName: string) => {
-      const result = await renameWorkspace(oldName, newName, {}, (msg) => console.log(`  ${msg}`))
+    .option("--force", "Skip confirmation prompt")
+    .option("--dry-run", "Show what would be done without making changes")
+    .action(async (oldName: string, newName: string, opts: { force?: boolean; dryRun?: boolean }) => {
+      if (!opts.force && !opts.dryRun) {
+        const ok = await p.confirm({
+          message: `Rename '${oldName}' \u2192 '${newName}'?`,
+          initialValue: false,
+        })
+        if (p.isCancel(ok) || !ok) {
+          console.log("Cancelled.")
+          return
+        }
+      }
+
+      const result = await renameWorkspace(oldName, newName, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(result.error)
         process.exit(1)
       }
-      console.log(`\nRenamed '${oldName}' → '${newName}'.`)
+      if (!opts.dryRun) {
+        console.log(`\nRenamed '${oldName}' \u2192 '${newName}'.`)
+      }
     })
 
   program
