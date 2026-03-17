@@ -7,6 +7,7 @@ import { registerWorkspaceCommands } from "./commands/workspace"
 import { configCommand } from "./commands/config"
 import { createCompletionCommand } from "./commands/completion"
 import { doctorCommand } from "./commands/doctor"
+import { getVersionString } from "./lib/version"
 
 async function checkGitVersion(): Promise<void> {
   const result = await $`git --version`.quiet().nothrow()
@@ -30,7 +31,8 @@ const program = new Command()
 const rawName = basename(process.argv[1])
 const binName = rawName.endsWith(".ts") || rawName.endsWith(".js") ? "git-stacks" : rawName
 
-program.name(binName).description("Git worktree workspace manager").version("0.1.1").enablePositionalOptions()
+const versionString = await getVersionString()
+program.name(binName).description("Git worktree workspace manager").version(versionString).enablePositionalOptions()
 
 program.addCommand(stackCommand)
 registerWorkspaceCommands(program)
