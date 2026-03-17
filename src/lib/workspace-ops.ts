@@ -29,6 +29,7 @@ import {
 } from "./git"
 import { integrations, type IntegrationContext } from "./integrations"
 import { runHooks } from "./lifecycle"
+import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "./files"
 
 export type ProgressCallback = (message: string) => void
 
@@ -452,6 +453,38 @@ export async function openWorkspace(
     }
   }
 
+  const wsDir = join(tasksDir, name)
+  const stacks = loadWorkspaceStacks(workspace)
+
+  // Per-repo file ops (Level 2) — idempotent: dst exists → skip
+  for (const wsRepo of workspace.repos.filter(r => r.mode === "worktree")) {
+    const stack = stacks.get(wsRepo.stack)
+    if (!stack) continue
+    const stackRepo = stack.repos.find(r => r.name === wsRepo.name)
+    if (!stackRepo) continue
+    const fileResult = applyFileOpsForRepo(stackRepo, wsRepo)
+    if (!fileResult.ok) {
+      onProgress?.(`file-ops warning [${wsRepo.name}]: ${fileResult.error}`)
+    } else if (fileResult.warnings) {
+      for (const w of fileResult.warnings) onProgress?.(`file-ops: ${w}`)
+    }
+  }
+
+  // Workspace-instance file ops (Level 1) — idempotent: dst exists → skip
+  for (const [, stack] of stacks) {
+    const wsFileResult = applyFileOpsForWorkspace(stack, workspace, wsDir)
+    if (!wsFileResult.ok) {
+      onProgress?.(`file-ops warning [workspace]: ${wsFileResult.error}`)
+    } else if (wsFileResult.warnings) {
+      for (const w of wsFileResult.warnings) onProgress?.(`file-ops: ${w}`)
+    }
+  }
+
+  // Write env files — after file ops, before integrations
+  const mergedEnvVars = mergeEnv(workspace, stacks)
+  writeEnvFiles(workspace, stacks, mergedEnvVars, msg => onProgress?.(msg))
+  const hookEnv = { ...baseEnv, ...mergedEnvVars }
+
   const ctx: IntegrationContext = { workspace, tasksDir, config }
 
   for (const integration of integrations) {
@@ -461,14 +494,6 @@ export async function openWorkspace(
     const artifactPath = integration.generate?.(ctx) ?? null
     await integration.open(ctx, artifactPath)
   }
-
-  // After integrations, run post_open hooks
-  const stacks = loadWorkspaceStacks(workspace)
-  const mergedEnvVars = mergeEnv(workspace, stacks)
-  const hookEnv = { ...baseEnv, ...mergedEnvVars }
-
-  // Write env files
-  writeEnvFiles(workspace, stacks, mergedEnvVars)
 
   // Workspace-level post_open
   if (workspace.hooks?.post_open?.length) {
