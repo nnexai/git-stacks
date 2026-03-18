@@ -2,71 +2,52 @@
 
 ## What This Is
 
-`git-stacks` is a CLI workspace manager for feature-branch driven development. It creates isolated, fully-configured development environments per feature or task — instantly setting up git worktrees, IDE/terminal multiplexer sessions, and dependency repos from declarative stack templates. Works for a single developer juggling multiple features in parallel, or for AI agents that each need their own workspace without colliding on files.
+`git-stacks` is a CLI workspace manager for feature-branch driven development. It creates isolated, fully-configured development environments per feature or task — instantly setting up git worktrees, IDE/terminal multiplexer sessions, and dependency repos from declarative templates. Works for a single developer juggling multiple features in parallel, or for AI agents that each need their own workspace without colliding on files.
 
 ## Core Value
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Requirements
+## Current State — v0.2.0 (shipped 2026-03-18)
 
-### Validated
+### What shipped in v0.2.0
 
-- ✓ `git-stacks new` creates a workspace from one or more stack templates — existing
-- ✓ `git-stacks open` re-opens an existing workspace, recreating missing worktrees — existing
-- ✓ `git-stacks clone` creates a workspace from an existing remote branch — existing
-- ✓ Stack YAML format defines repos, modes (worktree/trunk), hooks, env vars, file ops — existing
-- ✓ Workspace YAML persists task instances at `~/.config/git-stacks/workspaces/` — existing
-- ✓ Git worktree isolation per repo (worktree vs trunk mode) — existing
-- ✓ Hook system: `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove` — existing
-- ✓ Integration plugin system: VSCode, IntelliJ, tmux, cmux — existing
-- ✓ Interactive TUI dashboard (`git-stacks manage`) via SolidJS + OpenTUI — existing
-- ✓ Stack wizards: `stack new`, `stack init`, `stack edit` — existing
-- ✓ Shell completion for bash/zsh/fish — existing
-- ✓ `git-stacks doctor` health check and drift detection — existing
-- ✓ `git-stacks merge` with conflict pre-check — existing
-- ✓ `git-stacks sync` with rebase/merge strategies — existing
-- ✓ `git-stacks run` to execute commands across all workspace repos — existing
+- **Stable foundation** — Test infra with real git repos, Zod schema resilience, prerequisite checks, 5 live bug fixes (atomic merge/remove/rename, mergeNoFF detached HEAD)
+- **File ops engine** — Copy/symlink with glob at workspace-instance and per-repo levels; idempotent; loud-fail
+- **Dynamic version** — `git-stacks -V` shows `package.json` version + git hash + `-dirty` flag
+- **Destructive op safety** — `--dry-run` / `--force` on `remove`, `clean`, `merge`, `rename`; external file warnings before teardown
+- **Registry + Template model** — Stack model fully replaced; Repo Registry as source of truth; Templates as reusable workspace recipes; workspace YAML self-contained at creation
+- **UX polish** — `formatError` with actionable hints, `--json` on `status`/`doctor`/`sync`, `doctor --fix`, richer `list` columns, `run --parallel`
+- **Tech debt closed** — Full `openWorkspace()` lifecycle on "open now?", typed Workspace in new flow, dead code removed
 
-### Active
+### Current primitives (stable as of v0.2.0)
 
-- [ ] Clarify and stabilize the core primitives (Stack, Workspace, Repo, Integration, Hook contracts)
-- [ ] Comprehensive test suite: unit tests for all lib functions, integration tests for key flows
-- [ ] Safe destructive operations: `remove`, `clean`, `merge` with dry-run, confirmation prompts, and rollback paths
-- [ ] Clear, actionable error messages throughout — especially for git failures, missing repos, config errors
-- [ ] Easier workspace setup from an existing branch (not just new branches)
-- [ ] Better merge tooling: per-repo status visibility, partial merges, conflict surfacing
-- [ ] Expand integration support: additional IDE targets, smarter detection
-- [ ] Programmatic API surface for agent/automation use cases
+- **Repo Registry** (`~/.config/git-stacks/registry.yml`) — source of truth for local repo locations and default branches
+- **Templates** (`~/.config/git-stacks/templates/{name}.yml`) — reusable workspace recipes with per-repo mode, branch patterns, hooks, env, file ops
+- **Workspaces** (`~/.config/git-stacks/workspaces/{name}.yml`) — task-scoped instances; self-contained snapshots at creation time
+- **Integrations** — VSCode, IntelliJ, tmux, cmux plugin system; extensible via `src/lib/integrations/`
+- **Hooks** — `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove` at stack/template and workspace levels
 
-### Out of Scope
+## Next Milestone Goals
 
-- Remote/cloud workspace sharing — local-machine focus, no server component planned
-- GUI application — TUI and CLI only
-- Agent memory/session persistence — interesting problem, revisit after core is solid
-- AI-triggered operations (merge conflict resolution, intelligent setup) — secondary priority
+To be defined via `/gsd:new-milestone`. Candidate themes:
 
-## Context
-
-- **Working PoC**: All core commands exist and work. Architecture is clean (layered: config → lib → commands → TUI). The integration plugin pattern and hook system are well-designed extensibility points.
-- **Brownfield development**: New work must not break existing config formats (`stacks/{name}.yml`, `workspaces/{name}.yml`) — users may already have configs in place.
-- **Multi-agent use case**: The isolation model (one workspace per task) makes this naturally compatible with AI agents working in parallel. Agents creating new worktrees currently see them as fresh projects — context persistence across workspace recreations is an open problem for later.
-- **Inspiration**: workmux, cmux — the feel should be fast, composable, and frictionless like those tools.
+- **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type
+- **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, autocomplete upgrade, per-repo ahead/behind
+- **Agent-aware** — agent status file protocol, `manage` dashboard indicators, batch workspace generation (`new --count N`)
 
 ## Versioning
 
-**Package version:** This roadmap targets the `v0.2.0` npm release. The project is staying on zerover (`0.x`) until core primitives are fully settled (the Stacks-vs-Templates design decision is the main gate).
-
-**GSD epic naming:** The GSD planning system calls this work "v1" internally (first planned milestone). This does not mean semver v1.0. When the GSD roadmap says "v1 requirements," it means requirements for this milestone — not a public API stability promise.
-
-**Version gate for 1.0:** Not planned until: core primitives decided, destructive ops hardened, programmatic API stabilized.
+**Current release:** `v0.2.0`
+**Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
+**Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
 ## Constraints
 
 - **Runtime**: Bun — no Node.js compatibility required; use Bun APIs freely (`$`, `spawn`, `Bun.file`)
 - **Language**: TypeScript strict mode throughout
 - **Config format**: YAML with Zod validation — preserve schema compatibility with existing user configs
-- **No breaking changes**: Existing stack/workspace YAML files must continue to work across improvements
+- **No breaking changes**: Existing workspace YAML files must continue to work across improvements
 
 ## Key Decisions
 
@@ -76,8 +57,38 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | YAML for all config | Human-readable, editable without the tool | ✓ Good |
 | Integration plugin pattern | Add IDE/terminal support without touching core | ✓ Good |
 | Git worktrees as isolation primitive | Avoids full clones, preserves git history/branches | ✓ Good |
-| Per-stack + per-workspace hooks | Composable automation at the right scope | — Pending evaluation |
+| Stack model → Registry+Template (v0.2.0) | Cleaner primitives, zerover clean break, no migration shim | ✓ Done |
+| Per-template + per-workspace hooks | Composable automation at the right scope | ✓ Good |
 | SolidJS for TUI dashboard | Reactive UI in terminal via OpenTUI | — Pending evaluation |
+| Workspace YAML self-contained at creation | No template required at open time; resilient to template deletion | ✓ Good |
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Remote/cloud workspace sharing | Local-machine focus; no server component planned |
+| GUI application | TUI and CLI only |
+| Built-in package/tool version management | Delegate to mise/asdf via hooks |
+| AI-triggered conflict resolution | Secondary priority; requires stable API first |
+| Nix/devenv as first-class dependency | Out of domain; composable via hooks |
+| Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
+| Monorepo build caching | Nx/Turborepo's domain |
 
 ---
-*Last updated: 2026-03-17 after initialization*
+
+<details>
+<summary>v1.0 milestone history (GSD internal name for v0.2.0 work)</summary>
+
+**Active goals (now complete):**
+- Clarify and stabilize the core primitives (Stack, Workspace, Repo, Integration, Hook contracts)
+- Comprehensive test suite: unit tests for all lib functions, integration tests for key flows
+- Safe destructive operations: `remove`, `clean`, `merge` with dry-run, confirmation prompts, and rollback paths
+- Clear, actionable error messages throughout
+- Easier workspace setup from an existing branch (not just new branches)
+- Programmatic API surface for agent/automation use cases (deferred to next milestone)
+
+See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
+</details>
+
+---
+*Last updated: 2026-03-18 — v0.2.0 shipped*
