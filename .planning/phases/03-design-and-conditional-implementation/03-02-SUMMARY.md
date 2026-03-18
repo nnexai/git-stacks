@@ -114,3 +114,10 @@ None - no external service configuration required.
 ---
 *Phase: 03-design-and-conditional-implementation*
 *Completed: 2026-03-18*
+
+## Self-Check: PASSED
+
+- FOUND: src/commands/repo.ts
+- FOUND: src/tui/repo-wizard.ts
+- FOUND commit: d26c3e2 (Task 1)
+- FOUND commit: ce6c609 (Task 2)
