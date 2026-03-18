@@ -83,10 +83,10 @@
 
 ### Repo Registry
 
-- [ ] **REPO-01**: User can register a git repository by providing a remote URL — git-stacks clones it to the configured workspace root and stores the repo metadata
-- [ ] **REPO-02**: User can register repos by pointing git-stacks at a local folder — it scans for git repos within it (non-recursive, one level) and offers to register found repos
-- [ ] **REPO-03**: User can list, view, and remove registered repos
-- [ ] **REPO-04**: Registered repos have a default branch that is used as the base for worktree creation when no override is specified
+- [x] **REPO-01**: User can register a git repository by providing a remote URL — git-stacks clones it to the configured workspace root and stores the repo metadata
+- [x] **REPO-02**: User can register repos by pointing git-stacks at a local folder — it scans for git repos within it (non-recursive, one level) and offers to register found repos
+- [x] **REPO-03**: User can list, view, and remove registered repos
+- [x] **REPO-04**: Registered repos have a default branch that is used as the base for worktree creation when no override is specified
 
 ### Template Abstraction
 
@@ -187,10 +187,10 @@
 | SAFE-03 | Phase 2 | Complete |
 | DESIGN-01 | Phase 3 | Complete |
 | DESIGN-02 | Phase 3 | Complete |
-| REPO-01 | Phase 3 (conditional) | Pending |
-| REPO-02 | Phase 3 (conditional) | Pending |
-| REPO-03 | Phase 3 (conditional) | Pending |
-| REPO-04 | Phase 3 (conditional) | Pending |
+| REPO-01 | Phase 3 (conditional) | Complete |
+| REPO-02 | Phase 3 (conditional) | Complete |
+| REPO-03 | Phase 3 (conditional) | Complete |
+| REPO-04 | Phase 3 (conditional) | Complete |
 | TMPL-01 | Phase 3 (conditional) | Pending |
 | TMPL-02 | Phase 3 (conditional) | Pending |
 | TMPL-03 | Phase 3 (conditional) | Pending |
