@@ -8,6 +8,8 @@ import {
   WORKSPACES_DIR,
   GLOBAL_CONFIG_FILE,
   DEFAULT_WORKSPACE_ROOT,
+  REGISTRY_FILE,
+  TEMPLATES_DIR,
   expandHome,
 } from "./paths"
 
@@ -42,6 +44,50 @@ export const FilesSchema = z
   .optional()
 export type Files = z.infer<typeof FilesSchema>
 
+// --- Registry ---
+
+export const RepoRegistryEntrySchema = z.object({
+  name: z.string(),
+  schema_version: z.string().default("1"),
+  local_path: z.string(),
+  default_branch: z.string().default("main"),
+  type: RepoTypeSchema.default("other"),
+})
+export type RepoRegistryEntry = z.infer<typeof RepoRegistryEntrySchema>
+
+export const RepoRegistrySchema = z.array(RepoRegistryEntrySchema).default([])
+export type RepoRegistry = z.infer<typeof RepoRegistrySchema>
+
+// --- Templates ---
+
+export const TemplateRepoSchema = z.object({
+  repo: z.string(),                                    // registry name
+  mode: z.enum(["trunk", "worktree"]).default("worktree"),
+  base_branch: z.string().optional(),                  // overrides registry default_branch
+  branch_pattern: z.string().optional(),               // e.g. "feature/<workspace-name>"
+})
+export type TemplateRepo = z.infer<typeof TemplateRepoSchema>
+
+export const TemplateSchema = z.object({
+  name: z.string(),
+  schema_version: z.string().default("1"),
+  description: z.string().optional(),
+  repos: z.array(TemplateRepoSchema).default([]),
+  hooks: z.object({
+    pre_create: z.array(z.string()).optional(),
+    post_create: z.array(z.string()).optional(),
+    pre_open: z.array(z.string()).optional(),
+    post_open: z.array(z.string()).optional(),
+    pre_remove: z.array(z.string()).optional(),
+    post_merge: z.array(z.string()).optional(),
+  }).optional(),
+  env: z.record(z.string()).optional(),
+  env_file: z.string().optional(),
+  files: FilesSchema,
+  integrations: z.record(z.unknown()).optional(),
+})
+export type Template = z.infer<typeof TemplateSchema>
+
 export const StackRepoSchema = z.object({
   name: z.string(),
   path: z.string(),
@@ -74,11 +120,12 @@ const WorkspaceRepoHooksSchema = z.object({
 
 export const WorkspaceRepoSchema = z.object({
   name: z.string(),
-  stack: z.string(),
+  repo: z.string(),           // registry name — replaces 'stack'
   type: RepoTypeSchema,
   mode: z.enum(["trunk", "worktree"]),
   main_path: z.string(),
   task_path: z.string(),
+  base_branch: z.string().optional(),  // base branch for merge/sync resolution
   hooks: WorkspaceRepoHooksSchema.optional(),
   files: FilesSchema,
 })
@@ -103,6 +150,7 @@ export const WorkspaceSchema = z.object({
   description: z.string().optional(),
   branch: z.string(),
   created: z.string(),
+  template: z.string().optional(),      // informational: source template name
   cmux_workspace_id: z.string().optional(),
   hooks: WorkspaceHooksSchema.optional(),
   settings: WorkspaceSettingsSchema.optional(),
@@ -231,6 +279,76 @@ export function listWorkspaces(): Workspace[] {
     }
   }
   return results
+}
+
+// --- Registry ---
+
+export function readRegistry(): RepoRegistryEntry[] {
+  if (!existsSync(REGISTRY_FILE)) return []
+  try {
+    const raw = readFileSync(REGISTRY_FILE, "utf-8")
+    const parsed = RepoRegistrySchema.safeParse(parse(raw))
+    if (parsed.success) return parsed.data
+    console.error(`[git-stacks] Registry parse error: ${formatZodError(parsed.error)}`)
+    return []
+  } catch (err) {
+    console.error(`[git-stacks] Cannot read registry: ${err}`)
+    return []
+  }
+}
+
+export function writeRegistry(entries: RepoRegistryEntry[]) {
+  ensureDir(dirname(REGISTRY_FILE))
+  writeYaml(REGISTRY_FILE, entries)
+}
+
+export function listRegistryEntries(): RepoRegistryEntry[] {
+  return readRegistry()
+}
+
+// --- Templates ---
+
+export function templatePath(name: string): string {
+  return join(TEMPLATES_DIR, `${name}.yml`)
+}
+
+export function templateExists(name: string): boolean {
+  return existsSync(templatePath(name))
+}
+
+export function readTemplate(name: string): Template {
+  return readYaml(templatePath(name), TemplateSchema)
+}
+
+export function writeTemplate(template: Template) {
+  ensureDir(TEMPLATES_DIR)
+  writeYaml(templatePath(template.name), template)
+}
+
+export function listTemplates(): Template[] {
+  if (!existsSync(TEMPLATES_DIR)) return []
+  const results: Template[] = []
+  for (const f of readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith(".yml"))) {
+    const name = f.replace(".yml", "")
+    try {
+      const raw = readFileSync(templatePath(name), "utf-8")
+      const parsed = TemplateSchema.safeParse(parse(raw))
+      if (parsed.success) {
+        results.push(parsed.data)
+      } else {
+        console.error(`[git-stacks] Skipping corrupt template '${name}': ${formatZodError(parsed.error)}`)
+      }
+    } catch (err) {
+      console.error(`[git-stacks] Skipping unreadable template '${name}': ${err}`)
+    }
+  }
+  return results
+}
+
+// --- Branch pattern expansion ---
+
+export function expandBranchPattern(pattern: string, workspaceName: string): string {
+  return pattern.replace(/<workspace-name>/g, workspaceName)
 }
 
 export { expandHome }
