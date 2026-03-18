@@ -165,7 +165,7 @@ export function registerWorkspaceCommands(program: Command) {
 
       // Always check dirty status (UX-04); --status flag retained for backward compat
       const infos = await Promise.all(
-        workspaces.map((ws) => getWorkspaceListInfo(ws, true))
+        workspaces.map((ws) => getWorkspaceListInfo(ws))
       )
 
       // Sort

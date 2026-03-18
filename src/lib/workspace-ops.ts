@@ -63,7 +63,7 @@ function formatAge(created: string): string {
 
 export async function getWorkspaceListInfo(
   workspace: Workspace,
-  checkStatus = true   // Default to true; kept for backward compat
+  _checkStatus = true   // kept for backward compat; dirty checks always run now
 ): Promise<WorkspaceListInfo> {
   const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
   const trunkRepos = workspace.repos.filter((r) => r.mode === "trunk")
