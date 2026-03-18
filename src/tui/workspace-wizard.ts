@@ -1,35 +1,104 @@
-// @ts-nocheck — TODO(03-05): rewrite wizard for Registry+Template model
 import * as p from "@clack/prompts"
-import { mkdirSync, existsSync, writeFileSync, lstatSync } from "fs"
+import { mkdirSync, existsSync } from "fs"
 import { safeText, cancel } from "./utils"
-import { join } from "path"
+import { join, resolve, basename } from "path"
 import {
+  readRegistry,
+  writeRegistry,
+  readTemplate,
+  listTemplates,
+  templateExists,
   writeWorkspace,
   workspaceExists,
   readGlobalConfig,
+  expandBranchPattern,
   type WorkspaceRepo,
   type Workspace,
+  type Template,
+  type RepoRegistryEntry,
 } from "../lib/config"
-
-// stub removed until 03-05 rewrites this file
-const listStacks = () => []
-import { getTasksDir } from "../lib/paths"
-import { createWorktree } from "../lib/git"
+import { getTasksDir, expandHome } from "../lib/paths"
+import { createWorktree, getCurrentBranch } from "../lib/git"
+import { detectRepoType } from "../lib/detect"
 import { integrations, type IntegrationContext } from "../lib/integrations"
 import { runHooks } from "../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
 
-export async function runWorkspaceNew(nameArg?: string) {
+async function pickReposFromRegistry(
+  registry: RepoRegistryEntry[],
+  message: string,
+): Promise<string[]> {
+  if (registry.length <= 20) {
+    const selectedRaw = await p.multiselect({
+      message,
+      options: registry.map(r => ({ value: r.name, label: r.name, hint: `${r.type} \u2014 ${r.local_path}` })),
+      required: true,
+    })
+    if (p.isCancel(selectedRaw)) cancel()
+    return selectedRaw as string[]
+  }
+  const filterRaw = await safeText({
+    message: `${message} (type to filter, empty = show all)`,
+  })
+  if (p.isCancel(filterRaw)) cancel()
+  const filter = (filterRaw as string).trim().toLowerCase()
+  const filtered = filter
+    ? registry.filter(r => r.name.toLowerCase().includes(filter))
+    : registry
+  if (filtered.length === 0) {
+    p.log.warn(`No repos match '${filter}'.`)
+    return []
+  }
+  const selectedRaw = await p.multiselect({
+    message: `Select repos (${filtered.length} shown)`,
+    options: filtered.map(r => ({ value: r.name, label: r.name, hint: `${r.type} \u2014 ${r.local_path}` })),
+    required: true,
+  })
+  if (p.isCancel(selectedRaw)) cancel()
+  return selectedRaw as string[]
+}
+
+function buildReposFromTemplate(
+  template: Template,
+  registry: RepoRegistryEntry[],
+  wsName: string,
+  branch: string,
+  tasksDir: string,
+): WorkspaceRepo[] {
+  const registryMap = new Map(registry.map(r => [r.name, r]))
+  const repos: WorkspaceRepo[] = []
+
+  for (const tplRepo of template.repos) {
+    const regEntry = registryMap.get(tplRepo.repo)
+    if (!regEntry) {
+      p.log.warn(`Registry entry '${tplRepo.repo}' not found \u2014 skipping`)
+      continue
+    }
+
+    const mode = tplRepo.mode ?? "worktree"
+    const taskPath = mode === "worktree"
+      ? join(tasksDir, wsName, regEntry.name)
+      : regEntry.local_path
+
+    repos.push({
+      name: regEntry.name,
+      repo: tplRepo.repo,
+      type: regEntry.type,
+      mode,
+      main_path: regEntry.local_path,
+      task_path: taskPath,
+      base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+    })
+  }
+
+  return repos
+}
+
+export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
   p.intro("New workspace")
 
   const config = readGlobalConfig()
   const tasksDir = getTasksDir(config.workspace_root)
-
-  const stacks = listStacks()
-  if (stacks.length === 0) {
-    p.cancel("No stacks defined. Run `ws stack new` first.")
-    process.exit(1)
-  }
 
   // Name
   const nameRaw = await safeText({
@@ -43,10 +112,168 @@ export async function runWorkspaceNew(nameArg?: string) {
   if (p.isCancel(nameRaw)) cancel()
   const wsName = (nameRaw as string).trim()
 
-  // Branch
+  let repos: WorkspaceRepo[] = []
+  let templateName: string | undefined
+  let wsHooks: Workspace["hooks"] | undefined
+  let wsEnv: Record<string, string> | undefined
+  let wsEnvFile: string | undefined
+  let wsFiles: Workspace["files"]
+  let wsIntegrationSettings: Record<string, unknown> | undefined
+
+  // Determine creation mode
+  if (fromSource) {
+    // --from was specified: resolve as local path or template name
+    const expanded = expandHome(fromSource)
+    const resolved = resolve(expanded)
+
+    if (existsSync(resolved) && existsSync(join(resolved, ".git"))) {
+      // --from <local-path>: auto-register + create 1-repo workspace
+      const registry = readRegistry()
+      const autoName = basename(resolved)
+      const regName = autoName
+      if (registry.some(r => r.name === regName)) {
+        // Already registered — just use it
+        p.log.info(`Repo '${regName}' already registered.`)
+      } else {
+        const type = detectRepoType(resolved)
+        const branch = await getCurrentBranch(resolved)
+        registry.push({
+          name: regName,
+          schema_version: "1",
+          local_path: resolved,
+          default_branch: branch,
+          type,
+        })
+        writeRegistry(registry)
+        p.log.success(`Auto-registered '${regName}' at ${resolved}`)
+      }
+
+      const regEntry = registry.find(r => r.name === regName)!
+      repos = [{
+        name: regEntry.name,
+        repo: regEntry.name,
+        type: regEntry.type,
+        mode: "worktree" as const,
+        main_path: regEntry.local_path,
+        task_path: join(tasksDir, wsName, regEntry.name),
+        base_branch: regEntry.default_branch,
+      }]
+    } else if (templateExists(fromSource)) {
+      // --from <template-name>: create from template
+      templateName = fromSource
+      const template = readTemplate(fromSource)
+      const registry = readRegistry()
+
+      repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
+
+      // Snapshot template config into workspace
+      wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+      wsEnv = template.env ? { ...template.env } : undefined
+      wsEnvFile = template.env_file
+      wsFiles = template.files
+      wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+    } else {
+      p.cancel(`'${fromSource}' is not a local path or known template name.`)
+      process.exit(1)
+    }
+  } else {
+    // No --from: offer template-or-adhoc choice
+    const templates = listTemplates()
+    const registry = readRegistry()
+
+    if (registry.length === 0 && templates.length === 0) {
+      p.cancel("No repos registered and no templates. Run `ws repo add <path>` first.")
+      process.exit(1)
+    }
+
+    let creationMode: string = "adhoc"
+    if (templates.length > 0) {
+      const modeRaw = await p.select({
+        message: "Create from",
+        options: [
+          ...(templates.length > 0 ? [{ value: "template", label: "Template", hint: `${templates.length} available` }] : []),
+          { value: "adhoc", label: "Pick repos", hint: "select from registry" },
+        ],
+      })
+      if (p.isCancel(modeRaw)) cancel()
+      creationMode = modeRaw as string
+    }
+
+    if (creationMode === "template") {
+      const tplRaw = await p.select({
+        message: "Template",
+        options: templates.map(t => ({
+          value: t.name,
+          label: t.name,
+          hint: t.description ?? `${t.repos.length} repos`,
+        })),
+      })
+      if (p.isCancel(tplRaw)) cancel()
+      templateName = tplRaw as string
+      const template = readTemplate(templateName)
+      repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
+
+      // Snapshot template config
+      wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+      wsEnv = template.env ? { ...template.env } : undefined
+      wsEnvFile = template.env_file
+      wsFiles = template.files
+      wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+    } else {
+      // Ad-hoc: pick repos from registry
+      if (registry.length === 0) {
+        p.cancel("No repos registered. Run `ws repo add <path>` first.")
+        process.exit(1)
+      }
+      const selectedNames = await pickReposFromRegistry(registry, "Select repos")
+      if (selectedNames.length === 0) {
+        p.cancel("No repos selected.")
+        process.exit(0)
+      }
+
+      for (const repoName of selectedNames) {
+        const regEntry = registry.find(r => r.name === repoName)!
+        const modeRaw = await p.select({
+          message: `  ${repoName} \u2014 mode`,
+          options: [
+            { value: "worktree" as const, label: "Worktree", hint: "new branch" },
+            { value: "trunk" as const, label: "Trunk", hint: "reference main clone" },
+          ],
+          initialValue: "worktree" as const,
+        })
+        if (p.isCancel(modeRaw)) cancel()
+        const mode = modeRaw as "trunk" | "worktree"
+
+        repos.push({
+          name: regEntry.name,
+          repo: regEntry.name,
+          type: regEntry.type,
+          mode,
+          main_path: regEntry.local_path,
+          task_path: mode === "worktree" ? join(tasksDir, wsName, regEntry.name) : regEntry.local_path,
+          base_branch: regEntry.default_branch,
+        })
+      }
+    }
+  }
+
+  if (repos.length === 0) {
+    p.cancel("No repos selected.")
+    process.exit(0)
+  }
+
+  // Branch — expand patterns if template had branch_pattern
+  const defaultBranch = templateName
+    ? (() => {
+        const tpl = readTemplate(templateName!)
+        const firstPattern = tpl.repos.find(r => r.branch_pattern)?.branch_pattern
+        return firstPattern ? expandBranchPattern(firstPattern, wsName) : `feature/${wsName}`
+      })()
+    : `feature/${wsName}`
+
   const branchRaw = await safeText({
     message: "Branch name",
-    fallbackValue: `feature/${wsName}`,
+    fallbackValue: defaultBranch,
     validate: (v) => (v.trim() ? undefined : "Required"),
   })
   if (p.isCancel(branchRaw)) cancel()
@@ -57,109 +284,19 @@ export async function runWorkspaceNew(nameArg?: string) {
   if (p.isCancel(descRaw)) cancel()
   const description = (descRaw as string).trim()
 
-  // Select stacks
-  const selectedStackNamesRaw = await p.multiselect({
-    message: "Stack(s)",
-    options: stacks.map((s) => ({
-      value: s.name,
-      label: s.name,
-      hint: s.description,
-    })),
-    required: true,
-  })
-  if (p.isCancel(selectedStackNamesRaw)) cancel()
-  const selectedStackNames = selectedStackNamesRaw as string[]
-
-  const selectedStacks = stacks.filter((s) => selectedStackNames.includes(s.name))
-
-  // Per-stack repo selection
-  const repos: WorkspaceRepo[] = []
-
-  for (const stack of selectedStacks) {
-    if (stack.repos.length === 0) continue
-
-    const includedNamesRaw = await p.multiselect({
-      message: `Repos from '${stack.name}'`,
-      options: stack.repos.map((r) => ({
-        value: r.name,
-        label: r.name,
-        hint: `${r.type} · default: ${r.default_mode}`,
-      })),
-      initialValues: stack.repos.map((r) => r.name),
-      required: false,
-    })
-    if (p.isCancel(includedNamesRaw)) cancel()
-    const includedNames = includedNamesRaw as string[]
-
-    for (const repoName of includedNames) {
-      const stackRepo = stack.repos.find((r) => r.name === repoName)!
-
-      const modeRaw = await p.select({
-        message: `  ${repoName} — mode`,
-        options: [
-          { value: "worktree" as const, label: "Worktree", hint: `branch: ${branch as string}` },
-          { value: "trunk" as const, label: "Trunk", hint: "reference main clone" },
-        ],
-        initialValue: stackRepo.default_mode,
-      })
-      if (p.isCancel(modeRaw)) cancel()
-      const mode = modeRaw as "trunk" | "worktree"
-
-      const taskPath =
-        mode === "worktree" ? join(tasksDir, wsName, repoName) : stackRepo.path
-
-      repos.push({
-        name: repoName,
-        stack: stack.name,
-        type: stackRepo.type,
-        mode,
-        main_path: stackRepo.path,
-        task_path: taskPath,
-      })
-    }
-  }
-
-  if (repos.length === 0) {
-    p.cancel("No repos selected.")
-    process.exit(0)
-  }
-
   const baseEnv = {
     WS_WORKSPACE: wsName,
     WS_BRANCH: branch,
     WS_TASKS_DIR: tasksDir,
   }
 
-  // Run pre_create hooks before creating worktrees
-  for (const stack of selectedStacks) {
-    // Stack-level pre_create
-    if (stack.hooks?.pre_create?.length) {
-      const stackEnv = { ...baseEnv, WS_STACK: stack.name }
-      try {
-        await runHooks(stack.hooks.pre_create, tasksDir, stackEnv)
-      } catch (err) {
-        p.cancel(`pre_create hook failed: ${err}`)
-        process.exit(1)
-      }
-    }
-
-    // Repo-level pre_create
-    for (const wsRepo of repos.filter(r => r.mode === "worktree" && r.stack === stack.name)) {
-      const stackRepo = stack.repos.find(r => r.name === wsRepo.name)
-      if (!stackRepo?.hooks?.pre_create?.length) continue
-      const repoEnv = {
-        ...baseEnv,
-        WS_STACK: stack.name,
-        WS_REPO_NAME: wsRepo.name,
-        WS_WORKTREE_PATH: wsRepo.task_path,
-        WS_MAIN_PATH: wsRepo.main_path,
-      }
-      try {
-        await runHooks(stackRepo.hooks.pre_create, wsRepo.main_path, repoEnv)
-      } catch (err) {
-        p.cancel(`pre_create hook failed for ${wsRepo.name}: ${err}`)
-        process.exit(1)
-      }
+  // Run pre_create hooks (from snapshot or workspace config)
+  if (wsHooks?.pre_create?.length) {
+    try {
+      await runHooks(wsHooks.pre_create, tasksDir, baseEnv)
+    } catch (err) {
+      p.cancel(`pre_create hook failed: ${err}`)
+      process.exit(1)
     }
   }
 
@@ -168,12 +305,11 @@ export async function runWorkspaceNew(nameArg?: string) {
   if (worktreeRepos.length > 0) {
     const spinner = p.spinner()
     spinner.start("Creating worktrees")
-
     const wsDir = join(tasksDir, wsName)
     if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
 
     for (const repo of worktreeRepos) {
-      spinner.message(`${repo.name}…`)
+      spinner.message(`${repo.name}\u2026`)
       try {
         await createWorktree(repo.main_path, repo.task_path, branch)
       } catch (err) {
@@ -182,44 +318,43 @@ export async function runWorkspaceNew(nameArg?: string) {
         process.exit(1)
       }
     }
-
     spinner.stop(`${worktreeRepos.length} worktree(s) created`)
   }
 
-  // Merge stack env vars (used for env files and hook environment)
-  const stackEnv: Record<string, string> = {}
-  for (const stack of selectedStacks) {
-    if (stack.env) Object.assign(stackEnv, stack.env)
-  }
-  const enrichedBaseEnv = { ...baseEnv, ...stackEnv }
+  // Merge env (workspace-level)
+  const envVars: Record<string, string> = wsEnv ? { ...wsEnv } : {}
+  const enrichedBaseEnv = { ...baseEnv, ...envVars }
 
   const wsDir = join(tasksDir, wsName)
 
+  // File ops
   const opsSpinner = p.spinner()
   opsSpinner.start("Applying file ops")
 
-  // STEP 1: Per-repo file ops (Level 2) — all repos first
-  for (const stack of selectedStacks) {
-    for (const wsRepo of repos.filter((r) => r.mode === "worktree" && r.stack === stack.name)) {
-      const stackRepo = stack.repos.find((r) => r.name === wsRepo.name)
-      if (!stackRepo) continue
-      opsSpinner.message(`files: ${wsRepo.name}`)
-      const fileResult = applyFileOpsForRepo(stackRepo, wsRepo)
-      if (!fileResult.ok) {
-        opsSpinner.stop(`File operation failed for ${wsRepo.name}`)
-        p.log.error(fileResult.error)
-        process.exit(1)
-      }
-      if (fileResult.warnings) {
-        for (const w of fileResult.warnings) p.log.warn(w)
-      }
+  // Per-repo file ops
+  for (const wsRepo of repos.filter(r => r.mode === "worktree")) {
+    if (!wsRepo.files) continue
+    opsSpinner.message(`files: ${wsRepo.name}`)
+    const repoLike = {
+      name: wsRepo.name,
+      path: wsRepo.main_path,
+      files: wsRepo.files,
+    }
+    const fileResult = applyFileOpsForRepo(repoLike, wsRepo)
+    if (!fileResult.ok) {
+      opsSpinner.stop(`File operation failed for ${wsRepo.name}`)
+      p.log.error(fileResult.error)
+      process.exit(1)
+    }
+    if (fileResult.warnings) {
+      for (const w of fileResult.warnings) p.log.warn(w)
     }
   }
 
-  // STEP 2: Workspace-instance file ops (Level 1) — once per stack, targets wsDir
-  // workspace.files is not available yet (YAML not written), so only stack.files applies here.
-  for (const stack of selectedStacks) {
-    const wsFileResult = applyFileOpsForWorkspace(stack, {} as Workspace, wsDir)
+  // Workspace-instance file ops
+  if (wsFiles) {
+    const sourceLike = { files: wsFiles }
+    const wsFileResult = applyFileOpsForWorkspace(sourceLike, {} as Workspace, wsDir)
     if (!wsFileResult.ok) {
       opsSpinner.stop("Workspace file operation failed")
       p.log.error(wsFileResult.error)
@@ -229,111 +364,74 @@ export async function runWorkspaceNew(nameArg?: string) {
       for (const w of wsFileResult.warnings) p.log.warn(w)
     }
   }
-
   opsSpinner.stop("File ops done")
 
-  // STEP 3: Write env files — after file ops, before hooks
-  const envFileName = selectedStacks.find((s) => s.env_file)?.env_file
-  if (envFileName) {
-    const content = Object.entries(stackEnv).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
+  // Env files
+  if (wsEnvFile && Object.keys(envVars).length > 0) {
+    const { writeFileSync, lstatSync } = await import("fs")
+    const content = Object.entries(envVars).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
     for (const repo of worktreeRepos) {
       if (!existsSync(repo.task_path)) continue
-      const targetPath = join(repo.task_path, envFileName)
+      const targetPath = join(repo.task_path, wsEnvFile)
       try {
         if (lstatSync(targetPath).isSymbolicLink()) {
           p.log.warn(`skipping env file write: ${targetPath} is a symlink`)
           continue
         }
-      } catch { /* file doesn't exist yet, safe to write */ }
+      } catch { /* file doesn't exist yet */ }
       writeFileSync(targetPath, content, "utf-8")
     }
   }
 
-  // STEP 4: post_create hooks — after file ops and env files
-  const hooksSpinner = p.spinner()
-  hooksSpinner.start("Running post_create hooks")
-  try {
-    for (const stack of selectedStacks) {
-      for (const wsRepo of repos.filter((r) => r.mode === "worktree" && r.stack === stack.name)) {
-        const stackRepo = stack.repos.find((r) => r.name === wsRepo.name)
-        if (!stackRepo) continue
-
-        const repoEnv = {
-          ...enrichedBaseEnv,
-          WS_STACK: stack.name,
-          WS_REPO_NAME: wsRepo.name,
-          WS_REPO_PATH: wsRepo.task_path,
-          WS_MAIN_PATH: wsRepo.main_path,
-        }
-
-        if (stackRepo.hooks?.post_create?.length) {
-          hooksSpinner.message(`hooks: ${wsRepo.name}`)
-          await runHooks(stackRepo.hooks.post_create, wsRepo.task_path, repoEnv)
-        }
-      }
-
-      if (stack.hooks?.post_create?.length) {
-        hooksSpinner.message(`hooks: ${stack.name} (stack)`)
-        await runHooks(stack.hooks.post_create, wsDir, { ...enrichedBaseEnv, WS_STACK: stack.name })
-      }
-    }
-    hooksSpinner.stop("post_create hooks done")
-  } catch (err) {
-    hooksSpinner.stop("Hook failed")
-    p.log.error(String(err))
-    process.exit(1)
-  }
-
-  // Collect integration settings from selected stacks
-  const wsIntegrationSettings: Record<string, unknown> = {}
-  for (const stack of selectedStacks) {
-    if (!stack.integrations) continue
-    for (const [id, cfg] of Object.entries(stack.integrations)) {
-      if (!wsIntegrationSettings[id]) {
-        wsIntegrationSettings[id] = cfg
-      } else {
-        const existing = wsIntegrationSettings[id] as Record<string, unknown>
-        const incoming = cfg as Record<string, unknown>
-        const merged = { ...existing, ...incoming }
-        if (Array.isArray(existing.panes) && Array.isArray(incoming.panes)) {
-          merged.panes = [...existing.panes, ...incoming.panes]
-        }
-        wsIntegrationSettings[id] = merged
-      }
+  // post_create hooks
+  if (wsHooks?.post_create?.length) {
+    const hooksSpinner = p.spinner()
+    hooksSpinner.start("Running post_create hooks")
+    try {
+      await runHooks(wsHooks.post_create, wsDir, enrichedBaseEnv)
+      hooksSpinner.stop("post_create hooks done")
+    } catch (err) {
+      hooksSpinner.stop("Hook failed")
+      p.log.error(String(err))
+      process.exit(1)
     }
   }
 
-  // Save config
-  const workspace = {
+  // Build integration settings from template snapshot
+  const settingsIntegrations = wsIntegrationSettings && Object.keys(wsIntegrationSettings).length > 0
+    ? { settings: { integrations: wsIntegrationSettings } }
+    : {}
+
+  // Save workspace config
+  const workspace: Record<string, unknown> = {
     name: wsName,
     schema_version: "1",
     description: description || undefined,
     branch,
     created: new Date().toISOString().split("T")[0],
+    ...(templateName ? { template: templateName } : {}),
+    ...(wsHooks ? { hooks: wsHooks } : {}),
     repos,
-    ...(Object.keys(wsIntegrationSettings).length > 0
-      ? { settings: { integrations: wsIntegrationSettings } }
-      : {}),
+    ...(wsEnv ? { env: wsEnv } : {}),
+    ...(wsEnvFile ? { env_file: wsEnvFile } : {}),
+    ...(wsFiles ? { files: wsFiles } : {}),
+    ...settingsIntegrations,
   }
-  writeWorkspace(workspace)
+  writeWorkspace(workspace as Workspace)
 
-  // Generate artifacts for each enabled integration
-  const ctx: IntegrationContext = { workspace, tasksDir, config }
+  // Generate integration artifacts
+  const ctx: IntegrationContext = { workspace: workspace as Workspace, tasksDir, config }
   const artifacts: Array<{ integration: (typeof integrations)[number]; path: string | null }> = []
-
   for (const integration of integrations) {
     if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(workspace)) continue
+    if (integration.applies && !integration.applies(workspace as Workspace)) continue
     const path = integration.generate?.(ctx) ?? null
     artifacts.push({ integration, path })
     if (path) p.log.success(`${integration.label}: ${path}`)
   }
 
   // Offer to open
-  const openNow = await p.confirm({
-    message: "Open workspace now?",
-    initialValue: true,
-  })
+  const openNow = await p.confirm({ message: "Open workspace now?", initialValue: true })
   if (!p.isCancel(openNow) && openNow) {
     for (const { integration, path } of artifacts) {
       await integration.open(ctx, path)

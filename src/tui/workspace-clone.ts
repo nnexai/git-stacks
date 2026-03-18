@@ -76,7 +76,7 @@ export async function runWorkspaceClone(sourceArg?: string) {
     const wsDir = join(tasksDir, newName)
     if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
     for (const repo of worktreeRepos) {
-      spinner.message(`${repo.name}…`)
+      spinner.message(`${repo.name}\u2026`)
       try {
         await createWorktree(repo.main_path, repo.task_path, newBranch)
       } catch (err) {
@@ -88,7 +88,7 @@ export async function runWorkspaceClone(sourceArg?: string) {
     spinner.stop(`${worktreeRepos.length} worktree(s) created`)
   }
 
-  // Build and save new workspace (drop cmux_workspace_id)
+  // Build and save new workspace (drop cmux_workspace_id, preserve template ref)
   const { cmux_workspace_id: _, ...rest } = source
   const newWorkspace = {
     ...rest,
@@ -110,7 +110,6 @@ export async function runWorkspaceClone(sourceArg?: string) {
     if (path) p.log.success(`${integration.label}: ${path}`)
   }
 
-  // Offer to open
   const openNow = await p.confirm({ message: "Open workspace now?", initialValue: true })
   if (!p.isCancel(openNow) && openNow) {
     for (const { integration, path } of artifacts) {
