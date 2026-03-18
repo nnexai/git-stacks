@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-03-18T18:55:39.274Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-03-18T19:03:07.122Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
   percent: 20
 ---
 
@@ -63,6 +63,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 03-design-and-conditional-implementation P02 | 8 | 2 tasks | 3 files |
 | Phase 03-design-and-conditional-implementation P03 | 5 | 2 tasks | 3 files |
 | Phase 03-design-and-conditional-implementation P04 | 6 | 2 tasks | 4 files |
+| Phase 03-design-and-conditional-implementation P05 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,9 @@ Recent decisions affecting current work:
 - [Phase 03-04]: mergeEnv and writeEnvFiles simplified to workspace-only — template env snapshot-copied at creation time, no stacks needed at open time
 - [Phase 03-04]: TMPL-04: trunk repo base branch accessibility: checkout first, worktree creation fallback, warning-only on both failures (graceful degradation)
 - [Phase 03-04]: applyFileOpsForRepo/applyFileOpsForWorkspace use generic FileOpsRepoSource/FileOpsWorkspaceSource interfaces instead of StackRepo/Stack types
+- [Phase 03-design-and-conditional-implementation]: --from routing: resolve to absolute path first; if existsSync + .git exists treat as local path, else check templateExists() — template names that look like paths handled correctly
+- [Phase 03-design-and-conditional-implementation]: Template config deep-copied into workspace YAML at creation — workspace self-contained, does not need template present at open time
+- [Phase 03-design-and-conditional-implementation]: open --recreate shows full diff (added/removed repos, hooks changed, env changed) before applying — users see exactly what will change
 
 ### Roadmap Evolution
 
@@ -125,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T18:55:39.272Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-03-18T19:03:07.120Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None
