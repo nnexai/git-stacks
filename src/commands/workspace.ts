@@ -614,8 +614,73 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--all", "Sync all workspaces")
     .option("--strategy <strategy>", "Sync strategy: rebase or merge")
     .option("--best-effort", "Skip conflicting repos instead of aborting")
-    .action(async (name: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean }) => {
+    .option("--json", "Output results as JSON")
+    .action(async (name: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean; json?: boolean }) => {
       const strategy = opts.strategy as "rebase" | "merge" | undefined
+
+      // --json mode: suppress all progress output, emit pure JSON at end
+      if (opts.json) {
+        if (opts.all) {
+          const workspaces = listWorkspaces()
+          const allResults = []
+          for (const ws of workspaces) {
+            const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort })
+            allResults.push({
+              workspace: ws.name,
+              repos: [
+                ...result.synced.map(s => ({
+                  name: s.repo,
+                  strategy: strategy ?? "rebase",
+                  result: s.commits === 0 ? "up-to-date" as const : (strategy === "merge" ? "merged" as const : "rebased" as const),
+                  commits_behind_before: s.commits,
+                  error: null,
+                })),
+                ...result.skipped.map(s => ({
+                  name: s.repo,
+                  strategy: strategy ?? "rebase",
+                  result: "failed" as const,
+                  commits_behind_before: 0,
+                  error: s.reason,
+                })),
+              ],
+            })
+          }
+          console.log(JSON.stringify(allResults, null, 2))
+          process.exit(allResults.some(r => r.repos.some(rr => rr.result === "failed")) ? 1 : 0)
+          return
+        }
+
+        if (!name) {
+          console.error(formatError("Missing workspace name", "usage: ws sync <name> [--all] [--json]"))
+          process.exit(1)
+        }
+
+        const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort })
+
+        const output = {
+          workspace: name,
+          repos: [
+            ...result.synced.map(s => ({
+              name: s.repo,
+              strategy: strategy ?? "rebase",
+              result: s.commits === 0 ? "up-to-date" as const : (strategy === "merge" ? "merged" as const : "rebased" as const),
+              commits_behind_before: s.commits,
+              error: null,
+            })),
+            ...result.skipped.map(s => ({
+              name: s.repo,
+              strategy: strategy ?? "rebase",
+              result: "failed" as const,
+              commits_behind_before: 0,
+              error: s.reason,
+            })),
+          ],
+        }
+
+        console.log(JSON.stringify(output, null, 2))
+        if (!result.ok) process.exit(1)
+        return
+      }
 
       if (opts.all) {
         const workspaces = listWorkspaces()
