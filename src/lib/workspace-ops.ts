@@ -1,4 +1,3 @@
-// @ts-nocheck — TODO(03-04): migrate workspace-ops to Registry model
 import { existsSync, unlinkSync, readFileSync, writeFileSync, lstatSync } from "fs"
 import { join } from "path"
 import { parse } from "yaml"
@@ -11,10 +10,6 @@ import {
   WorkspaceSchema,
   type Workspace,
 } from "./config"
-
-// TODO(03-04): remove when workspace-ops is migrated to Registry model
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Stack = any
 import { getTasksDir } from "./paths"
 import {
   isRepoDirty,
@@ -33,6 +28,7 @@ import {
 import { integrations, type IntegrationContext } from "./integrations"
 import { runHooks } from "./lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
+import { $ } from "bun"
 
 export type ProgressCallback = (message: string) => void
 
@@ -96,32 +92,18 @@ export async function getWorkspaceListInfo(
   }
 }
 
-function loadWorkspaceStacks(_workspace: Workspace): Map<string, Stack> {
-  // TODO(03-04): replace with registry-based resolution
-  return new Map<string, Stack>()
-}
-
-export function mergeEnv(
-  workspace: Workspace,
-  stacks: Map<string, Stack>
-): Record<string, string> {
+export function mergeEnv(workspace: Workspace): Record<string, string> {
   const merged: Record<string, string> = {}
-  for (const repo of workspace.repos) {
-    const stack = stacks.get(repo.stack)
-    if (stack?.env) Object.assign(merged, stack.env)
-  }
   if (workspace.env) Object.assign(merged, workspace.env)
   return merged
 }
 
 export function writeEnvFiles(
   workspace: Workspace,
-  stacks: Map<string, Stack>,
   mergedEnv: Record<string, string>,
   onWarn?: (msg: string) => void
 ): void {
   const envFileName = workspace.env_file
-    ?? [...stacks.values()].find(s => s.env_file)?.env_file
   if (!envFileName) return
 
   for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
@@ -189,32 +171,17 @@ export async function runPreRemoveHooks(workspace: Workspace, tasksDir: string):
     WS_TASKS_DIR: tasksDir,
   }
 
-  const stacksByName = loadWorkspaceStacks(workspace)
-
-  // Compute merged env for hook enrichment
-  const mergedEnvVars = mergeEnv(workspace, stacksByName)
+  const mergedEnvVars = mergeEnv(workspace)
   const enrichedBaseEnv = { ...baseEnv, ...mergedEnvVars }
 
-  for (const [stackName, stack] of stacksByName) {
-    if (!stack.hooks?.pre_remove?.length) continue
+  // Workspace-level pre_remove hooks (from template snapshot or workspace config)
+  if (workspace.hooks?.pre_remove?.length) {
     const wsDir = join(tasksDir, workspace.name)
-    await runHooks(stack.hooks.pre_remove, wsDir, { ...enrichedBaseEnv, WS_STACK: stackName })
+    await runHooks(workspace.hooks.pre_remove, existsSync(wsDir) ? wsDir : tasksDir, enrichedBaseEnv)
   }
 
-  for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
-    const stack = stacksByName.get(repo.stack)
-    if (!stack) continue
-    const stackRepo = stack.repos.find((r) => r.name === repo.name)
-    if (!stackRepo?.hooks?.pre_remove?.length) continue
-    const cwd = existsSync(repo.task_path) ? repo.task_path : repo.main_path
-    await runHooks(stackRepo.hooks.pre_remove, cwd, {
-      ...enrichedBaseEnv,
-      WS_STACK: repo.stack,
-      WS_REPO_NAME: repo.name,
-      WS_REPO_PATH: repo.task_path,
-      WS_MAIN_PATH: repo.main_path,
-    })
-  }
+  // Per-repo pre_open hooks are on WorkspaceRepo.hooks — but pre_remove is not
+  // defined on WorkspaceRepoHooksSchema (only pre_open is). No per-repo pre_remove hooks to run.
 }
 
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
@@ -251,9 +218,8 @@ export async function cleanWorkspace(
   }
 
   // External file warnings (FILES-17) — emitted in both dry-run and real runs
-  const stacks = loadWorkspaceStacks(workspace)
   const wsDir = join(tasksDir, workspace.name)
-  const externalWarnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+  const externalWarnings = warnExternalFiles(workspace, wsDir, tasksDir)
   for (const w of externalWarnings) {
     onProgress?.(w)
   }
@@ -317,9 +283,8 @@ export async function removeWorkspace(
   }
 
   // External file warnings (FILES-17) — emitted in both dry-run and real runs
-  const stacks = loadWorkspaceStacks(workspace)
   const wsDir = join(tasksDir, workspace.name)
-  const externalWarnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+  const externalWarnings = warnExternalFiles(workspace, wsDir, tasksDir)
   for (const w of externalWarnings) {
     onProgress?.(w)
   }
@@ -385,11 +350,9 @@ export async function mergeWorkspace(
     }
   }
 
-  // Resolve base branches
-  const stacks = loadWorkspaceStacks(workspace)
+  // Resolve base branches from workspace repo data (registry model)
   const repoBases = worktreeRepos.map((repo) => {
-    const stack = stacks.get(repo.stack)
-    const baseBranch = stack?.repos.find((r) => r.name === repo.name)?.default_branch ?? "main"
+    const baseBranch = repo.base_branch ?? "main"
     return { repo, baseBranch }
   })
 
@@ -452,7 +415,7 @@ export async function mergeWorkspace(
     await deleteLocalBranch(repo.main_path, workspace.branch)
   }
 
-  const mergedMergeEnv = mergeEnv(workspace, stacks)
+  const mergedMergeEnv = mergeEnv(workspace)
 
   unlinkSync(workspacePath(name))
 
@@ -538,15 +501,17 @@ export async function openWorkspace(
   }
 
   const wsDir = join(tasksDir, name)
-  const stacks = loadWorkspaceStacks(workspace)
 
-  // Per-repo file ops (Level 2) — idempotent: dst exists → skip
+  // Per-repo file ops — workspace repos carry their own files config
   for (const wsRepo of workspace.repos.filter(r => r.mode === "worktree")) {
-    const stack = stacks.get(wsRepo.stack)
-    if (!stack) continue
-    const stackRepo = stack.repos.find(r => r.name === wsRepo.name)
-    if (!stackRepo) continue
-    const fileResult = applyFileOpsForRepo(stackRepo, wsRepo)
+    if (!wsRepo.files) continue
+    // Construct a FileOpsRepoSource-compatible object for applyFileOpsForRepo
+    const repoSource = {
+      name: wsRepo.name,
+      path: wsRepo.main_path,
+      files: wsRepo.files,
+    }
+    const fileResult = applyFileOpsForRepo(repoSource, wsRepo)
     if (!fileResult.ok) {
       onProgress?.(`file-ops warning [${wsRepo.name}]: ${fileResult.error}`)
     } else if (fileResult.warnings) {
@@ -554,9 +519,9 @@ export async function openWorkspace(
     }
   }
 
-  // Workspace-instance file ops (Level 1) — idempotent: dst exists → skip
-  for (const [, stack] of stacks) {
-    const wsFileResult = applyFileOpsForWorkspace(stack, workspace, wsDir)
+  // Workspace-instance file ops
+  if (workspace.files) {
+    const wsFileResult = applyFileOpsForWorkspace({ files: workspace.files }, workspace, wsDir)
     if (!wsFileResult.ok) {
       onProgress?.(`file-ops warning [workspace]: ${wsFileResult.error}`)
     } else if (wsFileResult.warnings) {
@@ -565,9 +530,36 @@ export async function openWorkspace(
   }
 
   // Write env files — after file ops, before integrations
-  const mergedEnvVars = mergeEnv(workspace, stacks)
-  writeEnvFiles(workspace, stacks, mergedEnvVars, msg => onProgress?.(msg))
+  const mergedEnvVars = mergeEnv(workspace)
+  writeEnvFiles(workspace, mergedEnvVars, msg => onProgress?.(msg))
   const hookEnv = { ...baseEnv, ...mergedEnvVars }
+
+  // TMPL-04: Ensure trunk repos have their expected base branch accessible
+  for (const repo of workspace.repos.filter(r => r.mode === "trunk")) {
+    if (!existsSync(repo.task_path)) continue
+    const currentBranch = await getCurrentBranch(repo.task_path)
+    const expectedBranch = repo.base_branch ?? "main"
+    if (currentBranch !== expectedBranch) {
+      // Step 1: Try git checkout to the expected branch
+      try {
+        const checkoutResult = await $`git -C ${repo.task_path} checkout ${expectedBranch}`.quiet().nothrow()
+        if (checkoutResult.exitCode === 0) {
+          onProgress?.(`trunk repo '${repo.name}': checked out '${expectedBranch}' (was '${currentBranch}')`)
+          continue
+        }
+      } catch { /* checkout failed, try worktree */ }
+
+      // Step 2: If checkout fails (branch doesn't exist locally), create a worktree at that branch
+      try {
+        const worktreePath = join(tasksDir, workspace.name, `${repo.name}-${expectedBranch}`)
+        await createWorktree(repo.main_path, worktreePath, expectedBranch)
+        onProgress?.(`trunk repo '${repo.name}': created worktree at '${expectedBranch}' (checkout failed, branch may not exist locally)`)
+      } catch (wtErr) {
+        // Step 3: Both failed — warn and continue (graceful degradation)
+        onProgress?.(`\u26A0 trunk repo '${repo.name}' is on '${currentBranch}', expected '${expectedBranch}' (checkout and worktree creation both failed: ${wtErr})`)
+      }
+    }
+  }
 
   const ctx: IntegrationContext = { workspace, tasksDir, config }
 
@@ -579,18 +571,12 @@ export async function openWorkspace(
     await integration.open(ctx, artifactPath)
   }
 
-  // Workspace-level post_open
+  // Workspace-level post_open hooks (includes template hooks if copied at creation)
   if (workspace.hooks?.post_open?.length) {
     for (const cmd of workspace.hooks.post_open) {
       onProgress?.(`post_open: ${cmd}`)
       await runHooks([cmd], join(tasksDir, name), hookEnv)
     }
-  }
-
-  // Stack-level post_open
-  for (const [stackName, stack] of stacks) {
-    if (!stack.hooks?.post_open?.length) continue
-    await runHooks(stack.hooks.post_open, join(tasksDir, name), { ...hookEnv, WS_STACK: stackName })
   }
 
   onProgress?.(`Opened '${name}'.`)
@@ -695,13 +681,10 @@ export async function syncWorkspace(
     return { ok: true, synced: [], skipped: [] }
   }
 
-  // Resolve base branches and strategies from stacks (single read per stack)
-  const stacks = loadWorkspaceStacks(workspace)
+  // Resolve base branches from workspace repo data (registry model)
   const repoInfos = worktreeRepos.map((repo) => {
-    const stackRepo = stacks.get(repo.stack)?.repos.find((r) => r.name === repo.name)
-    const baseBranch = stackRepo?.default_branch ?? "main"
-    const stackStrategy = stackRepo?.sync_strategy as "rebase" | "merge" | undefined
-    return { repo, baseBranch, strategy: opts.strategy ?? stackStrategy ?? "rebase" }
+    const baseBranch = repo.base_branch ?? "main"
+    return { repo, baseBranch, strategy: opts.strategy ?? "rebase" }
   })
 
   // Fetch all repos in parallel
