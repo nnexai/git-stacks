@@ -2,7 +2,6 @@
 import { Command } from "commander"
 import { basename } from "path"
 import { $ } from "bun"
-import { stackCommand } from "./commands/stack"
 import { registerWorkspaceCommands } from "./commands/workspace"
 import { configCommand } from "./commands/config"
 import { createCompletionCommand } from "./commands/completion"
@@ -34,7 +33,6 @@ const binName = rawName.endsWith(".ts") || rawName.endsWith(".js") ? "git-stacks
 const versionString = await getVersionString()
 program.name(binName).description("Git worktree workspace manager").version(versionString).enablePositionalOptions()
 
-program.addCommand(stackCommand)
 registerWorkspaceCommands(program)
 program.addCommand(configCommand)
 

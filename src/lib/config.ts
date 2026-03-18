@@ -4,7 +4,6 @@ import { parse, stringify } from "yaml"
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs"
 import { join, dirname } from "path"
 import {
-  STACKS_DIR,
   WORKSPACES_DIR,
   GLOBAL_CONFIG_FILE,
   DEFAULT_WORKSPACE_ROOT,
@@ -28,13 +27,6 @@ export function formatZodError(err: ZodError): string {
 
 export const RepoTypeSchema = z.enum(["java", "typescript", "other"])
 export type RepoType = z.infer<typeof RepoTypeSchema>
-
-const HooksSchema = z.object({
-  pre_create: z.array(z.string()).optional(),
-  post_create: z.array(z.string()).optional(),
-  pre_remove: z.array(z.string()).optional(),
-  post_open: z.array(z.string()).optional(),
-})
 
 export const FilesSchema = z
   .object({
@@ -88,31 +80,6 @@ export const TemplateSchema = z.object({
 })
 export type Template = z.infer<typeof TemplateSchema>
 
-export const StackRepoSchema = z.object({
-  name: z.string(),
-  path: z.string(),
-  type: RepoTypeSchema.default("other"),
-  default_mode: z.enum(["trunk", "worktree"]).default("worktree"),
-  default_branch: z.string().default("main"),
-  sync_strategy: z.enum(["rebase", "merge"]).optional(),
-  hooks: HooksSchema.optional(),
-  files: FilesSchema,
-})
-export type StackRepo = z.infer<typeof StackRepoSchema>
-
-export const StackSchema = z.object({
-  name: z.string(),
-  // Migration strategy: bump default when schema changes; read-time migration functions keyed by version
-  schema_version: z.string().default("1"),
-  description: z.string().optional(),
-  repos: z.array(StackRepoSchema).default([]),
-  integrations: z.record(z.unknown()).optional(),
-  hooks: HooksSchema.optional(),
-  env: z.record(z.string()).optional(),
-  env_file: z.string().optional(),
-  files: FilesSchema,
-})
-export type Stack = z.infer<typeof StackSchema>
 
 const WorkspaceRepoHooksSchema = z.object({
   pre_open: z.array(z.string()).optional(),
@@ -201,45 +168,6 @@ export function readGlobalConfig(): GlobalConfig {
 
 export function writeGlobalConfig(config: GlobalConfig) {
   writeYaml(GLOBAL_CONFIG_FILE, config)
-}
-
-// --- Stacks ---
-
-export function stackPath(name: string): string {
-  return join(STACKS_DIR, `${name}.yml`)
-}
-
-export function stackExists(name: string): boolean {
-  return existsSync(stackPath(name))
-}
-
-export function readStack(name: string): Stack {
-  return readYaml(stackPath(name), StackSchema)
-}
-
-export function writeStack(stack: Stack) {
-  ensureDir(STACKS_DIR)
-  writeYaml(stackPath(stack.name), stack)
-}
-
-export function listStacks(): Stack[] {
-  if (!existsSync(STACKS_DIR)) return []
-  const results: Stack[] = []
-  for (const f of readdirSync(STACKS_DIR).filter((f) => f.endsWith(".yml"))) {
-    const name = f.replace(".yml", "")
-    try {
-      const raw = readFileSync(stackPath(name), "utf-8")
-      const parsed = StackSchema.safeParse(parse(raw))
-      if (parsed.success) {
-        results.push(parsed.data)
-      } else {
-        console.error(`[git-stacks] Skipping corrupt stack '${name}': ${formatZodError(parsed.error)}`)
-      }
-    } catch (err) {
-      console.error(`[git-stacks] Skipping unreadable stack '${name}': ${err}`)
-    }
-  }
-  return results
 }
 
 // --- Workspaces ---
