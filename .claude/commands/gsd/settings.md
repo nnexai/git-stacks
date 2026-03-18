@@ -20,11 +20,11 @@ Routes to the settings workflow which handles:
 </objective>
 
 <execution_context>
-@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/settings.md
+@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/settings.md
 </execution_context>
 
 <process>
-**Follow the settings workflow** from `@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/settings.md`.
+**Follow the settings workflow** from `@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/settings.md`.
 
 The workflow handles all logic including:
 1. Config file creation with defaults if missing

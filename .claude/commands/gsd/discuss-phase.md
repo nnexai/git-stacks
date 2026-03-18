@@ -29,8 +29,8 @@ Extract implementation decisions that downstream agents need — researcher and 
 </objective>
 
 <execution_context>
-@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/discuss-phase.md
-@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/templates/context.md
+@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/discuss-phase.md
+@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/templates/context.md
 </execution_context>
 
 <context>

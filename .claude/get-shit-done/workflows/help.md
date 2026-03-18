@@ -260,7 +260,7 @@ Usage: `/gsd:debug` (resume active session)
 **`/gsd:note <text>`**
 Zero-friction idea capture — one command, instant save, no questions.
 
-- Saves timestamped note to `.planning/notes/` (or `/home/nnex/dev/prj/git-stacks/.claude/notes/` globally)
+- Saves timestamped note to `.planning/notes/` (or `/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/notes/` globally)
 - Three subcommands: append (default), list, promote
 - Promote converts a note into a structured todo
 - Works without a project (falls back to global scope)
@@ -307,6 +307,20 @@ Validate built features through conversational UAT.
 - Ready for re-execution if issues found
 
 Usage: `/gsd:verify-work 3`
+
+### Ship Work
+
+**`/gsd:ship [phase]`**
+Create a PR from completed phase work with an auto-generated body.
+
+- Pushes branch to remote
+- Creates PR with summary from SUMMARY.md, VERIFICATION.md, REQUIREMENTS.md
+- Optionally requests code review
+- Updates STATE.md with shipping status
+
+Prerequisites: Phase verified, `gh` CLI installed and authenticated.
+
+Usage: `/gsd:ship 4` or `/gsd:ship 4 --draft`
 
 ### Milestone Auditing
 

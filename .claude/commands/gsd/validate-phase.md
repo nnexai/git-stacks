@@ -22,7 +22,7 @@ Output: updated VALIDATION.md + generated test files.
 </objective>
 
 <execution_context>
-@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/validate-phase.md
+@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/validate-phase.md
 </execution_context>
 
 <context>
@@ -30,6 +30,6 @@ Phase: $ARGUMENTS — optional, defaults to last completed phase.
 </context>
 
 <process>
-Execute @/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/validate-phase.md.
+Execute @/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/validate-phase.md.
 Preserve all workflow gates.
 </process>
