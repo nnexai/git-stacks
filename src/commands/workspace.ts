@@ -435,8 +435,10 @@ export function registerWorkspaceCommands(program: Command) {
     .command("run <name> [repo]")
     .description("Run a command or shell inside a workspace")
     .option("--all-repos", "Run command in every worktree repo sequentially")
+    .option("--parallel", "Run command in every worktree repo simultaneously")
+    .option("--json", "Output results as JSON (requires --parallel)")
     .passThroughOptions()
-    .action(async (name: string, repo: string | undefined, opts: { allRepos?: boolean }) => {
+    .action(async (name: string, repo: string | undefined, opts: { allRepos?: boolean; parallel?: boolean; json?: boolean }) => {
       if (!workspaceExists(name)) {
         console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
         process.exit(1)
@@ -450,6 +452,76 @@ export function registerWorkspaceCommands(program: Command) {
       const dashDashIdx = process.argv.indexOf("--")
       const extraArgs = dashDashIdx >= 0 ? process.argv.slice(dashDashIdx + 1) : []
       const shellCmd = extraArgs.join(" ")
+
+      if (opts.parallel) {
+        if (!shellCmd) {
+          console.error(formatError("Cannot open interactive shell with --parallel", "provide a command after --"))
+          process.exit(1)
+        }
+
+        const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+        if (worktreeRepos.length === 0) {
+          console.error(formatError(`No worktree repos in workspace '${name}'`))
+          process.exit(1)
+        }
+
+        // --json mode: suppress all spinners, run silently, emit JSON at end
+        if (opts.json) {
+          const results = await Promise.all(worktreeRepos.map(async (r) => {
+            const proc = Bun.spawn(["sh", "-c", shellCmd], {
+              cwd: r.task_path,
+              stdio: ["inherit", "pipe", "pipe"],
+            })
+            const [exitCode, stdout, stderr] = await Promise.all([
+              proc.exited,
+              new Response(proc.stdout).text(),
+              new Response(proc.stderr).text(),
+            ])
+            return { repo: r.name, exit_code: exitCode, stdout, stderr }
+          }))
+          console.log(JSON.stringify(results, null, 2))
+          process.exit(results.some(r => r.exit_code !== 0) ? 1 : 0)
+        }
+
+        // Human output mode: use a single overall spinner, then show per-repo results
+        const spinner = p.spinner()
+        spinner.start(`Running in ${worktreeRepos.length} repos...`)
+
+        const results = await Promise.all(worktreeRepos.map(async (r) => {
+          const proc = Bun.spawn(["sh", "-c", shellCmd], {
+            cwd: r.task_path,
+            stdio: ["inherit", "pipe", "pipe"],
+          })
+          const [exitCode, stdout, stderr] = await Promise.all([
+            proc.exited,
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+          ])
+          return { repo: r.name, exitCode, stdout, stderr }
+        }))
+
+        const failed = results.filter(r => r.exitCode !== 0)
+        const passed = results.filter(r => r.exitCode === 0)
+        spinner.stop(`${passed.length} passed, ${failed.length} failed`)
+
+        // Print per-repo summary lines
+        for (const r of results) {
+          const icon = r.exitCode === 0 ? "\u2713" : `\u2717 (exit ${r.exitCode})`
+          console.log(`  ${icon}  ${r.repo}`)
+        }
+
+        // Flush failed output grouped by repo
+        if (failed.length > 0) {
+          console.log("")
+          for (const r of failed) {
+            console.log(`\u2014\u2014\u2014 ${r.repo} \u2014\u2014\u2014`)
+            if (r.stdout.trim()) process.stdout.write(r.stdout)
+            if (r.stderr.trim()) process.stderr.write(r.stderr)
+          }
+        }
+
+        process.exit(failed.length > 0 ? 1 : 0)
+      }
 
       if (opts.allRepos) {
         if (!shellCmd) {
