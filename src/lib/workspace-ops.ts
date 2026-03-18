@@ -237,7 +237,7 @@ export async function cleanWorkspace(
   try {
     await runPreRemoveHooks(workspace, tasksDir)
   } catch (err) {
-    return { ok: false, error: `pre_remove hook failed: ${err}` }
+    return { ok: false, error: `pre_remove hook failed (${err})` }
   }
 
   // Stage: attempt all worktree removals, collect failures (BUG-02 fix)
@@ -251,12 +251,12 @@ export async function cleanWorkspace(
       await removeWorktree(repo.main_path, repo.task_path)
       onProgress?.(`removed  ${repo.name}`)
     } catch (err) {
-      failures.push(`${repo.name}: ${err}`)
+      failures.push(`${repo.name} (${err})`)
     }
   }
 
   if (failures.length > 0) {
-    return { ok: false, error: `Failed to clean worktrees:\n  ${failures.join("\n  ")}` }
+    return { ok: false, error: `Could not clean worktrees:\n  ${failures.join("\n  ")}` }
   }
 
   return { ok: true }
@@ -303,7 +303,7 @@ export async function removeWorkspace(
   try {
     await runPreRemoveHooks(workspace, tasksDir)
   } catch (err) {
-    return { ok: false, error: `pre_remove hook failed: ${err}` }
+    return { ok: false, error: `pre_remove hook failed (${err})` }
   }
 
   // Stage: attempt all worktree removals, collect failures (BUG-02 fix)
@@ -314,13 +314,13 @@ export async function removeWorkspace(
       await removeWorktree(repo.main_path, repo.task_path)
       onProgress?.(`removed  ${repo.name}`)
     } catch (err) {
-      failures.push(`${repo.name}: ${err}`)
+      failures.push(`${repo.name} (${err})`)
     }
   }
 
   // Commit: only delete YAML if all removals succeeded
   if (failures.length > 0) {
-    return { ok: false, error: `Failed to remove worktrees:\n  ${failures.join("\n  ")}` }
+    return { ok: false, error: `Could not remove worktrees:\n  ${failures.join("\n  ")}` }
   }
 
   unlinkSync(workspacePath(name))
@@ -363,11 +363,11 @@ export async function mergeWorkspace(
     if (!branchExists) continue
     const conflicts = await getMergeConflicts(repo.main_path, baseBranch, workspace.branch)
     if (conflicts.length > 0) {
-      conflicting.push(`${repo.name}: ${conflicts.join(", ")}`)
+      conflicting.push(`${repo.name} (${conflicts.join(", ")})`)
     }
   }
   if (conflicting.length > 0) {
-    return { ok: false, error: `Merge conflicts:\n  ${conflicting.join("\n  ")}` }
+    return { ok: false, error: `Merge conflicts detected:\n  ${conflicting.join("\n  ")}` }
   }
 
   // Dry-run short-circuit — skip hooks, just describe what would happen
@@ -389,7 +389,7 @@ export async function mergeWorkspace(
   try {
     await runPreRemoveHooks(workspace, tasksDir)
   } catch (err) {
-    return { ok: false, error: `pre_remove hook failed: ${err}` }
+    return { ok: false, error: `pre_remove hook failed (${err})` }
   }
 
   // Merge (BUG-01 fix: check result and return early on failure -- YAML preserved)
@@ -401,7 +401,7 @@ export async function mergeWorkspace(
     }
     const result = await mergeNoFF(repo.main_path, baseBranch, workspace.branch)
     if (!result.ok) {
-      return { ok: false, error: `Merge failed for ${repo.name}: ${result.error}` }
+      return { ok: false, error: `Merge failed for '${repo.name}' (${result.error})` }
     }
     onProgress?.(`merged  ${repo.name}  →  ${baseBranch}`)
   }
@@ -709,7 +709,7 @@ export async function syncWorkspace(
   // In strict mode, abort if any conflicts
   if (!opts.bestEffort && conflicts.length > 0) {
     const detail = conflicts
-      .map(c => `  ${c.repo}: ${c.files.join(", ")}`)
+      .map(c => `  ${c.repo} (${c.files.join(", ")})`)
       .join("\n")
     return {
       ok: false,
