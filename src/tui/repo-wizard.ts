@@ -1,76 +1,8 @@
 import * as p from "@clack/prompts"
-import { existsSync } from "fs"
-import { resolve, join, basename } from "path"
-import { safeText, cancel } from "./utils"
+import { cancel } from "./utils"
 import { readRegistry, writeRegistry, type RepoRegistryEntry } from "../lib/config"
-import { expandHome } from "../lib/paths"
-import { detectRepoType, scanForRepos } from "../lib/detect"
+import { scanForRepos } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
-
-export async function runRepoAdd(pathArg?: string) {
-  p.intro("Register repo")
-
-  let rawPath: string
-  if (pathArg) {
-    rawPath = pathArg
-  } else {
-    const pathRaw = await safeText({
-      message: "Path to git repo",
-      validate: (v) => (!v.trim() ? "Required" : undefined),
-    })
-    if (p.isCancel(pathRaw)) cancel()
-    rawPath = (pathRaw as string).trim()
-  }
-
-  const localPath = resolve(expandHome(rawPath))
-
-  if (!existsSync(localPath)) {
-    p.cancel(`Path does not exist: ${localPath}`)
-    process.exit(1)
-  }
-  if (!existsSync(join(localPath, ".git"))) {
-    p.cancel(`Not a git repository: ${localPath}`)
-    process.exit(1)
-  }
-
-  const autoName = basename(localPath)
-  const autoType = detectRepoType(localPath)
-  const autoBranch = await getCurrentBranch(localPath)
-
-  const registry = readRegistry()
-
-  const nameRaw = await safeText({
-    message: "Registry name",
-    fallbackValue: autoName,
-    validate: (v) => {
-      if (!v.trim()) return "Required"
-      if (registry.some((r) => r.name === v.trim())) return `'${v.trim()}' already registered`
-    },
-  })
-  if (p.isCancel(nameRaw)) cancel()
-  const name = (nameRaw as string).trim()
-
-  const branchRaw = await safeText({
-    message: "Default branch",
-    fallbackValue: autoBranch,
-    validate: (v) => (!v.trim() ? "Required" : undefined),
-  })
-  if (p.isCancel(branchRaw)) cancel()
-  const defaultBranch = (branchRaw as string).trim()
-
-  const entry: RepoRegistryEntry = {
-    name,
-    schema_version: "1",
-    local_path: localPath,
-    default_branch: defaultBranch,
-    type: autoType,
-  }
-
-  registry.push(entry)
-  writeRegistry(registry)
-
-  p.outro(`Registered '${name}' (${autoType}) at ${localPath} [${defaultBranch}]`)
-}
 
 export async function runRepoScan(dir: string) {
   p.intro("Scan for repos")

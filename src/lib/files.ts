@@ -5,20 +5,14 @@ import type { WorkspaceRepo, Workspace, Files } from "./config"
 
 export type ApplyResult = { ok: true; warnings?: string[] } | { ok: false; error: string }
 
-/**
- * Minimal interface for a file ops source at the per-repo level.
- * Replaces the old StackRepo type, keeping only the fields needed for file ops.
- */
+/** Minimal interface for a file ops source at the per-repo level. */
 export interface FileOpsRepoSource {
   name?: string
   path: string
   files?: Files
 }
 
-/**
- * Minimal interface for a file ops source at the workspace-instance level.
- * Replaces the old Stack type, keeping only the fields needed for file ops.
- */
+/** Minimal interface for a file ops source at the workspace-instance level. */
 export interface FileOpsWorkspaceSource {
   files?: Files
 }
@@ -245,16 +239,4 @@ export function warnExternalFiles(
   }
 
   return warnings
-}
-
-/**
- * @deprecated Use applyFileOpsForRepo instead.
- * Kept for backward compatibility with the existing call site in workspace-wizard.ts.
- * Applies file operations using only the source repo's files config (no workspace merge).
- * Source: source.path, Destination: taskPath
- */
-export function applyFileOperations(source: FileOpsRepoSource, taskPath: string): void {
-  if (!source.files) return
-  processFileList("copy", source.files.copy ?? [], source.path, taskPath)
-  processFileList("symlink", source.files.symlink ?? [], source.path, taskPath)
 }
