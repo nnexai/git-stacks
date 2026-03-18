@@ -350,6 +350,13 @@ export async function mergeWorkspace(
     }
   }
 
+  // External file warnings (SAFE-01 completeness) — emitted in both dry-run and real runs
+  const wsDir = join(tasksDir, workspace.name)
+  const externalWarnings = warnExternalFiles(workspace, wsDir, tasksDir)
+  for (const w of externalWarnings) {
+    onProgress?.(w)
+  }
+
   // Resolve base branches from workspace repo data (registry model)
   const repoBases = worktreeRepos.map((repo) => {
     const baseBranch = repo.base_branch ?? "main"
