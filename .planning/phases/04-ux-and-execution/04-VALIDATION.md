@@ -38,36 +38,41 @@ created: 2026-03-18
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 4-UX01-01 | error-formatting | W0 | UX-01 | unit | `bun test tests/lib/errors.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX01-02 | error-formatting | W0 | UX-01 | unit | `bun test tests/lib/errors.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX02-01 | json-output | W1 | UX-02 | integration | `bun test tests/commands/status-json.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX02-02 | json-output | W1 | UX-02 | unit | `bun test tests/commands/doctor-json.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX02-03 | json-output | W1 | UX-02 | integration | `bun test tests/commands/sync-json.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX03-01 | doctor-fix | W1 | UX-03 | integration | `bun test tests/commands/doctor-fix.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX03-02 | doctor-fix | W1 | UX-03 | integration | `bun test tests/commands/doctor-fix.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX03-03 | doctor-fix | W1 | UX-03 | unit | `bun test tests/commands/doctor-fix.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-UX04-01 | list-columns | W1 | UX-04 | unit | `bun test tests/lib/config.test.ts` | ✅ extend | ⬜ pending |
-| 4-UX04-02 | list-columns | W1 | UX-04 | unit | `bun test tests/lib/workspace-ops.test.ts` | ✅ extend | ⬜ pending |
-| 4-UX04-03 | list-columns | W1 | UX-04 | integration | `bun test tests/commands/list-columns.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-RUN01-01 | run-parallel | W2 | RUN-01 | integration | `bun test tests/commands/run-parallel.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-RUN01-02 | run-parallel | W2 | RUN-01 | integration | `bun test tests/commands/run-parallel.test.ts` | ❌ Wave 0 | ⬜ pending |
-| 4-RUN01-03 | run-parallel | W2 | RUN-01 | integration | `bun test tests/commands/run-parallel.test.ts` | ❌ Wave 0 | ⬜ pending |
+| 4-W0-00 | 04-01 | W0 | all | stub | `bun test tests/commands/` | Plan 04-01 Task 0 creates | pending |
+| 4-UX01-01 | 04-01 | W1 | UX-01 | unit | `bun test tests/lib/errors.test.ts` | Plan 04-01 Task 1 creates | pending |
+| 4-UX01-02 | 04-01 | W1 | UX-01 | unit | `bun test tests/lib/errors.test.ts` | Plan 04-01 Task 1 creates | pending |
+| 4-UX02-01 | 04-02 | W2 | UX-02 | integration | `bun test tests/commands/status-json.test.ts` | stub from W0 | pending |
+| 4-UX02-02 | 04-03 | W2 | UX-02 | unit | `bun test tests/commands/doctor-json.test.ts` | stub from W0 | pending |
+| 4-UX02-03 | 04-04 | W3 | UX-02 | integration | `bun test tests/commands/sync-json.test.ts` | stub from W0 | pending |
+| 4-UX03-01 | 04-03 | W2 | UX-03 | integration | `bun test tests/commands/doctor-fix.test.ts` | stub from W0 | pending |
+| 4-UX03-02 | 04-03 | W2 | UX-03 | integration | `bun test tests/commands/doctor-fix.test.ts` | stub from W0 | pending |
+| 4-UX03-03 | 04-03 | W2 | UX-03 | unit | `bun test tests/commands/doctor-fix.test.ts` | stub from W0 | pending |
+| 4-UX04-01 | 04-02 | W2 | UX-04 | unit | `bun test tests/lib/config.test.ts` | extend existing | pending |
+| 4-UX04-02 | 04-02 | W2 | UX-04 | unit | `bun test tests/lib/workspace-ops.test.ts` | extend existing | pending |
+| 4-UX04-03 | 04-02 | W2 | UX-04 | integration | `bun test tests/commands/list-columns.test.ts` | stub from W0 | pending |
+| 4-RUN01-01 | 04-04 | W3 | RUN-01 | integration | `bun test tests/commands/run-parallel.test.ts` | stub from W0 | pending |
+| 4-RUN01-02 | 04-04 | W3 | RUN-01 | integration | `bun test tests/commands/run-parallel.test.ts` | stub from W0 | pending |
+| 4-RUN01-03 | 04-04 | W3 | RUN-01 | integration | `bun test tests/commands/run-parallel.test.ts` | stub from W0 | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/commands/` — create directory (`mkdirSync`)
-- [ ] `tests/lib/errors.test.ts` — unit tests for `formatError` (UX-01)
-- [ ] `tests/commands/doctor-json.test.ts` — doctor --json and --fix tests (UX-02, UX-03)
-- [ ] `tests/commands/status-json.test.ts` — status --json integration test (UX-02)
-- [ ] `tests/commands/sync-json.test.ts` — sync --json integration test (UX-02)
-- [ ] `tests/commands/list-columns.test.ts` — list default columns test (UX-04)
-- [ ] `tests/commands/run-parallel.test.ts` — run --parallel integration tests (RUN-01)
+Wave 0 is handled by **Plan 04-01, Task 0** which creates all stub test files before any implementation begins.
 
-Existing files to extend (not Wave 0 stubs, but additions):
+- [x] `tests/commands/` — created by Plan 04-01 Task 0
+- [x] `tests/commands/status-json.test.ts` — stub with `test.todo()` entries (UX-02)
+- [x] `tests/commands/doctor-json.test.ts` — stub with `test.todo()` entries (UX-02)
+- [x] `tests/commands/doctor-fix.test.ts` — stub with `test.todo()` entries (UX-03)
+- [x] `tests/commands/sync-json.test.ts` — stub with `test.todo()` entries (UX-02)
+- [x] `tests/commands/list-columns.test.ts` — stub with `test.todo()` entries (UX-04)
+- [x] `tests/commands/run-parallel.test.ts` — stub with `test.todo()` entries (RUN-01)
+
+> Note: Checkboxes above are marked as planned (will be created by Task 0). Set `wave_0_complete: true` in frontmatter after Plan 04-01 Task 0 executes successfully.
+
+Existing files to extend (not Wave 0 stubs, but additions by Plan 04-02):
 - `tests/lib/config.test.ts` — add schema backward-compat test for `last_opened?: string`
 - `tests/lib/workspace-ops.test.ts` — add `repoCount` field test in `getWorkspaceListInfo`
 
@@ -84,11 +89,12 @@ Existing files to extend (not Wave 0 stubs, but additions):
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Wave 0 stubs created by Plan 04-01 Task 0 (first task in first plan)
 - [ ] Sampling continuity: no 3 consecutive tasks without automated verify
 - [ ] Wave 0 covers all MISSING references
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 10s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** pending — set `wave_0_complete: true` after Plan 04-01 Task 0 runs
