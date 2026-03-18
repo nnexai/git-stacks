@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation** - Stable config schemas, test infrastructure, and live bug fixes — the PoC becomes trustworthy
 - [x] **Phase 2: Safety** - Destructive operations (remove, clean, merge) gain dry-run, confirmation, and consistent --force behavior (completed 2026-03-17)
-- [ ] **Phase 3: Design and Conditional Implementation** - Evaluate Stack vs Repo-Registry/Template model, then implement the winning model (REPO-* and TMPL-* contingent on DESIGN outcome)
+- [ ] **Phase 3: Design and Conditional Implementation** - Replace Stack model with Repo Registry + Template + Workspace model
 - [ ] **Phase 4: UX and Execution** - Actionable errors, --json output, doctor --fix, richer list columns, and parallel run
 
 ## Phase Details
@@ -74,19 +74,29 @@ Plans:
 - [ ] 02-02-PLAN.md — Command layer: --dry-run flags, --force prompt gating, rename gains both flags (SAFE-02, SAFE-03)
 
 ### Phase 3: Design and Conditional Implementation
-**Goal**: A documented decision exists on whether Stacks are replaced, renamed, or supplemented by a Repo Registry + Template model — and the chosen model is implemented (REPO-* and TMPL-* execute only if DESIGN-01 and DESIGN-02 conclude they are in scope)
+**Goal**: Stacks are replaced by a three-primitive model (Repo Registry, Template, Workspace) — design decision documented, all REPO-* and TMPL-* requirements implemented, Stack code fully removed
 
-**Note on conditionality:** REPO-* and TMPL-* requirements are contingent on DESIGN-01 and DESIGN-02. If the design evaluation concludes the current Stack model is sufficient, REPO-* and TMPL-* requirements are deferred to v2 and this phase delivers only the design documentation. If the new model is adopted, all nine REPO-* and TMPL-* requirements are implemented within this phase.
+**Design outcome:** Stacks eliminated (zerover, clean break). Repo Registry is the source of truth for repo locations. Templates are optional reusable workspace recipes. Workspaces are snapshots at creation time.
 
 **Depends on**: Phase 2
 **Requirements**: DESIGN-01, DESIGN-02, REPO-01, REPO-02, REPO-03, REPO-04, TMPL-01, TMPL-02, TMPL-03, TMPL-04, TMPL-05
 **Success Criteria** (what must be TRUE):
   1. A written decision document exists comparing the current Stack model against a Repo Registry/Template model across at least 3 representative workflows — rationale and backward-compatibility stance are documented
-  2. The design decision is implemented: either the existing Stack model is confirmed and no REPO/TMPL work proceeds, OR a user can register repos and create named Templates that reference them to create workspaces
-  3. (Conditional on new model) User can list, view, and remove registered repos from the CLI
-  4. (Conditional on new model) Templates support branch-name placeholders (e.g., feature/<workspace-name>) expanded at workspace creation time
-  5. (Conditional on new model) Existing stack YAML files continue to work unchanged after the model change is introduced
-**Plans**: TBD
+  2. User can register local repos, scan directories, list/show/remove/rename registered repos
+  3. User can create named Templates referencing registered repos with per-repo mode, base branch, and branch pattern placeholders
+  4. User can create workspaces from templates, from ad-hoc registry picks, or from a local path
+  5. Trunk repos have their base branch checked at open time with a warning if mismatched
+  6. User can clone an existing workspace (copy config, new branch) without needing a template
+  7. User can re-sync a workspace from its source template via open --recreate
+  8. All Stack code (schemas, commands, TUI wizards) is removed from the codebase
+**Plans**: 5 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Schema foundation: design doc, new schemas (Registry, Template), Stack removal (DESIGN-01, DESIGN-02)
+- [ ] 03-02-PLAN.md — Repo registry commands and TUI wizard (REPO-01, REPO-02, REPO-03, REPO-04)
+- [ ] 03-03-PLAN.md — Template commands and TUI wizard (TMPL-01, TMPL-02, TMPL-03)
+- [ ] 03-04-PLAN.md — Workspace ops migration from Stack to Registry model (TMPL-04)
+- [ ] 03-05-PLAN.md — Workspace commands, wizard rewrite, --from, --recreate, test updates (TMPL-05)
 
 ### Phase 4: UX and Execution
 **Goal**: The tool communicates clearly, works with scripts and agents, and surfaces workspace health at a glance
@@ -111,5 +121,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 01.1. File ops | 2/2 | Complete    | 2026-03-17 |
 | 01.2. Version command | 1/1 | Complete    | 2026-03-17 |
 | 2. Safety | 2/2 | Complete   | 2026-03-17 |
-| 3. Design and Conditional Implementation | 0/TBD | Not started | - |
+| 3. Design and Conditional Implementation | 0/5 | Not started | - |
 | 4. UX and Execution | 0/TBD | Not started | - |
