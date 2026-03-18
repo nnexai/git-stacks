@@ -204,10 +204,10 @@ export function applyFileOpsForWorkspace(
 export function warnExternalFiles(
   workspace: Workspace,
   wsDir: string,
-  tasksDir: string,
+  _tasksDir: string,
 ): string[] {
   const warnings: string[] = []
-  const boundaryDir = join(tasksDir, workspace.name)
+  const boundaryDir = wsDir
 
   function isInternal(resolvedPath: string): boolean {
     return resolvedPath === boundaryDir || resolvedPath.startsWith(boundaryDir + "/")

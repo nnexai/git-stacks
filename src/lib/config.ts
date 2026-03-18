@@ -108,6 +108,7 @@ const WorkspaceHooksSchema = z.object({
   pre_open: z.array(z.string()).optional(),
   post_open: z.array(z.string()).optional(),
   post_merge: z.array(z.string()).optional(),
+  pre_remove: z.array(z.string()).optional(),
 })
 
 export const WorkspaceSchema = z.object({
