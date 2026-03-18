@@ -105,7 +105,14 @@
 
 ### Execution
 
-- [ ] **RUN-01**: `run <workspace> <cmd>` supports `--parallel` to execute the command across all repos simultaneously, with per-repo spinner and aggregated exit code
+- [x] **RUN-01**: `run <workspace> <cmd>` supports `--parallel` to execute the command across all repos simultaneously, with per-repo spinner and aggregated exit code
+
+### Tech Debt Cleanup (Phase 5)
+
+- [ ] **DEBT-01**: The "Open workspace now?" prompt after `ws new` and `ws clone` delegates to `openWorkspace()` from workspace-ops.ts instead of calling `integration.open()` directly — ensuring post_open hooks, per-repo pre_open hooks, file-ops re-application, writeEnvFiles, TMPL-04 trunk branch check, and last_opened timestamp all execute on the first open after creation
+- [ ] **DEBT-02**: The `ws new` flow builds a properly-typed `Workspace` object in memory before calling `applyFileOpsForWorkspace`, replacing the `{} as Workspace` cast that silently drops workspace-level `files:` entries
+- [ ] **DEBT-03**: `mergeWorkspace` calls `warnExternalFiles()` before its dry-run short-circuit, matching the pattern in `cleanWorkspace` and `removeWorkspace` — completing SAFE-01 coverage for all three destructive operations
+- [ ] **DEBT-04**: Dead code removed: `STACKS_DIR` export from paths.ts, stale "old StackRepo/Stack type" comments from files.ts, deprecated `applyFileOperations` function from files.ts, and unreachable `runRepoAdd` function from repo-wizard.ts
 
 ## v2 Requirements
 
@@ -200,13 +207,18 @@
 | UX-02 | Phase 4 | Complete |
 | UX-03 | Phase 4 | Complete |
 | UX-04 | Phase 4 | Complete |
-| RUN-01 | Phase 4 | Pending |
+| RUN-01 | Phase 4 | Complete |
+| DEBT-01 | Phase 5 | Planned |
+| DEBT-02 | Phase 5 | Planned |
+| DEBT-03 | Phase 5 | Planned |
+| DEBT-04 | Phase 5 | Planned |
 
 **Coverage:**
-- v1 requirements: 57 total
-- Mapped to phases: 57
+- v1 requirements: 57 total (complete)
+- Tech debt requirements: 4 total (Phase 5)
+- Mapped to phases: 61
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 — added FILES-16, FILES-17 for file cleanup on workspace remove/clean*
+*Last updated: 2026-03-18 — added DEBT-01 through DEBT-04 for Phase 5 tech debt cleanup*

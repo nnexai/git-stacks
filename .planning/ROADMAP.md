@@ -119,7 +119,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -129,3 +129,20 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Safety | 2/2 | Complete   | 2026-03-17 |
 | 3. Design and Conditional Implementation | 5/5 | Complete   | 2026-03-18 |
 | 4. UX and Execution | 4/4 | Complete   | 2026-03-18 |
+| 5. Tech Debt Cleanup | 0/2 | Planned    |  |
+
+### Phase 5: Tech Debt Cleanup — fix open now lifecycle bypass, workspace type contract in new flow, and dead code removal
+
+**Goal:** The "open now?" shortcut after workspace creation runs the full openWorkspace() lifecycle (hooks, file-ops, env-writes, last_opened), the new-flow file ops receive a properly-typed workspace object, mergeWorkspace emits external file warnings for SAFE-01 completeness, and all dead code from Stack removal and stranded development is eliminated
+**Requirements**: DEBT-01, DEBT-02, DEBT-03, DEBT-04
+**Depends on:** Phase 4
+**Success Criteria** (what must be TRUE):
+  1. Answering "yes" to "Open workspace now?" after creation triggers the full openWorkspace() lifecycle -- post_open hooks, per-repo pre_open hooks, file-ops, writeEnvFiles, trunk branch check, and last_opened all execute
+  2. Workspace-level file ops during the new flow receive a real Workspace object -- no {} as Workspace cast
+  3. mergeWorkspace dry-run emits external file warnings (matching clean and remove behavior)
+  4. No dead exports (STACKS_DIR), dead functions (runRepoAdd, applyFileOperations), or stale comments remain
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Fix lifecycle bypass in workspace-wizard.ts and workspace-clone.ts + type contract fix (DEBT-01, DEBT-02)
+- [ ] 05-02-PLAN.md — Add warnExternalFiles to mergeWorkspace + dead code removal (DEBT-03, DEBT-04)
