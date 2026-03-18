@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-ux-and-execution-03-PLAN.md
-last_updated: "2026-03-18T20:53:45.037Z"
+stopped_at: Completed 04-ux-and-execution-04-PLAN.md
+last_updated: "2026-03-18T20:58:33.887Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 19
-  completed_plans: 18
+  completed_plans: 19
   percent: 20
 ---
 
@@ -67,6 +67,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 04-ux-and-execution P01 | 4 | 4 tasks | 10 files |
 | Phase 04-ux-and-execution P02 | 2 | 2 tasks | 3 files |
 | Phase 04-ux-and-execution P03 | 2 | 2 tasks | 1 files |
+| Phase 04-ux-and-execution P04 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -123,6 +124,9 @@ Recent decisions affecting current work:
 - [Phase 04-ux-and-execution]: openWorkspace re-reads workspace before writing last_opened to preserve latest YAML state after hooks/integrations
 - [Phase 04-ux-and-execution]: doctor --json: collect all issues first then output pure JSON — guarantees no human lines leak to stdout when --json active
 - [Phase 04-ux-and-execution]: doctor --fix: continue past individual failures, report N fixed / M failed at end — consistent with plan spec
+- [Phase 04-ux-and-execution]: run --parallel uses single spinner (not per-repo) — @clack/prompts is single-stream only
+- [Phase 04-ux-and-execution]: sync --json: no onProgress callback passed to syncWorkspace — prevents human lines leaking into JSON
+- [Phase 04-ux-and-execution]: sync --json result field: up-to-date (0 commits), rebased/merged (>0 commits by strategy), failed (skipped list)
 
 ### Roadmap Evolution
 
@@ -140,6 +144,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:53:45.035Z
-Stopped at: Completed 04-ux-and-execution-03-PLAN.md
+Last session: 2026-03-18T20:58:33.884Z
+Stopped at: Completed 04-ux-and-execution-04-PLAN.md
 Resume file: None
