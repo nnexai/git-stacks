@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-18T19:42:20.280Z"
+stopped_at: Completed 04-ux-and-execution-01-PLAN.md
+last_updated: "2026-03-18T20:29:11.898Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 19
+  completed_plans: 16
   percent: 20
 ---
 
@@ -64,6 +64,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 03-design-and-conditional-implementation P03 | 5 | 2 tasks | 3 files |
 | Phase 03-design-and-conditional-implementation P04 | 6 | 2 tasks | 4 files |
 | Phase 03-design-and-conditional-implementation P05 | 3 | 2 tasks | 3 files |
+| Phase 04-ux-and-execution P01 | 4 | 4 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,9 @@ Recent decisions affecting current work:
 - [Phase 03-design-and-conditional-implementation]: --from routing: resolve to absolute path first; if existsSync + .git exists treat as local path, else check templateExists() — template names that look like paths handled correctly
 - [Phase 03-design-and-conditional-implementation]: Template config deep-copied into workspace YAML at creation — workspace self-contained, does not need template present at open time
 - [Phase 03-design-and-conditional-implementation]: open --recreate shows full diff (added/removed repos, hooks changed, env changed) before applying — users see exactly what will change
+- [Phase 04-ux-and-execution]: formatError empty hint guard: empty string and undefined both produce message-only output (no bare arrow line)
+- [Phase 04-ux-and-execution]: Recovery hints in workspace.ts: only added where specific actionable fix exists — not invented for result.error passthroughs from ops layer
+- [Phase 04-ux-and-execution]: Parenthetical git error format: 'Operation failed for name (raw git error)' locked in workspace-ops.ts per CONTEXT.md decision
 
 ### Roadmap Evolution
 
@@ -129,6 +133,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T19:42:20.278Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-ux-and-execution/04-CONTEXT.md
+Last session: 2026-03-18T20:29:11.891Z
+Stopped at: Completed 04-ux-and-execution-01-PLAN.md
+Resume file: None
