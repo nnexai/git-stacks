@@ -1,6 +1,6 @@
 # git-stacks
 
-Git worktree workspace manager — stacks, workspaces, and multi-repo orchestration.
+Git worktree workspace manager — repo registry, templates, and multi-repo orchestration.
 
 **Why?** Switching between tasks (tickets, features, experiments) across multiple repos means juggling branches, IDE windows, and terminal sessions. `git-stacks` creates isolated worktrees for each task and opens everything in one shot.
 
@@ -18,15 +18,20 @@ bun add -g git-stacks
 
 ## Concepts
 
-**Stack** — a named template describing a set of repos (paths, types, default modes). Stored at `~/.config/ws/stacks/{name}.yml`.
+**Repo Registry** — a flat list of local git repos with names, paths, types, and default branches. Stored at `~/.config/git-stacks/registry.yml`. Managed via `git-stacks repo add|scan|list|show|remove|rename`.
 
-**Workspace** — a task/ticket-scoped instance created from a stack. Each workspace gets a branch; repos can be in `worktree` mode (isolated git worktree) or `trunk` mode (references the main clone directly). Stored at `~/.config/ws/workspaces/{name}.yml`.
+**Template** — a named set of repos (by registry name) with modes and branch patterns, used to stamp out workspaces. Stored at `~/.config/git-stacks/templates/{name}.yml`. Managed via `git-stacks template new|list|show|edit|clone|rename|remove`.
+
+**Workspace** — a task/ticket-scoped instance created from a template. Each workspace has a branch; repos can be in `worktree` mode (isolated git worktree at `{workspace_root}/tasks/{workspace_name}/{repo_name}`) or `trunk` mode (references the main clone directly). Stored at `~/.config/git-stacks/workspaces/{name}.yml`.
 
 ## Quick Start
 
 ```bash
-# Scan an existing directory and create a stack from it
-git-stacks stack init ~/dev/myproject
+# Register repos from an existing directory
+git-stacks repo scan ~/dev/myproject
+
+# Create a template from registered repos (interactive)
+git-stacks template new
 
 # Create a new workspace (interactive)
 git-stacks new my-feature
@@ -38,14 +43,27 @@ git-stacks open my-feature
 git-stacks merge my-feature
 ```
 
-## Stacks
+## Repo Registry
 
 ```bash
-git-stacks stack new          # Define a new stack interactively
-git-stacks stack init [dir]   # Create a stack by scanning a directory for git repos
-git-stacks stack edit <name>  # Add/remove/modify repos in a stack
-git-stacks stack list         # List all stacks
-git-stacks stack show <name>  # Show stack details
+git-stacks repo add <path>           # Register a local git repo
+git-stacks repo scan <dir>           # Scan directory for git repos and register them
+git-stacks repo list                 # List all registered repos
+git-stacks repo show <name>          # Show repo details
+git-stacks repo remove <name>        # Remove a repo from registry
+git-stacks repo rename <old> <new>   # Rename a registered repo
+```
+
+## Templates
+
+```bash
+git-stacks template new [name]          # Create a new template interactively
+git-stacks template list                # List all templates
+git-stacks template show <name>         # Show template details
+git-stacks template edit <name>         # Edit an existing template
+git-stacks template clone <name> <new>  # Clone a template under a new name
+git-stacks template rename <old> <new>  # Rename a template
+git-stacks template remove <name>       # Remove a template
 ```
 
 ## Workspaces
@@ -82,22 +100,22 @@ function wcd; cd (git-stacks cd $argv); end
 ## Configuration
 
 ```bash
+git-stacks manage    # Interactive TUI dashboard (default when run with no args)
 git-stacks config    # Interactive config wizard
 git-stacks doctor    # Health check — detect drift between config and filesystem
-git-stacks manage    # Interactive TUI dashboard
 ```
 
-Global config lives at `~/.config/ws/config.yml`. Default workspace root is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
+Global config lives at `~/.config/git-stacks/config.yml`. Default workspace root is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
 
 ## Hooks & Env Injection
 
-Stacks and workspaces support hook arrays (shell commands run in order):
+Templates and workspaces support hook arrays (shell commands run in order):
 
-- Stack: `pre_create`, `post_create`, `pre_remove`
-- Workspace: `pre_open`, `post_open`, `post_merge`
+- Template: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_remove`, `post_merge`
+- Workspace: `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove`
 - Per-repo: `pre_open`
 
-Hooks receive injected env vars: `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, and others. Stacks and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
+Hooks receive injected env vars: `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
 
 ## Shell Completions
 
