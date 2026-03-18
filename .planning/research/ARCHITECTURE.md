@@ -1,509 +1,604 @@
 # Architecture Research
 
-**Domain:** Multi-repo workspace manager CLI (developer environment tooling)
-**Researched:** 2026-03-17
-**Confidence:** HIGH (based on direct codebase analysis + training knowledge of comparable tools: tmuxinator, mise, moonrepo, devenv, workmux)
+**Domain:** Multi-repo workspace manager CLI — v0.3.0 milestone additions (Dashboard overhaul, messaging IPC, shell completion)
+**Researched:** 2026-03-19
+**Confidence:** HIGH for integration points and component boundaries (verified against live source); MEDIUM for IPC transport (Bun.serve unix confirmed in official docs; Bun.listen unix API shape unconfirmed — Bun.serve is the recommended path)
 
 ---
 
-## Standard Architecture for This Domain
+## System Overview
 
-### System Overview
+Current v0.2.0 architecture and where the three new features attach:
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│                         CLI / TUI Layer                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │  Commander   │  │  Clack TUI   │  │  SolidJS     │               │
-│  │  Commands    │  │  Wizards     │  │  Dashboard   │               │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘               │
-├─────────┴─────────────────┴─────────────────┴────────────────────────┤
-│                      Business Logic Layer                             │
-│  ┌──────────────────────────┐  ┌──────────────────────────────────┐  │
-│  │     workspace-ops.ts     │  │         lifecycle.ts             │  │
-│  │  open/clean/merge/sync/  │  │  runHooks() — sequential shell   │  │
-│  │  rename/status           │  │  execution with env injection    │  │
-│  └─────────────┬────────────┘  └──────────────────────────────────┘  │
-├───────────────┬┴──────────────────────────────────────────────────────┤
-│               │          Infrastructure Layer                          │
-│  ┌────────────┴───┐  ┌───────────────┐  ┌──────────────────────────┐ │
-│  │   git.ts       │  │  integrations/│  │       files.ts           │ │
-│  │  worktree ops  │  │  plugin system│  │  copy/symlink operations │ │
-│  │  via Bun $     │  │  (registry)   │  │                          │ │
-│  └────────────────┘  └───────────────┘  └──────────────────────────┘ │
-├───────────────────────────────────────────────────────────────────────┤
-│                       Configuration Layer                              │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
-│  │   config.ts      │  │    paths.ts       │  │  YAML on disk    │   │
-│  │  Zod schemas +   │  │  single source    │  │  stacks/ +       │   │
-│  │  YAML read/write │  │  for all paths    │  │  workspaces/     │   │
-│  └──────────────────┘  └──────────────────┘  └──────────────────┘   │
-└───────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  CLI Entry  src/index.ts                                                  │
+│                                                                           │
+│  Commands (src/commands/)                                                 │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────────┐  │
+│  │ workspace.ts │ │ template.ts  │ │   repo.ts    │ │  completion.ts  │  │
+│  └──────┬───────┘ └──────────────┘ └──────────────┘ └────────┬────────┘  │
+│         │                                                      │           │
+│   NEW: src/commands/message.ts ──────────────────────┐         │           │
+│         │                                             │         │           │
+├─────────┴─────────────────────────────────────────────────────┴───────────┤
+│  Business Logic (src/lib/)                                                 │
+│                                                                            │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐     │
+│  │workspace-ops │ │   config.ts  │ │    git.ts    │ │  paths.ts    │     │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘     │
+│                                                                            │
+│  NEW: src/lib/messages.ts  (message store: YAML read/write per workspace) │
+│  NEW: src/lib/ipc.ts       (Bun.serve unix socket server — TUI side)      │
+│  CHANGED: src/lib/paths.ts (add MESSAGES_DIR, messagePath(), SOCKET_PATH) │
+│  CHANGED: src/lib/completion-generator.ts (enum completions, msg cmds)   │
+├────────────────────────────────────────────────────────────────────────────┤
+│  TUI  src/tui/dashboard/                                                   │
+│                                                                            │
+│  CHANGED: App.tsx          (tab signal, TabBar, tab-gated content shows)  │
+│  CHANGED: types.ts         (Tab type, Message type, extended UIView)      │
+│  NEW: TabBar.tsx            (Workspaces | Templates | Repos tab header)   │
+│  NEW: TemplatesTab.tsx      (list + detail pane for templates)            │
+│  NEW: ReposTab.tsx          (list + detail pane for repo registry)        │
+│  CHANGED: WorkspaceRow.tsx  (add latest-message badge + age column)       │
+│  CHANGED: DetailStatus.tsx  (add Messages section, clear action)          │
+│  NEW: hooks/useMessages.ts  (IPC signal subscription + file catch-up)     │
+│  NEW: hooks/useTemplates.ts (mirrors useWorkspaces.ts pattern)            │
+│  NEW: hooks/useRepos.ts     (mirrors useWorkspaces.ts pattern)            │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+---
 
-| Component | Responsibility | Communicates With |
-|-----------|----------------|-------------------|
-| `src/index.ts` | CLI entry point; registers all commands; default to `manage` | Commander, commands/* |
-| `src/commands/workspace.ts` | Workspace subcommand handlers; CLI option parsing | workspace-ops, TUI wizards |
-| `src/commands/stack.ts` | Stack subcommand thin wrappers | TUI stack wizards |
-| `src/commands/doctor.ts` | Health check; drift detection; issue reporting | config, git, paths |
-| `src/lib/workspace-ops.ts` | Core domain operations (open, clean, merge, sync, rename) | git, config, lifecycle, integrations |
-| `src/lib/git.ts` | All git operations via Bun `$` shell API | External: git binary |
-| `src/lib/lifecycle.ts` | Sequential hook runner with env injection | External: sh -c |
-| `src/lib/config.ts` | Zod schemas; YAML read/write; workspace and stack I/O | YAML files on disk |
-| `src/lib/paths.ts` | All filesystem path constants and helpers | Nothing (pure computation) |
-| `src/lib/files.ts` | Copy and symlink operations for stack file templates | Filesystem |
-| `src/lib/integrations/` | Plugin registry + per-tool implementations | workspace-ops, config, external tools |
-| `src/tui/` | Interactive prompts for new/clone/edit workflows | config, workspace-ops |
-| `src/tui/dashboard/` | SolidJS reactive TUI for `manage` command | workspace-ops |
+## Component Responsibilities
+
+### Unchanged / Stable Components
+
+| Component | Responsibility | Notes |
+|-----------|----------------|-------|
+| `src/lib/config.ts` | Zod schemas + YAML I/O for all entities | No schema changes to Workspace; backward-compatible throughout |
+| `src/lib/workspace-ops.ts` | Business logic: open, clean, remove, merge, rename, sync | Called unchanged from dashboard and CLI; one helper added (see below) |
+| `src/lib/git.ts` | All git operations via Bun `$` | Untouched |
+| `src/lib/lifecycle.ts` | Hook runner | Untouched |
+| `src/lib/integrations/` | Plugin system for IDE/terminal artifacts | Untouched |
+| `src/commands/workspace.ts` | CLI workspace subcommands | Completion metadata additions only; no logic changes |
+| `src/tui/workspace-wizard.ts` | `ws new` interactive flow | Untouched |
+| `src/tui/workspace-clone.ts` | `ws clone` interactive flow | Untouched |
+| `src/tui/dashboard/WorkspaceList.tsx` | Scrollable workspace list | Untouched |
+| `src/tui/dashboard/ActionMenu.tsx` | Per-workspace action menu | Untouched |
+| `src/tui/dashboard/ConfirmDialog.tsx` | Confirmation modal | Untouched |
+| `src/tui/dashboard/ProgressView.tsx` | Progress display during operations | Untouched |
+| `src/tui/dashboard/BatchBar.tsx` | Batch selection bar | Untouched |
+| `src/tui/dashboard/StatusIndicator.tsx` | Status icon component | Untouched |
+| `src/tui/dashboard/hooks/useWorkspaces.ts` | Workspace data + async status loading | Untouched |
+
+### Modified Files
+
+| File | What Changes | Risk Scope |
+|------|-------------|-----------|
+| `src/lib/paths.ts` | Add `MESSAGES_DIR`, `messagePath(wsName)`, `SOCKET_PATH` exports | Additive; no existing exports changed |
+| `src/lib/completion-generator.ts` | Add `"message"` to `DynamicCompletion` union; add `OPTION_ENUMS` table for `--strategy`/`--sort`; extend bash/zsh/fish emitters with enum option branches; add `message.send` etc. to `DYNAMIC_COMPLETIONS` map | All existing completion output lines preserved; additions are in independent branches |
+| `src/lib/workspace-ops.ts` | Add `editTemplateYaml(name)` helper | One new export; mirrors existing `editWorkspaceYaml` |
+| `src/index.ts` | Register `messageCommand` | One `program.addCommand(messageCommand)` line |
+| `src/tui/dashboard/App.tsx` | Add `tab` signal, `TabBar` in header, tab-gated content blocks | Workspaces tab rendering path unchanged; new branches alongside existing |
+| `src/tui/dashboard/types.ts` | Extend `UIView` union with tab-specific states; add `Tab` type; add `Message` type | Purely additive TypeScript; existing variants untouched |
+| `src/tui/dashboard/WorkspaceRow.tsx` | Add message badge column (latest message text + age) | Layout addition; existing column rendering untouched |
+| `src/tui/dashboard/DetailStatus.tsx` | Add Messages section below repos section | Content addition; existing repos section untouched |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `src/commands/message.ts` | Commander subcommand family: `message send <workspace> <text> [--sender <name>]`, `message list <workspace>`, `message clear <workspace> [--id <id>]` |
+| `src/lib/messages.ts` | Message store: `WorkspaceMessage` type, `appendMessage`, `listMessages`, `clearMessages`; per-workspace YAML at `~/.config/git-stacks/messages/{name}.yml` |
+| `src/lib/ipc.ts` | TUI-side IPC server: `startIpcServer()` using `Bun.serve({ unix: SOCKET_PATH })`, `stopIpcServer()`; notifies subscribers via callback registered by `useMessages` hook |
+| `src/tui/dashboard/TabBar.tsx` | Tab header component — renders tab names with active indicator; keyboard: `1`/`2`/`3` or `Tab`/`Shift+Tab` |
+| `src/tui/dashboard/TemplatesTab.tsx` | Template list + detail pane; actions: new (launches template-wizard), edit (`$EDITOR` via `editTemplateYaml`), remove |
+| `src/tui/dashboard/ReposTab.tsx` | Repo registry list + detail pane; actions: remove (with confirmation) |
+| `src/tui/dashboard/hooks/useMessages.ts` | Subscribes to IPC push notifications + reads from YAML store on reload; exposes per-workspace reactive signal to `WorkspaceRow` and `DetailStatus` |
+| `src/tui/dashboard/hooks/useTemplates.ts` | `listTemplates()` as reactive signal; synchronous load (no async status checks) |
+| `src/tui/dashboard/hooks/useRepos.ts` | `readRegistry()` as reactive signal; synchronous load |
 
 ---
 
-## How Comparable Tools Are Structured
-
-### tmuxinator / workmux (session managers)
-
-**Architecture pattern:** Flat config file + process launcher.
-- Single YAML per session describes windows/panes and startup commands.
-- No plugin system; extensions are done via hooks or ERB templates.
-- State is ephemeral — the YAML *is* the definition, no separate instance state.
-
-**Lesson for git-stacks:** The separation of "definition" (Stack YAML) from "instance" (Workspace YAML) is more sophisticated than tmuxinator's approach and is correct. tmuxinator re-reads the definition every time; git-stacks snapshots the repos into the workspace YAML at creation time. This makes workspaces self-contained (survive stack edits), but means stale data accumulates — the `sync`/`doctor` pattern compensates for this correctly.
-
-### mise (polyglot tool version manager)
-
-**Architecture pattern:** Config file hierarchy with scope resolution.
-- `mise.toml` → project-level, `~/.config/mise/config.toml` → global.
-- Plugin system: each tool is a plugin (TOML-configured or Bash-script). Plugins implement `install`, `list-all`, `exec` hooks.
-- Config schema evolution: uses `.toml` with forward-compatible unknown-key tolerance (no hard Zod rejection on extra fields).
-- **Key pattern:** The `tasks` feature uses the same hook mechanism as regular config — `[tasks.build]` is just a named hook sequence. This unification is elegant.
-
-**Lesson for git-stacks:** Zod's `strict()` mode would reject unknown YAML keys, breaking configs on downgrade. The current schemas use `z.object()` (not `.strict()`), which silently ignores unknown keys — this is the correct pattern for user-facing config files. However, there is currently no mechanism for additive migrations (e.g., adding a required field to WorkspaceSchema). A `schema_version` field in YAML enables forward-compatibility checks.
-
-### moonrepo (monorepo/multi-repo task orchestrator)
-
-**Architecture pattern:** DAG task execution with workspace graph.
-- Each project defines tasks in `.moon/project.yml`; workspace defines the graph in `.moon/workspace.yml`.
-- Plugin system (Rust WASM): plugins implement task runners as WASM modules — a heavy-weight, sandboxed approach.
-- State: uses a local cache at `.moon/cache/` with hashed inputs for incremental execution. Significant separate state beyond config.
-- **Key pattern:** Task dependency resolution as a directed acyclic graph; topological execution order.
-
-**Lesson for git-stacks:** The hook system today is a simple sequential list per scope (stack, workspace, repo). As the tool matures, users will want cross-repo hook ordering (e.g., "build repo A before running post_open for repo B"). A dependency graph for hooks is a maturity milestone, not day-one scope. The current flat arrays are the right starting point.
-
-### devenv (Nix-based dev environments)
-
-**Architecture pattern:** Declarative environment spec that generates activation scripts.
-- A single `devenv.nix` generates a shell environment, process manager config, and service definitions.
-- No separate "instance" concept — environment is derived from spec each time.
-- **Key pattern:** Separation of "what is in the environment" (spec) from "how to activate it" (generated shell script). The generated artifacts are disposable.
-
-**Lesson for git-stacks:** The integration `generate()` method (produces `.code-workspace`, `.idea/` etc.) maps directly to this pattern. These artifacts are **derived** from the workspace spec, not source of truth. The corollary: if an artifact is corrupted or stale, `ws open` should regenerate it without asking. Currently this appears to be the behavior — `generate()` overwrites unconditionally.
-
----
-
-## Recommended Project Structure (Current + Maturity Direction)
+## Recommended Project Structure (Post v0.3.0)
 
 ```
 src/
-├── index.ts                    # CLI entry: register commands, default to manage
-├── commands/                   # CLI command handlers (thin: parse → dispatch)
-│   ├── workspace.ts            # new, clone, open, list, status, clean, remove, cd, merge, run, rename, sync
-│   ├── stack.ts                # stack new|init|edit|list
-│   ├── doctor.ts               # health check, drift detection
-│   ├── config.ts               # interactive config wizard
-│   └── completion.ts           # shell completion generation
-├── lib/                        # Infrastructure (no CLI concerns)
-│   ├── config.ts               # Zod schemas + YAML I/O (source of truth for types)
-│   ├── paths.ts                # All filesystem path constants (pure, no I/O)
-│   ├── git.ts                  # Git operations via Bun $ (single responsibility: git)
-│   ├── workspace-ops.ts        # Domain operations: open/clean/merge/sync/rename
-│   ├── lifecycle.ts            # Hook runner (env injection, sequential execution)
-│   ├── files.ts                # File copy/symlink operations
-│   ├── detect.ts               # Repo type detection
-│   ├── completion-generator.ts # Auto-generates shell completions from commander tree
-│   ├── vscode.ts               # Artifact generator (legacy; owned by integration plugin)
-│   ├── intellij.ts             # Artifact generator (legacy; owned by integration plugin)
-│   ├── cmux.ts                 # Artifact generator (legacy; owned by integration plugin)
-│   ├── tmux.ts                 # Artifact generator (legacy; owned by integration plugin)
-│   └── integrations/           # Plugin registry
-│       ├── types.ts            # Integration interface + IntegrationContext
-│       ├── index.ts            # Registry array (the only file to edit when adding plugins)
-│       ├── vscode.ts           # VSCode plugin (config, generate, open)
-│       ├── intellij.ts         # IntelliJ plugin
-│       ├── cmux.ts             # cmux plugin
-│       └── tmux.ts             # tmux plugin
-└── tui/                        # Interactive UI (clack prompts + SolidJS dashboard)
-    ├── utils.ts                # safeText() wrapper
-    ├── stack-wizard.ts         # stack new / stack init prompts
-    ├── stack-edit.ts           # stack edit prompts
-    ├── workspace-wizard.ts     # ws new prompts
-    ├── workspace-clone.ts      # ws clone prompts
-    └── dashboard/              # SolidJS TUI (ws manage)
-        ├── run.tsx             # Entry point for dashboard
-        ├── App.tsx             # Root component, state management
-        └── [components].tsx    # WorkspaceList, WorkspaceRow, ActionMenu, etc.
+├── commands/
+│   ├── workspace.ts          # unchanged
+│   ├── template.ts           # unchanged
+│   ├── repo.ts               # unchanged
+│   ├── doctor.ts             # unchanged
+│   ├── config.ts             # unchanged
+│   ├── completion.ts         # unchanged
+│   └── message.ts            # NEW: message send|list|clear
+├── lib/
+│   ├── config.ts             # unchanged schema and I/O
+│   ├── paths.ts              # CHANGED: add MESSAGES_DIR, messagePath(), SOCKET_PATH
+│   ├── git.ts                # unchanged
+│   ├── workspace-ops.ts      # CHANGED: add editTemplateYaml() helper
+│   ├── lifecycle.ts          # unchanged
+│   ├── files.ts              # unchanged
+│   ├── detect.ts             # unchanged
+│   ├── completion-generator.ts  # CHANGED: enum completions + message cmds
+│   ├── messages.ts           # NEW: message store (YAML)
+│   ├── ipc.ts                # NEW: Bun.serve unix IPC server for TUI
+│   ├── version.ts            # unchanged
+│   ├── errors.ts             # unchanged
+│   └── integrations/         # unchanged
+└── tui/
+    ├── template-wizard.ts    # unchanged
+    ├── repo-wizard.ts        # unchanged
+    ├── workspace-wizard.ts   # unchanged
+    ├── workspace-clone.ts    # unchanged
+    ├── utils.ts              # unchanged
+    └── dashboard/
+        ├── run.tsx           # unchanged (or minimal: call startIpcServer on mount)
+        ├── App.tsx           # CHANGED: tab routing
+        ├── types.ts          # CHANGED: Tab + Message types
+        ├── TabBar.tsx        # NEW
+        ├── WorkspaceList.tsx # unchanged
+        ├── WorkspaceRow.tsx  # CHANGED: message badge
+        ├── TemplatesTab.tsx  # NEW
+        ├── ReposTab.tsx      # NEW
+        ├── DetailStatus.tsx  # CHANGED: messages section
+        ├── ActionMenu.tsx    # unchanged
+        ├── ConfirmDialog.tsx # unchanged
+        ├── ProgressView.tsx  # unchanged
+        ├── BatchBar.tsx      # unchanged
+        ├── StatusIndicator.tsx  # unchanged
+        └── hooks/
+            ├── useWorkspaces.ts  # unchanged
+            ├── useMessages.ts    # NEW
+            ├── useTemplates.ts   # NEW
+            └── useRepos.ts       # NEW
 ```
 
-**Structure rationale:**
-- `lib/` is UI-agnostic — usable from commands, TUI, and a future programmatic API.
-- `commands/` are thin dispatchers — no business logic, only option parsing and output formatting.
-- `tui/` depends on `lib/` but never vice versa — prevents circular dependencies.
-- `lib/integrations/` is the sole extensibility boundary — add a file, register in `index.ts`, done.
+### Structure Rationale
+
+- **`src/lib/messages.ts` in lib/ not commands/:** Messages are a persistent store accessed from both CLI (`message.ts`) and TUI (`useMessages.ts`). It belongs in `lib/` following the same pattern as `config.ts` — pure data I/O, no CLI or TUI concerns.
+- **`src/lib/ipc.ts` in lib/ not tui/:** The IPC server is conceptually infrastructure, not UI. The TUI starts and stops it, but the server definition is independent of any SolidJS component.
+- **Per-workspace YAML in `messages/` subdirectory:** Keeps messages segregated from workspace config YAMLs. Enables `clearMessages` as a simple `unlinkSync` without touching workspace config.
+- **New hooks alongside existing `useWorkspaces.ts`:** All three hooks follow the same React/SolidJS hooks pattern. Co-locating them in `hooks/` makes the pattern obvious and parallel.
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: Command-Result Return Type
+### Pattern 1: Additive Enum Completion Without Breaking Existing Output
 
-**What:** Business logic functions return `{ ok: boolean; error?: string }` rather than throwing. Only hooks and catastrophic failures throw.
+`completion-generator.ts` currently has three completion value types in the `DynamicCompletion` union: `workspace`, `repo`, `template`, and the special `shells`. The dynamic completion dispatch uses the `DYNAMIC_COMPLETIONS` map (keyed by commander path string).
 
-**When to use:** Every workspace-ops function. Enables callers (commands, TUI, future API) to handle failures gracefully without try/catch everywhere.
+**What:** Extend with a `message` dynamic type and a new static `OPTION_ENUMS` lookup table for fixed-value options.
 
-**Trade-offs:** Pro: predictable error flow; easy to test. Con: easy to ignore return value (`const _ = await openWorkspace(...)` silently discards failure). TypeScript's lack of checked exceptions means callers must be disciplined.
+**Target shape (fully additive — no existing types removed):**
 
-**Current implementation:** `workspace-ops.ts` uses this consistently. Commands check `result.ok` and exit with code 1 on failure. Dashboard checks it and displays inline error.
+```typescript
+// Extend the union (additive)
+type DynamicCompletion = "workspace" | "repo" | "template" | "shells" | "message"
 
-**Maturity gap:** The `{ ok, error }` type is not formally declared as a shared type alias — it's inlined. Extracting `type Result<T = void> = { ok: true; data?: T } | { ok: false; error: string }` would be cleaner and enables typed success payloads.
+// New: static table for options with known fixed values
+const OPTION_ENUMS: Record<string, Record<string, string[]>> = {
+  sync:    { "--strategy": ["rebase", "merge"] },
+  list:    { "--sort": ["date", "name", "status"] },
+}
+```
 
-### Pattern 2: Integration Plugin Registry
+`buildNode()` already collects `options: OptionInfo[]` per command. Extend `CommandNode` with `optionEnums: { option: string; values: string[] }[]`, populated by a lookup against `OPTION_ENUMS[node.path]`. Each of `generateBash`, `generateZsh`, `generateFish` gets one new branch that handles the `$prev` token matching an enum option — independent of the existing dynamic completion branches.
 
-**What:** All IDE/terminal integrations implement a shared `Integration` interface and are registered in a single array. Core code iterates the array; no if/else branching on integration type.
+**Commands needing coverage via `DYNAMIC_COMPLETIONS`:**
 
-**When to use:** Any time a new external tool needs to be supported. The contract is: `id`, `isEnabled(ctx)`, optional `applies(workspace)`, optional `generate(ctx)`, required `open(ctx, path)`, required `configurePrompt(current)`.
+| Commander Path | Type |
+|----------------|------|
+| `message.send` | `workspace` (first arg) |
+| `message.list` | `workspace` (first arg) |
+| `message.clear` | `workspace` (first arg) |
 
-**Trade-offs:** Pro: adding a new integration requires touching zero existing files. Con: the `generate → open` lifecycle is hardcoded — integrations that need to query external state before generating (e.g., check if a port is free) have to do it awkwardly inside `open()`.
+**When to use:** Use OPTION_ENUMS for fixed values on existing commands. Do not add `.choices()` to Commander option definitions — that changes runtime validation behavior (Commander rejects non-choice values), which is outside the intended scope of completion-only changes.
 
-**Maturity gap:** The `generate()` method returns `string | null` (a path). For integrations that generate multiple artifacts (e.g., a `.devcontainer/` folder), this is too narrow. A future interface revision should return `string[] | null`.
+**Trade-offs:** OPTION_ENUMS is a second source of truth for valid option values. Acceptable: completion output is advisory, the table is tiny and co-located with the generator, and it requires zero changes to the commands themselves.
 
-### Pattern 3: Config as Snapshot, Not Reference
+### Pattern 2: Message Store as Per-Workspace YAML (Not Schema Field)
 
-**What:** When `ws new` creates a workspace, it snapshots repo metadata (paths, modes, types, stack name) into the workspace YAML. The workspace is self-contained — it does not re-read the stack at runtime.
+**What:** Messages are stored as a YAML list at `~/.config/git-stacks/messages/{workspace-name}.yml`, managed exclusively by `src/lib/messages.ts`.
 
-**When to use:** This is the current architecture for all workspace operations.
+**Message type:**
 
-**Trade-offs:** Pro: workspaces survive stack edits; idempotent. Con: if a stack is updated (new repo added), existing workspaces don't automatically gain the new repo. Requires an explicit `ws sync` or manual YAML edit.
+```typescript
+type WorkspaceMessage = {
+  id: string          // nanoid or `Date.now().toString(36)` for cheap uniqueness
+  workspace: string   // workspace name (redundant with filename; useful for filtering)
+  sender?: string     // optional agent name or hook script name
+  text: string
+  created_at: string  // ISO timestamp
+}
+```
 
-**Maturity direction:** A `ws update-from-stack` command that diffs the current workspace repos against the stack definition and offers to apply changes. This is a planned quality-of-life improvement, not a design flaw.
+**New constants in `paths.ts`:**
 
-### Pattern 4: Hook Scope Hierarchy
+```typescript
+export const MESSAGES_DIR = join(WS_CONFIG_DIR, "messages")
 
-**What:** Hooks run at three scopes with increasing specificity: stack-level → workspace-level → repo-level. Environment variables are injected at each scope (`WS_STACK`, `WS_WORKSPACE`, `WS_REPO_NAME`, etc.).
+export function messagePath(wsName: string): string {
+  return join(MESSAGES_DIR, `${wsName}.yml`)
+}
+```
 
-**When to use:** All lifecycle events follow this hierarchy.
+**Why not a field on `WorkspaceSchema`:** WorkspaceSchema is a creation-time snapshot. Adding a `messages` array field would:
+1. Make every `message send` a read-modify-write of workspace YAML — potential concurrent write corruption with agents
+2. Require re-running Zod validation on every append
+3. Bloat the workspace file visible in `ws status --json` and `ws list --json`
+4. Require adding `.optional()` with `.default([])` to avoid breaking existing workspace YAMLs
 
-**Trade-offs:** Pro: composable — a stack author defines general setup, workspace author adds task-specific steps, repo maintainer adds per-repo steps. Con: execution order is implicit (stack hooks before workspace hooks before repo hooks) and not documented as a contract.
+A separate file per workspace avoids all of this. `clearMessages(wsName)` is a single `unlinkSync`. No workspace YAML is touched.
 
-**Maturity gap:** No timeout mechanism on hooks — a hung hook blocks forever. Tools like mise implement a `timeout_secs` field per hook entry. Also, parallel hook execution (run all repo `pre_open` hooks concurrently) would improve speed for large workspaces.
+### Pattern 3: IPC Transport — Bun.serve Unix Socket
 
-### Pattern 5: Paths as a Pure Module
+**What:** When the TUI dashboard runs, it starts a single global HTTP server on a Unix domain socket. The `message send` command POSTs to this socket to push a live notification. If the socket is absent (TUI not running), send writes to YAML only — message is durable, appears on next `reload()`.
 
-**What:** All filesystem path computations live in `paths.ts` with zero I/O. Functions are pure: `getTasksDir(wsRoot)` returns a string without touching the filesystem.
+**Socket path:**
 
-**When to use:** Everywhere a path is needed. No inline path construction elsewhere.
+```typescript
+// In paths.ts — /tmp so it is auto-cleaned on reboot
+export const SOCKET_PATH = join("/tmp", "git-stacks.sock")
+```
 
-**Trade-offs:** Pro: makes path logic trivially testable; prevents scattered `join(HOME, ...)` calls. Con: `paths.ts` derives `HOME` from `homedir()` at module load time, making it hard to override in tests without `process.env.HOME` mutation.
+A single global socket (not per-workspace) means one server instance, one path to advertise, one cleanup. All messages carry a `workspace` field so the IPC server routes to the correct signal.
 
-**Maturity direction:** Accept `wsRoot` as a parameter rather than reading from global config — then tests can pass a temp directory without environment mutation.
+**TUI-side server (`src/lib/ipc.ts`):**
+
+```typescript
+// Bun.serve with unix option — confirmed in official Bun docs (added v0.8.1)
+let _server: ReturnType<typeof Bun.serve> | null = null
+
+export function startIpcServer(onMessage: (msg: WorkspaceMessage) => void) {
+  // Remove stale socket file if present (crash recovery)
+  if (existsSync(SOCKET_PATH)) unlinkSync(SOCKET_PATH)
+
+  _server = Bun.serve({
+    unix: SOCKET_PATH,
+    async fetch(req) {
+      const msg = await req.json() as WorkspaceMessage
+      appendMessage(msg.workspace, msg)   // durable write
+      onMessage(msg)                       // live notification to TUI
+      return new Response("ok")
+    },
+  })
+}
+
+export function stopIpcServer() {
+  _server?.stop(true)
+  _server = null
+  if (existsSync(SOCKET_PATH)) unlinkSync(SOCKET_PATH)
+}
+```
+
+**CLI-side send (`src/commands/message.ts`):**
+
+```typescript
+// Try live notification; always write to durable store
+const msg: WorkspaceMessage = { id, workspace, sender, text, created_at }
+appendMessage(workspace, msg)          // always: durable YAML write
+
+if (existsSync(SOCKET_PATH)) {
+  try {
+    await fetch("http://localhost/message", {
+      unix: SOCKET_PATH,   // fetch with unix option — confirmed in Bun docs
+      method: "POST",
+      body: JSON.stringify(msg),
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch {
+    // TUI exited between check and connect; durable store already written
+  }
+}
+```
+
+**"TUI not running" contract:** `existsSync(SOCKET_PATH)` is the guard. If absent, no error is shown. Message is in the YAML store; the TUI picks it up on next `reload()`. The `message send` command always exits 0 — notification delivery is best-effort, storage is guaranteed.
+
+**`useMessages` hook flow:**
+
+```
+TUI starts (App.tsx onMount or run.tsx):
+  → startIpcServer(onMessage)
+  → useMessages creates createSignal<WorkspaceMessage[]>([]) per workspace
+
+When IPC message arrives:
+  → onMessage callback fires
+  → setMessages(ws.name, [...prev, msg])  [reactive signal update]
+  → WorkspaceRow and DetailStatus re-render
+
+When user presses R (reload):
+  → reload() in useWorkspaces fires
+  → useMessages reads YAML store for all workspaces (catches messages sent while TUI was closed)
+
+TUI destroys (renderer.destroy()):
+  → stopIpcServer()
+  → SOCKET_PATH removed
+```
+
+### Pattern 4: Tab Layout in App.tsx
+
+**What:** Add a `tab` signal alongside the existing `view` signal. Tab state is separate from view state — the existing confirm/action-menu/progress view flow works identically within each tab.
+
+**New state:**
+
+```typescript
+type Tab = "workspaces" | "templates" | "repos"
+const [tab, setTab] = createSignal<Tab>("workspaces")
+// existing: const [view, setView] = createSignal<UIView>({ view: "list" })
+```
+
+Tab switching resets `view` to `{ view: "list" }` and `cursor` to `0`.
+
+**Keyboard handler addition (inside existing `useKeyboard` in the `list` view block):**
+
+```typescript
+if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); setCursor(0); return }
+if (key.name === "2") { setTab("templates");  setView({ view: "list" }); setCursor(0); return }
+if (key.name === "3") { setTab("repos");      setView({ view: "list" }); setCursor(0); return }
+```
+
+**Content routing (JSX addition, not replacement):**
+
+```tsx
+<TabBar activeTab={tab()} onTabChange={(t) => { setTab(t); setView({ view: "list" }); setCursor(0) }} />
+
+<Show when={tab() === "workspaces"}>
+  {/* existing WorkspaceList, ActionMenu, ConfirmDialog etc. — untouched */}
+</Show>
+<Show when={tab() === "templates"}>
+  <TemplatesTab cursor={cursor()} ... />
+</Show>
+<Show when={tab() === "repos"}>
+  <ReposTab cursor={cursor()} ... />
+</Show>
+```
+
+**Why `tab` is separate from `UIView`:** The existing `UIView` union (`list`, `action-menu`, `confirm`, `progress`, `detail-status`) is used in pattern matches by `ConfirmDialog`, `ActionMenu`, `ProgressView`, `DetailStatus` — all of which check `view().view`. Adding tabs to this union would require every one of those components to handle new variant cases. Keeping `tab` as an independent signal means zero changes to those components.
 
 ---
 
 ## Data Flow
 
-### Workspace Creation Flow
+### Message Send Flow
 
 ```
-User: git-stacks new [name]
-    |
-    v
-commands/workspace.ts: registerWorkspaceCommands()
-    |  (dispatches to TUI)
-    v
-tui/workspace-wizard.ts: runWorkspaceNew()
-    |  (reads stack YAMLs, prompts user)
-    |  config.ts: readStack(name) x N
-    v
-    |  (user confirms)
-    v
-config.ts: writeWorkspace(workspace)  ── YAML written to disk
-    |
-    v
-lib/git.ts: createWorktree() x N      ── git worktrees created
-    |
-    v
-lib/lifecycle.ts: runHooks()          ── post_create hooks
-    |
-    v
-lib/integrations/index.ts: generate() + open()  ── IDE/terminal launched
-    |
-    v
-lib/files.ts: applyFileOperations()   ── template files copied/symlinked
+git-stacks message send my-feature "build passed" --sender ci
+
+  1. src/commands/message.ts
+       build WorkspaceMessage { id, workspace: "my-feature", sender: "ci", text, created_at }
+
+  2. appendMessage("my-feature", msg)            [src/lib/messages.ts]
+       ensureDir(MESSAGES_DIR)
+       read messages/my-feature.yml ([] if absent)
+       push msg
+       trim to MAX_MESSAGES (50)
+       writeYaml(messagePath("my-feature"), msgs)
+
+  3. if existsSync(SOCKET_PATH):
+       fetch("http://localhost/message", { unix: SOCKET_PATH, body: msg })
+         → Bun.serve handler in ipc.ts
+             appendMessage already done; call onMessage(msg)
+             → useMessages signal setter fires
+             → WorkspaceRow for "my-feature" re-renders with new badge
+             → DetailStatus (if open on "my-feature") re-renders messages section
+
+  4. exit 0  (always; IPC failure is silent)
 ```
 
-### Workspace Open Flow
+### Dashboard Tab Navigation Flow
 
 ```
-User: git-stacks open <name>
-    |
-    v
-commands/workspace.ts → lib/workspace-ops.ts: openWorkspace()
-    |
-    v
-config.ts: readWorkspace(name) + readGlobalConfig()
-    |
-    v
-lib/git.ts: createWorktree() for each missing task_path
-    |
-    v
-lib/lifecycle.ts: runHooks(workspace.hooks.pre_open)
-    |
-    v
-lib/lifecycle.ts: runHooks(repo.hooks.pre_open) per repo
-    |
-    v
-integrations[].isEnabled() → applies() → generate() → open()
-    |
-    v
-lib/workspace-ops.ts: mergeEnv() → writeEnvFiles()
-    |
-    v
-lib/lifecycle.ts: runHooks(workspace.hooks.post_open)
-                  runHooks(stack.hooks.post_open) per stack
+User presses "2" (Templates tab)
+
+  App.tsx useKeyboard handler
+    setTab("templates")
+    setView({ view: "list" })
+    setCursor(0)
+
+  TemplatesTab renders (useTemplates() already has listTemplates() signal loaded)
+    displays template list with cursor at 0
+
+  User presses Enter
+    TemplatesTab sets local action-menu view
+    ActionMenu offers: [n] New / [e] Edit / [r] Remove / [Esc] Back
+
+  User presses "e" (Edit)
+    editTemplateYaml(name) returns { path, validate }
+    renderer.suspend()
+    spawn $EDITOR on templatePath(name)
+    await editor exit
+    validate() — Zod parse on modified YAML
+    renderer.resume()
+    reload templates signal
 ```
 
-### State Management
+### Completion Extension Flow
 
 ```
-Persistent state (YAML files):
-  ~/.config/git-stacks/config.yml          ← GlobalConfig (workspace_root, integration settings)
-  ~/.config/git-stacks/stacks/{name}.yml   ← Stack definitions (templates)
-  ~/.config/git-stacks/workspaces/{name}.yml ← Workspace instances (snapshots)
+User types: git-stacks sync my-feat --strategy <TAB>
 
-Git state (managed by git itself):
-  {workspace_root}/main/{repo}/            ← Main clones
-  {workspace_root}/tasks/{ws}/{repo}/      ← Worktree checkouts
+  Shell completion function (bash/zsh/fish) runs
+    sees "sync" as subcommand
+    sees "--strategy" as $prev / previous token
+    hits new enum-option branch in generated completion function
 
-No in-process runtime state is persisted.
-State source of truth: YAML files + git worktree list.
-Doctor command reconciles the two.
-```
+  Generated output (bash example):
+    if [[ "$prev" == "--strategy" ]]; then
+      COMPREPLY=($(compgen -W "rebase merge" -- "$cur"))
+    fi
 
-### Config Resolution Priority
-
-```
-Integration enabled state:
-  workspace.settings.integrations[id].enabled   (highest — per-workspace override)
-      ↓ if absent
-  config.integrations[id].enabled                (global setting)
-      ↓ if absent
-  integration.enabledByDefault                   (fallback)
-
-Hook environment variable resolution:
-  process.env                                    (base)
-  + stack.env / workspace.env (merged)           (additive)
-  + WS_* injected vars (WS_WORKSPACE, WS_BRANCH, etc.)  (always present)
+  Source: completion-generator.ts
+    OPTION_ENUMS["sync"]["--strategy"] = ["rebase", "merge"]
+    generateBash/Zsh/Fish each emit the above from the options loop
 ```
 
 ---
 
-## Component Boundaries (What Talks to What)
+## Integration Points: New vs Modified (Explicit)
 
-```
-CLI Layer (commands/)
-    |
-    |-- reads/writes --> config.ts (YAML schemas)
-    |-- calls -------> workspace-ops.ts (all operations)
-    |-- dispatches --> tui/ (interactive prompts for new/clone/edit)
-    |-- no direct --> git.ts, lifecycle.ts, integrations/ (these are lib internals)
+### New Files — No Risk to Existing Behaviour
 
-TUI Layer (tui/)
-    |
-    |-- reads/writes --> config.ts (YAML schemas)
-    |-- calls -------> workspace-ops.ts (operations post-wizard)
-    |-- no calls to --> git.ts, lifecycle.ts (these are workspace-ops concerns)
+| File | Integrates With | Coupling Point |
+|------|-----------------|---------------|
+| `src/commands/message.ts` | `src/lib/messages.ts`, `src/lib/ipc.ts` (client fetch), `src/lib/paths.ts` | Registered via `program.addCommand(messageCommand)` in `index.ts` — one line |
+| `src/lib/messages.ts` | `src/lib/paths.ts` (MESSAGES_DIR), `yaml` (existing dep), `zod` (existing dep) | Standalone new module; no existing file imports it initially |
+| `src/lib/ipc.ts` | `Bun.serve` (built-in), `src/lib/messages.ts`, `src/lib/paths.ts` | Imported only by TUI startup (App.tsx or run.tsx) |
+| `src/tui/dashboard/TabBar.tsx` | OpenTUI box/text primitives, receives `activeTab` and `onTabChange` props | Props-only component; no shared mutable state |
+| `src/tui/dashboard/TemplatesTab.tsx` | `hooks/useTemplates.ts`, `src/lib/config.ts` (listTemplates, readTemplate), `editTemplateYaml` from workspace-ops | Same pattern as Workspaces tab components |
+| `src/tui/dashboard/ReposTab.tsx` | `hooks/useRepos.ts`, `src/lib/config.ts` (readRegistry) | Read + remove actions; no write path to existing workspace data |
+| `src/tui/dashboard/hooks/useMessages.ts` | `src/lib/messages.ts`, IPC server `onMessage` callback | Reactive subscription; no filesystem side effects on read |
+| `src/tui/dashboard/hooks/useTemplates.ts` | `src/lib/config.ts` (listTemplates) | Synchronous read; simpler than useWorkspaces (no async status) |
+| `src/tui/dashboard/hooks/useRepos.ts` | `src/lib/config.ts` (readRegistry) | Synchronous read |
 
-workspace-ops.ts (domain layer)
-    |
-    |-- reads/writes --> config.ts
-    |-- calls -------> git.ts
-    |-- calls -------> lifecycle.ts
-    |-- calls -------> integrations/
-    |-- calls -------> files.ts
-    |-- reads from --> paths.ts
+### Modified Files — Change Scope
 
-integrations/ (plugin layer)
-    |
-    |-- reads from --> config.ts (types + GlobalConfig)
-    |-- reads from --> paths.ts
-    |-- calls -------> lib/vscode.ts, lib/intellij.ts, etc. (artifact generators)
-    |-- spawns -------> external tools (code, idea, tmux, cmux)
+| File | Change | Risk |
+|------|--------|------|
+| `src/lib/paths.ts` | Add `MESSAGES_DIR`, `messagePath(wsName)`, `SOCKET_PATH` exports | Zero — additive exports; existing exports untouched |
+| `src/lib/workspace-ops.ts` | Add `editTemplateYaml(name)` export | Zero — new export following exact pattern of `editWorkspaceYaml`; no existing functions changed |
+| `src/lib/completion-generator.ts` | Add `"message"` to DynamicCompletion, OPTION_ENUMS table, extended emitters | LOW — new branches in independent if-blocks; existing generated output lines unchanged. Verify by running `git-stacks completion bash` before/after and diffing |
+| `src/index.ts` | Import + register `messageCommand` | Zero — Commander registration is purely additive |
+| `src/tui/dashboard/App.tsx` | Add `tab` signal, `TabBar` render, tab-gated `<Show>` blocks | LOW — existing Workspaces tab rendering path is inside `<Show when={tab() === "workspaces"}>` and is unchanged; new code is alongside, not inside |
+| `src/tui/dashboard/types.ts` | Add `Tab` type; add `Message` type; extend `UIView` with tab-specific members if needed | LOW — TypeScript union extension; no existing code references new members |
+| `src/tui/dashboard/WorkspaceRow.tsx` | Add message badge column | LOW — additional `<text>` element in existing `<box flexDirection="row">`; existing column widths may need adjustment |
+| `src/tui/dashboard/DetailStatus.tsx` | Add Messages section | LOW — additional content block below existing repos section; no existing JSX changed |
 
-git.ts (infrastructure)
-    |
-    |-- spawns -------> git binary via Bun $
+---
 
-lifecycle.ts (infrastructure)
-    |
-    |-- spawns -------> sh -c for each hook command
+## Build Order (Minimises Risk)
 
-config.ts (foundation)
-    |
-    |-- reads/writes -> YAML files via paths.ts constants
-    |-- no other deps
-```
+The three features have different dependency profiles. This order ensures each phase is independently shippable and testable.
 
-**Boundary violations to avoid:**
-- Commands importing from `git.ts` directly (doctor.ts currently imports `$` from bun directly — acceptable for one-off checks)
-- `lib/` modules importing from `commands/` or `tui/` (would create circular dependency)
-- `integrations/` importing from `workspace-ops.ts` (would create circular dependency — integrations receive context, not the ops module)
+### Phase 1 — Message Store + CLI Command (no IPC, no UI)
+
+**Deliver:**
+- `src/lib/paths.ts`: add `MESSAGES_DIR`, `messagePath()`, `SOCKET_PATH`
+- `src/lib/messages.ts`: `WorkspaceMessage` type, `appendMessage`, `listMessages`, `clearMessages`
+- `src/commands/message.ts`: `message send|list|clear` (writes to YAML store only; no IPC)
+- `src/index.ts`: `program.addCommand(messageCommand)`
+
+**Why first:** Zero dependencies on TUI or IPC. Immediately testable. Agents and hooks can start using `git-stacks message send` before the dashboard is updated. The YAML store is the ground truth; IPC is a live notification layer on top. Getting the store right before adding the server prevents the server from being built on an unstable data contract.
+
+**Test surface:** Unit tests for `appendMessage`/`listMessages`/`clearMessages` using `process.env.HOME` redirect (matches existing test pattern in `tests/lib/`). CLI integration test: `git-stacks message send test-ws "hello"` writes `~/.config/git-stacks/messages/test-ws.yml` with the expected content.
+
+### Phase 2 — Shell Completion Overhaul
+
+**Deliver:**
+- `src/lib/completion-generator.ts`: `"message"` dynamic type in DYNAMIC_COMPLETIONS, OPTION_ENUMS table for `--strategy`/`--sort`, extended emitters for bash/zsh/fish.
+
+**Why second:** Pure logic change in one file. Independently verifiable by running `git-stacks completion bash` and diffing output against a snapshot. No UI risk. Can be done in parallel with Phase 3 but is sequenced here for smaller PRs.
+
+**Breakage guard:** The existing DYNAMIC_COMPLETIONS map keys match by commander path string. Adding `"message.send": "workspace"` is purely additive. The only risk is a typo in the path key — caught by running the generator and verifying workspace name completion appears for `message send`. Optionally: snapshot test the completion output for the `bash` format.
+
+**Verification steps:**
+1. Run `bun run src/index.ts completion bash` before and after the change; compare with diff
+2. Confirm new `message` subcommand completions appear
+3. Confirm `sync --strategy <TAB>` produces `rebase merge`
+4. Confirm existing `open <TAB>` still produces workspace names
+
+### Phase 3 — Dashboard Tab Layout (Templates + Repos tabs)
+
+**Deliver:**
+- `src/lib/workspace-ops.ts`: `editTemplateYaml` helper
+- `src/tui/dashboard/types.ts`: `Tab` type
+- `src/tui/dashboard/TabBar.tsx`: tab header component
+- `src/tui/dashboard/hooks/useTemplates.ts`, `hooks/useRepos.ts`
+- `src/tui/dashboard/TemplatesTab.tsx`, `ReposTab.tsx`
+- `src/tui/dashboard/App.tsx`: tab routing
+
+**Why third:** No dependency on Phase 1 (messages) or IPC. `listTemplates` and `readRegistry` are stable. Can be tested interactively with `bun run dev` (which runs `manage`). The Workspaces tab continues to work identically — the only addition is a new routing layer above it.
+
+**Breakage guard:** The Workspaces tab components (`WorkspaceList`, `WorkspaceRow`, `ActionMenu`, `ConfirmDialog`, `ProgressView`, `DetailStatus`) are untouched. They are wrapped in `<Show when={tab() === "workspaces"}>` — this means they no longer render when another tab is active (expected and correct). Verify: all existing dashboard keyboard actions work correctly on the Workspaces tab after the change.
+
+### Phase 4 — IPC Transport + Message Display in Dashboard
+
+**Deliver:**
+- `src/lib/ipc.ts`: `startIpcServer`, `stopIpcServer`
+- `src/tui/dashboard/hooks/useMessages.ts`
+- `src/tui/dashboard/WorkspaceRow.tsx`: message badge
+- `src/tui/dashboard/DetailStatus.tsx`: messages section
+
+**Why last:** Depends on Phase 1 (YAML store + message types) and on Phase 3 (dashboard running with stable structure). The IPC server startup and cleanup must be verified before merging — see critical contract below.
+
+**Critical contract:** `stopIpcServer()` must be called when the TUI exits. In the current codebase, exit happens via `renderer.destroy()` in App.tsx. The cleanup should be in `onCleanup` (SolidJS cleanup) or immediately before `renderer.destroy()`. If `stopIpcServer()` is not called on crash, the socket file remains. Guard: `startIpcServer()` removes the stale socket file before binding (`existsSync(SOCKET_PATH) && unlinkSync(SOCKET_PATH)`).
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Messages Field on WorkspaceSchema
+
+**What people do:** Add `messages: WorkspaceMessage[]` to the existing `WorkspaceSchema` in `config.ts`.
+
+**Why it's wrong:** WorkspaceSchema is a creation-time snapshot with a write model designed for infrequent updates. Adding a mutable list to it means: (a) every `message send` does a read-modify-write of the workspace YAML, risking concurrent write corruption when multiple agents send messages simultaneously; (b) Zod re-validates the entire workspace on every append; (c) messages appear in `ws status --json` and `ws list --json` output, polluting those APIs; (d) `clearMessages` becomes a partial YAML rewrite rather than a file delete.
+
+**Do this instead:** Separate `~/.config/git-stacks/messages/{workspace}.yml` files managed exclusively by `src/lib/messages.ts`. WorkspaceSchema stays backward-compatible and self-contained.
+
+### Anti-Pattern 2: IPC Socket Per Workspace
+
+**What people do:** Start a separate `Bun.serve` instance per open workspace, each at `socketPath(wsName)`.
+
+**Why it's wrong:** The dashboard shows all workspaces simultaneously. N workspaces = N servers to start, N paths to advertise in `paths.ts`, N cleanup operations in `stopIpcServer`. The `message send` command would need to discover which workspace's socket path to use — requiring an additional lookup.
+
+**Do this instead:** Single global socket at `SOCKET_PATH`. All messages carry a `workspace` field. The single IPC server routes to the correct per-workspace signal inside `useMessages`. One server, one path, one cleanup.
+
+### Anti-Pattern 3: Adding Commander `.choices()` for Completion
+
+**What people do:** Add `.choices(["rebase", "merge"])` to `program.command("sync").option("--strategy", ...)` in `workspace.ts`, then modify `buildNode()` in `completion-generator.ts` to read `opt.argChoices` from Commander's option object.
+
+**Why it's wrong:** Commander v14 exposes `opt.argChoices` but adding `.choices()` changes runtime validation — Commander rejects unknown values with an error. This codebase accepts arbitrary strings for `--strategy` and validates inside `syncWorkspace`. Changing to Commander-level validation is a behavior change requiring audit of all callers, not an incidental completion improvement.
+
+**Do this instead:** Static `OPTION_ENUMS` table in `completion-generator.ts`. Completion output is advisory; runtime validation path is unchanged.
+
+### Anti-Pattern 4: Tab State Inside UIView Union
+
+**What people do:** Extend `UIView` to include tab information, e.g. `{ view: "list"; tab: Tab }`.
+
+**Why it's wrong:** `UIView` is pattern-matched in `ConfirmDialog`, `ActionMenu`, `ProgressView`, and `DetailStatus` via `view().view === "..."`. Adding a `tab` field to the `"list"` variant (or adding new tab-specific variants) means every one of these components needs to handle the new shape. TypeScript's union exhaustiveness will not catch the gap unless every match is a full discriminated union switch.
+
+**Do this instead:** Independent `tab` signal. Tab switches reset `view` to `{ view: "list" }`. The existing view state machine is entirely contained within whatever tab is active.
+
+### Anti-Pattern 5: Polling the Message YAML File for Live Updates
+
+**What people do:** In `useMessages.ts`, run `setInterval(() => setMessages(readMessages(wsName)), 1000)` to detect new messages via filesystem polling.
+
+**Why it's wrong:** Adds up to 1-second latency for live notifications. Creates filesystem churn (1 read per workspace per second while the TUI is open). Requires interval cleanup in `onCleanup`. Silently accumulates I/O load as workspace count grows.
+
+**Do this instead:** IPC push is the live notification channel (sub-100ms). The YAML file is read on `reload()` triggered by explicit user action or after completing an operation — this catches messages that arrived while the TUI was closed. `useMessages` should not contain a polling interval.
 
 ---
 
 ## Scaling Considerations
 
-This is a local CLI tool with no server component. "Scaling" means handling more workspaces, more repos per workspace, and more simultaneous users (AI agents on the same machine).
+This is a local single-machine tool. "Scale" here means usability at high workspace counts.
 
-| Concern | At 5 workspaces | At 50 workspaces | At 500 workspaces |
-|---------|-----------------|------------------|-------------------|
-| List startup time | Instant | ~100ms YAML parse | >1s; needs lazy load or index |
-| Status check | ~200ms parallel git | ~2s parallel git | Need pagination / async stream |
-| Completion latency | Instant | ~50ms dir scan | Cache needed (but adds staleness) |
-| Config file contention | None (single process) | None | Possible if agent parallelism creates concurrent writes |
-
-**First bottleneck:** `listWorkspaces()` and `listStacks()` re-read and re-parse all YAML on every command. For <20 workspaces this is fine (current typical use). At 50+ workspaces, a lightweight JSON index file (`~/.config/git-stacks/.index.json` with name + branch + created) enables fast list/completion without full YAML parse. Invalidated on any write.
-
-**Second bottleneck:** `git-stacks status` is already parallelized with `Promise.all()` for dirty checks. The serial fallback in some sync paths (per-repo `rebaseBranch()` called sequentially) could be parallelized for independent repos.
-
-**Agent parallelism:** The current architecture has no file locking on workspace YAML writes. Two agents creating workspaces simultaneously could corrupt the workspaces directory. A simple lock file (`~/.config/git-stacks/.lock`) with `flock` semantics would address this for the multi-agent use case.
-
----
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Standalone Artifact Generators as First-Class Modules
-
-**What people do:** Call `generateCodeWorkspace()` from `lib/vscode.ts` directly, bypassing the integration plugin.
-
-**Why it's wrong:** The integration plugin is the contract boundary. Bypassing it means the `isEnabled()` check is skipped, workspace overrides are ignored, and the tool can be launched when the user has disabled it. It also splits the "what to generate" logic across two locations.
-
-**Do this instead:** All artifact generation goes through `integrations/index.ts`. The standalone files in `lib/` become private implementation details of their integration plugin (moved to `lib/integrations/vscode/artifact.ts` or inlined into `lib/integrations/vscode.ts`).
-
-### Anti-Pattern 2: Hardcoded Skip Logic in openWorkspace
-
-**What people do:** Pass `{ ide: false, cmux: false }` flags to `openWorkspace()`, which builds a `skip: Set<string>` of integration IDs to exclude.
-
-**Why it's wrong:** This couples the command-layer flags to integration IDs. Adding a new integration means updating both the integration registry and the skip logic in `openWorkspace()`. The integration plugin's `isEnabled()` contract already handles this.
-
-**Do this instead:** Map CLI flags to `workspace.settings.integrations` overrides before calling `openWorkspace()`. The function never needs the `opts.ide/opts.cmux` flags — it reads enable state from context. This is a clean-up task, not urgent.
-
-### Anti-Pattern 3: Schema Version Lock-In Without Migration Path
-
-**What people do:** Add required fields to Zod schemas (e.g., make `branch` required in `WorkspaceSchema`) without providing a migration for existing YAML files.
-
-**Why it's wrong:** Users with existing configs will get a cryptic Zod parse error on upgrade. The tool becomes self-breaking.
-
-**Do this instead:** New required fields should have `.default()` fallbacks in Zod. Truly new mandatory fields require a migration step: on read, if the field is absent, apply the default and write back. A `schema_version` field in YAML enables conditional migration paths.
-
-### Anti-Pattern 4: Global Config as Integration Config Bag
-
-**What people do:** Store arbitrary integration state in `config.integrations[id]` as `Record<string, unknown>`.
-
-**Why it's wrong:** There is no compile-time guarantee that the stored data matches what the integration expects. The integration must parse defensively on every access. A corrupted or mistyped value silently fails.
-
-**Do this instead:** Each integration's `configurePrompt()` method already validates with its own Zod schema before writing. The pattern is correct — the gap is that the global config schema uses `z.record(z.unknown())` instead of per-integration validated schemas. This is a practical tradeoff (the registry is runtime, not compile-time), documented and acceptable.
-
-### Anti-Pattern 5: TUI Layer Calling git.ts Directly
-
-**What people do:** Import git functions directly into wizard code for "quick checks" (e.g., validate a branch exists during prompts).
-
-**Why it's wrong:** Creates a direct dependency from TUI to infrastructure, bypassing workspace-ops. Makes the TUI hard to test and violates the layering contract.
-
-**Do this instead:** Add a validation function to workspace-ops (e.g., `validateBranchExists(stackName, branch)`) and call that from TUI. The TUI layer should only know about config types and workspace-ops functions.
-
----
-
-## Integration Points
-
-### External Tools (Integration Plugins)
-
-| Tool | Launch Pattern | Detection | Failure Mode |
-|------|---------------|-----------|--------------|
-| VSCode / code-insiders | `$ code artifact.code-workspace` | Binary name from config | Silent via `.nothrow()` |
-| IntelliJ / idea | `$ idea artifact-dir/` | `applies()`: Java repos only | Silent via `.nothrow()` |
-| tmux | `$ tmux new-session ...` | `enabledByDefault: false` | Silent via `.nothrow()` |
-| cmux | `$ cmux select-workspace ...` | `enabledByDefault: false` | Stale session ID tracked in workspace YAML |
-
-**Improvement needed:** All integration `open()` calls use `.nothrow()` — binary-not-found errors are silently swallowed. A `which`-style pre-check before spawning would produce actionable errors.
-
-### Shell Completion Integration
-
-| Shell | Generation | Dynamic Resolution |
-|-------|------------|-------------------|
-| bash | `complete -F __git_stacks_complete git-stacks` | Reads `~/.config/git-stacks/workspaces/` at tab time |
-| zsh | `_arguments` with completion functions | Same |
-| fish | `complete -c git-stacks` | Same |
-
-**Risk:** Completion functions read the YAML directory at every tab press. For NFS or network-mounted home directories this adds latency. An index file (see Scaling section) would fix this.
-
-### Programmatic API (Future)
-
-The current architecture makes a programmatic API straightforward: `workspace-ops.ts` functions accept typed parameters and return `{ ok, error }` structs — they are already API-shaped. The CLI is a thin shell around them. To expose an API, the only work needed is:
-
-1. Export `workspace-ops.ts` functions as a package entry point.
-2. Accept a `configDir` parameter to override the global `~/.config/git-stacks/` path (enables multi-tenant / agent use).
-3. Document the `ProgressCallback` pattern for streaming output.
-
----
-
-## Build Order Implications for Roadmap
-
-Based on the dependency graph, phases should respect this order:
-
-**Foundation (must be first):**
-`paths.ts` + `config.ts` (Zod schemas) — everything depends on these. Any schema changes here have the widest blast radius. Stabilize types here before adding features.
-
-**Infrastructure (second):**
-`git.ts`, `lifecycle.ts`, `files.ts` — pure infrastructure with no domain coupling. Tests here are unit-testable with temp git repos.
-
-**Domain (third):**
-`workspace-ops.ts` — depends on all infrastructure. Integration tests require all of the above.
-
-**Integrations (parallel to domain):**
-`lib/integrations/` — depends on config types but not workspace-ops. Can be developed and tested independently.
-
-**CLI + TUI (last):**
-Commands and wizards are thin — implement after the domain is stable. Changes here should never require domain-layer changes.
-
-**Doctor / observability (any time after domain):**
-`doctor.ts` depends on config and paths; it is a read-only consumer of domain state. Can be extended independently.
-
----
-
-## Gaps and Open Questions
-
-1. **Schema migration strategy:** No formal versioning or migration mechanism exists. Adding `schema_version: 1` now (while there are few users) costs nothing and prevents future pain. Flag for Phase 1 / stabilization work.
-
-2. **Standalone generators vs. integration plugins:** `src/lib/vscode.ts`, `intellij.ts`, `cmux.ts`, `tmux.ts` are accessible alongside the integration plugin implementations. The intended boundary is that plugins own their generators. This should be resolved during a cleanup phase.
-
-3. **Programmatic API surface:** `workspace-ops.ts` is API-ready today but not exported as a package entry point. When multi-agent use becomes a first-class scenario, a `package.json` `exports` field pointing to a public API surface (not the CLI binary) is needed.
-
-4. **Hook execution model:** All hooks run sequentially, blocking the main process. No timeout, no parallelism, no output capture (output goes to inherited stdio). For long-running hooks, there is no way to display progress inside the TUI dashboard. A structured hook result type (exit code + captured output + duration) would enable better UX.
-
-5. **Config path injection for tests:** `paths.ts` derives `HOME` at module load time. The `process.env.HOME` mutation pattern in tests is fragile under parallelism. Dependency-injecting `configDir` into the read/write functions would make this clean.
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1-20 workspaces | Current approach fine. Message badge reads one YAML file per workspace row — negligible I/O. |
+| 20-50 workspaces | Message file reads in `useMessages` should be batched like `fetchStatuses` in `useWorkspaces` (groups of 5) to avoid 50 simultaneous fs reads on startup. |
+| 50-100 workspaces | Consider capping message YAML files at `MAX_MESSAGES = 50` entries. `appendMessage` trims oldest entries when over the cap. Prevents unbounded file growth for long-running agent workspaces. |
+| 100+ workspaces | `WorkspaceRow` message badge adds one `readMessages(wsName)` per visible row. At 100+ workspaces, badge data should be loaded lazily (only for visible rows in the viewport, same as the status loading in `useWorkspaces`). |
 
 ---
 
 ## Sources
 
-- Direct codebase analysis: `/home/nnex/dev/prj/git-stacks/src/` (HIGH confidence — primary source)
-- Codebase architecture document: `.planning/codebase/ARCHITECTURE.md` (HIGH confidence)
-- Codebase concerns document: `.planning/codebase/CONCERNS.md` (HIGH confidence)
-- Training knowledge of mise architecture (MEDIUM confidence — verified against known patterns)
-- Training knowledge of tmuxinator, moonrepo, devenv design patterns (MEDIUM confidence — training data, not verified against live docs; used for comparative patterns only, not specific claims)
+- `src/index.ts` — live codebase (read directly 2026-03-19)
+- `src/lib/completion-generator.ts` — live codebase (read directly 2026-03-19)
+- `src/lib/paths.ts` — live codebase (read directly 2026-03-19)
+- `src/lib/config.ts` — live codebase (read directly 2026-03-19)
+- `src/lib/workspace-ops.ts` — live codebase (read directly 2026-03-19)
+- `src/commands/workspace.ts`, `template.ts`, `repo.ts` — live codebase (read directly 2026-03-19)
+- `src/tui/dashboard/App.tsx`, `types.ts`, `WorkspaceRow.tsx`, `DetailStatus.tsx`, `ActionMenu.tsx` — live codebase (read directly 2026-03-19)
+- `src/tui/dashboard/hooks/useWorkspaces.ts` — live codebase (read directly 2026-03-19)
+- Bun Unix socket fetch: [bun.sh/guides/http/fetch-unix](https://bun.sh/guides/http/fetch-unix) — `fetch({ unix: socketPath })` confirmed (HIGH confidence)
+- Bun.serve unix option: [bun.com/docs/runtime/http/server](https://bun.com/docs/runtime/http/server) — `Bun.serve({ unix: path })` confirmed, added Bun v0.8.1 (HIGH confidence)
+- Bun TCP API: [bun.sh/docs/api/tcp](https://bun.sh/docs/api/tcp) — `Bun.listen` documented for TCP only; unix socket path not confirmed for `Bun.listen` — `Bun.serve` is the correct path for this use case (MEDIUM confidence)
 
 ---
 
-*Architecture research for: multi-repo workspace manager CLI (git-stacks)*
-*Researched: 2026-03-17*
+*Architecture research for: git-stacks v0.3.0 — Dashboard tab layout, messaging IPC, shell completion overhaul*
+*Researched: 2026-03-19*

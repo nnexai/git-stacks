@@ -1,237 +1,188 @@
-# Feature Research
+# Feature Landscape — v0.3.0
 
-**Domain:** Multi-repo workspace manager / dev environment CLI (git worktrees + IDE/terminal orchestration)
-**Researched:** 2026-03-17
-**Confidence:** MEDIUM — tmuxinator and workmux verified via GitHub READMEs (HIGH for those two); mise/devenv/moonrepo via official docs (HIGH); direnv via official README (HIGH); turborepo/nx/cargo-make via GitHub/docs (MEDIUM); training knowledge fills gaps for nx/turbo since WebFetch was blocked on their sites.
-
----
-
-## Context: What git-stacks Already Has
-
-Before mapping what's missing, these features are already implemented and are NOT the focus of this document:
-
-- Workspace lifecycle: `new`, `open`, `clone`, `merge`, `sync`, `remove`, `clean`, `rename`
-- Stack templates (YAML) with per-repo modes (worktree/trunk), hooks, env vars, file ops
-- Hook system: `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove`
-- Integration plugins: VSCode, IntelliJ, tmux, cmux — with enable/disable overrides per workspace
-- Interactive TUI dashboard (`manage`) via SolidJS
-- Stack wizards: `stack new`, `stack init`, `stack edit`
-- Shell completion (bash/zsh/fish)
-- `doctor` health check: orphaned task dirs, missing worktrees, dead stack refs, stale cmux sessions
-- `run` command: execute arbitrary commands across workspace repos
-- `sync` with rebase/merge strategies and best-effort mode
-- `status` command with dirty-worktree detection
-- `list` with JSON output and sort options
-- `cd` command for shell navigation
+**Domain:** Rich terminal management UI, inter-process workspace messaging, shell completion completeness
+**Researched:** 2026-03-19
+**Scope:** v0.3.0 milestone only — dashboard overhaul, notification/messaging system, shell completion improvements
 
 ---
 
-## Feature Landscape
+## Current State Baseline
 
-### Table Stakes (Users Expect These)
+The existing dashboard (`git-stacks manage`) is a SolidJS/OpenTUI single-screen list with:
+- Workspace list, cursor navigation (j/k/arrows), space-to-select batch
+- Action popup menu per workspace (open, status, edit, clean, remove, merge)
+- Confirm dialog for destructive actions
+- Progress view for long-running ops
+- Detail status pane (repo list with dirty/missing indicators)
+- / filter, R refresh, q quit
 
-Features users assume exist in any serious workspace/multi-repo dev tool. Missing these causes churn, bug reports, or abandonment.
+Shell completions cover: top-level commands, workspace names for workspace commands, repo names for repo subcommands, template names for template subcommands. Missing: branches, enum flag values (--sort, --strategy), all flags for subcommands with subcommands (repo.add, repo.scan, template.new, etc.), and the new `message` command.
+
+---
+
+## Table Stakes
+
+Features users expect from any serious terminal management UI. Missing these makes the tool feel unfinished compared to lazygit, k9s, or htop.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| **Dry-run mode for destructive operations** | `merge`, `remove`, `clean` are irreversible. Every serious CLI tool exposes `--dry-run`. workmux, cargo-make, Nx, moon all provide preview/dry-run. Absence means users fear the tool. | LOW | Print what _would_ happen without executing. Already has conflict pre-check for merge; extend the pattern. |
-| **Per-operation confirmation prompts** | Tools that delete things without "are you sure?" are considered broken by power users. tmuxinator's `delete` confirms; workmux pre-merge hook failure aborts. | LOW | `remove` and `clean` need interactive confirm when not `--force`. |
-| **Actionable error messages with suggested fix** | Every check in `doctor` already has a `fix:` field — but errors during `open`, `merge`, `sync`, `run` often emit raw git stderr. Users expect "repo X has uncommitted changes — stash or use --force" not a bare exit code. | MEDIUM | Standardize error objects with a `suggestion` field across all lib functions. |
-| **List workspaces shows branch + age** | `git-stacks list` exists but power users expect to see: workspace name, branch, repos in scope, when created, dirty status at a glance. tmuxinator `list` and workmux `list` both show rich status. | LOW | Already partially done; may need richer columns (repo count, dirty indicators). |
-| **Workspace status shows per-repo state** | `status [name]` shows dirty repos; users also expect: commits ahead/behind upstream, last sync time, which repos have uncommitted work. mise and moon both show per-project health. | MEDIUM | Extend `RepoStatus` type to include ahead/behind counts. |
-| **`--force` flags consistently available** | `remove`, `clean`, `merge` have `--force` but inconsistently. Users expect a uniform escape hatch when they know what they're doing. | LOW | Audit all destructive commands; ensure `--force` bypasses safety checks uniformly. |
-| **Config schema validation with clear errors** | Zod validation exists on read, but YAML parse errors surface as stack traces. Users need "invalid stack config at line 12: missing required field 'path'" not a JavaScript error. | MEDIUM | Catch Zod errors and format them as human-readable field-level messages. |
-| **Programmatic output (`--json`) on all status commands** | `list` has `--json`; `status` and `doctor` do not. Automation scripts and AI agents expect machine-readable output everywhere. mise, moon, Nx all support JSON output. | LOW | Add `--json` to `status`, `doctor`, `sync` result output. |
-| **`doctor --fix` auto-repair mode** | `doctor` detects issues and prints suggested `fix:` commands but doesn't run them. Users expect `--fix` to execute safe repairs automatically (re-run `open` for missing worktrees, delete orphaned dirs). | MEDIUM | Already has fix suggestions; add `--fix` flag to execute them. |
-| **Workspace templates / quick-start from existing branch** | Cloning an existing remote branch into a workspace is `git-stacks clone`, but the PROJECT.md flags this as needing improvement. Users working off existing PRs/branches expect smooth onboarding. | MEDIUM | `clone` should auto-detect multi-repo stacks, validate branch exists, offer stack selection. |
+| **Tab row for entity switching (Workspaces / Templates / Repos)** | Any multi-entity TUI uses tab navigation. lazygit uses [ ] to switch tabs within a panel. k9s uses numeric shortcuts. Users managing 3 entity types from one `manage` command expect to reach all three without exiting. | MEDIUM | Tab row renders above list; [ and ] (or 1/2/3) switch between tabs. Each tab has its own cursor position, selection state, and data hook. Existing `WorkspaceList` becomes one of three tab views. |
+| **Detail pane alongside list (master-detail split)** | lazygit, k9s, and htop all show a detail pane next to or below the list. The current dashboard navigates *away* from the list to show details — users lose the list context entirely. A persistent right-side or bottom pane that updates as cursor moves is the expected pattern. | MEDIUM | Split layout: list occupies 60% width, detail 40%. Detail auto-updates reactively as cursor changes. No "enter detail view" step needed for read-only info; actions still require Enter. |
+| **All entity-type CRUD accessible in-TUI** | Templates tab: new, edit, clone, remove. Repos tab: list only (add/scan require wizard which needs full terminal; those should launch editor/wizard via suspend+resume like the existing `edit` action). Users who open `manage` expect to not need to exit for common tasks. | MEDIUM | Actions menus per tab follow the existing ActionMenu pattern. Suspend/resume via `renderer.suspend()`/`renderer.resume()` already works for editor launch — same mechanism for spawning wizards. |
+| **Persistent help bar showing current-context keys** | lazygit's context-aware `?` help is the gold standard. At minimum a static help bar that updates per tab/view is required. Currently the help bar only shows list-view keys and disappears in other views. | LOW | One-line status bar at bottom. Update it per active view. Show at least 5 most important bindings. |
+| **? key for full key reference** | Standard in terminal tools: ? pops a scrollable keybinding reference. Users discovering the tool for the first time need this to not feel lost. | LOW | A `KeyHelp` overlay showing all bindings for current context. Pressing ? again or Esc dismisses it. |
+| **Consistent Esc to go back** | Every view should be dismissible with Esc. The existing ActionMenu, ConfirmDialog, and DetailStatus all handle Esc correctly — but a tab-level detail pane has no dismiss behavior defined yet. | LOW | When detail pane is in "expanded" mode (occupies full screen), Esc returns to split. Otherwise Esc from list goes to previous tab or quits. |
+| **Message/notification display in workspace list row** | v0.3.0 adds a messaging system. The workspace row must show: latest message preview (truncated to ~30 chars), sender name, and relative age ("2m ago"). Currently the row shows name + branch + dirty count + created date — no message slot exists. | MEDIUM | Add message column to `WorkspaceRow`. Requires reading message store per workspace on load and on `R` refresh. Must not slow down initial render — load messages async alongside status checks. |
+| **Message list in workspace detail pane** | Detail pane currently shows only repo list. With the messaging system, the detail pane must show: per-sender message history, timestamps, and a clear-all or clear-by-sender action. This is the primary read surface for workspace notifications. | MEDIUM | Add a "Messages" section below the repos section in `DetailStatus`. Since messages can grow, make it scrollable within the pane. |
+| **Shell completion covers all commands and flag values** | When tab-completing `git-stacks sync --strategy `, the user expects `rebase` and `merge` as completions. When typing `git-stacks list --sort `, they expect `date name status`. Users who use completions notice immediately when common flags give no suggestions. | LOW | Add enum value completions to the existing generator. This is a generator-level change: emit a choices array for known options, use it in the case/argument blocks per shell. |
+| **Shell completion covers `message` subcommand family** | The new `message send|clear|list` commands need completions including workspace name as first argument for `send` and `clear`. This is a straightforward extension of the existing `DYNAMIC_COMPLETIONS` map. | LOW | Add `"message.send": "workspace"`, `"message.clear": "workspace"`, `"message.list": "workspace"` to the map. Add `"message"` as a new top-level entry in the command tree. |
 
-### Differentiators (Competitive Advantage)
+---
 
-Features where git-stacks can pull ahead of workmux, tmuxinator, and similar tools.
+## Differentiators
+
+Features that set this v0.3.0 release apart. Not universally expected, but highly valued.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Agent-aware dashboard with status indicators** | workmux has emoji status indicators (working/waiting/done) per worktree tied to AI agent state. git-stacks `manage` TUI exists but doesn't track agent activity. As AI-agent parallel dev becomes standard, this differentiates. | HIGH | Requires integration hooks for Claude Code / Copilot CLI / similar tools to write status files that the dashboard polls. |
-| **Multi-worktree batch generation from template** | workmux supports `--count N`, `--foreach`, `--agent` flags for spinning up N identical worktrees with templated branch names. git-stacks creates one workspace at a time. For agent parallelism, batch creation is a force multiplier. | HIGH | New command or `new --count N --template <branch-pattern>`. Requires template variable system (MiniJinja or similar). |
-| **PR checkout as first-class command** | workmux `add --pr <number>` creates a worktree directly from a GitHub PR. git-stacks has no equivalent. For teams doing PR review in isolated environments this removes 4-5 manual steps. | MEDIUM | `git-stacks clone --pr <number>` using `gh` CLI. Check PR branch, create workspace from inferred stack. |
-| **Alternative terminal backend support** | workmux supports tmux (primary), WezTerm, kitty, Zellij. git-stacks supports tmux and cmux. WezTerm and Zellij are growing rapidly in 2024-2026 among power users. | MEDIUM | Integration plugin pattern already handles this cleanly; add `wezterm.ts` and `zellij.ts` integrations. |
-| **Sandbox / container isolation mode** | workmux supports Docker/Podman and Lima VM backends for agent sandboxing. git-stacks has no isolation boundary — agents can access the whole filesystem. For production-safe agent workflows, container mode is compelling. | HIGH | New integration type; complex. Likely v2+. |
-| **Programmatic API / SDK surface** | PROJECT.md calls this out as an active requirement. No other comparable tool exposes a clean TypeScript API. AI agent frameworks (LangChain, Claude Code, etc.) need to call workspace operations programmatically without shelling out. | MEDIUM | Export `openWorkspace`, `mergeWorkspace`, etc. as a typed package. Already partially structured for this. |
-| **Per-workspace env file writing with secret injection** | git-stacks already writes `.env` files per repo from `env` + `env_file` in stack/workspace YAML. The differentiator is injecting secrets from a secrets manager (1Password CLI, Vault, `sops`) at workspace open time via hooks or a native integration. | HIGH | Hook-based approach is possible today; native integration would be cleaner. |
-| **Stack composition (multi-stack workspaces)** | git-stacks already supports multiple stacks per workspace — this is already a differentiator over tools like tmuxinator/workmux that have no stack concept at all. Highlight and polish this: inter-stack dep ordering, conflict detection. | MEDIUM | The capability exists; polish edge cases and document the mental model clearly. |
-| **`run` command with parallel execution and output aggregation** | `git-stacks run <name> [repo]` executes commands per repo sequentially. mise, moon, and cargo-make all run tasks in parallel with aggregated output. Parallel `run --parallel` with a spinner per repo and aggregated results would be a major DX win. | MEDIUM | Bun's `spawn` supports parallel; need output buffering + terminal multiplexing of output streams. |
-| **Watch mode for tasks** | mise and cargo-make support `--watch` mode to re-run tasks when files change. For "run tests across all repos when any file changes" workflows this is highly valued. | HIGH | Requires file watcher integration (Bun has `Bun.watch`). Likely v1.x+ feature. |
+| **Workspace messaging system (file-based JSONL)** | No comparable workspace CLI has a built-in notification/messaging system. The primary use case is AI agents running in workspaces posting status updates that a human developer can see in the TUI. This is unique to git-stacks' multi-agent positioning. The file-based JSONL approach — one file per workspace at `~/.config/git-stacks/messages/{workspace}.jsonl` — is durable, inspectable, and trivially implemented with no IPC complexity. | MEDIUM | CLI surface: `git-stacks message send <workspace> "<text>" [--from <sender>]`, `git-stacks message list <workspace>`, `git-stacks message clear <workspace> [--from <sender>]`. Storage: append-only JSONL, one record per line: `{"id":"uuid","from":"agent-1","text":"done","ts":"ISO8601"}`. Dashboard polls on R refresh. No daemon, no sockets, no background process. |
+| **Silent-drop behavior when TUI not running** | `message send` completes successfully even when the TUI dashboard is not open. This is non-obvious but correct: agents calling `message send` from hooks shouldn't fail or hang waiting for a consumer. Messages persist on disk and are read when the dashboard next opens. | LOW | `message send` is pure file-append. No socket, no PID check. This is the correct design — implement it this way by default, not as a fallback. |
+| **Per-sender message scoping** | Agents can identify themselves by name (`--from claude-agent-1`). The detail pane groups messages by sender, and `message clear --from <sender>` clears only that sender's messages. This gives the human developer per-agent visibility at a glance without mixing up which agent said what. | LOW | Storage is per-workspace (one file per workspace), not per-sender. Sender name is a field in each record. Grouping is done at render time in the detail pane. |
+| **Template tab with inline YAML edit** | Templates are YAML files and editing them through the wizard is slow. The Templates tab in the dashboard should offer "e — edit in $EDITOR" using the same suspend/resume pattern already working for workspace YAML edit. Power users who maintain templates will find this significantly faster than exiting to run `template edit`. | LOW | Reuse `editWorkspaceYaml()` pattern. Template path is `~/.config/git-stacks/templates/{name}.yml`. Already have `templatePath()` in config.ts. |
+| **Repos tab as read-only registry browser** | The Repos tab shows the registry with name, type, default branch, path, and disk-exists status. `repo add` and `repo scan` require interactive input unsuitable for TUI — they should be documented as "run from terminal", not hidden or faked. The Repos tab is useful as a health-check surface: flag repos where the path no longer exists on disk. | LOW | Load registry via `readRegistry()`. Compute `existsSync(entry.local_path)` per entry for health indicator. No write actions except "e — open YAML directly" for advanced users. |
+| **Branch completions for `new --from` and `clone`** | `git-stacks new --from <branch>` and `git-stacks clone <source>` benefit from branch completion. This requires running `git branch -r` at completion time against the repos in the registry. This is more complex than the static completions but makes the workflow significantly smoother when creating workspaces from existing branches. | HIGH | Fish/zsh/bash dynamic completion functions can call `git branch -r` but need a repo path context. Feasible for zsh/fish with a shell function. Mark LOW confidence on implementation approach — needs per-phase research. |
+| **Enum value completions for all flag choices** | `--sort date|name|status`, `--strategy rebase|merge`, `--output json|text` — providing these completions requires only adding a `choices` property to the OptionInfo type in the completion generator and emitting them in the shell-specific case blocks. This is pure mechanical work with high payoff: completions feel complete and professional. | LOW | Generator change: add `choices?: string[]` to `OptionInfo`. In `buildNode()`, parse choices from commander option metadata if available, otherwise hard-code per-option in the `DYNAMIC_COMPLETIONS` equivalent. Commander does not store choices natively; maintain a `OPTION_CHOICES` map keyed by `"command.--flag"`. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+---
 
-Features that seem valuable but create more problems than they solve given git-stacks' design goals and constraints.
+## Anti-Features
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| **Remote/cloud workspace sharing** | "Share my workspace with a teammate" | Turns a local CLI into a client-server system; auth, sync, conflict resolution, network reliability all become problems. Out of scope per PROJECT.md. | Document workspace YAML as portable — teammates can `git-stacks clone` from the same branch. |
-| **Built-in package manager / tool version management** | mise and devenv handle tool versions; users want one tool | git-stacks is about workspace _orchestration_, not runtime management. Adding `.nvmrc`-style tool pinning duplicates mise/asdf with inferior maintenance. Scope bleed. | Recommend mise or asdf in stack's `post_create` hook. Document the pattern. |
-| **GUI application** | Visual workspace management is appealing | Electron/web app is a completely different maintenance surface. The TUI dashboard already provides interactive UI. Out of scope per PROJECT.md. | Invest in TUI dashboard quality instead. |
-| **Nix / devenv integration as a first-class feature** | Nix devShells are reproducible and powerful | Adding Nix as a first-class dependency forces all users to have Nix installed. Complexity is enormous. The hook system already handles `direnv allow` or `devenv up` as post-create commands. | Document the hook-based integration pattern clearly. |
-| **AI-triggered merge conflict resolution** | Automate merge pain points | Automated conflict resolution requires deep git semantic understanding; false positives destroy work. Developers must retain final control over conflict resolution. | Surface conflicts clearly with per-repo status; let developer use their preferred merge tool. |
-| **Monorepo task pipeline (Nx/Turborepo-style caching)** | Run only affected tasks | git-stacks manages _workspaces_ (task branches), not _build pipelines_. Affected-task caching is Nx/turbo's domain. Adding it would require a build graph, input hashing, and cache storage — a full product in itself. | `git-stacks run` can call `nx affected` or `turbo run` inside repos; compose with existing tools. |
-| **Real-time everything / live sync** | Keep worktrees in sync automatically | Automatic git operations without user intent break the isolation model. Background rebase can introduce conflicts mid-work silently. | Provide explicit `sync --all` and surface "N commits behind" in status/dashboard. |
-| **Per-user permission management** | Multi-user workspace access control | git-stacks is explicitly single-machine, single-user. Building permissions adds auth infrastructure with no clear local benefit. | Standard filesystem permissions handle multi-user scenarios on shared machines. |
+Features that seem reasonable to add in v0.3.0 but should be explicitly deferred or avoided.
+
+| Anti-Feature | Why Avoid | What to Do Instead |
+|--------------|-----------|-------------------|
+| **Real-time TUI auto-refresh (polling loop)** | A background polling interval that reruns `getWorkspaceStatus()` across all workspaces constantly will hammer the filesystem, block git operations, and produce flickering. No user asked for this. | Provide `R` manual refresh. That is sufficient. If the user wants live updates, the dashboard is the wrong tool — they should use `watch git-stacks status`. |
+| **Websocket/Unix socket IPC for message delivery** | Tempting to make `message send` push directly into the running TUI via a socket. This requires the TUI to act as a server, adds a daemon lifetime problem, and fails silently in many environments. High complexity for marginal benefit. | File-based JSONL is sufficient. On `R` refresh the TUI reads the latest. If real-time push is needed in a future milestone, add it then with a proper design. |
+| **Message persistence across workspace lifetime** | Storing messages permanently creates unbounded disk growth and stale-data confusion. AI agents can post thousands of messages per session. | Messages belong to a workspace session. Provide `message clear` to wipe. Document "messages are not a log" — they are ephemeral status. Consider auto-clearing on workspace open. |
+| **In-TUI wizard for template creation (new or edit)** | Building a wizard (the multi-step @clack/prompts flow) inside the SolidJS renderer requires bridging two rendering contexts. The existing approach — suspend renderer, run wizard in the raw terminal, resume — works without this complexity. | Suspend/resume for template wizard is the correct approach. Do not attempt to render @clack/prompts inside OpenTUI. |
+| **Animated progress indicators beyond the existing ProgressView** | Spinners per row, animated status indicators, pulse effects — these are scope creep and distracting in a management tool. The existing `StatusIndicator` and `ProgressView` are sufficient. | Ship what exists. Add animations only if users report the tool feels slow or unresponsive. |
+| **Searching/filtering within detail pane** | The detail pane shows at most ~20 repos per workspace. Adding an in-pane search is premature. | The top-level `/` filter for workspace names is sufficient for v0.3.0. |
+| **Flag completions that require external API calls** | Completing `--sort` with a network call to check what keys are sortable, or querying GitHub for `--pr` PR numbers, adds latency and failure modes to shell completion. | Static enum values only for v0.3.0. Branch completions from local git are acceptable (local disk, fast). No network calls in completion scripts. |
+| **Mouse support in the TUI** | OpenTUI/SolidJS TUI does not provide mouse event handling today. Adding mouse support would require patching the underlying renderer or waiting for library support. | Keyboard-first is the right default for a developer tool. Do not add mouse support in v0.3.0. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-Dry-run mode
-    └──enables──> Doctor --fix auto-repair (safe to auto-fix when dry-run logic is proven)
+Tab navigation (Workspaces | Templates | Repos)
+    └──requires──> Per-tab state (cursor, selection, filter) isolated per tab
+    └──enables──> Template tab YAML edit action
+    └──enables──> Repos tab registry browser
 
-Actionable error messages
-    └──requires──> Standardized error object type across all lib functions
-    └──enables──> Doctor --fix (fix suggestions must be machine-parseable, not display strings)
+Master-detail split layout
+    └──requires──> Tab navigation (detail content differs per tab)
+    └──enables──> Message list in workspace detail pane
+    └──enables──> Repo health indicators in repos detail pane
 
-Per-repo ahead/behind status
-    └──requires──> Fetch origin (already done in sync flow)
-    └──enables──> Agent dashboard (agents need to know upstream drift)
+Message storage (JSONL per workspace)
+    └──enables──> message send|list|clear CLI commands
+    └──enables──> Message preview in workspace list row
+    └──enables──> Message list in workspace detail pane
+    └──note──> Message commands are independent of TUI; TUI reads from same store
 
-Programmatic API surface
-    └──requires──> Stable error types + result types (not just console output)
-    └──enables──> Agent-aware features (agents call the API, not the CLI)
+Shell completion for `message` subcommand
+    └──requires──> message command registered in commander (index.ts)
+    └──requires──> DYNAMIC_COMPLETIONS map updated
+    └──blocks on──> message command must be implemented before completion is useful
 
-PR checkout command
-    └──requires──> gh CLI available (external dependency, not bundled)
-    └──enables──> Agent batch generation (each agent PR gets its own workspace)
+Enum value completions for flags
+    └──requires──> OPTION_CHOICES map in completion-generator.ts
+    └──independent──> does not depend on any other v0.3.0 feature
+    └──note──> ship this early; it is low-risk and highly visible
 
-Agent status indicators in dashboard
-    └──requires──> Agent status file protocol (convention for agents to write status)
-    └──enhances──> Multi-worktree batch generation (dashboard shows N agents)
-
-Parallel `run` execution
-    └──requires──> Output buffering / stream multiplexing
-    └──enhances──> Multi-worktree batch generation (run commands across all agent workspaces)
-
-Alternative terminal backends (WezTerm, Zellij)
-    └──requires──> Integration plugin pattern (already exists)
-    └──conflicts with──> cmux-specific features (cmux workspace ID tracking is tmux-coupled)
+Branch completions
+    └──requires──> Shell function that calls `git branch -r` with a repo context
+    └──complexity──> Context (which repo?) is ambiguous at completion time — needs phase-specific research
+    └──deferred to──> Implementation phase; mark as "needs deeper research" in roadmap
 ```
 
-### Dependency Notes
+---
 
-- **Dry-run requires no structural change:** The merge conflict pre-check pattern already exists; extend it to `remove` and `clean`.
-- **Doctor --fix depends on actionable errors:** The `fix` field in Issue objects is currently a display string; it needs to be a structured action type to be safely executable.
-- **PR checkout has external dependency on `gh` CLI:** Should gate behind a check and emit a clear error if `gh` is not authenticated.
-- **Parallel run conflicts with sequential run:** They should be the same command (`run --parallel`), not separate commands.
-- **Agent dashboard is high-complexity:** The status indicator protocol needs to be defined before implementation — otherwise agents and dashboard will be built to different contracts.
+## Complexity Assessment Per Feature Area
+
+### Dashboard Overhaul
+
+**Tab navigation:** MEDIUM. Adding tab state requires restructuring App.tsx to hold `activeTab` signal and conditionally rendering three different list/detail component trees. The keyboard handler grows to include [ and ] (or 1/2/3). Per-tab cursor/selection must be tracked separately. Estimated: 150-250 lines of new component code, major restructure of App.tsx.
+
+**Master-detail split layout:** MEDIUM. Requires changing the layout from a single full-width list to a side-by-side or top-bottom split. OpenTUI's flexbox supports this natively (flexDirection="row"). The detail pane component must be reactive to cursor position — when cursor changes in the list, the detail pane re-renders for the newly focused item. This is straightforward with SolidJS reactive signals.
+
+**CRUD actions per tab:** MEDIUM. Template actions (edit, clone, remove) reuse patterns from workspace actions. The suspend/resume editor launch already works. New `ActionMenu` variants per tab are needed. The wizards (`runTemplateNew`, `runTemplateEdit`) already exist and can be spawned via the same `spawn()` + `renderer.suspend()` pattern.
+
+**Message display in list row:** MEDIUM. Requires reading the JSONL message file per workspace as part of the data-loading pipeline. Must not add blocking I/O to the initial render — load message previews asynchronously alongside the existing `fetchStatuses()` flow.
+
+### Messaging System
+
+**Core CLI commands:** LOW. `message send` is a file append. `message list` is a file read + format. `message clear` is a file delete or line filter. No network, no IPC, no background process. The entire implementation is 50-100 lines including schema definition.
+
+**JSONL schema design:** LOW. Schema is simple: `{id: string, from: string, text: string, ts: string}`. The only design decision is whether to use a per-workspace file or a single global file. Per-workspace is strongly preferred: scoped reads, easy clear, no cross-workspace contamination.
+
+**TUI integration:** MEDIUM. Rendering messages in both the list row (preview) and detail pane (full list) adds two new reactive data streams to the dashboard. The main concern is performance: reading N message files on dashboard open adds N disk reads. These should be batched and cached.
+
+### Shell Completions
+
+**Enum value completions for existing flags:** LOW. Mechanical generator change. Add a `OPTION_CHOICES` constant map. Update `buildNode()` to look up choices. Emit them in `bashCaseBody()`, `zshCaseBody()`, and the fish flags loop. Estimated: 50-80 lines of generator changes, minimal risk.
+
+**`message` command completions:** LOW. Add three entries to `DYNAMIC_COMPLETIONS`. The `message` top-level command needs subcommand handling identical to `repo` and `template`. Estimated: 5-10 lines.
+
+**Branch completions:** HIGH complexity, LOW confidence on implementation approach. The fundamental problem is that shell completion scripts run in the user's shell environment, not in the git-stacks process. To complete branch names, the completion function needs to know which repo(s) to query. For `new --from`, the relevant repo is ambiguous at completion time (no workspace context yet). For `clone <source>`, the source is itself being completed. This needs per-phase research before implementation.
 
 ---
 
-## MVP Definition
+## MVP Definition for v0.3.0
 
-git-stacks already has an MVP. This section defines what's needed to graduate from "working PoC" to "polished stable tool" (v1.0) and what comes after.
+### Must Ship (makes v0.3.0 a coherent release)
 
-### Launch With (v1.0 — Stabilization)
+1. **Tab navigation** — Workspaces | Templates | Repos tabs with [ ] or 1/2/3 keys
+2. **Master-detail split layout** — list + detail pane side-by-side for all three tabs
+3. **CRUD actions in-TUI for workspaces and templates** — all existing workspace actions plus template edit/clone/remove
+4. **Messaging system CLI** — `message send|list|clear` with JSONL storage per workspace
+5. **Message display in dashboard** — preview in list row, full list in detail pane
+6. **Enum value completions** — `--sort`, `--strategy`, `--output`, and other fixed-choice flags
+7. **`message` command completions** — workspace name completion for send/list/clear
 
-Minimum work needed to make the existing tool trustworthy and complete-feeling.
+### Defer to v0.3.x or v0.4.0
 
-- [ ] **Dry-run for `merge`, `remove`, `clean`** — removes the primary reason users fear destructive operations
-- [ ] **Confirmation prompts on `remove` and `clean` (without --force)** — standard CLI safety; absence feels broken
-- [ ] **Actionable error messages throughout** — currently raw git stderr leaks; users need guided recovery paths
-- [ ] **Config validation errors as human-readable field messages** — Zod errors as stack traces are not acceptable UX
-- [ ] **`--json` output on `status`, `doctor`, `sync`** — required for scripting and agent automation
-- [ ] **`doctor --fix` for safe auto-repairs** — extends existing doctor checks; low risk since repairs are already listed
-
-### Add After Validation (v1.x — Power User Features)
-
-Features to add once v1.0 is stable and gathering user feedback.
-
-- [ ] **PR checkout (`clone --pr <number>`)** — trigger: users reporting friction with PR review workflows
-- [ ] **Parallel `run --parallel`** — trigger: users with 5+ repos in a workspace hit sequential execution pain
-- [ ] **Per-repo ahead/behind in `status`** — trigger: users asking "how stale is my workspace?"
-- [ ] **WezTerm and Zellij integration plugins** — trigger: users on non-tmux terminals requesting support
-- [ ] **Programmatic API package** — trigger: first agent framework integration attempt
-
-### Future Consideration (v2+ — Differentiation)
-
-Defer until v1.x is stable and product-market fit is established.
-
-- [ ] **Agent-aware dashboard with status indicators** — defer: requires agent status protocol definition; high complexity
-- [ ] **Multi-worktree batch generation** — defer: requires template variable system; primarily useful for agent-parallel workflows
-- [ ] **Secret injection at open time** — defer: secrets management is a deep domain; hooks provide a good enough escape hatch
-- [ ] **Container/sandbox isolation** — defer: out of scope per PROJECT.md; revisit when agent-safety requirements are clearer
-- [ ] **Watch mode for `run`** — defer: useful but complex; composable with existing `mise watch` via hooks
+- **Branch completions** — HIGH complexity, needs design decision on repo context resolution; defer and flag for research
+- **In-TUI template creation wizard** — the suspend/resume pattern works for editing; creation wizard is low priority
+- **Auto-clear messages on workspace open** — convenient but not critical; let users call `message clear` explicitly
+- **Mouse support** — library capability gap; don't attempt
 
 ---
 
-## Feature Prioritization Matrix
+## Phase-Specific Research Flags
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Dry-run for destructive ops | HIGH | LOW | P1 |
-| Confirmation prompts (`remove`, `clean`) | HIGH | LOW | P1 |
-| Actionable error messages | HIGH | MEDIUM | P1 |
-| Config validation human errors | HIGH | MEDIUM | P1 |
-| `--json` on status/doctor/sync | MEDIUM | LOW | P1 |
-| `doctor --fix` | MEDIUM | MEDIUM | P1 |
-| PR checkout (`clone --pr`) | HIGH | MEDIUM | P2 |
-| Parallel `run --parallel` | HIGH | MEDIUM | P2 |
-| Per-repo ahead/behind in status | MEDIUM | MEDIUM | P2 |
-| WezTerm / Zellij integrations | MEDIUM | LOW | P2 |
-| Programmatic API surface | HIGH | MEDIUM | P2 |
-| Agent dashboard status indicators | HIGH | HIGH | P3 |
-| Batch worktree generation | MEDIUM | HIGH | P3 |
-| Secret injection integration | MEDIUM | HIGH | P3 |
-| Container/sandbox isolation | LOW | HIGH | P3 |
-| Watch mode for `run` | MEDIUM | HIGH | P3 |
-
-**Priority key:**
-- P1: Must have for v1.0 stable release
-- P2: Should have; add in v1.x iterations
-- P3: Nice to have; future consideration
-
----
-
-## Competitor Feature Analysis
-
-| Feature | tmuxinator | workmux | mise | direnv | moonrepo | git-stacks (current) | git-stacks (target) |
-|---------|------------|---------|------|--------|----------|----------------------|---------------------|
-| Session/workspace lifecycle (new/open/close/remove) | Yes (project files) | Yes | No (env scoped) | No | No (task scoped) | Yes | Yes |
-| Multi-repo support | No (single project) | Single repo + worktrees | No | No | Yes (monorepo) | Yes (multi-repo stacks) | Yes |
-| Git worktree isolation | No | Yes (primary feature) | No | No | No | Yes | Yes |
-| Declarative YAML/TOML config | Yes | Yes | Yes | No (.envrc script) | Yes | Yes | Yes |
-| Lifecycle hooks | Yes (5 events) | Yes (3 events) | Yes (6 events) | No | Yes | Yes (6 events) | Extend |
-| Environment variable injection | Limited (ERB) | Yes | Yes (primary feature) | Yes (primary feature) | Per-task | Yes | Yes |
-| IDE integration | No | No | No | No | No | Yes (VSCode, IntelliJ) | Extend (WezTerm, Zellij) |
-| Terminal multiplexer integration | Yes (tmux only) | Yes (tmux + 3 alt backends) | No | No | No | Yes (tmux, cmux) | Add WezTerm/Zellij |
-| Interactive TUI dashboard | No | Yes (agent dashboard) | No | No | No | Yes | Improve |
-| Dry-run mode | No | No | No | No | Yes (`--dryRun`) | No (gap) | P1 |
-| Confirmation prompts | Yes (delete) | No | No | No | No | Partial | P1 |
-| `--json` machine output | No | No | No | No | Yes | Partial | P1 |
-| PR checkout | No | Yes (`--pr`) | No | No | No | No (gap) | P2 |
-| Parallel task execution | No | No | Yes (parallel deps) | No | Yes | Sequential only | P2 |
-| Affected-repo detection | No | No | No | No | Yes | No | Anti-feature |
-| Build caching | No | No | No | No | Yes | No | Anti-feature |
-| Tool version management | No | No | Yes (primary) | No | Yes (toolchain) | No | Anti-feature |
-| Batch workspace generation | No | Yes (`--count`, `--foreach`) | No | No | No | No (gap) | P3 |
-| Agent status indicators | No | Yes | No | No | No | No (gap) | P3 |
-| Programmatic API | No | No | No | No | No | No (gap) | P2 |
-| Shell completion | No | Yes | Yes | No | No | Yes | Done |
-| Health check / doctor | Yes | No | No | No | No | Yes | Extend with --fix |
+| Topic | Research Needed | Complexity Indicator |
+|-------|-----------------|---------------------|
+| Branch completions | How to resolve repo context at completion time in bash/zsh/fish; whether `git branch -r` across multiple registry repos is feasible in a completion function | HIGH — needs dedicated research in implementation phase |
+| OpenTUI flexbox split layout | Whether OpenTUI supports stable side-by-side panes at small terminal widths; minimum terminal width assumptions | MEDIUM — verify with codebase/docs before implementation |
+| JSONL locking on concurrent writes | If two agents `message send` simultaneously to the same workspace file, is there a race condition on append? Bun's file append behavior needs verification. | LOW — likely safe; verify in implementation |
+| Commander option metadata for choices | Whether Commander.js stores `choices()` metadata on the `Option` object in a way the completion generator can read; or whether a manual map is required | LOW — read Commander source; fast to verify |
 
 ---
 
 ## Sources
 
-- **tmuxinator**: https://github.com/tmuxinator/tmuxinator — README (HIGH confidence)
-- **workmux**: https://github.com/raine/workmux — README (HIGH confidence, verified March 2026)
-- **mise**: https://mise.jdx.dev — official docs, configuration.md, tasks/index.md (HIGH confidence)
-- **direnv**: https://github.com/direnv/direnv — README (HIGH confidence)
-- **moonrepo/moon**: https://github.com/moonrepo/moon — README + docs (MEDIUM confidence)
-- **devenv**: https://github.com/cachix/devenv — README (HIGH confidence)
-- **cargo-make**: https://github.com/sagiegurari/cargo-make — README (MEDIUM confidence)
-- **just**: https://github.com/casey/just — README (HIGH confidence)
-- **nx/turborepo**: Training knowledge + partial doc access (MEDIUM confidence, WebFetch blocked for official sites)
-- **git-stacks codebase**: Direct code analysis of `src/commands/`, `src/lib/`, `src/lib/config.ts` (HIGH confidence)
-- **PROJECT.md + ARCHITECTURE.md**: First-party project documentation (HIGH confidence)
+- **Existing dashboard codebase** — `src/tui/dashboard/` (HIGH confidence, direct code analysis)
+- **Existing completion generator** — `src/lib/completion-generator.ts` (HIGH confidence, direct code analysis)
+- **Existing command surface** — `src/commands/workspace.ts`, `src/commands/repo.ts`, `src/commands/template.ts` (HIGH confidence)
+- **PROJECT.md** — first-party milestone description (HIGH confidence)
+- **lazygit UX patterns** — https://github.com/jesseduffield/lazygit, https://www.bwplotka.dev/2025/lazygit/ (MEDIUM confidence)
+- **k9s TUI patterns** — https://k9scli.io/, https://ahmedjama.com/blog/2025/09/the-complete-k9s-cheatsheet/ (MEDIUM confidence)
+- **TUI keyboard navigation patterns** — https://notes.suhaib.in/docs/tech/utilities/making-dev-tools-feel-native-with-tui-interfaces/ (MEDIUM confidence)
+- **File-based IPC / JSONL pattern** — https://dev.to/uenyioha/porting-claude-codes-agent-teams-to-opencode-4hol (MEDIUM confidence — single source for JSONL inbox pattern, but independently sensible)
+- **Shell completion quality** — https://click.palletsprojects.com/en/stable/shell-completion/ (MEDIUM confidence, Python CLI reference but principles apply universally)
 
 ---
-*Feature research for: multi-repo workspace manager CLI (git-stacks)*
-*Researched: 2026-03-17*
+*Feature research for: v0.3.0 — dashboard overhaul, messaging system, shell completions*
+*Researched: 2026-03-19*

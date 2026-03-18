@@ -1,261 +1,236 @@
 # Project Research Summary
 
-**Project:** git-stacks
-**Domain:** Multi-repo workspace manager CLI (git worktrees + IDE/terminal orchestration)
-**Researched:** 2026-03-17
+**Project:** git-stacks v0.3.0
+**Domain:** Multi-repo workspace manager CLI — terminal dashboard overhaul, IPC messaging, shell completion improvements
+**Researched:** 2026-03-19
 **Confidence:** HIGH
 
 ## Executive Summary
 
-git-stacks is a developer environment orchestration tool: it manages git worktrees across multiple repos, snapshots workspace definitions into YAML, and coordinates IDE/terminal launch via an integration plugin system. The tool already has a working PoC covering the full workspace lifecycle, hooks, IDE/terminal integrations, shell completions, a TUI dashboard, and a `doctor` health-check command. Research confirms the current Bun + TypeScript + Commander.js + Zod + YAML stack is well-chosen and should not be replaced — the work ahead is hardening, not rebuilding.
+git-stacks v0.3.0 extends an already-solid Bun/TypeScript/SolidJS/OpenTUI codebase with three distinct features: a multi-tab dashboard overhaul (Workspaces, Templates, Repos tabs), a file-backed workspace messaging system with optional live IPC push notification, and a shell completion overhaul. All three are achievable with the existing dependency set — no new npm packages are needed. The recommended approach follows the codebase's own patterns closely: new data modules in `src/lib/`, new commands in `src/commands/`, new TUI components in `src/tui/dashboard/`. The build order recommended by architecture research (messages store first, completions second, tab layout third, IPC push last) keeps each phase independently shippable and testable.
 
-The recommended approach is a phased stabilization: first fix the critical safety gaps (partial-failure corruption, silent config errors, destructive-op UX) and add the table-stakes features that distinguish a trustworthy tool from a PoC (dry-run, confirmation prompts, actionable errors, `--json` output). Second, extend the power-user surface (PR checkout, parallel `run`, richer status, additional terminal integrations, programmatic API). Third, pursue the differentiation layer (agent-aware dashboard, batch workspace generation) once the core is proven stable.
+The highest-impact risk is in the dashboard overhaul: OpenTUI's `useKeyboard` is a global broadcast, not a focused event system. Every mounted component that calls it receives every keypress. Adding three tab panels that each manage cursor state will cause double-dispatch unless all keyboard routing is centralized in `App.tsx` and every panel guards its handler body on an `active` prop. This must be the first design decision settled before any tab panel code is written. A closely related risk is the existing `UIView` union referencing list entries by numeric index — this breaks silently when tab switching changes which list is active. Both issues are low-effort to fix upfront and difficult to retrofit after tab panels are built.
 
-The three highest-risk areas the roadmap must address explicitly are: (1) git worktree operations that corrupt or leave state inconsistent on partial failure — specifically `mergeWorkspace`, `removeWorkspace`, and `renameWorkspace`; (2) the total absence of git-operation tests, which means regressions in the most critical code paths are caught only in production; and (3) Zod schema evolution, where adding any required field without a `.default()` breaks all existing user config files silently. These are not hypothetical risks — the codebase analysis identified concrete code paths for each.
-
----
+The IPC transport decision has a cross-platform implication that requirements must resolve explicitly: `Bun.serve({ unix })` and `fetch({ unix })` are confirmed for macOS and Linux. On Windows, Bun supports AF_UNIX via Windows 10 1803+ but Named Pipe fallback may be needed for broader coverage. The recommended decision for v0.3.0 is to accept Unix-socket-only (macOS + Linux) and document Windows as future work. If Windows support is a hard requirement, an abstraction layer (a `getIpcAddress()` helper returning a unix path on unix and a TCP loopback address on Windows) should be designed before any IPC code is written.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The current stack is correct. No major substitutions are needed. The only prioritized change is upgrading `@clack/prompts` from `0.9.1` to `1.1.0` (ESM-only since v1.0; Bun handles this natively), which adds autocomplete prompts, a `p.tasks()` progress API, and removes the picocolors dependency. OpenTUI + SolidJS for the `manage` dashboard is pre-1.0 with low adoption and should be monitored — Ink (React for CLIs, used by Claude Code, Gemini CLI, Wrangler) is the documented migration target if OpenTUI creates blockers.
+The existing stack is kept as-is. No new dependencies are needed for any v0.3.0 feature. All three features use APIs already provided by Bun's runtime and components already present in the installed `@opentui/solid@0.1.87`. For full detail see `.planning/research/STACK.md`.
 
 **Core technologies:**
-- **Bun 1.3.10:** Runtime, test runner, `$` shell API — decisive for CLI startup speed and native TypeScript execution; keep
-- **TypeScript 5.9.3:** Strict mode required for config-heavy tool where incorrect schema inference causes silent data loss; keep
-- **Commander.js 14.x:** CLI command tree; deeply coupled to shell completion generator — do not upgrade to v15; keep
-- **Zod 3.25.76:** Config schema validation; do NOT migrate to v4 until schema compatibility tests exist — migration risk to existing user configs is real; keep on v3
-- **yaml 2.8.2:** Full YAML 1.2 spec implementation; v3.0 prerelease drops default export and goes ESM-only — stay on 2.x; keep
-- **@clack/prompts:** Upgrade to 1.1.0 for new prompt types and `p.tasks()` progress API
-- **OpenTUI + SolidJS (dashboard):** Monitor; Ink is migration target if pre-1.0 stability becomes an issue
+- **Bun 1.3.10+**: Runtime, IPC server via `Bun.serve({ unix })` and `fetch({ unix })` — confirmed in official Bun HTTP docs; HIGH confidence
+- **@opentui/solid 0.1.87** (installed): `<tab_select>` and `<scrollbox>` confirmed present in installed type definitions; no upgrade required for v0.3.0
+- **TypeScript strict / Commander.js 14.0.3 / Zod / yaml**: All unchanged from v0.2.0; message store uses YAML with a 50-message cap per workspace
+- **solid-js 1.9.11**: Reactive state; `batch()` discipline is critical when updating multiple signals from async socket or status-fetch callbacks
 
-**What not to use:** blessed/neo-blessed (unmaintained), shelljs (deprecated), execa (redundant with Bun `$`), ts-node (redundant), jest (use bun:test), Commander.js v15 (Node 22+ requirement, no Bun benefit).
+IPC transport is `Bun.serve({ unix: "/tmp/git-stacks.sock" })` for the TUI listener and `fetch("http://localhost/path", { unix: sockPath })` for the CLI sender. A single global socket (not per-workspace) handles all workspace messages, each carrying a `workspace` field. The sender always writes to the durable YAML store first; IPC is a best-effort live push that drops silently when the socket is absent or the TUI is not running.
+
+A possible OpenTUI upgrade to 0.1.88 (current latest) adds `scrollChildIntoView` on `<scrollbox>`, useful for the detail pane — not required but worth considering during Phase 3.
 
 ### Expected Features
 
-The tool already has a complete MVP. Research identifies what is needed to graduate from PoC to polished stable tool.
+For the full feature table with complexity ratings and dependency graph, see `.planning/research/FEATURES.md`.
 
-**Must have for v1.0 (table stakes — absence causes churn):**
-- Dry-run mode for `merge`, `remove`, `clean` — every serious CLI exposes `--dry-run`; absence means users fear destructive operations
-- Confirmation prompts on `remove` and `clean` without `--force` — absence feels broken to power users
-- Actionable error messages throughout — currently raw git stderr leaks; users need guided recovery ("repo X has uncommitted changes — stash or use --force")
-- Config validation errors as human-readable field messages — Zod stack traces are not acceptable UX
-- `--json` output on `status`, `doctor`, `sync` — required for scripting and agent automation; `list` already has it
-- `doctor --fix` auto-repair mode — doctor already lists fix commands; execute them with `--fix`
+**Must have (v0.3.0 table stakes):**
+- Tab row in dashboard — Workspaces, Templates, Repos with `1`/`2`/`3` or `[`/`]` navigation; any serious multi-entity TUI requires this
+- Master-detail split layout — list at ~60% width, reactive detail pane at ~40%; current full-screen detail navigation loses list context
+- All entity CRUD accessible in-TUI — template edit/clone/remove via existing suspend/resume editor pattern; repos tab is read-only
+- Persistent context-aware help bar — one-line footer showing current-tab bindings; `?` key for full reference overlay
+- Messaging system CLI — `message send|list|clear` with per-workspace YAML storage; primary use case is AI agents posting status updates
+- Message display in dashboard — latest message preview in workspace list row; full message history in detail pane with sender grouping and timestamps
+- Enum value completions — `--sort`, `--strategy`, `--output` and other fixed-choice flags currently produce no completions
+- `message` command completions — workspace name completion for send/list/clear
 
-**Should have for v1.x (competitive differentiators):**
-- PR checkout (`clone --pr <number>` via `gh` CLI) — removes 4-5 manual steps for PR review workflows
-- Parallel `run --parallel` — users with 5+ repos hit sequential execution pain; Bun's `spawn` supports this
-- Per-repo ahead/behind counts in `status` — "how stale is my workspace?" is a frequent ask
-- WezTerm and Zellij integration plugins — the plugin pattern already supports this cleanly
-- Programmatic API surface — `workspace-ops.ts` is already API-shaped; export it as a package entry point
+**Should have (differentiators):**
+- Per-sender message scoping — `--from <agent-name>` on send; `clear --from <sender>`; group by sender in detail pane
+- Repos tab as registry health browser — flags repos where path no longer exists on disk
+- Template tab with inline YAML edit via `$EDITOR` (suspend/resume)
 
-**Defer to v2+ (high complexity, not yet validated):**
-- Agent-aware dashboard with status indicators — requires agent status protocol definition before implementation
-- Multi-worktree batch generation (`new --count N`) — primarily useful for agent-parallel workflows; complex template variable system needed
-- Secret injection at open time via secrets manager — hooks provide a sufficient escape hatch for now
-- Container/sandbox isolation — out of scope per PROJECT.md; revisit when agent-safety requirements clarify
-- Watch mode for `run` — composable with `mise watch` via hooks; defer
+**Defer to v0.3.x or v0.4.0:**
+- Branch completions for `--from` and `clone` — HIGH complexity; repo context at completion time is ambiguous; needs dedicated research spike
+- In-TUI template creation wizard — suspend/resume for editing is sufficient; creation wizard bridges two rendering contexts
+- Mouse support — OpenTUI library gap; keyboard-first is the correct default
+- Auto-clear messages on workspace open
 
-**Anti-features (do not build):** remote/cloud workspace sharing, built-in package/tool version management (use mise), GUI application, Nix as a first-class dependency, AI-triggered conflict resolution, monorepo build caching (Nx/Turborepo's domain).
+**Explicit anti-features (do not add in v0.3.0):**
+- Real-time polling auto-refresh (use manual `R` refresh instead — avoids filesystem churn and TUI flicker)
+- WebSocket or complex IPC (file-based YAML + optional unix socket push is sufficient)
+- In-TUI wizard rendering (always use suspend/resume to hand off terminal to `@clack/prompts`)
+- `git branch` calls in shell completion functions (blocks Tab for seconds with many workspaces)
 
 ### Architecture Approach
 
-The existing architecture is sound and correctly layered: `commands/` are thin dispatchers, `lib/` is UI-agnostic domain and infrastructure, `tui/` depends on `lib/` but never vice versa, and `lib/integrations/` is the sole extensibility boundary. The "config as snapshot" pattern (workspace YAML snapshots repo metadata at creation time rather than re-reading the stack) is the right call — workspaces survive stack edits. The `{ ok: boolean; error?: string }` return type from all workspace-ops functions makes a future programmatic API straightforward. Three architectural clean-ups are identified but not urgent: consolidating duplicate artifact generators (`src/lib/vscode.ts` alongside `src/lib/integrations/vscode.ts`), extracting a shared `Result<T>` type alias, and replacing `process.env.HOME` mutation in tests with dependency injection in `paths.ts`.
+The architecture adds new files cleanly alongside existing ones. The existing `WorkspaceList`, `ActionMenu`, `ConfirmDialog`, `ProgressView`, `BatchBar`, `DetailStatus`, `useWorkspaces`, and all of `workspace-ops.ts`, `git.ts`, `lifecycle.ts`, and `integrations/` are untouched. New features attach via additive exports, a new command registered in `index.ts`, and new JSX branches in `App.tsx` guarded by `<Show when={tab() === "...">`. For full component map, data flow diagrams, and anti-patterns to avoid, see `.planning/research/ARCHITECTURE.md`.
 
-**Major components:**
-1. `lib/config.ts` — Zod schemas + YAML I/O; foundation that everything else depends on; any changes have wide blast radius
-2. `lib/workspace-ops.ts` — all core domain operations (open/clean/merge/sync/rename); the programmatic API surface in waiting
-3. `lib/git.ts` + `lib/lifecycle.ts` — infrastructure layer; zero test coverage today; highest regression risk
-4. `lib/integrations/` — plugin registry; adding a new integration requires one new file + one registry line; no other files change
-5. `tui/dashboard/` — SolidJS TUI for `manage`; pre-1.0 library risk; Ink is migration target
+**New files (zero risk to existing behaviour):**
+1. `src/commands/message.ts` — Commander subcommand family: `message send|list|clear`
+2. `src/lib/messages.ts` — Message store: `appendMessage`, `listMessages`, `clearMessages`; per-workspace YAML at `~/.config/git-stacks/messages/{name}.yml`
+3. `src/lib/ipc.ts` — `startIpcServer()` / `stopIpcServer()` using `Bun.serve({ unix })`; notifies subscribers via callback
+4. `src/tui/dashboard/TabBar.tsx` — Tab header component with `1`/`2`/`3` keyboard switching
+5. `src/tui/dashboard/TemplatesTab.tsx` — Template list + detail pane with edit/clone/remove actions
+6. `src/tui/dashboard/ReposTab.tsx` — Registry list + detail pane with health indicators
+7. `src/tui/dashboard/hooks/useMessages.ts` — IPC push subscription + file read on reload
+8. `src/tui/dashboard/hooks/useTemplates.ts` — Reactive `listTemplates()` signal
+9. `src/tui/dashboard/hooks/useRepos.ts` — Reactive `readRegistry()` signal
+
+**Modified files (additive, low risk):**
+- `src/lib/paths.ts` — add `MESSAGES_DIR`, `messagePath(wsName)`, `SOCKET_PATH`
+- `src/lib/workspace-ops.ts` — add `editTemplateYaml()` mirroring existing `editWorkspaceYaml()`
+- `src/lib/completion-generator.ts` — add `OPTION_ENUMS` table, extend bash/zsh/fish emitters, register `message.*` in `DYNAMIC_COMPLETIONS`
+- `src/index.ts` — one `program.addCommand(messageCommand)` line
+- `src/tui/dashboard/App.tsx` — add `tab` signal, `TabBar` render, tab-gated `<Show>` blocks (workspaces path unchanged, alongside not inside)
+- `src/tui/dashboard/types.ts` — add `Tab` type and `Message` type
+- `src/tui/dashboard/WorkspaceRow.tsx` — add message badge column
+- `src/tui/dashboard/DetailStatus.tsx` — add Messages section below repos section
+
+**Key design decisions codified by research:**
+- `tab` signal is independent of `UIView` — tab switches reset view to `{ view: "list" }`, leaving all existing view-state components (`ActionMenu`, `ConfirmDialog`, `ProgressView`, `DetailStatus`) completely unchanged
+- Messages stored in separate per-workspace YAML files, not as a field on `WorkspaceSchema` — avoids concurrent write corruption from multiple agents, prevents message data from polluting `ws status --json` output, and makes `clearMessages` a simple file delete
+- Single global socket at `/tmp/git-stacks.sock` (not per workspace) — one server, one path, one cleanup; all messages carry a `workspace` field for routing
+- OPTION_ENUMS static table in `completion-generator.ts` (not Commander `.choices()`) — avoids unintended runtime validation behavior change; completions are advisory, not enforced
 
 ### Critical Pitfalls
 
-1. **Partial failure leaves repos in inconsistent state** — `mergeWorkspace` deletes the workspace YAML before all repos are processed; a failure mid-way leaves some repos merged and the workspace record gone with no recovery path. Fix: stage all operations, validate first, commit side effects only after all succeed; never delete YAML until done.
+For full pitfall detail including warning signs, recovery strategies, and a "looks done but isn't" checklist, see `.planning/research/PITFALLS.md`.
 
-2. **`renameWorkspace` breaks git worktree registration** — it calls `renameSync` on the filesystem but does not re-register worktrees with git; after rename, `git status` inside the worktree fails. Fix: use `git worktree remove` + `git worktree add` on the new path instead of a filesystem rename.
+1. **`useKeyboard` global broadcast causes double-dispatch across tab panels** — Use `<Show>` (not CSS hide) so inactive panels unmount and their handlers deregister. Alternatively, centralize all keyboard routing in `App.tsx` and gate each panel's handler on `if (props.active)`. Must be resolved before any tab panel code is written.
 
-3. **`mergeNoFF` switches HEAD of the main clone** — running `git checkout <baseBranch>` in the main clone can break dependent worktrees and leaves the clone stranded on the wrong branch if merge fails. Fix: use a temporary worktree for the merge target, or `git merge-tree` to avoid switching HEAD.
+2. **`UIView` numeric index becomes stale on tab switch** — Change `UIView` action states to store entity name (string) not list index (number). Replace single `cursor` signal with `Record<TabId, number>` initialized to `{ workspaces: 0, templates: 0, repos: 0 }`. Required prerequisite refactor before implementing tabs.
 
-4. **Any new Zod schema field without `.default()` breaks all existing user configs** — no versioning or migration mechanism exists; all `readWorkspace`/`readStack` calls throw for all users on upgrade. Fix: all new schema fields must be `.optional()` or have `.default()`; treat schemas as a public API contract; add `schema_version` field.
+3. **Stale Unix socket file causes silent message delivery failures and TUI launch failures** — On TUI startup: probe-connect before binding; remove stale file if ECONNREFUSED. On CLI send: catch ECONNREFUSED/ENOENT and exit 0 silently (never use `fs.existsSync` alone as a liveness check). On TUI exit: `unlinkSync(SOCKET_PATH)` in SIGTERM, SIGINT, and OpenTUI `onDestroy`.
 
-5. **Zero test coverage for git operations** — `src/lib/git.ts` and `src/lib/workspace-ops.ts` have no tests; regressions are caught in production only. Fix: `makeGitRepo(tmpDir)` test helper (5 lines, runs in milliseconds), then integration tests for all critical git paths.
+4. **OpenTUI issue #564 — `renderer.suspend()` + editor spawn drops keystrokes** — Verify suspend/resume works correctly with the installed OpenTUI version before building Template/Repo tab editor actions. If broken, fall back to `renderer.destroy()` + re-`render()`. Pin OpenTUI version; do not accept minor bumps without verifying suspend/resume behavior.
 
----
+5. **OpenTUI issue #789 — render loop stalls under rapid signal updates** — Wrap all multi-signal updates from async callbacks in SolidJS `batch()`. Buffer incoming socket messages; flush to the signal at most once per render frame rather than calling `setMessages()` directly inside the socket data handler.
+
+6. **Shell completion subprocess performance** — Never add `git branch` or per-repo subprocess calls to completion functions. Keep dynamic lookups to the existing `ls`/`grep` patterns. Benchmark Tab completion at 20 workspaces; must be under 200ms on a local SSD.
 
 ## Implications for Roadmap
 
-Based on combined research, a four-phase structure is recommended. The ordering is driven by: (a) architectural dependency order (`config.ts` foundations must be stable before safe feature additions), (b) safety-before-features principle (critical pitfalls are currently live bugs, not future risks), and (c) feature value/cost ratio (P1 items are high value at low cost).
+The four-phase build order from architecture research is the recommended roadmap structure. Each phase is independently shippable and testable. Phases 2 and 3 can be developed in parallel by different contributors.
 
-### Phase 1: Foundation Safety and Config Robustness
+### Phase 1: Message Store and CLI Commands
 
-**Rationale:** Three of the six critical pitfalls are live bugs affecting existing users today: silent YAML parse failures that make all commands unusable on one corrupt file, schema additions that break existing configs, and the absence of any git operation test coverage. These must be addressed before adding any features — otherwise new features will be built on an unstable base that randomly breaks user environments.
+**Rationale:** Zero dependencies on TUI or IPC. Immediately testable with unit tests using the existing `process.env.HOME` redirect pattern in `tests/lib/`. Agents and hooks can start using `git-stacks message send` before the dashboard is updated. The durable YAML store is the ground truth; IPC is a notification layer on top. Getting the data contract right before the server prevents the server from being built on an unstable schema.
 
-**Delivers:** A tool that does not break mysteriously and has a safety net for future changes.
+**Delivers:** `git-stacks message send|list|clear` CLI commands with per-workspace YAML storage at `~/.config/git-stacks/messages/{workspace}.yml`. Message schema with `id`, `workspace`, `sender`, `text`, `created_at`. `appendMessage` trims to MAX_MESSAGES=50 to bound disk growth.
 
-**Addresses from FEATURES.md:**
-- Config validation errors as human-readable field messages (P1)
-- Test infrastructure (`makeGitRepo` helper, git.ts and workspace-ops.ts coverage)
+**Addresses:** Messaging system CLI (must-have), per-sender message scoping (differentiator), silent-drop behavior when TUI not running
 
-**Avoids from PITFALLS.md:**
-- Pitfall 2: Silent YAML parse failures (wrap file reads in try/catch, warn to stderr, continue)
-- Pitfall 5: Schema field addition breaking existing configs (`.default()` rule, `schema_version` field, CI fixture test)
-- Pitfall 6: No git operation test coverage (`makeGitRepo` helper + integration tests for critical paths)
+**Avoids:** Concurrent write corruption from multiple agents (by keeping messages in a separate file, not on WorkspaceSchema)
 
-**Research flag:** Standard patterns — no research-phase needed; solutions are well-defined.
+### Phase 2: Shell Completion Overhaul
 
----
+**Rationale:** Pure logic change in one file with no TUI risk. Independently verifiable by diffing `git-stacks completion bash` output before and after. Can be developed in parallel with Phase 3.
 
-### Phase 2: Destructive Operation Hardening
+**Delivers:** Enum value completions for `--sort`, `--strategy`, `--output` and other fixed-choice flags. `message send|list|clear` workspace name completions. Extended fish flag completions for nested subcommand families (`repo.add`, `template.new`, etc.).
 
-**Rationale:** `mergeWorkspace`, `removeWorkspace`, `cleanWorkspace`, and `renameWorkspace` all have live bugs where failure leaves repos and config in an unrecoverable state. These are the operations users rely on most and fear most. The architectural fix (stage-then-commit, never delete YAML until operations complete) is clear but requires careful implementation with integration tests to verify.
+**Addresses:** Enum value completions (must-have), `message` command completions (must-have)
 
-**Delivers:** Destructive operations that are safe, reversible where possible, and recoverable when not.
+**Avoids:** DYNAMIC_COMPLETIONS gap for the new `message.*` command family, subprocess performance pitfall in completion functions
 
-**Addresses from FEATURES.md:**
-- Dry-run mode for `merge`, `remove`, `clean` (P1)
-- Confirmation prompts on `remove` and `clean` (P1)
-- `--force` flag consistency audit across all destructive commands
+**Verification:** Run `git-stacks completion bash` before and after; diff output; confirm `sync --strategy <TAB>` yields `rebase merge` and `message send <TAB>` yields workspace names; time completion at 20 workspaces (must be under 200ms)
 
-**Avoids from PITFALLS.md:**
-- Pitfall 1: Partial failure corrupt state (two-stage verify-then-commit; never delete YAML early)
-- Pitfall 3: `renameWorkspace` git worktree breakage (`git worktree remove` + `git worktree add` pattern)
-- Pitfall 4: `mergeNoFF` HEAD mutation (temporary worktree or `git merge-tree` approach)
+### Phase 3: Dashboard Tab Layout
 
-**Research flag:** `mergeNoFF` safe merge approach (git 2.38+ `--into-name` flag vs. temporary worktree fallback) — brief research-phase recommended to verify git version compatibility on target platforms.
+**Rationale:** Depends only on existing stable APIs (`listTemplates`, `readRegistry`). No dependency on Phase 1 messages or IPC. The Workspaces tab continues to work identically — all new code is alongside, not inside, existing components.
 
----
+**Prerequisite refactors (must complete before any tab panel code):**
+- Change `UIView` action states from numeric index to entity name
+- Replace single `cursor` signal with `Record<TabId, number>`
+- Verify `renderer.suspend()` + editor launch works correctly with installed OpenTUI version (issue #564)
+- Establish keyboard routing discipline (single `useKeyboard` in App.tsx or `active` prop gating on every panel)
 
-### Phase 3: UX Polish and Observability
+**Delivers:** `<TabBar>` component with 1/2/3 keyboard switching. `<TemplatesTab>` with list + detail pane and edit/clone/remove actions. `<ReposTab>` with registry browser and disk-health indicators. Context-aware help bar. `?` key reference overlay.
 
-**Rationale:** With the safety foundation in place, this phase addresses the features that make the tool feel complete and professional to users. These are all P1 items from FEATURES.md with low-to-medium implementation cost. They are grouped together because they share a common pattern: standardizing error/output types across the codebase.
+**Addresses:** Tab navigation (must-have), master-detail split layout (must-have), all entity CRUD in-TUI (must-have), repos tab health browser (differentiator), template YAML edit (differentiator)
 
-**Delivers:** A tool that communicates clearly, works with scripts and agents, and surfaces workspace health at a glance.
+**Avoids:** Double-dispatch keyboard pitfall, UIView index coupling pitfall, render loop stall (via `batch()` discipline in new hooks)
 
-**Addresses from FEATURES.md:**
-- Actionable error messages throughout (P1) — requires standardized `Result<T>` type and `suggestion` field
-- `--json` output on `status`, `doctor`, `sync` (P1)
-- `doctor --fix` auto-repair mode (P1)
-- Richer `list` columns (branch, age, repo count, dirty indicators)
-- Per-repo ahead/behind counts in `status` (P2)
+### Phase 4: IPC Push and Message Display in Dashboard
 
-**Uses from STACK.md:**
-- `@clack/prompts` 1.1.0 `p.tasks()` API for multi-step operation progress display
-- Result type extraction (`type Result<T>`) as a shared type in `lib/`
+**Rationale:** Depends on Phase 1 (YAML store + message types) and Phase 3 (dashboard structure stable). IPC startup and cleanup lifecycle must be thoroughly verified before merging.
 
-**Architecture component:** Formalize `Result<T>` type alias; doctor `Issue` type gets structured `action` field (not display string) enabling `--fix` auto-execution.
+**Cross-platform decision required before this phase begins:** `Bun.serve({ unix })` works on macOS and Linux. Windows requires AF_UNIX (Windows 10 1803+) or a Named Pipe fallback. Recommended decision: accept Unix-socket-only for v0.3.0, document Windows as future work. If Windows is required, implement `getIpcAddress()` returning unix path on unix and TCP localhost on Windows before writing any IPC code.
 
-**Research flag:** Standard patterns — no research-phase needed.
+**Delivers:** `src/lib/ipc.ts` with `startIpcServer()` / `stopIpcServer()`. `useMessages` hook with IPC push subscription and file-read fallback on `R` reload. Message badge (latest message + age + sender) in `WorkspaceRow`. Full message list with sender grouping in `DetailStatus`. `message clear` triggers workspace-specific reactive reload in TUI.
 
----
+**Critical contract:** `stopIpcServer()` must be called when the TUI exits — in `onCleanup`, SIGTERM handler, and immediately before `renderer.destroy()`. `startIpcServer()` must probe-connect before binding to handle stale socket files from crashes.
 
-### Phase 4: Power User Features
+**Addresses:** Message display in dashboard (must-have — list row preview and detail pane)
 
-**Rationale:** With a stable, safe, well-communicating core, add the differentiating features that pull git-stacks ahead of comparable tools. These are all P2 items — high user value, medium implementation cost — and have now been de-risked by the foundation work in phases 1-3.
-
-**Delivers:** Features that serve power users and position git-stacks as the best-in-class tool for multi-repo dev workflows.
-
-**Addresses from FEATURES.md:**
-- PR checkout: `clone --pr <number>` via `gh` CLI (P2)
-- Parallel `run --parallel` with per-repo spinner and aggregated results (P2)
-- WezTerm and Zellij integration plugins (P2) — integration plugin pattern already supports this cleanly
-- Programmatic API surface: export `workspace-ops.ts` as a typed package entry point (P2)
-- Stack composition polish: inter-stack dependency ordering, conflict detection
-
-**Uses from STACK.md:**
-- Integration plugin pattern (`src/lib/integrations/`) — add `wezterm.ts` and `zellij.ts` following existing pattern
-- Bun `spawn` for parallel subprocess management
-- `gh` CLI external dependency for PR checkout (gate behind availability check)
-
-**Research flag:** Programmatic API surface — brief research-phase recommended to understand what API surface shape agent framework integrations (LangChain, Claude Code SDK) expect.
-
----
-
-### Phase 5: Agent-Aware Features (v2+)
-
-**Rationale:** The agent-parallel workflow use case (multiple AI agents working in separate worktrees simultaneously) is the long-term differentiator. But it requires: (a) a defined agent status file protocol, (b) stable programmatic API from Phase 4, (c) validated product-market fit from v1.x. Do not start this until Phase 4 ships and gathers feedback.
-
-**Delivers:** The features that make git-stacks uniquely suited to AI-agent-parallel development workflows.
-
-**Addresses from FEATURES.md:**
-- Agent-aware dashboard with status indicators (P3)
-- Multi-worktree batch generation (`new --count N --template`) (P3)
-- Agent status protocol definition (prerequisite for everything else in this phase)
-
-**Avoids:** Building to an undefined contract — agent dashboard and batch generation must share the same status file protocol; define the protocol before implementing either.
-
-**Research flag:** Research-phase strongly recommended — agent status file conventions are not yet standardized across tools; workmux's approach is a starting point but not a universal standard.
-
----
+**Avoids:** Stale socket file pitfall, render loop stall from rapid socket messages (buffer + batch flush)
 
 ### Phase Ordering Rationale
 
-- Phases 1-2 address live bugs before adding features — this is non-negotiable; adding features to a broken base makes the bugs harder to fix later
-- Phase 3 before Phase 4 because `Result<T>` standardization and structured error types are prerequisites for a clean programmatic API
-- Phase 5 last because it requires the programmatic API (Phase 4) and a protocol definition that should be informed by real v1.x user feedback
-- Architecture dependency order from ARCHITECTURE.md confirms: `config.ts` schemas must be stable (Phase 1) before `workspace-ops.ts` changes (Phase 2) before CLI/TUI changes (Phases 3-4)
+- Phase 1 first because its data contract (message schema, file layout) anchors all subsequent messaging work with zero TUI risk
+- Phase 2 can run in parallel with Phase 3 — the only shared file is `index.ts` for command registration
+- Phase 3 third because the prerequisite UIView and keyboard refactors are non-trivial and must be done before any tab code; doing them first keeps each PR reviewable and isolated
+- Phase 4 last because it depends on both the data model (Phase 1) and a stable dashboard structure (Phase 3), and its lifecycle requirements (socket cleanup on exit) must be verified against an already-working TUI
 
 ### Research Flags
 
 Phases needing deeper research during planning:
-- **Phase 2:** `mergeNoFF` safe approach — verify git 2.38+ `--into-name` availability on macOS/Linux target platforms; if unavailable, document the temporary-worktree fallback pattern
-- **Phase 5:** Agent status file protocol — research workmux's status file format, Claude Code's workspace conventions, and any emerging standards before committing to an implementation
+
+- **Phase 3 (prerequisite verification):** OpenTUI issue #564 — verify `renderer.suspend()` + `Bun.spawn()` for editor launch works cleanly with the installed version. If not, the destroy/re-render workaround must be designed and tested before Templates/Repos tab editor actions are built.
+- **Phase 3:** OpenTUI flexbox side-by-side pane stability at narrow terminal widths — verify minimum terminal width assumption (likely 100 columns) before committing to a 60/40 split layout.
+- **Phase 4:** IPC transport platform scope — Windows support must be explicitly decided in requirements before Phase 4 design begins (see cross-platform decision above).
+- **Deferred (v0.3.x):** Branch completions for `--from` and `clone` — HIGH complexity; how to resolve repo context at completion time needs a dedicated research spike before scheduling.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** Config robustness patterns (try/catch file iteration, Zod `.default()`, schema versioning) are well-established
-- **Phase 3:** UX patterns (actionable errors, `--json` output, auto-repair modes) are standard CLI best practices
-- **Phase 4 (WezTerm/Zellij):** Integration plugin pattern already proven; adding a new integration is mechanical
 
----
+- **Phase 1:** Pure file I/O with Zod validation — follows identical patterns to existing `config.ts` read/write; no new patterns to discover.
+- **Phase 2:** Completion generator extension — all mechanics already exist; adding OPTION_ENUMS and new DYNAMIC_COMPLETIONS entries is mechanical work with clear precedent in the existing generator.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Core stack verified against official releases (Bun 1.3.10, Commander.js 14.0.3, yaml 2.8.2, Zod 3.25.76, @clack/prompts 1.1.0). OpenTUI section MEDIUM due to pre-1.0 status and limited public documentation. |
-| Features | MEDIUM | Table-stakes features verified against tmuxinator, workmux, mise, moonrepo READMEs (HIGH for those tools). nx/turborepo features MEDIUM (WebFetch blocked for official sites; training knowledge used). |
-| Architecture | HIGH | Primary source is direct codebase analysis of `src/`. Comparative tool patterns (mise, tmuxinator, devenv) MEDIUM (training knowledge, not live docs). All architectural conclusions are grounded in actual code. |
-| Pitfalls | HIGH | All six critical pitfalls sourced from direct code reading with specific line-level evidence. Git worktree internal behavior MEDIUM (training data, well-established since Git 2.5, no live docs verified). |
+| Stack | HIGH | All APIs verified against official Bun docs and installed type definitions; no new dependencies; IPC transport confirmed in official Bun HTTP docs |
+| Features | HIGH | Based on direct codebase analysis + well-documented TUI patterns from lazygit/k9s; feature scope is tightly bounded to the milestone |
+| Architecture | HIGH | Based on reading live source files (2026-03-19); integration points are additive; pattern reuse is explicit throughout |
+| Pitfalls | HIGH | Critical pitfalls have direct codebase evidence (global useKeyboard, numeric UIView index); OpenTUI issues #564 and #789 are open and confirmed in the issue tracker |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **OpenTUI stability timeline:** No public roadmap or 1.0 commitment documented. During Phase 3/4, evaluate whether the dashboard needs an Ink migration. Decision criterion: any breaking change in OpenTUI that requires significant rework should trigger migration.
+- **IPC Windows compatibility:** Must be resolved as a requirements decision before Phase 4. The technical options are fully understood (unix-only vs. `getIpcAddress()` abstraction); the business/scope decision is not. Either accept macOS/Linux-only for v0.3.0 or design the abstraction layer before IPC code begins.
 
-- **git `--into-name` flag availability:** PITFALLS.md cites Git 2.38+ for the safe merge approach. The minimum Git version requirement for git-stacks users is not documented. Address in Phase 2 planning: check git version and provide fallback, or document a minimum requirement.
+- **JSONL vs YAML for message store:** Architecture research recommends YAML (consistent with rest of config); feature research notes JSONL (append-only, lighter for frequent writes). Both work. Recommend YAML for consistency with existing code patterns given the 50-message cap. Decide in Phase 1 requirements; if concurrent-write testing reveals issues, switching to JSONL is a localized change within `src/lib/messages.ts`.
 
-- **Programmatic API shape:** `workspace-ops.ts` is API-ready but what external consumers (agent frameworks, CI tools) actually need has not been researched. Address in Phase 4 planning with a brief research spike before committing to an API surface.
+- **OpenTUI issue #564 status:** Whether `renderer.suspend()` reliably hands off the terminal to an editor process depends on the installed version. Verify with a manual test before Phase 3 editor-launch work begins. If broken, `renderer.destroy()` + re-`render()` must replace `suspend()`/`resume()` in all editor invocation paths.
 
-- **`process.env.HOME` test fragility:** Identified in PITFALLS.md as a race condition risk under parallel `bun test`. Acceptable for Phase 1 (note it, don't fix it yet); must be replaced with `configDir` dependency injection before Phase 2 integration tests are added.
+- **OpenTUI issue #789 (render loop stall) status:** The pitfall is real and documented; whether the current installed version has a fix is unknown. The `batch()` discipline mitigates but may not fully prevent stalls. Monitor OpenTUI release notes during development.
 
----
+- **Branch completions design (deferred):** When scheduled for v0.3.x, needs a research spike on resolving which repo to query `git branch` against at completion time before implementation begins.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase analysis: `/home/nnex/dev/prj/git-stacks/src/` — architecture, pitfalls, component boundaries
-- `.planning/codebase/ARCHITECTURE.md` and `.planning/codebase/CONCERNS.md` — existing design documentation
-- Bun v1.3.10 release: https://github.com/oven-sh/bun/releases
-- Commander.js v14.0.3 release notes: https://github.com/tj/commander.js/releases
-- @clack/prompts v1.1.0 release notes: https://github.com/natemoo-re/clack/releases
-- yaml v2.8.2 release notes: https://github.com/eemeli/yaml/releases
-- workmux README: https://github.com/raine/workmux (verified March 2026)
-- tmuxinator README: https://github.com/tmuxinator/tmuxinator
-- mise official docs: https://mise.jdx.dev
-- direnv README: https://github.com/direnv/direnv
-- devenv README: https://github.com/cachix/devenv
-- Ink adoption evidence: https://github.com/vadimdemedes/ink (Claude Code, Gemini CLI, Wrangler, GitHub Copilot)
+- Live codebase (read directly 2026-03-19): `src/tui/dashboard/App.tsx`, `types.ts`, `hooks/useWorkspaces.ts`, `WorkspaceRow.tsx`, `DetailStatus.tsx`, `ActionMenu.tsx`
+- Live codebase (read directly 2026-03-19): `src/lib/completion-generator.ts`, `paths.ts`, `config.ts`, `workspace-ops.ts`
+- Live codebase (read directly 2026-03-19): `src/commands/workspace.ts`, `template.ts`, `repo.ts`, `index.ts`
+- Installed type definitions: `node_modules/@opentui/solid/src/types/elements.d.ts`, `node_modules/@opentui/core/renderables/TabSelect.d.ts`
+- Bun HTTP server + Unix domain sockets: https://bun.sh/docs/api/http#unix-domain-sockets
+- Bun fetch with Unix sockets: https://bun.sh/guides/http/fetch-unix
+- Bun OS signal handling: https://bun.sh/guides/process/os-signals
+- Bun GitHub issue #15686 (Unix socket permissions fix in PR #16200)
+- OpenTUI GitHub issues #564 (suspend/resume editor spawn) and #789 (render loop stall) — confirmed open
 
 ### Secondary (MEDIUM confidence)
-- Zod v4 breaking changes: GitHub releases — specific version 4.3.6 confirmed; migration path inferred from release notes
-- moonrepo README and docs — partial access
-- nx/turborepo — training knowledge (WebFetch blocked for official sites)
-- git worktree internal behavior (`.git/worktrees/` metadata structure) — training data, well-established since Git 2.5
-- mise, tmuxinator, moonrepo, devenv design patterns — training knowledge used for comparative analysis only
+- OpenTUI documentation: https://opentui.com/docs/core-concepts/ — layout, keyboard, lifecycle
+- OpenTUI v0.1.88 release notes: https://github.com/sst/opentui/releases
+- lazygit UX patterns: https://github.com/jesseduffield/lazygit
+- k9s TUI patterns: https://k9scli.io/
+- Commander.js `option.argChoices` behavior — runtime behavior inferred from Commander source; standard feature, well-established
+- Fish shell completion performance: fish-shell issues #2413, #5158
+
+### Tertiary (LOW confidence)
+- JSONL inbox pattern for agent-to-human messaging: https://dev.to/uenyioha/porting-claude-codes-agent-teams-to-opencode-4hol — single source; pattern is independently sensible regardless of source quality
 
 ---
-*Research completed: 2026-03-17*
+*Research completed: 2026-03-19*
 *Ready for roadmap: yes*

@@ -1,128 +1,209 @@
 # Stack Research
 
-**Domain:** Multi-repo workspace manager CLI tool
-**Researched:** 2026-03-17
-**Confidence:** HIGH (core stack verified against official docs and releases; TUI section MEDIUM due to OpenTUI's limited public documentation)
+**Domain:** Multi-repo workspace manager CLI tool — v0.3.0 additions
+**Researched:** 2026-03-19
+**Confidence:** HIGH (core stack from prior research; v0.3.0 additions verified against official Bun docs and installed package type definitions)
 
 ---
 
 ## Verdict on Current Stack
 
-The current TypeScript + Bun + Commander.js + YAML + Zod stack is well-chosen and should be kept. No major rewrites are warranted. There are specific version upgrades and one component substitution (OpenTUI) to evaluate. Details below.
+The existing Bun + TypeScript + Commander.js + YAML + Zod + OpenTUI/SolidJS stack is kept as-is. The v0.3.0 milestone requires **no new npm dependencies** — all three features (tab navigation, IPC messaging, shell completion improvements) are achievable with what is already installed. The IPC transport uses Bun's built-in `Bun.serve({ unix })` + `fetch({ unix })` APIs; tab navigation uses the `<tab_select>` component already in `@opentui/solid@0.1.87`; completion improvements are purely code changes to `completion-generator.ts`.
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies
+### Core Technologies (unchanged from v0.2.0)
 
-| Technology | Recommended Version | Purpose | Why Recommended |
-|------------|---------------------|---------|-----------------|
-| Bun | 1.3.10 (current stable) | Runtime, package manager, test runner, shell scripting via `$` | Fastest startup for CLI tools (5ms vs Node 25ms); native TypeScript without build step; `$` shell API eliminates shelljs/execa dependency; built-in test runner; cross-platform compilation via `bun build --compile`. Confirmed current: bun/releases shows v1.3.10 released Feb 26, 2026. |
-| TypeScript | 5.9.3 (current) | Type safety, IDE support, type-level correctness | Strict mode is non-negotiable for a config-heavy tool where incorrect schema inference causes silent data loss. TSX for TUI components. Already on latest. |
-| Commander.js | 14.0.3 (stay on 14.x) | CLI command tree, argument parsing, option validation | Industry standard with 314M+ weekly downloads. v14 has groups of options/commands in help (useful for large CLIs). v15 is upcoming but requires Node v22+ and goes ESM-only — irrelevant to Bun users but not a reason to upgrade yet. Stay on 14.x; the Commander tree is also introspected for shell completion generation in this codebase, making it a structural dependency. |
-| Zod | 3.25.76 (stay on v3) | Config schema validation, type inference for YAML | Zod v4 was released as a separate package with a migration layer (`zod/v4`). v3 is still maintained. The current schemas are deeply integrated into config.ts. Do not migrate to v4 in the near term — the schema-breaking risk to existing user configs (see PITFALLS.md) makes this a dedicated migration task, not an incidental upgrade. When migrating: v4 has stricter `.pick()`/`.omit()` and `.extend()` with refinements, which will require test coverage before switching. |
-| yaml | 2.8.2 (current, stay on 2.x) | YAML read/write for stack/workspace/global config | The `yaml` npm package (eemeli/yaml) is the correct, full-spec YAML implementation. v2.8.2 is the latest stable. A v3.0.0 prerelease drops the default export and becomes ESM-only — monitor but do not upgrade until stable. js-yaml is the alternative but has had security issues and no full YAML 1.2 spec support. |
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| Bun | 1.3.10+ | Runtime, shell scripting, IPC server | `Bun.serve({ unix })` and `fetch({ unix })` provide first-class Unix domain socket support with no dependencies. HIGH confidence — verified in official Bun HTTP docs. |
+| TypeScript strict | 5.9.3 | Type safety | Unchanged. |
+| Commander.js | 14.0.3 | CLI command tree | Unchanged. The completion generator introspects this tree — it remains a structural dependency. |
+| @opentui/solid | 0.1.87 (installed) | TUI dashboard | `<tab_select>` is a first-class JSX element already in the installed build. No upgrade needed for v0.3.0. The `onChange` and `onSelect` event props integrate cleanly with SolidJS signals. |
+| solid-js | 1.9.11 | Reactive state for TUI | Unchanged. |
+| yaml + Zod | 2.8.2 + 3.25.76 | Config I/O | Unchanged. Message store uses JSON (not YAML) to avoid parse overhead on frequent reads. |
 
-### TUI and Interactive Prompts
+### v0.3.0 Feature Stack
 
-| Technology | Recommended Version | Purpose | Why Recommended |
-|------------|---------------------|---------|-----------------|
-| @clack/prompts | 1.1.0 (upgrade from 0.9.1) | Interactive prompts: text input, selects, confirmations, spinners | v1.0.0 went ESM-only and added autocomplete, progress bars, task logging, improved `cancel()`/`error()` spinner methods. v1.1.0 replaced `picocolors` with Node built-in `styleText` (fewer deps). The codebase already uses it correctly via `safeText()` wrapper. Upgrade is worthwhile for the new prompt types; requires reviewing ESM-only constraint (Bun handles ESM natively so no issue). |
-| Ink (React for CLIs) | 5.x (evaluate for `git-stacks manage`) | Rich interactive TUI dashboard | Ink is the industry-standard TUI framework for Node/Bun CLIs: used by Anthropic Claude Code, Google Gemini CLI, GitHub Copilot CLI, Cloudflare Wrangler, Prisma. React + Yoga Flexbox layout, `useInput`/`usePaste` hooks, full component model. The current `git-stacks manage` dashboard uses OpenTUI/SolidJS — evaluate replacing with Ink (see Alternatives below). |
-| OpenTUI + SolidJS | 0.1.87 (current, evaluate risk) | Interactive TUI dashboard (current implementation) | OpenTUI is at v0.1.87 with low npm download numbers and no public documentation site. SolidJS bindings are maintained by the same author. The core concepts (reactive terminal rendering) are sound, but the library is pre-1.0 with limited adoption and limited community support. Monitor actively. If blocking issues emerge in the dashboard, Ink is the migration target. |
+#### Feature 1: Tab Navigation in Dashboard
 
-### Development and Testing
+**Approach:** Use the `<tab_select>` JSX element from `@opentui/solid`, already installed.
 
-| Technology | Recommended Version | Purpose | Why Recommended |
-|------------|---------------------|---------|-----------------|
-| bun:test | built-in (Bun 1.3.10) | Unit and integration test runner | Jest-compatible API (`describe`/`test`/`expect`), snapshot support, `test.each` parametrized tests, mock functions, `expectTypeOf` for type-level assertions. Zero additional dependencies. Already in use. Do not add Vitest or Jest — they add Node-ism overhead that conflicts with Bun's native APIs. |
-| @types/bun | latest | Bun API type definitions (`$`, `spawn`, `Bun.file`) | Required for TypeScript to type-check Bun-specific APIs. Already in devDependencies. Keep on `latest`. |
+**Type-verified props** (from `node_modules/@opentui/solid/src/types/elements.d.ts` and `node_modules/@opentui/core/renderables/TabSelect.d.ts`):
 
-### Supporting Libraries
+```typescript
+// TabSelectOption shape
+interface TabSelectOption {
+  name: string        // tab label
+  description: string // subtitle shown below bar
+  value?: any
+}
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| opentui-spinner | 0.0.6 | Animated spinners in CLI output | Non-interactive progress indication (before/after TUI dashboard). Keep as-is unless OpenTUI is replaced. |
-| chalk or picocolors | (not yet a dep) | Terminal color formatting for non-TUI output | Add if error messages, status output, or `doctor` output needs consistent color. `picocolors` is faster and zero-deps; `chalk` has more features. For this tool, picocolors is sufficient. @clack/prompts v1.1.0 now uses Node built-in `styleText` internally — consider using that for consistency. |
+// JSX props
+<tab_select
+  options={tabs}                       // TabSelectOption[]
+  tabWidth={20}                        // chars per tab, default 20
+  showDescription={false}             // hide description row to save height
+  showUnderline={true}
+  showScrollArrows={true}             // auto when tabs exceed width
+  wrapSelection={false}
+  focused={activeTab() === TAB_IDX}   // controls keyboard routing
+  onChange={(i, opt) => setActiveTab(i)}
+  onSelect={(i, opt) => setActiveTab(i)}
+/>
+```
+
+**Keyboard events emitted:** `selectionChanged` on left/right arrow or `[`/`]`; `itemSelected` on Enter. Navigation left/right is handled internally by the component — the parent only needs to track `activeTab()` signal.
+
+**Layout pattern for tabbed panes:** Use a `<box flexDirection="column">` as root. Row 1: `<tab_select>`. Row 2: `<Show when={activeTab() === 0}><WorkspacesPane /></Show>` etc. The `flexGrow={1}` on the pane box fills remaining height after the tab bar. The tab bar height is dynamic (2 rows with description, 1 without).
+
+**Key routing pattern:** The existing `useKeyboard` global handler in `App.tsx` must yield to `<tab_select>` when the tab bar has focus. The `focused` prop routes keyboard events to the component's internal handler. Parent intercepts Tab key (`key.name === "tab"`) to cycle which element has focus; this is the standard OpenTUI focus management pattern.
+
+**Detail pane:** A `<scrollbox>` is the correct choice for detail panes — it handles overflow scrolling within a fixed terminal region. Props: `focused`, `stickyScroll`, `stickyStart`.
+
+**No new dependencies required.** The `<tab_select>` component is already in the installed `@opentui/solid@0.1.87`.
+
+---
+
+#### Feature 2: IPC Transport for Messaging System
+
+**Decision: `Bun.serve({ unix })` as the TUI listener + `fetch({ unix })` as the sender.**
+
+**Rationale over alternatives:**
+
+| Approach | Verdict | Why |
+|----------|---------|-----|
+| `Bun.serve({ unix })` + `fetch({ unix })` | **USE THIS** | First-class Bun API, verified in official docs. Sender fails fast with `connectError` when TUI not running. Request/response model is natural for send/clear/list. No extra deps. |
+| `Bun.listen()` (raw TCP socket) | Avoid for this use case | Lower-level; requires manual framing for newline-delimited JSON. `Bun.serve` with HTTP semantics is simpler and gives structured request/response for free. |
+| Bun IPC (`Bun.spawn` + `process.send()`) | Not applicable | Only works for parent-child process pairs spawned by the same process. The TUI and the `message send` command are independent processes. |
+| Shared file (append-only JSON lines) | Fallback only | Reliable but requires polling or `Bun.watch()`. No push; harder to implement `list` as a consistent snapshot. Use only if Unix sockets prove problematic. |
+| Named pipe (mkfifo) | Avoid | POSIX-only, blocking by default, no structured framing. More complexity than Unix sockets for no gain. |
+
+**Socket path:** `~/.config/git-stacks/ipc.sock` — co-located with all other config files. The TUI process writes this path on startup and removes it on `renderer.destroy()`. The sender checks whether the socket file exists before attempting `fetch`; if absent, it exits silently (TUI not running).
+
+**"Drop silently when TUI not running" implementation:**
+
+```typescript
+// In message send command
+async function sendMessage(payload: MessagePayload): Promise<void> {
+  const sockPath = getIpcSocketPath() // ~/.config/git-stacks/ipc.sock
+  const sockFile = Bun.file(sockPath)
+  if (!(await sockFile.exists())) return // TUI not running — drop silently
+
+  try {
+    await fetch("http://localhost/message", {
+      unix: sockPath,
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch {
+    // Socket file existed but connection refused (TUI exited between check and connect) — drop silently
+  }
+}
+```
+
+**TUI server setup:** `Bun.serve({ unix: sockPath, fetch(req) { ... } })`. The server is started inside `runDashboard()` before `render()` and stopped in the cleanup path. Use `server.unref()` so the HTTP server does not prevent the Bun process from exiting when the TUI renderer destroys itself.
+
+**Message store:** Messages persisted as a JSON file at `~/.config/git-stacks/messages/{workspace-name}.json`. The IPC endpoint is a thin layer that (a) writes to this file and (b) triggers a reactive reload in the TUI via a SolidJS signal. The `git-stacks message list` command reads the file directly without needing the TUI to be running.
+
+**Verified APIs:**
+- `Bun.serve({ unix: "/path/to.sock", fetch(req) {...} })` — confirmed in official Bun HTTP docs (https://bun.sh/docs/api/http#unix-domain-sockets). HIGH confidence.
+- `fetch("http://host/path", { unix: "/path/to.sock" })` — confirmed in official Bun guides (https://bun.sh/guides/http/fetch-unix). HIGH confidence.
+- `server.unref()` — confirmed in Bun HTTP Server TypeScript definition. HIGH confidence.
+
+---
+
+#### Feature 3: Shell Completion Improvements
+
+**Approach: Code changes to `completion-generator.ts` only. No new dependencies.**
+
+The existing generator correctly handles dynamic completions for workspace, template, and repo names. The gaps are:
+
+1. **Missing enum completions** — `--sync-strategy`, `--mode`, `--output` options have fixed string values that the generator currently emits no completions for. Fix: add an `enumValues` field to `OptionInfo` and populate it from Commander's `argChoices` property (Commander populates this for `.choices()` options).
+
+2. **Missing `message` subcommand family** — the v0.3.0 `git-stacks message send|clear|list` commands need entries in `DYNAMIC_COMPLETIONS` for workspace name completion (the first positional argument on `send` and `clear`).
+
+3. **Missing branch completions** — `git-stacks new` and `git-stacks sync` accept branch names. Shell-side branch completion requires running `git branch` in a sub-shell. This is implementable with a shell function in generated output, similar to how workspace names are resolved. The generator needs a new `DynamicCompletion` type: `"branch"`.
+
+4. **Fish subcommand flag completions** — the current Fish generator emits flags only for top-level commands. Commands with subcommands (e.g., `repo`, `template`) do not get flag completions. This requires extending the per-subcommand case handling in `generateFish`.
+
+**Implementation approach:**
+
+```typescript
+// Add to DynamicCompletion union
+type DynamicCompletion = "workspace" | "repo" | "template" | "shells" | "branch"
+
+// Add to OptionInfo
+interface OptionInfo {
+  long: string
+  description: string
+  enumValues?: string[]  // populated from cmd.options[n].argChoices
+}
+
+// In buildNode(), populate enumValues:
+const options = cmd.options
+  .filter(opt => opt.long !== undefined && opt.long !== "--help" && opt.long !== "--version")
+  .map(opt => ({
+    long: opt.long!,
+    description: opt.description,
+    enumValues: (opt as any).argChoices as string[] | undefined,
+  }))
+```
+
+For bash, the `bashCaseBody` function needs a case for "current word starts with `-` and previous word is an enum option" to emit enum value completions. For zsh, `_arguments` spec already supports choice lists: `'--sync-strategy[strategy]:strategy:(fast-forward merge rebase)'`. For fish, add `complete -c git-stacks -n '__fish_seen_subcommand_from sync' -l sync-strategy -a 'fast-forward merge rebase'`.
+
+**Branch completions shell function** (bash/fish): call `git branch --format='%(refname:short)'` to list local branches. This is safe to include inline in generated completion scripts — it fails silently if not in a git repo.
+
+**No new dependencies.** All changes are to `completion-generator.ts` logic. Commander's `option.argChoices` field is already populated when commands use `.choices()`.
 
 ---
 
 ## Installation
 
+No new package installations are required for v0.3.0. All three features use:
+- APIs already provided by Bun's runtime (`Bun.serve`, `Bun.file`, `fetch`)
+- Components already in the installed `@opentui/solid@0.1.87` (`<tab_select>`, `<scrollbox>`)
+- Code changes to existing TypeScript files
+
 ```bash
-# Keep current dependencies — no changes needed for core
+# No new dependencies — verify current state is consistent
 bun install
-
-# Upgrade @clack/prompts (breaking: ESM-only, Bun handles this)
-bun add @clack/prompts@^1.1.0
-
-# If adding color formatting for CLI output:
-bun add picocolors
 ```
+
+If OpenTUI is upgraded to 0.1.88 (current latest as of 2026-03-19):
+
+```bash
+bun add @opentui/core@0.1.88 @opentui/solid@0.1.88
+```
+
+0.1.88 adds Plugins/Slots, CJK word-wrap fix, and ScrollBox `scrollChildIntoView`. None of these block v0.3.0 but `scrollChildIntoView` is useful for the detail pane.
 
 ---
 
 ## Alternatives Considered
 
-| Category | Recommended | Alternative | Why Alternative is Better (and When) |
-|----------|-------------|-------------|---------------------------------------|
-| CLI framework | Commander.js 14.x | citty (unjs/citty 0.2.1) | citty has zero external dependencies, lazy sub-command loading (better for large CLIs), and auto-generated usage docs. Preferred IF: starting a new project and lazy loading matters. Not worth migrating from Commander — the completion generator introspects Commander's tree and that coupling is load-bearing. |
-| CLI framework | Commander.js 14.x | oclif | oclif adds plugin architecture, hook system, auto-updater for large "platform CLIs" (Heroku/Salesforce-style). Overkill for this tool's scope — and its plugin system would conflict with the custom integration plugin pattern already built. |
-| CLI framework | Commander.js 14.x | yargs | yargs has stronger middleware support. But Commander's strict mode (excess args cause errors) and help group support in v14 are a better fit for a tool where correctness matters. |
-| TUI dashboard | Ink (React) | OpenTUI + SolidJS (current) | OpenTUI is pre-1.0 with low adoption. Ink is battle-tested, used by top-tier CLI tools (Claude Code, Gemini CLI), has an active community, and SolidJS experience transfers directly to Ink given the JSX model. Migrate if OpenTUI creates blockers. |
-| TUI dashboard | Ink (React) | Blessed | Blessed is effectively unmaintained (last release 2019). Do not use. |
-| Config format | YAML + Zod | TOML + @iarna/toml | TOML is the format used by mise, cargo, etc. — better for deeply nested configs with multiline strings. But switching breaks all existing user config files and gains nothing for this tool's schema complexity. YAML is correct here. |
-| Config format | YAML + Zod | JSON | JSON lacks comments, requires strict syntax, and is less human-editable. YAML is the right call for developer-facing config files. |
-| Runtime | Bun | Node.js + tsx | Node.js has broader hosting support, but git-stacks is a local developer tool, not a server. Bun's `$` shell API and fast startup are decisive advantages. Node would require `execa` or `shelljs` and a build step. |
-| Schema validation | Zod 3.x | Zod 4.x | Zod v4 has improved performance and stricter APIs (no accidental refinement drops). Migrate when the existing schema test coverage is in place — see PITFALLS.md Pitfall 5. Do not rush: v3 is still maintained and the risk of silent breaking changes to user configs outweighs the v4 benefits until schema tests exist. |
-| Prompts | @clack/prompts | Inquirer.js | Inquirer's modular rewrite (`@inquirer/prompts`) is comparable in quality but heavier. @clack/prompts is simpler and aesthetically cleaner for wizard-style flows. Keep @clack. |
-| Test runner | bun:test | Vitest | Vitest is excellent but designed for Node/browser. In a Bun codebase, bun:test runs 2-3x faster and doesn't require configuration. Only switch if a specific Vitest feature (e.g., coverage provider) is needed. |
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| IPC transport | `Bun.serve({ unix })` | `Bun.listen()` raw TCP socket | Raw TCP requires manual newline-delimited JSON framing, no structured request/response, more error handling code. HTTP over Unix socket is the same cost but gives structured semantics for free. |
+| IPC transport | `Bun.serve({ unix })` | Shared JSON file + `Bun.watch()` | Works but requires polling (or file watcher) in the TUI. Push semantics (HTTP POST) are cleaner for "notify TUI on send" vs "TUI polls for changes". File-based store is used for persistence; HTTP layer handles the live push. |
+| IPC transport | `Bun.serve({ unix })` | Abstract namespace socket (Linux-only) | Abstract sockets auto-clean without a file, but they are Linux-only. The socket file at `~/.config/git-stacks/ipc.sock` works on both macOS and Linux. |
+| Tab navigation | `<tab_select>` (OpenTUI built-in) | Manual tab bar rendered with `<text>` | Manual implementation is ~100 lines of layout + keyboard math that the built-in already does correctly, including scroll arrows for overflow. No benefit to reimplementing. |
+| Completion enum values | Populate from `option.argChoices` | Hardcode in generator | Hardcoding creates maintenance drift when command options change. `argChoices` is the Commander source of truth. |
 
 ---
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Blessed / neo-blessed | Unmaintained since 2019, no TypeScript types, known bugs with modern terminals | Ink (React for CLIs) |
-| shelljs | Deprecated by its own maintainers in favor of native shell APIs; no async support | Bun's `$` shell API (already in use) |
-| execa | Adds a dependency for subprocess handling that Bun's `$` and `spawn` cover natively | Bun's `$` (shell interpolation) and `Bun.spawn()` (hook execution) |
-| chalk 5.x | ESM-only — Bun handles ESM, but it's a heavy dependency for a few color calls | `picocolors` or Node built-in `styleText` |
-| yup | Older, slower than Zod, less ergonomic TS inference, losing community momentum | Zod (already in use) |
-| ts-node | Node-only TypeScript execution layer — completely redundant with Bun | Bun's native TypeScript execution |
-| esbuild (standalone) | Bun bundles and compiles natively via `bun build --compile` | `bun build --compile` for distribution |
-| jest | Requires Node, has complex configuration. bun:test is API-compatible and runs natively | bun:test (already in use) |
-| Commander.js v15 (when released) | Requires Node v22+ runtime — irrelevant to Bun users, and ESM-only migration adds friction with no benefit | Stay on Commander.js 14.x until a specific v15 feature is needed |
-
----
-
-## Stack Patterns by Variant
-
-**For CLI commands (non-interactive output):**
-- Use Commander.js command definitions in `src/commands/`
-- Output via `console.log` / `console.error` with optional `picocolors` for color
-- Return structured `{ ok: boolean, error?: string }` results from lib functions, not throw
-
-**For interactive wizard flows (new workspace, new stack, config):**
-- Use @clack/prompts v1.1.0 via `safeText()` wrapper
-- Use `p.group()` for multi-step wizard flows
-- Use `p.tasks()` (new in v1.0.0) for showing progress of multi-step operations
-
-**For the TUI dashboard (`git-stacks manage`):**
-- Current: OpenTUI + SolidJS. Keep for now; reassess if blocked.
-- Migration target: Ink (React) if OpenTUI stability becomes an issue
-- Pattern: render-on-demand, not continuous polling — use reactive state, not `setInterval`
-
-**For distribution:**
-- Current: npm publish with Bun shebang (`#!/usr/bin/env bun`) — requires users to have Bun installed
-- Future option: `bun build --compile --bytecode` to produce standalone binaries (no Bun required for end users); add to CI for macOS arm64/x64 and Linux x64 targets
-- Recommendation: add `bun build --compile` as a release artifact alongside the npm package once the tool reaches wider distribution
-
-**For testing git operations:**
-- Use `bun:test` with a `makeGitRepo(tmpDir)` helper (see PITFALLS.md Pitfall 6)
-- Isolate config path via `process.env.HOME` redirect in `beforeEach` (existing pattern)
-- Replace `process.env.HOME` mutation with dependency injection in `paths.ts` as a medium-term improvement
+| WebSocket for IPC | Overkill. No browser; no multi-client fan-out needed. Unix socket HTTP is simpler. | `Bun.serve({ unix })` |
+| Redis or SQLite for message store | Unnecessary external state. Messages are ephemeral workspace annotations, not a database. | JSON file in `~/.config/git-stacks/messages/` |
+| `readline` or `node:readline` for completion | Already generating completion scripts statically. Commander provides all needed metadata via `argChoices`. | Code changes to `completion-generator.ts` |
+| `blessed` or any new TUI library | OpenTUI already handles tab navigation. No justification for adding a second TUI library. | `@opentui/solid` `<tab_select>` |
+| `@inquirer/prompts` | `@clack/prompts` already handles all prompt types needed. | `@clack/prompts` (existing) |
 
 ---
 
@@ -130,41 +211,62 @@ bun add picocolors
 
 | Package | Compatible With | Notes |
 |---------|-----------------|-------|
-| @clack/prompts@^1.1.0 | Bun 1.3.x | ESM-only (v1.0.0+); Bun handles ESM natively, no issue. Review `safeText()` wrapper — in v1.x, empty text input behavior should be verified. |
-| Commander.js@^14.0.3 | Bun 1.3.x, TypeScript 5.x | Dual CJS/ESM. v15 will be ESM-only and require Node 22+; not relevant to Bun runtime but hold off migration. |
-| yaml@^2.8.2 | Bun 1.3.x | v3.0.0 prerelease drops default export — stay on 2.x until v3 stabilizes. |
-| zod@^3.25.76 | Bun 1.3.x, TypeScript 5.x | v3 is still maintained. Zod v4 (`zod@^4.x`) is a separate package. Do not co-install both. Migrate deliberately after adding schema compatibility tests. |
-| solid-js@^1.9.11 + @opentui/solid@^0.1.87 | Bun 1.3.x with `@opentui/solid/bun-plugin` preloaded | Plugin must be programmatically registered for global installs (already fixed in 0.1.3). Watch for OpenTUI breaking changes closely — pre-1.0 packages can have unstable APIs. |
+| `@opentui/solid@0.1.87` (installed) | solid-js@1.9.11 | `<tab_select>` and `<scrollbox>` confirmed present in installed type definitions. v0.1.88 available but not required. |
+| `Bun.serve({ unix })` | Bun 1.x | Available since Bun 0.8.1 (2023). Stable API. Verified in official Bun HTTP server docs. HIGH confidence. |
+| `fetch({ unix })` | Bun 1.x | Available and stable. Verified in official Bun guides. HIGH confidence. |
 
 ---
 
-## Key Stack Decisions Summary
+## Stack Patterns for v0.3.0 Features
 
-| Decision | Status | Rationale |
-|----------|--------|-----------|
-| Bun as runtime | Keep, correct | Performance, native TS, `$` shell API, built-in test runner — all decisive for a CLI tool |
-| Commander.js v14 | Keep, correct | Deep coupling with completion generator; large ecosystem; v14 has everything needed |
-| Zod v3 | Keep, do not rush to v4 | Migration risk to existing user configs; wait for schema test coverage first |
-| yaml v2.x | Keep | Stable, full-spec, v3 prerelease not ready |
-| @clack/prompts | Upgrade to v1.1.0 | New prompt types (autocomplete, tasks) are valuable; ESM-only not an issue under Bun |
-| OpenTUI + SolidJS | Monitor, evaluate Ink migration | Pre-1.0, low adoption — correct decision was pragmatic for PoC; production path likely via Ink |
-| bun:test | Keep | Best test runner for Bun codebases; no additional deps |
+**Tab navigation in `App.tsx`:**
+- Add `activeTab` signal: `createSignal<"workspaces" | "templates" | "repos">("workspaces")`
+- Render `<tab_select>` at fixed height above the existing `<WorkspaceList>`
+- Use `<Show when={activeTab() === "workspaces"}>` guards to swap content pane
+- Forward `focused` prop based on whether a sub-panel has captured focus
+- The `useKeyboard` global handler in `App.tsx` intercepts Tab key to cycle panel focus; `<tab_select>` handles its own left/right arrow keys internally when `focused={true}`
+
+**IPC socket lifecycle:**
+- `runDashboard()` calls `startIpcServer()` before `render()`, gets back a `{ server, sockPath }` handle
+- On `renderer.destroy()` (q/escape from list view), call `server.stop()` and `Bun.file(sockPath).delete()` or `fs.unlink`
+- The SolidJS reactive layer receives incoming messages via a `createSignal<Message[]>` updated by the IPC handler via `setMessages(...)`
+- The IPC handler runs in the same Bun process as the TUI renderer — no threading needed; Bun's event loop integrates both
+
+**Message data model:**
+
+```typescript
+interface Message {
+  id: string         // crypto.randomUUID()
+  workspace: string  // workspace name
+  sender?: string    // optional agent/hook identifier
+  text: string
+  createdAt: string  // ISO 8601
+}
+```
+
+Stored as `~/.config/git-stacks/messages/{workspace}.json` (array). The `git-stacks message list` command reads this directly; `send` writes it and POSTs to the IPC socket; `clear` truncates the file and POSTs to trigger a TUI reload.
+
+**Shell completion enum values:**
+- `option.argChoices` is typed as `string[] | undefined` on Commander's `Option` class
+- In `buildNode()`, cast `cmd.options` entries to include `argChoices` (already present at runtime, just not in the public type surface)
+- In bash case body: when the previous word matches a `--flag` with `enumValues`, emit `COMPREPLY=($(compgen -W "val1 val2 val3" -- "$cur"))`
+- In zsh `_arguments`: emit `'--flag[description]:value:(val1 val2 val3)'` format
+- In fish: emit `complete -c git-stacks -n '...' -l flag-name -a 'val1 val2 val3'`
 
 ---
 
 ## Sources
 
-- Bun v1.3.10 release: https://github.com/oven-sh/bun/releases (current stable Feb 26, 2026) — HIGH confidence
-- Bun compile docs: https://bun.sh/docs/bundler/executables — HIGH confidence (official)
-- Commander.js v14.0.3 / v15.0.0-0 release notes: https://github.com/tj/commander.js/releases — HIGH confidence
-- @clack/prompts v1.1.0 release notes: https://github.com/natemoo-re/clack/releases — HIGH confidence
-- yaml v2.8.2 release notes: https://github.com/eemeli/yaml/releases — HIGH confidence
-- Zod v4 breaking changes (pick/omit/extend on schemas with refinements): GitHub releases — MEDIUM confidence (specific version 4.3.6 confirmed; migration path inferred from release notes)
-- citty v0.2.1: https://github.com/unjs/citty — HIGH confidence (repo verified)
-- Ink adoption (Claude Code, Gemini CLI, GitHub Copilot, Wrangler): https://github.com/vadimdemedes/ink — HIGH confidence
-- mise architecture (Rust, TOML): https://github.com/jdx/mise — HIGH confidence
+- Bun HTTP server + Unix domain sockets: https://bun.sh/docs/api/http#unix-domain-sockets — HIGH confidence (official docs, verified 2026-03-19)
+- Bun fetch with Unix sockets: https://bun.sh/guides/http/fetch-unix — HIGH confidence (official docs, verified 2026-03-19)
+- Bun IPC (parent-child only): https://bun.sh/docs/guides/process/ipc — HIGH confidence (verified: IPC is parent-child only, not applicable here)
+- `@opentui/solid` type definitions: `node_modules/@opentui/solid/src/types/elements.d.ts` (installed) — HIGH confidence (source of truth)
+- `@opentui/core` TabSelect type definitions: `node_modules/@opentui/core/renderables/TabSelect.d.ts` (installed) — HIGH confidence
+- OpenTUI v0.1.88 release notes: https://github.com/sst/opentui/releases — MEDIUM confidence (release notes verified; exact API changes for 0.1.88 not reviewed in detail)
+- OpenTUI layout documentation: https://opentui.com/docs/core-concepts/layout/ — MEDIUM confidence (docs verified for Yoga flexbox; tab_select height calculation verified from type definitions)
+- Commander.js `option.argChoices`: https://github.com/tj/commander.js — MEDIUM confidence (runtime behavior inferred from Commander source; standard feature, well-established)
 
 ---
 
-*Stack research for: multi-repo workspace manager CLI (git-stacks)*
-*Researched: 2026-03-17*
+*Stack research for: git-stacks v0.3.0 — dashboard overhaul, IPC messaging, shell completions*
+*Researched: 2026-03-19*
