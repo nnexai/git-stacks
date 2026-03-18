@@ -26,12 +26,12 @@ Replace the Stack model with a three-primitive Registry + Template + Workspace m
 
 ### Repo Registry
 - Registry is the **source of truth** for where repos live on the machine
-- Registration methods: `add <local-path>`, `add <url>` (ssh or https), `scan <dir>` (discovers repos one level deep, offers to register)
+- Registration methods: `add <local-path>`, `scan <dir>` (discovers repos one level deep, offers to register)
 - Same repo at two different local locations → register under different names
-- Registry entry: `{ name, url, local_path, default_branch, type }`
+- Registry entry: `{ name, local_path, default_branch, type }`
 - Commands:
   ```
-  git-stacks repo add <url|path>
+  git-stacks repo add <path>
   git-stacks repo scan <dir>
   git-stacks repo list
   git-stacks repo show <name>
@@ -88,12 +88,11 @@ env:
 
 ### Workspace creation — `--from` flag
 - `git-stacks new <name> [--from <source>]` — universal source flag:
-  - `--from git@github.com/org/repo` or `--from https://...` → registers repo + creates 1-repo workspace
-  - `--from ~/dev/my-repo` or `--from ./path` (exists on disk) → registers repo + creates 1-repo workspace
-  - `--from my-template` → creates workspace from named template
-  - No `--from` → ad-hoc picker: select repos from registry
-- Detection order: URL (contains `://` or starts with `git@`) → local path (exists on disk) → template name
-- Auto-registers repos when `--from <url|path>` is used — registration is a side-effect, not a prerequisite
+  - `--from ~/dev/my-repo` or `--from ./path` (exists on disk) — registers repo + creates 1-repo workspace
+  - `--from my-template` — creates workspace from named template
+  - No `--from` — ad-hoc picker: select repos from registry
+- Detection order: local path (exists on disk) → template name
+- Auto-registers repos when `--from <path>` is used — registration is a side-effect, not a prerequisite
 
 ### Clone commands — no ambiguity
 - `git-stacks clone <workspace> [new-name]` — copy existing workspace config (new branch, new worktrees)
@@ -167,7 +166,7 @@ env:
 <specifics>
 ## Specific Ideas
 
-- `--from` detection order is important: URL check first (contains `://` or starts with `git@`), then disk existence check, then template name lookup — this order is unambiguous in practice
+- `--from` detection order: disk existence check first, then template name lookup — this order is unambiguous in practice
 - `template:` field in workspace YAML is the exact field name — not `created_from`, `source`, or anything else
 - `open --recreate` should show a diff before applying — "Template has changed: [what changed]. Apply?" — consistent with `--dry-run` output style from Phase 2
 - Repo registry storage: single location per machine, likely `~/.config/git-stacks/repos.yml` or `~/.config/git-stacks/registry.yml` (planner decides exact path, but must be in paths.ts)
@@ -182,6 +181,7 @@ env:
 - Quick repo onboarding ideas — user has further ideas here, deferred to future discussion
 - `@clack/prompts` 1.1.0 upgrade (PWR-04) — currently v2 backlog; may unlock better autocomplete for repo picker; planner should check if needed
 - Multiple checked-out locations of the same repo — current resolution: register under different names; more sophisticated aliasing is a future concern
+- **URL/remote registration deferred to v2** — `add <url>` (ssh or https), `--from git@github.com/org/repo`, `--from https://...` for auto-clone + register. Phase 3 scoped to local paths only per user decision.
 
 </deferred>
 
