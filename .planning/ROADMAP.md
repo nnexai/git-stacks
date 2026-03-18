@@ -108,7 +108,13 @@ Plans:
   3. doctor --fix executes the repair actions it already identifies, with per-action success/failure reported
   4. list shows branch name, repo count, last-opened time, and dirty indicator by default — no extra flags needed
   5. run <workspace> <cmd> --parallel executes across all repos simultaneously with per-repo output and a single aggregated exit code
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — formatError helper + error message audit across commands (UX-01)
+- [ ] 04-02-PLAN.md — List richer default columns, last_opened tracking, status --json (UX-04, UX-02)
+- [ ] 04-03-PLAN.md — Doctor --json, --fix, --force flags (UX-02, UX-03)
+- [ ] 04-04-PLAN.md — Run --parallel concurrent execution, sync --json (RUN-01, UX-02)
 
 ## Progress
 
@@ -122,4 +128,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 01.2. Version command | 1/1 | Complete    | 2026-03-17 |
 | 2. Safety | 2/2 | Complete   | 2026-03-17 |
 | 3. Design and Conditional Implementation | 5/5 | Complete   | 2026-03-18 |
-| 4. UX and Execution | 0/TBD | Not started | - |
+| 4. UX and Execution | 0/4 | Not started | - |
