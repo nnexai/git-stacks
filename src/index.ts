@@ -6,6 +6,7 @@ import { registerWorkspaceCommands } from "./commands/workspace"
 import { configCommand } from "./commands/config"
 import { createCompletionCommand } from "./commands/completion"
 import { doctorCommand } from "./commands/doctor"
+import { repoCommand } from "./commands/repo"
 import { getVersionString } from "./lib/version"
 
 async function checkGitVersion(): Promise<void> {
@@ -50,6 +51,7 @@ program
   })
 
 program.addCommand(doctorCommand)
+program.addCommand(repoCommand)
 
 // Register last — program tree must be fully populated before the action runs
 program.addCommand(createCompletionCommand(program))
