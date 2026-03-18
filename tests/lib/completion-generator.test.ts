@@ -34,13 +34,23 @@ function buildTestProgram(): Command {
 
   program.command("list").description("List all workspaces")
 
-  const stackCmd = new Command("stack").description("Manage stack definitions")
-  stackCmd.command("new").description("Define a new stack interactively")
-  stackCmd.command("init [dir]").description("Initialize from a directory of repos")
-  stackCmd.command("edit <name>").description("Edit an existing stack")
-  stackCmd.command("list").description("List all stacks")
-  stackCmd.command("show <name>").description("Show stack details")
-  program.addCommand(stackCmd)
+  const repoCmd = new Command("repo").description("Manage repo registry")
+  repoCmd.command("add <path>").description("Register a repo from a local path")
+  repoCmd.command("list").description("List registered repos")
+  repoCmd.command("show <name>").description("Show repo details")
+  repoCmd.command("remove <name>").description("Remove a repo from the registry")
+  repoCmd.command("rename <name> <new-name>").description("Rename a registered repo")
+  program.addCommand(repoCmd)
+
+  const templateCmd = new Command("template").description("Manage workspace templates")
+  templateCmd.command("new [name]").description("Create a new template interactively")
+  templateCmd.command("list").description("List all templates")
+  templateCmd.command("show <name>").description("Show template details")
+  templateCmd.command("edit <name>").description("Edit an existing template")
+  templateCmd.command("clone <name> <new-name>").description("Clone a template under a new name")
+  templateCmd.command("rename <name> <new-name>").description("Rename a template")
+  templateCmd.command("remove <name>").description("Remove a template")
+  program.addCommand(templateCmd)
 
   program
     .command("completion [shell]")
@@ -52,7 +62,7 @@ function buildTestProgram(): Command {
 describe("generateBash", () => {
   test("includes all top-level command names", () => {
     const out = generateBash(buildTestProgram())
-    expect(out).toContain("open clone clean remove merge list stack completion")
+    expect(out).toContain("open clone clean remove merge list repo template completion")
   })
 
   test("workspace dynamic lookup for clone (no flags)", () => {
@@ -77,13 +87,20 @@ describe("generateBash", () => {
     expect(out).toContain("--force")
   })
 
-  test("stack subcommands block", () => {
+  test("repo subcommands block", () => {
     const out = generateBash(buildTestProgram())
-    expect(out).toContain("    stack)")
+    expect(out).toContain("    repo)")
     expect(out).toContain("COMP_CWORD} -eq 2")
-    expect(out).toContain("new init edit list show")
-    expect(out).toContain("@(edit|show)")
-    expect(out).toContain(".config/ws/stacks")
+    expect(out).toContain("add list show remove rename")
+    expect(out).toContain("@(show|remove|rename)")
+    expect(out).toContain(".config/ws/registry.yml")
+  })
+
+  test("template subcommands block", () => {
+    const out = generateBash(buildTestProgram())
+    expect(out).toContain("    template)")
+    expect(out).toContain("new list show edit clone rename remove")
+    expect(out).toContain(".config/ws/templates")
   })
 
   test("completion shells", () => {
@@ -117,7 +134,8 @@ describe("generateZsh", () => {
     const out = generateZsh(buildTestProgram())
     expect(out).toContain("'open:Open a workspace'")
     expect(out).toContain("'clone:Clone a workspace'")
-    expect(out).toContain("'stack:Manage stack definitions'")
+    expect(out).toContain("'repo:Manage repo registry'")
+    expect(out).toContain("'template:Manage workspace templates'")
     expect(out).toContain("'completion:Generate shell completion scripts'")
   })
 
@@ -145,14 +163,23 @@ describe("generateZsh", () => {
     expect(out).toContain("_ws_workspaces")
   })
 
-  test("stack delegates to _ws_stack helper", () => {
+  test("repo delegates to _ws_repo helper", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_ws_stack ;;")
-    expect(out).toContain("_ws_stack()")
-    expect(out).toContain("'new:Define a new stack interactively'")
-    expect(out).toContain("'edit:Edit an existing stack'")
-    expect(out).toContain("edit|show)")
-    expect(out).toContain("_ws_stacks")
+    expect(out).toContain("_ws_repo ;;")
+    expect(out).toContain("_ws_repo()")
+    expect(out).toContain("'show:Show repo details'")
+    expect(out).toContain("'remove:Remove a repo from the registry'")
+    expect(out).toContain("show|remove|rename)")
+    expect(out).toContain("_ws_repos")
+  })
+
+  test("template delegates to _ws_template helper", () => {
+    const out = generateZsh(buildTestProgram())
+    expect(out).toContain("_ws_template ;;")
+    expect(out).toContain("_ws_template()")
+    expect(out).toContain("'show:Show template details'")
+    expect(out).toContain("'edit:Edit an existing template'")
+    expect(out).toContain("_ws_templates")
   })
 
   test("completion uses _values 'shell'", () => {
@@ -163,7 +190,8 @@ describe("generateZsh", () => {
   test("includes static helpers", () => {
     const out = generateZsh(buildTestProgram())
     expect(out).toContain("_ws_workspaces()")
-    expect(out).toContain("_ws_stacks()")
+    expect(out).toContain("_ws_repos()")
+    expect(out).toContain("_ws_templates()")
   })
 
   test("adding a new command auto-appears in top-level list", () => {
@@ -179,7 +207,8 @@ describe("generateFish", () => {
     const out = generateFish(buildTestProgram())
     expect(out).toContain("-a open")
     expect(out).toContain("-a clone")
-    expect(out).toContain("-a stack")
+    expect(out).toContain("-a repo")
+    expect(out).toContain("-a template")
     expect(out).toContain("-a completion")
   })
 
@@ -201,17 +230,24 @@ describe("generateFish", () => {
     expect(out).toContain("-l force")
   })
 
-  test("stack subcommand completions", () => {
+  test("repo subcommand completions", () => {
     const out = generateFish(buildTestProgram())
-    expect(out).toContain("__fish_seen_subcommand_from stack")
-    expect(out).toContain("-a 'new'")
+    expect(out).toContain("__fish_seen_subcommand_from repo")
+    expect(out).toContain("-a 'show'")
+    expect(out).toContain("-a 'remove'")
+    expect(out).toContain("(__ws_repos)")
+  })
+
+  test("template subcommand completions", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain("__fish_seen_subcommand_from template")
     expect(out).toContain("-a 'edit'")
-    expect(out).toContain("(__ws_stacks)")
+    expect(out).toContain("(__ws_templates)")
   })
 
   test("__ws_no_subcommand includes all top-level names", () => {
     const out = generateFish(buildTestProgram())
-    expect(out).toContain("not __fish_seen_subcommand_from open clone clean remove merge list stack completion")
+    expect(out).toContain("not __fish_seen_subcommand_from open clone clean remove merge list repo template completion")
   })
 
   test("completion shell options directive", () => {

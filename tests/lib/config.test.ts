@@ -1,46 +1,19 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
-import { StackSchema, WorkspaceSchema, WorkspaceRepoSchema, formatZodError, listStacks, listWorkspaces } from "../../src/lib/config"
-import { STACKS_DIR, WORKSPACES_DIR } from "../../src/lib/paths"
+import {
+  WorkspaceSchema,
+  WorkspaceRepoSchema,
+  RepoRegistryEntrySchema,
+  TemplateSchema,
+  formatZodError,
+  listWorkspaces,
+  expandBranchPattern,
+} from "../../src/lib/config"
+import { WORKSPACES_DIR } from "../../src/lib/paths"
 import { makeTmpDir, cleanup } from "../helpers"
 
 // --- Schema parsing ---
-
-describe("StackSchema", () => {
-  test("parses a minimal stack", () => {
-    const stack = StackSchema.parse({ name: "my-stack" })
-    expect(stack.name).toBe("my-stack")
-    expect(stack.repos).toEqual([])
-    expect(stack.description).toBeUndefined()
-  })
-
-  test("applies defaults to repos", () => {
-    const stack = StackSchema.parse({
-      name: "x",
-      repos: [{ name: "svc", path: "/some/path" }],
-    })
-    expect(stack.repos[0].type).toBe("other")
-    expect(stack.repos[0].default_mode).toBe("worktree")
-    expect(stack.repos[0].default_branch).toBe("main")
-  })
-
-  test("preserves explicit repo values", () => {
-    const stack = StackSchema.parse({
-      name: "x",
-      repos: [{ name: "svc", path: "/p", type: "java", default_mode: "trunk", default_branch: "development" }],
-    })
-    expect(stack.repos[0].type).toBe("java")
-    expect(stack.repos[0].default_mode).toBe("trunk")
-    expect(stack.repos[0].default_branch).toBe("development")
-  })
-
-  test("rejects invalid repo type", () => {
-    expect(() =>
-      StackSchema.parse({ name: "x", repos: [{ name: "r", path: "/p", type: "python" }] })
-    ).toThrow()
-  })
-})
 
 describe("WorkspaceSchema", () => {
   test("parses a minimal workspace", () => {
@@ -57,21 +30,32 @@ describe("WorkspaceSchema", () => {
     })
     expect(ws.cmux_workspace_id).toBe("workspace:3")
   })
+
+  test("parses workspace with template field", () => {
+    const ws = WorkspaceSchema.parse({ name: "ws", branch: "b", created: "d", template: "my-app" })
+    expect(ws.template).toBe("my-app")
+  })
+
+  test("parses workspace without template field (backward compat)", () => {
+    const ws = WorkspaceSchema.parse({ name: "ws", branch: "b", created: "d" })
+    expect(ws.template).toBeUndefined()
+  })
 })
 
 describe("WorkspaceRepoSchema", () => {
   test("parses a worktree repo", () => {
     const repo = WorkspaceRepoSchema.parse({
-      name: "svc", stack: "platform", type: "java",
+      name: "svc", repo: "platform", type: "java",
       mode: "worktree", main_path: "/main/svc", task_path: "/tasks/ws/svc",
     })
     expect(repo.name).toBe("svc")
     expect(repo.mode).toBe("worktree")
+    expect(repo.repo).toBe("platform")
   })
 
   test("parses a trunk repo", () => {
     const repo = WorkspaceRepoSchema.parse({
-      name: "lib", stack: "platform", type: "typescript",
+      name: "lib", repo: "platform", type: "typescript",
       mode: "trunk", main_path: "/main/lib", task_path: "/main/lib",
     })
     expect(repo.mode).toBe("trunk")
@@ -79,33 +63,98 @@ describe("WorkspaceRepoSchema", () => {
   })
 })
 
+// --- RepoRegistryEntrySchema ---
+
+describe("RepoRegistryEntrySchema", () => {
+  test("parses a minimal registry entry", () => {
+    const entry = RepoRegistryEntrySchema.parse({ name: "api", local_path: "/home/dev/api" })
+    expect(entry.name).toBe("api")
+    expect(entry.local_path).toBe("/home/dev/api")
+    expect(entry.default_branch).toBe("main")
+    expect(entry.type).toBe("other")
+    expect(entry.schema_version).toBe("1")
+  })
+
+  test("preserves explicit values", () => {
+    const entry = RepoRegistryEntrySchema.parse({
+      name: "api", local_path: "/dev/api", default_branch: "develop", type: "java",
+    })
+    expect(entry.default_branch).toBe("develop")
+    expect(entry.type).toBe("java")
+  })
+})
+
+// --- TemplateSchema ---
+
+describe("TemplateSchema", () => {
+  test("parses a minimal template", () => {
+    const tpl = TemplateSchema.parse({ name: "my-app" })
+    expect(tpl.name).toBe("my-app")
+    expect(tpl.repos).toEqual([])
+    expect(tpl.schema_version).toBe("1")
+  })
+
+  test("parses template with repos and hooks", () => {
+    const tpl = TemplateSchema.parse({
+      name: "my-app",
+      description: "Main app",
+      repos: [
+        { repo: "api", mode: "worktree", base_branch: "develop", branch_pattern: "feature/<workspace-name>" },
+        { repo: "web", mode: "trunk" },
+      ],
+      hooks: { post_open: ["bun install"] },
+      env: { NODE_ENV: "development" },
+    })
+    expect(tpl.repos).toHaveLength(2)
+    expect(tpl.repos[0].repo).toBe("api")
+    expect(tpl.repos[0].branch_pattern).toBe("feature/<workspace-name>")
+    expect(tpl.hooks?.post_open).toEqual(["bun install"])
+  })
+})
+
+// --- expandBranchPattern ---
+
+describe("expandBranchPattern", () => {
+  test("replaces <workspace-name> with actual name", () => {
+    expect(expandBranchPattern("feature/<workspace-name>", "JIRA-123")).toBe("feature/JIRA-123")
+  })
+
+  test("replaces multiple occurrences", () => {
+    expect(expandBranchPattern("<workspace-name>/<workspace-name>", "fix")).toBe("fix/fix")
+  })
+
+  test("returns pattern unchanged if no placeholder", () => {
+    expect(expandBranchPattern("feature/static", "ws")).toBe("feature/static")
+  })
+})
+
 // --- Read/write round-trip ---
 
-describe("stack file I/O", () => {
+describe("workspace file I/O", () => {
   let tmp: string
 
   beforeEach(() => { tmp = makeTmpDir("config") })
   afterEach(() => cleanup(tmp))
 
-  test("writeStack + readStack round-trips correctly", async () => {
-    // Dynamically set config dir to tmp
+  test("writeWorkspace + readWorkspace round-trips correctly", async () => {
     process.env.HOME = tmp
-    const { writeStack, readStack } = await import("../../src/lib/config")
+    const { writeWorkspace, readWorkspace } = await import("../../src/lib/config")
 
-    const stack = StackSchema.parse({
-      name: "test-stack",
-      description: "My stack",
-      repos: [{ name: "repo-a", path: "/main/repo-a", type: "java", default_mode: "worktree", default_branch: "develop" }],
+    const ws = WorkspaceSchema.parse({
+      name: "test-workspace",
+      description: "My workspace",
+      branch: "feature/test",
+      created: "2026-01-01",
+      template: "my-app",
     })
 
-    writeStack(stack)
-    const loaded = readStack("test-stack")
+    writeWorkspace(ws)
+    const loaded = readWorkspace("test-workspace")
 
-    expect(loaded.name).toBe("test-stack")
-    expect(loaded.description).toBe("My stack")
-    expect(loaded.repos).toHaveLength(1)
-    expect(loaded.repos[0].name).toBe("repo-a")
-    expect(loaded.repos[0].default_branch).toBe("develop")
+    expect(loaded.name).toBe("test-workspace")
+    expect(loaded.description).toBe("My workspace")
+    expect(loaded.branch).toBe("feature/test")
+    expect(loaded.template).toBe("my-app")
   })
 })
 
@@ -113,11 +162,10 @@ describe("stack file I/O", () => {
 
 describe("formatZodError", () => {
   test("formats field-path error messages", () => {
-    const result = StackSchema.safeParse({ name: 123 })
+    const result = WorkspaceSchema.safeParse({ name: 123 })
     expect(result.success).toBe(false)
     if (!result.success) {
       const msg = formatZodError(result.error)
-      // Should contain the field path and/or the error description
       expect(msg.toLowerCase()).toMatch(/name|expected string/)
     }
   })
@@ -132,7 +180,7 @@ describe("formatZodError", () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       const msg = formatZodError(result.error)
-      // Nested path should use dot notation (e.g. repos.0.stack)
+      // Nested path should use dot notation (e.g. repos.0.repo)
       expect(msg).toMatch(/repos\.0\./)
     }
   })
@@ -152,71 +200,49 @@ describe("formatZodError", () => {
 // --- schema_version ---
 
 describe("schema_version", () => {
-  test("defaults to '1' when absent in StackSchema", () => {
-    const stack = StackSchema.parse({ name: "test" })
-    expect(stack.schema_version).toBe("1")
-  })
-
   test("defaults to '1' when absent in WorkspaceSchema", () => {
     const ws = WorkspaceSchema.parse({ name: "w", branch: "b", created: "d" })
     expect(ws.schema_version).toBe("1")
-  })
-
-  test("preserves explicit schema_version in StackSchema", () => {
-    const stack = StackSchema.parse({ name: "test", schema_version: "2" })
-    expect(stack.schema_version).toBe("2")
   })
 
   test("preserves explicit schema_version in WorkspaceSchema", () => {
     const ws = WorkspaceSchema.parse({ name: "w", branch: "b", created: "d", schema_version: "3" })
     expect(ws.schema_version).toBe("3")
   })
+
+  test("defaults to '1' when absent in TemplateSchema", () => {
+    const tpl = TemplateSchema.parse({ name: "t" })
+    expect(tpl.schema_version).toBe("1")
+  })
 })
 
 // --- CONF-02: minimal YAML shape guard ---
 
 describe("CONF-02: minimal YAML shape guard", () => {
-  test("minimal stack (only required fields) still parses", () => {
-    expect(() => StackSchema.parse({ name: "minimal" })).not.toThrow()
-  })
-
   test("minimal workspace (only required fields) still parses", () => {
     expect(() => WorkspaceSchema.parse({ name: "w", branch: "main", created: "2026-01-01" })).not.toThrow()
   })
 })
 
 // --- corrupt YAML handling (CONF-01) ---
-// Note: STACKS_DIR and WORKSPACES_DIR are resolved at module load time from the real HOME.
+// Note: WORKSPACES_DIR is resolved at module load time from the real HOME.
 // Tests write files directly to these dirs with unique test-prefixed names to avoid
 // interfering with real user data, then clean them up in afterEach.
 
 describe("corrupt YAML handling", () => {
   const TEST_PREFIX = "_test-corrupt-"
-  let createdStackFiles: string[] = []
   let createdWorkspaceFiles: string[] = []
 
   beforeEach(() => {
-    createdStackFiles = []
     createdWorkspaceFiles = []
-    mkdirSync(STACKS_DIR, { recursive: true })
     mkdirSync(WORKSPACES_DIR, { recursive: true })
   })
 
   afterEach(() => {
-    for (const f of createdStackFiles) {
-      try { rmSync(f) } catch { /* ignore */ }
-    }
     for (const f of createdWorkspaceFiles) {
       try { rmSync(f) } catch { /* ignore */ }
     }
   })
-
-  function writeStackFile(name: string, content: string): string {
-    const p = join(STACKS_DIR, `${TEST_PREFIX}${name}.yml`)
-    writeFileSync(p, content, "utf-8")
-    createdStackFiles.push(p)
-    return p
-  }
 
   function writeWorkspaceFile(name: string, content: string): string {
     const p = join(WORKSPACES_DIR, `${TEST_PREFIX}${name}.yml`)
@@ -224,21 +250,6 @@ describe("corrupt YAML handling", () => {
     createdWorkspaceFiles.push(p)
     return p
   }
-
-  test("listStacks skips corrupt stack YAML and returns only valid ones", () => {
-    // Valid stack
-    writeStackFile("good", "name: \"_test-corrupt-good\"\n")
-    // Schema-invalid stack (name must be a string)
-    writeStackFile("bad", "name: 9999\nrepos: []\n")
-
-    const stacks = listStacks()
-    const names = stacks.map((s) => s.name)
-
-    expect(names).toContain("_test-corrupt-good")
-    expect(names).not.toContain("_test-corrupt-bad")
-    // Total should not include the bad one relative to what we added
-    expect(names.filter((n) => n.startsWith(TEST_PREFIX))).toHaveLength(1)
-  })
 
   test("listWorkspaces skips corrupt workspace YAML and returns only valid ones", () => {
     // Valid workspace
@@ -253,29 +264,11 @@ describe("corrupt YAML handling", () => {
     expect(names).not.toContain("_test-corrupt-bad-ws")
     expect(names.filter((n) => n.startsWith("_test-corrupt"))).toHaveLength(1)
   })
-
-  test("listStacks handles syntactically invalid YAML without throwing", () => {
-    writeStackFile("syntax-err", ": invalid: yaml: [[")
-
-    let result: ReturnType<typeof listStacks> | undefined
-    expect(() => {
-      result = listStacks()
-    }).not.toThrow()
-    // Syntactically invalid YAML is skipped
-    const names = (result ?? []).map((s) => s.name)
-    expect(names).not.toContain(`${TEST_PREFIX}syntax-err`)
-  })
 })
 
 // --- FilesSchema extensions ---
 
 describe("FilesSchema extensions", () => {
-  // SCHEMA-01: StackSchema backward compat — files: absent
-  test("SCHEMA-01: StackSchema parses without files: field (backward compat)", () => {
-    const result = StackSchema.parse({ name: "s" })
-    expect(result.files).toBeUndefined()
-  })
-
   // SCHEMA-02: WorkspaceSchema backward compat — files: absent
   test("SCHEMA-02: WorkspaceSchema parses without files: field (backward compat)", () => {
     const result = WorkspaceSchema.parse({ name: "w", branch: "b", created: "2026-01-01" })
@@ -286,7 +279,7 @@ describe("FilesSchema extensions", () => {
   test("SCHEMA-03: WorkspaceRepoSchema parses without files: field (backward compat)", () => {
     const result = WorkspaceRepoSchema.parse({
       name: "r",
-      stack: "s",
+      repo: "s",
       type: "other",
       mode: "worktree",
       main_path: "/m",
@@ -295,16 +288,7 @@ describe("FilesSchema extensions", () => {
     expect(result.files).toBeUndefined()
   })
 
-  // SCHEMA-04: All three schemas parse with files: present
-  test("SCHEMA-04: StackSchema parses with files: present", () => {
-    const result = StackSchema.parse({
-      name: "s",
-      files: { copy: [".env"], symlink: ["node_modules"] },
-    })
-    expect(result.files?.copy).toEqual([".env"])
-    expect(result.files?.symlink).toEqual(["node_modules"])
-  })
-
+  // SCHEMA-04: WorkspaceSchema parses with files: present
   test("SCHEMA-04: WorkspaceSchema parses with files: present", () => {
     const result = WorkspaceSchema.parse({
       name: "w",
@@ -319,7 +303,7 @@ describe("FilesSchema extensions", () => {
   test("SCHEMA-04: WorkspaceRepoSchema parses with files: present", () => {
     const result = WorkspaceRepoSchema.parse({
       name: "r",
-      stack: "s",
+      repo: "s",
       type: "other",
       mode: "worktree",
       main_path: "/m",

@@ -1,21 +1,27 @@
 import { Command } from "commander"
 
-type DynamicCompletion = "workspace" | "stack" | "shells"
+type DynamicCompletion = "workspace" | "repo" | "template" | "shells"
 
 const DYNAMIC_COMPLETIONS: Record<string, DynamicCompletion> = {
-  clone:        "workspace",
-  open:         "workspace",
-  status:       "workspace",
-  clean:        "workspace",
-  remove:       "workspace",
-  merge:        "workspace",
-  rename:       "workspace",
-  run:          "workspace",
-  sync:         "workspace",
-  cd:           "workspace",
-  "stack.edit": "stack",
-  "stack.show": "stack",
-  completion:   "shells",
+  clone:             "workspace",
+  open:              "workspace",
+  status:            "workspace",
+  clean:             "workspace",
+  remove:            "workspace",
+  merge:             "workspace",
+  rename:            "workspace",
+  run:               "workspace",
+  sync:              "workspace",
+  cd:                "workspace",
+  "repo.show":       "repo",
+  "repo.remove":     "repo",
+  "repo.rename":     "repo",
+  "template.show":   "template",
+  "template.edit":   "template",
+  "template.clone":  "template",
+  "template.rename": "template",
+  "template.remove": "template",
+  completion:        "shells",
 }
 
 interface OptionInfo {
@@ -66,10 +72,17 @@ function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string
       `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
     )
   }
-  if (type === "stack") {
+  if (type === "repo") {
     return (
       `${indent}local names\n` +
-      `${indent}names=$(ls "$HOME/.config/${name}/stacks" 2>/dev/null | sed 's/\\.yml$//')\n` +
+      `${indent}names=$(grep '^- name:' "$HOME/.config/${name}/registry.yml" 2>/dev/null | sed 's/^- name: //')\n` +
+      `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
+    )
+  }
+  if (type === "template") {
+    return (
+      `${indent}local names\n` +
+      `${indent}names=$(ls "$HOME/.config/${name}/templates" 2>/dev/null | sed 's/\\.yml$//')\n` +
       `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
     )
   }
@@ -185,7 +198,9 @@ function zshCaseBody(node: CommandNode, id: string): string {
   }
 
   if (dynamic && options.length > 0) {
-    const helper = dynamic === "stack" ? `_${id}_stacks` : `_${id}_workspaces`
+    const helper = dynamic === "repo" ? `_${id}_repos`
+      : dynamic === "template" ? `_${id}_templates`
+      : `_${id}_workspaces`
     const pos = `'${firstArgRequired ? ":" : "::"} :${helper}'`
     let out = `        _arguments \\\n`
     for (const opt of options) {
@@ -200,8 +215,12 @@ function zshCaseBody(node: CommandNode, id: string): string {
     return `        _${id}_workspaces ;;\n`
   }
 
-  if (dynamic === "stack") {
-    return `        _${id}_stacks ;;\n`
+  if (dynamic === "repo") {
+    return `        _${id}_repos ;;\n`
+  }
+
+  if (dynamic === "template") {
+    return `        _${id}_templates ;;\n`
   }
 
   return ""
@@ -229,7 +248,9 @@ function generateZshSubcmdHelper(node: CommandNode, id: string): string {
   out += `  else\n`
   out += `    case $words[2] in\n`
   for (const [dynType, names] of byDynamic) {
-    const helper = dynType === "stack" ? `_${id}_stacks` : `_${id}_workspaces`
+    const helper = dynType === "repo" ? `_${id}_repos`
+      : dynType === "template" ? `_${id}_templates`
+      : `_${id}_workspaces`
     out += `      ${names.join("|")})\n`
     out += `        ${helper} ;;\n`
   }
@@ -299,10 +320,16 @@ export function generateZsh(program: Command): string {
   out += `  _values 'workspace' $workspaces\n`
   out += `}\n`
   out += "\n"
-  out += `_${id}_stacks() {\n`
-  out += `  local stacks_dir="$HOME/.config/${name}/stacks"\n`
-  out += `  local stacks=(\${stacks_dir}/*.yml(N:t:r))\n`
-  out += `  _values 'stack' $stacks\n`
+  out += `_${id}_repos() {\n`
+  out += `  local names\n`
+  out += `  names=($(grep '^- name:' "$HOME/.config/${name}/registry.yml" 2>/dev/null | sed 's/^- name: //'))\n`
+  out += `  _values 'repo' $names\n`
+  out += `}\n`
+  out += "\n"
+  out += `_${id}_templates() {\n`
+  out += `  local templates_dir="$HOME/.config/${name}/templates"\n`
+  out += `  local templates=(\${templates_dir}/*.yml(N:t:r))\n`
+  out += `  _values 'template' $templates\n`
   out += `}\n`
 
   for (const node of nodes) {
@@ -347,10 +374,17 @@ export function generateFish(program: Command): string {
   out += "  end\n"
   out += "end\n"
   out += "\n"
-  out += `function __${id}_stacks\n`
-  out += `  set -l stacks_dir "$HOME/.config/${name}/stacks"\n`
-  out += "  if test -d $stacks_dir\n"
-  out += "    ls $stacks_dir | sed 's/\\.yml$//'\n"
+  out += `function __${id}_repos\n`
+  out += `  set -l reg "$HOME/.config/${name}/registry.yml"\n`
+  out += "  if test -f $reg\n"
+  out += "    grep '^- name:' $reg | sed 's/^- name: //'\n"
+  out += "  end\n"
+  out += "end\n"
+  out += "\n"
+  out += `function __${id}_templates\n`
+  out += `  set -l templates_dir "$HOME/.config/${name}/templates"\n`
+  out += "  if test -d $templates_dir\n"
+  out += "    ls $templates_dir | sed 's/\\.yml$//'\n"
   out += "  end\n"
   out += "end\n"
   out += "\n"
@@ -392,12 +426,20 @@ export function generateFish(program: Command): string {
       out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and not __fish_seen_subcommand_from ${subcmdNames}' \\\n`
       out += `  -a '${sub.name}' -d '${sub.description}'\n`
     }
-    // Stack-name completions for subcommands that need it
-    const stackDynSubs = node.subcommands.filter(s => s.dynamic === "stack")
-    if (stackDynSubs.length > 0) {
-      out += `\nfor cmd in ${stackDynSubs.map(s => s.name).join(" ")}\n`
+    // Repo-name completions for subcommands that need it
+    const repoDynSubs = node.subcommands.filter(s => s.dynamic === "repo")
+    if (repoDynSubs.length > 0) {
+      out += `\nfor cmd in ${repoDynSubs.map(s => s.name).join(" ")}\n`
       out += `  complete -c ${name} -f -n "__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from $cmd" \\\n`
-      out += `    -a "(__${id}_stacks)"\n`
+      out += `    -a "(__${id}_repos)"\n`
+      out += "end\n"
+    }
+    // Template-name completions for subcommands that need it
+    const templateDynSubs = node.subcommands.filter(s => s.dynamic === "template")
+    if (templateDynSubs.length > 0) {
+      out += `\nfor cmd in ${templateDynSubs.map(s => s.name).join(" ")}\n`
+      out += `  complete -c ${name} -f -n "__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from $cmd" \\\n`
+      out += `    -a "(__${id}_templates)"\n`
       out += "end\n"
     }
   }

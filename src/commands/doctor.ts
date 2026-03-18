@@ -4,11 +4,10 @@ import { join } from "path"
 import { $ } from "bun"
 import {
   listWorkspaces,
-  listStacks,
-  stackExists,
+  readRegistry,
   readGlobalConfig,
   type Workspace,
-  type Stack,
+  type RepoRegistryEntry,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
 
@@ -78,7 +77,7 @@ function findMissingMainClones(workspaces: Workspace[]): Issue[] {
           icon: "fail",
           entity: ws.name,
           message: `main_path missing: ${repo.main_path}`,
-          fix: `ws stack edit ${repo.stack}`,
+          fix: `ws repo show ${repo.repo}`,
         })
       }
     }
@@ -108,20 +107,22 @@ async function findStaleCmuxRefs(workspaces: Workspace[]): Promise<Issue[]> {
   return issues
 }
 
-/** Workspace repos referencing stacks that don't exist. */
-function findDeadStackRefs(workspaces: Workspace[]): Issue[] {
+/** Workspace repos referencing registry entries that don't exist. */
+function findDeadRepoRefs(workspaces: Workspace[]): Issue[] {
   const issues: Issue[] = []
+  const registry = readRegistry()
+  const registryNames = new Set(registry.map(r => r.name))
   const checked = new Set<string>()
   for (const ws of workspaces) {
     for (const repo of ws.repos) {
-      const key = `${ws.name}:${repo.stack}`
+      const key = `${ws.name}:${repo.repo}`
       if (checked.has(key)) continue
       checked.add(key)
-      if (!stackExists(repo.stack)) {
+      if (!registryNames.has(repo.repo)) {
         issues.push({
           icon: "fail",
           entity: ws.name,
-          message: `references non-existent stack '${repo.stack}'`,
+          message: `references non-registered repo '${repo.repo}'`,
         })
       }
     }
@@ -129,19 +130,17 @@ function findDeadStackRefs(workspaces: Workspace[]): Issue[] {
   return issues
 }
 
-/** Stack repos whose path doesn't exist on disk. */
-function findDeadRepoPaths(stacks: Stack[]): Issue[] {
+/** Registry entries whose local_path doesn't exist on disk. */
+function findDeadRegistryPaths(registry: RepoRegistryEntry[]): Issue[] {
   const issues: Issue[] = []
-  for (const stack of stacks) {
-    for (const repo of stack.repos) {
-      if (!existsSync(repo.path)) {
-        issues.push({
-          icon: "fail",
-          entity: stack.name,
-          message: `repo '${repo.name}' path not found: ${repo.path}`,
-          fix: `ws stack edit ${stack.name}`,
-        })
-      }
+  for (const entry of registry) {
+    if (!existsSync(entry.local_path)) {
+      issues.push({
+        icon: "fail",
+        entity: entry.name,
+        message: `local_path not found: ${entry.local_path}`,
+        fix: `ws repo remove ${entry.name}`,
+      })
     }
   }
   return issues
@@ -153,18 +152,18 @@ export const doctorCommand = new Command("doctor")
     const config = readGlobalConfig()
     const tasksDir = getTasksDir(config.workspace_root)
     const workspaces = listWorkspaces()
-    const stacks = listStacks()
+    const registry = readRegistry()
 
     // --- Workspace checks ---
     const orphaned = findOrphanedTaskDirs(tasksDir, workspaces)
     const missingWorktrees = findMissingWorktrees(workspaces)
     const missingMains = findMissingMainClones(workspaces)
     const staleCmux = await findStaleCmuxRefs(workspaces)
-    const deadStacks = findDeadStackRefs(workspaces)
+    const deadRepoRefs = findDeadRepoRefs(workspaces)
 
     // Group workspace issues by entity
     const wsIssuesByEntity = new Map<string, Issue[]>()
-    for (const issue of [...missingWorktrees, ...missingMains, ...staleCmux, ...deadStacks]) {
+    for (const issue of [...missingWorktrees, ...missingMains, ...staleCmux, ...deadRepoRefs]) {
       const existing = wsIssuesByEntity.get(issue.entity) ?? []
       existing.push(issue)
       wsIssuesByEntity.set(issue.entity, existing)
@@ -202,14 +201,14 @@ export const doctorCommand = new Command("doctor")
       }
     }
 
-    // --- Stack checks ---
-    const deadRepoPaths = findDeadRepoPaths(stacks)
+    // --- Registry checks ---
+    const deadRegistryPaths = findDeadRegistryPaths(registry)
 
-    if (deadRepoPaths.length > 0) {
+    if (deadRegistryPaths.length > 0) {
       console.log(
-        `\n  ${deadRepoPaths.length} stack issue${deadRepoPaths.length === 1 ? "" : "s"}:`
+        `\n  ${deadRegistryPaths.length} registry issue${deadRegistryPaths.length === 1 ? "" : "s"}:`
       )
-      for (const issue of deadRepoPaths) {
+      for (const issue of deadRegistryPaths) {
         console.log(`  ${icon(issue.icon)}  ${issue.entity}: ${issue.message}`)
         if (issue.fix) {
           console.log(`       \u2192 run: ${issue.fix}`)
@@ -250,7 +249,7 @@ export const doctorCommand = new Command("doctor")
       }
     }
 
-    if (wsIssueCount === 0 && deadRepoPaths.length === 0 && binaryIssues.length === 0) {
+    if (wsIssueCount === 0 && deadRegistryPaths.length === 0 && binaryIssues.length === 0) {
       console.log("\n  Everything looks good!")
     }
 
