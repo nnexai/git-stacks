@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: next-milestone
-status: idle
-stopped_at: v1.0 milestone archived, v0.2.0 tagged
-last_updated: "2026-03-18T22:35:40.148Z"
-last_activity: 2026-03-18 — Completed quick task 260318-wrq: the readme is stale - it still talks about the stack command and similar. looks at the existing commands and workflows and update it!
+milestone: v0.3.0
+milestone_name: dashboard-ui-overhaul
+status: planning
+stopped_at: ""
+last_updated: "2026-03-19T00:00:00.000Z"
+last_activity: 2026-03-19 — Milestone v0.3.0 started
 progress:
   total_phases: 0
   completed_phases: 0
@@ -18,16 +18,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-18)
+See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Between milestones — v0.2.0 shipped, next milestone not yet planned.
+**Current focus:** v0.3.0 Dashboard UI Overhaul — defining requirements.
 
 ## Current Position
 
-Milestone: v1.0 complete, archived as v0.2.0
-Status: Idle — awaiting next milestone planning
-Last activity: 2026-03-18 — Completed quick task 260318-wrq: the readme is stale - it still talks about the stack command and similar. looks at the existing commands and workflows and update it!
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-19 — Milestone v0.3.0 started
 
 ## Previous Milestone Summary
 
