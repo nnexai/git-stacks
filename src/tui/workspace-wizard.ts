@@ -62,7 +62,7 @@ function buildReposFromTemplate(
   template: Template,
   registry: RepoRegistryEntry[],
   wsName: string,
-  branch: string,
+  _branch: string,
   tasksDir: string,
 ): WorkspaceRepo[] {
   const registryMap = new Map(registry.map(r => [r.name, r]))

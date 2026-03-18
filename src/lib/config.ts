@@ -105,6 +105,8 @@ export const WorkspaceSettingsSchema = z.object({
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettingsSchema>
 
 const WorkspaceHooksSchema = z.object({
+  pre_create: z.array(z.string()).optional(),
+  post_create: z.array(z.string()).optional(),
   pre_open: z.array(z.string()).optional(),
   post_open: z.array(z.string()).optional(),
   post_merge: z.array(z.string()).optional(),
