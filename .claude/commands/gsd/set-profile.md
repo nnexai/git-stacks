@@ -9,4 +9,4 @@ allowed-tools:
 
 Show the following output to the user verbatim, with no extra commentary:
 
-!`node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-set-model-profile $ARGUMENTS --raw`
+!`node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-set-model-profile $ARGUMENTS --raw`

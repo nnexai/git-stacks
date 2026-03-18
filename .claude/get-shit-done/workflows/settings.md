@@ -12,8 +12,8 @@ Read all files referenced by the invoking prompt's execution_context before star
 Ensure config exists and load current state:
 
 ```bash
-node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-ensure-section
-INIT=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" state load)
+node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-ensure-section
+INIT=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" state load)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -49,7 +49,7 @@ AskUserQuestion([
       { label: "Quality", description: "Opus everywhere except verification (highest cost)" },
       { label: "Balanced (Recommended)", description: "Opus for planning, Sonnet for research/execution/verification" },
       { label: "Budget", description: "Sonnet for writing, Haiku for research/verification (lowest cost)" },
-      { label: "Inherit", description: "Use current session model for all agents (best for OpenCode /model)" }
+      { label: "Inherit", description: "Use current session model for all agents (best for OpenRouter, local models, or runtime model switching)" }
     ]
   },
   {

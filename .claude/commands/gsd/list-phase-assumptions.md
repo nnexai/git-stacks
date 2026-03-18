@@ -17,7 +17,7 @@ Output: Conversational output only (no file creation) - ends with "What do you t
 </objective>
 
 <execution_context>
-@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/list-phase-assumptions.md
+@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/list-phase-assumptions.md
 </execution_context>
 
 <context>
