@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-ux-and-execution-02-PLAN.md
-last_updated: "2026-03-18T20:36:30.719Z"
+stopped_at: Completed 04-ux-and-execution-03-PLAN.md
+last_updated: "2026-03-18T20:53:45.037Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 19
-  completed_plans: 17
+  completed_plans: 18
   percent: 20
 ---
 
@@ -66,6 +66,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 03-design-and-conditional-implementation P05 | 3 | 2 tasks | 3 files |
 | Phase 04-ux-and-execution P01 | 4 | 4 tasks | 10 files |
 | Phase 04-ux-and-execution P02 | 2 | 2 tasks | 3 files |
+| Phase 04-ux-and-execution P03 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -120,6 +121,8 @@ Recent decisions affecting current work:
 - [Phase 04-ux-and-execution]: getWorkspaceListInfo always runs dirty checks regardless of checkStatus param — param kept for backward compat (UX-04); dirty changed from boolean|null to boolean
 - [Phase 04-ux-and-execution]: list default format: dirty mark + name + branch + repo count + lastOpened age — drops description column in favor of useful metrics
 - [Phase 04-ux-and-execution]: openWorkspace re-reads workspace before writing last_opened to preserve latest YAML state after hooks/integrations
+- [Phase 04-ux-and-execution]: doctor --json: collect all issues first then output pure JSON — guarantees no human lines leak to stdout when --json active
+- [Phase 04-ux-and-execution]: doctor --fix: continue past individual failures, report N fixed / M failed at end — consistent with plan spec
 
 ### Roadmap Evolution
 
@@ -137,6 +140,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:36:30.713Z
-Stopped at: Completed 04-ux-and-execution-02-PLAN.md
+Last session: 2026-03-18T20:53:45.035Z
+Stopped at: Completed 04-ux-and-execution-03-PLAN.md
 Resume file: None
