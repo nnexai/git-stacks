@@ -1,9 +1,27 @@
 import { cpSync, symlinkSync, lstatSync, mkdirSync } from "fs"
 import { join, dirname, basename, isAbsolute } from "path"
 import { expandHome } from "./paths"
-import type { StackRepo, Stack, WorkspaceRepo, Workspace, Files } from "./config"
+import type { WorkspaceRepo, Workspace, Files } from "./config"
 
 export type ApplyResult = { ok: true; warnings?: string[] } | { ok: false; error: string }
+
+/**
+ * Minimal interface for a file ops source at the per-repo level.
+ * Replaces the old StackRepo type, keeping only the fields needed for file ops.
+ */
+export interface FileOpsRepoSource {
+  name?: string
+  path: string
+  files?: Files
+}
+
+/**
+ * Minimal interface for a file ops source at the workspace-instance level.
+ * Replaces the old Stack type, keeping only the fields needed for file ops.
+ */
+export interface FileOpsWorkspaceSource {
+  files?: Files
+}
 
 /**
  * Check if something exists at the given path (file, directory, or symlink — including dangling).
@@ -122,12 +140,12 @@ export function processFileList(
 
 /**
  * Apply file operations at the per-repo level.
- * Merges stack repo files config with workspace repo files config (additive).
+ * Merges source files config with workspace repo files config (additive).
  * Source base: wsRepo.main_path (where large files live in the main clone)
  * Destination: wsRepo.task_path (the worktree)
  */
-export function applyFileOpsForRepo(stackRepo: StackRepo, wsRepo: WorkspaceRepo): ApplyResult {
-  const merged = mergeFiles(stackRepo.files, wsRepo.files)
+export function applyFileOpsForRepo(source: FileOpsRepoSource, wsRepo: WorkspaceRepo): ApplyResult {
+  const merged = mergeFiles(source.files, wsRepo.files)
   const sourceBase = wsRepo.main_path
   const destDir = wsRepo.task_path
 
@@ -147,16 +165,16 @@ export function applyFileOpsForRepo(stackRepo: StackRepo, wsRepo: WorkspaceRepo)
 
 /**
  * Apply file operations at the workspace-instance level.
- * Merges stack files config with workspace files config (additive).
+ * Merges source files config with workspace files config (additive).
  * Source base: wsInstanceRoot (relative paths resolve against workspace instance root)
  * Destination: wsInstanceRoot
  */
 export function applyFileOpsForWorkspace(
-  stack: Stack,
+  source: FileOpsWorkspaceSource,
   workspace: Workspace,
   wsInstanceRoot: string
 ): ApplyResult {
-  const merged = mergeFiles(stack.files, workspace.files)
+  const merged = mergeFiles(source.files, workspace.files)
   const sourceBase = wsInstanceRoot
   const destDir = wsInstanceRoot
 
@@ -180,21 +198,19 @@ export function applyFileOpsForWorkspace(
  * that resolves to a location outside the workspace root (wsDir = join(tasksDir, workspace.name)).
  * Reasons purely from path math — never checks filesystem existence (Pitfall 4).
  *
- * Checks both workspace-instance level file ops (across all stacks) and per-repo
- * file ops (for worktree-mode repos). Returns warning strings for any destination
- * that is NOT inside join(tasksDir, workspace.name).
+ * Checks workspace-instance level file ops and per-repo file ops (for worktree-mode repos).
+ * Returns warning strings for any destination that is NOT inside join(tasksDir, workspace.name).
  */
 export function warnExternalFiles(
   workspace: Workspace,
-  stacks: Map<string, Stack>,
-  _wsInstanceRoot: string,
-  tasksDir: string
+  wsDir: string,
+  tasksDir: string,
 ): string[] {
   const warnings: string[] = []
-  const wsDir = join(tasksDir, workspace.name)
+  const boundaryDir = join(tasksDir, workspace.name)
 
   function isInternal(resolvedPath: string): boolean {
-    return resolvedPath === wsDir || resolvedPath.startsWith(wsDir + "/")
+    return resolvedPath === boundaryDir || resolvedPath.startsWith(boundaryDir + "/")
   }
 
   function checkEntry(entry: string): void {
@@ -210,37 +226,21 @@ export function warnExternalFiles(
     // Relative paths always resolve inside destDir, so always internal
   }
 
-  // Collect all workspace-level files (deduplicate across stacks by using a Set for seen entries)
-  // Workspace-instance level: iterate each stack, merge with workspace.files
-  const seenWsEntries = new Set<string>()
-  for (const [, stack] of stacks) {
-    const merged = mergeFiles(stack.files, workspace.files)
-    for (const entry of [...merged.copy, ...merged.symlink]) {
-      if (!seenWsEntries.has(entry)) {
-        seenWsEntries.add(entry)
-        checkEntry(entry)
-      }
-    }
+  // Collect workspace-level files
+  if (workspace.files?.copy) {
+    for (const entry of workspace.files.copy) checkEntry(entry)
+  }
+  if (workspace.files?.symlink) {
+    for (const entry of workspace.files.symlink) checkEntry(entry)
   }
 
-  // If stacks map is empty but workspace has files, still check workspace files
-  if (stacks.size === 0) {
-    const merged = mergeFiles(undefined, workspace.files)
-    for (const entry of [...merged.copy, ...merged.symlink]) {
-      if (!seenWsEntries.has(entry)) {
-        seenWsEntries.add(entry)
-        checkEntry(entry)
-      }
+  // Collect per-repo files (workspace repos carry their own files config)
+  for (const repo of workspace.repos) {
+    if (repo.files?.copy) {
+      for (const entry of repo.files.copy) checkEntry(entry)
     }
-  }
-
-  // Per-repo level: iterate worktree repos
-  for (const wsRepo of workspace.repos.filter(r => r.mode === "worktree")) {
-    const stack = stacks.get(wsRepo.stack)
-    const stackRepo = stack?.repos.find(r => r.name === wsRepo.name)
-    const merged = mergeFiles(stackRepo?.files, wsRepo.files)
-    for (const entry of [...merged.copy, ...merged.symlink]) {
-      checkEntry(entry)
+    if (repo.files?.symlink) {
+      for (const entry of repo.files.symlink) checkEntry(entry)
     }
   }
 
@@ -250,11 +250,11 @@ export function warnExternalFiles(
 /**
  * @deprecated Use applyFileOpsForRepo instead.
  * Kept for backward compatibility with the existing call site in workspace-wizard.ts.
- * Applies file operations using only the stack repo's files config (no workspace merge).
- * Source: stackRepo.path, Destination: taskPath
+ * Applies file operations using only the source repo's files config (no workspace merge).
+ * Source: source.path, Destination: taskPath
  */
-export function applyFileOperations(stackRepo: StackRepo, taskPath: string): void {
-  if (!stackRepo.files) return
-  processFileList("copy", stackRepo.files.copy ?? [], stackRepo.path, taskPath)
-  processFileList("symlink", stackRepo.files.symlink ?? [], stackRepo.path, taskPath)
+export function applyFileOperations(source: FileOpsRepoSource, taskPath: string): void {
+  if (!source.files) return
+  processFileList("copy", source.files.copy ?? [], source.path, taskPath)
+  processFileList("symlink", source.files.symlink ?? [], source.path, taskPath)
 }

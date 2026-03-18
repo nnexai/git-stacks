@@ -4,13 +4,10 @@ import { existsSync, mkdirSync, writeFileSync, rmSync, unlinkSync } from "fs"
 import { execSync } from "child_process"
 import { makeTmpDir, cleanup, makeGitRepo } from "../helpers"
 import {
-  writeStack,
   writeWorkspace,
   workspaceExists,
   workspacePath,
-  stackPath,
   writeGlobalConfig,
-  StackSchema,
   WorkspaceSchema,
 } from "../../src/lib/config"
 import {
@@ -39,7 +36,7 @@ function uniqueWsName(prefix = "test-ws"): string {
   return `_wsops-${prefix}-${FILE_RUN_ID}-${_testCounter}`
 }
 
-function uniqueStackName(prefix = "test-stack"): string {
+function uniqueRegistryName(prefix = "test-repo"): string {
   return `_wsops-${prefix}-${FILE_RUN_ID}-${_testCounter}`
 }
 
@@ -71,12 +68,12 @@ function restoreGlobalConfig() {
  * Core fixture builder: creates real git repos, stack YAML, workspace YAML,
  * and actual git worktrees. Returns all handles needed for assertions.
  *
- * Caller provides wsName and stackName to ensure uniqueness per test.
+ * Caller provides wsName and registryName to ensure uniqueness per test.
  */
 async function setupWorkspaceFixture(
   tmp: string,
   wsName: string,
-  stackName: string,
+  registryName: string,
   opts: { repoCount?: number } = {}
 ) {
   const repoCount = opts.repoCount ?? 1
@@ -102,26 +99,14 @@ async function setupWorkspaceFixture(
 
   const branchName = "feature/test"
 
-  // Write stack YAML
-  writeStack(StackSchema.parse({
-    name: stackName,
-    repos: repos.map((r) => ({
-      name: r.name,
-      path: r.repoPath,
-      type: "other",
-      default_mode: "worktree",
-      default_branch: "main",
-    })),
-  }))
-
-  // Write workspace YAML
+  // Write workspace YAML (registry model — no stack YAML needed)
   writeWorkspace(WorkspaceSchema.parse({
     name: wsName,
     branch: branchName,
     created: new Date().toISOString(),
     repos: repos.map((r) => ({
       name: r.name,
-      stack: stackName,
+      repo: registryName,
       type: "other",
       mode: "worktree",
       main_path: r.repoPath,
@@ -134,23 +119,17 @@ async function setupWorkspaceFixture(
     await createWorktree(repo.repoPath, repo.worktreePath, branchName)
   }
 
-  return { repos, wsRoot, tasksDir, branchName, stackName }
+  return { repos, wsRoot, tasksDir, branchName, registryName }
 }
 
 /**
- * Cleanup function: removes workspace YAML, stack YAML, and tmp dir.
+ * Cleanup function: removes workspace YAML and tmp dir.
  */
-function cleanupFixture(wsName: string, stackName: string, tmp: string) {
+function cleanupFixture(wsName: string, _registryName: string, tmp: string) {
   // Remove workspace YAML if it still exists
   const wsYaml = workspacePath(wsName)
   if (existsSync(wsYaml)) {
     try { unlinkSync(wsYaml) } catch { /* ignore */ }
-  }
-
-  // Remove stack YAML
-  const sYaml = stackPath(stackName)
-  if (existsSync(sYaml)) {
-    try { unlinkSync(sYaml) } catch { /* ignore */ }
   }
 
   // Clean tmp dir (worktrees, repos)
@@ -175,7 +154,7 @@ describe("mergeWorkspace", () => {
 
   test("merges all repos and deletes workspace YAML on success", async () => {
     const wsName = uniqueWsName("merge-success")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -195,7 +174,7 @@ describe("mergeWorkspace", () => {
 
   test("preserves workspace YAML when merge fails (BUG-01)", async () => {
     const wsName = uniqueWsName("merge-fail")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 2 })
 
@@ -254,7 +233,7 @@ describe("removeWorkspace", () => {
 
   test("removes worktrees and deletes workspace YAML", async () => {
     const wsName = uniqueWsName("remove-success")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -273,7 +252,7 @@ describe("removeWorkspace", () => {
 
   test("preserves YAML when worktree removal fails (BUG-02)", async () => {
     const wsName = uniqueWsName("remove-fail")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 2 })
 
@@ -316,7 +295,7 @@ describe("cleanWorkspace", () => {
 
   test("removes worktrees without deleting workspace YAML", async () => {
     const wsName = uniqueWsName("clean-success")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -355,7 +334,7 @@ describe("renameWorkspace", () => {
   test("re-registers worktrees at new paths", async () => {
     const wsName = uniqueWsName("rename-from")
     const newWsName = uniqueWsName("rename-to")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos, tasksDir } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -389,7 +368,7 @@ describe("renameWorkspace", () => {
   test("only re-registers worktree-mode repos, not trunk", async () => {
     const wsName = uniqueWsName("rename-trunk")
     const newWsName = uniqueWsName("rename-trunk-to")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     // Set up fixture with 1 worktree repo
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
@@ -400,7 +379,7 @@ describe("renameWorkspace", () => {
     const workspace = readWorkspace(wsName)
     workspace.repos.push({
       name: "trunk-repo",
-      stack: stackName,
+      repo: stackName,
       type: "other" as const,
       mode: "trunk" as const,
       main_path: trunkRepoPath,
@@ -449,7 +428,7 @@ describe("dry-run", () => {
   // emits [dry-run] prefixed lines, and leaves workspace YAML and worktree intact
   test("SAFE-01 remove dry-run: does not delete worktree or config YAML", async () => {
     const wsName = uniqueWsName("remove-dry")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -477,7 +456,7 @@ describe("dry-run", () => {
   // emits [dry-run] lines, worktrees still exist
   test("SAFE-01 clean dry-run: does not remove worktrees", async () => {
     const wsName = uniqueWsName("clean-dry")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -502,7 +481,7 @@ describe("dry-run", () => {
   // no actual merge, branch and worktree still exist
   test("SAFE-01 merge dry-run: does not merge or delete anything", async () => {
     const wsName = uniqueWsName("merge-dry")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -539,7 +518,7 @@ describe("dry-run", () => {
   test("SAFE-01 rename dry-run: does not re-register worktrees or rename config", async () => {
     const wsName = uniqueWsName("rename-dry-from")
     const newWsName = uniqueWsName("rename-dry-to")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -566,7 +545,7 @@ describe("dry-run", () => {
   // destination emits warning via onProgress before teardown
   test("FILES-17 remove real: emits external file warning via onProgress", async () => {
     const wsName = uniqueWsName("remove-ext")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -593,7 +572,7 @@ describe("dry-run", () => {
   // destination emits warning via onProgress
   test("FILES-17 clean real: emits external file warning via onProgress", async () => {
     const wsName = uniqueWsName("clean-ext")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
@@ -616,7 +595,7 @@ describe("dry-run", () => {
   // also emits external file warnings via onProgress
   test("SAFE-01 dry-run also shows external file warnings", async () => {
     const wsName = uniqueWsName("remove-dry-ext")
-    const stackName = uniqueStackName()
+    const stackName = uniqueRegistryName()
 
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 

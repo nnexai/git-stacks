@@ -13,8 +13,10 @@ import {
   applyFileOpsForRepo,
   applyFileOpsForWorkspace,
   warnExternalFiles,
+  type FileOpsRepoSource,
+  type FileOpsWorkspaceSource,
 } from "../../src/lib/files"
-import type { StackRepo, Stack, WorkspaceRepo, Workspace } from "../../src/lib/config"
+import type { WorkspaceRepo, Workspace } from "../../src/lib/config"
 
 // --- applyEntry ---
 
@@ -249,7 +251,7 @@ describe("applyFileOpsForWorkspace", () => {
     // Create source file at wsRoot
     write(wsRoot, "shared.bin", "big binary data")
 
-    const stack: Partial<Stack> = {
+    const source: FileOpsWorkspaceSource = {
       files: { copy: ["shared.bin"] },
     }
     const workspace: Partial<Workspace> = {
@@ -258,7 +260,7 @@ describe("applyFileOpsForWorkspace", () => {
 
     // Apply workspace-level file ops
     const result = applyFileOpsForWorkspace(
-      stack as Stack,
+      source,
       workspace as Workspace,
       wsRoot
     )
@@ -274,15 +276,14 @@ describe("applyFileOpsForWorkspace", () => {
     mkdir(tmp, "source-data")
     write(srcDir, "config.env", "ENV=prod")
 
-    // Stack files with relative path (resolves against wsInstanceRoot)
-    // Since the source doesn't exist at wsRoot, use absolute path
-    const stack: Partial<Stack> = {
+    // Source files with absolute path (resolves against wsInstanceRoot as basename)
+    const source: FileOpsWorkspaceSource = {
       files: { copy: [join(srcDir, "config.env")] },
     }
     const workspace: Partial<Workspace> = {}
 
     const result = applyFileOpsForWorkspace(
-      stack as Stack,
+      source,
       workspace as Workspace,
       wsRoot
     )
@@ -309,7 +310,7 @@ describe("applyFileOpsForRepo", () => {
     // Create data.bin in the main clone (source)
     write(mainPath, "data.bin", "binary content")
 
-    const stackRepo: Partial<StackRepo> = {
+    const source: FileOpsRepoSource = {
       files: { copy: ["data.bin"] },
       path: mainPath,
     }
@@ -319,23 +320,23 @@ describe("applyFileOpsForRepo", () => {
       files: undefined,
     }
 
-    const result = applyFileOpsForRepo(stackRepo as StackRepo, wsRepo as WorkspaceRepo)
+    const result = applyFileOpsForRepo(source, wsRepo as WorkspaceRepo)
     expect(result.ok).toBe(true)
     // data.bin should appear at task_path
     expect(existsSync(join(taskPath, "data.bin"))).toBe(true)
     expect(readFileSync(join(taskPath, "data.bin"), "utf-8")).toBe("binary content")
   })
 
-  test("FILES-14: workspace repo files merged with stack repo files additively", () => {
+  test("FILES-14: workspace repo files merged with source repo files additively", () => {
     const mainPath = join(tmp, "main-repo")
     const taskPath = join(tmp, "task-repo")
     mkdir(tmp, "main-repo")
     mkdir(tmp, "task-repo")
-    write(mainPath, "stack-file.txt", "from stack")
+    write(mainPath, "source-file.txt", "from source")
     write(mainPath, "ws-file.txt", "from workspace")
 
-    const stackRepo: Partial<StackRepo> = {
-      files: { copy: ["stack-file.txt"] },
+    const source: FileOpsRepoSource = {
+      files: { copy: ["source-file.txt"] },
       path: mainPath,
     }
     const wsRepo: Partial<WorkspaceRepo> = {
@@ -344,9 +345,9 @@ describe("applyFileOpsForRepo", () => {
       files: { copy: ["ws-file.txt"] },
     }
 
-    const result = applyFileOpsForRepo(stackRepo as StackRepo, wsRepo as WorkspaceRepo)
+    const result = applyFileOpsForRepo(source, wsRepo as WorkspaceRepo)
     expect(result.ok).toBe(true)
-    expect(existsSync(join(taskPath, "stack-file.txt"))).toBe(true)
+    expect(existsSync(join(taskPath, "source-file.txt"))).toBe(true)
     expect(existsSync(join(taskPath, "ws-file.txt"))).toBe(true)
   })
 })
@@ -360,8 +361,8 @@ describe("warnExternalFiles", () => {
   afterEach(() => cleanup(tmp))
 
   function makeWorkspace(files?: { copy?: string[]; symlink?: string[] }, repos?: Array<{
-    name: string; stack: string; mode: "worktree" | "trunk"; main_path: string; task_path: string; files?: { copy?: string[]; symlink?: string[] }
-  }>): import("../../src/lib/config").Workspace {
+    name: string; repo?: string; mode: "worktree" | "trunk"; main_path: string; task_path: string; files?: { copy?: string[]; symlink?: string[] }
+  }>): Workspace {
     return {
       name: "test-ws",
       schema_version: "1",
@@ -369,29 +370,11 @@ describe("warnExternalFiles", () => {
       created: new Date().toISOString(),
       repos: (repos ?? []).map(r => ({
         name: r.name,
-        stack: r.stack,
+        repo: r.repo ?? "test-repo",
         type: "other" as const,
         mode: r.mode,
         main_path: r.main_path,
         task_path: r.task_path,
-        files: r.files,
-      })),
-      files,
-    }
-  }
-
-  function makeStack(files?: { copy?: string[]; symlink?: string[] }, repos?: Array<{
-    name: string; files?: { copy?: string[]; symlink?: string[] }
-  }>): import("../../src/lib/config").Stack {
-    return {
-      name: "test-stack",
-      schema_version: "1",
-      repos: (repos ?? []).map(r => ({
-        name: r.name,
-        path: "/some/path",
-        type: "other" as const,
-        default_mode: "worktree" as const,
-        default_branch: "main",
         files: r.files,
       })),
       files,
@@ -404,10 +387,8 @@ describe("warnExternalFiles", () => {
     const tasksDir = join(tmp, "tasks")
 
     const workspace = makeWorkspace({ copy: ["internal-file.txt"] })
-    const stack = makeStack({ copy: ["shared.bin"] })
-    const stacks = new Map([["test-stack", stack]])
 
-    const warnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+    const warnings = warnExternalFiles(workspace, wsDir, tasksDir)
     expect(warnings).toEqual([])
   })
 
@@ -418,10 +399,8 @@ describe("warnExternalFiles", () => {
 
     // /tmp/outside/secrets is outside wsDir
     const workspace = makeWorkspace({ symlink: ["/tmp/outside/secrets"] })
-    const stack = makeStack()
-    const stacks = new Map([["test-stack", stack]])
 
-    const warnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+    const warnings = warnExternalFiles(workspace, wsDir, tasksDir)
     expect(warnings.length).toBeGreaterThanOrEqual(1)
     expect(warnings[0]).toMatch(/Warning: external destination/)
     expect(warnings[0]).toContain("secrets")
@@ -433,10 +412,8 @@ describe("warnExternalFiles", () => {
     const tasksDir = join(tmp, "tasks")
 
     const workspace = makeWorkspace({ symlink: ["~/.secrets"] })
-    const stack = makeStack()
-    const stacks = new Map([["test-stack", stack]])
 
-    const warnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+    const warnings = warnExternalFiles(workspace, wsDir, tasksDir)
     expect(warnings.length).toBeGreaterThanOrEqual(1)
     expect(warnings[0]).toMatch(/Warning: external destination/)
     expect(warnings[0]).toContain(".secrets")
@@ -452,16 +429,14 @@ describe("warnExternalFiles", () => {
     // The repo has a file that symlinks to an absolute external path
     const workspace = makeWorkspace(undefined, [{
       name: "repo-0",
-      stack: "test-stack",
+      repo: "test-repo",
       mode: "worktree",
       main_path: repoMainPath,
       task_path: repoTaskPath,
       files: { symlink: ["/etc/hosts"] },
     }])
-    const stack = makeStack(undefined, [{ name: "repo-0" }])
-    const stacks = new Map([["test-stack", stack]])
 
-    const warnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+    const warnings = warnExternalFiles(workspace, wsDir, tasksDir)
     expect(warnings.length).toBeGreaterThanOrEqual(1)
     expect(warnings[0]).toMatch(/Warning: external destination/)
     expect(warnings[0]).toContain("hosts")
@@ -474,26 +449,22 @@ describe("warnExternalFiles", () => {
 
     // Absolute external directory path
     const workspace = makeWorkspace({ copy: ["/usr/local/share/models"] })
-    const stack = makeStack()
-    const stacks = new Map([["test-stack", stack]])
 
-    const warnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+    const warnings = warnExternalFiles(workspace, wsDir, tasksDir)
     expect(warnings.length).toBeGreaterThanOrEqual(1)
     // Should reference the directory-level destination, not files inside
     expect(warnings[0]).toMatch(/Warning: external destination/)
     expect(warnings[0]).toContain("models")
   })
 
-  // Test 6 (FILES-16 no files): returns empty array when workspace and stack have no files config
+  // Test 6 (FILES-16 no files): returns empty array when workspace has no files config
   test("FILES-16 no files: returns empty array when no files config present", () => {
     const wsDir = join(tmp, "tasks", "test-ws")
     const tasksDir = join(tmp, "tasks")
 
     const workspace = makeWorkspace(undefined)
-    const stack = makeStack(undefined)
-    const stacks = new Map([["test-stack", stack]])
 
-    const warnings = warnExternalFiles(workspace, stacks, wsDir, tasksDir)
+    const warnings = warnExternalFiles(workspace, wsDir, tasksDir)
     expect(warnings).toEqual([])
   })
 })
