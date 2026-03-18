@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-03-18T00:49:00.634Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-03-18T18:35:25.449Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 15
+  completed_plans: 11
   percent: 20
 ---
 
@@ -59,6 +59,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01.1-file-and-folder-copy-symlink-support P02 | 3 | 3 tasks | 2 files |
 | Phase 02-safety P01 | 5 | 2 tasks | 5 files |
 | Phase 02-safety P02 | 10 | 2 tasks | 1 files |
+| Phase 03-design-and-conditional-implementation PP01 | 9 | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase 02-safety]: renameWorkspace opts param defaults to {} for backward compatibility with existing call sites
 - [Phase 02-safety]: --gone + --dry-run deferred per CONTEXT.md — the --gone path in clean gets --force prompt gating but not --dry-run support
 - [Phase 02-safety]: Destructive command pattern: .option('--force') + .option('--dry-run') + if (!opts.force && !opts.dryRun) { p.confirm } — consistent across remove, clean, merge, rename
+- [Phase 03-01]: Registry storage: single flat file registry.yml (not per-entry files) — simpler, atomic reads, consistent with config.yml pattern
+- [Phase 03-01]: REPO-01 constraint honored: url field NOT included in RepoRegistryEntrySchema — local paths only in Phase 3, zerover clean break from Stack model
+- [Phase 03-01]: WorkspaceRepoSchema: stack -> repo field (zerover, no migration shim); WorkspaceSchema adds optional template field as informational provenance
 
 ### Roadmap Evolution
 
@@ -109,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T00:49:00.632Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-design-and-conditional-implementation/03-CONTEXT.md
+Last session: 2026-03-18T18:35:25.446Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None

@@ -78,8 +78,8 @@
 
 ### Design Evaluation
 
-- [ ] **DESIGN-01**: The current Stack/Workspace model is evaluated against a Repo-Registry/Template/Workspace model across at least 3 representative user workflows — the winning model (or a hybrid) is documented with rationale
-- [ ] **DESIGN-02**: A decision is made and documented on whether "Stacks" are replaced, renamed, or supplemented by a Template abstraction — and what backward-compatibility (if any) is offered
+- [x] **DESIGN-01**: The current Stack/Workspace model is evaluated against a Repo-Registry/Template/Workspace model across at least 3 representative user workflows — the winning model (or a hybrid) is documented with rationale
+- [x] **DESIGN-02**: A decision is made and documented on whether "Stacks" are replaced, renamed, or supplemented by a Template abstraction — and what backward-compatibility (if any) is offered
 
 ### Repo Registry
 
@@ -185,8 +185,8 @@
 | SAFE-01 | Phase 2 | Complete |
 | SAFE-02 | Phase 2 | Complete |
 | SAFE-03 | Phase 2 | Complete |
-| DESIGN-01 | Phase 3 | Pending |
-| DESIGN-02 | Phase 3 | Pending |
+| DESIGN-01 | Phase 3 | Complete |
+| DESIGN-02 | Phase 3 | Complete |
 | REPO-01 | Phase 3 (conditional) | Pending |
 | REPO-02 | Phase 3 (conditional) | Pending |
 | REPO-03 | Phase 3 (conditional) | Pending |
