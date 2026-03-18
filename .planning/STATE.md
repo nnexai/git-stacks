@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-ux-and-execution-04-PLAN.md
-last_updated: "2026-03-18T21:02:37.472Z"
+stopped_at: Completed 05-tech-debt-cleanup-01-PLAN.md
+last_updated: "2026-03-18T21:48:27.162Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 6
-  total_plans: 19
-  completed_plans: 19
+  total_plans: 21
+  completed_plans: 20
   percent: 20
 ---
 
@@ -68,6 +68,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 04-ux-and-execution P02 | 2 | 2 tasks | 3 files |
 | Phase 04-ux-and-execution P03 | 2 | 2 tasks | 1 files |
 | Phase 04-ux-and-execution P04 | 2 | 2 tasks | 1 files |
+| Phase 05-tech-debt-cleanup P01 | 2 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -127,11 +128,14 @@ Recent decisions affecting current work:
 - [Phase 04-ux-and-execution]: run --parallel uses single spinner (not per-repo) — @clack/prompts is single-stream only
 - [Phase 04-ux-and-execution]: sync --json: no onProgress callback passed to syncWorkspace — prevents human lines leaking into JSON
 - [Phase 04-ux-and-execution]: sync --json result field: up-to-date (0 commits), rebased/merged (>0 commits by strategy), failed (skipped list)
+- [Phase 05-tech-debt-cleanup]: workspace-wizard.ts: workspaceObj built as typed Workspace before file ops, settingsIntegrations moved up as prerequisite, enabling type-safe applyFileOpsForWorkspace call
+- [Phase 05-tech-debt-cleanup]: Both TUI 'open now' flows delegate to openWorkspace() — never call integration.open() directly in TUI; artifact display loop retained for user feedback (generate is idempotent)
 
 ### Roadmap Evolution
 
 - Phase 01.1 inserted after Phase 1: File and folder copy/symlink support between repos for large binary sharing (URGENT)
 - Phase 01.2 inserted after Phase 1: small addition to add a version command that shows published version and git commit hash - should also work then running from source via bun link (URGENT)
+- Phase 5 added: Tech Debt Cleanup — fix open now lifecycle bypass, workspace type contract in new flow, and dead code removal
 
 ### Pending Todos
 
@@ -144,6 +148,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:58:33.884Z
-Stopped at: Completed 04-ux-and-execution-04-PLAN.md
+Last session: 2026-03-18T21:48:27.157Z
+Stopped at: Completed 05-tech-debt-cleanup-01-PLAN.md
 Resume file: None

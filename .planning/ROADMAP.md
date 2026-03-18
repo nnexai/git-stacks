@@ -129,7 +129,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Safety | 2/2 | Complete   | 2026-03-17 |
 | 3. Design and Conditional Implementation | 5/5 | Complete   | 2026-03-18 |
 | 4. UX and Execution | 4/4 | Complete   | 2026-03-18 |
-| 5. Tech Debt Cleanup | 0/2 | Planned    |  |
+| 5. Tech Debt Cleanup | 1/2 | In Progress|  |
 
 ### Phase 5: Tech Debt Cleanup — fix open now lifecycle bypass, workspace type contract in new flow, and dead code removal
 
