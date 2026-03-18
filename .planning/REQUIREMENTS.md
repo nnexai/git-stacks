@@ -99,9 +99,9 @@
 ### UX and Observability
 
 - [x] **UX-01**: Error messages across all commands include context and a suggested recovery action (e.g., "Repo 'api' has uncommitted changes — stash with `git stash` or use `--force` to skip")
-- [ ] **UX-02**: `status`, `doctor`, and `sync` support `--json` output for scripting and agent automation (`list` already has this)
+- [x] **UX-02**: `status`, `doctor`, and `sync` support `--json` output for scripting and agent automation (`list` already has this)
 - [ ] **UX-03**: `doctor` supports a `--fix` flag that auto-executes the suggested repair actions it already identifies
-- [ ] **UX-04**: `list` shows richer columns by default: branch name, repo count, last-opened time, dirty indicator
+- [x] **UX-04**: `list` shows richer columns by default: branch name, repo count, last-opened time, dirty indicator
 
 ### Execution
 
@@ -197,9 +197,9 @@
 | TMPL-04 | Phase 3 (conditional) | Complete |
 | TMPL-05 | Phase 3 (conditional) | Complete |
 | UX-01 | Phase 4 | Complete |
-| UX-02 | Phase 4 | Pending |
+| UX-02 | Phase 4 | Complete |
 | UX-03 | Phase 4 | Pending |
-| UX-04 | Phase 4 | Pending |
+| UX-04 | Phase 4 | Complete |
 | RUN-01 | Phase 4 | Pending |
 
 **Coverage:**

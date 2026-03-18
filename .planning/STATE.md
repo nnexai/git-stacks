@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 04-ux-and-execution-01-PLAN.md
-last_updated: "2026-03-18T20:29:11.898Z"
+stopped_at: Completed 04-ux-and-execution-02-PLAN.md
+last_updated: "2026-03-18T20:36:30.719Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 19
-  completed_plans: 16
+  completed_plans: 17
   percent: 20
 ---
 
@@ -65,6 +65,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 03-design-and-conditional-implementation P04 | 6 | 2 tasks | 4 files |
 | Phase 03-design-and-conditional-implementation P05 | 3 | 2 tasks | 3 files |
 | Phase 04-ux-and-execution P01 | 4 | 4 tasks | 10 files |
+| Phase 04-ux-and-execution P02 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,9 @@ Recent decisions affecting current work:
 - [Phase 04-ux-and-execution]: formatError empty hint guard: empty string and undefined both produce message-only output (no bare arrow line)
 - [Phase 04-ux-and-execution]: Recovery hints in workspace.ts: only added where specific actionable fix exists — not invented for result.error passthroughs from ops layer
 - [Phase 04-ux-and-execution]: Parenthetical git error format: 'Operation failed for name (raw git error)' locked in workspace-ops.ts per CONTEXT.md decision
+- [Phase 04-ux-and-execution]: getWorkspaceListInfo always runs dirty checks regardless of checkStatus param — param kept for backward compat (UX-04); dirty changed from boolean|null to boolean
+- [Phase 04-ux-and-execution]: list default format: dirty mark + name + branch + repo count + lastOpened age — drops description column in favor of useful metrics
+- [Phase 04-ux-and-execution]: openWorkspace re-reads workspace before writing last_opened to preserve latest YAML state after hooks/integrations
 
 ### Roadmap Evolution
 
@@ -133,6 +137,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:29:11.891Z
-Stopped at: Completed 04-ux-and-execution-01-PLAN.md
+Last session: 2026-03-18T20:36:30.713Z
+Stopped at: Completed 04-ux-and-execution-02-PLAN.md
 Resume file: None
