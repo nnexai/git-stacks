@@ -8,6 +8,10 @@ import {
   workspaceExists,
   workspacePath,
   readGlobalConfig,
+  readTemplate,
+  readRegistry,
+  templateExists,
+  writeWorkspace,
   type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
@@ -31,8 +35,9 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("new [name]")
     .description("Create a new workspace interactively")
-    .action(async (name?: string) => {
-      await runWorkspaceNew(name)
+    .option("--from <source>", "Create from template name or local repo path")
+    .action(async (name: string | undefined, opts: { from?: string }) => {
+      await runWorkspaceNew(name, opts.from)
     })
 
   program
@@ -47,7 +52,96 @@ export function registerWorkspaceCommands(program: Command) {
     .description("Open a workspace (VSCode, IntelliJ, cmux, tmux)")
     .option("--no-ide", "Skip opening IDEs")
     .option("--no-cmux", "Skip cmux session")
-    .action(async (name: string, opts: { ide: boolean; cmux: boolean }) => {
+    .option("--recreate", "Re-sync workspace from template")
+    .option("--force", "Skip confirmation in --recreate")
+    .action(async (name: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean }) => {
+      if (opts.recreate) {
+        if (!workspaceExists(name)) {
+          console.error(`Workspace '${name}' not found.`)
+          process.exit(1)
+        }
+
+        const ws = readWorkspace(name)
+        if (!ws.template) {
+          console.error(`Workspace '${name}' has no template: field \u2014 cannot use --recreate.`)
+          process.exit(1)
+        }
+
+        if (!templateExists(ws.template)) {
+          console.error(`Template '${ws.template}' not found.`)
+          process.exit(1)
+        }
+
+        const template = readTemplate(ws.template)
+        const registry = readRegistry()
+
+        // Compute diff — compare template repos vs workspace repos
+        const tplRepoNames = new Set(template.repos.map(r => r.repo))
+        const wsRepoNames = new Set(ws.repos.map(r => r.repo))
+        const added = [...tplRepoNames].filter(n => !wsRepoNames.has(n))
+        const removed = [...wsRepoNames].filter(n => !tplRepoNames.has(n))
+
+        // Check for hook/env changes
+        const hooksChanged = JSON.stringify(template.hooks ?? {}) !== JSON.stringify(ws.hooks ?? {})
+        const envChanged = JSON.stringify(template.env ?? {}) !== JSON.stringify(ws.env ?? {})
+
+        if (added.length === 0 && removed.length === 0 && !hooksChanged && !envChanged) {
+          console.log("No changes detected between workspace and template.")
+        } else {
+          console.log("\nTemplate changes detected:")
+          if (added.length > 0) console.log(`  Added repos:   ${added.join(", ")}`)
+          if (removed.length > 0) console.log(`  Removed repos: ${removed.join(", ")}`)
+          if (hooksChanged) console.log("  Hooks changed")
+          if (envChanged) console.log("  Environment changed")
+          console.log("")
+
+          if (!opts.force) {
+            const ok = await p.confirm({
+              message: "Apply these changes from template?",
+              initialValue: false,
+            })
+            if (p.isCancel(ok) || !ok) {
+              console.log("Cancelled.")
+              return
+            }
+          }
+
+          // Apply: update workspace hooks, env, env_file, files, integrations from template
+          ws.hooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+          ws.env = template.env ? { ...template.env } : undefined
+          ws.env_file = template.env_file
+          ws.files = template.files
+          if (template.integrations) {
+            ws.settings = { ...ws.settings, integrations: JSON.parse(JSON.stringify(template.integrations)) }
+          }
+
+          // Update repo list from template
+          const registryMap = new Map(registry.map(r => [r.name, r]))
+          const { getTasksDir: getTD } = await import("../lib/paths")
+          const config = readGlobalConfig()
+          const td = getTD(config.workspace_root)
+
+          ws.repos = template.repos.map(tplRepo => {
+            const existing = ws.repos.find(r => r.repo === tplRepo.repo)
+            if (existing) return { ...existing, base_branch: tplRepo.base_branch ?? existing.base_branch }
+            const regEntry = registryMap.get(tplRepo.repo)
+            if (!regEntry) return null
+            return {
+              name: regEntry.name,
+              repo: tplRepo.repo,
+              type: regEntry.type,
+              mode: tplRepo.mode ?? "worktree",
+              main_path: regEntry.local_path,
+              task_path: tplRepo.mode === "trunk" ? regEntry.local_path : join(td, name, regEntry.name),
+              base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+            }
+          }).filter(Boolean) as typeof ws.repos
+
+          writeWorkspace(ws)
+          console.log("Workspace updated from template.")
+        }
+      }
+
       const result = await openWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(result.error)
