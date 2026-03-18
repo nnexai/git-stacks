@@ -2,6 +2,7 @@ import { Command } from "commander"
 import * as p from "@clack/prompts"
 import { existsSync, unlinkSync } from "fs"
 import { join } from "path"
+import { formatError } from "../lib/errors"
 import {
   listWorkspaces,
   readWorkspace,
@@ -57,18 +58,18 @@ export function registerWorkspaceCommands(program: Command) {
     .action(async (name: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean }) => {
       if (opts.recreate) {
         if (!workspaceExists(name)) {
-          console.error(`Workspace '${name}' not found.`)
+          console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
           process.exit(1)
         }
 
         const ws = readWorkspace(name)
         if (!ws.template) {
-          console.error(`Workspace '${name}' has no template: field \u2014 cannot use --recreate.`)
+          console.error(formatError(`Workspace '${name}' has no template field`, "only workspaces created from templates support --recreate"))
           process.exit(1)
         }
 
         if (!templateExists(ws.template)) {
-          console.error(`Template '${ws.template}' not found.`)
+          console.error(formatError(`Template '${ws.template}' not found`, "run: ws template list"))
           process.exit(1)
         }
 
@@ -144,7 +145,7 @@ export function registerWorkspaceCommands(program: Command) {
 
       const result = await openWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
-        console.error(result.error)
+        console.error(formatError(result.error!))
         process.exit(1)
       }
     })
@@ -274,8 +275,7 @@ export function registerWorkspaceCommands(program: Command) {
             if (dirty.length > 0) dirtyEntries.push(`  ${ws.name}: ${dirty.join(", ")}`)
           }
           if (dirtyEntries.length > 0) {
-            console.error("Aborting: dirty worktrees found:\n" + dirtyEntries.join("\n"))
-            console.error("Use --force to skip this check.")
+            console.error(formatError("Dirty worktrees found:\n" + dirtyEntries.join("\n"), "use --force to skip this check"))
             process.exit(1)
           }
         }
@@ -300,7 +300,7 @@ export function registerWorkspaceCommands(program: Command) {
           try {
             await runPreRemoveHooks(ws, tasksDir)
           } catch (err) {
-            console.error(`pre_remove hook failed for '${ws.name}': ${err}`)
+            console.error(formatError(`pre_remove hook failed for '${ws.name}': ${err}`))
             process.exit(1)
           }
           for (const repo of ws.repos.filter((r) => r.mode === "worktree")) {
@@ -315,7 +315,7 @@ export function registerWorkspaceCommands(program: Command) {
 
       // --- ws clean <name> ---
       if (!name) {
-        console.error("Usage: ws clean <name> [--gone]")
+        console.error(formatError("Missing workspace name", "usage: ws clean <name> [--gone]"))
         process.exit(1)
       }
 
@@ -332,7 +332,7 @@ export function registerWorkspaceCommands(program: Command) {
 
       const result = await cleanWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
-        console.error(result.error)
+        console.error(formatError(result.error!))
         process.exit(1)
       }
 
@@ -346,7 +346,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
       if (!workspaceExists(name)) {
-        console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
+        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
         process.exit(1)
       }
 
@@ -363,7 +363,7 @@ export function registerWorkspaceCommands(program: Command) {
 
       const result = await removeWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
-        console.error(result.error)
+        console.error(formatError(result.error!))
         process.exit(1)
       }
     })
@@ -373,7 +373,7 @@ export function registerWorkspaceCommands(program: Command) {
     .description("Print path to a workspace (or repo within it) — use via shell function")
     .action((name: string, repo?: string) => {
       if (!workspaceExists(name)) {
-        console.error(`Workspace '${name}' not found.`)
+        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
         process.exit(1)
       }
       const config = readGlobalConfig()
@@ -383,7 +383,7 @@ export function registerWorkspaceCommands(program: Command) {
       if (repo) {
         const found = workspace.repos.find((r) => r.name === repo)
         if (!found) {
-          console.error(`Repo '${repo}' not found in workspace '${name}'.`)
+          console.error(formatError(`Repo '${repo}' not found in workspace '${name}'`, `available repos: ${workspace.repos.map(r => r.name).join(", ")}`))
           process.exit(1)
         }
         process.stdout.write(found.task_path + "\n")
@@ -399,7 +399,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
       if (!workspaceExists(name)) {
-        console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
+        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
         process.exit(1)
       }
 
@@ -416,7 +416,7 @@ export function registerWorkspaceCommands(program: Command) {
 
       const result = await mergeWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
-        console.error(result.error)
+        console.error(formatError(result.error!))
         process.exit(1)
       }
     })
@@ -428,7 +428,7 @@ export function registerWorkspaceCommands(program: Command) {
     .passThroughOptions()
     .action(async (name: string, repo: string | undefined, opts: { allRepos?: boolean }) => {
       if (!workspaceExists(name)) {
-        console.error(`Workspace '${name}' not found. Run \`ws list\` to see available workspaces.`)
+        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
         process.exit(1)
       }
 
@@ -443,13 +443,13 @@ export function registerWorkspaceCommands(program: Command) {
 
       if (opts.allRepos) {
         if (!shellCmd) {
-          console.error("Cannot open interactive shell with --all-repos. Provide a command after --.")
+          console.error(formatError("Cannot open interactive shell with --all-repos", "provide a command after --"))
           process.exit(1)
         }
 
         const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
         if (worktreeRepos.length === 0) {
-          console.error(`No worktree repos in workspace '${name}'.`)
+          console.error(formatError(`No worktree repos in workspace '${name}'`))
           process.exit(1)
         }
 
@@ -472,7 +472,7 @@ export function registerWorkspaceCommands(program: Command) {
       if (repo) {
         const found = workspace.repos.find((r) => r.name === repo)
         if (!found) {
-          console.error(`Repo '${repo}' not found in workspace '${name}'.`)
+          console.error(formatError(`Repo '${repo}' not found in workspace '${name}'`, `available repos: ${workspace.repos.map(r => r.name).join(", ")}`))
           process.exit(1)
         }
         cwd = found.task_path
@@ -518,7 +518,7 @@ export function registerWorkspaceCommands(program: Command) {
 
       const result = await renameWorkspace(oldName, newName, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
-        console.error(result.error)
+        console.error(formatError(result.error!))
         process.exit(1)
       }
       if (!opts.dryRun) {
@@ -547,7 +547,7 @@ export function registerWorkspaceCommands(program: Command) {
           const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort }, (msg) => console.log(`    ${msg}`))
           if (!result.ok) {
             hasFailures = true
-            if (result.error) console.error(`    ${result.error}`)
+            if (result.error) console.error(`    ${formatError(result.error)}`)
           }
         }
         if (hasFailures) process.exit(1)
@@ -555,13 +555,13 @@ export function registerWorkspaceCommands(program: Command) {
       }
 
       if (!name) {
-        console.error("Usage: ws sync <name> [--all]")
+        console.error(formatError("Missing workspace name", "usage: ws sync <name> [--all]"))
         process.exit(1)
       }
 
       const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort }, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
-        if (result.error) console.error(result.error)
+        if (result.error) console.error(formatError(result.error))
         if (result.skipped.length > 0) {
           console.log(`\nTip: use \`ws run ${name} <repo> -- lazygit\` to resolve conflicts`)
         }
