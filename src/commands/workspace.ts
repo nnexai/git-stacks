@@ -647,7 +647,6 @@ export function registerWorkspaceCommands(program: Command) {
           }
           console.log(JSON.stringify(allResults, null, 2))
           process.exit(allResults.some(r => r.repos.some(rr => rr.result === "failed")) ? 1 : 0)
-          return
         }
 
         if (!name) {

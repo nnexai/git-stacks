@@ -5,7 +5,7 @@ import { readRegistry, writeRegistry, type RepoRegistryEntry } from "../lib/conf
 import { expandHome } from "../lib/paths"
 import { detectRepoType } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
-import { runRepoAdd, runRepoScan } from "../tui/repo-wizard"
+import { runRepoScan } from "../tui/repo-wizard"
 
 export const repoCommand = new Command("repo").description("Manage repo registry")
 
