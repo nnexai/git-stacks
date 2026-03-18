@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-03-18T18:46:56.857Z"
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-03-18T18:55:39.274Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 20
 ---
 
@@ -62,6 +62,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 03-design-and-conditional-implementation PP01 | 9 | 3 tasks | 10 files |
 | Phase 03-design-and-conditional-implementation P02 | 8 | 2 tasks | 3 files |
 | Phase 03-design-and-conditional-implementation P03 | 5 | 2 tasks | 3 files |
+| Phase 03-design-and-conditional-implementation P04 | 6 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,9 @@ Recent decisions affecting current work:
 - [Phase 03-03]: templateCommand placed after repoCommand and before createCompletionCommand so shell completions auto-include template subcommands
 - [Phase 03-03]: pickReposFromRegistry switches from plain multiselect to filter+multiselect at 20-entry threshold (CONTEXT.md searchable picker guidance)
 - [Phase 03-03]: base_branch only stored in TemplateRepo when it differs from registry default_branch — keeps YAML clean
+- [Phase 03-04]: mergeEnv and writeEnvFiles simplified to workspace-only — template env snapshot-copied at creation time, no stacks needed at open time
+- [Phase 03-04]: TMPL-04: trunk repo base branch accessibility: checkout first, worktree creation fallback, warning-only on both failures (graceful degradation)
+- [Phase 03-04]: applyFileOpsForRepo/applyFileOpsForWorkspace use generic FileOpsRepoSource/FileOpsWorkspaceSource interfaces instead of StackRepo/Stack types
 
 ### Roadmap Evolution
 
@@ -121,6 +125,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T18:46:56.855Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-03-18T18:55:39.272Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None

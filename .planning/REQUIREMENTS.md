@@ -93,7 +93,7 @@
 - [x] **TMPL-01**: User can create a named Template that references a set of registered repos with per-repo configuration (mode: worktree vs trunk, base branch override)
 - [x] **TMPL-02**: Templates support branch naming placeholders — e.g., `feature/<workspace-name>` or `fix/<workspace-name>-<description-slug>` — expanded at workspace creation time
 - [x] **TMPL-03**: Templates define hook arrays (pre_create, post_create, pre_open, post_open) and plugin/integration configurations at the template level
-- [ ] **TMPL-04**: For "trunk/dependency" repos in a template, workspace instantiation ensures the correct base branch is accessible — either the repo is already on that branch, or a worktree at that branch is created automatically
+- [x] **TMPL-04**: For "trunk/dependency" repos in a template, workspace instantiation ensures the correct base branch is accessible — either the repo is already on that branch, or a worktree at that branch is created automatically
 - [ ] **TMPL-05**: User can create a workspace directly from an existing workspace (clone pattern) without needing a template — the existing workspace's repo/branch configuration is used as the source
 
 ### UX and Observability
@@ -194,7 +194,7 @@
 | TMPL-01 | Phase 3 (conditional) | Complete |
 | TMPL-02 | Phase 3 (conditional) | Complete |
 | TMPL-03 | Phase 3 (conditional) | Complete |
-| TMPL-04 | Phase 3 (conditional) | Pending |
+| TMPL-04 | Phase 3 (conditional) | Complete |
 | TMPL-05 | Phase 3 (conditional) | Pending |
 | UX-01 | Phase 4 | Pending |
 | UX-02 | Phase 4 | Pending |
