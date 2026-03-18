@@ -155,7 +155,7 @@ export function registerWorkspaceCommands(program: Command) {
     .description("List all workspaces")
     .option("--sort <key>", "Sort by: date, name, status", "date")
     .option("--json", "Output as JSON")
-    .option("--status", "Check dirty status (slower)")
+    .option("--status", "Check dirty status (kept for backward compat — dirty checks always run)")
     .action(async (opts: { sort: string; json?: boolean; status?: boolean }) => {
       const workspaces = listWorkspaces()
       if (workspaces.length === 0) {
@@ -163,14 +163,15 @@ export function registerWorkspaceCommands(program: Command) {
         return
       }
 
+      // Always check dirty status (UX-04); --status flag retained for backward compat
       const infos = await Promise.all(
-        workspaces.map((ws) => getWorkspaceListInfo(ws, !!opts.status))
+        workspaces.map((ws) => getWorkspaceListInfo(ws, true))
       )
 
       // Sort
       if (opts.sort === "name") {
         infos.sort((a, b) => a.name.localeCompare(b.name))
-      } else if (opts.sort === "status" && opts.status) {
+      } else if (opts.sort === "status") {
         infos.sort((a, b) => {
           if (a.dirty === b.dirty) return new Date(b.created).getTime() - new Date(a.created).getTime()
           if (a.dirty && !b.dirty) return -1
@@ -189,26 +190,10 @@ export function registerWorkspaceCommands(program: Command) {
 
       console.log("")
       for (const info of infos) {
-        let dirtyIndicator: string
-        if (info.dirty === null) {
-          dirtyIndicator = "?"
-        } else if (info.dirty) {
-          dirtyIndicator = `~ ${info.dirtyRepos.join(" ")}`
-        } else {
-          // Check if any worktree task_paths were missing
-          const ws = workspaces.find((w) => w.name === info.name)!
-          const missingPaths = ws.repos.some(
-            (r) => r.mode === "worktree" && !existsSync(r.task_path)
-          )
-          dirtyIndicator = missingPaths ? "\u2717" : "\u2713"
-        }
-
-        const desc = info.description.length > 40
-          ? info.description.slice(0, 40)
-          : info.description
-
+        const dirtyMark = info.dirty ? "~" : " "
+        const repoStr = `${info.repoCount} repos`
         console.log(
-          `  ${info.name.padEnd(20)} ${info.branch.padEnd(32)} ${dirtyIndicator.padEnd(16)} ${info.age.padEnd(6)} ${desc}`
+          `  ${dirtyMark} ${info.name.padEnd(20)} ${info.branch.padEnd(30)} ${repoStr.padEnd(10)} ${info.lastOpened.padEnd(6)}`
         )
       }
     })
@@ -216,10 +201,35 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("status [name]")
     .description("Show workspace status — dirty state, worktree health")
-    .action(async (name?: string) => {
+    .option("--json", "Output as JSON")
+    .action(async (name?: string, opts: { json?: boolean } = {}) => {
       const workspaces = name ? [readWorkspace(name)] : listWorkspaces()
       if (workspaces.length === 0) {
         console.log("No workspaces.")
+        return
+      }
+
+      if (opts.json) {
+        const output = await Promise.all(workspaces.map(async (ws) => {
+          const repos = await getWorkspaceStatus(ws)
+          return {
+            name: ws.name,
+            branch: ws.branch,
+            template: ws.template ?? null,
+            repos: repos.map(r => {
+              const wsRepo = ws.repos.find(wr => wr.name === r.name)
+              return {
+                name: r.name,
+                mode: r.mode,
+                branch: r.branch,
+                exists: r.exists,
+                dirty: r.dirty,
+                task_path: wsRepo?.task_path ?? null,
+              }
+            }),
+          }
+        }))
+        console.log(JSON.stringify(output, null, 2))
         return
       }
 
