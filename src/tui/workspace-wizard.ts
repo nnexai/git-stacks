@@ -23,6 +23,7 @@ import { detectRepoType } from "../lib/detect"
 import { integrations, type IntegrationContext } from "../lib/integrations"
 import { runHooks } from "../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
+import { openWorkspace } from "../lib/workspace-ops"
 
 async function pickReposFromRegistry(
   registry: RepoRegistryEntry[],
@@ -327,6 +328,27 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
 
   const wsDir = join(tasksDir, wsName)
 
+  // Build integration settings from template snapshot
+  const settingsIntegrations = wsIntegrationSettings && Object.keys(wsIntegrationSettings).length > 0
+    ? { settings: { integrations: wsIntegrationSettings } }
+    : {}
+
+  // Build workspace object before file ops so we can pass a real Workspace to applyFileOpsForWorkspace
+  const workspaceObj: Workspace = {
+    name: wsName,
+    schema_version: "1",
+    description: description || undefined,
+    branch,
+    created: new Date().toISOString().split("T")[0],
+    ...(templateName ? { template: templateName } : {}),
+    ...(wsHooks ? { hooks: wsHooks } : {}),
+    repos,
+    ...(wsEnv ? { env: wsEnv } : {}),
+    ...(wsEnvFile ? { env_file: wsEnvFile } : {}),
+    ...(wsFiles ? { files: wsFiles } : {}),
+    ...settingsIntegrations,
+  } as Workspace
+
   // File ops
   const opsSpinner = p.spinner()
   opsSpinner.start("Applying file ops")
@@ -354,7 +376,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
   // Workspace-instance file ops
   if (wsFiles) {
     const sourceLike = { files: wsFiles }
-    const wsFileResult = applyFileOpsForWorkspace(sourceLike, {} as Workspace, wsDir)
+    const wsFileResult = applyFileOpsForWorkspace(sourceLike, workspaceObj, wsDir)
     if (!wsFileResult.ok) {
       opsSpinner.stop("Workspace file operation failed")
       p.log.error(wsFileResult.error)
@@ -397,34 +419,15 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
     }
   }
 
-  // Build integration settings from template snapshot
-  const settingsIntegrations = wsIntegrationSettings && Object.keys(wsIntegrationSettings).length > 0
-    ? { settings: { integrations: wsIntegrationSettings } }
-    : {}
-
   // Save workspace config
-  const workspace: Record<string, unknown> = {
-    name: wsName,
-    schema_version: "1",
-    description: description || undefined,
-    branch,
-    created: new Date().toISOString().split("T")[0],
-    ...(templateName ? { template: templateName } : {}),
-    ...(wsHooks ? { hooks: wsHooks } : {}),
-    repos,
-    ...(wsEnv ? { env: wsEnv } : {}),
-    ...(wsEnvFile ? { env_file: wsEnvFile } : {}),
-    ...(wsFiles ? { files: wsFiles } : {}),
-    ...settingsIntegrations,
-  }
-  writeWorkspace(workspace as Workspace)
+  writeWorkspace(workspaceObj)
 
   // Generate integration artifacts
-  const ctx: IntegrationContext = { workspace: workspace as Workspace, tasksDir, config }
+  const ctx: IntegrationContext = { workspace: workspaceObj, tasksDir, config }
   const artifacts: Array<{ integration: (typeof integrations)[number]; path: string | null }> = []
   for (const integration of integrations) {
     if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(workspace as Workspace)) continue
+    if (integration.applies && !integration.applies(workspaceObj)) continue
     const path = integration.generate?.(ctx) ?? null
     artifacts.push({ integration, path })
     if (path) p.log.success(`${integration.label}: ${path}`)
@@ -433,8 +436,9 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
   // Offer to open
   const openNow = await p.confirm({ message: "Open workspace now?", initialValue: true })
   if (!p.isCancel(openNow) && openNow) {
-    for (const { integration, path } of artifacts) {
-      await integration.open(ctx, path)
+    const result = await openWorkspace(wsName, {}, (msg) => p.log.info(msg))
+    if (!result.ok) {
+      p.log.warn(`Open failed: ${result.error}`)
     }
   }
 

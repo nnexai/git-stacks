@@ -12,6 +12,7 @@ import {
 import { getTasksDir } from "../lib/paths"
 import { createWorktree } from "../lib/git"
 import { integrations, type IntegrationContext } from "../lib/integrations"
+import { openWorkspace } from "../lib/workspace-ops"
 
 export async function runWorkspaceClone(sourceArg?: string) {
   p.intro("Clone workspace")
@@ -112,8 +113,9 @@ export async function runWorkspaceClone(sourceArg?: string) {
 
   const openNow = await p.confirm({ message: "Open workspace now?", initialValue: true })
   if (!p.isCancel(openNow) && openNow) {
-    for (const { integration, path } of artifacts) {
-      await integration.open(ctx, path)
+    const result = await openWorkspace(newName, {}, (msg) => p.log.info(msg))
+    if (!result.ok) {
+      p.log.warn(`Open failed: ${result.error}`)
     }
   }
 
