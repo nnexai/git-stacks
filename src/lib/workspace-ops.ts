@@ -38,10 +38,12 @@ export type WorkspaceListInfo = {
   description: string
   created: string
   age: string // human-readable: "2h", "3d", "1w", "2mo", "1y"
+  lastOpened: string   // human-readable age from last_opened, falls back to created
   dirty: boolean | null // null = not checked
   dirtyRepos: string[] // names of dirty repos (empty if not checked)
   worktreeCount: number
   trunkCount: number
+  repoCount: number    // worktreeCount + trunkCount
 }
 
 function formatAge(created: string): string {
@@ -61,23 +63,19 @@ function formatAge(created: string): string {
 
 export async function getWorkspaceListInfo(
   workspace: Workspace,
-  checkStatus: boolean
+  checkStatus = true   // Default to true; kept for backward compat
 ): Promise<WorkspaceListInfo> {
   const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
   const trunkRepos = workspace.repos.filter((r) => r.mode === "trunk")
 
-  let dirty: boolean | null = null
-  const dirtyRepos: string[] = []
-
-  if (checkStatus) {
-    const results = await Promise.all(
-      worktreeRepos
-        .filter((repo) => existsSync(repo.task_path))
-        .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
-    )
-    dirtyRepos.push(...results.filter((r) => r.dirty).map((r) => r.name))
-    dirty = dirtyRepos.length > 0
-  }
+  // Always run dirty checks (dirty check is always on now per UX-04, checkStatus ignored)
+  const results = await Promise.all(
+    worktreeRepos
+      .filter((repo) => existsSync(repo.task_path))
+      .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
+  )
+  const dirtyRepos: string[] = results.filter((r) => r.dirty).map((r) => r.name)
+  const dirty: boolean = dirtyRepos.length > 0
 
   return {
     name: workspace.name,
@@ -85,10 +83,12 @@ export async function getWorkspaceListInfo(
     description: workspace.description ?? "",
     created: workspace.created,
     age: formatAge(workspace.created),
+    lastOpened: formatAge(workspace.last_opened ?? workspace.created),
     dirty,
     dirtyRepos,
     worktreeCount: worktreeRepos.length,
     trunkCount: trunkRepos.length,
+    repoCount: worktreeRepos.length + trunkRepos.length,
   }
 }
 
@@ -578,6 +578,11 @@ export async function openWorkspace(
       await runHooks([cmd], join(tasksDir, name), hookEnv)
     }
   }
+
+  // Update last_opened timestamp
+  const updatedWs = readWorkspace(name)
+  updatedWs.last_opened = new Date().toISOString()
+  writeWorkspace(updatedWs)
 
   onProgress?.(`Opened '${name}'.`)
   return { ok: true }

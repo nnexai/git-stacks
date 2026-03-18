@@ -120,6 +120,7 @@ export const WorkspaceSchema = z.object({
   description: z.string().optional(),
   branch: z.string(),
   created: z.string(),
+  last_opened: z.string().optional(),   // ISO timestamp, updated by openWorkspace
   template: z.string().optional(),      // informational: source template name
   cmux_workspace_id: z.string().optional(),
   hooks: WorkspaceHooksSchema.optional(),
