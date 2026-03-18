@@ -111,8 +111,8 @@
 
 - [x] **DEBT-01**: The "Open workspace now?" prompt after `ws new` and `ws clone` delegates to `openWorkspace()` from workspace-ops.ts instead of calling `integration.open()` directly — ensuring post_open hooks, per-repo pre_open hooks, file-ops re-application, writeEnvFiles, TMPL-04 trunk branch check, and last_opened timestamp all execute on the first open after creation
 - [x] **DEBT-02**: The `ws new` flow builds a properly-typed `Workspace` object in memory before calling `applyFileOpsForWorkspace`, replacing the `{} as Workspace` cast that silently drops workspace-level `files:` entries
-- [ ] **DEBT-03**: `mergeWorkspace` calls `warnExternalFiles()` before its dry-run short-circuit, matching the pattern in `cleanWorkspace` and `removeWorkspace` — completing SAFE-01 coverage for all three destructive operations
-- [ ] **DEBT-04**: Dead code removed: `STACKS_DIR` export from paths.ts, stale "old StackRepo/Stack type" comments from files.ts, deprecated `applyFileOperations` function from files.ts, and unreachable `runRepoAdd` function from repo-wizard.ts
+- [x] **DEBT-03**: `mergeWorkspace` calls `warnExternalFiles()` before its dry-run short-circuit, matching the pattern in `cleanWorkspace` and `removeWorkspace` — completing SAFE-01 coverage for all three destructive operations
+- [x] **DEBT-04**: Dead code removed: `STACKS_DIR` export from paths.ts, stale "old StackRepo/Stack type" comments from files.ts, deprecated `applyFileOperations` function from files.ts, and unreachable `runRepoAdd` function from repo-wizard.ts
 
 ## v2 Requirements
 

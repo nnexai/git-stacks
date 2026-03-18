@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05-tech-debt-cleanup-01-PLAN.md
-last_updated: "2026-03-18T21:48:27.162Z"
+stopped_at: Completed 05-tech-debt-cleanup-02-PLAN.md
+last_updated: "2026-03-18T21:52:34.662Z"
 last_activity: 2026-03-17 — Completed plan 01-01 (git test infrastructure)
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
   percent: 20
 ---
 
@@ -69,6 +69,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 04-ux-and-execution P03 | 2 | 2 tasks | 1 files |
 | Phase 04-ux-and-execution P04 | 2 | 2 tasks | 1 files |
 | Phase 05-tech-debt-cleanup P01 | 2 | 1 tasks | 2 files |
+| Phase 05-tech-debt-cleanup PP02 | 2 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,7 @@ Recent decisions affecting current work:
 - [Phase 04-ux-and-execution]: sync --json result field: up-to-date (0 commits), rebased/merged (>0 commits by strategy), failed (skipped list)
 - [Phase 05-tech-debt-cleanup]: workspace-wizard.ts: workspaceObj built as typed Workspace before file ops, settingsIntegrations moved up as prerequisite, enabling type-safe applyFileOpsForWorkspace call
 - [Phase 05-tech-debt-cleanup]: Both TUI 'open now' flows delegate to openWorkspace() — never call integration.open() directly in TUI; artifact display loop retained for user feedback (generate is idempotent)
+- [Phase 05-tech-debt-cleanup]: warnExternalFiles block inserted after dirty check and before conflict pre-check in mergeWorkspace — matching identical pattern in cleanWorkspace and removeWorkspace
 
 ### Roadmap Evolution
 
@@ -148,6 +150,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-18T21:48:27.157Z
-Stopped at: Completed 05-tech-debt-cleanup-01-PLAN.md
+Last session: 2026-03-18T21:52:34.657Z
+Stopped at: Completed 05-tech-debt-cleanup-02-PLAN.md
 Resume file: None
