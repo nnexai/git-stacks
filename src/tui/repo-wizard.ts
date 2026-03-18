@@ -1,6 +1,6 @@
 import * as p from "@clack/prompts"
 import { cancel } from "./utils"
-import { readRegistry, writeRegistry, type RepoRegistryEntry } from "../lib/config"
+import { readRegistry, writeRegistry } from "../lib/config"
 import { scanForRepos } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
 
