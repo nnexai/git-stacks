@@ -2,6 +2,7 @@ import { Command } from "commander"
 import { existsSync, readdirSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
+import * as p from "@clack/prompts"
 import {
   listWorkspaces,
   readRegistry,
@@ -10,6 +11,7 @@ import {
   type RepoRegistryEntry,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
+import { formatError } from "../lib/errors"
 
 interface Issue {
   icon: "pass" | "fail" | "warn"
@@ -148,7 +150,10 @@ function findDeadRegistryPaths(registry: RepoRegistryEntry[]): Issue[] {
 
 export const doctorCommand = new Command("doctor")
   .description("Check workspace health — detect drift between config and filesystem")
-  .action(async () => {
+  .option("--json", "Output as JSON")
+  .option("--fix", "Auto-execute suggested fixes")
+  .option("--force", "Skip confirmation when used with --fix")
+  .action(async (opts: { json?: boolean; fix?: boolean; force?: boolean }) => {
     const config = readGlobalConfig()
     const tasksDir = getTasksDir(config.workspace_root)
     const workspaces = listWorkspaces()
@@ -161,6 +166,70 @@ export const doctorCommand = new Command("doctor")
     const staleCmux = await findStaleCmuxRefs(workspaces)
     const deadRepoRefs = findDeadRepoRefs(workspaces)
 
+    // --- Registry checks ---
+    const deadRegistryPaths = findDeadRegistryPaths(registry)
+
+    // --- Runtime dependency checks ---
+    const binaries = [
+      { name: "git", required: true, install: "https://git-scm.com" },
+      { name: "code", required: false, install: "https://code.visualstudio.com" },
+      { name: "code-insiders", required: false, install: "https://code.visualstudio.com/insiders" },
+      { name: "idea", required: false, install: "https://www.jetbrains.com/idea" },
+      { name: "tmux", required: false, install: "https://github.com/tmux/tmux" },
+      { name: "cmux", required: false, install: "https://github.com/nicholasgasior/cmux" },
+    ]
+
+    const binaryIssues: Issue[] = []
+    for (const { name, required, install } of binaries) {
+      const found = await checkBinary(name)
+      if (!found) {
+        binaryIssues.push({
+          icon: required ? "fail" : "warn",
+          entity: name,
+          message: "not found",
+          fix: `Install: ${install}`,
+        })
+      }
+    }
+
+    // Collect ALL issues into one flat array
+    const allIssues: Issue[] = [
+      ...orphaned,
+      ...missingWorktrees,
+      ...missingMains,
+      ...staleCmux,
+      ...deadRepoRefs,
+      ...deadRegistryPaths,
+      ...binaryIssues,
+    ]
+
+    // --- JSON output (UX-02) ---
+    if (opts.json) {
+      if (opts.fix) {
+        const fixableIssues = allIssues.filter(i => i.fix)
+        const fixResults = []
+        for (const issue of fixableIssues) {
+          try {
+            const proc = Bun.spawn(["sh", "-c", issue.fix!], { stdio: ["pipe", "pipe", "pipe"] })
+            const exitCode = await proc.exited
+            fixResults.push({ entity: issue.entity, fix: issue.fix, success: exitCode === 0, exit_code: exitCode })
+          } catch (err) {
+            fixResults.push({ entity: issue.entity, fix: issue.fix, success: false, error: String(err) })
+          }
+        }
+        const healthy = allIssues.length === 0
+        const output = { healthy, issues: allIssues, fixes: fixResults }
+        console.log(JSON.stringify(output, null, 2))
+        return
+      }
+
+      const healthy = allIssues.length === 0
+      const output = { healthy, issues: allIssues }
+      console.log(JSON.stringify(output, null, 2))
+      return
+    }
+
+    // --- Human-readable output ---
     // Group workspace issues by entity
     const wsIssuesByEntity = new Map<string, Issue[]>()
     for (const issue of [...missingWorktrees, ...missingMains, ...staleCmux, ...deadRepoRefs]) {
@@ -201,9 +270,6 @@ export const doctorCommand = new Command("doctor")
       }
     }
 
-    // --- Registry checks ---
-    const deadRegistryPaths = findDeadRegistryPaths(registry)
-
     if (deadRegistryPaths.length > 0) {
       console.log(
         `\n  ${deadRegistryPaths.length} registry issue${deadRegistryPaths.length === 1 ? "" : "s"}:`
@@ -213,29 +279,6 @@ export const doctorCommand = new Command("doctor")
         if (issue.fix) {
           console.log(`       \u2192 run: ${issue.fix}`)
         }
-      }
-    }
-
-    // --- Runtime dependency checks ---
-    const binaries = [
-      { name: "git", required: true, install: "https://git-scm.com" },
-      { name: "code", required: false, install: "https://code.visualstudio.com" },
-      { name: "code-insiders", required: false, install: "https://code.visualstudio.com/insiders" },
-      { name: "idea", required: false, install: "https://www.jetbrains.com/idea" },
-      { name: "tmux", required: false, install: "https://github.com/tmux/tmux" },
-      { name: "cmux", required: false, install: "https://github.com/nicholasgasior/cmux" },
-    ]
-
-    const binaryIssues: Issue[] = []
-    for (const { name, required, install } of binaries) {
-      const found = await checkBinary(name)
-      if (!found) {
-        binaryIssues.push({
-          icon: required ? "fail" : "warn",
-          entity: name,
-          message: "not found",
-          fix: `Install: ${install}`,
-        })
       }
     }
 
@@ -251,6 +294,71 @@ export const doctorCommand = new Command("doctor")
 
     if (wsIssueCount === 0 && deadRegistryPaths.length === 0 && binaryIssues.length === 0) {
       console.log("\n  Everything looks good!")
+    }
+
+    // --- Fix execution (UX-03) ---
+    if (opts.fix) {
+      const fixableIssues = allIssues.filter(i => i.fix)
+      const unfixableIssues = allIssues.filter(i => !i.fix && i.icon !== "pass")
+
+      if (fixableIssues.length === 0) {
+        console.log("\n  No auto-fixable issues found.")
+        if (unfixableIssues.length > 0) {
+          console.log(`  ${unfixableIssues.length} issue(s) require manual action.`)
+        }
+        return
+      }
+
+      // Show fixable issues with their commands
+      console.log(`\n  Fixes to execute:`)
+      for (const issue of fixableIssues) {
+        console.log(`    ${issue.entity}: ${issue.fix}`)
+      }
+
+      // Annotate unfixable issues
+      if (unfixableIssues.length > 0) {
+        console.log("")
+        for (const issue of unfixableIssues) {
+          console.log(`    ${issue.entity}: ${issue.message} (no auto-fix — manual action needed)`)
+        }
+      }
+
+      // Confirmation (unless --force)
+      if (!opts.force) {
+        const ok = await p.confirm({
+          message: `${fixableIssues.length} fix${fixableIssues.length === 1 ? "" : "es"} available. Execute all?`,
+          initialValue: false,
+        })
+        if (p.isCancel(ok) || !ok) {
+          console.log("Cancelled.")
+          return
+        }
+      }
+
+      // Execute fixes — continue past failures
+      let fixed = 0
+      let failed = 0
+      for (const issue of fixableIssues) {
+        try {
+          const proc = Bun.spawn(["sh", "-c", issue.fix!], {
+            stdio: ["inherit", "inherit", "inherit"],
+          })
+          const exitCode = await proc.exited
+          if (exitCode === 0) {
+            fixed++
+            console.log(`  \u2713 fixed: ${issue.entity}`)
+          } else {
+            failed++
+            console.error(`  \u2717 failed: ${issue.entity} (exit ${exitCode})`)
+          }
+        } catch (err) {
+          failed++
+          console.error(`  \u2717 failed: ${issue.entity} (${formatError(String(err))})`)
+        }
+      }
+
+      console.log(`\n  ${fixed} fixed, ${failed} failed.`)
+      return
     }
 
     console.log("")
