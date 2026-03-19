@@ -1,6 +1,5 @@
 /** @jsxImportSource @opentui/solid */
 import { For, Show, createMemo } from "solid-js"
-import { useTerminalDimensions } from "@opentui/solid"
 import { WorkspaceRow } from "./WorkspaceRow"
 import type { WorkspaceEntry } from "./types"
 
@@ -9,12 +8,11 @@ type Props = {
   cursor: number
   selected: Set<number>
   filter: string
+  height: number
 }
 
 export function WorkspaceList(props: Props) {
-  const dims = useTerminalDimensions()
-  // Reserve lines for header (3) + help bar (2) + batch bar (2) + border (2)
-  const viewportHeight = createMemo(() => Math.max(3, dims().height - 9))
+  const viewportHeight = createMemo(() => Math.max(3, props.height))
 
   const scrollOffset = createMemo(() => {
     const vh = viewportHeight()

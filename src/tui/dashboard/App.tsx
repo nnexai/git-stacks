@@ -1,13 +1,13 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, createMemo, Show } from "solid-js"
-import { useKeyboard, useRenderer } from "@opentui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
 import { WorkspaceList } from "./WorkspaceList"
+import { WorkspaceDetail } from "./WorkspaceDetail"
 import { ActionMenu } from "./ActionMenu"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
-import { DetailStatus } from "./DetailStatus"
 import { BatchBar } from "./BatchBar"
 import {
   cleanWorkspace,
@@ -16,19 +16,58 @@ import {
   openWorkspace,
   editWorkspaceYaml,
 } from "../../lib/workspace-ops"
-import type { UIView, Action } from "./types"
+import type { UIView, Action, Tab } from "./types"
 
 export default function App() {
   const renderer = useRenderer()
+  const dims = useTerminalDimensions()
   const { entries, loading, reload } = useWorkspaces()
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
-  const [cursor, setCursor] = createSignal(0)
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
-  const [filter, setFilter] = createSignal("")
-  const [filtering, setFiltering] = createSignal(false)
   const [progressLines, setProgressLines] = createSignal<string[]>([])
   const [progressDone, setProgressDone] = createSignal(false)
+
+  // Tab system
+  const [tab, setTab] = createSignal<Tab>("workspaces")
+
+  // Per-tab independent cursor/filter/filtering state
+  const tabCursor = {
+    workspaces: createSignal(0),
+    templates: createSignal(0),
+    repos: createSignal(0),
+  } as const
+  const tabFilter = {
+    workspaces: createSignal(""),
+    templates: createSignal(""),
+    repos: createSignal(""),
+  } as const
+  const tabFiltering = {
+    workspaces: createSignal(false),
+    templates: createSignal(false),
+    repos: createSignal(false),
+  } as const
+
+  // Active tab accessors
+  const cursor = createMemo(() => tabCursor[tab()][0]())
+  const setCursor = (v: number | ((prev: number) => number)) => tabCursor[tab()][1](v as any)
+  const filter = createMemo(() => tabFilter[tab()][0]())
+  const setFilter = (v: string | ((prev: string) => string)) => tabFilter[tab()][1](v as any)
+  const filtering = createMemo(() => tabFiltering[tab()][0]())
+  const setFiltering = (v: boolean) => tabFiltering[tab()][1](v)
+
+  // Split layout dimensions
+  const listHeight = createMemo(() => Math.floor((dims().height - 5) * 0.6))
+  const detailHeight = createMemo(() => dims().height - 5 - listHeight())
+
+  // Tab title
+  const tabTitle = createMemo(() => {
+    const t = tab()
+    const ws = t === "workspaces" ? "[1 Workspaces]" : "1 Workspaces"
+    const tm = t === "templates" ? "[2 Templates]" : "2 Templates"
+    const re = t === "repos" ? "[3 Repos]" : "3 Repos"
+    return `  ${ws}  ${tm}  ${re}`
+  })
 
   const filteredEntries = createMemo(() => {
     const f = filter().toLowerCase()
@@ -36,17 +75,37 @@ export default function App() {
     return entries().filter((e) => e.workspace.name.toLowerCase().includes(f))
   })
 
-  const currentEntry = createMemo(() => {
-    const v = view()
-    if (v.view === "action-menu" || v.view === "confirm" || v.view === "detail-status") {
-      return filteredEntries()[v.index]
-    }
-    return filteredEntries()[cursor()]
-  })
+  const currentEntry = createMemo(() => filteredEntries()[cursor()])
+  const selectedName = createMemo(() => currentEntry()?.workspace.name ?? "")
 
   function clampCursor() {
     const max = filteredEntries().length - 1
     if (cursor() > max) setCursor(Math.max(0, max))
+  }
+
+  async function handleRun(name: string) {
+    if (!name) return
+    setProgressLines([])
+    setProgressDone(false)
+    setView({ view: "progress", message: `Running ${name}...` })
+    const proc = Bun.spawn(["git-stacks", "run", name], {
+      stdout: "pipe",
+      stderr: "inherit",
+    })
+    const reader = proc.stdout.getReader()
+    const decoder = new TextDecoder()
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value)
+        for (const line of text.split("\n")) {
+          if (line) setProgressLines(prev => [...prev, line])
+        }
+      }
+    } catch {}
+    await proc.exited
+    setProgressDone(true)
   }
 
   async function runAction(action: Action, index: number) {
@@ -54,8 +113,8 @@ export default function App() {
     if (!entry) return
     const name = entry.workspace.name
 
-    if (action === "status") {
-      setView({ view: "detail-status", index })
+    if (action === "rename") {
+      setView({ view: "inline-input", index, purpose: "rename", prefill: name })
       return
     }
 
@@ -163,6 +222,21 @@ export default function App() {
   useKeyboard((key) => {
     const v = view()
 
+    // Tab switching — at the very beginning before other checks
+    if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
+    if (key.name === "2") { setTab("templates"); setView({ view: "list" }); return }
+    if (key.name === "3") { setTab("repos"); setView({ view: "list" }); return }
+    if (key.name === "]") {
+      setTab(t => t === "workspaces" ? "templates" : t === "templates" ? "repos" : "workspaces")
+      setView({ view: "list" })
+      return
+    }
+    if (key.name === "[") {
+      setTab(t => t === "workspaces" ? "repos" : t === "repos" ? "templates" : "workspaces")
+      setView({ view: "list" })
+      return
+    }
+
     // Handle filter mode
     if (filtering()) {
       if (key.name === "escape") {
@@ -200,25 +274,27 @@ export default function App() {
 
     if (v.view === "progress") return
 
-    // Detail status view
-    if (v.view === "detail-status") return // DetailStatus has its own keyboard handler
-
     // Confirm dialog
     if (v.view === "confirm") return // ConfirmDialog has its own keyboard handler
 
     // Action menu
     if (v.view === "action-menu") return // ActionMenu has its own keyboard handler
 
+    // Inline input
+    if (v.view === "inline-input") return
+
     // List view
     if (v.view === "list") {
       const len = filteredEntries().length
 
-      if (key.name === "q" || key.name === "escape") {
-        if (selected().size > 0) {
-          setSelected(new Set<number>())
-          return
-        }
+      if (key.name === "q") {
         renderer.destroy()
+        return
+      }
+      if (key.name === "escape") {
+        if (filtering()) { setFiltering(false); setFilter(""); clampCursor(); return }
+        if (selected().size > 0) { setSelected(new Set<number>()); return }
+        // NO-OP at top-level list — do NOT call renderer.destroy()
         return
       }
 
@@ -276,23 +352,35 @@ export default function App() {
   })
 
   return (
-    <box flexDirection="column" height="100%">
-      {/* Header */}
-      <box height={1}>
-        <text fg="cyan"> ws manage </text>
-        <Show when={loading()}>
+    <box border title={tabTitle()} flexDirection="column" height="100%">
+      {/* Loading indicator */}
+      <Show when={loading()}>
+        <box height={1}>
           <text fg="gray"> (loading statuses...)</text>
-        </Show>
-      </box>
+        </box>
+      </Show>
 
-      {/* Main content */}
+      {/* Main content — list pane */}
       <Show when={view().view === "list" || view().view === "action-menu" || view().view === "confirm"}>
-        <WorkspaceList
-          entries={filteredEntries()}
-          cursor={cursor()}
-          selected={selected()}
-          filter={filtering() ? filter() : ""}
-        />
+        <Show when={tab() === "workspaces"}>
+          <WorkspaceList
+            entries={filteredEntries()}
+            cursor={cursor()}
+            selected={selected()}
+            filter={filtering() ? filter() : ""}
+            height={listHeight()}
+          />
+        </Show>
+        <Show when={tab() === "templates"}>
+          <box flexDirection="column" flexGrow={1} height={listHeight()}>
+            <text fg="gray">  (templates tab — coming in plan 03)</text>
+          </box>
+        </Show>
+        <Show when={tab() === "repos"}>
+          <box flexDirection="column" flexGrow={1} height={listHeight()}>
+            <text fg="gray">  (repos tab — coming in plan 03)</text>
+          </box>
+        </Show>
       </Show>
 
       <Show when={view().view === "action-menu"}>
@@ -300,6 +388,7 @@ export default function App() {
           workspaceName={currentEntry()?.workspace.name ?? ""}
           onAction={(action) => runAction(action, (view() as any).index)}
           onCancel={() => setView({ view: "list" })}
+          onRun={() => handleRun(selectedName())}
         />
       </Show>
 
@@ -327,11 +416,20 @@ export default function App() {
         />
       </Show>
 
-      <Show when={view().view === "detail-status" && currentEntry()}>
-        <DetailStatus
-          entry={currentEntry()!}
-          onBack={() => setView({ view: "list" })}
-        />
+      {/* Separator + detail pane */}
+      <Show when={view().view === "list" || view().view === "action-menu" || view().view === "confirm"}>
+        <text fg="gray">  ── {selectedName()} {'─'.repeat(40)}</text>
+        <box flexDirection="column" height={detailHeight()}>
+          <Show when={tab() === "workspaces"}>
+            <WorkspaceDetail entry={currentEntry()} />
+          </Show>
+          <Show when={tab() === "templates"}>
+            <text fg="gray">  (template detail — coming in plan 03)</text>
+          </Show>
+          <Show when={tab() === "repos"}>
+            <text fg="gray">  (repo detail — coming in plan 03)</text>
+          </Show>
+        </box>
       </Show>
 
       {/* Batch bar */}
@@ -343,7 +441,7 @@ export default function App() {
       <Show when={view().view === "list"}>
         <box height={1}>
           <text fg="gray">
-            {" "}↑↓/jk Navigate  Enter Actions  Space Select  / Filter  R Refresh  q Quit
+            {" "}↑↓/jk Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit
           </text>
         </box>
       </Show>

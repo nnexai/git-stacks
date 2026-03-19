@@ -19,11 +19,13 @@ export type WorkspaceEntry = {
   status: WorkspaceStatus
 }
 
-export type Action = "open" | "status" | "edit" | "clean" | "remove" | "merge"
+export type Tab = "workspaces" | "templates" | "repos"
+
+export type Action = "open" | "edit" | "rename" | "clean" | "remove" | "merge"
 
 export type UIView =
   | { view: "list" }
   | { view: "action-menu"; index: number }
   | { view: "confirm"; index: number; action: Action; batch?: boolean }
   | { view: "progress"; message: string }
-  | { view: "detail-status"; index: number }
+  | { view: "inline-input"; index: number; purpose: "rename" | "clone-template"; prefill: string }

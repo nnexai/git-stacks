@@ -7,11 +7,12 @@ type Props = {
   workspaceName: string
   onAction: (action: Action) => void
   onCancel: () => void
+  onRun?: () => void
 }
 
 const actions: { key: string; action: Action; label: string }[] = [
   { key: "o", action: "open", label: "Open" },
-  { key: "s", action: "status", label: "Status" },
+  { key: "n", action: "rename", label: "Rename" },
   { key: "e", action: "edit", label: "Edit ($EDITOR)" },
   { key: "c", action: "clean", label: "Clean" },
   { key: "r", action: "remove", label: "Remove" },
@@ -22,6 +23,10 @@ export function ActionMenu(props: Props) {
   useKeyboard((key) => {
     if (key.name === "escape") {
       props.onCancel()
+      return
+    }
+    if (key.name === "u" && props.onRun) {
+      props.onRun()
       return
     }
     const match = actions.find((a) => a.key === key.name)
@@ -35,6 +40,7 @@ export function ActionMenu(props: Props) {
           <text fg="white">  [{item.key}] {item.label}</text>
         )}
       </For>
+      <text fg="white">  [u] Run</text>
       <text fg="gray">{"\n"}  [Esc] Back</text>
     </box>
   )
