@@ -35,7 +35,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 **Target features:**
 - **Dashboard overhaul** — Tabbed layout (Workspaces | Templates | Repos), list + detail pane per tab, all CLI actions accessible in-TUI, system editor integration for config files
 - **Notification/messaging system** — `git-stacks message send|clear|list` subcommand family; workspace-scoped notifications with optional sender (for per-agent granularity); displayed in workspace list row (latest + age) and detail pane (per-sender, clearable); drop silently when TUI not running
-- **Shell completions overhaul** — Full dynamic coverage (workspaces, templates, repos, branches) + all fixed enum values (sync strategies, modes, output formats) across all commands
+- **Shell completions overhaul** — Full dynamic coverage (workspaces, templates, repos, branches) + all fixed enum values (sync strategies, modes, output formats) across all commands *(Phase 7 complete — 2026-03-19)*
 
 ## Next Milestone Goals
 
@@ -100,4 +100,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-19 — v0.3.0 milestone started*
+*Last updated: 2026-03-19 — Phase 7 complete (shell completion overhaul)*
