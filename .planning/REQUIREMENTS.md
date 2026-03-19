@@ -83,45 +83,43 @@ Acknowledged but deferred to v0.3.x or v0.4.0.
 
 ## Traceability
 
-Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MSG-01 | — | Pending |
-| MSG-02 | — | Pending |
-| MSG-03 | — | Pending |
-| MSG-04 | — | Pending |
-| MSG-05 | — | Pending |
-| MSG-06 | — | Pending |
-| MSG-07 | — | Pending |
-| MSG-08 | — | Pending |
-| MSG-09 | — | Pending |
-| MSG-10 | — | Pending |
-| MSG-11 | — | Pending |
-| MSG-12 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
-| DASH-05 | — | Pending |
-| DASH-06 | — | Pending |
-| DASH-07 | — | Pending |
-| DASH-08 | — | Pending |
-| DASH-09 | — | Pending |
-| DASH-10 | — | Pending |
-| DASH-11 | — | Pending |
-| CMPL-01 | — | Pending |
-| CMPL-02 | — | Pending |
-| CMPL-03 | — | Pending |
-| CMPL-04 | — | Pending |
-| CMPL-05 | — | Pending |
-| CMPL-06 | — | Pending |
+| MSG-01 | Phase 6 | Pending |
+| MSG-02 | Phase 6 | Pending |
+| MSG-03 | Phase 6 | Pending |
+| MSG-04 | Phase 6 | Pending |
+| MSG-05 | Phase 6 | Pending |
+| MSG-06 | Phase 6 | Pending |
+| MSG-07 | Phase 6 | Pending |
+| MSG-08 | Phase 6 | Pending |
+| MSG-09 | Phase 6 | Pending |
+| MSG-10 | Phase 6 | Pending |
+| MSG-11 | Phase 9 | Pending |
+| MSG-12 | Phase 9 | Pending |
+| DASH-01 | Phase 8 | Pending |
+| DASH-02 | Phase 8 | Pending |
+| DASH-03 | Phase 8 | Pending |
+| DASH-04 | Phase 8 | Pending |
+| DASH-05 | Phase 8 | Pending |
+| DASH-06 | Phase 8 | Pending |
+| DASH-07 | Phase 8 | Pending |
+| DASH-08 | Phase 8 | Pending |
+| DASH-09 | Phase 8 | Pending |
+| DASH-10 | Phase 8 | Pending |
+| DASH-11 | Phase 8 | Pending |
+| CMPL-01 | Phase 7 | Pending |
+| CMPL-02 | Phase 7 | Pending |
+| CMPL-03 | Phase 7 | Pending |
+| CMPL-04 | Phase 7 | Pending |
+| CMPL-05 | Phase 7 | Pending |
+| CMPL-06 | Phase 7 | Pending |
 
 **Coverage:**
 - v0.3.0 requirements: 29 total
-- Mapped to phases: 0
-- Unmapped: 29 ⚠️
+- Mapped to phases: 29
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after initial definition*
+*Last updated: 2026-03-19 — traceability populated after roadmap creation*
