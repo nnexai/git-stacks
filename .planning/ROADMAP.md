@@ -37,7 +37,11 @@ See [.planning/milestones/v1.0-ROADMAP.md](.planning/milestones/v1.0-ROADMAP.md)
   3. User can run `git-stacks message clear --from agent-name` and only that sender's messages are removed; other messages remain
   4. `git-stacks message send` exits 0 when the TUI is not running; the message is durable and survives TUI restart
   5. When the TUI is running, a sent message appears in the dashboard within one second without a manual `R` refresh
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 06-01-PLAN.md — Path constant + JSONL message store library (src/lib/paths.ts + src/lib/messages.ts)
+- [ ] 06-02-PLAN.md — message send|list|clear CLI command (src/commands/message.ts + register in src/index.ts)
+- [ ] 06-03-PLAN.md — TUI Unix socket server (src/tui/dashboard/run.tsx + onIpcMessage export for Phase 9)
 
 ### Phase 7: Shell Completion Overhaul
 **Goal**: Tab completion covers every command, subcommand, fixed-choice flag value, and dynamic entity name in the CLI surface
@@ -55,7 +59,7 @@ See [.planning/milestones/v1.0-ROADMAP.md](.planning/milestones/v1.0-ROADMAP.md)
 **Depends on**: Phase 6 (types and path constants established; not a hard runtime dependency but avoids type churn)
 **Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06, DASH-07, DASH-08, DASH-09, DASH-10, DASH-11
 **Success Criteria** (what must be TRUE):
-  1. User presses `2` and lands on the Templates tab; cursor position and any active filter on the Workspaces tab are preserved when pressing `1` to return
+  1. User presses `2` and lands on the Templates tab; cursor position and any filter on the Workspaces tab are preserved when pressing `1` to return
   2. User sees the list and detail pane side by side without pressing Enter — the detail pane updates as the cursor moves through the list
   3. User presses Enter on a workspace, selects "rename" from the action menu, completes it, and returns to the list without restarting the TUI
   4. User presses `e` on a template in the Templates tab, edits the YAML in `$EDITOR`, saves, and the list reflects the change after editor exit
@@ -78,7 +82,7 @@ See [.planning/milestones/v1.0-ROADMAP.md](.planning/milestones/v1.0-ROADMAP.md)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 6. Message Store + CLI | v0.3.0 | 0/? | Not started | - |
+| 6. Message Store + CLI | v0.3.0 | 0/3 | Planned | - |
 | 7. Shell Completion Overhaul | v0.3.0 | 0/? | Not started | - |
 | 8. Dashboard Tab Layout | v0.3.0 | 0/? | Not started | - |
 | 9. IPC Push + Message Display | v0.3.0 | 0/? | Not started | - |
