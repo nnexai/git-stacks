@@ -37,12 +37,12 @@
 
 ### Completions
 
-- [ ] **CMPL-01**: Shell completions suggest valid values for all fixed-choice flags across all commands (e.g., `--strategy rebase|merge`, `--sort date|name|status`, `--output json|text`, `--mode worktree|trunk`)
-- [ ] **CMPL-02**: Shell completions suggest workspace names for all commands and subcommands that accept a workspace argument
-- [ ] **CMPL-03**: Shell completions suggest template names for all template subcommands (`template edit`, `template remove`, etc.)
-- [ ] **CMPL-04**: Shell completions suggest repo names for all repo subcommands (`repo remove`, etc.)
-- [ ] **CMPL-05**: Shell completions cover all subcommand trees including `repo add|scan|list|remove`, `template new|edit|list|remove`, and `message send|list|clear`
-- [ ] **CMPL-06**: `message send`, `message list`, and `message clear` have workspace name completion for the `--workspace` flag
+- [x] **CMPL-01**: Shell completions suggest valid values for all fixed-choice flags across all commands (e.g., `--strategy rebase|merge`, `--sort date|name|status`, `--output json|text`, `--mode worktree|trunk`)
+- [x] **CMPL-02**: Shell completions suggest workspace names for all commands and subcommands that accept a workspace argument
+- [x] **CMPL-03**: Shell completions suggest template names for all template subcommands (`template edit`, `template remove`, etc.)
+- [x] **CMPL-04**: Shell completions suggest repo names for all repo subcommands (`repo remove`, etc.)
+- [x] **CMPL-05**: Shell completions cover all subcommand trees including `repo add|scan|list|remove`, `template new|edit|list|remove`, and `message send|list|clear`
+- [x] **CMPL-06**: `message send`, `message list`, and `message clear` have workspace name completion for the `--workspace` flag
 
 ---
 
@@ -108,12 +108,12 @@ Acknowledged but deferred to v0.3.x or v0.4.0.
 | DASH-09 | Phase 8 | Pending |
 | DASH-10 | Phase 8 | Pending |
 | DASH-11 | Phase 8 | Pending |
-| CMPL-01 | Phase 7 | Pending |
-| CMPL-02 | Phase 7 | Pending |
-| CMPL-03 | Phase 7 | Pending |
-| CMPL-04 | Phase 7 | Pending |
-| CMPL-05 | Phase 7 | Pending |
-| CMPL-06 | Phase 7 | Pending |
+| CMPL-01 | Phase 7 | Complete |
+| CMPL-02 | Phase 7 | Complete |
+| CMPL-03 | Phase 7 | Complete |
+| CMPL-04 | Phase 7 | Complete |
+| CMPL-05 | Phase 7 | Complete |
+| CMPL-06 | Phase 7 | Complete |
 
 **Coverage:**
 - v0.3.0 requirements: 29 total

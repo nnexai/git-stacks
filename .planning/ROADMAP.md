@@ -21,7 +21,7 @@ See [.planning/milestones/v1.0-ROADMAP.md](.planning/milestones/v1.0-ROADMAP.md)
 **Phase Numbering:** Continues from v0.2.0 (phases 1-5 archived).
 
 - [ ] **Phase 6: Message Store + CLI** - JSONL-backed message store with `git-stacks message send|list|clear` subcommand family
-- [ ] **Phase 7: Shell Completion Overhaul** - Full dynamic coverage for all commands, subcommand trees, and fixed enum flag values
+- [x] **Phase 7: Shell Completion Overhaul** - Full dynamic coverage for all commands, subcommand trees, and fixed enum flag values (completed 2026-03-19)
 - [ ] **Phase 8: Dashboard Tab Layout** - Tabbed Workspaces | Templates | Repos layout with split list+detail pane and prerequisite UIView/keyboard refactors
 - [ ] **Phase 9: IPC Push + Message Display** - Live Unix socket delivery into dashboard; message badges in workspace list and detail pane
 
@@ -85,6 +85,6 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. Message Store + CLI | v0.3.0 | 0/3 | Planned | - |
-| 7. Shell Completion Overhaul | v0.3.0 | 0/1 | Planned | - |
+| 7. Shell Completion Overhaul | 1/1 | Complete   | 2026-03-19 | - |
 | 8. Dashboard Tab Layout | v0.3.0 | 0/? | Not started | - |
 | 9. IPC Push + Message Display | v0.3.0 | 0/? | Not started | - |
