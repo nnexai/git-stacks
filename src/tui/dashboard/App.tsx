@@ -3,8 +3,14 @@ import { createSignal, createMemo, Show } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
+import { useTemplates } from "./hooks/useTemplates"
+import { useRepos } from "./hooks/useRepos"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
+import { TemplateList } from "./TemplateList"
+import { TemplateDetail } from "./TemplateDetail"
+import { RepoList } from "./RepoList"
+import { RepoDetail } from "./RepoDetail"
 import { ActionMenu } from "./ActionMenu"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
@@ -22,6 +28,8 @@ export default function App() {
   const renderer = useRenderer()
   const dims = useTerminalDimensions()
   const { entries, loading, reload } = useWorkspaces()
+  const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
+  const { entries: repoEntries, reload: reloadRepos } = useRepos()
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
@@ -70,17 +78,42 @@ export default function App() {
   })
 
   const filteredEntries = createMemo(() => {
-    const f = filter().toLowerCase()
+    const f = tabFilter.workspaces[0]().toLowerCase()
     if (!f) return entries()
     return entries().filter((e) => e.workspace.name.toLowerCase().includes(f))
   })
 
-  const currentEntry = createMemo(() => filteredEntries()[cursor()])
-  const selectedName = createMemo(() => currentEntry()?.workspace.name ?? "")
+  const filteredTemplates = createMemo(() => {
+    const f = tabFilter.templates[0]().toLowerCase()
+    if (!f) return templateEntries()
+    return templateEntries().filter(t => t.name.toLowerCase().includes(f))
+  })
+
+  const filteredRepos = createMemo(() => {
+    const f = tabFilter.repos[0]().toLowerCase()
+    if (!f) return repoEntries()
+    return repoEntries().filter(r => r.name.toLowerCase().includes(f) || r.local_path.toLowerCase().includes(f))
+  })
+
+  const currentEntry = createMemo(() => filteredEntries()[tabCursor.workspaces[0]()])
+  const currentTemplate = createMemo(() => filteredTemplates()[tabCursor.templates[0]()])
+  const currentRepo = createMemo(() => filteredRepos()[tabCursor.repos[0]()])
+
+  const allWorkspaces = createMemo(() => entries().map(e => e.workspace))
+
+  const selectedName = createMemo(() => {
+    const t = tab()
+    if (t === "workspaces") return currentEntry()?.workspace.name ?? ""
+    if (t === "templates") return currentTemplate()?.name ?? ""
+    if (t === "repos") return currentRepo()?.name ?? ""
+    return ""
+  })
 
   function clampCursor() {
-    const max = filteredEntries().length - 1
-    if (cursor() > max) setCursor(Math.max(0, max))
+    const entriesList = tab() === "workspaces" ? filteredEntries()
+      : tab() === "templates" ? filteredTemplates()
+      : filteredRepos()
+    setCursor(c => Math.min(c, Math.max(0, entriesList.length - 1)))
   }
 
   async function handleRun(name: string) {
@@ -285,7 +318,10 @@ export default function App() {
 
     // List view
     if (v.view === "list") {
-      const len = filteredEntries().length
+      const activeEntries = tab() === "workspaces" ? filteredEntries()
+        : tab() === "templates" ? filteredTemplates()
+        : filteredRepos()
+      const len = activeEntries.length
 
       if (key.name === "q") {
         renderer.destroy()
@@ -293,7 +329,7 @@ export default function App() {
       }
       if (key.name === "escape") {
         if (filtering()) { setFiltering(false); setFilter(""); clampCursor(); return }
-        if (selected().size > 0) { setSelected(new Set<number>()); return }
+        if (selected().size > 0) { setSelected(() => new Set<number>()); return }
         // NO-OP at top-level list — do NOT call renderer.destroy()
         return
       }
@@ -309,6 +345,7 @@ export default function App() {
       }
 
       if (key.name === "return") {
+        if (tab() === "repos") return
         if (len > 0) setView({ view: "action-menu", index: cursor() })
         return
       }
@@ -345,6 +382,8 @@ export default function App() {
 
       // Refresh
       if (key.name === "R" || (key.ctrl && key.name === "r")) {
+        if (tab() === "templates") { reloadTemplates(); return }
+        if (tab() === "repos") { reloadRepos(); return }
         reload()
         return
       }
@@ -372,14 +411,20 @@ export default function App() {
           />
         </Show>
         <Show when={tab() === "templates"}>
-          <box flexDirection="column" flexGrow={1} height={listHeight()}>
-            <text fg="gray">  (templates tab — coming in plan 03)</text>
-          </box>
+          <TemplateList
+            entries={filteredTemplates()}
+            cursor={tabCursor.templates[0]()}
+            filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
+            height={listHeight()}
+          />
         </Show>
         <Show when={tab() === "repos"}>
-          <box flexDirection="column" flexGrow={1} height={listHeight()}>
-            <text fg="gray">  (repos tab — coming in plan 03)</text>
-          </box>
+          <RepoList
+            entries={filteredRepos()}
+            cursor={tabCursor.repos[0]()}
+            filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
+            height={listHeight()}
+          />
         </Show>
       </Show>
 
@@ -424,10 +469,14 @@ export default function App() {
             <WorkspaceDetail entry={currentEntry()} />
           </Show>
           <Show when={tab() === "templates"}>
-            <text fg="gray">  (template detail — coming in plan 03)</text>
+            <TemplateDetail template={currentTemplate()} />
           </Show>
           <Show when={tab() === "repos"}>
-            <text fg="gray">  (repo detail — coming in plan 03)</text>
+            <RepoDetail
+              entry={currentRepo()}
+              allTemplates={templateEntries()}
+              allWorkspaces={allWorkspaces()}
+            />
           </Show>
         </box>
       </Show>
