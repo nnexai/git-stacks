@@ -52,7 +52,9 @@ Plans:
   2. Typing `git-stacks message send <TAB>` completes with workspace names
   3. Typing `git-stacks template edit <TAB>` completes with template names, and `git-stacks repo remove <TAB>` completes with repo names
   4. All subcommand trees (`repo add|scan|list|remove`, `template new|edit|list|remove`, `message send|list|clear`) appear as completions
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 07-01-PLAN.md — OPTION_ENUMS + FLAG_COMPLETIONS data tables, prev-word detection in bash/zsh/fish generators, message subcommand tree coverage
 
 ### Phase 8: Dashboard Tab Layout
 **Goal**: The dashboard is a tabbed management interface with Workspaces, Templates, and Repos tabs — each with a side-by-side list and detail pane — and consistent keyboard navigation throughout
@@ -83,6 +85,6 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 6. Message Store + CLI | v0.3.0 | 0/3 | Planned | - |
-| 7. Shell Completion Overhaul | v0.3.0 | 0/? | Not started | - |
+| 7. Shell Completion Overhaul | v0.3.0 | 0/1 | Planned | - |
 | 8. Dashboard Tab Layout | v0.3.0 | 0/? | Not started | - |
 | 9. IPC Push + Message Display | v0.3.0 | 0/? | Not started | - |
