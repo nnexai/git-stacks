@@ -173,6 +173,26 @@ export function generateBash(program: Command): string {
   out += '  prev="${COMP_WORDS[COMP_CWORD-1]}"\n'
   out += '  words=("${COMP_WORDS[@]}")\n'
   out += "\n"
+  // Emit OPTION_ENUMS and FLAG_COMPLETIONS prev-word detection (before top-level case)
+  const enumEntries = Object.entries(OPTION_ENUMS)
+  const flagEntries = Object.entries(FLAG_COMPLETIONS)
+  if (enumEntries.length > 0 || flagEntries.length > 0) {
+    out += '  case "$prev" in\n'
+    for (const [flag, values] of enumEntries) {
+      out += `    "${flag}")\n`
+      out += `      COMPREPLY=($(compgen -W "${values.join(" ")}" -- "$cur"))\n`
+      out += `      return 0\n`
+      out += `      ;;\n`
+    }
+    for (const [flag, dynType] of flagEntries) {
+      out += `    "${flag}")\n`
+      out += bashDynamicLookup(dynType, "      ", name)
+      out += `      return 0\n`
+      out += `      ;;\n`
+    }
+    out += "  esac\n"
+    out += "\n"
+  }
   out += "  if [[ ${COMP_CWORD} -eq 1 ]]; then\n"
   out += `    COMPREPLY=($(compgen -W "${topLevelNames}" -- "$cur"))\n`
   out += "    return 0\n"
@@ -198,6 +218,25 @@ export function generateBash(program: Command): string {
 
 // ─── Zsh ─────────────────────────────────────────────────────────────────────
 
+/** Returns the _arguments spec string for a single option, honoring OPTION_ENUMS and FLAG_COMPLETIONS. */
+function zshOptionSpec(opt: OptionInfo, id: string): string {
+  const flagName = opt.long  // e.g., "--strategy"
+  const enumValues = OPTION_ENUMS[flagName]
+  const flagDynamic = FLAG_COMPLETIONS[flagName]
+  if (enumValues) {
+    const valName = flagName.slice(2) // "strategy"
+    return `'${opt.long}[${opt.description}]:${valName}:(${enumValues.join(" ")})'`
+  } else if (flagDynamic) {
+    const helper = flagDynamic === "repo" ? `_${id}_repos`
+      : flagDynamic === "template" ? `_${id}_templates`
+      : `_${id}_workspaces`
+    const valName = flagName.slice(2)
+    return `'${opt.long}[${opt.description}]:${valName}:${helper}'`
+  } else {
+    return `'${opt.long}[${opt.description}]'`
+  }
+}
+
 function zshCaseBody(node: CommandNode, id: string): string {
   const { subcommands, options, dynamic, firstArgRequired } = node
 
@@ -216,7 +255,7 @@ function zshCaseBody(node: CommandNode, id: string): string {
     const pos = `'${firstArgRequired ? ":" : "::"} :${helper}'`
     let out = `        _arguments \\\n`
     for (const opt of options) {
-      out += `          '${opt.long}[${opt.description}]' \\\n`
+      out += `          ${zshOptionSpec(opt, id)} \\\n`
     }
     out += `          ${pos}\n`
     out += `          ;;\n`
@@ -233,6 +272,18 @@ function zshCaseBody(node: CommandNode, id: string): string {
 
   if (dynamic === "template") {
     return `        _${id}_templates ;;\n`
+  }
+
+  // No positional dynamic, but command has options that are in OPTION_ENUMS or FLAG_COMPLETIONS
+  // (e.g. `list --sort`) — emit _arguments with enum-aware specs
+  const enumOpts = options.filter(o => OPTION_ENUMS[o.long] !== undefined || FLAG_COMPLETIONS[o.long] !== undefined)
+  if (enumOpts.length > 0) {
+    let out = `        _arguments \\\n`
+    for (const opt of options) {
+      out += `          ${zshOptionSpec(opt, id)} \\\n`
+    }
+    out += `          ;;\n`
+    return out
   }
 
   return ""
@@ -259,11 +310,32 @@ function generateZshSubcmdHelper(node: CommandNode, id: string): string {
   out += `    _describe 'subcommand' subcmds\n`
   out += `  else\n`
   out += `    case $words[2] in\n`
+  // Subcommands that have options — emit _arguments with OPTION_ENUMS/FLAG_COMPLETIONS awareness
+  for (const sub of subcmds) {
+    if (sub.options.length > 0) {
+      out += `      ${sub.name})\n`
+      out += `        _arguments \\\n`
+      for (const opt of sub.options) {
+        out += `          ${zshOptionSpec(opt, id)} \\\n`
+      }
+      out += `          ;;\n`
+    } else if (sub.dynamic && sub.dynamic !== "shells") {
+      const helper = sub.dynamic === "repo" ? `_${id}_repos`
+        : sub.dynamic === "template" ? `_${id}_templates`
+        : `_${id}_workspaces`
+      out += `      ${sub.name})\n`
+      out += `        ${helper} ;;\n`
+    }
+  }
+  // Fallback: byDynamic grouping for subcommands without options (backward compat)
   for (const [dynType, names] of byDynamic) {
+    // Skip any names already handled above (those with options)
+    const unhandled = names.filter(n => !subcmds.find(s => s.name === n && s.options.length > 0))
+    if (unhandled.length === 0) continue
     const helper = dynType === "repo" ? `_${id}_repos`
       : dynType === "template" ? `_${id}_templates`
       : `_${id}_workspaces`
-    out += `      ${names.join("|")})\n`
+    out += `      ${unhandled.join("|")})\n`
     out += `        ${helper} ;;\n`
   }
   out += `    esac\n`
@@ -429,6 +501,48 @@ export function generateFish(program: Command): string {
     }
   }
 
+  // OPTION_ENUMS: emit complete directives with -ra for fixed-choice flag values
+  const enumFlags = Object.entries(OPTION_ENUMS)
+  if (enumFlags.length > 0) {
+    out += "\n# Fixed-choice flag values\n"
+    for (const [flag, values] of enumFlags) {
+      const longName = flag.slice(2) // strip "--"
+      // Find which top-level commands or subcommands use this flag
+      for (const node of nodes) {
+        if (node.options.some(o => o.long === flag)) {
+          out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName} -ra '${values.join(" ")}'\n`
+        }
+        for (const sub of node.subcommands) {
+          if (sub.options.some(o => o.long === flag)) {
+            out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -ra '${values.join(" ")}'\n`
+          }
+        }
+      }
+    }
+  }
+
+  // FLAG_COMPLETIONS: emit complete directives with dynamic lookup for flag values (e.g. --workspace)
+  const dynFlags = Object.entries(FLAG_COMPLETIONS)
+  if (dynFlags.length > 0) {
+    out += "\n# Dynamic flag-value completions\n"
+    for (const [flag, dynType] of dynFlags) {
+      const longName = flag.slice(2)
+      const helperFn = dynType === "repo" ? `__${id}_repos`
+        : dynType === "template" ? `__${id}_templates`
+        : `__${id}_workspaces`
+      for (const node of nodes) {
+        if (node.options.some(o => o.long === flag)) {
+          out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName} -ra "(${helperFn})"\n`
+        }
+        for (const sub of node.subcommands) {
+          if (sub.options.some(o => o.long === flag)) {
+            out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -ra "(${helperFn})"\n`
+          }
+        }
+      }
+    }
+  }
+
   // Commands with subcommands (e.g. stack)
   for (const node of nodes) {
     if (node.subcommands.length === 0) continue
@@ -438,6 +552,16 @@ export function generateFish(program: Command): string {
       out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and not __fish_seen_subcommand_from ${subcmdNames}' \\\n`
       out += `  -a '${sub.name}' -d '${sub.description}'\n`
     }
+    // Flags for subcommands
+    for (const sub of node.subcommands) {
+      if (sub.options.length === 0) continue
+      out += `\n# Flags for ${node.name} ${sub.name}\n`
+      for (const opt of sub.options) {
+        const longName = opt.long.slice(2)
+        out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -d '${opt.description}'\n`
+      }
+    }
+
     // Repo-name completions for subcommands that need it
     const repoDynSubs = node.subcommands.filter(s => s.dynamic === "repo")
     if (repoDynSubs.length > 0) {
