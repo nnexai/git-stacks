@@ -25,7 +25,7 @@ export function WorkspaceList(props: Props) {
   )
 
   return (
-    <box border title="Workspaces" flexDirection="column" flexGrow={1}>
+    <box flexDirection="column">
       <Show when={props.filter}>
         <text fg="cyan">  filter: {props.filter}</text>
       </Show>

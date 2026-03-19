@@ -73,8 +73,10 @@ export default function App() {
   const setFiltering = (v: boolean) => tabFiltering[tab()][1](v)
 
   // Split layout dimensions
-  const listHeight = createMemo(() => Math.floor((dims().height - 5) * 0.6))
-  const detailHeight = createMemo(() => dims().height - 5 - listHeight())
+  // inner height = total - 2 (border) - 1 (separator) - 1 (help bar) = total - 4
+  const innerHeight = createMemo(() => Math.max(6, dims().height - 4))
+  const listHeight = createMemo(() => Math.floor(innerHeight() * 0.6))
+  const detailHeight = createMemo(() => innerHeight() - listHeight())
 
   // Tab title
   const tabTitle = createMemo(() => {
@@ -82,7 +84,7 @@ export default function App() {
     const ws = t === "workspaces" ? "[1 Workspaces]" : "1 Workspaces"
     const tm = t === "templates" ? "[2 Templates]" : "2 Templates"
     const re = t === "repos" ? "[3 Repos]" : "3 Repos"
-    return `  ${ws}  ${tm}  ${re}`
+    return ` ${ws}  ${tm}  ${re} `
   })
 
   const filteredEntries = createMemo(() => {
@@ -115,6 +117,15 @@ export default function App() {
     if (t === "templates") return currentTemplate()?.name ?? ""
     if (t === "repos") return currentRepo()?.name ?? ""
     return ""
+  })
+
+  // Full-width separator line (defined after selectedName to avoid TDZ)
+  const separatorLine = createMemo(() => {
+    const name = selectedName()
+    const width = Math.max(0, dims().width - 2)
+    const prefix = name ? `── ${name} ` : `── `
+    const remaining = Math.max(0, width - prefix.length)
+    return `${prefix}${'─'.repeat(remaining)}`
   })
 
   const inlineInputLabel = createMemo(() => {
@@ -505,79 +516,7 @@ export default function App() {
         </box>
       </Show>
 
-      {/* Main content — list pane */}
-      <Show when={view().view === "list" || view().view === "action-menu" || view().view === "confirm"}>
-        <Show when={tab() === "workspaces"}>
-          <WorkspaceList
-            entries={filteredEntries()}
-            cursor={cursor()}
-            selected={selected()}
-            filter={filtering() ? filter() : ""}
-            height={listHeight()}
-          />
-        </Show>
-        <Show when={tab() === "templates"}>
-          <TemplateList
-            entries={filteredTemplates()}
-            cursor={tabCursor.templates[0]()}
-            filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
-            height={listHeight()}
-          />
-        </Show>
-        <Show when={tab() === "repos"}>
-          <RepoList
-            entries={filteredRepos()}
-            cursor={tabCursor.repos[0]()}
-            filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
-            height={listHeight()}
-          />
-        </Show>
-      </Show>
-
-      <Show when={tab() === "workspaces" && view().view === "action-menu"}>
-        <ActionMenu
-          workspaceName={currentEntry()?.workspace.name ?? ""}
-          onAction={(action) => runAction(action, (view() as any).index)}
-          onCancel={() => setView({ view: "list" })}
-          onRun={() => handleRun(selectedName())}
-        />
-      </Show>
-
-      <Show when={tab() === "templates" && view().view === "action-menu"}>
-        <TemplateActionMenu
-          templateName={currentTemplate()?.name ?? ""}
-          onAction={handleTemplateAction}
-          onCancel={() => setView({ view: "list" })}
-        />
-      </Show>
-
-      <Show when={view().view === "confirm"}>
-        {(() => {
-          const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
-          const label = confirmContext() === "template"
-            ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
-            : v.batch
-            ? `${v.action} ${selected().size} workspace(s)?`
-            : `${v.action} '${filteredEntries()[v.index]?.workspace.name}'?`
-          return (
-            <ConfirmDialog
-              message={label}
-              onConfirm={() => executeConfirmed(v.action, v.index, v.batch)}
-              onCancel={() => setView({ view: "list" })}
-            />
-          )
-        })()}
-      </Show>
-
-      <Show when={view().view === "inline-input"}>
-        <InlineInput
-          label={inlineInputLabel()}
-          prefill={(view() as any).prefill ?? ""}
-          onConfirm={handleInlineInputConfirm}
-          onCancel={handleInlineInputCancel}
-        />
-      </Show>
-
+      {/* Progress view — replaces the whole layout */}
       <Show when={view().view === "progress"}>
         <ProgressView
           title={(view() as any).message}
@@ -586,21 +525,102 @@ export default function App() {
         />
       </Show>
 
-      {/* Separator + detail pane */}
-      <Show when={view().view === "list" || view().view === "action-menu" || view().view === "confirm"}>
-        <text fg="gray">  ── {selectedName()} {'─'.repeat(40)}</text>
-        <box flexDirection="column" height={detailHeight()}>
+      {/* List pane — height-constrained so it doesn't collapse to content size */}
+      <Show when={view().view !== "progress"}>
+        <box height={listHeight()}>
           <Show when={tab() === "workspaces"}>
-            <WorkspaceDetail entry={currentEntry()} />
+            <WorkspaceList
+              entries={filteredEntries()}
+              cursor={cursor()}
+              selected={selected()}
+              filter={filtering() ? filter() : ""}
+              height={listHeight()}
+            />
           </Show>
           <Show when={tab() === "templates"}>
-            <TemplateDetail template={currentTemplate()} />
+            <TemplateList
+              entries={filteredTemplates()}
+              cursor={tabCursor.templates[0]()}
+              filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
+              height={listHeight()}
+            />
           </Show>
           <Show when={tab() === "repos"}>
-            <RepoDetail
-              entry={currentRepo()}
-              allTemplates={templateEntries()}
-              allWorkspaces={allWorkspaces()}
+            <RepoList
+              entries={filteredRepos()}
+              cursor={tabCursor.repos[0]()}
+              filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
+              height={listHeight()}
+            />
+          </Show>
+        </box>
+
+        {/* Full-width separator line */}
+        <text fg="gray">{separatorLine()}</text>
+
+        {/* Lower pane — detail OR overlay content */}
+        <box flexDirection="column" height={detailHeight()}>
+          {/* Normal list view — show detail */}
+          <Show when={view().view === "list"}>
+            <Show when={tab() === "workspaces"}>
+              <WorkspaceDetail entry={currentEntry()} />
+            </Show>
+            <Show when={tab() === "templates"}>
+              <TemplateDetail template={currentTemplate()} />
+            </Show>
+            <Show when={tab() === "repos"}>
+              <RepoDetail
+                entry={currentRepo()}
+                allTemplates={templateEntries()}
+                allWorkspaces={allWorkspaces()}
+              />
+            </Show>
+          </Show>
+
+          {/* Action menus — replace the detail area */}
+          <Show when={tab() === "workspaces" && view().view === "action-menu"}>
+            <ActionMenu
+              workspaceName={currentEntry()?.workspace.name ?? ""}
+              onAction={(action) => runAction(action, (view() as any).index)}
+              onCancel={() => setView({ view: "list" })}
+              onRun={() => handleRun(selectedName())}
+            />
+          </Show>
+
+          <Show when={tab() === "templates" && view().view === "action-menu"}>
+            <TemplateActionMenu
+              templateName={currentTemplate()?.name ?? ""}
+              onAction={handleTemplateAction}
+              onCancel={() => setView({ view: "list" })}
+            />
+          </Show>
+
+          {/* Confirm dialog */}
+          <Show when={view().view === "confirm"}>
+            {(() => {
+              const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
+              const label = confirmContext() === "template"
+                ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
+                : v.batch
+                ? `${v.action} ${selected().size} workspace(s)?`
+                : `${v.action} '${filteredEntries()[v.index]?.workspace.name}'?`
+              return (
+                <ConfirmDialog
+                  message={label}
+                  onConfirm={() => executeConfirmed(v.action, v.index, v.batch)}
+                  onCancel={() => setView({ view: "list" })}
+                />
+              )
+            })()}
+          </Show>
+
+          {/* Inline input */}
+          <Show when={view().view === "inline-input"}>
+            <InlineInput
+              label={inlineInputLabel()}
+              prefill={(view() as any).prefill ?? ""}
+              onConfirm={handleInlineInputConfirm}
+              onCancel={handleInlineInputCancel}
             />
           </Show>
         </box>
@@ -616,10 +636,10 @@ export default function App() {
         <box height={1}>
           <text fg="gray">
             {tab() === "workspaces"
-              ? "  ↑↓/jk Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit"
+              ? "  1/2/3 Tabs  ↑↓/jk Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit"
               : tab() === "templates"
-              ? "  ↑↓/jk Navigate  Enter Actions  / Filter  R Refresh  ? Help  q Quit"
-              : "  ↑↓/jk Navigate  / Filter  R Refresh  ? Help  q Quit"}
+              ? "  1/2/3 Tabs  ↑↓/jk Navigate  Enter Actions  / Filter  R Refresh  ? Help  q Quit"
+              : "  1/2/3 Tabs  ↑↓/jk Navigate  / Filter  R Refresh  ? Help  q Quit"}
           </text>
         </box>
       </Show>

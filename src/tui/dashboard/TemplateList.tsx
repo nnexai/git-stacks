@@ -23,7 +23,7 @@ export function TemplateList(props: Props) {
   )
 
   return (
-    <box border title="Templates" flexDirection="column" flexGrow={1}>
+    <box flexDirection="column">
       <Show when={props.filter}>
         <text fg="cyan">  filter: {props.filter}</text>
       </Show>

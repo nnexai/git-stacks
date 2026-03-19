@@ -29,6 +29,7 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
       Bun.connect({
         unix: SOCKET_PATH,
         socket: {
+          data() {},        // Required by Bun — no-op, we only care about open/error
           open(s) {
             s.end()
             resolve(false)  // socket is alive — another TUI is running
