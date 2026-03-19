@@ -32,7 +32,10 @@ function buildTestProgram(): Command {
     .description("Merge worktree branches")
     .option("--force", "Skip dirty worktree check")
 
-  program.command("list").description("List all workspaces")
+  program
+    .command("list")
+    .description("List all workspaces")
+    .option("--sort <key>", "Sort by: date, name, status", "date")
 
   const repoCmd = new Command("repo").description("Manage repo registry")
   repoCmd.command("add <path>").description("Register a repo from a local path")
@@ -55,6 +58,32 @@ function buildTestProgram(): Command {
   program
     .command("completion [shell]")
     .description("Generate shell completion scripts")
+
+  // sync command (has --strategy flag for OPTION_ENUMS testing)
+  program
+    .command("sync [name]")
+    .description("Sync workspace branches")
+    .option("--all", "Sync all workspaces")
+    .option("--strategy <strategy>", "Sync strategy: rebase or merge")
+
+  // message command group (for CMPL-05, CMPL-06 testing)
+  const messageCmd = new Command("message").description("Workspace notifications")
+  messageCmd
+    .command("send <text>")
+    .description("Send a notification")
+    .option("--workspace <name>", "Target workspace")
+    .option("--from <sender>", "Sender name")
+  messageCmd
+    .command("list")
+    .description("List notifications")
+    .option("--workspace <name>", "Target workspace")
+    .option("--json", "Output as JSON")
+  messageCmd
+    .command("clear")
+    .description("Clear notifications")
+    .option("--workspace <name>", "Target workspace")
+    .option("--from <sender>", "Clear by sender")
+  program.addCommand(messageCmd)
 
   return program
 }
@@ -268,5 +297,104 @@ describe("generateFish", () => {
     const out = generateFish(p)
     expect(out).toContain("-a frobnicate")
     expect(out).toContain("frobnicate")
+  })
+})
+
+describe("OPTION_ENUMS - fixed-choice flag values", () => {
+  test("bash: --strategy prev-word completes to rebase merge", () => {
+    const out = generateBash(buildTestProgram())
+    expect(out).toContain('"--strategy"')
+    expect(out).toContain('compgen -W "rebase merge"')
+  })
+
+  test("bash: --sort prev-word completes to date name status", () => {
+    const out = generateBash(buildTestProgram())
+    expect(out).toContain('"--sort"')
+    expect(out).toContain('compgen -W "date name status"')
+  })
+
+  test("zsh: --strategy gets enum completion", () => {
+    const out = generateZsh(buildTestProgram())
+    // zsh uses '--strategy[...]:strategy:(rebase merge)' pattern
+    expect(out).toContain("rebase merge")
+    expect(out).toContain("strategy")
+  })
+
+  test("zsh: --sort gets enum completion", () => {
+    const out = generateZsh(buildTestProgram())
+    expect(out).toContain("date name status")
+    expect(out).toContain("sort")
+  })
+
+  test("fish: --strategy has -a with enum values", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain("rebase merge")
+    expect(out).toContain("strategy")
+  })
+
+  test("fish: --sort has -a with enum values", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain("date name status")
+    expect(out).toContain("sort")
+  })
+})
+
+describe("FLAG_COMPLETIONS - --workspace flag value", () => {
+  test("bash: --workspace prev-word triggers workspace lookup", () => {
+    const out = generateBash(buildTestProgram())
+    expect(out).toContain('"--workspace"')
+    expect(out).toContain('.config/ws/workspaces')
+  })
+
+  test("zsh: --workspace flag gets workspace completion", () => {
+    const out = generateZsh(buildTestProgram())
+    expect(out).toContain("--workspace")
+    expect(out).toContain("_ws_workspaces")
+  })
+
+  test("fish: --workspace flag gets workspace completion", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain("workspace")
+    expect(out).toContain("__ws_workspaces")
+  })
+})
+
+describe("message subcommand tree", () => {
+  test("bash: message case includes send list clear subcommands", () => {
+    const out = generateBash(buildTestProgram())
+    expect(out).toContain("    message)")
+    expect(out).toContain("send list clear")
+  })
+
+  test("zsh: message subcommand helper exists", () => {
+    const out = generateZsh(buildTestProgram())
+    expect(out).toContain("_ws_message()")
+    expect(out).toContain("'send:Send a notification'")
+    expect(out).toContain("'list:List notifications'")
+    expect(out).toContain("'clear:Clear notifications'")
+  })
+
+  test("fish: message subcommands appear", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain("__fish_seen_subcommand_from message")
+    expect(out).toContain("-a 'send'")
+    expect(out).toContain("-a 'list'")
+    expect(out).toContain("-a 'clear'")
+  })
+
+  test("bash: message subcommands include workspace lookup for --workspace", () => {
+    const out = generateBash(buildTestProgram())
+    // message subcommand case should reference workspace completion
+    expect(out).toContain("message)")
+  })
+
+  test("zsh: message top-level appears in command list", () => {
+    const out = generateZsh(buildTestProgram())
+    expect(out).toContain("'message:Workspace notifications'")
+  })
+
+  test("fish: message appears in top-level completions", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain("-a message")
   })
 })

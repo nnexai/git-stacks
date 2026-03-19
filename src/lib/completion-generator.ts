@@ -22,6 +22,18 @@ const DYNAMIC_COMPLETIONS: Record<string, DynamicCompletion> = {
   "template.rename": "template",
   "template.remove": "template",
   completion:        "shells",
+  "message.send":    "workspace",
+  "message.list":    "workspace",
+  "message.clear":   "workspace",
+}
+
+const OPTION_ENUMS: Record<string, string[]> = {
+  "--strategy": ["rebase", "merge"],
+  "--sort":     ["date", "name", "status"],
+}
+
+const FLAG_COMPLETIONS: Record<string, DynamicCompletion> = {
+  "--workspace": "workspace",
 }
 
 interface OptionInfo {
