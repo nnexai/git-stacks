@@ -15,13 +15,19 @@ import { ActionMenu } from "./ActionMenu"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
+import { InlineInput } from "./InlineInput"
+import { HelpOverlay } from "./HelpOverlay"
+import { TemplateActionMenu } from "./TemplateActionMenu"
 import {
   cleanWorkspace,
   removeWorkspace,
   mergeWorkspace,
   openWorkspace,
   editWorkspaceYaml,
+  renameWorkspace,
 } from "../../lib/workspace-ops"
+import { readTemplate, writeTemplate, templatePath } from "../../lib/config"
+import { unlinkSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
 
 export default function App() {
@@ -35,6 +41,8 @@ export default function App() {
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
   const [progressLines, setProgressLines] = createSignal<string[]>([])
   const [progressDone, setProgressDone] = createSignal(false)
+  const [helpOpen, setHelpOpen] = createSignal(false)
+  const [confirmContext, setConfirmContext] = createSignal<"workspace" | "template">("workspace")
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -109,6 +117,12 @@ export default function App() {
     return ""
   })
 
+  const inlineInputLabel = createMemo(() => {
+    const v = view()
+    if (v.view === "inline-input") return v.purpose === "rename" ? "New name" : "Clone as"
+    return ""
+  })
+
   function clampCursor() {
     const entriesList = tab() === "workspaces" ? filteredEntries()
       : tab() === "templates" ? filteredTemplates()
@@ -173,6 +187,17 @@ export default function App() {
   }
 
   async function executeConfirmed(action: Action, index: number, batch?: boolean) {
+    if (confirmContext() === "template") {
+      const tmpl = filteredTemplates()[index]
+      if (tmpl) {
+        try { unlinkSync(templatePath(tmpl.name)) } catch {}
+        reloadTemplates()
+      }
+      setConfirmContext("workspace")
+      setView({ view: "list" })
+      return
+    }
+
     const indicesToProcess = batch
       ? [...selected()]
       : [index]
@@ -251,9 +276,89 @@ export default function App() {
     }
   }
 
+  async function handleInlineInputConfirm(value: string) {
+    const v = view() as { view: "inline-input"; index: number; purpose: string; prefill: string }
+    const trimmed = value.trim()
+    if (!trimmed) { setView({ view: "list" }); return }
+
+    if (v.purpose === "rename") {
+      const oldName = filteredEntries()[v.index]?.workspace.name
+      if (!oldName) { setView({ view: "list" }); return }
+      setProgressLines([])
+      setProgressDone(false)
+      setView({ view: "progress", message: `Renaming ${oldName} → ${trimmed}...` })
+      const result = await renameWorkspace(oldName, trimmed, {}, (msg) =>
+        setProgressLines(prev => [...prev, msg])
+      )
+      if (!result.ok) setProgressLines(prev => [...prev, `ERROR: ${result.error}`])
+      setProgressDone(true)
+      reload()
+      return
+    }
+
+    if (v.purpose === "clone-template") {
+      const srcName = filteredTemplates()[v.index]?.name
+      if (!srcName) { setView({ view: "list" }); return }
+      try {
+        const src = readTemplate(srcName)
+        writeTemplate({ ...src, name: trimmed })
+        reloadTemplates()
+      } catch {}
+      setView({ view: "list" })
+      return
+    }
+
+    setView({ view: "list" })
+  }
+
+  function handleInlineInputCancel() {
+    setView({ view: "list" })
+  }
+
+  async function handleTemplateAction(action: "edit" | "clone" | "remove") {
+    const v = view() as { view: "action-menu"; index: number }
+    const template = filteredTemplates()[v.index]
+    if (!template) { setView({ view: "list" }); return }
+    const name = template.name
+
+    if (action === "edit") {
+      const editor = process.env.VISUAL || process.env.EDITOR || "vi"
+      const path = templatePath(name)
+      renderer.suspend()
+      try {
+        const proc = spawn([editor, path], { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
+        await proc.exited
+      } finally {
+        renderer.resume()
+        reloadTemplates()
+        setView({ view: "list" })
+      }
+      return
+    }
+
+    if (action === "clone") {
+      setView({ view: "inline-input", index: v.index, purpose: "clone-template", prefill: name + "-copy" })
+      return
+    }
+
+    if (action === "remove") {
+      setConfirmContext("template")
+      setView({ view: "confirm", index: v.index, action: "remove" })
+      return
+    }
+  }
+
   // Main keyboard handler
   useKeyboard((key) => {
     const v = view()
+
+    // Help overlay toggle — must be at very top
+    if (key.name === "?" && !filtering()) {
+      if (helpOpen()) { setHelpOpen(false); return }
+      setHelpOpen(true)
+      return
+    }
+    if (helpOpen()) return  // block all other keys when help is open (HelpOverlay handles its own)
 
     // Tab switching — at the very beginning before other checks
     if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
@@ -328,6 +433,7 @@ export default function App() {
         return
       }
       if (key.name === "escape") {
+        if (helpOpen()) { setHelpOpen(false); return }
         if (filtering()) { setFiltering(false); setFilter(""); clampCursor(); return }
         if (selected().size > 0) { setSelected(() => new Set<number>()); return }
         // NO-OP at top-level list — do NOT call renderer.destroy()
@@ -428,7 +534,7 @@ export default function App() {
         </Show>
       </Show>
 
-      <Show when={view().view === "action-menu"}>
+      <Show when={tab() === "workspaces" && view().view === "action-menu"}>
         <ActionMenu
           workspaceName={currentEntry()?.workspace.name ?? ""}
           onAction={(action) => runAction(action, (view() as any).index)}
@@ -437,10 +543,20 @@ export default function App() {
         />
       </Show>
 
+      <Show when={tab() === "templates" && view().view === "action-menu"}>
+        <TemplateActionMenu
+          templateName={currentTemplate()?.name ?? ""}
+          onAction={handleTemplateAction}
+          onCancel={() => setView({ view: "list" })}
+        />
+      </Show>
+
       <Show when={view().view === "confirm"}>
         {(() => {
           const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
-          const label = v.batch
+          const label = confirmContext() === "template"
+            ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
+            : v.batch
             ? `${v.action} ${selected().size} workspace(s)?`
             : `${v.action} '${filteredEntries()[v.index]?.workspace.name}'?`
           return (
@@ -451,6 +567,15 @@ export default function App() {
             />
           )
         })()}
+      </Show>
+
+      <Show when={view().view === "inline-input"}>
+        <InlineInput
+          label={inlineInputLabel()}
+          prefill={(view() as any).prefill ?? ""}
+          onConfirm={handleInlineInputConfirm}
+          onCancel={handleInlineInputCancel}
+        />
       </Show>
 
       <Show when={view().view === "progress"}>
@@ -487,12 +612,21 @@ export default function App() {
       </Show>
 
       {/* Help bar */}
-      <Show when={view().view === "list"}>
+      <Show when={view().view === "list" && !helpOpen()}>
         <box height={1}>
           <text fg="gray">
-            {" "}↑↓/jk Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit
+            {tab() === "workspaces"
+              ? "  ↑↓/jk Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit"
+              : tab() === "templates"
+              ? "  ↑↓/jk Navigate  Enter Actions  / Filter  R Refresh  ? Help  q Quit"
+              : "  ↑↓/jk Navigate  / Filter  R Refresh  ? Help  q Quit"}
           </text>
         </box>
+      </Show>
+
+      {/* Help overlay */}
+      <Show when={helpOpen()}>
+        <HelpOverlay tab={tab()} onClose={() => setHelpOpen(false)} />
       </Show>
     </box>
   )
