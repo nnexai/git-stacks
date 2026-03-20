@@ -528,7 +528,7 @@ export default function App() {
       }
 
       // Refresh
-      if (key.name === "R" || (key.ctrl && key.name === "r")) {
+      if (key.name === "r") {
         if (tab() === "templates") { reloadTemplates(); setRefreshFlash("Refreshed templates"); setTimeout(() => setRefreshFlash(""), 1500); return }
         if (tab() === "repos") { reloadRepos(); setRefreshFlash("Refreshed repos"); setTimeout(() => setRefreshFlash(""), 1500); return }
         reloadMessages()  // sync — setMsgMap fires before reload()
