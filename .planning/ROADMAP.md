@@ -83,7 +83,11 @@ Plans:
   1. In the Workspaces tab list, a workspace that has active messages shows a preview with sender (if set), truncated text, and relative age without pressing any key
   2. With a workspace selected in the Workspaces tab, the detail pane shows all messages grouped by sender, with the most recent first per sender
   3. User presses `c` on a sender group in the detail pane and that sender's messages are cleared; other senders' messages remain
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 09-01-PLAN.md — Message utilities + useMessages hook + types (messageUtils.ts, useMessages.ts, types.ts update)
+- [ ] 09-02-PLAN.md — WorkspaceRow preview + WorkspaceDetail inline message list + App.tsx wiring
+- [ ] 09-03-PLAN.md — MessageOverlay full-screen component + m key handler + help updates
 
 ## Progress
 
@@ -94,4 +98,4 @@ Plans:
 | 6. Message Store + CLI | v0.3.0 | 0/3 | Planned | - |
 | 7. Shell Completion Overhaul | 1/1 | Complete   | 2026-03-19 | - |
 | 8. Dashboard Tab Layout | 6/6 | Complete   | 2026-03-20 | - |
-| 9. IPC Push + Message Display | v0.3.0 | 0/? | Not started | - |
+| 9. IPC Push + Message Display | v0.3.0 | 0/3 | Planned | - |
