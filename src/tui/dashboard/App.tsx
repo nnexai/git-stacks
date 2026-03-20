@@ -18,6 +18,7 @@ import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
 import { InlineInput } from "./InlineInput"
 import { HelpOverlay } from "./HelpOverlay"
+import { MessageOverlay } from "./MessageOverlay"
 import { TemplateActionMenu } from "./TemplateActionMenu"
 import {
   cleanWorkspace,
@@ -37,13 +38,15 @@ export default function App() {
   const { entries, loading, reload } = useWorkspaces()
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
-  const { messagesFor, reloadMessages } = useMessages()
+  const { messagesFor, clearSender, reloadMessages } = useMessages()
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
   const [progressLines, setProgressLines] = createSignal<string[]>([])
   const [progressDone, setProgressDone] = createSignal(false)
   const [helpOpen, setHelpOpen] = createSignal(false)
+  const [messagesOpen, setMessagesOpen] = createSignal(false)
+  const [messagesWorkspace, setMessagesWorkspace] = createSignal("")
   const [confirmContext, setConfirmContext] = createSignal<"workspace" | "template">("workspace")
 
   // Tab system
@@ -130,7 +133,7 @@ export default function App() {
   const helpBarText = createMemo(() => {
     const t = tab()
     if (t === "workspaces")
-      return "  1/2/3 Tabs  up/dn Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit"
+      return "  1/2/3 Tabs  up/dn Navigate  Enter Actions  Space Select  m Messages  / Filter  R Refresh  ? Help  q Quit"
     if (t === "templates")
       return "  1/2/3 Tabs  up/dn Navigate  Enter Actions  / Filter  R Refresh  ? Help  q Quit"
     return "  1/2/3 Tabs  up/dn Navigate  / Filter  R Refresh  ? Help  q Quit"
@@ -384,6 +387,9 @@ export default function App() {
     }
     if (helpOpen()) return  // block all other keys when help is open (HelpOverlay handles its own)
 
+    // Message overlay guard — MessageOverlay handles its own keys
+    if (messagesOpen()) return
+
     // Tab switching — at the very beginning before other checks
     if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
     if (key.name === "2") { setTab("templates"); setView({ view: "list" }); return }
@@ -503,6 +509,16 @@ export default function App() {
         }
       }
 
+      // Message overlay (workspaces tab only, not during batch selection)
+      if (key.name === "m" && tab() === "workspaces" && selected().size === 0) {
+        const name = currentEntry()?.workspace.name
+        if (name) {
+          setMessagesWorkspace(name)
+          setMessagesOpen(true)
+        }
+        return
+      }
+
       // Filter
       if (key.name === "/") {
         setFiltering(true)
@@ -528,7 +544,20 @@ export default function App() {
         <HelpOverlay tab={tab()} onClose={() => setHelpOpen(false)} />
       </Show>
 
-      <Show when={!helpOpen()}>
+      {/* Message overlay replaces EVERYTHING when open */}
+      <Show when={!helpOpen() && messagesOpen()}>
+        <MessageOverlay
+          workspaceName={messagesWorkspace()}
+          messages={messagesFor(messagesWorkspace())}
+          onClose={() => setMessagesOpen(false)}
+          onClearSender={(sender) => clearSender(messagesWorkspace(), sender)}
+        />
+        <box height={1}>
+          <text fg="gray">  j/k Navigate groups  c Clear group  Esc Close</text>
+        </box>
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen()}>
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
           <Switch>
