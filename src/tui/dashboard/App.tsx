@@ -694,7 +694,7 @@ export default function App() {
           </Show>
           <Show when={!filtering() && !refreshFlash() && !loading()}>
             <text fg="gray">{helpBarText()}</text>
-            <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>  sock:{socketStatus} ipc:{ipcCount()}</text>
+            <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>  {socketStatus === "bound" ? "\u25cf" : "\u25cb"}</text>
           </Show>
         </box>
       </Show>
