@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, createMemo, Show } from "solid-js"
+import { createSignal, createMemo, Show, Switch, Match } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
@@ -72,11 +72,8 @@ export default function App() {
   const filtering = createMemo(() => tabFiltering[tab()][0]())
   const setFiltering = (v: boolean) => tabFiltering[tab()][1](v)
 
-  // Split layout dimensions
-  // inner height = total - 2 (border) - 1 (separator) - 1 (help bar) = total - 4
-  const innerHeight = createMemo(() => Math.max(6, dims().height - 4))
-  const listHeight = createMemo(() => Math.floor(innerHeight() * 0.6))
-  const detailHeight = createMemo(() => innerHeight() - listHeight())
+  // List pane height estimate for scroll viewport
+  const listHeight = createMemo(() => Math.max(6, Math.floor(dims().height * 0.6) - 2))
 
   // Tab title
   const tabTitle = createMemo(() => {
@@ -119,13 +116,22 @@ export default function App() {
     return ""
   })
 
-  // Full-width separator line (defined after selectedName to avoid TDZ)
-  const separatorLine = createMemo(() => {
+  // Detail box title shows selected name or progress message
+  const detailBoxTitle = createMemo(() => {
+    const v = view()
+    if (v.view === "progress") return ` ${(v as any).message} `
     const name = selectedName()
-    const width = Math.max(0, dims().width - 2)
-    const prefix = name ? `── ${name} ` : `── `
-    const remaining = Math.max(0, width - prefix.length)
-    return `${prefix}${'─'.repeat(remaining)}`
+    return name ? ` ${name} ` : ""
+  })
+
+  // Context-sensitive help bar text
+  const helpBarText = createMemo(() => {
+    const t = tab()
+    if (t === "workspaces")
+      return "  1/2/3 Tabs  up/dn Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit"
+    if (t === "templates")
+      return "  1/2/3 Tabs  up/dn Navigate  Enter Actions  / Filter  R Refresh  ? Help  q Quit"
+    return "  1/2/3 Tabs  up/dn Navigate  / Filter  R Refresh  ? Help  q Quit"
   })
 
   const inlineInputLabel = createMemo(() => {
@@ -508,91 +514,88 @@ export default function App() {
   })
 
   return (
-    <box border title={tabTitle()} flexDirection="column" height="100%">
-      {/* Loading indicator */}
-      <Show when={loading()}>
-        <box height={1}>
-          <text fg="gray"> (loading statuses...)</text>
-        </box>
+    <box flexDirection="column" height="100%">
+      {/* Help overlay replaces EVERYTHING when open */}
+      <Show when={helpOpen()}>
+        <HelpOverlay tab={tab()} onClose={() => setHelpOpen(false)} />
       </Show>
 
-      {/* Progress view — replaces the whole layout */}
-      <Show when={view().view === "progress"}>
-        <ProgressView
-          title={(view() as any).message}
-          lines={progressLines()}
-          done={progressDone()}
-        />
-      </Show>
-
-      {/* List pane — height-constrained so it doesn't collapse to content size */}
-      <Show when={view().view !== "progress"}>
-        <box height={listHeight()}>
-          <Show when={tab() === "workspaces"}>
-            <WorkspaceList
-              entries={filteredEntries()}
-              cursor={cursor()}
-              selected={selected()}
-              filter={filtering() ? filter() : ""}
-              height={listHeight()}
-            />
-          </Show>
-          <Show when={tab() === "templates"}>
-            <TemplateList
-              entries={filteredTemplates()}
-              cursor={tabCursor.templates[0]()}
-              filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
-              height={listHeight()}
-            />
-          </Show>
-          <Show when={tab() === "repos"}>
-            <RepoList
-              entries={filteredRepos()}
-              cursor={tabCursor.repos[0]()}
-              filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
-              height={listHeight()}
-            />
-          </Show>
-        </box>
-
-        {/* Full-width separator line */}
-        <text fg="gray">{separatorLine()}</text>
-
-        {/* Lower pane — detail OR overlay content */}
-        <box flexDirection="column" height={detailHeight()}>
-          {/* Normal list view — show detail */}
-          <Show when={view().view === "list"}>
-            <Show when={tab() === "workspaces"}>
-              <WorkspaceDetail entry={currentEntry()} />
-            </Show>
-            <Show when={tab() === "templates"}>
-              <TemplateDetail template={currentTemplate()} />
-            </Show>
-            <Show when={tab() === "repos"}>
-              <RepoDetail
-                entry={currentRepo()}
-                allTemplates={templateEntries()}
-                allWorkspaces={allWorkspaces()}
+      <Show when={!helpOpen()}>
+        {/* TOP BOX: list pane with tab title in border */}
+        <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
+          <Switch>
+            <Match when={tab() === "workspaces"}>
+              <WorkspaceList
+                entries={filteredEntries()}
+                cursor={cursor()}
+                selected={selected()}
+                filter={filtering() ? filter() : ""}
+                height={listHeight()}
               />
-            </Show>
+            </Match>
+            <Match when={tab() === "templates"}>
+              <TemplateList
+                entries={filteredTemplates()}
+                cursor={tabCursor.templates[0]()}
+                filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
+                height={listHeight()}
+              />
+            </Match>
+            <Match when={tab() === "repos"}>
+              <RepoList
+                entries={filteredRepos()}
+                cursor={tabCursor.repos[0]()}
+                filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
+                height={listHeight()}
+              />
+            </Match>
+          </Switch>
+          {/* Batch bar INSIDE top box as footer row */}
+          <Show when={view().view === "list" && selected().size > 0}>
+            <BatchBar count={selected().size} />
+          </Show>
+        </box>
+
+        {/* BOTTOM BOX: detail / action-menu / confirm / progress / inline-input */}
+        <box border title={detailBoxTitle()} flexDirection="column" flexGrow={2} minHeight={10}>
+          {/* List view — tab-specific detail */}
+          <Show when={view().view === "list"}>
+            <Switch>
+              <Match when={tab() === "workspaces"}>
+                <WorkspaceDetail entry={currentEntry()} />
+              </Match>
+              <Match when={tab() === "templates"}>
+                <TemplateDetail template={currentTemplate()} />
+              </Match>
+              <Match when={tab() === "repos"}>
+                <RepoDetail
+                  entry={currentRepo()}
+                  allTemplates={templateEntries()}
+                  allWorkspaces={allWorkspaces()}
+                />
+              </Match>
+            </Switch>
           </Show>
 
-          {/* Action menus — replace the detail area */}
-          <Show when={tab() === "workspaces" && view().view === "action-menu"}>
-            <ActionMenu
-              workspaceName={currentEntry()?.workspace.name ?? ""}
-              onAction={(action) => runAction(action, (view() as any).index)}
-              onCancel={() => setView({ view: "list" })}
-              onRun={() => handleRun(selectedName())}
-            />
-          </Show>
-
-          <Show when={tab() === "templates" && view().view === "action-menu"}>
-            <TemplateActionMenu
-              templateName={currentTemplate()?.name ?? ""}
-              onAction={handleTemplateAction}
-              onCancel={() => setView({ view: "list" })}
-            />
+          {/* Action menus */}
+          <Show when={view().view === "action-menu"}>
+            <Switch>
+              <Match when={tab() === "workspaces"}>
+                <ActionMenu
+                  workspaceName={currentEntry()?.workspace.name ?? ""}
+                  onAction={(action) => runAction(action, (view() as any).index)}
+                  onCancel={() => setView({ view: "list" })}
+                  onRun={() => handleRun(selectedName())}
+                />
+              </Match>
+              <Match when={tab() === "templates"}>
+                <TemplateActionMenu
+                  templateName={currentTemplate()?.name ?? ""}
+                  onAction={handleTemplateAction}
+                  onCancel={() => setView({ view: "list" })}
+                />
+              </Match>
+            </Switch>
           </Show>
 
           {/* Confirm dialog */}
@@ -623,30 +626,29 @@ export default function App() {
               onCancel={handleInlineInputCancel}
             />
           </Show>
+
+          {/* Progress view */}
+          <Show when={view().view === "progress"}>
+            <ProgressView
+              title={(view() as any).message}
+              lines={progressLines()}
+              done={progressDone()}
+            />
+          </Show>
         </box>
-      </Show>
 
-      {/* Batch bar */}
-      <Show when={view().view === "list" && selected().size > 0}>
-        <BatchBar count={selected().size} />
-      </Show>
-
-      {/* Help bar */}
-      <Show when={view().view === "list" && !helpOpen()}>
+        {/* HELP BAR / FILTER LINE / LOADING — outside both boxes, fixed 1 row */}
         <box height={1}>
-          <text fg="gray">
-            {tab() === "workspaces"
-              ? "  1/2/3 Tabs  ↑↓/jk Navigate  Enter Actions  Space Select  / Filter  R Refresh  ? Help  q Quit"
-              : tab() === "templates"
-              ? "  1/2/3 Tabs  ↑↓/jk Navigate  Enter Actions  / Filter  R Refresh  ? Help  q Quit"
-              : "  1/2/3 Tabs  ↑↓/jk Navigate  / Filter  R Refresh  ? Help  q Quit"}
-          </text>
+          <Show when={filtering()}>
+            <text fg="cyan">  filter: {filter() || "_"}</text>
+          </Show>
+          <Show when={!filtering() && loading()}>
+            <text fg="gray">  (loading statuses...)</text>
+          </Show>
+          <Show when={!filtering() && !loading()}>
+            <text fg="gray">{helpBarText()}</text>
+          </Show>
         </box>
-      </Show>
-
-      {/* Help overlay */}
-      <Show when={helpOpen()}>
-        <HelpOverlay tab={tab()} onClose={() => setHelpOpen(false)} />
       </Show>
     </box>
   )
