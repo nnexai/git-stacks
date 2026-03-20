@@ -98,4 +98,4 @@ Plans:
 | 6. Message Store + CLI | v0.3.0 | 0/3 | Planned | - |
 | 7. Shell Completion Overhaul | 1/1 | Complete   | 2026-03-19 | - |
 | 8. Dashboard Tab Layout | 6/6 | Complete   | 2026-03-20 | - |
-| 9. IPC Push + Message Display | v0.3.0 | 1/3 | Executing | - |
+| 9. IPC Push + Message Display | 2/3 | In Progress|  | - |
