@@ -38,7 +38,8 @@ export default function App() {
   const { entries, loading, reload } = useWorkspaces()
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
-  const { msgMap, tick, clearSender, reloadMessages } = useMessages()
+  const { msgMap, tick, ipcCount, clearSender, reloadMessages } = useMessages()
+  const [refreshFlash, setRefreshFlash] = createSignal("")
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
@@ -528,10 +529,12 @@ export default function App() {
 
       // Refresh
       if (key.name === "R" || (key.ctrl && key.name === "r")) {
-        if (tab() === "templates") { reloadTemplates(); return }
-        if (tab() === "repos") { reloadRepos(); return }
+        if (tab() === "templates") { reloadTemplates(); setRefreshFlash("Refreshed templates"); setTimeout(() => setRefreshFlash(""), 1500); return }
+        if (tab() === "repos") { reloadRepos(); setRefreshFlash("Refreshed repos"); setTimeout(() => setRefreshFlash(""), 1500); return }
+        reloadMessages()  // sync — setMsgMap fires before reload()
         reload()
-        reloadMessages()
+        setRefreshFlash("Refreshed")
+        setTimeout(() => setRefreshFlash(""), 1500)
         return
       }
     }
@@ -678,15 +681,19 @@ export default function App() {
         </box>
 
         {/* HELP BAR / FILTER LINE / LOADING — outside both boxes, fixed 1 row */}
-        <box height={1}>
+        <box height={1} flexDirection="row">
           <Show when={filtering()}>
             <text fg="cyan">  filter: {filter() || "_"}</text>
           </Show>
-          <Show when={!filtering() && loading()}>
+          <Show when={!filtering() && refreshFlash()}>
+            <text fg="green">  {refreshFlash()}</text>
+          </Show>
+          <Show when={!filtering() && !refreshFlash() && loading()}>
             <text fg="gray">  (loading statuses...)</text>
           </Show>
-          <Show when={!filtering() && !loading()}>
+          <Show when={!filtering() && !refreshFlash() && !loading()}>
             <text fg="gray">{helpBarText()}</text>
+            <text fg={ipcCount() > 0 ? "green" : "gray"}>  ipc:{ipcCount()}</text>
           </Show>
         </box>
       </Show>

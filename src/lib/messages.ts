@@ -1,5 +1,5 @@
 import { appendFile, readFile, writeFile } from "node:fs/promises"
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { MESSAGES_DIR } from "./paths"
 
@@ -37,6 +37,14 @@ export async function listMessages(workspace: string): Promise<MessageRecord[]> 
   const path = messagePath(workspace)
   if (!existsSync(path)) return []
   const raw = await readFile(path, "utf8")
+  const lines = raw.trim().split("\n").filter(Boolean)
+  return lines.map((l) => JSON.parse(l) as MessageRecord).reverse()
+}
+
+export function listMessagesSync(workspace: string): MessageRecord[] {
+  const path = messagePath(workspace)
+  if (!existsSync(path)) return []
+  const raw = readFileSync(path, "utf8")
   const lines = raw.trim().split("\n").filter(Boolean)
   return lines.map((l) => JSON.parse(l) as MessageRecord).reverse()
 }
