@@ -1,236 +1,311 @@
 # Project Research Summary
 
-**Project:** git-stacks v0.3.0
-**Domain:** Multi-repo workspace manager CLI — terminal dashboard overhaul, IPC messaging, shell completion improvements
-**Researched:** 2026-03-19
+**Project:** git-stacks v0.4.0 — TUI Hardening & Polish
+**Domain:** Bun CLI tool with SolidJS/OpenTUI terminal dashboard — test infrastructure, wizard flows, CRUD parity, sync
+**Researched:** 2026-03-20
 **Confidence:** HIGH
+
+---
+
+## RESOLVED CONTRADICTIONS
+
+Two contradictions between research files have been explicitly resolved here. Requirements and roadmap must not re-litigate these decisions.
+
+### Resolution 1: OpenTUI testRender IS Available
+
+**Contradiction:** PITFALLS.md (Pitfall 1) states "There is no headless or virtual renderer for OpenTUI" and recommends testing only pure logic. STACK.md and ARCHITECTURE.md both independently verified, from installed package type declarations, that `@opentui/solid@0.1.87` exports `testRender` backed by `@opentui/core/testing/`.
+
+**Resolution: Trust STACK.md (HIGH confidence, verified from installed source).**
+
+`testRender` from `@opentui/solid` mounts SolidJS components in a headless `TestRenderer` with no real terminal required. `captureCharFrame()` returns the terminal buffer as a plain string (ANSI-stripped). `mockInput.pressKey/typeText/pressEnter` inject keystrokes directly into the renderer's keyboard pipeline. `renderOnce()` advances the render loop synchronously. Tests run in CI on Linux without a display server.
+
+PITFALLS.md's Pitfall 1 is based on an incorrect assumption that no headless renderer exists. Its recommended testing strategy (pure-function extraction only, no component tests) was the correct fallback given that assumption, but is now superseded. **The three-tier testing model still applies at the architecture level, but Layer 2 (component tests with testRender) is feasible and should be built.**
+
+The "looks done but isn't" checklist item from PITFALLS.md — "Unit tests import cleanly: bun test tests/ passes with zero imports from @opentui/solid or @opentui/core in test files" — is **incorrect** and must not be followed. Tests in `tests/tui/dashboard/` that use `testRender` will import from `@opentui/solid` by design.
+
+### Resolution 2: Create Wizards Must Be Native TUI Components, NOT suspend+resume to @clack/prompts
+
+**Contradiction:** FEATURES.md recommends `renderer.suspend()` + existing `@clack/prompts` wizards as the primary pattern for create flows (Features 3, 4, 5). PITFALLS.md (Pitfall 3) and ARCHITECTURE.md both independently state that `@clack/prompts` and OpenTUI have an unresolvable stdio ownership conflict — `renderer.suspend()` + clack is not reliable for wizard flows, only for $EDITOR launch.
+
+**Resolution: Trust PITFALLS.md + STACK.md + ARCHITECTURE.md consensus over FEATURES.md.**
+
+`@clack/prompts` and OpenTUI both assume exclusive ownership of the terminal (raw mode, cursor visibility, stdin handling). The `renderer.suspend()` + `@clack/prompts` pattern is only reliably usable for $EDITOR launch because editors are well-behaved terminal programs that restore terminal state on exit. `@clack/prompts` does not guarantee this — it calls `process.exit(1)` on cancel, which bypasses cleanup. FEATURES.md's confidence in this approach is misplaced; it confuses the working editor-launch pattern with the unproven clack-wizard-from-TUI pattern.
+
+**The correct approach for all create flows is native TUI wizard components:**
+
+- A new `WizardView.tsx` component manages multi-step state internally (ARCHITECTURE.md's Option C)
+- `UIView` gets a `{ view: "wizard"; kind: "create-workspace" | "create-template" | "create-repo" }` variant
+- Wizard-specific step/data state lives inside the WizardView component, not in UIView (per PITFALLS.md Pitfall 4)
+- `renderer.suspend()` is reserved for: (a) $EDITOR launch only, and (b) `repo scan` as an explicit escape hatch since that flow has a complex directory traversal UI not worth rebuilding
+
+This means the "suspend+resume" recommendations throughout FEATURES.md Features 3, 4, and 5 should be read as "native TUI wizard" for text-entry flows, and "suspend+resume escape hatch" only for `repo scan`.
+
+---
 
 ## Executive Summary
 
-git-stacks v0.3.0 extends an already-solid Bun/TypeScript/SolidJS/OpenTUI codebase with three distinct features: a multi-tab dashboard overhaul (Workspaces, Templates, Repos tabs), a file-backed workspace messaging system with optional live IPC push notification, and a shell completion overhaul. All three are achievable with the existing dependency set — no new npm packages are needed. The recommended approach follows the codebase's own patterns closely: new data modules in `src/lib/`, new commands in `src/commands/`, new TUI components in `src/tui/dashboard/`. The build order recommended by architecture research (messages store first, completions second, tab layout third, IPC push last) keeps each phase independently shippable and testable.
+git-stacks v0.4.0 closes the gap between what the CLI can do and what the TUI dashboard can do. The v0.3.0 dashboard is a read-and-act interface — users can open, rename, clean, merge, and remove workspaces, but they cannot create anything or sync from base branches without exiting to the CLI. v0.4.0 makes the dashboard fully self-sufficient for daily workspace management. The five deliverables are: workspace sync in the action menu, workspace and template create flows as native TUI wizards, repo management actions in the Repos tab, and a component-level test harness using OpenTUI's first-class headless test renderer.
 
-The highest-impact risk is in the dashboard overhaul: OpenTUI's `useKeyboard` is a global broadcast, not a focused event system. Every mounted component that calls it receives every keypress. Adding three tab panels that each manage cursor state will cause double-dispatch unless all keyboard routing is centralized in `App.tsx` and every panel guards its handler body on an `active` prop. This must be the first design decision settled before any tab panel code is written. A closely related risk is the existing `UIView` union referencing list entries by numeric index — this breaks silently when tab switching changes which list is active. Both issues are low-effort to fix upfront and difficult to retrofit after tab panels are built.
+The recommended implementation approach leverages capabilities that are already fully present in the installed packages. No new dependencies are required. `@opentui/solid@0.1.87` ships `testRender` for headless component testing — confirmed by reading the installed type declarations and implementation, not from documentation. `syncWorkspace()` is already implemented and exported from `workspace-ops.ts`. The wizard pattern extends the existing `UIView` signal-as-state-machine approach: add a `"wizard"` view variant, build `WizardView.tsx` as a self-contained multi-step component, and extend `InlineInput.tsx` with cursor movement before any wizard input uses it. The implementation build order has a clear dependency chain and can be executed phase-by-phase without rework.
 
-The IPC transport decision has a cross-platform implication that requirements must resolve explicitly: `Bun.serve({ unix })` and `fetch({ unix })` are confirmed for macOS and Linux. On Windows, Bun supports AF_UNIX via Windows 10 1803+ but Named Pipe fallback may be needed for broader coverage. The recommended decision for v0.3.0 is to accept Unix-socket-only (macOS + Linux) and document Windows as future work. If Windows support is a hard requirement, an abstraction layer (a `getIpcAddress()` helper returning a unix path on unix and a TCP loopback address on Windows) should be designed before any IPC code is written.
+The dominant risks are in the wizard layer. Two bugs are guaranteed to occur unless explicitly prevented: (1) `runHooks()` in `lifecycle.ts` uses `stdio: "inherit"` — hook output will corrupt the TUI if `post_create` hooks fire while the TUI is active; a `runHooksCaptured()` variant is a prerequisite for create operations in the TUI. (2) `useWorkspaces.reload()` does not return a `Promise<void>` — the cursor cannot be correctly positioned on the newly created entity without this change. Both are lib-layer changes of low scope but high consequence if missed. Sync has its own risk: `fetchOrigin()` in `git.ts` has no timeout, so a sync on a workspace with an unreachable remote will hang indefinitely; a 30-second per-repo timeout is required before the sync action ships.
+
+---
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack is kept as-is. No new dependencies are needed for any v0.3.0 feature. All three features use APIs already provided by Bun's runtime and components already present in the installed `@opentui/solid@0.1.87`. For full detail see `.planning/research/STACK.md`.
+The existing stack (Bun, TypeScript, Commander.js, `@opentui/solid`, SolidJS, YAML + Zod, `@clack/prompts`) is unchanged for v0.4.0. No new dependencies are required for any feature in this milestone.
 
-**Core technologies:**
-- **Bun 1.3.10+**: Runtime, IPC server via `Bun.serve({ unix })` and `fetch({ unix })` — confirmed in official Bun HTTP docs; HIGH confidence
-- **@opentui/solid 0.1.87** (installed): `<tab_select>` and `<scrollbox>` confirmed present in installed type definitions; no upgrade required for v0.3.0
-- **TypeScript strict / Commander.js 14.0.3 / Zod / yaml**: All unchanged from v0.2.0; message store uses YAML with a 50-message cap per workspace
-- **solid-js 1.9.11**: Reactive state; `batch()` discipline is critical when updating multiple signals from async socket or status-fetch callbacks
+**Core testing additions (no new packages):**
 
-IPC transport is `Bun.serve({ unix: "/tmp/git-stacks.sock" })` for the TUI listener and `fetch("http://localhost/path", { unix: sockPath })` for the CLI sender. A single global socket (not per-workspace) handles all workspace messages, each carrying a `workspace` field. The sender always writes to the durable YAML store first; IPC is a best-effort live push that drops silently when the socket is absent or the TUI is not running.
+| API | Source | Purpose |
+|-----|--------|---------|
+| `testRender` | `@opentui/solid` (installed) | Mount SolidJS components in headless renderer |
+| `captureCharFrame()` | `@opentui/core/testing` (installed) | Capture rendered output as plain string |
+| `mockInput.typeText/pressKey/pressEnter/pressEscape/pressArrow` | `@opentui/core/testing` (installed) | Simulate keyboard input |
+| `renderOnce()` | `@opentui/core/testing` (installed) | Advance render loop synchronously before asserting |
+| `TestRecorder` | `@opentui/core/testing` (installed) | Record frame sequences for multi-step interaction tests |
+| `toMatchSnapshot()` / `toMatchInlineSnapshot()` | `bun:test` built-in | Snapshot assertions on `captureCharFrame()` output |
 
-A possible OpenTUI upgrade to 0.1.88 (current latest) adds `scrollChildIntoView` on `<scrollbox>`, useful for the detail pane — not required but worth considering during Phase 3.
+**Key version notes:** `toMatchInlineSnapshot` requires Bun 1.1.39+; the project runs Bun 1.3.10. The `@opentui/core` native binary (`@opentui/core-linux-x64`) is already installed; test renderer initializes it with `testing: true`, disabling real terminal I/O. `bunfig.toml` already has `preload = ["@opentui/solid/preload"]` — component tests work without additional configuration.
+
+**What not to add:** `node-pty` (native addon, Bun compatibility issues), `@solid-primitives/state-machine` (the view signal union IS the state machine — no external library needed), PTY-based e2e subprocess tests (brittle, slow, superseded by `testRender`).
 
 ### Expected Features
 
-For the full feature table with complexity ratings and dependency graph, see `.planning/research/FEATURES.md`.
+**Must have — P1 (core milestone, make TUI fully self-sufficient):**
 
-**Must have (v0.3.0 table stakes):**
-- Tab row in dashboard — Workspaces, Templates, Repos with `1`/`2`/`3` or `[`/`]` navigation; any serious multi-entity TUI requires this
-- Master-detail split layout — list at ~60% width, reactive detail pane at ~40%; current full-screen detail navigation loses list context
-- All entity CRUD accessible in-TUI — template edit/clone/remove via existing suspend/resume editor pattern; repos tab is read-only
-- Persistent context-aware help bar — one-line footer showing current-tab bindings; `?` key for full reference overlay
-- Messaging system CLI — `message send|list|clear` with per-workspace YAML storage; primary use case is AI agents posting status updates
-- Message display in dashboard — latest message preview in workspace list row; full message history in detail pane with sender grouping and timestamps
-- Enum value completions — `--sort`, `--strategy`, `--output` and other fixed-choice flags currently produce no completions
-- `message` command completions — workspace name completion for send/list/clear
+- Workspace sync in action menu (`s` key) — lowest-effort gap closure; `syncWorkspace()` already complete
+- Create workspace from TUI (`n` key in Workspaces tab) — native TUI wizard via `WizardView.tsx`
+- Create template from TUI (`n` key in Templates tab) — native TUI wizard, same WizardView pattern
+- Repo management actions from Repos tab (Enter opens action menu; add via InlineInput; scan via suspend+resume escape hatch; remove with ConfirmDialog)
+- E2E test infrastructure — component-level tests with `testRender`; App integration tests; three-tier test model established
+- `InlineInput` cursor movement (left/right arrows, insert at position) — prerequisite for any wizard text field; must ship before WizardView
 
-**Should have (differentiators):**
-- Per-sender message scoping — `--from <agent-name>` on send; `clear --from <sender>`; group by sender in detail pane
-- Repos tab as registry health browser — flags repos where path no longer exists on disk
-- Template tab with inline YAML edit via `$EDITOR` (suspend/resume)
+**Should have — P2 (polish, ship if time allows):**
 
-**Defer to v0.3.x or v0.4.0:**
-- Branch completions for `--from` and `clone` — HIGH complexity; repo context at completion time is ambiguous; needs dedicated research spike
-- In-TUI template creation wizard — suspend/resume for editing is sufficient; creation wizard bridges two rendering contexts
-- Mouse support — OpenTUI library gap; keyboard-first is the correct default
-- Auto-clear messages on workspace open
+- TUI screen improvements: help bar fits 80 columns; column widths responsive to terminal width; workspace rows show age (`3d`) not ISO date
+- Detail pane info density improvements (tighter padding, more content per screen row)
 
-**Explicit anti-features (do not add in v0.3.0):**
-- Real-time polling auto-refresh (use manual `R` refresh instead — avoids filesystem churn and TUI flicker)
-- WebSocket or complex IPC (file-based YAML + optional unix socket push is sufficient)
-- In-TUI wizard rendering (always use suspend/resume to hand off terminal to `@clack/prompts`)
-- `git branch` calls in shell completion functions (blocks Tab for seconds with many workspaces)
+**Defer to v0.5.0+:**
+
+- Snapshot testing for TUI layouts (brittle maintenance burden — use `toContain()` assertions instead of full-frame equality)
+- Adjustable split ratio (no user requests)
+- Batch workspace sync from TUI (git-lock-aware concurrency required; CLI `--all` flag is sufficient)
+- Strategy selection UI for sync (always default to rebase in TUI)
+
+**Explicit scope boundary for wizard flows:** The TUI create-workspace wizard supports template-based creation only (select template, enter name and branch). Ad-hoc repo selection from the TUI requires a `MultiSelectList` component that does not yet exist. Building it for v0.4.0 is feasible but increases scope significantly; defer ad-hoc mode to the CLI if time is constrained.
 
 ### Architecture Approach
 
-The architecture adds new files cleanly alongside existing ones. The existing `WorkspaceList`, `ActionMenu`, `ConfirmDialog`, `ProgressView`, `BatchBar`, `DetailStatus`, `useWorkspaces`, and all of `workspace-ops.ts`, `git.ts`, `lifecycle.ts`, and `integrations/` are untouched. New features attach via additive exports, a new command registered in `index.ts`, and new JSX branches in `App.tsx` guarded by `<Show when={tab() === "...">`. For full component map, data flow diagrams, and anti-patterns to avoid, see `.planning/research/ARCHITECTURE.md`.
+The v0.4.0 architecture is an additive extension to the existing `App.tsx` / `UIView` state machine. The `UIView` discriminated union gains one new variant (`"wizard"`). A new `WizardView.tsx` component handles all multi-step create flows with self-contained step/data state. Five existing files get small modifications (types.ts, ActionMenu.tsx, TemplateActionMenu.tsx, App.tsx, and `lifecycle.ts` for the `runHooksCaptured` prerequisite). Five new test files establish the test harness. No new external dependencies.
 
-**New files (zero risk to existing behaviour):**
-1. `src/commands/message.ts` — Commander subcommand family: `message send|list|clear`
-2. `src/lib/messages.ts` — Message store: `appendMessage`, `listMessages`, `clearMessages`; per-workspace YAML at `~/.config/git-stacks/messages/{name}.yml`
-3. `src/lib/ipc.ts` — `startIpcServer()` / `stopIpcServer()` using `Bun.serve({ unix })`; notifies subscribers via callback
-4. `src/tui/dashboard/TabBar.tsx` — Tab header component with `1`/`2`/`3` keyboard switching
-5. `src/tui/dashboard/TemplatesTab.tsx` — Template list + detail pane with edit/clone/remove actions
-6. `src/tui/dashboard/ReposTab.tsx` — Registry list + detail pane with health indicators
-7. `src/tui/dashboard/hooks/useMessages.ts` — IPC push subscription + file read on reload
-8. `src/tui/dashboard/hooks/useTemplates.ts` — Reactive `listTemplates()` signal
-9. `src/tui/dashboard/hooks/useRepos.ts` — Reactive `readRegistry()` signal
+**Major components:**
 
-**Modified files (additive, low risk):**
-- `src/lib/paths.ts` — add `MESSAGES_DIR`, `messagePath(wsName)`, `SOCKET_PATH`
-- `src/lib/workspace-ops.ts` — add `editTemplateYaml()` mirroring existing `editWorkspaceYaml()`
-- `src/lib/completion-generator.ts` — add `OPTION_ENUMS` table, extend bash/zsh/fish emitters, register `message.*` in `DYNAMIC_COMPLETIONS`
-- `src/index.ts` — one `program.addCommand(messageCommand)` line
-- `src/tui/dashboard/App.tsx` — add `tab` signal, `TabBar` render, tab-gated `<Show>` blocks (workspaces path unchanged, alongside not inside)
-- `src/tui/dashboard/types.ts` — add `Tab` type and `Message` type
-- `src/tui/dashboard/WorkspaceRow.tsx` — add message badge column
-- `src/tui/dashboard/DetailStatus.tsx` — add Messages section below repos section
+1. `WizardView.tsx` (new) — self-contained multi-step create wizard; owns `currentStep` and `collectedValues` signals; `useKeyboard` for Enter/Escape/arrow navigation; calls `onConfirm(values)` or `onCancel()` when done; renders in detail pane when `view().view === "wizard"`
+2. `types.ts` (modified) — add `"sync"` to `Action` union; add `{ view: "wizard"; kind: WizardKind }` to `UIView`
+3. `App.tsx` (modified) — import `syncWorkspace`; add sync case in `runAction`; add wizard routing; add `n` key binding for workspaces/templates tabs
+4. `InlineInput.tsx` (modified) — add left/right cursor movement, insert at position; prerequisite for wizard text fields
+5. `lifecycle.ts` (modified) — add `runHooksCaptured()` variant that captures stdout/stderr as callback lines instead of `stdio: "inherit"`; prerequisite for create operations in TUI
 
-**Key design decisions codified by research:**
-- `tab` signal is independent of `UIView` — tab switches reset view to `{ view: "list" }`, leaving all existing view-state components (`ActionMenu`, `ConfirmDialog`, `ProgressView`, `DetailStatus`) completely unchanged
-- Messages stored in separate per-workspace YAML files, not as a field on `WorkspaceSchema` — avoids concurrent write corruption from multiple agents, prevents message data from polluting `ws status --json` output, and makes `clearMessages` a simple file delete
-- Single global socket at `/tmp/git-stacks.sock` (not per workspace) — one server, one path, one cleanup; all messages carry a `workspace` field for routing
-- OPTION_ENUMS static table in `completion-generator.ts` (not Commander `.choices()`) — avoids unintended runtime validation behavior change; completions are advisory, not enforced
+**Key architectural patterns to preserve:**
+
+- Bottom-pane view routing: each view variant renders exclusively in the detail pane via `<Show when={view().view === "..."}>`; components own their `useKeyboard`; App.tsx is the single coordinator
+- Early-return keyboard guard: `if (v.view === "wizard") return` in App.tsx keyboard handler prevents double-dispatch
+- Config isolation in tests: `process.env.HOME` redirect before dynamic import; required for all App integration tests
+- No nested `<text>` in OpenTUI JSX: use `<box flexDirection="row"><text>...</text><text>...</text></box>` for inline-styled content
+- Full-frame snapshot assertions are an anti-pattern: assert with `captureCharFrame().toContain("expected text")`; not `toBe(entireFrame)`
 
 ### Critical Pitfalls
 
-For full pitfall detail including warning signs, recovery strategies, and a "looks done but isn't" checklist, see `.planning/research/PITFALLS.md`.
+1. **`runHooks()` stdout corruption** — `lifecycle.ts` uses `stdio: "inherit"`; hook output writes directly to terminal while OpenTUI is rendering; TUI visually corrupts. Prevention: add `runHooksCaptured()` before implementing any create operation that may trigger hooks. This is a prerequisite, not a cleanup task.
 
-1. **`useKeyboard` global broadcast causes double-dispatch across tab panels** — Use `<Show>` (not CSS hide) so inactive panels unmount and their handlers deregister. Alternatively, centralize all keyboard routing in `App.tsx` and gate each panel's handler on `if (props.active)`. Must be resolved before any tab panel code is written.
+2. **`@clack/prompts` in TUI context** — calling any `@clack/prompts` function from within the TUI corrupts the terminal, even with `renderer.suspend()`. Prevention: build create wizards as native TUI components (`WizardView.tsx`). The `grep -r "@clack" src/tui/dashboard/` check must return nothing.
 
-2. **`UIView` numeric index becomes stale on tab switch** — Change `UIView` action states to store entity name (string) not list index (number). Replace single `cursor` signal with `Record<TabId, number>` initialized to `{ workspaces: 0, templates: 0, repos: 0 }`. Required prerequisite refactor before implementing tabs.
+3. **`useWorkspaces.reload()` is not async** — cursor cannot be positioned on the new entity after create without awaiting reload. Prevention: change `reload()` to return `Promise<void>`; `await reload()` then set cursor to new entity index before transitioning back to list view.
 
-3. **Stale Unix socket file causes silent message delivery failures and TUI launch failures** — On TUI startup: probe-connect before binding; remove stale file if ECONNREFUSED. On CLI send: catch ECONNREFUSED/ENOENT and exit 0 silently (never use `fs.existsSync` alone as a liveness check). On TUI exit: `unlinkSync(SOCKET_PATH)` in SIGTERM, SIGINT, and OpenTUI `onDestroy`.
+4. **`fetchOrigin()` has no timeout** — sync on a workspace with an unreachable remote hangs indefinitely. Prevention: add a 30-second `Bun.timeout()` wrapper around `fetchOrigin()` before shipping the sync action.
 
-4. **OpenTUI issue #564 — `renderer.suspend()` + editor spawn drops keystrokes** — Verify suspend/resume works correctly with the installed OpenTUI version before building Template/Repo tab editor actions. If broken, fall back to `renderer.destroy()` + re-`render()`. Pin OpenTUI version; do not accept minor bumps without verifying suspend/resume behavior.
+5. **`InlineInput` has no cursor movement** — users cannot correct mid-string errors in wizard text fields. Prevention: extend `InlineInput` with left/right arrow cursor movement and insert-at-position before WizardView is built; this is a prerequisite for the entire wizard layer.
 
-5. **OpenTUI issue #789 — render loop stalls under rapid signal updates** — Wrap all multi-signal updates from async callbacks in SolidJS `batch()`. Buffer incoming socket messages; flush to the signal at most once per render frame rather than calling `setMessages()` directly inside the socket data handler.
+6. **Wizard steps encoded in `UIView` union** — encoding individual steps as `UIView` variants balloons `App.tsx` and eliminates back-navigation. Prevention: `UIView` gets one `"wizard"` variant; all step state lives inside `WizardView.tsx` as local signals.
 
-6. **Shell completion subprocess performance** — Never add `git branch` or per-repo subprocess calls to completion functions. Keep dynamic lookups to the existing `ls`/`grep` patterns. Benchmark Tab completion at 20 workspaces; must be under 200ms on a local SSD.
+---
 
 ## Implications for Roadmap
 
-The four-phase build order from architecture research is the recommended roadmap structure. Each phase is independently shippable and testable. Phases 2 and 3 can be developed in parallel by different contributors.
+Based on combined research, suggested phase structure (6 phases):
 
-### Phase 1: Message Store and CLI Commands
+### Phase 1: Test Harness Foundation
 
-**Rationale:** Zero dependencies on TUI or IPC. Immediately testable with unit tests using the existing `process.env.HOME` redirect pattern in `tests/lib/`. Agents and hooks can start using `git-stacks message send` before the dashboard is updated. The durable YAML store is the ground truth; IPC is a notification layer on top. Getting the data contract right before the server prevents the server from being built on an unstable schema.
+**Rationale:** `testRender` is available and verified but no component tests exist yet. Establishing the harness before feature work gives regression coverage for everything that follows. The `process.env.HOME` isolation pattern, JSX pragma requirements, and `renderOnce()` discipline must be demonstrated in working tests before other developers rely on them.
 
-**Delivers:** `git-stacks message send|list|clear` CLI commands with per-workspace YAML storage at `~/.config/git-stacks/messages/{workspace}.yml`. Message schema with `id`, `workspace`, `sender`, `text`, `created_at`. `appendMessage` trims to MAX_MESSAGES=50 to bound disk growth.
+**Delivers:** `tests/tui/dashboard/InlineInput.test.tsx` as the reference test; `tests/tui/dashboard/ActionMenu.test.tsx`; confirmed that `testRender` + `bun:test` + `bunfig.toml` preload works end-to-end; snapshot baseline for existing components.
 
-**Addresses:** Messaging system CLI (must-have), per-sender message scoping (differentiator), silent-drop behavior when TUI not running
+**Addresses (FEATURES.md):** E2E test infrastructure (P1); establishes three-tier test model
 
-**Avoids:** Concurrent write corruption from multiple agents (by keeping messages in a separate file, not on WorkspaceSchema)
+**Avoids (PITFALLS.md):** Full-frame snapshot brittle anti-pattern (use `toContain` not `toBe`); double-rendering from missed `renderOnce()` calls; HOME isolation for App integration tests
 
-### Phase 2: Shell Completion Overhaul
+**Research flag:** Standard patterns — skip `/gsd:research-phase`. `testRender` API is fully documented in STACK.md. No unknowns.
 
-**Rationale:** Pure logic change in one file with no TUI risk. Independently verifiable by diffing `git-stacks completion bash` output before and after. Can be developed in parallel with Phase 3.
+---
 
-**Delivers:** Enum value completions for `--sort`, `--strategy`, `--output` and other fixed-choice flags. `message send|list|clear` workspace name completions. Extended fish flag completions for nested subcommand families (`repo.add`, `template.new`, etc.).
+### Phase 2: Prerequisites — InlineInput Cursor + runHooksCaptured
 
-**Addresses:** Enum value completions (must-have), `message` command completions (must-have)
+**Rationale:** Two lib-layer changes are prerequisites for the wizard layer. Neither is large in scope, but both are guaranteed to cause hard-to-diagnose bugs if skipped: cursor-less InlineInput breaks usability in any multi-field wizard; `stdio: "inherit"` from hooks corrupts TUI rendering on any create operation that triggers `post_create` hooks. Completing both before wizard work begins eliminates an entire class of implementation bugs.
 
-**Avoids:** DYNAMIC_COMPLETIONS gap for the new `message.*` command family, subprocess performance pitfall in completion functions
+**Delivers:** `InlineInput.tsx` with left/right cursor movement and insert-at-position; `runHooksCaptured()` variant in `lifecycle.ts` that streams hook output via callback instead of inheriting stdio.
 
-**Verification:** Run `git-stacks completion bash` before and after; diff output; confirm `sync --strategy <TAB>` yields `rebase merge` and `message send <TAB>` yields workspace names; time completion at 20 workspaces (must be under 200ms)
+**Addresses (FEATURES.md):** Prerequisite for Features 3, 4, 5 (create flows)
 
-### Phase 3: Dashboard Tab Layout
+**Avoids (PITFALLS.md):** Pitfall 8 (InlineInput cursor), Pitfall 10 (`runHooks` stdio corruption)
 
-**Rationale:** Depends only on existing stable APIs (`listTemplates`, `readRegistry`). No dependency on Phase 1 messages or IPC. The Workspaces tab continues to work identically — all new code is alongside, not inside, existing components.
+**Research flag:** Standard patterns — skip `/gsd:research-phase`. Both changes are well-scoped; implementation paths are specified in ARCHITECTURE.md and PITFALLS.md.
 
-**Prerequisite refactors (must complete before any tab panel code):**
-- Change `UIView` action states from numeric index to entity name
-- Replace single `cursor` signal with `Record<TabId, number>`
-- Verify `renderer.suspend()` + editor launch works correctly with installed OpenTUI version (issue #564)
-- Establish keyboard routing discipline (single `useKeyboard` in App.tsx or `active` prop gating on every panel)
+---
 
-**Delivers:** `<TabBar>` component with 1/2/3 keyboard switching. `<TemplatesTab>` with list + detail pane and edit/clone/remove actions. `<ReposTab>` with registry browser and disk-health indicators. Context-aware help bar. `?` key reference overlay.
+### Phase 3: Workspace Sync Action
 
-**Addresses:** Tab navigation (must-have), master-detail split layout (must-have), all entity CRUD in-TUI (must-have), repos tab health browser (differentiator), template YAML edit (differentiator)
+**Rationale:** Sync is the lowest-effort P1 feature (4 small file modifications, no new files) and the highest-value gap closure (users who run `git-stacks sync` multiple times per day currently must exit the TUI to do so). Implementing it third gives a complete, testable feature that validates the ProgressView pattern before more complex work.
 
-**Avoids:** Double-dispatch keyboard pitfall, UIView index coupling pitfall, render loop stall (via `batch()` discipline in new hooks)
+**Delivers:** `s` key in workspace ActionMenu triggers `syncWorkspace()` with streaming per-repo progress in ProgressView; `fetchOrigin()` timeout at 30 seconds; sync result summary (N synced, N skipped).
 
-### Phase 4: IPC Push and Message Display in Dashboard
+**Addresses (FEATURES.md):** Feature 6 (workspace sync); P1 priority
 
-**Rationale:** Depends on Phase 1 (YAML store + message types) and Phase 3 (dashboard structure stable). IPC startup and cleanup lifecycle must be thoroughly verified before merging.
+**Avoids (PITFALLS.md):** Pitfall 6 (fetchOrigin timeout), Pitfall 7 (concurrent sync — progress view must block all keys while in-progress)
 
-**Cross-platform decision required before this phase begins:** `Bun.serve({ unix })` works on macOS and Linux. Windows requires AF_UNIX (Windows 10 1803+) or a Named Pipe fallback. Recommended decision: accept Unix-socket-only for v0.3.0, document Windows as future work. If Windows is required, implement `getIpcAddress()` returning unix path on unix and TCP localhost on Windows before writing any IPC code.
+**Uses (STACK.md):** `syncWorkspace()` already exported from `workspace-ops.ts`; no changes to ops layer
 
-**Delivers:** `src/lib/ipc.ts` with `startIpcServer()` / `stopIpcServer()`. `useMessages` hook with IPC push subscription and file-read fallback on `R` reload. Message badge (latest message + age + sender) in `WorkspaceRow`. Full message list with sender grouping in `DetailStatus`. `message clear` triggers workspace-specific reactive reload in TUI.
+**Research flag:** Standard patterns — skip `/gsd:research-phase`. Sync integration path fully specified in ARCHITECTURE.md.
 
-**Critical contract:** `stopIpcServer()` must be called when the TUI exits — in `onCleanup`, SIGTERM handler, and immediately before `renderer.destroy()`. `startIpcServer()` must probe-connect before binding to handle stale socket files from crashes.
+---
 
-**Addresses:** Message display in dashboard (must-have — list row preview and detail pane)
+### Phase 4: WizardView + Create Workspace
 
-**Avoids:** Stale socket file pitfall, render loop stall from rapid socket messages (buffer + batch flush)
+**Rationale:** `WizardView.tsx` is the largest new component in this milestone. Building it for workspace creation first establishes the full multi-step wizard pattern — step signals, data accumulation, Enter/Escape navigation, `onConfirm`/`onCancel` callbacks — in a context where the requirements are fully known (name + branch + template). Template creation reuses the same component in Phase 5.
+
+**Delivers:** `WizardView.tsx` with text-input and select-from-list step types; `n` key in Workspaces tab opens workspace creation wizard; `WizardView.test.tsx` unit tests for step progression, back-navigation, cancel safety; `reload()` made async with cursor-to-new-entity after create.
+
+**Addresses (FEATURES.md):** Feature 3 (create workspace); P1 priority; template-only mode (ad-hoc repo selection deferred per scope boundary)
+
+**Avoids (PITFALLS.md):** Pitfall 3 (no @clack/prompts in TUI), Pitfall 4 (wizard steps not in UIView), Pitfall 5 (reload cursor update), Pitfall 9 (repo multi-select deferred to CLI)
+
+**Research flag:** Needs `/gsd:research-phase` during planning. WizardView's select-step type for template picking needs a concrete design before implementation. The `reload()` async change has downstream effects on all hooks that call it — scope the change carefully.
+
+---
+
+### Phase 5: Template Create + Repo Management Actions
+
+**Rationale:** Template creation reuses Phase 4's WizardView verbatim — it is purely integration work. Repo management is independent: the Repos tab needs Enter to open an action menu (currently a no-op), InlineInput for path entry, and suspend+resume escape hatch for the scan wizard (the one explicitly sanctioned use of suspend+resume for a non-editor external tool).
+
+**Delivers:** `n` key in Templates tab opens template create wizard via WizardView; Enter on Repos tab opens RepoActionMenu with add/scan/remove actions; InlineInput path entry with `existsSync` indicator; remove with ConfirmDialog showing used-by context; scan via `renderer.suspend()` + `runRepoScan()` + `renderer.resume()`.
+
+**Addresses (FEATURES.md):** Feature 5 (template create); Feature 4 (repo management); P1 priority
+
+**Avoids (PITFALLS.md):** Pitfall 5 (reload cursor after create); filesystem browser anti-pattern (InlineInput not a directory picker)
+
+**Research flag:** Standard patterns for template create. Repo scan (suspend+resume) is the one explicitly allowed exception to the no-clack-in-TUI rule — document this clearly in the code to prevent future confusion.
+
+---
+
+### Phase 6: App Integration Tests + Screen Improvements
+
+**Rationale:** Once all features are implemented, App-level integration tests can exercise complete key sequences against real (isolated) state. Screen improvements are cosmetic P2 work that benefit from a clean test baseline — verifying nothing breaks at 80 columns is easier when tests already exercise the rendering path.
+
+**Delivers:** `App.integration.test.tsx` covering tab switching, action menu dispatch, wizard entry/completion/cancel, sync progress; help bar fits 80 columns; column widths responsive to terminal width; workspace rows show age not ISO date; responsive column truncation in WorkspaceRow and TemplateList.
+
+**Addresses (FEATURES.md):** E2E test infrastructure (integration layer); TUI screen improvements (P2)
+
+**Avoids (PITFALLS.md):** Full-frame snapshot assertion anti-pattern; PTY test brittleness (all tests use `testRender`, none use PTY)
+
+**Research flag:** Standard patterns — skip `/gsd:research-phase`. App integration tests follow the pattern documented in ARCHITECTURE.md. Screen improvements are purely cosmetic with no architectural decisions.
+
+---
 
 ### Phase Ordering Rationale
 
-- Phase 1 first because its data contract (message schema, file layout) anchors all subsequent messaging work with zero TUI risk
-- Phase 2 can run in parallel with Phase 3 — the only shared file is `index.ts` for command registration
-- Phase 3 third because the prerequisite UIView and keyboard refactors are non-trivial and must be done before any tab code; doing them first keeps each PR reviewable and isolated
-- Phase 4 last because it depends on both the data model (Phase 1) and a stable dashboard structure (Phase 3), and its lifecycle requirements (socket cleanup on exit) must be verified against an already-working TUI
+- Phase 1 before all others: tests written in Phase 1 catch regressions in all later phases; no point writing features then retrofitting a test harness
+- Phase 2 before Phases 3-5: both prerequisites (`InlineInput` cursor, `runHooksCaptured`) are required by multiple later phases; fixing them once early is cheaper than discovering the gaps mid-implementation
+- Phase 3 (sync) before Phase 4 (wizard): sync is fully independent and low-risk; completing it validates ProgressView integration before the more complex wizard layer is added
+- Phases 4 and 5 are sequenced by complexity: WizardView must exist before template/repo flows can reuse it
+- Phase 6 last: integration tests can only be meaningful once all features are wired; screen improvements are polish that belong at the end
 
 ### Research Flags
 
-Phases needing deeper research during planning:
+Phases needing `/gsd:research-phase` during planning:
 
-- **Phase 3 (prerequisite verification):** OpenTUI issue #564 — verify `renderer.suspend()` + `Bun.spawn()` for editor launch works cleanly with the installed version. If not, the destroy/re-render workaround must be designed and tested before Templates/Repos tab editor actions are built.
-- **Phase 3:** OpenTUI flexbox side-by-side pane stability at narrow terminal widths — verify minimum terminal width assumption (likely 100 columns) before committing to a 60/40 split layout.
-- **Phase 4:** IPC transport platform scope — Windows support must be explicitly decided in requirements before Phase 4 design begins (see cross-platform decision above).
-- **Deferred (v0.3.x):** Branch completions for `--from` and `clone` — HIGH complexity; how to resolve repo context at completion time needs a dedicated research spike before scheduling.
+- **Phase 4** — WizardView select-step design for template picker needs to be specified before implementation; `reload()` async change requires impact analysis across all hooks
 
-Phases with standard patterns (skip research-phase):
+Phases with standard patterns (skip research):
 
-- **Phase 1:** Pure file I/O with Zod validation — follows identical patterns to existing `config.ts` read/write; no new patterns to discover.
-- **Phase 2:** Completion generator extension — all mechanics already exist; adding OPTION_ENUMS and new DYNAMIC_COMPLETIONS entries is mechanical work with clear precedent in the existing generator.
+- **Phase 1** — `testRender` API is fully documented in STACK.md; no unknowns
+- **Phase 2** — both prerequisite changes are small and fully specified
+- **Phase 3** — sync integration path fully documented in ARCHITECTURE.md
+- **Phase 5** — reuses Phase 4 patterns; suspend+resume for scan is the one documented exception
+- **Phase 6** — follows patterns from ARCHITECTURE.md and Phase 1 harness
+
+---
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All APIs verified against official Bun docs and installed type definitions; no new dependencies; IPC transport confirmed in official Bun HTTP docs |
-| Features | HIGH | Based on direct codebase analysis + well-documented TUI patterns from lazygit/k9s; feature scope is tightly bounded to the milestone |
-| Architecture | HIGH | Based on reading live source files (2026-03-19); integration points are additive; pattern reuse is explicit throughout |
-| Pitfalls | HIGH | Critical pitfalls have direct codebase evidence (global useKeyboard, numeric UIView index); OpenTUI issues #564 and #789 are open and confirmed in the issue tracker |
+| Stack | HIGH | All testing API claims verified from installed package type declarations (`node_modules/@opentui/core/testing.d.ts`, `node_modules/@opentui/solid/index.d.ts`). No external dependency on unverified docs. |
+| Features | HIGH | Based on direct codebase analysis. Feature scope is internal (no external APIs to research). The wizard approach conflict (FEATURES.md vs. consensus) is resolved above. |
+| Architecture | HIGH | All component boundaries verified against live source. Build order is dependency-driven and explicit. The `testRender` → `renderOnce()` → `captureCharFrame()` test loop was verified from compiled implementation (`testing.js`). |
+| Pitfalls | HIGH (with correction) | Pitfall 1 (no headless renderer) is incorrect and resolved. All other pitfalls are derived from direct codebase analysis with specific file/line evidence. Critical pitfalls (hook stdio, fetchOrigin timeout, reload async) are concrete and actionable. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **IPC Windows compatibility:** Must be resolved as a requirements decision before Phase 4. The technical options are fully understood (unix-only vs. `getIpcAddress()` abstraction); the business/scope decision is not. Either accept macOS/Linux-only for v0.3.0 or design the abstraction layer before IPC code begins.
+- **WizardView select-step implementation detail:** ARCHITECTURE.md specifies the shape (`{ type: "select"; field; label; options }`) but not the exact rendering approach for the option list. Options: extend `ActionMenu` with dynamic items, or use the `<select>` JSX element backed by OpenTUI's `SelectRenderable`. This is a design decision for Phase 4 planning, not a research gap.
 
-- **JSONL vs YAML for message store:** Architecture research recommends YAML (consistent with rest of config); feature research notes JSONL (append-only, lighter for frequent writes). Both work. Recommend YAML for consistency with existing code patterns given the 50-message cap. Decide in Phase 1 requirements; if concurrent-write testing reveals issues, switching to JSONL is a localized change within `src/lib/messages.ts`.
+- **`reload()` async change scope:** Making `useWorkspaces.reload()` return `Promise<void>` may affect other callers. Phase 4 planning should audit all call sites before making the change.
 
-- **OpenTUI issue #564 status:** Whether `renderer.suspend()` reliably hands off the terminal to an editor process depends on the installed version. Verify with a manual test before Phase 3 editor-launch work begins. If broken, `renderer.destroy()` + re-`render()` must replace `suspend()`/`resume()` in all editor invocation paths.
+- **Wizard scope for repo selection:** Whether to build a `MultiSelectList` for ad-hoc workspace creation (full TUI, no CLI exit) or defer ad-hoc mode to the CLI is a product decision. The research recommends deferring; requirements must make this explicit to avoid scope creep during Phase 4 implementation.
 
-- **OpenTUI issue #789 (render loop stall) status:** The pitfall is real and documented; whether the current installed version has a fix is unknown. The `batch()` discipline mitigates but may not fully prevent stalls. Monitor OpenTUI release notes during development.
+- **Suspend+resume for `repo scan`:** The scan flow is the one sanctioned use of `renderer.suspend()` for a non-editor external tool. This exception should be documented in the codebase (a comment in App.tsx) to prevent future developers from using it as a precedent for other wizard flows.
 
-- **Branch completions design (deferred):** When scheduled for v0.3.x, needs a research spike on resolving which repo to query `git branch` against at completion time before implementation begins.
+---
 
 ## Sources
 
-### Primary (HIGH confidence)
-- Live codebase (read directly 2026-03-19): `src/tui/dashboard/App.tsx`, `types.ts`, `hooks/useWorkspaces.ts`, `WorkspaceRow.tsx`, `DetailStatus.tsx`, `ActionMenu.tsx`
-- Live codebase (read directly 2026-03-19): `src/lib/completion-generator.ts`, `paths.ts`, `config.ts`, `workspace-ops.ts`
-- Live codebase (read directly 2026-03-19): `src/commands/workspace.ts`, `template.ts`, `repo.ts`, `index.ts`
-- Installed type definitions: `node_modules/@opentui/solid/src/types/elements.d.ts`, `node_modules/@opentui/core/renderables/TabSelect.d.ts`
-- Bun HTTP server + Unix domain sockets: https://bun.sh/docs/api/http#unix-domain-sockets
-- Bun fetch with Unix sockets: https://bun.sh/guides/http/fetch-unix
-- Bun OS signal handling: https://bun.sh/guides/process/os-signals
-- Bun GitHub issue #15686 (Unix socket permissions fix in PR #16200)
-- OpenTUI GitHub issues #564 (suspend/resume editor spawn) and #789 (render loop stall) — confirmed open
+### Primary (HIGH confidence — verified from installed source)
+
+- `node_modules/@opentui/core/testing.d.ts` — full testing export list
+- `node_modules/@opentui/core/testing/test-renderer.d.ts` — `createTestRenderer`, `TestRenderer`, `MockInput` types
+- `node_modules/@opentui/core/testing/mock-keys.d.ts` — `createMockKeys`, `KeyCodes`, `pressKey`, `typeText`, `pressArrow` signatures
+- `node_modules/@opentui/core/testing/test-recorder.d.ts` — `TestRecorder`, `RecordedFrame` types
+- `node_modules/@opentui/core/testing/manual-clock.d.ts` — `ManualClock` type
+- `node_modules/@opentui/solid/index.d.ts` — `testRender` signature
+- `node_modules/@opentui/core/testing.js` — `createTestRenderer` implementation confirming mock stdin, `testing: true` flag, ANSI-stripped `captureCharFrame`
+- `src/tui/dashboard/App.tsx` — UIView state machine, keyboard dispatch, action routing, suspend/resume pattern
+- `src/tui/dashboard/ActionMenu.tsx` — action list and keyboard handler
+- `src/tui/dashboard/InlineInput.tsx` — current capabilities and limitations
+- `src/tui/dashboard/types.ts` — UIView, Action, Tab types
+- `src/lib/workspace-ops.ts` — `syncWorkspace()` signature and return type
+- `src/lib/lifecycle.ts` — `runHooks()` with `stdio: "inherit"` (the hook stdio problem)
+- `src/lib/git.ts` — `fetchOrigin()` without timeout
+- `src/tui/dashboard/hooks/useWorkspaces.ts` — reload pattern, async status fetch
+- `tests/lib/workspace-ops.test.ts` — process.env.HOME isolation pattern
+- `tests/tui/messageUtils.test.ts` — existing pure-function TUI test pattern
+- `.planning/PROJECT.md` — v0.4.0 milestone scope
 
 ### Secondary (MEDIUM confidence)
-- OpenTUI documentation: https://opentui.com/docs/core-concepts/ — layout, keyboard, lifecycle
-- OpenTUI v0.1.88 release notes: https://github.com/sst/opentui/releases
-- lazygit UX patterns: https://github.com/jesseduffield/lazygit
-- k9s TUI patterns: https://k9scli.io/
-- Commander.js `option.argChoices` behavior — runtime behavior inferred from Commander source; standard feature, well-established
-- Fish shell completion performance: fish-shell issues #2413, #5158
 
-### Tertiary (LOW confidence)
-- JSONL inbox pattern for agent-to-human messaging: https://dev.to/uenyioha/porting-claude-codes-agent-teams-to-opencode-4hol — single source; pattern is independently sensible regardless of source quality
+- OpenTUI testing guide: https://deepwiki.com/sst/opentui/6.1-getting-started — independently confirms testRender API surface
+- Bun test runner docs: https://bun.sh/docs/test — `toMatchSnapshot`, `toMatchInlineSnapshot` confirmed
+- Bun `toMatchInlineSnapshot` shipped in Bun v1.1.39: https://github.com/oven-sh/bun/issues/3623
+
+### Tertiary (supporting context)
+
+- `node-pty` Bun compatibility issue: https://github.com/microsoft/node-pty/issues/632 — confirmed native addon problems; supports rejection of PTY approach
+- Project memory: `feedback_opentui_no_nested_text.md` — OpenTUI crashes on nested `<text>` elements
 
 ---
-*Research completed: 2026-03-19*
+
+*Research completed: 2026-03-20*
 *Ready for roadmap: yes*

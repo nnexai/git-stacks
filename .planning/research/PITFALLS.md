@@ -1,188 +1,291 @@
 # Pitfalls Research
 
-**Domain:** TUI dashboard overhaul, Unix socket IPC messaging, and shell completion improvements for an existing Bun/TypeScript/SolidJS CLI tool
-**Researched:** 2026-03-19
-**Confidence:** HIGH (direct codebase analysis + verified OpenTUI docs + confirmed Bun socket behavior from official sources and issue tracker)
+**Domain:** v0.4.0 — E2E test infrastructure + wizard flows (create workspace/template/repo) + workspace sync in Bun/SolidJS/OpenTUI TUI dashboard
+**Researched:** 2026-03-20
+**Confidence:** HIGH — derived from direct codebase analysis of current source, established patterns, and known OpenTUI constraints
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Multiple `useKeyboard` Handlers Fire Simultaneously — Double-Dispatch in Modal/Tab Views
+### Pitfall 1: Testing OpenTUI Components Is Nearly Impossible Without a Headless Renderer
 
 **What goes wrong:**
-`useKeyboard` in OpenTUI/Solid is a **global broadcast** hook — every mounted component that calls it receives every keypress, regardless of which is "visually active." The existing dashboard works around this by having `App.tsx` guard with `if (v.view === "action-menu") return` before dispatching list keys, but child components (`ActionMenu`, `ConfirmDialog`, `DetailStatus`) also register their own `useKeyboard` handlers. Both fire on every keypress. The parent early-returns, but the child still processes the same key.
+There is no headless or virtual renderer for OpenTUI. Any test that attempts to `render()` an OpenTUI component will try to write to stdout, enter raw terminal mode, and manipulate the terminal — which breaks in CI environments (no TTY), test runners (captured stdout), and parallel test execution. You cannot test that a component renders correctly by inspecting its output, because the output goes directly to the terminal escape code stream, not to a queryable DOM.
 
-When tabs are added, each tab panel (`WorkspacesTab`, `TemplatesTab`, `ReposTab`) will mount its own `useKeyboard`. If the inactive tab components remain mounted (rendered but visually hidden), their handlers still fire. A user pressing `j` to navigate the Workspaces list will also fire the key handler inside the Templates list — both update their respective cursors simultaneously.
+Attempting to mock `@opentui/solid` and `@opentui/core` deeply enough to unit-test component rendering is a dead end. The renderer, layout engine, and keyboard event system are tightly coupled in the OpenTUI internals — there is no public test API.
 
 **Why it happens:**
-OpenTUI's focus model routes events to the focused component (a low-level concept). The SolidJS `useKeyboard` hook wraps the global `KeyHandler` event emitter and fires for all subscribers. There is no built-in "active tab" or "focus scope" concept in the SolidJS reconciler. When tab components are mounted unconditionally (common for performance — avoids remounting), all their handlers are live.
+OpenTUI is a terminal rendering library with no browser-style JSDOM equivalent. The rendering target is a real terminal, not a virtual tree that can be snapshot-tested. This is the same fundamental problem as testing `ink` (the React-based terminal library) — ink solved it by providing an `ink-testing-library` with a virtual output buffer. OpenTUI has no equivalent as of 2026.
 
 **How to avoid:**
-- Use a single top-level `useKeyboard` in `App.tsx` and pass a `currentTab` signal down as a prop or context. Child tab panels receive an `active: boolean` prop and all key dispatching routes through the one handler.
-- Alternatively, only mount (render) the active tab's content — use SolidJS `<Show>` not CSS `display: none`. If remount cost is acceptable for the 3 tabs in this project, this is the simpler and safer pattern.
-- Never have a child component call `useKeyboard` while also being guarded in the parent — either the parent handles it entirely or the child handles it entirely, not both. The existing `ActionMenu`/`ConfirmDialog`/`DetailStatus` pattern works only because the parent early-returns before processing list keys; extend this discipline explicitly when adding tabs.
-- If tab panels must stay mounted for state preservation, introduce an `AppContext` with a `focusedTab` signal and gate every `useKeyboard` callback body on `if (props.active) ...` as the very first line.
+The correct testing strategy for this codebase has three tiers, and they must be kept separate:
+
+1. **Unit test pure logic extracted from components** — `messageUtils.ts`, `groupBySender`, `formatAge`, validation functions, form state machines, and anything that can be separated from OpenTUI JSX. These test with `bun test` normally. The existing `tests/tui/messageUtils.test.ts` is the exact right model.
+
+2. **Unit test the underlying lib functions** — `workspace-ops.ts`, `git.ts`, `config.ts`. These already have tests in `tests/lib/`. New create/sync operations must expose their core logic as testable lib functions before wiring them into the TUI. Test the lib, not the TUI component that calls the lib.
+
+3. **Smoke/integration tests via CLI subprocess** — spawn `bun run src/index.ts manage` as a child process with a real (but temporary) config directory, send keystrokes via PTY, and assert on the terminal output buffer. This is what tools like `xterm.js` headless or `node-pty` + `expect`-style scripting provide. This approach is feasible but has high implementation cost — it is the right approach for e2e validation, but should be scoped carefully.
+
+Do not waste time trying to mock OpenTUI internals for rendering tests. Write zero rendering tests. Write extensive logic tests.
 
 **Warning signs:**
-- A navigation key (e.g., `j`, `k`, arrow) triggers movement in two different lists at once.
-- Pressing `Esc` in an action menu also resets the filter on the background list.
-- Tab switching appears to work but leaves a ghost cursor in the previously active tab.
+- A test file imports from `@opentui/solid` or `@opentui/core` directly — this will fail or require extensive mocking.
+- A test description says "renders correctly" or "shows the right text" — this is a rendering test and will not work.
+- A test attempts to call `render()` from `@opentui/solid` — even with mocks, this will break.
 
-**Phase to address:** Dashboard overhaul phase — must be settled before implementing any tab panels.
+**Phase to address:** E2E test infrastructure phase — must establish the three-tier testing model as the first deliverable, before writing any tests. The model needs to be documented so future phases follow it automatically.
 
 ---
 
-### Pitfall 2: Stale Unix Socket File Causes Silent Failure of All `message send` Commands
+### Pitfall 2: PTY-Based E2E Tests Are Brittle Against Terminal Width, Speed, and Render Timing
 
 **What goes wrong:**
-The TUI daemon creates a Unix domain socket (e.g., `~/.config/git-stacks/tui.sock`) when it starts and listens for incoming messages. If the TUI process crashes or is killed (SIGKILL, power loss, OOM), the socket file is left on disk. The next time a user runs `git-stacks message send`, `Bun.connect()` to the stale socket file gets a `ECONNREFUSED` error because nothing is listening — but the file exists, so any "is TUI running?" check that uses `fs.existsSync(socketPath)` returns `true` and the command appears to fail for an opaque reason rather than "silently dropping" as designed.
-
-Inversely, the next TUI launch tries to `Bun.listen()` on the socket path and receives `EADDRINUSE` because the stale file is still there. `SO_REUSEADDR` does not apply to AF_UNIX sockets — the only solution is `fs.unlinkSync()` before bind.
+If you implement PTY-based e2e tests (spawning the TUI in a headless PTY, sending keystrokes, asserting on the output buffer), they will be extremely sensitive to:
+- **Terminal width/height assumptions** — the TUI renders differently at 80 vs 120 vs 200 columns. A test that asserts `"[1 Workspaces]"` is on the first line will fail when the terminal is narrower than expected.
+- **Render timing** — OpenTUI renders at 30fps (`targetFps: 30`). A keypress sent immediately after the previous one may arrive before the TUI has re-rendered, causing the assertion to see the pre-keypress state.
+- **Async status loading** — `useWorkspaces` loads git status asynchronously. If your e2e test asserts on workspace status before async fetching completes, it will see "pending" indicators and fail.
+- **File system state** — tests need a fully isolated config directory or they will see real user workspaces, which are unpredictable.
 
 **Why it happens:**
-Socket file lifecycle is not the same as process lifecycle. The OS does not clean up socket files when a process exits (unlike ephemeral TCP ports which are reclaimed). `fs.existsSync` checks the filesystem, not whether any process is listening. Both `EADDRINUSE` on start and `ECONNREFUSED` on connect are predictable but need explicit handling.
+Terminal applications don't have a stable DOM to query. The only observable output is raw terminal escape codes, which are fragile to assert on. Timing is non-deterministic — async git operations, the render loop, and keystroke processing all run concurrently.
 
 **How to avoid:**
-- TUI startup: Before `Bun.listen({ unix: socketPath, ... })`, check if the file exists. If it does, attempt `Bun.connect({ unix: socketPath, ... })`. If connect fails with ECONNREFUSED/ENOENT, the process is gone — call `fs.unlinkSync(socketPath)` and proceed to listen. If connect succeeds, a TUI is already running — abort with a clear message.
-- TUI shutdown: Register cleanup in `process.on("SIGINT", ...)`, `process.on("SIGTERM", ...)`, and the OpenTUI `onDestroy` callback (which fires on `renderer.destroy()`). All three must call `fs.unlinkSync(socketPath)` wrapped in `try/catch` (file may already be gone).
-- `message send` client side: Catch `ECONNREFUSED` and `ENOENT` from `Bun.connect()` and treat both as "TUI not running — drop silently." Do not rely on `fs.existsSync` for liveness check; only a successful connect proves liveness.
-- Socket path: Use a per-session or PID-qualified path (e.g., `~/.config/git-stacks/tui-<pid>.sock`) and write the path to a known location (`~/.config/git-stacks/tui.lock`) — this eliminates the EADDRINUSE problem entirely at the cost of slightly more lookup logic.
+- Set a fixed terminal size in PTY-based tests: `pty.spawn(..., { cols: 120, rows: 40 })`. Hard-code all output assertions to assume 120x40.
+- After sending keystrokes, wait for a stable-state marker rather than a fixed timeout. For example, after opening the TUI, wait until the help bar text appears (it only renders when not loading). `await waitForText(pty, "r Refresh")` is more robust than `await sleep(500)`.
+- Redirect `HOME` or set `XDG_CONFIG_HOME` to a temp directory in every e2e test. Populate it with fixture YAML files representing known workspaces/templates/repos before launching.
+- Never assert on terminal escape codes directly. Strip ANSI codes before asserting (`output.replace(/\x1b\[[0-9;]*m/g, "")`) and assert on plain text.
+- Keep PTY-based tests to a small set of smoke tests (5–10) covering the most critical user paths. Do not try to cover every feature with PTY tests.
 
 **Warning signs:**
-- `git-stacks message send` prints an error after a crashed TUI session.
-- Second TUI launch after a crash fails with `EADDRINUSE` and no actionable message.
-- `ls ~/.config/git-stacks/*.sock` shows lingering files after TUI exits.
+- E2e tests pass locally but fail in CI with "text not found" — likely a timing or terminal size issue.
+- E2e tests are flaky at a rate above 5% — timing assumptions are wrong; add proper wait conditions.
+- An e2e test file exceeds 300 lines — scope creep; the PTY test suite should be minimal.
 
-**Phase to address:** Messaging/IPC phase — design the socket lifecycle protocol before writing the first line of socket code.
+**Phase to address:** E2E test infrastructure phase — establish the PTY harness with the right abstractions (fixed terminal size, ANSI stripping, wait-for-text helpers) before writing any actual test cases.
 
 ---
 
-### Pitfall 3: OpenTUI `renderer.suspend()` + `Bun.spawn()` for Editor Integration Is a Known Open Issue
+### Pitfall 3: Wizard Flows (Multi-Step Create) Cannot Use `@clack/prompts` Inside the TUI Renderer — They Conflict
 
 **What goes wrong:**
-The existing `launchEditor()` in `App.tsx` correctly calls `renderer.suspend()` before spawning the editor and `renderer.resume()` after. However, OpenTUI issue #564 (open as of early 2026) documents that spawning an external editor via `Bun.spawn()` while OpenTUI is active causes the editor to be "extremely slow and drops inputs." The root cause is that OpenTUI continues to capture stdout and interferes with the spawned process's terminal I/O even when suspended.
+The existing `workspace-wizard.ts`, `template-wizard.ts`, and `repo-wizard.ts` use `@clack/prompts` (`p.text`, `p.select`, `p.multiselect`). These prompts take over the terminal directly — they write to stdout and read from stdin in their own input loop. This is fundamentally incompatible with having the OpenTUI renderer active at the same time.
 
-For the dashboard overhaul, editor launch will be needed for more surfaces (workspace YAML, template YAML, repo config). If the suspend/resume issue is not resolved upstream, every editor invocation risks dropped keystrokes and a laggy editing experience.
+If you try to trigger a `@clack/prompts` flow from within the TUI (e.g., pressing "n" in the workspace action menu to create a new workspace), the clack prompts will write to the terminal while OpenTUI is also writing to it — causing garbled output. Even with `renderer.suspend()`, the clack prompts may not restore terminal state correctly when the TUI resumes, because clack leaves the terminal in a different mode than it found it.
+
+This is why the current TUI only calls `renderer.suspend()` for `$EDITOR` launches, and only for that — it does not invoke any `@clack/prompts` flows from within the TUI at all.
 
 **Why it happens:**
-OpenTUI operates in terminal raw mode and captures stdin globally. `renderer.suspend()` is documented as "fully suspend (disables mouse, input, and raw mode)" but the issue tracker indicates this does not fully release terminal control in all Bun versions. The fix was reportedly applied between OpenTUI 0.1.47–0.1.49 but later regressed.
+`@clack/prompts` and OpenTUI both assume exclusive ownership of the terminal. They each manage raw mode, cursor visibility, and stdin handling. There is no protocol for one to yield to the other and then resume cleanly.
 
 **How to avoid:**
-- Before the dashboard overhaul phase ships, verify the current installed OpenTUI version resolves issue #564. Test: suspend → spawn `$EDITOR` → type 20 characters → no dropped inputs.
-- If the issue is present: implement a workaround using `renderer.destroy()` (full teardown) before spawning the editor and `render()` again after the editor exits. This is heavier (full TUI restart) but reliably hands off the terminal. The existing `launchEditor` structure already handles this in the `finally` block.
-- Do not expand editor-launch surfaces (Templates tab, Repos tab) until the terminal handoff is confirmed working for the already-existing Workspace YAML editor path.
-- Pin the OpenTUI version in `package.json` — do not accept minor version bumps without verifying the suspend/resume behavior hasn't regressed.
+Create wizard flows inside the TUI using the existing TUI primitives — specifically the multi-step `InlineInput` pattern extended to a "form wizard" flow. The wizard is a new `UIView` state (e.g., `{ view: "wizard"; step: number; data: Partial<WizardState> }`) that renders fields one step at a time using the existing `InlineInput` component as the building block, with a `StepIndicator` component to show progress.
+
+Do not attempt to invoke `@clack/prompts` from within the TUI under any circumstances. The clack-based wizards (`workspace-wizard.ts`, `template-wizard.ts`) remain available as standalone CLI commands (`git-stacks new`, `git-stacks template new`) — they do not need to be replaced, only re-implemented as native TUI flows for the dashboard.
+
+The `renderer.suspend()` → clack flow → `renderer.resume()` pattern that some developers attempt is not reliable. `launchEditor()` works only because `$EDITOR` is a well-behaved terminal program that respects SIGWINCH and restores terminal state on exit. `@clack/prompts` does not guarantee this.
 
 **Warning signs:**
-- Opening `$EDITOR` from the TUI drops characters typed in the first 500ms.
-- Vim/nano key sequences arrive garbled or delayed.
-- `renderer.resume()` leaves residual rendering artifacts (ghost text) after the editor exits.
+- A developer attempts to call `runWorkspaceNew()` from within a TUI action menu handler — this will corrupt the terminal.
+- A PR adds `import * as p from "@clack/prompts"` to any file in `src/tui/dashboard/` — this is a red flag.
+- The wizard phase starts by trying to wrap clack prompts in a `renderer.suspend()` call — do not proceed with this approach.
 
-**Phase to address:** Dashboard overhaul phase — test editor integration as the very first sub-task; do not build Template/Repo tabs until Workspace YAML editing is verified clean.
+**Phase to address:** All create-flow phases (create workspace, create template, create repo from TUI). The constraint must be stated at the start of every wizard phase design.
 
 ---
 
-### Pitfall 4: `UIView` Discriminated Union Does Not Scale to Multi-Tab State — Index Coupling Breaks on Tab Switch
+### Pitfall 4: Multi-Step TUI Wizard State Stored in `UIView` Union Grows Unmanageable Without a Form State Machine
 
 **What goes wrong:**
-The current `UIView` type stores index into `filteredEntries()` as a numeric offset (`{ view: "action-menu"; index: number }`). This works when there is one list. With three tabs (Workspaces, Templates, Repos), each tab has its own list. If the user opens an action menu on workspace #3, switches to the Templates tab (resetting `filteredEntries` to templates), then the saved `index: 3` now points at template #3, not workspace #3. Actions will execute against the wrong entity.
+The existing `UIView` union has simple states: `list`, `action-menu`, `confirm`, `progress`, `inline-input`. Adding multi-step create flows (workspace creation requires: name, template-or-adhoc choice, repo selection, branch, description; template creation requires: name, repo selection, per-repo mode, description) will balloon the `UIView` union.
 
-Additionally, the `cursor` signal is a single number. With multiple tabs, there needs to be one cursor per tab, but the current signal design has one global cursor.
+If you encode wizard steps directly in `UIView` (e.g., `{ view: "create-workspace-step-2"; name: string; mode: "template" | "adhoc" }`), `App.tsx` will have a combinatorial explosion of step-specific keyboard handlers and render branches. The existing keyboard handler is already 160+ lines for 5 simple views.
+
+Additionally, the wizard may need to go "back" — the user presses Escape to go to the previous step, not cancel entirely. This requires wizard state to be a stack, not a flat discriminated union.
 
 **Why it happens:**
-The existing architecture optimized for one list. Index-based references into a list are implicitly tied to the list identity. Adding tabs means multiple lists exist simultaneously.
+The `UIView` approach works beautifully for modal dialogs (confirm, progress, inline-input) because they have exactly one step. It degrades for multi-step flows because each step is a different type of interaction, and the transitions between steps need to carry accumulated form data.
 
 **How to avoid:**
-- Change `UIView` action states to store workspace/template/repo names (strings, the natural primary key) instead of numeric indexes: `{ view: "action-menu"; tab: TabId; name: string }`. Resolve the actual object by name at action time.
-- Replace the single `cursor` signal with a `Record<TabId, number>` map, initialized with `{ workspaces: 0, templates: 0, repos: 0 }`.
-- The `filteredEntries` memo must be replaced with per-tab filtered lists; the current unified `filteredEntries()` approach has a name collision risk.
-- Audit every place `filteredEntries()[index]` appears and change to a by-name lookup before adding any tab.
+Introduce a dedicated wizard state object alongside `UIView`, not inside it. When the user enters a wizard flow, `UIView` transitions to `{ view: "wizard"; kind: "create-workspace" | "create-template" | "create-repo" }`. The wizard-specific state lives in a separate `createSignal<WizardState>()` scoped to the wizard component. The wizard component handles its own keyboard input via `useKeyboard` (like `ActionMenu` and `ConfirmDialog` already do) and calls `onComplete(result)` or `onCancel()` when done.
+
+This keeps the wizard entirely self-contained: `App.tsx` only has to render `<CreateWorkspaceWizard ... />` when `view().view === "wizard"`. It does not need to know about individual steps.
+
+Each wizard component owns a `step` signal and a partial data accumulator signal. It renders the current step's input and navigates forward/backward via its own `useKeyboard` handler. The `App.tsx` keyboard handler does the same `if (v.view === "wizard") return` early-return it already does for `action-menu` and `confirm`.
 
 **Warning signs:**
-- "Remove workspace X" dialog appears but removes a different workspace than the one the cursor was on.
-- Switching tabs while an action menu is open causes the action to execute against the newly visible tab's entity.
-- TypeScript does not catch this because `index: number` is valid for any list.
+- `UIView` union grows beyond 8 variants — sign that wizard steps are being encoded at the wrong level.
+- `App.tsx` keyboard handler grows beyond 250 lines — sign that wizard step dispatch is leaking into App.
+- A PR adds `step` as a field on the `UIView` object — wrong abstraction level.
 
-**Phase to address:** Dashboard overhaul phase — address as a prerequisite design step before implementing tab switching. Changing from index-based to name-based UIView is a low-risk refactor that pays dividends throughout the feature.
+**Phase to address:** First wizard phase (whichever create flow is implemented first). The wizard component pattern must be established on the first wizard, then followed for all subsequent ones.
 
 ---
 
-### Pitfall 5: Shell Completion Dynamic Lookups Spawn Subprocesses — Blocks Tab for Seconds on Slow Disk or NFS
+### Pitfall 5: Create Operations Must Reload the Correct Data Hook After Writing — Stale Lists Are the #1 UX Bug
 
 **What goes wrong:**
-The current fish completion for workspace names uses `ls $ws_dir | sed 's/\\.yml$//'` inside a `function __git_stacks_workspaces` that fish runs as a subprocess on every Tab press. Adding branch completions (which would require running `git branch` inside each workspace path) will compound this. A user with 15 workspaces who presses Tab after `git-stacks open` would trigger 15 `git branch` subprocesses.
+After creating a workspace in the TUI, the workspace list still shows the old state until `reload()` is called on the `useWorkspaces` hook. The same applies to templates and repos. If the wizard's `onComplete` callback forgets to call `reload()` (or calls the wrong hook's reload), the new entity appears to be missing, and the user may attempt to create it again.
 
-The existing repo name completion uses `grep '^- name:' registry.yml` which is fast, but if the path to `registry.yml` is on a slow filesystem (e.g., NFS home directory, remote-mounted drive), even a `grep` can take 200–500ms, making Tab feel broken.
+More subtle: `useWorkspaces.reload()` re-fetches git status for all workspaces asynchronously (the `fetchStatuses` batch). After creating a new workspace, the new entry will appear in "pending" state during the refetch. If the cursor lands on the new entry before its status is loaded, detail pane shows "pending" — which is correct but may appear as a bug if not expected.
+
+Additionally, `reload()` does not update the cursor position — if there are 5 workspaces, the user creates a 6th, and `reload()` is called, the cursor stays at its previous position. The new workspace may be offscreen.
 
 **Why it happens:**
-Shell completion functions are executed synchronously on Tab press. Any subprocess call — `ls`, `grep`, `git` — adds latency. Fish-shell issue tracker documents completions blocking for 30 seconds when subprocesses are slow. The user cannot interrupt a hanging completion function in many shells.
+Data hooks in this TUI are pull-based: they load data on demand and on explicit `reload()` calls. They have no awareness of external writes. After a create operation writes a new YAML file, the hook does not know the file exists until `reload()` is called.
 
 **How to avoid:**
-- Keep dynamic lookups to exactly what currently exists: `ls` the workspaces dir, `ls` the templates dir, `grep` the registry file. These are O(1) disk operations and fast even for 100+ workspaces.
-- Do NOT add `git branch` or any per-repo subprocess call to completion functions. Branch completion adds complexity but the performance cost is disqualifying.
-- Wrap every `ls` / `grep` with a hard timeout guard in the shell functions: `ls "$ws_dir" 2>/dev/null` (already done) — ensure this `2>/dev/null` suppression is present on all existing and new lookups.
-- For the `message` subcommand, workspace names are already covered by the existing workspace completion lookup. Register `message.send` in `DYNAMIC_COMPLETIONS` mapping to `"workspace"` — do not add a separate lookup.
-- Test all three shells (bash/zsh/fish) explicitly with an empty `~/.config/git-stacks/` directory (fresh install simulation) to verify completions return empty rather than error codes that corrupt the shell prompt.
+- Every create wizard's `onComplete` callback must call the appropriate `reload()` before calling `setView({ view: "list" })`.
+- After reload, set the cursor to point at the newly created entity: `setCursor(newEntryIndex)`. Compute the index from the post-reload list. This requires `reload()` to be synchronous for the cursor update to be correct, or using an `afterReload` callback.
+- Design `reload()` to return a `Promise<void>` so the wizard can `await reload()` and then set the cursor. The current `useWorkspaces.reload()` does not return a promise — this will need to be changed for wizard flows.
+- For workspace creation specifically, note that `useWorkspaces.reload()` triggers async git status fetching — the new workspace will appear with `state: "pending"` initially. This is correct behavior; do not treat it as an error.
 
 **Warning signs:**
-- Tab after `git-stacks open` takes more than 100ms on a local SSD — likely a subprocess is misbehaving.
-- Completion works in bash but hangs in fish — fish runs completion functions out of process; bash runs them in-shell.
-- The generated completion script grows beyond ~300 lines — a sign that per-command static enums are being inlined repetitively instead of shared.
+- After creating a workspace, the list still shows the old count — `reload()` was not called.
+- Cursor lands on the wrong entry after create — cursor was not updated after reload.
+- The new entity is "missing" but actually exists on disk — `reload()` called before the write operation completed.
 
-**Phase to address:** Shell completion overhaul phase — resolve before releasing, and add a performance smoke test (time `bash -c 'source <(git-stacks completion bash); COMP_WORDS=(git-stacks open ""); COMP_CWORD=2; _git_stacks_complete; echo "${COMPREPLY[@]}"'` — must complete in under 200ms).
+**Phase to address:** Every wizard create phase. The reload-and-cursor-update pattern should be documented as a required step in the completion protocol for all create operations.
 
 ---
 
-### Pitfall 6: OpenTUI Render Loop Silently Stalls Under Keyboard Event Bursts (Known Issue #789)
+### Pitfall 6: Workspace Sync Is an Async Network Operation — `fetchOrigin` Can Block for Tens of Seconds on Slow Remotes
 
 **What goes wrong:**
-OpenTUI issue #789 documents a scenario where the render loop stalls silently when a rendering flag blocks `requestRender` during an event burst. In the context of the dashboard overhaul, this is most likely to trigger when:
-- Rapid async status fetching sets many reactive signals in quick succession (the existing `fetchStatuses` batch-update pattern).
-- Tab switching while status fetches are in-flight triggers multiple concurrent signal updates.
-- The messaging system fires a signal update on every incoming socket message (e.g., if an agent sends 10 messages in 100ms).
+`syncWorkspace()` calls `fetchOrigin()` for all repos in parallel before the rebase/merge step. `fetchOrigin` is a `git fetch origin` shell call. On a slow remote (high latency, large repo, weak network), this can take 10–60 seconds per repo. With 5 repos in a workspace, the parallel fetch is still gated by the slowest repo.
 
-When the render loop stalls, the TUI appears frozen. No explicit error is reported.
+In the TUI, a sync action that blocks for 30+ seconds with only a spinner and no per-repo progress creates the impression the TUI has hung. The user may press Ctrl+C, which tears down the TUI without completing the sync — leaving repos in a partially-fetched state (some repos fetched, some not; rebase not yet run).
+
+Additionally, if the user navigates away from the progress view (the current implementation allows any key to dismiss the progress view when `progressDone()` is true, but during an operation the only guard is `if (v.view === "progress" && !progressDone()) return`), an inadvertent keypress could re-trigger the TUI's `reload()` or switch tabs in the background.
 
 **Why it happens:**
-The render loop in OpenTUI has a flag that prevents re-entry during rendering. If a reactive update triggered inside a render call schedules another render, and that cycle repeats, the loop may lock up. The exact trigger conditions are not fully documented (the issue is open).
+Network I/O latency is unpredictable and cannot be bounded. The current progress view was designed for operations that complete in under 10 seconds (open, clean, rename). Sync has qualitatively different timing characteristics because it depends on remote network performance.
 
 **How to avoid:**
-- Batch all signal writes from async operations using SolidJS `batch()` calls. The existing `setEntries` pattern in `useWorkspaces.ts` does this correctly (it wraps the `prev.map()` update). Replicate this discipline for template/repo hooks.
-- For the messaging system: buffer incoming socket messages in a plain array; flush to the SolidJS signal at most once per frame using `requestAnimationFrame`-equivalent timing. Do not call `setMessages()` inside the socket `data` handler directly — queue first, flush in a scheduled microtask or `setInterval`.
-- Subscribe to OpenTUI release notes during the dashboard overhaul phase; the issue is active and a fix may land mid-development. Pin versions and note the version where stall behavior was tested.
-- Add an explicit render watchdog in development: log a console warning if 500ms passes without a render when the renderer is active.
+- Show per-repo progress for sync, not just a global spinner. Each repo's fetch, conflict check, and rebase/merge result should stream into `progressLines` as it completes, not just at the end. The existing `onProgress` callback pattern in `syncWorkspace()` already emits per-repo messages — the TUI just needs to display them as they arrive.
+- Add a timeout to `fetchOrigin` — if a single repo's fetch takes more than 30 seconds, skip it with a "fetch timeout" warning and continue with the other repos. This prevents one slow remote from blocking the entire sync.
+- Respect the existing `--best-effort` semantics in the TUI: if any repo's sync fails (network error, conflict, dirty worktree), the TUI should continue with remaining repos and show the per-repo results, not abort the entire operation.
+- Make the progress view non-dismissible during a sync (or any long-running operation): do not allow any key to dismiss or return to list view until `progressDone()` is true. The current pattern already handles this but verify for sync specifically.
 
 **Warning signs:**
-- Dashboard freezes momentarily when switching tabs while workspaces are loading.
-- High-frequency message sends from an agent script freeze the TUI.
-- The `loading()` indicator gets stuck — `setLoading(false)` was called but the UI never reflects it.
+- Sync progress view shows only "Fetching from origin..." for over 30 seconds with no updates — per-repo progress is not being emitted.
+- User reports TUI hangs during sync — network timeout is needed.
+- After a failed sync (partial), the workspace list still shows the old status — `reload()` must be called even after errors.
 
-**Phase to address:** Dashboard overhaul phase (tab switching and data loading) and messaging phase (high-frequency socket writes).
+**Phase to address:** Workspace sync phase. The timeout and per-repo streaming are must-haves before the feature ships; do not ship a sync action with only a single "syncing..." spinner.
 
 ---
 
-### Pitfall 7: `DYNAMIC_COMPLETIONS` Map Does Not Cover New `message` Subcommand Family
+### Pitfall 7: Concurrent Sync Operations Can Corrupt Repo State — No Locking on Git Worktrees
 
 **What goes wrong:**
-The `completion-generator.ts` uses a flat `DYNAMIC_COMPLETIONS` map keyed by command path strings (`"repo.show"`, `"template.edit"`, etc.). Adding `git-stacks message send <workspace-name>` requires registering `"message.send"` in this map. If the developer adds the `message` command family to `index.ts` but forgets to update `DYNAMIC_COMPLETIONS`, `message send <Tab>` produces no completions — it silently falls through the case statement and returns nothing.
+If two sync operations run simultaneously on the same repo (e.g., user triggers sync via TUI and also runs `git-stacks sync <name>` from the terminal), both will run `git fetch origin` and `git rebase origin/main` on the same worktree path. Two concurrent rebases on the same working tree will corrupt the rebase state — one will leave `.git/rebase-merge/` in place and the other will find a rebase-in-progress error.
 
-The same applies to any new top-level flags added to existing commands (e.g., `--strategy` values for `sync`, output format enums for new commands). Enum completions are not generated at all currently — only workspace/template/repo names and shell names have dynamic lookup. Fixed enum values (`local`, `rebase`, `merge` for sync strategies) need to be inlined as static completion strings, but there is no mechanism to do this today.
+In the TUI, this is most likely to happen when:
+- The user triggers sync, the progress view is showing, and they also run sync from a terminal.
+- A batch sync (syncing multiple workspaces) runs parallel operations on workspaces that share a repo (e.g., two workspaces both have worktrees of the same repo).
 
 **Why it happens:**
-The `DYNAMIC_COMPLETIONS` map is manually maintained and has no connection to the Commander.js command definitions. Adding a new command does not automatically update completions. TypeScript does not warn about missing entries because the map has type `Record<string, DynamicCompletion>`, not a mapped type over all known command paths.
+Git worktrees do not have cross-process locking for high-level operations like rebase. Git's internal lock files (`index.lock`, `MERGE_HEAD`) protect individual atomic operations but not multi-step operations like rebase.
 
 **How to avoid:**
-- When adding the `message` command family, immediately add `"message.send": "workspace"` and `"message.clear": "workspace"` to `DYNAMIC_COMPLETIONS` as part of the same PR.
-- For fixed enum completions (e.g., `--strategy local|rebase|merge`, `--format json|table`): extend the `DynamicCompletion` type to support a `{ type: "enum"; values: string[] }` variant, or inline the enum values as a new string literal type entry. Do not defer this — the completions feature only delivers full value when option enums are covered.
-- Add a test that runs `generateBash`, `generateZsh`, and `generateFish` against the live commander tree and checks that the output contains expected command paths. This is a snapshot/smoke test that will catch regressions when new commands are added.
+- Do not run parallel syncs on the same workspace. The current TUI action model triggers one action per keypress, so single-workspace sync is inherently serialized.
+- For any future batch sync (multiple workspaces at once), check whether repos overlap across the selected workspaces before running in parallel. If they share a repo (same `main_path`), serialize those syncs.
+- In the sync progress view, disable all keys that could trigger another sync or git operation. The current progress view already blocks keys while in-progress, which is correct.
+- Document in the workspace action menu help text: "Do not run `git-stacks sync` from the terminal while TUI sync is in progress."
 
 **Warning signs:**
-- `git-stacks message send <Tab>` produces no completions.
-- `git-stacks sync --strategy <Tab>` produces no completions.
-- A PR adds a new subcommand but `DYNAMIC_COMPLETIONS` diff is empty.
+- Sync fails with "Another rebase in progress" error — concurrent sync detected.
+- After sync, `git status` in the worktree shows `interactive rebase in progress` — a previous sync was interrupted.
 
-**Phase to address:** Shell completion overhaul phase — address as explicit tasks: (1) register `message.*` commands, (2) design and implement enum completion support.
+**Phase to address:** Workspace sync phase. The concurrency concern should inform the UI design: show a clear "sync in progress" status on the workspace row to discourage concurrent operation from the CLI.
+
+---
+
+### Pitfall 8: `InlineInput` Multi-Character Sequences (Arrows, Special Keys) Break Text Editing
+
+**What goes wrong:**
+The existing `InlineInput` component handles only single-character key events (`key.name.length === 1`) and named keys (`backspace`, `return`, `escape`). It does not handle:
+- Left/right arrow keys for cursor movement within the input
+- Home/End keys to jump to beginning/end
+- Ctrl+A, Ctrl+E, Ctrl+K (shell-style editing shortcuts)
+- Copy/paste (Ctrl+V or terminal paste) which sends multi-character sequences
+
+For the simple `rename` and `clone-template` use cases, this is acceptable — the input is short and the user can backspace to correct mistakes. For wizard inputs like workspace name, branch name, template name, and repo path, the lack of cursor movement will frustrate users entering paths or making corrections in the middle of the string.
+
+**Why it happens:**
+OpenTUI's keyboard event model fires one event per logical key. Arrow keys produce `key.name === "left"` or `key.name === "right"` — these are already available. The current `InlineInput` simply does not handle them because they were not needed for the rename use case.
+
+**How to avoid:**
+Extend `InlineInput` to support cursor movement before it is used for wizard flows. Add:
+- `left`/`right` arrow keys to move a cursor position signal
+- `home`/`end` keys to jump to start/end
+- Character insertion at cursor position (not just append)
+- Display the cursor using a visual cursor indicator (e.g., `text[0..cursorPos] + "_" + text[cursorPos..]`)
+
+Alternatively, create a new `WizardInput` component with full cursor support, and reserve the simple `InlineInput` for the existing rename/clone flows.
+
+Do not start wizard implementation using the existing `InlineInput` without this upgrade. The first user complaint will be that they typed a long path, realized there was a typo in the middle, and had to delete all the way back to the typo.
+
+**Warning signs:**
+- Wizard design docs say "use the existing InlineInput component" without mentioning cursor support — flag for enhancement.
+- A test for wizard input only tests appending characters, never tests correcting a middle character.
+
+**Phase to address:** The first wizard phase. `InlineInput` must be upgraded (or `WizardInput` created) before wizard implementation begins.
+
+---
+
+### Pitfall 9: Repo Selection in TUI Wizard Needs a Multi-Select UI That Doesn't Exist Yet
+
+**What goes wrong:**
+Both workspace creation and template creation require selecting multiple repos from the registry. The `@clack/prompts` `p.multiselect` component is not available in the TUI. The existing TUI has no multi-select component — only single-item cursor navigation.
+
+The workspace wizard must support selecting 1–N repos from the registry. With a large registry (20+ entries), this also needs filtering. Without a multi-select component, the developer faces a choice:
+- Implement a custom multi-select in OpenTUI (space to toggle, enter to confirm) — significant UI work.
+- Limit the TUI wizard to template-based creation only (no ad-hoc repo selection) and defer the ad-hoc path to the CLI.
+- Use a sequence of "yes/no per repo" steps — terrible UX for large registries.
+
+**Why it happens:**
+Multi-select is a complex UI primitive that requires both cursor navigation and selection state. The existing TUI's `BatchBar` + space-to-select pattern in the workspace list is the closest analogue, but it operates on a known list of already-loaded workspaces, not an inline selection within a wizard flow.
+
+**How to avoid:**
+Build a `MultiSelectList` component that embeds cursor navigation + space-to-toggle + enter-to-confirm behavior. It should be a self-contained component receiving `items: Array<{ label: string; hint?: string }>` and calling `onConfirm(selectedIndices: number[])` and `onCancel()`. The `BatchBar` selection pattern from `WorkspaceList` is the right model.
+
+Alternatively, scope the TUI create-workspace wizard to template-only mode (select template, enter name and branch) and leave ad-hoc multi-repo selection to the CLI `git-stacks new`. This is a valid scope decision that reduces the v0.4.0 surface area. The FEATURES.md should make this scoping explicit.
+
+Do not attempt the "yes/no per repo" approach — it is unusable for registries with 5+ repos.
+
+**Warning signs:**
+- A wizard design specifies "show each repo as an inline-input step with y/n" — this is the wrong approach.
+- A wizard design does not mention how repo selection works — a design gap that will block implementation.
+
+**Phase to address:** Template and workspace create phases. Must be resolved at design time, not during implementation.
+
+---
+
+### Pitfall 10: After Create, Existing Hooks (`pre_create`, `post_create`) Run in the TUI Process — They Spawn Subprocesses with Inherited Stdio
+
+**What goes wrong:**
+`workspace-ops.ts` and `workspace-wizard.ts` run `pre_create` and `post_create` hooks via `runHooks()` in `lifecycle.ts`. `runHooks` uses `Bun.spawn` with `stdio: "inherit"` — the hook subprocess inherits the TUI's stdin/stdout/stderr. This means hook output goes directly to the terminal while OpenTUI is also rendering, causing visual corruption.
+
+This is the same problem documented in the existing PITFALLS.md for `runHooks` called from the TUI context (see "Integration Gotchas" table). For the create wizard specifically, it means any `post_create` hook (which the user configured in the template) will corrupt the TUI display when the wizard calls `createWorkspace` internally.
+
+**Why it happens:**
+`lifecycle.ts` was designed for the CLI context where `stdio: "inherit"` is correct. In TUI context, it must capture hook output and stream it to the progress view's `progressLines` signal instead.
+
+**How to avoid:**
+When calling create operations from the TUI, use the `onProgress` callback pattern that already exists in `cleanWorkspace`, `removeWorkspace`, etc. However, `runHooks` does not support this callback pattern — it uses `stdio: "inherit"` directly.
+
+Before adding create operations to the TUI, modify `runHooks` (or create a `runHooksCaptured` variant) that captures hook stdout/stderr and returns it line-by-line via a callback, instead of inheriting stdio. The existing `handleRun()` in `App.tsx` (which spawns `git-stacks run` with `stdout: "pipe"` and streams output to `progressLines`) shows the right pattern.
+
+This is a lib-layer change that must be made before any TUI wizard can safely run hooks.
+
+**Warning signs:**
+- A create workspace wizard calls `runHooks()` directly — this will corrupt the TUI.
+- A PR adds a create action to the TUI without modifying `runHooks` to support captured output.
+- Testing the create wizard with a template that has `post_create` hooks shows visual corruption — the symptom is unmistakable.
+
+**Phase to address:** Create workspace phase (first wizard phase). The `runHooks` captured-output change is a prerequisite, not an enhancement.
 
 ---
 
@@ -190,11 +293,12 @@ The `DYNAMIC_COMPLETIONS` map is manually maintained and has no connection to th
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Global `useKeyboard` in every modal/tab component | Each component is self-contained | Key events fire in all mounted components simultaneously; no ordering guarantee | Never for tab panels — centralize in App.tsx |
-| `UIView` stores numeric index instead of entity name | Simple to implement | Index becomes stale if list order changes or tabs switch | Must fix before adding tabs; acceptable in single-list v0.2.0 code |
-| `fs.existsSync(socketPath)` as liveness check for TUI | One-liner | False positives on stale socket files; broken "drop silently" contract | Never — always use connect probe |
-| Adding `git branch` to completion functions | Rich branch name completions | Blocks Tab for seconds with many workspaces | Never — branch completions are not worth the perf cost in this tool |
-| `renderer.destroy()` + re-`render()` for editor handoff | Reliably releases the terminal | Noticeable TUI restart flash after editor exits | Acceptable workaround until OpenTUI issue #564 is resolved upstream |
+| `InlineInput` without cursor movement for wizards | Reuse existing component | Users cannot edit middle of long paths; first complaint on first real use | Never for wizard input with paths or long strings |
+| Encode wizard steps in `UIView` union | Familiar pattern from existing views | Combinatorial explosion in App.tsx keyboard handler; no "back" navigation | Only for truly single-step interactions; never for multi-step flows |
+| Call `@clack/prompts` from TUI with `renderer.suspend()` | Reuse existing wizard logic | Terminal corruption; unreliable state restoration | Never — dedicated TUI wizard components required |
+| Skip `reload()` cursor update after create | Simpler code | New entity appears offscreen; user confused about whether create succeeded | Never — cursor update is required for perceived correctness |
+| PTY e2e tests without fixed terminal size and wait helpers | Quick initial tests | Flaky CI failures; false confidence in coverage | Never — always set dimensions and wait for stable state |
+| Hook process with `stdio: "inherit"` from TUI context | No code change needed | Hook output corrupts TUI rendering | Never from TUI context — always use captured output |
 
 ---
 
@@ -202,12 +306,12 @@ The `DYNAMIC_COMPLETIONS` map is manually maintained and has no connection to th
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| OpenTUI `useKeyboard` + SolidJS `<Show>` | Hiding a component with `<Show when={false}>` unmounts it and removes its `useKeyboard` handler — but `<Show>` conditionals can introduce flicker; developers switch to CSS hide instead, leaving handlers active | Always use `<Show>` (not CSS hide) for tab panels, or gate all `useKeyboard` bodies on an `active` prop |
-| `Bun.listen({ unix: path })` + process exit | TUI exits; socket file remains; next launch fails EADDRINUSE | Register `unlinkSync(socketPath)` in SIGTERM, SIGINT, and OpenTUI `onDestroy`; also probe-connect before listen |
-| `workspace-ops.ts` called from TUI context | `openWorkspace()` calls `runHooks()` which does `Bun.spawn` with inherited stdio — this will corrupt the TUI's terminal state if stdio is not redirected | When invoking workspace-ops from the TUI, pass hooks through a child process with captured stdio, not inherited |
-| SolidJS `batch()` + signal updates from async code | Async signal updates outside `batch()` trigger individual reactive recomputations, increasing render pressure | Wrap all multi-signal updates from async callbacks in `batch()` |
-| `message send` while TUI is not running | Client throws ECONNREFUSED; without a catch this bubbles as unhandled error | Wrap `Bun.connect()` in try/catch; treat ECONNREFUSED and ENOENT as "TUI not running" and exit 0 silently |
-| Completion generator + new `message` subcommand | Developer adds `message` command to Commander.js but forgets to update `DYNAMIC_COMPLETIONS` | Test: assert completion output contains `message` for all three shells |
+| OpenTUI + `@clack/prompts` | Calling `p.text()` / `p.select()` from TUI action handlers | Build native TUI wizard components using `InlineInput` and `useKeyboard` |
+| `runHooks()` from TUI | Calling `runHooks()` with inherited stdio | Extend to `runHooksCaptured()` variant; stream output via `onProgress` callback to `progressLines` |
+| `useWorkspaces.reload()` after create | Not awaiting reload before cursor update | Make `reload()` async (return `Promise<void>`); `await reload()` then compute and set new cursor index |
+| `syncWorkspace()` from TUI | Showing only a spinner without per-repo progress | `syncWorkspace()` already emits per-repo messages via `onProgress`; ensure the TUI calls this and streams them |
+| `bun test` + `@opentui/solid` imports | Importing OpenTUI in test files | Extract all testable logic into pure TypeScript files; never import `@opentui/solid` in tests |
+| PTY e2e tests + async git status loading | Asserting on workspace status before `fetchStatuses` completes | Wait for help bar to appear (stable TUI state indicator) before sending navigation keystrokes |
 
 ---
 
@@ -215,20 +319,10 @@ The `DYNAMIC_COMPLETIONS` map is manually maintained and has no connection to th
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `git branch` in shell completion functions | Tab after `message send` blocks 2–10 seconds with many workspaces | Never add per-repo subprocesses to completion functions | Immediately with 3+ workspaces on slow disk |
-| High-frequency socket writes directly to SolidJS signal | TUI freezes on rapid message floods (10+ msgs/sec from agent) | Buffer messages; flush to signal at most once per render frame | When agent sends status updates in tight loops |
-| `loadTemplates()` + `loadRepos()` called on every tab switch | Tab switching feels sluggish; startup time grows with entity count | Load all entity lists once on TUI startup; use `reload()` on explicit refresh keystroke only | ~50+ templates/repos |
-| OpenTUI rendering all 3 tab panels simultaneously | Increased layout calculation cost even for inactive panels | Mount only active tab content via `<Show>`; accept remount cost | 3 tabs × 20 rows each = manageable, but unnecessary |
-
----
-
-## Security Mistakes
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Unix socket world-readable | Any local user can send messages to the TUI, inject fake notifications | After socket creation, `fs.chmodSync(socketPath, 0o600)` — note: Bun had a bug (issue #15686) where sockets were created `0700` due to µSockets; fixed in PR #16200 — verify current Bun version applies correct mode |
-| Message `sender` field from socket not sanitized before rendering | Specially crafted sender name with escape codes could corrupt terminal rendering | Sanitize `sender` and `text` fields: strip ANSI escape sequences and limit to printable ASCII before rendering in the TUI |
-| Socket path traversal | If socket path is user-controlled (e.g., workspace-specific socket path derived from workspace name), a workspace name with `../` could place the socket outside `~/.config/git-stacks/` | Validate socket path stays within config directory; use `path.basename()` on any workspace-derived filename fragment |
+| `fetchOrigin` without timeout in sync | Sync hangs for minutes on slow/offline remote | Add 30-second timeout per repo; skip timed-out repos as `skipped` with reason | Immediately on any remote unavailability |
+| Reload + full git status refetch after every create | Create workspace triggers 5-second status loading for all workspaces | After create, do a targeted single-workspace status fetch rather than full reload | With 10+ workspaces, each create triggers ~10 concurrent git-status calls |
+| Multi-select component with full list re-render on every space keypress | Flicker in multi-select list with 20+ repos | Use cursor + selection state signals; only re-render changed rows | ~20+ items in the select list |
+| PTY test suite grows to 50+ test cases | CI takes 5+ minutes for TUI e2e tests | Cap PTY tests at 10–15 smoke cases; cover logic with unit tests instead | As soon as CI budget exceeds 2 minutes for the TUI test suite |
 
 ---
 
@@ -236,26 +330,26 @@ The `DYNAMIC_COMPLETIONS` map is manually maintained and has no connection to th
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Tab bar renders but active tab content flashes on switch | Jarring visual during tab navigation | `<Show>` with keyed components or preserve scroll offset in tab state |
-| `message send` silently drops when TUI is not running, but user has no way to know if messages are being received | AI agents cannot verify their messages are being displayed | Add `message list` that reads from the persisted message store (not the TUI) so agents can verify delivery without needing the TUI running |
-| Help bar (`↑↓/jk Navigate Enter Actions...`) does not update when tab changes | Users on the Templates or Repos tab see workspace-specific keybindings | Help bar must be tab-aware or generic |
-| Notification count in workspace row (design goal) displays stale count after `message clear` | Cleared messages still show count until next `reload()` | `message clear` must trigger a workspace-specific `reload()` signal, not wait for the next full refresh |
-| Progress view for long-running actions (open, merge) blocks entire TUI | Cannot browse other workspaces or switch tabs during a long operation | Design progress as a sidebar or status update on the workspace row, not a full-screen takeover — but this is a scope decision; at minimum add a cancel path |
+| Wizard cancel deletes partially-created files | User loses work; orphaned worktrees on disk | Only write config/create worktrees after all wizard steps complete; wizard state is in-memory until commit |
+| Wizard with no "back" navigation | Typo in step 1 requires canceling the entire flow and starting over | Implement "back" (`Escape` goes to previous step); only `Escape` at step 0 cancels the whole wizard |
+| Sync shows "Done" even when some repos were skipped (best-effort) | User thinks all repos are in sync when some failed | Show per-repo result table: synced/skipped/failed count; "Done" message includes summary |
+| Create workspace wizard offers no preview of what will be created | User doesn't know how many worktrees will be created, which paths, which branch | Show a summary step as the final step before creation begins ("Will create 3 worktrees at ~/workspaces/tasks/foo/") |
+| Keyboard focus is ambiguous when wizard is open and list is still visible | User presses arrow key expecting to navigate wizard but list cursor also moves | Wizard must render in the detail pane with the list pane still visible but keyboard-blocked; App.tsx early-return pattern handles this if done correctly |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Tab keyboard routing:** Each tab panel has an `active` prop or equivalent guard — press `j` in Workspaces tab, switch to Templates tab, press `j` — verify Templates cursor moves and Workspaces cursor does NOT move.
-- [ ] **Socket cleanup:** Kill the TUI with `kill -9`; verify `git-stacks message send` exits 0 silently (drop); verify next TUI launch succeeds without `EADDRINUSE`.
-- [ ] **Socket liveness check:** Socket file exists but TUI is not running — `git-stacks message send` must exit 0, not error.
-- [ ] **`UIView` entity reference:** After opening action menu on workspace "foo", switch to Templates tab, switch back — open action menu targets "foo" not whatever is at the same numeric index in the template list.
-- [ ] **Completion coverage:** Run `git-stacks completion bash | bash -c 'source /dev/stdin; COMP_WORDS=(git-stacks message send ""); COMP_CWORD=3; _git_stacks_complete; echo "${COMPREPLY[@]}"'` — must print workspace names, not empty.
-- [ ] **Completion on fresh install:** Remove `~/.config/git-stacks/`; verify `git-stacks open <Tab>` completes with empty list (no error, no broken prompt).
-- [ ] **Editor handoff:** Open workspace YAML editor, type 30 characters rapidly — verify zero dropped keystrokes.
-- [ ] **OpenTUI lifecycle on crash:** Unhandled promise rejection in a tab component — verify terminal is restored to normal mode (cursor visible, not raw mode) via the `uncaughtException` handler.
-- [ ] **Enum completions:** `git-stacks sync --strategy <Tab>` — verify `local`, `rebase`, `merge` are offered (not empty).
-- [ ] **Message persistence:** `message send` when TUI is not running silently drops — but `message list` must still show the message (implies messages are persisted to disk, not only to TUI memory).
+- [ ] **E2E test isolation:** Every PTY test sets `XDG_CONFIG_HOME` or `HOME` to a temp directory — verify no test reads real user config.
+- [ ] **PTY terminal size:** Every PTY test explicitly sets terminal to fixed dimensions (`cols: 120, rows: 40`) — verify locally and in CI.
+- [ ] **Wizard cancel safety:** Cancel at any wizard step leaves no files on disk (no YAML written, no worktree created) — verify by inspecting the temp config dir after cancel.
+- [ ] **Wizard back navigation:** `Escape` at step 2+ goes to step 1, not cancel — verify by testing multi-step wizard with Escape at each non-first step.
+- [ ] **Create reload cursor:** After workspace create, the cursor points to the new workspace in the list — verify by asserting on the detail pane content.
+- [ ] **Hook capture:** `post_create` hook output appears in the TUI progress view, not in the terminal background — verify with a template that has a `post_create` hook echoing text.
+- [ ] **Sync per-repo progress:** Sync action emits one progress line per repo (fetch, conflict check, rebase result) — verify by watching `progressLines` grow during sync.
+- [ ] **Sync timeout:** Sync on an unreachable remote repo returns a "fetch timeout" skipped result within 30 seconds, not hang indefinitely — verify by pointing a test repo at an unreachable URL.
+- [ ] **Unit tests import cleanly:** `bun test tests/` passes with zero imports from `@opentui/solid` or `@opentui/core` in test files — verify with `grep -r "@opentui" tests/`.
+- [ ] **InlineInput cursor:** Typing a long string and pressing left arrow moves cursor left; subsequent character insertion inserts at cursor position — verify before using in any wizard.
 
 ---
 
@@ -263,12 +357,12 @@ The `DYNAMIC_COMPLETIONS` map is manually maintained and has no connection to th
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Stale socket blocks TUI launch | LOW | `rm ~/.config/git-stacks/*.sock`; re-launch TUI |
-| Double keyboard dispatch corrupts cursor state | MEDIUM | Add `active` guards to all `useKeyboard` bodies; retest all tab navigation |
-| `UIView` index mismatch executes action on wrong entity | MEDIUM | Change `UIView` to name-based references; add test: action menu → tab switch → verify action targets original entity |
-| OpenTUI render loop stall | MEDIUM | Identify signal write not wrapped in `batch()`; wrap it; verify high-frequency test no longer stalls |
-| Completion missing for `message` commands | LOW | Add entries to `DYNAMIC_COMPLETIONS`; re-run `git-stacks completion bash/zsh/fish` |
-| Editor spawn corrupts terminal (drops inputs) | HIGH | Switch `launchEditor` from `suspend/resume` to `destroy/re-render`; verify with issue #564 test case |
+| E2E tests written as rendering tests (impossible to run) | MEDIUM | Delete rendering tests; extract logic into `messageUtils.ts`-style pure functions; rewrite as unit tests of those functions |
+| Wizard implemented with `@clack/prompts` + `renderer.suspend()` | HIGH | Rewrite wizard as native TUI component; extract validation and business logic from clack wizard into lib functions reusable by both |
+| `runHooks` inherited stdio corrupts TUI on post_create hooks | HIGH | Add `runHooksCaptured()` variant immediately; the TUI component using the hook will need to be updated to pass `onProgress` |
+| Create operation writes partial state on wizard cancel | MEDIUM | Add transactional wrapper: accumulate all writes into a "pending" structure; execute all writes atomically only on wizard confirmation |
+| Sync hangs due to missing network timeout | LOW-MEDIUM | Add `Bun.timeout()` wrapper around `fetchOrigin()`; already within one function so the change is localized |
+| PTY tests are 100% flaky in CI | MEDIUM | Add `waitForText()` helper; fix terminal size; reduce to smoke test set; accept that some TUI behavior is manual-test only |
 
 ---
 
@@ -276,27 +370,47 @@ The `DYNAMIC_COMPLETIONS` map is manually maintained and has no connection to th
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Multiple `useKeyboard` handlers double-dispatch | Dashboard overhaul — first sub-task | Integration test: mount two tab panels; verify key only fires in active one |
-| Stale socket file blocks launch or silently misfires | Messaging/IPC phase — socket protocol design | Manual test: SIGKILL TUI; probe-connect; verify graceful ECONNREFUSED handling |
-| `renderer.suspend()` editor spawn drops inputs | Dashboard overhaul — editor integration sub-task | Manual test: open editor, type 30 chars; verify zero drops |
-| `UIView` index coupling breaks on tab switch | Dashboard overhaul — prerequisite refactor | Test: action menu opened, tab switched, action executed — verify correct entity |
-| Completion subprocess performance | Shell completion phase | Benchmark: time Tab completion with 20 workspaces; must be <200ms |
-| `DYNAMIC_COMPLETIONS` missing `message.*` entries | Shell completion phase — explicit task | Snapshot test: completion output contains `message` subcommand paths |
-| Render loop stall under signal burst | Dashboard overhaul + messaging phase | Stress test: 20 rapid message sends; TUI must not freeze |
+| Testing OpenTUI components | E2E test infrastructure phase — establish three-tier model | No `@opentui` imports in `tests/`; all TUI tests are in `tests/tui/` and test pure logic |
+| PTY test brittleness | E2E test infrastructure phase — build the harness correctly first | Harness must fix terminal size, strip ANSI, and expose `waitForText()`; test in CI before using for feature tests |
+| `@clack/prompts` in TUI | Every create wizard phase — stated as constraint in phase design | `grep -r "@clack" src/tui/dashboard/` returns nothing |
+| Wizard state in `UIView` | First wizard phase — establish wizard component pattern | `UIView` union count stays at ≤ 8 variants after first wizard |
+| Reload cursor update | Every create wizard completion | After create, cursor is on the new entity; detail pane shows the new entity's content |
+| `fetchOrigin` timeout for sync | Workspace sync phase | Sync on unreachable remote returns within 30s with `skipped` entry |
+| Concurrent sync corruption | Workspace sync phase | Verify that only one sync can run at a time; TUI progress view blocks all other actions |
+| `InlineInput` cursor movement | First wizard phase (prerequisite) | Left/right arrow keys move cursor in any wizard text field |
+| Multi-select UI | Create template/workspace phase (design step) | Either `MultiSelectList` component exists, or ad-hoc repo selection is explicitly out of scope for TUI |
+| `runHooks` captured output | Create workspace phase (prerequisite lib change) | `post_create` hook output appears in TUI progress view, not leaked to terminal |
 
 ---
 
 ## Sources
 
-- Direct codebase analysis: `src/tui/dashboard/App.tsx`, `src/tui/dashboard/ActionMenu.tsx`, `src/tui/dashboard/ConfirmDialog.tsx`, `src/tui/dashboard/DetailStatus.tsx`, `src/tui/dashboard/hooks/useWorkspaces.ts`, `src/tui/dashboard/types.ts`, `src/lib/completion-generator.ts`
-- OpenTUI official documentation: [Renderer lifecycle](https://opentui.com/docs/core-concepts/renderer/), [Keyboard input and focus](https://opentui.com/docs/core-concepts/keyboard/), [Lifecycle](https://opentui.com/docs/core-concepts/lifecycle/) — MEDIUM confidence (current docs, but OpenTUI is early-stage and behavior may differ from documentation)
-- OpenTUI GitHub issue tracker: [Issue #564 — Bun.spawn editor slow/dropped inputs (open)](https://github.com/anomalyco/opentui/issues/564), [Issue #789 — render loop stalls on event burst (open)](https://github.com/sst/opentui/issues) — HIGH confidence (direct issue observation)
-- Bun official docs: [OS signal handling](https://bun.sh/guides/process/os-signals), [TCP/Unix socket API](https://bun.sh/docs/api/tcp) — HIGH confidence
-- Bun GitHub: [Issue #15686 — Unix socket permissions 0700 (fixed in PR #16200)](https://github.com/oven-sh/bun/issues/15686) — HIGH confidence
-- Unix socket stale file behavior: POSIX spec (SO_REUSEADDR does not apply to AF_UNIX), confirmed in [nodejs/asyncio issue #425](https://github.com/python/asyncio/issues/425) and [Node.js docs](https://nodejs.org/api/net.html) — HIGH confidence
-- Fish shell completion performance: [fish-shell issue #2413 (30s block)](https://github.com/fish-shell/fish-shell/issues/2413), [issue #5158](https://github.com/fish-shell/fish-shell/issues/5158) — HIGH confidence
-- Training knowledge: SolidJS reactivity model, `batch()` semantics, `<Show>` vs CSS hide mount behavior, Commander.js tree walking
+- Direct codebase analysis (HIGH confidence — verified line-by-line):
+  - `src/tui/dashboard/App.tsx` — keyboard handler structure, view dispatch, renderer.suspend pattern
+  - `src/tui/dashboard/InlineInput.tsx` — current capabilities and limitations
+  - `src/tui/dashboard/ProgressView.tsx` — progress streaming model
+  - `src/tui/dashboard/hooks/useWorkspaces.ts` — reload pattern, async status fetch
+  - `src/tui/dashboard/run.tsx` — `render()` API call, `onDestroy` callback
+  - `src/tui/workspace-wizard.ts` — clack-based wizard structure (must not be imported from TUI)
+  - `src/lib/workspace-ops.ts` — `syncWorkspace()`, `cleanWorkspace()`, `onProgress` callback pattern
+  - `src/lib/lifecycle.ts` — `runHooks()` with `stdio: "inherit"` (the problem)
+  - `src/lib/git.ts` — `fetchOrigin()`, no timeout, pure async
+  - `tests/tui/messageUtils.test.ts` — the correct model for TUI logic tests
+  - `.planning/PROJECT.md` — Key Decisions table, established constraints
+
+- Project memory (HIGH confidence — recorded from real bugs):
+  - `feedback_opentui_no_nested_text.md` — `TextRenderable.add()` crash on nested `<text>`
+  - v0.3.0 Key Decisions table — height-based tab visibility, Switch/Match repaint issue
+
+- Prior research (HIGH confidence — verified patterns from Phase 9 research):
+  - `SolidJS Map signal identity check` — must create new Map to trigger re-render
+  - `onIpcMessage mutable export` — namespace import required for reassignment
+  - `useKeyboard global broadcast` — parent must return early to prevent double-dispatch
+
+- Inference from OpenTUI architecture (MEDIUM confidence — no headless renderer exists):
+  - No test renderer available as of 2026; confirmed by absence in npm ecosystem and OpenTUI docs
+  - `renderer.suspend()` + `@clack/prompts` incompatibility — architectural consequence of both owning terminal raw mode
 
 ---
-*Pitfalls research for: TUI dashboard overhaul, Unix socket IPC messaging, shell completion improvements (Bun/SolidJS/OpenTUI/Commander.js)*
-*Researched: 2026-03-19*
+*Pitfalls research for: v0.4.0 — E2E tests + wizard flows + workspace sync in Bun/SolidJS/OpenTUI*
+*Researched: 2026-03-20*
