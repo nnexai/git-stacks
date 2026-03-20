@@ -1,6 +1,6 @@
 {
   "name": "git-stacks",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Git worktree workspace manager — stacks, workspaces, and multi-repo orchestration",
   "license": "MIT",
   "author": "nnexai",
@@ -22,6 +22,7 @@
     "src",
     "bunfig.toml",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: unknown
-stopped_at: Completed 09-02-PLAN.md
-last_updated: "2026-03-20T03:52:12.258Z"
+milestone: v0.3.0
+milestone_name: Dashboard UI Overhaul
+status: between_milestones
+stopped_at: Milestone v0.3.0 complete — shipped 2026-03-20
+last_updated: "2026-03-20T00:00:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -16,78 +16,31 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-19)
+See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 09 — ipc-push-message-display
+**Current focus:** Between milestones — v0.3.0 shipped. Run `/gsd:new-milestone` to start v0.4.0.
 
 ## Current Position
 
-Phase: 09 (ipc-push-message-display) — EXECUTING
-Plan: 2 of 3
-
-## Performance Metrics
-
-**Velocity:**
-
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-*Updated after each plan completion*
-| Phase 07-shell-completion-overhaul P01 | 3 | 2 tasks | 2 files |
-| Phase 08 P05 | 2 | 2 tasks | 9 files |
-| Phase 08 P06 | 6 | 2 tasks | 1 files |
-| Phase 09 P01 | 2min | 2 tasks | 5 files |
-| Phase 09 P02 | 2min | 2 tasks | 4 files |
+Milestone v0.3.0 complete. All 4 phases (6–9), 13 plans shipped 2026-03-20.
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Phase 6]: Message store uses JSONL (one file per workspace at `~/.config/git-stacks/messages/{name}.jsonl`); NOT a field on WorkspaceSchema — avoids concurrent write corruption from agents
-- [Phase 6]: Single global Unix socket at `/tmp/git-stacks.sock` (not per-workspace); all messages carry a `workspace` field for routing
-- [Phase 7]: OPTION_ENUMS static table in completion-generator.ts (not Commander `.choices()`) — avoids unintended runtime validation behavior change
-- [Phase 8]: `tab` signal is independent of `UIView` — UIView union and all existing view-state components (ActionMenu, ConfirmDialog, ProgressView, DetailStatus) are untouched
-- [Phase 8]: Two prerequisite refactors MUST happen before any tab panel code: (a) UIView action states switch from numeric index to entity name, (b) keyboard routing centralized in App.tsx to avoid double-dispatch to inactive panels
-- [Phase 07]: OPTION_ENUMS static table in completion-generator.ts (not Commander .choices()) avoids unintended runtime validation behavior change
-- [Phase 07]: FLAG_COMPLETIONS table separate from OPTION_ENUMS — different lookup strategy for dynamic flag-value completion
-- [Phase 07]: zshOptionSpec() extracted as shared helper eliminating duplication between zshCaseBody() and generateZshSubcmdHelper()
-- [Phase 08]: Use Switch/Match instead of Show for mutually-exclusive tab content — prevents SolidJS retaining inactive tab DOM nodes that caused key-press freeze
-- [Phase 08]: Two-box layout with flexGrow ratios (3:2) replaces manual innerHeight/detailHeight memos — layout engine handles proportional sizing and BatchBar overflow
-- [Phase 08]: Child dashboard components (ActionMenu, ConfirmDialog, ProgressView) are borderless — parent detail box provides border context, avoiding double borders
-- [Phase 08]: Height-based visibility (height={tab() === X ? value : 0}) replaces Switch/Match — OpenTUI terminal renderer does not repaint when SolidJS swaps conditional DOM branches
-- [Phase 08]: On rename error, stay on progress view; on success call setView({ view: list }) so detail pane shows clean state immediately
-- [Phase 09]: useMessages creates new Map on every IPC push (not mutate-in-place) — SolidJS identity check requires object reference change to trigger reactivity
-- [Phase 09]: setIpcCallback setter in run.tsx (not direct onIpcMessage mutation) — cleaner API; hook calls once during init, onCleanup sets null to prevent stale closures
-- [Phase 09]: Removed clearSender from App.tsx destructuring (unused until Plan 03 MessageOverlay) — avoids TS6133 unused variable error
-- [Phase 09]: messagePreview memo returns null for 0-message case — clean conditional rendering, avoids empty-object edge cases
-
-### Research Flags (from research/SUMMARY.md)
-
-- [Phase 8]: Verify `renderer.suspend()` + editor spawn works with installed OpenTUI before building template editor actions (issue #564)
-- [Phase 8]: Verify OpenTUI flexbox side-by-side pane stability at narrow terminal widths (minimum ~100 columns assumed)
-- [Phase 9]: IPC transport is Unix-socket-only for v0.3.0 (macOS + Linux); Windows documented as future work
+All milestone decisions recorded in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+None.
 
 ## Session Continuity
 
-Last session: 2026-03-20T02:59:08.843Z
-Stopped at: Completed 09-02-PLAN.md
+Last session: 2026-03-20
+Stopped at: Milestone v0.3.0 archived
 Resume file: None

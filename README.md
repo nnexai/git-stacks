@@ -2,7 +2,7 @@
 
 Git worktree workspace manager — repo registry, templates, and multi-repo orchestration.
 
-**Why?** Switching between tasks (tickets, features, experiments) across multiple repos means juggling branches, IDE windows, and terminal sessions. `git-stacks` creates isolated worktrees for each task and opens everything in one shot.
+**Why?** Switching between tasks (tickets, features, experiments) across multiple repos means juggling branches, IDE windows, and terminal sessions. `git-stacks` creates isolated worktrees for each task and opens everything in one shot. An interactive TUI dashboard lets you manage everything without leaving the terminal.
 
 ## Installation
 
@@ -97,12 +97,57 @@ wcd() { cd "$(git-stacks cd "$@")"; }
 function wcd; cd (git-stacks cd $argv); end
 ```
 
-## Configuration
+## Workspace Notifications
+
+AI agents and hook scripts can send notifications to workspaces:
+
+```bash
+# Send a notification (auto-detects workspace from WS_WORKSPACE env var)
+git-stacks message send "Build complete"
+
+# Send with an explicit sender name (useful for multi-agent setups)
+git-stacks message send "Tests passed" --from ci-bot
+
+# Target a specific workspace
+git-stacks message send "Deploy done" --workspace my-feature --from deploy-bot
+
+# List notifications for current workspace
+git-stacks message list
+
+# Clear all notifications for current workspace
+git-stacks message clear
+
+# Clear notifications from a specific sender only
+git-stacks message clear --from ci-bot
+```
+
+Messages persist in `~/.config/git-stacks/messages/{workspace}.jsonl`. When the TUI dashboard is running, messages appear in real time via Unix socket — no manual refresh needed.
+
+## Dashboard
 
 ```bash
 git-stacks manage    # Interactive TUI dashboard (default when run with no args)
+```
+
+The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs:
+
+- Switch tabs with `1` / `2` / `3` or `[` / `]`
+- Each tab shows a split list + detail pane — detail updates as you move the cursor
+- **Workspaces tab**: open, rename, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane
+  - `m` — open full-screen message overlay for selected workspace
+  - `c` — clear messages from a sender in the detail pane
+  - `r` — reload data from disk
+- **Templates tab**: edit in `$EDITOR`, clone, remove
+- **Repos tab**: browse registry with disk health indicator
+- `?` — scrollable keybinding reference; `Esc` closes it
+- `Esc` — navigate back (action menu → list, overlay → split)
+
+## Configuration
+
+```bash
 git-stacks config    # Interactive config wizard
 git-stacks doctor    # Health check — detect drift between config and filesystem
+git-stacks doctor --fix   # Auto-repair drift
 ```
 
 Global config lives at `~/.config/git-stacks/config.yml`. Default workspace root is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
@@ -117,6 +162,17 @@ Templates and workspaces support hook arrays (shell commands run in order):
 
 Hooks receive injected env vars: `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
 
+**Using hooks with the notification system:**
+
+```yaml
+# In a template or workspace YAML
+hooks:
+  post_create:
+    - git-stacks message send "Workspace ready" --from setup
+  post_open:
+    - git-stacks message send "Opened" --from workspace
+```
+
 ## Shell Completions
 
 ```bash
@@ -124,6 +180,8 @@ git-stacks completion bash >> ~/.bashrc
 git-stacks completion zsh  >> ~/.zshrc
 git-stacks completion fish > ~/.config/fish/completions/git-stacks.fish
 ```
+
+Completions cover all commands, subcommands, dynamic entity names (workspaces, templates, repos), and fixed enum flag values (`--strategy rebase|merge`, `--sort date|name|status`).
 
 ## License
 
