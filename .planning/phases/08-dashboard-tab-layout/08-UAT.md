@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 08-dashboard-tab-layout
 source: 08-01-SUMMARY.md, 08-02-SUMMARY.md, 08-03-SUMMARY.md, 08-04-SUMMARY.md, 08-05-SUMMARY.md
 started: 2026-03-20T00:00:00Z
@@ -98,27 +98,37 @@ skipped: 5
   reason: "User reported: press 2 does not update the tab - same with press 3 and press 1 does not go back. when going 1 -> 2 -> 1 -> ? (help) -> Esc the ui is usable again, but 2 or 3 do not update the content and basically freeze / break the list and detail page ( same of before the 8-5 fixes"
   severity: major
   test: 2
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "OpenTUI terminal renderer does not repaint when SolidJS conditional rendering (Show, Switch/Match) swaps DOM branches. The signal/state layer works correctly (events dispatch to mounted-but-invisible components, cursor state is preserved), but the terminal buffer retains the previous branch's painted output. Both the original Show approach and the Switch/Match replacement exhibit the same behavior. Additionally, toggling the help overlay (which uses Show) on a non-workspaces tab can leave the user visually stuck on the help screen or even fully frozen. The issue is structural: OpenTUI doesn't handle conditional tree restructuring."
+  artifacts:
+    - path: "src/tui/dashboard/App.tsx"
+      issue: "Lines 519-523: Show-based help/main toggle doesn't repaint on close; Lines 526-551: Switch/Match tab content doesn't repaint on branch swap; Lines 564-578: same for detail pane"
+  missing:
+    - "Replace all conditional rendering (Show for help, Switch/Match for tabs) with height-based visibility: render all components permanently, toggle height to show/hide"
+    - "All three tab contents rendered always with height={tab() === X ? '100%' : 0}"
+    - "Help overlay and main content rendered always with height-based toggle instead of Show"
 
 - truth: "Pressing [ and ] cycles through tabs and updates the visible content"
   status: failed
   reason: "User reported: same issue as test 2 content does not update. by navigating back to tab 1 and then opening help and closing it the ui works again otherwise broken by pressing ] or ["
   severity: major
   test: 3
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Same root cause as test 2 — OpenTUI renderer doesn't repaint on conditional branch swap"
+  artifacts:
+    - path: "src/tui/dashboard/App.tsx"
+      issue: "Same as test 2"
+  missing:
+    - "Same fix as test 2 — height-based visibility instead of conditional rendering"
 
 - truth: "After workspace rename completes, detail pane shows clean workspace detail with no remnants from the rename input"
   status: failed
   reason: "User reported: almost working - remnants of the rename are visibly merged with the detail page everything else works"
   severity: minor
   test: 8
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "handleInlineInputConfirm() sets view to 'progress' (line ~306) but never resets to 'list' after completion — view only gets reset on next user key press (line ~425). InlineInput text persists on terminal because renderer doesn't fully clear previous component output during the stale progress→keypress→list transition."
+  artifacts:
+    - path: "src/tui/dashboard/App.tsx"
+      issue: "handleInlineInputConfirm() missing setView({ view: 'list' }) after reload() in rename branch (line ~312)"
+    - path: "src/tui/dashboard/InlineInput.tsx"
+      issue: "No explicit cleanup on unmount; text artifacts persist"
+  missing:
+    - "Add setView({ view: 'list' }) after reload() in the rename branch of handleInlineInputConfirm()"
