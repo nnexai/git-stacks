@@ -72,17 +72,18 @@ export async function pushToSocket(record: MessageRecord): Promise<void> {
         Bun.connect({
           unix: SOCKET_PATH,
           socket: {
+            data() {},  // required by Bun socket API — no-op for write-only client
             open(socket) {
               socket.write(JSON.stringify(record) + "\n")
               socket.end()
             },
-            connectError(_socket, _err) {
+            connectError() {
               resolve()  // TUI not running — silently drop
             },
             close() {
               resolve()
             },
-            error(_socket, _err) {
+            error() {
               resolve()  // silently swallow
             },
           },
