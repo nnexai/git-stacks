@@ -135,10 +135,10 @@ export default function App() {
   const helpBarText = createMemo(() => {
     const t = tab()
     if (t === "workspaces")
-      return "  1/2/3 Tabs  up/dn Navigate  Enter Actions  Space Select  m Messages  / Filter  R Refresh  ? Help  q Quit"
+      return "  1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  m Messages  / Filter  r Refresh  ? Help  q Quit"
     if (t === "templates")
-      return "  1/2/3 Tabs  up/dn Navigate  Enter Actions  / Filter  R Refresh  ? Help  q Quit"
-    return "  1/2/3 Tabs  up/dn Navigate  / Filter  R Refresh  ? Help  q Quit"
+      return "  1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  / Filter  r Refresh  ? Help  q Quit"
+    return "  1/2/3 Tabs  \u2191\u2193/jk Navigate  / Filter  r Refresh  ? Help  q Quit"
   })
 
   const inlineInputLabel = createMemo(() => {
@@ -558,7 +558,7 @@ export default function App() {
           onClearSender={(sender) => clearSender(messagesWorkspace(), sender)}
         />
         <box height={1}>
-          <text fg="gray">  j/k Navigate groups  c Clear group  Esc Close</text>
+          <text fg="gray">  {"\u2191\u2193"}/jk Navigate groups  c Clear group  Esc Close</text>
         </box>
       </Show>
 

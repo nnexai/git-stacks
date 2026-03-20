@@ -17,7 +17,7 @@ export function HelpOverlay(props: Props) {
       <text fg="white">{"\n"}  Global:</text>
       <text fg="gray">    1 / 2 / 3   Switch tabs (Workspaces / Templates / Repos)</text>
       <text fg="gray">    [ / ]       Previous / next tab</text>
-      <text fg="gray">    R           Refresh current tab</text>
+      <text fg="gray">    r           Refresh current tab</text>
       <text fg="gray">    ?           Toggle this help</text>
       <text fg="gray">    q           Quit (from list view only)</text>
       <text fg="white">{"\n"}  Navigation:</text>
