@@ -8,6 +8,18 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
+## Current Milestone: v0.4.0 TUI Hardening & Polish
+
+**Goal:** Make the TUI fully self-sufficient — e2e tested, visually polished, and capable of all operations currently requiring the CLI.
+
+**Target features:**
+- E2E test infrastructure for the TUI dashboard (automated validation replaces slow manual testing)
+- TUI screen improvements: info density, screen space usage, layout polish
+- Create workspace (new/clone) from within TUI
+- Repo management in TUI: add, scan, remove (registry is currently browse-only)
+- Template creation from within TUI (edit/clone/remove exist, create does not)
+- Workspace sync action in TUI action menu
+
 ## Current State — v0.3.0 (shipped 2026-03-20)
 
 ### What shipped in v0.3.0
@@ -136,4 +148,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-20 — v0.3.0 milestone complete (Dashboard UI Overhaul)*
+*Last updated: 2026-03-20 — v0.4.0 milestone started (TUI Hardening & Polish)*
