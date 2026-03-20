@@ -31,51 +31,27 @@ export function RepoList(props: Props) {
     <box flexDirection="column">
       <Show
         when={props.entries.length > 0}
-        fallback={<text fg="gray">  No repos in registry. Run `git-stacks repo add` to register one.</text>}
+        fallback={<text fg="gray">{"  No repos in registry. Run `git-stacks repo add` to register one."}</text>}
       >
         <For each={visibleEntries()}>
           {(entry, visibleIndex) => {
             const absoluteIndex = () => scrollOffset() + visibleIndex()
             const focused = () => absoluteIndex() === props.cursor
-            const indicator = entry.diskExists ? "✓" : "✗"
-            const indicatorFg = entry.diskExists ? "green" : "red"
-            const truncated = truncatePath(entry.local_path)
             return (
-              <Show
-                when={focused()}
-                fallback={
-                  <text fg="white">
-                    {"   "}
-                    <text fg={indicatorFg}>{indicator}</text>
-                    {"  "}{entry.name.padEnd(24)}{"  "}{entry.type.padEnd(12)}{"  "}{truncated}
-                  </text>
-                }
-              >
-                <text fg="cyan">
-                  {"  > "}
-                  <text fg={indicatorFg}>{indicator}</text>
-                  {"  "}{entry.name.padEnd(24)}{"  "}{entry.type.padEnd(12)}{"  "}{truncated}
-                </text>
-              </Show>
+              <box height={1} flexDirection="row" backgroundColor={focused() ? "#333333" : undefined}>
+                <text fg={focused() ? "white" : "gray"}>{focused() ? " > " : "   "}</text>
+                <text fg={entry.diskExists ? "green" : "red"}>{entry.diskExists ? "✓" : "✗"}</text>
+                <text fg="white">{`  ${entry.name.padEnd(24)}`}</text>
+                <text fg="cyan">{`  ${entry.type.padEnd(12)}`}</text>
+                <text fg="gray">{`  ${truncatePath(entry.local_path)}`}</text>
+              </box>
             )
           }}
         </For>
         <Show when={props.entries.length > viewportHeight()}>
-          {(() => {
-            const vh = viewportHeight()
-            const above = scrollOffset()
-            const below = props.entries.length - scrollOffset() - vh
-            return (
-              <>
-                <Show when={above > 0}>
-                  <text fg="gray">  ↑↑ {above} above</text>
-                </Show>
-                <Show when={below > 0}>
-                  <text fg="gray">  ↓↓ {below} below</text>
-                </Show>
-              </>
-            )
-          })()}
+          <text fg="gray">
+            {`  ${scrollOffset() + 1}-${Math.min(scrollOffset() + viewportHeight(), props.entries.length)} of ${props.entries.length}`}
+          </text>
         </Show>
       </Show>
     </box>

@@ -26,48 +26,26 @@ export function TemplateList(props: Props) {
     <box flexDirection="column">
       <Show
         when={props.entries.length > 0}
-        fallback={<text fg="gray">  No templates found. Run `git-stacks template new` to create one.</text>}
+        fallback={<text fg="gray">{"  No templates found. Run `git-stacks template new` to create one."}</text>}
       >
         <For each={visibleEntries()}>
           {(entry, visibleIndex) => {
             const absoluteIndex = () => scrollOffset() + visibleIndex()
             const focused = () => absoluteIndex() === props.cursor
             return (
-              <Show
-                when={focused()}
-                fallback={
-                  <text fg="white">
-                    {"   "}{entry.name}
-                    {"   "}
-                    <text fg="gray">({entry.repos.length} repos){entry.description ? `  ${entry.description}` : ""}</text>
-                  </text>
-                }
-              >
-                <text fg="cyan">
-                  {"  > "}{entry.name}
-                  {"   "}
-                  <text fg="gray">({entry.repos.length} repos){entry.description ? `  ${entry.description}` : ""}</text>
-                </text>
-              </Show>
+              <box height={1} flexDirection="row" backgroundColor={focused() ? "#333333" : undefined}>
+                <text fg={focused() ? "white" : "gray"}>{focused() ? " > " : "   "}</text>
+                <text fg="white">{entry.name.padEnd(22)}</text>
+                <text fg="cyan">{` ${entry.repos.length} repos`}</text>
+                <text fg="gray">{entry.description ? `  ${entry.description}` : ""}</text>
+              </box>
             )
           }}
         </For>
         <Show when={props.entries.length > viewportHeight()}>
-          {(() => {
-            const vh = viewportHeight()
-            const above = scrollOffset()
-            const below = props.entries.length - scrollOffset() - vh
-            return (
-              <>
-                <Show when={above > 0}>
-                  <text fg="gray">  ↑↑ {above} above</text>
-                </Show>
-                <Show when={below > 0}>
-                  <text fg="gray">  ↓↓ {below} below</text>
-                </Show>
-              </>
-            )
-          })()}
+          <text fg="gray">
+            {`  ${scrollOffset() + 1}-${Math.min(scrollOffset() + viewportHeight(), props.entries.length)} of ${props.entries.length}`}
+          </text>
         </Show>
       </Show>
     </box>
