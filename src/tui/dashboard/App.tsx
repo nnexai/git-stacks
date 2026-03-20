@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, createMemo, Show, Switch, Match } from "solid-js"
+import { createSignal, createMemo, Show } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
@@ -515,42 +515,42 @@ export default function App() {
 
   return (
     <box flexDirection="column" height="100%">
-      {/* Help overlay replaces EVERYTHING when open */}
-      <Show when={helpOpen()}>
+      {/* Help overlay — full height when open, hidden when closed */}
+      <box height={helpOpen() ? "100%" : 0} overflow="hidden">
         <HelpOverlay tab={tab()} onClose={() => setHelpOpen(false)} />
-      </Show>
+      </box>
 
-      <Show when={!helpOpen()}>
+      {/* Main content — full height when help closed, hidden when open */}
+      <box flexDirection="column" height={helpOpen() ? 0 : "100%"} overflow="hidden">
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
-          <Switch>
-            <Match when={tab() === "workspaces"}>
-              <WorkspaceList
-                entries={filteredEntries()}
-                cursor={cursor()}
-                selected={selected()}
-                filter={filtering() ? filter() : ""}
-                height={listHeight()}
-              />
-            </Match>
-            <Match when={tab() === "templates"}>
-              <TemplateList
-                entries={filteredTemplates()}
-                cursor={tabCursor.templates[0]()}
-                filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
-                height={listHeight()}
-              />
-            </Match>
-            <Match when={tab() === "repos"}>
-              <RepoList
-                entries={filteredRepos()}
-                cursor={tabCursor.repos[0]()}
-                filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
-                height={listHeight()}
-              />
-            </Match>
-          </Switch>
-          {/* Batch bar INSIDE top box as footer row */}
+          <box height={tab() === "workspaces" ? listHeight() : 0} overflow="hidden">
+            <WorkspaceList
+              entries={filteredEntries()}
+              cursor={cursor()}
+              selected={selected()}
+              filter={filtering() ? filter() : ""}
+              height={listHeight()}
+            />
+          </box>
+          <box height={tab() === "templates" ? listHeight() : 0} overflow="hidden">
+            <TemplateList
+              entries={filteredTemplates()}
+              cursor={cursor()}
+              filter={filtering() ? filter() : ""}
+              height={listHeight()}
+            />
+          </box>
+          <box height={tab() === "repos" ? listHeight() : 0} overflow="hidden">
+            <RepoList
+              entries={filteredRepos()}
+              cursor={cursor()}
+              filter={filtering() ? filter() : ""}
+              height={listHeight()}
+            />
+          </box>
+          {/* Spacer pushes batch bar to bottom of top box */}
+          <box flexGrow={1} />
           <Show when={view().view === "list" && selected().size > 0}>
             <BatchBar count={selected().size} />
           </Show>
@@ -560,42 +560,38 @@ export default function App() {
         <box border title={detailBoxTitle()} flexDirection="column" flexGrow={2} minHeight={10}>
           {/* List view — tab-specific detail */}
           <Show when={view().view === "list"}>
-            <Switch>
-              <Match when={tab() === "workspaces"}>
-                <WorkspaceDetail entry={currentEntry()} />
-              </Match>
-              <Match when={tab() === "templates"}>
-                <TemplateDetail template={currentTemplate()} />
-              </Match>
-              <Match when={tab() === "repos"}>
-                <RepoDetail
-                  entry={currentRepo()}
-                  allTemplates={templateEntries()}
-                  allWorkspaces={allWorkspaces()}
-                />
-              </Match>
-            </Switch>
+            <box height={tab() === "workspaces" ? "100%" : 0} overflow="hidden">
+              <WorkspaceDetail entry={currentEntry()} />
+            </box>
+            <box height={tab() === "templates" ? "100%" : 0} overflow="hidden">
+              <TemplateDetail template={currentTemplate()} />
+            </box>
+            <box height={tab() === "repos" ? "100%" : 0} overflow="hidden">
+              <RepoDetail
+                entry={currentRepo()}
+                allTemplates={templateEntries()}
+                allWorkspaces={allWorkspaces()}
+              />
+            </box>
           </Show>
 
           {/* Action menus */}
           <Show when={view().view === "action-menu"}>
-            <Switch>
-              <Match when={tab() === "workspaces"}>
-                <ActionMenu
-                  workspaceName={currentEntry()?.workspace.name ?? ""}
-                  onAction={(action) => runAction(action, (view() as any).index)}
-                  onCancel={() => setView({ view: "list" })}
-                  onRun={() => handleRun(selectedName())}
-                />
-              </Match>
-              <Match when={tab() === "templates"}>
-                <TemplateActionMenu
-                  templateName={currentTemplate()?.name ?? ""}
-                  onAction={handleTemplateAction}
-                  onCancel={() => setView({ view: "list" })}
-                />
-              </Match>
-            </Switch>
+            <box height={tab() === "workspaces" ? "100%" : 0} overflow="hidden">
+              <ActionMenu
+                workspaceName={currentEntry()?.workspace.name ?? ""}
+                onAction={(action) => runAction(action, (view() as any).index)}
+                onCancel={() => setView({ view: "list" })}
+                onRun={() => handleRun(selectedName())}
+              />
+            </box>
+            <box height={tab() === "templates" ? "100%" : 0} overflow="hidden">
+              <TemplateActionMenu
+                templateName={currentTemplate()?.name ?? ""}
+                onAction={handleTemplateAction}
+                onCancel={() => setView({ view: "list" })}
+              />
+            </box>
           </Show>
 
           {/* Confirm dialog */}
@@ -649,7 +645,7 @@ export default function App() {
             <text fg="gray">{helpBarText()}</text>
           </Show>
         </box>
-      </Show>
+      </box>
     </box>
   )
 }
