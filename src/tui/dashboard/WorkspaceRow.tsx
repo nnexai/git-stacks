@@ -1,11 +1,16 @@
 /** @jsxImportSource @opentui/solid */
+import { createMemo } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import { StatusIndicator } from "./StatusIndicator"
+import { formatAge } from "./messageUtils"
 import type { WorkspaceEntry } from "./types"
+import type { MessageRecord } from "../../lib/messages"
 
 type Props = {
   entry: WorkspaceEntry
   focused: boolean
   selected: boolean
+  messages: MessageRecord[]
 }
 
 export function WorkspaceRow(props: Props) {
@@ -25,6 +30,23 @@ export function WorkspaceRow(props: Props) {
     return `${focus}[${sel}]`
   }
 
+  const dims = useTerminalDimensions()
+
+  const messagePreview = createMemo(() => {
+    const msgs = props.messages
+    if (!msgs || msgs.length === 0) return null
+    const msg = msgs[0]  // most recent (newest-first from listMessages)
+    const age = formatAge(msg.timestamp)
+    const senderPrefix = msg.from ? `${msg.from}: ` : ""
+    // Fixed columns: prefix(5) + space(1) + status(2) + space(1) + name(23) + space(1) + branch(33) + wt/tr(~14) = ~80
+    const fixedWidth = 80
+    const ageWidth = age.length + 2  // "  age" spacing
+    const available = Math.max(10, dims().width - fixedWidth - ageWidth)
+    const text = senderPrefix + msg.text
+    const truncated = text.length > available ? text.slice(0, available - 1) + "\u2026" : text
+    return { truncated, age }
+  })
+
   return (
     <box
       height={1}
@@ -38,7 +60,10 @@ export function WorkspaceRow(props: Props) {
       <text fg="gray">
         {` ${wtCount()}wt ${trCount()}tr`}
         {dirtyCount() > 0 ? ` ~${dirtyCount()}` : ""}
-        {`  ${ws().created}`}
+        {messagePreview() ? `  ${messagePreview()!.truncated}` : `  ${ws().created}`}
+      </text>
+      <text fg={messagePreview() ? "yellow" : "gray"}>
+        {messagePreview() ? `  ${messagePreview()!.age}` : ""}
       </text>
     </box>
   )

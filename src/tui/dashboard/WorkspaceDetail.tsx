@@ -1,9 +1,12 @@
 /** @jsxImportSource @opentui/solid */
-import { For, Show } from "solid-js"
+import { For, Show, createMemo } from "solid-js"
+import { formatAge, isStale } from "./messageUtils"
 import type { WorkspaceEntry } from "./types"
+import type { MessageRecord } from "../../lib/messages"
 
 type Props = {
   entry: WorkspaceEntry | undefined
+  messages: MessageRecord[]
 }
 
 export function WorkspaceDetail(props: Props) {
@@ -15,6 +18,13 @@ export function WorkspaceDetail(props: Props) {
       {(entry) => {
         const ws = () => entry().workspace
         const status = () => entry().status
+
+        const displayMessages = createMemo(() => {
+          const msgs = props.messages ?? []
+          return msgs.slice(0, 10)  // last 10, already newest-first
+        })
+        const totalCount = createMemo(() => (props.messages ?? []).length)
+
         return (
           <>
             <text fg="white">  Branch: {ws().branch}</text>
@@ -40,8 +50,31 @@ export function WorkspaceDetail(props: Props) {
               <text fg="red">  Error: {(status() as any).message}</text>
             </Show>
             <text>{""}</text>
-            <text fg="white">  Messages:</text>
-            <text fg="gray">  (no messages)</text>
+            <Show when={totalCount() > 0} fallback={
+              <>
+                <text fg="white">  Messages:</text>
+                <text fg="gray">  (no messages)</text>
+              </>
+            }>
+              <text fg="white">
+                {totalCount() > 10
+                  ? `  Messages (showing 10 of ${totalCount()}):`
+                  : `  Messages (${totalCount()}):`}
+              </text>
+              <For each={displayMessages()}>
+                {(msg) => {
+                  const stale = isStale(msg.timestamp)
+                  const age = formatAge(msg.timestamp)
+                  const senderLabel = msg.from ? `${msg.from}: ` : ""
+                  return (
+                    <box height={1} flexDirection="row">
+                      <text fg={stale ? "gray" : "white"}>    {senderLabel}{msg.text}</text>
+                      <text fg={stale ? "gray" : "yellow"}>  {age}</text>
+                    </box>
+                  )
+                }}
+              </For>
+            </Show>
           </>
         )
       }}
