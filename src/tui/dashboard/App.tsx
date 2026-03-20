@@ -549,6 +549,7 @@ export default function App() {
         <MessageOverlay
           workspaceName={messagesWorkspace()}
           messages={msgMap().get(messagesWorkspace()) ?? []}
+          tick={tick()}
           onClose={() => setMessagesOpen(false)}
           onClearSender={(sender) => clearSender(messagesWorkspace(), sender)}
         />

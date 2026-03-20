@@ -8,6 +8,7 @@ import type { MessageRecord } from "../../lib/messages"
 type Props = {
   workspaceName: string
   messages: MessageRecord[]
+  tick: number
   onClose: () => void
   onClearSender: (sender: string | undefined) => Promise<void>
 }
@@ -100,13 +101,13 @@ export function MessageOverlay(props: Props) {
             }
             // message line
             const msg = line.msg!
-            const stale = isStale(msg.timestamp)
-            const age = formatAge(msg.timestamp)
             const senderLabel = msg.from ? `${msg.from}: ` : ""
+            const stale = () => (void props.tick, isStale(msg.timestamp))
+            const age = () => (void props.tick, formatAge(msg.timestamp))
             return (
               <box height={1} flexDirection="row">
-                <text fg={stale ? "gray" : "white"}>      {senderLabel}{msg.text}</text>
-                <text fg={stale ? "gray" : "yellow"}>  {age}</text>
+                <text fg={stale() ? "gray" : "white"}>      {senderLabel}{msg.text}</text>
+                <text fg={stale() ? "gray" : "yellow"}>  {age()}</text>
               </box>
             )
           }}

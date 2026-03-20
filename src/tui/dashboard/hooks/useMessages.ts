@@ -51,8 +51,11 @@ export function useMessages() {
   // Start loading
   loadAll()
 
-  // Refresh relative times every 30 seconds
-  const tickTimer = setInterval(() => setTick(t => t + 1), 30_000)
+  // Every 30s: reload JSONL files (picks up new messages) and bump tick (refreshes ages)
+  const tickTimer = setInterval(() => {
+    loadAll()
+    setTick(t => t + 1)
+  }, 30_000)
 
   // Clear a sender's messages and refresh reactive state
   async function clearSender(workspaceName: string, sender: string | undefined) {
@@ -71,6 +74,7 @@ export function useMessages() {
 
   function reloadMessages() {
     loadAll()
+    setTick(t => t + 1)
   }
 
   return { msgMap, tick, clearSender, reloadMessages }

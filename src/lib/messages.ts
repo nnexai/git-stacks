@@ -11,7 +11,7 @@ export interface MessageRecord {
 }
 
 const SOCKET_PATH = "/tmp/git-stacks.sock"
-const IPC_TIMEOUT_MS = 50
+const IPC_TIMEOUT_MS = 500
 
 function messagePath(workspace: string): string {
   return join(MESSAGES_DIR, `${workspace}.jsonl`)

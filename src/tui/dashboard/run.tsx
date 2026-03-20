@@ -32,31 +32,10 @@ export function setIpcCallback(fn: ((record: MessageRecord) => void) | null) {
  * Returns null if binding was skipped (another TUI running) or failed.
  */
 async function openSocketServer(): Promise<UnixSocketListener<undefined> | null> {
+  // Always clean up stale socket files — previous process may have been killed
+  // without cleanup. For a single-user CLI tool, last-writer-wins is fine.
   if (existsSync(SOCKET_PATH)) {
-    const stale = await new Promise<boolean>((resolve) => {
-      Bun.connect({
-        unix: SOCKET_PATH,
-        socket: {
-          data() {},        // Required by Bun — no-op, we only care about open/error
-          open(s) {
-            s.end()
-            resolve(false)  // socket is alive — another TUI is running
-          },
-          connectError() {
-            resolve(true)   // ECONNREFUSED — socket file is stale
-          },
-          error() {
-            resolve(true)   // treat any error as stale
-          },
-        },
-      }).catch(() => resolve(true))
-    })
-    if (stale) {
-      unlinkSync(SOCKET_PATH)
-    } else {
-      // Another TUI instance is running — skip binding
-      return null
-    }
+    try { unlinkSync(SOCKET_PATH) } catch {}
   }
 
   try {
@@ -64,7 +43,6 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
       unix: SOCKET_PATH,
       socket: {
         data(_socket, data) {
-          // data is a Buffer — must call toString() before JSON.parse
           const line = data.toString().trim()
           if (!line) return
           try {
@@ -76,8 +54,6 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
         },
       },
     })
-    // Prevent the socket listener from pinning the event loop independently
-    // of the renderer (renderer's stdin already keeps the process alive).
     server.unref()
     return server
   } catch {
