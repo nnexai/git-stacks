@@ -2,14 +2,15 @@
 phase: 08-dashboard-tab-layout
 plan: 06
 subsystem: ui
-tags: [solid-js, opentui, tui, dashboard, tab-switching, height-visibility]
+tags: [solid-js, opentui, tui, dashboard, nested-text-fix, selection-scoping]
 
 # Dependency graph
 requires:
   - phase: 08-05
     provides: tab signal, per-tab cursor/filter/filtering state, memo accessors, existing Switch/Match structure
 provides:
-  - Height-based visibility for all tab content panels and help overlay in App.tsx
+  - Fix for nested <text> crash in TemplateList/RepoList (root cause of tab switching issues)
+  - Selection/batch keys scoped to workspaces tab only
   - Rename view reset to list after successful completion
 affects: [08-UAT, any future dashboard rendering work]
 
@@ -17,85 +18,69 @@ affects: [08-UAT, any future dashboard rendering work]
 tech-stack:
   added: []
   patterns:
-    - "Height-based visibility: render all branches permanently, toggle height between active value and 0 instead of using Switch/Match or Show conditional"
-    - "overflow=hidden on wrapper boxes ensures zero-height content does not bleed"
+    - "No nested <text> in OpenTUI: TextRenderable ≠ TextNodeRenderable — use sibling <text> in <box flexDirection=row>"
+    - "Match WorkspaceRow pattern: <box height={1} flexDirection=row backgroundColor={focused ? #333333 : undefined}>"
 
 key-files:
   created: []
   modified:
     - src/tui/dashboard/App.tsx
+    - src/tui/dashboard/TemplateList.tsx
+    - src/tui/dashboard/RepoList.tsx
 
 key-decisions:
-  - "Height-based visibility (height={tab() === X ? value : 0}) replaces Switch/Match for tab panels — OpenTUI terminal renderer does not repaint when SolidJS swaps conditional DOM branches"
-  - "Help overlay uses two always-rendered boxes with height toggled by helpOpen() instead of two Show blocks"
-  - "On rename error, stay on progress view (user sees error); on rename success, call setView({ view: list }) so detail pane shows clean state"
+  - "Root cause was nested <text> elements, NOT Switch/Match — TextRenderable.add() delegates to TextNodeRenderable.add() which rejects TextRenderable children"
+  - "Reverted to original Switch/Match (clean conditional rendering) — it works correctly when components don't crash"
+  - "TemplateList/RepoList rewritten to use <box flexDirection=row> with sibling <text> for multi-colored segments, matching WorkspaceRow"
+  - "Space/batch keys/BatchBar gated to workspaces tab — prevents cross-tab selection bleed"
+  - "On rename error, stay on progress view; on success, call setView({ view: list })"
 
 patterns-established:
-  - "Height-based tab panel pattern: three permanent boxes, each with height={tab() === X ? listHeight() : 0} overflow=hidden"
-  - "All tab list branches use memo accessors cursor()/filter()/filtering() — memos dereference through tab() automatically"
+  - "OpenTUI row pattern: <box height={1} flexDirection=row backgroundColor={focused ? #333333 : undefined}> with sibling <text fg=color> segments"
+  - "Never nest <text> inside <text> in OpenTUI — causes TextNodeRenderable crash"
 
 requirements-completed: [DASH-02, DASH-03, DASH-07]
 
 # Metrics
-duration: 6min
+duration: 45min
 completed: 2026-03-20
 ---
 
-# Phase 08 Plan 06: Height-Based Visibility for Tab Switching and Rename Fix Summary
+# Phase 08 Plan 06: Nested Text Fix, Selection Scoping, Rename Fix
 
-**Height-based visibility replaces Switch/Match in App.tsx so OpenTUI repaints tab content and help overlay correctly; rename now resets to clean list view on success**
+**Eliminated nested `<text>` elements (root cause of tab freeze), scoped selection to workspaces tab, fixed rename view reset**
 
 ## Performance
 
-- **Duration:** 6 min
-- **Started:** 2026-03-20T01:05:20Z
-- **Completed:** 2026-03-20T01:11:00Z
-- **Tasks:** 2
-- **Files modified:** 1
+- **Duration:** 45 min (including root cause investigation)
+- **Completed:** 2026-03-20
+- **Tasks:** 2 (original) + manual debugging and correction
+- **Files modified:** 3
 
 ## Accomplishments
 
-- Replaced all Switch/Match conditional rendering with permanent height-toggled boxes, fixing tab switch freeze (UAT tests 2, 3)
-- Help overlay and main content now use height-based toggle (helpOpen ? 100% : 0) instead of two Show blocks, fixing visual sticking
-- Workspace rename now calls setView({ view: "list" }) on success so the detail pane immediately shows clean workspace detail (fixes UAT test 8)
-- Error path on rename stays on progress view so the user sees the error message
+- Identified root cause: OpenTUI's `TextRenderable.add()` delegates to `TextNodeRenderable.add()` which only accepts `string | TextNodeRenderable | StyledText` — a nested `<text>` creates a `TextRenderable` (different class), causing crash
+- Rewrote TemplateList and RepoList to use `<box flexDirection="row">` with sibling `<text>` elements, matching WorkspaceRow pattern (colored segments, highlighted background)
+- Reverted App.tsx to original Switch/Match — conditional rendering works correctly when components don't crash
+- Gated Space key, batch operations (`c`/`r`), and BatchBar to workspaces tab only
+- Fixed rename: `setView({ view: "list" })` after successful rename; error stays on progress view
 
-## Task Commits
+## Files Modified
 
-Each task was committed atomically:
-
-1. **Task 1: Replace conditional rendering with height-based visibility** - `3596e60` (feat)
-2. **Task 2: Fix rename remnants — reset view to list after rename completes** - `1ab914d` (fix)
-
-**Plan metadata:** (docs commit — see below)
-
-## Files Created/Modified
-
-- `src/tui/dashboard/App.tsx` - Removed Switch/Match imports; replaced all Switch/Match blocks in list pane, detail pane, and action-menu pane with height-toggled boxes; replaced help overlay Show swap with height toggle; fixed rename completion path
+- `src/tui/dashboard/App.tsx` — Restored Switch/Match, scoped selection/batch to workspaces tab, kept rename fix
+- `src/tui/dashboard/TemplateList.tsx` — Flattened to row-box pattern with sibling text segments
+- `src/tui/dashboard/RepoList.tsx` — Flattened to row-box pattern with colored disk indicator
 
 ## Decisions Made
 
-- Height-based visibility chosen over Show conditionals for all tab content — OpenTUI's terminal renderer retains the previous buffer when SolidJS restructures the DOM tree via conditional rendering; height=0 keeps nodes mounted so no repaint is needed
-- All three list-pane branches now use the memo accessors `cursor()`, `filter()`, `filtering()` instead of direct per-tab signal getters — correct because the memos dereference through `tab()`
-- Rename error path intentionally kept on progress view (not reset to list) so the user can read the error message before pressing a key
+- The original plan's hypothesis (Switch/Match causes no-repaint) was wrong — the actual issue was nested `<text>` crashing before content could render
+- `visible` prop works (`yogaNode.setDisplay(Display.None)` + `requestRender()`) but is unnecessary when Switch/Match works
+- Show/Switch/Match all work fine for conditional rendering in OpenTUI as long as no nested `<text>` is involved
 
 ## Deviations from Plan
 
-None - plan executed exactly as written.
-
-## Issues Encountered
-
-None.
-
-## User Setup Required
-
-None - no external service configuration required.
-
-## Next Phase Readiness
-
-- Tab switching, help overlay, and rename are now fixed
-- UAT tests 2, 3, and 8 should now pass
-- Previously skipped UAT tests 6, 7, 9, 10, 11 can be re-evaluated now that rendering is correct
+- Plan prescribed height-based visibility approach — this was incorrect. Reverted to original Switch/Match after identifying the real root cause (nested `<text>` crash)
+- Added selection scoping fix (not in original plan) — discovered during testing
 
 ---
 *Phase: 08-dashboard-tab-layout*

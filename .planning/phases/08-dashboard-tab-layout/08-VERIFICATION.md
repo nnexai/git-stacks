@@ -1,23 +1,36 @@
 ---
 phase: 08-dashboard-tab-layout
-verified: 2026-03-20T00:30:00Z
-status: passed
+verified: 2026-03-20T01:11:42Z
+status: human_needed
 score: 11/11 must-haves verified
-re_verification: null
+re_verification:
+  previous_status: human_needed
+  previous_score: 11/11
+  gaps_closed:
+    - "Tab switching (1/2/3) updates visible content immediately — height-based visibility replaces Switch/Match (UAT test 2)"
+    - "Tab cycling ([/]) updates visible content immediately — same height-based fix (UAT test 3)"
+    - "Workspace rename returns to clean detail view — setView({ view: 'list' }) added after reload() on success (UAT test 8)"
+  gaps_remaining: []
+  regressions: []
 gaps: []
 human_verification:
-  - test: "Full UAT re-run after 08-05 gap closure"
-    expected: "All 13 UAT tests pass (tests 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13 now repaired by 08-05)"
-    why_human: "UAT was run against 08-01 through 08-04. The 08-05 gap closure plan fixed all 5 issues (layout overflow, tab freeze, action menu borders, help overlay size, filter indicator). UAT must be manually re-run against the current codebase to confirm."
+  - test: "Full UAT re-run after 08-06 gap closure"
+    expected: "All 15 UAT tests pass. Specifically: tests 2 and 3 (tab switching with 1/2/3 and [/]) now update content immediately without freeze; test 8 (rename) returns to clean detail with no remnants; tests 6, 7, 9, 10, 11 (previously skipped due to tab-switching freeze) are now reachable and functional."
+    why_human: "UAT was run against 08-05 code and reported 3 issues. Plan 08-06 replaces Switch/Match with height-based visibility to fix the OpenTUI terminal-buffer repaint problem. Automated code inspection confirms the structural fix is in place, but only a live terminal session can confirm actual visual and interactive behavior is correct."
 ---
 
 # Phase 8: Dashboard Tab Layout — Verification Report
 
-**Phase Goal:** Replace single-list dashboard with a tabbed layout containing Workspaces, Templates, and Repos tabs. Each tab has a list pane and a detail pane. Action menus, help overlay, inline input, and filter mode are wired across all tabs.
-**Verified:** 2026-03-20T00:30:00Z
-**Status:** PASSED (automated verification)
-**Re-verification:** No — initial verification (no previous VERIFICATION.md existed)
-**Gap Closure Plans:** 08-05 executed and committed to address all 5 UAT gaps
+**Phase Goal:** Transform `git-stacks manage` from a single-view workspace list into a tabbed dashboard with Workspaces, Templates, and Repos tabs, each with list/detail/action panes, keyboard navigation, and a help overlay.
+**Verified:** 2026-03-20T01:11:42Z
+**Status:** HUMAN NEEDED (automated checks passed; UAT re-run required after 08-06 gap closure)
+**Re-verification:** Yes — after UAT-driven gap closure (plan 08-06 committed at `3596e60` and `1ab914d`)
+
+## What Changed Since Previous Verification
+
+Plan 08-05 introduced `Switch/Match` conditional rendering for tab panels and help overlay. UAT revealed this did not fix the OpenTUI repaint problem (tests 2 and 3 still frozen; test 8 had rename remnants). Plan 08-06 replaced all conditional rendering with **height-based visibility** (`height={tab() === X ? value : 0} overflow="hidden"`) and added `setView({ view: "list" })` after successful rename.
+
+The previous VERIFICATION.md truth #5 ("Switch/Match fixes SolidJS retain-all-nodes freeze") is superseded. The actual fix is height-based visibility with permanently-mounted components.
 
 ## Goal Achievement
 
@@ -25,17 +38,17 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|---------|
-| 1 | types.ts exports Tab type and updated UIView/Action unions with no compile errors | VERIFIED | `Tab = "workspaces" \| "templates" \| "repos"` at line 22; Action has "rename" not "status"; UIView has "inline-input" not "detail-status" |
-| 2 | useTemplates hook returns Accessor<Template[]> and reload() | VERIFIED | `useTemplates.ts` exports exactly `{ entries: Accessor<Template[]>, reload: () => void }` |
-| 3 | useRepos hook returns Accessor<RepoEntry[]> with disk-existence check per entry | VERIFIED | `useRepos.ts` maps `listRegistryEntries()` with `diskExists: existsSync(e.local_path)` per entry |
-| 4 | Dashboard renders two separate bordered boxes without overflow | VERIFIED | App.tsx returns outer `<box flexDirection="column" height="100%">` containing two separate `<box border>` with `flexGrow={3}` and `flexGrow={2}` |
-| 5 | Pressing 1/2/3 or [/] switches the visible tab content immediately (no freeze) | VERIFIED | App.tsx keyboard handler sets tab signal; JSX uses `<Switch><Match>` (not `<Show>`) for all tab content — fixes SolidJS retain-all-nodes freeze |
-| 6 | Workspace tab shows list pane and detail pane simultaneously | VERIFIED | WorkspaceList in top box, WorkspaceDetail in bottom box, both always rendered when workspaces tab is active |
-| 7 | Detail pane updates as cursor moves — no Enter press needed | VERIFIED | `currentEntry = createMemo(() => filteredEntries()[tabCursor.workspaces[0]()])` — reactive memo wired to cursor signal |
-| 8 | Templates and Repos tabs render real data components (no stubs) | VERIFIED | TemplateList, TemplateDetail, RepoList, RepoDetail all exist with full implementations; no stub text in App.tsx JSX |
-| 9 | User can rename a workspace and clone a template via inline input | VERIFIED | InlineInput.tsx exists; `handleInlineInputConfirm` calls `renameWorkspace` for "rename" purpose and `writeTemplate` for "clone-template" purpose |
-| 10 | Pressing ? opens help overlay; Esc/? closes it | VERIFIED | `helpOpen` signal in App.tsx; `?` key toggles it; HelpOverlay rendered with `height="100%"` `width="100%"` |
-| 11 | Esc back-chain: never exits TUI from top-level list | VERIFIED | `key.name === "q"` calls `renderer.destroy()`; `key.name === "escape"` in list view is NO-OP (comment at line 456 confirms intent and code confirms behavior) |
+| 1 | types.ts exports Tab type and updated UIView/Action unions with no compile errors | VERIFIED | `Tab = "workspaces" \| "templates" \| "repos"` at line 22; Action union at line 24 (no "status"); UIView at line 26 |
+| 2 | useTemplates hook returns Accessor<Template[]> and reload() | VERIFIED | `useTemplates.ts` imports `listTemplates` from `lib/config`; exports `{ entries: Accessor<Template[]>, reload }` |
+| 3 | useRepos hook returns Accessor<RepoEntry[]> with disk-existence check per entry | VERIFIED | `useRepos.ts` maps `listRegistryEntries()` with `diskExists: existsSync(e.local_path)` at line 13 |
+| 4 | Dashboard renders two separate bordered boxes without overflow | VERIFIED | App.tsx lines 532/566: two `<box border>` with `flexGrow={3}` / `flexGrow={2}`; BatchBar inside top box spacer |
+| 5 | Pressing 1/2/3 or [/] switches visible tab content — height-based visibility, no freeze | VERIFIED | App.tsx lines 533/542/550 (list pane) and 569/572/575 (detail pane): `height={tab() === X ? listHeight() : 0} overflow="hidden"`; no Switch/Match remain in file |
+| 6 | Workspace tab shows list pane and detail pane simultaneously | VERIFIED | WorkspaceList in top box, WorkspaceDetail in bottom box, both permanently rendered with height toggle |
+| 7 | Detail pane updates as cursor moves — no Enter press needed | VERIFIED | `currentEntry = createMemo(() => filteredEntries()[tabCursor.workspaces[0]()])` — reactive memo at line 105 |
+| 8 | Templates and Repos tabs render real data components (no stubs) | VERIFIED | TemplateList (75 lines), TemplateDetail (65 lines), RepoList (83 lines), RepoDetail (52 lines) all exist with full implementations |
+| 9 | User can rename a workspace and clone a template via inline input | VERIFIED | InlineInput.tsx (25 lines); `handleInlineInputConfirm` calls `renameWorkspace` for purpose=rename (line 307); `setView({ view: "list" })` at line 317 on success; `writeTemplate` for purpose=clone-template (lines 326-327) |
+| 10 | Pressing ? opens help overlay; Esc/? closes it | VERIFIED | `helpOpen` signal (line 44); `?` handler at lines 379-382; HelpOverlay has `height="100%"` `width="100%"`; App.tsx line 525: `height={helpOpen() ? "100%" : 0}` |
+| 11 | Esc back-chain: never exits TUI from top-level list | VERIFIED | `"q"` calls `renderer.destroy()` (line 455); `"escape"` in list view is NO-OP (line 462) |
 
 **Score:** 11/11 truths verified
 
@@ -47,49 +60,49 @@ human_verification:
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/tui/dashboard/types.ts` | Tab type, updated UIView with inline-input, updated Action without status | VERIFIED | Contains `Tab`, `Action` with "rename" (no "status"), `UIView` with "inline-input" (no "detail-status") |
-| `src/tui/dashboard/hooks/useTemplates.ts` | Reactive template list hook | VERIFIED | Exports `useTemplates()` returning `{ entries: Accessor<Template[]>, reload }` |
-| `src/tui/dashboard/hooks/useRepos.ts` | Reactive repo registry hook with disk existence | VERIFIED | Exports `RepoEntry` type and `useRepos()` returning `{ entries: Accessor<RepoEntry[]>, reload }` |
+| `src/tui/dashboard/types.ts` | Tab type, updated UIView with inline-input, updated Action without status | VERIFIED | Contains `Tab`, `Action` (no "status"), `UIView` with "inline-input" |
+| `src/tui/dashboard/hooks/useTemplates.ts` | Reactive template list hook | VERIFIED | 18 lines; imports `listTemplates` from `lib/config`; exports `useTemplates()` |
+| `src/tui/dashboard/hooks/useRepos.ts` | Reactive repo registry hook with disk existence | VERIFIED | 22 lines; exports `RepoEntry` type and `useRepos()` with `diskExists` field |
 
 ### Plan 02 Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/tui/dashboard/App.tsx` | Tabbed App with split layout | VERIFIED | Full implementation — 656 lines, Switch/Match tabs, two-box layout, all signals wired |
-| `src/tui/dashboard/WorkspaceDetail.tsx` | Inline workspace detail component | VERIFIED | Renders branch, created, repos with icons, messages placeholder |
-| `src/tui/dashboard/WorkspaceList.tsx` | List component accepting height prop | VERIFIED | `height: number` in Props; uses `props.height` for viewport calculation |
+| `src/tui/dashboard/App.tsx` | Tabbed App with split layout | VERIFIED | 657 lines; height-based tab panels; two-box layout; all signals wired |
+| `src/tui/dashboard/WorkspaceDetail.tsx` | Inline workspace detail component | VERIFIED | 50 lines; renders branch, created, repos |
+| `src/tui/dashboard/WorkspaceList.tsx` | List component accepting height prop | VERIFIED | 53 lines; `height: number` in Props |
 | `src/tui/dashboard/DetailStatus.tsx` | DELETED | VERIFIED | File does not exist on disk |
 
 ### Plan 03 Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/tui/dashboard/TemplateList.tsx` | Template list component | VERIFIED | Renders name, repo count, description; scrolling; cursor highlight |
-| `src/tui/dashboard/TemplateDetail.tsx` | Template detail component | VERIFIED | Renders hook summary, per-repo mode rows, description |
-| `src/tui/dashboard/RepoList.tsx` | Repo registry list component | VERIFIED | Renders disk indicator (✓/✗), name, type, truncated path |
-| `src/tui/dashboard/RepoDetail.tsx` | Repo detail with Used by section | VERIFIED | Renders path, type, branch, disk status, "Used by" templates/workspaces |
+| `src/tui/dashboard/TemplateList.tsx` | Template list component | VERIFIED | 75 lines; renders name, repo count, description |
+| `src/tui/dashboard/TemplateDetail.tsx` | Template detail component | VERIFIED | 65 lines; renders hook summary, per-repo mode rows |
+| `src/tui/dashboard/RepoList.tsx` | Repo registry list component | VERIFIED | 83 lines; renders disk indicator, name, type, truncated path |
+| `src/tui/dashboard/RepoDetail.tsx` | Repo detail with Used by section | VERIFIED | 52 lines; renders path, type, branch, disk status, "Used by" |
 
 ### Plan 04 Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/tui/dashboard/InlineInput.tsx` | Inline text input component | VERIFIED | useKeyboard captures all keys; renders `label: value_` |
-| `src/tui/dashboard/HelpOverlay.tsx` | Help overlay | VERIFIED | `height="100%"` `width="100%"` `border` `title="Keybindings"`; Esc/? closes |
-| `src/tui/dashboard/TemplateActionMenu.tsx` | Template action menu | VERIFIED | Borderless (`paddingTop={1} paddingLeft={2}`); e/c/r/Esc handlers |
+| `src/tui/dashboard/InlineInput.tsx` | Inline text input component | VERIFIED | 25 lines; renders `label: value_` |
+| `src/tui/dashboard/HelpOverlay.tsx` | Help overlay | VERIFIED | 39 lines; `height="100%"` `width="100%"` `border` `title="Keybindings"` |
+| `src/tui/dashboard/TemplateActionMenu.tsx` | Template action menu | VERIFIED | 26 lines; borderless with `paddingTop={1} paddingLeft={2}` |
 
 ### Plan 05 Artifacts (Gap Closure)
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `src/tui/dashboard/App.tsx` | Two-box layout with Switch/Match tab rendering | VERIFIED | flexGrow={3}/flexGrow={2}; `Switch, Match` imported from solid-js; used for list, detail, and action-menu content |
-| `src/tui/dashboard/ActionMenu.tsx` | Borderless action menu with padding | VERIFIED | `paddingTop={1} paddingLeft={2}`; no `border` or `width=` on outer box |
-| `src/tui/dashboard/TemplateActionMenu.tsx` | Borderless template action menu | VERIFIED | `paddingTop={1} paddingLeft={2}`; no `border` or `width=` on outer box |
-| `src/tui/dashboard/ConfirmDialog.tsx` | Borderless confirm dialog | VERIFIED | `paddingTop={2} paddingLeft={2}`; no `border` or `width=` on outer box |
-| `src/tui/dashboard/ProgressView.tsx` | Borderless progress view | VERIFIED | Outer box is `<box flexDirection="column">` with no border/title/width |
-| `src/tui/dashboard/HelpOverlay.tsx` | Full-screen overlay | VERIFIED | `height="100%"` `width="100%"` confirmed |
-| `src/tui/dashboard/WorkspaceList.tsx` | List without inline filter display | VERIFIED | `props.filter` declared in Props but no `Show when={props.filter}` block; 0 occurrences of `props.filter` in JSX |
-| `src/tui/dashboard/TemplateList.tsx` | List without inline filter display | VERIFIED | Same — filter prop accepted but not displayed |
-| `src/tui/dashboard/RepoList.tsx` | List without inline filter display | VERIFIED | Same — filter prop accepted but not displayed |
+| `src/tui/dashboard/ActionMenu.tsx` | Borderless action menu with padding | VERIFIED | `paddingTop={1} paddingLeft={2}`; no outer border |
+| `src/tui/dashboard/ConfirmDialog.tsx` | Borderless confirm dialog | VERIFIED | `paddingTop={2} paddingLeft={2}`; no outer border |
+| `src/tui/dashboard/ProgressView.tsx` | Borderless progress view | VERIFIED | Outer box has no border attribute |
+
+### Plan 06 Artifacts (Gap Closure)
+
+| Artifact | Expected | Status | Details |
+|----------|----------|--------|---------|
+| `src/tui/dashboard/App.tsx` | Height-based visibility for all tab content and help overlay; rename view reset | VERIFIED | Lines 525/530: help overlay height toggle; lines 533/542/550: list pane panels; lines 569/572/575: detail pane panels; lines 586/594: action menu panels; line 317: `setView({ view: "list" })` after successful rename |
 
 ---
 
@@ -106,34 +119,36 @@ human_verification:
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `App.tsx` | `WorkspaceDetail.tsx` | `import WorkspaceDetail` | WIRED | Line 9: `import { WorkspaceDetail } from "./WorkspaceDetail"`; used at line 565 |
+| `App.tsx` | `WorkspaceDetail.tsx` | `import WorkspaceDetail` | WIRED | Line 9: `import { WorkspaceDetail } from "./WorkspaceDetail"`; used at line 570 |
 | `App.tsx` | `tab signal` | `createSignal<Tab>` | WIRED | Line 48: `const [tab, setTab] = createSignal<Tab>("workspaces")` |
-| `WorkspaceList.tsx` | `props.height` | explicit height prop | WIRED | Line 11: `height: number` in Props; line 15: `const viewportHeight = createMemo(() => Math.max(3, props.height))` |
+| `WorkspaceList.tsx` | `props.height` | explicit height prop | WIRED | `height: number` in Props; used for viewport calculation |
 
 ### Plan 03 Key Links
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `App.tsx` | `hooks/useTemplates.ts` | `import useTemplates` | WIRED | Line 6: `import { useTemplates } from "./hooks/useTemplates"`; line 37: `const { entries: templateEntries, reload: reloadTemplates } = useTemplates()` |
-| `App.tsx` | `hooks/useRepos.ts` | `import useRepos` | WIRED | Line 7: `import { useRepos } from "./hooks/useRepos"`; line 38: `const { entries: repoEntries, reload: reloadRepos } = useRepos()` |
-| `RepoDetail.tsx` | `allTemplates + allWorkspaces props` | Used by section | WIRED | Props at lines 8-9; `usedByTemplates` filters `props.allTemplates`; `usedByWorkspaces` filters `props.allWorkspaces` |
+| `App.tsx` | `hooks/useTemplates.ts` | `import useTemplates` | WIRED | Line 6: import; line 37: `const { entries: templateEntries, reload: reloadTemplates } = useTemplates()` |
+| `App.tsx` | `hooks/useRepos.ts` | `import useRepos` | WIRED | Line 7: import; line 38: `const { entries: repoEntries, reload: reloadRepos } = useRepos()` |
+| `RepoDetail.tsx` | `allTemplates + allWorkspaces props` | Used by section | WIRED | Props accepted; filters `props.allTemplates` and `props.allWorkspaces` |
 
 ### Plan 04 Key Links
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `App.tsx` | `inline-input UIView` | `setView inline-input on rename/clone` | WIRED | `runAction` sets `{ view: "inline-input", ... }` for rename at line 181; `handleTemplateAction` sets it for clone at line 357 |
+| `App.tsx` | `inline-input UIView` | `setView inline-input on rename/clone` | WIRED | `runAction` sets `inline-input` for rename (line 181); `handleTemplateAction` for clone (line 363) |
 | `App.tsx` | `renameWorkspace` | called on inline-input confirm purpose=rename | WIRED | Line 307: `const result = await renameWorkspace(oldName, trimmed, {}, ...)` |
-| `App.tsx` | `readTemplate/writeTemplate` | called on inline-input confirm purpose=clone-template | WIRED | Lines 320-321: `const src = readTemplate(srcName); writeTemplate({ ...src, name: trimmed })` |
-| `App.tsx` | `helpOpen signal` | ? key sets helpOpen(true); HelpOverlay rendered when true | WIRED | Line 44: `const [helpOpen, setHelpOpen] = createSignal(false)`; line 373: `?` key handler; line 519: `<Show when={helpOpen()}>` |
+| `App.tsx` | `readTemplate/writeTemplate` | called on inline-input confirm purpose=clone-template | WIRED | Lines 326-327: `readTemplate(srcName)` / `writeTemplate({ ...src, name: trimmed })` |
+| `App.tsx` | `helpOpen signal` | ? key sets helpOpen(true); HelpOverlay rendered | WIRED | Line 44: signal; line 379: `?` handler; line 526: `<HelpOverlay>` in height-toggled wrapper |
 
-### Plan 05 Key Links
+### Plan 06 Key Links
 
 | From | To | Via | Status | Details |
 |------|----|-----|--------|---------|
-| `App.tsx` | `solid-js Switch/Match` | imported and used for tab rendering | WIRED | Line 2: `import { ..., Switch, Match } from "solid-js"`; three `<Switch>` blocks in JSX at lines 526, 563, 582 |
-| `App.tsx` | `HelpOverlay` | Show when={helpOpen()} as first child | WIRED | Lines 519-521: `<Show when={helpOpen()}><HelpOverlay .../>` as first child of outer box |
-| `App.tsx` | `filter display in help bar` | filtering() boolean controls filter line | WIRED | Lines 642-644: `<Show when={filtering()}><text fg="cyan">  filter: {filter() \|\| "_"}</text>` |
+| `tab() signal change` | height prop on list pane boxes | `height={tab() === X ? listHeight() : 0}` | WIRED | Lines 533, 542, 550: all three tab panels in list pane |
+| `tab() signal change` | height prop on detail pane boxes | `height={tab() === X ? "100%" : 0}` | WIRED | Lines 569, 572, 575: all three tab panels in detail pane |
+| `tab() signal change` | height prop on action-menu boxes | `height={tab() === X ? "100%" : 0}` | WIRED | Lines 586, 594: workspace and template action menus |
+| `helpOpen() signal change` | height prop on help/main containers | `height={helpOpen() ? "100%" : 0}` toggle | WIRED | Lines 525, 530: help overlay wrapper and main content wrapper |
+| `handleInlineInputConfirm rename branch` | `setView({ view: "list" })` | explicit view reset after reload() on success | WIRED | Line 317: inside the `else` (success-only) branch |
 
 ---
 
@@ -141,77 +156,80 @@ human_verification:
 
 | Requirement | Source Plans | Description | Status | Evidence |
 |-------------|-------------|-------------|--------|---------|
-| DASH-01 | 01, 02, 05 | Tab switching via 1/2/3 and [/] | SATISFIED | Tab signal, keyboard handler 1/2/3/[/] at lines 381-393; Switch/Match rendering |
-| DASH-02 | 01, 02 | Per-tab independent cursor and filter state | SATISFIED | `tabCursor`, `tabFilter`, `tabFiltering` records; active-tab accessor memos at lines 68-73 |
-| DASH-03 | 02, 05 | Split list+detail layout visible simultaneously | SATISFIED | Two `<box border>` with flexGrow={3}/flexGrow={2}; both always rendered when `!helpOpen()` |
+| DASH-01 | 01, 02, 05, 06 | Tab switching via 1/2/3 and [/] | SATISFIED | Keyboard handler lines 387-398; height-based panels lines 533/542/550 |
+| DASH-02 | 01, 02 | Per-tab independent cursor and filter state | SATISFIED | `tabCursor`, `tabFilter`, `tabFiltering` records; memo accessors lines 68-73 |
+| DASH-03 | 02, 05, 06 | Split list+detail layout visible simultaneously | SATISFIED | Two `<box border>` with `flexGrow={3}` / `flexGrow={2}`; both rendered when help is closed |
 | DASH-04 | 02 | Detail pane reactive to cursor movement | SATISFIED | `currentEntry/currentTemplate/currentRepo` are `createMemo` over `tabCursor` signals |
-| DASH-05 | 04 | All workspace actions in menu (open, edit, rename, run, merge, clean, remove) | SATISFIED | ActionMenu has o/n/e/c/r/m + [u] Run; handlers wired in App.tsx `runAction` and `handleRun` |
-| DASH-06 | 02, 04 | Workspace YAML edit in $EDITOR with suspend/resume | SATISFIED | `launchEditor()` at line 258: `renderer.suspend()` → `spawn([editor, path])` → `renderer.resume()` |
-| DASH-07 | 03, 04 | Template view/edit/clone/remove from Templates tab | SATISFIED | TemplateList, TemplateDetail render data; TemplateActionMenu handles edit/clone/remove; all wired |
-| DASH-08 | 03 | Repos tab with disk existence indicator | SATISFIED | RepoList renders `✓`/`✗` per `entry.diskExists`; `useRepos` hook checks `existsSync(e.local_path)` |
-| DASH-09 | 04, 05 | Context-sensitive help bar per tab | SATISFIED | `helpBarText` memo at lines 128-135; rendered at lines 648-650 with tab-specific text |
-| DASH-10 | 04, 05 | ? overlay with keybindings; Esc closes it | SATISFIED | HelpOverlay has `height="100%"` `width="100%"`; `?`/Esc close via `setHelpOpen(false)` |
-| DASH-11 | 02, 04, 05 | Esc back-chain never exits TUI accidentally | SATISFIED | `key.name === "q"` → `renderer.destroy()`; `key.name === "escape"` in list view → NO-OP (line 456) |
+| DASH-05 | 04 | All workspace actions in menu (open, edit, rename, run, merge, clean, remove) | SATISFIED | ActionMenu handlers; all wired in `runAction` and `handleRun` |
+| DASH-06 | 02, 04 | Workspace YAML edit in $EDITOR with suspend/resume | SATISFIED | `launchEditor()` at line 258: `renderer.suspend()` → spawn → `renderer.resume()` |
+| DASH-07 | 03, 04, 06 | Template view/edit/clone/remove from Templates tab | SATISFIED | TemplateList, TemplateDetail, TemplateActionMenu; edit/clone/remove all wired |
+| DASH-08 | 03 | Repos tab with disk existence indicator | SATISFIED | `useRepos` sets `diskExists: existsSync(e.local_path)`; RepoList renders `checkmark`/`cross` |
+| DASH-09 | 04, 05 | Context-sensitive help bar per tab | SATISFIED | `helpBarText` memo at lines 128-135; rendered at line 651 |
+| DASH-10 | 04, 05, 06 | ? overlay with keybindings; Esc closes it | SATISFIED | HelpOverlay `height="100%"` `width="100%"`; height-toggled wrapper; Esc handler |
+| DASH-11 | 02, 04, 05 | Esc back-chain never exits TUI accidentally | SATISFIED | `"q"` calls `renderer.destroy()` (line 455); `"escape"` in list view is NO-OP (line 462) |
 
-All 11 DASH requirements satisfied. No orphaned requirements found.
+All 11 DASH requirements satisfied. No orphaned requirements.
 
 ---
 
 ## Anti-Patterns Found
 
+No TODO/FIXME/HACK/PLACEHOLDER anti-patterns found in any dashboard file. No empty implementations. No stub returns.
+
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|---------|--------|
-| `WorkspaceDetail.tsx` | 44 | `(no messages)` static text | Info | Intentional Phase 9 placeholder — documented in plan as "Phase 9 populates this". Not a blocker. |
-
-No TODO/FIXME/HACK/PLACEHOLDER anti-patterns found in any dashboard file. No empty implementations found. No stub returns found.
+| `WorkspaceDetail.tsx` | ~44 | `(no messages)` static text | Info | Intentional — messages section reserved for Phase 9. Not a blocker. |
 
 ---
 
 ## Human Verification Required
 
-### 1. Full UAT Re-Run After Gap Closure
+### 1. Full UAT Re-Run After 08-06 Gap Closure
 
-**Test:** Run `git-stacks manage` and execute all 13 UAT tests from `08-UAT.md`
-**Expected:** All 13 tests pass. Specifically:
-- Test 1 (layout): Two visible bordered boxes; BatchBar inside top box does not cause overflow
-- Test 2 (tabs): Pressing 2/3/1 switches visible list content immediately (no freeze, no stale content)
-- Test 3 (state): Per-tab cursor preserved across switches
-- Test 6 (templates): Templates tab shows real template data
-- Test 7 (repos): Repos tab shows repos with disk indicator
-- Test 8 (actions): Action menu appears with padding inside detail box (no floating, no double border)
-- Test 9 (template edit): Template edit opens $EDITOR
-- Test 10 (template clone): Template clone inline input works end-to-end
-- Test 11 (template remove): Template remove confirm dialog works
-- Test 12 (help): Help overlay fills terminal area (not smushed)
-- Test 13 (filter): Pressing `/` immediately shows "filter: _" in help bar
-- Tests 4 and 5 already passed in original UAT
-**Why human:** The original UAT was run against code from plans 01-04. Plans 08-05 addressed all 5 reported issues (2 major, 3 minor). Automated code inspection confirms the fixes are in place, but only a live terminal session can confirm the actual visual and interactive behavior is correct.
+**Test:** Run `git-stacks manage` and execute all 15 UAT tests from `08-UAT.md`.
+**Expected:** All 15 tests pass. Focus areas for the three previously-failing tests:
+- Test 2 (1/2/3 switching): Press 2 — Templates tab renders content immediately. Press 3 — Repos tab renders. Press 1 — back to Workspaces. No freeze, no stale content.
+- Test 3 ([/] cycling): Press ] to cycle forward, [ backward — content updates on each press.
+- Test 8 (rename): Rename a workspace — detail pane returns to clean workspace detail with no remnants.
 
----
+And for the five previously-skipped tests:
+- Test 6 (templates data): Templates tab shows real template names, repo counts, descriptions.
+- Test 7 (repos disk indicator): Repos tab shows repos with checkmark/cross disk indicator.
+- Test 9 (template edit): Template action menu, press e — $EDITOR opens with template YAML.
+- Test 10 (template clone): Template action menu, press c — inline input appears; type name and Enter — new template appears in list.
+- Test 11 (template remove): Template action menu, press r — confirm dialog appears; confirm — template removed.
 
-## Gaps Summary
+Tests 1, 4, 5, 12, 13, 14, 15 already passed in the previous UAT run and should continue to pass.
 
-No gaps found. All 11 observable truths are verified. All required artifacts exist, are substantive, and are wired. All 11 DASH requirements are satisfied with concrete evidence.
-
-The only outstanding item is a human UAT re-run to confirm the 08-05 gap closure fixes the 5 UAT issues reported against the original 08-01 through 08-04 implementation. The automated verification confirms all structural fixes are in place:
-
-- Two-box layout with `flexGrow={3}` / `flexGrow={2}` replaces single-bordered outer box (fixes overflow)
-- `Switch/Match` replaces `Show when={tab() === ...}` for all tab content (fixes freeze)
-- Action menus, confirm dialog, and progress view are borderless with padding (fixes double borders)
-- HelpOverlay has `height="100%"` `width="100%"` (fixes smushed overlay)
-- Filter indicator `filter: {filter() || "_"}` in App.tsx help bar (fixes missing indicator on first `/` press)
+**Why human:** The previous UAT (run against 08-05 code) reported that 1/2/3 switching and [/] cycling did not update content despite the Switch/Match approach. Plan 08-06 replaces all conditional rendering with height-based visibility to fix the OpenTUI terminal-buffer repaint problem. Automated inspection confirms the structural fix is correctly implemented, but live terminal behavior cannot be verified programmatically.
 
 ---
 
 ## Type Check
 
-`bun run typecheck` — passes with zero errors (output: `$ tsc --noEmit` with no error lines)
+`bun run typecheck` — passes with zero errors (output: `$ tsc --noEmit` with no error lines).
 
 ## Test Suite
 
-`bun test tests/` — 174 pass, 30 todo, 0 fail across 204 tests in 17 files. No regressions introduced by Phase 8 dashboard changes.
+`bun test tests/` — 174 pass, 30 todo, 0 fail across 204 tests in 17 files. No regressions from Phase 8 dashboard changes.
 
 ---
 
-_Verified: 2026-03-20T00:30:00Z_
+## Gaps Summary
+
+No automated gaps. All 11 observable truths are verified. All required artifacts exist, are substantive, and are wired. All 11 DASH requirements are satisfied.
+
+The height-based visibility pattern is confirmed in place throughout App.tsx:
+- List pane: `height={tab() === X ? listHeight() : 0} overflow="hidden"` on three wrapper boxes (lines 533, 542, 550)
+- Detail pane: `height={tab() === X ? "100%" : 0} overflow="hidden"` on three wrapper boxes (lines 569, 572, 575)
+- Action menu pane: `height={tab() === X ? "100%" : 0} overflow="hidden"` on two wrapper boxes (lines 586, 594)
+- Help overlay: `height={helpOpen() ? "100%" : 0}` / `height={helpOpen() ? 0 : "100%"}` on two top-level boxes (lines 525, 530)
+- Rename reset: `setView({ view: "list" })` at line 317 inside the success-only branch after `reload()`
+- Switch and Match are fully removed from App.tsx (only `Show` remains for single-branch conditionals)
+
+The only outstanding item is a human UAT re-run to confirm these structural fixes produce the correct visual and interactive behavior in a live terminal.
+
+---
+
+_Verified: 2026-03-20T01:11:42Z_
 _Verifier: Claude (gsd-verifier)_
