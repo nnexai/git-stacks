@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-stopped_at: Completed 08-06-PLAN.md
-last_updated: "2026-03-20T01:59:45.547Z"
+status: executing
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-20T02:52:36.000Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 13
+  completed_plans: 11
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 08 — dashboard-tab-layout
+**Current focus:** Phase 09 — ipc-push-message-display
 
 ## Current Position
 
-Phase: 08 (dashboard-tab-layout) — EXECUTING
-Plan: 1 of 6
+Phase: 09 (ipc-push-message-display) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -44,6 +44,7 @@ Plan: 1 of 6
 | Phase 07-shell-completion-overhaul P01 | 3 | 2 tasks | 2 files |
 | Phase 08 P05 | 2 | 2 tasks | 9 files |
 | Phase 08 P06 | 6 | 2 tasks | 1 files |
+| Phase 09 P01 | 2min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Child dashboard components (ActionMenu, ConfirmDialog, ProgressView) are borderless — parent detail box provides border context, avoiding double borders
 - [Phase 08]: Height-based visibility (height={tab() === X ? value : 0}) replaces Switch/Match — OpenTUI terminal renderer does not repaint when SolidJS swaps conditional DOM branches
 - [Phase 08]: On rename error, stay on progress view; on success call setView({ view: list }) so detail pane shows clean state immediately
+- [Phase 09]: useMessages creates new Map on every IPC push (not mutate-in-place) — SolidJS identity check requires object reference change to trigger reactivity
+- [Phase 09]: setIpcCallback setter in run.tsx (not direct onIpcMessage mutation) — cleaner API; hook calls once during init, onCleanup sets null to prevent stale closures
 
 ### Research Flags (from research/SUMMARY.md)
 
@@ -82,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T01:08:10.581Z
-Stopped at: Completed 08-06-PLAN.md
+Last session: 2026-03-20T02:52:36.000Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None

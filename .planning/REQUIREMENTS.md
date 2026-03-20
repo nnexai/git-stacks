@@ -32,8 +32,8 @@
 - [ ] **MSG-08**: `git-stacks message send` exits 0 when the TUI is not running (IPC push silently dropped; file write still succeeds)
 - [ ] **MSG-09**: When the TUI is running, `git-stacks message send` delivers the notification in real-time via Unix socket without requiring a manual `R` refresh
 - [ ] **MSG-10**: TUI opens a Unix socket on startup and removes the socket file on clean exit; stale socket from a previous crash is detected and replaced at startup
-- [ ] **MSG-11**: Workspaces tab list row shows a notification indicator per workspace that has active messages: most recent sender (if set), truncated text, and relative age (e.g., "2m ago")
-- [ ] **MSG-12**: Workspaces tab detail pane shows all active notifications for the selected workspace grouped by sender, with a per-sender `c` clear action
+- [x] **MSG-11**: Workspaces tab list row shows a notification indicator per workspace that has active messages: most recent sender (if set), truncated text, and relative age (e.g., "2m ago")
+- [x] **MSG-12**: Workspaces tab detail pane shows all active notifications for the selected workspace grouped by sender, with a per-sender `c` clear action
 
 ### Completions
 
@@ -95,8 +95,8 @@ Acknowledged but deferred to v0.3.x or v0.4.0.
 | MSG-08 | Phase 6 | Pending |
 | MSG-09 | Phase 6 | Pending |
 | MSG-10 | Phase 6 | Pending |
-| MSG-11 | Phase 9 | Pending |
-| MSG-12 | Phase 9 | Pending |
+| MSG-11 | Phase 9 | Complete |
+| MSG-12 | Phase 9 | Complete |
 | DASH-01 | Phase 8 | Complete |
 | DASH-02 | Phase 8 | Complete |
 | DASH-03 | Phase 8 | Complete |
