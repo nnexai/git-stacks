@@ -22,7 +22,7 @@ See [.planning/milestones/v1.0-ROADMAP.md](.planning/milestones/v1.0-ROADMAP.md)
 
 - [ ] **Phase 6: Message Store + CLI** - JSONL-backed message store with `git-stacks message send|list|clear` subcommand family
 - [x] **Phase 7: Shell Completion Overhaul** - Full dynamic coverage for all commands, subcommand trees, and fixed enum flag values (completed 2026-03-19)
-- [x] **Phase 8: Dashboard Tab Layout** - Tabbed Workspaces | Templates | Repos layout with split list+detail pane and prerequisite UIView/keyboard refactors (completed 2026-03-20)
+- [ ] **Phase 8: Dashboard Tab Layout** - Tabbed Workspaces | Templates | Repos layout with split list+detail pane and prerequisite UIView/keyboard refactors (UAT gap closure in progress)
 - [ ] **Phase 9: IPC Push + Message Display** - Live Unix socket delivery into dashboard; message badges in workspace list and detail pane
 
 ## Phase Details
@@ -66,13 +66,14 @@ Plans:
   3. User presses Enter on a workspace, selects "rename" from the action menu, completes it, and returns to the list without restarting the TUI
   4. User presses `e` on a template in the Templates tab, edits the YAML in `$EDITOR`, saves, and the list reflects the change after editor exit
   5. User presses `?` and sees a scrollable keybinding reference; pressing `Esc` closes it and returns to the previous view
-**Plans**: 5 plans
+**Plans**: 6 plans
 Plans:
 - [x] 08-01-PLAN.md — Types + data hooks (types.ts Tab/UIView/Action updates; useTemplates.ts; useRepos.ts)
 - [x] 08-02-PLAN.md — Tab frame + split layout + workspace detail (App.tsx refactor; WorkspaceDetail.tsx; WorkspaceList height prop; retire DetailStatus.tsx)
 - [x] 08-03-PLAN.md — Templates tab + Repos tab content (TemplateList, TemplateDetail, RepoList, RepoDetail; wire into App.tsx)
 - [x] 08-04-PLAN.md — Action menus + inline input + help (InlineInput, HelpOverlay, TemplateActionMenu; full Esc back-chain; context-sensitive help bar)
-- [ ] 08-05-PLAN.md — UAT gap fix: two-box layout, Switch/Match tabs, borderless action menus, full-screen help, filter in help bar
+- [x] 08-05-PLAN.md — UAT gap fix: two-box layout, Switch/Match tabs, borderless action menus, full-screen help, filter in help bar
+- [ ] 08-06-PLAN.md — UAT gap closure: fix tab switching reactivity + rename view reset
 
 ### Phase 9: IPC Push + Message Display
 **Goal**: Workspace notifications sent via `git-stacks message send` appear in the running dashboard in real time, visible as a preview in the workspace list row and as a full grouped history in the detail pane
@@ -92,5 +93,5 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 6. Message Store + CLI | v0.3.0 | 0/3 | Planned | - |
 | 7. Shell Completion Overhaul | 1/1 | Complete   | 2026-03-19 | - |
-| 8. Dashboard Tab Layout | 5/5 | Complete   | 2026-03-20 | - |
+| 8. Dashboard Tab Layout | 5/6 | UAT Gap Closure | - | - |
 | 9. IPC Push + Message Display | v0.3.0 | 0/? | Not started | - |
