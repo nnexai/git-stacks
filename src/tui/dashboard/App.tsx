@@ -6,6 +6,7 @@ import { useWorkspaces } from "./hooks/useWorkspaces"
 import { useTemplates } from "./hooks/useTemplates"
 import { useRepos } from "./hooks/useRepos"
 import { useMessages } from "./hooks/useMessages"
+import { socketStatus } from "./run"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
 import { TemplateList } from "./TemplateList"
@@ -693,7 +694,7 @@ export default function App() {
           </Show>
           <Show when={!filtering() && !refreshFlash() && !loading()}>
             <text fg="gray">{helpBarText()}</text>
-            <text fg={ipcCount() > 0 ? "green" : "gray"}>  ipc:{ipcCount()}</text>
+            <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>  sock:{socketStatus} ipc:{ipcCount()}</text>
           </Show>
         </box>
       </Show>

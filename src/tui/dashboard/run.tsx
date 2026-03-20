@@ -13,10 +13,9 @@ const SOCKET_PATH = "/tmp/git-stacks.sock"
  */
 export let onIpcMessage: ((record: MessageRecord) => void) | null = null
 
-/**
- * Setter for the IPC callback. Used by useMessages hook to wire up
- * reactive state updates on incoming IPC messages.
- */
+/** Socket server status — readable by App.tsx for diagnostics */
+export let socketStatus: "off" | "bound" | "error" = "off"
+
 export function setIpcCallback(fn: ((record: MessageRecord) => void) | null) {
   onIpcMessage = fn
 }
@@ -55,9 +54,10 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
       },
     })
     server.unref()
+    socketStatus = "bound"
     return server
-  } catch {
-    // EADDRINUSE or other bind failure — skip gracefully
+  } catch (e) {
+    socketStatus = "error"
     return null
   }
 }
