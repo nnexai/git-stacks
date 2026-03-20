@@ -14,7 +14,7 @@ export function ConfirmDialog(props: Props) {
   })
 
   return (
-    <box border flexDirection="column" width="60%">
+    <box flexDirection="column" paddingTop={2} paddingLeft={2}>
       <text fg="yellow">  {props.message}</text>
       <text fg="gray">{"\n"}  [y] Yes  [n/Esc] No</text>
     </box>

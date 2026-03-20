@@ -24,9 +24,6 @@ export function TemplateList(props: Props) {
 
   return (
     <box flexDirection="column">
-      <Show when={props.filter}>
-        <text fg="cyan">  filter: {props.filter}</text>
-      </Show>
       <Show
         when={props.entries.length > 0}
         fallback={<text fg="gray">  No templates found. Run `git-stacks template new` to create one.</text>}

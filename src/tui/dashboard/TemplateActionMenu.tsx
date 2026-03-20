@@ -16,7 +16,7 @@ export function TemplateActionMenu(props: Props) {
   })
 
   return (
-    <box border title={`Actions: ${props.templateName}`} flexDirection="column" width="50%">
+    <box flexDirection="column" paddingTop={1} paddingLeft={2}>
       <text fg="white">  [e] Edit ($EDITOR)</text>
       <text fg="white">  [c] Clone</text>
       <text fg="white">  [r] Remove</text>

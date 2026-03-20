@@ -26,9 +26,6 @@ export function WorkspaceList(props: Props) {
 
   return (
     <box flexDirection="column">
-      <Show when={props.filter}>
-        <text fg="cyan">  filter: {props.filter}</text>
-      </Show>
       <Show
         when={props.entries.length > 0}
         fallback={<text fg="gray">  No workspaces found. Run `ws new` to create one.</text>}

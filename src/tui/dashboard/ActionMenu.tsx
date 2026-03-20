@@ -34,7 +34,7 @@ export function ActionMenu(props: Props) {
   })
 
   return (
-    <box border title={`Actions: ${props.workspaceName}`} flexDirection="column" width="50%">
+    <box flexDirection="column" paddingTop={1} paddingLeft={2}>
       <For each={actions}>
         {(item) => (
           <text fg="white">  [{item.key}] {item.label}</text>

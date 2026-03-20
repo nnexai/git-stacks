@@ -29,9 +29,6 @@ export function RepoList(props: Props) {
 
   return (
     <box flexDirection="column">
-      <Show when={props.filter}>
-        <text fg="cyan">  filter: {props.filter}</text>
-      </Show>
       <Show
         when={props.entries.length > 0}
         fallback={<text fg="gray">  No repos in registry. Run `git-stacks repo add` to register one.</text>}

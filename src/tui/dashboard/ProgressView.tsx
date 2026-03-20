@@ -10,7 +10,7 @@ type Props = {
 
 export function ProgressView(props: Props) {
   return (
-    <box border title={props.title} flexDirection="column" width="70%">
+    <box flexDirection="column">
       <Show when={!props.done}>
         <box flexDirection="row" height={1}>
           <spinner name="dots" color="cyan" />

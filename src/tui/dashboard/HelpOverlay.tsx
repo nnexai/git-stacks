@@ -13,7 +13,7 @@ export function HelpOverlay(props: Props) {
   })
 
   return (
-    <box border title="Keybindings" flexDirection="column" width="70%">
+    <box border title="Keybindings" flexDirection="column" height="100%" width="100%">
       <text fg="white">{"\n"}  Global:</text>
       <text fg="gray">    1 / 2 / 3   Switch tabs (Workspaces / Templates / Repos)</text>
       <text fg="gray">    [ / ]       Previous / next tab</text>
