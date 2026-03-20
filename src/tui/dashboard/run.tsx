@@ -14,6 +14,14 @@ const SOCKET_PATH = "/tmp/git-stacks.sock"
 export let onIpcMessage: ((record: MessageRecord) => void) | null = null
 
 /**
+ * Setter for the IPC callback. Used by useMessages hook to wire up
+ * reactive state updates on incoming IPC messages.
+ */
+export function setIpcCallback(fn: ((record: MessageRecord) => void) | null) {
+  onIpcMessage = fn
+}
+
+/**
  * Start the Unix socket server for real-time IPC from `git-stacks message send`.
  *
  * Stale socket detection:

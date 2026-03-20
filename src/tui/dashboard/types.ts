@@ -29,3 +29,4 @@ export type UIView =
   | { view: "confirm"; index: number; action: Action; batch?: boolean }
   | { view: "progress"; message: string }
   | { view: "inline-input"; index: number; purpose: "rename" | "clone-template"; prefill: string }
+  | { view: "messages"; workspaceName: string }
