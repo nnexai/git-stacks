@@ -5,6 +5,7 @@ import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
 import { useTemplates } from "./hooks/useTemplates"
 import { useRepos } from "./hooks/useRepos"
+import { useMessages } from "./hooks/useMessages"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
 import { TemplateList } from "./TemplateList"
@@ -36,6 +37,7 @@ export default function App() {
   const { entries, loading, reload } = useWorkspaces()
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
+  const { messagesFor, reloadMessages } = useMessages()
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
@@ -513,6 +515,7 @@ export default function App() {
         if (tab() === "templates") { reloadTemplates(); return }
         if (tab() === "repos") { reloadRepos(); return }
         reload()
+        reloadMessages()
         return
       }
     }
@@ -536,6 +539,7 @@ export default function App() {
                 selected={selected()}
                 filter={filtering() ? filter() : ""}
                 height={listHeight()}
+                messagesFor={messagesFor}
               />
             </Match>
             <Match when={tab() === "templates"}>
@@ -567,7 +571,7 @@ export default function App() {
           <Show when={view().view === "list"}>
             <Switch>
               <Match when={tab() === "workspaces"}>
-                <WorkspaceDetail entry={currentEntry()} />
+                <WorkspaceDetail entry={currentEntry()} messages={currentEntry() ? messagesFor(currentEntry()!.workspace.name) : []} />
               </Match>
               <Match when={tab() === "templates"}>
                 <TemplateDetail template={currentTemplate()} />

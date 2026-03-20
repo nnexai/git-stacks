@@ -2,6 +2,7 @@
 import { For, Show, createMemo } from "solid-js"
 import { WorkspaceRow } from "./WorkspaceRow"
 import type { WorkspaceEntry } from "./types"
+import type { MessageRecord } from "../../lib/messages"
 
 type Props = {
   entries: WorkspaceEntry[]
@@ -9,6 +10,7 @@ type Props = {
   selected: Set<number>
   filter: string
   height: number
+  messagesFor: (workspaceName: string) => MessageRecord[]
 }
 
 export function WorkspaceList(props: Props) {
@@ -38,6 +40,7 @@ export function WorkspaceList(props: Props) {
                 entry={entry}
                 focused={realIndex() === props.cursor}
                 selected={props.selected.has(realIndex())}
+                messages={props.messagesFor(entry.workspace.name)}
               />
             )
           }}
