@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-03-19T18:36:52.241Z"
+stopped_at: Completed 08-05-PLAN.md
+last_updated: "2026-03-20T00:15:16.373Z"
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 3
+  total_plans: 9
+  completed_plans: 9
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 07 — shell-completion-overhaul
+**Current focus:** Phase 08 — dashboard-tab-layout
 
 ## Current Position
 
-Phase: 07 (shell-completion-overhaul) — EXECUTING
-Plan: 1 of 1
+Phase: 08 (dashboard-tab-layout) — EXECUTING
+Plan: 1 of 5
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Plan: 1 of 1
 
 *Updated after each plan completion*
 | Phase 07-shell-completion-overhaul P01 | 3 | 2 tasks | 2 files |
+| Phase 08 P05 | 2 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -58,6 +59,9 @@ Recent decisions affecting current work:
 - [Phase 07]: OPTION_ENUMS static table in completion-generator.ts (not Commander .choices()) avoids unintended runtime validation behavior change
 - [Phase 07]: FLAG_COMPLETIONS table separate from OPTION_ENUMS — different lookup strategy for dynamic flag-value completion
 - [Phase 07]: zshOptionSpec() extracted as shared helper eliminating duplication between zshCaseBody() and generateZshSubcmdHelper()
+- [Phase 08]: Use Switch/Match instead of Show for mutually-exclusive tab content — prevents SolidJS retaining inactive tab DOM nodes that caused key-press freeze
+- [Phase 08]: Two-box layout with flexGrow ratios (3:2) replaces manual innerHeight/detailHeight memos — layout engine handles proportional sizing and BatchBar overflow
+- [Phase 08]: Child dashboard components (ActionMenu, ConfirmDialog, ProgressView) are borderless — parent detail box provides border context, avoiding double borders
 
 ### Research Flags (from research/SUMMARY.md)
 
@@ -75,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-19T18:32:59.602Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-03-20T00:15:16.371Z
+Stopped at: Completed 08-05-PLAN.md
 Resume file: None

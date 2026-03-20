@@ -8,17 +8,17 @@
 
 ### Dashboard
 
-- [ ] **DASH-01**: User can switch between Workspaces, Templates, and Repos tabs using `[` / `]` or `1` / `2` / `3` keyboard shortcuts
-- [ ] **DASH-02**: Each tab maintains independent cursor position and filter state when switching tabs
-- [ ] **DASH-03**: Dashboard displays list and detail pane simultaneously in a split layout (list ~60% width, detail ~40%)
-- [ ] **DASH-04**: Detail pane auto-updates reactively as cursor moves through the list without additional input
-- [ ] **DASH-05**: User can perform all workspace actions (open, status, rename, merge, run, clean, remove) from the Workspaces tab action menu
-- [ ] **DASH-06**: User can edit a workspace YAML file in `$EDITOR` from the Workspaces tab; TUI suspends during editing and resumes after exit
-- [ ] **DASH-07**: User can view, edit (in `$EDITOR`), clone, and remove templates from the Templates tab
-- [ ] **DASH-08**: User can browse the repo registry in the Repos tab with a disk-health indicator per entry (path exists vs. missing on disk)
-- [ ] **DASH-09**: A persistent one-line help bar at the bottom shows context-sensitive key bindings for the active view/tab
-- [ ] **DASH-10**: Pressing `?` opens a scrollable keybinding reference overlay for the current context; `Esc` or `?` closes it
-- [ ] **DASH-11**: Pressing `Esc` consistently navigates back (action menu → list, overlay → split) without unintentionally exiting the TUI
+- [x] **DASH-01**: User can switch between Workspaces, Templates, and Repos tabs using `[` / `]` or `1` / `2` / `3` keyboard shortcuts
+- [x] **DASH-02**: Each tab maintains independent cursor position and filter state when switching tabs
+- [x] **DASH-03**: Dashboard displays list and detail pane simultaneously in a split layout (list ~60% width, detail ~40%)
+- [x] **DASH-04**: Detail pane auto-updates reactively as cursor moves through the list without additional input
+- [x] **DASH-05**: User can perform all workspace actions (open, status, rename, merge, run, clean, remove) from the Workspaces tab action menu
+- [x] **DASH-06**: User can edit a workspace YAML file in `$EDITOR` from the Workspaces tab; TUI suspends during editing and resumes after exit
+- [x] **DASH-07**: User can view, edit (in `$EDITOR`), clone, and remove templates from the Templates tab
+- [x] **DASH-08**: User can browse the repo registry in the Repos tab with a disk-health indicator per entry (path exists vs. missing on disk)
+- [x] **DASH-09**: A persistent one-line help bar at the bottom shows context-sensitive key bindings for the active view/tab
+- [x] **DASH-10**: Pressing `?` opens a scrollable keybinding reference overlay for the current context; `Esc` or `?` closes it
+- [x] **DASH-11**: Pressing `Esc` consistently navigates back (action menu → list, overlay → split) without unintentionally exiting the TUI
 
 ### Messaging
 
@@ -97,17 +97,17 @@ Acknowledged but deferred to v0.3.x or v0.4.0.
 | MSG-10 | Phase 6 | Pending |
 | MSG-11 | Phase 9 | Pending |
 | MSG-12 | Phase 9 | Pending |
-| DASH-01 | Phase 8 | Pending |
-| DASH-02 | Phase 8 | Pending |
-| DASH-03 | Phase 8 | Pending |
-| DASH-04 | Phase 8 | Pending |
-| DASH-05 | Phase 8 | Pending |
-| DASH-06 | Phase 8 | Pending |
-| DASH-07 | Phase 8 | Pending |
-| DASH-08 | Phase 8 | Pending |
-| DASH-09 | Phase 8 | Pending |
-| DASH-10 | Phase 8 | Pending |
-| DASH-11 | Phase 8 | Pending |
+| DASH-01 | Phase 8 | Complete |
+| DASH-02 | Phase 8 | Complete |
+| DASH-03 | Phase 8 | Complete |
+| DASH-04 | Phase 8 | Complete |
+| DASH-05 | Phase 8 | Complete |
+| DASH-06 | Phase 8 | Complete |
+| DASH-07 | Phase 8 | Complete |
+| DASH-08 | Phase 8 | Complete |
+| DASH-09 | Phase 8 | Complete |
+| DASH-10 | Phase 8 | Complete |
+| DASH-11 | Phase 8 | Complete |
 | CMPL-01 | Phase 7 | Complete |
 | CMPL-02 | Phase 7 | Complete |
 | CMPL-03 | Phase 7 | Complete |
