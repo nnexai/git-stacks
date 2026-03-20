@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 08-05-PLAN.md
-last_updated: "2026-03-20T00:21:16.300Z"
+stopped_at: Completed 08-06-PLAN.md
+last_updated: "2026-03-20T01:08:10.587Z"
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 10
+  completed_plans: 10
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-19)
 ## Current Position
 
 Phase: 08 (dashboard-tab-layout) — EXECUTING
-Plan: 1 of 5
+Plan: 1 of 6
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Plan: 1 of 5
 *Updated after each plan completion*
 | Phase 07-shell-completion-overhaul P01 | 3 | 2 tasks | 2 files |
 | Phase 08 P05 | 2 | 2 tasks | 9 files |
+| Phase 08 P06 | 6 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -62,6 +63,8 @@ Recent decisions affecting current work:
 - [Phase 08]: Use Switch/Match instead of Show for mutually-exclusive tab content — prevents SolidJS retaining inactive tab DOM nodes that caused key-press freeze
 - [Phase 08]: Two-box layout with flexGrow ratios (3:2) replaces manual innerHeight/detailHeight memos — layout engine handles proportional sizing and BatchBar overflow
 - [Phase 08]: Child dashboard components (ActionMenu, ConfirmDialog, ProgressView) are borderless — parent detail box provides border context, avoiding double borders
+- [Phase 08]: Height-based visibility (height={tab() === X ? value : 0}) replaces Switch/Match — OpenTUI terminal renderer does not repaint when SolidJS swaps conditional DOM branches
+- [Phase 08]: On rename error, stay on progress view; on success call setView({ view: list }) so detail pane shows clean state immediately
 
 ### Research Flags (from research/SUMMARY.md)
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T00:15:16.371Z
-Stopped at: Completed 08-05-PLAN.md
+Last session: 2026-03-20T01:08:10.581Z
+Stopped at: Completed 08-06-PLAN.md
 Resume file: None
