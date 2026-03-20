@@ -89,13 +89,12 @@ export function MessageOverlay(props: Props) {
           {(line) => {
             if (line.type === "header") {
               const g = line.group!
-              const focused = line.groupIdx === groupCursor()
-              const indicator = focused ? "\u25b8" : " "
+              const focused = () => line.groupIdx === groupCursor()
               return (
                 <box height={1} flexDirection="row">
-                  <text fg={focused ? "white" : "gray"}>  {indicator} {g.label}</text>
+                  <text fg={focused() ? "white" : "gray"}>  {focused() ? "\u25b8" : " "} {g.label}</text>
                   <text fg="gray"> ({g.messages.length})</text>
-                  <text fg={focused ? "cyan" : "gray"}>{focused ? "  [c] clear" : ""}</text>
+                  <text fg={focused() ? "cyan" : "gray"}>{focused() ? "  [c] clear" : ""}</text>
                 </box>
               )
             }

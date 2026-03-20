@@ -7,6 +7,7 @@ import type { MessageRecord } from "../../lib/messages"
 type Props = {
   entry: WorkspaceEntry | undefined
   messages: MessageRecord[]
+  tick: number
 }
 
 export function WorkspaceDetail(props: Props) {
@@ -20,8 +21,9 @@ export function WorkspaceDetail(props: Props) {
         const status = () => entry().status
 
         const displayMessages = createMemo(() => {
+          void props.tick  // subscribe to tick for periodic time refresh
           const msgs = props.messages ?? []
-          return msgs.slice(0, 10)  // last 10, already newest-first
+          return msgs.slice(0, 3)  // last 3 in detail pane; full list via m overlay
         })
         const totalCount = createMemo(() => (props.messages ?? []).length)
 
@@ -57,8 +59,8 @@ export function WorkspaceDetail(props: Props) {
               </>
             }>
               <text fg="white">
-                {totalCount() > 10
-                  ? `  Messages (showing 10 of ${totalCount()}):`
+                {totalCount() > 3
+                  ? `  Messages (${totalCount()}, press m for all):`
                   : `  Messages (${totalCount()}):`}
               </text>
               <For each={displayMessages()}>

@@ -10,7 +10,8 @@ type Props = {
   selected: Set<number>
   filter: string
   height: number
-  messagesFor: (workspaceName: string) => MessageRecord[]
+  allMessages: Map<string, MessageRecord[]>
+  tick: number
 }
 
 export function WorkspaceList(props: Props) {
@@ -40,7 +41,8 @@ export function WorkspaceList(props: Props) {
                 entry={entry}
                 focused={realIndex() === props.cursor}
                 selected={props.selected.has(realIndex())}
-                messages={props.messagesFor(entry.workspace.name)}
+                messages={props.allMessages.get(entry.workspace.name) ?? []}
+                tick={props.tick}
               />
             )
           }}

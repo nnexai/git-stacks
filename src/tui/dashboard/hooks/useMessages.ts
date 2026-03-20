@@ -5,25 +5,33 @@ import { setIpcCallback } from "../run"
 
 export function useMessages() {
   const [msgMap, setMsgMap] = createSignal<Map<string, MessageRecord[]>>(new Map())
+  // Tick signal — incremented periodically to force re-evaluation of relative times
+  const [tick, setTick] = createSignal(0)
 
   // Eager load all workspaces' messages
   async function loadAll() {
-    const workspaces = listWorkspaces()
-    const results = await Promise.all(
-      workspaces.map(async (ws) => {
-        const msgs = await listMessages(ws.name)
-        return [ws.name, msgs] as const
-      })
-    )
-    const m = new Map<string, MessageRecord[]>()
-    for (const [name, msgs] of results) {
-      if (msgs.length > 0) m.set(name, msgs)
+    try {
+      const workspaces = listWorkspaces()
+      const results = await Promise.allSettled(
+        workspaces.map(async (ws) => {
+          const msgs = await listMessages(ws.name)
+          return [ws.name, msgs] as const
+        })
+      )
+      const m = new Map<string, MessageRecord[]>()
+      for (const r of results) {
+        if (r.status === "fulfilled") {
+          const [name, msgs] = r.value
+          if (msgs.length > 0) m.set(name, msgs)
+        }
+      }
+      setMsgMap(m)
+    } catch {
+      // silently ignore — messages are best-effort
     }
-    setMsgMap(m)
   }
 
   // IPC push handler — prepend new message to workspace's array
-  // setMsgMap is a stable reference from createSignal, safe in closure
   const handleIpc = (record: MessageRecord) => {
     setMsgMap(prev => {
       const next = new Map(prev)
@@ -33,20 +41,18 @@ export function useMessages() {
     })
   }
 
-  // Assign the IPC callback once during initialization
   setIpcCallback(handleIpc)
 
-  // Cleanup on unmount
   onCleanup(() => {
     setIpcCallback(null)
+    clearInterval(tickTimer)
   })
 
   // Start loading
   loadAll()
 
-  // Per-workspace message accessor (returns newest-first array)
-  const messagesFor = (workspaceName: string): MessageRecord[] =>
-    msgMap().get(workspaceName) ?? []
+  // Refresh relative times every 30 seconds
+  const tickTimer = setInterval(() => setTick(t => t + 1), 30_000)
 
   // Clear a sender's messages and refresh reactive state
   async function clearSender(workspaceName: string, sender: string | undefined) {
@@ -63,10 +69,9 @@ export function useMessages() {
     })
   }
 
-  // Reload all messages (e.g. after manual R refresh)
   function reloadMessages() {
     loadAll()
   }
 
-  return { messagesFor, clearSender, reloadMessages }
+  return { msgMap, tick, clearSender, reloadMessages }
 }

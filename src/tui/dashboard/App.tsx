@@ -38,7 +38,7 @@ export default function App() {
   const { entries, loading, reload } = useWorkspaces()
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
-  const { messagesFor, clearSender, reloadMessages } = useMessages()
+  const { msgMap, tick, clearSender, reloadMessages } = useMessages()
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
@@ -548,7 +548,7 @@ export default function App() {
       <Show when={!helpOpen() && messagesOpen()}>
         <MessageOverlay
           workspaceName={messagesWorkspace()}
-          messages={messagesFor(messagesWorkspace())}
+          messages={msgMap().get(messagesWorkspace()) ?? []}
           onClose={() => setMessagesOpen(false)}
           onClearSender={(sender) => clearSender(messagesWorkspace(), sender)}
         />
@@ -568,7 +568,8 @@ export default function App() {
                 selected={selected()}
                 filter={filtering() ? filter() : ""}
                 height={listHeight()}
-                messagesFor={messagesFor}
+                allMessages={msgMap()}
+                tick={tick()}
               />
             </Match>
             <Match when={tab() === "templates"}>
@@ -600,7 +601,7 @@ export default function App() {
           <Show when={view().view === "list"}>
             <Switch>
               <Match when={tab() === "workspaces"}>
-                <WorkspaceDetail entry={currentEntry()} messages={currentEntry() ? messagesFor(currentEntry()!.workspace.name) : []} />
+                <WorkspaceDetail entry={currentEntry()} messages={currentEntry() ? (msgMap().get(currentEntry()!.workspace.name) ?? []) : []} tick={tick()} />
               </Match>
               <Match when={tab() === "templates"}>
                 <TemplateDetail template={currentTemplate()} />

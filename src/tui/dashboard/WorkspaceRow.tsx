@@ -11,6 +11,7 @@ type Props = {
   focused: boolean
   selected: boolean
   messages: MessageRecord[]
+  tick: number
 }
 
 export function WorkspaceRow(props: Props) {
@@ -33,6 +34,7 @@ export function WorkspaceRow(props: Props) {
   const dims = useTerminalDimensions()
 
   const messagePreview = createMemo(() => {
+    void props.tick  // subscribe to tick for periodic time refresh
     const msgs = props.messages
     if (!msgs || msgs.length === 0) return null
     const msg = msgs[0]  // most recent (newest-first from listMessages)
