@@ -307,9 +307,15 @@ export default function App() {
       const result = await renameWorkspace(oldName, trimmed, {}, (msg) =>
         setProgressLines(prev => [...prev, msg])
       )
-      if (!result.ok) setProgressLines(prev => [...prev, `ERROR: ${result.error}`])
-      setProgressDone(true)
-      reload()
+      if (!result.ok) {
+        setProgressLines(prev => [...prev, `ERROR: ${result.error}`])
+        setProgressDone(true)
+        // Stay on progress view so user sees the error
+      } else {
+        setProgressDone(true)
+        reload()
+        setView({ view: "list" })
+      }
       return
     }
 
