@@ -50,6 +50,7 @@ export default function App() {
   const [messagesOpen, setMessagesOpen] = createSignal(false)
   const [messagesWorkspace, setMessagesWorkspace] = createSignal("")
   const [confirmContext, setConfirmContext] = createSignal<"workspace" | "template">("workspace")
+  const [filterFocused, setFilterFocused] = createSignal(false)
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -392,7 +393,25 @@ export default function App() {
     // Message overlay guard — MessageOverlay handles its own keys
     if (messagesOpen()) return
 
-    // Tab switching — at the very beginning before other checks
+    // Handle filter mode — must be before tab switching so 1/2/3/]/[ don't fire
+    if (filtering()) {
+      if (key.name === "escape") {
+        setFilterFocused(false)
+        setFiltering(false)
+        setFilter("")
+        clampCursor()
+        return
+      }
+      if (key.name === "return") {
+        setFilterFocused(false)
+        setFiltering(false)
+        clampCursor()
+        return
+      }
+      return // <input> handles typing, backspace, cursor movement natively
+    }
+
+    // Tab switching
     if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
     if (key.name === "2") { setTab("templates"); setView({ view: "list" }); return }
     if (key.name === "3") { setTab("repos"); setView({ view: "list" }); return }
@@ -405,22 +424,6 @@ export default function App() {
       setTab(t => t === "workspaces" ? "repos" : t === "repos" ? "templates" : "workspaces")
       setView({ view: "list" })
       return
-    }
-
-    // Handle filter mode — text input delegated to built-in <input> element
-    if (filtering()) {
-      if (key.name === "escape") {
-        setFiltering(false)
-        setFilter("")
-        clampCursor()
-        return
-      }
-      if (key.name === "return") {
-        setFiltering(false)
-        clampCursor()
-        return
-      }
-      return // <input> handles typing, backspace, cursor movement natively
     }
 
     // Progress view — any key returns to list
@@ -510,10 +513,12 @@ export default function App() {
         return
       }
 
-      // Filter
+      // Filter — defer focus so the `/` keypress doesn't leak into the input
       if (key.name === "/") {
         setFiltering(true)
         setFilter("")
+        setFilterFocused(false)
+        setTimeout(() => setFilterFocused(true), 0)
         return
       }
 
@@ -676,7 +681,7 @@ export default function App() {
             <box flexDirection="row" flexGrow={1}>
               <text fg="cyan">  filter: </text>
               <input
-                focused={true}
+                focused={filterFocused()}
                 value={filter()}
                 flexGrow={1}
                 onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
