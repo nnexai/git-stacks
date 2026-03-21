@@ -24,15 +24,16 @@ export const vscodeIntegration: Integration = {
 
   generate: (ctx) => generateCodeWorkspace(ctx.workspace, ctx.tasksDir),
 
-  async open(ctx, artifactPath) {
-    if (!artifactPath) return
+  async open(ctx, artifactPath, _bag) {
+    if (!artifactPath) return null
     const { cmd } = getConfig(ctx)
     const check = await $`which ${cmd}`.quiet().nothrow()
     if (check.exitCode !== 0) {
       // Binary not found -- skip silently (debug-level, not an error)
-      return
+      return null
     }
     await $`${cmd} ${artifactPath}`.quiet().nothrow()
+    return null
   },
 
   async configurePrompt(current) {

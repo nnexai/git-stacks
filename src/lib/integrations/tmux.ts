@@ -29,7 +29,7 @@ export const tmuxIntegration: Integration = {
 
   isEnabled: (ctx) => resolveEnabled("tmux", false, ctx),
 
-  async open(ctx, _artifactPath) {
+  async open(ctx, _artifactPath, _bag) {
     const spinner = p.spinner()
     spinner.start("Setting up tmux session")
     try {
@@ -43,6 +43,7 @@ export const tmuxIntegration: Integration = {
       spinner.stop("tmux unavailable — skipped")
       p.log.warn(`tmux: ${String(err)}`)
     }
+    return null
   },
 
   async configurePrompt(_current) {

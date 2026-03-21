@@ -25,7 +25,7 @@ import {
   mergeBranchFF,
   getCommitsBehind,
 } from "./git"
-import { integrations, type IntegrationContext } from "./integrations"
+import { integrations, type IntegrationContext, type ArtifactBag } from "./integrations"
 import { runHooks } from "./lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
 import { $ } from "bun"
@@ -569,13 +569,15 @@ export async function openWorkspace(
   }
 
   const ctx: IntegrationContext = { workspace, tasksDir, config }
+  const bag: ArtifactBag = {}
 
   for (const integration of integrations) {
     if (skip.has(integration.id)) continue
     if (!integration.isEnabled(ctx)) continue
     if (integration.applies && !integration.applies(workspace)) continue
     const artifactPath = integration.generate?.(ctx) ?? null
-    await integration.open(ctx, artifactPath)
+    const artifact = await integration.open(ctx, artifactPath, bag)
+    bag[integration.id] = artifact
   }
 
   // Workspace-level post_open hooks (includes template hooks if copied at creation)

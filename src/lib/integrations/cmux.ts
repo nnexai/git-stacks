@@ -31,7 +31,7 @@ export const cmuxIntegration: Integration = {
 
   isEnabled: (ctx) => resolveEnabled("cmux", true, ctx),
 
-  async open(ctx, _artifactPath) {
+  async open(ctx, _artifactPath, _bag) {
     const spinner = p.spinner()
     spinner.start("Setting up cmux workspace")
     try {
@@ -56,6 +56,7 @@ export const cmuxIntegration: Integration = {
       spinner.stop("cmux unavailable — skipped")
       p.log.warn(`cmux: ${String(err)}`)
     }
+    return null
   },
 
   async configurePrompt(_current) {

@@ -15,11 +15,12 @@ export const intellijIntegration: Integration = {
 
   generate: (ctx: IntegrationContext) => generateIntellijProject(ctx.workspace, ctx.tasksDir),
 
-  async open(_ctx, artifactPath) {
-    if (!artifactPath) return
+  async open(_ctx, artifactPath, _bag) {
+    if (!artifactPath) return null
     const check = await $`which idea`.quiet().nothrow()
-    if (check.exitCode !== 0) return
+    if (check.exitCode !== 0) return null
     await $`idea ${artifactPath}`.quiet().nothrow()
+    return null
   },
 
   async configurePrompt(_current) {
