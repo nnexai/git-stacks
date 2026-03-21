@@ -21,6 +21,8 @@ import { InlineInput } from "./InlineInput"
 import { HelpOverlay } from "./HelpOverlay"
 import { MessageOverlay } from "./MessageOverlay"
 import { TemplateActionMenu } from "./TemplateActionMenu"
+import { RepoActionMenu } from "./RepoActionMenu"
+import { RemoveBlockedView } from "./RemoveBlockedView"
 import {
   cleanWorkspace,
   removeWorkspace,
@@ -31,7 +33,7 @@ import {
   syncWorkspace,
 } from "../../lib/workspace-ops"
 import type { SyncRow, SyncResult } from "../../lib/workspace-ops"
-import { readTemplate, writeTemplate, templatePath, readWorkspace, readRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
+import { readTemplate, writeTemplate, templateExists, templatePath, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
 import { SyncProgressView } from "./SyncProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
 import { CreateProgressView, type CreateRow } from "./CreateProgressView"
@@ -70,6 +72,7 @@ export default function App() {
   const [createRows, setCreateRows] = createSignal<CreateRow[]>([])
   const [createDone, setCreateDone] = createSignal(false)
   const [createSummary, setCreateSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
+  const [repoRemoveTarget, setRepoRemoveTarget] = createSignal<string | null>(null)
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -150,6 +153,14 @@ export default function App() {
     if (v.view === "sync-progress") return ` ${(v as any).message} `
     if (v.view === "wizard-create" || v.view === "wizard-create-adhoc") return " Create Workspace "
     if (v.view === "create-progress") return ` Creating ${(v as any).workspaceName}... `
+    if (v.view === "wizard-create-template") return " Create Template "
+    if (v.view === "repo-action-menu") {
+      const name = selectedName()
+      return name ? ` ${name} ` : ""
+    }
+    if (v.view === "repo-remove-blocked") {
+      return ` ${(v as any).repoName} `
+    }
     const name = selectedName()
     return name ? ` ${name} ` : ""
   })
@@ -160,8 +171,8 @@ export default function App() {
     if (t === "workspaces")
       return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  m Messages  / Filter  r Refresh  ? Help  q Quit"
     if (t === "templates")
-      return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  / Filter  r Refresh  ? Help  q Quit"
-    return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Space Select  n Create  / Filter  r Refresh  ? Help  q Quit"
+      return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  / Filter  r Refresh  ? Help  q Quit"
+    return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  / Filter  r Refresh  ? Help  q Quit"
   })
 
   const inlineInputLabel = createMemo(() => {
@@ -414,6 +425,46 @@ export default function App() {
     setView({ view: "list" })
   }
 
+  async function handleRepoAction(action: "create-workspace" | "create-template" | "remove") {
+    const v = view() as { view: "repo-action-menu"; index: number }
+    const repo = filteredRepos()[v.index]
+    if (!repo) { setView({ view: "list" }); return }
+
+    // Compute effective repo list: multi-selected or just focused
+    const selectedIndices = reposSelected()
+    let repoNames: string[]
+    if (selectedIndices.size > 0) {
+      repoNames = [...selectedIndices].map(i => filteredRepos()[i]?.name).filter(Boolean) as string[]
+    } else {
+      repoNames = [repo.name]
+    }
+
+    if (action === "create-workspace") {
+      setReposSelected(new Set<number>())
+      setView({ view: "wizard-create-adhoc", source: "repos", repoNames })
+      return
+    }
+
+    if (action === "create-template") {
+      setReposSelected(new Set<number>())
+      setView({ view: "wizard-create-template", source: "repos", repoNames })
+      return
+    }
+
+    if (action === "remove") {
+      // Remove operates on focused repo only (not batch)
+      const refTemplates = templateEntries().filter(t => t.repos.some(r => r.repo === repo.name))
+      const refWorkspaces = allWorkspaces().filter(ws => ws.repos.some(r => r.repo === repo.name))
+      if (refTemplates.length > 0 || refWorkspaces.length > 0) {
+        setView({ view: "repo-remove-blocked", repoName: repo.name })
+      } else {
+        setRepoRemoveTarget(repo.name)
+        setView({ view: "confirm", index: v.index, action: "remove" })
+      }
+      return
+    }
+  }
+
   async function handleTemplateAction(action: "edit" | "clone" | "remove" | "create-workspace") {
     const v = view() as { view: "action-menu"; index: number }
     const template = filteredTemplates()[v.index]
@@ -454,6 +505,7 @@ export default function App() {
 
   // Wizard types and helpers
   type CreateWizardData = { name: string; branch: string }
+  type CreateTemplateData = { name: string }
 
   function buildTemplateWizardSteps(template: Template): WizardStep<CreateWizardData>[] {
     return [
@@ -487,6 +539,28 @@ export default function App() {
     ]
   }
 
+  function buildCreateTemplateSteps(repoNames: string[]): WizardStep<CreateTemplateData>[] {
+    return [
+      {
+        kind: "text" as const,
+        label: "Template name",
+        key: "name" as const,
+        validate: (v: string) => {
+          if (!v.trim()) return "Required"
+          if (templateExists(v.trim())) return `Template "${v.trim()}" already exists`
+          return undefined
+        },
+      },
+      {
+        kind: "confirm" as const,
+        buildMessage: (data: Partial<CreateTemplateData>) => {
+          const repoLines = repoNames.map(n => `  ${n} (worktree)`).join("\n")
+          return `Create template "${data.name}" with ${repoNames.length} repos?\n${repoLines}`
+        },
+      },
+    ]
+  }
+
   function buildAdhocWizardSteps(repoNames: string[]): WizardStep<CreateWizardData>[] {
     return [
       {
@@ -513,6 +587,24 @@ export default function App() {
         },
       },
     ]
+  }
+
+  function executeCreateTemplate(data: CreateTemplateData, repoNames: string[]) {
+    const template: Template = {
+      name: data.name.trim(),
+      schema_version: "1",
+      repos: repoNames.map(name => ({
+        repo: name,
+        mode: "worktree" as const,
+      })),
+    }
+    writeTemplate(template)
+    reloadTemplates().then(() => {
+      const idx = templateEntries().findIndex(t => t.name === data.name.trim())
+      if (idx >= 0) tabCursor.templates[1](idx)
+      setTab("templates")
+      setView({ view: "list" })
+    })
   }
 
   async function executeCreateWorkspace(
@@ -796,6 +888,9 @@ export default function App() {
 
     // Wizard views — WizardView handles its own keyboard (escape, y, input)
     if (v.view === "wizard-create" || v.view === "wizard-create-adhoc") return
+    if (v.view === "wizard-create-template") return  // WizardView handles its own keys
+    if (v.view === "repo-action-menu") return         // RepoActionMenu handles its own keys
+    if (v.view === "repo-remove-blocked") return      // RemoveBlockedView handles Esc
 
     // Create progress — any key returns to list when done (same pattern as sync-progress)
     if (v.view === "create-progress" && createDone()) {
@@ -843,7 +938,10 @@ export default function App() {
       }
 
       if (key.name === "return") {
-        if (tab() === "repos") return
+        if (tab() === "repos") {
+          if (len > 0) setView({ view: "repo-action-menu", index: cursor() })
+          return
+        }
         if (len > 0) setView({ view: "action-menu", index: cursor() })
         return
       }
@@ -861,6 +959,17 @@ export default function App() {
 
       if (key.name === "space" && tab() === "repos") {
         setReposSelected((prev) => {
+          const next = new Set(prev)
+          if (next.has(cursor())) next.delete(cursor())
+          else next.add(cursor())
+          return next
+        })
+        setCursor((i) => Math.min(len - 1, i + 1))
+        return
+      }
+
+      if (key.name === "space" && tab() === "templates") {
+        setTemplatesSelected((prev) => {
           const next = new Set(prev)
           if (next.has(cursor())) next.delete(cursor())
           else next.add(cursor())
@@ -889,24 +998,6 @@ export default function App() {
           setMessagesWorkspace(name)
           setMessagesOpen(true)
         }
-        return
-      }
-
-      // Ad-hoc workspace create from Repos tab (D-02, D-04)
-      if (key.name === "n" && tab() === "repos") {
-        const selectedIndices = reposSelected()
-        let repoNames: string[]
-        if (selectedIndices.size > 0) {
-          // D-04: use multi-selected repos
-          repoNames = [...selectedIndices].map(i => filteredRepos()[i]?.name).filter(Boolean) as string[]
-        } else {
-          // D-04: use currently highlighted repo
-          const current = currentRepo()
-          if (!current) return
-          repoNames = [current.name]
-        }
-        setReposSelected(new Set<number>())  // clear selection
-        setView({ view: "wizard-create-adhoc", source: "repos", repoNames })
         return
       }
 
@@ -1040,7 +1131,10 @@ export default function App() {
           <Show when={view().view === "confirm"}>
             {(() => {
               const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
-              const label = confirmContext() === "template"
+              const repoTarget = repoRemoveTarget()
+              const label = repoTarget
+                ? `Remove repo "${repoTarget}" (${filteredRepos()[v.index]?.local_path})?`
+                : confirmContext() === "template"
                 ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
                 : v.action === "sync"
                 ? `Sync '${filteredEntries()[v.index]?.workspace.name}'? (rebase from upstream)`
@@ -1051,6 +1145,17 @@ export default function App() {
                 <ConfirmDialog
                   message={label}
                   onConfirm={() => {
+                    const repoTarget = repoRemoveTarget()
+                    if (repoTarget) {
+                      const registry = readRegistry()
+                      const updated = registry.filter(r => r.name !== repoTarget)
+                      writeRegistry(updated)
+                      reloadRepos()
+                      setRepoRemoveTarget(null)
+                      setView({ view: "list" })
+                      clampCursor()
+                      return
+                    }
                     if (v.action === "sync") {
                       const entry = filteredEntries()[v.index]
                       if (entry) executeSync(entry.workspace.name)
@@ -1058,7 +1163,7 @@ export default function App() {
                       executeConfirmed(v.action, v.index, v.batch)
                     }
                   }}
-                  onCancel={() => setView({ view: "list" })}
+                  onCancel={() => { setRepoRemoveTarget(null); setView({ view: "list" }) }}
                 />
               )
             })()}
@@ -1120,6 +1225,48 @@ export default function App() {
                   steps={steps}
                   onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, null, v.repoNames)}
                   onCancel={() => setView({ view: "list" })}
+                />
+              )
+            })()}
+          </Show>
+
+          {/* Wizard: template create from Repos action menu */}
+          <Show when={view().view === "wizard-create-template"}>
+            {(() => {
+              const v = view() as { view: "wizard-create-template"; repoNames: string[] }
+              const steps = buildCreateTemplateSteps(v.repoNames)
+              return (
+                <WizardView
+                  steps={steps}
+                  onComplete={(data) => executeCreateTemplate(data as CreateTemplateData, v.repoNames)}
+                  onCancel={() => setView({ view: "list" })}
+                />
+              )
+            })()}
+          </Show>
+
+          {/* Repo action menu */}
+          <Show when={view().view === "repo-action-menu"}>
+            <RepoActionMenu
+              repoName={currentRepo()?.name ?? ""}
+              selectionCount={reposSelected().size}
+              onAction={handleRepoAction}
+              onCancel={() => setView({ view: "list" })}
+            />
+          </Show>
+
+          {/* Repo remove blocked */}
+          <Show when={view().view === "repo-remove-blocked"}>
+            {(() => {
+              const v = view() as { view: "repo-remove-blocked"; repoName: string }
+              const refTemplates = templateEntries().filter(t => t.repos.some(r => r.repo === v.repoName))
+              const refWorkspaces = allWorkspaces().filter(ws => ws.repos.some(r => r.repo === v.repoName))
+              return (
+                <RemoveBlockedView
+                  repoName={v.repoName}
+                  refTemplates={refTemplates.map(t => ({ name: t.name }))}
+                  refWorkspaces={refWorkspaces.map(ws => ({ name: ws.name }))}
+                  onBack={() => setView({ view: "list" })}
                 />
               )
             })()}
