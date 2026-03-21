@@ -146,14 +146,8 @@ export default function App() {
     return ""
   })
 
-  // Detail box title shows selected name or progress message
+  // Detail box title shows selected entity name (list view only)
   const detailBoxTitle = createMemo(() => {
-    const v = view()
-    if (v.view === "progress") return ` ${(v as any).message} `
-    if (v.view === "sync-progress") return ` ${(v as any).message} `
-    if (v.view === "wizard-create" || v.view === "wizard-create-adhoc") return " Create Workspace "
-    if (v.view === "create-progress") return ` Creating ${(v as any).workspaceName}... `
-    if (v.view === "wizard-create-template") return " Create Template "
     const name = selectedName()
     return name ? ` ${name} ` : ""
   })
@@ -1151,7 +1145,82 @@ export default function App() {
         })()}
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view !== "action-menu" && view().view !== "repo-action-menu" && view().view !== "confirm" && view().view !== "inline-input" && view().view !== "repo-remove-blocked"}>
+      {/* Medium dialog overlays — progress and wizard views */}
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "progress"}>
+        <ProgressView
+          title={(view() as any).message}
+          lines={progressLines()}
+          done={progressDone()}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "sync-progress"}>
+        <SyncProgressView
+          rows={syncRows()}
+          done={syncDone()}
+          summary={syncSummary()}
+          title={(view() as any).message}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "wizard-create"}>
+        {(() => {
+          const v = view() as { view: "wizard-create"; templateIndex: number }
+          const template = filteredTemplates()[v.templateIndex]
+          if (!template) return null
+          const tpl = readTemplate(template.name)
+          const steps = buildTemplateWizardSteps(tpl)
+          return (
+            <WizardView
+              title="Create Workspace"
+              steps={steps}
+              onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, tpl, null)}
+              onCancel={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "wizard-create-adhoc"}>
+        {(() => {
+          const v = view() as { view: "wizard-create-adhoc"; repoNames: string[] }
+          const steps = buildAdhocWizardSteps(v.repoNames)
+          return (
+            <WizardView
+              title="Create Workspace"
+              steps={steps}
+              onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, null, v.repoNames)}
+              onCancel={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "wizard-create-template"}>
+        {(() => {
+          const v = view() as { view: "wizard-create-template"; repoNames: string[] }
+          const steps = buildCreateTemplateSteps(v.repoNames)
+          return (
+            <WizardView
+              title="Create Template"
+              steps={steps}
+              onComplete={(data) => executeCreateTemplate(data as CreateTemplateData, v.repoNames)}
+              onCancel={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "create-progress"}>
+        <CreateProgressView
+          rows={createRows()}
+          done={createDone()}
+          summary={createSummary()}
+          title={"Creating " + (view() as any).workspaceName + "..."}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view !== "action-menu" && view().view !== "repo-action-menu" && view().view !== "confirm" && view().view !== "inline-input" && view().view !== "repo-remove-blocked" && view().view !== "progress" && view().view !== "sync-progress" && view().view !== "wizard-create" && view().view !== "wizard-create-adhoc" && view().view !== "wizard-create-template" && view().view !== "create-progress"}>
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
           <Switch>
@@ -1191,7 +1260,7 @@ export default function App() {
           </Show>
         </box>
 
-        {/* BOTTOM BOX: detail / action-menu / confirm / progress / inline-input */}
+        {/* BOTTOM BOX: detail pane for list view only */}
         <box border title={detailBoxTitle()} flexDirection="column" flexGrow={2} minHeight={10}>
           {/* List view — tab-specific detail */}
           <Show when={view().view === "list"}>
@@ -1210,83 +1279,6 @@ export default function App() {
                 />
               </Match>
             </Switch>
-          </Show>
-
-
-          {/* Progress view */}
-          <Show when={view().view === "progress"}>
-            <ProgressView
-              title={(view() as any).message}
-              lines={progressLines()}
-              done={progressDone()}
-            />
-          </Show>
-
-          {/* Sync progress view */}
-          <Show when={view().view === "sync-progress"}>
-            <SyncProgressView
-              rows={syncRows()}
-              done={syncDone()}
-              summary={syncSummary()}
-            />
-          </Show>
-
-          {/* Wizard: template-based create */}
-          <Show when={view().view === "wizard-create"}>
-            {(() => {
-              const v = view() as { view: "wizard-create"; templateIndex: number }
-              const template = filteredTemplates()[v.templateIndex]
-              if (!template) return null
-              const tpl = readTemplate(template.name)
-              const steps = buildTemplateWizardSteps(tpl)
-              return (
-                <WizardView
-                  steps={steps}
-                  onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, tpl, null)}
-                  onCancel={() => setView({ view: "list" })}
-                />
-              )
-            })()}
-          </Show>
-
-          {/* Wizard: ad-hoc create from Repos tab */}
-          <Show when={view().view === "wizard-create-adhoc"}>
-            {(() => {
-              const v = view() as { view: "wizard-create-adhoc"; repoNames: string[] }
-              const steps = buildAdhocWizardSteps(v.repoNames)
-              return (
-                <WizardView
-                  steps={steps}
-                  onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, null, v.repoNames)}
-                  onCancel={() => setView({ view: "list" })}
-                />
-              )
-            })()}
-          </Show>
-
-          {/* Wizard: template create from Repos action menu */}
-          <Show when={view().view === "wizard-create-template"}>
-            {(() => {
-              const v = view() as { view: "wizard-create-template"; repoNames: string[] }
-              const steps = buildCreateTemplateSteps(v.repoNames)
-              return (
-                <WizardView
-                  steps={steps}
-                  onComplete={(data) => executeCreateTemplate(data as CreateTemplateData, v.repoNames)}
-                  onCancel={() => setView({ view: "list" })}
-                />
-              )
-            })()}
-          </Show>
-
-
-          {/* Create progress view */}
-          <Show when={view().view === "create-progress"}>
-            <CreateProgressView
-              rows={createRows()}
-              done={createDone()}
-              summary={createSummary()}
-            />
           </Show>
         </box>
 
