@@ -96,16 +96,20 @@ Plans:
 - [x] 13-03-PLAN.md — Ad-hoc (Repos tab) create flow: multi-select, n key, wizard launch
 
 ### Phase 14: template-and-repo-management
-**Goal**: Users can create a new template from the Templates tab and perform add/scan/remove actions on the Repos tab without leaving the TUI
+**Goal**: Users can create a new template from the Repos tab action menu and perform remove actions on repos, with unified selection display across all tabs
 **Depends on**: Phase 13 (WizardView component exists and patterns established)
 **Requirements**: C-04, R-01, R-02, R-03, R-04
 **Success Criteria** (what must be TRUE):
-  1. Pressing `n` in the Templates tab opens a create wizard and the new template appears in the list after completion
-  2. Pressing enter on a repo row in the Repos tab opens an action menu with add, scan, and remove options
-  3. User can add a repo by entering a filesystem path via InlineInput; an indicator shows whether the path currently exists on disk
-  4. User can trigger a directory scan from within the TUI (suspends renderer, runs scan wizard, resumes)
-  5. User can remove a repo with a confirm dialog that shows which workspaces currently reference it
-**Plans**: TBD
+  1. Pressing Enter on a repo row opens RepoActionMenu with create workspace, create template, and remove options
+  2. Selecting repos and pressing `t` in RepoActionMenu opens a template create wizard; new template appears in Templates tab after completion
+  3. Pressing `r` on a repo with references shows a blocked-removal view; pressing `r` on a repo with no references shows confirm dialog and removes on confirm
+  4. All three tabs use identical `>[x]` checkbox-style selection indicators
+  5. Help bars are consistent across all tabs (Enter Actions, Space Select, / Filter, r Refresh, ? Help, q Quit)
+**Plans**: 3 plans
+Plans:
+- [ ] 14-01-PLAN.md — UIView type extensions + RepoActionMenu + RemoveBlockedView components with tests
+- [ ] 14-02-PLAN.md — Selection display unification (RepoList + TemplateList checkbox prefix)
+- [ ] 14-03-PLAN.md — App.tsx wiring: action handlers, template create wizard, repo remove, keyboard guards, help bar
 
 ### Phase 15: integration-tests-and-screen-polish
 **Goal**: App-level integration tests cover all major flows end-to-end, and the TUI renders cleanly within 80 columns with human-readable workspace ages
@@ -131,5 +135,5 @@ Plans:
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 13. wizard-create-workspace | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 14. template-and-repo-management | v0.4.0 | 0/? | Not started | — |
+| 14. template-and-repo-management | v0.4.0 | 0/3 | Not started | — |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |
