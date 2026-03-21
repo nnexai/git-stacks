@@ -103,10 +103,10 @@ None.
 
 ### Quick Tasks Completed
 
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260321-s98 | Fix dashboard creation wizard input forms clipping outside dialog and short visible input width | 2026-03-21 | 2a30e1b | [260321-s98-fix-dashboard-creation-wizard-input-form](./quick/260321-s98-fix-dashboard-creation-wizard-input-form/) |
-| 260321-sqp | Implement TODO tests across the test suite (28 tests, 6 files) | 2026-03-21 | 66ebabb | [260321-sqp-implement-todo-tests-across-the-test-sui](./quick/260321-sqp-implement-todo-tests-across-the-test-sui/) |
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260321-s98 | Fix dashboard creation wizard input forms clipping outside dialog and short visible input width | 2026-03-21 | 2a30e1b | | [260321-s98-fix-dashboard-creation-wizard-input-form](./quick/260321-s98-fix-dashboard-creation-wizard-input-form/) |
+| 260321-sqp | Implement TODO tests across the test suite (30 tests, 6 files) | 2026-03-21 | 5d62b91 | Verified | [260321-sqp-implement-todo-tests-across-the-test-sui](./quick/260321-sqp-implement-todo-tests-across-the-test-sui/) |
 
 ## Session Continuity
 

@@ -49,7 +49,7 @@ function runDoctorWithInput(
     {
       env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
       cwd: PROJECT_ROOT,
-      stdin: stdinInput ? Buffer.from(stdinInput) : undefined,
+      stdin: stdinInput ? Buffer.from(stdinInput) : "pipe",
       stdio: ["pipe", "pipe", "pipe"],
     }
   )
