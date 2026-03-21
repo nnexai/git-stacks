@@ -8,10 +8,12 @@ import {
   workspaceExists,
   writeWorkspace,
   readGlobalConfig,
+  readTemplate,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
 import { createWorktree } from "../lib/git"
-import { integrations, type IntegrationContext } from "../lib/integrations"
+import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
+import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
 import { openWorkspace } from "../lib/workspace-ops"
 
 export async function runWorkspaceClone(sourceArg?: string) {
@@ -63,6 +65,55 @@ export async function runWorkspaceClone(sourceArg?: string) {
   if (p.isCancel(branchRaw)) cancel()
   const newBranch = (branchRaw as string).trim()
 
+  // Optional: integration overrides (D-05, D-06)
+  // Cascade: source workspace integrations -> source template integrations -> global
+  const sourceWsIntegrations = (source.settings?.integrations ?? {}) as Record<string, Record<string, unknown>>
+
+  // Build initial enabled IDs walking the full cascade per D-06
+  const initialEnabledIds = integrations.filter(i => {
+    // Level 1: source workspace override
+    const wsOverride = sourceWsIntegrations[i.id]
+    if (wsOverride && typeof wsOverride === "object" && "enabled" in wsOverride) {
+      return (wsOverride as { enabled: boolean }).enabled
+    }
+    // Level 2: source workspace's template overrides (if template-based)
+    if (source.template) {
+      try {
+        const tpl = readTemplate(source.template)
+        const tplOverride = tpl.integrations?.[i.id]
+        if (tplOverride && typeof tplOverride === "object" && "enabled" in (tplOverride as object)) {
+          return (tplOverride as { enabled: boolean }).enabled
+        }
+      } catch {
+        // Template file missing — fall through to global
+      }
+    }
+    // Level 3: global config
+    return resolveEnabledGlobally(i.id, i.enabledByDefault, config)
+  }).map(i => i.id)
+
+  // currentConfigs: merge source ws overrides over template overrides for configurePrompt pre-fill
+  const currentConfigs = (() => {
+    const base: Record<string, Record<string, unknown>> = {}
+    if (source.template) {
+      try {
+        const tpl = readTemplate(source.template)
+        if (tpl.integrations) {
+          for (const [k, v] of Object.entries(tpl.integrations)) {
+            if (v && typeof v === "object") base[k] = v as Record<string, unknown>
+          }
+        }
+      } catch { /* template missing */ }
+    }
+    // Workspace overrides take precedence over template
+    for (const [k, v] of Object.entries(sourceWsIntegrations)) {
+      base[k] = v
+    }
+    return base
+  })()
+
+  const userIntegrationOverrides = await promptIntegrationOverrides(initialEnabledIds, currentConfigs)
+
   // Recompute task_paths for worktree repos
   const newRepos = source.repos.map((repo) => ({
     ...repo,
@@ -90,13 +141,22 @@ export async function runWorkspaceClone(sourceArg?: string) {
   }
 
   // Build and save new workspace (drop cmux_workspace_id, preserve template ref)
-  const { cmux_workspace_id: _, ...rest } = source
+  const { cmux_workspace_id: _, settings: _existingSettings, ...restNoSettings } = source
+  const mergedSettings = (() => {
+    const base = _existingSettings ?? {}
+    if (userIntegrationOverrides && Object.keys(userIntegrationOverrides).length > 0) {
+      return { ...base, integrations: userIntegrationOverrides }
+    }
+    return base
+  })()
+
   const newWorkspace = {
-    ...rest,
+    ...restNoSettings,
     name: newName,
     branch: newBranch,
     created: new Date().toISOString().split("T")[0],
     repos: newRepos,
+    ...(Object.keys(mergedSettings).length > 0 ? { settings: mergedSettings } : {}),
   }
   writeWorkspace(newWorkspace)
 

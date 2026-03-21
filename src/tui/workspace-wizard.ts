@@ -20,7 +20,8 @@ import {
 import { getTasksDir, expandHome } from "../lib/paths"
 import { createWorktree, getCurrentBranch } from "../lib/git"
 import { detectRepoType } from "../lib/detect"
-import { integrations, type IntegrationContext } from "../lib/integrations"
+import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
+import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
 import { runHooks } from "../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
 import { openWorkspace } from "../lib/workspace-ops"
@@ -284,6 +285,35 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
   const descRaw = await safeText({ message: "Description (optional)" })
   if (p.isCancel(descRaw)) cancel()
   const description = (descRaw as string).trim()
+
+  // Optional: integration overrides (D-05, D-06, D-07)
+  let userIntegrationOverrides: Record<string, unknown> | undefined
+  if (templateName) {
+    // Template-based: pre-select from template's integrations (D-06)
+    const tplIntegrations = (wsIntegrationSettings ?? {}) as Record<string, Record<string, unknown>>
+    const initialEnabledIds = integrations.filter(i => {
+      const override = tplIntegrations[i.id]
+      if (override && typeof override === "object" && "enabled" in override) {
+        return (override as { enabled: boolean }).enabled
+      }
+      return resolveEnabledGlobally(i.id, i.enabledByDefault, config)
+    }).map(i => i.id)
+    userIntegrationOverrides = await promptIntegrationOverrides(initialEnabledIds, tplIntegrations)
+  } else {
+    // Ad-hoc: pre-select from global config (D-06)
+    const initialEnabledIds = integrations
+      .filter(i => resolveEnabledGlobally(i.id, i.enabledByDefault, config))
+      .map(i => i.id)
+    const currentConfigs = Object.fromEntries(
+      integrations.map(i => [i.id, (config.integrations[i.id] ?? {}) as Record<string, unknown>])
+    )
+    userIntegrationOverrides = await promptIntegrationOverrides(initialEnabledIds, currentConfigs)
+  }
+
+  // Merge: user overrides take precedence over template snapshot
+  if (userIntegrationOverrides && Object.keys(userIntegrationOverrides).length > 0) {
+    wsIntegrationSettings = userIntegrationOverrides
+  }
 
   const baseEnv = {
     WS_WORKSPACE: wsName,
