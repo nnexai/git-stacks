@@ -31,20 +31,20 @@
 - [x] **C-01**: User can create a new workspace from the Workspaces tab (`n` key) without exiting to CLI — wizard: select template → enter name → enter branch
 - [x] **C-02**: Wizard supports back-navigation (escape goes to previous step) and full cancel (escape from first step returns to list)
 - [x] **C-03**: After workspace creation, the list refreshes and cursor positions on the newly created workspace
-- [ ] **C-04**: User can create a new template from the Templates tab (`n` key) without exiting to CLI
+- [x] **C-04**: User can create a new template from the Templates tab (`n` key) without exiting to CLI
 
 ### Repo Management (R-)
 
 - [x] **R-01**: User can open an action menu from the Repos tab (Enter on a repo row opens actions)
 - [ ] **R-02**: User can add a repo to the registry from within the TUI (path entry via InlineInput with path validation indicator)
 - [ ] **R-03**: User can trigger a repo directory scan from within the TUI (uses suspend+resume to the existing CLI scan wizard — the one sanctioned escape hatch)
-- [ ] **R-04**: User can remove a repo from the registry from within the TUI (ConfirmDialog showing which workspaces reference it)
+- [x] **R-04**: User can remove a repo from the registry from within the TUI (ConfirmDialog showing which workspaces reference it)
 
 ### Screen Improvements (UI-)
 
-- [ ] **UI-01**: Help bar content fits within 80 terminal columns without truncation
-- [ ] **UI-02**: Workspace list rows show relative age (`3d`, `2h`, `5m`) instead of ISO date string
-- [ ] **UI-03**: Column widths respond to terminal width (no hard-coded character widths)
+- [x] **UI-01**: Help bar content fits within 80 terminal columns without truncation
+- [x] **UI-02**: Workspace list rows show relative age (`3d`, `2h`, `5m`) instead of ISO date string
+- [x] **UI-03**: Column widths respond to terminal width (no hard-coded character widths)
 
 ## v2 Requirements
 
@@ -88,15 +88,15 @@
 | C-01 | Phase 13 | Complete |
 | C-02 | Phase 13 | Complete |
 | C-03 | Phase 13 | Complete |
-| C-04 | Phase 14 | Pending |
+| C-04 | Phase 14 | Complete |
 | R-01 | Phase 14 | Complete |
 | R-02 | Phase 14 | Pending |
 | R-03 | Phase 14 | Pending |
-| R-04 | Phase 14 | Pending |
+| R-04 | Phase 14 | Complete |
 | T-05 | Phase 15 | Pending |
-| UI-01 | Phase 15 | Pending |
-| UI-02 | Phase 15 | Pending |
-| UI-03 | Phase 15 | Pending |
+| UI-01 | Phase 15 | Complete |
+| UI-02 | Phase 15 | Complete |
+| UI-03 | Phase 15 | Complete |
 
 **Coverage:**
 - v1 requirements: 23 total

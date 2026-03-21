@@ -122,7 +122,7 @@ Plans:
   4. Column widths in workspace and template lists adjust to available terminal width — no hard-coded character widths
 **Plans**: 3 plans
 Plans:
-- [ ] 15-01-PLAN.md — Screen polish: tiered help bar, relative workspace age, responsive column widths
+- [x] 15-01-PLAN.md — Screen polish: tiered help bar, relative workspace age, responsive column widths
 - [ ] 15-02-PLAN.md — Integration tests part 1: tab switching + action menu dispatch
 - [ ] 15-03-PLAN.md — Integration tests part 2: wizard entry/cancel + sync progress flow
 
@@ -140,4 +140,4 @@ Plans:
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 13. wizard-create-workspace | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 14. template-and-repo-management | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 15. integration-tests-and-screen-polish | v0.4.0 | 0/3 | Not started | — |
+| 15. integration-tests-and-screen-polish | v0.4.0 | 1/3 | In Progress|  |

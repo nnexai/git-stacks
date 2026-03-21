@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-03-21T10:56:55.592Z"
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-03-21T11:56:23.662Z"
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 15
+  completed_plans: 13
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 14 — template-and-repo-management
+**Current focus:** Phase 15 — integration-tests-and-screen-polish
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 15 (integration-tests-and-screen-polish) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -66,6 +66,10 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 14]: repoRemoveTarget signal is the dedicated path for repo remove confirmation; no confirmContext extension
 - [Phase 14]: n key removed from Repos tab; workspace create moved into RepoActionMenu [w] action per D-03
 - [Phase 14]: executeCreateTemplate: reloads templates then uses findIndex to place cursor on new entry via Promise.then()
+- [Phase 15-01]: msgShortcut (m Messages) gated on tab() === workspaces so other tabs stay tighter
+- [Phase 15-01]: messagePreview fixedWidth made reactive: nameWidth() + branchWidth() + 23 instead of hardcoded 80
+- [Phase 15-01]: nameWidth inside For callback (not component scope) so it captures dims() reactively without extra signals
+- [Phase 15-01]: leftTruncate uses unicode ellipsis character (\u2026) consistent with name truncation in all three list components
 
 ### Pending Todos
 
@@ -77,7 +81,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T10:53:06.979Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-03-21T11:56:23.658Z
+Stopped at: Completed 15-01-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
