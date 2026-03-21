@@ -136,10 +136,10 @@ export default function App() {
   const helpBarText = createMemo(() => {
     const t = tab()
     if (t === "workspaces")
-      return "  1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  m Messages  / Filter  r Refresh  ? Help  q Quit"
+      return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  m Messages  / Filter  r Refresh  ? Help  q Quit"
     if (t === "templates")
-      return "  1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  / Filter  r Refresh  ? Help  q Quit"
-    return "  1/2/3 Tabs  \u2191\u2193/jk Navigate  / Filter  r Refresh  ? Help  q Quit"
+      return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  / Filter  r Refresh  ? Help  q Quit"
+    return "1/2/3 Tabs  \u2191\u2193/jk Navigate  / Filter  r Refresh  ? Help  q Quit"
   })
 
   const inlineInputLabel = createMemo(() => {
@@ -678,8 +678,8 @@ export default function App() {
         </box>
 
         {/* HELP BAR / FILTER LINE — single box, no DOM swapping, no height toggling */}
-        <box height={1} flexDirection="row">
-          <text fg="cyan">{filtering() ? "  filter: " : ""}</text>
+        <box height={1} flexDirection="row" paddingLeft={1}>
+          <text fg="cyan">{filtering() || filter() ? "filter: " : ""}</text>
           <input
             focused={filterFocused()}
             value={filter()}
@@ -688,9 +688,9 @@ export default function App() {
             onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
           />
           <text fg={!filtering() && filter() ? "cyan" : !filtering() && refreshFlash() ? "green" : "gray"}>
-            {filtering() ? "" : filter() ? `  filter: "${filter()}" ` : refreshFlash() ? `  ${refreshFlash()}` : loading() ? "  (loading statuses...)" : helpBarText()}
+            {filtering() ? "" : filter() ? `"${filter()}" ` : refreshFlash() ? refreshFlash() : loading() ? "(loading statuses...)" : helpBarText()}
           </text>
-          <text fg="gray">{!filtering() && filter() ? "/ edit · esc clear" : ""}</text>
+          <text fg="gray">{!filtering() && filter() ? " / edit · esc clear" : ""}</text>
           <box flexGrow={filtering() ? 0 : 1} />
           <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>{filtering() ? "" : socketStatus === "bound" ? "\u25cf" : "\u25cb"}{" "}</text>
         </box>
