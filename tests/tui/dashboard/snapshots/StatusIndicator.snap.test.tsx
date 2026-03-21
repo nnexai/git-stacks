@@ -3,7 +3,7 @@ import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { StatusIndicator } from "../../../../src/tui/dashboard/StatusIndicator"
 
-const renderOpts = { kittyKeyboard: true }
+const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 
 describe("StatusIndicator snapshots", () => {
   test("renders pending state (gray dot)", async () => {

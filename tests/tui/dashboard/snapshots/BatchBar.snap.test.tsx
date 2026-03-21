@@ -3,7 +3,7 @@ import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { BatchBar } from "../../../../src/tui/dashboard/BatchBar"
 
-const renderOpts = { kittyKeyboard: true }
+const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 
 describe("BatchBar snapshots", () => {
   test("renders with count and default action text", async () => {

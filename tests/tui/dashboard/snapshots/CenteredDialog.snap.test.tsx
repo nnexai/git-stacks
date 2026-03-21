@@ -3,7 +3,7 @@ import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { CenteredDialog } from "../../../../src/tui/dashboard/CenteredDialog"
 
-const renderOpts = { kittyKeyboard: true }
+const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 
 describe("CenteredDialog snapshots", () => {
   test("renders small dialog with title and text children", async () => {

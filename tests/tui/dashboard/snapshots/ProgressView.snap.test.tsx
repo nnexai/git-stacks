@@ -3,7 +3,7 @@ import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { ProgressView } from "../../../../src/tui/dashboard/ProgressView"
 
-const renderOpts = { kittyKeyboard: true }
+const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 
 describe("ProgressView snapshots", () => {
   test("renders done state with lines and completion message", async () => {

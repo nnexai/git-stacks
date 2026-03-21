@@ -5,7 +5,7 @@ import { RepoDetail } from "../../../../src/tui/dashboard/RepoDetail"
 import type { Template, Workspace } from "../../../../src/lib/config"
 import type { RepoEntry } from "../../../../src/tui/dashboard/hooks/useRepos"
 
-const renderOpts = { kittyKeyboard: true }
+const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 
 const makeWorkspace = (name: string, repoName: string): Workspace => ({
   name,

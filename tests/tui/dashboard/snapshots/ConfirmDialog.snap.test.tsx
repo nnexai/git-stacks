@@ -3,7 +3,7 @@ import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { ConfirmDialog } from "../../../../src/tui/dashboard/ConfirmDialog"
 
-const renderOpts = { kittyKeyboard: true }
+const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 const noop = () => {}
 
 describe("ConfirmDialog snapshots", () => {
