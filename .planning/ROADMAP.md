@@ -32,7 +32,7 @@ See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md) for full detail
 - [x] **Phase 10: test-harness** — Component-level test infrastructure using testRender + config dir isolation (completed 2026-03-21)
 - [x] **Phase 11: tui-prerequisites** — InlineInput cursor movement and runHooksCaptured before any wizard work (completed 2026-03-21)
 - [x] **Phase 12: workspace-sync** — Sync action in workspace action menu with per-repo progress and timeout (completed 2026-03-21)
-- [ ] **Phase 13: wizard-create-workspace** — WizardView component + create workspace from Workspaces tab
+- [ ] **Phase 13: wizard-create-workspace** — WizardView component + create workspace from Templates/Repos tabs
 - [ ] **Phase 14: template-and-repo-management** — Template create wizard + full repo action menu (add/scan/remove)
 - [ ] **Phase 15: integration-tests-and-screen-polish** — App integration tests + help bar, age display, responsive columns
 
@@ -81,15 +81,19 @@ Plans:
 - [x] 12-03-PLAN.md — App.tsx integration: types, ActionMenu, executeSync, keyboard guards, render branch
 
 ### Phase 13: wizard-create-workspace
-**Goal**: Users can create a new workspace entirely from within the TUI Workspaces tab, with full back-navigation and cursor placement on the new entry
+**Goal**: Users can create a new workspace entirely from within the TUI via Templates tab (action menu) or Repos tab (n key), with full back-navigation and cursor placement on the new entry
 **Depends on**: Phase 11 (InlineInput cursor prerequisite), Phase 12 (ProgressView pattern validated)
 **Requirements**: C-01, C-02, C-03
 **Success Criteria** (what must be TRUE):
-  1. Pressing `n` in the Workspaces tab opens a multi-step create wizard: select template, enter name, enter branch
+  1. Pressing `w` in the Templates action menu or `n` in the Repos tab opens a multi-step create wizard: enter name, enter branch, summary/confirm
   2. Pressing escape at any non-first step returns to the previous step; pressing escape at the first step cancels and returns to the list
   3. After a workspace is created, the list refreshes and the cursor sits on the newly created workspace row
   4. No `@clack/prompts` functions are called from within the TUI wizard flow (grep check passes)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 13-01-PLAN.md — WizardView + CreateProgressView components, types, useWorkspaces.reload() fix, tests
+- [ ] 13-02-PLAN.md — Template-based create flow wired into App.tsx via TemplateActionMenu
+- [ ] 13-03-PLAN.md — Ad-hoc (Repos tab) create flow: multi-select, n key, wizard launch
 
 ### Phase 14: template-and-repo-management
 **Goal**: Users can create a new template from the Templates tab and perform add/scan/remove actions on the Repos tab without leaving the TUI
@@ -126,6 +130,6 @@ Plans:
 | 10. test-harness | 2/2 | Complete    | 2026-03-21 | — |
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 13. wizard-create-workspace | v0.4.0 | 0/? | Not started | — |
+| 13. wizard-create-workspace | v0.4.0 | 0/3 | Not started | — |
 | 14. template-and-repo-management | v0.4.0 | 0/? | Not started | — |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |
