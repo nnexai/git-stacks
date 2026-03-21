@@ -55,6 +55,7 @@ export default function App() {
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
+  const [reposSelected, setReposSelected] = createSignal<Set<number>>(new Set())
   const [progressLines, setProgressLines] = createSignal<string[]>([])
   const [progressDone, setProgressDone] = createSignal(false)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -159,7 +160,7 @@ export default function App() {
       return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  m Messages  / Filter  r Refresh  ? Help  q Quit"
     if (t === "templates")
       return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  / Filter  r Refresh  ? Help  q Quit"
-    return "1/2/3 Tabs  \u2191\u2193/jk Navigate  / Filter  r Refresh  ? Help  q Quit"
+    return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Space Select  n Create  / Filter  r Refresh  ? Help  q Quit"
   })
 
   const inlineInputLabel = createMemo(() => {
@@ -485,6 +486,34 @@ export default function App() {
     ]
   }
 
+  function buildAdhocWizardSteps(repoNames: string[]): WizardStep<CreateWizardData>[] {
+    return [
+      {
+        kind: "text",
+        label: "Workspace name",
+        key: "name",
+        validate: (v: string) => {
+          if (!v.trim()) return "Required"
+          if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
+          return undefined
+        },
+      },
+      {
+        kind: "text",
+        label: "Branch",
+        key: "branch",
+        validate: (v: string) => (v.trim() ? undefined : "Required"),
+      },
+      {
+        kind: "confirm",
+        buildMessage: (data: Partial<CreateWizardData>) => {
+          const repoLines = repoNames.map(n => `  ${n} (worktree)`).join("\n")
+          return `Ad-hoc workspace\nBranch: ${data.branch}\nRepos:\n${repoLines}`
+        },
+      },
+    ]
+  }
+
   async function executeCreateWorkspace(
     data: CreateWizardData,
     template: Template | null,
@@ -796,6 +825,7 @@ export default function App() {
         if (filtering()) { setFiltering(false); setFilter(""); clampCursor(); return }
         if (filter()) { setFilter(""); clampCursor(); return }
         if (selected().size > 0) { setSelected(() => new Set<number>()); return }
+        if (reposSelected().size > 0) { setReposSelected(() => new Set<number>()); return }
         // NO-OP at top-level list — do NOT call renderer.destroy()
         return
       }
@@ -827,6 +857,17 @@ export default function App() {
         return
       }
 
+      if (key.name === "space" && tab() === "repos") {
+        setReposSelected((prev) => {
+          const next = new Set(prev)
+          if (next.has(cursor())) next.delete(cursor())
+          else next.add(cursor())
+          return next
+        })
+        setCursor((i) => Math.min(len - 1, i + 1))
+        return
+      }
+
       // Batch operations (workspaces only)
       if (tab() === "workspaces" && selected().size > 0) {
         if (key.name === "c") {
@@ -846,6 +887,24 @@ export default function App() {
           setMessagesWorkspace(name)
           setMessagesOpen(true)
         }
+        return
+      }
+
+      // Ad-hoc workspace create from Repos tab (D-02, D-04)
+      if (key.name === "n" && tab() === "repos") {
+        const selectedIndices = reposSelected()
+        let repoNames: string[]
+        if (selectedIndices.size > 0) {
+          // D-04: use multi-selected repos
+          repoNames = [...selectedIndices].map(i => filteredRepos()[i]?.name).filter(Boolean) as string[]
+        } else {
+          // D-04: use currently highlighted repo
+          const current = currentRepo()
+          if (!current) return
+          repoNames = [current.name]
+        }
+        setReposSelected(new Set<number>())  // clear selection
+        setView({ view: "wizard-create-adhoc", source: "repos", repoNames })
         return
       }
 
@@ -922,6 +981,7 @@ export default function App() {
                 cursor={tabCursor.repos[0]()}
                 filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
                 height={listHeight()}
+                selected={reposSelected()}
               />
             </Match>
           </Switch>
@@ -1041,6 +1101,21 @@ export default function App() {
                 <WizardView
                   steps={steps}
                   onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, tpl, null)}
+                  onCancel={() => setView({ view: "list" })}
+                />
+              )
+            })()}
+          </Show>
+
+          {/* Wizard: ad-hoc create from Repos tab */}
+          <Show when={view().view === "wizard-create-adhoc"}>
+            {(() => {
+              const v = view() as { view: "wizard-create-adhoc"; repoNames: string[] }
+              const steps = buildAdhocWizardSteps(v.repoNames)
+              return (
+                <WizardView
+                  steps={steps}
+                  onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, null, v.repoNames)}
                   onCancel={() => setView({ view: "list" })}
                 />
               )
