@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import type { AgentHookPlugin, HookEntry } from "./types"
+import type { AgentHookPlugin, HookEntry, HooksConfig, MatcherGroup } from "./types"
+
+const GIT_STACKS_MARKER = "git-stacks"
 
 function getSettingsPath(repoWorktreePath: string): string {
   return join(repoWorktreePath, ".claude", "settings.json")
@@ -20,7 +22,26 @@ function readSettings(settingsPath: string): Record<string, unknown> {
 function writeSettings(settingsPath: string, data: Record<string, unknown>): void {
   const dir = join(settingsPath, "..")
   mkdirSync(dir, { recursive: true })
-  writeFileSync(settingsPath, JSON.stringify(data, null, 2))
+  writeFileSync(settingsPath, JSON.stringify(data, null, 2) + "\n")
+}
+
+/** Check if a matcher group contains a git-stacks command */
+function isGitStacksGroup(group: MatcherGroup): boolean {
+  return group.hooks.some((h) => h.command.includes(GIT_STACKS_MARKER))
+}
+
+/** Convert flat HookEntry[] into the nested HooksConfig format */
+function entriesToConfig(entries: HookEntry[]): HooksConfig {
+  const config: HooksConfig = {}
+  for (const entry of entries) {
+    const group: MatcherGroup = {
+      ...(entry.matcher ? { matcher: entry.matcher } : {}),
+      hooks: [{ type: "command", command: entry.command }],
+    }
+    if (!config[entry.event]) config[entry.event] = []
+    config[entry.event].push(group)
+  }
+  return config
 }
 
 export const claudeCodePlugin: AgentHookPlugin = {
@@ -54,14 +75,23 @@ export const claudeCodePlugin: AgentHookPlugin = {
     const settingsPath = getSettingsPath(repoWorktreePath)
     const data = readSettings(settingsPath)
 
-    // Get existing hooks, filtering out any pre-existing git-stacks entries (idempotency)
-    const existingHooks = Array.isArray(data.hooks)
-      ? (data.hooks as Array<{ command: string }>).filter((h) => !h.command.includes("git-stacks"))
-      : []
+    const existingHooks = (data.hooks ?? {}) as HooksConfig
 
-    const newEntries = this.generateHookEntries(workspaceName)
-    data.hooks = [...existingHooks, ...newEntries]
+    // Strip old git-stacks entries from each event (idempotency)
+    const cleaned: HooksConfig = {}
+    for (const [event, groups] of Object.entries(existingHooks)) {
+      const kept = groups.filter((g) => !isGitStacksGroup(g))
+      if (kept.length > 0) cleaned[event] = kept
+    }
 
+    // Merge in fresh git-stacks entries
+    const fresh = entriesToConfig(this.generateHookEntries(workspaceName))
+    for (const [event, groups] of Object.entries(fresh)) {
+      if (!cleaned[event]) cleaned[event] = []
+      cleaned[event].push(...groups)
+    }
+
+    data.hooks = cleaned
     writeSettings(settingsPath, data)
   },
 
@@ -70,16 +100,19 @@ export const claudeCodePlugin: AgentHookPlugin = {
     if (!existsSync(settingsPath)) return
 
     const data = readSettings(settingsPath)
-    if (!Array.isArray(data.hooks)) return
+    if (!data.hooks || typeof data.hooks !== "object") return
 
-    const remaining = (data.hooks as Array<{ command: string }>).filter(
-      (h) => !h.command.includes("git-stacks")
-    )
+    const hooks = data.hooks as HooksConfig
+    const cleaned: HooksConfig = {}
+    for (const [event, groups] of Object.entries(hooks)) {
+      const kept = groups.filter((g) => !isGitStacksGroup(g))
+      if (kept.length > 0) cleaned[event] = kept
+    }
 
-    if (remaining.length === 0) {
+    if (Object.keys(cleaned).length === 0) {
       delete data.hooks
     } else {
-      data.hooks = remaining
+      data.hooks = cleaned
     }
 
     writeSettings(settingsPath, data)

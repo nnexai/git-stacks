@@ -46,7 +46,7 @@ describe("claudeCodePlugin", () => {
     expect(entries[3].command).toContain("git-stacks message clear")
   })
 
-  it("install creates .claude/settings.json with hooks", async () => {
+  it("install creates .claude/settings.json with nested hooks format", async () => {
     const { claudeCodePlugin } = await import("../../src/lib/agent-hooks/claude-code")
     claudeCodePlugin.install(tmpDir, "test-ws")
 
@@ -54,9 +54,24 @@ describe("claudeCodePlugin", () => {
     expect(existsSync(settingsPath)).toBe(true)
 
     const data = JSON.parse(readFileSync(settingsPath, "utf-8"))
-    expect(Array.isArray(data.hooks)).toBe(true)
-    expect(data.hooks).toHaveLength(4)
-    expect(data.hooks[0].event).toBe("Stop")
+    // hooks should be an object keyed by event name
+    expect(typeof data.hooks).toBe("object")
+    expect(Array.isArray(data.hooks)).toBe(false)
+
+    // Check event keys exist
+    expect(data.hooks.Stop).toBeDefined()
+    expect(data.hooks.PreToolUse).toBeDefined()
+    expect(data.hooks.UserPromptSubmit).toBeDefined()
+    expect(data.hooks.PostToolUse).toBeDefined()
+
+    // Each event has matcher groups with nested hooks
+    expect(data.hooks.Stop).toHaveLength(1)
+    expect(data.hooks.Stop[0].hooks[0].type).toBe("command")
+    expect(data.hooks.Stop[0].hooks[0].command).toContain("git-stacks")
+
+    // PreToolUse has a matcher
+    expect(data.hooks.PreToolUse[0].matcher).toBe("AskUserQuestion")
+    expect(data.hooks.PreToolUse[0].hooks[0].type).toBe("command")
   })
 
   it("install merges with existing settings without losing other keys", async () => {
@@ -72,18 +87,43 @@ describe("claudeCodePlugin", () => {
 
     const data = JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf-8"))
     expect(data.permissions).toEqual({ allow: ["Read"] })
-    expect(Array.isArray(data.hooks)).toBe(true)
-    expect(data.hooks).toHaveLength(4)
+    expect(typeof data.hooks).toBe("object")
+    expect(data.hooks.Stop).toBeDefined()
   })
 
-  it("install is idempotent — running twice produces exactly 4 git-stacks hook entries", async () => {
+  it("install preserves existing non-git-stacks hooks in the same event", async () => {
+    const { claudeCodePlugin } = await import("../../src/lib/agent-hooks/claude-code")
+    const claudeDir = join(tmpDir, ".claude")
+    mkdirSync(claudeDir, { recursive: true })
+    writeFileSync(
+      join(claudeDir, "settings.json"),
+      JSON.stringify({
+        hooks: {
+          Stop: [{ hooks: [{ type: "command", command: "echo custom-hook" }] }],
+        },
+      }, null, 2)
+    )
+
+    claudeCodePlugin.install(tmpDir, "test-ws")
+
+    const data = JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf-8"))
+    // Should have the custom hook + git-stacks hook
+    expect(data.hooks.Stop).toHaveLength(2)
+    expect(data.hooks.Stop[0].hooks[0].command).toBe("echo custom-hook")
+    expect(data.hooks.Stop[1].hooks[0].command).toContain("git-stacks")
+  })
+
+  it("install is idempotent — running twice produces exactly one git-stacks entry per event", async () => {
     const { claudeCodePlugin } = await import("../../src/lib/agent-hooks/claude-code")
     claudeCodePlugin.install(tmpDir, "test-ws")
     claudeCodePlugin.install(tmpDir, "test-ws")
 
     const data = JSON.parse(readFileSync(join(tmpDir, ".claude", "settings.json"), "utf-8"))
-    const gsHooks = data.hooks.filter((h: { command: string }) => h.command.includes("git-stacks"))
-    expect(gsHooks).toHaveLength(4)
+    // Each event should have exactly 1 matcher group (git-stacks)
+    expect(data.hooks.Stop).toHaveLength(1)
+    expect(data.hooks.PreToolUse).toHaveLength(1)
+    expect(data.hooks.UserPromptSubmit).toHaveLength(1)
+    expect(data.hooks.PostToolUse).toHaveLength(1)
   })
 
   it("remove strips git-stacks entries, preserves non-git-stacks hooks", async () => {
@@ -94,10 +134,12 @@ describe("claudeCodePlugin", () => {
       join(claudeDir, "settings.json"),
       JSON.stringify({
         permissions: { allow: ["Read"] },
-        hooks: [
-          { event: "Stop", command: "git-stacks message send 'done' --workspace foo --from claude" },
-          { event: "Stop", command: "echo custom-hook" },
-        ],
+        hooks: {
+          Stop: [
+            { hooks: [{ type: "command", command: "git-stacks message send 'done' --workspace foo --from claude" }] },
+            { hooks: [{ type: "command", command: "echo custom-hook" }] },
+          ],
+        },
       }, null, 2)
     )
 
@@ -105,8 +147,8 @@ describe("claudeCodePlugin", () => {
 
     const data = JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf-8"))
     expect(data.permissions).toEqual({ allow: ["Read"] })
-    expect(data.hooks).toHaveLength(1)
-    expect(data.hooks[0].command).toBe("echo custom-hook")
+    expect(data.hooks.Stop).toHaveLength(1)
+    expect(data.hooks.Stop[0].hooks[0].command).toBe("echo custom-hook")
   })
 
   it("remove deletes hooks key when no hooks remain", async () => {
@@ -129,7 +171,7 @@ describe("agentHookPlugins registry", () => {
   it("exports array containing claudeCodePlugin", async () => {
     const { agentHookPlugins, claudeCodePlugin } = await import("../../src/lib/agent-hooks/index")
     expect(Array.isArray(agentHookPlugins)).toBe(true)
-    const found = agentHookPlugins.find((p) => p.id === "claude-code")
+    const found = agentHookPlugins.find((p: { id: string }) => p.id === "claude-code")
     expect(found).toBeDefined()
     expect(found).toBe(claudeCodePlugin)
   })
