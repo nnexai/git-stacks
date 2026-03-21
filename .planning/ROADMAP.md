@@ -79,7 +79,10 @@ Plans:
   3. `git-stacks open --no-ide` and `git-stacks open --no-cmux` skip their respective integrations as before (regression preserved)
   4. Integrations execute in ascending numeric `order` field order, with tier 1 before tier 2 before tier 3
   5. Runner unit tests cover artifact accumulation, tier ordering, and skip-flag bypass
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 17-01-PLAN.md — Add order field to Integration, create runner.ts with both execution modes, unit tests
+- [ ] 17-02-PLAN.md — Replace all four inline integration loops with runner calls
 
 ### Phase 18: artifact-population
 **Goal**: tmux, cmux, vscode, and intellij integrations return real artifact values so downstream integrations can read session names and window identifiers from the artifact bag
@@ -123,7 +126,7 @@ Plans:
 | 6-9. Dashboard UI | v0.3.0 | 13/13 | Complete | 2026-03-20 |
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16. artifact-type-foundation | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
-| 17. integration-runner | v0.6.0 | 0/? | Not started | - |
+| 17. integration-runner | v0.6.0 | 0/2 | Not started | - |
 | 18. artifact-population | v0.6.0 | 0/? | Not started | - |
 | 19. niri-shell-wrappers | v0.6.0 | 0/? | Not started | - |
 | 20. niri-integration | v0.6.0 | 0/? | Not started | - |
