@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
-stopped_at: Completed 16-artifact-type-foundation-16-01-PLAN.md
-last_updated: "2026-03-21T22:34:49.279Z"
+stopped_at: Completed 17-integration-runner-17-01-PLAN.md
+last_updated: "2026-03-21T22:58:37.647Z"
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  total_plans: 3
+  completed_plans: 2
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 16 — artifact-type-foundation
+**Current focus:** Phase 17 — integration-runner
 
 ## Current Position
 
-Phase: 17
-Plan: Not started
+Phase: 17 (integration-runner) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Plan: Not started
 ## Accumulated Context
 
 | Phase 16-artifact-type-foundation P01 | 2 | 2 tasks | 7 files |
+| Phase 17-integration-runner P01 | 15 | 2 tasks | 8 files |
 
 ### Decisions
 
@@ -59,6 +60,9 @@ Plan: Not started
 - [Phase 16-artifact-type-foundation]: All four existing integrations return null from open() — real artifact values deferred to Phase 18
 - [Phase 16-artifact-type-foundation]: ArtifactBag uses integration.id as key so downstream integrations can look up prior artifacts by well-known string key
 - [Phase 16-artifact-type-foundation]: WindowArtifact carries pid, app_id, and title to support niri snapshot-diff window identification in Phase 20
+- [Phase 17-integration-runner]: vscode=10, intellij=11, tmux=12 (tier 1: independent), cmux=20 (tier 2: side-effects) — preserves array order within tier 1
+- [Phase 17-integration-runner]: runner.ts imports integrations from index.ts directly (not as parameter) — enables mock.module test isolation with cache-busting
+- [Phase 17-integration-runner]: Spread-sort [...integrations].sort() avoids mutating the exported array in index.ts
 
 ### Pending Todos
 
@@ -79,7 +83,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:31:19.440Z
-Stopped at: Completed 16-artifact-type-foundation-16-01-PLAN.md
+Last session: 2026-03-21T22:58:37.644Z
+Stopped at: Completed 17-integration-runner-17-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 16`

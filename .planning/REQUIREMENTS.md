@@ -11,11 +11,11 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 
 - [x] **ORCH-01**: Integration `open()` returns typed artifacts (session names, window info) instead of void
 - [x] **ORCH-02**: Artifacts accumulate into a shared bag passed to each subsequent integration's `open()` call
-- [ ] **ORCH-03**: Integration execution uses three-tier ordering: independent setup (tier 1), partial side-effects (tier 2), window management (tier 3)
-- [ ] **ORCH-04**: Tier assignment is per-integration with extensible numeric priority (not hardcoded to niri)
+- [x] **ORCH-03**: Integration execution uses three-tier ordering: independent setup (tier 1), partial side-effects (tier 2), window management (tier 3)
+- [x] **ORCH-04**: Tier assignment is per-integration with extensible numeric priority (not hardcoded to niri)
 - [ ] **ORCH-05**: Four duplicated integration loops consolidated into a single runner module
-- [ ] **ORCH-06**: Runner supports both generate-only mode (TUI callers) and generate+open mode (workspace-ops, CLI)
-- [ ] **ORCH-07**: Existing `--no-ide`/`--no-cmux` skip flags preserved through runner consolidation
+- [x] **ORCH-06**: Runner supports both generate-only mode (TUI callers) and generate+open mode (workspace-ops, CLI)
+- [x] **ORCH-07**: Existing `--no-ide`/`--no-cmux` skip flags preserved through runner consolidation
 
 ### Artifacts
 
@@ -42,7 +42,7 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 ### Testing
 
 - [ ] **TEST-01**: Niri shell wrappers (`src/lib/niri.ts`) have a mockable interface — automated tests never call real `niri msg`
-- [ ] **TEST-02**: Integration runner has unit tests for artifact accumulation, tier ordering, and skip-flag behavior
+- [x] **TEST-02**: Integration runner has unit tests for artifact accumulation, tier ordering, and skip-flag behavior
 - [x] **TEST-03**: Existing integration tests continue to pass after `open()` return type change
 - [ ] **TEST-04**: Niri integration has unit tests with mocked niri shell wrappers covering workspace create, window move, tmux attach, cleanup
 
@@ -82,12 +82,12 @@ Deferred to v0.7.0+.
 | ART-05 | Phase 16 | Complete |
 | ART-06 | Phase 16 | Complete |
 | TEST-03 | Phase 16 | Complete |
-| ORCH-03 | Phase 17 | Pending |
-| ORCH-04 | Phase 17 | Pending |
+| ORCH-03 | Phase 17 | Complete |
+| ORCH-04 | Phase 17 | Complete |
 | ORCH-05 | Phase 17 | Pending |
-| ORCH-06 | Phase 17 | Pending |
-| ORCH-07 | Phase 17 | Pending |
-| TEST-02 | Phase 17 | Pending |
+| ORCH-06 | Phase 17 | Complete |
+| ORCH-07 | Phase 17 | Complete |
+| TEST-02 | Phase 17 | Complete |
 | ART-01 | Phase 18 | Pending |
 | ART-02 | Phase 18 | Pending |
 | ART-03 | Phase 18 | Pending |
