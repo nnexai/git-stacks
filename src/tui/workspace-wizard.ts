@@ -8,6 +8,7 @@ import {
   readTemplate,
   listTemplates,
   templateExists,
+  readWorkspace,
   writeWorkspace,
   workspaceExists,
   readGlobalConfig,
@@ -473,4 +474,66 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
   }
 
   p.outro(`Workspace '${wsName}' ready.  Run \`git-stacks open ${wsName}\` to re-open.`)
+}
+
+export async function runWorkspaceEdit(name: string) {
+  p.intro(`Edit workspace: ${name}`)
+
+  const ws = readWorkspace(name)
+  const config = readGlobalConfig()
+
+  const actionRaw = await p.select({
+    message: "What to edit?",
+    options: [
+      { value: "integrations", label: "Integrations", hint: "override per-integration settings" },
+      { value: "description", label: "Description" },
+      { value: "done", label: "Done", hint: "exit without changes" },
+    ],
+  })
+  if (p.isCancel(actionRaw)) cancel()
+  const action = actionRaw as string
+
+  if (action === "integrations") {
+    const currentOverrides = (ws.settings?.integrations ?? {}) as Record<string, Record<string, unknown>>
+    const initialEnabledIds = integrations.filter(i => {
+      const override = currentOverrides[i.id]
+      if (override && typeof override === "object" && "enabled" in override) {
+        return (override as { enabled: boolean }).enabled
+      }
+      return resolveEnabledGlobally(i.id, i.enabledByDefault, config)
+    }).map(i => i.id)
+    const result = await promptIntegrationOverrides(initialEnabledIds, currentOverrides)
+    if (result !== undefined) {
+      const updatedWs = { ...ws }
+      if (Object.keys(result).length > 0) {
+        updatedWs.settings = { ...(ws.settings ?? {}), integrations: result }
+      } else {
+        // User selected nothing — remove integrations override
+        if (updatedWs.settings) {
+          const { integrations: _, ...rest } = updatedWs.settings as Record<string, unknown>
+          updatedWs.settings = Object.keys(rest).length > 0 ? rest as Workspace["settings"] : undefined
+        }
+      }
+      writeWorkspace(updatedWs)
+      p.outro(`Workspace '${name}' updated.`)
+    } else {
+      p.outro("No changes.")
+    }
+    return
+  }
+
+  if (action === "description") {
+    const descRaw = await safeText({
+      message: "Description",
+      fallbackValue: ws.description || "",
+    })
+    if (p.isCancel(descRaw)) cancel()
+    const updatedWs = { ...ws, description: (descRaw as string).trim() || undefined }
+    writeWorkspace(updatedWs)
+    p.outro(`Workspace '${name}' updated.`)
+    return
+  }
+
+  // action === "done"
+  p.outro("No changes.")
 }

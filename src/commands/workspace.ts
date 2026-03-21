@@ -17,7 +17,7 @@ import {
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
 import { isBranchGoneOnRemote, removeWorktree } from "../lib/git"
-import { runWorkspaceNew } from "../tui/workspace-wizard"
+import { runWorkspaceNew, runWorkspaceEdit } from "../tui/workspace-wizard"
 import { runWorkspaceClone } from "../tui/workspace-clone"
 import {
   getDirtyWorktrees,
@@ -52,6 +52,17 @@ export function registerWorkspaceCommands(program: Command) {
     .description("Clone a workspace with a new name and branch")
     .action(async (source?: string) => {
       await runWorkspaceClone(source)
+    })
+
+  program
+    .command("edit <name>")
+    .description("Edit a workspace interactively")
+    .action(async (name: string) => {
+      if (!workspaceExists(name)) {
+        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+        process.exit(1)
+      }
+      await runWorkspaceEdit(name)
     })
 
   program
