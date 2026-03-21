@@ -2,7 +2,6 @@
 import { createSignal, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import { CenteredDialog } from "./CenteredDialog"
-import { InlineInput } from "./InlineInput"
 
 export type WizardStep<T> =
   | { kind: "text"; label: string; key: keyof T & string; prefill?: (data: Partial<T>) => string; validate?: (v: string) => string | undefined }
@@ -64,22 +63,34 @@ export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
     }
   }
 
-  // Keyboard handler for confirm step
+  // Keyboard handler for text and confirm steps
   useKeyboard((key) => {
     const step = props.steps[stepIndex()]
-    if (!step || step.kind !== "confirm") return
+    if (!step) return
 
-    if (key.name === "y") {
-      props.onComplete(data() as T)
-      return
-    }
-    if (key.name === "escape") {
-      if (stepIndex() > 0) {
-        setStepIndex(prev => prev - 1)
-      } else {
-        props.onCancel()
+    // Text step: handle escape (InlineInput no longer provides this)
+    if (step.kind === "text") {
+      if (key.name === "escape") {
+        handleTextCancel()
+        return
       }
-      return
+      return // Let input handle all other keys
+    }
+
+    // Confirm step
+    if (step.kind === "confirm") {
+      if (key.name === "y") {
+        props.onComplete(data() as T)
+        return
+      }
+      if (key.name === "escape") {
+        if (stepIndex() > 0) {
+          setStepIndex(prev => prev - 1)
+        } else {
+          props.onCancel()
+        }
+        return
+      }
     }
   })
 
@@ -94,13 +105,14 @@ export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
             const prefillValue = step.prefill ? step.prefill(data()) : ""
             return (
               <>
-                <InlineInput
-                  label={step.label}
-                  prefill={prefillValue}
-                  onConfirm={handleTextConfirm}
-                  onCancel={handleTextCancel}
-                  focused={inputFocused()}
-                />
+                <box flexDirection="row" paddingLeft={1}>
+                  <text fg="cyan">  {step.label}: </text>
+                  <input
+                    value={prefillValue}
+                    focused={inputFocused()}
+                    onSubmit={(v) => handleTextConfirm(v as string)}
+                  />
+                </box>
                 <Show when={!!validationError()}>
                   <text fg="red">  {validationError()}</text>
                 </Show>
