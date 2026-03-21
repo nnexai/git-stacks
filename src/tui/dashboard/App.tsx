@@ -31,8 +31,16 @@ import {
   syncWorkspace,
 } from "../../lib/workspace-ops"
 import type { SyncRow, SyncResult } from "../../lib/workspace-ops"
-import { readTemplate, writeTemplate, templatePath, readWorkspace } from "../../lib/config"
+import { readTemplate, writeTemplate, templatePath, readWorkspace, readRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
 import { SyncProgressView } from "./SyncProgressView"
+import { WizardView, type WizardStep } from "./WizardView"
+import { CreateProgressView, type CreateRow } from "./CreateProgressView"
+import { createWorktree, removeWorktree } from "../../lib/git"
+import { getTasksDir } from "../../lib/paths"
+import { runHooksCaptured, type HookOutputLine } from "../../lib/lifecycle"
+import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../../lib/files"
+import { integrations, type IntegrationContext } from "../../lib/integrations"
+import { join } from "path"
 import { unlinkSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
 
@@ -57,6 +65,9 @@ export default function App() {
   const [syncRows, setSyncRows] = createSignal<SyncRow[]>([])
   const [syncDone, setSyncDone] = createSignal(false)
   const [syncSummary, setSyncSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
+  const [createRows, setCreateRows] = createSignal<CreateRow[]>([])
+  const [createDone, setCreateDone] = createSignal(false)
+  const [createSummary, setCreateSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -135,6 +146,8 @@ export default function App() {
     const v = view()
     if (v.view === "progress") return ` ${(v as any).message} `
     if (v.view === "sync-progress") return ` ${(v as any).message} `
+    if (v.view === "wizard-create" || v.view === "wizard-create-adhoc") return " Create Workspace "
+    if (v.view === "create-progress") return ` Creating ${(v as any).workspaceName}... `
     const name = selectedName()
     return name ? ` ${name} ` : ""
   })
@@ -399,11 +412,16 @@ export default function App() {
     setView({ view: "list" })
   }
 
-  async function handleTemplateAction(action: "edit" | "clone" | "remove") {
+  async function handleTemplateAction(action: "edit" | "clone" | "remove" | "create-workspace") {
     const v = view() as { view: "action-menu"; index: number }
     const template = filteredTemplates()[v.index]
     if (!template) { setView({ view: "list" }); return }
     const name = template.name
+
+    if (action === "create-workspace") {
+      setView({ view: "wizard-create", source: "template", templateIndex: v.index })
+      return
+    }
 
     if (action === "edit") {
       const editor = process.env.VISUAL || process.env.EDITOR || "vi"
@@ -429,6 +447,244 @@ export default function App() {
       setConfirmContext("template")
       setView({ view: "confirm", index: v.index, action: "remove" })
       return
+    }
+  }
+
+  // Wizard types and helpers
+  type CreateWizardData = { name: string; branch: string }
+
+  function buildTemplateWizardSteps(template: Template): WizardStep<CreateWizardData>[] {
+    return [
+      {
+        kind: "text",
+        label: "Workspace name",
+        key: "name",
+        validate: (v: string) => {
+          if (!v.trim()) return "Required"
+          if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
+          return undefined
+        },
+      },
+      {
+        kind: "text",
+        label: "Branch",
+        key: "branch",
+        prefill: (data: Partial<CreateWizardData>) => {
+          const pattern = template.repos.find(r => r.branch_pattern)?.branch_pattern
+          return pattern && data.name ? expandBranchPattern(pattern, data.name) : `feature/${data.name ?? ""}`
+        },
+        validate: (v: string) => (v.trim() ? undefined : "Required"),
+      },
+      {
+        kind: "confirm",
+        buildMessage: (data: Partial<CreateWizardData>) => {
+          const repoLines = template.repos.map(r => `  ${r.repo} (${r.mode ?? "worktree"})`).join("\n")
+          return `Template: ${template.name}\nBranch: ${data.branch}\nRepos:\n${repoLines}`
+        },
+      },
+    ]
+  }
+
+  async function executeCreateWorkspace(
+    data: CreateWizardData,
+    template: Template | null,
+    repoNames: string[] | null,
+  ) {
+    const wsName = data.name.trim()
+    const branch = data.branch.trim()
+
+    setCreateRows([])
+    setCreateDone(false)
+    setCreateSummary({ text: "", color: "green" })
+    setView({ view: "create-progress", workspaceName: wsName })
+
+    try {
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+      const registry = readRegistry()
+      const registryMap = new Map(registry.map(r => [r.name, r]))
+
+      // Build repos array
+      let repos: WorkspaceRepo[]
+      let wsHooks: Workspace["hooks"] | undefined
+      let wsEnv: Record<string, string> | undefined
+      let wsEnvFile: string | undefined
+      let wsFiles: Workspace["files"]
+      let wsIntegrationSettings: Record<string, unknown> | undefined
+      let templateName: string | undefined
+
+      if (template) {
+        // Template-based flow
+        templateName = template.name
+        repos = []
+        for (const tplRepo of template.repos) {
+          const regEntry = registryMap.get(tplRepo.repo)
+          if (!regEntry) continue  // skip missing registry entries silently
+          const mode = tplRepo.mode ?? "worktree"
+          const taskPath = mode === "worktree"
+            ? join(tasksDir, wsName, regEntry.name)
+            : regEntry.local_path
+          repos.push({
+            name: regEntry.name, repo: tplRepo.repo, type: regEntry.type, mode,
+            main_path: regEntry.local_path, task_path: taskPath,
+            base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+          })
+        }
+        wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+        wsEnv = template.env ? { ...template.env } : undefined
+        wsEnvFile = template.env_file
+        wsFiles = template.files
+        wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+      } else if (repoNames) {
+        // Ad-hoc flow (per D-09: all worktree mode)
+        repos = repoNames.map(name => {
+          const regEntry = registryMap.get(name)!
+          return {
+            name: regEntry.name, repo: regEntry.name, type: regEntry.type,
+            mode: "worktree" as const,
+            main_path: regEntry.local_path,
+            task_path: join(tasksDir, wsName, regEntry.name),
+            base_branch: regEntry.default_branch,
+          }
+        })
+      } else {
+        throw new Error("No template or repos provided")
+      }
+
+      // Initialize progress rows
+      const initialRows: CreateRow[] = repos.map(r => ({
+        repo: r.name,
+        status: r.mode === "trunk" ? "skipped" as const : "pending" as const,
+        detail: r.mode === "trunk" ? "trunk mode" : "",
+      }))
+      setCreateRows(initialRows)
+
+      const baseEnv = { WS_WORKSPACE: wsName, WS_BRANCH: branch, WS_TASKS_DIR: tasksDir }
+      const worktreeRepos = repos.filter(r => r.mode === "worktree")
+
+      // Pre-create hooks (D-17: abortOnFailure=false)
+      if (wsHooks?.pre_create?.length) {
+        for (const r of worktreeRepos) {
+          setCreateRows(prev => prev.map(row => row.repo === r.name ? { ...row, status: "running-hooks", detail: "pre_create" } : row))
+        }
+        await runHooksCaptured(
+          wsHooks.pre_create, tasksDir,
+          { ...baseEnv },
+          (_output: HookOutputLine) => {},
+          false  // D-17: don't abort on hook failure
+        )
+        // Reset status to pending after pre_create hooks
+        setCreateRows(prev => prev.map(row => row.status === "running-hooks" ? { ...row, status: "pending", detail: "" } : row))
+      }
+
+      // Create worktrees — track created for cleanup on failure (D-19)
+      const createdWorktrees: { main_path: string; task_path: string }[] = []
+      const wsDir = join(tasksDir, wsName)
+      const { mkdirSync, existsSync } = await import("fs")
+      if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
+
+      for (const repo of worktreeRepos) {
+        setCreateRows(prev => prev.map(r => r.repo === repo.name ? { ...r, status: "creating-worktree", detail: "creating worktree..." } : r))
+        try {
+          await createWorktree(repo.main_path, repo.task_path, branch)
+          createdWorktrees.push({ main_path: repo.main_path, task_path: repo.task_path })
+          setCreateRows(prev => prev.map(r => r.repo === repo.name ? { ...r, status: "done", detail: "worktree created" } : r))
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          setCreateRows(prev => prev.map(r => r.repo === repo.name ? { ...r, status: "failed", detail: msg } : r))
+
+          // D-19: cleanup already-created worktrees
+          for (const created of createdWorktrees) {
+            try { await removeWorktree(created.main_path, created.task_path) } catch {}
+          }
+          // Mark remaining as failed
+          setCreateRows(prev => prev.map(r => r.status === "pending" ? { ...r, status: "failed", detail: "aborted" } : r))
+
+          const nCreated = createdWorktrees.length
+          setCreateSummary({ text: `Failed on ${repo.name}. ${nCreated} worktree(s) cleaned up. Press any key to continue.`, color: "red" })
+          setCreateDone(true)
+          return  // abort — don't write workspace YAML
+        }
+      }
+
+      // File ops (per-repo)
+      for (const wsRepo of repos.filter(r => r.mode === "worktree")) {
+        if (!(wsRepo as any).files) continue
+        const repoLike = { name: wsRepo.name, path: wsRepo.main_path, files: (wsRepo as any).files }
+        applyFileOpsForRepo(repoLike, wsRepo)
+      }
+
+      // Workspace-instance file ops
+      if (wsFiles) {
+        const workspaceObj = { name: wsName, repos } as any
+        applyFileOpsForWorkspace({ files: wsFiles }, workspaceObj, wsDir)
+      }
+
+      // Env files
+      const envVars: Record<string, string> = wsEnv ? { ...wsEnv } : {}
+      if (wsEnvFile && Object.keys(envVars).length > 0) {
+        const { writeFileSync, lstatSync } = await import("fs")
+        const content = Object.entries(envVars).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
+        for (const repo of worktreeRepos) {
+          if (!existsSync(repo.task_path)) continue
+          const targetPath = join(repo.task_path, wsEnvFile)
+          try { if (lstatSync(targetPath).isSymbolicLink()) continue } catch {}
+          writeFileSync(targetPath, content, "utf-8")
+        }
+      }
+
+      // Post-create hooks (D-17: abortOnFailure=false)
+      if (wsHooks?.post_create?.length) {
+        await runHooksCaptured(
+          wsHooks.post_create, wsDir,
+          { ...baseEnv, ...envVars },
+          (_output: HookOutputLine) => {},
+          false
+        )
+      }
+
+      // Build settings object
+      const settingsIntegrations = wsIntegrationSettings && Object.keys(wsIntegrationSettings).length > 0
+        ? { settings: { integrations: wsIntegrationSettings } }
+        : {}
+
+      // Save workspace YAML
+      const workspaceObj: Workspace = {
+        name: wsName,
+        schema_version: "1",
+        branch,
+        created: new Date().toISOString().split("T")[0],
+        ...(templateName ? { template: templateName } : {}),
+        ...(wsHooks ? { hooks: wsHooks } : {}),
+        repos,
+        ...(wsEnv ? { env: wsEnv } : {}),
+        ...(wsEnvFile ? { env_file: wsEnvFile } : {}),
+        ...(wsFiles ? { files: wsFiles } : {}),
+        ...settingsIntegrations,
+      } as Workspace
+      writeWorkspace(workspaceObj)
+
+      // Generate integration artifacts
+      const ctx: IntegrationContext = { workspace: workspaceObj, tasksDir, config }
+      for (const integration of integrations) {
+        if (!integration.isEnabled(ctx)) continue
+        if (integration.applies && !integration.applies(workspaceObj)) continue
+        integration.generate?.(ctx)
+      }
+
+      // Summary
+      const nCreated = worktreeRepos.length
+      const nSkipped = repos.filter(r => r.mode === "trunk").length
+      const parts: string[] = []
+      if (nCreated > 0) parts.push(`${nCreated} created`)
+      if (nSkipped > 0) parts.push(`${nSkipped} trunk`)
+      setCreateSummary({ text: `${parts.join(", ")}. Press any key to continue.`, color: "green" })
+      setCreateDone(true)
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setCreateSummary({ text: `Error: ${msg}. Press any key to continue.`, color: "red" })
+      setCreateDone(true)
     }
   }
 
@@ -507,6 +763,22 @@ export default function App() {
 
     // Inline input
     if (v.view === "inline-input") return
+
+    // Wizard views — WizardView handles its own keyboard (escape, y, input)
+    if (v.view === "wizard-create" || v.view === "wizard-create-adhoc") return
+
+    // Create progress — any key returns to list when done (same pattern as sync-progress)
+    if (v.view === "create-progress" && createDone()) {
+      const wsName = (v as { view: "create-progress"; workspaceName: string }).workspaceName
+      setTab("workspaces")
+      reload().then(() => {
+        const idx = entries().findIndex(e => e.workspace.name === wsName)
+        if (idx >= 0) tabCursor.workspaces[1](idx)
+        setView({ view: "list" })
+      })
+      return
+    }
+    if (v.view === "create-progress") return  // block all keys during creation
 
     // List view
     if (v.view === "list") {
@@ -754,6 +1026,33 @@ export default function App() {
               rows={syncRows()}
               done={syncDone()}
               summary={syncSummary()}
+            />
+          </Show>
+
+          {/* Wizard: template-based create */}
+          <Show when={view().view === "wizard-create"}>
+            {(() => {
+              const v = view() as { view: "wizard-create"; templateIndex: number }
+              const template = filteredTemplates()[v.templateIndex]
+              if (!template) return null
+              const tpl = readTemplate(template.name)
+              const steps = buildTemplateWizardSteps(tpl)
+              return (
+                <WizardView
+                  steps={steps}
+                  onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, tpl, null)}
+                  onCancel={() => setView({ view: "list" })}
+                />
+              )
+            })()}
+          </Show>
+
+          {/* Create progress view */}
+          <Show when={view().view === "create-progress"}>
+            <CreateProgressView
+              rows={createRows()}
+              done={createDone()}
+              summary={createSummary()}
             />
           </Show>
         </box>
