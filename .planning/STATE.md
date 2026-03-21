@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-03-21T12:21:02.799Z"
+stopped_at: Completed 15.1-01-PLAN.md
+last_updated: "2026-03-21T16:45:59.639Z"
 progress:
-  total_phases: 6
+  total_phases: 8
   completed_phases: 6
-  total_plans: 15
-  completed_plans: 15
+  total_plans: 21
+  completed_plans: 16
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 15 — integration-tests-and-screen-polish
+**Current focus:** Phase 15.1 — action-menu-cursor-unification-and-centered-dialog
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 15.1 (action-menu-cursor-unification-and-centered-dialog) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -74,10 +74,17 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 15]: workspace-ops mock must include all exports (getWorkspaceStatus, editWorkspaceYaml, mergeEnv, writeEnvFiles, etc.) or Bun throws 'Export not found' on first use in integration tests
 - [Phase 15]: Config module must be mocked (not just env var) for cross-file integration test isolation
 - [Phase 15]: renderer.destroy() in afterEach prevents keyboard event leakage between testRender instances
+- [Phase 15.1-01]: CenteredDialog widths typed as Record<Size, `${number}%`> for TypeScript template literal compatibility with OpenTUI width prop
+- [Phase 15.1-01]: Action menu Show blocks promoted to App root level; split pane Show condition excludes action-menu/repo-action-menu states so dialogs get full terminal height
 
 ### Pending Todos
 
 None — Phase 11 complete.
+
+### Roadmap Evolution
+
+- Phase 15.1 inserted after Phase 15: Action menu cursor unification and centered dialog (URGENT) — merged from two notes: cursor unification + centered dialog overlay
+- Phase 15.2 inserted after Phase 15: Integration overrides per template and workspace (URGENT)
 
 ### Blockers/Concerns
 
@@ -85,7 +92,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T12:11:45.705Z
-Stopped at: Completed 15-02-PLAN.md
+Last session: 2026-03-21T16:45:59.637Z
+Stopped at: Completed 15.1-01-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
