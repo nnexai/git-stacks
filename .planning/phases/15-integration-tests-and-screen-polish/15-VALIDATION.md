@@ -2,7 +2,7 @@
 phase: 15
 slug: integration-tests-and-screen-polish
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-03-21
 ---
@@ -19,7 +19,7 @@ created: 2026-03-21
 |----------|-------|
 | **Framework** | bun:test (built-in) |
 | **Config file** | `bunfig.toml` (module resolution) + inline test config |
-| **Quick run command** | `bun test tests/tui/` |
+| **Quick run command** | `bun test tests/tui/dashboard/` |
 | **Full suite command** | `bun test tests/` |
 | **Estimated runtime** | ~5 seconds |
 
@@ -27,7 +27,7 @@ created: 2026-03-21
 
 ## Sampling Rate
 
-- **After every task commit:** Run `bun test tests/tui/`
+- **After every task commit:** Run `bun test tests/tui/dashboard/`
 - **After every plan wave:** Run `bun test tests/`
 - **Before `/gsd:verify-work`:** Full suite must be green
 - **Max feedback latency:** 5 seconds
@@ -38,21 +38,26 @@ created: 2026-03-21
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 15-01-01 | 01 | 1 | T-05 | integration | `bun test tests/tui/integration.test.tsx` | ❌ W0 | ⬜ pending |
-| 15-02-01 | 02 | 1 | UI-01 | unit | `bun test tests/tui/help-bar.test.tsx` | ❌ W0 | ⬜ pending |
-| 15-02-02 | 02 | 1 | UI-02 | unit | `bun test tests/tui/format-age.test.ts` | ❌ W0 | ⬜ pending |
-| 15-02-03 | 02 | 1 | UI-03 | unit | `bun test tests/tui/responsive-columns.test.tsx` | ❌ W0 | ⬜ pending |
+| 15-01-00 | 01 | 1 | T-05 | stub | `bun test tests/tui/dashboard/integ-tab-switching.test.tsx tests/tui/dashboard/integ-action-menu.test.tsx tests/tui/dashboard/integ-wizard.test.tsx tests/tui/dashboard/integ-sync-progress.test.tsx` | Wave 0 task | pending |
+| 15-01-01 | 01 | 1 | UI-01 | unit | `bun run typecheck && bun test tests/tui/dashboard/` | yes (existing) | pending |
+| 15-01-02 | 01 | 1 | UI-02, UI-03 | unit | `bun run typecheck && bun test tests/tui/dashboard/` | yes (existing) | pending |
+| 15-02-01 | 02 | 2 | T-05, UI-01, UI-02 | integration | `bun test tests/tui/dashboard/integ-tab-switching.test.tsx` | Wave 0 stub | pending |
+| 15-02-02 | 02 | 2 | T-05 | integration | `bun test tests/tui/dashboard/integ-action-menu.test.tsx` | Wave 0 stub | pending |
+| 15-03-01 | 03 | 2 | T-05 | integration | `bun test tests/tui/dashboard/integ-wizard.test.tsx` | Wave 0 stub | pending |
+| 15-03-02 | 03 | 2 | T-05 | integration | `bun test tests/tui/dashboard/integ-sync-progress.test.tsx` | Wave 0 stub | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/tui/integration.test.tsx` — stubs for T-05 (end-to-end tab/action/wizard flow)
-- [ ] `tests/tui/help-bar.test.tsx` — stubs for UI-01 (80-column help bar fit)
-- [ ] `tests/tui/format-age.test.ts` — stubs for UI-02 (relative age formatting)
-- [ ] `tests/tui/responsive-columns.test.tsx` — stubs for UI-03 (dynamic column widths)
+Wave 0 is handled by Plan 15-01 Task 0 (first task in Wave 1). It creates empty-but-passing `describe()` + `test.todo()` stubs for all four integration test files:
+
+- [x] `tests/tui/dashboard/integ-tab-switching.test.tsx` — stub for T-05 (tab switching), UI-01 (help bar), UI-02 (age display)
+- [x] `tests/tui/dashboard/integ-action-menu.test.tsx` — stub for T-05 (action menu dispatch + Remove side-effect)
+- [x] `tests/tui/dashboard/integ-wizard.test.tsx` — stub for T-05 (wizard entry/exit)
+- [x] `tests/tui/dashboard/integ-sync-progress.test.tsx` — stub for T-05 (sync progress flow)
 
 *Existing test infrastructure (testRender, mockInput, captureCharFrame) covers framework needs.*
 
@@ -68,11 +73,11 @@ created: 2026-03-21
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 5s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (Plan 15-01 Task 0 creates all four stubs)
+- [x] No watch-mode flags
+- [x] Feedback latency < 5s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** ready
