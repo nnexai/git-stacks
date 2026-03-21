@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 15.1-03-PLAN.md
-last_updated: "2026-03-21T18:19:13.875Z"
+stopped_at: Completed 15.2-01-PLAN.md
+last_updated: "2026-03-21T18:23:59.625Z"
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 20
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 15.1 — action-menu-cursor-unification-and-centered-dialog
+**Current focus:** Phase 15.2 — integration-overrides-per-template-and-workspace
 
 ## Current Position
 
-Phase: 15.2
-Plan: Not started
+Phase: 15.2 (integration-overrides-per-template-and-workspace) — EXECUTING
+Plan: 3 of 3
 
 ## Accumulated Context
 
@@ -81,6 +81,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 15.1-03]: WizardView/SyncProgressView/CreateProgressView accept optional title props; App.tsx passes contextual titles to promoted components
 - [Phase 15.1-03]: HelpOverlay and MessageOverlay self-managed borders fully removed; CenteredDialog exclusively owns border and title (Pitfall 6 pattern)
 - [Phase 15.1-03]: Detail pane now list-only; all wizard/progress/overlay views promoted to App root level ordered by z-priority
+- [Phase 15.2-01]: promptIntegrationOverrides uses confirm-guard pattern: undefined returned when user declines, no integrations key stored in template YAML (D-04)
+- [Phase 15.2-01]: Helper accepts initialEnabledIds and currentConfigs to support global-config pre-population for new and template-override pre-population for edit
 
 ### Pending Todos
 
@@ -97,7 +99,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T18:03:30.159Z
-Stopped at: Completed 15.1-03-PLAN.md
+Last session: 2026-03-21T18:23:48.151Z
+Stopped at: Completed 15.2-01-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.

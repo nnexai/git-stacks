@@ -142,19 +142,19 @@ Plans:
 | 14. template-and-repo-management | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 15.1. action-menu-cursor-unification-and-centered-dialog | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 15.2. integration-overrides-per-template-and-workspace | v0.4.0 | 0/3 | Planning    | — |
+| 15.2. integration-overrides-per-template-and-workspace | v0.4.0 | 2/3 | In Progress|  |
 
 ### Phase 15.2: Integration overrides per template and workspace (INSERTED)
 
 **Goal:** Users can configure per-integration overrides at template and workspace level via CLI wizards, and see resolved integration state in TUI detail panes
 **Requirements**: D-01 through D-12 (from CONTEXT.md)
 **Depends on:** Phase 15
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 
 Plans:
-- [ ] 15.2-01-PLAN.md — Shared wizard helper + template wizard integration overrides
+- [x] 15.2-01-PLAN.md — Shared wizard helper + template wizard integration overrides
 - [ ] 15.2-02-PLAN.md — Workspace wizard/clone integration overrides + git-stacks edit command
-- [ ] 15.2-03-PLAN.md — TUI detail pane integration display (WorkspaceDetail + TemplateDetail)
+- [x] 15.2-03-PLAN.md — TUI detail pane integration display (WorkspaceDetail + TemplateDetail)
 
 ### Phase 15.1: Action menu cursor unification and centered dialog (INSERTED)
 
