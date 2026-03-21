@@ -1,173 +1,277 @@
 # Stack Research
 
-**Domain:** Bun CLI tool with SolidJS/OpenTUI dashboard — v0.4.0 additions
-**Researched:** 2026-03-20
-**Confidence:** HIGH (key claims verified against installed package type definitions and official docs)
+**Domain:** Bun CLI tool — v0.6.0 additions (niri compositor integration + integration orchestration)
+**Researched:** 2026-03-21
+**Confidence:** HIGH (all niri commands verified against live `niri 25.11` installation; integration interface verified against installed source)
 
 ---
 
 ## Scope
 
-This document covers **only the additions needed for v0.4.0**. The existing stack (Bun, TypeScript, Commander.js, `@opentui/solid`, SolidJS, YAML + Zod, `@clack/prompts`) is unchanged and not re-researched.
+This document covers **only the additions needed for v0.6.0**. The existing stack (Bun, TypeScript, Commander.js, `@opentui/solid`, SolidJS, YAML + Zod, `@clack/prompts`, OpenTUI test renderer) is unchanged and not re-researched.
 
 Two questions answered:
 
-1. What is the right testing stack for the OpenTUI TUI dashboard?
-2. What patterns/primitives support multi-step create wizard flows within the existing OpenTUI architecture?
+1. What niri IPC commands are available, what do they return, and how do we use them for workspace management and window identification?
+2. What interface changes are needed to the integration plugin system to support artifact passing and ordering?
 
 ---
 
-## Finding 1: OpenTUI Has a First-Class Testing Module (Already Installed)
+## Finding 1: Niri IPC via `niri msg` — Fully Sufficient for Integration Needs
 
-`@opentui/core@0.1.87` (installed) ships a `./testing` export that provides a complete headless test renderer. `@opentui/solid@0.1.87` re-exports `testRender` that mounts a SolidJS component tree into that renderer. **No new dependencies are required for TUI component testing.**
+Niri 25.11 (installed) exposes all required compositor operations via `niri msg`. No Wayland protocol library, no socket-level IPC, and no Rust bindings are needed. The `niri msg` CLI is the correct interface.
 
-Verified by reading `node_modules/@opentui/core/testing.d.ts`, `node_modules/@opentui/core/testing/test-renderer.d.ts`, `node_modules/@opentui/solid/index.d.ts`, and the compiled `node_modules/@opentui/core/testing.js`. HIGH confidence.
+All commands verified against the live compositor. HIGH confidence.
 
-### The TUI Test API (All From Installed Packages)
+### The JSON Output Contract
+
+Pass `-j` / `--json` to any query command to get machine-readable output. The `action` subcommand does not support `-j` (it has no return value to serialize).
+
+**`niri msg -j workspaces`** — returns a JSON array:
 
 ```typescript
-import { testRender } from "@opentui/solid"
-import { KeyCodes, TestRecorder } from "@opentui/core/testing"
-
-// Mount a SolidJS component in a headless renderer (no TTY required)
-const { renderer, mockInput, renderOnce, captureCharFrame, resize } =
-  await testRender(() => <MyComponent />, { width: 80, height: 24 })
-
-// Simulate keyboard input
-await mockInput.typeText("hello")
-mockInput.pressKey("1")               // single keypress, no await needed
-await mockInput.pressKeys(["j", "j"]) // multiple keys
-mockInput.pressEnter()
-mockInput.pressEscape()
-mockInput.pressArrow("down")
-mockInput.pressKey("ArrowUp", { ctrl: true })
-
-// Advance the render loop (MUST call after each input batch before asserting)
-await renderOnce()
-
-// Capture output as a plain string (no ANSI codes)
-const frame = captureCharFrame()
-expect(frame).toContain("my-workspace")
-
-// Resize the virtual terminal
-resize(120, 40)
-
-// Record multiple frames for sequence assertions
-const recorder = new TestRecorder(renderer)
-recorder.rec()
-// ...interactions...
-recorder.stop()
-const frames = recorder.recordedFrames // RecordedFrame[]
+type NiriWorkspace = {
+  id: number          // stable compositor-assigned ID (survives focus changes)
+  idx: number         // 1-based display index on this output
+  name: string | null // user-set name, null if unnamed
+  output: string      // monitor name, e.g. "eDP-1"
+  is_urgent: boolean
+  is_active: boolean  // true if this workspace is visible on its output
+  is_focused: boolean // true if this workspace has keyboard focus
+  active_window_id: number | null
+}
 ```
 
-Key points:
-- `captureCharFrame()` returns the visible character content of the terminal buffer **without ANSI escape codes**. This makes `expect(frame).toContain("text")` and `expect(frame).toMatchSnapshot()` straightforward.
-- `renderOnce()` is required after input — the test renderer does not auto-loop. Every assertion must be preceded by `await renderOnce()`.
-- The renderer does not write to stdout (`useAlternateScreen: false`, `useConsole: false` in the test renderer constructor). Tests run silently in CI.
-- Set `OTUI_USE_CONSOLE=false` to suppress any remaining console interception during tests (the `createTestRenderer` implementation sets this automatically).
-- The `TestRenderer` extends `CliRenderer` — the same renderer type used in production. The test variant uses a mock stdin (`new Readable({ read() {} })`) instead of process.stdin.
-
-### Snapshot Testing With bun:test
-
-`bun:test` supports `toMatchSnapshot()` (file-based) and `toMatchInlineSnapshot()` (inline in test file). `toMatchInlineSnapshot` was shipped in Bun v1.1.39 (December 2024) and is available in the project's runtime (Bun 1.3.10). Types in `@types/bun` may lag; cast to `any` if the TypeScript compiler complains until `@types/bun` catches up.
-
-Pattern for TUI snapshot testing:
+**`niri msg -j windows`** — returns a JSON array:
 
 ```typescript
-test("workspace list renders correctly", async () => {
-  const { renderOnce, captureCharFrame } = await testRender(() => <WorkspaceList ... />)
-  await renderOnce()
-  expect(captureCharFrame()).toMatchSnapshot()
+type NiriWindow = {
+  id: number          // stable window ID — persists until window is closed
+  title: string | null
+  app_id: string | null  // Wayland app_id, e.g. "com.mitchellh.ghostty", "google-chrome"
+  pid: number | null  // PID of the process that owns the window surface
+  workspace_id: number | null
+  is_focused: boolean
+  is_floating: boolean
+  is_urgent: boolean
+  layout: {
+    pos_in_scrolling_layout: [number, number] | null
+    tile_size: [number, number]
+    window_size: [number, number]
+    tile_pos_in_workspace_view: [number, number] | null
+    window_offset_in_tile: [number, number]
+  }
+  focus_timestamp: { secs: number; nanos: number } | null
+}
+```
+
+**`niri msg -j focused-window`** — same shape as a single `NiriWindow` entry.
+
+**`niri msg -j focused-output`** — returns monitor info (not needed for this milestone).
+
+### Key Action Commands
+
+All verified via `niri msg action <cmd> --help`:
+
+| Command | Signature | Notes |
+|---------|-----------|-------|
+| `focus-workspace` | `<REFERENCE>` | REFERENCE = index (number) or name (string) |
+| `set-workspace-name` | `<NAME> [--workspace REFERENCE]` | Can name any workspace, not just focused |
+| `move-window-to-workspace` | `<REFERENCE> [--window-id ID] [--focus true\|false]` | Can move by window ID without focusing first |
+| `focus-window` | `--id <ID>` | Focus by stable window ID |
+| `spawn` | `-- <COMMAND>...` | Spawns command; fire-and-forget (no return value) |
+| `spawn-sh` | `-- <COMMAND>...` | Same as spawn but routes through shell |
+
+**Critical capability**: `move-window-to-workspace --window-id <ID> --focus false` moves a specific window to a named workspace **without switching focus to that workspace**. This is the key primitive for the niri integration's "gather all spawned windows onto the workspace" step.
+
+### Niri Workspace Model
+
+- Named workspaces are created on-demand: `niri msg action focus-workspace my-name` creates a workspace named `my-name` if it does not exist.
+- Workspace names are user-visible and persist in the compositor's workspace list.
+- The `id` field is a stable compositor-assigned integer. The `name` field is null until explicitly set.
+- `set-workspace-name` accepts `--workspace REFERENCE` to name any workspace by index or existing name — it does not require the workspace to be focused first.
+
+### Event Stream (Available but Not Needed for v0.6.0)
+
+`niri msg event-stream` streams compositor events as text lines (non-JSON in the live output; JSON events when the IPC socket is used directly). It emits `Window opened or changed: ...`, `Workspaces changed: ...`, etc. Useful for reactive window tracking but introduces a subprocess that must be managed. The snapshot-diff approach (below) avoids this complexity for v0.6.0.
+
+---
+
+## Finding 2: Window Identification Strategy — Snapshot-Diff via PID
+
+The challenge: after a terminal emulator window is spawned, we need to find its niri window ID to move it to the workspace. Niri windows expose a `pid` field — the PID of the process that owns the Wayland surface.
+
+**Recommended approach: Bun.spawn PID + poll `niri msg -j windows` by pid match.**
+
+```
+1. Before spawning: take snapshot of current window IDs (niri msg -j windows → Set<id>)
+2. Spawn the terminal via Bun.spawn(), capture child.pid
+3. Poll niri msg -j windows (up to ~3s, 200ms intervals)
+4. Find window where window.pid === child.pid OR window.pid is in the process subtree of child.pid
+5. Return window.id
+```
+
+Why PID match over snapshot-diff: snapshot-diff returns only "what's new" but cannot distinguish which new window belongs to which spawned process when multiple windows appear simultaneously. PID match is precise.
+
+**PID subtree consideration**: when spawning `ghostty --working-directory /path`, the ghostty window's `pid` in niri equals the direct child PID. Verified by cross-referencing `/run/user/1000/systemd/transient/app-niri-ghostty-<PID>.scope` — niri uses the spawned process's PID directly in the scope name. Direct PID match is sufficient; no process tree traversal needed.
+
+**Tmux client PID lookup**: tmux exposes `#{client_pid}` via `tmux list-clients -F "#{client_pid} #{session_name}"`. This returns the PID of the terminal emulator attached to the session. When the tmux artifact is `{ sessionName: string }`, the niri integration can run `tmux list-clients` to find the terminal PID and then match against niri windows.
+
+---
+
+## Finding 3: Integration Artifact System — Interface Changes Required
+
+Currently `open()` returns `Promise<void>`. The new contract must return spawned window/session identifiers so downstream integrations (niri) can locate and arrange them.
+
+### New `IntegrationArtifact` Type
+
+```typescript
+// src/lib/integrations/types.ts — add alongside existing exports
+
+export type IntegrationArtifact =
+  | { kind: "tmux-session"; sessionName: string }
+  | { kind: "cmux-workspace"; ref: string }
+  | { kind: "vscode-window"; pid: number }
+  | { kind: "niri-workspace"; workspaceName: string; windowIds: number[] }
+  | { kind: "process"; pid: number }
+  | null
+
+export interface IntegrationResult {
+  artifact: IntegrationArtifact
+}
+```
+
+### Updated `Integration` Interface
+
+```typescript
+// open() return type changes from Promise<void> to Promise<IntegrationArtifact>
+open(ctx: IntegrationContext, artifactPath: string | null): Promise<IntegrationArtifact>
+```
+
+### Updated `IntegrationContext`
+
+```typescript
+export interface IntegrationContext {
+  workspace: Workspace
+  tasksDir: string
+  config: GlobalConfig
+  // Artifacts from integrations that ran before this one (in pipeline order)
+  priorArtifacts: IntegrationArtifact[]
+}
+```
+
+### Integration Ordering
+
+The `integrations` array in `src/lib/integrations/index.ts` is already ordered. Explicit ordering is enforced by the array position — niri goes last. Configurable per-workspace ordering is a v0.7.0 concern; for v0.6.0, position in the array is sufficient.
+
+The workspace-ops loop becomes:
+
+```typescript
+const priorArtifacts: IntegrationArtifact[] = []
+for (const integration of integrations) {
+  if (skip.has(integration.id)) continue
+  if (!integration.isEnabled(ctx)) continue
+  if (integration.applies && !integration.applies(workspace)) continue
+  const artifactPath = integration.generate?.(ctx) ?? null
+  const ctxWithArtifacts = { ...ctx, priorArtifacts }
+  const artifact = await integration.open(ctxWithArtifacts, artifactPath)
+  if (artifact !== null) priorArtifacts.push(artifact)
+}
+```
+
+---
+
+## Finding 4: Niri Integration Config Schema
+
+The niri integration needs minimal config — whether it's enabled and the terminal command to spawn (defaulting to the user's `$TERM` or a configured terminal).
+
+```typescript
+const niriConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  terminal: z.string().optional(), // e.g. "ghostty", "foot", "alacritty" — defaults to $TERM_PROGRAM or "foot"
 })
 ```
 
-Snapshots live in `tests/__snapshots__/`. Update with `bun test --update-snapshots`.
-
----
-
-## Finding 2: InlineInput Already Exists; Multi-Step Wizard = SolidJS View State
-
-### Existing InlineInput Pattern
-
-`src/tui/dashboard/InlineInput.tsx` is the existing single-step text input. It:
-- Registers `useKeyboard` to handle character input, backspace, enter, and escape
-- Exposes `onConfirm(value)` and `onCancel()` callbacks
-- Is surfaced from `App.tsx` via the `view` signal: `setView({ view: "inline-input", purpose: "rename", prefill: name })`
-
-This pattern scales cleanly to multi-step wizards. A multi-step form is just an extended view state with a `step` field and accumulated partial data.
-
-### Multi-Step Wizard Pattern (No New Libraries Needed)
-
-A wizard is a named view state with a `step` discriminant and a partial data accumulator. The entire pattern fits in existing SolidJS primitives (`createSignal`, `createMemo`).
-
-```typescript
-// In App.tsx view union — extend existing UIView type
-type UIView =
-  | { view: "list" }
-  | { view: "inline-input"; purpose: string; prefill: string; index?: number }
-  | { view: "new-workspace-wizard"; step: "name" | "template" | "branch"; data: Partial<NewWorkspaceInput> }
-  | { view: "action-menu"; index: number }
-  // ...
-
-// Transition: enter wizard
-setView({ view: "new-workspace-wizard", step: "name", data: {} })
-
-// Transition: advance to next step (in handleWizardStep)
-setView(v => ({
-  ...v,
-  step: "template",
-  data: { ...(v as any).data, name: enteredName }
-}))
-
-// Transition: wizard complete
-const formData = (view() as any).data
-await createWorkspace(formData)
-setView({ view: "list" })
-```
-
-Each wizard step renders a different `<InlineInput>` (or a `<Select>`-backed picker) in the detail pane, driven by the `step` field. No external state machine library is needed; the view signal IS the state machine.
-
-**Why not `@solid-primitives/state-machine`:** `createMachine` from `@solid-primitives/state-machine@0.1.1` adds abstractions (state callback functions, typed transitions) that are appropriate when a state machine has complex side-effect lifecycles. For a multi-step form, the `view()` signal-as-discriminated-union pattern used throughout `App.tsx` is already established and sufficient. Adding a new primitive for the same job introduces cognitive overhead with no architectural benefit.
-
-### Select-Based Step (Template / Repo Picker)
-
-Some wizard steps require picking from a list (e.g., "choose a template"). The existing `<ActionMenu>` component renders a numbered list and uses `useKeyboard` for navigation. Wizard steps that need a picker can reuse or extend `ActionMenu` with dynamic items.
-
-OpenTUI `SelectRenderable` (via `@opentui/core/renderables/Select.d.ts`, already in the package) is the lower-level primitive if a fully-styled picker with scroll is needed. In the SolidJS context, `<select>` is the JSX element mapped to `SelectRenderable`. However, the existing `ActionMenu` pattern is simpler and already tested by users — prefer it for v0.4.0 wizard steps.
+The niri integration does not need a `panes` layout config — it arranges windows based on what prior integrations spawned (via `priorArtifacts`). Layout control is a v0.7.0 concern.
 
 ---
 
 ## Recommended Stack Additions
 
-### Core Testing (No New Dependencies)
+### No New npm Dependencies Required
 
-| API | Source | Purpose |
-|-----|--------|---------|
-| `testRender` | `@opentui/solid` (installed) | Mount SolidJS components in headless renderer |
-| `captureCharFrame()` | `@opentui/core/testing` (installed) | Capture rendered output as plain string |
-| `mockInput.typeText/pressKey` | `@opentui/core/testing` (installed) | Simulate keyboard input |
-| `renderOnce()` | `@opentui/core/testing` (installed) | Advance render loop once |
-| `TestRecorder` | `@opentui/core/testing` (installed) | Record frame sequences for multi-step interaction tests |
-| `toMatchSnapshot()` | `bun:test` (built-in) | Snapshot assertions on `captureCharFrame()` output |
-| `toMatchInlineSnapshot()` | `bun:test` v1.1.39+ (Bun 1.3.10) | Inline snapshots for small assertions |
+| Need | Approach | Why No Library |
+|------|----------|---------------|
+| Niri IPC | `Bun.$\`niri msg -j ...\`` shell calls | `niri msg` is the correct API; socket-level IPC adds complexity with no benefit at this scale |
+| JSON parsing | `JSON.parse()` + Zod validation | Already used throughout the codebase |
+| PID-based window lookup | Bun `$` shell + `JSON.parse` | No library adds value over direct shell calls |
+| Process spawning | `Bun.spawn()` (already used) | Returns `.pid` directly |
+| Polling / retry | Simple `await sleep()` loop in `niri.ts` | Overkill for a 3s poll with 200ms intervals |
 
-### Wizard Flow (No New Dependencies)
+### New Files
 
-| Pattern | Implementation | Source |
-|---------|---------------|--------|
-| Multi-step view state | Extend `UIView` discriminated union with `step` + `data` fields | Existing `App.tsx` pattern |
-| Text input step | `<InlineInput>` with `purpose` matching the wizard step | Existing component |
-| Picker step | Extend `<ActionMenu>` with dynamic items, or use `<select>` JSX element | Existing components |
-| Step transitions | `setView(v => ({ ...v, step: nextStep, data: merged }))` | SolidJS `createSignal` |
+| File | Purpose |
+|------|---------|
+| `src/lib/niri.ts` | Shell wrappers for `niri msg` commands (mirrors `src/lib/tmux.ts` pattern) |
+| `src/lib/integrations/niri.ts` | Niri integration plugin |
+
+### Modified Files
+
+| File | Change |
+|------|--------|
+| `src/lib/integrations/types.ts` | Add `IntegrationArtifact`, `IntegrationResult`; update `open()` return type and `IntegrationContext` |
+| `src/lib/integrations/index.ts` | Register `niriIntegration` last in the array |
+| `src/lib/integrations/tmux.ts` | Return `{ kind: "tmux-session", sessionName }` from `open()` |
+| `src/lib/integrations/cmux.ts` | Return `{ kind: "cmux-workspace", ref }` from `open()` |
+| `src/lib/integrations/vscode.ts` | Return `{ kind: "process", pid }` from `open()` (or null if not launched) |
+| `src/lib/integrations/intellij.ts` | Return `{ kind: "process", pid }` from `open()` (or null if not launched) |
+| `src/lib/workspace-ops.ts` | Thread `priorArtifacts` through the integration loop |
+
+---
+
+## The `niri.ts` Shell Wrapper API (Mirrors `tmux.ts`)
+
+```typescript
+// src/lib/niri.ts
+
+// Check if niri compositor is running (NIRI_SOCKET env var is set by niri)
+export function isNiriRunning(): boolean
+
+// List all current workspaces
+export async function listNiriWorkspaces(): Promise<NiriWorkspace[]>
+
+// List all current windows
+export async function listNiriWindows(): Promise<NiriWindow[]>
+
+// Focus or create a named workspace
+export async function focusNiriWorkspace(name: string): Promise<void>
+
+// Set the name of a workspace (by reference — name or index)
+export async function setNiriWorkspaceName(name: string, workspace?: string | number): Promise<void>
+
+// Move a specific window to a named workspace without following focus
+export async function moveWindowToWorkspace(windowId: number, workspaceName: string, followFocus?: boolean): Promise<void>
+
+// Spawn a command via niri (runs in compositor context)
+export async function niriSpawn(command: string[]): Promise<void>
+
+// Poll windows until a window with the given pid appears (timeout in ms, default 3000)
+export async function waitForWindowByPid(pid: number, timeoutMs?: number): Promise<NiriWindow | null>
+
+// Snapshot current window IDs (for snapshot-diff if needed)
+export async function snapshotWindowIds(): Promise<Set<number>>
+```
+
+The implementation of each function follows the exact pattern of `tmux.ts`: `await $\`niri msg ...\`.quiet().nothrow()` and parse stdout.
 
 ---
 
 ## Installation
 
-No new packages required. The testing API is already present in the installed `@opentui/core@0.1.87` and `@opentui/solid@0.1.87`.
+No new packages required.
 
 ```bash
-# Verify current install is clean
+# Verify nothing broken
 bun install
 
 # No new packages needed
@@ -179,51 +283,38 @@ bun install
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `node-pty` | Has known Bun compatibility issues (native addon). Bun 1.3.x has its own PTY API (`Bun.Terminal`) but that is for spawning external processes — overkill here since OpenTUI's test renderer handles everything in-process. | `testRender` from `@opentui/solid` |
-| `ink` testing utilities (`@inkjs/ui`, `ink-testing-library`) | Different TUI framework entirely. Incompatible with OpenTUI's Zig-backed renderer. | `testRender` + `captureCharFrame` |
-| `@solid-primitives/state-machine` | The `view()` signal-as-state-machine pattern already used in `App.tsx` is sufficient for wizard flows. A state machine library adds abstraction with no benefit at this scale. | Extend the existing `UIView` union type |
-| PTY-based e2e via `Bun.Terminal` + `Bun.spawn` | Spawning the full `git-stacks manage` process in a PTY and parsing ANSI output is brittle and slow. The OpenTUI test renderer does the same thing in-process with clean string output. | `testRender` + `captureCharFrame` |
-| `vitest` or `jest` | Project is already on `bun:test` which is Jest-compatible. Switching runners provides no benefit and removes the Bun-native speed advantage. | `bun:test` (existing) |
-| Global state pollution between tests | `testRender` creates an isolated renderer instance per test. Use `afterEach` to call `renderer.destroy()`. | Lifecycle hooks in `bun:test` |
-
----
-
-## Integration With Existing bun:test Setup
-
-Tests for TUI components live under `tests/tui/`. The existing test at `tests/tui/messageUtils.test.ts` tests pure utility functions — no renderer needed. New component tests that use `testRender` require the preload:
-
-`bunfig.toml` already has `preload = ["@opentui/solid/preload"]`. Component tests using `testRender` will work under `bun test tests/` without additional configuration.
-
-OpenTUI requires the Zig native binary (`@opentui/core-linux-x64` is installed). The test renderer initialises this binary with `testing: true` which disables actual terminal I/O. Tests will run in CI on Linux without a display server.
+| `niri-ipc` npm package (if one exists) | The niri IPC socket protocol is internal and subject to change. `niri msg` is the stable, versioned CLI interface. The compositor maintainers explicitly ship `niri msg` as the intended API surface. | `Bun.$\`niri msg ...\`` |
+| `@wayland-protocols` / any Wayland library | Requires native bindings, incompatible with Bun's module resolution for most native addons; massively over-engineered for reading compositor state. | `niri msg -j` JSON parsing |
+| `event-stream` subprocess for window tracking | Requires managing a long-lived subprocess, error recovery, and line parsing. The 3-second poll approach is simpler and sufficient since windows appear within 500ms in practice. | PID-match poll loop in `waitForWindowByPid` |
+| Configurable integration ordering in YAML (v0.6.0) | Array position in `integrations` index is sufficient — niri must run last and that's the only ordering constraint. Per-workspace ordering is a v0.7.0 concern. | Hard-coded array order in `src/lib/integrations/index.ts` |
+| `child_process.execSync` / Node `exec` | Project uses Bun `$` shell throughout. Mixing APIs creates inconsistency. | `Bun.$\`...\`` with `.quiet().nothrow()` |
 
 ---
 
 ## Version Compatibility
 
-| Package | Version | Notes |
-|---------|---------|-------|
-| `@opentui/core` | 0.1.87 (installed) | `./testing` export and `TestRecorder` confirmed in installed type definitions |
-| `@opentui/solid` | 0.1.87 (installed) | `testRender` confirmed in installed `index.d.ts` and `index.js` |
-| `bun:test` | Bun 1.3.10 | `toMatchSnapshot` supported since Bun 1.x. `toMatchInlineSnapshot` since Bun 1.1.39 (Dec 2024). Both available. |
-| `OTUI_USE_CONSOLE` env var | Any | Set automatically by `createTestRenderer`. No configuration needed. |
+| Component | Version | Notes |
+|-----------|---------|-------|
+| niri | 25.11 (installed) | `move-window-to-workspace --window-id` verified as supported |
+| `niri msg -j` | 25.11 | JSON output flag verified working on all query commands |
+| Bun | 1.3.10 (project runtime) | `Bun.spawn()` returns `.pid`; `$` shell available |
+| Zod | installed (project) | Schema validation for parsed niri JSON |
 
 ---
 
 ## Sources
 
-- `node_modules/@opentui/core/testing.d.ts` — full testing export list, HIGH confidence (installed source)
-- `node_modules/@opentui/core/testing/test-renderer.d.ts` — `createTestRenderer`, `TestRenderer`, `MockInput`, `MockMouse` types, HIGH confidence (installed source)
-- `node_modules/@opentui/core/testing/mock-keys.d.ts` — `createMockKeys`, `KeyCodes`, `pressKey`, `typeText`, `pressArrow` signatures, HIGH confidence (installed source)
-- `node_modules/@opentui/core/testing/test-recorder.d.ts` — `TestRecorder`, `RecordedFrame` types, HIGH confidence (installed source)
-- `node_modules/@opentui/solid/index.d.ts` — `testRender` signature, HIGH confidence (installed source)
-- `node_modules/@opentui/core/testing.js` — `createTestRenderer` implementation (mock stdin, `testing: true` flag, `captureCharFrame` reads `getRealCharBytes(true)` which strips ANSI), HIGH confidence (installed source)
-- OpenTUI testing guide: https://deepwiki.com/sst/opentui/6.1-getting-started — MEDIUM confidence (independently confirms API surface)
-- Bun test runner docs: https://bun.sh/docs/test — `toMatchSnapshot`, `toMatchInlineSnapshot` confirmed, HIGH confidence (official docs)
-- Bun `toMatchInlineSnapshot` issue: https://github.com/oven-sh/bun/issues/3623 — shipped in Bun v1.1.39, HIGH confidence (issue confirmed closed/completed)
-- Bun Terminal PTY API: https://bun.sh/docs/api/spawn — PTY approach considered and rejected in favour of in-process `testRender`, HIGH confidence
-- `node-pty` Bun issue: https://github.com/microsoft/node-pty/issues/632 — native addon compatibility problems confirmed, HIGH confidence
+- `niri msg --help`, `niri msg action --help` — full command list verified, HIGH confidence (live compositor 25.11)
+- `niri msg -j workspaces` live output — workspace JSON schema verified, HIGH confidence (live output)
+- `niri msg -j windows` live output — window JSON schema with `pid`, `app_id`, `id`, `workspace_id` fields verified, HIGH confidence (live output)
+- `niri msg action move-window-to-workspace --help` — `--window-id` flag confirmed, HIGH confidence (live compositor)
+- `niri msg action set-workspace-name --help` — `--workspace` flag confirmed, HIGH confidence (live compositor)
+- `/run/user/1000/systemd/transient/app-niri-ghostty-<PID>.scope` — niri spawns via systemd transient scopes using the process PID, confirming PID match strategy, HIGH confidence (live filesystem)
+- `src/lib/integrations/types.ts` (installed source) — current `Integration.open()` signature returns `Promise<void>`, HIGH confidence (installed source)
+- `src/lib/integrations/tmux.ts` (installed source) — pattern for shell wrappers and `open()` implementation, HIGH confidence (installed source)
+- `src/lib/workspace-ops.ts` (installed source) — integration loop structure confirmed, HIGH confidence (installed source)
 
 ---
 
-*Stack research for: git-stacks v0.4.0 — TUI e2e testing and wizard create flows*
-*Researched: 2026-03-20*
+*Stack research for: git-stacks v0.6.0 — niri compositor integration and integration orchestration*
+*Researched: 2026-03-21*

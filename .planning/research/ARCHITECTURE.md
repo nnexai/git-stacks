@@ -1,499 +1,596 @@
 # Architecture Research
 
-**Domain:** TUI dashboard e2e testing, wizard create flows, and sync integration — v0.4.0 milestone
-**Researched:** 2026-03-20
-**Confidence:** HIGH for integration points and component boundaries (verified against live source); HIGH for OpenTUI testing API (verified against installed node_modules type declarations); MEDIUM for wizard flow UX patterns (based on existing codebase patterns + tradeoff analysis)
+**Domain:** Integration orchestration pipeline with artifact passing and niri compositor integration — v0.6.0 milestone
+**Researched:** 2026-03-21
+**Confidence:** HIGH for integration interface changes (verified against live source); HIGH for niri API (verified against running niri binary); HIGH for consolidation approach (verified all 4 loop sites)
 
 ---
 
 ## System Overview
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  CLI Entry  src/index.ts                                                      │
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Call Sites (4 today → 1 after consolidation)                                │
+│  ┌───────────────┐  ┌──────────────────┐  ┌──────────────────┐              │
+│  │workspace-ops  │  │ workspace-wizard  │  │ workspace-clone  │              │
+│  │ openWorkspace │  │  (generate only)  │  │  (generate only) │              │
+│  └───────┬───────┘  └────────┬─────────┘  └────────┬─────────┘              │
+│          │                   │                      │                         │
+│          │         ┌─────────┘──────────────────────┘                        │
+│          │         │  App.tsx (generate only — TUI create path)               │
+│          │         └────────────────────────────────────────────────────┐     │
+│          │                                                               │     │
+│          ▼                                                               ▼     │
 │  ┌───────────────────────────────────────────────────────────────────────┐   │
-│  │ Commands (src/commands/)                                               │   │
-│  │ workspace.ts | template.ts | repo.ts | doctor.ts | config.ts           │   │
+│  │  src/lib/integrations/runner.ts  (NEW — consolidated loop)            │   │
+│  │                                                                        │   │
+│  │  runIntegrationGenerate(ctx, integrations[]) → ArtifactBag            │   │
+│  │  runIntegrationOpen(ctx, bag, integrations[]) → void                  │   │
+│  └──────────┬────────────────────────────────────────────────────────────┘   │
+│             │ calls in order                                                   │
+│  ┌──────────▼────────────────────────────────────────────────────────────┐   │
+│  │  Integration plugins (each reads from ArtifactBag, writes to it)      │   │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐              │   │
+│  │  │  vscode  │  │ intellij │  │   cmux   │  │   tmux   │              │   │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘              │   │
+│  │                                           ┌──────────────┐             │   │
+│  │                                           │    niri      │ ← runs last  │   │
+│  │                                           │  (NEW file)  │             │   │
+│  │                                           └──────────────┘             │   │
 │  └───────────────────────────────────────────────────────────────────────┘   │
 │                                                                               │
-│  TUI Dashboard  src/tui/dashboard/                                            │
-│  ┌──────────────────────────────────────────────────────────────────────┐    │
-│  │  run.tsx — mounts App, opens Unix socket                              │    │
-│  │                                                                        │    │
-│  │  App.tsx — tab state, keyboard dispatch, view routing                  │    │
-│  │  ┌──────────────────────────────────────────────────────────────┐     │    │
-│  │  │ UIView state machine                                          │     │    │
-│  │  │  "list" | "action-menu" | "confirm" | "progress"             │     │    │
-│  │  │  "inline-input" | "messages" | [NEW: "wizard"]               │     │    │
-│  │  └──────────────────────────────────────────────────────────────┘     │    │
-│  │                                                                        │    │
-│  │  List pane (top box)          Detail pane (bottom box)                 │    │
-│  │  WorkspaceList.tsx            WorkspaceDetail.tsx                      │    │
-│  │  TemplateList.tsx             TemplateDetail.tsx / ActionMenus         │    │
-│  │  RepoList.tsx                 RepoDetail.tsx                           │    │
-│  │                               ConfirmDialog.tsx                        │    │
-│  │                               InlineInput.tsx                          │    │
-│  │                               ProgressView.tsx                         │    │
-│  │                               [NEW: WizardView.tsx]                    │    │
-│  └──────────────────────────────────────────────────────────────────────┘    │
-│                                                                               │
-│  Hooks  src/tui/dashboard/hooks/                                              │
-│  useWorkspaces | useTemplates | useRepos | useMessages                        │
-│                                                                               │
-│  Ops Layer  src/lib/workspace-ops.ts                                          │
-│  openWorkspace | cleanWorkspace | removeWorkspace | mergeWorkspace            │
-│  renameWorkspace | syncWorkspace | getWorkspaceListInfo                       │
-│                                                                               │
-│  Config Layer  src/lib/config.ts                                              │
-│  YAML read/write, Zod validation, listWorkspaces, listTemplates               │
-└──────────────────────────────────────────────────────────────────────────────┘
+│  External tools invoked by open()                                             │
+│  niri msg -j windows (snapshot-diff)   tmux list-clients   code-insiders     │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
 | Component | Responsibility | Status |
 |-----------|----------------|--------|
-| `run.tsx` | Mount App, manage Unix socket lifecycle | Existing — no changes needed for v0.4.0 features |
-| `App.tsx` | UIView state machine, keyboard dispatch, tab routing | Existing — needs `sync` added to `Action`, wizard view added to `UIView`, `syncWorkspace` import added |
-| `ActionMenu.tsx` | Keyboard-driven menu for workspace actions | Existing — add `[s] Sync` entry |
-| `TemplateActionMenu.tsx` | Keyboard-driven menu for template actions | Existing — add `[n] New` entry |
-| `InlineInput.tsx` | Single-field inline text entry | Existing — reuse as-is for simple prompts |
-| `ConfirmDialog.tsx` | y/n confirmation | Existing — no changes needed |
-| `ProgressView.tsx` | Streaming progress lines | Existing — reuse for sync progress |
-| `types.ts` | UIView union, Action union, Tab type | Existing — add `"sync"` to Action, add `"wizard"` view shape |
-| `WizardView.tsx` | Multi-step TUI wizard — NEW | New file |
-| `hooks/useWorkspaces.ts` | Workspace list + status fetching | Existing — no changes needed |
-| `hooks/useTemplates.ts` | Template list | Existing — no changes needed |
-| `hooks/useRepos.ts` | Repo registry list | Existing — no changes needed |
+| `src/lib/integrations/types.ts` | Integration interface, ArtifactBag type, IntegrationContext | Modify — add `ArtifactBag`, change `open()` signature |
+| `src/lib/integrations/runner.ts` | Consolidated generate+open loop, shared bag threading | New file |
+| `src/lib/integrations/index.ts` | Integration registry array | Modify — register niri last |
+| `src/lib/integrations/vscode.ts` | Generate `.code-workspace`, open code binary, return window id | Modify — return artifact |
+| `src/lib/integrations/tmux.ts` | Open/focus tmux session, return session name | Modify — return artifact |
+| `src/lib/integrations/cmux.ts` | Open/focus cmux workspace, return workspace ref | Modify — return artifact |
+| `src/lib/integrations/intellij.ts` | Open IntelliJ, return artifact | Modify — return artifact |
+| `src/lib/integrations/niri.ts` | Create niri workspace, spawn terminal into tmux, arrange windows | New file |
+| `src/lib/workspace-ops.ts` (openWorkspace) | Call runner instead of inline loop | Modify — ~8 lines |
+| `src/tui/workspace-wizard.ts` | Call runner for generate phase | Modify — ~8 lines |
+| `src/tui/workspace-clone.ts` | Call runner for generate phase | Modify — ~8 lines |
+| `src/tui/dashboard/App.tsx` | Call runner for generate phase | Modify — ~8 lines |
 
 ---
 
-## Question 1: E2E Test Architecture
+## Artifact Type Design
 
-### What OpenTUI Provides
-
-OpenTUI ships first-class test infrastructure in `@opentui/core/testing/` and re-exports from `@opentui/solid`:
-
-- `testRender(component, config?)` — mounts a SolidJS component into a headless `TestRenderer` (no real terminal), returns `{ renderer, mockInput, mockMouse, renderOnce, captureCharFrame, captureSpans, resize }`
-- `mockInput.pressKey(key)` — inject a keypress into the renderer's keyboard pipeline
-- `mockInput.typeText(text)` — inject a sequence of character keypresses
-- `mockInput.pressKeys([...], delayMs?)` — sequence of keys with optional delay
-- `mockInput.pressEnter()` / `pressEscape()` / `pressArrow(dir)` — named shorthand keys
-- `captureCharFrame()` — snapshot the current terminal buffer as a string
-- `captureSpans()` — structured span capture with fg/bg/text for precise assertions
-- `resize(w, h)` — simulate terminal resize
-- `TestRecorder` — hooks into the render pipeline to record frames for playback
-- `ManualClock` — controllable clock for testing timeouts without `sleep`
-
-This is an **in-process, headless test renderer**. No PTY, no subprocess, no real terminal needed.
-
-### Recommended First-Pass Test Architecture
-
-**Use `testRender` from `@opentui/solid` directly in bun:test.** This is the correct first pass.
-
-```
-tests/
-  tui/
-    messageUtils.test.ts    (already exists — pure function unit tests, no renderer)
-    dashboard/
-      InlineInput.test.tsx  (NEW — component unit test)
-      ActionMenu.test.tsx   (NEW — component unit test)
-      WizardView.test.tsx   (NEW — wizard step progression)
-      App.integration.test.tsx (NEW — integration: key sequences drive state changes)
-```
-
-**Three layers, in order of build priority:**
-
-**Layer 1 — Pure function unit tests** (already established pattern)
-Test `messageUtils.ts`, `formatAge`, etc. No renderer. Use bun:test directly. Already working in `tests/tui/messageUtils.test.ts`.
-
-**Layer 2 — Component unit tests with `testRender`**
-Mount a single component (e.g. `InlineInput`, `ActionMenu`) with controlled props, inject keypresses, assert `captureCharFrame()` contains expected text. Filesystem-isolated (no real config reads).
+### ArtifactBag Shape
 
 ```typescript
-// tests/tui/dashboard/InlineInput.test.tsx
-import { testRender } from "@opentui/solid"
-import { InlineInput } from "../../../src/tui/dashboard/InlineInput"
-import { describe, test, expect } from "bun:test"
+// src/lib/integrations/types.ts (additions)
 
-test("InlineInput renders prefill and accepts input", async () => {
-  let confirmed = ""
-  const { mockInput, renderOnce, captureCharFrame } = await testRender(() => (
-    <InlineInput label="Name" prefill="foo" onConfirm={(v) => { confirmed = v }} onCancel={() => {}} />
-  ))
-  await renderOnce()
-  expect(captureCharFrame()).toContain("foo")
-  mockInput.pressKey("b")
-  await renderOnce()
-  expect(captureCharFrame()).toContain("foob")
-  mockInput.pressEnter()
-  expect(confirmed).toBe("foob")
+export interface TmuxArtifact {
+  type: "tmux"
+  sessionName: string
+}
+
+export interface CmuxArtifact {
+  type: "cmux"
+  workspaceRef: string
+}
+
+export interface VscodeArtifact {
+  type: "vscode"
+  pid: number | null          // process pid returned from spawn, if available
+  windowId: number | null     // niri window id, populated via snapshot-diff if niri present
+}
+
+export interface IntellijArtifact {
+  type: "intellij"
+  pid: number | null
+  windowId: number | null
+}
+
+export type IntegrationArtifact =
+  | TmuxArtifact
+  | CmuxArtifact
+  | VscodeArtifact
+  | IntellijArtifact
+
+/**
+ * Shared bag accumulating artifacts from all preceding integrations.
+ * Passed read-write through the open() pipeline.
+ * Keyed by integration id for O(1) lookup.
+ */
+export type ArtifactBag = Partial<{
+  tmux: TmuxArtifact
+  cmux: CmuxArtifact
+  vscode: VscodeArtifact
+  intellij: IntellijArtifact
+}>
+```
+
+### Updated Integration Interface
+
+The key change: `open()` receives `bag` (read access to prior artifacts) and returns `IntegrationArtifact | null` (its contribution).
+
+```typescript
+export interface Integration {
+  id: string
+  label: string
+  hint: string
+  enabledByDefault: boolean
+
+  applies?(workspace: Workspace): boolean
+  isEnabled(ctx: IntegrationContext): boolean
+  configurePrompt(current: Record<string, unknown>): Promise<Record<string, unknown> | null>
+
+  /**
+   * Write artifact files to disk. Returns artifact path or null.
+   * Unchanged from current interface.
+   */
+  generate?(ctx: IntegrationContext): string | null
+
+  /**
+   * Launch / activate the integration.
+   * Receives ArtifactBag from preceding integrations (read-only for non-niri).
+   * Returns this integration's artifact contribution, or null.
+   *
+   * Backward compat: existing integrations that don't use bag can ignore it.
+   * Existing integrations that return void are updated to return null.
+   */
+  open(ctx: IntegrationContext, artifactPath: string | null, bag: ArtifactBag): Promise<IntegrationArtifact | null>
+}
+```
+
+The `bag` parameter is the third argument. Existing integrations pass `_bag` and return `null` — a mechanical update with no logic change.
+
+---
+
+## Consolidated Runner
+
+### Why Consolidate
+
+Four separate inline loops exist today:
+
+1. `workspace-ops.ts:openWorkspace` lines 573-579 — runs generate + open
+2. `workspace-wizard.ts` lines 458-464 — runs generate only (no open)
+3. `workspace-clone.ts` lines 165-171 — runs generate only (no open)
+4. `App.tsx` lines 790-793 — runs generate only (no open)
+
+Each duplication is a maintenance vector: if filtering logic (applies/isEnabled) changes, all 4 sites must change. The consolidation should live in a new `runner.ts` file, not in `workspace-ops.ts`, because the generate-only callers live in TUI code that should not depend on workspace-ops.
+
+### runner.ts Design
+
+```typescript
+// src/lib/integrations/runner.ts
+
+import type { Integration, IntegrationContext, ArtifactBag, IntegrationArtifact } from "./types"
+
+/**
+ * Run the generate phase for all applicable integrations.
+ * Returns a map of integration id → artifact path (for callers that log artifact paths).
+ * Used by: workspace-wizard, workspace-clone, App.tsx (create flow)
+ */
+export function runIntegrationGenerate(
+  ctx: IntegrationContext,
+  integrationList: Integration[] = integrations
+): Map<string, string | null> {
+  const paths = new Map<string, string | null>()
+  for (const integration of integrationList) {
+    if (!integration.isEnabled(ctx)) continue
+    if (integration.applies && !integration.applies(ctx.workspace)) continue
+    const path = integration.generate?.(ctx) ?? null
+    paths.set(integration.id, path)
+  }
+  return paths
+}
+
+/**
+ * Run generate + open phases with artifact threading.
+ * Returns the final ArtifactBag after all integrations have run.
+ * Used by: openWorkspace (the only caller that runs open())
+ */
+export async function runIntegrations(
+  ctx: IntegrationContext,
+  skip: Set<string> = new Set(),
+  integrationList: Integration[] = integrations
+): Promise<ArtifactBag> {
+  const bag: ArtifactBag = {}
+  for (const integration of integrationList) {
+    if (skip.has(integration.id)) continue
+    if (!integration.isEnabled(ctx)) continue
+    if (integration.applies && !integration.applies(ctx.workspace)) continue
+    const artifactPath = integration.generate?.(ctx) ?? null
+    const artifact = await integration.open(ctx, artifactPath, bag)
+    if (artifact) {
+      // TypeScript-safe bag mutation — discriminated union ensures correct key
+      (bag as Record<string, IntegrationArtifact>)[integration.id] = artifact
+    }
+  }
+  return bag
+}
+```
+
+The generate-only callers replace their loops with `runIntegrationGenerate(ctx)`. The `openWorkspace` caller replaces its loop with `runIntegrations(ctx, skip)`.
+
+---
+
+## Niri Integration Design
+
+### Window Identification: Snapshot-Diff Strategy
+
+Niri has no "spawn this command and return me the resulting window id" API. The approach:
+
+1. Take `before` snapshot: `niri msg -j windows` → array of `{ id, app_id, title, workspace_id, pid }`
+2. Spawn the terminal command (e.g. `ghostty -e tmux attach-session -t {name}`)
+3. Poll `niri msg -j windows` until new window appears (up to 5s, 100ms intervals)
+4. The new window is the diff: id present in `after` but not in `before`
+5. Return that window id as the artifact
+
+```typescript
+// Verified niri window JSON shape (from live niri on this machine):
+// { id: number, title: string, app_id: string, pid: number, workspace_id: number,
+//   is_focused: boolean, is_floating: boolean, is_urgent: boolean,
+//   layout: { ... }, focus_timestamp: { secs, nanos } }
+```
+
+### Niri Workspace: Named Workspaces
+
+`niri msg action focus-workspace <REFERENCE>` accepts a workspace name. Niri workspaces can have names. The approach:
+
+1. Before spawning windows: `niri msg action focus-workspace -- {workspaceName}` creates/focuses named workspace
+2. All subsequent spawns land on that workspace (niri places new windows on focused workspace)
+3. After all windows are spawned: `niri msg action focus-workspace -- {workspaceName}` re-focuses
+
+Niri does not have a "create named workspace" command — it creates the workspace on focus if it doesn't exist. Naming is done via niri config (`workspace` block in config.kdl) or the workspace automatically gets a name when focused by name.
+
+**Confirmed from live `niri msg -j workspaces`:** workspace `name` field is `null` for unnamed workspaces. A named workspace set via `niri msg action focus-workspace my-name` will create workspace with that name.
+
+### Terminal Spawning for tmux
+
+Niri does not directly attach to tmux sessions. The niri integration spawns a terminal (configurable, default: `ghostty`) with a command to attach to the tmux session:
+
+```
+niri msg action spawn -- ghostty -e tmux attach-session -t {sessionName}
+```
+
+This requires tmux to have already run. Since tmux runs before niri (ordering enforced by position in integration array), `bag.tmux?.sessionName` is available.
+
+If tmux is not in the bag (not enabled), niri spawns a plain terminal in the workspace directory instead.
+
+### Window-to-Workspace Movement
+
+After all terminals/IDEs are spawned by preceding integrations, niri needs to move those windows to the git-stacks workspace. The challenge: vscode/intellij spawn their own windows without going through `niri msg action spawn` (they use `Bun.$`), so their windows appear on whatever workspace is currently focused.
+
+Strategy: niri runs last and uses `--window-id` on `move-window-to-workspace`:
+
+```
+niri msg action move-window-to-workspace --window-id {id} {workspaceName}
+```
+
+This is why window IDs from preceding integrations are critical. If vscode puts its PID in the artifact, niri can match `windows[].pid === artifact.pid` to find the window id, then move it.
+
+**Confirmed from live niri:** `niri msg action move-window-to-workspace --window-id <WINDOW_ID> <REFERENCE>` is a real command with exactly this syntax.
+
+### Niri Integration Config Schema
+
+```typescript
+const niriConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  terminal: z.string().default("ghostty"),     // terminal binary to spawn
+  terminal_flags: z.string().default(""),      // extra flags passed before -e
+  workspace_name_prefix: z.string().default("gs-"),  // prefix for niri workspace name
+  arrange_windows: z.boolean().default(true),  // move preceding integration windows
 })
 ```
 
-**Layer 3 — App-level integration tests with mocked ops**
-Mount `App` (or a test harness wrapping it) with filesystem isolation. Mock or stub `workspace-ops.ts` functions. Drive key sequences and assert view state changes. These tests validate that pressing `Enter` opens the action menu, pressing `s` triggers sync, etc.
+The niri workspace name is `{prefix}{workspaceName}`. Default: `gs-my-feature`.
 
-The key challenge is that `App.tsx` imports live config readers (`listWorkspaces`, `listTemplates`, `listRegistry`) directly inside hooks. The existing pattern in `tests/lib/workspace-ops.test.ts` sets `process.env.HOME` before dynamic import to redirect config reads. The same pattern must be used for App integration tests.
+### Niri open() Implementation Flow
 
-### Why Not PTY-Based Subprocess Tests
-
-PTY tests (spawn `git-stacks manage` in a pty, send keystrokes via node-pty or expect) are expensive: slow startup (~500ms), flaky timing, hard to assert partial frames, no type safety, no access to internal state. The OpenTUI `testRender` approach is in-process, fast, and deterministic. PTY tests are appropriate only if testing the actual terminal rendering pipeline (ANSI escape codes, alternate screen) which is OpenTUI's concern, not git-stacks's.
-
-### Why Not Visual Snapshot Tests
-
-Snapshot tests against `captureCharFrame()` string output are brittle — any layout change breaks them, even cosmetic ones. Use `captureCharFrame().toContain("expected text")` assertions instead of full-frame equality. Reserve `TestRecorder` frame capture only for regression tests on specific rendering bugs.
-
-### Configuration for JSX in Test Files
-
-The `/** @jsxImportSource @opentui/solid */` pragma must be at the top of any test file that uses JSX. The existing `tsconfig.json` likely needs `"jsx": "preserve"` or similar for Bun to handle `.tsx` test files. Verify the existing `bunfig.toml` handles `.tsx` transforms in the test runner.
-
----
-
-## Question 2: Wizard Flows for Create Operations
-
-### The Three Options
-
-**Option A: Subprocess @clack/prompts wizards** — suspend the TUI renderer (`renderer.suspend()`), exec the existing CLI wizard as a subprocess, resume on return.
-
-- Pros: zero new TUI code, reuses all existing validation logic
-- Cons: jarring UX (TUI disappears, clack prompts appear, TUI returns), duplicate code paths, wizard output/errors are not surfaced in the TUI, no shared state between TUI and wizard, cannot integrate with TUI's progress/error display
-
-**Option B: Inline multi-field TUI forms using InlineInput pattern** — chain multiple `InlineInput` steps, each as a separate `UIView` state.
-
-- Pros: stays entirely in TUI, consistent with existing rename/clone patterns, no new component architecture
-- Cons: InlineInput is one field at a time. Multi-field flows (workspace new needs name + branch + template selection) require managing step state in App.tsx or an ad-hoc state object, no selection widgets for multi-select (template picker, repo picker)
-
-**Option C: Full-screen overlay wizard** — a new `WizardView.tsx` component that manages its own multi-step state, renders in the detail pane (bottom box), handles its own keyboard routing.
-
-- Pros: self-contained component, clean separation from App state, can handle multi-field and selection steps, follows the MessageOverlay/HelpOverlay full-screen pattern already established
-- Cons: new component to build, needs a "select from list" sub-widget for template/repo picking
-
-### Recommendation: Option C (WizardView) for New Creates, Option A (subprocess) as Escape Hatch
-
-Use `WizardView.tsx` for the create flows, displayed in the detail pane (bottom box) when view state is `"wizard"`. For v0.4.0 first pass, this is the right call because:
-
-1. The existing codebase has a clear pattern: components own their own `useKeyboard` handler and receive callbacks (`onConfirm`, `onCancel`). WizardView follows this exactly.
-2. Create workspace requires 3+ fields (name, branch, template selection). InlineInput chaining would scatter that logic across App.tsx's `handleInlineInputConfirm`.
-3. ProgressView is already available to show post-create progress. WizardView collects inputs, App.tsx calls `createWorkspace` (CLI wrapper or direct ops layer call), then transitions to ProgressView.
-4. The `renderer.suspend()` + subprocess pattern already works for `launchEditor` in App.tsx — use it as a fallback for anything too complex to build in-TUI for v0.4.0, but do not use it as the primary path.
-
-**What WizardView needs to support:**
-
-```typescript
-// src/tui/dashboard/WizardView.tsx
-type WizardStep =
-  | { type: "text"; field: string; label: string; validate?: (v: string) => string | undefined }
-  | { type: "select"; field: string; label: string; options: { value: string; label: string }[] }
-
-type WizardProps = {
-  title: string
-  steps: WizardStep[]
-  onConfirm: (values: Record<string, string>) => void
-  onCancel: () => void
-}
+```
+niri.open(ctx, _artifactPath, bag):
+  1. Resolve config (terminal, prefix, arrange_windows)
+  2. niriWorkspaceName = prefix + ctx.workspace.name
+  3. niri msg action focus-workspace -- niriWorkspaceName
+     (creates workspace if not exists, switches to it)
+  4. If bag.tmux exists:
+       sessionName = bag.tmux.sessionName
+       Snapshot before = niri msg -j windows
+       niri msg action spawn -- {terminal} -e tmux attach-session -t {sessionName}
+       Poll until new window appears (up to 5s)
+       terminalWindowId = diff(before, after)[0].id
+     Else:
+       Snapshot before = niri msg -j windows
+       niri msg action spawn -- {terminal} -- sh -c "cd {tasksDir}/{name} && {terminal}"
+       Poll until new window appears
+       terminalWindowId = diff(before, after)[0].id
+  5. If arrange_windows:
+       For each window_id in [bag.vscode?.windowId, bag.intellij?.windowId] (non-null):
+         niri msg action move-window-to-workspace --window-id {id} -- niriWorkspaceName
+  6. niri msg action focus-workspace -- niriWorkspaceName
+  7. Return { type: "niri", workspaceName: niriWorkspaceName, windowIds: [...] }
 ```
 
-WizardView manages `currentStep` and `collectedValues` internally. Each step renders a prompt + current value. Navigation: Enter to advance, Escape to go back (or cancel on step 0). The `select` step type handles arrow navigation through options.
+### Populating windowId in vscode/intellij Artifacts
 
-**Important constraint:** OpenTUI's known pitfall — no nested `<text>` elements. WizardView must use `<box flexDirection="row"><text>...</text><text>...</text></box>` for any inline-styled content.
+VSCode: `code-insiders path` spawns asynchronously and returns before the window exists. To get the window id:
+- Snapshot before, run the command, snapshot-diff after. Same pattern as terminal.
+- Store the result in `VscodeArtifact.windowId`. If niri is not running (check: `WAYLAND_DISPLAY` + `niri msg -j workspaces` succeeds), skip the snapshot.
 
-### Template Select Widget
+IntelliJ: Same approach. `intellij.sh` is fire-and-forget. Snapshot-diff works.
 
-For template/repo selection inside a wizard step, a simple vertically-navigable list (like TemplateList but embedded) is sufficient. This is a `select` step type: arrow up/down moves cursor, Enter confirms. No multi-select needed for the create workspace wizard (single template).
+tmux: No window to track — tmux is a session, not a GUI window. The terminal spawned by niri to attach tmux is tracked by niri's snapshot. `TmuxArtifact` only needs `sessionName`.
 
-### Subprocess Escape Hatch (repo add/scan)
+The key insight: snapshot-diff is only needed when niri is in the integration list and enabled. The vscode/intellij integrations can skip the niri-specific window tracking if they don't know niri is enabled. Alternatively, they always track the window (cheap: one `niri msg` call) and store `null` if niri is not running.
 
-Repo scan (`git-stacks repo scan`) involves directory traversal output and is inherently complex. For v0.4.0, use `renderer.suspend()` + `Bun.spawn` to call the existing `repo scan` CLI, then `renderer.resume()` + `reloadRepos()`. This is the same pattern as `launchEditor` in App.tsx. It is acceptable here because repo scan is an infrequent, non-critical flow.
-
----
-
-## Question 3: Workspace Sync Integration
-
-### Current State
-
-`syncWorkspace(name, opts, onProgress)` exists in `src/lib/workspace-ops.ts` at line 677. It:
-- Accepts `name`, `{ strategy?: "rebase" | "merge", bestEffort?: boolean }`, and a progress callback
-- Returns `SyncResult = { ok, synced, skipped, error? }`
-- Runs fetch, conflict check, then rebase or merge per repo
-- Streams progress via `onProgress` callbacks
-
-### Integration Work Required
-
-**1. Add `"sync"` to the `Action` union in `types.ts`**
-
-```typescript
-export type Action = "open" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync"
-```
-
-**2. Add sync entry to ActionMenu.tsx**
-
-```typescript
-{ key: "s", action: "sync", label: "Sync (rebase)" },
-```
-
-Note: `"s"` is currently unbound in ActionMenu. Verify no conflict with batch selection key `"s"` (which only applies in list view, not action-menu view — the keyboard guards in App.tsx already prevent this).
-
-**3. Wire sync in App.tsx `runAction`**
-
-Sync does not need a confirmation dialog (it is non-destructive and reversible). It goes directly to progress view, same as `open`:
-
-```typescript
-if (action === "sync") {
-  setProgressLines([])
-  setProgressDone(false)
-  setView({ view: "progress", message: `Syncing ${name}...` })
-  const result = await syncWorkspace(name, {}, (msg) =>
-    setProgressLines((prev) => [...prev, msg])
-  )
-  if (!result.ok) {
-    setProgressLines((prev) => [...prev, `ERROR: ${result.error}`])
-    if (result.skipped.length > 0) {
-      result.skipped.forEach(s => setProgressLines(prev => [...prev, `  skipped ${s.repo}: ${s.reason}`]))
-    }
-  } else {
-    result.synced.forEach(s => setProgressLines(prev => [...prev, `  synced ${s.repo} (+${s.commits})`]))
-  }
-  setProgressDone(true)
-  return
-}
-```
-
-**4. Import `syncWorkspace` in App.tsx**
-
-```typescript
-import {
-  cleanWorkspace, removeWorkspace, mergeWorkspace, openWorkspace,
-  editWorkspaceYaml, renameWorkspace, syncWorkspace  // add syncWorkspace
-} from "../../lib/workspace-ops"
-```
-
-**5. No strategy selection UI needed for v0.4.0**
-
-Default to `{ strategy: "rebase" }`. A future enhancement could add a select step in a wizard. The `bestEffort` flag is not needed in the first pass — let the user see conflict errors and resolve manually.
-
-### Total sync integration: 4 file changes, no new files
-
----
-
-## Question 4: New Files vs Modified Files
-
-### New Files
-
-| File | What It Is | Why New |
-|------|-----------|---------|
-| `src/tui/dashboard/WizardView.tsx` | Multi-step create wizard component | Handles workspace new, workspace clone, template new. Self-contained step state. |
-| `tests/tui/dashboard/InlineInput.test.tsx` | Component unit test | First test using `testRender` — establishes the test harness pattern |
-| `tests/tui/dashboard/ActionMenu.test.tsx` | Component unit test | Verifies key bindings dispatch correct actions |
-| `tests/tui/dashboard/WizardView.test.tsx` | Wizard step progression tests | Validates multi-step navigation, field collection, cancel |
-| `tests/tui/dashboard/App.integration.test.tsx` | App-level integration tests | Key sequences → view state assertions, mocked ops layer |
-
-### Modified Files
-
-| File | Change | Scope |
-|------|--------|-------|
-| `src/tui/dashboard/types.ts` | Add `"sync"` to `Action`, add `{ view: "wizard"; purpose: WizardPurpose }` to `UIView` | Small — 2-3 lines |
-| `src/tui/dashboard/ActionMenu.tsx` | Add `{ key: "s", action: "sync", label: "Sync (rebase)" }` to actions array | 1 line |
-| `src/tui/dashboard/TemplateActionMenu.tsx` | Add `[n] New` entry and keyboard handler | ~5 lines |
-| `src/tui/dashboard/App.tsx` | Import `syncWorkspace`, add sync case in `runAction`, add wizard view in `UIView` routing, add create-workspace keyboard trigger | Medium — ~50 lines |
-| `src/lib/workspace-ops.ts` | No changes for sync — it is already complete | No changes |
+Recommendation: always attempt window id capture in vscode/intellij if `WAYLAND_DISPLAY` is set. Store `null` on failure. This way vscode/intellij have no dependency on niri's enabled state.
 
 ---
 
 ## Data Flow
 
-### Sync Action Flow
+### openWorkspace with Artifacts
 
 ```
-User presses Enter on workspace row
-  → view = { view: "action-menu", index }
-  → ActionMenu renders with [s] Sync visible
-  → User presses "s"
-  → runAction("sync", index) in App.tsx
-  → view = { view: "progress", message: "Syncing..." }
-  → syncWorkspace(name, {}, onProgress) called
-  → onProgress callbacks → setProgressLines(prev => [...prev, msg])
-  → SolidJS reactivity → ProgressView re-renders each line
-  → syncWorkspace resolves → setProgressDone(true)
-  → User presses any key → reload() → view = { view: "list" }
+git-stacks open my-feature
+  → openWorkspace("my-feature", opts)
+  → ctx = { workspace, tasksDir, config }
+  → runIntegrations(ctx, skip)
+      bag = {}
+      vscode.generate(ctx) → writes .code-workspace
+      vscode.open(ctx, path, bag={}) → spawns code-insiders, snapshot-diff → window_id
+        → returns VscodeArtifact { type: "vscode", pid, windowId }
+        → bag.vscode = { ... }
+      tmux.open(ctx, null, bag={vscode}) → opens session "my-feature"
+        → returns TmuxArtifact { type: "tmux", sessionName: "my-feature" }
+        → bag.tmux = { ... }
+      niri.open(ctx, null, bag={vscode, tmux})
+        → focus-workspace gs-my-feature
+        → spawn ghostty -e tmux attach-session -t my-feature
+        → move-window-to-workspace --window-id {vscode.windowId} gs-my-feature
+        → returns NiriArtifact { type: "niri", workspaceName: "gs-my-feature", windowIds: [...] }
+  → post_open hooks
+  → update last_opened
 ```
 
-### Wizard Create Flow (workspace new)
+### Generate-Only Flow (workspace create)
 
 ```
-User presses "n" on workspaces tab (list view, no selection)
-  → view = { view: "wizard", purpose: "new-workspace" }
-  → WizardView renders with steps: [name, branch, template-select]
-  → User navigates steps, Enter advances, Esc backs up
-  → WizardView.onConfirm({ name, branch, template }) fires
-  → App.tsx calls createWorkspace (via CLI spawn or ops layer)
-  → view = { view: "progress", message: "Creating..." }
-  → On complete: reload() → view = { view: "list" }
+workspace-wizard.ts creates new workspace
+  → runIntegrationGenerate(ctx)
+      for each integration: check enabled + applies, call generate?()
+      returns Map<id, artifactPath>
+  → log artifact paths (p.log.success)
+  → no open() called — open() happens later on `git-stacks open`
 ```
 
-### Test Data Flow (testRender)
+---
 
+## Integration Ordering
+
+Order is determined by position in the `integrations` array in `index.ts`. No dynamic reordering. Niri must be last.
+
+```typescript
+// src/lib/integrations/index.ts
+export const integrations = [
+  vscodeIntegration,    // 1. generate + open: writes .code-workspace, spawns IDE
+  intellijIntegration,  // 2. generate + open: writes .idea/, spawns IDE
+  cmuxIntegration,      // 3. no generate, open: creates cmux workspace
+  tmuxIntegration,      // 4. no generate, open: creates tmux session → produces TmuxArtifact
+  niriIntegration,      // 5. no generate, open: creates niri workspace, spawns terminal, arranges
+]
 ```
-bun test
-  → testRender(<InlineInput ...props />)
-  → Creates headless TestRenderer (no real tty, no stdin/stdout)
-  → mockInput.pressKey("a")
-  → Key injected directly into renderer's keyboard event pipeline
-  → SolidJS reactive update fires
-  → renderOnce() — forces a synchronous render pass
-  → captureCharFrame() returns terminal buffer as string
-  → expect(frame).toContain("a_")  ← asserts rendered text
-```
+
+This ordering guarantees `bag.tmux` is populated when niri runs. If a user wants to run only niri + vscode (no tmux), niri spawns a plain terminal instead (gracefully degraded from tmux-attach to plain terminal).
+
+Configurable ordering is explicitly out of scope for v0.6.0 per the milestone — it can be addressed later by adding an `order: number` field to each integration's global config.
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: Bottom-Pane View Routing
+### Pattern 1: Bag Threading Through Sequential Integration Loop
 
-**What:** App.tsx holds a `UIView` signal. Each view variant renders exclusively in the detail pane (bottom box) via `<Show when={view().view === "...">`. Components own their own `useKeyboard` handler; App.tsx passes `onAction`/`onConfirm`/`onCancel` callbacks.
+**What:** The runner passes a single mutable `ArtifactBag` object through all integrations in order. Each integration reads artifacts from preceding ones (via `bag.tmux`, `bag.vscode`, etc.) and writes its own artifact back. The bag starts empty and grows.
 
-**When to use:** All interactive overlays and forms that replace the detail pane. Applies to action menus, confirm dialogs, inline inputs, progress views, wizard views.
+**When to use:** Any time a later integration needs to act on the output of an earlier one (niri needs tmux session name, niri needs vscode window id).
 
-**Trade-offs:** Clean separation — components are unaware of each other. App.tsx is the single coordinator. Risk: App.tsx grows large with many view cases. Mitigate by keeping each view's logic in its component.
-
-### Pattern 2: InlineInput for Single-Field Prompts
-
-**What:** `InlineInput.tsx` is a 25-line component. One field, one label, prefill, Enter/Escape callbacks. Used for rename (existing) and clone-template (existing).
-
-**When to use:** Single-field prompts only. Rename, clone-with-name, any prompt that is one string input.
-
-**Do not use for:** Multi-field create flows. Use WizardView instead.
-
-### Pattern 3: ProgressView for Async Ops with Streaming Output
-
-**What:** `ProgressView.tsx` receives `lines[]` and `done` props. App.tsx pushes lines via `setProgressLines`. Any key while `done === true` clears the view and reloads.
-
-**When to use:** All async operations that call `workspace-ops.ts` functions. open, clean, remove, merge, rename, sync — all feed into ProgressView.
-
-**Trade-offs:** Simple and consistent. Cannot scroll long outputs (if a sync touches 20 repos, the oldest lines scroll off). Acceptable for v0.4.0.
-
-### Pattern 4: Config Isolation in Tests via process.env.HOME Redirect
-
-**What:** `workspace-ops.test.ts` uses `process.env.HOME = tmpDir` before dynamically importing config functions to ensure all YAML reads/writes go to a temp directory, not the developer's real config.
-
-**When to use:** Any test that touches `src/lib/config.ts`, `src/lib/workspace-ops.ts`, or any dashboard hook that calls these. Essential for App integration tests.
+**Trade-offs:** Simple and explicit. No publish/subscribe. No async coordination — integrations run sequentially, so bag is always populated before the next integration reads from it. Sequential is correct here because each integration may need to wait for its predecessor's window to appear before the next one starts. Parallelism would require complex synchronization with no benefit.
 
 **Example:**
 ```typescript
-const tmpHome = makeTmpDir("test-app")
-process.env.HOME = tmpHome
-// write fixture configs into tmpHome/.config/git-stacks/
-const { default: App } = await import("../../../src/tui/dashboard/App")
-const { testRender } = await import("@opentui/solid")
-// ... test ...
-process.env.HOME = originalHome
+// niri.ts reads from bag
+async open(ctx, _artifactPath, bag) {
+  const sessionName = bag.tmux?.sessionName  // undefined if tmux not enabled
+  if (sessionName) {
+    await $`niri msg action spawn -- ${terminal} -e tmux attach-session -t ${sessionName}`
+  } else {
+    await $`niri msg action spawn -- ${terminal}`
+  }
+}
 ```
+
+### Pattern 2: Snapshot-Diff for Window Identification
+
+**What:** Take a `niri msg -j windows` snapshot before spawning a window, then poll after spawn until a new window id appears in the diff.
+
+**When to use:** Any time a window must be identified after a fire-and-forget spawn command (vscode, intellij, terminal). Used by: niri.open(), and optionally by vscode.open()/intellij.open() for pre-populating windowId.
+
+**Trade-offs:** Polling is slightly fragile (window may take >5s on slow systems). Prefer 100ms intervals with a 5s ceiling. The diff approach is correct because window ids are monotonically increasing integers in niri — the new window will have a higher id than any pre-existing window.
+
+**Example:**
+```typescript
+async function spawnAndFindWindow(command: string[]): Promise<number | null> {
+  const before = await getNiriWindowIds()
+  await $`niri msg action spawn -- ${command}`.quiet().nothrow()
+  for (let i = 0; i < 50; i++) {
+    await Bun.sleep(100)
+    const after = await getNiriWindowIds()
+    const newIds = after.filter(id => !before.includes(id))
+    if (newIds.length > 0) return newIds[0]
+  }
+  return null
+}
+
+async function getNiriWindowIds(): Promise<number[]> {
+  const result = await $`niri msg -j windows`.quiet().nothrow()
+  if (result.exitCode !== 0) return []
+  const windows = JSON.parse(result.stdout.toString()) as Array<{ id: number }>
+  return windows.map(w => w.id)
+}
+```
+
+### Pattern 3: Runner Accepts Optional Integration List (Testability)
+
+**What:** Both `runIntegrationGenerate` and `runIntegrations` accept an optional `integrationList` parameter that defaults to the full `integrations` array. Tests pass a controlled subset.
+
+**When to use:** Everywhere that integration loops are called. Avoids global state coupling in tests.
+
+**Trade-offs:** Slightly more verbose call site in tests. Benefit: tests can pass `[mockIntegration]` without mocking the module. Production call sites pass nothing (default to full list).
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Subprocess Wizards as Primary TUI Interaction Path
+### Anti-Pattern 1: Integrations Reading Other Integrations' Config Directly
 
-**What people do:** Call `renderer.suspend()` and spawn the @clack/prompts wizard as a subprocess for create flows inside the TUI.
+**What people do:** `niri.open()` reads `ctx.workspace.settings.integrations.tmux` to find the session name.
 
-**Why it's wrong:** The TUI disappears during the wizard. The wizard has no access to TUI state. Error output from the subprocess is not surfaced in the TUI's ProgressView. This is appropriate only for `$EDITOR` launch (external tool, user expects the handoff) and as a one-time escape hatch for operationally complex flows like `repo scan`.
+**Why it's wrong:** Tight coupling between integration implementations. If tmux config schema changes, niri breaks. Also, the computed session name (after normalization) differs from the raw config value.
 
-**Do this instead:** Build WizardView for create flows. Reserve subprocess pattern only for editor launch and `repo scan`.
+**Do this instead:** Consume from the bag. `bag.tmux.sessionName` is the computed, normalized session name that the tmux integration actually used.
 
-### Anti-Pattern 2: Nested `<text>` in OpenTUI Components
+### Anti-Pattern 2: Open() Returning Void for All Integrations
 
-**What people do:** Write `<text><text fg="red">error:</text> message</text>`.
+**What people do:** Keep `open()` returning `Promise<void>` for existing integrations, only adding return values to new integrations.
 
-**Why it's wrong:** OpenTUI's `TextRenderable.add()` rejects `TextRenderable` children. This causes a crash or silent render failure.
+**Why it's wrong:** The type system then cannot enforce that niri's bag consumption is safe. ArtifactBag entries will be `any` or require casts.
 
-**Do this instead:** `<box flexDirection="row"><text fg="red">error:</text><text> message</text></box>`
+**Do this instead:** Update all `open()` signatures to `Promise<IntegrationArtifact | null>` at once. The update is mechanical: add `return null` to the end of each existing `open()`. The type change enables the compiler to enforce correctness on niri's bag reads.
 
-### Anti-Pattern 3: Full-Frame Snapshot Assertions in TUI Tests
+### Anti-Pattern 3: Global Mutable Bag Object Shared Across Calls
 
-**What people do:** `expect(captureCharFrame()).toBe(entireScreenSnapshot)`.
+**What people do:** Create `const globalBag: ArtifactBag = {}` at module scope, reuse across `openWorkspace` calls.
 
-**Why it's wrong:** Any layout change — spacing, padding, terminal width — breaks the snapshot. Tests become a maintenance burden rather than a safety net.
+**Why it's wrong:** Stale artifacts from a previous workspace open would bleed into the next call. This is a correctness bug in long-running processes (TUI, daemon mode).
 
-**Do this instead:** Assert specific text presence: `expect(captureCharFrame()).toContain("[s] Sync")`. For structural assertions, use `captureSpans()` to check specific colored regions.
+**Do this instead:** Create a fresh `const bag: ArtifactBag = {}` inside `runIntegrations()` each invocation.
 
-### Anti-Pattern 4: Switch/Match for Conditional Rendering in OpenTUI
+### Anti-Pattern 4: Niri Polling Without Timeout
 
-**What people do:** Use SolidJS `<Switch><Match when={...}>` to conditionally render tab content.
+**What people do:** `while (true) { await poll(); if (found) break }`.
 
-**Why it's wrong:** OpenTUI's renderer does not repaint when SolidJS swaps conditional DOM branches on some versions. This is a known established pattern in this codebase — use height-based visibility (`height={isActive ? "100%" : 0}`) instead.
+**Why it's wrong:** If the spawned application crashes immediately, the loop runs forever.
 
-**Exception:** `App.tsx` currently uses `<Switch><Match>` for tab content inside the list pane (lines 568–595) and it works. The concern applies specifically to top-level alternating between fundamentally different component trees. Follow the existing pattern in the file when in doubt.
+**Do this instead:** Fixed iteration count with sleep — `for (let i = 0; i < 50; i++) { await Bun.sleep(100); ... }` gives a 5-second ceiling. Return `null` on timeout. Niri integration must gracefully handle `null` window ids.
+
+### Anti-Pattern 5: Duplicating the Integration Loop at New Call Sites
+
+**What people do:** Add a 5th inline integration loop for a new workflow (e.g., `git-stacks clone`).
+
+**Why it's wrong:** Defeats the consolidation effort. Each inline loop must independently handle filtering, bag threading, and skip logic.
+
+**Do this instead:** Call `runIntegrationGenerate(ctx)` or `runIntegrations(ctx, skip)` from `runner.ts`.
 
 ---
 
 ## Integration Points
 
+### New vs Modified Components
+
+| Component | Action | Scope |
+|-----------|--------|-------|
+| `src/lib/integrations/types.ts` | Modify | Add `ArtifactBag`, `IntegrationArtifact` types; change `open()` signature |
+| `src/lib/integrations/runner.ts` | New | `runIntegrationGenerate`, `runIntegrations` |
+| `src/lib/integrations/niri.ts` | New | Full niri integration plugin |
+| `src/lib/integrations/index.ts` | Modify | Import + register `niriIntegration` last |
+| `src/lib/integrations/vscode.ts` | Modify | Return `VscodeArtifact` from `open()` |
+| `src/lib/integrations/tmux.ts` | Modify | Return `TmuxArtifact` from `open()` |
+| `src/lib/integrations/cmux.ts` | Modify | Return `CmuxArtifact` from `open()` |
+| `src/lib/integrations/intellij.ts` | Modify | Return `IntellijArtifact` from `open()` |
+| `src/lib/workspace-ops.ts` | Modify | Replace inline loop with `runIntegrations(ctx, skip)` |
+| `src/tui/workspace-wizard.ts` | Modify | Replace inline loop with `runIntegrationGenerate(ctx)` |
+| `src/tui/workspace-clone.ts` | Modify | Replace inline loop with `runIntegrationGenerate(ctx)` |
+| `src/tui/dashboard/App.tsx` | Modify | Replace inline loop with `runIntegrationGenerate(ctx)` |
+
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| `App.tsx` ↔ `ActionMenu.tsx` | Props: `workspaceName`, `onAction`, `onCancel`, `onRun` | Add `"sync"` to `Action` type and actions array |
-| `App.tsx` ↔ `TemplateActionMenu.tsx` | Props: `templateName`, `onAction`, `onCancel` | Add `"create"` action to trigger wizard |
-| `App.tsx` ↔ `WizardView.tsx` (NEW) | Props: `title`, `steps`, `onConfirm`, `onCancel` | New boundary — follows same callback pattern |
-| `App.tsx` ↔ `workspace-ops.ts` | Direct async function calls with progress callbacks | `syncWorkspace` added to existing imports |
-| `App.tsx` ↔ `types.ts` | `UIView`, `Action`, `Tab` unions | Add `"sync"` to Action, `"wizard"` view to UIView |
-| `testRender` ↔ component | `@opentui/solid` testRender API | `mockInput`, `captureCharFrame`, `renderOnce` |
-| `tests/*` ↔ config layer | `process.env.HOME` redirect + dynamic import | Required for any test touching config/ops layer |
+| `runner.ts` ↔ integration plugins | Direct function calls, `ArtifactBag` passed by reference | Bag is mutated in-place in runner, not returned from plugin |
+| `niri.ts` ↔ `bag.tmux` | Read `bag.tmux?.sessionName` | Optional — degrades gracefully if tmux not enabled |
+| `niri.ts` ↔ `bag.vscode` / `bag.intellij` | Read `windowId` | Optional — skips window arrangement if null |
+| `vscode.ts` ↔ niri CLI | `niri msg -j windows` snapshot-diff | Only executed when `WAYLAND_DISPLAY` set |
+| `niri.ts` ↔ niri CLI | `niri msg action spawn`, `niri msg action focus-workspace`, `niri msg action move-window-to-workspace --window-id` | All via `Bun.$` shell |
+| `workspace-ops.ts` ↔ `runner.ts` | Import and call `runIntegrations` | Replaces the 7-line inline loop at line 573 |
 
-### External Boundaries (no change for v0.4.0)
+### Backward Compatibility
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `run.tsx` ↔ Unix socket | `Bun.listen` / `Bun.connect` | IPC unchanged for v0.4.0 |
-| `workspace-ops.ts` ↔ git | `Bun.$` shell calls | No change |
-| `workspace-ops.ts` ↔ YAML config | `src/lib/config.ts` read/write | No change |
+- Existing workspace YAML files: no schema change. Artifact data is not persisted (it's runtime-only).
+- Existing integration configs: no change. `niri` integration adds a new key under `config.integrations.niri` only when the user runs `git-stacks config`.
+- `open()` signature change: the `bag` parameter is new but integrations that ignore it require only adding `_bag: ArtifactBag` to the parameter list. Return type changes from `Promise<void>` to `Promise<IntegrationArtifact | null>`, requiring `return null` at the end. These are mechanical, non-breaking updates.
+- Callers of `integration.open()` that exist outside `runner.ts` (none currently, but tests may mock it): must be updated to match new signature.
 
 ---
 
-## Build Order Recommendation
+## Build Order
 
-Dependencies flow in this order — build bottom-up:
+Dependencies flow bottom-up. Build in this order:
 
-1. **types.ts changes first** — `"sync"` in Action, `"wizard"` view variant. Everything else depends on this.
+1. **`types.ts` changes** — `ArtifactBag`, `IntegrationArtifact` union, updated `open()` signature. Everything else depends on this. This is the only change that creates a TypeScript compile error cascade — address it first to unblock all other work.
 
-2. **ActionMenu.tsx sync entry** — trivial, unblocks integration test writing.
+2. **Mechanical `open()` return-type updates** — vscode, tmux, cmux, intellij each get `_bag: ArtifactBag` parameter and `return null`. No logic change. All 4 files, ~2 lines each. Restores compile green.
 
-3. **App.tsx sync wiring** — import `syncWorkspace`, add sync case to `runAction`. Self-contained, no new components needed. Can be tested immediately.
+3. **`runner.ts`** — new file with `runIntegrationGenerate` and `runIntegrations`. Depends on updated types from step 1. Does not depend on any integration-specific logic.
 
-4. **InlineInput.test.tsx** — establishes the `testRender` + bun:test pattern before building WizardView. Validates the test harness works.
+4. **Replace inline loops** — workspace-ops, workspace-wizard, workspace-clone, App.tsx each replace their loop with runner calls. This is safe to do before niri exists because runner behavior is identical to the old loops for integrations that return null.
 
-5. **WizardView.tsx** — new component. Build after InlineInput test confirms the harness pattern is working.
+5. **tmux artifact population** — update `tmux.ts` `open()` to actually return `TmuxArtifact` with `sessionName`. This is the dependency for niri's terminal attach path.
 
-6. **WizardView.test.tsx** — unit tests for step progression, field collection, cancel.
+6. **vscode/intellij window id** — update `vscode.ts` and `intellij.ts` to do snapshot-diff and populate `windowId`. This is the dependency for niri's window arrangement path. Can be deferred to after niri basics work (niri can skip arrangement for these if windowId is null).
 
-7. **App.tsx wizard routing** — wire WizardView into App's view state and keyboard dispatch. Add "n" key binding on workspaces and templates tabs.
+7. **`niri.ts`** — new integration. Depends on steps 1-5. Reads `bag.tmux?.sessionName`. Builds the niri-workspace create, terminal spawn, and window arrange flows incrementally.
 
-8. **App.integration.test.tsx** — requires working WizardView + sync routing.
+8. **`index.ts` registration** — add niriIntegration as the last entry. One line.
 
-9. **TemplateActionMenu.tsx create entry** — add "n" key for template create, triggers wizard.
+9. **Tests** — integration tests for runner (unit), niri snapshot-diff helper (unit, can mock niri CLI), and end-to-end open flow with bag threading.
 
-10. **Repo management in TUI** (if in scope) — uses `renderer.suspend()` pattern for scan, WizardView for add.
+---
+
+## Niri API Reference (Verified on Live System)
+
+All commands confirmed against running niri binary on this machine.
+
+| Command | Purpose | Notes |
+|---------|---------|-------|
+| `niri msg -j windows` | List all windows as JSON | Returns `Array<{id,title,app_id,pid,workspace_id,...}>` |
+| `niri msg -j workspaces` | List all workspaces | Returns `Array<{id,idx,name,output,is_active,...}>`. `name` is null for unnamed. |
+| `niri msg action focus-workspace <name>` | Create+focus named workspace | Creates if not exists |
+| `niri msg action spawn -- <cmd>` | Spawn process on focused workspace | Window appears on current workspace |
+| `niri msg action move-window-to-workspace --window-id <id> <name>` | Move specific window to workspace | `--window-id` flag confirmed |
 
 ---
 
 ## Sources
 
-- `src/tui/dashboard/App.tsx` — verified live source for UIView state machine, keyboard dispatch, action routing
-- `src/tui/dashboard/ActionMenu.tsx` — verified live source for action list and keyboard handler
-- `src/tui/dashboard/InlineInput.tsx` — verified live source for inline input pattern
-- `src/tui/dashboard/types.ts` — verified UIView, Action, Tab types
-- `src/lib/workspace-ops.ts` — verified syncWorkspace signature at line 677
-- `node_modules/@opentui/solid/index.d.ts` — verified `testRender` export
-- `node_modules/@opentui/core/testing/test-renderer.d.ts` — verified TestRenderer API
-- `node_modules/@opentui/core/testing/mock-keys.d.ts` — verified MockInput API
-- `node_modules/@opentui/core/testing/test-recorder.d.ts` — verified TestRecorder API
-- `node_modules/@opentui/core/testing/manual-clock.d.ts` — verified ManualClock API
-- `tests/lib/workspace-ops.test.ts` — verified process.env.HOME isolation pattern
-- `tests/tui/messageUtils.test.ts` — verified existing pure-function TUI test pattern
-- `.planning/PROJECT.md` — v0.4.0 milestone scope confirmed
+- `src/lib/integrations/types.ts` — verified current Integration interface
+- `src/lib/integrations/tmux.ts` — verified current tmux open() pattern
+- `src/lib/integrations/cmux.ts` — verified current cmux open() + artifact ref pattern
+- `src/lib/integrations/vscode.ts` — verified current vscode open() pattern
+- `src/lib/integrations/index.ts` — verified current integration ordering
+- `src/lib/workspace-ops.ts` lines 573-579 — verified inline loop location
+- `src/tui/workspace-wizard.ts` lines 458-464 — verified generate-only loop
+- `src/tui/workspace-clone.ts` lines 165-171 — verified generate-only loop
+- `src/tui/dashboard/App.tsx` lines 790-793 — verified generate-only loop (TUI create path)
+- `niri msg -j windows` — live output verified, JSON shape documented
+- `niri msg -j workspaces` — live output verified, workspace name field confirmed as null for unnamed
+- `niri msg action move-window-to-workspace --help` — `--window-id` flag confirmed
+- `niri msg action spawn --help` — `-- <COMMAND>...` syntax confirmed
+- `niri msg action focus-workspace --help` — REFERENCE arg confirmed
 
 ---
-*Architecture research for: v0.4.0 TUI e2e testing, wizard create flows, sync action integration*
-*Researched: 2026-03-20*
+*Architecture research for: v0.6.0 integration orchestration, artifact passing, niri compositor integration*
+*Researched: 2026-03-21*

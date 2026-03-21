@@ -1,311 +1,170 @@
 # Project Research Summary
 
-**Project:** git-stacks v0.4.0 — TUI Hardening & Polish
-**Domain:** Bun CLI tool with SolidJS/OpenTUI terminal dashboard — test infrastructure, wizard flows, CRUD parity, sync
-**Researched:** 2026-03-20
+**Project:** git-stacks v0.6.0 — Integration Orchestration & Niri Compositor Integration
+**Domain:** CLI workspace manager — integration pipeline orchestration, Wayland/niri compositor integration
+**Researched:** 2026-03-21
 **Confidence:** HIGH
-
----
-
-## RESOLVED CONTRADICTIONS
-
-Two contradictions between research files have been explicitly resolved here. Requirements and roadmap must not re-litigate these decisions.
-
-### Resolution 1: OpenTUI testRender IS Available
-
-**Contradiction:** PITFALLS.md (Pitfall 1) states "There is no headless or virtual renderer for OpenTUI" and recommends testing only pure logic. STACK.md and ARCHITECTURE.md both independently verified, from installed package type declarations, that `@opentui/solid@0.1.87` exports `testRender` backed by `@opentui/core/testing/`.
-
-**Resolution: Trust STACK.md (HIGH confidence, verified from installed source).**
-
-`testRender` from `@opentui/solid` mounts SolidJS components in a headless `TestRenderer` with no real terminal required. `captureCharFrame()` returns the terminal buffer as a plain string (ANSI-stripped). `mockInput.pressKey/typeText/pressEnter` inject keystrokes directly into the renderer's keyboard pipeline. `renderOnce()` advances the render loop synchronously. Tests run in CI on Linux without a display server.
-
-PITFALLS.md's Pitfall 1 is based on an incorrect assumption that no headless renderer exists. Its recommended testing strategy (pure-function extraction only, no component tests) was the correct fallback given that assumption, but is now superseded. **The three-tier testing model still applies at the architecture level, but Layer 2 (component tests with testRender) is feasible and should be built.**
-
-The "looks done but isn't" checklist item from PITFALLS.md — "Unit tests import cleanly: bun test tests/ passes with zero imports from @opentui/solid or @opentui/core in test files" — is **incorrect** and must not be followed. Tests in `tests/tui/dashboard/` that use `testRender` will import from `@opentui/solid` by design.
-
-### Resolution 2: Create Wizards Must Be Native TUI Components, NOT suspend+resume to @clack/prompts
-
-**Contradiction:** FEATURES.md recommends `renderer.suspend()` + existing `@clack/prompts` wizards as the primary pattern for create flows (Features 3, 4, 5). PITFALLS.md (Pitfall 3) and ARCHITECTURE.md both independently state that `@clack/prompts` and OpenTUI have an unresolvable stdio ownership conflict — `renderer.suspend()` + clack is not reliable for wizard flows, only for $EDITOR launch.
-
-**Resolution: Trust PITFALLS.md + STACK.md + ARCHITECTURE.md consensus over FEATURES.md.**
-
-`@clack/prompts` and OpenTUI both assume exclusive ownership of the terminal (raw mode, cursor visibility, stdin handling). The `renderer.suspend()` + `@clack/prompts` pattern is only reliably usable for $EDITOR launch because editors are well-behaved terminal programs that restore terminal state on exit. `@clack/prompts` does not guarantee this — it calls `process.exit(1)` on cancel, which bypasses cleanup. FEATURES.md's confidence in this approach is misplaced; it confuses the working editor-launch pattern with the unproven clack-wizard-from-TUI pattern.
-
-**The correct approach for all create flows is native TUI wizard components:**
-
-- A new `WizardView.tsx` component manages multi-step state internally (ARCHITECTURE.md's Option C)
-- `UIView` gets a `{ view: "wizard"; kind: "create-workspace" | "create-template" | "create-repo" }` variant
-- Wizard-specific step/data state lives inside the WizardView component, not in UIView (per PITFALLS.md Pitfall 4)
-- `renderer.suspend()` is reserved for: (a) $EDITOR launch only, and (b) `repo scan` as an explicit escape hatch since that flow has a complex directory traversal UI not worth rebuilding
-
-This means the "suspend+resume" recommendations throughout FEATURES.md Features 3, 4, and 5 should be read as "native TUI wizard" for text-entry flows, and "suspend+resume escape hatch" only for `repo scan`.
-
----
 
 ## Executive Summary
 
-git-stacks v0.4.0 closes the gap between what the CLI can do and what the TUI dashboard can do. The v0.3.0 dashboard is a read-and-act interface — users can open, rename, clean, merge, and remove workspaces, but they cannot create anything or sync from base branches without exiting to the CLI. v0.4.0 makes the dashboard fully self-sufficient for daily workspace management. The five deliverables are: workspace sync in the action menu, workspace and template create flows as native TUI wizards, repo management actions in the Repos tab, and a component-level test harness using OpenTUI's first-class headless test renderer.
+git-stacks v0.6.0 adds two tightly coupled capabilities to the existing integration system: an artifact-passing pipeline that allows integrations to share runtime state, and a niri compositor integration that consumes those artifacts to arrange all workspace windows onto a single named niri workspace. The current system runs integrations sequentially but discards their return values — each integration is isolated. The v0.6.0 goal is to turn that isolated sequence into a cooperative pipeline where later integrations (niri) can act on what earlier integrations produced (tmux session names, vscode window IDs).
 
-The recommended implementation approach leverages capabilities that are already fully present in the installed packages. No new dependencies are required. `@opentui/solid@0.1.87` ships `testRender` for headless component testing — confirmed by reading the installed type declarations and implementation, not from documentation. `syncWorkspace()` is already implemented and exported from `workspace-ops.ts`. The wizard pattern extends the existing `UIView` signal-as-state-machine approach: add a `"wizard"` view variant, build `WizardView.tsx` as a self-contained multi-step component, and extend `InlineInput.tsx` with cursor movement before any wizard input uses it. The implementation build order has a clear dependency chain and can be executed phase-by-phase without rework.
+The recommended approach is to add a typed `ArtifactBag` that flows through the sequential integration loop, introduce a consolidated `runner.ts` module to replace four duplicated inline loops, and build a new `niri.ts` integration plugin that creates a named niri workspace and moves all spawned windows onto it. The entire niri IPC surface is available via the `niri msg` CLI — no Wayland protocol libraries or socket-level IPC are needed. The niri compositor is already installed at version 25.11 and all required commands have been verified against the live binary.
 
-The dominant risks are in the wizard layer. Two bugs are guaranteed to occur unless explicitly prevented: (1) `runHooks()` in `lifecycle.ts` uses `stdio: "inherit"` — hook output will corrupt the TUI if `post_create` hooks fire while the TUI is active; a `runHooksCaptured()` variant is a prerequisite for create operations in the TUI. (2) `useWorkspaces.reload()` does not return a `Promise<void>` — the cursor cannot be correctly positioned on the newly created entity without this change. Both are lib-layer changes of low scope but high consequence if missed. Sync has its own risk: `fetchOrigin()` in `git.ts` has no timeout, so a sync on a workspace with an unreachable remote will hang indefinitely; a 30-second per-repo timeout is required before the sync action ships.
-
----
+The key risks are (1) breaking the `Integration.open()` signature atomically across all four existing integrations, (2) the inherent async gap between spawning a Wayland window and the compositor registering it, and (3) tmux environment variable contamination when `git-stacks open` is run from inside an existing tmux session. All three have clear mitigation strategies documented in the research.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack (Bun, TypeScript, Commander.js, `@opentui/solid`, SolidJS, YAML + Zod, `@clack/prompts`) is unchanged for v0.4.0. No new dependencies are required for any feature in this milestone.
+No new npm dependencies are required. All niri IPC is handled via `Bun.$\`niri msg -j ...\`` shell calls — the same pattern used throughout the codebase for tmux and git operations. JSON output from `niri msg -j` is parsed with `JSON.parse()` and validated with the existing Zod setup. Two new source files are needed: `src/lib/niri.ts` (a shell wrapper library mirroring `tmux.ts`) and `src/lib/integrations/niri.ts` (the integration plugin). Six existing files require modification for the interface change and artifact returns.
 
-**Core testing additions (no new packages):**
-
-| API | Source | Purpose |
-|-----|--------|---------|
-| `testRender` | `@opentui/solid` (installed) | Mount SolidJS components in headless renderer |
-| `captureCharFrame()` | `@opentui/core/testing` (installed) | Capture rendered output as plain string |
-| `mockInput.typeText/pressKey/pressEnter/pressEscape/pressArrow` | `@opentui/core/testing` (installed) | Simulate keyboard input |
-| `renderOnce()` | `@opentui/core/testing` (installed) | Advance render loop synchronously before asserting |
-| `TestRecorder` | `@opentui/core/testing` (installed) | Record frame sequences for multi-step interaction tests |
-| `toMatchSnapshot()` / `toMatchInlineSnapshot()` | `bun:test` built-in | Snapshot assertions on `captureCharFrame()` output |
-
-**Key version notes:** `toMatchInlineSnapshot` requires Bun 1.1.39+; the project runs Bun 1.3.10. The `@opentui/core` native binary (`@opentui/core-linux-x64`) is already installed; test renderer initializes it with `testing: true`, disabling real terminal I/O. `bunfig.toml` already has `preload = ["@opentui/solid/preload"]` — component tests work without additional configuration.
-
-**What not to add:** `node-pty` (native addon, Bun compatibility issues), `@solid-primitives/state-machine` (the view signal union IS the state machine — no external library needed), PTY-based e2e subprocess tests (brittle, slow, superseded by `testRender`).
+**Core technologies:**
+- `Bun.$` shell — niri IPC via `niri msg` CLI — the compositor's stable, versioned API surface; socket-level IPC is explicitly avoided
+- `Zod` (already installed) — schema validation for parsed niri JSON responses
+- `Bun.spawn()` (already used) — returns `.pid` directly for process tracking
+- `niri msg -j windows` / `niri msg -j workspaces` — verified JSON output shapes on live niri 25.11
+- `niri msg action move-window-to-workspace --window-id` — confirmed flag syntax on live binary
 
 ### Expected Features
 
-**Must have — P1 (core milestone, make TUI fully self-sufficient):**
+**Must have (table stakes):**
+- `IntegrationArtifact` discriminated union type and `open()` return type change — foundation; nothing else works without this
+- Artifact accumulation bag (`ArtifactBag`) threaded through the integration loop — enables niri to read what tmux and vscode produced
+- tmux integration returns `{ type: "tmux", sessionName }` — trivial change, high value
+- cmux integration returns `{ type: "cmux", workspaceRef }` — trivial change
+- Consolidated `runner.ts` replacing four duplicated inline loops
+- Numeric `order` field on `Integration`; niri hardcoded to `Number.MAX_SAFE_INTEGER` (always last)
+- Niri integration: `applies()` guards on `$NIRI_SOCKET`, creates/names workspace, focuses it
+- Window identification via snapshot-diff (poll `niri msg -j windows` before and after spawn)
+- `move-window-to-workspace --window-id` to arrange identified windows onto the niri workspace
+- Graceful degradation: all window identification failures are warnings, not errors
+- Cleanup: `unset-workspace-name` called from `runPreRemoveHooks()` when niri is running
 
-- Workspace sync in action menu (`s` key) — lowest-effort gap closure; `syncWorkspace()` already complete
-- Create workspace from TUI (`n` key in Workspaces tab) — native TUI wizard via `WizardView.tsx`
-- Create template from TUI (`n` key in Templates tab) — native TUI wizard, same WizardView pattern
-- Repo management actions from Repos tab (Enter opens action menu; add via InlineInput; scan via suspend+resume escape hatch; remove with ConfirmDialog)
-- E2E test infrastructure — component-level tests with `testRender`; App integration tests; three-tier test model established
-- `InlineInput` cursor movement (left/right arrows, insert at position) — prerequisite for any wizard text field; must ship before WizardView
+**Should have (v0.6.x after validation):**
+- Event-stream-based window detection replacing polling (more precise, avoids sleep loops)
+- Artifact values exported as env vars (`WS_TMUX_SESSION`, `WS_CMUX_REF`) for `post_open` hooks
+- `git-stacks config` TUI shows resolved integration execution order
+- Terminal spawning in niri integration when no tmux artifact is present
 
-**Should have — P2 (polish, ship if time allows):**
-
-- TUI screen improvements: help bar fits 80 columns; column widths responsive to terminal width; workspace rows show age (`3d`) not ISO date
-- Detail pane info density improvements (tighter padding, more content per screen row)
-
-**Defer to v0.5.0+:**
-
-- Snapshot testing for TUI layouts (brittle maintenance burden — use `toContain()` assertions instead of full-frame equality)
-- Adjustable split ratio (no user requests)
-- Batch workspace sync from TUI (git-lock-aware concurrency required; CLI `--all` flag is sufficient)
-- Strategy selection UI for sync (always default to rebase in TUI)
-
-**Explicit scope boundary for wizard flows:** The TUI create-workspace wizard supports template-based creation only (select template, enter name and branch). Ad-hoc repo selection from the TUI requires a `MultiSelectList` component that does not yet exist. Building it for v0.4.0 is feasible but increases scope significantly; defer ad-hoc mode to the CLI if time is constrained.
+**Defer (v0.7.0+):**
+- Per-workspace niri layout configuration (column widths, split ratios)
+- IntelliJ window arrangement (app startup timing problem unsolved)
+- XWayland window identification via xdotool fallback
+- Configurable per-workspace integration ordering in YAML
+- `open-on-workspace` niri `config.kdl` snippet generation
 
 ### Architecture Approach
 
-The v0.4.0 architecture is an additive extension to the existing `App.tsx` / `UIView` state machine. The `UIView` discriminated union gains one new variant (`"wizard"`). A new `WizardView.tsx` component handles all multi-step create flows with self-contained step/data state. Five existing files get small modifications (types.ts, ActionMenu.tsx, TemplateActionMenu.tsx, App.tsx, and `lifecycle.ts` for the `runHooksCaptured` prerequisite). Five new test files establish the test harness. No new external dependencies.
+The central architectural change is introducing `src/lib/integrations/runner.ts` as the single authoritative place where the integration loop runs. This replaces four duplicated inline loops across `workspace-ops.ts`, `workspace-wizard.ts`, `workspace-clone.ts`, and `App.tsx`. The runner exposes two functions: `runIntegrationGenerate()` for the workspace-create flow (no `open()` calls needed) and `runIntegrations()` for the workspace-open flow (full pipeline with artifact accumulation). The `ArtifactBag` is created fresh per invocation inside the runner, preventing stale artifact bleed between calls.
 
 **Major components:**
-
-1. `WizardView.tsx` (new) — self-contained multi-step create wizard; owns `currentStep` and `collectedValues` signals; `useKeyboard` for Enter/Escape/arrow navigation; calls `onConfirm(values)` or `onCancel()` when done; renders in detail pane when `view().view === "wizard"`
-2. `types.ts` (modified) — add `"sync"` to `Action` union; add `{ view: "wizard"; kind: WizardKind }` to `UIView`
-3. `App.tsx` (modified) — import `syncWorkspace`; add sync case in `runAction`; add wizard routing; add `n` key binding for workspaces/templates tabs
-4. `InlineInput.tsx` (modified) — add left/right cursor movement, insert at position; prerequisite for wizard text fields
-5. `lifecycle.ts` (modified) — add `runHooksCaptured()` variant that captures stdout/stderr as callback lines instead of `stdio: "inherit"`; prerequisite for create operations in TUI
-
-**Key architectural patterns to preserve:**
-
-- Bottom-pane view routing: each view variant renders exclusively in the detail pane via `<Show when={view().view === "..."}>`; components own their `useKeyboard`; App.tsx is the single coordinator
-- Early-return keyboard guard: `if (v.view === "wizard") return` in App.tsx keyboard handler prevents double-dispatch
-- Config isolation in tests: `process.env.HOME` redirect before dynamic import; required for all App integration tests
-- No nested `<text>` in OpenTUI JSX: use `<box flexDirection="row"><text>...</text><text>...</text></box>` for inline-styled content
-- Full-frame snapshot assertions are an anti-pattern: assert with `captureCharFrame().toContain("expected text")`; not `toBe(entireFrame)`
+1. `src/lib/integrations/types.ts` — add `ArtifactBag`, per-integration artifact types, and update `open()` signature; this is the compile-time contract between all integrations
+2. `src/lib/integrations/runner.ts` (new) — consolidated generate and open loops with bag threading; optional `integrationList` parameter for testability
+3. `src/lib/niri.ts` (new) — `niri msg` shell wrappers (`listNiriWindows`, `focusNiriWorkspace`, `waitForWindowByPid`, `moveWindowToWorkspace`, etc.) mirroring the `tmux.ts` pattern
+4. `src/lib/integrations/niri.ts` (new) — full integration plugin: applies-check on `$NIRI_SOCKET`, workspace create/focus, terminal spawn with tmux attach, window arrangement from bag
+5. All four existing integration plugins — mechanical `open()` return type updates; tmux and cmux populate their artifact fields with actual values
 
 ### Critical Pitfalls
 
-1. **`runHooks()` stdout corruption** — `lifecycle.ts` uses `stdio: "inherit"`; hook output writes directly to terminal while OpenTUI is rendering; TUI visually corrupts. Prevention: add `runHooksCaptured()` before implementing any create operation that may trigger hooks. This is a prerequisite, not a cleanup task.
+1. **Breaking the `Integration.open()` interface non-atomically** — use a transitional `Promise<IntegrationArtifact | null | void>` union type to keep the build green while updating integrations one-by-one; tighten to `Promise<IntegrationArtifact | null>` only after all four are updated.
 
-2. **`@clack/prompts` in TUI context** — calling any `@clack/prompts` function from within the TUI corrupts the terminal, even with `renderer.suspend()`. Prevention: build create wizards as native TUI components (`WizardView.tsx`). The `grep -r "@clack" src/tui/dashboard/` check must return nothing.
+2. **Niri window spawn is asynchronous with no guaranteed PID-to-window mapping** — use snapshot-diff (capture window IDs before spawn, poll after with exponential backoff up to 3s) rather than direct PID lookup; PID matching is unreliable for Xwayland apps and flatpak-sandboxed processes per official niri documentation and maintainer statements.
 
-3. **`useWorkspaces.reload()` is not async** — cursor cannot be positioned on the new entity after create without awaiting reload. Prevention: change `reload()` to return `Promise<void>`; `await reload()` then set cursor to new entity index before transitioning back to list view.
+3. **Niri named workspaces are ephemeral — they disappear when empty** — always query `niri msg -j workspaces` at the start of `niriIntegration.open()` to check if the workspace already exists; never save niri workspace numeric IDs to YAML (they are session-scoped and change every session).
 
-4. **`fetchOrigin()` has no timeout** — sync on a workspace with an unreachable remote hangs indefinitely. Prevention: add a 30-second `Bun.timeout()` wrapper around `fetchOrigin()` before shipping the sync action.
+4. **tmux environment contamination when spawning from inside tmux** — use `env -u TMUX -u TMUX_PANE foot -e tmux new-session -A -s {name}` for all terminal spawn commands in the niri integration; `tmux new-session -A` is more robust than `tmux attach-session` (handles session not yet existing).
 
-5. **`InlineInput` has no cursor movement** — users cannot correct mid-string errors in wizard text fields. Prevention: extend `InlineInput` with left/right arrow cursor movement and insert-at-position before WizardView is built; this is a prerequisite for the entire wizard layer.
-
-6. **Wizard steps encoded in `UIView` union** — encoding individual steps as `UIView` variants balloons `App.tsx` and eliminates back-navigation. Prevention: `UIView` gets one `"wizard"` variant; all step state lives inside `WizardView.tsx` as local signals.
-
----
+5. **Integration skip flags broken by orchestration refactor** — `skip.has(integration.id)` must remain the first guard in the new orchestration loop, before ordering and before `isEnabled`; add regression tests for `--no-ide` and `--no-cmux` before touching `workspace-ops.ts`.
 
 ## Implications for Roadmap
 
-Based on combined research, suggested phase structure (6 phases):
+Based on research, the build order has strict dependencies that dictate phase structure. The interface change creates a TypeScript compile error cascade — it must be the first atomic step before any other work can proceed.
 
-### Phase 1: Test Harness Foundation
+### Phase 1: Artifact Type Foundation
+**Rationale:** Every other change in this milestone depends on the `ArtifactBag` and updated `Integration.open()` signature being defined and compiling. Doing this first keeps the build green throughout the rest of the work.
+**Delivers:** `IntegrationArtifact` discriminated union, `ArtifactBag` type, updated `open()` signature using `void | T` transition union; all four existing integrations compile with mechanical `_bag` parameter and `return null` additions.
+**Addresses:** Interface migration (table stakes), artifact type confusion pitfall (Pitfall 5), integration interface breaking change pitfall (Pitfall 1).
+**Avoids:** Pitfall 1 (non-atomic interface break) via the `void | T` transitional signature.
 
-**Rationale:** `testRender` is available and verified but no component tests exist yet. Establishing the harness before feature work gives regression coverage for everything that follows. The `process.env.HOME` isolation pattern, JSX pragma requirements, and `renderOnce()` discipline must be demonstrated in working tests before other developers rely on them.
+### Phase 2: Integration Runner Consolidation
+**Rationale:** The four duplicated loops must be replaced before the artifact accumulation logic is built — otherwise the new bag-threading code would be written in one loop and need to be duplicated to three others. This phase has no external dependencies and unblocks all subsequent phases.
+**Delivers:** `src/lib/integrations/runner.ts` with `runIntegrationGenerate()` and `runIntegrations()`; all four call sites updated; existing behavior preserved; skip-flag regression tests written and passing.
+**Uses:** Updated types from Phase 1.
+**Avoids:** Pitfall 8 (skip flags broken) and Anti-Pattern 5 (new inline loops at new call sites).
 
-**Delivers:** `tests/tui/dashboard/InlineInput.test.tsx` as the reference test; `tests/tui/dashboard/ActionMenu.test.tsx`; confirmed that `testRender` + `bun:test` + `bunfig.toml` preload works end-to-end; snapshot baseline for existing components.
+### Phase 3: Artifact Population in Existing Integrations
+**Rationale:** Niri needs real values from tmux and cmux to do its job. This phase makes the bag actually useful rather than always-empty. VSCode/IntelliJ window ID capture is included here but can produce `null` — niri gracefully degrades when these are absent.
+**Delivers:** tmux returns `{ type: "tmux", sessionName }`; cmux returns `{ type: "cmux", workspaceRef }`; vscode returns `{ type: "vscode", pid, windowId }` (windowId via snapshot-diff if `WAYLAND_DISPLAY` set, else null); intellij same; `open()` return type tightened from `void | T` to `T | null`.
+**Implements:** Artifact accumulation loop in runner producing a populated `ArtifactBag`.
+**Addresses:** tmux artifact (P1), cmux artifact (P1), VSCode artifact (P2) from feature prioritization matrix.
 
-**Addresses (FEATURES.md):** E2E test infrastructure (P1); establishes three-tier test model
+### Phase 4: Niri Shell Wrapper Library
+**Rationale:** Isolating all `niri msg` CLI calls into `src/lib/niri.ts` before writing the integration plugin keeps the plugin testable and follows the established `tmux.ts` / `git.ts` pattern. The wrapper functions can be unit-tested independently of the integration lifecycle.
+**Delivers:** `src/lib/niri.ts` with `isNiriRunning()`, `listNiriWindows()`, `listNiriWorkspaces()`, `focusNiriWorkspace()`, `setNiriWorkspaceName()`, `moveWindowToWorkspace()`, `niriSpawn()`, `waitForWindowByPid()`, `snapshotWindowIds()`.
+**Avoids:** Pitfall 7 (IPC state inconsistency) by building name-based action calls from the start; Pitfall 2 (async window spawn) by building the snapshot-diff poll in `waitForWindowByPid()` with exponential backoff.
 
-**Avoids (PITFALLS.md):** Full-frame snapshot brittle anti-pattern (use `toContain` not `toBe`); double-rendering from missed `renderOnce()` calls; HOME isolation for App integration tests
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`. `testRender` API is fully documented in STACK.md. No unknowns.
-
----
-
-### Phase 2: Prerequisites — InlineInput Cursor + runHooksCaptured
-
-**Rationale:** Two lib-layer changes are prerequisites for the wizard layer. Neither is large in scope, but both are guaranteed to cause hard-to-diagnose bugs if skipped: cursor-less InlineInput breaks usability in any multi-field wizard; `stdio: "inherit"` from hooks corrupts TUI rendering on any create operation that triggers `post_create` hooks. Completing both before wizard work begins eliminates an entire class of implementation bugs.
-
-**Delivers:** `InlineInput.tsx` with left/right cursor movement and insert-at-position; `runHooksCaptured()` variant in `lifecycle.ts` that streams hook output via callback instead of inheriting stdio.
-
-**Addresses (FEATURES.md):** Prerequisite for Features 3, 4, 5 (create flows)
-
-**Avoids (PITFALLS.md):** Pitfall 8 (InlineInput cursor), Pitfall 10 (`runHooks` stdio corruption)
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`. Both changes are well-scoped; implementation paths are specified in ARCHITECTURE.md and PITFALLS.md.
-
----
-
-### Phase 3: Workspace Sync Action
-
-**Rationale:** Sync is the lowest-effort P1 feature (4 small file modifications, no new files) and the highest-value gap closure (users who run `git-stacks sync` multiple times per day currently must exit the TUI to do so). Implementing it third gives a complete, testable feature that validates the ProgressView pattern before more complex work.
-
-**Delivers:** `s` key in workspace ActionMenu triggers `syncWorkspace()` with streaming per-repo progress in ProgressView; `fetchOrigin()` timeout at 30 seconds; sync result summary (N synced, N skipped).
-
-**Addresses (FEATURES.md):** Feature 6 (workspace sync); P1 priority
-
-**Avoids (PITFALLS.md):** Pitfall 6 (fetchOrigin timeout), Pitfall 7 (concurrent sync — progress view must block all keys while in-progress)
-
-**Uses (STACK.md):** `syncWorkspace()` already exported from `workspace-ops.ts`; no changes to ops layer
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`. Sync integration path fully specified in ARCHITECTURE.md.
-
----
-
-### Phase 4: WizardView + Create Workspace
-
-**Rationale:** `WizardView.tsx` is the largest new component in this milestone. Building it for workspace creation first establishes the full multi-step wizard pattern — step signals, data accumulation, Enter/Escape navigation, `onConfirm`/`onCancel` callbacks — in a context where the requirements are fully known (name + branch + template). Template creation reuses the same component in Phase 5.
-
-**Delivers:** `WizardView.tsx` with text-input and select-from-list step types; `n` key in Workspaces tab opens workspace creation wizard; `WizardView.test.tsx` unit tests for step progression, back-navigation, cancel safety; `reload()` made async with cursor-to-new-entity after create.
-
-**Addresses (FEATURES.md):** Feature 3 (create workspace); P1 priority; template-only mode (ad-hoc repo selection deferred per scope boundary)
-
-**Avoids (PITFALLS.md):** Pitfall 3 (no @clack/prompts in TUI), Pitfall 4 (wizard steps not in UIView), Pitfall 5 (reload cursor update), Pitfall 9 (repo multi-select deferred to CLI)
-
-**Research flag:** Needs `/gsd:research-phase` during planning. WizardView's select-step type for template picking needs a concrete design before implementation. The `reload()` async change has downstream effects on all hooks that call it — scope the change carefully.
-
----
-
-### Phase 5: Template Create + Repo Management Actions
-
-**Rationale:** Template creation reuses Phase 4's WizardView verbatim — it is purely integration work. Repo management is independent: the Repos tab needs Enter to open an action menu (currently a no-op), InlineInput for path entry, and suspend+resume escape hatch for the scan wizard (the one explicitly sanctioned use of suspend+resume for a non-editor external tool).
-
-**Delivers:** `n` key in Templates tab opens template create wizard via WizardView; Enter on Repos tab opens RepoActionMenu with add/scan/remove actions; InlineInput path entry with `existsSync` indicator; remove with ConfirmDialog showing used-by context; scan via `renderer.suspend()` + `runRepoScan()` + `renderer.resume()`.
-
-**Addresses (FEATURES.md):** Feature 5 (template create); Feature 4 (repo management); P1 priority
-
-**Avoids (PITFALLS.md):** Pitfall 5 (reload cursor after create); filesystem browser anti-pattern (InlineInput not a directory picker)
-
-**Research flag:** Standard patterns for template create. Repo scan (suspend+resume) is the one explicitly allowed exception to the no-clack-in-TUI rule — document this clearly in the code to prevent future confusion.
-
----
-
-### Phase 6: App Integration Tests + Screen Improvements
-
-**Rationale:** Once all features are implemented, App-level integration tests can exercise complete key sequences against real (isolated) state. Screen improvements are cosmetic P2 work that benefit from a clean test baseline — verifying nothing breaks at 80 columns is easier when tests already exercise the rendering path.
-
-**Delivers:** `App.integration.test.tsx` covering tab switching, action menu dispatch, wizard entry/completion/cancel, sync progress; help bar fits 80 columns; column widths responsive to terminal width; workspace rows show age not ISO date; responsive column truncation in WorkspaceRow and TemplateList.
-
-**Addresses (FEATURES.md):** E2E test infrastructure (integration layer); TUI screen improvements (P2)
-
-**Avoids (PITFALLS.md):** Full-frame snapshot assertion anti-pattern; PTY test brittleness (all tests use `testRender`, none use PTY)
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`. App integration tests follow the pattern documented in ARCHITECTURE.md. Screen improvements are purely cosmetic with no architectural decisions.
-
----
+### Phase 5: Niri Integration Plugin
+**Rationale:** All dependencies are in place — types defined, runner consolidated, artifacts populated, shell wrappers available. This is the full niri integration implementation.
+**Delivers:** `src/lib/integrations/niri.ts` with full open lifecycle (applies-check, workspace create/focus, terminal spawn with tmux attach, window arrangement from bag); registered last in `index.ts`; cleanup hook in `runPreRemoveHooks()`; Zod config schema with `terminal`, `terminal_flags`, `workspace_name_prefix`, `arrange_windows`.
+**Addresses:** All niri integration table stakes features; Pitfall 3 (workspace lifecycle), Pitfall 6 (tmux env contamination).
 
 ### Phase Ordering Rationale
 
-- Phase 1 before all others: tests written in Phase 1 catch regressions in all later phases; no point writing features then retrofitting a test harness
-- Phase 2 before Phases 3-5: both prerequisites (`InlineInput` cursor, `runHooksCaptured`) are required by multiple later phases; fixing them once early is cheaper than discovering the gaps mid-implementation
-- Phase 3 (sync) before Phase 4 (wizard): sync is fully independent and low-risk; completing it validates ProgressView integration before the more complex wizard layer is added
-- Phases 4 and 5 are sequenced by complexity: WizardView must exist before template/repo flows can reuse it
-- Phase 6 last: integration tests can only be meaningful once all features are wired; screen improvements are polish that belong at the end
+- Phases 1 and 2 are pure refactors that must precede feature work to avoid duplicate bug-fixing across multiple loop implementations.
+- Phase 3 depends on Phase 1 (types) and Phase 2 (runner); it makes the pipeline useful without requiring niri.
+- Phase 4 is independent of Phase 3 and can be built in parallel but must precede Phase 5.
+- Phase 5 depends on all prior phases; it is the integration point where everything comes together.
+- This order means the build stays green and existing tests pass after each phase — no phase creates a partial state where the system is broken.
 
 ### Research Flags
 
-Phases needing `/gsd:research-phase` during planning:
+Phases with well-documented patterns (standard implementation, skip research-phase):
+- **Phase 1:** TypeScript interface migration is a standard refactor pattern; no domain research needed.
+- **Phase 2:** Loop consolidation is mechanical; the `runner.ts` pseudocode from ARCHITECTURE.md is implementation-ready.
+- **Phase 3:** All four integration files have been read; artifact values (session names, refs) are trivially accessible from existing code paths.
+- **Phase 4:** The `niri msg` API is fully documented in STACK.md with verified command signatures. The snapshot-diff pattern is specified precisely in ARCHITECTURE.md. No additional research needed.
 
-- **Phase 4** — WizardView select-step design for template picker needs to be specified before implementation; `reload()` async change requires impact analysis across all hooks
-
-Phases with standard patterns (skip research):
-
-- **Phase 1** — `testRender` API is fully documented in STACK.md; no unknowns
-- **Phase 2** — both prerequisite changes are small and fully specified
-- **Phase 3** — sync integration path fully documented in ARCHITECTURE.md
-- **Phase 5** — reuses Phase 4 patterns; suspend+resume for scan is the one documented exception
-- **Phase 6** — follows patterns from ARCHITECTURE.md and Phase 1 harness
-
----
+Phases that warrant careful implementation attention (no research-phase needed, but execution risk present):
+- **Phase 5:** The full `niriIntegration.open()` flow is specified step-by-step in ARCHITECTURE.md. The tmux env-contamination fix (Pitfall 6) and workspace existence check (Pitfall 3) must be built from the start, not retrofitted. The "looks done but isn't" checklist in PITFALLS.md is the verification guide.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All testing API claims verified from installed package type declarations (`node_modules/@opentui/core/testing.d.ts`, `node_modules/@opentui/solid/index.d.ts`). No external dependency on unverified docs. |
-| Features | HIGH | Based on direct codebase analysis. Feature scope is internal (no external APIs to research). The wizard approach conflict (FEATURES.md vs. consensus) is resolved above. |
-| Architecture | HIGH | All component boundaries verified against live source. Build order is dependency-driven and explicit. The `testRender` → `renderOnce()` → `captureCharFrame()` test loop was verified from compiled implementation (`testing.js`). |
-| Pitfalls | HIGH (with correction) | Pitfall 1 (no headless renderer) is incorrect and resolved. All other pitfalls are derived from direct codebase analysis with specific file/line evidence. Critical pitfalls (hook stdio, fetchOrigin timeout, reload async) are concrete and actionable. |
+| Stack | HIGH | All niri commands verified against live niri 25.11; no new dependencies; existing codebase patterns confirmed from installed source |
+| Features | HIGH | Feature list derived from direct codebase analysis of existing integration system combined with verified niri IPC capabilities |
+| Architecture | HIGH | All four inline loop sites verified in source; runner design matches established patterns; build order has no ambiguous dependencies |
+| Pitfalls | HIGH (niri-specific: MEDIUM) | Codebase pitfalls are code-verified with file/line evidence; niri async/IPC pitfalls sourced from official niri docs and maintainer statements |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **WizardView select-step implementation detail:** ARCHITECTURE.md specifies the shape (`{ type: "select"; field; label; options }`) but not the exact rendering approach for the option list. Options: extend `ActionMenu` with dynamic items, or use the `<select>` JSX element backed by OpenTUI's `SelectRenderable`. This is a design decision for Phase 4 planning, not a research gap.
-
-- **`reload()` async change scope:** Making `useWorkspaces.reload()` return `Promise<void>` may affect other callers. Phase 4 planning should audit all call sites before making the change.
-
-- **Wizard scope for repo selection:** Whether to build a `MultiSelectList` for ad-hoc workspace creation (full TUI, no CLI exit) or defer ad-hoc mode to the CLI is a product decision. The research recommends deferring; requirements must make this explicit to avoid scope creep during Phase 4 implementation.
-
-- **Suspend+resume for `repo scan`:** The scan flow is the one sanctioned use of `renderer.suspend()` for a non-editor external tool. This exception should be documented in the codebase (a comment in App.tsx) to prevent future developers from using it as a precedent for other wizard flows.
-
----
+- **VSCode window ID via snapshot-diff** — VSCode takes 2-5 seconds to open; the 5s polling timeout should be sufficient but is untested against actual VSCode startup time in this environment. If VSCode consistently exceeds the timeout, `windowId` will be `null` and window arrangement is silently skipped. Validate timing during Phase 3 implementation.
+- **Multiple empty workspaces at open time** — when `niriIntegration.open()` calls `focus-workspace <name>` to create a workspace, niri may have multiple unnamed empty workspaces if the user scrolled past the last workspace. The `set-workspace-name` logic needs to handle this case. Explicit test required during Phase 5.
+- **cmux `app_id` string for window identification** — the research notes cmux has a known Wayland `app_id` that could be used for direct window lookup rather than snapshot-diff. The exact string was not verified against a running cmux instance. Verify during Phase 5 if cmux window arrangement is desired.
 
 ## Sources
 
-### Primary (HIGH confidence — verified from installed source)
-
-- `node_modules/@opentui/core/testing.d.ts` — full testing export list
-- `node_modules/@opentui/core/testing/test-renderer.d.ts` — `createTestRenderer`, `TestRenderer`, `MockInput` types
-- `node_modules/@opentui/core/testing/mock-keys.d.ts` — `createMockKeys`, `KeyCodes`, `pressKey`, `typeText`, `pressArrow` signatures
-- `node_modules/@opentui/core/testing/test-recorder.d.ts` — `TestRecorder`, `RecordedFrame` types
-- `node_modules/@opentui/core/testing/manual-clock.d.ts` — `ManualClock` type
-- `node_modules/@opentui/solid/index.d.ts` — `testRender` signature
-- `node_modules/@opentui/core/testing.js` — `createTestRenderer` implementation confirming mock stdin, `testing: true` flag, ANSI-stripped `captureCharFrame`
-- `src/tui/dashboard/App.tsx` — UIView state machine, keyboard dispatch, action routing, suspend/resume pattern
-- `src/tui/dashboard/ActionMenu.tsx` — action list and keyboard handler
-- `src/tui/dashboard/InlineInput.tsx` — current capabilities and limitations
-- `src/tui/dashboard/types.ts` — UIView, Action, Tab types
-- `src/lib/workspace-ops.ts` — `syncWorkspace()` signature and return type
-- `src/lib/lifecycle.ts` — `runHooks()` with `stdio: "inherit"` (the hook stdio problem)
-- `src/lib/git.ts` — `fetchOrigin()` without timeout
-- `src/tui/dashboard/hooks/useWorkspaces.ts` — reload pattern, async status fetch
-- `tests/lib/workspace-ops.test.ts` — process.env.HOME isolation pattern
-- `tests/tui/messageUtils.test.ts` — existing pure-function TUI test pattern
-- `.planning/PROJECT.md` — v0.4.0 milestone scope
+### Primary (HIGH confidence)
+- `niri msg --help`, `niri msg -j windows`, `niri msg -j workspaces` (live niri 25.11) — all command signatures and JSON output shapes verified on running compositor
+- `niri msg action move-window-to-workspace --help`, `niri msg action focus-workspace --help`, `niri msg action spawn --help` — flag syntax confirmed
+- `src/lib/integrations/types.ts` (installed source) — current `open()` signature returns `Promise<void>`
+- `src/lib/integrations/{tmux,cmux,vscode,intellij}.ts` (installed source) — existing artifact values and open() patterns
+- `src/lib/workspace-ops.ts` lines 573-579 and 462-469 (installed source) — inline loop location and skip logic
+- `src/tui/{workspace-wizard,workspace-clone}.ts` and `src/tui/dashboard/App.tsx` (installed source) — all three generate-only loop sites confirmed
 
 ### Secondary (MEDIUM confidence)
+- Niri IPC wiki: https://github.com/YaLTeR/niri/wiki/IPC — IPC state inconsistency warning
+- Niri maintainer statement: https://github.com/niri-wm/niri/discussions/3208 — "no way to reliably associate a new window with a spawn command"
+- Niri ephemeral workspaces: https://github.com/niri-wm/niri/discussions/3198 — workspace lifecycle documentation
+- Niri async timing: https://github.com/niri-wm/niri/discussions/2602 — "might take a few hundred ms sometimes due to system load"
+- Niri Xwayland PID issue: https://github.com/YaLTeR/niri/issues/2563 — PID matching unreliable for Xwayland apps
 
-- OpenTUI testing guide: https://deepwiki.com/sst/opentui/6.1-getting-started — independently confirms testRender API surface
-- Bun test runner docs: https://bun.sh/docs/test — `toMatchSnapshot`, `toMatchInlineSnapshot` confirmed
-- Bun `toMatchInlineSnapshot` shipped in Bun v1.1.39: https://github.com/oven-sh/bun/issues/3623
-
-### Tertiary (supporting context)
-
-- `node-pty` Bun compatibility issue: https://github.com/microsoft/node-pty/issues/632 — confirmed native addon problems; supports rejection of PTY approach
-- Project memory: `feedback_opentui_no_nested_text.md` — OpenTUI crashes on nested `<text>` elements
+### Tertiary (LOW confidence)
+- cmux `app_id` for Wayland window identification — inferred from integration research; exact string not verified against a running cmux instance
 
 ---
-
-*Research completed: 2026-03-20*
+*Research completed: 2026-03-21*
 *Ready for roadmap: yes*
