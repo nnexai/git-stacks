@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 15.1-02-PLAN.md
-last_updated: "2026-03-21T16:50:42.350Z"
+stopped_at: Completed 15.1-03-PLAN.md
+last_updated: "2026-03-21T18:03:30.164Z"
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 21
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -78,6 +78,9 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 15.1-01]: Action menu Show blocks promoted to App root level; split pane Show condition excludes action-menu/repo-action-menu states so dialogs get full terminal height
 - [Phase 15.1-02]: confirmTitle() memo computes contextual ConfirmDialog title from repoRemoveTarget, confirmContext, or entry name
 - [Phase 15.1-02]: Split-pane Show condition extended to exclude confirm/inline-input/repo-remove-blocked following the action-menu exclusion pattern from Plan 01
+- [Phase 15.1-03]: WizardView/SyncProgressView/CreateProgressView accept optional title props; App.tsx passes contextual titles to promoted components
+- [Phase 15.1-03]: HelpOverlay and MessageOverlay self-managed borders fully removed; CenteredDialog exclusively owns border and title (Pitfall 6 pattern)
+- [Phase 15.1-03]: Detail pane now list-only; all wizard/progress/overlay views promoted to App root level ordered by z-priority
 
 ### Pending Todos
 
@@ -94,7 +97,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T16:50:42.346Z
-Stopped at: Completed 15.1-02-PLAN.md
+Last session: 2026-03-21T18:03:30.159Z
+Stopped at: Completed 15.1-03-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
