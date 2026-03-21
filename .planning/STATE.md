@@ -4,7 +4,7 @@ milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
 stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-03-21T10:53:06.981Z"
+last_updated: "2026-03-21T10:56:55.592Z"
 progress:
   total_phases: 6
   completed_phases: 5
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 14 (template-and-repo-management) — EXECUTING
-Plan: 3 of 3
+Phase: 15
+Plan: Not started
 
 ## Accumulated Context
 

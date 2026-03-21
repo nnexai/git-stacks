@@ -135,5 +135,5 @@ Plans:
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 13. wizard-create-workspace | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 14. template-and-repo-management | v0.4.0 | 3/3 | Complete   | 2026-03-21 |
+| 14. template-and-repo-management | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |
