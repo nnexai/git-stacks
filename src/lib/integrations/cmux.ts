@@ -3,7 +3,7 @@ import { z } from "zod"
 import { join } from "path"
 import { openCmuxWorkspace, addCmuxPane, addCmuxSurface, sendToCmuxSurface, getCmuxMainPane, focusCmuxSurface } from "../cmux"
 import { writeWorkspace, workspaceExists, readWorkspace } from "../config"
-import { resolveEnabled, type Integration, type IntegrationContext } from "./types"
+import { resolveEnabled, type Integration, type IntegrationContext, type CmuxArtifact } from "./types"
 
 const surfaceSchema = z.object({
   repo: z.string().optional(),
@@ -32,7 +32,7 @@ export const cmuxIntegration: Integration = {
 
   isEnabled: (ctx) => resolveEnabled("cmux", true, ctx),
 
-  async open(ctx, _artifactPath, _bag) {
+  async open(ctx, _artifactPath, _bag): Promise<CmuxArtifact | null> {
     const spinner = p.spinner()
     spinner.start("Setting up cmux workspace")
     try {
@@ -53,11 +53,12 @@ export const cmuxIntegration: Integration = {
       }
 
       spinner.stop("cmux workspace ready")
+      return { kind: "cmux", workspaceRef: ref }
     } catch (err) {
       spinner.stop("cmux unavailable — skipped")
       p.log.warn(`cmux: ${String(err)}`)
+      return null
     }
-    return null
   },
 
   async configurePrompt(_current) {

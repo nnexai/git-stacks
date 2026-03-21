@@ -3,7 +3,7 @@ import { z } from "zod"
 import { $ } from "bun"
 import { generateCodeWorkspace } from "../vscode"
 import { safeText } from "../../tui/utils"
-import { resolveEnabled, type Integration, type IntegrationContext } from "./types"
+import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 
 const configSchema = z.object({
   enabled: z.boolean().default(true),
@@ -25,7 +25,7 @@ export const vscodeIntegration: Integration = {
 
   generate: (ctx) => generateCodeWorkspace(ctx.workspace, ctx.tasksDir),
 
-  async open(ctx, artifactPath, _bag) {
+  async open(ctx, artifactPath, _bag): Promise<WindowArtifact | null> {
     if (!artifactPath) return null
     const { cmd } = getConfig(ctx)
     const check = await $`which ${cmd}`.quiet().nothrow()
@@ -33,8 +33,17 @@ export const vscodeIntegration: Integration = {
       // Binary not found -- skip silently (debug-level, not an error)
       return null
     }
-    await $`${cmd} ${artifactPath}`.quiet().nothrow()
-    return null
+    try {
+      const proc = Bun.spawn([cmd, artifactPath], {
+        stdout: "ignore",
+        stderr: "ignore",
+        stdin: "ignore",
+      })
+      const app_id = cmd.split("/").at(-1) ?? cmd
+      return { kind: "window", pid: proc.pid, app_id, title: "" }
+    } catch {
+      return null
+    }
   },
 
   async configurePrompt(current) {

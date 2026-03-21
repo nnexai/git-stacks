@@ -1,6 +1,6 @@
 import { $ } from "bun"
 import { generateIntellijProject } from "../intellij"
-import { resolveEnabled, type Integration, type IntegrationContext } from "./types"
+import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 import type { Workspace } from "../config"
 
 export const intellijIntegration: Integration = {
@@ -16,12 +16,20 @@ export const intellijIntegration: Integration = {
 
   generate: (ctx: IntegrationContext) => generateIntellijProject(ctx.workspace, ctx.tasksDir),
 
-  async open(_ctx, artifactPath, _bag) {
+  async open(_ctx, artifactPath, _bag): Promise<WindowArtifact | null> {
     if (!artifactPath) return null
     const check = await $`which idea`.quiet().nothrow()
     if (check.exitCode !== 0) return null
-    await $`idea ${artifactPath}`.quiet().nothrow()
-    return null
+    try {
+      const proc = Bun.spawn(["idea", artifactPath], {
+        stdout: "ignore",
+        stderr: "ignore",
+        stdin: "ignore",
+      })
+      return { kind: "window", pid: proc.pid, app_id: "idea", title: "" }
+    } catch {
+      return null
+    }
   },
 
   async configurePrompt(_current) {

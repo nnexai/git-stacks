@@ -2,7 +2,7 @@ import * as p from "@clack/prompts"
 import { z } from "zod"
 import { join } from "path"
 import { openTmuxSession, addTmuxPane, sendToTmuxPane, getTmuxMainPane, focusTmuxPane, focusTmuxSession } from "../tmux"
-import { resolveEnabled, type Integration, type IntegrationContext } from "./types"
+import { resolveEnabled, type Integration, type IntegrationContext, type TmuxArtifact } from "./types"
 
 const surfaceSchema = z.object({
   repo: z.string().optional(),
@@ -30,7 +30,7 @@ export const tmuxIntegration: Integration = {
 
   isEnabled: (ctx) => resolveEnabled("tmux", false, ctx),
 
-  async open(ctx, _artifactPath, _bag) {
+  async open(ctx, _artifactPath, _bag): Promise<TmuxArtifact | null> {
     const spinner = p.spinner()
     spinner.start("Setting up tmux session")
     try {
@@ -40,11 +40,12 @@ export const tmuxIntegration: Integration = {
       }
       spinner.stop("tmux session ready")
       await focusTmuxSession(ctx.workspace.name)
+      return { kind: "tmux", sessionName: ctx.workspace.name }
     } catch (err) {
       spinner.stop("tmux unavailable — skipped")
       p.log.warn(`tmux: ${String(err)}`)
+      return null
     }
-    return null
   },
 
   async configurePrompt(_current) {
