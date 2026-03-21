@@ -31,6 +31,12 @@ import {
   renameWorkspace,
   syncWorkspace,
 } from "../lib/workspace-ops"
+import type { SyncRow } from "../lib/workspace-ops"
+
+function formatSyncRow(row: SyncRow): string {
+  const label = row.status === "synced" ? "synced" : row.status === "skipped" ? "skipped" : "failed"
+  return `${label}  ${row.repo}  ${row.detail}`
+}
 
 export function registerWorkspaceCommands(program: Command) {
   program
@@ -690,7 +696,7 @@ export function registerWorkspaceCommands(program: Command) {
         let hasFailures = false
         for (const ws of workspaces) {
           console.log(`\n  ${ws.name}  [${ws.branch}]`)
-          const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort }, (msg) => console.log(`    ${msg}`))
+          const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort }, (row) => console.log(`    ${formatSyncRow(row)}`))
           if (!result.ok) {
             hasFailures = true
             if (result.error) console.error(`    ${formatError(result.error)}`)
@@ -705,7 +711,7 @@ export function registerWorkspaceCommands(program: Command) {
         process.exit(1)
       }
 
-      const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort }, (msg) => console.log(`  ${msg}`))
+      const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort }, (row) => console.log(`  ${formatSyncRow(row)}`))
       if (!result.ok) {
         if (result.error) console.error(formatError(result.error))
         if (result.skipped.length > 0) {

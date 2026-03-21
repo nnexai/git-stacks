@@ -303,12 +303,12 @@ export default function App() {
     setSyncSummary({ text: "", color: "green" })
     setView({ view: "sync-progress", message: `Syncing ${name}...` })
 
-    const onSyncProgress = (update: SyncRow) => {
+    const onProgress = (update: SyncRow) => {
       setSyncRows(prev => prev.map(r => r.repo === update.repo ? { ...r, ...update } : r))
     }
 
     try {
-      const result = await syncWorkspace(name, { strategy: "rebase", bestEffort: true }, undefined, onSyncProgress)
+      const result = await syncWorkspace(name, { strategy: "rebase", bestEffort: true }, onProgress)
       setSyncSummary(buildSummary(result))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
