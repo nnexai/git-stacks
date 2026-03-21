@@ -31,7 +31,7 @@ See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md) for full detail
 
 - [x] **Phase 10: test-harness** — Component-level test infrastructure using testRender + config dir isolation (completed 2026-03-21)
 - [x] **Phase 11: tui-prerequisites** — InlineInput cursor movement and runHooksCaptured before any wizard work (completed 2026-03-21)
-- [ ] **Phase 12: workspace-sync** — Sync action in workspace action menu with per-repo progress and timeout
+- [x] **Phase 12: workspace-sync** — Sync action in workspace action menu with per-repo progress and timeout (completed 2026-03-21)
 - [ ] **Phase 13: wizard-create-workspace** — WizardView component + create workspace from Workspaces tab
 - [ ] **Phase 14: template-and-repo-management** — Template create wizard + full repo action menu (add/scan/remove)
 - [ ] **Phase 15: integration-tests-and-screen-polish** — App integration tests + help bar, age display, responsive columns
@@ -78,7 +78,7 @@ Plans:
 Plans:
 - [x] 12-01-PLAN.md — Backend: fetchOrigin timeout + syncWorkspace structured callback + fetch failure tracking
 - [x] 12-02-PLAN.md — SyncProgressView component + tests
-- [ ] 12-03-PLAN.md — App.tsx integration: types, ActionMenu, executeSync, keyboard guards, render branch
+- [x] 12-03-PLAN.md — App.tsx integration: types, ActionMenu, executeSync, keyboard guards, render branch
 
 ### Phase 13: wizard-create-workspace
 **Goal**: Users can create a new workspace entirely from within the TUI Workspaces tab, with full back-navigation and cursor placement on the new entry
@@ -125,7 +125,7 @@ Plans:
 | 9. IPC Push + Message Display | v0.3.0 | 3/3 | Complete | 2026-03-20 |
 | 10. test-harness | 2/2 | Complete    | 2026-03-21 | — |
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
-| 12. workspace-sync | v0.4.0 | 2/3 | In Progress|  |
+| 12. workspace-sync | v0.4.0 | 3/3 | Complete   | 2026-03-21 |
 | 13. wizard-create-workspace | v0.4.0 | 0/? | Not started | — |
 | 14. template-and-repo-management | v0.4.0 | 0/? | Not started | — |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |

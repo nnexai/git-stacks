@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 12-workspace-sync/12-01-PLAN.md
-last_updated: "2026-03-21T08:47:38.740Z"
+stopped_at: Completed 12-workspace-sync/12-03-PLAN.md
+last_updated: "2026-03-21T08:53:12.454Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -52,6 +52,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 12]: Fragment wrapper in For: use <>...</> to wrap row + conflict sub-rows when a For entry has variable sub-rows
 - [Phase 12-workspace-sync]: Use git -c fetch.timeout=30 (socket-level) not AbortSignal — git handles subprocess cleanup, aligned with WS-04
 - [Phase 12-workspace-sync]: onSyncProgress added as 4th optional parameter to syncWorkspace — preserves all existing callers without change
+- [Phase 12-workspace-sync]: buildSummary: non-conflict skips counted as failures for accurate color coding
+- [Phase 12-workspace-sync]: Sync routes through confirm dialog for D-07/D-08 compliance; onConfirm branches on action === 'sync'
 
 ### Pending Todos
 
@@ -63,7 +65,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T08:47:38.738Z
-Stopped at: Completed 12-workspace-sync/12-01-PLAN.md
+Last session: 2026-03-21T08:53:12.452Z
+Stopped at: Completed 12-workspace-sync/12-03-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
