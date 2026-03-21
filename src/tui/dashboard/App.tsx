@@ -18,6 +18,7 @@ import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
 import { InlineInput } from "./InlineInput"
+import { FilterIndicator } from "./FilterIndicator"
 import { HelpOverlay } from "./HelpOverlay"
 import { MessageOverlay } from "./MessageOverlay"
 import { TemplateActionMenu } from "./TemplateActionMenu"
@@ -459,6 +460,7 @@ export default function App() {
       if (key.name === "escape") {
         if (helpOpen()) { setHelpOpen(false); return }
         if (filtering()) { setFiltering(false); setFilter(""); clampCursor(); return }
+        if (filter()) { setFilter(""); clampCursor(); return }
         if (selected().size > 0) { setSelected(() => new Set<number>()); return }
         // NO-OP at top-level list — do NOT call renderer.destroy()
         return
@@ -514,9 +516,10 @@ export default function App() {
       }
 
       // Filter — defer focus so the `/` keypress doesn't leak into the input
+      // If a filter is already active (indicator showing), re-enter edit mode preserving text
       if (key.name === "/") {
         setFiltering(true)
-        setFilter("")
+        if (!filter()) setFilter("")
         setFilterFocused(false)
         setTimeout(() => setFilterFocused(true), 0)
         return
@@ -677,24 +680,19 @@ export default function App() {
 
         {/* HELP BAR / FILTER LINE / LOADING — outside both boxes, fixed 1 row */}
         <box height={1} flexDirection="row">
-          <Show when={filtering()}>
-            <box flexDirection="row" flexGrow={1}>
-              <text fg="cyan">  filter: </text>
-              <input
-                focused={filterFocused()}
-                value={filter()}
-                flexGrow={1}
-                onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
-              />
-            </box>
-          </Show>
-          <Show when={!filtering() && refreshFlash()}>
+          <FilterIndicator
+            filtering={filtering()}
+            filterFocused={filterFocused()}
+            filter={filter()}
+            onInput={(v) => { setFilter(v); clampCursor() }}
+          />
+          <Show when={!filtering() && !filter() && refreshFlash()}>
             <text fg="green">  {refreshFlash()}</text>
           </Show>
-          <Show when={!filtering() && !refreshFlash() && loading()}>
+          <Show when={!filtering() && !filter() && !refreshFlash() && loading()}>
             <text fg="gray">  (loading statuses...)</text>
           </Show>
-          <Show when={!filtering() && !refreshFlash() && !loading()}>
+          <Show when={!filtering() && !filter() && !refreshFlash() && !loading()}>
             <text fg="gray">{helpBarText()}</text>
           </Show>
           <box flexGrow={1} />
