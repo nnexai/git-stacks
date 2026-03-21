@@ -1,0 +1,57 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`CenteredDialog snapshots renders small dialog with title and text children 1`] = `
+"                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                    ┌─ Test Dialog ────────────────────────┐                    
+                    │ Dialog content here                  │                    
+                    └──────────────────────────────────────┘                    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`CenteredDialog snapshots renders large dialog with title and multi-line children 1`] = `
+"                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+    ┌─ Large Dialog ───────────────────────────────────────────────────────┐    
+    │ First line of content                                                │    
+    │ Second line of content                                               │    
+    │ Third line of content                                                │    
+    └──────────────────────────────────────────────────────────────────────┘    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
