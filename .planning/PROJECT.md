@@ -20,7 +20,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Template creation from within TUI (edit/clone/remove exist, create does not)
 - Workspace sync action in TUI action menu
 
-## Current State — v0.3.0 (shipped 2026-03-20)
+## Current State — v0.4.0 milestone complete (2026-03-21)
+
+### What shipped in v0.4.0
+
+- **E2E test infrastructure** — headless `testRender` + `mockInput` + `captureCharFrame` for automated TUI validation; `GIT_STACKS_CONFIG_DIR` for config isolation; 14 integration tests covering tab switching, action menus, wizards, and sync flows
+- **TUI screen polish** — width-tiered help bar (progressive dropping at 50/65/80/100 cols), relative workspace ages (`3d`, `2h`, `5m`), responsive column widths across all list views
+- **Create workspace wizard** — template-based and ad-hoc creation with back-navigation, cursor placement, and deferred focus
+- **Repo management** — RepoActionMenu with create workspace/template/remove actions; blocked-removal view shows references; template creation from selected repos
+- **Workspace sync** — per-repo progress display with 30s fetch timeout; sync action in workspace action menu
+- **Unified selection display** — `>[x]` checkbox prefix across all three dashboard tabs
+- **InlineInput** — cursor-positioned editing via built-in `<input>` wrapper replacing hand-rolled keyboard accumulation
+- **TUI-safe hooks** — `runHooksCaptured()` with callback streaming prevents OpenTUI screen corruption
 
 ### What shipped in v0.3.0
 
@@ -54,6 +65,10 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ TUI repo remove (blocked path shows references, safe path with ConfirmDialog) — v0.4.0 Phase 14
 - ✓ RepoActionMenu with selection-aware labels (`[w]`/`[t]`/`[r]` shortcuts) — v0.4.0 Phase 14
 - ✓ Unified checkbox prefix display across all dashboard tabs — v0.4.0 Phase 14
+- ✓ App-level integration tests covering tab switching, action menu dispatch, wizard entry/cancel, and sync progress — v0.4.0 Phase 15
+- ✓ Width-tiered help bar fitting within 80 columns — v0.4.0 Phase 15
+- ✓ Relative workspace ages in list view (`3d`, `2h`, `5m`) — v0.4.0 Phase 15
+- ✓ Responsive column widths across all list views — v0.4.0 Phase 15
 - ✓ Repo Registry as source of truth for repo paths — v0.2.0
 - ✓ Templates as reusable workspace recipes — v0.2.0
 - ✓ Workspace YAML self-contained at creation — v0.2.0
@@ -161,4 +176,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-21 — Phase 14 (template-and-repo-management) complete*
+*Last updated: 2026-03-21 — Phase 15 (integration-tests-and-screen-polish) complete; v0.4.0 milestone done*
