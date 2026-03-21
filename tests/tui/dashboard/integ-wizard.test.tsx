@@ -1,27 +1,50 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup, write } from "../../helpers"
+import { makeTmpDir, cleanup } from "../../helpers"
 
-// Config isolation — MUST be set before any import that touches paths.ts
-// Each test file has its own Bun module scope, so this env override takes effect
-// before App.tsx and its transitive imports are loaded.
+// Config isolation — set BEFORE any import that touches paths.ts.
+// NOTE: Bun shares module cache across test files in the same process run.
+// We mock the config module directly with inline fixtures so that our tests
+// are resilient to file load order and paths.ts cache contention.
 const configDir = makeTmpDir("integ-wizard")
 process.env.GIT_STACKS_CONFIG_DIR = configDir
 
-// Seed YAML fixtures before App is imported (Pitfall 4: hooks load data at mount time)
-write(configDir, "config.yml", "workspace_root: /tmp/integ-wizard-root\n")
-write(configDir, "registry.yml", [
-  "- name: dev-repo",
-  "  local_path: /tmp/integ-wizard-dev-repo",
-  "  type: other",
-  "  default_branch: main",
-].join("\n") + "\n")
-write(configDir, "templates/dev-tmpl.yml", [
-  "name: dev-tmpl",
-  "repos:",
-  "  - repo: dev-repo",
-  "    mode: worktree",
-].join("\n") + "\n")
+// Inline fixtures
+const registryFixture = [
+  { name: "dev-repo", local_path: "/tmp/integ-wizard-dev-repo", type: "other" as const, default_branch: "main" },
+]
+const templateFixture = {
+  name: "dev-tmpl",
+  schema_version: "1" as const,
+  repos: [{ repo: "dev-repo", mode: "worktree" as const }],
+}
+
+// Mock config module with inline fixtures — resilient to module cache ordering
+mock.module("../../../src/lib/config", () => ({
+  listWorkspaces: mock(() => []),
+  readWorkspace: mock(() => null),
+  writeWorkspace: mock(() => {}),
+  workspaceExists: mock(() => false),
+  workspacePath: mock((name: string) => `${configDir}/workspaces/${name}.yml`),
+  readRegistry: mock(() => registryFixture),
+  writeRegistry: mock(() => {}),
+  listRegistryEntries: mock(() => registryFixture),
+  listTemplates: mock(() => [templateFixture]),
+  readTemplate: mock((_name: string) => templateFixture),
+  writeTemplate: mock(() => {}),
+  templateExists: mock(() => false),
+  templatePath: mock((name: string) => `${configDir}/templates/${name}.yml`),
+  readGlobalConfig: mock(() => ({
+    workspace_root: "/tmp/integ-wizard-root",
+    integrations: {},
+  })),
+  writeGlobalConfig: mock(() => {}),
+  expandBranchPattern: mock((pattern: string, name: string) => pattern.replace("{name}", name)),
+  formatZodError: mock(() => ""),
+  WorkspaceSchema: {} as any,
+  TemplateSchema: {} as any,
+  RepoRegistryEntrySchema: {} as any,
+}))
 
 // Mock git operations to prevent real filesystem git work
 mock.module("../../../src/lib/git", () => ({
