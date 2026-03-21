@@ -110,6 +110,7 @@ export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
                   <input
                     value={prefillValue}
                     focused={inputFocused()}
+                    flexGrow={1}
                     onSubmit={(v) => handleTextConfirm(v as string)}
                   />
                 </box>

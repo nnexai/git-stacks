@@ -13,10 +13,10 @@ export async function createWorktree(
 ): Promise<void> {
   const exists = await checkBranchExists(repoPath, branch)
   if (exists) {
-    await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`
+    await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet()
   } else {
     // Branch from current HEAD of the main clone, not a fixed base branch
-    await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`
+    await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet()
   }
 }
 

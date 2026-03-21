@@ -4,6 +4,22 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.4.1] — 2026-03-21
+
+### Fixed
+
+- **Wizard input width**: text inputs in all wizard dialogs (create workspace, create template) now span the full dialog width via `flexGrow={1}` instead of showing only a few characters
+- **Double-nested dialog**: wizard text steps no longer render `InlineInput` (which wraps in its own `CenteredDialog`), eliminating the double-nesting that clipped inputs to ~35% terminal width
+- **Git worktree output bleed**: `git worktree add` output (commit messages) no longer bleeds into the TUI — commands now use `.quiet()`
+- **Number keys in dialogs**: pressing 1/2/3 or `[`/`]` no longer switches tabs while a wizard, action menu, confirm dialog, or other overlay is active — dialog guards now block all navigation keys
+
+### Added
+
+- **Batch bar on all tabs**: templates and repos tabs now show a selection bar at the bottom of the list when items are selected, matching the workspaces tab pattern
+- **Batch bar positioning**: selection bar anchored to bottom of list pane instead of appearing right after the last selected entry
+
+---
+
 ## [0.4.0] — 2026-03-21
 
 ### Added

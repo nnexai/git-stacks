@@ -842,20 +842,8 @@ export default function App() {
       return // <input> handles typing, backspace, cursor movement natively
     }
 
-    // Tab switching
-    if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
-    if (key.name === "2") { setTab("templates"); setView({ view: "list" }); return }
-    if (key.name === "3") { setTab("repos"); setView({ view: "list" }); return }
-    if (key.name === "]") {
-      setTab(t => t === "workspaces" ? "templates" : t === "templates" ? "repos" : "workspaces")
-      setView({ view: "list" })
-      return
-    }
-    if (key.name === "[") {
-      setTab(t => t === "workspaces" ? "repos" : t === "repos" ? "templates" : "workspaces")
-      setView({ view: "list" })
-      return
-    }
+    // Dialog/overlay guards — block ALL global keys (including tab switching) when a
+    // dialog is active. These must come before tab switching so 1/2/3 don't leak through.
 
     // Progress view — any key returns to list
     if (v.view === "progress" && progressDone()) {
@@ -890,6 +878,21 @@ export default function App() {
     if (v.view === "wizard-create-template") return  // WizardView handles its own keys
     if (v.view === "repo-action-menu") return         // RepoActionMenu handles its own keys
     if (v.view === "repo-remove-blocked") return      // RemoveBlockedView handles Esc
+
+    // Tab switching
+    if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
+    if (key.name === "2") { setTab("templates"); setView({ view: "list" }); return }
+    if (key.name === "3") { setTab("repos"); setView({ view: "list" }); return }
+    if (key.name === "]") {
+      setTab(t => t === "workspaces" ? "templates" : t === "templates" ? "repos" : "workspaces")
+      setView({ view: "list" })
+      return
+    }
+    if (key.name === "[") {
+      setTab(t => t === "workspaces" ? "repos" : t === "repos" ? "templates" : "workspaces")
+      setView({ view: "list" })
+      return
+    }
 
     // Create progress — any key returns to list when done (same pattern as sync-progress)
     if (v.view === "create-progress" && createDone()) {
@@ -1254,9 +1257,18 @@ export default function App() {
               />
             </Match>
           </Switch>
-          {/* Batch bar INSIDE top box as footer row */}
+          {/* Batch bar anchored to bottom of list box */}
           <Show when={view().view === "list" && tab() === "workspaces" && selected().size > 0}>
+            <box flexGrow={1} />
             <BatchBar count={selected().size} />
+          </Show>
+          <Show when={view().view === "list" && tab() === "templates" && templatesSelected().size > 0}>
+            <box flexGrow={1} />
+            <BatchBar count={templatesSelected().size} actions="[Enter] Actions" />
+          </Show>
+          <Show when={view().view === "list" && tab() === "repos" && reposSelected().size > 0}>
+            <box flexGrow={1} />
+            <BatchBar count={reposSelected().size} actions="[Enter] Actions" />
           </Show>
         </box>
 

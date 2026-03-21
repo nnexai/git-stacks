@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 type Props = {
   count: number
+  actions?: string
 }
 
 export function BatchBar(props: Props) {
@@ -10,7 +11,7 @@ export function BatchBar(props: Props) {
         {`  ${props.count} selected  `}
       </text>
       <text fg="gray">
-        [c] Clean All  [r] Remove All  [Esc] Deselect All
+        {props.actions ?? "[c] Clean All  [r] Remove All"}  [Esc] Deselect All
       </text>
     </box>
   )
