@@ -1,6 +1,27 @@
 import { z } from "zod"
 import type { Workspace, GlobalConfig } from "../config"
 
+export type TmuxArtifact = {
+  kind: "tmux"
+  sessionName: string
+}
+
+export type CmuxArtifact = {
+  kind: "cmux"
+  workspaceRef: string
+}
+
+export type WindowArtifact = {
+  kind: "window"
+  pid: number
+  app_id: string
+  title: string
+}
+
+export type IntegrationArtifact = TmuxArtifact | CmuxArtifact | WindowArtifact
+
+export type ArtifactBag = Record<string, IntegrationArtifact | null>
+
 export interface IntegrationContext {
   workspace: Workspace
   tasksDir: string
@@ -35,7 +56,7 @@ export interface Integration {
   generate?(ctx: IntegrationContext): string | null
 
   /** Launch / activate the integration (open IDE, create terminal session, …) */
-  open(ctx: IntegrationContext, artifactPath: string | null): Promise<void>
+  open(ctx: IntegrationContext, artifactPath: string | null, bag: ArtifactBag): Promise<IntegrationArtifact | null>
 }
 
 const enabledSchema = z.object({ enabled: z.boolean() })

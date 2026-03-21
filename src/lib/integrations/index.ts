@@ -3,7 +3,7 @@ import { intellijIntegration } from "./intellij"
 import { cmuxIntegration } from "./cmux"
 import { tmuxIntegration } from "./tmux"
 
-export { type Integration, type IntegrationContext, resolveEnabledGlobally } from "./types"
+export { type Integration, type IntegrationContext, type IntegrationArtifact, type ArtifactBag, resolveEnabledGlobally } from "./types"
 
 /**
  * All registered integrations, in the order they run (generate → open).
