@@ -93,7 +93,9 @@ Plans:
   2. After `git-stacks open` with cmux enabled, the artifact bag contains `{ type: "cmux", workspaceRef: "<ref>" }`
   3. VSCode integration returns a window artifact (pid + best-effort window id) or null — never throws when window identification fails
   4. IntelliJ integration returns a window artifact or null — never throws when window identification fails
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 18-01-PLAN.md — Create artifact tests, update tmux/cmux/vscode/intellij to return real artifacts
 
 ### Phase 19: niri-shell-wrappers
 **Goal**: All niri msg IPC calls are isolated in src/lib/niri.ts behind a clean interface that automated tests can mock without calling the real niri binary
@@ -127,6 +129,6 @@ Plans:
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16. artifact-type-foundation | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
 | 17. integration-runner | v0.6.0 | 2/2 | Complete    | 2026-03-21 |
-| 18. artifact-population | v0.6.0 | 0/? | Not started | - |
+| 18. artifact-population | v0.6.0 | 0/1 | Not started | - |
 | 19. niri-shell-wrappers | v0.6.0 | 0/? | Not started | - |
 | 20. niri-integration | v0.6.0 | 0/? | Not started | - |
