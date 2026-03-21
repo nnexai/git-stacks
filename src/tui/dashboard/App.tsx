@@ -673,11 +673,12 @@ export default function App() {
         {/* HELP BAR / FILTER LINE / LOADING — outside both boxes, fixed 1 row */}
         <box height={1} flexDirection="row">
           <Show when={filtering()}>
-            <box flexDirection="row">
+            <box flexDirection="row" flexGrow={1}>
               <text fg="cyan">  filter: </text>
               <input
                 focused={true}
                 value={filter()}
+                flexGrow={1}
                 onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
               />
             </box>
