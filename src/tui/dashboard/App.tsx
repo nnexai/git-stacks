@@ -1220,7 +1220,7 @@ export default function App() {
         />
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view !== "action-menu" && view().view !== "repo-action-menu" && view().view !== "confirm" && view().view !== "inline-input" && view().view !== "repo-remove-blocked" && view().view !== "progress" && view().view !== "sync-progress" && view().view !== "wizard-create" && view().view !== "wizard-create-adhoc" && view().view !== "wizard-create-template" && view().view !== "create-progress"}>
+      <Show when={!helpOpen() && !messagesOpen()}>
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
           <Switch>

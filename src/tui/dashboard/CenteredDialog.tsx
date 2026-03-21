@@ -20,9 +20,9 @@ export function CenteredDialog(props: Props) {
 
   return (
     <box
+      position="absolute"
       height="100%"
       width="100%"
-      backgroundColor="transparent"
       justifyContent="center"
       alignItems="center"
     >
