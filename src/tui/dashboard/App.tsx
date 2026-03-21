@@ -1262,9 +1262,8 @@ export default function App() {
 
         {/* BOTTOM BOX: detail pane for list view only */}
         <box border title={detailBoxTitle()} flexDirection="column" flexGrow={2} minHeight={10}>
-          {/* List view — tab-specific detail */}
-          <Show when={view().view === "list"}>
-            <Switch>
+          {/* Tab-specific detail — always visible (dialogs overlay via absolute positioning) */}
+          <Switch>
               <Match when={tab() === "workspaces"}>
                 <WorkspaceDetail entry={currentEntry()} messages={currentEntry() ? (msgMap().get(currentEntry()!.workspace.name) ?? []) : []} tick={tick()} />
               </Match>
@@ -1279,7 +1278,6 @@ export default function App() {
                 />
               </Match>
             </Switch>
-          </Show>
         </box>
 
         {/* HELP BAR / FILTER LINE — single box, no DOM swapping, no height toggling */}
