@@ -174,7 +174,7 @@ export default function App() {
     if (w < 50) return "? Help  q Quit"
     const core = `Enter Actions  Space Select  / Filter${msgShortcut}  ? Help  q Quit`
     if (w < 65) return core
-    if (w < 80) return `r Refresh  ${core}`
+    if (w <= 80) return `r Refresh  ${core}`
     if (w < 100) return `1/2/3 Tabs  r Refresh  ${core}`
     return `\u2191\u2193/jk Navigate  1/2/3 Tabs  r Refresh  ${core}`
   })
