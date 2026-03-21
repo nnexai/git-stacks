@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, Show } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
+import { CenteredDialog } from "./CenteredDialog"
 import { InlineInput } from "./InlineInput"
 
 export type WizardStep<T> =
@@ -11,6 +12,7 @@ type Props<T extends Record<string, unknown>> = {
   steps: WizardStep<T>[]
   onComplete: (data: T) => void
   onCancel: () => void
+  title?: string
 }
 
 export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
@@ -82,40 +84,42 @@ export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
   })
 
   return (
-    <box flexDirection="column" paddingTop={1} paddingLeft={2}>
-      {(() => {
-        const step = props.steps[stepIndex()]
-        if (!step) return null
+    <CenteredDialog title={props.title ?? "Wizard"} size="medium">
+      <box flexDirection="column" paddingTop={1} paddingLeft={1}>
+        {(() => {
+          const step = props.steps[stepIndex()]
+          if (!step) return null
 
-        if (step.kind === "text") {
-          const prefillValue = step.prefill ? step.prefill(data()) : ""
-          return (
-            <>
-              <InlineInput
-                label={step.label}
-                prefill={prefillValue}
-                onConfirm={handleTextConfirm}
-                onCancel={handleTextCancel}
-                focused={inputFocused()}
-              />
-              <Show when={!!validationError()}>
-                <text fg="red">  {validationError()}</text>
-              </Show>
-            </>
-          )
-        }
+          if (step.kind === "text") {
+            const prefillValue = step.prefill ? step.prefill(data()) : ""
+            return (
+              <>
+                <InlineInput
+                  label={step.label}
+                  prefill={prefillValue}
+                  onConfirm={handleTextConfirm}
+                  onCancel={handleTextCancel}
+                  focused={inputFocused()}
+                />
+                <Show when={!!validationError()}>
+                  <text fg="red">  {validationError()}</text>
+                </Show>
+              </>
+            )
+          }
 
-        if (step.kind === "confirm") {
-          return (
-            <box flexDirection="column">
-              <text fg="yellow">  {step.buildMessage(data())}</text>
-              <text fg="gray">{"\n"}  [y] Create  [Esc] Back</text>
-            </box>
-          )
-        }
+          if (step.kind === "confirm") {
+            return (
+              <box flexDirection="column">
+                <text fg="yellow">  {step.buildMessage(data())}</text>
+                <text fg="gray">{"\n"}  [y] Create  [Esc] Back</text>
+              </box>
+            )
+          }
 
-        return null
-      })()}
-    </box>
+          return null
+        })()}
+      </box>
+    </CenteredDialog>
   )
 }

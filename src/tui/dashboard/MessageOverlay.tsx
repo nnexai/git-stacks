@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, createMemo, For, Show } from "solid-js"
 import { useKeyboard, useTerminalDimensions } from "@opentui/solid"
+import { CenteredDialog } from "./CenteredDialog"
 import { groupBySender, formatAge, isStale } from "./messageUtils"
 import type { SenderGroup } from "./messageUtils"
 import type { MessageRecord } from "../../lib/messages"
@@ -80,39 +81,40 @@ export function MessageOverlay(props: Props) {
   })
 
   return (
-    <box border title={` ${props.workspaceName} \u2014 Messages (${props.messages.length}) `}
-         flexDirection="column" height="100%" width="100%">
-      <Show when={groups().length === 0}>
-        <text fg="gray">  No messages</text>
-      </Show>
-      <Show when={groups().length > 0}>
-        <For each={visibleLines()}>
-          {(line) => {
-            if (line.type === "header") {
-              const g = line.group!
-              const focused = () => line.groupIdx === groupCursor()
+    <CenteredDialog title={`${props.workspaceName} \u2014 Messages (${props.messages.length})`} size="large">
+      <box flexDirection="column" flexGrow={1}>
+        <Show when={groups().length === 0}>
+          <text fg="gray">  No messages</text>
+        </Show>
+        <Show when={groups().length > 0}>
+          <For each={visibleLines()}>
+            {(line) => {
+              if (line.type === "header") {
+                const g = line.group!
+                const focused = () => line.groupIdx === groupCursor()
+                return (
+                  <box height={1} flexDirection="row">
+                    <text fg={focused() ? "white" : "gray"}>  {focused() ? "\u25b8" : " "} {g.label}</text>
+                    <text fg="gray"> ({g.messages.length})</text>
+                    <text fg={focused() ? "cyan" : "gray"}>{focused() ? "  [c] clear" : ""}</text>
+                  </box>
+                )
+              }
+              // message line
+              const msg = line.msg!
+              const senderLabel = msg.from ? `${msg.from}: ` : ""
+              const stale = () => (void props.tick, isStale(msg.timestamp))
+              const age = () => (void props.tick, formatAge(msg.timestamp))
               return (
                 <box height={1} flexDirection="row">
-                  <text fg={focused() ? "white" : "gray"}>  {focused() ? "\u25b8" : " "} {g.label}</text>
-                  <text fg="gray"> ({g.messages.length})</text>
-                  <text fg={focused() ? "cyan" : "gray"}>{focused() ? "  [c] clear" : ""}</text>
+                  <text fg={stale() ? "gray" : "white"}>      {senderLabel}{msg.text}</text>
+                  <text fg={stale() ? "gray" : "yellow"}>  {age()}</text>
                 </box>
               )
-            }
-            // message line
-            const msg = line.msg!
-            const senderLabel = msg.from ? `${msg.from}: ` : ""
-            const stale = () => (void props.tick, isStale(msg.timestamp))
-            const age = () => (void props.tick, formatAge(msg.timestamp))
-            return (
-              <box height={1} flexDirection="row">
-                <text fg={stale() ? "gray" : "white"}>      {senderLabel}{msg.text}</text>
-                <text fg={stale() ? "gray" : "yellow"}>  {age()}</text>
-              </box>
-            )
-          }}
-        </For>
-      </Show>
-    </box>
+            }}
+          </For>
+        </Show>
+      </box>
+    </CenteredDialog>
   )
 }

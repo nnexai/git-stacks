@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import "opentui-spinner/solid"
 import { For, Show } from "solid-js"
+import { CenteredDialog } from "./CenteredDialog"
 
 export type SyncRow = {
   repo: string
@@ -29,11 +30,13 @@ type Props = {
   rows: SyncRow[]
   done: boolean
   summary: { text: string; color: "green" | "yellow" | "red" }
+  title?: string
 }
 
 export function SyncProgressView(props: Props) {
   return (
-    <box flexDirection="column">
+    <CenteredDialog title={props.title ?? "Sync Progress"} size="medium">
+      <box flexDirection="column">
       <Show when={!props.done}>
         <box flexDirection="row" height={1}>
           <spinner name="dots" color="cyan" />
@@ -65,6 +68,7 @@ export function SyncProgressView(props: Props) {
       <Show when={props.done && !!props.summary.text}>
         <text fg={props.summary.color}>{"\n"}  {props.summary.text}</text>
       </Show>
-    </box>
+      </box>
+    </CenteredDialog>
   )
 }

@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import "opentui-spinner/solid"
 import { For, Show } from "solid-js"
+import { CenteredDialog } from "./CenteredDialog"
 
 export type CreateRow = {
   repo: string
@@ -28,37 +29,40 @@ type Props = {
   rows: CreateRow[]
   done: boolean
   summary: { text: string; color: "green" | "yellow" | "red" }
+  title?: string
 }
 
 export function CreateProgressView(props: Props) {
   return (
-    <box flexDirection="column">
-      <Show when={!props.done}>
-        <box flexDirection="row" height={1}>
-          <spinner name="dots" color="cyan" />
-          <text fg="white"> Creating...</text>
-        </box>
-      </Show>
-      <For each={props.rows}>
-        {(row) => (
-          <box flexDirection="row" height={1} paddingLeft={2}>
-            <Show
-              when={row.status === "creating-worktree" || row.status === "running-hooks"}
-              fallback={
-                <text fg={colorFor(row.status)}>{glyphFor(row.status)} </text>
-              }
-            >
-              <spinner name="dots" color="cyan" />
-              <text fg="white"> </text>
-            </Show>
-            <text fg="white">{row.repo}</text>
-            <text fg="gray">  {row.detail}</text>
+    <CenteredDialog title={props.title ?? "Creating..."} size="medium">
+      <box flexDirection="column">
+        <Show when={!props.done}>
+          <box flexDirection="row" height={1}>
+            <spinner name="dots" color="cyan" />
+            <text fg="white"> Creating...</text>
           </box>
-        )}
-      </For>
-      <Show when={props.done && !!props.summary.text}>
-        <text fg={props.summary.color}>{"\n"}  {props.summary.text}</text>
-      </Show>
-    </box>
+        </Show>
+        <For each={props.rows}>
+          {(row) => (
+            <box flexDirection="row" height={1} paddingLeft={2}>
+              <Show
+                when={row.status === "creating-worktree" || row.status === "running-hooks"}
+                fallback={
+                  <text fg={colorFor(row.status)}>{glyphFor(row.status)} </text>
+                }
+              >
+                <spinner name="dots" color="cyan" />
+                <text fg="white"> </text>
+              </Show>
+              <text fg="white">{row.repo}</text>
+              <text fg="gray">  {row.detail}</text>
+            </box>
+          )}
+        </For>
+        <Show when={props.done && !!props.summary.text}>
+          <text fg={props.summary.color}>{"\n"}  {props.summary.text}</text>
+        </Show>
+      </box>
+    </CenteredDialog>
   )
 }

@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { useKeyboard } from "@opentui/solid"
+import { CenteredDialog } from "./CenteredDialog"
 import type { Tab } from "./types"
 
 type Props = {
@@ -13,28 +14,30 @@ export function HelpOverlay(props: Props) {
   })
 
   return (
-    <box border title="Keybindings" flexDirection="column" height="100%" width="100%">
-      <text fg="white">{"\n"}  Global:</text>
-      <text fg="gray">    1 / 2 / 3   Switch tabs (Workspaces / Templates / Repos)</text>
-      <text fg="gray">    [ / ]       Previous / next tab</text>
-      <text fg="gray">    r           Refresh current tab</text>
-      <text fg="gray">    ?           Toggle this help</text>
-      <text fg="gray">    q           Quit (from list view only)</text>
-      <text fg="white">{"\n"}  Navigation:</text>
-      <text fg="gray">    ↑ ↓ / j k   Move cursor</text>
-      <text fg="gray">    /           Start filter</text>
-      <text fg="gray">    Esc         Back / clear filter / close overlay</text>
-      <text fg="white">{"\n"}  Workspaces tab:</text>
-      <text fg="gray">    Enter       Open action menu</text>
-      <text fg="gray">    Space       Select for batch operation</text>
-      <text fg="gray">    m           View workspace messages</text>
-      <text fg="gray">    Actions: o=Open  e=Edit  n=Rename  u=Run  m=Merge  c=Clean  r=Remove</text>
-      <text fg="white">{"\n"}  Templates tab:</text>
-      <text fg="gray">    Enter       Open action menu</text>
-      <text fg="gray">    e=Edit($EDITOR)  c=Clone  r=Remove</text>
-      <text fg="white">{"\n"}  Repos tab:</text>
-      <text fg="gray">    (read-only — no actions)</text>
-      <text fg="gray">{"\n"}  Press Esc or ? to close</text>
-    </box>
+    <CenteredDialog title="Keybindings" size="large">
+      <box flexDirection="column">
+        <text fg="white">{"\n"}  Global:</text>
+        <text fg="gray">    1 / 2 / 3   Switch tabs (Workspaces / Templates / Repos)</text>
+        <text fg="gray">    [ / ]       Previous / next tab</text>
+        <text fg="gray">    r           Refresh current tab</text>
+        <text fg="gray">    ?           Toggle this help</text>
+        <text fg="gray">    q           Quit (from list view only)</text>
+        <text fg="white">{"\n"}  Navigation:</text>
+        <text fg="gray">    ↑ ↓ / j k   Move cursor</text>
+        <text fg="gray">    /           Start filter</text>
+        <text fg="gray">    Esc         Back / clear filter / close overlay</text>
+        <text fg="white">{"\n"}  Workspaces tab:</text>
+        <text fg="gray">    Enter       Open action menu</text>
+        <text fg="gray">    Space       Select for batch operation</text>
+        <text fg="gray">    m           View workspace messages</text>
+        <text fg="gray">    Actions: o=Open  e=Edit  n=Rename  u=Run  m=Merge  c=Clean  r=Remove</text>
+        <text fg="white">{"\n"}  Templates tab:</text>
+        <text fg="gray">    Enter       Open action menu</text>
+        <text fg="gray">    e=Edit($EDITOR)  c=Clone  r=Remove</text>
+        <text fg="white">{"\n"}  Repos tab:</text>
+        <text fg="gray">    (read-only — no actions)</text>
+        <text fg="gray">{"\n"}  Press Esc or ? to close</text>
+      </box>
+    </CenteredDialog>
   )
 }
