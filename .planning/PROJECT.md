@@ -46,6 +46,8 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Headless TUI component test infrastructure (`testRender` + `mockInput` + `captureCharFrame`) — v0.4.0 Phase 10
 - ✓ Config directory isolation via `GIT_STACKS_CONFIG_DIR` env var — v0.4.0 Phase 10
 - ✓ ActionMenu arrow-key cursor navigation — v0.4.0 Phase 10
+- ✓ InlineInput cursor-positioned editing via built-in `<input>` wrapper — v0.4.0 Phase 11
+- ✓ `runHooksCaptured()` TUI-safe hook output streaming via callback — v0.4.0 Phase 11
 - ✓ Repo Registry as source of truth for repo paths — v0.2.0
 - ✓ Templates as reusable workspace recipes — v0.2.0
 - ✓ Workspace YAML self-contained at creation — v0.2.0
@@ -151,4 +153,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-21 — Phase 10 (test-harness) complete*
+*Last updated: 2026-03-21 — Phase 11 (tui-prerequisites) complete*
