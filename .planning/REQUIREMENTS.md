@@ -74,35 +74,35 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| T-01 | — | Pending |
-| T-02 | — | Pending |
-| T-03 | — | Pending |
-| T-04 | — | Pending |
-| T-05 | — | Pending |
-| T-06 | — | Pending |
-| P-01 | — | Pending |
-| P-02 | — | Pending |
-| WS-01 | — | Pending |
-| WS-02 | — | Pending |
-| WS-03 | — | Pending |
-| WS-04 | — | Pending |
-| C-01 | — | Pending |
-| C-02 | — | Pending |
-| C-03 | — | Pending |
-| C-04 | — | Pending |
-| R-01 | — | Pending |
-| R-02 | — | Pending |
-| R-03 | — | Pending |
-| R-04 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
+| T-01 | Phase 10 | Pending |
+| T-02 | Phase 10 | Pending |
+| T-03 | Phase 10 | Pending |
+| T-04 | Phase 10 | Pending |
+| T-06 | Phase 10 | Pending |
+| P-01 | Phase 11 | Pending |
+| P-02 | Phase 11 | Pending |
+| WS-01 | Phase 12 | Pending |
+| WS-02 | Phase 12 | Pending |
+| WS-03 | Phase 12 | Pending |
+| WS-04 | Phase 12 | Pending |
+| C-01 | Phase 13 | Pending |
+| C-02 | Phase 13 | Pending |
+| C-03 | Phase 13 | Pending |
+| C-04 | Phase 14 | Pending |
+| R-01 | Phase 14 | Pending |
+| R-02 | Phase 14 | Pending |
+| R-03 | Phase 14 | Pending |
+| R-04 | Phase 14 | Pending |
+| T-05 | Phase 15 | Pending |
+| UI-01 | Phase 15 | Pending |
+| UI-02 | Phase 15 | Pending |
+| UI-03 | Phase 15 | Pending |
 
 **Coverage:**
 - v1 requirements: 23 total
-- Mapped to phases: 0 (filled by roadmapper)
-- Unmapped: 23 — pending roadmap
+- Mapped to phases: 23
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after initial definition for v0.4.0*
+*Last updated: 2026-03-21 — traceability filled by roadmapper*
