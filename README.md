@@ -80,6 +80,7 @@ git-stacks run <name> [repo]       # Run a command or shell inside a workspace
 git-stacks merge <name>            # Merge branches into base branches, then clean
 git-stacks clean [name]            # Remove worktrees (config kept), or --gone to remove all with deleted remote branches
 git-stacks remove <name>           # Permanently remove worktrees + config
+git-stacks edit <name>             # Edit workspace integration overrides
 git-stacks cd <name> [repo]        # Print path — use via shell function
 ```
 
@@ -133,12 +134,15 @@ The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs
 
 - Switch tabs with `1` / `2` / `3` or `[` / `]`
 - Each tab shows a split list + detail pane — detail updates as you move the cursor
-- **Workspaces tab**: open, rename, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane
+- All dialogs render as centered overlays with dimmed backgrounds
+- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane
+  - `s` — sync workspace (per-repo progress with 30s fetch timeout)
   - `m` — open full-screen message overlay for selected workspace
   - `c` — clear messages from a sender in the detail pane
   - `r` — reload data from disk
-- **Templates tab**: edit in `$EDITOR`, clone, remove
-- **Repos tab**: browse registry with disk health indicator
+- **Templates tab**: create workspace from template (`w`), edit, clone, remove; detail pane shows resolved integration overrides
+- **Repos tab**: create workspace (`n`), create template (`t`), remove; `Space` to multi-select repos
+- Detail panes show resolved integration state with source annotations (`[global]`, `[template]`, `[workspace]`)
 - `?` — scrollable keybinding reference; `Esc` closes it
 - `Esc` — navigate back (action menu → list, overlay → split)
 

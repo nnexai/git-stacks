@@ -4,6 +4,66 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.4.0] — 2026-03-21
+
+### Added
+
+**TUI test infrastructure**
+- Headless `testRender` + `mockInput` + `captureCharFrame` API for automated TUI testing — 311 tests across 38 files run in CI without a real terminal
+- `GIT_STACKS_CONFIG_DIR` environment variable overrides config directory location for test isolation
+- App-level integration tests covering tab switching, action menu dispatch, wizard entry/cancel, and sync progress flows
+
+**Workspace sync** (`git-stacks manage` → Workspaces → `s`)
+- Sync action in workspace action menu with per-repo progress display
+- 30-second fetch timeout on unreachable remotes — TUI never hangs
+- Sync summary showing repos synced, skipped, and failed
+- Keyboard input blocked during sync to prevent double-dispatch
+
+**Create workspace from TUI** (`git-stacks manage` → Templates → `w` or Repos → `n`)
+- Multi-step wizard: select template → enter name → enter branch → summary/confirm
+- Back-navigation (Escape goes to previous step) and full cancel
+- After creation, cursor positions on the newly created workspace
+- Ad-hoc creation from Repos tab with Space multi-select
+- All wizard text fields use built-in `<input>` with cursor movement
+
+**Template and repo management from TUI**
+- `git-stacks manage` → Repos → Enter opens action menu with create workspace, create template, and remove options
+- Template creation from selected repos via Repos tab action menu
+- Repo remove with blocked-removal view (shows referencing workspaces/templates)
+- Unified `>[x]` checkbox-style selection indicators across all three tabs
+
+**Screen polish**
+- Width-tiered help bar: progressive content at 50/65/80/100 column widths — always fits
+- Workspace list rows show relative age (`3d`, `2h`, `5m`) instead of ISO date string
+- Responsive column widths across all list views — no hard-coded character widths
+- 30-second tick timer refreshes relative timestamps automatically
+
+**CenteredDialog overlay architecture**
+- All 11 dialog types (action menus, confirms, wizards, progress views, help, messages) render as centered overlays with dimmed background
+- Three size variants: small (50%) for confirms/menus, medium (70%) for wizards/progress, large (90%) for help/messages
+- Content behind overlays remains visible — split pane stays rendered underneath
+- Arrow key + Enter cursor navigation in all action menus
+
+**Integration overrides**
+- `git-stacks template new` / `git-stacks template edit` prompt for per-integration overrides (enable/disable/configure per integration)
+- `git-stacks new` / `git-stacks clone` prompt for per-workspace integration overrides with cascade-aware pre-selection
+- `git-stacks edit <name>` — new command to modify workspace integration overrides post-creation
+- Integration cascade: global → template → workspace; overrides stored conditionally in YAML (no key when user declines)
+- TUI detail panes show resolved integration state with source annotations (`[global]`, `[template]`, `[workspace]`, `[skipped: no matching repos]`) and config values inline
+
+**Prerequisites**
+- `InlineInput` rewritten to wrap OpenTUI built-in `<input>` — gains cursor movement, selection, undo/redo for free
+- `runHooksCaptured()` in `lifecycle.ts` — streams hook stdout/stderr via callback instead of `stdio: "inherit"`, preventing OpenTUI screen corruption
+
+### Fixed
+
+- InlineInput no longer uses hand-rolled `useKeyboard` character accumulation — all text fields use built-in `<input>` component
+- Keyboard isolation: input-mode guard placed above all navigation handlers to prevent key leaks when `<input>` is focused
+- Deferred focus pattern (`setTimeout(() => setFocused(true), 0)`) prevents trigger keypress from leaking into newly mounted inputs
+- Bun `mock.module` cross-file cache collision resolved via query-parameter cache-busting
+
+---
+
 ## [0.3.0] — 2026-03-20
 
 ### Added

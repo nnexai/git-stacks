@@ -1,7 +1,7 @@
 {
   "name": "git-stacks",
-  "version": "0.3.0",
-  "description": "Git worktree workspace manager — stacks, workspaces, and multi-repo orchestration",
+  "version": "0.4.0",
+  "description": "Git worktree workspace manager — templates, workspaces, and multi-repo orchestration",
   "license": "MIT",
   "author": "nnexai",
   "keywords": [
@@ -9,7 +9,7 @@
     "worktree",
     "workspace",
     "multi-repo",
-    "stack",
+    "template",
     "cli",
     "bun",
     "developer-tools"
