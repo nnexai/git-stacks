@@ -33,7 +33,7 @@ See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md) for full detail
 - [x] **Phase 11: tui-prerequisites** — InlineInput cursor movement and runHooksCaptured before any wizard work (completed 2026-03-21)
 - [x] **Phase 12: workspace-sync** — Sync action in workspace action menu with per-repo progress and timeout (completed 2026-03-21)
 - [x] **Phase 13: wizard-create-workspace** — WizardView component + create workspace from Templates/Repos tabs (completed 2026-03-21)
-- [ ] **Phase 14: template-and-repo-management** — Template create wizard + full repo action menu (add/scan/remove)
+- [x] **Phase 14: template-and-repo-management** — Template create wizard + full repo action menu (add/scan/remove) (completed 2026-03-21)
 - [ ] **Phase 15: integration-tests-and-screen-polish** — App integration tests + help bar, age display, responsive columns
 
 ## Phase Details
@@ -109,7 +109,7 @@ Plans:
 Plans:
 - [x] 14-01-PLAN.md — UIView type extensions + RepoActionMenu + RemoveBlockedView components with tests
 - [x] 14-02-PLAN.md — Selection display unification (RepoList + TemplateList checkbox prefix)
-- [ ] 14-03-PLAN.md — App.tsx wiring: action handlers, template create wizard, repo remove, keyboard guards, help bar
+- [x] 14-03-PLAN.md — App.tsx wiring: action handlers, template create wizard, repo remove, keyboard guards, help bar
 
 ### Phase 15: integration-tests-and-screen-polish
 **Goal**: App-level integration tests cover all major flows end-to-end, and the TUI renders cleanly within 80 columns with human-readable workspace ages
@@ -135,5 +135,5 @@ Plans:
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 13. wizard-create-workspace | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 14. template-and-repo-management | v0.4.0 | 2/3 | In Progress|  |
+| 14. template-and-repo-management | v0.4.0 | 3/3 | Complete   | 2026-03-21 |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |

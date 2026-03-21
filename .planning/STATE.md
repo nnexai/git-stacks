@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-03-21T10:46:18.705Z"
+stopped_at: Completed 14-03-PLAN.md
+last_updated: "2026-03-21T10:53:06.981Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -63,6 +63,9 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 14-template-and-repo-management]: prefix() function placed inside For callback (not component scope) — closes over reactive isSelected() and focused() memos without extra signal passing
 - [Phase 14-template-and-repo-management]: TemplateList selected prop optional so existing App.tsx callers compile without change until Plan 03 wires the signal
 - [Phase 14]: RepoActionMenu uses reactive arrow functions for label text; RemoveBlockedView accepts lightweight { name: string }[] refs
+- [Phase 14]: repoRemoveTarget signal is the dedicated path for repo remove confirmation; no confirmContext extension
+- [Phase 14]: n key removed from Repos tab; workspace create moved into RepoActionMenu [w] action per D-03
+- [Phase 14]: executeCreateTemplate: reloads templates then uses findIndex to place cursor on new entry via Promise.then()
 
 ### Pending Todos
 
@@ -74,7 +77,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T10:46:18.702Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-03-21T10:53:06.979Z
+Stopped at: Completed 14-03-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
