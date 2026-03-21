@@ -9,6 +9,7 @@ import { doctorCommand } from "./commands/doctor"
 import { repoCommand } from "./commands/repo"
 import { templateCommand } from "./commands/template"
 import { messageCommand } from "./commands/message"
+import { installCommand } from "./commands/install"
 import { getVersionString } from "./lib/version"
 
 async function checkGitVersion(): Promise<void> {
@@ -56,6 +57,7 @@ program.addCommand(doctorCommand)
 program.addCommand(repoCommand)
 program.addCommand(templateCommand)
 program.addCommand(messageCommand)
+program.addCommand(installCommand)
 
 // Register last — program tree must be fully populated before the action runs
 program.addCommand(createCompletionCommand(program))
