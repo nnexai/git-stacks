@@ -1,6 +1,9 @@
 /** @jsxImportSource @opentui/solid */
 import { Show, For, createMemo } from "solid-js"
 import type { Template } from "../../lib/config"
+import { readGlobalConfig } from "../../lib/config"
+import { integrations } from "../../lib/integrations"
+import { resolveEnabledGlobally } from "../../lib/integrations/types"
 
 type Props = {
   template: Template | undefined
@@ -13,6 +16,7 @@ export function TemplateDetail(props: Props) {
       fallback={<text fg="gray">  No template selected</text>}
     >
       {(template) => {
+        const globalConfig = readGlobalConfig()
         const hookCounts = createMemo(() => {
           const h = template().hooks
           if (!h) return { total: 0, primary: "" }
@@ -57,6 +61,46 @@ export function TemplateDetail(props: Props) {
             <Show when={template().description}>
               <text fg="gray">  {template().description}</text>
             </Show>
+            <text>{""}</text>
+            <text fg="white">  Integrations:</text>
+            <For each={integrations}>
+              {(integration) => {
+                // Template detail: only two cascade levels — template and global
+                // No applies() check needed for templates (no workspace context)
+                const tplOverride = template().integrations?.[integration.id]
+                let enabled: boolean
+                let source: string
+
+                if (tplOverride && typeof tplOverride === "object" && "enabled" in (tplOverride as object)) {
+                  enabled = (tplOverride as { enabled: boolean }).enabled
+                  source = "template"
+                } else {
+                  enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig)
+                  source = "global"
+                }
+
+                // Config summary for enabled integrations (D-11)
+                let configSummary = ""
+                if (enabled) {
+                  const rawConfig = ((tplOverride ?? globalConfig.integrations[integration.id] ?? {}) as Record<string, unknown>)
+                  const extras = Object.entries(rawConfig)
+                    .filter(([k]) => k !== "enabled")
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(", ")
+                  if (extras) configSummary = `(${extras})`
+                }
+
+                const icon = enabled ? "\u2713" : "\u2717"
+                const fg = enabled ? "green" : "red"
+
+                return (
+                  <box flexDirection="row" height={1}>
+                    <text fg={fg}>    {icon}  {integration.id.padEnd(10)}  {configSummary}</text>
+                    <text fg="gray">  [{source}]</text>
+                  </box>
+                )
+              }}
+            </For>
           </>
         )
       }}
