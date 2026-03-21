@@ -4,14 +4,19 @@ import { testRender } from "@opentui/solid"
 import { InlineInput } from "../../../src/tui/dashboard/InlineInput"
 
 describe("InlineInput", () => {
-  test("typing appends characters to display", async () => {
+  test("typing appends characters and confirms correctly", async () => {
+    let confirmed = ""
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => <InlineInput label="Name" prefill="" onConfirm={() => {}} onCancel={() => {}} />
+      () => <InlineInput label="Name" prefill="" onConfirm={(v) => { confirmed = v }} onCancel={() => {}} />
     )
     await renderOnce()
     await mockInput.typeText("hello")
     await renderOnce()
-    expect(captureCharFrame()).toContain("hello")
+    // Built-in input cursor may obscure some characters in the char frame,
+    // so verify via onConfirm instead of captureCharFrame for full value
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(confirmed).toBe("hello")
   })
 
   test("backspace removes last character", async () => {
@@ -69,5 +74,20 @@ describe("InlineInput", () => {
     )
     await renderOnce()
     expect(captureCharFrame()).toContain("Branch")
+  })
+
+  test("left-arrow then type inserts character at cursor position", async () => {
+    let confirmed = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => <InlineInput label="Name" prefill="ac" onConfirm={(v) => { confirmed = v }} onCancel={() => {}} />
+    )
+    await renderOnce()
+    mockInput.pressArrow("left")   // cursor moves before "c"
+    await renderOnce()
+    await mockInput.typeText("b")  // inserts "b" at cursor → "abc"
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(confirmed).toBe("abc")
   })
 })
