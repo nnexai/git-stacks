@@ -1,41 +1,93 @@
 import { describe, test, expect, afterAll } from "bun:test"
 import { join } from "path"
 import { makeTmpDir, cleanup } from "../helpers"
+import { readFileSync } from "fs"
+import { spawnSync } from "child_process"
 
-// Set env BEFORE importing paths (module constants evaluate at import time)
 const tmp = makeTmpDir("paths-test")
-process.env.GIT_STACKS_CONFIG_DIR = tmp
-
-// Now import — WS_CONFIG_DIR will pick up the env var
-const { WS_CONFIG_DIR, WORKSPACES_DIR, REGISTRY_FILE, TEMPLATES_DIR, MESSAGES_DIR, GLOBAL_CONFIG_FILE } = await import("../../src/lib/paths")
 
 afterAll(() => {
-  delete process.env.GIT_STACKS_CONFIG_DIR
   cleanup(tmp)
 })
 
 describe("paths.ts GIT_STACKS_CONFIG_DIR override", () => {
-  test("WS_CONFIG_DIR equals the env var value", () => {
-    expect(WS_CONFIG_DIR).toBe(tmp)
+  // Verify the source contains the env override pattern
+  test("paths.ts source contains GIT_STACKS_CONFIG_DIR env override", () => {
+    const src = readFileSync(join(import.meta.dir, "../../src/lib/paths.ts"), "utf-8")
+    expect(src).toContain("process.env.GIT_STACKS_CONFIG_DIR")
   })
 
-  test("WORKSPACES_DIR derives from overridden WS_CONFIG_DIR", () => {
-    expect(WORKSPACES_DIR).toBe(join(tmp, "workspaces"))
+  // Spawn a fresh Bun process to evaluate paths.ts in isolation, verifying
+  // that the env var is read at module load time and overrides all derived paths.
+  test("WS_CONFIG_DIR equals GIT_STACKS_CONFIG_DIR in a fresh process", () => {
+    const script = `
+      const { WS_CONFIG_DIR } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
+      console.log(WS_CONFIG_DIR)
+    `
+    const result = spawnSync("bun", ["--eval", script], {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: tmp },
+      encoding: "utf-8",
+    })
+    expect(result.stdout.trim()).toBe(tmp)
   })
 
-  test("REGISTRY_FILE derives from overridden WS_CONFIG_DIR", () => {
-    expect(REGISTRY_FILE).toBe(join(tmp, "registry.yml"))
+  test("WORKSPACES_DIR derives from overridden WS_CONFIG_DIR in a fresh process", () => {
+    const script = `
+      const { WORKSPACES_DIR } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
+      console.log(WORKSPACES_DIR)
+    `
+    const result = spawnSync("bun", ["--eval", script], {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: tmp },
+      encoding: "utf-8",
+    })
+    expect(result.stdout.trim()).toBe(join(tmp, "workspaces"))
   })
 
-  test("TEMPLATES_DIR derives from overridden WS_CONFIG_DIR", () => {
-    expect(TEMPLATES_DIR).toBe(join(tmp, "templates"))
+  test("REGISTRY_FILE derives from overridden WS_CONFIG_DIR in a fresh process", () => {
+    const script = `
+      const { REGISTRY_FILE } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
+      console.log(REGISTRY_FILE)
+    `
+    const result = spawnSync("bun", ["--eval", script], {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: tmp },
+      encoding: "utf-8",
+    })
+    expect(result.stdout.trim()).toBe(join(tmp, "registry.yml"))
   })
 
-  test("MESSAGES_DIR derives from overridden WS_CONFIG_DIR", () => {
-    expect(MESSAGES_DIR).toBe(join(tmp, "messages"))
+  test("TEMPLATES_DIR derives from overridden WS_CONFIG_DIR in a fresh process", () => {
+    const script = `
+      const { TEMPLATES_DIR } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
+      console.log(TEMPLATES_DIR)
+    `
+    const result = spawnSync("bun", ["--eval", script], {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: tmp },
+      encoding: "utf-8",
+    })
+    expect(result.stdout.trim()).toBe(join(tmp, "templates"))
   })
 
-  test("GLOBAL_CONFIG_FILE derives from overridden WS_CONFIG_DIR", () => {
-    expect(GLOBAL_CONFIG_FILE).toBe(join(tmp, "config.yml"))
+  test("MESSAGES_DIR derives from overridden WS_CONFIG_DIR in a fresh process", () => {
+    const script = `
+      const { MESSAGES_DIR } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
+      console.log(MESSAGES_DIR)
+    `
+    const result = spawnSync("bun", ["--eval", script], {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: tmp },
+      encoding: "utf-8",
+    })
+    expect(result.stdout.trim()).toBe(join(tmp, "messages"))
+  })
+
+  test("GLOBAL_CONFIG_FILE derives from overridden WS_CONFIG_DIR in a fresh process", () => {
+    const script = `
+      const { GLOBAL_CONFIG_FILE } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
+      console.log(GLOBAL_CONFIG_FILE)
+    `
+    const result = spawnSync("bun", ["--eval", script], {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: tmp },
+      encoding: "utf-8",
+    })
+    expect(result.stdout.trim()).toBe(join(tmp, "config.yml"))
   })
 })
