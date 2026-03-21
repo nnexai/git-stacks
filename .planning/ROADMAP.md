@@ -50,7 +50,7 @@ See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md) for full detail
 
 - [x] **Phase 16: artifact-type-foundation** - Define IntegrationArtifact types, ArtifactBag, and update open() signature across all integrations so the build compiles with the new contract (completed 2026-03-21)
 - [x] **Phase 17: integration-runner** - Consolidate four duplicated integration loops into a single runner.ts module with tier ordering, artifact accumulation, and skip-flag preservation (completed 2026-03-21)
-- [ ] **Phase 18: artifact-population** - Make existing integrations (tmux, cmux, vscode, intellij) return real artifact values so the bag is populated for downstream consumers
+- [x] **Phase 18: artifact-population** - Make existing integrations (tmux, cmux, vscode, intellij) return real artifact values so the bag is populated for downstream consumers (completed 2026-03-21)
 - [ ] **Phase 19: niri-shell-wrappers** - Implement src/lib/niri.ts shell wrapper library with mockable interface covering all niri msg IPC operations
 - [ ] **Phase 20: niri-integration** - Implement the full niri integration plugin: workspace lifecycle, window arrangement from artifact bag, terminal spawn, cleanup on remove
 
@@ -93,9 +93,9 @@ Plans:
   2. After `git-stacks open` with cmux enabled, the artifact bag contains `{ type: "cmux", workspaceRef: "<ref>" }`
   3. VSCode integration returns a window artifact (pid + best-effort window id) or null — never throws when window identification fails
   4. IntelliJ integration returns a window artifact or null — never throws when window identification fails
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 18-01-PLAN.md — Create artifact tests, update tmux/cmux/vscode/intellij to return real artifacts
+- [x] 18-01-PLAN.md — Create artifact tests, update tmux/cmux/vscode/intellij to return real artifacts
 
 ### Phase 19: niri-shell-wrappers
 **Goal**: All niri msg IPC calls are isolated in src/lib/niri.ts behind a clean interface that automated tests can mock without calling the real niri binary
@@ -129,6 +129,6 @@ Plans:
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16. artifact-type-foundation | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
 | 17. integration-runner | v0.6.0 | 2/2 | Complete    | 2026-03-21 |
-| 18. artifact-population | v0.6.0 | 0/1 | Not started | - |
+| 18. artifact-population | v0.6.0 | 1/1 | Complete   | 2026-03-21 |
 | 19. niri-shell-wrappers | v0.6.0 | 0/? | Not started | - |
 | 20. niri-integration | v0.6.0 | 0/? | Not started | - |

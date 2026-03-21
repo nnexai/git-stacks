@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
-stopped_at: Completed 17-integration-runner-17-02-PLAN.md
-last_updated: "2026-03-21T23:06:55.968Z"
+stopped_at: Completed 18-artifact-population-18-01-PLAN.md
+last_updated: "2026-03-21T23:26:11.106Z"
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 17 — integration-runner
+**Current focus:** Phase 18 — artifact-population
 
 ## Current Position
 
-Phase: 18
-Plan: Not started
+Phase: 18 (artifact-population) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Plan: Not started
 | Phase 16-artifact-type-foundation P01 | 2 | 2 tasks | 7 files |
 | Phase 17-integration-runner P01 | 15 | 2 tasks | 8 files |
 | Phase 17-integration-runner P02 | 5 | 1 tasks | 4 files |
+| Phase 18-artifact-population P01 | 3 | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -65,6 +66,8 @@ Plan: Not started
 - [Phase 17-integration-runner]: runner.ts imports integrations from index.ts directly (not as parameter) — enables mock.module test isolation with cache-busting
 - [Phase 17-integration-runner]: Spread-sort [...integrations].sort() avoids mutating the exported array in index.ts
 - [Phase 17-integration-runner]: workspace-ops.ts drops the bag variable — runIntegrations return not yet consumed downstream, await alone is sufficient
+- [Phase 18-artifact-population]: Bun.spawn used instead of Bun.$ for IDE launches — Bun.$ blocks awaiting exit, Bun.spawn returns immediately with pid for WindowArtifact
+- [Phase 18-artifact-population]: vscode app_id derived from cmd basename (cmd.split('/').at(-1)) to handle custom binary paths; intellij hardcoded as 'idea'
 
 ### Pending Todos
 
@@ -85,7 +88,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T23:03:00.861Z
-Stopped at: Completed 17-integration-runner-17-02-PLAN.md
+Last session: 2026-03-21T23:26:11.104Z
+Stopped at: Completed 18-artifact-population-18-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 16`
