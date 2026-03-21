@@ -24,7 +24,7 @@
 - [ ] **WS-01**: User can trigger workspace sync from the Workspaces tab action menu without leaving the TUI
 - [x] **WS-02**: Sync shows per-repo progress in ProgressView while running (repo name + status line per repo)
 - [x] **WS-03**: Sync completes with a result summary (N synced, N skipped/failed)
-- [ ] **WS-04**: Sync on an unreachable remote fails with a clear error message within 30 seconds (no indefinite hang)
+- [x] **WS-04**: Sync on an unreachable remote fails with a clear error message within 30 seconds (no indefinite hang)
 
 ### Create Flows (C-)
 
@@ -84,7 +84,7 @@
 | WS-01 | Phase 12 | Pending |
 | WS-02 | Phase 12 | Complete |
 | WS-03 | Phase 12 | Complete |
-| WS-04 | Phase 12 | Pending |
+| WS-04 | Phase 12 | Complete |
 | C-01 | Phase 13 | Pending |
 | C-02 | Phase 13 | Pending |
 | C-03 | Phase 13 | Pending |

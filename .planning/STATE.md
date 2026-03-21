@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-03-21T08:47:04.201Z"
+stopped_at: Completed 12-workspace-sync/12-01-PLAN.md
+last_updated: "2026-03-21T08:47:38.740Z"
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 12 (workspace-sync) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Accumulated Context
 
@@ -50,6 +50,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 11]: onSubmit typed as (v as string) cast — TypeScript intersection of InputProps.onSubmit(string) and TextareaOptions.onSubmit(SubmitEvent)
 - [Phase 12]: SyncRow type exported from SyncProgressView.tsx as canonical location — Plan 03 (App.tsx) imports from here
 - [Phase 12]: Fragment wrapper in For: use <>...</> to wrap row + conflict sub-rows when a For entry has variable sub-rows
+- [Phase 12-workspace-sync]: Use git -c fetch.timeout=30 (socket-level) not AbortSignal — git handles subprocess cleanup, aligned with WS-04
+- [Phase 12-workspace-sync]: onSyncProgress added as 4th optional parameter to syncWorkspace — preserves all existing callers without change
 
 ### Pending Todos
 
@@ -61,7 +63,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T08:47:04.199Z
-Stopped at: Completed 12-02-PLAN.md
+Last session: 2026-03-21T08:47:38.738Z
+Stopped at: Completed 12-workspace-sync/12-01-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.

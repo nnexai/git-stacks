@@ -76,7 +76,7 @@ Plans:
   4. All other key bindings are blocked while sync is in progress (no double-dispatch)
 **Plans**: 3 plans
 Plans:
-- [ ] 12-01-PLAN.md — Backend: fetchOrigin timeout + syncWorkspace structured callback + fetch failure tracking
+- [x] 12-01-PLAN.md — Backend: fetchOrigin timeout + syncWorkspace structured callback + fetch failure tracking
 - [x] 12-02-PLAN.md — SyncProgressView component + tests
 - [ ] 12-03-PLAN.md — App.tsx integration: types, ActionMenu, executeSync, keyboard guards, render branch
 
@@ -125,7 +125,7 @@ Plans:
 | 9. IPC Push + Message Display | v0.3.0 | 3/3 | Complete | 2026-03-20 |
 | 10. test-harness | 2/2 | Complete    | 2026-03-21 | — |
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
-| 12. workspace-sync | v0.4.0 | 1/3 | In Progress|  |
+| 12. workspace-sync | v0.4.0 | 2/3 | In Progress|  |
 | 13. wizard-create-workspace | v0.4.0 | 0/? | Not started | — |
 | 14. template-and-repo-management | v0.4.0 | 0/? | Not started | — |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |
