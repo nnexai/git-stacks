@@ -29,7 +29,7 @@ See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md) for full detail
 
 ### v0.4.0 TUI Hardening & Polish
 
-- [ ] **Phase 10: test-harness** — Component-level test infrastructure using testRender + config dir isolation
+- [x] **Phase 10: test-harness** — Component-level test infrastructure using testRender + config dir isolation (completed 2026-03-21)
 - [ ] **Phase 11: tui-prerequisites** — InlineInput cursor movement and runHooksCaptured before any wizard work
 - [ ] **Phase 12: workspace-sync** — Sync action in workspace action menu with per-repo progress and timeout
 - [ ] **Phase 13: wizard-create-workspace** — WizardView component + create workspace from Workspaces tab
@@ -117,7 +117,7 @@ Plans:
 | 7. Shell Completion Overhaul | v0.3.0 | 1/1 | Complete | 2026-03-19 |
 | 8. Dashboard Tab Layout | v0.3.0 | 6/6 | Complete | 2026-03-20 |
 | 9. IPC Push + Message Display | v0.3.0 | 3/3 | Complete | 2026-03-20 |
-| 10. test-harness | v0.4.0 | 1/2 | In progress | — |
+| 10. test-harness | 2/2 | Complete   | 2026-03-21 | — |
 | 11. tui-prerequisites | v0.4.0 | 0/? | Not started | — |
 | 12. workspace-sync | v0.4.0 | 0/? | Not started | — |
 | 13. wizard-create-workspace | v0.4.0 | 0/? | Not started | — |
