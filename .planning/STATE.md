@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 15.1-01-PLAN.md
-last_updated: "2026-03-21T16:45:59.639Z"
+stopped_at: Completed 15.1-02-PLAN.md
+last_updated: "2026-03-21T16:50:42.350Z"
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 21
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 15.1 (action-menu-cursor-unification-and-centered-dialog) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Accumulated Context
 
@@ -76,6 +76,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 15]: renderer.destroy() in afterEach prevents keyboard event leakage between testRender instances
 - [Phase 15.1-01]: CenteredDialog widths typed as Record<Size, `${number}%`> for TypeScript template literal compatibility with OpenTUI width prop
 - [Phase 15.1-01]: Action menu Show blocks promoted to App root level; split pane Show condition excludes action-menu/repo-action-menu states so dialogs get full terminal height
+- [Phase 15.1-02]: confirmTitle() memo computes contextual ConfirmDialog title from repoRemoveTarget, confirmContext, or entry name
+- [Phase 15.1-02]: Split-pane Show condition extended to exclude confirm/inline-input/repo-remove-blocked following the action-menu exclusion pattern from Plan 01
 
 ### Pending Todos
 
@@ -92,7 +94,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T16:45:59.637Z
-Stopped at: Completed 15.1-01-PLAN.md
+Last session: 2026-03-21T16:50:42.346Z
+Stopped at: Completed 15.1-02-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.

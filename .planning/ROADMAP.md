@@ -141,7 +141,7 @@ Plans:
 | 13. wizard-create-workspace | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 14. template-and-repo-management | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 15.1. action-menu-cursor-unification-and-centered-dialog | v0.4.0 | 1/3 | In Progress|  |
+| 15.1. action-menu-cursor-unification-and-centered-dialog | v0.4.0 | 2/3 | In Progress|  |
 | 15.2. integration-overrides-per-template-and-workspace | v0.4.0 | 0/3 | Planning    | — |
 
 ### Phase 15.2: Integration overrides per template and workspace (INSERTED)
@@ -161,9 +161,9 @@ Plans:
 **Goal:** Unify selection cursor across all three tabs and convert all overlay/dialog/wizard/progress views to centered dialog boxes with dimmed backgrounds
 **Requirements**: D-01 through D-20 (from CONTEXT.md)
 **Depends on:** Phase 15
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 15.1-01-PLAN.md — CenteredDialog component + cursor unification for RepoActionMenu and TemplateActionMenu
-- [ ] 15.1-02-PLAN.md — Wrap small dialogs with CenteredDialog + promote to App root level
+- [x] 15.1-02-PLAN.md — Wrap small dialogs with CenteredDialog + promote to App root level
 - [ ] 15.1-03-PLAN.md — Wrap large/medium components with CenteredDialog + promote remaining views + visual verification
