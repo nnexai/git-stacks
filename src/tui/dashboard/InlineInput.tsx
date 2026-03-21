@@ -8,6 +8,7 @@ type Props = {
   onConfirm: (value: string) => void
   onCancel: () => void
   ref?: (el: InputRenderable) => void
+  focused?: boolean
 }
 
 export function InlineInput(props: Props) {
@@ -21,7 +22,7 @@ export function InlineInput(props: Props) {
       <input
         ref={props.ref}
         value={props.prefill}
-        focused={true}
+        focused={props.focused ?? true}
         onSubmit={(v) => props.onConfirm(v as string)}
       />
     </box>

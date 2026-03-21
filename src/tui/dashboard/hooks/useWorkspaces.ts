@@ -30,7 +30,7 @@ export function useWorkspaces() {
     setLoading(false)
   }
 
-  function reload() {
+  function reload(): Promise<void> {
     const workspaces = listWorkspaces()
     const fresh: WorkspaceEntry[] = workspaces.map((ws) => ({
       workspace: ws,
@@ -38,7 +38,7 @@ export function useWorkspaces() {
     }))
     setEntries(fresh)
     setLoading(true)
-    fetchStatuses(workspaces, setEntries, () => cancelled).then(() => {
+    return fetchStatuses(workspaces, setEntries, () => cancelled).then(() => {
       if (!cancelled) setLoading(false)
     })
   }

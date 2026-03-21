@@ -21,7 +21,7 @@ export type WorkspaceEntry = {
 
 export type Tab = "workspaces" | "templates" | "repos"
 
-export type Action = "open" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync"
+export type Action = "open" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync" | "create-workspace"
 
 export type UIView =
   | { view: "list" }
@@ -31,3 +31,6 @@ export type UIView =
   | { view: "sync-progress"; message: string }
   | { view: "inline-input"; index: number; purpose: "rename" | "clone-template"; prefill: string }
   | { view: "messages"; workspaceName: string }
+  | { view: "wizard-create"; source: "template"; templateIndex: number }
+  | { view: "wizard-create-adhoc"; source: "repos"; repoNames: string[] }
+  | { view: "create-progress"; workspaceName: string }
