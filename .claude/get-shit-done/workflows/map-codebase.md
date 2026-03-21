@@ -26,7 +26,7 @@ Documents are reference material for Claude when planning/executing. Always incl
 Load codebase mapping context:
 
 ```bash
-INIT=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" init map-codebase)
+INIT=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" init map-codebase)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -185,9 +185,19 @@ Continue to collect_confirmations.
 </step>
 
 <step name="collect_confirmations">
-Wait for all 4 agents to complete.
+Wait for all 4 agents to complete using TaskOutput tool.
 
-Read each agent's output file to collect confirmations.
+**For each agent task_id returned by the Agent tool calls above:**
+```
+TaskOutput tool:
+  task_id: "{task_id from Agent result}"
+  block: true
+  timeout: 300000
+```
+
+Call TaskOutput for all 4 agents in parallel (single message with 4 TaskOutput calls).
+
+Once all TaskOutput calls return, read each agent's output file to collect confirmations.
 
 **Expected confirmation format from each agent:**
 ```
@@ -295,7 +305,7 @@ Continue to commit_codebase_map.
 Commit the codebase map:
 
 ```bash
-node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs: map existing codebase" --files .planning/codebase/*.md
+node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs: map existing codebase" --files .planning/codebase/*.md
 ```
 
 Continue to offer_next.

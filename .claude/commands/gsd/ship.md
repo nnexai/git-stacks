@@ -17,7 +17,7 @@ Closes the plan → execute → verify → ship loop.
 </objective>
 
 <execution_context>
-@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/ship.md
+@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/ship.md
 </execution_context>
 
-Execute the ship workflow from @/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/ship.md end-to-end.
+Execute the ship workflow from @/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/ship.md end-to-end.

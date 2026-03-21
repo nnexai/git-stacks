@@ -19,8 +19,8 @@ Routes to the profile-user workflow which orchestrates the full flow: consent ga
 </objective>
 
 <execution_context>
-@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/profile-user.md
-@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/references/ui-brand.md
+@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/profile-user.md
+@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/references/ui-brand.md
 </execution_context>
 
 <context>

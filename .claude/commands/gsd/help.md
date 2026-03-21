@@ -13,10 +13,10 @@ Output ONLY the reference content below. Do NOT add:
 </objective>
 
 <execution_context>
-@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/help.md
+@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/help.md
 </execution_context>
 
 <process>
-Output the complete GSD command reference from @/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/help.md.
+Output the complete GSD command reference from @/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/help.md.
 Display the reference content directly — no additions or modifications.
 </process>

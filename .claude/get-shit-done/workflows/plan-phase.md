@@ -5,7 +5,7 @@ Create executable phase prompts (PLAN.md files) for a roadmap phase with integra
 <required_reading>
 Read all files referenced by the invoking prompt's execution_context before starting.
 
-@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/references/ui-brand.md
+@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/references/ui-brand.md
 </required_reading>
 
 <available_agent_types>
@@ -22,7 +22,7 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 Load all context in one call (paths only to minimize orchestrator context):
 
 ```bash
-INIT=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" init plan-phase "$PHASE")
+INIT=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" init plan-phase "$PHASE")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -50,7 +50,7 @@ mkdir -p ".planning/phases/${padded_phase}-${phase_slug}"
 ## 3. Validate Phase
 
 ```bash
-PHASE_INFO=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}")
+PHASE_INFO=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}")
 ```
 
 **If `found` is false:** Error with available phases. **If `found` is true:** Extract `phase_number`, `phase_name`, `goal` from JSON.
@@ -152,7 +152,7 @@ Use full relative paths. Group by topic area.]
 
 5. Commit:
 ```bash
-node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs(${padded_phase}): generate context from PRD" --files "${phase_dir}/${padded_phase}-CONTEXT.md"
+node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs(${padded_phase}): generate context from PRD" --files "${phase_dir}/${padded_phase}-CONTEXT.md"
 ```
 
 6. Set `context_content` to the generated CONTEXT.md content and continue to step 5 (Handle Research).
@@ -229,7 +229,7 @@ Display banner:
 ### Spawn gsd-phase-researcher
 
 ```bash
-PHASE_DESC=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}" | jq -r '.section')
+PHASE_DESC=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}" | jq -r '.section')
 ```
 
 Research prompt:
@@ -291,7 +291,7 @@ grep -l "## Validation Architecture" "${PHASE_DIR}"/*-RESEARCH.md 2>/dev/null
 ```
 
 **If found:**
-1. Read template: `/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/templates/VALIDATION.md`
+1. Read template: `/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/templates/VALIDATION.md`
 2. Write to `${PHASE_DIR}/${PADDED_PHASE}-VALIDATION.md` (use Write tool)
 3. Fill frontmatter: `{N}` → phase number, `{phase-slug}` → slug, `{date}` → current date
 4. Verify:
@@ -308,8 +308,8 @@ test -f "${PHASE_DIR}/${PADDED_PHASE}-VALIDATION.md" && echo "VALIDATION_CREATED
 > Skip if `workflow.ui_phase` is explicitly `false` AND `workflow.ui_safety_gate` is explicitly `false` in `.planning/config.json`. If keys are absent, treat as enabled.
 
 ```bash
-UI_PHASE_CFG=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.ui_phase 2>/dev/null || echo "true")
-UI_GATE_CFG=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.ui_safety_gate 2>/dev/null || echo "true")
+UI_PHASE_CFG=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.ui_phase 2>/dev/null || echo "true")
+UI_GATE_CFG=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.ui_safety_gate 2>/dev/null || echo "true")
 ```
 
 **If both are `false`:** Skip to step 6.
@@ -317,7 +317,7 @@ UI_GATE_CFG=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-s
 Check if phase has frontend indicators:
 
 ```bash
-PHASE_SECTION=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}" 2>/dev/null)
+PHASE_SECTION=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" roadmap get-phase "${PHASE}" 2>/dev/null)
 echo "$PHASE_SECTION" | grep -iE "UI|interface|frontend|component|layout|page|screen|view|form|dashboard|widget" > /dev/null 2>&1
 HAS_UI=$?
 ```
@@ -383,7 +383,7 @@ VALIDATION_EXISTS=$(ls "${PHASE_DIR}"/*-VALIDATION.md 2>/dev/null | head -1)
 If missing and Nyquist is still enabled/applicable — ask user:
 1. Re-run: `/gsd:plan-phase {PHASE} --research`
 2. Disable Nyquist with the exact command:
-   `node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow.nyquist_validation false`
+   `node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow.nyquist_validation false`
 3. Continue anyway (plans fail Dimension 8)
 
 Proceed to Step 8 only if user selects 2 or 3.
@@ -650,13 +650,13 @@ Check for auto-advance trigger:
 2. **Sync chain flag with intent** — if user invoked manually (no `--auto`), clear the ephemeral chain flag from any previous interrupted `--auto` chain. This does NOT touch `workflow.auto_advance` (the user's persistent settings preference):
    ```bash
    if [[ ! "$ARGUMENTS" =~ --auto ]]; then
-     node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_chain_active false 2>/dev/null
+     node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-set workflow._auto_chain_active false 2>/dev/null
    fi
    ```
 3. Read both the chain flag and user preference:
    ```bash
-   AUTO_CHAIN=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow._auto_chain_active 2>/dev/null || echo "false")
-   AUTO_CFG=$(node "/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.auto_advance 2>/dev/null || echo "false")
+   AUTO_CHAIN=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow._auto_chain_active 2>/dev/null || echo "false")
+   AUTO_CFG=$(node "/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/bin/gsd-tools.cjs" config-get workflow.auto_advance 2>/dev/null || echo "false")
    ```
 
 **If `--auto` flag present OR `AUTO_CHAIN` is true OR `AUTO_CFG` is true:**
@@ -736,6 +736,30 @@ Verification: {Passed | Passed with override | Skipped}
 
 ───────────────────────────────────────────────────────────────
 </offer_next>
+
+<windows_troubleshooting>
+**Windows users:** If plan-phase freezes during agent spawning (common on Windows due to
+stdio deadlocks with MCP servers — see Claude Code issue anthropics/claude-code#28126):
+
+1. **Force-kill:** Close the terminal (Ctrl+C may not work)
+2. **Clean up orphaned processes:**
+   ```powershell
+   # Kill orphaned node processes from stale MCP servers
+   Get-Process node -ErrorAction SilentlyContinue | Where-Object {$_.StartTime -lt (Get-Date).AddHours(-1)} | Stop-Process -Force
+   ```
+3. **Clean up stale task directories:**
+   ```powershell
+   # Remove stale subagent task dirs (Claude Code never cleans these on crash)
+   Remove-Item -Recurse -Force "$env:USERPROFILE\.claude\tasks\*" -ErrorAction SilentlyContinue
+   ```
+4. **Reduce MCP server count:** Temporarily disable non-essential MCP servers in settings.json
+5. **Retry:** Restart Claude Code and run `/gsd:plan-phase` again
+
+If freezes persist, try `--skip-research` to reduce the agent chain from 3 to 2 agents:
+```
+/gsd:plan-phase N --skip-research
+```
+</windows_troubleshooting>
 
 <success_criteria>
 - [ ] .planning/ directory validated

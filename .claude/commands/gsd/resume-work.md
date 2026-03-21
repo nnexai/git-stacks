@@ -22,11 +22,11 @@ Routes to the resume-project workflow which handles:
   </objective>
 
 <execution_context>
-@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/resume-project.md
+@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/resume-project.md
 </execution_context>
 
 <process>
-**Follow the resume-project workflow** from `@/home/nnex/workspaces/tasks/cleanup/git-stacks/.claude/get-shit-done/workflows/resume-project.md`.
+**Follow the resume-project workflow** from `@/home/nnex/dev/prj/git-stacks/.claude/get-shit-done/workflows/resume-project.md`.
 
 The workflow handles all resumption logic including:
 
