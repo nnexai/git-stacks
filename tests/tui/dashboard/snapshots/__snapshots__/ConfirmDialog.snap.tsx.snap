@@ -1,0 +1,57 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`ConfirmDialog snapshots renders with default title and message 1`] = `
+"                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                    ┌─ Confirm ────────────────────────────┐                    
+                    │                                      │                    
+                    │  Delete workspace?                   │                    
+                    │                                      │                    
+                    │  [y] Yes [n/Esc] No                  │                    
+                    └──────────────────────────────────────┘                    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`ConfirmDialog snapshots renders with custom title and message 1`] = `
+"                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                    ┌─ Remove Repo ────────────────────────┐                    
+                    │                                      │                    
+                    │  Are you sure?                       │                    
+                    │                                      │                    
+                    │  [y] Yes [n/Esc] No                  │                    
+                    └──────────────────────────────────────┘                    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
