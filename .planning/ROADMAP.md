@@ -61,7 +61,9 @@ Plans:
   1. User can press left/right arrows inside an InlineInput field to move the cursor and insert a character mid-string
   2. A test asserts that InlineInput cursor movement produces the correct output after left-arrow + character insertion
   3. Calling `runHooksCaptured()` from a TUI context does not write any output directly to the terminal — output lines arrive via callback
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 11-01-PLAN.md — InlineInput built-in input wrapper + runHooksCaptured lifecycle function
 
 ### Phase 12: workspace-sync
 **Goal**: Users can sync a workspace from inside the TUI action menu and see per-repo progress without exiting to the CLI
@@ -118,7 +120,7 @@ Plans:
 | 8. Dashboard Tab Layout | v0.3.0 | 6/6 | Complete | 2026-03-20 |
 | 9. IPC Push + Message Display | v0.3.0 | 3/3 | Complete | 2026-03-20 |
 | 10. test-harness | 2/2 | Complete    | 2026-03-21 | — |
-| 11. tui-prerequisites | v0.4.0 | 0/? | Not started | — |
+| 11. tui-prerequisites | v0.4.0 | 0/1 | Not started | — |
 | 12. workspace-sync | v0.4.0 | 0/? | Not started | — |
 | 13. wizard-create-workspace | v0.4.0 | 0/? | Not started | — |
 | 14. template-and-repo-management | v0.4.0 | 0/? | Not started | — |
