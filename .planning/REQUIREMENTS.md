@@ -28,9 +28,9 @@
 
 ### Create Flows (C-)
 
-- [ ] **C-01**: User can create a new workspace from the Workspaces tab (`n` key) without exiting to CLI — wizard: select template → enter name → enter branch
-- [ ] **C-02**: Wizard supports back-navigation (escape goes to previous step) and full cancel (escape from first step returns to list)
-- [ ] **C-03**: After workspace creation, the list refreshes and cursor positions on the newly created workspace
+- [x] **C-01**: User can create a new workspace from the Workspaces tab (`n` key) without exiting to CLI — wizard: select template → enter name → enter branch
+- [x] **C-02**: Wizard supports back-navigation (escape goes to previous step) and full cancel (escape from first step returns to list)
+- [x] **C-03**: After workspace creation, the list refreshes and cursor positions on the newly created workspace
 - [ ] **C-04**: User can create a new template from the Templates tab (`n` key) without exiting to CLI
 
 ### Repo Management (R-)
@@ -85,9 +85,9 @@
 | WS-02 | Phase 12 | Complete |
 | WS-03 | Phase 12 | Complete |
 | WS-04 | Phase 12 | Complete |
-| C-01 | Phase 13 | Pending |
-| C-02 | Phase 13 | Pending |
-| C-03 | Phase 13 | Pending |
+| C-01 | Phase 13 | Complete |
+| C-02 | Phase 13 | Complete |
+| C-03 | Phase 13 | Complete |
 | C-04 | Phase 14 | Pending |
 | R-01 | Phase 14 | Pending |
 | R-02 | Phase 14 | Pending |

@@ -91,7 +91,7 @@ Plans:
   4. No `@clack/prompts` functions are called from within the TUI wizard flow (grep check passes)
 **Plans**: 3 plans
 Plans:
-- [ ] 13-01-PLAN.md — WizardView + CreateProgressView components, types, useWorkspaces.reload() fix, tests
+- [x] 13-01-PLAN.md — WizardView + CreateProgressView components, types, useWorkspaces.reload() fix, tests
 - [ ] 13-02-PLAN.md — Template-based create flow wired into App.tsx via TemplateActionMenu
 - [ ] 13-03-PLAN.md — Ad-hoc (Repos tab) create flow: multi-select, n key, wizard launch
 
@@ -130,6 +130,6 @@ Plans:
 | 10. test-harness | 2/2 | Complete    | 2026-03-21 | — |
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 13. wizard-create-workspace | v0.4.0 | 0/3 | Not started | — |
+| 13. wizard-create-workspace | v0.4.0 | 1/3 | In Progress|  |
 | 14. template-and-repo-management | v0.4.0 | 0/? | Not started | — |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |

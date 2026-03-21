@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 12-workspace-sync/12-03-PLAN.md
-last_updated: "2026-03-21T08:57:07.545Z"
+stopped_at: Completed 13-wizard-create-workspace/13-01-PLAN.md
+last_updated: "2026-03-21T09:45:51.881Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 9
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 12 — workspace-sync
+**Current focus:** Phase 13 — wizard-create-workspace
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
+Phase: 13 (wizard-create-workspace) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -54,6 +54,9 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 12-workspace-sync]: onSyncProgress added as 4th optional parameter to syncWorkspace — preserves all existing callers without change
 - [Phase 12-workspace-sync]: buildSummary: non-conflict skips counted as failures for accurate color coding
 - [Phase 12-workspace-sync]: Sync routes through confirm dialog for D-07/D-08 compliance; onConfirm branches on action === 'sync'
+- [Phase 13-wizard-create-workspace]: WizardView step/data state lives as local signals inside WizardView.tsx, not in UIView union variants (per D-22)
+- [Phase 13-wizard-create-workspace]: InlineInput.focused optional prop (default true) required for WizardView deferred focus pattern; all existing callers unaffected
+- [Phase 13-wizard-create-workspace]: Test deferred focus: await new Promise(r => setTimeout(r, 0)) required between step transitions — renderOnce() does not process macrotask queues
 
 ### Pending Todos
 
@@ -65,7 +68,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T08:53:12.452Z
-Stopped at: Completed 12-workspace-sync/12-03-PLAN.md
+Last session: 2026-03-21T09:45:51.878Z
+Stopped at: Completed 13-wizard-create-workspace/13-01-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
