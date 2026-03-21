@@ -55,11 +55,63 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.4.0 — TUI Hardening & Polish
+
+**Shipped:** 2026-03-21
+**Phases:** 8 (Phases 10–15.2) | **Plans:** 21 | **Tasks:** 43
+
+### What Was Built
+
+- Headless TUI test infrastructure (`testRender` + `mockInput` + `captureCharFrame`) with `GIT_STACKS_CONFIG_DIR` isolation — 311 tests across 38 files
+- InlineInput rewrite to built-in `<input>` wrapper with cursor movement; `runHooksCaptured()` for TUI-safe hook execution
+- Workspace sync action with per-repo progress, 30s fetch timeout, and keyboard blocking
+- Multi-step WizardView + CreateProgressView components powering workspace creation from Templates and Repos tabs
+- Template creation from Repos tab, repo remove with blocked-reference detection, unified `>[x]` selection display
+- Screen polish: width-tiered help bar, relative workspace ages, responsive column widths
+- CenteredDialog overlay architecture for all 11 dialog types with three size variants
+- Integration override cascade: per-template and per-workspace settings via CLI wizards, TUI detail pane display with source annotations
+
+### What Worked
+
+- **Single-day delivery**: 8 phases, 21 plans, 43 tasks executed in a single session — the GSD wave-based parallel execution maximized throughput
+- **Component test infrastructure first**: Phase 10 establishing testRender before any feature work meant every subsequent phase had automated validation from the start
+- **WizardView reusability**: The shared wizard component from Phase 13 was reused directly in Phase 14 (template create) — no rework or adaptation needed
+- **CenteredDialog as late refinement**: Phase 15.1 wrapped all existing dialogs without modifying their internal logic — clean separation of layout from behavior
+- **Parallel executor agents**: Wave 1 of Phase 15.2 ran two agents simultaneously (helper + dashboard display) — independent plans with no file conflicts
+
+### What Was Inefficient
+
+- **Bun mock.module cross-file contamination**: 4 test failures when running wizard-helpers.test.ts alongside workspace-wizard.test.ts. Root cause: bun caches mock.module globally and doesn't invalidate on re-registration. Required query-parameter cache-busting workaround (`import("path?unit-test")`)
+- **ROADMAP.md progress table drift**: Phase 10 and 11 rows were missing the milestone column, requiring manual correction at milestone completion
+- **Decimal phase plan checkbox tracking**: 15.2-02 checkbox not updated in ROADMAP.md despite SUMMARY.md existing — the `roadmap update-plan-progress` CLI doesn't handle all edge cases for inserted phases
+
+### Patterns Established
+
+- **Query-parameter cache-busting for bun mock.module**: `import("@/path?unit-test")` creates a separate module cache entry, bypassing stale mocks from other test files running in the same process
+- **CenteredDialog three-tier sizing**: small (50%) for confirms/menus, medium (70%) for wizards/progress, large (90%) for help/messages — consistent visual hierarchy
+- **Integration override cascade**: global → template → workspace with `promptIntegrationOverrides()` reusable helper; conditional YAML storage (no integrations key when user declines)
+- **Deferred input focus**: `setTimeout(() => setFocused(true), 0)` prevents trigger keypress from leaking into newly mounted `<input>` fields
+
+### Key Lessons
+
+1. **Bun mock isolation is not test-file-scoped**: `mock.module` is process-global in bun. Tests that mock the same module must either use identical mock shapes or employ cache-busting. This is not documented and cost investigation time.
+2. **Parallel agents need `--no-verify`**: Pre-commit hooks contend when multiple agents commit simultaneously. Post-wave hook validation is the correct pattern.
+3. **testRender makes TUI refactoring safe**: The CenteredDialog migration (15.1) touched all 11 dialog types with zero regressions because every component had testRender-based assertions.
+
+### Cost Observations
+
+- Model mix: sonnet for execution, opus for orchestration (balanced profile)
+- Sessions: 1 session, ~12 hours (2026-03-21 07:33 → 19:47)
+- Notable: All 8 phases completed in a single session — the fastest milestone by wall-clock time
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
 |-----------|--------|-------|------|--------------|
 | v0.2.0 Foundation | 7 | 21 | ~7 | ~3 |
 | v0.3.0 Dashboard UI Overhaul | 4 | 13 | 2 | 2 |
+| v0.4.0 TUI Hardening & Polish | 8 | 21 | 1 | 0 |
 
-**Trend:** Execution speed improved significantly (2 days vs ~7). TUI work is more discovery-heavy than CLI/lib work — expect 30–50% more plans when working against underdocumented renderer libraries.
+**Trend:** Execution speed continues to improve dramatically (1 day for 8 phases). Zero rework plans in v0.4.0 — the test infrastructure from Phase 10 caught issues during execution rather than in verification. Parallel agent execution (Phase 15.2 Wave 1) reduced wall-clock time for independent plans.
