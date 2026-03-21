@@ -107,7 +107,7 @@ Plans:
   5. Help bars are consistent across all tabs (Enter Actions, Space Select, / Filter, r Refresh, ? Help, q Quit)
 **Plans**: 3 plans
 Plans:
-- [ ] 14-01-PLAN.md — UIView type extensions + RepoActionMenu + RemoveBlockedView components with tests
+- [x] 14-01-PLAN.md — UIView type extensions + RepoActionMenu + RemoveBlockedView components with tests
 - [x] 14-02-PLAN.md — Selection display unification (RepoList + TemplateList checkbox prefix)
 - [ ] 14-03-PLAN.md — App.tsx wiring: action handlers, template create wizard, repo remove, keyboard guards, help bar
 
@@ -135,5 +135,5 @@ Plans:
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
 | 13. wizard-create-workspace | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 14. template-and-repo-management | v0.4.0 | 1/3 | In Progress|  |
+| 14. template-and-repo-management | v0.4.0 | 2/3 | In Progress|  |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |
