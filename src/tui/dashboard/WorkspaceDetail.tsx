@@ -3,6 +3,9 @@ import { For, Show, createMemo } from "solid-js"
 import { formatAge, isStale } from "./messageUtils"
 import type { WorkspaceEntry } from "./types"
 import type { MessageRecord } from "../../lib/messages"
+import { readGlobalConfig, readTemplate } from "../../lib/config"
+import { integrations } from "../../lib/integrations"
+import { resolveEnabledGlobally } from "../../lib/integrations/types"
 
 type Props = {
   entry: WorkspaceEntry | undefined
@@ -19,6 +22,7 @@ export function WorkspaceDetail(props: Props) {
       {(entry) => {
         const ws = () => entry().workspace
         const status = () => entry().status
+        const globalConfig = readGlobalConfig()
 
         const displayMessages = createMemo(() => {
           void props.tick  // subscribe to tick for periodic time refresh
@@ -77,6 +81,72 @@ export function WorkspaceDetail(props: Props) {
                 }}
               </For>
             </Show>
+            <text>{""}</text>
+            <text fg="white">  Integrations:</text>
+            <For each={integrations}>
+              {(integration) => {
+                // applies() check — takes precedence (skipped rows)
+                if (integration.applies && !integration.applies(ws())) {
+                  return (
+                    <text fg="gray">    -  {integration.id.padEnd(10)}  [skipped: no matching repos]</text>
+                  )
+                }
+
+                // Determine enabled state and source annotation (D-10)
+                // Walk cascade: workspace settings -> template -> global
+                const wsOverride = ws().settings?.integrations?.[integration.id]
+                let enabled: boolean
+                let source: string
+
+                if (wsOverride && typeof wsOverride === "object" && "enabled" in (wsOverride as object)) {
+                  enabled = (wsOverride as { enabled: boolean }).enabled
+                  source = "workspace"
+                } else if (ws().template) {
+                  // Check template-level override
+                  try {
+                    const tpl = readTemplate(ws().template!)
+                    const tplOverride = tpl.integrations?.[integration.id]
+                    if (tplOverride && typeof tplOverride === "object" && "enabled" in (tplOverride as object)) {
+                      enabled = (tplOverride as { enabled: boolean }).enabled
+                      source = "template"
+                    } else {
+                      enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig)
+                      source = "global"
+                    }
+                  } catch {
+                    // Template file missing — fall through to global
+                    enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig)
+                    source = "global"
+                  }
+                } else {
+                  enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig)
+                  source = "global"
+                }
+
+                // Config summary for enabled integrations (D-11)
+                let configSummary = ""
+                if (enabled) {
+                  const rawConfig = (ws().settings?.integrations?.[integration.id]
+                    ?? globalConfig.integrations[integration.id]
+                    ?? {}) as Record<string, unknown>
+                  const extras = Object.entries(rawConfig)
+                    .filter(([k]) => k !== "enabled")
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join(", ")
+                  if (extras) configSummary = `(${extras})`
+                }
+
+                const icon = enabled ? "\u2713" : "\u2717"
+                const fg = enabled ? "green" : "red"
+
+                return (
+                  <box flexDirection="row" height={1}>
+                    <text fg={fg}>    {icon}  {integration.id.padEnd(10)}  {configSummary}</text>
+                    <text fg="gray">  [{source}]</text>
+                  </box>
+                )
+              }}
+            </For>
           </>
         )
       }}
