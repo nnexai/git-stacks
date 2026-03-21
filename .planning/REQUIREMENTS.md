@@ -19,10 +19,10 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 
 ### Artifacts
 
-- [ ] **ART-01**: tmux integration returns session name artifact
-- [ ] **ART-02**: cmux integration returns workspace ref artifact
-- [ ] **ART-03**: VSCode integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
-- [ ] **ART-04**: IntelliJ integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
+- [x] **ART-01**: tmux integration returns session name artifact
+- [x] **ART-02**: cmux integration returns workspace ref artifact
+- [x] **ART-03**: VSCode integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
+- [x] **ART-04**: IntelliJ integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
 - [x] **ART-05**: Window artifact type is shared across all integrations: `{ pid: number; app_id: string; title: string }`
 - [x] **ART-06**: Integrations that cannot identify their window return null artifact (graceful degradation)
 
@@ -88,10 +88,10 @@ Deferred to v0.7.0+.
 | ORCH-06 | Phase 17 | Complete |
 | ORCH-07 | Phase 17 | Complete |
 | TEST-02 | Phase 17 | Complete |
-| ART-01 | Phase 18 | Pending |
-| ART-02 | Phase 18 | Pending |
-| ART-03 | Phase 18 | Pending |
-| ART-04 | Phase 18 | Pending |
+| ART-01 | Phase 18 | Complete |
+| ART-02 | Phase 18 | Complete |
+| ART-03 | Phase 18 | Complete |
+| ART-04 | Phase 18 | Complete |
 | NIRI-06 | Phase 19 | Pending |
 | NIRI-07 | Phase 19 | Pending |
 | NIRI-10 | Phase 19 | Pending |
