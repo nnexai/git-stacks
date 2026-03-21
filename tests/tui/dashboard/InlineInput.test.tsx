@@ -1,0 +1,73 @@
+/** @jsxImportSource @opentui/solid */
+import { describe, test, expect } from "bun:test"
+import { testRender } from "@opentui/solid"
+import { InlineInput } from "../../../src/tui/dashboard/InlineInput"
+
+describe("InlineInput", () => {
+  test("typing appends characters to display", async () => {
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <InlineInput label="Name" prefill="" onConfirm={() => {}} onCancel={() => {}} />
+    )
+    await renderOnce()
+    await mockInput.typeText("hello")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("hello")
+  })
+
+  test("backspace removes last character", async () => {
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <InlineInput label="Name" prefill="ab" onConfirm={() => {}} onCancel={() => {}} />
+    )
+    await renderOnce()
+    mockInput.pressBackspace()
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("a")
+    expect(frame).not.toContain("ab")
+  })
+
+  test("escape calls onCancel", async () => {
+    let cancelled = false
+    const { mockInput, renderOnce } = await testRender(
+      () => <InlineInput label="Name" prefill="" onConfirm={() => {}} onCancel={() => { cancelled = true }} />
+    )
+    await renderOnce()
+    mockInput.pressEscape()
+    // pressEscape sends \x1B which needs a brief parser timeout before firing
+    await new Promise((r) => setTimeout(r, 50))
+    await renderOnce()
+    expect(cancelled).toBe(true)
+  })
+
+  test("enter calls onConfirm with current value", async () => {
+    let confirmed = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => <InlineInput label="Name" prefill="hello" onConfirm={(v) => { confirmed = v }} onCancel={() => {}} />
+    )
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(confirmed).toBe("hello")
+  })
+
+  test("enter confirms typed text appended to prefill", async () => {
+    let confirmed = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => <InlineInput label="Name" prefill="hello" onConfirm={(v) => { confirmed = v }} onCancel={() => {}} />
+    )
+    await renderOnce()
+    await mockInput.typeText("world")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(confirmed).toBe("helloworld")
+  })
+
+  test("label appears in rendered frame", async () => {
+    const { renderOnce, captureCharFrame } = await testRender(
+      () => <InlineInput label="Branch" prefill="" onConfirm={() => {}} onCancel={() => {}} />
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Branch")
+  })
+})
