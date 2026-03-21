@@ -3,10 +3,16 @@ import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { ActionMenu } from "../../../src/tui/dashboard/ActionMenu"
 
+// Use kitty keyboard protocol so escape sends \x1B[27u (unambiguous CSI)
+// instead of bare \x1B which the parser holds to disambiguate from escape
+// sequence prefixes. This eliminates the flaky setTimeout delay entirely.
+const renderOpts = { kittyKeyboard: true }
+
 describe("ActionMenu", () => {
   test("renders all action labels", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -20,7 +26,8 @@ describe("ActionMenu", () => {
 
   test("shows cursor indicator on first item initially", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -29,7 +36,8 @@ describe("ActionMenu", () => {
 
   test("down arrow moves cursor to second item", async () => {
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     mockInput.pressArrow("down")
@@ -40,7 +48,8 @@ describe("ActionMenu", () => {
 
   test("up arrow after multiple downs moves cursor back", async () => {
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     for (let i = 0; i < 5; i++) {
@@ -57,7 +66,8 @@ describe("ActionMenu", () => {
   test("enter dispatches action at cursor position (first item)", async () => {
     let received = ""
     const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     mockInput.pressEnter()
@@ -68,7 +78,8 @@ describe("ActionMenu", () => {
   test("enter dispatches action at moved cursor position", async () => {
     let received = ""
     const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     mockInput.pressArrow("down")
@@ -83,12 +94,12 @@ describe("ActionMenu", () => {
   test("escape calls onCancel", async () => {
     let cancelled = false
     const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => { cancelled = true }} />
+      () => <ActionMenu workspaceName="ws" onAction={() => {}} onCancel={() => { cancelled = true }} />,
+      renderOpts
     )
     await renderOnce()
     mockInput.pressEscape()
-    // pressEscape sends \x1B which needs a brief parser timeout before firing
-    await new Promise((r) => setTimeout(r, 50))
+    // kitty keyboard sends \x1B[27u — parser recognizes it immediately, no delay needed
     await renderOnce()
     expect(cancelled).toBe(true)
   })
@@ -96,7 +107,8 @@ describe("ActionMenu", () => {
   test("letter shortcut r dispatches remove", async () => {
     let received = ""
     const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     mockInput.pressKey("r")
@@ -107,7 +119,8 @@ describe("ActionMenu", () => {
   test("letter shortcut o dispatches open", async () => {
     let received = ""
     const { mockInput, renderOnce } = await testRender(
-      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />
+      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
+      renderOpts
     )
     await renderOnce()
     mockInput.pressKey("o")
