@@ -39,9 +39,14 @@ export function RepoList(props: Props) {
             const absoluteIndex = () => scrollOffset() + visibleIndex()
             const focused = () => absoluteIndex() === props.cursor
             const isSelected = () => props.selected?.has(absoluteIndex()) ?? false
+            const prefix = () => {
+              const sel = isSelected() ? "x" : " "
+              const focus = focused() ? ">" : " "
+              return `${focus}[${sel}]`
+            }
             return (
               <box height={1} flexDirection="row" backgroundColor={focused() ? "#333333" : undefined}>
-                <text fg={focused() ? "white" : "gray"}>{isSelected() ? " x " : focused() ? " > " : "   "}</text>
+                <text fg={focused() ? "white" : "gray"}>{prefix()} </text>
                 <text fg={entry.diskExists ? "green" : "red"}>{entry.diskExists ? "✓" : "✗"}</text>
                 <text fg="white">{`  ${entry.name.padEnd(24)}`}</text>
                 <text fg="cyan">{`  ${entry.type.padEnd(12)}`}</text>
