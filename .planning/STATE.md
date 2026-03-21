@@ -101,8 +101,15 @@ None — Phase 11 complete.
 
 None.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260321-s98 | Fix dashboard creation wizard input forms clipping outside dialog and short visible input width | 2026-03-21 | 2a30e1b | [260321-s98-fix-dashboard-creation-wizard-input-form](./quick/260321-s98-fix-dashboard-creation-wizard-input-form/) |
+
 ## Session Continuity
 
+Last activity: 2026-03-21 - Completed quick task 260321-s98: Fix dashboard creation wizard input forms clipping outside dialog and short visible input width
 Last session: 2026-03-21T18:32:51.697Z
 Stopped at: Completed 15.2-02-PLAN.md
 Resume file: None
