@@ -108,7 +108,7 @@ None.
 | 260321-s98 | Fix dashboard creation wizard input forms clipping outside dialog and short visible input width | 2026-03-21 | 2a30e1b | | [260321-s98-fix-dashboard-creation-wizard-input-form](./quick/260321-s98-fix-dashboard-creation-wizard-input-form/) |
 | 260321-sqp | Implement TODO tests across the test suite (30 tests, 6 files) | 2026-03-21 | 5d62b91 | Verified | [260321-sqp-implement-todo-tests-across-the-test-sui](./quick/260321-sqp-implement-todo-tests-across-the-test-sui/) |
 | 260321-tdv | Add snapshot tests for 7 untested TUI dashboard components (16 tests, 7 files) | 2026-03-21 | 13a4ba0 | Verified | [260321-tdv-tui-snapshot-tests-for-intentional-visua](./quick/260321-tdv-tui-snapshot-tests-for-intentional-visua/) |
-| 260321-u1l | Add git-stacks install --hooks command with Claude Code agent hook plugin system | 2026-03-21 | c88a7fb | Verified | [260321-u1l-git-stacks-install-hooks-agent-framework](./quick/260321-u1l-git-stacks-install-hooks-agent-framework/) |
+| 260321-u1l | Add git-stacks install --hooks command with Claude Code agent hook plugin system | 2026-03-21 | 3cc797a | Verified | [260321-u1l-git-stacks-install-hooks-agent-framework](./quick/260321-u1l-git-stacks-install-hooks-agent-framework/) |
 
 ## Session Continuity
 
