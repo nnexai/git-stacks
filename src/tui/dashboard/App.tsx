@@ -154,15 +154,16 @@ export default function App() {
     if (v.view === "wizard-create" || v.view === "wizard-create-adhoc") return " Create Workspace "
     if (v.view === "create-progress") return ` Creating ${(v as any).workspaceName}... `
     if (v.view === "wizard-create-template") return " Create Template "
-    if (v.view === "repo-action-menu") {
-      const name = selectedName()
-      return name ? ` ${name} ` : ""
-    }
-    if (v.view === "repo-remove-blocked") {
-      return ` ${(v as any).repoName} `
-    }
     const name = selectedName()
     return name ? ` ${name} ` : ""
+  })
+
+  // Contextual title for ConfirmDialog
+  const confirmTitle = createMemo(() => {
+    const repoTarget = repoRemoveTarget()
+    if (repoTarget) return repoTarget
+    if (confirmContext() === "template") return filteredTemplates()[(view() as any).index]?.name ?? "Confirm"
+    return filteredEntries()[(view() as any).index]?.workspace.name ?? "Confirm"
   })
 
   // Context-sensitive help bar text (width-tiered to fit 80-column terminals)
@@ -1080,7 +1081,77 @@ export default function App() {
         />
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view !== "action-menu" && view().view !== "repo-action-menu"}>
+      {/* Confirm dialog — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "confirm"}>
+        {(() => {
+          const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
+          const repoTarget = repoRemoveTarget()
+          const label = repoTarget
+            ? `Remove repo "${repoTarget}" (${filteredRepos()[v.index]?.local_path})?`
+            : confirmContext() === "template"
+            ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
+            : v.action === "sync"
+            ? `Sync '${filteredEntries()[v.index]?.workspace.name}'? (rebase from upstream)`
+            : v.batch
+            ? `${v.action} ${selected().size} workspace(s)?`
+            : `${v.action} '${filteredEntries()[v.index]?.workspace.name}'?`
+          return (
+            <ConfirmDialog
+              title={confirmTitle()}
+              message={label}
+              onConfirm={() => {
+                const repoTarget = repoRemoveTarget()
+                if (repoTarget) {
+                  const registry = readRegistry()
+                  const updated = registry.filter(r => r.name !== repoTarget)
+                  writeRegistry(updated)
+                  reloadRepos()
+                  setRepoRemoveTarget(null)
+                  setView({ view: "list" })
+                  clampCursor()
+                  return
+                }
+                if (v.action === "sync") {
+                  const entry = filteredEntries()[v.index]
+                  if (entry) executeSync(entry.workspace.name)
+                } else {
+                  executeConfirmed(v.action, v.index, v.batch)
+                }
+              }}
+              onCancel={() => { setRepoRemoveTarget(null); setView({ view: "list" }) }}
+            />
+          )
+        })()}
+      </Show>
+
+      {/* Inline input — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "inline-input"}>
+        <InlineInput
+          label={inlineInputLabel()}
+          prefill={(view() as any).prefill ?? ""}
+          onConfirm={handleInlineInputConfirm}
+          onCancel={handleInlineInputCancel}
+        />
+      </Show>
+
+      {/* Repo remove blocked — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "repo-remove-blocked"}>
+        {(() => {
+          const v = view() as { view: "repo-remove-blocked"; repoName: string }
+          const refTemplates = templateEntries().filter(t => t.repos.some(r => r.repo === v.repoName))
+          const refWorkspaces = allWorkspaces().filter(ws => ws.repos.some(r => r.repo === v.repoName))
+          return (
+            <RemoveBlockedView
+              repoName={v.repoName}
+              refTemplates={refTemplates.map(t => ({ name: t.name }))}
+              refWorkspaces={refWorkspaces.map(ws => ({ name: ws.name }))}
+              onBack={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view !== "action-menu" && view().view !== "repo-action-menu" && view().view !== "confirm" && view().view !== "inline-input" && view().view !== "repo-remove-blocked"}>
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
           <Switch>
@@ -1141,58 +1212,6 @@ export default function App() {
             </Switch>
           </Show>
 
-
-          {/* Confirm dialog */}
-          <Show when={view().view === "confirm"}>
-            {(() => {
-              const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
-              const repoTarget = repoRemoveTarget()
-              const label = repoTarget
-                ? `Remove repo "${repoTarget}" (${filteredRepos()[v.index]?.local_path})?`
-                : confirmContext() === "template"
-                ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
-                : v.action === "sync"
-                ? `Sync '${filteredEntries()[v.index]?.workspace.name}'? (rebase from upstream)`
-                : v.batch
-                ? `${v.action} ${selected().size} workspace(s)?`
-                : `${v.action} '${filteredEntries()[v.index]?.workspace.name}'?`
-              return (
-                <ConfirmDialog
-                  message={label}
-                  onConfirm={() => {
-                    const repoTarget = repoRemoveTarget()
-                    if (repoTarget) {
-                      const registry = readRegistry()
-                      const updated = registry.filter(r => r.name !== repoTarget)
-                      writeRegistry(updated)
-                      reloadRepos()
-                      setRepoRemoveTarget(null)
-                      setView({ view: "list" })
-                      clampCursor()
-                      return
-                    }
-                    if (v.action === "sync") {
-                      const entry = filteredEntries()[v.index]
-                      if (entry) executeSync(entry.workspace.name)
-                    } else {
-                      executeConfirmed(v.action, v.index, v.batch)
-                    }
-                  }}
-                  onCancel={() => { setRepoRemoveTarget(null); setView({ view: "list" }) }}
-                />
-              )
-            })()}
-          </Show>
-
-          {/* Inline input */}
-          <Show when={view().view === "inline-input"}>
-            <InlineInput
-              label={inlineInputLabel()}
-              prefill={(view() as any).prefill ?? ""}
-              onConfirm={handleInlineInputConfirm}
-              onCancel={handleInlineInputCancel}
-            />
-          </Show>
 
           {/* Progress view */}
           <Show when={view().view === "progress"}>
@@ -1260,23 +1279,6 @@ export default function App() {
             })()}
           </Show>
 
-
-          {/* Repo remove blocked */}
-          <Show when={view().view === "repo-remove-blocked"}>
-            {(() => {
-              const v = view() as { view: "repo-remove-blocked"; repoName: string }
-              const refTemplates = templateEntries().filter(t => t.repos.some(r => r.repo === v.repoName))
-              const refWorkspaces = allWorkspaces().filter(ws => ws.repos.some(r => r.repo === v.repoName))
-              return (
-                <RemoveBlockedView
-                  repoName={v.repoName}
-                  refTemplates={refTemplates.map(t => ({ name: t.name }))}
-                  refWorkspaces={refWorkspaces.map(ws => ({ name: ws.name }))}
-                  onBack={() => setView({ view: "list" })}
-                />
-              )
-            })()}
-          </Show>
 
           {/* Create progress view */}
           <Show when={view().view === "create-progress"}>
