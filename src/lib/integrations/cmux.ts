@@ -28,6 +28,7 @@ export const cmuxIntegration: Integration = {
   label: "cmux",
   hint: "creates/focuses a cmux workspace",
   enabledByDefault: true,
+  order: 20,
 
   isEnabled: (ctx) => resolveEnabled("cmux", true, ctx),
 

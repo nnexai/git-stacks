@@ -36,6 +36,14 @@ export interface Integration {
   /** Used when no explicit config entry exists for this integration */
   enabledByDefault: boolean
 
+  /**
+   * Numeric execution priority. Runner sorts ascending before iteration.
+   *   tier 1 (10-19): independent setup (vscode, intellij, tmux)
+   *   tier 2 (20-29): partial side-effects (cmux)
+   *   tier 3 (30-39): window management (niri, future)
+   */
+  order: number
+
   /** Return false to skip this integration for a given workspace (e.g. IntelliJ on non-Java repos) */
   applies?(workspace: Workspace): boolean
 

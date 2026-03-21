@@ -33,6 +33,7 @@ const fakeIntegrations = [
     label: "VSCode",
     hint: "Open in VSCode",
     enabledByDefault: true,
+    order: 10,
     configurePrompt: mockConfigurePrompt,
   },
   {
@@ -40,6 +41,7 @@ const fakeIntegrations = [
     label: "tmux",
     hint: "Open in tmux",
     enabledByDefault: false,
+    order: 12,
     configurePrompt: mock(async (current: Record<string, unknown>) => ({
       ...current,
       enabled: true,

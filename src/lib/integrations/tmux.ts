@@ -26,6 +26,7 @@ export const tmuxIntegration: Integration = {
   label: "tmux",
   hint: "creates/focuses a tmux session",
   enabledByDefault: false,
+  order: 12,
 
   isEnabled: (ctx) => resolveEnabled("tmux", false, ctx),
 

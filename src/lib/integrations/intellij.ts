@@ -8,6 +8,7 @@ export const intellijIntegration: Integration = {
   label: "IntelliJ",
   hint: "opens .idea project for Java repos",
   enabledByDefault: true,
+  order: 11,
 
   applies: (workspace: Workspace) => workspace.repos.some((r) => r.type === "java"),
 

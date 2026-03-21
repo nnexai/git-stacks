@@ -19,6 +19,7 @@ export const vscodeIntegration: Integration = {
   label: "VSCode",
   hint: "opens .code-workspace on git-stacks open",
   enabledByDefault: true,
+  order: 10,
 
   isEnabled: (ctx) => resolveEnabled("vscode", true, ctx),
 
