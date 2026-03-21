@@ -674,13 +674,21 @@ export type SyncResult = {
   error?: string
 }
 
+export type SyncRow = {
+  repo: string
+  status: "pending" | "fetching" | "rebasing" | "synced" | "skipped" | "failed"
+  detail: string
+  conflicts: string[]
+}
+
 export async function syncWorkspace(
   name: string,
   opts: {
     strategy?: "rebase" | "merge"
     bestEffort?: boolean
   },
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  onSyncProgress?: (update: SyncRow) => void
 ): Promise<SyncResult> {
   if (!workspaceExists(name)) {
     return { ok: false, synced: [], skipped: [], error: `Workspace '${name}' not found.` }
@@ -699,12 +707,23 @@ export async function syncWorkspace(
     return { repo, baseBranch, strategy: opts.strategy ?? "rebase" }
   })
 
-  // Fetch all repos in parallel
+  // Fetch all repos in parallel — track failures instead of swallowing them
   onProgress?.("Fetching from origin...")
+  const fetchFailures = new Map<string, string>()
   await Promise.all(
     repoInfos
       .filter(({ repo }) => existsSync(repo.task_path))
-      .map(({ repo }) => fetchOrigin(repo.task_path).catch(() => {}))
+      .map(async ({ repo }) => {
+        onSyncProgress?.({ repo: repo.name, status: "fetching", detail: "", conflicts: [] })
+        try {
+          await fetchOrigin(repo.task_path)
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "fetch failed"
+          const detail = msg.includes("timeout") ? "fetch failed (timeout)" : "fetch failed"
+          fetchFailures.set(repo.name, detail)
+          onSyncProgress?.({ repo: repo.name, status: "failed", detail, conflicts: [] })
+        }
+      })
   )
 
   // Dry-run conflict check in parallel
@@ -741,14 +760,23 @@ export async function syncWorkspace(
       continue
     }
 
+    if (fetchFailures.has(repo.name)) {
+      skipped.push({ repo: repo.name, reason: fetchFailures.get(repo.name)! })
+      onProgress?.(`failed  ${repo.name}  ${fetchFailures.get(repo.name)}`)
+      continue
+    }
+
     if (conflictRepos.has(repo.name)) {
       const c = conflicts.find(c => c.repo === repo.name)!
       skipped.push({ repo: repo.name, reason: `conflict in ${c.files.join(", ")}` })
       onProgress?.(`skipped  ${repo.name}  conflict in ${c.files.join(", ")}`)
+      onSyncProgress?.({ repo: repo.name, status: "skipped", detail: `conflict: ${c.files[0]}`, conflicts: c.files.slice(1) })
       continue
     }
 
     const commitsBefore = await getCommitsBehind(repo.task_path, `origin/${baseBranch}`, "HEAD")
+
+    onSyncProgress?.({ repo: repo.name, status: "rebasing", detail: "", conflicts: [] })
 
     let result: { ok: boolean; error?: string }
     if (strategy === "merge") {
@@ -760,11 +788,13 @@ export async function syncWorkspace(
     if (!result.ok) {
       skipped.push({ repo: repo.name, reason: result.error ?? "sync failed" })
       onProgress?.(`failed  ${repo.name}  ${result.error}`)
+      onSyncProgress?.({ repo: repo.name, status: "failed", detail: result.error ?? "sync failed", conflicts: [] })
       continue
     }
 
     synced.push({ repo: repo.name, commits: commitsBefore })
     onProgress?.(`synced  ${repo.name}  ${baseBranch} → ${workspace.branch}  (+${commitsBefore} commits)`)
+    onSyncProgress?.({ repo: repo.name, status: "synced", detail: `+${commitsBefore} commits`, conflicts: [] })
   }
 
   return { ok: skipped.length === 0 || opts.bestEffort === true, synced, skipped }
