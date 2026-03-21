@@ -165,14 +165,18 @@ export default function App() {
     return name ? ` ${name} ` : ""
   })
 
-  // Context-sensitive help bar text
+  // Context-sensitive help bar text (width-tiered to fit 80-column terminals)
   const helpBarText = createMemo(() => {
+    const w = dims().width
     const t = tab()
-    if (t === "workspaces")
-      return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  m Messages  / Filter  r Refresh  ? Help  q Quit"
-    if (t === "templates")
-      return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  / Filter  r Refresh  ? Help  q Quit"
-    return "1/2/3 Tabs  \u2191\u2193/jk Navigate  Enter Actions  Space Select  / Filter  r Refresh  ? Help  q Quit"
+    const msgShortcut = t === "workspaces" ? "  m Messages" : ""
+
+    if (w < 50) return "? Help  q Quit"
+    const core = `Enter Actions  Space Select  / Filter${msgShortcut}  ? Help  q Quit`
+    if (w < 65) return core
+    if (w < 80) return `r Refresh  ${core}`
+    if (w < 100) return `1/2/3 Tabs  r Refresh  ${core}`
+    return `\u2191\u2193/jk Navigate  1/2/3 Tabs  r Refresh  ${core}`
   })
 
   const inlineInputLabel = createMemo(() => {

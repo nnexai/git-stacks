@@ -62,7 +62,7 @@ export function WorkspaceRow(props: Props) {
       <text fg="gray">
         {` ${wtCount()}wt ${trCount()}tr`}
         {dirtyCount() > 0 ? ` ~${dirtyCount()}` : ""}
-        {messagePreview() ? `  ${messagePreview()!.truncated}` : `  ${ws().created}`}
+        {messagePreview() ? `  ${messagePreview()!.truncated}` : `  ${formatAge(ws().created)}`}
       </text>
       <text fg={messagePreview() ? "yellow" : "gray"}>
         {messagePreview() ? `  ${messagePreview()!.age}` : ""}
