@@ -299,7 +299,6 @@ describe("fetchOrigin", () => {
   test("succeeds on a repo with a local origin remote", async () => {
     // Set up a local 'origin' so fetchOrigin has something to fetch from
     const originPath = makeGitRepo(tmp, "origin-repo")
-    const { execSync } = await import("child_process")
     execSync(`git -C ${repoPath} remote add origin ${originPath}`, { stdio: "pipe" })
     // fetchOrigin should succeed without throwing
     await expect(fetchOrigin(repoPath)).resolves.toBeUndefined()
