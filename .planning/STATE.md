@@ -4,7 +4,7 @@ milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
 stopped_at: Completed 15.2-02-PLAN.md
-last_updated: "2026-03-21T18:47:03.824Z"
+last_updated: "2026-03-21T19:02:06.240Z"
 progress:
   total_phases: 8
   completed_phases: 8

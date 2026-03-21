@@ -8,17 +8,7 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.4.0 TUI Hardening & Polish
-
-**Goal:** Make the TUI fully self-sufficient — e2e tested, visually polished, and capable of all operations currently requiring the CLI.
-
-**Target features:**
-- E2E test infrastructure for the TUI dashboard (automated validation replaces slow manual testing)
-- TUI screen improvements: info density, screen space usage, layout polish
-- Create workspace (new/clone) from within TUI
-- Repo management in TUI: add, scan, remove (registry is currently browse-only)
-- Template creation from within TUI (edit/clone/remove exist, create does not)
-- Workspace sync action in TUI action menu
+## Current Milestone: (none — planning next)
 
 ## Current State — v0.4.0 milestone complete (2026-03-21)
 
@@ -32,6 +22,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Unified selection display** — `>[x]` checkbox prefix across all three dashboard tabs
 - **InlineInput** — cursor-positioned editing via built-in `<input>` wrapper replacing hand-rolled keyboard accumulation
 - **TUI-safe hooks** — `runHooksCaptured()` with callback streaming prevents OpenTUI screen corruption
+- **CenteredDialog architecture** — all 11 dialog types rendered as dimmed overlays at App root level with consistent cursor navigation and three size variants (small/medium/large)
+- **Integration override cascade** — per-template and per-workspace integration settings via `promptIntegrationOverrides()` helper; TUI detail panes show resolved enabled state with source annotations ([global], [template], [workspace], [skipped])
+- **`git-stacks edit`** — post-creation workspace integration override editing
 
 ### What shipped in v0.3.0
 
@@ -69,6 +62,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Width-tiered help bar fitting within 80 columns — v0.4.0 Phase 15
 - ✓ Relative workspace ages in list view (`3d`, `2h`, `5m`) — v0.4.0 Phase 15
 - ✓ Responsive column widths across all list views — v0.4.0 Phase 15
+- ✓ CenteredDialog overlay architecture with three size variants — v0.4.0 Phase 15.1
+- ✓ Unified cursor navigation in all action menus (arrow keys + Enter) — v0.4.0 Phase 15.1
+- ✓ Per-template integration overrides via CLI wizard (new + edit) — v0.4.0 Phase 15.2
+- ✓ Per-workspace integration overrides via CLI wizard (new + clone + edit) — v0.4.0 Phase 15.2
+- ✓ TUI detail pane integration cascade display with source annotations — v0.4.0 Phase 15.2
 - ✓ Repo Registry as source of truth for repo paths — v0.2.0
 - ✓ Templates as reusable workspace recipes — v0.2.0
 - ✓ Workspace YAML self-contained at creation — v0.2.0
@@ -107,15 +105,16 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Next Milestone Goals
 
-After v0.3.0 — candidates for v0.4.0:
+After v0.4.0 — candidates for v0.5.0:
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type; version gate for v1.0
 - **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, per-repo ahead/behind in status
 - **Agent-aware** — batch workspace generation (`new --count N`), agent status file protocol, Windows IPC fallback
+- **TUI completeness** — R-02 (add repo from TUI), R-03 (scan repos from TUI), T-03 cursor movement tests
 
 ## Versioning
 
-**Current release:** `v0.3.0`
+**Current release:** `v0.4.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -145,6 +144,9 @@ After v0.3.0 — candidates for v0.4.0:
 | Height-based tab visibility over Switch/Match | OpenTUI renderer does not repaint when SolidJS swaps conditional DOM branches | ✓ Good |
 | Built-in `<input>` for all text fields | Gains cursor movement, selection, undo/redo; replaces hand-rolled `useKeyboard` + `_` cursor | ✓ Established pattern |
 | Input keyboard isolation: guard + deferred focus | `useKeyboard` is global broadcast — input-mode guard must be ABOVE navigation; defer focus via setTimeout(0) to prevent trigger key leak | ✓ Established pattern |
+| CenteredDialog overlay architecture | All dialogs render at App root with dimmed background; three size variants (small/medium/large) | ✓ Established pattern |
+| Integration override cascade (global → template → workspace) | Reusable `promptIntegrationOverrides()` helper; conditional YAML storage (no key when user declines) | ✓ Good |
+| Query-parameter cache-busting for bun mock.module | `import("@/path?unit-test")` bypasses stale mock.module cache from cross-file contamination | ✓ Workaround for bun limitation |
 
 ## Out of Scope
 
@@ -176,4 +178,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-21 — Phase 15 (integration-tests-and-screen-polish) complete; v0.4.0 milestone done*
+*Last updated: 2026-03-21 after v0.4.0 milestone — TUI Hardening & Polish shipped*
