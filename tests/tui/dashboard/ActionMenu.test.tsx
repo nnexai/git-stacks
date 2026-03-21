@@ -22,6 +22,7 @@ describe("ActionMenu", () => {
     expect(frame).toContain("Clean")
     expect(frame).toContain("Remove")
     expect(frame).toContain("Merge")
+    expect(frame).toContain("Sync")
   })
 
   test("shows cursor indicator on first item initially", async () => {
@@ -126,5 +127,17 @@ describe("ActionMenu", () => {
     mockInput.pressKey("o")
     await renderOnce()
     expect(received).toBe("open")
+  })
+
+  test("s key dispatches sync action", async () => {
+    let dispatched = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => <ActionMenu workspaceName="ws" onAction={(a) => { dispatched = a }} onCancel={() => {}} />,
+      renderOpts
+    )
+    await renderOnce()
+    mockInput.pressKey("s")
+    await renderOnce()
+    expect(dispatched).toBe("sync")
   })
 })

@@ -17,6 +17,7 @@ const actions: { key: string; action: Action; label: string }[] = [
   { key: "c", action: "clean", label: "Clean" },
   { key: "r", action: "remove", label: "Remove" },
   { key: "m", action: "merge", label: "Merge" },
+  { key: "s", action: "sync", label: "Sync" },
 ]
 
 export function ActionMenu(props: Props) {

@@ -21,12 +21,13 @@ export type WorkspaceEntry = {
 
 export type Tab = "workspaces" | "templates" | "repos"
 
-export type Action = "open" | "edit" | "rename" | "clean" | "remove" | "merge"
+export type Action = "open" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync"
 
 export type UIView =
   | { view: "list" }
   | { view: "action-menu"; index: number }
   | { view: "confirm"; index: number; action: Action; batch?: boolean }
   | { view: "progress"; message: string }
+  | { view: "sync-progress"; message: string }
   | { view: "inline-input"; index: number; purpose: "rename" | "clone-template"; prefill: string }
   | { view: "messages"; workspaceName: string }
