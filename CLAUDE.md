@@ -74,6 +74,13 @@ tests/
 - Per-workspace overrides: add `settings.integrations.<id>.enabled: false` to the workspace YAML.
 - IntelliJ integration's `applies()` returns false when no Java repos are present — it is skipped entirely rather than generating empty artifacts.
 
+### Dashboard TUI input rules
+
+- **Use OpenTUI built-in `<input>` for ALL text fields** in the dashboard — never hand-roll `useKeyboard` character accumulation. The built-in input provides cursor movement, selection, undo/redo, and blinking cursor for free.
+- **Keyboard isolation**: `useKeyboard` is a global broadcast — ALL handlers see ALL keys. When a focused `<input>` is active, place the input-mode guard (`if (filtering()) return` / `if (v.view === "inline-input") return`) **above** all navigation handlers (tab switching, cursor movement, action triggers) in the main `useKeyboard` callback.
+- **Deferred focus**: When a keypress activates a new `<input>` (e.g., `/` opens filter), mount with `focused={false}` and `setTimeout(() => setFocused(true), 0)` — otherwise the triggering keypress leaks into the input as the first character.
+- **`runHooksCaptured()`** must be used instead of `runHooks()` when executing hooks from within the TUI — `runHooks` uses `stdio: "inherit"` which corrupts the OpenTUI screen.
+
 ### Hooks system
 
 Templates and workspaces define hook arrays (shell commands executed in order by `runHooks()` in `lifecycle.ts`):

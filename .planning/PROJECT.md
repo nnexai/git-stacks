@@ -122,6 +122,8 @@ After v0.3.0 — candidates for v0.4.0:
 | OPTION_ENUMS static table (not Commander `.choices()`) | Avoids unintended runtime validation side-effects in completion generator | ✓ Good |
 | No nested `<text>` in OpenTUI | TextRenderable.add() rejects TextRenderable children — use `<box flexDirection="row">` with sibling `<text>` | ✓ Established pattern |
 | Height-based tab visibility over Switch/Match | OpenTUI renderer does not repaint when SolidJS swaps conditional DOM branches | ✓ Good |
+| Built-in `<input>` for all text fields | Gains cursor movement, selection, undo/redo; replaces hand-rolled `useKeyboard` + `_` cursor | ✓ Established pattern |
+| Input keyboard isolation: guard + deferred focus | `useKeyboard` is global broadcast — input-mode guard must be ABOVE navigation; defer focus via setTimeout(0) to prevent trigger key leak | ✓ Established pattern |
 
 ## Out of Scope
 
