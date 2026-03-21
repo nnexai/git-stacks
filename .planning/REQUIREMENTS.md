@@ -77,39 +77,39 @@ Deferred to v0.7.0+.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORCH-01 | — | Pending |
-| ORCH-02 | — | Pending |
-| ORCH-03 | — | Pending |
-| ORCH-04 | — | Pending |
-| ORCH-05 | — | Pending |
-| ORCH-06 | — | Pending |
-| ORCH-07 | — | Pending |
-| ART-01 | — | Pending |
-| ART-02 | — | Pending |
-| ART-03 | — | Pending |
-| ART-04 | — | Pending |
-| ART-05 | — | Pending |
-| ART-06 | — | Pending |
-| NIRI-01 | — | Pending |
-| NIRI-02 | — | Pending |
-| NIRI-03 | — | Pending |
-| NIRI-04 | — | Pending |
-| NIRI-05 | — | Pending |
-| NIRI-06 | — | Pending |
-| NIRI-07 | — | Pending |
-| NIRI-08 | — | Pending |
-| NIRI-09 | — | Pending |
-| NIRI-10 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| TEST-04 | — | Pending |
+| ORCH-01 | Phase 16 | Pending |
+| ORCH-02 | Phase 16 | Pending |
+| ART-05 | Phase 16 | Pending |
+| ART-06 | Phase 16 | Pending |
+| TEST-03 | Phase 16 | Pending |
+| ORCH-03 | Phase 17 | Pending |
+| ORCH-04 | Phase 17 | Pending |
+| ORCH-05 | Phase 17 | Pending |
+| ORCH-06 | Phase 17 | Pending |
+| ORCH-07 | Phase 17 | Pending |
+| TEST-02 | Phase 17 | Pending |
+| ART-01 | Phase 18 | Pending |
+| ART-02 | Phase 18 | Pending |
+| ART-03 | Phase 18 | Pending |
+| ART-04 | Phase 18 | Pending |
+| NIRI-06 | Phase 19 | Pending |
+| NIRI-07 | Phase 19 | Pending |
+| NIRI-10 | Phase 19 | Pending |
+| TEST-01 | Phase 19 | Pending |
+| NIRI-01 | Phase 20 | Pending |
+| NIRI-02 | Phase 20 | Pending |
+| NIRI-03 | Phase 20 | Pending |
+| NIRI-04 | Phase 20 | Pending |
+| NIRI-05 | Phase 20 | Pending |
+| NIRI-08 | Phase 20 | Pending |
+| NIRI-09 | Phase 20 | Pending |
+| TEST-04 | Phase 20 | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
-- Mapped to phases: 0
-- Unmapped: 27
+- Mapped to phases: 27
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after initial definition*
+*Last updated: 2026-03-21 after roadmap creation — all 27 requirements mapped to phases 16-20*
