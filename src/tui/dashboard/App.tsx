@@ -18,7 +18,6 @@ import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
 import { InlineInput } from "./InlineInput"
-import { FilterIndicator } from "./FilterIndicator"
 import { HelpOverlay } from "./HelpOverlay"
 import { MessageOverlay } from "./MessageOverlay"
 import { TemplateActionMenu } from "./TemplateActionMenu"
@@ -678,22 +677,22 @@ export default function App() {
           </Show>
         </box>
 
-        {/* HELP BAR / FILTER LINE — height-based visibility avoids Show repaint issues */}
-        <box height={filtering() ? 1 : 0} flexDirection="row">
-          <FilterIndicator
-            filtering={true}
-            filterFocused={filterFocused()}
-            filter={filter()}
-            onInput={(v) => { setFilter(v); clampCursor() }}
+        {/* HELP BAR / FILTER LINE — single box, no DOM swapping, no height toggling */}
+        <box height={1} flexDirection="row">
+          <text fg="cyan">{filtering() ? "  filter: " : ""}</text>
+          <input
+            focused={filterFocused()}
+            value={filter()}
+            flexGrow={filtering() ? 1 : 0}
+            width={filtering() ? undefined : 0}
+            onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
           />
-        </box>
-        <box height={filtering() ? 0 : 1} flexDirection="row">
-          <text fg={filter() ? "cyan" : refreshFlash() ? "green" : "gray"}>
-            {filter() ? `  filter: "${filter()}" ` : refreshFlash() ? `  ${refreshFlash()}` : loading() ? "  (loading statuses...)" : helpBarText()}
+          <text fg={!filtering() && filter() ? "cyan" : !filtering() && refreshFlash() ? "green" : "gray"}>
+            {filtering() ? "" : filter() ? `  filter: "${filter()}" ` : refreshFlash() ? `  ${refreshFlash()}` : loading() ? "  (loading statuses...)" : helpBarText()}
           </text>
-          <text fg="gray">{filter() && !filtering() ? "/ edit · esc clear" : ""}</text>
-          <box flexGrow={1} />
-          <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>{socketStatus === "bound" ? "\u25cf" : "\u25cb"} </text>
+          <text fg="gray">{!filtering() && filter() ? "/ edit · esc clear" : ""}</text>
+          <box flexGrow={filtering() ? 0 : 1} />
+          <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>{filtering() ? "" : socketStatus === "bound" ? "\u25cf" : "\u25cb"}{" "}</text>
         </box>
       </Show>
     </box>
