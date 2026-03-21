@@ -61,7 +61,7 @@ function findMissingWorktrees(workspaces: Workspace[]): Issue[] {
           icon: "fail",
           entity: ws.name,
           message: `task_path missing: ${repo.task_path}`,
-          fix: `ws open ${ws.name}`,
+          fix: `git-stacks open ${ws.name}`,
         })
       }
     }
@@ -79,7 +79,7 @@ function findMissingMainClones(workspaces: Workspace[]): Issue[] {
           icon: "fail",
           entity: ws.name,
           message: `main_path missing: ${repo.main_path}`,
-          fix: `ws repo show ${repo.repo}`,
+          fix: `git-stacks repo show ${repo.repo}`,
         })
       }
     }
@@ -98,7 +98,7 @@ async function findStaleCmuxRefs(workspaces: Workspace[]): Promise<Issue[]> {
         issues.push({
           icon: "warn",
           entity: ws.name,
-          message: `cmux_workspace_id stale (session not found) \u2014 will reset on next ws open`,
+          message: `cmux_workspace_id stale (session not found) \u2014 will reset on next git-stacks open`,
         })
       }
     } catch {
@@ -141,7 +141,7 @@ function findDeadRegistryPaths(registry: RepoRegistryEntry[]): Issue[] {
         icon: "fail",
         entity: entry.name,
         message: `local_path not found: ${entry.local_path}`,
-        fix: `ws repo remove ${entry.name}`,
+        fix: `git-stacks repo remove ${entry.name}`,
       })
     }
   }

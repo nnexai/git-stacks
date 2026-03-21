@@ -64,7 +64,7 @@ export function registerWorkspaceCommands(program: Command) {
     .action(async (name: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean }) => {
       if (opts.recreate) {
         if (!workspaceExists(name)) {
-          console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
+          console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
           process.exit(1)
         }
 
@@ -75,7 +75,7 @@ export function registerWorkspaceCommands(program: Command) {
         }
 
         if (!templateExists(ws.template)) {
-          console.error(formatError(`Template '${ws.template}' not found`, "run: ws template list"))
+          console.error(formatError(`Template '${ws.template}' not found`, "run: git-stacks template list"))
           process.exit(1)
         }
 
@@ -165,7 +165,7 @@ export function registerWorkspaceCommands(program: Command) {
     .action(async (opts: { sort: string; json?: boolean; status?: boolean }) => {
       const workspaces = listWorkspaces()
       if (workspaces.length === 0) {
-        console.log("No workspaces. Run `ws new` to create one.")
+        console.log("No workspaces. Run `git-stacks new` to create one.")
         return
       }
 
@@ -258,7 +258,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (name: string | undefined, opts: { gone?: boolean; force?: boolean; dryRun?: boolean }) => {
       if (opts.gone) {
-        // --- ws clean --gone ---
+        // --- git-stacks clean --gone ---
         const config = readGlobalConfig()
         const tasksDir = getTasksDir(config.workspace_root)
         const allWorkspaces = listWorkspaces()
@@ -329,9 +329,9 @@ export function registerWorkspaceCommands(program: Command) {
         return
       }
 
-      // --- ws clean <name> ---
+      // --- git-stacks clean <name> ---
       if (!name) {
-        console.error(formatError("Missing workspace name", "usage: ws clean <name> [--gone]"))
+        console.error(formatError("Missing workspace name", "usage: git-stacks clean <name> [--gone]"))
         process.exit(1)
       }
 
@@ -352,7 +352,7 @@ export function registerWorkspaceCommands(program: Command) {
         process.exit(1)
       }
 
-      console.log(`\nDone. Run \`ws open ${name}\` to recreate worktrees.`)
+      console.log(`\nDone. Run \`git-stacks open ${name}\` to recreate worktrees.`)
     })
 
   program
@@ -362,7 +362,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
       if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
+        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
 
@@ -389,7 +389,7 @@ export function registerWorkspaceCommands(program: Command) {
     .description("Print path to a workspace (or repo within it) — use via shell function")
     .action((name: string, repo?: string) => {
       if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
+        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
       const config = readGlobalConfig()
@@ -415,7 +415,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
       if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
+        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
 
@@ -446,7 +446,7 @@ export function registerWorkspaceCommands(program: Command) {
     .passThroughOptions()
     .action(async (name: string, repo: string | undefined, opts: { allRepos?: boolean; parallel?: boolean; json?: boolean }) => {
       if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: ws list"))
+        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
 
@@ -656,7 +656,7 @@ export function registerWorkspaceCommands(program: Command) {
         }
 
         if (!name) {
-          console.error(formatError("Missing workspace name", "usage: ws sync <name> [--all] [--json]"))
+          console.error(formatError("Missing workspace name", "usage: git-stacks sync <name> [--all] [--json]"))
           process.exit(1)
         }
 
@@ -707,7 +707,7 @@ export function registerWorkspaceCommands(program: Command) {
       }
 
       if (!name) {
-        console.error(formatError("Missing workspace name", "usage: ws sync <name> [--all]"))
+        console.error(formatError("Missing workspace name", "usage: git-stacks sync <name> [--all]"))
         process.exit(1)
       }
 
@@ -715,7 +715,7 @@ export function registerWorkspaceCommands(program: Command) {
       if (!result.ok) {
         if (result.error) console.error(formatError(result.error))
         if (result.skipped.length > 0) {
-          console.log(`\nTip: use \`ws run ${name} <repo> -- lazygit\` to resolve conflicts`)
+          console.log(`\nTip: use \`git-stacks run ${name} <repo> -- lazygit\` to resolve conflicts`)
         }
         process.exit(1)
       }

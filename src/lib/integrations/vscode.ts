@@ -17,7 +17,7 @@ function getConfig(ctx: IntegrationContext) {
 export const vscodeIntegration: Integration = {
   id: "vscode",
   label: "VSCode",
-  hint: "opens .code-workspace on ws open",
+  hint: "opens .code-workspace on git-stacks open",
   enabledByDefault: true,
 
   isEnabled: (ctx) => resolveEnabled("vscode", true, ctx),

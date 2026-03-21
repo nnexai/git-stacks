@@ -22,7 +22,7 @@ export interface Integration {
   isEnabled(ctx: IntegrationContext): boolean
 
   /**
-   * Interactive config prompts run by `ws config`.
+   * Interactive config prompts run by `git-stacks config`.
    * Receives the current raw config object for this integration (may be `{}`).
    * Returns the updated config object, or null if the user cancelled.
    */

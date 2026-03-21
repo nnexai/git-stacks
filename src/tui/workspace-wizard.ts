@@ -183,7 +183,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
     const registry = readRegistry()
 
     if (registry.length === 0 && templates.length === 0) {
-      p.cancel("No repos registered and no templates. Run `ws repo add <path>` first.")
+      p.cancel("No repos registered and no templates. Run `git-stacks repo add <path>` first.")
       process.exit(1)
     }
 
@@ -223,7 +223,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
     } else {
       // Ad-hoc: pick repos from registry
       if (registry.length === 0) {
-        p.cancel("No repos registered. Run `ws repo add <path>` first.")
+        p.cancel("No repos registered. Run `git-stacks repo add <path>` first.")
         process.exit(1)
       }
       const selectedNames = await pickReposFromRegistry(registry, "Select repos")
@@ -442,5 +442,5 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
     }
   }
 
-  p.outro(`Workspace '${wsName}' ready.  Run \`ws open ${wsName}\` to re-open.`)
+  p.outro(`Workspace '${wsName}' ready.  Run \`git-stacks open ${wsName}\` to re-open.`)
 }

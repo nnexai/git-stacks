@@ -21,7 +21,7 @@ export async function runWorkspaceClone(sourceArg?: string) {
 
   const workspaces = listWorkspaces()
   if (workspaces.length === 0) {
-    p.cancel("No workspaces to clone. Run `ws new` first.")
+    p.cancel("No workspaces to clone. Run `git-stacks new` first.")
     process.exit(1)
   }
 
@@ -119,5 +119,5 @@ export async function runWorkspaceClone(sourceArg?: string) {
     }
   }
 
-  p.outro(`Workspace '${newName}' ready.  Run \`ws open ${newName}\` to re-open.`)
+  p.outro(`Workspace '${newName}' ready.  Run \`git-stacks open ${newName}\` to re-open.`)
 }

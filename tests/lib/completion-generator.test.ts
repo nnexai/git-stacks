@@ -4,7 +4,7 @@ import { generateBash, generateZsh, generateFish } from "../../src/lib/completio
 
 function buildTestProgram(): Command {
   const program = new Command()
-  program.name("ws").description("Test workspace manager")
+  program.name("git-stacks").description("Test workspace manager")
 
   program
     .command("open <name>")
@@ -97,7 +97,7 @@ describe("generateBash", () => {
   test("workspace dynamic lookup for clone (no flags)", () => {
     const out = generateBash(buildTestProgram())
     expect(out).toContain("    clone)")
-    expect(out).toContain(".config/ws/workspaces")
+    expect(out).toContain(".config/git-stacks/workspaces")
   })
 
   test("flag split for open (has flags + workspace)", () => {
@@ -106,7 +106,7 @@ describe("generateBash", () => {
     expect(out).toContain("$cur\" == -*")
     expect(out).toContain("--no-ide")
     expect(out).toContain("--no-cmux")
-    expect(out).toContain(".config/ws/workspaces")
+    expect(out).toContain(".config/git-stacks/workspaces")
   })
 
   test("flag split for clean includes --gone and --force", () => {
@@ -122,14 +122,14 @@ describe("generateBash", () => {
     expect(out).toContain("COMP_CWORD} -eq 2")
     expect(out).toContain("add list show remove rename")
     expect(out).toContain("@(show|remove|rename)")
-    expect(out).toContain(".config/ws/registry.yml")
+    expect(out).toContain(".config/git-stacks/registry.yml")
   })
 
   test("template subcommands block", () => {
     const out = generateBash(buildTestProgram())
     expect(out).toContain("    template)")
     expect(out).toContain("new list show edit clone rename remove")
-    expect(out).toContain(".config/ws/templates")
+    expect(out).toContain(".config/git-stacks/templates")
   })
 
   test("completion shells", () => {
@@ -159,7 +159,7 @@ describe("generateBash", () => {
 })
 
 describe("generateZsh", () => {
-  test("includes all top-level commands in _ws_top_commands", () => {
+  test("includes all top-level commands in _git_stacks_top_commands", () => {
     const out = generateZsh(buildTestProgram())
     expect(out).toContain("'open:Open a workspace'")
     expect(out).toContain("'clone:Clone a workspace'")
@@ -172,43 +172,43 @@ describe("generateZsh", () => {
     const out = generateZsh(buildTestProgram())
     expect(out).toContain("'--no-ide[Skip opening IDEs]'")
     expect(out).toContain("'--no-cmux[Skip cmux session]'")
-    expect(out).toContain("': :_ws_workspaces'")
+    expect(out).toContain("': :_git_stacks_workspaces'")
   })
 
   test("clean uses optional positional spec", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("':: :_ws_workspaces'")
+    expect(out).toContain("':: :_git_stacks_workspaces'")
   })
 
   test("remove uses required positional spec", () => {
     const out = generateZsh(buildTestProgram())
     expect(out).toContain("'--force[Skip dirty worktree check]'")
-    // remove has required arg, so ': :_ws_workspaces'
-    expect(out).toContain("': :_ws_workspaces'")
+    // remove has required arg, so ': :_git_stacks_workspaces'
+    expect(out).toContain("': :_git_stacks_workspaces'")
   })
 
-  test("clone delegates to _ws_workspaces directly", () => {
+  test("clone delegates to _git_stacks_workspaces directly", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_ws_workspaces")
+    expect(out).toContain("_git_stacks_workspaces")
   })
 
-  test("repo delegates to _ws_repo helper", () => {
+  test("repo delegates to _git_stacks_repo helper", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_ws_repo ;;")
-    expect(out).toContain("_ws_repo()")
+    expect(out).toContain("_git_stacks_repo ;;")
+    expect(out).toContain("_git_stacks_repo()")
     expect(out).toContain("'show:Show repo details'")
     expect(out).toContain("'remove:Remove a repo from the registry'")
     expect(out).toContain("show|remove|rename)")
-    expect(out).toContain("_ws_repos")
+    expect(out).toContain("_git_stacks_repos")
   })
 
-  test("template delegates to _ws_template helper", () => {
+  test("template delegates to _git_stacks_template helper", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_ws_template ;;")
-    expect(out).toContain("_ws_template()")
+    expect(out).toContain("_git_stacks_template ;;")
+    expect(out).toContain("_git_stacks_template()")
     expect(out).toContain("'show:Show template details'")
     expect(out).toContain("'edit:Edit an existing template'")
-    expect(out).toContain("_ws_templates")
+    expect(out).toContain("_git_stacks_templates")
   })
 
   test("completion uses _values 'shell'", () => {
@@ -218,9 +218,9 @@ describe("generateZsh", () => {
 
   test("includes static helpers", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_ws_workspaces()")
-    expect(out).toContain("_ws_repos()")
-    expect(out).toContain("_ws_templates()")
+    expect(out).toContain("_git_stacks_workspaces()")
+    expect(out).toContain("_git_stacks_repos()")
+    expect(out).toContain("_git_stacks_templates()")
   })
 
   test("adding a new command auto-appears in top-level list", () => {
@@ -244,7 +244,7 @@ describe("generateFish", () => {
   test("workspace completions grouped in for loop", () => {
     const out = generateFish(buildTestProgram())
     expect(out).toContain("for cmd in open clone clean remove merge")
-    expect(out).toContain("(__ws_workspaces)")
+    expect(out).toContain("(__git_stacks_workspaces)")
   })
 
   test("flag directives for open use long names without --", () => {
@@ -264,17 +264,17 @@ describe("generateFish", () => {
     expect(out).toContain("__fish_seen_subcommand_from repo")
     expect(out).toContain("-a 'show'")
     expect(out).toContain("-a 'remove'")
-    expect(out).toContain("(__ws_repos)")
+    expect(out).toContain("(__git_stacks_repos)")
   })
 
   test("template subcommand completions", () => {
     const out = generateFish(buildTestProgram())
     expect(out).toContain("__fish_seen_subcommand_from template")
     expect(out).toContain("-a 'edit'")
-    expect(out).toContain("(__ws_templates)")
+    expect(out).toContain("(__git_stacks_templates)")
   })
 
-  test("__ws_no_subcommand includes all top-level names", () => {
+  test("__git_stacks_no_subcommand includes all top-level names", () => {
     const out = generateFish(buildTestProgram())
     expect(out).toContain("not __fish_seen_subcommand_from open clone clean remove merge list repo template completion")
   })
@@ -287,7 +287,7 @@ describe("generateFish", () => {
 
   test("includes shell wrapper", () => {
     const out = generateFish(buildTestProgram())
-    expect(out).toContain("function ws")
+    expect(out).toContain("function git-stacks")
     expect(out).toContain("test \"$argv[1]\" = \"cd\"")
   })
 
@@ -343,19 +343,19 @@ describe("FLAG_COMPLETIONS - --workspace flag value", () => {
   test("bash: --workspace prev-word triggers workspace lookup", () => {
     const out = generateBash(buildTestProgram())
     expect(out).toContain('"--workspace"')
-    expect(out).toContain('.config/ws/workspaces')
+    expect(out).toContain('.config/git-stacks/workspaces')
   })
 
   test("zsh: --workspace flag gets workspace completion", () => {
     const out = generateZsh(buildTestProgram())
     expect(out).toContain("--workspace")
-    expect(out).toContain("_ws_workspaces")
+    expect(out).toContain("_git_stacks_workspaces")
   })
 
   test("fish: --workspace flag gets workspace completion", () => {
     const out = generateFish(buildTestProgram())
     expect(out).toContain("workspace")
-    expect(out).toContain("__ws_workspaces")
+    expect(out).toContain("__git_stacks_workspaces")
   })
 })
 
@@ -368,7 +368,7 @@ describe("message subcommand tree", () => {
 
   test("zsh: message subcommand helper exists", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_ws_message()")
+    expect(out).toContain("_git_stacks_message()")
     expect(out).toContain("'send:Send a notification'")
     expect(out).toContain("'list:List notifications'")
     expect(out).toContain("'clear:Clear notifications'")

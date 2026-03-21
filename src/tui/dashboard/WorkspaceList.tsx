@@ -31,7 +31,7 @@ export function WorkspaceList(props: Props) {
     <box flexDirection="column">
       <Show
         when={props.entries.length > 0}
-        fallback={<text fg="gray">  No workspaces found. Run `ws new` to create one.</text>}
+        fallback={<text fg="gray">  No workspaces found. Run `git-stacks new` to create one.</text>}
       >
         <For each={visibleEntries()}>
           {(entry) => {

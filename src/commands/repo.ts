@@ -62,7 +62,7 @@ repoCommand
   .action(() => {
     const registry = readRegistry()
     if (registry.length === 0) {
-      console.log("No repos registered. Run `ws repo add <path>` or `ws repo scan <dir>` to register.")
+      console.log("No repos registered. Run `git-stacks repo add <path>` or `git-stacks repo scan <dir>` to register.")
       return
     }
     console.log("")

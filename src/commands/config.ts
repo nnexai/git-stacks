@@ -6,9 +6,9 @@ import { safeText, cancel } from "../tui/utils"
 import { integrations, resolveEnabledGlobally } from "../lib/integrations"
 
 export const configCommand = new Command("config")
-  .description("View and edit global ws configuration")
+  .description("View and edit global git-stacks configuration")
   .action(async () => {
-    p.intro("Configure ws")
+    p.intro("Configure git-stacks")
     const config = readGlobalConfig()
 
     const wsRootRaw = await safeText({

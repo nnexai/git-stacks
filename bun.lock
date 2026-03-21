@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "ws",
+      "name": "git-stacks",
       "dependencies": {
         "@clack/prompts": "^0.9.1",
         "@opentui/core": "^0.1.87",

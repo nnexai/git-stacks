@@ -661,7 +661,7 @@ export async function renameWorkspace(
   onProgress?.(`deleted  ${oldName}.yml`)
 
   if (workspace.cmux_workspace_id) {
-    onProgress?.(`⚠ cmux session name is stale — will update on next \`ws open ${newName}\``)
+    onProgress?.(`⚠ cmux session name is stale — will update on next \`git-stacks open ${newName}\``)
   }
 
   return { ok: true }

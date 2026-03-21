@@ -7,8 +7,8 @@ describe("formatError", () => {
   })
 
   test("message + hint format: appends hint on next line with '  -> ' prefix", () => {
-    expect(formatError("Workspace 'foo' not found", "run: ws list")).toBe(
-      "error: Workspace 'foo' not found\n  -> run: ws list"
+    expect(formatError("Workspace 'foo' not found", "run: git-stacks list")).toBe(
+      "error: Workspace 'foo' not found\n  -> run: git-stacks list"
     )
   })
 
