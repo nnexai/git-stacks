@@ -4,7 +4,7 @@ milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
 stopped_at: Completed 16-artifact-type-foundation-16-01-PLAN.md
-last_updated: "2026-03-21T22:31:19.443Z"
+last_updated: "2026-03-21T22:34:49.279Z"
 progress:
   total_phases: 5
   completed_phases: 1
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 
 ## Current Position
 
-Phase: 16 (artifact-type-foundation) — EXECUTING
-Plan: 1 of 1
+Phase: 17
+Plan: Not started
 
 ## Performance Metrics
 
