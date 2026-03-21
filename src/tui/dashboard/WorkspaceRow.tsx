@@ -33,6 +33,23 @@ export function WorkspaceRow(props: Props) {
 
   const dims = useTerminalDimensions()
 
+  const nameWidth = createMemo(() => {
+    const w = dims().width
+    // Fixed: prefix(5) + space(1) + status(2) + space(1) = 9
+    // Fixed right: " Nwt Mtr" ~10 + optional dirty ~4 = ~14
+    const fixed = 9 + 14
+    const remaining = w - fixed
+    const nameMin = 10
+    return Math.min(24, Math.max(nameMin, Math.floor(remaining * 0.3)))
+  })
+
+  const branchWidth = createMemo(() => {
+    const w = dims().width
+    const fixed = 9 + 14
+    const nw = nameWidth()
+    return Math.max(10, w - fixed - nw - 2)
+  })
+
   const messagePreview = createMemo(() => {
     void props.tick  // subscribe to tick for periodic time refresh
     const msgs = props.messages
@@ -40,8 +57,8 @@ export function WorkspaceRow(props: Props) {
     const msg = msgs[0]  // most recent (newest-first from listMessages)
     const age = formatAge(msg.timestamp)
     const senderPrefix = msg.from ? `${msg.from}: ` : ""
-    // Fixed columns: prefix(5) + space(1) + status(2) + space(1) + name(23) + space(1) + branch(33) + wt/tr(~14) = ~80
-    const fixedWidth = 80
+    // Fixed columns adapt to reactive column widths
+    const fixedWidth = nameWidth() + branchWidth() + 23
     const ageWidth = age.length + 2  // "  age" spacing
     const available = Math.max(10, dims().width - fixedWidth - ageWidth)
     const text = senderPrefix + msg.text
@@ -57,8 +74,16 @@ export function WorkspaceRow(props: Props) {
     >
       <text fg={props.focused ? "white" : "gray"}>{prefix()} </text>
       <StatusIndicator status={props.entry.status} />
-      <text fg="white"> {ws().name.padEnd(22)}</text>
-      <text fg="cyan"> {ws().branch.padEnd(32)}</text>
+      <text fg="white"> {(() => {
+        const n = ws().name
+        const nw = nameWidth()
+        return (n.length > nw ? n.slice(0, nw - 1) + "\u2026" : n.padEnd(nw))
+      })()}</text>
+      <text fg="cyan"> {(() => {
+        const b = ws().branch
+        const bw = branchWidth()
+        return (b.length > bw ? b.slice(0, bw - 1) + "\u2026" : b.padEnd(bw))
+      })()}</text>
       <text fg="gray">
         {` ${wtCount()}wt ${trCount()}tr`}
         {dirtyCount() > 0 ? ` ~${dirtyCount()}` : ""}

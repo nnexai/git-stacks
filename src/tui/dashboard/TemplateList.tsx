@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { For, Show, createMemo } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import type { Template } from "../../lib/config"
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 
 export function TemplateList(props: Props) {
   const viewportHeight = createMemo(() => Math.max(3, props.height))
+  const dims = useTerminalDimensions()
 
   const scrollOffset = createMemo(() => {
     const vh = viewportHeight()
@@ -39,10 +41,19 @@ export function TemplateList(props: Props) {
               const focus = focused() ? ">" : " "
               return `${focus}[${sel}]`
             }
+            const nameWidth = () => {
+              // Fixed: prefix(5) + space(1) = 6
+              // Right side: " N repos" ~10 + description variable
+              const fixed = 6 + 12
+              return Math.min(24, Math.max(10, Math.floor((dims().width - fixed) * 0.35)))
+            }
             return (
               <box height={1} flexDirection="row" backgroundColor={focused() ? "#333333" : undefined}>
                 <text fg={focused() ? "white" : "gray"}>{prefix()} </text>
-                <text fg="white">{entry.name.padEnd(22)}</text>
+                <text fg="white">{(() => {
+                  const nw = nameWidth()
+                  return entry.name.length > nw ? entry.name.slice(0, nw - 1) + "\u2026" : entry.name.padEnd(nw)
+                })()}</text>
                 <text fg="cyan">{` ${entry.repos.length} repos`}</text>
                 <text fg="gray">{entry.description ? `  ${entry.description}` : ""}</text>
               </box>
