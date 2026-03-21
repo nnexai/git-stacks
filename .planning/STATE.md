@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.2
-milestone_name: milestone
+milestone: v0.4.0
+milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-03-21T07:20:57.110Z"
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-03-21T08:47:04.201Z"
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 11 — tui-prerequisites — COMPLETE
+**Current focus:** Phase 12 — workspace-sync
 
 ## Current Position
 
-Phase: 11 (tui-prerequisites) — COMPLETE
-Plan: 1 of 1 (done)
+Phase: 12 (workspace-sync) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -48,6 +48,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - `pressEscape()` requires a 50ms setTimeout before asserting callback — the OpenTUI escape-sequence parser waits for more bytes after `\x1B` before emitting the event
 - [Phase 11]: InlineInput test 1 uses onConfirm assertion instead of captureCharFrame — built-in input cursor obscures chars in frame
 - [Phase 11]: onSubmit typed as (v as string) cast — TypeScript intersection of InputProps.onSubmit(string) and TextareaOptions.onSubmit(SubmitEvent)
+- [Phase 12]: SyncRow type exported from SyncProgressView.tsx as canonical location — Plan 03 (App.tsx) imports from here
+- [Phase 12]: Fragment wrapper in For: use <>...</> to wrap row + conflict sub-rows when a For entry has variable sub-rows
 
 ### Pending Todos
 
@@ -59,7 +61,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T07:13:05.674Z
-Stopped at: Completed 11-01-PLAN.md
-Resume file: .planning/phases/11-tui-prerequisites/11-01-SUMMARY.md
+Last session: 2026-03-21T08:47:04.199Z
+Stopped at: Completed 12-02-PLAN.md
+Resume file: None
 Next action: Phase 11 complete. Execute next phase.
