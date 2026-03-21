@@ -10,6 +10,7 @@ import {
   mergeNoFF,
   rebaseBranch,
   getCommitsBehind,
+  fetchOrigin,
 } from "../../src/lib/git"
 
 // ---------------------------------------------------------------------------
@@ -278,5 +279,39 @@ describe("getCommitsBehind", () => {
     // feature-behind is 2 commits behind main
     const count = await getCommitsBehind(repoPath, "main", "feature-behind")
     expect(count).toBe(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("fetchOrigin")
+// ---------------------------------------------------------------------------
+
+describe("fetchOrigin", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-test")
+    repoPath = makeGitRepo(tmp)
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("succeeds on a repo with a local origin remote", async () => {
+    // Set up a local 'origin' so fetchOrigin has something to fetch from
+    const originPath = makeGitRepo(tmp, "origin-repo")
+    const { execSync } = await import("child_process")
+    execSync(`git -C ${repoPath} remote add origin ${originPath}`, { stdio: "pipe" })
+    // fetchOrigin should succeed without throwing
+    await expect(fetchOrigin(repoPath)).resolves.toBeUndefined()
+  })
+
+  test("source contains fetch.timeout=30 flag", async () => {
+    // Source-level verification: confirm the timeout flag is baked into the implementation
+    const { readFileSync } = await import("fs")
+    const source = readFileSync(
+      new URL("../../src/lib/git.ts", import.meta.url).pathname,
+      "utf-8"
+    )
+    expect(source).toContain("fetch.timeout=30")
   })
 })

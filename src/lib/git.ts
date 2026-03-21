@@ -109,7 +109,7 @@ export async function deleteLocalBranch(repoPath: string, branch: string): Promi
 }
 
 export async function fetchOrigin(repoPath: string): Promise<void> {
-  await $`git -C ${repoPath} fetch origin`.quiet()
+  await $`git -C ${repoPath} -c fetch.timeout=30 fetch origin`.quiet()
 }
 
 export async function rebaseBranch(
