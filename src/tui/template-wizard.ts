@@ -5,10 +5,13 @@ import {
   writeTemplate,
   templateExists,
   readTemplate,
+  readGlobalConfig,
   type Template,
   type TemplateRepo,
   type RepoRegistryEntry,
 } from "../lib/config"
+import { integrations, resolveEnabledGlobally } from "../lib/integrations"
+import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
 
 async function pickReposFromRegistry(
   registry: RepoRegistryEntry[],
@@ -147,6 +150,16 @@ export async function runTemplateNew(nameArg?: string) {
     }
   }
 
+  // Optional: integration overrides (D-01, D-02, D-03)
+  const config = readGlobalConfig()
+  const initialEnabledIds = integrations
+    .filter(i => resolveEnabledGlobally(i.id, i.enabledByDefault, config))
+    .map(i => i.id)
+  const currentConfigs = Object.fromEntries(
+    integrations.map(i => [i.id, (config.integrations[i.id] ?? {}) as Record<string, unknown>])
+  )
+  const integrationOverrides = await promptIntegrationOverrides(initialEnabledIds, currentConfigs)
+
   // Build and save template
   const template: Template = {
     name,
@@ -154,6 +167,9 @@ export async function runTemplateNew(nameArg?: string) {
     description,
     repos,
     ...(hooks ? { hooks } : {}),
+    ...(integrationOverrides && Object.keys(integrationOverrides).length > 0
+      ? { integrations: integrationOverrides }
+      : {}),
   }
 
   writeTemplate(template)
@@ -177,6 +193,7 @@ export async function runTemplateEdit(name: string) {
     options: [
       { value: "repos", label: "Repos", hint: "add/remove repos" },
       { value: "description", label: "Description" },
+      { value: "integrations", label: "Integrations", hint: "override per-integration settings" },
       { value: "done", label: "Done", hint: "save and exit" },
     ],
   })
@@ -259,6 +276,27 @@ export async function runTemplateEdit(name: string) {
     template.repos = updatedRepos
     writeTemplate(template)
     p.outro(`Template '${name}' updated with ${updatedRepos.length} repo(s).`)
+    return
+  }
+
+  if (action === "integrations") {
+    const config = readGlobalConfig()
+    const currentOverrides = (template.integrations ?? {}) as Record<string, Record<string, unknown>>
+    const initialEnabledIds = integrations.filter(i => {
+      const override = currentOverrides[i.id]
+      if (override && "enabled" in override) return (override as { enabled: boolean }).enabled
+      return resolveEnabledGlobally(i.id, i.enabledByDefault, config)
+    }).map(i => i.id)
+    const result = await promptIntegrationOverrides(initialEnabledIds, currentOverrides)
+    if (result !== undefined) {
+      if (Object.keys(result).length > 0) {
+        template.integrations = result
+      } else {
+        delete template.integrations
+      }
+      writeTemplate(template)
+      p.outro(`Template '${name}' updated.`)
+    }
     return
   }
 
