@@ -19,7 +19,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Existing integration updates — tmux/vscode/cmux return artifacts for downstream consumption
 - Window identification — snapshot-diff strategy, tmux client lookup, app_id matching
 
-## Current State — v0.4.0 milestone complete (2026-03-21)
+## Current State — v0.6.0 Phase 16 complete (2026-03-21)
 
 ### What shipped in v0.4.0
 
@@ -91,7 +91,8 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-- [ ] Integration artifact system — `open()` returns artifacts, accumulated into shared context for downstream integrations
+- [x] Integration artifact type foundation — `open()` returns `IntegrationArtifact | null`, `ArtifactBag` accumulator threaded through calls — v0.6.0 Phase 16
+- [ ] Integration artifact population — existing integrations return real artifacts (session names, window IDs)
 - [ ] Integration ordering — explicit execution order, configurable per-template/workspace
 - [ ] Niri compositor integration — dedicated workspace, window arrangement, tmux terminal spawning
 - [ ] Existing integrations return artifacts — tmux session name, vscode/cmux window PIDs
@@ -186,4 +187,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-21 after v0.6.0 milestone start — Integration Orchestration & Niri*
+*Last updated: 2026-03-21 after v0.6.0 Phase 16 — artifact-type-foundation complete*
