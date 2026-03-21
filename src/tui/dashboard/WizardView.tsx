@@ -15,7 +15,7 @@ type Props<T extends Record<string, unknown>> = {
 
 export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
   const [stepIndex, setStepIndex] = createSignal(0)
-  const [data, setData] = createSignal<Partial<T>>({} as Partial<T>)
+  const [data, setData] = createSignal({} as Partial<T>)
   const [validationError, setValidationError] = createSignal<string | undefined>(undefined)
   // Deferred focus pattern: input starts focused; on step transitions, set to false then
   // defer to true via setTimeout(0) to prevent the triggering keypress from leaking
