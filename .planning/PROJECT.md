@@ -49,6 +49,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ InlineInput cursor-positioned editing via built-in `<input>` wrapper — v0.4.0 Phase 11
 - ✓ `runHooksCaptured()` TUI-safe hook output streaming via callback — v0.4.0 Phase 11
 - ✓ TUI workspace sync with per-repo progress display and 30s fetch timeout — v0.4.0 Phase 12
+- ✓ TUI workspace creation wizard (template-based and ad-hoc) with back-navigation and cursor placement — v0.4.0 Phase 13
 - ✓ Repo Registry as source of truth for repo paths — v0.2.0
 - ✓ Templates as reusable workspace recipes — v0.2.0
 - ✓ Workspace YAML self-contained at creation — v0.2.0
