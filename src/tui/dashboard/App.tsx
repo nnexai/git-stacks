@@ -678,23 +678,20 @@ export default function App() {
           </Show>
         </box>
 
-        {/* HELP BAR / FILTER LINE / LOADING — outside both boxes, fixed 1 row */}
-        <box height={1} flexDirection="row">
+        {/* HELP BAR / FILTER LINE — height-based visibility avoids Show repaint issues */}
+        <box height={filtering() ? 1 : 0} flexDirection="row">
           <FilterIndicator
-            filtering={filtering()}
+            filtering={true}
             filterFocused={filterFocused()}
             filter={filter()}
             onInput={(v) => { setFilter(v); clampCursor() }}
           />
-          <Show when={!filtering() && !filter() && refreshFlash()}>
-            <text fg="green">  {refreshFlash()}</text>
-          </Show>
-          <Show when={!filtering() && !filter() && !refreshFlash() && loading()}>
-            <text fg="gray">  (loading statuses...)</text>
-          </Show>
-          <Show when={!filtering() && !filter() && !refreshFlash() && !loading()}>
-            <text fg="gray">{helpBarText()}</text>
-          </Show>
+        </box>
+        <box height={filtering() ? 0 : 1} flexDirection="row">
+          <text fg={filter() ? "cyan" : refreshFlash() ? "green" : "gray"}>
+            {filter() ? `  filter: "${filter()}" ` : refreshFlash() ? `  ${refreshFlash()}` : loading() ? "  (loading statuses...)" : helpBarText()}
+          </text>
+          <text fg="gray">{filter() && !filtering() ? "/ edit · esc clear" : ""}</text>
           <box flexGrow={1} />
           <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>{socketStatus === "bound" ? "\u25cf" : "\u25cb"} </text>
         </box>
