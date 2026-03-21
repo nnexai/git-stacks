@@ -1049,7 +1049,38 @@ export default function App() {
         </box>
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen()}>
+      {/* Action menus — full-screen CenteredDialog overlays */}
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "action-menu"}>
+        <Switch>
+          <Match when={tab() === "workspaces"}>
+            <ActionMenu
+              workspaceName={currentEntry()?.workspace.name ?? ""}
+              onAction={(action) => runAction(action, (view() as any).index)}
+              onCancel={() => setView({ view: "list" })}
+              onRun={() => handleRun(selectedName())}
+            />
+          </Match>
+          <Match when={tab() === "templates"}>
+            <TemplateActionMenu
+              templateName={currentTemplate()?.name ?? ""}
+              onAction={handleTemplateAction}
+              onCancel={() => setView({ view: "list" })}
+            />
+          </Match>
+        </Switch>
+      </Show>
+
+      {/* Repo action menu — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "repo-action-menu"}>
+        <RepoActionMenu
+          repoName={currentRepo()?.name ?? ""}
+          selectionCount={reposSelected().size}
+          onAction={handleRepoAction}
+          onCancel={() => setView({ view: "list" })}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view !== "action-menu" && view().view !== "repo-action-menu"}>
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
           <Switch>
@@ -1110,26 +1141,6 @@ export default function App() {
             </Switch>
           </Show>
 
-          {/* Action menus */}
-          <Show when={view().view === "action-menu"}>
-            <Switch>
-              <Match when={tab() === "workspaces"}>
-                <ActionMenu
-                  workspaceName={currentEntry()?.workspace.name ?? ""}
-                  onAction={(action) => runAction(action, (view() as any).index)}
-                  onCancel={() => setView({ view: "list" })}
-                  onRun={() => handleRun(selectedName())}
-                />
-              </Match>
-              <Match when={tab() === "templates"}>
-                <TemplateActionMenu
-                  templateName={currentTemplate()?.name ?? ""}
-                  onAction={handleTemplateAction}
-                  onCancel={() => setView({ view: "list" })}
-                />
-              </Match>
-            </Switch>
-          </Show>
 
           {/* Confirm dialog */}
           <Show when={view().view === "confirm"}>
@@ -1249,15 +1260,6 @@ export default function App() {
             })()}
           </Show>
 
-          {/* Repo action menu */}
-          <Show when={view().view === "repo-action-menu"}>
-            <RepoActionMenu
-              repoName={currentRepo()?.name ?? ""}
-              selectionCount={reposSelected().size}
-              onAction={handleRepoAction}
-              onCancel={() => setView({ view: "list" })}
-            />
-          </Show>
 
           {/* Repo remove blocked */}
           <Show when={view().view === "repo-remove-blocked"}>
@@ -1304,6 +1306,7 @@ export default function App() {
           <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>{filtering() ? "" : socketStatus === "bound" ? "\u25cf" : "\u25cb"}{" "}</text>
         </box>
       </Show>
+
     </box>
   )
 }

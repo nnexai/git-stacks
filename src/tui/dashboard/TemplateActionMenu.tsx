@@ -1,5 +1,7 @@
 /** @jsxImportSource @opentui/solid */
+import { For, createSignal } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
+import { CenteredDialog } from "./CenteredDialog"
 
 type Props = {
   templateName: string
@@ -8,8 +10,20 @@ type Props = {
 }
 
 export function TemplateActionMenu(props: Props) {
+  const items = [
+    { key: "w", action: "create-workspace" as const, label: "Create workspace" },
+    { key: "e", action: "edit" as const, label: "Edit ($EDITOR)" },
+    { key: "c", action: "clone" as const, label: "Clone" },
+    { key: "r", action: "remove" as const, label: "Remove" },
+  ]
+
+  const [cursor, setCursor] = createSignal(0)
+
   useKeyboard((key) => {
     if (key.name === "escape") { props.onCancel(); return }
+    if (key.name === "down") { setCursor(c => Math.min(c + 1, items.length - 1)); return }
+    if (key.name === "up") { setCursor(c => Math.max(c - 1, 0)); return }
+    if (key.name === "return") { props.onAction(items[cursor()].action); return }
     if (key.name === "w") { props.onAction("create-workspace"); return }
     if (key.name === "e") { props.onAction("edit"); return }
     if (key.name === "c") { props.onAction("clone"); return }
@@ -17,12 +31,15 @@ export function TemplateActionMenu(props: Props) {
   })
 
   return (
-    <box flexDirection="column" paddingTop={1} paddingLeft={2}>
-      <text fg="white">  [w] Create workspace</text>
-      <text fg="white">  [e] Edit ($EDITOR)</text>
-      <text fg="white">  [c] Clone</text>
-      <text fg="white">  [r] Remove</text>
+    <CenteredDialog title={props.templateName} size="small">
+      <For each={items}>
+        {(item, i) => (
+          <text fg={i() === cursor() ? "cyan" : "white"}>
+            {i() === cursor() ? "> " : "  "}[{item.key}] {item.label}
+          </text>
+        )}
+      </For>
       <text fg="gray">{"\n"}  [Esc] Back</text>
-    </box>
+    </CenteredDialog>
   )
 }

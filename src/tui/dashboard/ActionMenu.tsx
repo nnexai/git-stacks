@@ -2,6 +2,7 @@
 import { For, createSignal } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 import type { Action } from "./types"
+import { CenteredDialog } from "./CenteredDialog"
 
 type Props = {
   workspaceName: string
@@ -44,7 +45,7 @@ export function ActionMenu(props: Props) {
   })
 
   return (
-    <box flexDirection="column" paddingTop={1} paddingLeft={2}>
+    <CenteredDialog title={props.workspaceName} size="small">
       <For each={fullActions}>
         {(item, i) => (
           <text fg={i() === cursor() ? "cyan" : "white"}>
@@ -53,6 +54,6 @@ export function ActionMenu(props: Props) {
         )}
       </For>
       <text fg="gray">{"\n"}  [Esc] Back</text>
-    </box>
+    </CenteredDialog>
   )
 }

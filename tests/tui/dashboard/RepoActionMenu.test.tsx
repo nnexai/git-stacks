@@ -120,4 +120,82 @@ describe("RepoActionMenu", () => {
     await renderOnce()
     expect(cancelled).toBe(true)
   })
+
+  test("shows cursor on first item by default", async () => {
+    const { renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <RepoActionMenu
+          repoName="my-repo"
+          selectionCount={0}
+          onAction={() => {}}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("> [w]")
+  })
+
+  test("down arrow moves cursor to second item", async () => {
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <RepoActionMenu
+          repoName="my-repo"
+          selectionCount={0}
+          onAction={() => {}}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    mockInput.pressArrow("down")
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("> [t]")
+  })
+
+  test("clamps cursor at bottom (down 3 times stays on last item)", async () => {
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <RepoActionMenu
+          repoName="my-repo"
+          selectionCount={0}
+          onAction={() => {}}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    for (let i = 0; i < 3; i++) {
+      mockInput.pressArrow("down")
+      await renderOnce()
+    }
+    const frame = captureCharFrame()
+    expect(frame).toContain("> [r]")
+  })
+
+  test("enter dispatches cursor action (second item)", async () => {
+    let received = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => (
+        <RepoActionMenu
+          repoName="my-repo"
+          selectionCount={0}
+          onAction={(a) => { received = a }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    mockInput.pressArrow("down")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(received).toBe("create-template")
+  })
 })
