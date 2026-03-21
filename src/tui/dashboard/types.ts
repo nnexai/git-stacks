@@ -34,3 +34,6 @@ export type UIView =
   | { view: "wizard-create"; source: "template"; templateIndex: number }
   | { view: "wizard-create-adhoc"; source: "repos"; repoNames: string[] }
   | { view: "create-progress"; workspaceName: string }
+  | { view: "wizard-create-template"; source: "repos"; repoNames: string[] }
+  | { view: "repo-action-menu"; index: number }
+  | { view: "repo-remove-blocked"; repoName: string }
