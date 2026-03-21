@@ -1,0 +1,115 @@
+# Requirements: git-stacks v0.6.0
+
+**Defined:** 2026-03-21
+**Core Value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
+
+## v1 Requirements
+
+Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap phases.
+
+### Orchestration
+
+- [ ] **ORCH-01**: Integration `open()` returns typed artifacts (session names, window info) instead of void
+- [ ] **ORCH-02**: Artifacts accumulate into a shared bag passed to each subsequent integration's `open()` call
+- [ ] **ORCH-03**: Integration execution uses three-tier ordering: independent setup (tier 1), partial side-effects (tier 2), window management (tier 3)
+- [ ] **ORCH-04**: Tier assignment is per-integration with extensible numeric priority (not hardcoded to niri)
+- [ ] **ORCH-05**: Four duplicated integration loops consolidated into a single runner module
+- [ ] **ORCH-06**: Runner supports both generate-only mode (TUI callers) and generate+open mode (workspace-ops, CLI)
+- [ ] **ORCH-07**: Existing `--no-ide`/`--no-cmux` skip flags preserved through runner consolidation
+
+### Artifacts
+
+- [ ] **ART-01**: tmux integration returns session name artifact
+- [ ] **ART-02**: cmux integration returns workspace ref artifact
+- [ ] **ART-03**: VSCode integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
+- [ ] **ART-04**: IntelliJ integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
+- [ ] **ART-05**: Window artifact type is shared across all integrations: `{ pid: number; app_id: string; title: string }`
+- [ ] **ART-06**: Integrations that cannot identify their window return null artifact (graceful degradation)
+
+### Niri
+
+- [ ] **NIRI-01**: Niri integration creates/reuses a named niri workspace per git-stacks workspace via `set-workspace-name`
+- [ ] **NIRI-02**: Niri integration moves windows from prior integrations to the named workspace using artifact bag window info
+- [ ] **NIRI-03**: Niri integration spawns a terminal on the niri workspace attached to tmux session (reads tmux session name from artifact bag)
+- [ ] **NIRI-04**: Niri integration is idempotent on re-open: checks if named workspace exists with expected windows before recreating
+- [ ] **NIRI-05**: Niri integration cleans up (unnames workspace) when git-stacks workspace is removed
+- [ ] **NIRI-06**: Window identification uses snapshot-diff of `niri msg -j windows` (before/after spawn) for spawned windows
+- [ ] **NIRI-07**: Window identification uses PID matching from artifact bag for windows spawned by other integrations
+- [ ] **NIRI-08**: Niri integration is gated by `NIRI_SOCKET` env var presence (skips gracefully when niri is not running)
+- [ ] **NIRI-09**: Terminal emulator is configurable (e.g., `terminal: "ghostty"`) with sensible default
+- [ ] **NIRI-10**: Niri shell wrappers isolated in `src/lib/niri.ts` with clean mock boundary for automated tests
+
+### Testing
+
+- [ ] **TEST-01**: Niri shell wrappers (`src/lib/niri.ts`) have a mockable interface — automated tests never call real `niri msg`
+- [ ] **TEST-02**: Integration runner has unit tests for artifact accumulation, tier ordering, and skip-flag behavior
+- [ ] **TEST-03**: Existing integration tests continue to pass after `open()` return type change
+- [ ] **TEST-04**: Niri integration has unit tests with mocked niri shell wrappers covering workspace create, window move, tmux attach, cleanup
+
+## Future Requirements
+
+Deferred to v0.7.0+.
+
+### Window Management
+
+- **WM-01**: Aerospace (macOS) compositor integration using same tier-3 pattern as niri
+- **WM-02**: Native macOS Spaces integration
+- **WM-03**: Per-workspace niri layout configuration (column widths, floating positions)
+
+### Integration Enhancements
+
+- **INT-01**: cmux consumes tmux session artifact to spawn attached terminal (tier 2 behavior)
+- **INT-02**: Per-template/workspace integration order overrides
+- **INT-03**: Integration dependency declarations (formal provides/consumes)
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Wayland protocol library (libwayland bindings) | `niri msg` CLI is sufficient; no performance-critical path |
+| niri event-stream subprocess | Polling via snapshot-diff is simpler and sufficient for workspace setup |
+| Dynamic reordering based on dependency graph | Three-tier numeric priority is extensible enough for v0.6.0 |
+| Persisting niri workspace IDs in YAML | niri workspace IDs are session-scoped and ephemeral |
+| Named workspace collision handling | git-stacks workspace names are unique (registry-enforced) |
+| Live niri calls in automated tests | All niri interactions mocked; live verification during dev only |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| ORCH-01 | — | Pending |
+| ORCH-02 | — | Pending |
+| ORCH-03 | — | Pending |
+| ORCH-04 | — | Pending |
+| ORCH-05 | — | Pending |
+| ORCH-06 | — | Pending |
+| ORCH-07 | — | Pending |
+| ART-01 | — | Pending |
+| ART-02 | — | Pending |
+| ART-03 | — | Pending |
+| ART-04 | — | Pending |
+| ART-05 | — | Pending |
+| ART-06 | — | Pending |
+| NIRI-01 | — | Pending |
+| NIRI-02 | — | Pending |
+| NIRI-03 | — | Pending |
+| NIRI-04 | — | Pending |
+| NIRI-05 | — | Pending |
+| NIRI-06 | — | Pending |
+| NIRI-07 | — | Pending |
+| NIRI-08 | — | Pending |
+| NIRI-09 | — | Pending |
+| NIRI-10 | — | Pending |
+| TEST-01 | — | Pending |
+| TEST-02 | — | Pending |
+| TEST-03 | — | Pending |
+| TEST-04 | — | Pending |
+
+**Coverage:**
+- v1 requirements: 27 total
+- Mapped to phases: 0
+- Unmapped: 27
+
+---
+*Requirements defined: 2026-03-21*
+*Last updated: 2026-03-21 after initial definition*
