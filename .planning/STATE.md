@@ -4,7 +4,7 @@ milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
 stopped_at: Completed 13-wizard-create-workspace/13-03-PLAN.md
-last_updated: "2026-03-21T09:56:31.651Z"
+last_updated: "2026-03-21T10:00:36.953Z"
 progress:
   total_phases: 6
   completed_phases: 4
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 ## Current Position
 
-Phase: 13 (wizard-create-workspace) — EXECUTING
-Plan: 3 of 3
+Phase: 14
+Plan: Not started
 
 ## Accumulated Context
 
