@@ -33,8 +33,8 @@ describe("InlineInput", () => {
     )
     await renderOnce()
     mockInput.pressEscape()
-    // pressEscape sends \x1B which needs a brief parser timeout before firing
-    await new Promise((r) => setTimeout(r, 50))
+    // pressEscape sends \x1B — parser waits to distinguish from escape sequence prefix
+    await new Promise((r) => setTimeout(r, 150))
     await renderOnce()
     expect(cancelled).toBe(true)
   })
