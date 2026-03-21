@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-03-21T11:56:23.662Z"
+stopped_at: Completed 15-03-PLAN.md
+last_updated: "2026-03-21T12:07:27.894Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 15 (integration-tests-and-screen-polish) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Accumulated Context
 
@@ -70,6 +70,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 15-01]: messagePreview fixedWidth made reactive: nameWidth() + branchWidth() + 23 instead of hardcoded 80
 - [Phase 15-01]: nameWidth inside For callback (not component scope) so it captures dims() reactively without extra signals
 - [Phase 15-01]: leftTruncate uses unicode ellipsis character (\u2026) consistent with name truncation in all three list components
+- [Phase 15]: integ-sync-progress mocks ../../../src/lib/config wholesale to provide inline workspace fixture — GIT_STACKS_CONFIG_DIR alone is insufficient when paths.ts is already cached from an earlier test file in same Bun run (Pitfall 1 from RESEARCH.md)
+- [Phase 15]: workspace-ops mock must include all exports (getWorkspaceStatus, editWorkspaceYaml, mergeEnv, writeEnvFiles, etc.) or Bun throws 'Export not found' on first use in integration tests
 
 ### Pending Todos
 
@@ -81,7 +83,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T11:56:23.658Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-03-21T12:07:27.892Z
+Stopped at: Completed 15-03-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.

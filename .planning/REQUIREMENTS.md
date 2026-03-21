@@ -11,7 +11,7 @@
 - [x] **T-02**: Tests can simulate keyboard input (`typeText`, `pressKey`, `pressEnter`, `pressEscape`, `pressArrow`) and assert on rendered output via `captureCharFrame()`
 - [ ] **T-03**: `InlineInput` component has tests covering: typing, cursor movement (left/right), backspace, escape cancel, enter confirm *(partial — typing/backspace/escape/enter tested in Phase 10; cursor movement deferred to Phase 11 P-01)*
 - [x] **T-04**: `ActionMenu` component has tests covering: arrow key navigation, option selection on enter, dismiss on escape
-- [ ] **T-05**: App-level integration tests cover: tab switching, action menu dispatch, wizard entry/exit, sync progress flow
+- [x] **T-05**: App-level integration tests cover: tab switching, action menu dispatch, wizard entry/exit, sync progress flow
 - [x] **T-06**: Config directory location can be overridden via environment variable (`GIT_STACKS_CONFIG_DIR`) so tests run in an isolated directory instead of `~/.config/git-stacks/`
 
 ### Prerequisites (P-)
@@ -93,7 +93,7 @@
 | R-02 | Phase 14 | Pending |
 | R-03 | Phase 14 | Pending |
 | R-04 | Phase 14 | Complete |
-| T-05 | Phase 15 | Pending |
+| T-05 | Phase 15 | Complete |
 | UI-01 | Phase 15 | Complete |
 | UI-02 | Phase 15 | Complete |
 | UI-03 | Phase 15 | Complete |
