@@ -32,7 +32,7 @@ See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md) for full detail
 - [x] **Phase 10: test-harness** — Component-level test infrastructure using testRender + config dir isolation (completed 2026-03-21)
 - [x] **Phase 11: tui-prerequisites** — InlineInput cursor movement and runHooksCaptured before any wizard work (completed 2026-03-21)
 - [x] **Phase 12: workspace-sync** — Sync action in workspace action menu with per-repo progress and timeout (completed 2026-03-21)
-- [ ] **Phase 13: wizard-create-workspace** — WizardView component + create workspace from Templates/Repos tabs
+- [x] **Phase 13: wizard-create-workspace** — WizardView component + create workspace from Templates/Repos tabs (completed 2026-03-21)
 - [ ] **Phase 14: template-and-repo-management** — Template create wizard + full repo action menu (add/scan/remove)
 - [ ] **Phase 15: integration-tests-and-screen-polish** — App integration tests + help bar, age display, responsive columns
 
@@ -93,7 +93,7 @@ Plans:
 Plans:
 - [x] 13-01-PLAN.md — WizardView + CreateProgressView components, types, useWorkspaces.reload() fix, tests
 - [x] 13-02-PLAN.md — Template-based create flow wired into App.tsx via TemplateActionMenu
-- [ ] 13-03-PLAN.md — Ad-hoc (Repos tab) create flow: multi-select, n key, wizard launch
+- [x] 13-03-PLAN.md — Ad-hoc (Repos tab) create flow: multi-select, n key, wizard launch
 
 ### Phase 14: template-and-repo-management
 **Goal**: Users can create a new template from the Templates tab and perform add/scan/remove actions on the Repos tab without leaving the TUI
@@ -130,6 +130,6 @@ Plans:
 | 10. test-harness | 2/2 | Complete    | 2026-03-21 | — |
 | 11. tui-prerequisites | 1/1 | Complete    | 2026-03-21 | — |
 | 12. workspace-sync | v0.4.0 | 3/3 | Complete    | 2026-03-21 |
-| 13. wizard-create-workspace | v0.4.0 | 2/3 | In Progress|  |
+| 13. wizard-create-workspace | v0.4.0 | 3/3 | Complete   | 2026-03-21 |
 | 14. template-and-repo-management | v0.4.0 | 0/? | Not started | — |
 | 15. integration-tests-and-screen-polish | v0.4.0 | 0/? | Not started | — |

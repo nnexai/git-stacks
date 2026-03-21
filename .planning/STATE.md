@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 13-wizard-create-workspace/13-02-PLAN.md
-last_updated: "2026-03-21T09:51:18.396Z"
+stopped_at: Completed 13-wizard-create-workspace/13-03-PLAN.md
+last_updated: "2026-03-21T09:56:31.651Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -58,6 +58,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 13-wizard-create-workspace]: InlineInput.focused optional prop (default true) required for WizardView deferred focus pattern; all existing callers unaffected
 - [Phase 13-wizard-create-workspace]: Test deferred focus: await new Promise(r => setTimeout(r, 0)) required between step transitions — renderOnce() does not process macrotask queues
 - [Phase 13-wizard-create-workspace]: executeCreateWorkspace handles both template-based and ad-hoc flows; ad-hoc path stubbed for Plan 03 wiring
+- [Phase 13]: buildAdhocWizardSteps has no branch prefill (D-08: ad-hoc starts blank)
+- [Phase 13]: All ad-hoc repos default to worktree mode (D-09)
 
 ### Pending Todos
 
@@ -69,7 +71,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:51:18.393Z
-Stopped at: Completed 13-wizard-create-workspace/13-02-PLAN.md
+Last session: 2026-03-21T09:56:31.649Z
+Stopped at: Completed 13-wizard-create-workspace/13-03-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
