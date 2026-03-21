@@ -48,7 +48,10 @@ See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md) for full detail
   3. A test can navigate `ActionMenu` with arrow keys and assert selected option changes
   4. Tests for `InlineInput` and `ActionMenu` exist and cover: typing, cursor move, backspace, escape cancel, enter confirm, arrow nav, option select
   5. Setting `GIT_STACKS_CONFIG_DIR` redirects all config reads/writes to a temp directory in any test
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 10-01-PLAN.md — Config dir isolation (GIT_STACKS_CONFIG_DIR) + ActionMenu cursor navigation
+- [ ] 10-02-PLAN.md — InlineInput and ActionMenu component tests via testRender
 
 ### Phase 11: tui-prerequisites
 **Goal**: InlineInput supports cursor-positioned editing and hook output is capturable as a stream, unblocking all wizard and create-flow work
@@ -114,7 +117,7 @@ See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md) for full detail
 | 7. Shell Completion Overhaul | v0.3.0 | 1/1 | Complete | 2026-03-19 |
 | 8. Dashboard Tab Layout | v0.3.0 | 6/6 | Complete | 2026-03-20 |
 | 9. IPC Push + Message Display | v0.3.0 | 3/3 | Complete | 2026-03-20 |
-| 10. test-harness | v0.4.0 | 0/? | Not started | — |
+| 10. test-harness | v0.4.0 | 0/2 | Not started | — |
 | 11. tui-prerequisites | v0.4.0 | 0/? | Not started | — |
 | 12. workspace-sync | v0.4.0 | 0/? | Not started | — |
 | 13. wizard-create-workspace | v0.4.0 | 0/? | Not started | — |
