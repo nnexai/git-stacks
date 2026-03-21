@@ -17,10 +17,10 @@ export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
   const [stepIndex, setStepIndex] = createSignal(0)
   const [data, setData] = createSignal<Partial<T>>({} as Partial<T>)
   const [validationError, setValidationError] = createSignal<string | undefined>(undefined)
-  const [inputFocused, setInputFocused] = createSignal(false)
-
-  // Defer initial focus so mount keypress doesn't leak into input
-  setTimeout(() => setInputFocused(true), 0)
+  // Deferred focus pattern: input starts focused; on step transitions, set to false then
+  // defer to true via setTimeout(0) to prevent the triggering keypress from leaking
+  // into the new step's input (per CLAUDE.md keyboard isolation rules)
+  const [inputFocused, setInputFocused] = createSignal(true)
 
   function handleTextConfirm(value: string) {
     const step = props.steps[stepIndex()]
@@ -36,25 +36,26 @@ export function WizardView<T extends Record<string, unknown>>(props: Props<T>) {
 
     setValidationError(undefined)
     const key = step.key as keyof T
-    setData(prev => ({ ...prev, [key]: value } as Partial<T>))
+    const nextData = { ...data(), [key]: value } as Partial<T>
+    setData(() => nextData)
 
     const nextIndex = stepIndex() + 1
     if (nextIndex < props.steps.length) {
-      setStepIndex(nextIndex)
-      // Deferred focus: prevent the Enter keypress from leaking into the next input
+      // Deferred focus: prevent Enter keypress from leaking into the next input
       setInputFocused(false)
+      setStepIndex(nextIndex)
       setTimeout(() => setInputFocused(true), 0)
     } else {
-      props.onComplete(data() as T)
+      props.onComplete(nextData as T)
     }
   }
 
   function handleTextCancel() {
     setValidationError(undefined)
     if (stepIndex() > 0) {
-      setStepIndex(prev => prev - 1)
       // Deferred focus for back-navigation
       setInputFocused(false)
+      setStepIndex(prev => prev - 1)
       setTimeout(() => setInputFocused(true), 0)
     } else {
       props.onCancel()
