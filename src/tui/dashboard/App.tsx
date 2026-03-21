@@ -56,6 +56,7 @@ export default function App() {
   const [view, setView] = createSignal<UIView>({ view: "list" })
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
   const [reposSelected, setReposSelected] = createSignal<Set<number>>(new Set())
+  const [templatesSelected, setTemplatesSelected] = createSignal<Set<number>>(new Set())
   const [progressLines, setProgressLines] = createSignal<string[]>([])
   const [progressDone, setProgressDone] = createSignal(false)
   const [helpOpen, setHelpOpen] = createSignal(false)
@@ -826,6 +827,7 @@ export default function App() {
         if (filter()) { setFilter(""); clampCursor(); return }
         if (selected().size > 0) { setSelected(() => new Set<number>()); return }
         if (reposSelected().size > 0) { setReposSelected(() => new Set<number>()); return }
+        if (templatesSelected().size > 0) { setTemplatesSelected(() => new Set<number>()); return }
         // NO-OP at top-level list — do NOT call renderer.destroy()
         return
       }
@@ -973,6 +975,7 @@ export default function App() {
                 cursor={tabCursor.templates[0]()}
                 filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
                 height={listHeight()}
+                selected={templatesSelected()}
               />
             </Match>
             <Match when={tab() === "repos"}>

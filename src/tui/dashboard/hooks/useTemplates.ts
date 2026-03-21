@@ -1,10 +1,10 @@
 import { createSignal, type Accessor } from "solid-js"
 import { listTemplates, type Template } from "../../../lib/config"
 
-export function useTemplates(): { entries: Accessor<Template[]>; reload: () => void } {
+export function useTemplates(): { entries: Accessor<Template[]>; reload: () => Promise<void> } {
   const [entries, setEntries] = createSignal<Template[]>([])
 
-  function reload() {
+  async function reload(): Promise<void> {
     try {
       setEntries(listTemplates())
     } catch {
@@ -12,7 +12,7 @@ export function useTemplates(): { entries: Accessor<Template[]>; reload: () => v
     }
   }
 
-  reload() // synchronous initial load
+  reload() // initial load
 
   return { entries, reload }
 }
