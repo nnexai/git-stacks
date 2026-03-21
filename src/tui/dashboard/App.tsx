@@ -1220,7 +1220,7 @@ export default function App() {
         />
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen()}>
+      {/* Split pane — always visible; dialogs overlay via absolute positioning */}
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
           <Switch>
@@ -1297,7 +1297,6 @@ export default function App() {
           <box flexGrow={filtering() ? 0 : 1} />
           <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>{filtering() ? "" : socketStatus === "bound" ? "\u25cf" : "\u25cb"}{" "}</text>
         </box>
-      </Show>
 
     </box>
   )
