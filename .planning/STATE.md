@@ -4,7 +4,7 @@ milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
 stopped_at: Completed 17-integration-runner-17-02-PLAN.md
-last_updated: "2026-03-21T23:03:00.863Z"
+last_updated: "2026-03-21T23:06:55.968Z"
 progress:
   total_phases: 5
   completed_phases: 2
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 
 ## Current Position
 
-Phase: 17 (integration-runner) — EXECUTING
-Plan: 2 of 2
+Phase: 18
+Plan: Not started
 
 ## Performance Metrics
 

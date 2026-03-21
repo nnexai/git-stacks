@@ -126,7 +126,7 @@ Plans:
 | 6-9. Dashboard UI | v0.3.0 | 13/13 | Complete | 2026-03-20 |
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16. artifact-type-foundation | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
-| 17. integration-runner | v0.6.0 | 2/2 | Complete   | 2026-03-21 |
+| 17. integration-runner | v0.6.0 | 2/2 | Complete    | 2026-03-21 |
 | 18. artifact-population | v0.6.0 | 0/? | Not started | - |
 | 19. niri-shell-wrappers | v0.6.0 | 0/? | Not started | - |
 | 20. niri-integration | v0.6.0 | 0/? | Not started | - |
