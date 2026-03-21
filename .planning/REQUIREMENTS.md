@@ -12,7 +12,7 @@
 - [ ] **T-03**: `InlineInput` component has tests covering: typing, cursor movement (left/right), backspace, escape cancel, enter confirm
 - [ ] **T-04**: `ActionMenu` component has tests covering: arrow key navigation, option selection on enter, dismiss on escape
 - [ ] **T-05**: App-level integration tests cover: tab switching, action menu dispatch, wizard entry/exit, sync progress flow
-- [ ] **T-06**: Config directory location can be overridden via environment variable (`GIT_STACKS_CONFIG_DIR`) so tests run in an isolated directory instead of `~/.config/git-stacks/`
+- [x] **T-06**: Config directory location can be overridden via environment variable (`GIT_STACKS_CONFIG_DIR`) so tests run in an isolated directory instead of `~/.config/git-stacks/`
 
 ### Prerequisites (P-)
 
@@ -78,7 +78,7 @@
 | T-02 | Phase 10 | Pending |
 | T-03 | Phase 10 | Pending |
 | T-04 | Phase 10 | Pending |
-| T-06 | Phase 10 | Pending |
+| T-06 | Phase 10 | Complete (10-01) |
 | P-01 | Phase 11 | Pending |
 | P-02 | Phase 11 | Pending |
 | WS-01 | Phase 12 | Pending |
