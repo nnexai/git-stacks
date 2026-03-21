@@ -20,6 +20,15 @@
           }
         ],
         "matcher": "Bash|Edit|Write|MultiEdit|Agent|Task"
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git-stacks message clear --workspace git-stacks --from claude"
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -30,6 +39,35 @@
             "type": "command",
             "command": "node .claude/hooks/gsd-prompt-guard.js",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git-stacks message send \"Claude is asking a question — input needed\" --workspace git-stacks --from claude"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git-stacks message send \"Claude has finished and may need your attention\" --workspace git-stacks --from claude"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git-stacks message clear --workspace git-stacks --from claude"
           }
         ]
       }

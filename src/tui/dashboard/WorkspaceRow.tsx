@@ -33,21 +33,28 @@ export function WorkspaceRow(props: Props) {
 
   const dims = useTerminalDimensions()
 
+  // Counts column: " Nwt Mtr" or " Nwt Mtr ~D" — fixed width
+  const countsText = createMemo(() => {
+    const dirty = dirtyCount()
+    return `${wtCount()}wt ${trCount()}tr${dirty > 0 ? ` ~${dirty}` : ""}`
+  })
+  const countsWidth = createMemo(() => countsText().length + 2) // leading "  "
+
   const nameWidth = createMemo(() => {
     const w = dims().width
-    // Fixed: prefix(5) + space(1) + status(2) + space(1) = 9
-    // Fixed right: " Nwt Mtr" ~10 + optional dirty ~4 = ~14
-    const fixed = 9 + 14
+    // Fixed: prefix(5) + space(1) + status(2) + space(1) + countsCol = 9 + countsWidth
+    const fixed = 9 + countsWidth()
     const remaining = w - fixed
     const nameMin = 10
     return Math.min(24, Math.max(nameMin, Math.floor(remaining * 0.3)))
   })
 
   const branchWidth = createMemo(() => {
-    const w = dims().width
-    const fixed = 9 + 14
     const nw = nameWidth()
-    return Math.max(10, w - fixed - nw - 2)
+    // branch gets ~30% of remaining after name, capped
+    const w = dims().width
+    const fixed = 9 + countsWidth() + nw + 2
+    return Math.min(30, Math.max(10, Math.floor((w - fixed) * 0.4)))
   })
 
   const messagePreview = createMemo(() => {
@@ -57,10 +64,10 @@ export function WorkspaceRow(props: Props) {
     const msg = msgs[0]  // most recent (newest-first from listMessages)
     const age = formatAge(msg.timestamp)
     const senderPrefix = msg.from ? `${msg.from}: ` : ""
-    // Fixed columns adapt to reactive column widths
-    const fixedWidth = nameWidth() + branchWidth() + 23
+    // Remaining space after all fixed columns
+    const fixedWidth = 9 + nameWidth() + 2 + branchWidth() + countsWidth()
     const ageWidth = age.length + 2  // "  age" spacing
-    const available = Math.max(10, dims().width - fixedWidth - ageWidth)
+    const available = Math.max(10, dims().width - fixedWidth - ageWidth - 2) // -2 for "  " before msg
     const text = senderPrefix + msg.text
     const truncated = text.length > available ? text.slice(0, available - 1) + "\u2026" : text
     return { truncated, age }
@@ -84,12 +91,11 @@ export function WorkspaceRow(props: Props) {
         const bw = branchWidth()
         return (b.length > bw ? b.slice(0, bw - 1) + "\u2026" : b.padEnd(bw))
       })()}</text>
-      <text fg="gray">
-        {` ${wtCount()}wt ${trCount()}tr`}
-        {dirtyCount() > 0 ? ` ~${dirtyCount()}` : ""}
+      <text fg="gray">{`  ${countsText()}`}</text>
+      <text fg={messagePreview() ? "white" : "gray"}>
         {messagePreview() ? `  ${messagePreview()!.truncated}` : `  ${formatAge(ws().created)}`}
       </text>
-      <text fg={messagePreview() ? "yellow" : "gray"}>
+      <text fg="yellow">
         {messagePreview() ? `  ${messagePreview()!.age}` : ""}
       </text>
     </box>

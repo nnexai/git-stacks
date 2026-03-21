@@ -4,6 +4,20 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.5.1] — 2026-03-21
+
+### Improved
+
+- **Workspace list message layout**: moved repo counts (`Nwt Mtr`) to a fixed column after branch name (matching repo tab pattern), freeing remaining space for message previews
+- **Message visibility**: message preview text now renders in white instead of gray, making it much more readable against the terminal background
+- **Message age color**: age indicator is now always yellow when a message exists, providing consistent visual distinction
+
+### Added
+
+- **WorkspaceRow snapshot tests**: 8 snapshot tests covering focused/unfocused/selected rows, message preview, system messages, dirty repos, name truncation, and message truncation
+
+---
+
 ## [0.5.0] — 2026-03-21
 
 ### Added

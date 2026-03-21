@@ -30,7 +30,7 @@ exports[`RepoDetail snapshots renders fallback when no entry is selected 1`] = `
 
 exports[`RepoDetail snapshots renders entry with template and workspace references 1`] = `
 " Path: /home/user/repos/api                                                     
- Type: node Branch: main                                                        
+ Type: typescript Branch: main                                                  
   ✓ exists                                                                      
                                                                                 
  Used by:                                                                       
