@@ -50,6 +50,10 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ `runHooksCaptured()` TUI-safe hook output streaming via callback — v0.4.0 Phase 11
 - ✓ TUI workspace sync with per-repo progress display and 30s fetch timeout — v0.4.0 Phase 12
 - ✓ TUI workspace creation wizard (template-based and ad-hoc) with back-navigation and cursor placement — v0.4.0 Phase 13
+- ✓ TUI template creation from Repos tab action menu with duplicate-name validation — v0.4.0 Phase 14
+- ✓ TUI repo remove (blocked path shows references, safe path with ConfirmDialog) — v0.4.0 Phase 14
+- ✓ RepoActionMenu with selection-aware labels (`[w]`/`[t]`/`[r]` shortcuts) — v0.4.0 Phase 14
+- ✓ Unified checkbox prefix display across all dashboard tabs — v0.4.0 Phase 14
 - ✓ Repo Registry as source of truth for repo paths — v0.2.0
 - ✓ Templates as reusable workspace recipes — v0.2.0
 - ✓ Workspace YAML self-contained at creation — v0.2.0
@@ -157,4 +161,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-21 — Phase 12 (workspace-sync) complete*
+*Last updated: 2026-03-21 — Phase 14 (template-and-repo-management) complete*
