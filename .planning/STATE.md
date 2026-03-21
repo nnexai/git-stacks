@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 13-wizard-create-workspace/13-03-PLAN.md
-last_updated: "2026-03-21T10:00:36.953Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-03-21T10:45:37.157Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 12
+  completed_plans: 10
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 13 — wizard-create-workspace
+**Current focus:** Phase 14 — template-and-repo-management
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
+Phase: 14 (template-and-repo-management) — EXECUTING
+Plan: 2 of 3
 
 ## Accumulated Context
 
@@ -60,6 +60,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 13-wizard-create-workspace]: executeCreateWorkspace handles both template-based and ad-hoc flows; ad-hoc path stubbed for Plan 03 wiring
 - [Phase 13]: buildAdhocWizardSteps has no branch prefill (D-08: ad-hoc starts blank)
 - [Phase 13]: All ad-hoc repos default to worktree mode (D-09)
+- [Phase 14-template-and-repo-management]: prefix() function placed inside For callback (not component scope) — closes over reactive isSelected() and focused() memos without extra signal passing
+- [Phase 14-template-and-repo-management]: TemplateList selected prop optional so existing App.tsx callers compile without change until Plan 03 wires the signal
 
 ### Pending Todos
 
@@ -71,7 +73,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T09:56:31.649Z
-Stopped at: Completed 13-wizard-create-workspace/13-03-PLAN.md
+Last session: 2026-03-21T10:45:37.155Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.

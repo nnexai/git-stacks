@@ -35,7 +35,7 @@
 
 ### Repo Management (R-)
 
-- [ ] **R-01**: User can open an action menu from the Repos tab (Enter on a repo row opens actions)
+- [x] **R-01**: User can open an action menu from the Repos tab (Enter on a repo row opens actions)
 - [ ] **R-02**: User can add a repo to the registry from within the TUI (path entry via InlineInput with path validation indicator)
 - [ ] **R-03**: User can trigger a repo directory scan from within the TUI (uses suspend+resume to the existing CLI scan wizard — the one sanctioned escape hatch)
 - [ ] **R-04**: User can remove a repo from the registry from within the TUI (ConfirmDialog showing which workspaces reference it)
@@ -89,7 +89,7 @@
 | C-02 | Phase 13 | Complete |
 | C-03 | Phase 13 | Complete |
 | C-04 | Phase 14 | Pending |
-| R-01 | Phase 14 | Pending |
+| R-01 | Phase 14 | Complete |
 | R-02 | Phase 14 | Pending |
 | R-03 | Phase 14 | Pending |
 | R-04 | Phase 14 | Pending |
