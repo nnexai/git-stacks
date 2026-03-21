@@ -16,8 +16,8 @@
 
 ### Prerequisites (P-)
 
-- [ ] **P-01**: `InlineInput` supports left/right cursor movement and character insertion at cursor position (prerequisite for all wizard text fields)
-- [ ] **P-02**: `lifecycle.ts` provides `runHooksCaptured()` variant that streams hook stdout/stderr via callback instead of `stdio: "inherit"` (prerequisite for all TUI create operations that trigger hooks)
+- [x] **P-01**: `InlineInput` supports left/right cursor movement and character insertion at cursor position (prerequisite for all wizard text fields)
+- [x] **P-02**: `lifecycle.ts` provides `runHooksCaptured()` variant that streams hook stdout/stderr via callback instead of `stdio: "inherit"` (prerequisite for all TUI create operations that trigger hooks)
 
 ### Workspace Actions (WS-)
 
@@ -79,8 +79,8 @@
 | T-03 | Phase 10+11 | Partial (cursor movement → Phase 11) |
 | T-04 | Phase 10 | Complete |
 | T-06 | Phase 10 | Complete (10-01) |
-| P-01 | Phase 11 | Pending |
-| P-02 | Phase 11 | Pending |
+| P-01 | Phase 11 | Complete |
+| P-02 | Phase 11 | Complete |
 | WS-01 | Phase 12 | Pending |
 | WS-02 | Phase 12 | Pending |
 | WS-03 | Phase 12 | Pending |
