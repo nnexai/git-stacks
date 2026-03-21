@@ -28,8 +28,11 @@ import {
   openWorkspace,
   editWorkspaceYaml,
   renameWorkspace,
+  syncWorkspace,
 } from "../../lib/workspace-ops"
-import { readTemplate, writeTemplate, templatePath } from "../../lib/config"
+import type { SyncRow, SyncResult } from "../../lib/workspace-ops"
+import { readTemplate, writeTemplate, templatePath, readWorkspace } from "../../lib/config"
+import { SyncProgressView } from "./SyncProgressView"
 import { unlinkSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
 
@@ -51,6 +54,9 @@ export default function App() {
   const [messagesWorkspace, setMessagesWorkspace] = createSignal("")
   const [confirmContext, setConfirmContext] = createSignal<"workspace" | "template">("workspace")
   const [filterFocused, setFilterFocused] = createSignal(false)
+  const [syncRows, setSyncRows] = createSignal<SyncRow[]>([])
+  const [syncDone, setSyncDone] = createSignal(false)
+  const [syncSummary, setSyncSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -128,6 +134,7 @@ export default function App() {
   const detailBoxTitle = createMemo(() => {
     const v = view()
     if (v.view === "progress") return ` ${(v as any).message} `
+    if (v.view === "sync-progress") return ` ${(v as any).message} `
     const name = selectedName()
     return name ? ` ${name} ` : ""
   })
@@ -153,6 +160,23 @@ export default function App() {
       : tab() === "templates" ? filteredTemplates()
       : filteredRepos()
     setCursor(c => Math.min(c, Math.max(0, entriesList.length - 1)))
+  }
+
+  function buildSummary(result: SyncResult): { text: string; color: "green" | "yellow" | "red" } {
+    const ns = result.synced.length
+    const nsk = result.skipped.filter(s => s.reason.includes("conflict")).length
+    const nf = result.skipped.length - nsk  // non-conflict skips are failures
+
+    if (ns === 0 && nsk === 0 && nf === 0) {
+      return { text: "Nothing to sync. Press any key to continue.", color: "green" }
+    }
+    if (nf > 0) {
+      return { text: `${ns} synced, ${nsk} skipped, ${nf} failed. Press any key to continue.`, color: "red" }
+    }
+    if (nsk > 0) {
+      return { text: `${ns} synced, ${nsk} skipped. Press any key to continue.`, color: "yellow" }
+    }
+    return { text: `${ns} synced. Press any key to continue.`, color: "green" }
   }
 
   async function handleRun(name: string) {
@@ -204,6 +228,11 @@ export default function App() {
       )
       if (!result.ok) setProgressLines((prev) => [...prev, `ERROR: ${result.error}`])
       setProgressDone(true)
+      return
+    }
+
+    if (action === "sync") {
+      setView({ view: "confirm", index, action: "sync" })
       return
     }
 
@@ -261,6 +290,31 @@ export default function App() {
 
     if (batch) setSelected(new Set<number>())
     setProgressDone(true)
+  }
+
+  async function executeSync(name: string) {
+    const ws = readWorkspace(name)
+    const initialRows: SyncRow[] = ws.repos
+      .filter(r => r.mode === "worktree")
+      .map(r => ({ repo: r.name, status: "pending" as const, detail: "", conflicts: [] }))
+
+    setSyncRows(initialRows)
+    setSyncDone(false)
+    setSyncSummary({ text: "", color: "green" })
+    setView({ view: "sync-progress", message: `Syncing ${name}...` })
+
+    const onSyncProgress = (update: SyncRow) => {
+      setSyncRows(prev => prev.map(r => r.repo === update.repo ? { ...r, ...update } : r))
+    }
+
+    try {
+      const result = await syncWorkspace(name, { strategy: "rebase", bestEffort: true }, undefined, onSyncProgress)
+      setSyncSummary(buildSummary(result))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setSyncSummary({ text: `Sync failed: ${msg}. Press any key to continue.`, color: "red" })
+    }
+    setSyncDone(true)
   }
 
   async function launchEditor(name: string) {
@@ -435,6 +489,15 @@ export default function App() {
     }
 
     if (v.view === "progress") return
+
+    // Sync progress — any key returns to list when done
+    if (v.view === "sync-progress" && syncDone()) {
+      reload()
+      setView({ view: "list" })
+      clampCursor()
+      return
+    }
+    if (v.view === "sync-progress") return  // block ALL keys during sync (D-11)
 
     // Confirm dialog
     if (v.view === "confirm") return // ConfirmDialog has its own keyboard handler
@@ -644,13 +707,22 @@ export default function App() {
               const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
               const label = confirmContext() === "template"
                 ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
+                : v.action === "sync"
+                ? `Sync '${filteredEntries()[v.index]?.workspace.name}'? (rebase from upstream)`
                 : v.batch
                 ? `${v.action} ${selected().size} workspace(s)?`
                 : `${v.action} '${filteredEntries()[v.index]?.workspace.name}'?`
               return (
                 <ConfirmDialog
                   message={label}
-                  onConfirm={() => executeConfirmed(v.action, v.index, v.batch)}
+                  onConfirm={() => {
+                    if (v.action === "sync") {
+                      const entry = filteredEntries()[v.index]
+                      if (entry) executeSync(entry.workspace.name)
+                    } else {
+                      executeConfirmed(v.action, v.index, v.batch)
+                    }
+                  }}
                   onCancel={() => setView({ view: "list" })}
                 />
               )
@@ -673,6 +745,15 @@ export default function App() {
               title={(view() as any).message}
               lines={progressLines()}
               done={progressDone()}
+            />
+          </Show>
+
+          {/* Sync progress view */}
+          <Show when={view().view === "sync-progress"}>
+            <SyncProgressView
+              rows={syncRows()}
+              done={syncDone()}
+              summary={syncSummary()}
             />
           </Show>
         </box>
