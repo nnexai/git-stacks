@@ -1,5 +1,6 @@
 import { Command } from "commander"
 import * as p from "@clack/prompts"
+import type { Workspace } from "../lib/config"
 import { listWorkspaces, readWorkspace, readGlobalConfig } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
 import { agentHookPlugins } from "../lib/agent-hooks"
@@ -37,10 +38,19 @@ export const installCommand = new Command("install")
 
     p.intro("git-stacks install")
 
-    // Detect workspace from cwd or env
-    let workspaceName = detectWorkspaceFromCwd()
+    let workspace: Workspace
 
-    if (!workspaceName) {
+    // Detect workspace from cwd or env
+    const detectedName = detectWorkspaceFromCwd()
+
+    if (detectedName) {
+      try {
+        workspace = readWorkspace(detectedName)
+      } catch {
+        p.log.error(`Detected workspace '${detectedName}' but could not read its config.`)
+        process.exit(1)
+      }
+    } else {
       const workspaces = listWorkspaces()
       if (workspaces.length === 0) {
         p.log.error("No workspaces found. Create one first with: git-stacks new")
@@ -49,7 +59,7 @@ export const installCommand = new Command("install")
 
       const selected = await p.select({
         message: "Select a workspace to install hooks into",
-        options: workspaces.map((ws) => ({ value: ws.name, label: ws.name })),
+        options: workspaces.map((ws) => ({ value: ws, label: ws.name })),
       })
 
       if (p.isCancel(selected)) {
@@ -57,28 +67,16 @@ export const installCommand = new Command("install")
         process.exit(0)
       }
 
-      workspaceName = selected as string
+      workspace = selected as Workspace
     }
 
-    const workspace = readWorkspace(workspaceName)
-    const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
-
-    if (worktreeRepos.length === 0) {
-      p.log.warn(`No worktree repos found in workspace '${workspaceName}'.`)
-      p.outro("Nothing to do.")
-      return
-    }
+    const targetDir = process.cwd()
 
     if (opts.remove) {
-      // Remove all agent hook plugins from all worktree repos
       for (const plugin of agentHookPlugins) {
-        for (const repo of worktreeRepos) {
-          plugin.remove(repo.task_path)
-        }
+        plugin.remove(targetDir)
       }
-      p.log.success(
-        `Removed hooks from ${worktreeRepos.length} repo(s) in workspace '${workspaceName}'.`
-      )
+      p.log.success(`Removed hooks from ${targetDir}`)
     } else {
       // Multi-select plugins to install
       const pluginChoices = await p.multiselect({
@@ -99,13 +97,11 @@ export const installCommand = new Command("install")
       const selectedPlugins = agentHookPlugins.filter((p) => selectedIds.includes(p.id))
 
       for (const plugin of selectedPlugins) {
-        for (const repo of worktreeRepos) {
-          plugin.install(repo.task_path, workspace.name)
-        }
+        plugin.install(targetDir, workspace.name)
       }
 
       p.log.success(
-        `Installed hooks for ${selectedPlugins.length} framework(s) into ${worktreeRepos.length} repo(s) in workspace '${workspaceName}'.`
+        `Installed ${selectedPlugins.map((p) => p.label).join(", ")} hooks into ${targetDir} (workspace: ${workspace.name})`
       )
     }
 

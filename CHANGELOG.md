@@ -4,6 +4,34 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.5.0] — 2026-03-21
+
+### Added
+
+**Agent hook installer** (`git-stacks install --hooks`)
+- Install AI agent framework hooks into the current directory's `.claude/settings.json`
+- Hooks bridge Claude Code lifecycle events into git-stacks workspace notifications:
+  - `Stop` — sends "Claude has finished and may need your attention"
+  - `PreToolUse` (AskUserQuestion) — sends "Claude is asking a question — input needed"
+  - `UserPromptSubmit` — clears notification (user is responding)
+  - `PostToolUse` (AskUserQuestion) — clears notification
+- Workspace auto-detection from cwd (path-based) or `WS_WORKSPACE` env var, with interactive fallback
+- Multi-select for agent frameworks (extensible plugin system, Claude Code included)
+- `git-stacks install --hooks --remove` to uninstall hooks
+- Idempotent: running install twice updates hooks without duplication
+- Merges into existing `.claude/settings.json` without disturbing other keys (permissions, etc.)
+
+**Extensible agent hook plugin system** (`src/lib/agent-hooks/`)
+- `AgentHookPlugin` interface for adding new agent framework integrations
+- Plugin registry pattern: add a new file + register in `index.ts`
+- Generates proper Claude Code nested hooks format (object keyed by event name with matcher groups)
+
+**Test coverage improvements**
+- 30 previously-TODO tests implemented across 6 test files (doctor-json, doctor-fix, status-json, sync-json, list-columns, run-parallel)
+- Snapshot tests for 7 TUI dashboard components (CenteredDialog, StatusIndicator, BatchBar, ConfirmDialog, HelpOverlay, ProgressView, RepoDetail)
+
+---
+
 ## [0.4.1] — 2026-03-21
 
 ### Fixed

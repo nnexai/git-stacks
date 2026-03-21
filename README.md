@@ -156,6 +156,22 @@ git-stacks doctor --fix   # Auto-repair drift
 
 Global config lives at `~/.config/git-stacks/config.yml`. Default workspace root is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
 
+## Agent Hook Installer
+
+Install AI agent notification hooks into the current project so the TUI dashboard shows when an agent needs your attention:
+
+```bash
+# Install Claude Code hooks (interactive workspace + framework selection)
+git-stacks install --hooks
+
+# Remove installed hooks
+git-stacks install --hooks --remove
+```
+
+This writes lifecycle hooks into `.claude/settings.json` in the current directory. When Claude Code finishes a task or asks a question, a notification appears in the dashboard. When you respond, the notification clears automatically.
+
+The plugin system is extensible — new agent frameworks can be added as plugins in `src/lib/agent-hooks/`.
+
 ## Hooks & Env Injection
 
 Templates and workspaces support hook arrays (shell commands run in order):
