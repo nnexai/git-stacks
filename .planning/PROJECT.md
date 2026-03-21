@@ -8,7 +8,16 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: (none — planning next)
+## Current Milestone: v0.6.0 Integration Orchestration & Niri
+
+**Goal:** Transform integrations from independent side-effects into an ordered pipeline with shared artifacts, and ship a niri compositor integration that arranges all workspace windows on a dedicated niri workspace.
+
+**Target features:**
+- Integration artifact system — `open()` returns spawned windows/session names, accumulated into shared context
+- Integration ordering — explicit, configurable execution order (niri runs last)
+- Niri integration — dedicated workspace per git-stacks workspace, window arrangement, tmux terminal spawning
+- Existing integration updates — tmux/vscode/cmux return artifacts for downstream consumption
+- Window identification — snapshot-diff strategy, tmux client lookup, app_id matching
 
 ## Current State — v0.4.0 milestone complete (2026-03-21)
 
@@ -82,12 +91,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-- [ ] Programmatic API — export `workspace-ops.ts` as typed package; `Result<T>` return type
-- [ ] WezTerm/Zellij integrations
-- [ ] `clone --pr <N>` — create workspace from GitHub PR branch
-- [ ] Per-repo ahead/behind indicator in workspace status
-- [ ] Batch workspace generation (`new --count N`) for agent orchestration
-- [ ] Agent status file protocol (standardized env injection for agent frameworks)
+- [ ] Integration artifact system — `open()` returns artifacts, accumulated into shared context for downstream integrations
+- [ ] Integration ordering — explicit execution order, configurable per-template/workspace
+- [ ] Niri compositor integration — dedicated workspace, window arrangement, tmux terminal spawning
+- [ ] Existing integrations return artifacts — tmux session name, vscode/cmux window PIDs
+- [ ] Window identification strategy — snapshot-diff, tmux client lookup, app_id matching
 
 ### Out of Scope
 
@@ -105,7 +113,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Next Milestone Goals
 
-After v0.4.0 — candidates for v0.5.0:
+After v0.6.0 — candidates for v0.7.0+:
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type; version gate for v1.0
 - **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, per-repo ahead/behind in status
@@ -114,7 +122,7 @@ After v0.4.0 — candidates for v0.5.0:
 
 ## Versioning
 
-**Current release:** `v0.4.0`
+**Current release:** `v0.5.1`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -178,4 +186,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-21 after v0.4.0 milestone — TUI Hardening & Polish shipped*
+*Last updated: 2026-03-21 after v0.6.0 milestone start — Integration Orchestration & Niri*

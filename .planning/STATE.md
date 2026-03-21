@@ -1,30 +1,30 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.4.0
-milestone_name: TUI Hardening & Polish
-status: unknown
-stopped_at: Completed quick task 260321-u1l
-last_updated: "2026-03-21T20:43:26Z"
+milestone: v0.6.0
+milestone_name: Integration Orchestration & Niri
+status: defining_requirements
+stopped_at: Milestone v0.6.0 started
+last_updated: "2026-03-21T22:00:00Z"
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 21
-  completed_plans: 21
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-20)
+See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 15.2 — integration-overrides-per-template-and-workspace
+**Current focus:** Defining requirements for v0.6.0 — Integration Orchestration & Niri
 
 ## Current Position
 
-Phase: 15.2
-Plan: Not started
+Phase: Not started (defining requirements)
+Plan: —
 
 ## Accumulated Context
 
