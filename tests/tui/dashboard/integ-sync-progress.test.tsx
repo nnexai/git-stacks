@@ -30,6 +30,71 @@ write(configDir, "workspaces/sync-ws.yml", [
   "    base_branch: main",
 ].join("\n") + "\n")
 
+// Inline workspace fixture for mocking (resilient against module cache issues).
+// When this test runs in a full test suite, paths.ts may already be loaded with a
+// different configDir (Pitfall 1 in RESEARCH.md). The inline fixture ensures that
+// config functions return our expected data regardless of file system resolution.
+const syncWsFixture = {
+  name: "sync-ws",
+  schema_version: "1" as const,
+  branch: "feature/sync-test",
+  created: "2026-03-01T00:00:00.000Z",
+  repos: [
+    {
+      repo: "sync-repo",
+      name: "sync-repo",
+      type: "other" as const,
+      mode: "worktree" as const,
+      main_path: "/tmp/sync-repo",
+      task_path: "/tmp/tasks/sync-ws/sync-repo",
+      base_branch: "main",
+    },
+  ],
+}
+
+const registryFixture = [
+  {
+    name: "sync-repo",
+    local_path: "/tmp/sync-repo",
+    type: "other" as const,
+    default_branch: "main",
+  },
+]
+
+// Mock config module — ensures listWorkspaces and readWorkspace return our fixture
+// data even when paths.ts module cache resolves to a different configDir.
+mock.module("../../../src/lib/config", () => ({
+  // Workspace operations
+  listWorkspaces: mock(() => [syncWsFixture]),
+  readWorkspace: mock((_name: string) => syncWsFixture),
+  writeWorkspace: mock(() => {}),
+  workspaceExists: mock((name: string) => name === "sync-ws"),
+  workspacePath: mock((name: string) => `${configDir}/workspaces/${name}.yml`),
+  // Registry operations
+  readRegistry: mock(() => registryFixture),
+  writeRegistry: mock(() => {}),
+  listRegistryEntries: mock(() => registryFixture),
+  // Template operations
+  listTemplates: mock(() => []),
+  readTemplate: mock((_name: string) => { throw new Error("not found") }),
+  writeTemplate: mock(() => {}),
+  templateExists: mock(() => false),
+  templatePath: mock((name: string) => `${configDir}/templates/${name}.yml`),
+  // Global config
+  readGlobalConfig: mock(() => ({
+    workspace_root: "/tmp/integ-sync-root",
+    integrations: {},
+  })),
+  writeGlobalConfig: mock(() => {}),
+  // Helpers
+  expandBranchPattern: mock((pattern: string, name: string) => pattern.replace("{name}", name)),
+  formatZodError: mock(() => ""),
+  // Re-export Zod schemas as-is (types only, not needed at runtime for tests)
+  WorkspaceSchema: {} as any,
+  TemplateSchema: {} as any,
+  RepoRegistryEntrySchema: {} as any,
+}))
+
 // Mock git operations to prevent real filesystem git work
 mock.module("../../../src/lib/git", () => ({
   createWorktree: mock(async () => {}),
@@ -92,11 +157,12 @@ describe("integration: sync progress flow", () => {
     await renderOnce()
 
     // Enter on first workspace to open ActionMenu
+    // The workspace list shows "sync-ws" from the mocked listWorkspaces()
     mockInput.pressEnter()
     await renderOnce()
 
     const frame = captureCharFrame()
-    // ActionMenu should contain "Sync" option
+    // ActionMenu should contain "Sync" option (key "s" in ActionMenu.tsx)
     expect(frame).toContain("Sync")
   })
 
@@ -107,7 +173,7 @@ describe("integration: sync progress flow", () => {
     )
     await renderOnce()
 
-    // Open ActionMenu
+    // Open ActionMenu on first (only) workspace
     mockInput.pressEnter()
     await renderOnce()
 
@@ -140,15 +206,20 @@ describe("integration: sync progress flow", () => {
     mockInput.pressKey("y")
     await renderOnce()
 
-    // After confirming: syncWorkspace mock resolves immediately (sync fn is called)
-    // The sync-progress view OR the completion state should be visible
-    // Since the mock resolves synchronously, syncDone may already be true
+    // After confirming: executeSync is called which:
+    // 1. Sets view to "sync-progress"
+    // 2. Calls syncWorkspace (which is mocked and resolves synchronously)
+    // 3. Sets syncDone = true
+    // The sync-progress view shows rows from the progress updates.
+    // Since the mock resolves synchronously, syncDone may already be true.
     const frame = captureCharFrame()
 
-    // Either the sync progress view shows "sync-repo" from the progress rows,
-    // or the workspace list is back with "sync-ws".
-    // Either way: the workspace name should appear somewhere meaningful.
-    const hasSyncContent = frame.includes("sync-repo") || frame.includes("sync-ws") || frame.includes("Syncing")
+    // The frame should contain sync-related content (progress rows or list with sync-ws)
+    const hasSyncContent = (
+      frame.includes("sync-repo") ||
+      frame.includes("sync-ws") ||
+      frame.includes("Syncing")
+    )
     expect(hasSyncContent).toBe(true)
   })
 })
