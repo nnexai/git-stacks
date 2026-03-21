@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
-status: roadmap_created
-stopped_at: Roadmap created — 5 phases (16-20), 27 requirements mapped
-last_updated: "2026-03-21T22:30:00Z"
+status: unknown
+stopped_at: Completed 16-artifact-type-foundation-16-01-PLAN.md
+last_updated: "2026-03-21T22:31:19.443Z"
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
 ---
 
 # Project State
@@ -19,20 +19,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** v0.6.0 Phase 16 — artifact-type-foundation (ready to plan)
+**Current focus:** Phase 16 — artifact-type-foundation
 
 ## Current Position
 
-Phase: 16 of 20 (artifact-type-foundation)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-03-21 — Roadmap created for v0.6.0
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 16 (artifact-type-foundation) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0 (this milestone)
 - Average duration: —
 - Total execution time: —
@@ -44,6 +41,8 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 ## Accumulated Context
+
+| Phase 16-artifact-type-foundation P01 | 2 | 2 tasks | 7 files |
 
 ### Decisions
 
@@ -57,6 +56,9 @@ Progress: [░░░░░░░░░░] 0%
 - Terminal spawn for niri uses `env -u TMUX -u TMUX_PANE <terminal> -e tmux new-session -A -s <name>` to prevent tmux env contamination when git-stacks is run from inside tmux
 - All niri IPC isolated in `src/lib/niri.ts` — no niri calls anywhere else; automated tests always mock this module
 - Phase 19 (niri-shell-wrappers) can proceed in parallel with Phase 17-18 since it only depends on Phase 16
+- [Phase 16-artifact-type-foundation]: All four existing integrations return null from open() — real artifact values deferred to Phase 18
+- [Phase 16-artifact-type-foundation]: ArtifactBag uses integration.id as key so downstream integrations can look up prior artifacts by well-known string key
+- [Phase 16-artifact-type-foundation]: WindowArtifact carries pid, app_id, and title to support niri snapshot-diff window identification in Phase 20
 
 ### Pending Todos
 
@@ -77,7 +79,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:30:00Z
-Stopped at: Roadmap created for v0.6.0 — ready to plan Phase 16
+Last session: 2026-03-21T22:31:19.440Z
+Stopped at: Completed 16-artifact-type-foundation-16-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 16`

@@ -48,7 +48,7 @@ See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md) for full detail
 
 **Milestone Goal:** Transform integrations from isolated side-effects into an ordered pipeline with shared artifacts, and ship a niri compositor integration that arranges all workspace windows onto a dedicated named workspace.
 
-- [ ] **Phase 16: artifact-type-foundation** - Define IntegrationArtifact types, ArtifactBag, and update open() signature across all integrations so the build compiles with the new contract
+- [x] **Phase 16: artifact-type-foundation** - Define IntegrationArtifact types, ArtifactBag, and update open() signature across all integrations so the build compiles with the new contract (completed 2026-03-21)
 - [ ] **Phase 17: integration-runner** - Consolidate four duplicated integration loops into a single runner.ts module with tier ordering, artifact accumulation, and skip-flag preservation
 - [ ] **Phase 18: artifact-population** - Make existing integrations (tmux, cmux, vscode, intellij) return real artifact values so the bag is populated for downstream consumers
 - [ ] **Phase 19: niri-shell-wrappers** - Implement src/lib/niri.ts shell wrapper library with mockable interface covering all niri msg IPC operations
@@ -65,9 +65,9 @@ See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md) for full detail
   2. `ArtifactBag` type exists in types.ts and is threaded as a parameter through open() on all integrations
   3. All existing integration tests pass unchanged after the signature update (TEST-03)
   4. `IntegrationArtifact` is a discriminated union covering at minimum tmux, cmux, vscode, intellij, and window variants
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 16-01-PLAN.md — Define artifact types, update Integration.open() signature, update all implementations and caller
+- [x] 16-01-PLAN.md — Define artifact types, update Integration.open() signature, update all implementations and caller
 
 ### Phase 17: integration-runner
 **Goal**: A single runner.ts module replaces all four inline integration loops; the two execution modes (generate-only for TUI callers, generate+open for workspace-ops/CLI) are both implemented; skip flags work correctly
@@ -122,7 +122,7 @@ Plans:
 | 1-5. Foundation | v0.2.0 | 21/21 | Complete | 2026-03-18 |
 | 6-9. Dashboard UI | v0.3.0 | 13/13 | Complete | 2026-03-20 |
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
-| 16. artifact-type-foundation | v0.6.0 | 0/1 | Not started | - |
+| 16. artifact-type-foundation | v0.6.0 | 1/1 | Complete   | 2026-03-21 |
 | 17. integration-runner | v0.6.0 | 0/? | Not started | - |
 | 18. artifact-population | v0.6.0 | 0/? | Not started | - |
 | 19. niri-shell-wrappers | v0.6.0 | 0/? | Not started | - |

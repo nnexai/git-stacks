@@ -9,8 +9,8 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 
 ### Orchestration
 
-- [ ] **ORCH-01**: Integration `open()` returns typed artifacts (session names, window info) instead of void
-- [ ] **ORCH-02**: Artifacts accumulate into a shared bag passed to each subsequent integration's `open()` call
+- [x] **ORCH-01**: Integration `open()` returns typed artifacts (session names, window info) instead of void
+- [x] **ORCH-02**: Artifacts accumulate into a shared bag passed to each subsequent integration's `open()` call
 - [ ] **ORCH-03**: Integration execution uses three-tier ordering: independent setup (tier 1), partial side-effects (tier 2), window management (tier 3)
 - [ ] **ORCH-04**: Tier assignment is per-integration with extensible numeric priority (not hardcoded to niri)
 - [ ] **ORCH-05**: Four duplicated integration loops consolidated into a single runner module
@@ -23,8 +23,8 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 - [ ] **ART-02**: cmux integration returns workspace ref artifact
 - [ ] **ART-03**: VSCode integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
 - [ ] **ART-04**: IntelliJ integration returns generic window artifact (pid, app_id, window_title) via best-effort identification
-- [ ] **ART-05**: Window artifact type is shared across all integrations: `{ pid: number; app_id: string; title: string }`
-- [ ] **ART-06**: Integrations that cannot identify their window return null artifact (graceful degradation)
+- [x] **ART-05**: Window artifact type is shared across all integrations: `{ pid: number; app_id: string; title: string }`
+- [x] **ART-06**: Integrations that cannot identify their window return null artifact (graceful degradation)
 
 ### Niri
 
@@ -43,7 +43,7 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 
 - [ ] **TEST-01**: Niri shell wrappers (`src/lib/niri.ts`) have a mockable interface — automated tests never call real `niri msg`
 - [ ] **TEST-02**: Integration runner has unit tests for artifact accumulation, tier ordering, and skip-flag behavior
-- [ ] **TEST-03**: Existing integration tests continue to pass after `open()` return type change
+- [x] **TEST-03**: Existing integration tests continue to pass after `open()` return type change
 - [ ] **TEST-04**: Niri integration has unit tests with mocked niri shell wrappers covering workspace create, window move, tmux attach, cleanup
 
 ## Future Requirements
@@ -77,11 +77,11 @@ Deferred to v0.7.0+.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORCH-01 | Phase 16 | Pending |
-| ORCH-02 | Phase 16 | Pending |
-| ART-05 | Phase 16 | Pending |
-| ART-06 | Phase 16 | Pending |
-| TEST-03 | Phase 16 | Pending |
+| ORCH-01 | Phase 16 | Complete |
+| ORCH-02 | Phase 16 | Complete |
+| ART-05 | Phase 16 | Complete |
+| ART-06 | Phase 16 | Complete |
+| TEST-03 | Phase 16 | Complete |
 | ORCH-03 | Phase 17 | Pending |
 | ORCH-04 | Phase 17 | Pending |
 | ORCH-05 | Phase 17 | Pending |
