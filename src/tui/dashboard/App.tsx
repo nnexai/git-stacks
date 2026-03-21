@@ -41,7 +41,8 @@ import { createWorktree, removeWorktree } from "../../lib/git"
 import { getTasksDir } from "../../lib/paths"
 import { runHooksCaptured, type HookOutputLine } from "../../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../../lib/files"
-import { integrations, type IntegrationContext } from "../../lib/integrations"
+import { type IntegrationContext } from "../../lib/integrations"
+import { runIntegrationGenerate } from "../../lib/integrations/runner"
 import { join } from "path"
 import { unlinkSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
@@ -787,11 +788,7 @@ export default function App() {
 
       // Generate integration artifacts
       const ctx: IntegrationContext = { workspace: workspaceObj, tasksDir, config }
-      for (const integration of integrations) {
-        if (!integration.isEnabled(ctx)) continue
-        if (integration.applies && !integration.applies(workspaceObj)) continue
-        integration.generate?.(ctx)
-      }
+      await runIntegrationGenerate(ctx)
 
       // Summary
       const nCreated = worktreeRepos.length

@@ -14,6 +14,7 @@ import { getTasksDir } from "../lib/paths"
 import { createWorktree } from "../lib/git"
 import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
 import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
+import { runIntegrationGenerate } from "../lib/integrations/runner"
 import { openWorkspace } from "../lib/workspace-ops"
 
 export async function runWorkspaceClone(sourceArg?: string) {
@@ -162,12 +163,8 @@ export async function runWorkspaceClone(sourceArg?: string) {
 
   // Generate integration artifacts
   const ctx: IntegrationContext = { workspace: newWorkspace, tasksDir, config }
-  const artifacts: Array<{ integration: (typeof integrations)[number]; path: string | null }> = []
-  for (const integration of integrations) {
-    if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(newWorkspace)) continue
-    const path = integration.generate?.(ctx) ?? null
-    artifacts.push({ integration, path })
+  const results = await runIntegrationGenerate(ctx)
+  for (const { integration, path } of results) {
     if (path) p.log.success(`${integration.label}: ${path}`)
   }
 

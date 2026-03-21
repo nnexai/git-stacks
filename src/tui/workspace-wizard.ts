@@ -23,6 +23,7 @@ import { createWorktree, getCurrentBranch } from "../lib/git"
 import { detectRepoType } from "../lib/detect"
 import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
 import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
+import { runIntegrationGenerate } from "../lib/integrations/runner"
 import { runHooks } from "../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
 import { openWorkspace } from "../lib/workspace-ops"
@@ -455,12 +456,8 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
 
   // Generate integration artifacts
   const ctx: IntegrationContext = { workspace: workspaceObj, tasksDir, config }
-  const artifacts: Array<{ integration: (typeof integrations)[number]; path: string | null }> = []
-  for (const integration of integrations) {
-    if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(workspaceObj)) continue
-    const path = integration.generate?.(ctx) ?? null
-    artifacts.push({ integration, path })
+  const results = await runIntegrationGenerate(ctx)
+  for (const { integration, path } of results) {
     if (path) p.log.success(`${integration.label}: ${path}`)
   }
 
