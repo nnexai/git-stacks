@@ -407,7 +407,7 @@ export default function App() {
       return
     }
 
-    // Handle filter mode
+    // Handle filter mode — text input delegated to built-in <input> element
     if (filtering()) {
       if (key.name === "escape") {
         setFiltering(false)
@@ -420,18 +420,7 @@ export default function App() {
         clampCursor()
         return
       }
-      if (key.name === "backspace") {
-        setFilter((f) => f.slice(0, -1))
-        clampCursor()
-        return
-      }
-      // Printable character
-      if (key.name.length === 1 && !key.ctrl && !key.meta) {
-        setFilter((f) => f + key.name)
-        clampCursor()
-        return
-      }
-      return
+      return // <input> handles typing, backspace, cursor movement natively
     }
 
     // Progress view — any key returns to list
@@ -684,7 +673,14 @@ export default function App() {
         {/* HELP BAR / FILTER LINE / LOADING — outside both boxes, fixed 1 row */}
         <box height={1} flexDirection="row">
           <Show when={filtering()}>
-            <text fg="cyan">  filter: {filter() || "_"}</text>
+            <box flexDirection="row">
+              <text fg="cyan">  filter: </text>
+              <input
+                focused={true}
+                value={filter()}
+                onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
+              />
+            </box>
           </Show>
           <Show when={!filtering() && refreshFlash()}>
             <text fg="green">  {refreshFlash()}</text>
