@@ -1,9 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import { useKeyboard } from "@opentui/solid"
 import type { InputRenderable } from "@opentui/core"
+import { CenteredDialog } from "./CenteredDialog"
 
 type Props = {
   label: string
+  title?: string
   prefill: string
   onConfirm: (value: string) => void
   onCancel: () => void
@@ -17,14 +19,16 @@ export function InlineInput(props: Props) {
   })
 
   return (
-    <box flexDirection="row">
-      <text fg="cyan">  {props.label}: </text>
-      <input
-        ref={props.ref}
-        value={props.prefill}
-        focused={props.focused ?? true}
-        onSubmit={(v) => props.onConfirm(v as string)}
-      />
-    </box>
+    <CenteredDialog title={props.title ?? props.label} size="small">
+      <box flexDirection="row" paddingLeft={1}>
+        <text fg="cyan">  {props.label}: </text>
+        <input
+          ref={props.ref}
+          value={props.prefill}
+          focused={props.focused ?? true}
+          onSubmit={(v) => props.onConfirm(v as string)}
+        />
+      </box>
+    </CenteredDialog>
   )
 }

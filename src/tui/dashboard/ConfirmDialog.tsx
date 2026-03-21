@@ -1,8 +1,10 @@
 /** @jsxImportSource @opentui/solid */
 import { useKeyboard } from "@opentui/solid"
+import { CenteredDialog } from "./CenteredDialog"
 
 type Props = {
   message: string
+  title?: string
   onConfirm: () => void
   onCancel: () => void
 }
@@ -14,9 +16,11 @@ export function ConfirmDialog(props: Props) {
   })
 
   return (
-    <box flexDirection="column" paddingTop={2} paddingLeft={2}>
-      <text fg="yellow">  {props.message}</text>
-      <text fg="gray">{"\n"}  [y] Yes  [n/Esc] No</text>
-    </box>
+    <CenteredDialog title={props.title ?? "Confirm"} size="small">
+      <box flexDirection="column" paddingTop={1} paddingLeft={1}>
+        <text fg="yellow">  {props.message}</text>
+        <text fg="gray">{"\n"}  [y] Yes  [n/Esc] No</text>
+      </box>
+    </CenteredDialog>
   )
 }
