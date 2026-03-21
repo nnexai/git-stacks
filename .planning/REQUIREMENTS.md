@@ -9,7 +9,7 @@
 
 - [x] **T-01**: Developer can run component-level tests for TUI dashboard components in CI without a real terminal, using `testRender` from `@opentui/solid`
 - [x] **T-02**: Tests can simulate keyboard input (`typeText`, `pressKey`, `pressEnter`, `pressEscape`, `pressArrow`) and assert on rendered output via `captureCharFrame()`
-- [x] **T-03**: `InlineInput` component has tests covering: typing, cursor movement (left/right), backspace, escape cancel, enter confirm
+- [ ] **T-03**: `InlineInput` component has tests covering: typing, cursor movement (left/right), backspace, escape cancel, enter confirm *(partial — typing/backspace/escape/enter tested in Phase 10; cursor movement deferred to Phase 11 P-01)*
 - [x] **T-04**: `ActionMenu` component has tests covering: arrow key navigation, option selection on enter, dismiss on escape
 - [ ] **T-05**: App-level integration tests cover: tab switching, action menu dispatch, wizard entry/exit, sync progress flow
 - [x] **T-06**: Config directory location can be overridden via environment variable (`GIT_STACKS_CONFIG_DIR`) so tests run in an isolated directory instead of `~/.config/git-stacks/`
@@ -76,7 +76,7 @@
 |-------------|-------|--------|
 | T-01 | Phase 10 | Complete |
 | T-02 | Phase 10 | Complete |
-| T-03 | Phase 10 | Complete |
+| T-03 | Phase 10+11 | Partial (cursor movement → Phase 11) |
 | T-04 | Phase 10 | Complete |
 | T-06 | Phase 10 | Complete (10-01) |
 | P-01 | Phase 11 | Pending |
