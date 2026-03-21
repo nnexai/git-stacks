@@ -1,14 +1,24 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
+import type { Mock } from "bun:test"
 
-// Mock @clack/prompts
-const mockConfirm = mock(async () => false as boolean | symbol)
-const mockMultiselect = mock(async () => [] as string[] | symbol)
-const mockIsCancel = mock((v: unknown) => typeof v === "symbol")
+// Register @clack/prompts mock — comprehensive to match other test files.
+// Bun caches mock.module globally across test files; the first registration wins.
+// We still register our own so tests pass when run in isolation.
+const localConfirm = mock(async () => false as boolean | symbol)
+const localMultiselect = mock(async () => [] as string[] | symbol)
+const localIsCancel = mock((v: unknown) => typeof v === "symbol")
 
 mock.module("@clack/prompts", () => ({
-  confirm: mockConfirm,
-  multiselect: mockMultiselect,
-  isCancel: mockIsCancel,
+  confirm: localConfirm,
+  multiselect: localMultiselect,
+  isCancel: localIsCancel,
+  cancel: mock(() => {}),
+  intro: mock(() => {}),
+  outro: mock(() => {}),
+  log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+  spinner: mock(() => ({ start: mock(() => {}), stop: mock(() => {}), message: mock(() => {}) })),
+  text: mock(async () => ""),
+  select: mock(async () => ""),
 }))
 
 // Mock integrations
@@ -41,17 +51,32 @@ mock.module("@/lib/integrations/index", () => ({
   integrations: fakeIntegrations,
 }))
 
-// Mock tui/utils cancel
-const mockCancel = mock((): never => {
-  throw new Error("cancelled")
-})
-
+// Mock tui/utils
 mock.module("@/tui/utils", () => ({
-  cancel: mockCancel,
+  cancel: mock((): never => { throw new Error("cancelled") }),
+  safeText: mock(async () => ""),
 }))
 
-// Import after mocks
-const { promptIntegrationOverrides } = await import("@/lib/integrations/wizard-helpers")
+// CRITICAL: workspace-edit.test.ts mocks @/lib/integrations/wizard-helpers entirely.
+// Bun caches mock.module globally; if workspace-edit runs first (alphabetically
+// tests/commands/ < tests/lib/), the wizard-helpers module is replaced with a stub.
+// Use query-parameter cache-busting to force bun to load the real module from disk
+// with our mocked @clack/prompts, integrations, and utils dependencies.
+const { promptIntegrationOverrides } = await import(
+  // @ts-ignore — query param cache-busting for bun module cache
+  "@/lib/integrations/wizard-helpers?unit-test"
+)
+
+// Get bound references from the @clack/prompts module that wizard-helpers.ts is using.
+// These may be our registered mocks or another test file's — either way, these are
+// the objects we need to configure in each test.
+const p = await import("@clack/prompts")
+const mockConfirm = p.confirm as Mock<(...args: unknown[]) => unknown>
+const mockMultiselect = p.multiselect as Mock<(...args: unknown[]) => unknown>
+const mockIsCancel = p.isCancel as Mock<(...args: unknown[]) => unknown>
+
+const utils = await import("@/tui/utils")
+const mockCancel = utils.cancel as Mock<(...args: unknown[]) => unknown>
 
 describe("promptIntegrationOverrides", () => {
   beforeEach(() => {
@@ -59,6 +84,13 @@ describe("promptIntegrationOverrides", () => {
     mockMultiselect.mockReset()
     mockIsCancel.mockReset()
     mockIsCancel.mockImplementation((v: unknown) => typeof v === "symbol")
+    mockCancel.mockReset()
+    mockCancel.mockImplementation((): never => { throw new Error("cancelled") })
+    mockConfigurePrompt.mockReset()
+    mockConfigurePrompt.mockImplementation(async (current: Record<string, unknown>) => ({
+      ...current,
+      enabled: true,
+    }))
   })
 
   test("Test 1: returns undefined when user declines override (p.confirm returns false)", async () => {
