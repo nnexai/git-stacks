@@ -49,7 +49,7 @@ See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md) for full detail
 **Milestone Goal:** Transform integrations from isolated side-effects into an ordered pipeline with shared artifacts, and ship a niri compositor integration that arranges all workspace windows onto a dedicated named workspace.
 
 - [x] **Phase 16: artifact-type-foundation** - Define IntegrationArtifact types, ArtifactBag, and update open() signature across all integrations so the build compiles with the new contract (completed 2026-03-21)
-- [ ] **Phase 17: integration-runner** - Consolidate four duplicated integration loops into a single runner.ts module with tier ordering, artifact accumulation, and skip-flag preservation
+- [x] **Phase 17: integration-runner** - Consolidate four duplicated integration loops into a single runner.ts module with tier ordering, artifact accumulation, and skip-flag preservation (completed 2026-03-21)
 - [ ] **Phase 18: artifact-population** - Make existing integrations (tmux, cmux, vscode, intellij) return real artifact values so the bag is populated for downstream consumers
 - [ ] **Phase 19: niri-shell-wrappers** - Implement src/lib/niri.ts shell wrapper library with mockable interface covering all niri msg IPC operations
 - [ ] **Phase 20: niri-integration** - Implement the full niri integration plugin: workspace lifecycle, window arrangement from artifact bag, terminal spawn, cleanup on remove
@@ -79,10 +79,10 @@ Plans:
   3. `git-stacks open --no-ide` and `git-stacks open --no-cmux` skip their respective integrations as before (regression preserved)
   4. Integrations execute in ascending numeric `order` field order, with tier 1 before tier 2 before tier 3
   5. Runner unit tests cover artifact accumulation, tier ordering, and skip-flag bypass
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 17-01-PLAN.md — Add order field to Integration, create runner.ts with both execution modes, unit tests
-- [ ] 17-02-PLAN.md — Replace all four inline integration loops with runner calls
+- [x] 17-02-PLAN.md — Replace all four inline integration loops with runner calls
 
 ### Phase 18: artifact-population
 **Goal**: tmux, cmux, vscode, and intellij integrations return real artifact values so downstream integrations can read session names and window identifiers from the artifact bag
@@ -126,7 +126,7 @@ Plans:
 | 6-9. Dashboard UI | v0.3.0 | 13/13 | Complete | 2026-03-20 |
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16. artifact-type-foundation | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
-| 17. integration-runner | v0.6.0 | 1/2 | In Progress|  |
+| 17. integration-runner | v0.6.0 | 2/2 | Complete   | 2026-03-21 |
 | 18. artifact-population | v0.6.0 | 0/? | Not started | - |
 | 19. niri-shell-wrappers | v0.6.0 | 0/? | Not started | - |
 | 20. niri-integration | v0.6.0 | 0/? | Not started | - |

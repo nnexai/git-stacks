@@ -13,7 +13,7 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 - [x] **ORCH-02**: Artifacts accumulate into a shared bag passed to each subsequent integration's `open()` call
 - [x] **ORCH-03**: Integration execution uses three-tier ordering: independent setup (tier 1), partial side-effects (tier 2), window management (tier 3)
 - [x] **ORCH-04**: Tier assignment is per-integration with extensible numeric priority (not hardcoded to niri)
-- [ ] **ORCH-05**: Four duplicated integration loops consolidated into a single runner module
+- [x] **ORCH-05**: Four duplicated integration loops consolidated into a single runner module
 - [x] **ORCH-06**: Runner supports both generate-only mode (TUI callers) and generate+open mode (workspace-ops, CLI)
 - [x] **ORCH-07**: Existing `--no-ide`/`--no-cmux` skip flags preserved through runner consolidation
 
@@ -84,7 +84,7 @@ Deferred to v0.7.0+.
 | TEST-03 | Phase 16 | Complete |
 | ORCH-03 | Phase 17 | Complete |
 | ORCH-04 | Phase 17 | Complete |
-| ORCH-05 | Phase 17 | Pending |
+| ORCH-05 | Phase 17 | Complete |
 | ORCH-06 | Phase 17 | Complete |
 | ORCH-07 | Phase 17 | Complete |
 | TEST-02 | Phase 17 | Complete |

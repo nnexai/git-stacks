@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
-stopped_at: Completed 17-integration-runner-17-01-PLAN.md
-last_updated: "2026-03-21T22:58:37.647Z"
+stopped_at: Completed 17-integration-runner-17-02-PLAN.md
+last_updated: "2026-03-21T23:03:00.863Z"
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -44,6 +44,7 @@ Plan: 2 of 2
 
 | Phase 16-artifact-type-foundation P01 | 2 | 2 tasks | 7 files |
 | Phase 17-integration-runner P01 | 15 | 2 tasks | 8 files |
+| Phase 17-integration-runner P02 | 5 | 1 tasks | 4 files |
 
 ### Decisions
 
@@ -63,6 +64,7 @@ Plan: 2 of 2
 - [Phase 17-integration-runner]: vscode=10, intellij=11, tmux=12 (tier 1: independent), cmux=20 (tier 2: side-effects) — preserves array order within tier 1
 - [Phase 17-integration-runner]: runner.ts imports integrations from index.ts directly (not as parameter) — enables mock.module test isolation with cache-busting
 - [Phase 17-integration-runner]: Spread-sort [...integrations].sort() avoids mutating the exported array in index.ts
+- [Phase 17-integration-runner]: workspace-ops.ts drops the bag variable — runIntegrations return not yet consumed downstream, await alone is sufficient
 
 ### Pending Todos
 
@@ -83,7 +85,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T22:58:37.644Z
-Stopped at: Completed 17-integration-runner-17-01-PLAN.md
+Last session: 2026-03-21T23:03:00.861Z
+Stopped at: Completed 17-integration-runner-17-02-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 16`
