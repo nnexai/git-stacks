@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.4.0
 milestone_name: TUI Hardening & Polish
 status: unknown
-stopped_at: Completed 15.2-03-PLAN.md
-last_updated: "2026-03-21T18:24:17.240Z"
+stopped_at: Completed 15.2-02-PLAN.md
+last_updated: "2026-03-21T18:32:51.702Z"
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
 ---
 
 # Project State
@@ -85,6 +85,8 @@ All prior milestone decisions recorded in PROJECT.md Key Decisions table.
 - [Phase 15.2-01]: Helper accepts initialEnabledIds and currentConfigs to support global-config pre-population for new and template-override pre-population for edit
 - [Phase 15.2]: readGlobalConfig() called once at render time — config is stable during TUI session (no reactive signal needed)
 - [Phase 15.2]: readTemplate() wrapped in try/catch in WorkspaceDetail — resilient to template file deletion while workspace still references it
+- [Phase 15.2-02]: Both test files mock @clack/prompts comprehensively (spinner, multiselect, confirm) to avoid Bun module cache issue when run together
+- [Phase 15.2-02]: runWorkspaceEdit co-located in workspace-wizard.ts (not a separate file) since it shares all imports
 
 ### Pending Todos
 
@@ -101,7 +103,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T18:24:17.234Z
-Stopped at: Completed 15.2-03-PLAN.md
+Last session: 2026-03-21T18:32:51.697Z
+Stopped at: Completed 15.2-02-PLAN.md
 Resume file: None
 Next action: Phase 11 complete. Execute next phase.
