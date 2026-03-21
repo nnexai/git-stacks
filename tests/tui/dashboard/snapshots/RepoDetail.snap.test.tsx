@@ -16,7 +16,7 @@ const makeWorkspace = (name: string, repoName: string): Workspace => ({
     {
       name: repoName,
       repo: repoName,
-      type: "node",
+      type: "typescript",
       mode: "worktree",
       main_path: `/home/user/workspaces/main/${repoName}`,
       task_path: `/home/user/workspaces/tasks/${name}/${repoName}`,
@@ -55,7 +55,7 @@ describe("RepoDetail snapshots", () => {
       name: "api",
       schema_version: "1",
       local_path: "/home/user/repos/api",
-      type: "node",
+      type: "typescript",
       default_branch: "main",
       diskExists: true,
     }
