@@ -6,7 +6,9 @@ export const HOME = homedir()
 export const DEFAULT_WORKSPACE_ROOT = join(HOME, "workspaces")
 
 // All config and metadata lives in ~/.config/git-stacks/
-export const WS_CONFIG_DIR = join(HOME, ".config", "git-stacks")
+// GIT_STACKS_CONFIG_DIR env var overrides the config dir (used for test isolation)
+export const WS_CONFIG_DIR =
+  process.env.GIT_STACKS_CONFIG_DIR ?? join(HOME, ".config", "git-stacks")
 export const WORKSPACES_DIR = join(WS_CONFIG_DIR, "workspaces")
 export const GLOBAL_CONFIG_FILE = join(WS_CONFIG_DIR, "config.yml")
 export const REGISTRY_FILE = join(WS_CONFIG_DIR, "registry.yml")
