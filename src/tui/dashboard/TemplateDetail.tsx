@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { Show, For, createMemo } from "solid-js"
+import { formatConfigValue } from "./configUtils"
 import type { Template } from "../../lib/config"
 import { readGlobalConfig } from "../../lib/config"
 import { integrations } from "../../lib/integrations"
@@ -85,7 +86,7 @@ export function TemplateDetail(props: Props) {
                   const rawConfig = ((tplOverride ?? globalConfig.integrations[integration.id] ?? {}) as Record<string, unknown>)
                   const extras = Object.entries(rawConfig)
                     .filter(([k]) => k !== "enabled")
-                    .map(([k, v]) => `${k}: ${v}`)
+                    .map(([k, v]) => `${k}: ${formatConfigValue(v)}`)
                     .join(", ")
                   if (extras) configSummary = `(${extras})`
                 }

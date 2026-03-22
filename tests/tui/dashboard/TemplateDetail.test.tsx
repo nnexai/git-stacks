@@ -25,6 +25,15 @@ mock.module("../../../src/lib/integrations", () => ({
       isEnabled: mock(() => true),
       open: mock(async () => {}),
     },
+    {
+      id: "niri",
+      label: "niri",
+      hint: "",
+      enabledByDefault: true,
+      configurePrompt: mock(async () => null),
+      isEnabled: mock(() => true),
+      open: mock(async () => {}),
+    },
   ],
   resolveEnabledGlobally: mock(() => true),
 }))
@@ -127,5 +136,23 @@ describe("TemplateDetail integration display", () => {
     await renderOnce()
     const frame = captureCharFrame()
     expect(frame).toContain("(cmd: code-insiders)")
+  })
+
+  test("Test 5: niri columns render as '1 col' not '[object Object]'", async () => {
+    const template = makeTemplate({
+      integrations: {
+        niri: {
+          enabled: true,
+          columns: [{ windows: [{ app: "foot" }] }],
+        },
+      },
+    })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <TemplateDetail template={template as any} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("1 col")
+    expect(frame).not.toContain("[object Object]")
   })
 })

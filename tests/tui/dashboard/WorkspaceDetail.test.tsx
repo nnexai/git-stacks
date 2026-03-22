@@ -38,6 +38,15 @@ mock.module("../../../src/lib/integrations", () => ({
       isEnabled: mock(() => true),
       open: mock(async () => {}),
     },
+    {
+      id: "niri",
+      label: "niri",
+      hint: "",
+      enabledByDefault: true,
+      configurePrompt: mock(async () => null),
+      isEnabled: mock(() => true),
+      open: mock(async () => {}),
+    },
   ],
   resolveEnabledGlobally: mock(() => true),
 }))
@@ -190,5 +199,31 @@ describe("WorkspaceDetail integration display", () => {
     await renderOnce()
     const frame = captureCharFrame()
     expect(frame).toContain("[skipped:")
+  })
+
+  test("Test 7: niri columns render as '2 cols' not '[object Object]'", async () => {
+    const entry = makeEntry({
+      workspace: {
+        settings: {
+          integrations: {
+            niri: {
+              enabled: true,
+              focus: true,
+              columns: [
+                { width: "50%", windows: [{ app: "foot" }] },
+                { windows: [{ source: "vscode" }] },
+              ],
+            },
+          },
+        },
+      },
+    })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("2 cols")
+    expect(frame).not.toContain("[object Object]")
   })
 })
