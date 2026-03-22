@@ -70,7 +70,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 - [x] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks (completed 2026-03-22)
 - [x] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements (completed 2026-03-22)
 - [x] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation via forge CLI pass-through (completed 2026-03-22)
-- [ ] **Phase 28: Issue & Task Tracking Integration** - Issue linking for GitHub/GitLab/Gitea/Jira via forge CLIs and configurable templates
+- [x] **Phase 28: Issue & Task Tracking Integration** - Issue linking for GitHub/GitLab/Gitea/Jira via forge CLIs and configurable templates (completed 2026-03-22)
 
 ## Phase Details
 
@@ -126,7 +126,7 @@ Plans:
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 27. Git Forge Integrations | v0.7.0 | 4/4 | Complete    | 2026-03-22 |
-| 28. Issue & Task Tracking | v0.7.0 | 3/4 | In Progress|  |
+| 28. Issue & Task Tracking | v0.7.0 | 4/4 | Complete   | 2026-03-22 |
 
 ### Phase 24: Mock Architecture Refactor
 
@@ -223,10 +223,10 @@ Plans:
   5. `issue unlink` removes only the issue key, preserving other integration config
   6. `git-stacks doctor` checks availability of `jira` binary
   7. All four trackers registered and visible as subcommands
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 28-01-PLAN.md — Shared issue-utils module (resolveIssueRef, linkIssue, unlinkIssue, formatIssueError)
 - [x] 28-02-PLAN.md — Forge issue subcommands (GitHub, GitLab, Gitea issue link/unlink/open)
 - [x] 28-03-PLAN.md — Jira standalone integration + doctor check + integration-commands tests
-- [ ] 28-04-PLAN.md — CHANGELOG and README documentation for issue tracking features
+- [x] 28-04-PLAN.md — CHANGELOG and README documentation for issue tracking features

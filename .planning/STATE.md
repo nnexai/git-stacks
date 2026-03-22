@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T17:44:07.339Z"
+last_updated: "2026-03-22T17:48:19.931Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -69,6 +69,7 @@ Plan: 4 of 4
 | Phase 28-issue-task-tracking-integration P01 | 1min | 1 tasks | 2 files |
 | Phase 28-issue-task-tracking-integration P03 | 244s | 2 tasks | 5 files |
 | Phase 28-issue-task-tracking-integration P02 | 5min | 2 tasks | 6 files |
+| Phase 28-issue-task-tracking-integration P04 | 2min | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -113,6 +114,7 @@ Plan: 4 of 4
 - [Phase 28-issue-task-tracking-integration]: Doctor jira check uses warn severity — jira-cli is optional, configurable template fallback exists (D-06)
 - [Phase 28-02]: Gitea issue open uses tea issues ls --output json --fields index,url --state all (tea has no issue view command)
 - [Phase 28-02]: Issue link/unlink delegate to issue-utils pure YAML ops — no forge CLI invocation needed for link/unlink
+- [Phase 28-issue-task-tracking-integration]: Issue tracking docs: entries placed after forge entries in CHANGELOG.md for logical feature grouping; README table rows updated in-place to mention issues alongside PRs
 
 ### Pending Todos
 
@@ -138,7 +140,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:44:07.337Z
+Last session: 2026-03-22T17:48:19.928Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21
