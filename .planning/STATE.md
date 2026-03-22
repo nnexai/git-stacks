@@ -4,7 +4,7 @@ milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
 stopped_at: Completed 25-03-PLAN.md — mergeWorkspace D-10 cascade, TUI captured flag fix, runPreRemoveHooks removal
-last_updated: "2026-03-22T14:51:21.991Z"
+last_updated: "2026-03-22T15:10:00.000Z"
 progress:
   total_phases: 9
   completed_phases: 6
@@ -81,6 +81,7 @@ Plan: Not started
 - [Phase 25-dedicated-lifecycle-phases]: mergeWorkspace composes _executeClean for steps 1-6 rather than calling _executeClose directly — matches removeWorkspace pattern and avoids duplicating close+clean logic
 - [Phase 25-dedicated-lifecycle-phases]: post_merge fires after post_remove (D-11 ordering) — workspace is fully deleted before merge notification hooks run
 - [Phase 25-dedicated-lifecycle-phases]: All TUI lifecycle dispatches pass captured:true to prevent OpenTUI screen corruption when hooks run during clean/remove/merge
+- [quick-260322-m2k]: All hook env vars renamed from WS_ to GS_ prefix; buildRepoEnv helper extracted; openWorkspace now uses buildBaseEnv (injects GS_TRIGGERED_BY=open); create flows inject GS_TRIGGERED_BY=create
 
 ### Pending Todos
 
@@ -100,7 +101,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T14:45:03.707Z
-Stopped at: Completed 25-03-PLAN.md — mergeWorkspace D-10 cascade, TUI captured flag fix, runPreRemoveHooks removal
+Last session: 2026-03-22T15:10:00.000Z
+Stopped at: Completed quick-260322-m2k — hook env var rename WS_ to GS_ prefix, buildRepoEnv helper, full test and doc update
 Resume file: None
 Next action: /gsd:plan-phase 21
