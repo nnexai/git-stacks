@@ -28,6 +28,22 @@
 - [x] **MOCK-03**: `tui/utils.ts` exports a `prompts` object re-exporting all used `@clack/prompts` functions (text, select, confirm, multiselect, spinner, intro, outro, log, isCancel)
 - [x] **MOCK-04**: Production files that import `@clack/prompts` directly switch to importing from `@/tui/utils`
 
+### Lifecycle Cascade
+
+- [ ] **LC-01**: New hook fields (`post_close`, `pre_clean`, `post_clean`, `pre_merge`, `post_remove`) parse in `WorkspaceHooksSchema` and `TemplateSchema` without error
+- [ ] **LC-02**: Per-repo `pre_clean` field parses in `WorkspaceRepoHooksSchema` without error
+- [ ] **LC-03**: Existing YAML files without new hook fields continue to parse (backward compatible)
+- [ ] **LC-04**: `cleanWorkspace` calls `_executeClose` before worktree removal (close-before-clean cascade per D-02)
+- [ ] **LC-05**: `cleanWorkspace` fires `pre_clean` hooks before worktree removal and `post_clean` after
+- [ ] **LC-06**: Per-repo `pre_clean` hooks fire immediately before each individual worktree removal (interleaved, not batched, per D-08)
+- [ ] **LC-07**: Hook failure mid-cascade aborts the entire operation (per D-03)
+- [ ] **LC-08**: `closeWorkspace` fires `post_close` hooks after integration cleanup and injects `WS_TRIGGERED_BY` env var (per D-04)
+- [ ] **LC-09**: `removeWorkspace` cascades through `_executeClean` then fires `pre_remove` before YAML delete and `post_remove` after (per D-06)
+- [ ] **LC-10**: `mergeWorkspace` follows full D-10 lifecycle order: `pre_close` -> integration cleanup -> `post_close` -> `pre_clean` -> per-repo `pre_clean` + worktree removal -> `post_clean` -> `pre_merge` -> git merge + branch delete -> `pre_remove` -> YAML delete -> `post_remove` -> `post_merge`
+- [ ] **LC-11**: `post_merge` fires after `post_remove` (per D-11)
+- [ ] **LC-12**: `runPreRemoveHooks` function removed — no longer used by any lifecycle function
+- [ ] **LC-13**: TUI dashboard passes `captured: true` to `cleanWorkspace`, `removeWorkspace`, and `mergeWorkspace` to prevent OpenTUI screen corruption
+
 ## Future Requirements
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type
@@ -55,16 +71,29 @@
 | UI-01 | Phase 22 | Complete |
 | TEST-01 | Phase 23 | Complete |
 | TEST-02 | Phase 23 | Complete |
-| MOCK-01 | Phase 24 | Planned |
-| MOCK-02 | Phase 24 | Planned |
-| MOCK-03 | Phase 24 | Planned |
-| MOCK-04 | Phase 24 | Planned |
+| MOCK-01 | Phase 24 | Complete |
+| MOCK-02 | Phase 24 | Complete |
+| MOCK-03 | Phase 24 | Complete |
+| MOCK-04 | Phase 24 | Complete |
+| LC-01 | Phase 25 | Planned |
+| LC-02 | Phase 25 | Planned |
+| LC-03 | Phase 25 | Planned |
+| LC-04 | Phase 25 | Planned |
+| LC-05 | Phase 25 | Planned |
+| LC-06 | Phase 25 | Planned |
+| LC-07 | Phase 25 | Planned |
+| LC-08 | Phase 25 | Planned |
+| LC-09 | Phase 25 | Planned |
+| LC-10 | Phase 25 | Planned |
+| LC-11 | Phase 25 | Planned |
+| LC-12 | Phase 25 | Planned |
+| LC-13 | Phase 25 | Planned |
 
 **Coverage:**
-- v0.7.0 requirements: 11 total
-- Mapped to phases: 11
+- v0.7.0 requirements: 24 total
+- Mapped to phases: 24
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after Phase 24 requirement definition*
+*Last updated: 2026-03-22 after Phase 25 requirement definition*

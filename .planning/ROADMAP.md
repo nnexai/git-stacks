@@ -122,7 +122,7 @@ Plans:
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 24.1. Test Mock Hygiene | v0.7.0 | 0/1 | Not started | - |
-| 25. Dedicated Lifecycle Phases | v0.7.0 | 0/? | Not started | - |
+| 25. Dedicated Lifecycle Phases | v0.7.0 | 0/3 | Not started | - |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 0/? | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
@@ -149,13 +149,23 @@ Plans:
 
 ### Phase 25: Dedicated Lifecycle Phases
 
-**Goal**: Introduce dedicated lifecycle phases so close happens before clean, and clean happens before remove. Hooks like `pre_close` should trigger in close/clean/remove commands, while `pre_remove` only fires in the remove command — giving users finer-grained control over teardown behavior.
-**Requirements**: TBD
+**Goal**: Introduce cascading lifecycle phases so close happens before clean, and clean happens before remove. Each higher-level command composes lower-level functions: `remove` calls `close` then `clean` then does its own work; `clean` calls `close` then does its own work. New hooks (`pre_clean`, `post_close`, `post_clean`, `post_remove`, `pre_merge`) give users finer-grained control over teardown behavior. `merge` also participates in the full cascade.
+**Requirements**: LC-01, LC-02, LC-03, LC-04, LC-05, LC-06, LC-07, LC-08, LC-09, LC-10, LC-11, LC-12, LC-13
 **Depends on:** Phase 24
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. `cleanWorkspace` calls `closeWorkspace` (via `_executeClose`) before worktree removal, with `pre_clean`/`post_clean` hooks
+  2. `removeWorkspace` calls `cleanWorkspace` (via `_executeClean`) before YAML deletion, with `pre_remove`/`post_remove` hooks
+  3. `mergeWorkspace` follows the full D-10 order: pre_close -> cleanup -> post_close -> pre_clean -> worktree removal -> post_clean -> pre_merge -> git merge -> pre_remove -> YAML delete -> post_remove -> post_merge
+  4. `WS_TRIGGERED_BY` env var set in all hooks to indicate the parent command (close, clean, remove, merge)
+  5. Per-repo `pre_clean` hooks fire immediately before each individual worktree removal (interleaved)
+  6. Hook failure at any cascade step aborts the entire operation
+  7. TUI dashboard passes `captured: true` to all lifecycle functions
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 25 to break down)
+- [ ] 25-01-PLAN.md — Schema extensions + closeWorkspace refactor (buildBaseEnv, _executeClose, post_close, WS_TRIGGERED_BY)
+- [ ] 25-02-PLAN.md — cleanWorkspace + removeWorkspace cascade refactor (_executeClean, pre_clean/post_clean, per-repo pre_clean, pre_remove/post_remove)
+- [ ] 25-03-PLAN.md — mergeWorkspace cascade (full D-10 order, pre_merge) + TUI captured flag fix + runPreRemoveHooks removal
 
 ### Phase 26: Autocompletion & Editor Polish
 
