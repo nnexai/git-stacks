@@ -35,6 +35,20 @@ All notable changes to `git-stacks` are documented here.
 
 **Doctor forge CLI checks** — `git-stacks doctor` now checks availability of `gh`, `glab`, and `tea` CLIs with install links.
 
+**Issue & task tracking integration (GitHub, GitLab, Gitea, Jira)** — link workspaces to issues and open them from CLI:
+- `git-stacks integration <tracker> issue link <workspace> <issue-id>` — associate an issue with a workspace
+- `git-stacks integration <tracker> issue unlink <workspace>` — remove the association
+- `git-stacks integration <tracker> issue open <workspace>` — print issue URL to stdout; `--web` opens in browser (forge trackers)
+- Supported trackers: `github` (via `gh issue view`), `gitlab` (via `glab issue view`), `gitea` (via `tea issues ls` JSON extraction), `jira` (via configurable command template)
+- Issue references stored in workspace YAML under `settings.integrations.<tracker>.issue` — no schema migration needed
+- Jira integration uses configurable `open_cmd` template (default: `jira open $ISSUE_ID`) — tool-agnostic via `$ISSUE_ID` env var substitution
+
+**Jira integration plugin** — standalone integration for Jira issue tracking:
+- `git-stacks integration jira issue link <workspace> <issue-key>` — link Jira issues like `PROJ-123`
+- `git-stacks integration jira issue open <workspace>` — opens issue via configurable command
+- Configure via `git-stacks config` — set custom `open_cmd` template (e.g. `xdg-open https://company.atlassian.net/browse/$ISSUE_ID`)
+- `git-stacks doctor` checks `jira` CLI availability
+
 **Per-command shell completion** — `git-stacks new --from <TAB>` now completes template names in bash, zsh, and fish. `close` and `edit` commands complete workspace names. Per-command flag completions are scoped correctly — `message send --from` remains freeform.
 
 **`--yaml` editor flag** — 4 commands now accept `--yaml` to open the raw YAML config in `$EDITOR` (falls back to `$VISUAL`, then `vi`). Post-edit validation warns on Zod schema errors:
