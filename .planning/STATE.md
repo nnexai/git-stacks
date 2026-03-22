@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T17:43:30.204Z"
+last_updated: "2026-03-22T17:44:07.339Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 20
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 28 (issue-task-tracking-integration) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Plan: 3 of 4
 | Phase 27 P04 | 65s | 2 tasks | 2 files |
 | Phase 28-issue-task-tracking-integration P01 | 1min | 1 tasks | 2 files |
 | Phase 28-issue-task-tracking-integration P03 | 244s | 2 tasks | 5 files |
+| Phase 28-issue-task-tracking-integration P02 | 5min | 2 tasks | 6 files |
 
 ### Decisions
 
@@ -110,6 +111,8 @@ Plan: 3 of 4
 - [Phase 28-issue-task-tracking-integration]: jiraIntegration.order = 53 — tier 5, after gitea (52); avoids collision with gitlab at 51
 - [Phase 28-issue-task-tracking-integration]: _exec.runShell uses sh -c with ISSUE_ID env var for shell injection safety — no string interpolation (Jira Pitfall 5)
 - [Phase 28-issue-task-tracking-integration]: Doctor jira check uses warn severity — jira-cli is optional, configurable template fallback exists (D-06)
+- [Phase 28-02]: Gitea issue open uses tea issues ls --output json --fields index,url --state all (tea has no issue view command)
+- [Phase 28-02]: Issue link/unlink delegate to issue-utils pure YAML ops — no forge CLI invocation needed for link/unlink
 
 ### Pending Todos
 
@@ -135,7 +138,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:43:30.202Z
+Last session: 2026-03-22T17:44:07.337Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21
