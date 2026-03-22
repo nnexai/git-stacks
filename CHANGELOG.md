@@ -21,6 +21,20 @@ All notable changes to `git-stacks` are documented here.
 
 ### Added
 
+**Forge integrations (GitHub, GitLab, Gitea)** — create, view, and check status of PRs/MRs via forge CLIs:
+- `git-stacks integration github pr create <workspace> [repo]` — create GitHub PR via `gh` CLI with correct base branch
+- `git-stacks integration gitlab pr create <workspace> [repo]` — create GitLab MR via `glab` CLI (translates `pr` to `mr` internally)
+- `git-stacks integration gitea pr create <workspace> [repo]` — create Gitea PR via `tea` CLI
+- `pr open <workspace> [repo]` — print PR/MR URL to stdout; `--web` opens in browser
+- `pr status <workspace> [repo]` — pass-through forge CLI status output
+- `[repo]` auto-selected when workspace has exactly one worktree-mode repo; required when multiple
+
+**Forge field on repo registry** — repos can now have an optional `forge` field (`github`, `gitlab`, or `gitea`) in the registry. Existing configs without this field continue to work (backward compatible).
+
+**Forge detection at registration** — `repo add` and `repo scan` detect forge from remote URL (github.com, gitlab.com) and CLI availability. Auto-selects when one forge matches; prompts when multiple match.
+
+**Doctor forge CLI checks** — `git-stacks doctor` now checks availability of `gh`, `glab`, and `tea` CLIs with install links.
+
 **Per-command shell completion** — `git-stacks new --from <TAB>` now completes template names in bash, zsh, and fish. `close` and `edit` commands complete workspace names. Per-command flag completions are scoped correctly — `message send --from` remains freeform.
 
 **`--yaml` editor flag** — 4 commands now accept `--yaml` to open the raw YAML config in `$EDITOR` (falls back to `$VISUAL`, then `vi`). Post-edit validation warns on Zod schema errors:
