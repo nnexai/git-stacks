@@ -73,6 +73,11 @@ export const TemplateSchema = z.object({
     pre_remove: z.array(z.string()).optional(),
     post_merge: z.array(z.string()).optional(),
     pre_close: z.array(z.string()).optional(),
+    post_close: z.array(z.string()).optional(),
+    pre_clean: z.array(z.string()).optional(),
+    post_clean: z.array(z.string()).optional(),
+    pre_merge: z.array(z.string()).optional(),
+    post_remove: z.array(z.string()).optional(),
   }).optional(),
   env: z.record(z.string()).optional(),
   env_file: z.string().optional(),
@@ -84,6 +89,7 @@ export type Template = z.infer<typeof TemplateSchema>
 
 const WorkspaceRepoHooksSchema = z.object({
   pre_open: z.array(z.string()).optional(),
+  pre_clean: z.array(z.string()).optional(),
 })
 
 export const WorkspaceRepoSchema = z.object({
@@ -113,6 +119,11 @@ const WorkspaceHooksSchema = z.object({
   post_merge: z.array(z.string()).optional(),
   pre_remove: z.array(z.string()).optional(),
   pre_close: z.array(z.string()).optional(),
+  post_close: z.array(z.string()).optional(),
+  pre_clean: z.array(z.string()).optional(),
+  post_clean: z.array(z.string()).optional(),
+  pre_merge: z.array(z.string()).optional(),
+  post_remove: z.array(z.string()).optional(),
 })
 
 export const WorkspaceSchema = z.object({

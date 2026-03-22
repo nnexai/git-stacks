@@ -710,3 +710,199 @@ describe("closeWorkspace", () => {
     }
   })
 })
+
+// ============================================================================
+// describe("lifecycle hook schemas") — LC-01 (D-05, D-06, D-07, D-08)
+// ============================================================================
+
+describe("lifecycle hook schemas (LC-01)", () => {
+  // --- WorkspaceSchema new hook fields ---
+
+  test("WorkspaceSchema accepts post_close in hooks", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "test-ws",
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [],
+      hooks: {
+        post_close: ["echo post_close_ran"],
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.post_close).toEqual(["echo post_close_ran"])
+    }
+  })
+
+  test("WorkspaceSchema accepts pre_clean in hooks", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "test-ws",
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [],
+      hooks: {
+        pre_clean: ["echo pre_clean_ran"],
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.pre_clean).toEqual(["echo pre_clean_ran"])
+    }
+  })
+
+  test("WorkspaceSchema accepts post_clean in hooks", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "test-ws",
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [],
+      hooks: {
+        post_clean: ["echo post_clean_ran"],
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.post_clean).toEqual(["echo post_clean_ran"])
+    }
+  })
+
+  test("WorkspaceSchema accepts pre_merge in hooks", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "test-ws",
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [],
+      hooks: {
+        pre_merge: ["echo pre_merge_ran"],
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.pre_merge).toEqual(["echo pre_merge_ran"])
+    }
+  })
+
+  test("WorkspaceSchema accepts post_remove in hooks", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "test-ws",
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [],
+      hooks: {
+        post_remove: ["echo post_remove_ran"],
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.post_remove).toEqual(["echo post_remove_ran"])
+    }
+  })
+
+  // --- TemplateSchema new hook fields ---
+
+  test("TemplateSchema accepts post_close in hooks", () => {
+    const result = TemplateSchema.safeParse({
+      name: "my-template",
+      repos: [],
+      hooks: { post_close: ["echo post_close"] },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.post_close).toEqual(["echo post_close"])
+    }
+  })
+
+  test("TemplateSchema accepts pre_clean in hooks", () => {
+    const result = TemplateSchema.safeParse({
+      name: "my-template",
+      repos: [],
+      hooks: { pre_clean: ["echo pre_clean"] },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.pre_clean).toEqual(["echo pre_clean"])
+    }
+  })
+
+  test("TemplateSchema accepts post_clean in hooks", () => {
+    const result = TemplateSchema.safeParse({
+      name: "my-template",
+      repos: [],
+      hooks: { post_clean: ["echo post_clean"] },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.post_clean).toEqual(["echo post_clean"])
+    }
+  })
+
+  test("TemplateSchema accepts pre_merge in hooks", () => {
+    const result = TemplateSchema.safeParse({
+      name: "my-template",
+      repos: [],
+      hooks: { pre_merge: ["echo pre_merge"] },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.pre_merge).toEqual(["echo pre_merge"])
+    }
+  })
+
+  test("TemplateSchema accepts post_remove in hooks", () => {
+    const result = TemplateSchema.safeParse({
+      name: "my-template",
+      repos: [],
+      hooks: { post_remove: ["echo post_remove"] },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.post_remove).toEqual(["echo post_remove"])
+    }
+  })
+
+  // --- Per-repo pre_clean (D-08) ---
+
+  test("WorkspaceSchema accepts pre_clean in repo hooks (D-08)", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "test-ws",
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [{
+        name: "repo-0",
+        repo: "my-repo",
+        type: "other",
+        mode: "worktree",
+        main_path: "/tmp/main",
+        task_path: "/tmp/task",
+        hooks: {
+          pre_clean: ["echo repo_pre_clean"],
+        },
+      }],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.repos[0].hooks?.pre_clean).toEqual(["echo repo_pre_clean"])
+    }
+  })
+
+  // --- Backward compatibility ---
+
+  test("WorkspaceSchema without new hook fields still parses (backward compatible)", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "legacy-ws",
+      branch: "feature/legacy",
+      created: new Date().toISOString(),
+      repos: [],
+      hooks: {
+        pre_create: ["echo pre_create"],
+        post_create: ["echo post_create"],
+        pre_open: ["echo pre_open"],
+        post_open: ["echo post_open"],
+        post_merge: ["echo post_merge"],
+        pre_remove: ["echo pre_remove"],
+        pre_close: ["echo pre_close"],
+      },
+    })
+    expect(result.success).toBe(true)
+  })
+})
