@@ -15,8 +15,8 @@ import {
   focusNiriWorkspace,
   focusNiriWorkspaceDown,
   unsetNiriWorkspaceName,
+  niriSpawn,
 } from "../niri"
-import { runHooks } from "../lifecycle"
 
 const niriConfigSchema = z.object({
   enabled: z.boolean().optional(),
@@ -70,15 +70,28 @@ export const niriIntegration: Integration = {
         }
       }
 
-      // Step 4: Run user-configured commands (NIRI-03/NIRI-09 replacement)
-      const config = niriConfigSchema.parse(ctx.config.integrations["niri"] ?? {})
+      // Step 4: Spawn user-configured commands via niri IPC
+      // Uses niriSpawn (niri msg action spawn) so niri owns the windows and
+      // can place them on the correct workspace. Also non-blocking — no stdio
+      // inheritance that would corrupt the TUI dashboard.
+      // Commands are split on whitespace and env vars substituted directly —
+      // no shell wrapper. Use hooks if you need shell features.
+      const wsConfig = niriConfigSchema.safeParse(ctx.workspace.settings?.integrations?.["niri"] ?? {})
+      const globalConfig = niriConfigSchema.safeParse(ctx.config.integrations["niri"] ?? {})
+      const config = wsConfig.success && wsConfig.data.commands?.length
+        ? wsConfig.data
+        : globalConfig.success ? globalConfig.data : { commands: [] }
       if (config.commands?.length) {
-        const hookEnv: Record<string, string> = {
+        const vars: Record<string, string> = {
           WS_WORKSPACE: ctx.workspace.name,
           WS_BRANCH: ctx.workspace.branch ?? "",
           WS_TASKS_DIR: ctx.tasksDir,
         }
-        await runHooks(config.commands, ctx.tasksDir, hookEnv, false)
+        for (const cmd of config.commands) {
+          const expanded = cmd.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")
+          const args = expanded.split(/\s+/).filter(Boolean)
+          if (args.length > 0) await niriSpawn(args)
+        }
       }
 
       spinner.stop("niri workspace ready")

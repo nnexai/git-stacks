@@ -4,6 +4,59 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.6.0] — 2026-03-22
+
+### Added
+
+**Integration artifact pipeline**
+- `Integration.open()` now returns `IntegrationArtifact | null` instead of `void` — typed discriminated union covers tmux, cmux, and window variants
+- `ArtifactBag` accumulator type threads artifact results through the integration chain — each integration receives prior integrations' outputs
+- tmux returns `{ kind: "tmux", sessionName }`, cmux returns `{ kind: "cmux", workspaceRef }`, vscode/intellij return `{ kind: "window", pid, app_id, title }`
+
+**Centralized integration runner** (`src/lib/integrations/runner.ts`)
+- `runIntegrations(ctx, skip)` — generate + open mode with ArtifactBag accumulation; replaces the inline loop in `workspace-ops.ts`
+- `runIntegrationGenerate(ctx)` — generate-only mode for TUI callers; replaces inline loops in `workspace-wizard.ts`, `workspace-clone.ts`, `App.tsx`
+- Three-tier numeric ordering via `order` field on `Integration` interface: tier 1 (10-19: vscode, intellij, tmux), tier 2 (20-29: cmux), tier 3 (30+: niri)
+- Existing `--no-ide` / `--no-cmux` skip flags preserved through the runner
+
+**Niri compositor integration** (`src/lib/integrations/niri.ts`)
+- Tier-3 integration plugin (order 30, disabled by default) — runs after all other integrations
+- Creates/reuses a named niri workspace per git-stacks workspace via `niri msg action set-workspace-name`
+- Moves windows from prior integrations onto the named workspace using niriWindowIds from the ArtifactBag
+- Focuses the niri workspace after setup so new windows open there naturally
+- User-configurable `commands: string[]` — spawned via `niri msg action spawn` (niri owns the windows, no shell wrapper). Supports `$WS_WORKSPACE`, `$WS_BRANCH`, `$WS_TASKS_DIR` env var substitution. Commands read from workspace settings first, global config as fallback.
+- Cleanup on workspace clean/remove: unsets niri workspace name
+- Gated by `NIRI_SOCKET` env var — silently skips when niri is not running
+- Idempotent on re-open: checks if named workspace already exists before creating
+- Config schema: `{ enabled: boolean, commands?: string[] }`
+
+**Integration helper commands** (`git-stacks integration <name> <action>`)
+- New optional `commands?(parent: Command): void` method on `Integration` interface — integrations register their own CLI subcommands
+- `git-stacks integration tmux attach [workspace]` — attach to a workspace's tmux session
+- `git-stacks integration niri focus-workspace [workspace]` — focus a workspace's niri workspace
+
+**Niri shell wrappers** (`src/lib/niri.ts`)
+- 8 typed async functions wrapping all `niri msg` IPC calls: `isNiriRunning()`, `listNiriWindows()`, `listNiriWorkspaces()`, `setNiriWorkspaceName()`, `moveWindowToWorkspace()`, `niriSpawn()`, `focusNiriWorkspace()`, `snapshotWindowIds()`
+- Zod-validated JSON schemas for niri window and workspace data
+- Injectable `_exec` object for test isolation — all niri calls mockable without spawning real processes
+
+**Test coverage**
+- 63 new tests (375 → 438 total) covering runner ordering/skip/accumulation, artifact return values, niri shell wrappers, and niri integration plugin
+- All niri tests pass without `NIRI_SOCKET` present in the test environment
+
+### Changed
+
+- `Integration` interface: `open()` signature changed from `(ctx, artifactPath) → Promise<void>` to `(ctx, artifactPath, bag) → Promise<IntegrationArtifact | null>`
+- `Integration` interface: added required `order: number` field for execution ordering
+- `Integration` interface: added optional `cleanup?(ctx): Promise<void>` for resource teardown on workspace clean/remove
+- `Integration` interface: added optional `commands?(parent: Command): void` for registering CLI helper subcommands
+- VSCode and IntelliJ integrations now use `Bun.spawn` instead of `Bun.$` for IDE launch — enables PID capture for artifact reporting
+- tmux `open()` no longer attaches/focuses the session — creates it detached so the user can attach where they want (e.g., via niri commands or `git-stacks integration tmux attach`)
+- tmux `cleanup()` kills the session by name on workspace clean/remove
+- Niri commands use `niriSpawn()` instead of `runHooks()` — windows are spawned via niri IPC (no shell, no stdio inheritance that would corrupt the TUI dashboard)
+
+---
+
 ## [0.5.1] — 2026-03-21
 
 ### Improved

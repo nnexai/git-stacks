@@ -11,7 +11,7 @@ const mockUnsetNiriWorkspaceName = mock(async () => {})
 const mockMoveWindowToWorkspace = mock(async () => {})
 const mockFocusNiriWorkspace = mock(async () => {})
 const mockFocusNiriWorkspaceDown = mock(async () => {})
-const mockRunHooks = mock(async () => {})
+const mockNiriSpawn = mock(async () => {})
 
 mock.module("@/lib/niri", () => ({
   isNiriRunning: mockIsNiriRunning,
@@ -22,7 +22,7 @@ mock.module("@/lib/niri", () => ({
   moveWindowToWorkspace: mockMoveWindowToWorkspace,
   focusNiriWorkspace: mockFocusNiriWorkspace,
   focusNiriWorkspaceDown: mockFocusNiriWorkspaceDown,
-  niriSpawn: mock(async () => {}),
+  niriSpawn: mockNiriSpawn,
   snapshotWindowIds: mock(async () => []),
 }))
 
@@ -32,7 +32,7 @@ mock.module("@clack/prompts", () => ({
 }))
 
 mock.module("@/lib/lifecycle", () => ({
-  runHooks: mockRunHooks,
+  runHooks: mock(async () => {}),
 }))
 
 // Cache-busted import after all mocks registered
@@ -58,7 +58,7 @@ beforeEach(() => {
   mockMoveWindowToWorkspace.mockReset()
   mockFocusNiriWorkspace.mockReset()
   mockFocusNiriWorkspaceDown.mockReset()
-  mockRunHooks.mockReset()
+  mockNiriSpawn.mockReset()
   // Re-set default implementations
   mockIsNiriRunning.mockImplementation(async () => true)
   mockListNiriWorkspaces.mockImplementation(async () => [])
@@ -196,30 +196,22 @@ describe("window moves (NIRI-02)", () => {
 // User commands (NIRI-03, NIRI-09)
 // ===================================================================
 describe("user commands (NIRI-03, NIRI-09)", () => {
-  test("executes commands via runHooks with hook env", async () => {
+  test("spawns commands via niriSpawn with env var substitution (no shell)", async () => {
     const ctxWithCommands: IntegrationContext = {
       ...fakeCtx,
-      config: { integrations: { niri: { enabled: true, commands: ["echo hello"] } } } as any,
+      config: { integrations: { niri: { enabled: true, commands: ["ghostty -e tmux attach $WS_WORKSPACE"] } } } as any,
     }
 
     await niriIntegration.open(ctxWithCommands, null, emptyBag)
 
-    expect(mockRunHooks.mock.calls.length).toBe(1)
-    const [commands, cwd, env, abortOnFailure] = mockRunHooks.mock.calls[0]
-    expect(commands).toEqual(["echo hello"])
-    expect(cwd).toBe("/tmp/tasks")
-    expect(env).toEqual({
-      WS_WORKSPACE: "test-ws",
-      WS_BRANCH: "feat/test",
-      WS_TASKS_DIR: "/tmp/tasks",
-    })
-    expect(abortOnFailure).toBe(false)
+    expect(mockNiriSpawn.mock.calls.length).toBe(1)
+    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["ghostty", "-e", "tmux", "attach", "test-ws"])
   })
 
-  test("does not call runHooks when commands absent", async () => {
+  test("does not call niriSpawn when commands absent", async () => {
     await niriIntegration.open(fakeCtx, null, emptyBag)
 
-    expect(mockRunHooks.mock.calls.length).toBe(0)
+    expect(mockNiriSpawn.mock.calls.length).toBe(0)
   })
 })
 
