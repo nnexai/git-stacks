@@ -5,6 +5,8 @@ type DynamicCompletion = "workspace" | "repo" | "template" | "shells"
 const DYNAMIC_COMPLETIONS: Record<string, DynamicCompletion> = {
   clone:             "workspace",
   open:              "workspace",
+  close:             "workspace",
+  edit:              "workspace",
   status:            "workspace",
   clean:             "workspace",
   remove:            "workspace",
@@ -34,6 +36,17 @@ const OPTION_ENUMS: Record<string, string[]> = {
 
 const FLAG_COMPLETIONS: Record<string, DynamicCompletion> = {
   "--workspace": "workspace",
+}
+
+// Per-command flag completions: key format is "commandPath:--flagName"
+// Only flags where completion is non-obvious (e.g. --from on new command = template name)
+// Do NOT add message.send:--from or message.clear:--from — those sender names are freeform
+const COMMAND_FLAG_COMPLETIONS: Record<string, DynamicCompletion> = {
+  "new:--from": "template",
+}
+
+function resolveFlagCompletion(commandPath: string, flagName: string): DynamicCompletion | undefined {
+  return COMMAND_FLAG_COMPLETIONS[`${commandPath}:${flagName}`] ?? FLAG_COMPLETIONS[flagName]
 }
 
 interface OptionInfo {
@@ -128,19 +141,69 @@ function bashCaseBody(node: CommandNode, name: string): string {
     return `      COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))\n`
   }
 
+  // Check for command-specific flag completions (COMMAND_FLAG_COMPLETIONS)
+  const cmdFlagEntries = Object.entries(COMMAND_FLAG_COMPLETIONS)
+    .filter(([key]) => key.startsWith(`${node.path}:`))
+
   if (dynamic && options.length > 0) {
     const flagsStr = options.map(o => o.long).join(" ")
-    return (
+    let out =
       `      if [[ "$cur" == -* ]]; then\n` +
       `        COMPREPLY=($(compgen -W "${flagsStr}" -- "$cur"))\n` +
-      `      else\n` +
-      bashDynamicLookup(dynamic, "        ", name) +
-      `      fi\n`
-    )
+      `      else\n`
+
+    if (cmdFlagEntries.length > 0) {
+      out += `        case "$prev" in\n`
+      for (const [key, dynType] of cmdFlagEntries) {
+        const flag = key.split(":")[1]
+        out += `          "${flag}")\n`
+        out += bashDynamicLookup(dynType, "            ", name)
+        out += `            return 0\n`
+        out += `            ;;\n`
+      }
+      out += `        esac\n`
+    }
+
+    out += bashDynamicLookup(dynamic, "        ", name)
+    out += `      fi\n`
+    return out
   }
 
   if (dynamic) {
     return bashDynamicLookup(dynamic, "      ", name)
+  }
+
+  // No positional dynamic, but command has COMMAND_FLAG_COMPLETIONS entries
+  // (e.g. `new --from` completes template names but `new` itself has no positional completion)
+  if (cmdFlagEntries.length > 0) {
+    const flagsStr = options.map(o => o.long).join(" ")
+    let out = ""
+    if (options.length > 0) {
+      out += `      if [[ "$cur" == -* ]]; then\n`
+      out += `        COMPREPLY=($(compgen -W "${flagsStr}" -- "$cur"))\n`
+      out += `      else\n`
+      out += `        case "$prev" in\n`
+      for (const [key, dynType] of cmdFlagEntries) {
+        const flag = key.split(":")[1]
+        out += `          "${flag}")\n`
+        out += bashDynamicLookup(dynType, "            ", name)
+        out += `            return 0\n`
+        out += `            ;;\n`
+      }
+      out += `        esac\n`
+      out += `      fi\n`
+    } else {
+      out += `      case "$prev" in\n`
+      for (const [key, dynType] of cmdFlagEntries) {
+        const flag = key.split(":")[1]
+        out += `        "${flag}")\n`
+        out += bashDynamicLookup(dynType, "          ", name)
+        out += `          return 0\n`
+        out += `          ;;\n`
+      }
+      out += `      esac\n`
+    }
+    return out
   }
 
   return ""
@@ -218,11 +281,11 @@ export function generateBash(program: Command): string {
 
 // ─── Zsh ─────────────────────────────────────────────────────────────────────
 
-/** Returns the _arguments spec string for a single option, honoring OPTION_ENUMS and FLAG_COMPLETIONS. */
-function zshOptionSpec(opt: OptionInfo, id: string): string {
+/** Returns the _arguments spec string for a single option, honoring OPTION_ENUMS, FLAG_COMPLETIONS, and COMMAND_FLAG_COMPLETIONS. */
+function zshOptionSpec(opt: OptionInfo, id: string, commandPath = ""): string {
   const flagName = opt.long  // e.g., "--strategy"
   const enumValues = OPTION_ENUMS[flagName]
-  const flagDynamic = FLAG_COMPLETIONS[flagName]
+  const flagDynamic = resolveFlagCompletion(commandPath, flagName)
   if (enumValues) {
     const valName = flagName.slice(2) // "strategy"
     return `'${opt.long}[${opt.description}]:${valName}:(${enumValues.join(" ")})'`
@@ -255,7 +318,7 @@ function zshCaseBody(node: CommandNode, id: string): string {
     const pos = `'${firstArgRequired ? ":" : "::"} :${helper}'`
     let out = `        _arguments \\\n`
     for (const opt of options) {
-      out += `          ${zshOptionSpec(opt, id)} \\\n`
+      out += `          ${zshOptionSpec(opt, id, node.path)} \\\n`
     }
     out += `          ${pos}\n`
     out += `          ;;\n`
@@ -276,11 +339,11 @@ function zshCaseBody(node: CommandNode, id: string): string {
 
   // No positional dynamic, but command has options that are in OPTION_ENUMS or FLAG_COMPLETIONS
   // (e.g. `list --sort`) — emit _arguments with enum-aware specs
-  const enumOpts = options.filter(o => OPTION_ENUMS[o.long] !== undefined || FLAG_COMPLETIONS[o.long] !== undefined)
+  const enumOpts = options.filter(o => OPTION_ENUMS[o.long] !== undefined || resolveFlagCompletion(node.path, o.long) !== undefined)
   if (enumOpts.length > 0) {
     let out = `        _arguments \\\n`
     for (const opt of options) {
-      out += `          ${zshOptionSpec(opt, id)} \\\n`
+      out += `          ${zshOptionSpec(opt, id, node.path)} \\\n`
     }
     out += `          ;;\n`
     return out
@@ -316,7 +379,7 @@ function generateZshSubcmdHelper(node: CommandNode, id: string): string {
       out += `      ${sub.name})\n`
       out += `        _arguments \\\n`
       for (const opt of sub.options) {
-        out += `          ${zshOptionSpec(opt, id)} \\\n`
+        out += `          ${zshOptionSpec(opt, id, sub.path)} \\\n`
       }
       out += `          ;;\n`
     } else if (sub.dynamic && sub.dynamic !== "shells") {
@@ -540,6 +603,21 @@ export function generateFish(program: Command): string {
           }
         }
       }
+    }
+  }
+
+  // COMMAND_FLAG_COMPLETIONS: emit per-command flag-value completions
+  const cmdFlagEntries = Object.entries(COMMAND_FLAG_COMPLETIONS)
+  if (cmdFlagEntries.length > 0) {
+    out += "\n# Per-command flag-value completions\n"
+    for (const [key, dynType] of cmdFlagEntries) {
+      const [cmdPath, flag] = key.split(":")
+      const longName = flag.slice(2)  // strip "--"
+      const helperFn = dynType === "repo" ? `__${id}_repos`
+        : dynType === "template" ? `__${id}_templates`
+        : `__${id}_workspaces`
+      // cmdPath is a top-level command name (e.g. "new") — use __fish_seen_subcommand_from
+      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${cmdPath}' -l ${longName} -ra "(${helperFn})"\n`
     }
   }
 

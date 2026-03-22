@@ -66,6 +66,17 @@ function buildTestProgram(): Command {
     .option("--all", "Sync all workspaces")
     .option("--strategy <strategy>", "Sync strategy: rebase or merge")
 
+  // new command (has --from for COMMAND_FLAG_COMPLETIONS testing)
+  program
+    .command("new [name]")
+    .description("Create a new workspace interactively")
+    .option("--from <source>", "Create from template name or local repo path")
+
+  // close command (should complete workspace names)
+  program
+    .command("close <name>")
+    .description("Close a workspace without deleting it")
+
   // message command group (for CMPL-05, CMPL-06 testing)
   const messageCmd = new Command("message").description("Workspace notifications")
   messageCmd
@@ -396,5 +407,70 @@ describe("message subcommand tree", () => {
   test("fish: message appears in top-level completions", () => {
     const out = generateFish(buildTestProgram())
     expect(out).toContain("-a message")
+  })
+})
+
+describe("COMMAND_FLAG_COMPLETIONS - per-command flag completions", () => {
+  test("bash: new --from completes template names", () => {
+    const out = generateBash(buildTestProgram())
+    // Inside the new) case, $prev == --from should trigger template lookup
+    expect(out).toContain('"--from")')
+    expect(out).toContain('.config/git-stacks/templates')
+  })
+
+  test("zsh: new --from gets template completion in _arguments spec", () => {
+    const out = generateZsh(buildTestProgram())
+    // The --from flag in the new command should reference _git_stacks_templates
+    // The _arguments spec should contain --from[...]:from:_git_stacks_templates
+    expect(out).toContain("_git_stacks_templates")
+    // And the from option in new command should use the template helper
+    expect(out).toContain("--from[Create from template name or local repo path]:from:_git_stacks_templates")
+  })
+
+  test("fish: new --from completes template names", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain(
+      "complete -c git-stacks -f -n '__fish_seen_subcommand_from new' -l from -ra \"(__git_stacks_templates)\""
+    )
+  })
+
+  test("message send --from has no template completion in bash", () => {
+    const out = generateBash(buildTestProgram())
+    // The global --from case in bash should not appear — only per-command via COMMAND_FLAG_COMPLETIONS
+    // message.send --from is freeform, so no template lookup for it
+    // Verify there's no template lookup associated with 'message' command context
+    const messageSection = out.slice(out.indexOf("    message)"), out.indexOf("    message)") + 500)
+    expect(messageSection).not.toContain('.config/git-stacks/templates')
+  })
+
+  test("message send --from has no template completion in fish", () => {
+    const out = generateFish(buildTestProgram())
+    // There should NOT be a per-command flag completion for message.send:--from
+    expect(out).not.toContain(
+      "__fish_seen_subcommand_from message; and __fish_seen_subcommand_from send' -l from -ra \"(__git_stacks_templates)\""
+    )
+  })
+})
+
+describe("close command - workspace completions", () => {
+  test("bash: close appears in workspace completions case", () => {
+    const out = generateBash(buildTestProgram())
+    // close should have a case branch with workspace lookup
+    expect(out).toContain("    close)")
+    expect(out).toContain('.config/git-stacks/workspaces')
+  })
+
+  test("zsh: close gets workspace completion in case body", () => {
+    const out = generateZsh(buildTestProgram())
+    // close should map to _git_stacks_workspaces
+    expect(out).toContain("        close)")
+    expect(out).toContain("_git_stacks_workspaces")
+  })
+
+  test("fish: close in workspace completion for loop", () => {
+    const out = generateFish(buildTestProgram())
+    // close should appear in the for cmd in ... workspace loop
+    expect(out).toMatch(/for cmd in[^\n]*\bclose\b/)
+    expect(out).toContain("(__git_stacks_workspaces)")
   })
 })
