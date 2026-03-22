@@ -28,6 +28,9 @@ export function formatZodError(err: ZodError): string {
 export const RepoTypeSchema = z.enum(["java", "typescript", "other"])
 export type RepoType = z.infer<typeof RepoTypeSchema>
 
+export const ForgeTypeSchema = z.enum(["github", "gitlab", "gitea"]).optional()
+export type ForgeType = z.infer<typeof ForgeTypeSchema>
+
 export const FilesSchema = z
   .object({
     copy: z.array(z.string()).optional(),
@@ -44,6 +47,7 @@ export const RepoRegistryEntrySchema = z.object({
   local_path: z.string(),
   default_branch: z.string().default("main"),
   type: RepoTypeSchema.default("other"),
+  forge: ForgeTypeSchema,
 })
 export type RepoRegistryEntry = z.infer<typeof RepoRegistryEntrySchema>
 

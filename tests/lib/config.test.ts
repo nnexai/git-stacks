@@ -295,6 +295,34 @@ describe("corrupt YAML handling", () => {
 
 afterAll(() => isolated.cleanup())
 
+// --- RepoRegistryEntrySchema forge field ---
+
+describe("RepoRegistryEntrySchema forge field", () => {
+  test("accepts forge: github", () => {
+    const entry = RepoRegistryEntrySchema.parse({ name: "r", local_path: "/x", forge: "github" })
+    expect(entry.forge).toBe("github")
+  })
+
+  test("accepts forge: gitlab", () => {
+    const entry = RepoRegistryEntrySchema.parse({ name: "r", local_path: "/x", forge: "gitlab" })
+    expect(entry.forge).toBe("gitlab")
+  })
+
+  test("accepts forge: gitea", () => {
+    const entry = RepoRegistryEntrySchema.parse({ name: "r", local_path: "/x", forge: "gitea" })
+    expect(entry.forge).toBe("gitea")
+  })
+
+  test("backward compat: missing forge field parses as undefined (FORGE-02)", () => {
+    const entry = RepoRegistryEntrySchema.parse({ name: "r", local_path: "/x" })
+    expect(entry.forge).toBeUndefined()
+  })
+
+  test("rejects forge: bitbucket with ZodError", () => {
+    expect(() => RepoRegistryEntrySchema.parse({ name: "r", local_path: "/x", forge: "bitbucket" })).toThrow()
+  })
+})
+
 // --- FilesSchema extensions ---
 
 describe("FilesSchema extensions", () => {
