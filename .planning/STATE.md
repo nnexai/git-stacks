@@ -69,6 +69,10 @@ Plan: Not started
 
 3 todos converted to v0.7.0 milestone scope (now CLOSE-01 through TEST-02).
 
+### Roadmap Evolution
+
+- Phase 24 added: Mock Architecture Refactor — replace module-level mock.module() with injectable dependency mocking (_exec pattern)
+
 ### Blockers/Concerns
 
 None.
