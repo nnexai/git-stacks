@@ -69,7 +69,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 - [x] **Phase 24.1: Test Mock Hygiene (INSERTED)** - Eliminate stale @clack/prompts mocks and fix incomplete @/tui/utils mocks left over from Phase 24 (completed 2026-03-22)
 - [x] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks (completed 2026-03-22)
 - [x] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements (completed 2026-03-22)
-- [ ] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation and issue/task linking
+- [ ] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation via forge CLI pass-through
 
 ## Phase Details
 
@@ -124,7 +124,7 @@ Plans:
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
-| 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
+| 27. Git Forge Integrations | v0.7.0 | 0/3 | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
 
@@ -189,13 +189,23 @@ Plans:
 
 ### Phase 27: Git Forge Integrations
 
-**Goal**: Add integrations for GitHub, GitLab, and Gitea using their respective CLI tools (gh, glab, tea) to create MR/PRs and open them. Integrations should understand where repos are upstream (via git remote or explicit config). Additionally, provide issue/task linking so users can associate a workspace with a task/issue and quickly open or fetch it.
-**Requirements**: TBD
+**Goal**: Add GitHub, GitLab, and Gitea forge integrations as Integration plugins, each wrapping their respective CLI tool (gh, glab, tea) to create PR/MRs, open them in browser, and check status. Forge type is stored per-repo in the registry. CLI-only (no TUI dashboard actions). Issue/task linking deferred to Phase 28.
+**Requirements**: FORGE-01, FORGE-02, FORGE-03, FORGE-04, FORGE-05, FORGE-06, FORGE-07, FORGE-08, FORGE-09, FORGE-10, FORGE-11, FORGE-12, FORGE-13
 **Depends on:** Phase 26
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. `RepoRegistryEntrySchema` accepts optional `forge` field; existing YAML without it parses cleanly
+  2. `git-stacks integration github pr create <workspace>` invokes `gh pr create --base <branch>` in the correct repo's task_path
+  3. `git-stacks integration gitlab pr create <workspace>` invokes `glab mr create --target-branch <branch>` (pr->mr translation)
+  4. `git-stacks integration gitea pr create <workspace>` invokes `tea pulls create --base <branch>`
+  5. `pr open --web` opens browser; `pr open` prints URL to stdout
+  6. Forge detection at `repo add`/`repo scan` suggests forge from remote URL and CLI availability
+  7. `git-stacks doctor` checks availability of `gh`, `glab`, `tea`
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 27 to break down)
+- [ ] 27-01-PLAN.md — Schema: ForgeTypeSchema + forge field on RepoRegistryEntrySchema; forge-utils.ts with resolveForgeRepo
+- [ ] 27-02-PLAN.md — Three forge integration plugins (github, gitlab, gitea) + registration + unit tests
+- [ ] 27-03-PLAN.md — Forge detection in repo add/scan + doctor binary checks
 
 ### Phase 28: Issue & Task Tracking Integration
 

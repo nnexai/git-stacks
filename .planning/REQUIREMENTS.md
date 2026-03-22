@@ -57,6 +57,22 @@
 - [x] **POLISH-09**: `removeWorkspace` always deletes `tasks/{name}/` directory as part of total removal
 - [x] **POLISH-10**: `removeWorkspace --force` with malformed/unparseable YAML succeeds via name-based directory cleanup fallback
 
+### Git Forge Integrations
+
+- [ ] **FORGE-01**: `RepoRegistryEntrySchema` accepts optional `forge` field with values `"github" | "gitlab" | "gitea"` (per D-01)
+- [ ] **FORGE-02**: Existing registry YAML files without `forge` field continue to parse without error (backward compatible)
+- [ ] **FORGE-03**: `resolveForgeRepo(workspaceName, repoArg)` resolves workspace+repo context: auto-selects when exactly one worktree repo, errors when multiple and no arg (per D-10)
+- [ ] **FORGE-04**: GitHub integration plugin implements `Integration` interface with `commands()` registering `pr create`, `pr open`, `pr status` (per D-06, D-09)
+- [ ] **FORGE-05**: GitLab integration plugin translates `pr` to `mr` terminology when calling glab CLI (per D-11)
+- [ ] **FORGE-06**: Gitea integration plugin handles `pr open` by parsing `tea pulls ls --output json` for URL extraction (tea lacks --web)
+- [ ] **FORGE-07**: All forge CLI invocations use `stdio: "inherit"` for interactive pass-through (per D-12)
+- [ ] **FORGE-08**: Each forge plugin exports its own `_exec` object for injectable shell commands (per D-08)
+- [ ] **FORGE-09**: `pr create` passes base branch via `--base` (gh), `--target-branch` (glab), `--base` (tea) from workspace repo's `base_branch` or registry `default_branch` (per D-12)
+- [ ] **FORGE-10**: Forge detection at `repo add` and `repo scan` checks remote URL and CLI availability, suggests forge when exactly one detected, prompts when ambiguous (per D-04, D-05)
+- [ ] **FORGE-11**: Missing forge CLI or no forge configured on repo produces clear error message (per D-14)
+- [ ] **FORGE-12**: All three forge integrations registered in `src/lib/integrations/index.ts`
+- [ ] **FORGE-13**: `git-stacks doctor` checks availability of `gh`, `glab`, `tea` binaries
+
 ## Future Requirements
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type
@@ -72,6 +88,10 @@
 | Auto-close on branch merge | Adds complexity; user can run close manually after merge |
 | Close all workspaces command | Batch operations deferred; close one at a time for now |
 | Full mock.module() elimination sweep | Phase 24 covers direct unit tests only; caller tests stay as-is |
+| Issue/task linking (GitHub Issues, GitLab Issues, Gitea Issues, Jira) | Deferred to Phase 28 |
+| TUI-based PR actions using non-interactive flags | Future enhancement |
+| PR status display formatted by git-stacks | Pass-through is the design choice per D-09 |
+| Cross-repo PR descriptions | Deferred |
 
 ## Traceability
 
@@ -88,35 +108,48 @@
 | MOCK-02 | Phase 24 | Complete |
 | MOCK-03 | Phase 24 | Complete |
 | MOCK-04 | Phase 24 | Complete |
-| LC-01 | Phase 25 | Planned |
-| LC-02 | Phase 25 | Planned |
-| LC-03 | Phase 25 | Planned |
-| LC-04 | Phase 25 | Planned |
-| LC-05 | Phase 25 | Planned |
-| LC-06 | Phase 25 | Planned |
-| LC-07 | Phase 25 | Planned |
-| LC-08 | Phase 25 | Planned |
-| LC-09 | Phase 25 | Planned |
-| LC-10 | Phase 25 | Planned |
-| LC-11 | Phase 25 | Planned |
-| LC-12 | Phase 25 | Planned |
-| LC-13 | Phase 25 | Planned |
-| POLISH-01 | Phase 26 | Planned |
-| POLISH-02 | Phase 26 | Planned |
-| POLISH-03 | Phase 26 | Planned |
-| POLISH-04 | Phase 26 | Planned |
-| POLISH-05 | Phase 26 | Planned |
-| POLISH-06 | Phase 26 | Planned |
-| POLISH-07 | Phase 26 | Planned |
-| POLISH-08 | Phase 26 | Planned |
-| POLISH-09 | Phase 26 | Planned |
-| POLISH-10 | Phase 26 | Planned |
+| LC-01 | Phase 25 | Complete |
+| LC-02 | Phase 25 | Complete |
+| LC-03 | Phase 25 | Complete |
+| LC-04 | Phase 25 | Complete |
+| LC-05 | Phase 25 | Complete |
+| LC-06 | Phase 25 | Complete |
+| LC-07 | Phase 25 | Complete |
+| LC-08 | Phase 25 | Complete |
+| LC-09 | Phase 25 | Complete |
+| LC-10 | Phase 25 | Complete |
+| LC-11 | Phase 25 | Complete |
+| LC-12 | Phase 25 | Complete |
+| LC-13 | Phase 25 | Complete |
+| POLISH-01 | Phase 26 | Complete |
+| POLISH-02 | Phase 26 | Complete |
+| POLISH-03 | Phase 26 | Complete |
+| POLISH-04 | Phase 26 | Complete |
+| POLISH-05 | Phase 26 | Complete |
+| POLISH-06 | Phase 26 | Complete |
+| POLISH-07 | Phase 26 | Complete |
+| POLISH-08 | Phase 26 | Complete |
+| POLISH-09 | Phase 26 | Complete |
+| POLISH-10 | Phase 26 | Complete |
+| FORGE-01 | Phase 27 | Planned |
+| FORGE-02 | Phase 27 | Planned |
+| FORGE-03 | Phase 27 | Planned |
+| FORGE-04 | Phase 27 | Planned |
+| FORGE-05 | Phase 27 | Planned |
+| FORGE-06 | Phase 27 | Planned |
+| FORGE-07 | Phase 27 | Planned |
+| FORGE-08 | Phase 27 | Planned |
+| FORGE-09 | Phase 27 | Planned |
+| FORGE-10 | Phase 27 | Planned |
+| FORGE-11 | Phase 27 | Planned |
+| FORGE-12 | Phase 27 | Planned |
+| FORGE-13 | Phase 27 | Planned |
 
 **Coverage:**
-- v0.7.0 requirements: 34 total
-- Mapped to phases: 34
+- v0.7.0 requirements: 47 total
+- Mapped to phases: 47
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after Phase 26 requirement definition*
+*Last updated: 2026-03-22 after Phase 27 requirement definition*
