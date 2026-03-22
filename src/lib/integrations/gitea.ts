@@ -1,6 +1,8 @@
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
 import { resolveForgeRepo, formatForgeError } from "./forge-utils"
+import { workspaceExists } from "../config"
+import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
 
 // --- Exec ---
 
@@ -36,7 +38,7 @@ export const giteaIntegration: Integration = {
   /** Unique key — used as the key in config.integrations */
   id: "gitea",
   label: "Gitea",
-  hint: "create and manage Gitea PRs via tea CLI",
+  hint: "create and manage Gitea PRs and issues via tea CLI",
   enabledByDefault: false,
   order: 52,
 
@@ -117,6 +119,78 @@ export const giteaIntegration: Integration = {
         const { repoPath } = resolution
         const result = await _exec.run(["pulls", "ls", "--state", "open"], repoPath)
         if (result.exitCode !== 0) process.exit(result.exitCode)
+      })
+
+    // --- Issue commands (Phase 28) ---
+    const issue = parent.command("issue").description("Link and open Gitea issues")
+
+    issue.command("link <workspace> <issue-id>")
+      .description("Link a Gitea issue to a workspace")
+      .action(async (workspaceName: string, issueId: string) => {
+        if (!workspaceExists(workspaceName)) {
+          console.error(`Workspace '${workspaceName}' not found.`)
+          process.exit(1)
+        }
+        linkIssue(workspaceName, "gitea", issueId)
+        console.log(`Linked Gitea issue #${issueId} to workspace '${workspaceName}'.`)
+      })
+
+    issue.command("unlink <workspace>")
+      .description("Remove Gitea issue link from a workspace")
+      .action(async (workspaceName: string) => {
+        if (!workspaceExists(workspaceName)) {
+          console.error(`Workspace '${workspaceName}' not found.`)
+          process.exit(1)
+        }
+        unlinkIssue(workspaceName, "gitea")
+        console.log(`Unlinked Gitea issue from workspace '${workspaceName}'.`)
+      })
+
+    issue.command("open <workspace> [repo]")
+      .description("Open linked Gitea issue (--web opens in browser)")
+      .option("--web", "Open in browser")
+      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
+        const issueRes = resolveIssueRef(workspaceName, "gitea")
+        if (!issueRes.ok) {
+          console.error(formatIssueError(issueRes))
+          process.exit(1)
+        }
+        // tea requires git repo CWD to resolve Gitea project
+        const forgeRes = resolveForgeRepo(workspaceName, repoArg, "gitea")
+        if (!forgeRes.ok) {
+          console.error(formatForgeError(forgeRes))
+          process.exit(1)
+        }
+
+        // tea has no `issue view` command — extract URL from JSON listing
+        const capture = await _exec.runCapture(
+          ["issues", "ls", "--output", "json", "--fields", "index,url", "--state", "all"],
+          forgeRes.repoPath
+        )
+        if (capture.exitCode !== 0) {
+          process.exit(capture.exitCode)
+        }
+
+        let issues: Array<Record<string, unknown>>
+        try {
+          issues = JSON.parse(capture.stdout)
+        } catch {
+          console.error("Failed to parse issue list from tea output")
+          process.exit(1)
+        }
+
+        const found = issues.find((i) => String(i.index) === issueRes.issueId)
+        if (!found) {
+          console.error(`Issue #${issueRes.issueId} not found in Gitea repo.`)
+          process.exit(1)
+        }
+
+        // tea JSON may use html_url or url depending on version (per Pitfall 4)
+        const url = String(found.html_url ?? found.url)
+        console.log(url)
+        if (opts.web) {
+          await _exec.openUrl(url)
+        }
       })
   },
 }
