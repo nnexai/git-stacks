@@ -59,6 +59,21 @@ mock.module("@/tui/utils", () => ({
   safeText: mock(() => Promise.resolve("")),
 }))
 
+// 8. Mock @/lib/niri — vscode/intellij call isNiriRunning()/snapshotWindowIds() after Task 2 changes.
+// Without this mock, snapshotWindowIds would time out (10s) when NIRI_SOCKET is set in the environment.
+mock.module("@/lib/niri", () => ({
+  isNiriRunning: mock(async () => false),
+  snapshotWindowIds: mock(async () => []),
+  listNiriWindows: mock(async () => []),
+  listNiriWorkspaces: mock(async () => []),
+  setNiriWorkspaceName: mock(async () => {}),
+  unsetNiriWorkspaceName: mock(async () => {}),
+  moveWindowToWorkspace: mock(async () => {}),
+  focusNiriWorkspace: mock(async () => {}),
+  focusNiriWorkspaceDown: mock(async () => {}),
+  niriSpawn: mock(async () => {}),
+}))
+
 // === Cache-busting imports after all mocks registered ===
 const { tmuxIntegration } = await import(
   // @ts-ignore — query param cache-busting for bun module cache
