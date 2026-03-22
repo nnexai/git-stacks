@@ -267,6 +267,51 @@ export async function cleanWorkspace(
   return { ok: true }
 }
 
+export async function closeWorkspace(
+  name: string,
+  opts: { captured?: boolean },
+  onProgress?: ProgressCallback
+): Promise<{ ok: boolean; error?: string }> {
+  if (!workspaceExists(name)) {
+    return { ok: false, error: `Workspace '${name}' not found.` }
+  }
+
+  const config = readGlobalConfig()
+  const tasksDir = getTasksDir(config.workspace_root)
+  const workspace = readWorkspace(name)
+
+  const baseEnv = {
+    WS_WORKSPACE: workspace.name,
+    WS_BRANCH: workspace.branch,
+    WS_TASKS_DIR: tasksDir,
+  }
+  const mergedEnvVars = mergeEnv(workspace)
+  const enrichedBaseEnv = { ...baseEnv, ...mergedEnvVars }
+
+  // Run pre_close hooks if present
+  if (workspace.hooks?.pre_close?.length) {
+    const wsDir = join(tasksDir, workspace.name)
+    const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
+    try {
+      if (opts.captured) {
+        await runHooksCaptured(workspace.hooks.pre_close, hookCwd, enrichedBaseEnv,
+          (output) => onProgress?.(output.line))
+      } else {
+        await runHooks(workspace.hooks.pre_close, hookCwd, enrichedBaseEnv)
+      }
+    } catch (err) {
+      return { ok: false, error: `pre_close hook failed (${err})` }
+    }
+  }
+
+  // Run integration cleanup (e.g., end tmux session, unname niri workspace)
+  const ctx: IntegrationContext = { workspace, tasksDir, config }
+  await runIntegrationCleanup(ctx)
+
+  onProgress?.(`Closed '${name}'.`)
+  return { ok: true }
+}
+
 export async function removeWorkspace(
   name: string,
   opts: { force?: boolean; dryRun?: boolean },
