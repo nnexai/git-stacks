@@ -8,7 +8,7 @@ files:
 
 ## Problem
 
-The niri columns configuration is not displaying correctly in the details pane of the TUI dashboard. The rendering of the niri integration's column settings needs to be fixed so users can see and understand their current configuration.
+The niri columns configuration displays `[object Object]` in the details pane of the TUI dashboard instead of a human-readable representation. The columns config is an object/array that needs to be serialized properly for display.
 
 ## Solution
 
