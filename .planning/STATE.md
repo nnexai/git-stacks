@@ -4,7 +4,7 @@ milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
 stopped_at: Completed 24-01-PLAN.md — _exec injection for tmux.ts, cmux.ts, lifecycle.ts
-last_updated: "2026-03-22T13:21:15.746Z"
+last_updated: "2026-03-22T12:55:15.897Z"
 progress:
   total_phases: 7
   completed_phases: 4
@@ -78,7 +78,6 @@ None. 6 todos cleared: 3 already shipped (close command, niri fix, test isolatio
 
 - Phase 24 added: Mock Architecture Refactor — replace module-level mock.module() with injectable dependency mocking (_exec pattern)
 - Phases 25-27 added from promoted todos: Dedicated Lifecycle Phases, Autocompletion & Editor Polish, Git Forge Integrations
-- Phase 24.1 inserted after Phase 24: Test Mock Hygiene — fix stale @clack/prompts mocks and incomplete @/tui/utils mocks (URGENT)
 
 ### Blockers/Concerns
 
