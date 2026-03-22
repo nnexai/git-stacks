@@ -196,3 +196,13 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 27 to break down)
+
+### Phase 28: Issue & Task Tracking Integration
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 27
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 28 to break down)

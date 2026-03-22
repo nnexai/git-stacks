@@ -88,6 +88,7 @@ Plan: 3 of 3
 
 - Phase 24 added: Mock Architecture Refactor — replace module-level mock.module() with injectable dependency mocking (_exec pattern)
 - Phases 25-27 added from promoted todos: Dedicated Lifecycle Phases, Autocompletion & Editor Polish, Git Forge Integrations
+- Phase 28 added: Issue & Task Tracking Integration — deferred from phase 27 discussion; covers GitHub/GitLab/Gitea issue commands + Jira integration
 
 ### Blockers/Concerns
 
