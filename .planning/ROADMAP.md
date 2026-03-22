@@ -63,7 +63,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 **Milestone Goal:** Add workspace close command, fix niri display bug, and harden test isolation so the tool is reliable and complete for lightweight teardown workflows.
 
 - [x] **Phase 21: Workspace Close Command** - CLI and TUI teardown for integrations without deleting workspace state (completed 2026-03-22)
-- [ ] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config
+- [x] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config (completed 2026-03-22)
 - [ ] **Phase 23: Test Environment Isolation** - Audit and enforce isolated config dirs across all tests
 
 ## Phase Details
@@ -88,9 +88,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Niri integration config in the TUI workspace details pane shows the full column configuration (app, command, source windows, width) as readable text rather than `[object Object]`
   2. All other TUI detail pane fields are unaffected by the fix
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 22-01-PLAN.md — formatConfigValue helper and detail pane fix for object serialization
+- [x] 22-01-PLAN.md — formatConfigValue helper and detail pane fix for object serialization
 
 ### Phase 23: Test Environment Isolation
 **Goal**: Every test that touches config reads from and writes to a temporary directory — no test can pollute or read from the real user config at `~/.config/git-stacks`.
@@ -111,5 +111,5 @@ Plans:
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21. Workspace Close Command | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
-| 22. Niri Display Fix | v0.7.0 | 0/1 | Not started | - |
+| 22. Niri Display Fix | v0.7.0 | 1/1 | Complete   | 2026-03-22 |
 | 23. Test Environment Isolation | v0.7.0 | 0/? | Not started | - |

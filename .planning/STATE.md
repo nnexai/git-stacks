@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 21-01-PLAN.md — workspace close command implemented
-last_updated: "2026-03-22T09:41:12.274Z"
+stopped_at: Completed 22-01-PLAN.md — niri display fix implemented
+last_updated: "2026-03-22T09:51:40.868Z"
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 2
+  completed_plans: 2
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 21 — Workspace Close Command
+**Current focus:** Phase 22 — Niri Display Fix
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
+Phase: 22 (Niri Display Fix) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: Not started
 | Phase 19-niri-shell-wrappers P01 | 9min | 2 tasks | 2 files |
 | Phase 20 P01 | 3min | 2 tasks | 3 files |
 | Phase 21-workspace-close-command P01 | 6min | 2 tasks | 8 files |
+| Phase 22-niri-display-fix P01 | 2min | 2 tasks | 6 files |
 
 ### Decisions
 
@@ -59,6 +60,7 @@ Plan: Not started
 - [Phase 16-18]: ArtifactBag as Record<string, artifact | null> — niri reads bag values without mutation
 - [Phase 21-workspace-close-command]: closeWorkspace preserves worktrees and YAML — non-destructive, open works immediately after
 - [Phase 21-workspace-close-command]: No confirmation prompt for close (non-destructive) — same UX pattern as open, x shortcut in TUI after Open entry
+- [Phase 22-niri-display-fix]: formatConfigValue: niri columns detected by presence of 'windows' key on every array element — no niri-specific import needed in configUtils
 
 ### Pending Todos
 
@@ -70,7 +72,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T09:28:18.965Z
-Stopped at: Completed 21-01-PLAN.md — workspace close command implemented
+Last session: 2026-03-22T09:51:40.863Z
+Stopped at: Completed 22-01-PLAN.md — niri display fix implemented
 Resume file: None
 Next action: /gsd:plan-phase 21

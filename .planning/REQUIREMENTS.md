@@ -14,7 +14,7 @@
 
 ### UI Fix
 
-- [ ] **UI-01**: Niri columns configuration displays full column details (app, command, source windows, width) as readable text in TUI details pane instead of `[object Object]`
+- [x] **UI-01**: Niri columns configuration displays full column details (app, command, source windows, width) as readable text in TUI details pane instead of `[object Object]`
 
 ### Test Quality
 
@@ -44,7 +44,7 @@
 | CLOSE-02 | Phase 21 | Complete |
 | CLOSE-03 | Phase 21 | Complete |
 | CLOSE-04 | Phase 21 | Complete |
-| UI-01 | Phase 22 | Pending |
+| UI-01 | Phase 22 | Complete |
 | TEST-01 | Phase 23 | Pending |
 | TEST-02 | Phase 23 | Pending |
 
