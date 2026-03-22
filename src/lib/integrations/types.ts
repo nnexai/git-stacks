@@ -36,6 +36,7 @@ export interface IntegrationContext {
   workspace: Workspace
   tasksDir: string
   config: GlobalConfig
+  silent?: boolean
 }
 
 export interface Integration {

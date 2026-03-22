@@ -27,7 +27,7 @@ import {
 } from "./git"
 import { type IntegrationContext } from "./integrations"
 import { runIntegrations, runIntegrationCleanup } from "./integrations/runner"
-import { runHooks } from "./lifecycle"
+import { runHooks, runHooksCaptured } from "./lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
 import { $ } from "bun"
 
@@ -461,7 +461,7 @@ export async function mergeWorkspace(
 
 export async function openWorkspace(
   name: string,
-  opts: { ide?: boolean; cmux?: boolean },
+  opts: { ide?: boolean; cmux?: boolean; captured?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -471,6 +471,14 @@ export async function openWorkspace(
   const config = readGlobalConfig()
   const tasksDir = getTasksDir(config.workspace_root)
   const workspace = readWorkspace(name)
+
+  const execHooks = async (commands: string[] | undefined, cwd: string, env: Record<string, string>) => {
+    if (opts.captured) {
+      await runHooksCaptured(commands, cwd, env, (output) => onProgress?.(output.line))
+    } else {
+      await runHooks(commands, cwd, env)
+    }
+  }
 
   const skip = new Set<string>()
   if (opts.ide === false) {
@@ -502,7 +510,7 @@ export async function openWorkspace(
   if (workspace.hooks?.pre_open?.length) {
     for (const cmd of workspace.hooks.pre_open) {
       onProgress?.(`pre_open: ${cmd}`)
-      await runHooks([cmd], join(tasksDir, name), baseEnv)
+      await execHooks([cmd], join(tasksDir, name), baseEnv)
     }
   }
 
@@ -516,7 +524,7 @@ export async function openWorkspace(
     }
     for (const cmd of repo.hooks!.pre_open!) {
       onProgress?.(`pre_open [${repo.name}]: ${cmd}`)
-      await runHooks([cmd], repo.task_path, repoEnv)
+      await execHooks([cmd], repo.task_path, repoEnv)
     }
   }
 
@@ -581,14 +589,14 @@ export async function openWorkspace(
     }
   }
 
-  const ctx: IntegrationContext = { workspace, tasksDir, config }
+  const ctx: IntegrationContext = { workspace, tasksDir, config, ...(opts.captured && { silent: true }) }
   await runIntegrations(ctx, skip)
 
   // Workspace-level post_open hooks (includes template hooks if copied at creation)
   if (workspace.hooks?.post_open?.length) {
     for (const cmd of workspace.hooks.post_open) {
       onProgress?.(`post_open: ${cmd}`)
-      await runHooks([cmd], join(tasksDir, name), hookEnv)
+      await execHooks([cmd], join(tasksDir, name), hookEnv)
     }
   }
 
