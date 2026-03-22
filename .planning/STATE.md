@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 23-01-PLAN.md — test environment isolation implemented
-last_updated: "2026-03-22T11:46:01.369Z"
+stopped_at: Completed 24-02-PLAN.md — prompts wrapper and import switch
+last_updated: "2026-03-22T12:45:26.456Z"
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 23 — Test Environment Isolation
+**Current focus:** Phase 24 — mock-architecture-refactor
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
+Phase: 24 (mock-architecture-refactor) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Plan: Not started
 | Phase 21-workspace-close-command P01 | 6min | 2 tasks | 8 files |
 | Phase 22-niri-display-fix P01 | 2min | 2 tasks | 6 files |
 | Phase 23-test-environment-isolation P01 | 7min | 2 tasks | 4 files |
+| Phase 24-mock-architecture-refactor P02 | 8min | 2 tasks | 18 files |
 
 ### Decisions
 
@@ -64,6 +65,7 @@ Plan: Not started
 - [Phase 22-niri-display-fix]: formatConfigValue: niri columns detected by presence of 'windows' key on every array element — no niri-specific import needed in configUtils
 - [Phase 23-test-environment-isolation]: Re-establish mock in beforeEach when multiple describe blocks share one isolated config — prevents io-roundtrip test from overriding the shared file-level mock
 - [Phase 23-test-environment-isolation]: useIsolatedConfig + cache-busting dynamic imports replaces saveGlobalConfig/restoreGlobalConfig pattern — tests no longer touch real config files
+- [Phase 24-mock-architecture-refactor]: prompts wrapper pattern: import { prompts as p } from @/tui/utils alias preserves all p.confirm/p.select call sites; tests mocking @/tui/utils directly need prompts in mock shape
 
 ### Pending Todos
 
@@ -80,7 +82,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T11:27:13.942Z
-Stopped at: Completed 23-01-PLAN.md — test environment isolation implemented
+Last session: 2026-03-22T12:45:26.454Z
+Stopped at: Completed 24-02-PLAN.md — prompts wrapper and import switch
 Resume file: None
 Next action: /gsd:plan-phase 21
