@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T16:19:30.286Z"
+last_updated: "2026-03-22T16:23:49.980Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
   completed_phases: 7
-  total_plans: 16
-  completed_plans: 14
+  total_plans: 17
+  completed_plans: 15
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 27 (git-forge-integrations) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Plan: 3 of 4
 | Phase 26-autocompletion-editor-polish P03 | 4min | 2 tasks | 3 files |
 | Phase 27-git-forge-integrations P01 | 2min | 2 tasks | 4 files |
 | Phase 27-git-forge-integrations P03 | 3min | 2 tasks | 5 files |
+| Phase 27-git-forge-integrations P02 | 7min | 2 tasks | 8 files |
 
 ### Decisions
 
@@ -97,6 +98,9 @@ Plan: 3 of 4
 - [Phase 27-03]: Bun.spawn for teaPullsLs in forge detection — Bun shell $ template has no .cwd() chain method
 - [Phase 27-03]: Gitea detection URL-agnostic via tea pulls ls success — self-hosted instances can have any domain; URL matching would have high false-negative rate
 - [Phase 27-03]: D-05 fork: auto-select forge when exactly 1 match detected; p.select prompt when 0 or multiple matches — zero-match prompt shows all forges with initialValue:none for easy skip
+- [Phase 27-02]: GitLab pr status uses 'glab mr list' not 'glab mr status' — mr status subcommand does not exist in glab CLI
+- [Phase 27-02]: Gitea _exec has three methods: run (inherit stdio), runCapture (piped stdout for JSON), openUrl (platform-aware xdg-open/open)
+- [Phase 27-02]: All forge integrations pass forge identifier string as third arg to resolveForgeRepo — triggers D-14 forge mismatch validation
 
 ### Pending Todos
 
@@ -122,7 +126,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T16:19:30.280Z
+Last session: 2026-03-22T16:23:49.974Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21
