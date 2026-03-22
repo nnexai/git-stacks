@@ -1,3 +1,4 @@
+import { $ } from "bun"
 import {
   workspaceExists,
   readWorkspace,
@@ -73,6 +74,62 @@ export function resolveForgeRepo(
   const baseBranch = repo.base_branch ?? registryEntry?.default_branch ?? "main"
 
   return { ok: true, workspace, repo, repoPath: repo.task_path, baseBranch }
+}
+
+// --- Forge Detection ---
+
+/** Injectable executor for detection shell commands. Tests can replace these. */
+export const _detect = {
+  which: async (cmd: string): Promise<boolean> => {
+    const result = await $`which ${cmd}`.quiet().nothrow()
+    return result.exitCode === 0
+  },
+  gitRemoteUrl: async (repoPath: string): Promise<string | null> => {
+    const result = await $`git -C ${repoPath} remote get-url origin`.quiet().nothrow()
+    if (result.exitCode !== 0) return null
+    return result.text().trim()
+  },
+  teaPullsLs: async (repoPath: string): Promise<boolean> => {
+    const proc = Bun.spawn(["tea", "pulls", "ls", "--limit", "1"], {
+      cwd: repoPath,
+      stdout: "ignore",
+      stderr: "ignore",
+    })
+    return (await proc.exited) === 0
+  },
+}
+
+export async function detectGitHubForge(repoPath: string): Promise<boolean> {
+  const installed = await _detect.which("gh")
+  if (!installed) return false
+  const remoteUrl = await _detect.gitRemoteUrl(repoPath)
+  if (!remoteUrl) return false
+  return remoteUrl.includes("github.com")
+}
+
+export async function detectGitLabForge(repoPath: string): Promise<boolean> {
+  const installed = await _detect.which("glab")
+  if (!installed) return false
+  const remoteUrl = await _detect.gitRemoteUrl(repoPath)
+  if (!remoteUrl) return false
+  // Only match gitlab.com SaaS with high confidence (per Pitfall 4 in RESEARCH.md)
+  return remoteUrl.includes("gitlab.com")
+}
+
+export async function detectGiteaForge(repoPath: string): Promise<boolean> {
+  const installed = await _detect.which("tea")
+  if (!installed) return false
+  // tea resolves login from remote URL — if `tea pulls ls` succeeds, the repo matches a configured login
+  return await _detect.teaPullsLs(repoPath)
+}
+
+/** Run all forge detections and return the ones that matched. */
+export async function detectForgeForRepo(repoPath: string): Promise<NonNullable<ForgeType>[]> {
+  const results: NonNullable<ForgeType>[] = []
+  if (await detectGitHubForge(repoPath)) results.push("github")
+  if (await detectGitLabForge(repoPath)) results.push("gitlab")
+  if (await detectGiteaForge(repoPath)) results.push("gitea")
+  return results
 }
 
 // --- Error formatting ---
