@@ -16,12 +16,35 @@ import {
   focusNiriWorkspaceDown,
   unsetNiriWorkspaceName,
   niriSpawn,
+  focusNiriWindow,
+  setNiriColumnWidth,
+  consumeOrExpelWindowLeft,
+  niriSpawnSh,
+  snapshotWindowIds,
 } from "../niri"
+
+// ─── Config schemas ───────────────────────────────────────────────────────────
+
+const niriWindowConfigSchema = z.object({
+  app: z.string().optional(),
+  source: z.string().optional(),
+  args: z.array(z.string()).optional(),
+  repo: z.string().optional(),
+  cwd: z.string().optional(),
+  command: z.string().optional(),
+})
+
+const niriColumnSchema = z.object({
+  width: z.string().optional(),
+  windows: z.array(niriWindowConfigSchema).min(1),
+})
 
 const niriConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  commands: z.array(z.string()).optional(),
+  columns: z.array(niriColumnSchema).optional(),
 })
+
+// ─── Integration ─────────────────────────────────────────────────────────────
 
 export const niriIntegration: Integration = {
   id: "niri",
@@ -40,7 +63,7 @@ export const niriIntegration: Integration = {
     spinner.start("Setting up niri workspace")
 
     try {
-      // Step 2: Create or reuse named workspace (NIRI-01, NIRI-04)
+      // Step 1: Create or reuse named workspace (NIRI-01, NIRI-04)
       const workspaceName = ctx.workspace.name
       const workspaces = await listNiriWorkspaces()
       const alreadyNamed = workspaces.some((ws) => ws.name === workspaceName)
@@ -50,13 +73,11 @@ export const niriIntegration: Integration = {
         await focusNiriWorkspace(workspaceName)
       } else {
         // First open: create a NEW workspace — do NOT rename the user's current workspace
-        // Step 1: Focus a new empty workspace at the end of the workspace list
         await focusNiriWorkspaceDown()
-        // Step 2: Name this new workspace
         await setNiriWorkspaceName(workspaceName)
       }
 
-      // Step 3: Move prior integration windows by niriWindowIds (not PID)
+      // Step 2: Move prior integration windows by niriWindowIds (NIRI-02)
       for (const artifact of Object.values(bag)) {
         if (artifact?.kind !== "window") continue
         if (!artifact.niriWindowIds?.length) continue
@@ -70,27 +91,99 @@ export const niriIntegration: Integration = {
         }
       }
 
-      // Step 4: Spawn user-configured commands via niri IPC
-      // Uses niriSpawn (niri msg action spawn) so niri owns the windows and
-      // can place them on the correct workspace. Also non-blocking — no stdio
-      // inheritance that would corrupt the TUI dashboard.
-      // Commands are split on whitespace and env vars substituted directly —
-      // no shell wrapper. Use hooks if you need shell features.
-      const wsConfig = niriConfigSchema.safeParse(ctx.workspace.settings?.integrations?.["niri"] ?? {})
+      // Step 3: Process declarative column layout
+      const wsConfig = niriConfigSchema.safeParse(
+        ctx.workspace.settings?.integrations?.["niri"] ?? {}
+      )
       const globalConfig = niriConfigSchema.safeParse(ctx.config.integrations["niri"] ?? {})
-      const config = wsConfig.success && wsConfig.data.commands?.length
-        ? wsConfig.data
-        : globalConfig.success ? globalConfig.data : { commands: [] }
-      if (config.commands?.length) {
+
+      // Workspace columns take precedence over global columns
+      const columns =
+        wsConfig.success && wsConfig.data.columns?.length
+          ? wsConfig.data.columns
+          : globalConfig.success
+            ? globalConfig.data.columns
+            : undefined
+
+      if (columns?.length) {
+        // Build env var expand function
         const vars: Record<string, string> = {
           WS_WORKSPACE: ctx.workspace.name,
           WS_BRANCH: ctx.workspace.branch ?? "",
           WS_TASKS_DIR: ctx.tasksDir,
         }
-        for (const cmd of config.commands) {
-          const expanded = cmd.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")
-          const args = expanded.split(/\s+/).filter(Boolean)
-          if (args.length > 0) await niriSpawn(args)
+        const expandVars = (s: string): string =>
+          s.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")
+
+        // Process columns sequentially (left to right)
+        for (const column of columns) {
+          const columnWindowIds: number[] = []
+
+          for (const window of column.windows) {
+            try {
+              if (window.source !== undefined) {
+                // Source window: resolve from ArtifactBag
+                const artifact = bag[window.source]
+                if (artifact?.kind === "window" && artifact.niriWindowIds?.length) {
+                  columnWindowIds.push(artifact.niriWindowIds[0])
+                } else {
+                  p.log.warn(`niri: source "${window.source}" not found in bag or has no window IDs`)
+                }
+              } else if (window.app !== undefined) {
+                // Direct spawn via niriSpawn (no shell)
+                const expandedArgs = (window.args ?? []).map(expandVars)
+                const newIds = await snapshotWindowIds(() =>
+                  niriSpawn([window.app!, ...expandedArgs])
+                )
+                columnWindowIds.push(...newIds)
+              } else if (window.command !== undefined) {
+                // Shell spawn via niriSpawnSh
+                const expandedCommand = expandVars(window.command)
+
+                // Resolve cwd: repo takes precedence over cwd
+                let resolvedCwd: string | undefined
+                if (window.repo !== undefined) {
+                  const repoEntry = ctx.workspace.repos.find((r) => r.name === window.repo)
+                  resolvedCwd = repoEntry?.task_path
+                } else if (window.cwd !== undefined) {
+                  resolvedCwd = expandVars(window.cwd)
+                }
+
+                // Build shell string
+                const parts: string[] = []
+                if (resolvedCwd) parts.push(`cd ${resolvedCwd}`)
+                parts.push(expandedCommand)
+                const shellCmd = parts.join(" && ")
+
+                const newIds = await snapshotWindowIds(() => niriSpawnSh(shellCmd))
+                columnWindowIds.push(...newIds)
+              } else {
+                p.log.warn("niri: window config has none of source/app/command — skipping")
+              }
+            } catch (err) {
+              p.log.warn(`niri: failed to place window: ${String(err)}`)
+              // Continue — partial failure acceptable
+            }
+          }
+
+          // Stack windows 2+ into the column via consumeOrExpelWindowLeft
+          for (let i = 1; i < columnWindowIds.length; i++) {
+            try {
+              await consumeOrExpelWindowLeft(columnWindowIds[i])
+            } catch (err) {
+              p.log.warn(`niri: failed to stack window ${columnWindowIds[i]}: ${String(err)}`)
+            }
+          }
+
+          // Apply column width if configured and we have at least one window
+          if (column.width && columnWindowIds[0] !== undefined) {
+            try {
+              await focusNiriWindow(columnWindowIds[0])
+              await setNiriColumnWidth(column.width)
+            } catch (err) {
+              p.log.warn(`niri: failed to set column width: ${String(err)}`)
+            }
+          }
         }
       }
 
@@ -114,7 +207,7 @@ export const niriIntegration: Integration = {
   },
 
   async configurePrompt(_current: Record<string, unknown>): Promise<Record<string, unknown> | null> {
-    // No interactive prompts for commands array in v0.6.0
+    // No interactive prompts for columns array in v0.6.0
     return { enabled: true }
   },
 
