@@ -16,12 +16,19 @@ mock.module("@/lib/tmux", () => ({
 // Mock niri lib so no real shell commands run during import
 mock.module("@/lib/niri", () => ({
   isNiriRunning: mock(async () => false),
+  listNiriWindows: mock(async () => []),
   listNiriWorkspaces: mock(async () => []),
   setNiriWorkspaceName: mock(async () => {}),
   moveWindowToWorkspace: mock(async () => {}),
   focusNiriWorkspace: mock(async () => {}),
   focusNiriWorkspaceDown: mock(async () => {}),
   unsetNiriWorkspaceName: mock(async () => {}),
+  niriSpawn: mock(async () => {}),
+  focusNiriWindow: mock(async () => {}),
+  consumeOrExpelWindowLeft: mock(async () => {}),
+  niriSpawnSh: mock(async () => {}),
+  moveColumnToIndex: mock(async () => {}),
+  setWindowWidth: mock(async () => {}),
   snapshotWindowIds: mock(async () => []),
 }))
 
