@@ -75,7 +75,8 @@ Plan: Not started
 
 ### Pending Todos
 
-None. 6 todos cleared: 3 already shipped (close command, niri fix, test isolation), 3 promoted to phases 25-27 (lifecycle phases, autocompletion polish, git forge integrations).
+1 pending todo:
+- **Issue and task tracking integration (Jira, GitHub, GitLab, Gitea)** — deferred from phase 27 discussion; design unified issue/task linking across forges + Jira
 
 ### Roadmap Evolution
 
