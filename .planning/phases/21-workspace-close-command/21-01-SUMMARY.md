@@ -131,6 +131,14 @@ _Note: TDD tasks have multiple commits (test → feat)_
 - Phase 22 (niri display fix) and Phase 23 (test isolation) can proceed independently
 - The `pre_close` hook is available in YAML for users to configure teardown scripts
 
+## Self-Check: PASSED
+
+- All source files created/modified exist on disk
+- All task commits verified in git log (1bf82c8, 4110370, 1ca1262)
+- `bun run typecheck` exits 0
+- `bun test tests/lib/workspace-ops.test.ts` — 19 pass, 0 fail (includes 5 new closeWorkspace tests)
+- `bun test tests/tui/dashboard/ActionMenu.test.tsx` — 10 pass, 0 fail
+
 ---
 *Phase: 21-workspace-close-command*
 *Completed: 2026-03-22*
