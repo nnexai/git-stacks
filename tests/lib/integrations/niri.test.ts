@@ -156,9 +156,9 @@ describe("workspace creation (NIRI-01, NIRI-04)", () => {
 // Window moves (NIRI-02)
 // ===================================================================
 describe("window moves (NIRI-02)", () => {
-  test("moves windows by niriWindowIds", async () => {
+  test("moves windows by windowIds['niri']", async () => {
     const bagWithWindow: ArtifactBag = {
-      vscode: { kind: "window", pid: 0, app_id: "code", title: "", niriWindowIds: [42] },
+      vscode: { kind: "window", pid: 0, app_id: "code", title: "", windowIds: { niri: [42] } },
     }
 
     await niriIntegration.open(fakeCtx, null, bagWithWindow)
@@ -168,9 +168,9 @@ describe("window moves (NIRI-02)", () => {
     expect(mockMoveWindowToWorkspace.mock.calls[0][1]).toBe("test-ws")
   })
 
-  test("moves multiple niriWindowIds from single artifact", async () => {
+  test("moves multiple windowIds['niri'] from single artifact", async () => {
     const bagWithWindow: ArtifactBag = {
-      vscode: { kind: "window", pid: 0, app_id: "code", title: "", niriWindowIds: [42, 43] },
+      vscode: { kind: "window", pid: 0, app_id: "code", title: "", windowIds: { niri: [42, 43] } },
     }
 
     await niriIntegration.open(fakeCtx, null, bagWithWindow)
@@ -180,7 +180,7 @@ describe("window moves (NIRI-02)", () => {
     expect(mockMoveWindowToWorkspace.mock.calls[1][0]).toBe(43)
   })
 
-  test("skips window with no niriWindowIds", async () => {
+  test("skips window with no windowIds", async () => {
     const bagWithWindow: ArtifactBag = {
       vscode: { kind: "window", pid: 1234, app_id: "code", title: "" },
     }
@@ -190,9 +190,9 @@ describe("window moves (NIRI-02)", () => {
     expect(mockMoveWindowToWorkspace.mock.calls.length).toBe(0)
   })
 
-  test("skips window with empty niriWindowIds array", async () => {
+  test("skips window with empty windowIds['niri'] array", async () => {
     const bagWithWindow: ArtifactBag = {
-      vscode: { kind: "window", pid: 1234, app_id: "code", title: "", niriWindowIds: [] },
+      vscode: { kind: "window", pid: 1234, app_id: "code", title: "", windowIds: { niri: [] } },
     }
 
     await niriIntegration.open(fakeCtx, null, bagWithWindow)
@@ -202,7 +202,7 @@ describe("window moves (NIRI-02)", () => {
 
   test("moveWindowToWorkspace failure does not abort — integration returns null", async () => {
     const bagWithWindow: ArtifactBag = {
-      vscode: { kind: "window", pid: 0, app_id: "code", title: "", niriWindowIds: [42] },
+      vscode: { kind: "window", pid: 0, app_id: "code", title: "", windowIds: { niri: [42] } },
     }
     mockMoveWindowToWorkspace.mockImplementation(async () => {
       throw new Error("move failed")
@@ -340,9 +340,9 @@ describe("column config — command: windows", () => {
 // Column config — source: windows (from ArtifactBag)
 // ===================================================================
 describe("column config — source: windows", () => {
-  test("source: window pulls niriWindowIds from bag — no spawn", async () => {
+  test("source: window pulls windowIds['niri'] from bag — no spawn", async () => {
     const bagWithVscode: ArtifactBag = {
-      vscode: { kind: "window", pid: 123, app_id: "code", title: "VS Code", niriWindowIds: [77] },
+      vscode: { kind: "window", pid: 123, app_id: "code", title: "VS Code", windowIds: { niri: [77] } },
     }
     const ctx: IntegrationContext = {
       ...fakeCtx,
@@ -364,9 +364,9 @@ describe("column config — source: windows", () => {
     expect(mockSnapshotWindowIds.mock.calls.length).toBe(0)
   })
 
-  test("source: window with niriWindowId as first column window — width applied", async () => {
+  test("source: window with windowIds['niri'] as first column window — width applied", async () => {
     const bagWithVscode: ArtifactBag = {
-      vscode: { kind: "window", pid: 123, app_id: "code", title: "VS Code", niriWindowIds: [77] },
+      vscode: { kind: "window", pid: 123, app_id: "code", title: "VS Code", windowIds: { niri: [77] } },
     }
     const ctx: IntegrationContext = {
       ...fakeCtx,
