@@ -185,9 +185,10 @@ The plugin system is extensible — new agent frameworks can be added as plugins
 | 1 | tmux | Creates detached tmux session | Session name |
 | 2 | cmux | Creates/focuses cmux workspace | Workspace ref |
 | 3 | niri | Arranges windows on a named niri workspace | — |
-| 5 | GitHub | Creates GitHub PRs via `gh` CLI | — |
-| 5 | GitLab | Creates GitLab MRs via `glab` CLI | — |
-| 5 | Gitea | Creates Gitea PRs via `tea` CLI | — |
+| 5 | GitHub | GitHub PRs and issues via `gh` CLI | — |
+| 5 | GitLab | GitLab MRs and issues via `glab` CLI | — |
+| 5 | Gitea | Gitea PRs and issues via `tea` CLI | — |
+| 5 | Jira | Jira issue tracking via configurable command | — |
 
 Integrations are configured per-global, per-template, or per-workspace. Use `git-stacks config` to enable/disable globally, or pass overrides during `git-stacks new` / `git-stacks edit`.
 
@@ -253,6 +254,47 @@ git-stacks integration github pr create my-feature backend-api
 ```
 
 Repos must have a `forge` field set in the registry (`github`, `gitlab`, or `gitea`). This is auto-detected during `repo add` / `repo scan` from remote URL and CLI availability. Check forge CLI availability with `git-stacks doctor`.
+
+**Issue tracking** (GitHub, GitLab, Gitea, Jira):
+
+Link workspaces to issues from any supported tracker. Issue references are stored in workspace YAML — no external state.
+
+```bash
+# Link an issue to a workspace
+git-stacks integration github issue link my-feature 42
+git-stacks integration jira issue link my-feature PROJ-123
+
+# View linked issue URL
+git-stacks integration github issue open my-feature
+
+# Open in browser
+git-stacks integration github issue open my-feature --web
+
+# Remove link
+git-stacks integration github issue unlink my-feature
+```
+
+Jira uses a configurable command template (default: `jira open $ISSUE_ID`). Configure via `git-stacks config` or edit the config YAML directly:
+
+```yaml
+# ~/.config/git-stacks/config.yml
+integrations:
+  jira:
+    enabled: true
+    open_cmd: "xdg-open https://company.atlassian.net/browse/$ISSUE_ID"
+```
+
+Issue data is stored per-workspace:
+
+```yaml
+# ~/.config/git-stacks/workspaces/my-feature.yml
+settings:
+  integrations:
+    github:
+      issue: "42"
+    jira:
+      issue: "PROJ-123"
+```
 
 ## Hooks & Env Injection
 
