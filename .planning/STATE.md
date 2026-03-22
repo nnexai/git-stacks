@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
-stopped_at: Completed quick task 260322-b5d (WindowDetector refactor)
-last_updated: "2026-03-22T07:18:32Z"
+stopped_at: Completed quick task 260322-c0u (niri two-phase column layout)
+last_updated: "2026-03-22T07:58:00Z"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -80,6 +80,9 @@ Plan: Not started
 - [Quick 260322-9bm]: Integration.commands?(parent: Command) optional method enables per-integration CLI helpers without requiring all integrations to implement it
 - [Quick 260322-b5d]: WindowDetector.begin() called before every integration's open() — runner captures pre-spawn snapshot for each integration, not just window-producing ones (simplicity over optimization)
 - [Quick 260322-b5d]: WindowArtifact.niriWindowIds replaced with generic windowIds Record<string,number[]> — niri reads artifact.windowIds?.["niri"] for source windows and window moves
+- [Quick 260322-c0u]: Two-phase niri layout: Phase 1 collects columnMap (no positioning), Phase 2 reorders left-to-right via focusNiriWindow+moveColumnToIndex(1-based), then stacks, then applies widths via setWindowWidth --id
+- [Quick 260322-c0u]: setWindowWidth --id replaces setNiriColumnWidth in niri integration — eliminates focus dependency for width setting; setNiriColumnWidth kept in niri.ts for backward compat but unused by integration
+- [Quick 260322-c0u]: NiriWindowSchema.layout field added (optional) with pos_in_scrolling_layout tuple — enables future column position queries without guessing
 
 ### Pending Todos
 
@@ -101,10 +104,11 @@ None.
 | 260322-9bm | tmux open() defocus, cleanup(), integration helper commands (tmux attach, niri focus-workspace) | 2026-03-22 | 285802d | Verified | [260322-9bm-tmux-integration-remove-focus-on-open-ad](./quick/260322-9bm-tmux-integration-remove-focus-on-open-ad/) |
 | 260322-a6s | Rework niri integration config from commands[] to declarative columns with app/command/source windows | 2026-03-22 | 468d564 | Verified | [260322-a6s-rework-niri-integration-config-declarati](./quick/260322-a6s-rework-niri-integration-config-declarati/) |
 | 260322-b5d | Refactor window ID detection to WindowDetector interface — decouple vscode/intellij from niri.ts | 2026-03-22 | 9b38920 | Verified | [260322-b5d-refactor-window-id-detection-from-hardco](./quick/260322-b5d-refactor-window-id-detection-from-hardco/) |
+| 260322-c0u | Rework niri column layout to two-phase approach: create-then-arrange with move-column-to-index and set-window-width --id | 2026-03-22 | 4662303 | Verified | [260322-c0u-rework-niri-column-layout-two-phase-appr](./quick/260322-c0u-rework-niri-column-layout-two-phase-appr/) |
 
 ## Session Continuity
 
-Last session: 2026-03-22T06:08:00.000Z
-Stopped at: Completed quick task 260322-a6s (niri declarative column config rework)
+Last session: 2026-03-22T07:58:00Z
+Stopped at: Completed quick task 260322-c0u (niri two-phase column layout rework)
 Resume file: None
 Next action: `/gsd:plan-phase 16`
