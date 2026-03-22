@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 25-02-PLAN.md — _executeClean cascade and cleanWorkspace/removeWorkspace refactor
-last_updated: "2026-03-22T14:36:55.700Z"
+stopped_at: Completed 25-03-PLAN.md — mergeWorkspace D-10 cascade, TUI captured flag fix, runPreRemoveHooks removal
+last_updated: "2026-03-22T14:45:03.712Z"
 progress:
-  total_phases: 8
-  completed_phases: 5
+  total_phases: 9
+  completed_phases: 6
   total_plans: 12
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -58,6 +58,7 @@ Plan: 3 of 3
 | Phase 24.1-test-mock-hygiene P01 | 2min | 2 tasks | 7 files |
 | Phase 25-dedicated-lifecycle-phases P01 | 17 | 2 tasks | 3 files |
 | Phase 25-dedicated-lifecycle-phases P02 | 4 | 2 tasks | 2 files |
+| Phase 25-dedicated-lifecycle-phases P03 | 5 | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -77,6 +78,9 @@ Plan: 3 of 3
 - [Phase 25-dedicated-lifecycle-phases]: buildBaseEnv exported for reuse by plans 02 and 03; _executeClose private inner function; post_close fires after integration cleanup; restore real lifecycle in test to prevent parallel mock contamination
 - [Phase 25-dedicated-lifecycle-phases]: _executeClean cascade pattern: _executeClose called first, then pre_clean, then per-repo pre_clean interleaved with removal, then post_clean; triggeredBy propagated through entire chain
 - [Phase 25-dedicated-lifecycle-phases]: post_remove failure after YAML deletion logs but does not fail — YAML already gone, no rollback path
+- [Phase 25-dedicated-lifecycle-phases]: mergeWorkspace composes _executeClean for steps 1-6 rather than calling _executeClose directly — matches removeWorkspace pattern and avoids duplicating close+clean logic
+- [Phase 25-dedicated-lifecycle-phases]: post_merge fires after post_remove (D-11 ordering) — workspace is fully deleted before merge notification hooks run
+- [Phase 25-dedicated-lifecycle-phases]: All TUI lifecycle dispatches pass captured:true to prevent OpenTUI screen corruption when hooks run during clean/remove/merge
 
 ### Pending Todos
 
@@ -96,7 +100,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T14:36:55.697Z
-Stopped at: Completed 25-02-PLAN.md — _executeClean cascade and cleanWorkspace/removeWorkspace refactor
+Last session: 2026-03-22T14:45:03.707Z
+Stopped at: Completed 25-03-PLAN.md — mergeWorkspace D-10 cascade, TUI captured flag fix, runPreRemoveHooks removal
 Resume file: None
 Next action: /gsd:plan-phase 21
