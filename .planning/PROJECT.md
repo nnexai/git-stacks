@@ -8,9 +8,9 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State — v0.7.0 in progress (2026-03-22)
+## Current State — v0.7.0 shipped (2026-03-22)
 
-### What shipped in v0.7.0 (in progress)
+### What shipped in v0.7.0
 
 - **Dedicated lifecycle phases** — close, clean, remove, and merge each have dedicated pre/post hook pairs; lifecycle cascade (remove → clean → close) ensures consistent teardown ordering; `WS_TRIGGERED_BY` env var tells hooks which top-level operation initiated the cascade; per-repo `pre_clean` hook runs before each individual worktree removal; `mergeWorkspace` follows full D-10 lifecycle order via cascade composition
 - **Workspace close command** — `git-stacks close <name>` tears down integration sessions (tmux kill, niri unname) and runs `pre_close` hooks without deleting worktrees or workspace YAML; workspace remains fully re-openable via `git-stacks open`; TUI dashboard action menu includes Close with `x` shortcut
@@ -59,7 +59,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Messages** (`~/.config/git-stacks/messages/{workspace}.jsonl`) — workspace-scoped notification store; IPC-delivered to running TUI via `/tmp/git-stacks.sock`
 - **Integrations** — VSCode, IntelliJ, tmux, cmux, niri plugin system; extensible via `src/lib/integrations/`
 - **Issue Tracking** — `issue link/unlink/open` commands on GitHub, GitLab, Gitea, and Jira integration plugins; shared `issue-utils.ts` for resolution/persistence
-- **Hooks** — full lifecycle hook pairs (`pre_close`/`post_close`, `pre_clean`/`post_clean`, `pre_merge`/`post_merge`, `pre_remove`/`post_remove`, plus `pre_create`/`post_create`, `pre_open`/`post_open`) at template and workspace levels; per-repo `pre_open` and `pre_clean`; cascade design (remove → clean → close); hooks receive `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, `WS_TRIGGERED_BY`
+- **Hooks** — full lifecycle hook pairs (`pre_close`/`post_close`, `pre_clean`/`post_clean`, `pre_merge`/`post_merge`, `pre_remove`/`post_remove`, plus `pre_create`/`post_create`, `pre_open`/`post_open`) at template and workspace levels; per-repo `pre_open` and `pre_clean`; cascade design (remove → clean → close); hooks receive `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`
 
 ## Requirements
 
@@ -103,13 +103,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Full in-TUI CRUD for workspaces, templates, repos — v0.3.0
 - ✓ Shell completion coverage for all commands, subcommands, and fixed enum flag values — v0.3.0
 
+- ✓ Workspace close command — lightweight teardown (tmux, niri) without deleting workspace/worktrees — v0.7.0 Phase 21
+- ✓ Niri columns display fix — formatConfigValue helper for non-primitive config rendering — v0.7.0 Phase 22
+- ✓ Test environment isolation — useIsolatedConfig helper, all tests use temp dirs — v0.7.0 Phase 23
+- ✓ Mock architecture refactor — injectable `_exec` objects + centralized prompts wrapper — v0.7.0 Phase 24
+- ✓ Cascading lifecycle phases — close → clean → remove → merge with fine-grained hooks — v0.7.0 Phase 25
+- ✓ Shell completion & editor polish — `--from` completion, `--yaml` flags, force cleanup — v0.7.0 Phase 26
+- ✓ Git forge integrations — GitHub/GitLab/Gitea PR creation via CLI pass-through — v0.7.0 Phase 27
+- ✓ Issue & task tracking — link/unlink/open across GitHub/GitLab/Gitea/Jira — v0.7.0 Phase 28
+
 ### Active
 
-- [x] Workspace close command — lightweight teardown (tmux, niri) without deleting workspace/worktrees — v0.7.0 Phase 21
-- [x] Fix niri columns display in TUI details pane — `[object Object]` rendering bug — v0.7.0 Phase 22
-- [x] Audit and isolate test environments from user config — ensure all tests use isolated temp dirs — v0.7.0 Phase 23
-- [x] Dedicated lifecycle phases — close/clean/remove/merge with pre/post hooks and cascade — v0.7.0 Phase 25
-- [x] Issue & task tracking integration — link external issues to workspaces across GitHub/GitLab/Gitea/Jira trackers — v0.7.0 Phase 28
+(Pending next milestone — see Next Milestone Goals)
 
 ### Out of Scope
 
@@ -123,16 +128,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
-| Branch completions for `new --from` | Design spike needed (repo-context resolution at completion time) |
 
-## Current Milestone: v0.7.0 Close Command & Polish
+## Current Milestone: v0.7.0 Close Command & Polish — SHIPPED
 
-**Goal:** Add workspace close command, fix niri display bug, and harden test isolation.
+Shipped 2026-03-22. 9 phases, 20 plans, 58 requirements, 727 tests passing.
 
-**Target features:**
-- Workspace close command — lightweight teardown (end tmux session, remove niri named workspace) without deleting workspace directory or worktrees
-- Fix niri columns `[object Object]` display in TUI details pane
-- Audit and isolate all test environments from real user config
+**Delivered:** Workspace close command, cascading lifecycle hooks, mock architecture refactor, git forge integrations (GitHub/GitLab/Gitea), issue tracking (GitHub/GitLab/Gitea/Jira), shell completion polish, editor YAML flags.
 
 ## Next Milestone Goals
 
@@ -145,7 +146,7 @@ After v0.7.0 — candidates for v0.8.0+:
 
 ## Versioning
 
-**Current release:** `v0.5.1`
+**Current release:** `v0.7.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -184,6 +185,13 @@ After v0.7.0 — candidates for v0.8.0+:
 | Injectable `_exec` for niri test isolation | Bun built-in modules can't be mocked via mock.module; mutable object property is the workaround | ✓ Good |
 | Commands array over hardcoded terminal spawn | User configures arbitrary commands; more flexible than single terminal config | ✓ Good — user decision |
 | No cleanup on workspace remove | User manages niri workspace lifecycle manually; simplifies integration | ✓ Good — user decision |
+| Cascade composition (remove → clean → close) | Higher-level commands compose lower-level functions; consistent teardown ordering | ✓ Good |
+| `GS_TRIGGERED_BY` env var in hooks | Hooks know which top-level operation initiated the cascade | ✓ Good |
+| Injectable `_exec` for shell-wrapper modules | Property replacement over mock.module() — faster, more explicit, no cache issues | ✓ Good |
+| Centralized `prompts` wrapper in tui/utils.ts | Single mutable boundary for all @clack/prompts imports; one mock target | ✓ Good |
+| Forge CLI pass-through (gh/glab/tea) | Inherit stdio for interactive auth; no custom API clients | ✓ Good |
+| Issue IDs stored as strings | Unifies GitHub integers and Jira alphanumeric keys | ✓ Good |
+| Jira configurable `open_cmd` template | Tool-agnostic via `sh -c` with `$ISSUE_ID` env var; no hard dependency | ✓ Good |
 
 ## Out of Scope
 
@@ -215,4 +223,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-22 after v0.7.0 milestone started — Close Command & Polish*
+*Last updated: 2026-03-22 after v0.7.0 milestone shipped — Close Command & Polish*

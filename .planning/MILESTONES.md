@@ -1,5 +1,25 @@
 # Milestones
 
+## v0.7.0 Close Command & Polish (Shipped: 2026-03-22)
+
+**Phases completed:** 9 phases (21–28 + 24.1), 20 plans, 34 tasks
+**Files changed:** 163 files, +22,138 / -505 lines
+**Timeline:** 2026-03-22 (1 day, ~9 hours)
+**Commits:** 135 since v0.6.0
+
+**Key accomplishments:**
+
+- **Workspace close command** (`git-stacks close <name>`) — lightweight session teardown (tmux kill, niri unname) without deleting worktrees or YAML; TUI dashboard action menu with `x` shortcut
+- **Cascading lifecycle phases** — close → clean → remove → merge with 5 new hook pairs (`pre_clean`/`post_clean`, `post_close`, `pre_merge`, `post_remove`); per-repo interleaved `pre_clean`; `GS_TRIGGERED_BY` env var propagated through cascade
+- **Mock architecture refactor** — injectable `_exec` objects in tmux/cmux/lifecycle + centralized `prompts` wrapper in tui/utils.ts; 67 new unit tests via property replacement; dead mock.module("@clack/prompts") calls eliminated from 7 test files
+- **Git forge integrations** — GitHub (`gh`), GitLab (`glab`), Gitea (`tea`) integration plugins with `pr create/open/status`; forge auto-detection at `repo add`/`repo scan`; doctor binary checks
+- **Issue & task tracking** — `issue link/unlink/open` across GitHub, GitLab, Gitea, and standalone Jira plugin with configurable `open_cmd` template; shared issue-utils module
+- **CLI polish** — shell completion for `new --from` and `close`; `--yaml` flags for direct YAML editing with Zod validation; `clean` folder deletion; `remove --force` malformed YAML resilience
+
+**Archive:** [.planning/milestones/v0.7.0-ROADMAP.md](.planning/milestones/v0.7.0-ROADMAP.md)
+
+---
+
 ## v0.6.0 Integration Orchestration & Niri (Shipped: 2026-03-22)
 
 **Phases completed:** 5 phases, 6 plans, 11 tasks

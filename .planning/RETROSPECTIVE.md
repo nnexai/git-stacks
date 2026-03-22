@@ -153,6 +153,58 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.7.0 — Close Command & Polish
+
+**Shipped:** 2026-03-22
+**Phases:** 9 (Phases 21–28 + 24.1) | **Plans:** 20 | **Tasks:** 34
+
+### What Was Built
+
+- Workspace close command (`git-stacks close <name>`) with tmux/niri teardown and TUI action menu
+- Cascading lifecycle phases: close → clean → remove → merge with 5 new hook pairs and `GS_TRIGGERED_BY` propagation
+- Injectable `_exec` mock architecture in tmux/cmux/lifecycle + centralized `prompts` wrapper routing all 15 production files through tui/utils.ts
+- Test mock hygiene: dead mock.module("@clack/prompts") eliminated from 7 files, explicit @/tui/utils mocks
+- Git forge integrations: GitHub (`gh`), GitLab (`glab`), Gitea (`tea`) PR plugins with auto-detection at repo add/scan
+- Issue & task tracking: `issue link/unlink/open` for GitHub/GitLab/Gitea + standalone Jira plugin with configurable `open_cmd`
+- Shell completion for `new --from` and `close`; `--yaml` flags for direct YAML editing; `remove --force` resilience
+
+### What Worked
+
+- **Inserted phases handled cleanly**: Phase 24.1 (Test Mock Hygiene) was inserted as cleanup after Phase 24 shipped — decimal numbering kept context clear and ROADMAP.md tracking worked without issues
+- **Quick task mechanism**: Hook env var rename (WS_ → GS_) was done as a quick task mid-milestone — fast, atomic, didn't disrupt phase sequencing
+- **Forge → Issue layering**: Phase 27 (forges) was designed with Phase 28 (issue tracking) in mind — shared `_exec` pattern, resolveForgeRepo utility, and issue-utils module all composed cleanly
+- **Test count scaling**: 438 → 727 tests (+289 across 9 phases) with zero regressions — the mock refactor (Phase 24) actually improved test reliability by eliminating mock.module() ordering dependencies
+- **Autonomous execution**: All 9 phases ran in autonomous mode; user interaction limited to grey area decisions during discuss phases
+
+### What Was Inefficient
+
+- **Nyquist compliance gap**: 0/9 phases had compliant VALIDATION.md files — the audit flagged 4 missing and 5 drafts. The workflow's Nyquist validation step needs to be enforced during execution, not discovered at audit time
+- **SUMMARY.md frontmatter empty `requirements_completed`**: Multiple summaries had empty arrays despite satisfying requirements — cosmetic but causes confusion during audit cross-referencing
+- **v0.7.0 scope creep (positive)**: Originally scoped as 3 phases (close, display fix, test isolation), grew to 9 phases via promoted todos. Each addition was justified but the milestone name ("Close Command & Polish") undersells the scope
+
+### Patterns Established
+
+- **Centralized prompts wrapper**: `import { prompts as p } from "@/tui/utils"` — single mock target for all interactive prompts; tests mock `@/tui/utils` not `@clack/prompts`
+- **Lifecycle cascade composition**: Higher-level commands compose lower-level functions (`removeWorkspace` → `_executeClean` → `_executeClose`) with triggeredBy propagation
+- **Forge CLI pass-through**: `stdio: "inherit"` for interactive auth; no custom API clients — user's existing CLI auth works unchanged
+- **Issue ID coercion**: `String(issueId)` normalizes GitHub integers and Jira alphanumeric keys to a uniform storage format
+- **Configurable command template**: Jira `open_cmd` uses `sh -c` with `$ISSUE_ID` env var — no string interpolation, shell injection safe
+
+### Key Lessons
+
+1. **Mock architecture refactors pay compound interest**: The Phase 24 `_exec` pattern enabled fast, reliable tests for Phases 27 and 28 — each new integration module got instant test isolation without learning mock.module() quirks
+2. **Lifecycle cascade needs early design**: Phase 25's cascade design (D-10 lifecycle order) was critical for correctness but complex — the 3-plan structure (close, clean/remove, merge) was the right decomposition
+3. **Forge detection is better URL-agnostic**: Gitea's `tea pulls ls` success check works for any self-hosted domain; URL pattern matching would have high false-negative rates
+4. **Enforce Nyquist during execution**: Waiting until audit time to discover validation gaps wastes context. The executor should generate VALIDATION.md as part of the plan completion gate.
+
+### Cost Observations
+
+- Model mix: sonnet for execution, opus for planning/orchestration (balanced profile)
+- Sessions: 2-3 sessions on 2026-03-22 (~9 hours total)
+- Notable: Largest milestone by plan count (20 plans, 34 tasks) — completed same day as v0.6.0. Test suite grew from 438 to 727 (+66%)
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -161,5 +213,6 @@ Living document — one section per shipped milestone.
 | v0.3.0 Dashboard UI Overhaul | 4 | 13 | 2 | 2 |
 | v0.4.0 TUI Hardening & Polish | 8 | 21 | 1 | 0 |
 | v0.6.0 Integration & Niri | 5 | 6 | 1 | 0 |
+| v0.7.0 Close Command & Polish | 9 | 20 | 1 | 0 |
 
-**Trend:** Execution speed continues to improve. v0.6.0 is the leanest milestone yet — 6 plans, 11 tasks, zero rework. Autonomous mode ran all 5 phases with only 2 user interactions (grey area decisions in Phase 20). Infrastructure-first phasing eliminated type-level rework entirely. Test count grew from 375 to 438 (+63 tests) with zero regressions across the milestone.
+**Trend:** v0.7.0 is the largest milestone by phase+plan count (9 phases, 20 plans) yet maintained zero rework — the mock architecture refactor (Phase 24) eliminated the cross-test contamination class of bugs that caused rework in earlier milestones. Test count grew 66% (438 → 727) in one milestone. Autonomous mode scaled to 9 consecutive phases with minimal user interaction. Scope expansion via promoted todos (3 → 9 phases) worked well — each addition was small and well-defined.
