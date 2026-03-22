@@ -75,6 +75,7 @@ mock.module("../../../src/lib/git", () => ({
 mock.module("../../../src/lib/workspace-ops", () => ({
   openWorkspace: mock(async () => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
+  closeWorkspace: mock(async () => ({ ok: true })),
   removeWorkspace: mock(async () => ({ ok: true })),
   mergeWorkspace: mock(async () => ({ ok: true })),
   renameWorkspace: mock(async () => {}),

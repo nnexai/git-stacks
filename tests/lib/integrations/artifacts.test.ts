@@ -7,7 +7,17 @@ import type { IntegrationContext, ArtifactBag } from "@/lib/integrations/types"
 const mockSpinner = { start: mock(() => {}), stop: mock(() => {}) }
 mock.module("@clack/prompts", () => ({
   spinner: () => mockSpinner,
-  log: { warn: mock(() => {}) },
+  log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+  intro: mock(() => {}),
+  outro: mock(() => {}),
+  text: mock(async () => ""),
+  select: mock(async () => ""),
+  multiselect: mock(async () => []),
+  confirm: mock(async () => false),
+  isCancel: mock(() => false),
+  cancel: mock(() => {}),
+  group: mock(async () => ({})),
+  note: mock(() => {}),
 }))
 
 // 2. Mock @/lib/tmux

@@ -85,6 +85,7 @@ mock.module("../../../src/lib/git", () => ({
 mock.module("../../../src/lib/workspace-ops", () => ({
   openWorkspace: mock(async () => ({ ok: true })),
   cleanWorkspace: mock(async () => ({ ok: true })),
+  closeWorkspace: mock(async () => ({ ok: true })),
   removeWorkspace: mock(async (name: string) => {
     wsRemoved = true
     const { unlinkSync } = await import("fs")

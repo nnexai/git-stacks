@@ -39,15 +39,28 @@ mock.module("@/lib/niri", () => ({
   niriSpawnSh: mockNiriSpawnSh,
   moveColumnToIndex: mockMoveColumnToIndex,
   setWindowWidth: mockSetWindowWidth,
+  setNiriColumnWidth: mock(async () => {}),
+  _exec: { run: mock(async () => ({ exitCode: 0, stdout: "" })) },
 }))
 
 mock.module("@clack/prompts", () => ({
   spinner: () => ({ start: mock(() => {}), stop: mock(() => {}) }),
-  log: { warn: mock(() => {}) },
+  log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+  intro: mock(() => {}),
+  outro: mock(() => {}),
+  text: mock(async () => ""),
+  select: mock(async () => ""),
+  multiselect: mock(async () => []),
+  confirm: mock(async () => false),
+  isCancel: mock(() => false),
+  cancel: mock(() => {}),
+  group: mock(async () => ({})),
+  note: mock(() => {}),
 }))
 
 mock.module("@/lib/lifecycle", () => ({
   runHooks: mock(async () => {}),
+  runHooksCaptured: mock(async () => []),
 }))
 
 // Cache-busted import after all mocks registered

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, afterAll, mock } from "bun:test"
 import { join } from "path"
-import { mkdirSync, writeFileSync, rmSync } from "fs"
+import { mkdirSync, writeFileSync } from "fs"
 import {
   WorkspaceSchema,
   WorkspaceRepoSchema,

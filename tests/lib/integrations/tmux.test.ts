@@ -4,7 +4,17 @@ import type { IntegrationContext } from "@/lib/integrations/types"
 // Mock @clack/prompts with a no-op spinner
 mock.module("@clack/prompts", () => ({
   spinner: () => ({ start: () => {}, stop: () => {} }),
-  log: { warn: () => {} },
+  log: { info: () => {}, success: () => {}, warn: () => {}, error: () => {} },
+  intro: mock(() => {}),
+  outro: mock(() => {}),
+  text: mock(async () => ""),
+  select: mock(async () => ""),
+  multiselect: mock(async () => []),
+  confirm: mock(async () => false),
+  isCancel: mock(() => false),
+  cancel: mock(() => {}),
+  group: mock(async () => ({})),
+  note: mock(() => {}),
 }))
 
 // Controllable stubs for tmux lib functions

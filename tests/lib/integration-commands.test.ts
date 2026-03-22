@@ -29,18 +29,31 @@ mock.module("@/lib/niri", () => ({
   niriSpawnSh: mock(async () => {}),
   moveColumnToIndex: mock(async () => {}),
   setWindowWidth: mock(async () => {}),
+  setNiriColumnWidth: mock(async () => {}),
   snapshotWindowIds: mock(async () => []),
+  _exec: { run: mock(async () => ({ exitCode: 0, stdout: "" })) },
 }))
 
 // Mock @clack/prompts
 mock.module("@clack/prompts", () => ({
   spinner: () => ({ start: () => {}, stop: () => {} }),
-  log: { warn: () => {} },
+  log: { info: () => {}, success: () => {}, warn: () => {}, error: () => {} },
+  intro: mock(() => {}),
+  outro: mock(() => {}),
+  text: mock(async () => ""),
+  select: mock(async () => ""),
+  multiselect: mock(async () => []),
+  confirm: mock(async () => false),
+  isCancel: mock(() => false),
+  cancel: mock(() => {}),
+  group: mock(async () => ({})),
+  note: mock(() => {}),
 }))
 
 // Mock lifecycle
 mock.module("@/lib/lifecycle", () => ({
   runHooks: mock(async () => {}),
+  runHooksCaptured: mock(async () => []),
 }))
 
 // Cache-busting import of the integration command
