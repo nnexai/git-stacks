@@ -180,25 +180,6 @@ export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]>
   return results.filter((r) => r.dirty).map((r) => r.name)
 }
 
-export async function runPreRemoveHooks(workspace: Workspace, tasksDir: string): Promise<void> {
-  const baseEnv = {
-    WS_WORKSPACE: workspace.name,
-    WS_BRANCH: workspace.branch,
-    WS_TASKS_DIR: tasksDir,
-  }
-
-  const mergedEnvVars = mergeEnv(workspace)
-  const enrichedBaseEnv = { ...baseEnv, ...mergedEnvVars }
-
-  // Workspace-level pre_remove hooks (from template snapshot or workspace config)
-  if (workspace.hooks?.pre_remove?.length) {
-    const wsDir = join(tasksDir, workspace.name)
-    await runHooks(workspace.hooks.pre_remove, existsSync(wsDir) ? wsDir : tasksDir, enrichedBaseEnv)
-  }
-
-  // Per-repo pre_open hooks are on WorkspaceRepo.hooks — but pre_remove is not
-  // defined on WorkspaceRepoHooksSchema (only pre_open is). No per-repo pre_remove hooks to run.
-}
 
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
   return Promise.all(
@@ -494,7 +475,7 @@ export async function removeWorkspace(
 
 export async function mergeWorkspace(
   name: string,
-  opts: { force?: boolean; dryRun?: boolean },
+  opts: { force?: boolean; dryRun?: boolean; captured?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -542,6 +523,7 @@ export async function mergeWorkspace(
 
   // Dry-run short-circuit — skip hooks, just describe what would happen
   if (opts.dryRun) {
+    onProgress?.("[dry-run] would close workspace (run pre_close, integration cleanup, post_close)")
     for (const { repo, baseBranch } of repoBases) {
       onProgress?.(`[dry-run] would merge ${workspace.branch} into ${baseBranch} (${repo.name})`)
     }
@@ -556,17 +538,34 @@ export async function mergeWorkspace(
     return { ok: true }
   }
 
-  try {
-    await runPreRemoveHooks(workspace, tasksDir)
-  } catch (err) {
-    return { ok: false, error: `pre_remove hook failed (${err})` }
+  // D-10 Steps 1-6: close cascade + clean cascade via _executeClean
+  // _executeClean internally calls _executeClose, so the full order is:
+  // pre_close -> integration cleanup -> post_close -> pre_clean -> per-repo pre_clean + worktree removal -> post_clean
+  const cleanResult = await _executeClean(workspace, config, tasksDir, {
+    captured: opts.captured,
+    force: opts.force,
+    triggeredBy: "merge",
+  }, onProgress)
+  if (!cleanResult.ok) return cleanResult
+
+  const baseEnv = buildBaseEnv(workspace, tasksDir, "merge")
+  const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
+
+  // D-10 Step 7: pre_merge hooks
+  if (workspace.hooks?.pre_merge?.length) {
+    try {
+      if (opts.captured) {
+        await runHooksCaptured(workspace.hooks.pre_merge, hookCwd, baseEnv,
+          (output) => onProgress?.(output.line))
+      } else {
+        await runHooks(workspace.hooks.pre_merge, hookCwd, baseEnv)
+      }
+    } catch (err) {
+      return { ok: false, error: `pre_merge hook failed (${err})` }
+    }
   }
 
-  // Run integration cleanup (e.g., unname niri workspace)
-  const mergeCtx: IntegrationContext = { workspace, tasksDir, config }
-  await runIntegrationCleanup(mergeCtx)
-
-  // Merge (BUG-01 fix: check result and return early on failure -- YAML preserved)
+  // D-10 Step 8: git merge + branch delete
   for (const { repo, baseBranch } of repoBases) {
     const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
     if (!branchExists) {
@@ -577,35 +576,63 @@ export async function mergeWorkspace(
     if (!result.ok) {
       return { ok: false, error: `Merge failed for '${repo.name}' (${result.error})` }
     }
-    onProgress?.(`merged  ${repo.name}  →  ${baseBranch}`)
-  }
-
-  for (const repo of worktreeRepos) {
-    if (!existsSync(repo.task_path)) continue
-    await removeWorktree(repo.main_path, repo.task_path)
+    onProgress?.(`merged  ${repo.name}  ->  ${baseBranch}`)
   }
 
   for (const { repo } of repoBases) {
     await deleteLocalBranch(repo.main_path, workspace.branch)
   }
 
-  const mergedMergeEnv = mergeEnv(workspace)
+  // D-10 Step 9: pre_remove hooks
+  if (workspace.hooks?.pre_remove?.length) {
+    try {
+      if (opts.captured) {
+        await runHooksCaptured(workspace.hooks.pre_remove, hookCwd, baseEnv,
+          (output) => onProgress?.(output.line))
+      } else {
+        await runHooks(workspace.hooks.pre_remove, hookCwd, baseEnv)
+      }
+    } catch (err) {
+      return { ok: false, error: `pre_remove hook failed (${err})` }
+    }
+  }
 
+  // D-10 Step 10: YAML delete
   unlinkSync(workspacePath(name))
 
-  // Run post_merge hooks
+  // D-10 Step 11: post_remove hooks
+  if (workspace.hooks?.post_remove?.length) {
+    try {
+      if (opts.captured) {
+        await runHooksCaptured(workspace.hooks.post_remove, hookCwd, baseEnv,
+          (output) => onProgress?.(output.line))
+      } else {
+        await runHooks(workspace.hooks.post_remove, hookCwd, baseEnv)
+      }
+    } catch (err) {
+      // post_remove failure: YAML already deleted, log but don't fail
+      onProgress?.(`post_remove hook error: ${err}`)
+    }
+  }
+
+  // D-10 Step 12: post_merge hooks (D-11: fires after post_remove)
   if (workspace.hooks?.post_merge?.length) {
     const mergeBaseEnv = {
-      WS_WORKSPACE: workspace.name,
-      WS_BRANCH: workspace.branch,
-      WS_TASKS_DIR: tasksDir,
+      ...baseEnv,
       WS_MERGED_BRANCH: workspace.branch,
-      ...mergedMergeEnv,
     }
-    const wsDir = join(tasksDir, name)
     for (const cmd of workspace.hooks.post_merge) {
       onProgress?.(`post_merge: ${cmd}`)
-      await runHooks([cmd], existsSync(wsDir) ? wsDir : tasksDir, mergeBaseEnv)
+      try {
+        if (opts.captured) {
+          await runHooksCaptured([cmd], hookCwd, mergeBaseEnv,
+            (output) => onProgress?.(output.line))
+        } else {
+          await runHooks([cmd], hookCwd, mergeBaseEnv)
+        }
+      } catch (err) {
+        onProgress?.(`post_merge hook error: ${err}`)
+      }
     }
   }
 

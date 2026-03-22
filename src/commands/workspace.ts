@@ -1,13 +1,11 @@
 import { Command } from "commander"
 import { prompts as p } from "@/tui/utils"
-import { existsSync, unlinkSync } from "fs"
 import { join } from "path"
 import { formatError } from "../lib/errors"
 import {
   listWorkspaces,
   readWorkspace,
   workspaceExists,
-  workspacePath,
   readGlobalConfig,
   readTemplate,
   readRegistry,
@@ -16,12 +14,11 @@ import {
   type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
-import { isBranchGoneOnRemote, removeWorktree } from "../lib/git"
+import { isBranchGoneOnRemote } from "../lib/git"
 import { runWorkspaceNew, runWorkspaceEdit } from "../tui/workspace-wizard"
 import { runWorkspaceClone } from "../tui/workspace-clone"
 import {
   getDirtyWorktrees,
-  runPreRemoveHooks,
   getWorkspaceStatus,
   cleanWorkspace,
   closeWorkspace,
@@ -287,8 +284,6 @@ export function registerWorkspaceCommands(program: Command) {
     .action(async (name: string | undefined, opts: { gone?: boolean; force?: boolean; dryRun?: boolean }) => {
       if (opts.gone) {
         // --- git-stacks clean --gone ---
-        const config = readGlobalConfig()
-        const tasksDir = getTasksDir(config.workspace_root)
         const allWorkspaces = listWorkspaces()
         if (allWorkspaces.length === 0) {
           console.log("No workspaces found.")
@@ -341,17 +336,11 @@ export function registerWorkspaceCommands(program: Command) {
         }
 
         for (const ws of goneWorkspaces) {
-          try {
-            await runPreRemoveHooks(ws, tasksDir)
-          } catch (err) {
-            console.error(formatError(`pre_remove hook failed for '${ws.name}': ${err}`))
+          const result = await removeWorkspace(ws.name, { force: true }, (msg) => console.log(`  ${msg}`))
+          if (!result.ok) {
+            console.error(formatError(`Failed to remove '${ws.name}': ${result.error}`))
             process.exit(1)
           }
-          for (const repo of ws.repos.filter((r) => r.mode === "worktree")) {
-            if (!existsSync(repo.task_path)) continue
-            await removeWorktree(repo.main_path, repo.task_path)
-          }
-          unlinkSync(workspacePath(ws.name))
           console.log(`  removed  ${ws.name}`)
         }
         return

@@ -51,7 +51,7 @@ const {
   renameWorkspace,
   closeWorkspace,
 }: {
-  mergeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  mergeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   removeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   cleanWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   renameWorkspace: (name: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
@@ -223,6 +223,125 @@ describe("mergeWorkspace", () => {
     expect(result.error!.length).toBeGreaterThan(0)
 
     // Workspace YAML must still exist (BUG-01 fix verification)
+    expect(workspaceExists(wsName)).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: mergeWorkspace fires full D-10 lifecycle order
+  test("mergeWorkspace fires full D-10 lifecycle order", async () => {
+    const wsName = uniqueWsName("merge-d10-order")
+    const stackName = uniqueRegistryName()
+    const logFile = `/tmp/gsd-hook-log-merge-d10-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Add a commit to the worktree so merge has something to do
+    const repo = repos[0]
+    const gitOpts = { cwd: repo.worktreePath, stdio: "pipe" as const }
+    writeFileSync(join(repo.worktreePath, "feature.txt"), "feature content\n")
+    execSync("git add .", gitOpts)
+    execSync('git commit -m "feature commit"', gitOpts)
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = {
+      pre_close: [`echo PRE_CLOSE >> ${logFile}`],
+      post_close: [`echo POST_CLOSE >> ${logFile}`],
+      pre_clean: [`echo PRE_CLEAN >> ${logFile}`],
+      post_clean: [`echo POST_CLEAN >> ${logFile}`],
+      pre_merge: [`echo PRE_MERGE >> ${logFile}`],
+      pre_remove: [`echo PRE_REMOVE >> ${logFile}`],
+      post_remove: [`echo POST_REMOVE >> ${logFile}`],
+      post_merge: [`echo POST_MERGE >> ${logFile}`],
+    }
+    writeWorkspace(ws)
+
+    const result = await mergeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+    expect(workspaceExists(wsName)).toBe(false)
+
+    const log = existsSync(logFile) ? readFileSync(logFile, "utf-8") : ""
+    const preCloseIdx = log.indexOf("PRE_CLOSE")
+    const postCloseIdx = log.indexOf("POST_CLOSE")
+    const preCleanIdx = log.indexOf("PRE_CLEAN")
+    const postCleanIdx = log.indexOf("POST_CLEAN")
+    const preMergeIdx = log.indexOf("PRE_MERGE")
+    const preRemoveIdx = log.indexOf("PRE_REMOVE")
+    const postRemoveIdx = log.indexOf("POST_REMOVE")
+    const postMergeIdx = log.indexOf("POST_MERGE")
+
+    // All hooks fired
+    expect(preCloseIdx).toBeGreaterThanOrEqual(0)
+    expect(postCloseIdx).toBeGreaterThanOrEqual(0)
+    expect(preCleanIdx).toBeGreaterThanOrEqual(0)
+    expect(postCleanIdx).toBeGreaterThanOrEqual(0)
+    expect(preMergeIdx).toBeGreaterThanOrEqual(0)
+    expect(preRemoveIdx).toBeGreaterThanOrEqual(0)
+    expect(postRemoveIdx).toBeGreaterThanOrEqual(0)
+    expect(postMergeIdx).toBeGreaterThanOrEqual(0)
+
+    // D-10 order: PRE_CLOSE < POST_CLOSE < PRE_CLEAN < POST_CLEAN < PRE_MERGE < PRE_REMOVE < POST_REMOVE < POST_MERGE
+    expect(preCloseIdx).toBeLessThan(postCloseIdx)
+    expect(postCloseIdx).toBeLessThan(preCleanIdx)
+    expect(preCleanIdx).toBeLessThan(postCleanIdx)
+    expect(postCleanIdx).toBeLessThan(preMergeIdx)
+    expect(preMergeIdx).toBeLessThan(preRemoveIdx)
+    expect(preRemoveIdx).toBeLessThan(postRemoveIdx)
+    expect(postRemoveIdx).toBeLessThan(postMergeIdx)
+
+    try { unlinkSync(logFile) } catch { /* ignore */ }
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: WS_TRIGGERED_BY=merge propagated through entire cascade
+  test("mergeWorkspace sets WS_TRIGGERED_BY=merge in all hooks", async () => {
+    const wsName = uniqueWsName("merge-triggered-by")
+    const stackName = uniqueRegistryName()
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Add a commit to the worktree so merge has something to do
+    const repo = repos[0]
+    const gitOpts = { cwd: repo.worktreePath, stdio: "pipe" as const }
+    writeFileSync(join(repo.worktreePath, "feature.txt"), "feature content\n")
+    execSync("git add .", gitOpts)
+    execSync('git commit -m "feature commit"', gitOpts)
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = {
+      pre_close: ['test "$WS_TRIGGERED_BY" = "merge"'],
+      pre_merge: ['test "$WS_TRIGGERED_BY" = "merge"'],
+    }
+    writeWorkspace(ws)
+
+    const result = await mergeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: mergeWorkspace aborts if pre_merge hook fails (workspace YAML preserved)
+  test("mergeWorkspace aborts if pre_merge hook fails", async () => {
+    const wsName = uniqueWsName("merge-abort-pre-merge")
+    const stackName = uniqueRegistryName()
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Add a commit to the worktree so merge has something to do
+    const repo = repos[0]
+    const gitOpts = { cwd: repo.worktreePath, stdio: "pipe" as const }
+    writeFileSync(join(repo.worktreePath, "feature.txt"), "feature content\n")
+    execSync("git add .", gitOpts)
+    execSync('git commit -m "feature commit"', gitOpts)
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = { pre_merge: ["exit 1"] }
+    writeWorkspace(ws)
+
+    const result = await mergeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/pre_merge/)
+    // Workspace YAML must still exist (abort before YAML deletion)
     expect(workspaceExists(wsName)).toBe(true)
 
     cleanupFixture(wsName, stackName, tmp)
