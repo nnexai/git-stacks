@@ -52,6 +52,7 @@ git-stacks repo list                 # List all registered repos
 git-stacks repo show <name>          # Show repo details
 git-stacks repo remove <name>        # Remove a repo from registry
 git-stacks repo rename <old> <new>   # Rename a registered repo
+git-stacks repo --yaml               # Open registry.yml in $EDITOR
 ```
 
 ## Templates
@@ -60,7 +61,7 @@ git-stacks repo rename <old> <new>   # Rename a registered repo
 git-stacks template new [name]          # Create a new template interactively
 git-stacks template list                # List all templates
 git-stacks template show <name>         # Show template details
-git-stacks template edit <name>         # Edit an existing template
+git-stacks template edit <name>         # Edit a template interactively, or --yaml to open raw YAML in $EDITOR
 git-stacks template clone <name> <new>  # Clone a template under a new name
 git-stacks template rename <old> <new>  # Rename a template
 git-stacks template remove <name>       # Remove a template
@@ -79,9 +80,9 @@ git-stacks sync [name]             # Sync branches with upstream base branches
 git-stacks run <name> [repo]       # Run a command or shell inside a workspace
 git-stacks merge <name>            # Merge branches into base branches, then clean
 git-stacks close <name>            # Close integration sessions (tmux, niri) without removing worktrees
-git-stacks clean [name]            # Remove worktrees (config kept), or --gone to remove all with deleted remote branches
-git-stacks remove <name>           # Permanently remove worktrees + config
-git-stacks edit <name>             # Edit workspace integration overrides
+git-stacks clean [name]            # Remove worktrees + folder (config kept), or --gone to remove all with deleted remote branches
+git-stacks remove <name>           # Permanently remove worktrees + config (--force handles corrupt YAML)
+git-stacks edit <name>             # Edit workspace interactively, or --yaml to open raw YAML in $EDITOR
 git-stacks cd <name> [repo]        # Print path — use via shell function
 ```
 
@@ -150,7 +151,7 @@ The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs
 ## Configuration
 
 ```bash
-git-stacks config    # Interactive config wizard
+git-stacks config    # Interactive config wizard (or --yaml to open raw YAML in $EDITOR)
 git-stacks doctor    # Health check — detect drift between config and filesystem
 git-stacks doctor --fix   # Auto-repair drift
 ```
@@ -253,7 +254,7 @@ git-stacks completion zsh  >> ~/.zshrc
 git-stacks completion fish > ~/.config/fish/completions/git-stacks.fish
 ```
 
-Completions cover all commands, subcommands, dynamic entity names (workspaces, templates, repos), and fixed enum flag values (`--strategy rebase|merge`, `--sort date|name|status`).
+Completions cover all commands, subcommands, dynamic entity names (workspaces, templates, repos), fixed enum flag values (`--strategy rebase|merge`, `--sort date|name|status`), and per-command flag completions (`new --from` completes template names).
 
 ## License
 

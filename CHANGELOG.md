@@ -21,6 +21,16 @@ All notable changes to `git-stacks` are documented here.
 
 ### Added
 
+**Per-command shell completion** — `git-stacks new --from <TAB>` now completes template names in bash, zsh, and fish. `close` and `edit` commands complete workspace names. Per-command flag completions are scoped correctly — `message send --from` remains freeform.
+
+**`--yaml` editor flag** — 4 commands now accept `--yaml` to open the raw YAML config in `$EDITOR` (falls back to `$VISUAL`, then `vi`). Post-edit validation warns on Zod schema errors:
+- `git-stacks edit <name> --yaml` — workspace YAML
+- `git-stacks template edit <name> --yaml` — template YAML
+- `git-stacks config --yaml` — global config
+- `git-stacks repo --yaml` — repo registry
+
+**Folder cleanup in clean/remove** — `clean` now removes the `tasks/{name}/` directory after worktree removal (with a second confirmation prompt; `--force` skips it). `remove` always deletes the folder. `remove --force` handles malformed/unparseable workspace YAML via name-based directory fallback.
+
 **Dedicated lifecycle phases** — close, clean, remove, and merge now have their own hook pairs:
 - `pre_close` / `post_close` — fired when closing integration sessions
 - `pre_clean` / `post_clean` — fired when removing worktrees (config kept)
