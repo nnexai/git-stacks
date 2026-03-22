@@ -1,5 +1,25 @@
 import * as p from "@clack/prompts"
 
+// ─── Prompts wrapper ─────────────────────────────────────────────────────────
+// Mutable object re-exporting @clack/prompts functions. Tests can replace
+// individual properties (e.g. prompts.confirm = mock(...)) instead of
+// using mock.module("@clack/prompts").
+export const prompts = {
+  text: p.text,
+  select: p.select,
+  confirm: p.confirm,
+  multiselect: p.multiselect,
+  spinner: p.spinner,
+  intro: p.intro,
+  outro: p.outro,
+  log: p.log,
+  isCancel: p.isCancel,
+  cancel: p.cancel,
+  note: p.note,
+  group: p.group,
+  groupMultiselect: p.groupMultiselect,
+}
+
 export function cancel(): never {
   p.cancel("Cancelled.")
   process.exit(0)
@@ -26,7 +46,7 @@ export async function safeText(
     }
   }
 
-  const raw = await p.text(textOpts)
+  const raw = await prompts.text(textOpts)
   if (typeof raw === "symbol") return raw
   return (raw as string | undefined) ?? fallbackValue ?? ""
 }
