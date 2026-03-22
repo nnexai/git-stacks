@@ -65,7 +65,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 - [x] **Phase 21: Workspace Close Command** - CLI and TUI teardown for integrations without deleting workspace state (completed 2026-03-22)
 - [x] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config (completed 2026-03-22)
 - [x] **Phase 23: Test Environment Isolation** - Audit and enforce isolated config dirs across all tests (completed 2026-03-22)
-- [ ] **Phase 24: Mock Architecture Refactor** - Replace module-level mock.module() with injectable dependency mocking
+- [x] **Phase 24: Mock Architecture Refactor** - Replace module-level mock.module() with injectable dependency mocking (completed 2026-03-22)
 - [ ] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks
 - [ ] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements
 - [ ] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation and issue/task linking
@@ -119,7 +119,7 @@ Plans:
 | 21. Workspace Close Command | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 22. Niri Display Fix | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
-| 24. Mock Architecture Refactor | v0.7.0 | 1/2 | In Progress|  |
+| 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete   | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 0/? | Not started | - |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 0/? | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
@@ -129,10 +129,10 @@ Plans:
 **Goal**: Add injectable `_exec` objects to shell-wrapper modules (tmux, cmux, lifecycle) and create a `prompts` wrapper in `tui/utils.ts`, following the proven `niri.ts` pattern. Update direct unit tests to use injection instead of `mock.module()`. Establishes the pattern without a full-codebase sweep.
 **Requirements**: MOCK-01, MOCK-02, MOCK-03, MOCK-04
 **Depends on:** Phase 23
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 24-01-PLAN.md — Add _exec to tmux.ts, cmux.ts, lifecycle.ts + direct unit tests
+- [x] 24-01-PLAN.md — Add _exec to tmux.ts, cmux.ts, lifecycle.ts + direct unit tests
 - [x] 24-02-PLAN.md — Prompts wrapper in tui/utils.ts + production import switchover
 
 ### Phase 25: Dedicated Lifecycle Phases

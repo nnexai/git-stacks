@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 24-02-PLAN.md — prompts wrapper and import switch
-last_updated: "2026-03-22T12:45:26.456Z"
+stopped_at: Completed 24-01-PLAN.md — _exec injection for tmux.ts, cmux.ts, lifecycle.ts
+last_updated: "2026-03-22T12:48:43.547Z"
 progress:
   total_phases: 7
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -54,6 +54,7 @@ Plan: 2 of 2
 | Phase 22-niri-display-fix P01 | 2min | 2 tasks | 6 files |
 | Phase 23-test-environment-isolation P01 | 7min | 2 tasks | 4 files |
 | Phase 24-mock-architecture-refactor P02 | 8min | 2 tasks | 18 files |
+| Phase 24-mock-architecture-refactor P01 | 12min | 2 tasks | 6 files |
 
 ### Decisions
 
@@ -66,6 +67,8 @@ Plan: 2 of 2
 - [Phase 23-test-environment-isolation]: Re-establish mock in beforeEach when multiple describe blocks share one isolated config — prevents io-roundtrip test from overriding the shared file-level mock
 - [Phase 23-test-environment-isolation]: useIsolatedConfig + cache-busting dynamic imports replaces saveGlobalConfig/restoreGlobalConfig pattern — tests no longer touch real config files
 - [Phase 24-mock-architecture-refactor]: prompts wrapper pattern: import { prompts as p } from @/tui/utils alias preserves all p.confirm/p.select call sites; tests mocking @/tui/utils directly need prompts in mock shape
+- [Phase 24-01]: lifecycle.ts _exec.spawn returns SpawnHandle not resolved result — required for concurrent stream drain in runHooksCaptured
+- [Phase 24-01]: Lifecycle real-shell tests use cache-busting import to prevent mock.module contamination from consumer tests
 
 ### Pending Todos
 
@@ -82,7 +85,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T12:45:26.454Z
-Stopped at: Completed 24-02-PLAN.md — prompts wrapper and import switch
+Last session: 2026-03-22T12:48:43.545Z
+Stopped at: Completed 24-01-PLAN.md — _exec injection for tmux.ts, cmux.ts, lifecycle.ts
 Resume file: None
 Next action: /gsd:plan-phase 21
