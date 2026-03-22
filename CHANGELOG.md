@@ -6,6 +6,19 @@ All notable changes to `git-stacks` are documented here.
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- **Hook env vars renamed from `WS_` to `GS_` prefix** — all injected environment variables now use the `GS_` (git-stacks) prefix with consistent suffix conventions:
+  - `WS_WORKSPACE` -> `GS_WORKSPACE_NAME`
+  - `WS_BRANCH` -> `GS_WORKSPACE_BRANCH`
+  - `WS_TASKS_DIR` -> `GS_WORKSPACE_PATH`
+  - `WS_TRIGGERED_BY` -> `GS_TRIGGERED_BY`
+  - `WS_REPO_NAME` -> `GS_REPO_NAME`
+  - `WS_REPO_PATH` -> `GS_REPO_PATH`
+  - `WS_MAIN_PATH` -> `GS_REPO_CLONE_PATH`
+  - `WS_MERGED_BRANCH` -> `GS_MERGED_BRANCH`
+- `GS_TRIGGERED_BY` now injected into ALL lifecycle operations including `open` and `create` (previously only close/clean/remove/merge)
+
 ### Added
 
 **Dedicated lifecycle phases** — close, clean, remove, and merge now have their own hook pairs:
@@ -18,7 +31,7 @@ All notable changes to `git-stacks` are documented here.
 **Lifecycle cascade** — teardown operations compose in layers:
 - `remove` calls `clean` which calls `close` — each layer fires its own hooks
 - `merge` follows the full cascade: close → clean → merge-specific → remove
-- `WS_TRIGGERED_BY` env var injected into all hooks (`close`, `clean`, `remove`, or `merge`) so hooks know which top-level operation initiated the cascade
+- `GS_TRIGGERED_BY` env var injected into all hooks (`open`, `create`, `close`, `clean`, `remove`, or `merge`) so hooks know which top-level operation initiated the cascade
 
 ### Changed
 
@@ -45,7 +58,7 @@ All notable changes to `git-stacks` are documented here.
   - `width:` per column (e.g. `"50%"`, `"1280"`)
   - Three window types: `app:` (direct spawn), `command:` (shell spawn with cwd), `source:` (reuse prior integration window like vscode)
   - Multi-window columns stack automatically
-  - `$WS_WORKSPACE`, `$WS_BRANCH`, `$WS_TASKS_DIR` env var substitution in args/command/cwd
+  - `$GS_WORKSPACE_NAME`, `$GS_WORKSPACE_BRANCH`, `$GS_WORKSPACE_PATH` env var substitution in args/command/cwd
 - Focus control: `focus: true` on a window keeps it focused after layout; `focus: true` on the niri config keeps the workspace focused (without it, switches back — no focus steal)
 - Cleanup on workspace clean/remove
 - Silently skips when niri is not running
@@ -96,7 +109,7 @@ All notable changes to `git-stacks` are documented here.
   - `PreToolUse` (AskUserQuestion) — sends "Claude is asking a question — input needed"
   - `UserPromptSubmit` — clears notification (user is responding)
   - `PostToolUse` (AskUserQuestion) — clears notification
-- Workspace auto-detection from cwd (path-based) or `WS_WORKSPACE` env var, with interactive fallback
+- Workspace auto-detection from cwd (path-based) or `GS_WORKSPACE_NAME` env var, with interactive fallback
 - Multi-select for agent frameworks (extensible plugin system, Claude Code included)
 - `git-stacks install --hooks --remove` to uninstall hooks
 - Idempotent: running install twice updates hooks without duplication
@@ -194,7 +207,7 @@ All notable changes to `git-stacks` are documented here.
 ### Added
 
 **Workspace notification system**
-- `git-stacks message send "<text>"` — send a notification to the current workspace (auto-detected via `WS_WORKSPACE`); use `--workspace <name>` to target explicitly
+- `git-stacks message send "<text>"` — send a notification to the current workspace (auto-detected via `GS_WORKSPACE_NAME`); use `--workspace <name>` to target explicitly
 - `git-stacks message send --from <sender>` — tag message with a sender name (useful for per-agent granularity in hook scripts)
 - `git-stacks message list [--workspace <name>]` — list active notifications showing sender, text, and timestamp; supports `--json`
 - `git-stacks message clear [--workspace <name>] [--from <sender>]` — clear all messages or per-sender

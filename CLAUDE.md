@@ -89,7 +89,7 @@ Templates and workspaces define hook arrays (shell commands executed in order by
 - Workspace hooks: `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove`
 - Per-repo hooks (within workspace YAML): `pre_open`
 
-Hooks receive injected environment variables: `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path; `workspace-ops.ts` calls `mergeEnv()` to combine them and `writeEnvFiles()` to write merged env to each repo at the configured path.
+Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path; `workspace-ops.ts` calls `mergeEnv()` to combine them and `writeEnvFiles()` to write merged env to each repo at the configured path.
 
 ### Shell completion auto-generation
 

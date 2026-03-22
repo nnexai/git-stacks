@@ -104,7 +104,7 @@ function wcd; cd (git-stacks cd $argv); end
 AI agents and hook scripts can send notifications to workspaces:
 
 ```bash
-# Send a notification (auto-detects workspace from WS_WORKSPACE env var)
+# Send a notification (auto-detects workspace from GS_WORKSPACE_NAME env var)
 git-stacks message send "Build complete"
 
 # Send with an explicit sender name (useful for multi-agent setups)
@@ -219,7 +219,7 @@ settings:
               focus: true
         - width: "40%"
           windows:
-            - command: ghostty -e git-stacks integration tmux attach $WS_WORKSPACE
+            - command: ghostty -e git-stacks integration tmux attach $GS_WORKSPACE_NAME
 ```
 
 ## Hooks & Env Injection
@@ -230,9 +230,9 @@ Templates and workspaces support hook arrays (shell commands run in order):
 - Workspace: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_close`, `post_close`, `pre_clean`, `post_clean`, `pre_merge`, `post_merge`, `pre_remove`, `post_remove`
 - Per-repo: `pre_open`, `pre_clean`
 
-Lifecycle operations cascade: `remove` triggers `clean` which triggers `close`. Each layer fires its own hooks, so a `remove` fires close → clean → remove hooks in order. `merge` follows the same pattern: close → clean → merge-specific steps → remove. The `WS_TRIGGERED_BY` env var tells hooks which top-level operation initiated the cascade (`close`, `clean`, `remove`, or `merge`).
+Lifecycle operations cascade: `remove` triggers `clean` which triggers `close`. Each layer fires its own hooks, so a `remove` fires close → clean → remove hooks in order. `merge` follows the same pattern: close → clean → merge-specific steps → remove. The `GS_TRIGGERED_BY` env var tells hooks which top-level operation initiated the cascade (`close`, `clean`, `remove`, or `merge`).
 
-Hooks receive injected env vars: `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, `WS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
+Hooks receive injected env vars: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
 
 **Using hooks with the notification system:**
 

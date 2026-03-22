@@ -566,7 +566,7 @@ describe("column config — env var substitution", () => {
         integrations: {
           niri: {
             enabled: true,
-            columns: [{ windows: [{ command: "ghostty -e echo $WS_WORKSPACE" }] }],
+            columns: [{ windows: [{ command: "ghostty -e echo $GS_WORKSPACE_NAME" }] }],
           },
         },
       } as any,
@@ -586,7 +586,7 @@ describe("column config — env var substitution", () => {
         integrations: {
           niri: {
             enabled: true,
-            columns: [{ windows: [{ app: "firefox", args: ["http://localhost/$WS_WORKSPACE"] }] }],
+            columns: [{ windows: [{ app: "firefox", args: ["http://localhost/$GS_WORKSPACE_NAME"] }] }],
           },
         },
       } as any,
@@ -607,7 +607,7 @@ describe("column config — env var substitution", () => {
         integrations: {
           niri: {
             enabled: true,
-            columns: [{ windows: [{ command: "ghostty", cwd: "$WS_TASKS_DIR/mydir" }] }],
+            columns: [{ windows: [{ command: "ghostty", cwd: "$GS_WORKSPACE_PATH/mydir" }] }],
           },
         },
       } as any,

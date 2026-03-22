@@ -293,8 +293,8 @@ describe("mergeWorkspace", () => {
     cleanupFixture(wsName, stackName, tmp)
   })
 
-  // Test: WS_TRIGGERED_BY=merge propagated through entire cascade
-  test("mergeWorkspace sets WS_TRIGGERED_BY=merge in all hooks", async () => {
+  // Test: GS_TRIGGERED_BY=merge propagated through entire cascade
+  test("mergeWorkspace sets GS_TRIGGERED_BY=merge in all hooks", async () => {
     const wsName = uniqueWsName("merge-triggered-by")
     const stackName = uniqueRegistryName()
 
@@ -309,8 +309,8 @@ describe("mergeWorkspace", () => {
 
     const ws = readWorkspace(wsName)
     ws.hooks = {
-      pre_close: ['test "$WS_TRIGGERED_BY" = "merge"'],
-      pre_merge: ['test "$WS_TRIGGERED_BY" = "merge"'],
+      pre_close: ['test "$GS_TRIGGERED_BY" = "merge"'],
+      pre_merge: ['test "$GS_TRIGGERED_BY" = "merge"'],
     }
     writeWorkspace(ws)
 
@@ -463,8 +463,8 @@ describe("removeWorkspace", () => {
     cleanupFixture(wsName, stackName, tmp)
   })
 
-  // Test: WS_TRIGGERED_BY=remove propagated through entire cascade
-  test("removeWorkspace sets WS_TRIGGERED_BY=remove in all cascaded hooks", async () => {
+  // Test: GS_TRIGGERED_BY=remove propagated through entire cascade
+  test("removeWorkspace sets GS_TRIGGERED_BY=remove in all cascaded hooks", async () => {
     const wsName = uniqueWsName("remove-triggered-by")
     const stackName = uniqueRegistryName()
 
@@ -472,9 +472,9 @@ describe("removeWorkspace", () => {
 
     const ws = readWorkspace(wsName)
     ws.hooks = {
-      pre_close: ['test "$WS_TRIGGERED_BY" = "remove"'],
-      pre_clean: ['test "$WS_TRIGGERED_BY" = "remove"'],
-      pre_remove: ['test "$WS_TRIGGERED_BY" = "remove"'],
+      pre_close: ['test "$GS_TRIGGERED_BY" = "remove"'],
+      pre_clean: ['test "$GS_TRIGGERED_BY" = "remove"'],
+      pre_remove: ['test "$GS_TRIGGERED_BY" = "remove"'],
     }
     writeWorkspace(ws)
 
@@ -588,8 +588,8 @@ describe("cleanWorkspace", () => {
     cleanupFixture(wsName, stackName, tmp)
   })
 
-  // Test: WS_TRIGGERED_BY=clean propagated through cascade
-  test("cleanWorkspace sets WS_TRIGGERED_BY=clean in all hooks", async () => {
+  // Test: GS_TRIGGERED_BY=clean propagated through cascade
+  test("cleanWorkspace sets GS_TRIGGERED_BY=clean in all hooks", async () => {
     const wsName = uniqueWsName("clean-triggered-by")
     const stackName = uniqueRegistryName()
 
@@ -597,8 +597,8 @@ describe("cleanWorkspace", () => {
 
     const ws = readWorkspace(wsName)
     ws.hooks = {
-      pre_close: ['test "$WS_TRIGGERED_BY" = "clean"'],
-      pre_clean: ['test "$WS_TRIGGERED_BY" = "clean"'],
+      pre_close: ['test "$GS_TRIGGERED_BY" = "clean"'],
+      pre_clean: ['test "$GS_TRIGGERED_BY" = "clean"'],
     }
     writeWorkspace(ws)
 
@@ -1063,20 +1063,20 @@ describe("closeWorkspace", () => {
     cleanupFixture(wsName, stackName, tmp)
   })
 
-  // Test: closeWorkspace sets WS_TRIGGERED_BY=close
-  test("closeWorkspace sets WS_TRIGGERED_BY=close", async () => {
+  // Test: closeWorkspace sets GS_TRIGGERED_BY=close
+  test("closeWorkspace sets GS_TRIGGERED_BY=close", async () => {
     const wsName = uniqueWsName("close-triggered-by")
     const stackName = uniqueRegistryName()
 
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
-    // Patch workspace YAML: hook exits 0 only when WS_TRIGGERED_BY=close
+    // Patch workspace YAML: hook exits 0 only when GS_TRIGGERED_BY=close
     const ws = readWorkspace(wsName)
-    ws.hooks = { pre_close: ['test "$WS_TRIGGERED_BY" = "close"'] }
+    ws.hooks = { pre_close: ['test "$GS_TRIGGERED_BY" = "close"'] }
     writeWorkspace(ws)
 
     const result = await closeWorkspace(wsName, {})
-    // Hook exits 0 iff env var is set correctly — if WS_TRIGGERED_BY is wrong, hook fails
+    // Hook exits 0 iff env var is set correctly — if GS_TRIGGERED_BY is wrong, hook fails
     expect(result.ok).toBe(true)
 
     cleanupFixture(wsName, stackName, tmp)
