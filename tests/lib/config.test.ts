@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test"
 import { join } from "path"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import {
@@ -137,8 +137,29 @@ describe("workspace file I/O", () => {
   afterEach(() => cleanup(tmp))
 
   test("writeWorkspace + readWorkspace round-trips correctly", async () => {
-    process.env.HOME = tmp
-    const { writeWorkspace, readWorkspace } = await import("../../src/lib/config")
+    // Redirect WORKSPACES_DIR to temp dir to avoid writing to real config.
+    // process.env.HOME has no effect — paths.ts resolves at import time.
+    const wsDir = join(tmp, "workspaces")
+    mkdirSync(wsDir, { recursive: true })
+
+    mock.module("@/lib/paths", () => ({
+      HOME: tmp,
+      WS_CONFIG_DIR: tmp,
+      WORKSPACES_DIR: wsDir,
+      GLOBAL_CONFIG_FILE: join(tmp, "config.yml"),
+      REGISTRY_FILE: join(tmp, "registry.yml"),
+      TEMPLATES_DIR: join(tmp, "templates"),
+      MESSAGES_DIR: join(tmp, "messages"),
+      DEFAULT_WORKSPACE_ROOT: join(tmp, "workspaces-root"),
+      getMainDir: (r: string) => join(r, "main"),
+      getTasksDir: (r: string) => join(r, "tasks"),
+      expandHome: (p: string) => p.startsWith("~/") ? join(tmp, p.slice(2)) : p,
+    }))
+
+    const { writeWorkspace, readWorkspace } = await import(
+      // @ts-ignore — cache-busting for isolated paths mock
+      "@/lib/config?io-roundtrip-test"
+    )
 
     const ws = WorkspaceSchema.parse({
       name: "test-workspace",
