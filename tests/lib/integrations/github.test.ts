@@ -18,6 +18,30 @@ mock.module("@/lib/integrations/forge-utils", () => ({
   formatForgeError: formatForgeErrorMock,
 }))
 
+// --- Mock issue-utils BEFORE importing github.ts ---
+
+const linkIssueMock = mock(() => {})
+const unlinkIssueMock = mock(() => {})
+const resolveIssueRefMock = mock(() => ({
+  ok: true,
+  issueId: "42",
+  workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
+}))
+const formatIssueErrorMock = mock((err: any) => `Issue error: ${err.error}`)
+
+mock.module("@/lib/integrations/issue-utils", () => ({
+  linkIssue: linkIssueMock,
+  unlinkIssue: unlinkIssueMock,
+  resolveIssueRef: resolveIssueRefMock,
+  formatIssueError: formatIssueErrorMock,
+}))
+
+// --- Mock config (for workspaceExists) ---
+
+mock.module("@/lib/config", () => ({
+  workspaceExists: mock(() => true),
+}))
+
 // Cache-busting import
 const { _exec, githubIntegration } = await import(
   // @ts-ignore — query param cache-busting
@@ -40,6 +64,14 @@ beforeEach(() => {
     repoPath: "/tmp/task/repo-a",
     baseBranch: "develop",
   }))
+  resolveIssueRefMock.mockReset()
+  resolveIssueRefMock.mockImplementation(() => ({
+    ok: true,
+    issueId: "42",
+    workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
+  }))
+  linkIssueMock.mockReset()
+  unlinkIssueMock.mockReset()
   exitMock.mockReset()
   exitMock.mockImplementation((code?: number) => { throw new Error(`process.exit(${code})`) })
 })
@@ -137,5 +169,59 @@ describe("github pr status", () => {
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "pr", "status", "my-workspace"])
     expect((resolveForgeRepoMock.mock.calls[0] as any[])[2]).toBe("github")
+  })
+})
+
+describe("github issue commands", () => {
+  test("issue link calls linkIssue with correct args", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "link", "my-ws", "42"])
+    expect(linkIssueMock).toHaveBeenCalledWith("my-ws", "github", "42")
+  })
+
+  test("issue unlink calls unlinkIssue with correct args", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "unlink", "my-ws"])
+    expect(unlinkIssueMock).toHaveBeenCalledWith("my-ws", "github")
+  })
+
+  test("issue open --web calls _exec.run with gh issue view --web", async () => {
+    _exec.run = mock(async () => ({ exitCode: 0 }))
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "open", "my-ws", "--web"])
+    expect(_exec.run).toHaveBeenCalledWith(
+      ["issue", "view", "42", "--web"],
+      "/tmp/task/repo-a"
+    )
+  })
+
+  test("issue open (no --web) calls _exec.run with --json url --jq .url", async () => {
+    _exec.run = mock(async () => ({ exitCode: 0 }))
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
+    expect(_exec.run).toHaveBeenCalledWith(
+      ["issue", "view", "42", "--json", "url", "--jq", ".url"],
+      "/tmp/task/repo-a"
+    )
+  })
+
+  test("issue open with no linked issue prints error and exits", async () => {
+    resolveIssueRefMock.mockImplementation(() => ({
+      ok: false,
+      error: "no_issue_linked",
+      tracker: "github",
+      workspace: "my-ws",
+    }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
+    ).rejects.toThrow("process.exit")
+  })
+
+  test("issue open uses resolveForgeRepo for CWD", async () => {
+    _exec.run = mock(async () => ({ exitCode: 0 }))
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
+    expect(resolveForgeRepoMock).toHaveBeenCalledWith("my-ws", undefined, "github")
   })
 })

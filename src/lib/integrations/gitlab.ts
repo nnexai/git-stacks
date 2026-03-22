@@ -1,6 +1,8 @@
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
 import { resolveForgeRepo, formatForgeError } from "./forge-utils"
+import { workspaceExists } from "../config"
+import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
 
 // --- Exec ---
 
@@ -22,7 +24,7 @@ export const gitlabIntegration: Integration = {
   /** Unique key — used as the key in config.integrations */
   id: "gitlab",
   label: "GitLab",
-  hint: "create and manage GitLab MRs via glab CLI",
+  hint: "create and manage GitLab MRs and issues via glab CLI",
   enabledByDefault: false,
   order: 51,
 
@@ -84,6 +86,55 @@ export const gitlabIntegration: Integration = {
         // Use "mr list" — "glab mr status" does not exist (verified via official docs)
         const result = await _exec.run(["mr", "list"], repoPath)
         if (result.exitCode !== 0) process.exit(result.exitCode)
+      })
+
+    // --- Issue commands (Phase 28) ---
+    const issue = parent.command("issue").description("Link and open GitLab issues")
+
+    issue.command("link <workspace> <issue-id>")
+      .description("Link a GitLab issue to a workspace")
+      .action(async (workspaceName: string, issueId: string) => {
+        if (!workspaceExists(workspaceName)) {
+          console.error(`Workspace '${workspaceName}' not found.`)
+          process.exit(1)
+        }
+        linkIssue(workspaceName, "gitlab", issueId)
+        console.log(`Linked GitLab issue #${issueId} to workspace '${workspaceName}'.`)
+      })
+
+    issue.command("unlink <workspace>")
+      .description("Remove GitLab issue link from a workspace")
+      .action(async (workspaceName: string) => {
+        if (!workspaceExists(workspaceName)) {
+          console.error(`Workspace '${workspaceName}' not found.`)
+          process.exit(1)
+        }
+        unlinkIssue(workspaceName, "gitlab")
+        console.log(`Unlinked GitLab issue from workspace '${workspaceName}'.`)
+      })
+
+    issue.command("open <workspace> [repo]")
+      .description("Open linked GitLab issue (--web opens in browser)")
+      .option("--web", "Open in browser")
+      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
+        const issueRes = resolveIssueRef(workspaceName, "gitlab")
+        if (!issueRes.ok) {
+          console.error(formatIssueError(issueRes))
+          process.exit(1)
+        }
+        // glab issue view requires git repo CWD to resolve project (per Pitfall 1)
+        const forgeRes = resolveForgeRepo(workspaceName, repoArg, "gitlab")
+        if (!forgeRes.ok) {
+          console.error(formatForgeError(forgeRes))
+          process.exit(1)
+        }
+        if (opts.web) {
+          const result = await _exec.run(["issue", "view", issueRes.issueId, "--web"], forgeRes.repoPath)
+          if (result.exitCode !== 0) process.exit(result.exitCode)
+        } else {
+          const result = await _exec.run(["issue", "view", issueRes.issueId, "--output", "json"], forgeRes.repoPath)
+          if (result.exitCode !== 0) process.exit(result.exitCode)
+        }
       })
   },
 }
