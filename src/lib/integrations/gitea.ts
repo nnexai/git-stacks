@@ -1,6 +1,6 @@
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
-import { resolveForgeRepo, resolveForgeRepoAnyMode, formatForgeError } from "./forge-utils"
+import { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
 
@@ -30,6 +30,14 @@ export const _exec = {
     const proc = Bun.spawn([opener, url], { stdio: ["ignore", "ignore", "ignore"] })
     return { exitCode: await proc.exited }
   },
+  gitRemoteUrl: async (repoPath: string): Promise<string | null> => {
+    const proc = Bun.spawn(["git", "-C", repoPath, "remote", "get-url", "origin"], {
+      stdout: "pipe",
+      stderr: "ignore",
+    })
+    const stdout = await new Response(proc.stdout).text()
+    return (await proc.exited) === 0 ? stdout.trim() : null
+  },
 }
 
 // --- Integration ---
@@ -53,48 +61,62 @@ export const giteaIntegration: Integration = {
   },
 
   commands(parent: Command): void {
-    parent.command("open <workspace> [repo]")
-      .description("Open repository on Gitea (--web opens in browser)")
+    parent.command("open [workspace] [repo]")
+      .description("Open repository on Gitea (--web opens in browser). Omit workspace to use CWD.")
       .option("--web", "Open in browser")
-      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
-        const resolution = resolveForgeRepoAnyMode(workspaceName, repoArg, "gitea")
-        if (!resolution.ok) {
-          console.error(formatForgeError(resolution))
-          process.exit(1)
-        }
-        const { repoPath } = resolution
-
-        // tea has no direct "open repo" command — fetch repo list scoped to the git CWD
-        const capture = await _exec.runCapture(
-          ["repos", "ls", "--output", "json", "--limit", "1"],
-          repoPath
-        )
-        if (capture.exitCode !== 0) {
-          process.exit(capture.exitCode)
-        }
-
-        let repos: Array<Record<string, unknown>>
-        try {
-          repos = JSON.parse(capture.stdout)
-        } catch {
-          console.error("Failed to parse repo list from tea output")
-          process.exit(1)
+      .action(async (workspaceName: string | undefined, repoArg: string | undefined, opts: { web?: boolean }) => {
+        let repoPath: string
+        if (workspaceName) {
+          const resolution = resolveForgeRepoAnyMode(workspaceName, repoArg, "gitea")
+          if (!resolution.ok) {
+            console.error(formatForgeError(resolution))
+            process.exit(1)
+          }
+          repoPath = resolution.repoPath
+        } else {
+          const cwd = await resolveRepoCwd()
+          if (!cwd) {
+            console.error("Not inside a git repository. Specify a workspace or run from a git repo.")
+            process.exit(1)
+          }
+          repoPath = cwd
         }
 
-        if (!repos.length) {
-          console.error("No Gitea repo found for this workspace")
-          process.exit(1)
-        }
-
-        const url = String(repos[0].html_url ?? repos[0].url ?? "")
-        if (!url) {
-          console.error("Could not determine repo URL from tea output")
-          process.exit(1)
-        }
-
-        console.log(url)
         if (opts.web) {
-          await _exec.openUrl(url)
+          // tea open auto-discovers the repo from git remote in CWD
+          const result = await _exec.run(["open"], repoPath)
+          if (result.exitCode !== 0) process.exit(result.exitCode)
+        } else {
+          // Match git remote URL against tea repos to find the web URL
+          const remoteUrl = await _exec.gitRemoteUrl(repoPath)
+          if (!remoteUrl) {
+            console.error("Could not determine git remote URL")
+            process.exit(1)
+          }
+
+          const capture = await _exec.runCapture(
+            ["repos", "s", "-f", "url,ssh", "-o", "json"],
+            repoPath
+          )
+          if (capture.exitCode !== 0) {
+            process.exit(capture.exitCode)
+          }
+
+          let repos: Array<{ url?: string; ssh?: string }>
+          try {
+            repos = JSON.parse(capture.stdout)
+          } catch {
+            console.error("Failed to parse repo list from tea output")
+            process.exit(1)
+          }
+
+          const found = repos.find((r) => r.ssh === remoteUrl || r.url === remoteUrl)
+          if (!found?.url) {
+            console.error(`No Gitea repo found matching remote '${remoteUrl}'`)
+            process.exit(1)
+          }
+
+          console.log(found.url)
         }
       })
 

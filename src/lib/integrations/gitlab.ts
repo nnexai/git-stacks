@@ -1,6 +1,6 @@
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
-import { resolveForgeRepo, resolveForgeRepoAnyMode, formatForgeError } from "./forge-utils"
+import { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
 
@@ -39,16 +39,26 @@ export const gitlabIntegration: Integration = {
   },
 
   commands(parent: Command): void {
-    parent.command("open <workspace> [repo]")
-      .description("Open repository on GitLab (--web opens in browser)")
+    parent.command("open [workspace] [repo]")
+      .description("Open repository on GitLab (--web opens in browser). Omit workspace to use CWD.")
       .option("--web", "Open in browser")
-      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
-        const resolution = resolveForgeRepoAnyMode(workspaceName, repoArg, "gitlab")
-        if (!resolution.ok) {
-          console.error(formatForgeError(resolution))
-          process.exit(1)
+      .action(async (workspaceName: string | undefined, repoArg: string | undefined, opts: { web?: boolean }) => {
+        let repoPath: string
+        if (workspaceName) {
+          const resolution = resolveForgeRepoAnyMode(workspaceName, repoArg, "gitlab")
+          if (!resolution.ok) {
+            console.error(formatForgeError(resolution))
+            process.exit(1)
+          }
+          repoPath = resolution.repoPath
+        } else {
+          const cwd = await resolveRepoCwd()
+          if (!cwd) {
+            console.error("Not inside a git repository. Specify a workspace or run from a git repo.")
+            process.exit(1)
+          }
+          repoPath = cwd
         }
-        const { repoPath } = resolution
         if (opts.web) {
           const result = await _exec.run(["repo", "view", "--web"], repoPath)
           if (result.exitCode !== 0) process.exit(result.exitCode)

@@ -133,6 +133,15 @@ export function resolveForgeRepoAnyMode(
   return { ok: true, workspace, repo, repoPath: repo.main_path, baseBranch }
 }
 
+// --- CWD Detection ---
+
+/** Resolve repo path from CWD by finding the git toplevel. Returns null if not in a git repo. */
+export async function resolveRepoCwd(): Promise<string | null> {
+  const result = await $`git rev-parse --show-toplevel`.quiet().nothrow()
+  if (result.exitCode !== 0) return null
+  return result.text().trim()
+}
+
 // --- Forge Detection ---
 
 /** Injectable executor for detection shell commands. Tests can replace these. */
