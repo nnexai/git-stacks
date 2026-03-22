@@ -64,7 +64,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 
 - [x] **Phase 21: Workspace Close Command** - CLI and TUI teardown for integrations without deleting workspace state (completed 2026-03-22)
 - [x] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config (completed 2026-03-22)
-- [ ] **Phase 23: Test Environment Isolation** - Audit and enforce isolated config dirs across all tests
+- [x] **Phase 23: Test Environment Isolation** - Audit and enforce isolated config dirs across all tests (completed 2026-03-22)
 
 ## Phase Details
 
@@ -100,9 +100,9 @@ Plans:
   1. Running the full test suite leaves no files in `~/.config/git-stacks` or any other real user config path
   2. A shared test helper encapsulates the config isolation setup pattern so individual test files don't need to duplicate `HOME` redirection boilerplate
   3. Any test file that previously wrote to user config now passes with a clean temp dir
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 23-01-PLAN.md — Shared useIsolatedConfig helper + fix 3 offending test files (config, workspace-ops, messages)
+- [x] 23-01-PLAN.md — Shared useIsolatedConfig helper + fix 3 offending test files (config, workspace-ops, messages)
 
 ## Progress
 
@@ -114,4 +114,4 @@ Plans:
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21. Workspace Close Command | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 22. Niri Display Fix | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
-| 23. Test Environment Isolation | v0.7.0 | 0/1 | Not started | - |
+| 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete   | 2026-03-22 |

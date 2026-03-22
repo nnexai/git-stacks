@@ -18,8 +18,8 @@
 
 ### Test Quality
 
-- [ ] **TEST-01**: All tests that touch config redirect `HOME` to a temp directory — no test writes to real user config
-- [ ] **TEST-02**: Shared test setup helper exists for config isolation pattern if repeated across files
+- [x] **TEST-01**: All tests that touch config redirect `HOME` to a temp directory — no test writes to real user config
+- [x] **TEST-02**: Shared test setup helper exists for config isolation pattern if repeated across files
 
 ## Future Requirements
 
@@ -45,8 +45,8 @@
 | CLOSE-03 | Phase 21 | Complete |
 | CLOSE-04 | Phase 21 | Complete |
 | UI-01 | Phase 22 | Complete |
-| TEST-01 | Phase 23 | Pending |
-| TEST-02 | Phase 23 | Pending |
+| TEST-01 | Phase 23 | Complete |
+| TEST-02 | Phase 23 | Complete |
 
 **Coverage:**
 - v0.7.0 requirements: 7 total

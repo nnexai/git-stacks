@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 22-01-PLAN.md — niri display fix implemented
-last_updated: "2026-03-22T09:54:36.821Z"
+stopped_at: Completed 23-01-PLAN.md — test environment isolation implemented
+last_updated: "2026-03-22T11:27:13.948Z"
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 3
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 22 — Niri Display Fix
+**Current focus:** Phase 23 — Test Environment Isolation
 
 ## Current Position
 
-Phase: 23
-Plan: Not started
+Phase: 23 (Test Environment Isolation) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Plan: Not started
 | Phase 20 P01 | 3min | 2 tasks | 3 files |
 | Phase 21-workspace-close-command P01 | 6min | 2 tasks | 8 files |
 | Phase 22-niri-display-fix P01 | 2min | 2 tasks | 6 files |
+| Phase 23-test-environment-isolation P01 | 7min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -61,6 +62,8 @@ Plan: Not started
 - [Phase 21-workspace-close-command]: closeWorkspace preserves worktrees and YAML — non-destructive, open works immediately after
 - [Phase 21-workspace-close-command]: No confirmation prompt for close (non-destructive) — same UX pattern as open, x shortcut in TUI after Open entry
 - [Phase 22-niri-display-fix]: formatConfigValue: niri columns detected by presence of 'windows' key on every array element — no niri-specific import needed in configUtils
+- [Phase 23-test-environment-isolation]: Re-establish mock in beforeEach when multiple describe blocks share one isolated config — prevents io-roundtrip test from overriding the shared file-level mock
+- [Phase 23-test-environment-isolation]: useIsolatedConfig + cache-busting dynamic imports replaces saveGlobalConfig/restoreGlobalConfig pattern — tests no longer touch real config files
 
 ### Pending Todos
 
@@ -72,7 +75,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T09:51:40.863Z
-Stopped at: Completed 22-01-PLAN.md — niri display fix implemented
+Last session: 2026-03-22T11:27:13.942Z
+Stopped at: Completed 23-01-PLAN.md — test environment isolation implemented
 Resume file: None
 Next action: /gsd:plan-phase 21
