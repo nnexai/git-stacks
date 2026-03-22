@@ -1,5 +1,13 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
-import { runHooksCaptured, type HookOutputLine } from "../../src/lib/lifecycle"
+import type { HookOutputLine } from "@/lib/lifecycle"
+
+// ─── Real-shell tests ─────────────────────────────────────────────────────────
+// Cache-busting import avoids contamination from mock.module("@/lib/lifecycle")
+// used by consumer tests (integration-commands.test.ts).
+
+// @ts-ignore — query param cache-busting for bun module cache
+const lifecycleReal = await import("@/lib/lifecycle?lifecycle-real")
+const { runHooksCaptured } = lifecycleReal
 
 describe("runHooksCaptured", () => {
   test("captures stdout lines via callback", async () => {
@@ -8,7 +16,7 @@ describe("runHooksCaptured", () => {
       ["echo hello && echo world"],
       "/tmp",
       {},
-      (out) => lines.push(out)
+      (out: HookOutputLine) => lines.push(out)
     )
     expect(lines.map(l => l.line)).toEqual(["hello", "world"])
     expect(lines.every(l => l.stream === "stdout")).toBe(true)
@@ -24,7 +32,7 @@ describe("runHooksCaptured", () => {
       ["echo err >&2"],
       "/tmp",
       {},
-      (out) => lines.push(out)
+      (out: HookOutputLine) => lines.push(out)
     )
     expect(lines).toHaveLength(1)
     expect(lines[0].stream).toBe("stderr")
@@ -54,7 +62,7 @@ describe("runHooksCaptured", () => {
       ["exit 1", "echo second"],
       "/tmp",
       {},
-      (out) => lines.push(out),
+      (out: HookOutputLine) => lines.push(out),
       false
     )
     expect(results).toHaveLength(2)
@@ -69,7 +77,7 @@ describe("runHooksCaptured", () => {
       ["echo $TEST_VAR"],
       "/tmp",
       { TEST_VAR: "hello" },
-      (out) => lines.push(out)
+      (out: HookOutputLine) => lines.push(out)
     )
     expect(lines[0].line).toBe("hello")
   })
@@ -215,7 +223,7 @@ describe("runHooksCaptured _exec injection", () => {
       ["echo hello"],
       "/tmp",
       {},
-      (out) => lines.push(out)
+      (out: HookOutputLine) => lines.push(out)
     )
 
     expect(lines.some(l => l.line === "hello" && l.stream === "stdout")).toBe(true)
@@ -228,7 +236,7 @@ describe("runHooksCaptured _exec injection", () => {
       ["echo error >&2"],
       "/tmp",
       {},
-      (out) => lines.push(out)
+      (out: HookOutputLine) => lines.push(out)
     )
 
     expect(lines.some(l => l.line === "error text" && l.stream === "stderr")).toBe(true)

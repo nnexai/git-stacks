@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock } from "bun:test"
 import type { CmdResult } from "@/lib/cmux"
 
 // ─── Mock setup ───────────────────────────────────────────────────────────────
@@ -13,7 +13,6 @@ const cmuxModule = await import("@/lib/cmux?cmux-test")
 const {
   createCmuxWorkspace,
   focusCmuxWorkspace,
-  openCmuxWorkspace,
   addCmuxPane,
   addCmuxSurface,
   sendToCmuxSurface,

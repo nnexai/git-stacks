@@ -14,7 +14,6 @@ const {
   tmuxSessionExists,
   focusTmuxSession,
   createTmuxSession,
-  openTmuxSession,
   getTmuxMainPane,
   addTmuxPane,
   sendToTmuxPane,
