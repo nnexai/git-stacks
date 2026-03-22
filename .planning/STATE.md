@@ -83,6 +83,7 @@ Plan: Not started
 - [Quick 260322-c0u]: Two-phase niri layout: Phase 1 collects columnMap (no positioning), Phase 2 reorders left-to-right via focusNiriWindow+moveColumnToIndex(1-based), then stacks, then applies widths via setWindowWidth --id
 - [Quick 260322-c0u]: setWindowWidth --id replaces setNiriColumnWidth in niri integration — eliminates focus dependency for width setting; setNiriColumnWidth kept in niri.ts for backward compat but unused by integration
 - [Quick 260322-c0u]: NiriWindowSchema.layout field added (optional) with pos_in_scrolling_layout tuple — enables future column position queries without guessing
+- [Quick 260322-cqi]: openWorkspace captured mode: opts.captured routes hooks through runHooksCaptured (output via onProgress callback) and passes silent: true on IntegrationContext so integrations skip p.spinner()/p.log.warn() — dashboard uses this, CLI does not
 
 ### Pending Todos
 
@@ -105,10 +106,11 @@ None.
 | 260322-a6s | Rework niri integration config from commands[] to declarative columns with app/command/source windows | 2026-03-22 | 468d564 | Verified | [260322-a6s-rework-niri-integration-config-declarati](./quick/260322-a6s-rework-niri-integration-config-declarati/) |
 | 260322-b5d | Refactor window ID detection to WindowDetector interface — decouple vscode/intellij from niri.ts | 2026-03-22 | 9b38920 | Verified | [260322-b5d-refactor-window-id-detection-from-hardco](./quick/260322-b5d-refactor-window-id-detection-from-hardco/) |
 | 260322-c0u | Rework niri column layout to two-phase approach: create-then-arrange with move-column-to-index and set-window-width --id | 2026-03-22 | 4662303 | Verified | [260322-c0u-rework-niri-column-layout-two-phase-appr](./quick/260322-c0u-rework-niri-column-layout-two-phase-appr/) |
+| 260322-cqi | Fix broken press-any-key dialog in dashboard — captured mode for openWorkspace, silent-aware integrations | 2026-03-22 | 1b493f5 | Verified | [260322-cqi-fix-broken-press-any-key-dialog-in-dashb](./quick/260322-cqi-fix-broken-press-any-key-dialog-in-dashb/) |
 
 ## Session Continuity
 
-Last session: 2026-03-22T07:58:00Z
-Stopped at: Completed quick task 260322-c0u (niri two-phase column layout rework)
+Last session: 2026-03-22T09:28:00Z
+Stopped at: Completed quick task 260322-cqi (fix broken press-any-key dialog in dashboard)
 Resume file: None
 Next action: `/gsd:plan-phase 16`
