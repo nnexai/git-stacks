@@ -93,7 +93,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-(No active requirements — next milestone not yet defined)
+- [ ] Workspace close command — lightweight teardown (tmux, niri) without deleting workspace/worktrees
+- [ ] Fix niri columns display in TUI details pane — `[object Object]` rendering bug
+- [ ] Audit and isolate test environments from user config — ensure all tests use isolated temp dirs
 
 ### Out of Scope
 
@@ -109,9 +111,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 | Branch completions for `new --from` | Design spike needed (repo-context resolution at completion time) |
 
+## Current Milestone: v0.7.0 Close Command & Polish
+
+**Goal:** Add workspace close command, fix niri display bug, and harden test isolation.
+
+**Target features:**
+- Workspace close command — lightweight teardown (end tmux session, remove niri named workspace) without deleting workspace directory or worktrees
+- Fix niri columns `[object Object]` display in TUI details pane
+- Audit and isolate all test environments from real user config
+
 ## Next Milestone Goals
 
-After v0.6.0 — candidates for v0.7.0+:
+After v0.7.0 — candidates for v0.8.0+:
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type; version gate for v1.0
 - **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, per-repo ahead/behind in status
@@ -190,4 +201,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-22 after v0.6.0 milestone complete — Integration Orchestration & Niri shipped*
+*Last updated: 2026-03-22 after v0.7.0 milestone started — Close Command & Polish*
