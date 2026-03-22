@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
-status: ready-to-plan
-stopped_at: Roadmap created — Phase 21 ready to plan
-last_updated: "2026-03-22T09:00:00Z"
+status: unknown
+stopped_at: Completed 21-01-PLAN.md — workspace close command implemented
+last_updated: "2026-03-22T09:28:18.971Z"
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 1
+  completed_plans: 1
 ---
 
 # Project State
@@ -23,12 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 21 of 23 (Workspace Close Command)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-03-22 — Roadmap created for v0.7.0 (Phases 21-23)
-
-Progress: [░░░░░░░░░░] 0% (this milestone)
+Phase: 21 (Workspace Close Command) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -54,12 +50,15 @@ Progress: [░░░░░░░░░░] 0% (this milestone)
 | Phase 18-artifact-population P01 | 3 | 2 tasks | 5 files |
 | Phase 19-niri-shell-wrappers P01 | 9min | 2 tasks | 2 files |
 | Phase 20 P01 | 3min | 2 tasks | 3 files |
+| Phase 21-workspace-close-command P01 | 6min | 2 tasks | 8 files |
 
 ### Decisions
 
 - [Phase 20]: No cleanup on workspace remove — user manages niri workspace lifecycle manually; close command fills this gap
 - [Phase 19]: Injectable `_exec` for niri test isolation — Bun built-in modules can't be mocked via mock.module
 - [Phase 16-18]: ArtifactBag as Record<string, artifact | null> — niri reads bag values without mutation
+- [Phase 21-workspace-close-command]: closeWorkspace preserves worktrees and YAML — non-destructive, open works immediately after
+- [Phase 21-workspace-close-command]: No confirmation prompt for close (non-destructive) — same UX pattern as open, x shortcut in TUI after Open entry
 
 ### Pending Todos
 
@@ -71,7 +70,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T09:00:00Z
-Stopped at: Roadmap created — v0.7.0 phases 21-23 defined, ready to plan Phase 21
+Last session: 2026-03-22T09:28:18.965Z
+Stopped at: Completed 21-01-PLAN.md — workspace close command implemented
 Resume file: None
 Next action: /gsd:plan-phase 21

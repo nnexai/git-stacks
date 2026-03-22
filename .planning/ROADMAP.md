@@ -62,7 +62,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 
 **Milestone Goal:** Add workspace close command, fix niri display bug, and harden test isolation so the tool is reliable and complete for lightweight teardown workflows.
 
-- [ ] **Phase 21: Workspace Close Command** - CLI and TUI teardown for integrations without deleting workspace state
+- [x] **Phase 21: Workspace Close Command** - CLI and TUI teardown for integrations without deleting workspace state (completed 2026-03-22)
 - [ ] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config
 - [ ] **Phase 23: Test Environment Isolation** - Audit and enforce isolated config dirs across all tests
 
@@ -77,9 +77,9 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
   2. After close, `git-stacks open [name]` succeeds and restores a working session — the workspace is fully re-openable
   3. Close runs any configured teardown hooks before integration cleanup
   4. The TUI dashboard Workspaces action menu includes a "close" entry that triggers the same teardown
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 21-01-PLAN.md — Schema update, closeWorkspace function, CLI command, TUI dashboard action
+- [x] 21-01-PLAN.md — Schema update, closeWorkspace function, CLI command, TUI dashboard action
 
 ### Phase 22: Niri Display Fix
 **Goal**: The TUI details pane renders niri columns configuration as human-readable text instead of the raw `[object Object]` JavaScript serialization artifact.
@@ -108,6 +108,6 @@ Plans:
 | 6-9. Dashboard UI | v0.3.0 | 13/13 | Complete | 2026-03-20 |
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
-| 21. Workspace Close Command | v0.7.0 | 0/1 | In progress | - |
+| 21. Workspace Close Command | v0.7.0 | 1/1 | Complete   | 2026-03-22 |
 | 22. Niri Display Fix | v0.7.0 | 0/? | Not started | - |
 | 23. Test Environment Isolation | v0.7.0 | 0/? | Not started | - |
