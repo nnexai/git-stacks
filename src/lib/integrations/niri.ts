@@ -9,10 +9,11 @@ import {
 import {
   isNiriRunning,
   listNiriWorkspaces,
-  listNiriWindows,
   setNiriWorkspaceName,
   moveWindowToWorkspace,
   focusNiriWorkspace,
+  focusNiriWorkspaceDown,
+  unsetNiriWorkspaceName,
 } from "../niri"
 import { runHooks } from "../lifecycle"
 
@@ -43,27 +44,28 @@ export const niriIntegration: Integration = {
       const workspaces = await listNiriWorkspaces()
       const alreadyNamed = workspaces.some((ws) => ws.name === workspaceName)
 
-      if (!alreadyNamed) {
-        // Name the currently active workspace
+      if (alreadyNamed) {
+        // Re-open: just focus the existing named workspace
+        await focusNiriWorkspace(workspaceName)
+      } else {
+        // First open: create a NEW workspace — do NOT rename the user's current workspace
+        // Step 1: Focus a new empty workspace at the end of the workspace list
+        await focusNiriWorkspaceDown()
+        // Step 2: Name this new workspace
         await setNiriWorkspaceName(workspaceName)
       }
 
-      // Always focus the named workspace (both first-open and re-open)
-      await focusNiriWorkspace(workspaceName)
-
-      // Step 3: Move prior integration windows (NIRI-02)
-      const niriWindows = await listNiriWindows()
+      // Step 3: Move prior integration windows by niriWindowIds (not PID)
       for (const artifact of Object.values(bag)) {
         if (artifact?.kind !== "window") continue
-        const match = niriWindows.find(
-          (w) => w.pid != null && w.pid === artifact.pid
-        )
-        if (!match) continue
-        try {
-          await moveWindowToWorkspace(match.id, workspaceName)
-        } catch (err) {
-          p.log.warn(`niri: failed to move window ${match.id}: ${String(err)}`)
-          // Continue — partial failure is acceptable
+        if (!artifact.niriWindowIds?.length) continue
+        for (const windowId of artifact.niriWindowIds) {
+          try {
+            await moveWindowToWorkspace(windowId, workspaceName)
+          } catch (err) {
+            p.log.warn(`niri: failed to move window ${windowId}: ${String(err)}`)
+            // Continue — partial failure is acceptable
+          }
         }
       }
 
@@ -86,6 +88,15 @@ export const niriIntegration: Integration = {
 
     // Tier-3 integrations are consumers, not producers — always return null
     return null
+  },
+
+  async cleanup(ctx: IntegrationContext): Promise<void> {
+    if (!(await isNiriRunning())) return
+    const workspaces = await listNiriWorkspaces()
+    const named = workspaces.find((ws) => ws.name === ctx.workspace.name)
+    if (named) {
+      await unsetNiriWorkspaceName(ctx.workspace.name)
+    }
   },
 
   async configurePrompt(_current: Record<string, unknown>): Promise<Record<string, unknown> | null> {

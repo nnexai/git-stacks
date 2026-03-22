@@ -2,6 +2,7 @@ import { $ } from "bun"
 import { generateIntellijProject } from "../intellij"
 import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 import type { Workspace } from "../config"
+import { isNiriRunning, snapshotWindowIds } from "../niri"
 
 export const intellijIntegration: Integration = {
   id: "intellij",
@@ -21,12 +22,29 @@ export const intellijIntegration: Integration = {
     const check = await $`which idea`.quiet().nothrow()
     if (check.exitCode !== 0) return null
     try {
-      const proc = Bun.spawn(["idea", artifactPath], {
-        stdout: "ignore",
-        stderr: "ignore",
-        stdin: "ignore",
-      })
-      return { kind: "window", pid: proc.pid, app_id: "idea", title: "" }
+      const niriActive = await isNiriRunning()
+      if (niriActive) {
+        // Use snapshot-diff to capture niri window IDs — PID matching fails for Electron forks
+        let spawnedPid = 0
+        let niriWindowIds: number[] | undefined
+        const ids = await snapshotWindowIds(async () => {
+          const proc = Bun.spawn(["idea", artifactPath], {
+            stdout: "ignore",
+            stderr: "ignore",
+            stdin: "ignore",
+          })
+          spawnedPid = proc.pid
+        })
+        if (ids.length > 0) niriWindowIds = ids
+        return { kind: "window", pid: spawnedPid, app_id: "idea", title: "", niriWindowIds }
+      } else {
+        const proc = Bun.spawn(["idea", artifactPath], {
+          stdout: "ignore",
+          stderr: "ignore",
+          stdin: "ignore",
+        })
+        return { kind: "window", pid: proc.pid, app_id: "idea", title: "" }
+      }
     } catch {
       return null
     }
