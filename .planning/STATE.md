@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T16:12:56.786Z"
+last_updated: "2026-03-22T16:19:30.286Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 16
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 27 (git-forge-integrations) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Plan: 2 of 4
 | Phase 26-autocompletion-editor-polish P02 | 2min | 2 tasks | 6 files |
 | Phase 26-autocompletion-editor-polish P03 | 4min | 2 tasks | 3 files |
 | Phase 27-git-forge-integrations P01 | 2min | 2 tasks | 4 files |
+| Phase 27-git-forge-integrations P03 | 3min | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -93,6 +94,9 @@ Plan: 2 of 4
 - [Phase 26-autocompletion-editor-polish]: CLI clean: folder deletion in command layer after cleanWorkspace returns — cleaner separation, second p.confirm prompt
 - [Phase 27-01]: resolveForgeRepo validates registry forge field against expected forge before returning success (FORGE-11 / D-14)
 - [Phase 27-01]: ForgeTypeSchema as z.enum(['github','gitlab','gitea']).optional() — omission is valid for repos not using forge integrations (backward compat FORGE-02)
+- [Phase 27-03]: Bun.spawn for teaPullsLs in forge detection — Bun shell $ template has no .cwd() chain method
+- [Phase 27-03]: Gitea detection URL-agnostic via tea pulls ls success — self-hosted instances can have any domain; URL matching would have high false-negative rate
+- [Phase 27-03]: D-05 fork: auto-select forge when exactly 1 match detected; p.select prompt when 0 or multiple matches — zero-match prompt shows all forges with initialValue:none for easy skip
 
 ### Pending Todos
 
@@ -118,7 +122,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T16:12:56.784Z
+Last session: 2026-03-22T16:19:30.280Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21

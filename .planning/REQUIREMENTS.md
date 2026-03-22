@@ -68,10 +68,10 @@
 - [ ] **FORGE-07**: All forge CLI invocations use `stdio: "inherit"` for interactive pass-through (per D-12)
 - [ ] **FORGE-08**: Each forge plugin exports its own `_exec` object for injectable shell commands (per D-08)
 - [ ] **FORGE-09**: `pr create` passes base branch via `--base` (gh), `--target-branch` (glab), `--base` (tea) from workspace repo's `base_branch` or registry `default_branch` (per D-12)
-- [ ] **FORGE-10**: Forge detection at `repo add` and `repo scan` checks remote URL and CLI availability, suggests forge when exactly one detected, prompts when ambiguous (per D-04, D-05)
+- [x] **FORGE-10**: Forge detection at `repo add` and `repo scan` checks remote URL and CLI availability, suggests forge when exactly one detected, prompts when ambiguous (per D-04, D-05)
 - [x] **FORGE-11**: Missing forge CLI or no forge configured on repo produces clear error message (per D-14)
 - [ ] **FORGE-12**: All three forge integrations registered in `src/lib/integrations/index.ts`
-- [ ] **FORGE-13**: `git-stacks doctor` checks availability of `gh`, `glab`, `tea` binaries
+- [x] **FORGE-13**: `git-stacks doctor` checks availability of `gh`, `glab`, `tea` binaries
 
 ## Future Requirements
 
