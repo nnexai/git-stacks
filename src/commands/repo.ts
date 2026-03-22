@@ -8,6 +8,7 @@ import { getCurrentBranch } from "../lib/git"
 import { runRepoScan } from "../tui/repo-wizard"
 import { prompts as p } from "@/tui/utils"
 import { editRegistryYaml, openYamlInEditor } from "../lib/workspace-ops"
+import { detectForgeForRepo } from "../lib/integrations/forge-utils"
 
 export const repoCommand = new Command("repo")
   .description("Manage repo registry")
@@ -44,16 +45,49 @@ repoCommand
     }
     const type = detectRepoType(localPath)
     const defaultBranch = opts.branch ?? (await getCurrentBranch(localPath))
+
+    // Detect forge from remote URL and CLI availability (per D-04)
+    const forgeSuggestions = await detectForgeForRepo(localPath)
+    let forge: "github" | "gitlab" | "gitea" | undefined
+    if (forgeSuggestions.length === 1) {
+      // Exactly one match — auto-suggest (per D-05)
+      forge = forgeSuggestions[0]
+      console.log(`  Detected forge: ${forge}`)
+    } else {
+      // Multiple or no matches — prompt user to choose (per D-05)
+      const allForgeOptions: { value: string; label: string }[] = [
+        { value: "none", label: "None" },
+        ...(forgeSuggestions.length > 1
+          ? forgeSuggestions.map((f) => ({ value: f, label: f }))
+          : [
+              { value: "github", label: "github" },
+              { value: "gitlab", label: "gitlab" },
+              { value: "gitea", label: "gitea" },
+            ]),
+      ]
+      const choice = await p.select({
+        message: forgeSuggestions.length > 1
+          ? "Multiple forges detected — select one"
+          : "No forge detected — select one or skip",
+        options: allForgeOptions,
+        initialValue: forgeSuggestions.length === 0 ? "none" : undefined,
+      })
+      if (p.isCancel(choice)) { console.log("Cancelled."); process.exit(0) }
+      forge = choice === "none" ? undefined : (choice as "github" | "gitlab" | "gitea")
+    }
+
     const entry: RepoRegistryEntry = {
       name,
       schema_version: "1",
       local_path: localPath,
       default_branch: defaultBranch,
       type,
+      forge,
     }
     registry.push(entry)
     writeRegistry(registry)
-    console.log(`Registered '${name}' (${type}) at ${localPath} [${defaultBranch}]`)
+    const forgeLabel = forge ? ` [forge: ${forge}]` : ""
+    console.log(`Registered '${name}' (${type}) at ${localPath} [${defaultBranch}]${forgeLabel}`)
   })
 
 repoCommand

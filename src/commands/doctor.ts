@@ -192,6 +192,31 @@ export const doctorCommand = new Command("doctor")
       }
     }
 
+    // Forge CLI availability (warn level — optional, not required for git-stacks core)
+    const ghAvailable = await checkBinary("gh")
+    binaryIssues.push({
+      icon: ghAvailable ? "pass" : "warn",
+      entity: "gh (GitHub CLI)",
+      message: ghAvailable ? "installed" : "not installed — GitHub PR commands unavailable",
+      fix: ghAvailable ? undefined : "Install: https://cli.github.com/",
+    })
+
+    const glabAvailable = await checkBinary("glab")
+    binaryIssues.push({
+      icon: glabAvailable ? "pass" : "warn",
+      entity: "glab (GitLab CLI)",
+      message: glabAvailable ? "installed" : "not installed — GitLab MR commands unavailable",
+      fix: glabAvailable ? undefined : "Install: https://gitlab.com/gitlab-org/cli",
+    })
+
+    const teaAvailable = await checkBinary("tea")
+    binaryIssues.push({
+      icon: teaAvailable ? "pass" : "warn",
+      entity: "tea (Gitea CLI)",
+      message: teaAvailable ? "installed" : "not installed — Gitea PR commands unavailable",
+      fix: teaAvailable ? undefined : "Install: https://gitea.com/gitea/tea",
+    })
+
     // Collect ALL issues into one flat array
     const allIssues: Issue[] = [
       ...orphaned,

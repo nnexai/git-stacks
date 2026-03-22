@@ -2,6 +2,7 @@ import { prompts as p, cancel } from "./utils"
 import { readRegistry, writeRegistry } from "../lib/config"
 import { scanForRepos } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
+import { detectForgeForRepo } from "../lib/integrations/forge-utils"
 
 export async function runRepoScan(dir: string) {
   p.intro("Scan for repos")
@@ -57,12 +58,48 @@ export async function runRepoScan(dir: string) {
       p.log.warn(`Name collision: using '${regName}' instead of '${repo.name}'`)
     }
     const branch = await getCurrentBranch(repo.path).catch(() => "main")
+
+    // Detect forge from remote URL and CLI availability (per D-04)
+    const forgeSuggestions = await detectForgeForRepo(repo.path)
+    let forge: "github" | "gitlab" | "gitea" | undefined
+    if (forgeSuggestions.length === 1) {
+      forge = forgeSuggestions[0]
+      registerSpinner.message(`${regName} (forge: ${forge})`)
+    } else {
+      // Multiple or no matches — prompt user to choose (per D-05)
+      registerSpinner.stop(`Pausing for ${regName}`)
+      const allForgeOptions: { value: string; label: string }[] = [
+        { value: "none", label: "None" },
+        ...(forgeSuggestions.length > 1
+          ? forgeSuggestions.map((f: string) => ({ value: f, label: f }))
+          : [
+              { value: "github", label: "github" },
+              { value: "gitlab", label: "gitlab" },
+              { value: "gitea", label: "gitea" },
+            ]),
+      ]
+      const choice = await p.select({
+        message: forgeSuggestions.length > 1
+          ? `Multiple forges detected for '${regName}' — select one`
+          : `No forge detected for '${regName}' — select one or skip`,
+        options: allForgeOptions,
+        initialValue: forgeSuggestions.length === 0 ? "none" : undefined,
+      })
+      if (p.isCancel(choice)) {
+        forge = undefined
+      } else {
+        forge = choice === "none" ? undefined : (choice as "github" | "gitlab" | "gitea")
+      }
+      registerSpinner.start("Registering repos")
+    }
+
     registry.push({
       name: regName,
       schema_version: "1",
       local_path: repo.path,
       default_branch: branch,
       type: repo.detectedType,
+      forge,
     })
     registerSpinner.message(`${regName}`)
   }
