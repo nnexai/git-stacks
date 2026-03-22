@@ -11,6 +11,43 @@ export type HookResult = {
   command: string
 }
 
+// ─── Injectable executor ──────────────────────────────────────────────────────
+// Bun.spawn calls funnel through _exec.spawn. The object property is mutable
+// even in ESM (unlike named exports), so tests can replace it:
+//   import { _exec } from "@/lib/lifecycle?lifecycle-exec-test"
+//   _exec.spawn = mockFn
+//
+// SpawnHandle is returned so the caller can read streams before awaiting exit —
+// this is required by runHooksCaptured which must drain streams concurrently.
+
+export type SpawnHandle = {
+  exited: Promise<number>
+  stdout: ReadableStream<Uint8Array> | null
+  stderr: ReadableStream<Uint8Array> | null
+}
+
+export const _exec = {
+  spawn: (args: {
+    cmd: string[]
+    cwd: string
+    env: Record<string, string>
+    stdout: "inherit" | "pipe"
+    stderr: "inherit" | "pipe"
+  }): SpawnHandle => {
+    const proc = spawn(args.cmd, {
+      cwd: args.cwd,
+      env: args.env,
+      stdout: args.stdout,
+      stderr: args.stderr,
+    })
+    return {
+      exited: proc.exited,
+      stdout: args.stdout === "pipe" ? (proc.stdout ?? null) : null,
+      stderr: args.stderr === "pipe" ? (proc.stderr ?? null) : null,
+    }
+  },
+}
+
 // Runs an array of shell commands sequentially.
 // cwd: working directory for each command.
 // env: merged with process.env before running.
@@ -26,13 +63,14 @@ export async function runHooks(
   const mergedEnv = { ...process.env, ...env } as Record<string, string>
 
   for (const cmd of commands) {
-    const proc = spawn(["sh", "-c", cmd], {
+    const handle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
       cwd,
       env: mergedEnv,
       stdout: "inherit",
       stderr: "inherit",
     })
-    const exitCode = await proc.exited
+    const exitCode = await handle.exited
     if (abortOnFailure && exitCode !== 0) {
       throw new Error(`Hook failed (exit ${exitCode}): ${cmd}`)
     }
@@ -56,7 +94,8 @@ export async function runHooksCaptured(
   const results: HookResult[] = []
 
   for (const cmd of commands) {
-    const proc = spawn(["sh", "-c", cmd], {
+    const handle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
       cwd,
       env: mergedEnv,
       stdout: "pipe",
@@ -85,11 +124,11 @@ export async function runHooksCaptured(
     }
 
     await Promise.all([
-      readStream(proc.stdout.getReader(), "stdout"),
-      readStream(proc.stderr.getReader(), "stderr"),
+      readStream(handle.stdout!.getReader(), "stdout"),
+      readStream(handle.stderr!.getReader(), "stderr"),
     ])
 
-    const exitCode = await proc.exited
+    const exitCode = await handle.exited
     const result: HookResult = { exitCode, failed: exitCode !== 0, command: cmd }
     results.push(result)
 

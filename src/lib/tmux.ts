@@ -2,30 +2,45 @@ import { $ } from "bun"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
 
+// ─── Injectable executor ──────────────────────────────────────────────────────
+// All Bun.$ tmux calls funnel through _exec.run. The object property is mutable
+// even in ESM (unlike named exports), so tests can replace it:
+//   import { _exec } from "@/lib/tmux?tmux-test"
+//   _exec.run = mockFn
+
+export type CmdResult = { exitCode: number; stdout: string }
+
+export const _exec = {
+  run: async (args: string[]): Promise<CmdResult> => {
+    const result = await $`tmux ${args}`.quiet().nothrow()
+    return { exitCode: result.exitCode, stdout: result.text() }
+  },
+}
+
 // Kills a tmux session by name (no-op if it does not exist).
 export async function killTmuxSession(name: string): Promise<void> {
-  await $`tmux kill-session -t ${name}`.quiet().nothrow()
+  await _exec.run(["kill-session", "-t", name])
 }
 
 // Returns true if a tmux session with the given name exists.
 export async function tmuxSessionExists(name: string): Promise<boolean> {
-  const result = await $`tmux has-session -t ${name}`.quiet().nothrow()
-  return result.exitCode === 0
+  const r = await _exec.run(["has-session", "-t", name])
+  return r.exitCode === 0
 }
 
 // Focuses an existing tmux session.
 // Uses switch-client when inside tmux, attach-session otherwise.
 export async function focusTmuxSession(name: string): Promise<void> {
   if (process.env.TMUX) {
-    await $`tmux switch-client -t ${name}`.quiet().nothrow()
+    await _exec.run(["switch-client", "-t", name])
   } else {
-    await $`tmux attach-session -t ${name}`.quiet().nothrow()
+    await _exec.run(["attach-session", "-t", name])
   }
 }
 
 // Creates a new detached tmux session rooted at cwd.
 export async function createTmuxSession(cwd: string, name: string): Promise<void> {
-  await $`tmux new-session -d -s ${name} -c ${cwd}`.quiet().nothrow()
+  await _exec.run(["new-session", "-d", "-s", name, "-c", cwd])
 }
 
 // Opens a tmux session: focuses if it already exists, otherwise creates one.
@@ -48,9 +63,8 @@ export async function openTmuxSession(
 
 // Returns the global pane ID (e.g. "%0") of the first pane in the session.
 export async function getTmuxMainPane(session: string): Promise<string> {
-  const fmt = "#{pane_id}"
-  const result = await $`tmux list-panes -t ${session} -F ${fmt}`.quiet().nothrow()
-  return result.text().trim().split("\n")[0] || "%0"
+  const r = await _exec.run(["list-panes", "-t", session, "-F", "#{pane_id}"])
+  return r.stdout.trim().split("\n")[0] || "%0"
 }
 
 // Splits a window in the given session and returns the new pane ID, or null on failure.
@@ -60,22 +74,22 @@ export async function addTmuxPane(session: string, direction = "down"): Promise<
   const isVertical = direction === "down" || direction === "up"
   const isBefore = direction === "up" || direction === "left"
   const splitFlag = isVertical ? "-v" : "-h"
-  const fmt = "#{pane_id}"
-  const result = isBefore
-    ? await $`tmux split-window -t ${session} ${splitFlag} -b -P -F ${fmt}`.quiet().nothrow()
-    : await $`tmux split-window -t ${session} ${splitFlag} -P -F ${fmt}`.quiet().nothrow()
-  if (result.exitCode !== 0) return null
-  return result.text().trim() || null
+  const args = isBefore
+    ? ["split-window", "-t", session, splitFlag, "-b", "-P", "-F", "#{pane_id}"]
+    : ["split-window", "-t", session, splitFlag, "-P", "-F", "#{pane_id}"]
+  const r = await _exec.run(args)
+  if (r.exitCode !== 0) return null
+  return r.stdout.trim() || null
 }
 
 // Sends text to a pane and presses Enter to execute it.
 // Pane IDs (%N) are globally unique — no session prefix needed.
 export async function sendToTmuxPane(paneId: string, text: string): Promise<void> {
-  await $`tmux send-keys -t ${paneId} ${text} Enter`.quiet().nothrow()
+  await _exec.run(["send-keys", "-t", paneId, text, "Enter"])
 }
 
 // Focuses a specific pane. Returns true if successful.
 export async function focusTmuxPane(paneId: string): Promise<boolean> {
-  const result = await $`tmux select-pane -t ${paneId}`.quiet().nothrow()
-  return result.exitCode === 0
+  const r = await _exec.run(["select-pane", "-t", paneId])
+  return r.exitCode === 0
 }
