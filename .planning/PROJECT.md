@@ -19,6 +19,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Mock architecture refactor** — injectable `_exec` objects in tmux.ts, cmux.ts, and lifecycle.ts (matching niri.ts pattern); centralized `prompts` wrapper in tui/utils.ts replaces all direct `@clack/prompts` imports across 15 production files; enables fast isolated unit tests via property replacement instead of `mock.module()`; 574 tests pass with 0 failures
 - **Test mock hygiene** — eliminated all dead `mock.module("@clack/prompts")` calls from 7 test files; added explicit `@/tui/utils` mocks where missing; completes Phase 24 import migration cleanup
 - **Git forge integrations** — GitHub (`gh`), GitLab (`glab`), and Gitea (`tea`) integration plugins add `pr create/open/status` subcommands; `forge` field on repo registry schema with auto-detection during `repo add`/`repo scan`; `git-stacks doctor` checks for forge CLI binaries; 682 tests pass
+- **Issue & task tracking integration** — `issue link`, `issue unlink`, and `issue open` subcommands on all four tracker integrations (GitHub, GitLab, Gitea, Jira); shared `issue-utils.ts` module with `resolveIssueRef`, `linkIssue`, `unlinkIssue`, `formatIssueError`; standalone Jira integration plugin with configurable `open_cmd` template (`$ISSUE_ID` env var substitution); doctor checks for `jira` binary; 727 tests pass
 
 ### What shipped in v0.6.0
 
@@ -56,7 +57,8 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Templates** (`~/.config/git-stacks/templates/{name}.yml`) — reusable workspace recipes with per-repo mode, branch patterns, hooks, env, file ops
 - **Workspaces** (`~/.config/git-stacks/workspaces/{name}.yml`) — task-scoped instances; self-contained snapshots at creation time
 - **Messages** (`~/.config/git-stacks/messages/{workspace}.jsonl`) — workspace-scoped notification store; IPC-delivered to running TUI via `/tmp/git-stacks.sock`
-- **Integrations** — VSCode, IntelliJ, tmux, cmux plugin system; extensible via `src/lib/integrations/`
+- **Integrations** — VSCode, IntelliJ, tmux, cmux, niri plugin system; extensible via `src/lib/integrations/`
+- **Issue Tracking** — `issue link/unlink/open` commands on GitHub, GitLab, Gitea, and Jira integration plugins; shared `issue-utils.ts` for resolution/persistence
 - **Hooks** — full lifecycle hook pairs (`pre_close`/`post_close`, `pre_clean`/`post_clean`, `pre_merge`/`post_merge`, `pre_remove`/`post_remove`, plus `pre_create`/`post_create`, `pre_open`/`post_open`) at template and workspace levels; per-repo `pre_open` and `pre_clean`; cascade design (remove → clean → close); hooks receive `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, `WS_TRIGGERED_BY`
 
 ## Requirements
@@ -107,6 +109,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - [x] Fix niri columns display in TUI details pane — `[object Object]` rendering bug — v0.7.0 Phase 22
 - [x] Audit and isolate test environments from user config — ensure all tests use isolated temp dirs — v0.7.0 Phase 23
 - [x] Dedicated lifecycle phases — close/clean/remove/merge with pre/post hooks and cascade — v0.7.0 Phase 25
+- [x] Issue & task tracking integration — link external issues to workspaces across GitHub/GitLab/Gitea/Jira trackers — v0.7.0 Phase 28
 
 ### Out of Scope
 
