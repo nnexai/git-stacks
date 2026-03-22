@@ -3,6 +3,9 @@ import { intellijIntegration } from "./intellij"
 import { cmuxIntegration } from "./cmux"
 import { tmuxIntegration } from "./tmux"
 import { niriIntegration } from "./niri"
+import { githubIntegration } from "./github"
+import { gitlabIntegration } from "./gitlab"
+import { giteaIntegration } from "./gitea"
 
 export { type Integration, type IntegrationContext, type IntegrationArtifact, type ArtifactBag, resolveEnabledGlobally } from "./types"
 
@@ -10,4 +13,7 @@ export { type Integration, type IntegrationContext, type IntegrationArtifact, ty
  * All registered integrations, in the order they run (generate → open).
  * Add new integrations here and in their own file — no other files need touching.
  */
-export const integrations = [vscodeIntegration, intellijIntegration, cmuxIntegration, tmuxIntegration, niriIntegration]
+export const integrations = [
+  vscodeIntegration, intellijIntegration, cmuxIntegration, tmuxIntegration, niriIntegration,
+  githubIntegration, gitlabIntegration, giteaIntegration,
+]
