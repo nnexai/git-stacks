@@ -36,7 +36,7 @@ git-stacks template new
 # Create a new workspace (interactive)
 git-stacks new my-feature
 
-# Open a workspace (launches VSCode / tmux / cmux as configured)
+# Open a workspace (launches integrations in order: VSCode/IntelliJ → tmux → cmux → niri)
 git-stacks open my-feature
 
 # Merge branches back and clean up
@@ -171,6 +171,55 @@ git-stacks install --hooks --remove
 This writes lifecycle hooks into `.claude/settings.json` in the current directory. When Claude Code finishes a task or asks a question, a notification appears in the dashboard. When you respond, the notification clears automatically.
 
 The plugin system is extensible — new agent frameworks can be added as plugins in `src/lib/agent-hooks/`.
+
+## Integrations
+
+`git-stacks open` runs integrations in a defined order, passing artifacts (session names, window PIDs) between them:
+
+| Tier | Integration | What it does | Artifact |
+|------|-------------|-------------|----------|
+| 1 | VSCode | Opens `.code-workspace` | Window PID |
+| 1 | IntelliJ | Opens `.idea` project | Window PID |
+| 1 | tmux | Creates detached tmux session | Session name |
+| 2 | cmux | Creates/focuses cmux workspace | Workspace ref |
+| 3 | niri | Arranges windows on a named niri workspace | — |
+
+Integrations are configured per-global, per-template, or per-workspace. Use `git-stacks config` to enable/disable globally, or pass overrides during `git-stacks new` / `git-stacks edit`.
+
+**Integration helper commands:**
+
+```bash
+git-stacks integration tmux attach <workspace>          # Attach to workspace tmux session
+git-stacks integration niri focus-workspace <workspace>  # Focus workspace niri workspace
+```
+
+**tmux integration:**
+- Creates a detached tmux session per workspace — does not steal terminal focus
+- Configurable pane layout with repo-bound surfaces
+- Session killed automatically on workspace clean/remove
+- Attach manually via `git-stacks integration tmux attach` or niri commands config
+
+**Niri integration** (for [niri](https://github.com/YaLTeR/niri) Wayland compositor users):
+- Creates a dedicated named niri workspace per git-stacks workspace
+- Declarative `columns` layout — arrange windows into vertical columns with width control
+- Three window types: `app:` (direct spawn), `command:` (shell spawn with cwd), `source:` (reuse prior integration windows like vscode)
+- Focus control: `focus: true` on window entries or config level
+- Requires `NIRI_SOCKET` — silently skips when niri is not running
+
+```yaml
+# Example niri columns config in workspace YAML
+settings:
+  integrations:
+    niri:
+      columns:
+        - width: "60%"
+          windows:
+            - source: vscode
+              focus: true
+        - width: "40%"
+          windows:
+            - command: ghostty -e git-stacks integration tmux attach $WS_WORKSPACE
+```
 
 ## Hooks & Env Injection
 

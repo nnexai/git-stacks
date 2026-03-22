@@ -23,12 +23,18 @@ All notable changes to `git-stacks` are documented here.
 - Tier-3 integration plugin (order 30, disabled by default) — runs after all other integrations
 - Creates/reuses a named niri workspace per git-stacks workspace via `niri msg action set-workspace-name`
 - Moves windows from prior integrations onto the named workspace using niriWindowIds from the ArtifactBag
-- Focuses the niri workspace after setup so new windows open there naturally
-- User-configurable `commands: string[]` — spawned via `niri msg action spawn` (niri owns the windows, no shell wrapper). Supports `$WS_WORKSPACE`, `$WS_BRANCH`, `$WS_TASKS_DIR` env var substitution. Commands read from workspace settings first, global config as fallback.
+- Declarative `columns` layout config matching the tmux/cmux pane approach:
+  - `columns:` array — each column contains 1+ windows, ordered left-to-right
+  - Column `width:` passed verbatim to `niri msg action set-column-width` (e.g. `"50%"`, `"1280"`)
+  - Three window types: `app:` (direct spawn via `niriSpawn`), `command:` (shell spawn via `niriSpawnSh`), `source:` (reuse prior integration window from ArtifactBag)
+  - `repo:` resolves cwd from workspace repos, `cwd:` for explicit paths — prepends `cd <path> &&` to shell commands
+  - Multi-window columns stacked via `consume-or-expel-window-left` IPC
+  - `$WS_WORKSPACE`, `$WS_BRANCH`, `$WS_TASKS_DIR` env var substitution in args/command/cwd
+- Focus control: `focus: true` on a window entry focuses that window after layout; `focus: true` on the niri config keeps the workspace focused (without it, switches back to the original workspace — no focus steal)
 - Cleanup on workspace clean/remove: unsets niri workspace name
 - Gated by `NIRI_SOCKET` env var — silently skips when niri is not running
 - Idempotent on re-open: checks if named workspace already exists before creating
-- Config schema: `{ enabled: boolean, commands?: string[] }`
+- Config read from workspace settings first, global config as fallback
 
 **Integration helper commands** (`git-stacks integration <name> <action>`)
 - New optional `commands?(parent: Command): void` method on `Integration` interface — integrations register their own CLI subcommands
@@ -36,7 +42,7 @@ All notable changes to `git-stacks` are documented here.
 - `git-stacks integration niri focus-workspace [workspace]` — focus a workspace's niri workspace
 
 **Niri shell wrappers** (`src/lib/niri.ts`)
-- 8 typed async functions wrapping all `niri msg` IPC calls: `isNiriRunning()`, `listNiriWindows()`, `listNiriWorkspaces()`, `setNiriWorkspaceName()`, `moveWindowToWorkspace()`, `niriSpawn()`, `focusNiriWorkspace()`, `snapshotWindowIds()`
+- 14 typed async functions wrapping all `niri msg` IPC calls: `isNiriRunning()`, `listNiriWindows()`, `listNiriWorkspaces()`, `setNiriWorkspaceName()`, `unsetNiriWorkspaceName()`, `moveWindowToWorkspace()`, `niriSpawn()`, `niriSpawnSh()`, `focusNiriWorkspace()`, `focusNiriWorkspaceDown()`, `focusNiriWindow()`, `setNiriColumnWidth()`, `consumeOrExpelWindowLeft()`, `snapshotWindowIds()`
 - Zod-validated JSON schemas for niri window and workspace data
 - Injectable `_exec` object for test isolation — all niri calls mockable without spawning real processes
 
@@ -53,7 +59,7 @@ All notable changes to `git-stacks` are documented here.
 - VSCode and IntelliJ integrations now use `Bun.spawn` instead of `Bun.$` for IDE launch — enables PID capture for artifact reporting
 - tmux `open()` no longer attaches/focuses the session — creates it detached so the user can attach where they want (e.g., via niri commands or `git-stacks integration tmux attach`)
 - tmux `cleanup()` kills the session by name on workspace clean/remove
-- Niri commands use `niriSpawn()` instead of `runHooks()` — windows are spawned via niri IPC (no shell, no stdio inheritance that would corrupt the TUI dashboard)
+- Niri integration config: `commands: string[]` replaced with declarative `columns` layout — windows spawned via niri IPC, no shell wrapper or stdio inheritance
 
 ---
 
