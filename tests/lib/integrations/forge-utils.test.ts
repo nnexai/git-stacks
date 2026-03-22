@@ -13,10 +13,22 @@ mock.module("@/lib/config", () => ({
   readRegistry: readRegistryMock,
 }))
 
-// Cache-busting import
+// Cache-busting import for resolveForgeRepo / formatForgeError
 const { resolveForgeRepo, formatForgeError } = await import(
   // @ts-ignore — cache-busting for bun module cache
   "@/lib/integrations/forge-utils?unit-test"
+)
+
+// Cache-busting import for detection functions (separate bust to avoid mock.module collision)
+const {
+  _detect,
+  detectGitHubForge,
+  detectGitLabForge,
+  detectGiteaForge,
+  detectForgeForRepo,
+} = await import(
+  // @ts-ignore — cache-busting for bun module cache
+  "@/lib/integrations/forge-utils?detect-test"
 )
 
 // --- Factory helpers ---
@@ -268,5 +280,74 @@ describe("formatForgeError", () => {
     expect(msg).toContain("github")
     // Message should indicate no forge configured
     expect(msg.toLowerCase()).toMatch(/no forge|not configured/)
+  })
+})
+
+// --- Forge detection ---
+
+describe("forge detection", () => {
+  beforeEach(() => {
+    // Reset _detect to real implementations (overridden per test)
+    _detect.which = mock(async (_cmd: string) => false)
+    _detect.gitRemoteUrl = mock(async (_repoPath: string) => null)
+    _detect.teaPullsLs = mock(async (_repoPath: string) => false)
+  })
+
+  test("detectGitHubForge returns true for github.com remote with gh installed", async () => {
+    _detect.which = mock(async (cmd: string) => cmd === "gh")
+    _detect.gitRemoteUrl = mock(async () => "git@github.com:org/repo.git")
+    expect(await detectGitHubForge("/tmp/repo")).toBe(true)
+  })
+
+  test("detectGitHubForge returns false when gh not installed", async () => {
+    _detect.which = mock(async () => false)
+    _detect.gitRemoteUrl = mock(async () => "git@github.com:org/repo.git")
+    expect(await detectGitHubForge("/tmp/repo")).toBe(false)
+  })
+
+  test("detectGitHubForge returns false for non-github remote", async () => {
+    _detect.which = mock(async () => true)
+    _detect.gitRemoteUrl = mock(async () => "git@gitlab.com:org/repo.git")
+    expect(await detectGitHubForge("/tmp/repo")).toBe(false)
+  })
+
+  test("detectGitLabForge returns true for gitlab.com remote with glab installed", async () => {
+    _detect.which = mock(async (cmd: string) => cmd === "glab")
+    _detect.gitRemoteUrl = mock(async () => "git@gitlab.com:org/repo.git")
+    expect(await detectGitLabForge("/tmp/repo")).toBe(true)
+  })
+
+  test("detectGitLabForge returns false when glab not installed", async () => {
+    _detect.which = mock(async () => false)
+    _detect.gitRemoteUrl = mock(async () => "git@gitlab.com:org/repo.git")
+    expect(await detectGitLabForge("/tmp/repo")).toBe(false)
+  })
+
+  test("detectGiteaForge returns true when tea installed and teaPullsLs succeeds", async () => {
+    _detect.which = mock(async (cmd: string) => cmd === "tea")
+    _detect.teaPullsLs = mock(async () => true)
+    expect(await detectGiteaForge("/tmp/repo")).toBe(true)
+  })
+
+  test("detectGiteaForge returns false when tea not installed", async () => {
+    _detect.which = mock(async () => false)
+    _detect.teaPullsLs = mock(async () => true)
+    expect(await detectGiteaForge("/tmp/repo")).toBe(false)
+  })
+
+  test("detectForgeForRepo returns ['github'] when only GitHub detection matches", async () => {
+    _detect.which = mock(async (cmd: string) => cmd === "gh")
+    _detect.gitRemoteUrl = mock(async () => "git@github.com:org/repo.git")
+    _detect.teaPullsLs = mock(async () => false)
+    const result = await detectForgeForRepo("/tmp/repo")
+    expect(result).toEqual(["github"])
+  })
+
+  test("detectForgeForRepo returns [] when no detections match", async () => {
+    _detect.which = mock(async () => false)
+    _detect.gitRemoteUrl = mock(async () => null)
+    _detect.teaPullsLs = mock(async () => false)
+    const result = await detectForgeForRepo("/tmp/repo")
+    expect(result).toEqual([])
   })
 })
