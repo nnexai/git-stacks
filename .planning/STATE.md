@@ -4,7 +4,7 @@ milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
 stopped_at: Completed 24-01-PLAN.md — _exec injection for tmux.ts, cmux.ts, lifecycle.ts
-last_updated: "2026-03-22T12:55:15.897Z"
+last_updated: "2026-03-22T13:24:12.011Z"
 progress:
   total_phases: 7
   completed_phases: 4
