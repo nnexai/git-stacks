@@ -6,9 +6,12 @@ import {
   type Integration,
   type IntegrationContext,
   type ArtifactBag,
+  type WindowDetector,
+  type DetectorSnapshot,
 } from "./types"
 import {
   isNiriRunning,
+  listNiriWindows,
   listNiriWorkspaces,
   setNiriWorkspaceName,
   moveWindowToWorkspace,
@@ -57,6 +60,46 @@ export const niriIntegration: Integration = {
 
   isEnabled: (ctx) => resolveEnabled("niri", false, ctx),
 
+  /**
+   * WindowDetector for niri: captures window IDs before spawning (begin),
+   * then polls for new windows after spawn (resolve). Used by runner.ts to
+   * populate WindowArtifact.windowIds["niri"] for tier-1 integrations
+   * (vscode, intellij) without those integrations importing from niri.ts.
+   */
+  windowDetector: {
+    id: "niri",
+    async begin(): Promise<DetectorSnapshot> {
+      const running = await isNiriRunning()
+      if (!running) {
+        return { _brand: "niri", data: new Set<number>() }
+      }
+      const windows = await listNiriWindows()
+      const ids = new Set(windows.map((w) => w.id))
+      return { _brand: "niri", data: ids }
+    },
+    async resolve(snapshot: DetectorSnapshot, _hints?: { pid?: number; app_id?: string }): Promise<number[]> {
+      const beforeIds = snapshot.data as Set<number>
+      // If niri was not running when begin() was called, the set is empty — skip
+      // (we still poll in case niri started, but realistically it won't have)
+      // Poll with exponential backoff, same strategy as snapshotWindowIds
+      const timeoutMs = 10_000
+      const initialDelayMs = 200
+      const maxDelayMs = 2_000
+      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+      const deadline = Date.now() + timeoutMs
+      let delay = initialDelayMs
+
+      while (Date.now() < deadline) {
+        await sleep(delay)
+        const after = await listNiriWindows()
+        const newIds = after.map((w) => w.id).filter((id) => !beforeIds.has(id))
+        if (newIds.length > 0) return newIds
+        delay = Math.min(delay * 2, maxDelayMs)
+      }
+      return []
+    },
+  } satisfies WindowDetector,
+
   async open(ctx: IntegrationContext, _artifactPath: string | null, bag: ArtifactBag): Promise<null> {
     // NIRI-08: Silent gate — return null immediately if niri is not running
     if (!(await isNiriRunning())) return null
@@ -92,11 +135,12 @@ export const niriIntegration: Integration = {
         await setNiriWorkspaceName(workspaceName)
       }
 
-      // Step 2: Move prior integration windows by niriWindowIds (NIRI-02)
+      // Step 2: Move prior integration windows by windowIds["niri"] (NIRI-02)
       for (const artifact of Object.values(bag)) {
         if (artifact?.kind !== "window") continue
-        if (!artifact.niriWindowIds?.length) continue
-        for (const windowId of artifact.niriWindowIds) {
+        const niriIds = artifact.windowIds?.["niri"]
+        if (!niriIds?.length) continue
+        for (const windowId of niriIds) {
           try {
             await moveWindowToWorkspace(windowId, workspaceName)
           } catch (err) {
@@ -133,8 +177,9 @@ export const niriIntegration: Integration = {
               if (window.source !== undefined) {
                 // Source window: resolve from ArtifactBag
                 const artifact = bag[window.source]
-                if (artifact?.kind === "window" && artifact.niriWindowIds?.length) {
-                  windowId = artifact.niriWindowIds[0]
+                const sourceIds = artifact?.kind === "window" ? artifact.windowIds?.["niri"] : undefined
+                if (sourceIds?.length) {
+                  windowId = sourceIds[0]
                   columnWindowIds.push(windowId)
                 } else {
                   p.log.warn(`niri: source "${window.source}" not found in bag or has no window IDs`)

@@ -12,12 +12,20 @@ export type CmuxArtifact = {
   workspaceRef: string
 }
 
+export type DetectorSnapshot = { _brand: string; data: unknown }
+
+export interface WindowDetector {
+  id: string
+  begin(): Promise<DetectorSnapshot>
+  resolve(snapshot: DetectorSnapshot, hints?: { pid?: number; app_id?: string }): Promise<number[]>
+}
+
 export type WindowArtifact = {
   kind: "window"
   pid: number
   app_id: string
   title: string
-  niriWindowIds?: number[]  // Populated by snapshotWindowIds when niri is running
+  windowIds?: Record<string, number[]>  // Populated by runner via WindowDetector instances
 }
 
 export type IntegrationArtifact = TmuxArtifact | CmuxArtifact | WindowArtifact
@@ -73,6 +81,14 @@ export interface Integration {
 
   /** Register helper subcommands under `git-stacks integration <id>`. */
   commands?(parent: Command): void
+
+  /**
+   * Optional window ID detector. When present, runner.ts calls begin() before open()
+   * and resolve() after open() for any integration that returns a WindowArtifact.
+   * Results are merged into artifact.windowIds keyed by this detector's id.
+   * Tier-1 integrations (vscode, intellij) no longer handle detection themselves.
+   */
+  windowDetector?: WindowDetector
 }
 
 const enabledSchema = z.object({ enabled: z.boolean() })

@@ -4,7 +4,6 @@ import { $ } from "bun"
 import { generateCodeWorkspace } from "../vscode"
 import { safeText } from "../../tui/utils"
 import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
-import { isNiriRunning, snapshotWindowIds } from "../niri"
 
 const configSchema = z.object({
   enabled: z.boolean().default(true),
@@ -35,34 +34,15 @@ export const vscodeIntegration: Integration = {
       return null
     }
     try {
-      const niriActive = await isNiriRunning()
       const app_id = cmd.split("/").at(-1) ?? cmd
-      if (niriActive) {
-        // Use snapshot-diff to capture niri window IDs — PID matching fails for Electron forks
-        let spawnedPid = 0
-        const niriWindowIds = await snapshotWindowIds(async () => {
-          const proc = Bun.spawn([cmd, artifactPath], {
-            stdout: "ignore",
-            stderr: "ignore",
-            stdin: "ignore",
-          })
-          spawnedPid = proc.pid
-        })
-        return {
-          kind: "window",
-          pid: spawnedPid,
-          app_id,
-          title: "",
-          niriWindowIds: niriWindowIds.length > 0 ? niriWindowIds : undefined,
-        }
-      } else {
-        const proc = Bun.spawn([cmd, artifactPath], {
-          stdout: "ignore",
-          stderr: "ignore",
-          stdin: "ignore",
-        })
-        return { kind: "window", pid: proc.pid, app_id, title: "" }
-      }
+      // Spawn the editor — window ID detection is handled externally by runner.ts
+      // via WindowDetector instances (e.g. niri's windowDetector on niriIntegration)
+      const proc = Bun.spawn([cmd, artifactPath], {
+        stdout: "ignore",
+        stderr: "ignore",
+        stdin: "ignore",
+      })
+      return { kind: "window", pid: proc.pid, app_id, title: "" }
     } catch {
       return null
     }
