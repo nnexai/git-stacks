@@ -1,7 +1,7 @@
 import * as p from "@clack/prompts"
 import { z } from "zod"
 import { join } from "path"
-import { openTmuxSession, addTmuxPane, sendToTmuxPane, getTmuxMainPane, focusTmuxPane, focusTmuxSession } from "../tmux"
+import { openTmuxSession, addTmuxPane, sendToTmuxPane, getTmuxMainPane, focusTmuxPane, killTmuxSession, tmuxSessionExists } from "../tmux"
 import { resolveEnabled, type Integration, type IntegrationContext, type TmuxArtifact } from "./types"
 
 const surfaceSchema = z.object({
@@ -38,8 +38,7 @@ export const tmuxIntegration: Integration = {
       if (created) {
         await applyPaneLayout(ctx)
       }
-      spinner.stop("tmux session ready")
-      await focusTmuxSession(ctx.workspace.name)
+      spinner.stop(`tmux session ready: ${ctx.workspace.name}`)
       return { kind: "tmux", sessionName: ctx.workspace.name }
     } catch (err) {
       spinner.stop("tmux unavailable — skipped")
@@ -51,6 +50,12 @@ export const tmuxIntegration: Integration = {
   async configurePrompt(_current) {
     // No extra settings beyond enabled/disabled
     return { enabled: true }
+  },
+
+  async cleanup(ctx: IntegrationContext): Promise<void> {
+    if (await tmuxSessionExists(ctx.workspace.name)) {
+      await killTmuxSession(ctx.workspace.name)
+    }
   },
 }
 

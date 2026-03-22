@@ -2,6 +2,11 @@ import { $ } from "bun"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
 
+// Kills a tmux session by name (no-op if it does not exist).
+export async function killTmuxSession(name: string): Promise<void> {
+  await $`tmux kill-session -t ${name}`.quiet().nothrow()
+}
+
 // Returns true if a tmux session with the given name exists.
 export async function tmuxSessionExists(name: string): Promise<boolean> {
   const result = await $`tmux has-session -t ${name}`.quiet().nothrow()
