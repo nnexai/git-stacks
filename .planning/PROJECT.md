@@ -15,6 +15,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Workspace close command** — `git-stacks close <name>` tears down integration sessions (tmux kill, niri unname) and runs `pre_close` hooks without deleting worktrees or workspace YAML; workspace remains fully re-openable via `git-stacks open`; TUI dashboard action menu includes Close with `x` shortcut
 - **Niri display fix** — TUI detail panes render niri columns config as human-readable "N col(s)" instead of `[object Object]`; shared `formatConfigValue` helper handles all non-primitive config values
 - **Test environment isolation** — `useIsolatedConfig` shared helper in `tests/helpers.ts` redirects all config I/O to temp directories; all mock.module calls export complete module interfaces to prevent cross-test contamination; 513 tests pass with 0 failures
+- **Mock architecture refactor** — injectable `_exec` objects in tmux.ts, cmux.ts, and lifecycle.ts (matching niri.ts pattern); centralized `prompts` wrapper in tui/utils.ts replaces all direct `@clack/prompts` imports across 15 production files; enables fast isolated unit tests via property replacement instead of `mock.module()`; 574 tests pass with 0 failures
 
 ### What shipped in v0.6.0
 
