@@ -10,9 +10,10 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Current State — v0.7.0 in progress (2026-03-22)
 
-### What shipped in v0.7.0 (Phase 21 complete)
+### What shipped in v0.7.0 (Phase 22 complete)
 
 - **Workspace close command** — `git-stacks close <name>` tears down integration sessions (tmux kill, niri unname) and runs `pre_close` hooks without deleting worktrees or workspace YAML; workspace remains fully re-openable via `git-stacks open`; TUI dashboard action menu includes Close with `x` shortcut
+- **Niri display fix** — TUI detail panes render niri columns config as human-readable "N col(s)" instead of `[object Object]`; shared `formatConfigValue` helper handles all non-primitive config values
 
 ### What shipped in v0.6.0
 
