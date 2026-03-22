@@ -97,10 +97,11 @@ None.
 | 260321-u1l | Add git-stacks install --hooks command with Claude Code agent hook plugin system | 2026-03-21 | 3cc797a | Verified | [260321-u1l-git-stacks-install-hooks-agent-framework](./quick/260321-u1l-git-stacks-install-hooks-agent-framework/) |
 | 260322-8sf | Fix niri integration: use snapshotWindowIds, correct workspace creation, add cleanup | 2026-03-22 | 4d5830d | Verified | [260322-8sf-fix-niri-integration-use-snapshotwindowi](./quick/260322-8sf-fix-niri-integration-use-snapshotwindowi/) |
 | 260322-9bm | tmux open() defocus, cleanup(), integration helper commands (tmux attach, niri focus-workspace) | 2026-03-22 | 285802d | Verified | [260322-9bm-tmux-integration-remove-focus-on-open-ad](./quick/260322-9bm-tmux-integration-remove-focus-on-open-ad/) |
+| 260322-a6s | Rework niri integration config from commands[] to declarative columns with app/command/source windows | 2026-03-22 | 468d564 | Verified | [260322-a6s-rework-niri-integration-config-declarati](./quick/260322-a6s-rework-niri-integration-config-declarati/) |
 
 ## Session Continuity
 
-Last session: 2026-03-22T05:42:00.000Z
-Stopped at: Completed quick task 260322-9bm (tmux defocus + integration commands)
+Last session: 2026-03-22T06:08:00.000Z
+Stopped at: Completed quick task 260322-a6s (niri declarative column config rework)
 Resume file: None
 Next action: `/gsd:plan-phase 16`
