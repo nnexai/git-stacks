@@ -185,9 +185,9 @@ The plugin system is extensible — new agent frameworks can be added as plugins
 | 1 | tmux | Creates detached tmux session | Session name |
 | 2 | cmux | Creates/focuses cmux workspace | Workspace ref |
 | 3 | niri | Arranges windows on a named niri workspace | — |
-| 5 | GitHub | GitHub PRs and issues via `gh` CLI | — |
-| 5 | GitLab | GitLab MRs and issues via `glab` CLI | — |
-| 5 | Gitea | Gitea PRs and issues via `tea` CLI | — |
+| 5 | GitHub | GitHub repo browse, PRs, and issues via `gh` CLI | — |
+| 5 | GitLab | GitLab repo browse, MRs, and issues via `glab` CLI | — |
+| 5 | Gitea | Gitea repo browse, PRs, and issues via `tea` CLI | — |
 | 5 | Jira | Jira issue tracking via configurable command | — |
 
 Integrations are configured per-global, per-template, or per-workspace. Use `git-stacks config` to enable/disable globally, or pass overrides during `git-stacks new` / `git-stacks edit`.
@@ -229,9 +229,17 @@ settings:
 
 **Forge integrations** (GitHub, GitLab, Gitea):
 
-Forge integrations connect workspaces to pull request workflows. Each wraps a forge CLI tool (`gh`, `glab`, `tea`) and resolves the correct repo path and base branch from workspace context.
+Forge integrations connect workspaces to pull request workflows and project browsing. Each wraps a forge CLI tool (`gh`, `glab`, `tea`) and resolves the correct repo path and base branch from workspace context. The `open` command works with both worktree and trunk mode repos.
 
 ```bash
+# Open project homepage in browser
+git-stacks integration github open my-feature --web
+git-stacks integration gitlab open my-feature --web
+git-stacks integration gitea open my-feature --web
+
+# Print project URL to stdout (useful for piping)
+git-stacks integration github open my-feature
+
 # Create a PR for workspace branch against its base branch
 git-stacks integration github pr create my-feature
 git-stacks integration gitlab pr create my-feature      # translates to glab mr create

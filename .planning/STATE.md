@@ -34,9 +34,15 @@ Archived to .planning/milestones/v0.7.0-ROADMAP.md — see full decision log the
 
 None.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260322-vcs | implement integration-level open --web command to open project forge URL in browser for all 3 forges | 2026-03-22 | 1910490 | [260322-vcs-implement-integration-level-open-web-com](./quick/260322-vcs-implement-integration-level-open-web-com/) |
+
 ## Session Continuity
 
 Last session: 2026-03-22
-Last activity: 2026-03-22
+Last activity: 2026-03-22 - Completed quick task 260322-vcs: implement integration-level open --web command
 Resume file: None
 Next action: /gsd:new-milestone

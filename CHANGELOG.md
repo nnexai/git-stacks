@@ -31,6 +31,12 @@ All notable changes to `git-stacks` are documented here.
 - `pr status <workspace> [repo]` — pass-through forge CLI status output
 - `[repo]` auto-selected when workspace has exactly one worktree-mode repo; required when multiple
 
+**Forge repo browse** — open the project homepage on GitHub/GitLab/Gitea directly from a workspace:
+- `git-stacks integration github open <workspace> [repo]` — print repo URL; `--web` opens in browser (via `gh browse`)
+- `git-stacks integration gitlab open <workspace> [repo]` — print repo URL; `--web` opens in browser (via `glab repo view`)
+- `git-stacks integration gitea open <workspace> [repo]` — print repo URL; `--web` opens in browser (via `tea repos ls` JSON extraction)
+- Works with both worktree and trunk mode repos (uses `main_path` for resolution)
+
 **Forge field on repo registry** — repos can now have an optional `forge` field (`github`, `gitlab`, or `gitea`) in the registry. Existing configs without this field continue to work (backward compatible).
 
 **Forge detection at registration** — `repo add` and `repo scan` detect forge from remote URL (github.com, gitlab.com) and CLI availability. Auto-selects when one forge matches; prompts when multiple match.
