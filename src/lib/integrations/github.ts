@@ -1,6 +1,6 @@
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
-import { resolveForgeRepo, formatForgeError } from "./forge-utils"
+import { resolveForgeRepo, resolveForgeRepoAnyMode, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
 
@@ -39,6 +39,25 @@ export const githubIntegration: Integration = {
   },
 
   commands(parent: Command): void {
+    parent.command("open <workspace> [repo]")
+      .description("Open repository on GitHub (--web opens in browser)")
+      .option("--web", "Open in browser")
+      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
+        const resolution = resolveForgeRepoAnyMode(workspaceName, repoArg, "github")
+        if (!resolution.ok) {
+          console.error(formatForgeError(resolution))
+          process.exit(1)
+        }
+        const { repoPath } = resolution
+        if (opts.web) {
+          const result = await _exec.run(["browse"], repoPath)
+          if (result.exitCode !== 0) process.exit(result.exitCode)
+        } else {
+          const result = await _exec.run(["browse", "--no-browser"], repoPath)
+          if (result.exitCode !== 0) process.exit(result.exitCode)
+        }
+      })
+
     const pr = parent.command("pr").description("Manage GitHub pull requests")
 
     pr.command("create <workspace> [repo]")

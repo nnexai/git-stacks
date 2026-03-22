@@ -1,6 +1,6 @@
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
-import { resolveForgeRepo, formatForgeError } from "./forge-utils"
+import { resolveForgeRepo, resolveForgeRepoAnyMode, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
 
@@ -53,6 +53,51 @@ export const giteaIntegration: Integration = {
   },
 
   commands(parent: Command): void {
+    parent.command("open <workspace> [repo]")
+      .description("Open repository on Gitea (--web opens in browser)")
+      .option("--web", "Open in browser")
+      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
+        const resolution = resolveForgeRepoAnyMode(workspaceName, repoArg, "gitea")
+        if (!resolution.ok) {
+          console.error(formatForgeError(resolution))
+          process.exit(1)
+        }
+        const { repoPath } = resolution
+
+        // tea has no direct "open repo" command — fetch repo list scoped to the git CWD
+        const capture = await _exec.runCapture(
+          ["repos", "ls", "--output", "json", "--limit", "1"],
+          repoPath
+        )
+        if (capture.exitCode !== 0) {
+          process.exit(capture.exitCode)
+        }
+
+        let repos: Array<Record<string, unknown>>
+        try {
+          repos = JSON.parse(capture.stdout)
+        } catch {
+          console.error("Failed to parse repo list from tea output")
+          process.exit(1)
+        }
+
+        if (!repos.length) {
+          console.error("No Gitea repo found for this workspace")
+          process.exit(1)
+        }
+
+        const url = String(repos[0].html_url ?? repos[0].url ?? "")
+        if (!url) {
+          console.error("Could not determine repo URL from tea output")
+          process.exit(1)
+        }
+
+        console.log(url)
+        if (opts.web) {
+          await _exec.openUrl(url)
+        }
+      })
+
     const pr = parent.command("pr").description("Manage Gitea pull requests")
 
     pr.command("create <workspace> [repo]")

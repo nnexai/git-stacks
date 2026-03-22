@@ -1,6 +1,6 @@
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
-import { resolveForgeRepo, formatForgeError } from "./forge-utils"
+import { resolveForgeRepo, resolveForgeRepoAnyMode, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
 
@@ -39,6 +39,25 @@ export const gitlabIntegration: Integration = {
   },
 
   commands(parent: Command): void {
+    parent.command("open <workspace> [repo]")
+      .description("Open repository on GitLab (--web opens in browser)")
+      .option("--web", "Open in browser")
+      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
+        const resolution = resolveForgeRepoAnyMode(workspaceName, repoArg, "gitlab")
+        if (!resolution.ok) {
+          console.error(formatForgeError(resolution))
+          process.exit(1)
+        }
+        const { repoPath } = resolution
+        if (opts.web) {
+          const result = await _exec.run(["repo", "view", "--web"], repoPath)
+          if (result.exitCode !== 0) process.exit(result.exitCode)
+        } else {
+          const result = await _exec.run(["repo", "view", "--output", "json"], repoPath)
+          if (result.exitCode !== 0) process.exit(result.exitCode)
+        }
+      })
+
     const pr = parent.command("pr").description("Manage GitLab merge requests")
 
     // Note: pr -> mr translation (D-11): glab uses "mr" subcommands
