@@ -1,20 +1,25 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { IntegrationContext } from "@/lib/integrations/types"
 
-// Mock @clack/prompts with a no-op spinner
-mock.module("@clack/prompts", () => ({
-  spinner: () => ({ start: () => {}, stop: () => {} }),
-  log: { info: () => {}, success: () => {}, warn: () => {}, error: () => {} },
-  intro: mock(() => {}),
-  outro: mock(() => {}),
-  text: mock(async () => ""),
-  select: mock(async () => ""),
-  multiselect: mock(async () => []),
-  confirm: mock(async () => false),
-  isCancel: mock(() => false),
-  cancel: mock(() => {}),
-  group: mock(async () => ({})),
-  note: mock(() => {}),
+// Mock @/tui/utils (prompts wrapper) — explicit mock replaces dead @clack/prompts mock
+mock.module("@/tui/utils", () => ({
+  prompts: {
+    spinner: () => ({ start: () => {}, stop: () => {} }),
+    log: { info: () => {}, success: () => {}, warn: () => {}, error: () => {} },
+    intro: mock(() => {}),
+    outro: mock(() => {}),
+    text: mock(async () => ""),
+    select: mock(async () => ""),
+    multiselect: mock(async () => []),
+    confirm: mock(async () => false),
+    isCancel: mock(() => false),
+    cancel: mock(() => {}),
+    group: mock(async () => ({})),
+    note: mock(() => {}),
+    groupMultiselect: mock(async () => []),
+  },
+  cancel: mock((): never => { throw new Error("cancelled") }),
+  safeText: mock(async () => ""),
 }))
 
 // Controllable stubs for tmux lib functions

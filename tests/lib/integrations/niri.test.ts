@@ -43,19 +43,25 @@ mock.module("@/lib/niri", () => ({
   _exec: { run: mock(async () => ({ exitCode: 0, stdout: "" })) },
 }))
 
-mock.module("@clack/prompts", () => ({
-  spinner: () => ({ start: mock(() => {}), stop: mock(() => {}) }),
-  log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
-  intro: mock(() => {}),
-  outro: mock(() => {}),
-  text: mock(async () => ""),
-  select: mock(async () => ""),
-  multiselect: mock(async () => []),
-  confirm: mock(async () => false),
-  isCancel: mock(() => false),
-  cancel: mock(() => {}),
-  group: mock(async () => ({})),
-  note: mock(() => {}),
+// Mock @/tui/utils (prompts wrapper) — explicit mock replaces dead @clack/prompts mock
+mock.module("@/tui/utils", () => ({
+  prompts: {
+    spinner: () => ({ start: mock(() => {}), stop: mock(() => {}) }),
+    log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+    intro: mock(() => {}),
+    outro: mock(() => {}),
+    text: mock(async () => ""),
+    select: mock(async () => ""),
+    multiselect: mock(async () => []),
+    confirm: mock(async () => false),
+    isCancel: mock(() => false),
+    cancel: mock(() => {}),
+    group: mock(async () => ({})),
+    note: mock(() => {}),
+    groupMultiselect: mock(async () => []),
+  },
+  cancel: mock((): never => { throw new Error("cancelled") }),
+  safeText: mock(async () => ""),
 }))
 
 mock.module("@/lib/lifecycle", () => ({

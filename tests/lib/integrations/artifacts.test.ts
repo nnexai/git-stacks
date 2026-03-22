@@ -3,22 +3,8 @@ import type { IntegrationContext, ArtifactBag } from "@/lib/integrations/types"
 
 // === Register ALL mocks BEFORE any integration imports ===
 
-// 1. Mock @clack/prompts
+// 1. Shared mock instances
 const mockSpinner = { start: mock(() => {}), stop: mock(() => {}) }
-mock.module("@clack/prompts", () => ({
-  spinner: () => mockSpinner,
-  log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
-  intro: mock(() => {}),
-  outro: mock(() => {}),
-  text: mock(async () => ""),
-  select: mock(async () => ""),
-  multiselect: mock(async () => []),
-  confirm: mock(async () => false),
-  isCancel: mock(() => false),
-  cancel: mock(() => {}),
-  group: mock(async () => ({})),
-  note: mock(() => {}),
-}))
 
 // 2. Mock @/lib/tmux
 const mockOpenTmuxSession = mock(() => Promise.resolve({ created: false }))
@@ -64,9 +50,26 @@ mock.module("@/lib/intellij", () => ({
   generateIntellijProject: () => null,
 }))
 
-// 7. Mock @/tui/utils
+// 7. Mock @/tui/utils — must include prompts object since production code
+// imports { prompts as p } from "@/tui/utils"
 mock.module("@/tui/utils", () => ({
   safeText: mock(() => Promise.resolve("")),
+  prompts: {
+    spinner: () => mockSpinner,
+    log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+    intro: mock(() => {}),
+    outro: mock(() => {}),
+    text: mock(async () => ""),
+    select: mock(async () => ""),
+    multiselect: mock(async () => []),
+    confirm: mock(async () => false),
+    isCancel: mock(() => false),
+    cancel: mock(() => {}),
+    group: mock(async () => ({})),
+    note: mock(() => {}),
+    groupMultiselect: mock(async () => []),
+  },
+  cancel: mock((): never => { throw new Error("cancelled") }),
 }))
 
 // Note: @/lib/niri mock is NOT needed here — vscode and intellij no longer import from niri.ts.
