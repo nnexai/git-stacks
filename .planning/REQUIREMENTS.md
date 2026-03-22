@@ -46,9 +46,9 @@
 
 ### CLI Polish (Autocompletion & Editor)
 
-- [ ] **POLISH-01**: `new --from` completes template names in bash, zsh, and fish via `COMMAND_FLAG_COMPLETIONS` table
-- [ ] **POLISH-02**: `close` completes workspace names in all three shell formats (missing since Phase 21)
-- [ ] **POLISH-03**: `message send --from` and `message clear --from` do NOT get template completion (sender is freeform)
+- [x] **POLISH-01**: `new --from` completes template names in bash, zsh, and fish via `COMMAND_FLAG_COMPLETIONS` table
+- [x] **POLISH-02**: `close` completes workspace names in all three shell formats (missing since Phase 21)
+- [x] **POLISH-03**: `message send --from` and `message clear --from` do NOT get template completion (sender is freeform)
 - [ ] **POLISH-04**: `git-stacks edit <name> --yaml` opens workspace YAML in $EDITOR with post-edit Zod validation warning
 - [ ] **POLISH-05**: `git-stacks template edit <name> --yaml` opens template YAML in $EDITOR with post-edit Zod validation warning
 - [ ] **POLISH-06**: `git-stacks config --yaml` opens config.yml and `git-stacks repo --yaml` opens registry.yml in $EDITOR with post-edit Zod validation

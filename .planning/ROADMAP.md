@@ -123,7 +123,7 @@ Plans:
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
-| 26. Autocompletion & Editor Polish | v0.7.0 | 0/3 | Not started | - |
+| 26. Autocompletion & Editor Polish | v0.7.0 | 2/3 | In Progress|  |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
@@ -180,11 +180,11 @@ Plans:
   5. `clean` deletes the `tasks/{name}/` folder after worktree removal (with confirmation or --force)
   6. `remove` always deletes the `tasks/{name}/` folder
   7. `remove --force` handles malformed/unparseable YAML via name-based fallback
-**Plans:** 3 plans
+**Plans:** 2/3 plans executed
 
 Plans:
-- [ ] 26-01-PLAN.md — Shell completion: COMMAND_FLAG_COMPLETIONS table, close in DYNAMIC_COMPLETIONS, new --from template completion
-- [ ] 26-02-PLAN.md — Editor --yaml flags: openYamlInEditor helper, editYaml functions, --yaml on 4 commands
+- [x] 26-01-PLAN.md — Shell completion: COMMAND_FLAG_COMPLETIONS table, close in DYNAMIC_COMPLETIONS, new --from template completion
+- [x] 26-02-PLAN.md — Editor --yaml flags: openYamlInEditor helper, editYaml functions, --yaml on 4 commands
 - [x] 26-03-PLAN.md — Clean folder deletion + remove --force resilience (depends on Phase 25 refactor) (completed 2026-03-22)
 
 ### Phase 27: Git Forge Integrations
