@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T17:37:11.659Z"
+last_updated: "2026-03-22T17:43:30.204Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 20
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 28 (issue-task-tracking-integration) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Plan: 2 of 4
 | Phase 27-git-forge-integrations P02 | 7min | 2 tasks | 8 files |
 | Phase 27 P04 | 65s | 2 tasks | 2 files |
 | Phase 28-issue-task-tracking-integration P01 | 1min | 1 tasks | 2 files |
+| Phase 28-issue-task-tracking-integration P03 | 244s | 2 tasks | 5 files |
 
 ### Decisions
 
@@ -106,6 +107,9 @@ Plan: 2 of 4
 - [Phase 27]: Forge entries inserted at top of [Unreleased] Added section for discoverability; forge table rows use tier 5 (command-only, no open() artifacts)
 - [Phase 28-01]: Issue IDs stored as strings regardless of source format (String(issueId) coercion) — unifies GitHub int and Jira alphanumeric
 - [Phase 28-01]: issue-utils mirrors forge-utils pattern: shared resolution + formatting helpers extracted once for all four tracker integrations
+- [Phase 28-issue-task-tracking-integration]: jiraIntegration.order = 53 — tier 5, after gitea (52); avoids collision with gitlab at 51
+- [Phase 28-issue-task-tracking-integration]: _exec.runShell uses sh -c with ISSUE_ID env var for shell injection safety — no string interpolation (Jira Pitfall 5)
+- [Phase 28-issue-task-tracking-integration]: Doctor jira check uses warn severity — jira-cli is optional, configurable template fallback exists (D-06)
 
 ### Pending Todos
 
@@ -131,7 +135,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:37:11.656Z
+Last session: 2026-03-22T17:43:30.202Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21
