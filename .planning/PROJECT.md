@@ -8,18 +8,15 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.6.0 Integration Orchestration & Niri
+## Current State — v0.6.0 shipped (2026-03-22)
 
-**Goal:** Transform integrations from independent side-effects into an ordered pipeline with shared artifacts, and ship a niri compositor integration that arranges all workspace windows on a dedicated niri workspace.
+### What shipped in v0.6.0
 
-**Target features:**
-- Integration artifact system — `open()` returns spawned windows/session names, accumulated into shared context
-- Integration ordering — explicit, configurable execution order (niri runs last)
-- Niri integration — dedicated workspace per git-stacks workspace, window arrangement, tmux terminal spawning
-- Existing integration updates — tmux/vscode/cmux return artifacts for downstream consumption
-- Window identification — snapshot-diff strategy, tmux client lookup, app_id matching
-
-## Current State — v0.6.0 Phase 20 complete (2026-03-22)
+- **Integration artifact pipeline** — `open()` returns typed `IntegrationArtifact | null` (TmuxArtifact, CmuxArtifact, WindowArtifact discriminated union); `ArtifactBag` accumulates artifacts across the integration chain
+- **Centralized integration runner** — `runner.ts` with `runIntegrationGenerate()` and `runIntegrations()`; tier-based numeric ordering (10-19 tier 1, 20-29 tier 2, 30+ tier 3); replaces four inline loops
+- **Real artifact values** — tmux returns session name, cmux returns workspace ref, vscode/intellij return WindowArtifact with PID via `Bun.spawn`
+- **Niri shell wrappers** — `src/lib/niri.ts` with 8 typed async IPC wrappers, Zod-validated JSON schemas, injectable `_exec` for test isolation; 26 unit tests pass without NIRI_SOCKET
+- **Niri compositor integration** — tier-3 plugin (order 30); creates/reuses named niri workspace, moves windows via PID matching from ArtifactBag, supports user-configured `commands` array, NIRI_SOCKET gate; 13 unit tests with mocked wrappers
 
 ### What shipped in v0.4.0
 
@@ -76,6 +73,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Per-template integration overrides via CLI wizard (new + edit) — v0.4.0 Phase 15.2
 - ✓ Per-workspace integration overrides via CLI wizard (new + clone + edit) — v0.4.0 Phase 15.2
 - ✓ TUI detail pane integration cascade display with source annotations — v0.4.0 Phase 15.2
+- ✓ Integration artifact pipeline — typed open() returns, ArtifactBag accumulator — v0.6.0 Phase 16
+- ✓ Integration runner — centralized runner.ts with tier-ordered execution — v0.6.0 Phase 17
+- ✓ Real artifact values — tmux/cmux/vscode/intellij return typed artifacts — v0.6.0 Phase 18
+- ✓ Niri shell wrappers — 8 typed IPC wrappers with mockable interface — v0.6.0 Phase 19
+- ✓ Niri compositor integration — tier-3 plugin, named workspace, window moves — v0.6.0 Phase 20
 - ✓ Repo Registry as source of truth for repo paths — v0.2.0
 - ✓ Templates as reusable workspace recipes — v0.2.0
 - ✓ Workspace YAML self-contained at creation — v0.2.0
@@ -91,11 +93,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-- [x] Integration artifact type foundation — `open()` returns `IntegrationArtifact | null`, `ArtifactBag` accumulator threaded through calls — v0.6.0 Phase 16
-- [x] Integration artifact population — tmux/cmux return session/workspace refs, vscode/intellij return WindowArtifact with PID — v0.6.0 Phase 18
-- [x] Integration runner — centralized runner.ts with tier-ordered execution, generate-only and generate+open modes — v0.6.0 Phase 17
-- [x] Niri shell wrappers — src/lib/niri.ts with 8 typed IPC wrappers, Zod validation, NiriCommands mockable interface — v0.6.0 Phase 19
-- [x] Niri compositor integration — tier-3 plugin, named workspace, PID-based window moves, user-configurable commands — v0.6.0 Phase 20
+(No active requirements — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -155,6 +153,12 @@ After v0.6.0 — candidates for v0.7.0+:
 | CenteredDialog overlay architecture | All dialogs render at App root with dimmed background; three size variants (small/medium/large) | ✓ Established pattern |
 | Integration override cascade (global → template → workspace) | Reusable `promptIntegrationOverrides()` helper; conditional YAML storage (no key when user declines) | ✓ Good |
 | Query-parameter cache-busting for bun mock.module | `import("@/path?unit-test")` bypasses stale mock.module cache from cross-file contamination | ✓ Workaround for bun limitation |
+| Three-tier integration ordering (10/20/30) | Numeric `order` field on Integration interface; extensible without hardcoding to niri | ✓ Good |
+| ArtifactBag as Record<string, artifact \| null> | Simple key-value accumulator; niri reads bag values without mutation | ✓ Good |
+| Bun.spawn for IDE PID capture | `Bun.$` blocks until exit (no PID); `Bun.spawn` returns immediately with `.pid` | ✓ Good |
+| Injectable `_exec` for niri test isolation | Bun built-in modules can't be mocked via mock.module; mutable object property is the workaround | ✓ Good |
+| Commands array over hardcoded terminal spawn | User configures arbitrary commands; more flexible than single terminal config | ✓ Good — user decision |
+| No cleanup on workspace remove | User manages niri workspace lifecycle manually; simplifies integration | ✓ Good — user decision |
 
 ## Out of Scope
 
@@ -186,4 +190,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-22 after v0.6.0 Phase 20 — niri-integration complete (all phases done)*
+*Last updated: 2026-03-22 after v0.6.0 milestone complete — Integration Orchestration & Niri shipped*

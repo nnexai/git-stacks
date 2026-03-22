@@ -1,5 +1,20 @@
 # Milestones
 
+## v0.6.0 Integration Orchestration & Niri (Shipped: 2026-03-22)
+
+**Phases completed:** 5 phases, 6 plans, 11 tasks
+
+**Key accomplishments:**
+
+- Typed integration artifact pipeline: TmuxArtifact/CmuxArtifact/WindowArtifact discriminated union, ArtifactBag accumulator, and updated Integration.open() signature threaded through all four integrations and workspace-ops
+- Numeric `order` field on Integration interface with tier-based runner module (runIntegrationGenerate + runIntegrations) sorting ascending before iteration, tested via TDD with 14 unit tests.
+- All four inline integration loops consolidated into centralized runner calls, completing ORCH-05 with zero regressions across 389 tests
+- All four integrations (tmux, cmux, vscode, intellij) now return real typed IntegrationArtifact values from open() instead of null — ArtifactBag is populated for Phase 20 niri consumption
+- 8 typed async niri IPC wrappers in src/lib/niri.ts with Zod validation, injectable test hooks, and 26 unit tests that pass without NIRI_SOCKET
+- Niri compositor integration plugin (tier-3, order 30) that arranges workspace windows on a dedicated named niri workspace using PID matching from the ArtifactBag
+
+---
+
 ## v0.4.0 TUI Hardening & Polish (Shipped: 2026-03-21)
 
 **Phases completed:** 8 phases, 21 plans, 43 tasks

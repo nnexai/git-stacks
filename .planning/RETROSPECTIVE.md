@@ -106,6 +106,53 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.6.0 — Integration Orchestration & Niri
+
+**Shipped:** 2026-03-22
+**Phases:** 5 (Phases 16–20) | **Plans:** 6 | **Tasks:** 11
+
+### What Was Built
+
+- Typed integration artifact pipeline with IntegrationArtifact discriminated union and ArtifactBag accumulator
+- Centralized runner.ts replacing four inline integration loops with tier-based ordering
+- Real artifact values from all four integrations (tmux session name, cmux workspace ref, vscode/intellij window PID)
+- 8 typed niri IPC wrappers in src/lib/niri.ts with Zod validation and injectable test hooks
+- Niri compositor integration plugin — tier-3 (order 30), named workspace creation, PID-based window moves, user-configurable commands array
+
+### What Worked
+
+- **Infrastructure-first phasing**: Phases 16-19 built the type system, runner, artifact values, and niri wrappers before Phase 20 composed them all — zero type-level rework
+- **Pure infrastructure phase detection**: Phases 16-19 were correctly identified as infrastructure, skipping discuss and writing minimal context — significant time savings without quality loss
+- **TDD throughout**: Every phase used RED-GREEN test commits; caught the `Bun.$` vs `Bun.spawn` PID issue during Phase 18 test writing, not in production
+- **User decision integration**: The commands array approach (replacing hardcoded terminal spawn) came from smart discuss grey area questioning in Phase 20 — the right design emerged from the conversation
+
+### What Was Inefficient
+
+- **snapshotWindowIds built but unused**: Phase 19 implemented snapshot-diff window identification, but Phase 20 used simpler PID matching from ArtifactBag instead. The function is tested and available for future use but is dead code in v0.6.0
+- **niriSpawn built but unused**: Same — user's commands array decision made the niri-specific spawn wrapper unnecessary
+- **Stale IDE diagnostics**: TypeScript diagnostics fired after every executor commit but were always stale — the executor had already fixed the issues. Adds noise to the autonomous flow
+
+### Patterns Established
+
+- **Injectable `_exec` for shell wrapper testing**: Bun built-in modules can't be mocked via `mock.module`; mutable exported object is the workaround
+- **Three-tier integration ordering**: 10-19 (tier 1: independent), 20-29 (tier 2: partial deps), 30+ (tier 3: window management)
+- **ArtifactBag as Record<string, artifact | null>**: Simple key-value accumulator threaded through open() calls; downstream integrations read without mutation
+- **Bun.spawn for PID capture**: `Bun.$` blocks until exit and provides no PID; `Bun.spawn` returns immediately with `.pid`
+
+### Key Lessons
+
+1. **Build infrastructure ahead but validate demand**: snapshotWindowIds and niriSpawn were correctly designed but lacked consumers. A lighter Phase 19 scope (skip snapshot-diff, add only when Phase 20 needs it) would have been more efficient.
+2. **User decisions can simplify architecture**: The commands array approach was simpler than terminal spawn + config — listening to user intent reduced implementation complexity.
+3. **PID matching beats snapshot-diff for known windows**: When the ArtifactBag already has PIDs from prior integrations, direct PID matching via listNiriWindows is simpler and more reliable than before/after window snapshots.
+
+### Cost Observations
+
+- Model mix: sonnet for research/execution/verification, opus for planning (balanced profile)
+- Sessions: 1 session, autonomous mode for all 5 phases
+- Notable: 5 phases, 6 plans, 11 tasks — fastest milestone by task count; autonomous mode required only 2 user interactions (research approval questions + Phase 20 grey area decisions)
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -113,5 +160,6 @@ Living document — one section per shipped milestone.
 | v0.2.0 Foundation | 7 | 21 | ~7 | ~3 |
 | v0.3.0 Dashboard UI Overhaul | 4 | 13 | 2 | 2 |
 | v0.4.0 TUI Hardening & Polish | 8 | 21 | 1 | 0 |
+| v0.6.0 Integration & Niri | 5 | 6 | 1 | 0 |
 
-**Trend:** Execution speed continues to improve dramatically (1 day for 8 phases). Zero rework plans in v0.4.0 — the test infrastructure from Phase 10 caught issues during execution rather than in verification. Parallel agent execution (Phase 15.2 Wave 1) reduced wall-clock time for independent plans.
+**Trend:** Execution speed continues to improve. v0.6.0 is the leanest milestone yet — 6 plans, 11 tasks, zero rework. Autonomous mode ran all 5 phases with only 2 user interactions (grey area decisions in Phase 20). Infrastructure-first phasing eliminated type-level rework entirely. Test count grew from 375 to 438 (+63 tests) with zero regressions across the milestone.

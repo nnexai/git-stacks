@@ -4,7 +4,7 @@ milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
 stopped_at: Completed 20-niri-integration-20-01-PLAN.md
-last_updated: "2026-03-22T04:51:06.049Z"
+last_updated: "2026-03-22T04:57:35.802Z"
 progress:
   total_phases: 5
   completed_phases: 5
