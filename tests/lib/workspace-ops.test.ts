@@ -9,6 +9,7 @@ import {
   workspacePath,
   writeGlobalConfig,
   WorkspaceSchema,
+  TemplateSchema,
 } from "../../src/lib/config"
 import {
   createWorktree,
@@ -19,6 +20,7 @@ import {
   removeWorkspace,
   cleanWorkspace,
   renameWorkspace,
+  closeWorkspace,
 } from "../../src/lib/workspace-ops"
 import { GLOBAL_CONFIG_FILE } from "../../src/lib/paths"
 
@@ -620,5 +622,95 @@ describe("dry-run", () => {
     expect(existsSync(repos[0].worktreePath)).toBe(true)
 
     cleanupFixture(wsName, stackName, tmp)
+  })
+})
+
+// ============================================================================
+// describe("closeWorkspace") — CLOSE-01, CLOSE-02
+// ============================================================================
+
+describe("closeWorkspace", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-ops-close")
+    saveGlobalConfig()
+  })
+
+  afterEach(() => {
+    restoreGlobalConfig()
+  })
+
+  // Test 1: returns { ok: false, error } when workspace does not exist
+  test("returns ok:false when workspace does not exist", async () => {
+    const result = await closeWorkspace("non-existent-ws-close", {})
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/not found/)
+  })
+
+  // Test 2: returns { ok: true } for a valid workspace (preserves worktrees + YAML)
+  test("returns ok:true for a valid workspace and preserves worktrees and YAML", async () => {
+    const wsName = uniqueWsName("close-success")
+    const stackName = uniqueRegistryName()
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const result = await closeWorkspace(wsName, {})
+
+    expect(result.ok).toBe(true)
+    // Workspace YAML must still exist after close
+    expect(workspaceExists(wsName)).toBe(true)
+    // Worktree directory must still exist after close
+    expect(existsSync(repos[0].worktreePath)).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test 3: calls onProgress callback with "Closed '{name}'." message
+  test("calls onProgress with Closed message", async () => {
+    const wsName = uniqueWsName("close-progress")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const messages: string[] = []
+    const result = await closeWorkspace(wsName, {}, (msg) => messages.push(msg))
+
+    expect(result.ok).toBe(true)
+    expect(messages.some(m => m.includes(`Closed '${wsName}'.`))).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test 4: pre_close is accepted in WorkspaceHooksSchema (Zod parse succeeds)
+  test("pre_close is accepted in WorkspaceHooksSchema", () => {
+    const result = WorkspaceSchema.safeParse({
+      name: "test",
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [],
+      hooks: {
+        pre_close: ["echo closing"],
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.pre_close).toEqual(["echo closing"])
+    }
+  })
+
+  // Test 5: pre_close is accepted in TemplateSchema hooks (Zod parse succeeds)
+  test("pre_close is accepted in TemplateSchema hooks", () => {
+    const result = TemplateSchema.safeParse({
+      name: "my-template",
+      repos: [],
+      hooks: {
+        pre_close: ["echo template closing"],
+      },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.hooks?.pre_close).toEqual(["echo template closing"])
+    }
   })
 })
