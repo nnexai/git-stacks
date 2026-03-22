@@ -1,25 +1,10 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { Mock } from "bun:test"
 
-// Register @clack/prompts mock — comprehensive to match other test files.
-// Bun caches mock.module globally across test files; the first registration wins.
-// We still register our own so tests pass when run in isolation.
+// Shared mock instances used by @/tui/utils mock below
 const localConfirm = mock(async () => false as boolean | symbol)
 const localMultiselect = mock(async () => [] as string[] | symbol)
 const localIsCancel = mock((v: unknown) => typeof v === "symbol")
-
-mock.module("@clack/prompts", () => ({
-  confirm: localConfirm,
-  multiselect: localMultiselect,
-  isCancel: localIsCancel,
-  cancel: mock(() => {}),
-  intro: mock(() => {}),
-  outro: mock(() => {}),
-  log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
-  spinner: mock(() => ({ start: mock(() => {}), stop: mock(() => {}), message: mock(() => {}) })),
-  text: mock(async () => ""),
-  select: mock(async () => ""),
-}))
 
 // Mock integrations
 const mockConfigurePrompt = mock(async (current: Record<string, unknown>) => ({

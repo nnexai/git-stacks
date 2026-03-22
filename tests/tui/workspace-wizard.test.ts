@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
 
-// Mock @clack/prompts first (must be before imports)
+// Shared mock instances used by @/tui/utils mock below
 const mockIntro = mock(() => {})
 const mockOutro = mock(() => {})
 const mockLog = { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) }
@@ -16,19 +16,6 @@ const mockMultiselect = mock(async () => [] as string[] | symbol)
 const mockConfirm = mock(async () => false as boolean | symbol)
 const mockIsCancel = mock((v: unknown) => typeof v === "symbol")
 const mockCancel = mock(() => {})
-
-mock.module("@clack/prompts", () => ({
-  intro: mockIntro,
-  outro: mockOutro,
-  log: mockLog,
-  spinner: mockSpinner,
-  text: mockText,
-  select: mockSelect,
-  multiselect: mockMultiselect,
-  confirm: mockConfirm,
-  isCancel: mockIsCancel,
-  cancel: mockCancel,
-}))
 
 // Mock tui/utils
 const mockSafeText = mock(async () => "mock-value")

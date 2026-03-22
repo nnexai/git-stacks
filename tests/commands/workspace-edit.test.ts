@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
 
-// Mock @clack/prompts (comprehensive — must include all properties used by workspace-wizard.ts)
+// Shared mock instances used by @/tui/utils mock below
 const mockIntro = mock(() => {})
 const mockOutro = mock(() => {})
 const mockLog = { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) }
@@ -17,19 +17,6 @@ const mockText = mock(async () => "new description")
 const mockConfirm = mock(async () => false as boolean | symbol)
 const mockSafeText = mock(async () => "new description")
 const mockCancelUtil = mock((): never => { throw new Error("cancelled") })
-
-mock.module("@clack/prompts", () => ({
-  intro: mockIntro,
-  outro: mockOutro,
-  log: mockLog,
-  spinner: mockSpinner,
-  select: mockSelect,
-  multiselect: mockMultiselect,
-  isCancel: mockIsCancel,
-  text: mockText,
-  confirm: mockConfirm,
-  cancel: mock(() => {}),
-}))
 
 mock.module("@/tui/utils", () => ({
   safeText: mockSafeText,

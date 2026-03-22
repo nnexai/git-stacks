@@ -34,21 +34,7 @@ mock.module("@/lib/niri", () => ({
   _exec: { run: mock(async () => ({ exitCode: 0, stdout: "" })) },
 }))
 
-// Mock @clack/prompts
-mock.module("@clack/prompts", () => ({
-  spinner: () => ({ start: () => {}, stop: () => {} }),
-  log: { info: () => {}, success: () => {}, warn: () => {}, error: () => {} },
-  intro: mock(() => {}),
-  outro: mock(() => {}),
-  text: mock(async () => ""),
-  select: mock(async () => ""),
-  multiselect: mock(async () => []),
-  confirm: mock(async () => false),
-  isCancel: mock(() => false),
-  cancel: mock(() => {}),
-  group: mock(async () => ({})),
-  note: mock(() => {}),
-}))
+// No @/tui/utils mock needed — tests only exercise command structure, not prompt paths
 
 // Mock lifecycle
 mock.module("@/lib/lifecycle", () => ({
