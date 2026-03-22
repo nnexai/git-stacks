@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T15:29:06.135Z"
+last_updated: "2026-03-22T16:12:56.786Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
   completed_phases: 7
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 16
+  completed_plans: 13
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 26 — autocompletion-editor-polish
+**Current focus:** Phase 27 — git-forge-integrations
 
 ## Current Position
 
-Phase: 27
-Plan: Not started
+Phase: 27 (git-forge-integrations) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Plan: Not started
 | Phase 26-autocompletion-editor-polish P01 | 3min | 1 tasks | 2 files |
 | Phase 26-autocompletion-editor-polish P02 | 2min | 2 tasks | 6 files |
 | Phase 26-autocompletion-editor-polish P03 | 4min | 2 tasks | 3 files |
+| Phase 27-git-forge-integrations P01 | 2min | 2 tasks | 4 files |
 
 ### Decisions
 
@@ -90,6 +91,8 @@ Plan: Not started
 - [Phase 26-autocompletion-editor-polish]: deleteFolder opt in _executeClean as last step after post_clean hooks — worktrees deregistered before folder deleted
 - [Phase 26-autocompletion-editor-polish]: removeWorkspace --force malformed YAML fallback: readGlobalConfig safe, name-based rmSync, no hook execution
 - [Phase 26-autocompletion-editor-polish]: CLI clean: folder deletion in command layer after cleanWorkspace returns — cleaner separation, second p.confirm prompt
+- [Phase 27-01]: resolveForgeRepo validates registry forge field against expected forge before returning success (FORGE-11 / D-14)
+- [Phase 27-01]: ForgeTypeSchema as z.enum(['github','gitlab','gitea']).optional() — omission is valid for repos not using forge integrations (backward compat FORGE-02)
 
 ### Pending Todos
 
@@ -115,7 +118,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T15:24:30.916Z
+Last session: 2026-03-22T16:12:56.784Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21

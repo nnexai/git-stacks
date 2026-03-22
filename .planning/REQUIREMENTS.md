@@ -59,9 +59,9 @@
 
 ### Git Forge Integrations
 
-- [ ] **FORGE-01**: `RepoRegistryEntrySchema` accepts optional `forge` field with values `"github" | "gitlab" | "gitea"` (per D-01)
-- [ ] **FORGE-02**: Existing registry YAML files without `forge` field continue to parse without error (backward compatible)
-- [ ] **FORGE-03**: `resolveForgeRepo(workspaceName, repoArg)` resolves workspace+repo context: auto-selects when exactly one worktree repo, errors when multiple and no arg (per D-10)
+- [x] **FORGE-01**: `RepoRegistryEntrySchema` accepts optional `forge` field with values `"github" | "gitlab" | "gitea"` (per D-01)
+- [x] **FORGE-02**: Existing registry YAML files without `forge` field continue to parse without error (backward compatible)
+- [x] **FORGE-03**: `resolveForgeRepo(workspaceName, repoArg)` resolves workspace+repo context: auto-selects when exactly one worktree repo, errors when multiple and no arg (per D-10)
 - [ ] **FORGE-04**: GitHub integration plugin implements `Integration` interface with `commands()` registering `pr create`, `pr open`, `pr status` (per D-06, D-09)
 - [ ] **FORGE-05**: GitLab integration plugin translates `pr` to `mr` terminology when calling glab CLI (per D-11)
 - [ ] **FORGE-06**: Gitea integration plugin handles `pr open` by parsing `tea pulls ls --output json` for URL extraction (tea lacks --web)
@@ -69,7 +69,7 @@
 - [ ] **FORGE-08**: Each forge plugin exports its own `_exec` object for injectable shell commands (per D-08)
 - [ ] **FORGE-09**: `pr create` passes base branch via `--base` (gh), `--target-branch` (glab), `--base` (tea) from workspace repo's `base_branch` or registry `default_branch` (per D-12)
 - [ ] **FORGE-10**: Forge detection at `repo add` and `repo scan` checks remote URL and CLI availability, suggests forge when exactly one detected, prompts when ambiguous (per D-04, D-05)
-- [ ] **FORGE-11**: Missing forge CLI or no forge configured on repo produces clear error message (per D-14)
+- [x] **FORGE-11**: Missing forge CLI or no forge configured on repo produces clear error message (per D-14)
 - [ ] **FORGE-12**: All three forge integrations registered in `src/lib/integrations/index.ts`
 - [ ] **FORGE-13**: `git-stacks doctor` checks availability of `gh`, `glab`, `tea` binaries
 
