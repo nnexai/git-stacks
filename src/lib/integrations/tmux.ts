@@ -1,7 +1,8 @@
 import * as p from "@clack/prompts"
 import { z } from "zod"
 import { join } from "path"
-import { openTmuxSession, addTmuxPane, sendToTmuxPane, getTmuxMainPane, focusTmuxPane, killTmuxSession, tmuxSessionExists } from "../tmux"
+import type { Command } from "commander"
+import { openTmuxSession, addTmuxPane, sendToTmuxPane, getTmuxMainPane, focusTmuxPane, killTmuxSession, tmuxSessionExists, focusTmuxSession } from "../tmux"
 import { resolveEnabled, type Integration, type IntegrationContext, type TmuxArtifact } from "./types"
 
 const surfaceSchema = z.object({
@@ -56,6 +57,19 @@ export const tmuxIntegration: Integration = {
     if (await tmuxSessionExists(ctx.workspace.name)) {
       await killTmuxSession(ctx.workspace.name)
     }
+  },
+
+  commands(parent: Command): void {
+    parent
+      .command("attach [workspace]")
+      .description("Attach to a workspace's tmux session")
+      .action(async (workspace?: string) => {
+        if (!workspace) {
+          console.error("Usage: git-stacks integration tmux attach <workspace>")
+          process.exit(1)
+        }
+        await focusTmuxSession(workspace)
+      })
   },
 }
 

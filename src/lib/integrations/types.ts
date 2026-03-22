@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { Command } from "commander"
 import type { Workspace, GlobalConfig } from "../config"
 
 export type TmuxArtifact = {
@@ -69,6 +70,9 @@ export interface Integration {
 
   /** Clean up integration resources (e.g., unname niri workspace). Called on workspace clean/remove. */
   cleanup?(ctx: IntegrationContext): Promise<void>
+
+  /** Register helper subcommands under `git-stacks integration <id>`. */
+  commands?(parent: Command): void
 }
 
 const enabledSchema = z.object({ enabled: z.boolean() })

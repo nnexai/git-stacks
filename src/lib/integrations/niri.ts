@@ -1,5 +1,6 @@
 import { z } from "zod"
 import * as p from "@clack/prompts"
+import type { Command } from "commander"
 import {
   resolveEnabled,
   type Integration,
@@ -102,5 +103,18 @@ export const niriIntegration: Integration = {
   async configurePrompt(_current: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     // No interactive prompts for commands array in v0.6.0
     return { enabled: true }
+  },
+
+  commands(parent: Command): void {
+    parent
+      .command("focus-workspace [workspace]")
+      .description("Focus a workspace's niri workspace")
+      .action(async (workspace?: string) => {
+        if (!workspace) {
+          console.error("Usage: git-stacks integration niri focus-workspace <workspace>")
+          process.exit(1)
+        }
+        await focusNiriWorkspace(workspace)
+      })
   },
 }
