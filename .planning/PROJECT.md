@@ -10,8 +10,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Current State — v0.7.0 in progress (2026-03-22)
 
-### What shipped in v0.7.0 (all phases complete)
+### What shipped in v0.7.0 (in progress)
 
+- **Dedicated lifecycle phases** — close, clean, remove, and merge each have dedicated pre/post hook pairs; lifecycle cascade (remove → clean → close) ensures consistent teardown ordering; `WS_TRIGGERED_BY` env var tells hooks which top-level operation initiated the cascade; per-repo `pre_clean` hook runs before each individual worktree removal; `mergeWorkspace` follows full D-10 lifecycle order via cascade composition
 - **Workspace close command** — `git-stacks close <name>` tears down integration sessions (tmux kill, niri unname) and runs `pre_close` hooks without deleting worktrees or workspace YAML; workspace remains fully re-openable via `git-stacks open`; TUI dashboard action menu includes Close with `x` shortcut
 - **Niri display fix** — TUI detail panes render niri columns config as human-readable "N col(s)" instead of `[object Object]`; shared `formatConfigValue` helper handles all non-primitive config values
 - **Test environment isolation** — `useIsolatedConfig` shared helper in `tests/helpers.ts` redirects all config I/O to temp directories; all mock.module calls export complete module interfaces to prevent cross-test contamination; 513 tests pass with 0 failures
@@ -55,7 +56,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Workspaces** (`~/.config/git-stacks/workspaces/{name}.yml`) — task-scoped instances; self-contained snapshots at creation time
 - **Messages** (`~/.config/git-stacks/messages/{workspace}.jsonl`) — workspace-scoped notification store; IPC-delivered to running TUI via `/tmp/git-stacks.sock`
 - **Integrations** — VSCode, IntelliJ, tmux, cmux plugin system; extensible via `src/lib/integrations/`
-- **Hooks** — `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove` at template and workspace levels; hooks receive `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`
+- **Hooks** — full lifecycle hook pairs (`pre_close`/`post_close`, `pre_clean`/`post_clean`, `pre_merge`/`post_merge`, `pre_remove`/`post_remove`, plus `pre_create`/`post_create`, `pre_open`/`post_open`) at template and workspace levels; per-repo `pre_open` and `pre_clean`; cascade design (remove → clean → close); hooks receive `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, `WS_TRIGGERED_BY`
 
 ## Requirements
 
@@ -101,9 +102,10 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-- [ ] Workspace close command — lightweight teardown (tmux, niri) without deleting workspace/worktrees
-- [ ] Fix niri columns display in TUI details pane — `[object Object]` rendering bug
-- [ ] Audit and isolate test environments from user config — ensure all tests use isolated temp dirs
+- [x] Workspace close command — lightweight teardown (tmux, niri) without deleting workspace/worktrees — v0.7.0 Phase 21
+- [x] Fix niri columns display in TUI details pane — `[object Object]` rendering bug — v0.7.0 Phase 22
+- [x] Audit and isolate test environments from user config — ensure all tests use isolated temp dirs — v0.7.0 Phase 23
+- [x] Dedicated lifecycle phases — close/clean/remove/merge with pre/post hooks and cascade — v0.7.0 Phase 25
 
 ### Out of Scope
 
