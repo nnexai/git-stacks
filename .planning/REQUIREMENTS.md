@@ -78,13 +78,13 @@
 - [x] **ISSUE-01**: `resolveIssueRef(workspaceName, trackerId)` reads `workspace.settings.integrations.<id>.issue` and returns issue ID string or typed error (per D-02)
 - [x] **ISSUE-02**: `linkIssue(workspaceName, trackerId, issueId)` stores issue ID as string under `workspace.settings.integrations.<id>.issue`, preserving other config fields (per D-02, Pitfall 3)
 - [x] **ISSUE-03**: `unlinkIssue(workspaceName, trackerId)` removes only the `issue` key from tracker config, preserving other fields like `enabled` (per Pitfall 3)
-- [ ] **ISSUE-04**: GitHub integration gains `issue link`, `issue unlink`, `issue open` subcommands using `gh issue view` (per D-01, D-03, D-07)
-- [ ] **ISSUE-05**: GitLab integration gains `issue link`, `issue unlink`, `issue open` subcommands using `glab issue view` (per D-01, D-03, D-07)
-- [ ] **ISSUE-06**: Gitea integration gains `issue link`, `issue unlink`, `issue open` subcommands with `tea issues ls` JSON URL extraction (per D-01, D-03, D-07)
-- [ ] **ISSUE-07**: Jira standalone integration plugin with `issue link`, `issue unlink`, `issue open` commands (per D-01, D-05)
-- [ ] **ISSUE-08**: Jira `issue open` uses configurable command template with `$ISSUE_ID` env var via `sh -c` for shell injection safety (per D-06, Pitfall 5)
-- [ ] **ISSUE-09**: Jira integration registered in `src/lib/integrations/index.ts`
-- [ ] **ISSUE-10**: `git-stacks doctor` checks availability of `jira` binary
+- [x] **ISSUE-04**: GitHub integration gains `issue link`, `issue unlink`, `issue open` subcommands using `gh issue view` (per D-01, D-03, D-07)
+- [x] **ISSUE-05**: GitLab integration gains `issue link`, `issue unlink`, `issue open` subcommands using `glab issue view` (per D-01, D-03, D-07)
+- [x] **ISSUE-06**: Gitea integration gains `issue link`, `issue unlink`, `issue open` subcommands with `tea issues ls` JSON URL extraction (per D-01, D-03, D-07)
+- [x] **ISSUE-07**: Jira standalone integration plugin with `issue link`, `issue unlink`, `issue open` commands (per D-01, D-05)
+- [x] **ISSUE-08**: Jira `issue open` uses configurable command template with `$ISSUE_ID` env var via `sh -c` for shell injection safety (per D-06, Pitfall 5)
+- [x] **ISSUE-09**: Jira integration registered in `src/lib/integrations/index.ts`
+- [x] **ISSUE-10**: `git-stacks doctor` checks availability of `jira` binary
 
 ## Future Requirements
 

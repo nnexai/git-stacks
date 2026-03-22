@@ -4,7 +4,7 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
-## [Unreleased]
+## [0.7.0] — 2026-03-22
 
 ### Breaking Changes
 
@@ -20,6 +20,8 @@ All notable changes to `git-stacks` are documented here.
 - `GS_TRIGGERED_BY` now injected into ALL lifecycle operations including `open` and `create` (previously only close/clean/remove/merge)
 
 ### Added
+
+**`git-stacks close <name>`** — gracefully close a workspace's integration sessions (IDE windows, terminal multiplexers) without removing worktrees or config. Fires `pre_close` / `post_close` hooks. Available in CLI and TUI dashboard.
 
 **Forge integrations (GitHub, GitLab, Gitea)** — create, view, and check status of PRs/MRs via forge CLIs:
 - `git-stacks integration github pr create <workspace> [repo]` — create GitHub PR via `gh` CLI with correct base branch
@@ -77,6 +79,10 @@ All notable changes to `git-stacks` are documented here.
 - `cleanWorkspace` and `removeWorkspace` compose through inner `_executeClose` / `_executeClean` functions
 - TUI dashboard passes `captured: true` for all lifecycle dispatches (close, clean, remove, merge) — prevents hook stdout from corrupting the OpenTUI screen
 - `--gone` cleanup path in `git-stacks clean` now delegates to `removeWorkspace()` for full lifecycle coverage
+
+### Fixed
+
+- Niri column layout values now display correctly in TUI detail panes (previously showed `[object Object]`)
 
 ### Removed
 
