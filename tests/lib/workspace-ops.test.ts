@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, afterAll, mock } from "bun:test"
 import { join } from "path"
 import { existsSync, mkdirSync, writeFileSync, rmSync, unlinkSync } from "fs"
 import { execSync } from "child_process"
@@ -11,6 +11,13 @@ import {
 // Set up isolated config dir once for this file — all tests in this file share it.
 // Dynamic imports below use cache-busting query strings so they pick up the mock.
 const isolated = useIsolatedConfig("ws-ops")
+
+// Restore @/lib/lifecycle to the real implementation (cache-busted) so that
+// workspace-ops hook execution tests use actual shell commands, not stubs left
+// by other test files that call mock.module("@/lib/lifecycle", ...).
+// @ts-ignore — cache-busting avoids contamination from consumer test mocks
+const realLifecycle = await import("@/lib/lifecycle?ws-ops-lifecycle-real")
+mock.module("@/lib/lifecycle", () => realLifecycle)
 
 // Dynamic imports with cache-busting so they resolve against the isolated mock.
 const {
@@ -48,7 +55,7 @@ const {
   removeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   cleanWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   renameWorkspace: (name: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  closeWorkspace: (name: string, opts: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  closeWorkspace: (name: string, opts: { captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
 // @ts-ignore — cache-busting for isolated paths mock
 } = await import("@/lib/workspace-ops?ws-ops-test")
 
@@ -674,6 +681,73 @@ describe("closeWorkspace", () => {
 
     expect(result.ok).toBe(true)
     expect(messages.some(m => m.includes(`Closed '${wsName}'.`))).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: closeWorkspace fires post_close hook
+  test("closeWorkspace fires post_close hook", async () => {
+    const wsName = uniqueWsName("close-post-close")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Patch workspace YAML to add post_close hook
+    const ws = readWorkspace(wsName)
+    ws.hooks = { post_close: ["echo post_close_ran"] }
+    writeWorkspace(ws)
+
+    const result = await closeWorkspace(wsName, {})
+    expect(result.ok).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: closeWorkspace fires pre_close then post_close in order
+  test("closeWorkspace fires pre_close then post_close in order", async () => {
+    const wsName = uniqueWsName("close-hook-order")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Patch workspace YAML to add ordered hooks using captured output
+    const ws = readWorkspace(wsName)
+    ws.hooks = {
+      pre_close: ["echo PRE_CLOSE"],
+      post_close: ["echo POST_CLOSE"],
+    }
+    writeWorkspace(ws)
+
+    // Use captured mode so hook output is delivered via onProgress callback
+    const captured: string[] = []
+    const result = await closeWorkspace(wsName, { captured: true }, (msg) => captured.push(msg))
+    expect(result.ok).toBe(true)
+
+    // Hook output arrives via captured lines — order verified
+    const preIdx = captured.findIndex(l => l.includes("PRE_CLOSE"))
+    const postIdx = captured.findIndex(l => l.includes("POST_CLOSE"))
+    expect(preIdx).toBeGreaterThanOrEqual(0)
+    expect(postIdx).toBeGreaterThanOrEqual(0)
+    expect(preIdx).toBeLessThan(postIdx)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: closeWorkspace sets WS_TRIGGERED_BY=close
+  test("closeWorkspace sets WS_TRIGGERED_BY=close", async () => {
+    const wsName = uniqueWsName("close-triggered-by")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Patch workspace YAML: hook exits 0 only when WS_TRIGGERED_BY=close
+    const ws = readWorkspace(wsName)
+    ws.hooks = { pre_close: ['test "$WS_TRIGGERED_BY" = "close"'] }
+    writeWorkspace(ws)
+
+    const result = await closeWorkspace(wsName, {})
+    // Hook exits 0 iff env var is set correctly — if WS_TRIGGERED_BY is wrong, hook fails
+    expect(result.ok).toBe(true)
 
     cleanupFixture(wsName, stackName, tmp)
   })

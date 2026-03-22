@@ -9,6 +9,7 @@ import {
   readGlobalConfig,
   WorkspaceSchema,
   type Workspace,
+  type GlobalConfig,
 } from "./config"
 import { getTasksDir } from "./paths"
 import {
@@ -97,6 +98,20 @@ export function mergeEnv(workspace: Workspace): Record<string, string> {
   const merged: Record<string, string> = {}
   if (workspace.env) Object.assign(merged, workspace.env)
   return merged
+}
+
+export function buildBaseEnv(
+  workspace: Workspace,
+  tasksDir: string,
+  triggeredBy: string
+): Record<string, string> {
+  return {
+    WS_WORKSPACE: workspace.name,
+    WS_BRANCH: workspace.branch,
+    WS_TASKS_DIR: tasksDir,
+    WS_TRIGGERED_BY: triggeredBy,
+    ...mergeEnv(workspace),
+  }
 }
 
 export function writeEnvFiles(
@@ -267,37 +282,25 @@ export async function cleanWorkspace(
   return { ok: true }
 }
 
-export async function closeWorkspace(
-  name: string,
-  opts: { captured?: boolean },
+async function _executeClose(
+  workspace: Workspace,
+  config: GlobalConfig,
+  tasksDir: string,
+  opts: { captured?: boolean; triggeredBy: string },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!workspaceExists(name)) {
-    return { ok: false, error: `Workspace '${name}' not found.` }
-  }
-
-  const config = readGlobalConfig()
-  const tasksDir = getTasksDir(config.workspace_root)
-  const workspace = readWorkspace(name)
-
-  const baseEnv = {
-    WS_WORKSPACE: workspace.name,
-    WS_BRANCH: workspace.branch,
-    WS_TASKS_DIR: tasksDir,
-  }
-  const mergedEnvVars = mergeEnv(workspace)
-  const enrichedBaseEnv = { ...baseEnv, ...mergedEnvVars }
+  const env = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
+  const wsDir = join(tasksDir, workspace.name)
+  const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
 
   // Run pre_close hooks if present
   if (workspace.hooks?.pre_close?.length) {
-    const wsDir = join(tasksDir, workspace.name)
-    const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
     try {
       if (opts.captured) {
-        await runHooksCaptured(workspace.hooks.pre_close, hookCwd, enrichedBaseEnv,
+        await runHooksCaptured(workspace.hooks.pre_close, hookCwd, env,
           (output) => onProgress?.(output.line))
       } else {
-        await runHooks(workspace.hooks.pre_close, hookCwd, enrichedBaseEnv)
+        await runHooks(workspace.hooks.pre_close, hookCwd, env)
       }
     } catch (err) {
       return { ok: false, error: `pre_close hook failed (${err})` }
@@ -308,8 +311,36 @@ export async function closeWorkspace(
   const ctx: IntegrationContext = { workspace, tasksDir, config }
   await runIntegrationCleanup(ctx)
 
-  onProgress?.(`Closed '${name}'.`)
+  // Run post_close hooks if present
+  if (workspace.hooks?.post_close?.length) {
+    try {
+      if (opts.captured) {
+        await runHooksCaptured(workspace.hooks.post_close, hookCwd, env,
+          (output) => onProgress?.(output.line))
+      } else {
+        await runHooks(workspace.hooks.post_close, hookCwd, env)
+      }
+    } catch (err) {
+      return { ok: false, error: `post_close hook failed (${err})` }
+    }
+  }
+
+  onProgress?.(`Closed '${workspace.name}'.`)
   return { ok: true }
+}
+
+export async function closeWorkspace(
+  name: string,
+  opts: { captured?: boolean },
+  onProgress?: ProgressCallback
+): Promise<{ ok: boolean; error?: string }> {
+  if (!workspaceExists(name)) {
+    return { ok: false, error: `Workspace '${name}' not found.` }
+  }
+  const config = readGlobalConfig()
+  const tasksDir = getTasksDir(config.workspace_root)
+  const workspace = readWorkspace(name)
+  return _executeClose(workspace, config, tasksDir, { captured: opts.captured, triggeredBy: "close" }, onProgress)
 }
 
 export async function removeWorkspace(
