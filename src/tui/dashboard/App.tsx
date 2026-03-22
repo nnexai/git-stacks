@@ -249,7 +249,7 @@ export default function App() {
       setProgressLines([])
       setProgressDone(false)
       setView({ view: "progress", message: `Opening ${name}...` })
-      const result = await openWorkspace(name, {}, (msg) =>
+      const result = await openWorkspace(name, { captured: true }, (msg) =>
         setProgressLines((prev) => [...prev, msg])
       )
       if (!result.ok) setProgressLines((prev) => [...prev, `ERROR: ${result.error}`])

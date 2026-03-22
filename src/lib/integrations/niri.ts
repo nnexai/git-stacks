@@ -105,8 +105,8 @@ export const niriIntegration: Integration = {
     // NIRI-08: Silent gate — return null immediately if niri is not running
     if (!(await isNiriRunning())) return null
 
-    const spinner = p.spinner()
-    spinner.start("Setting up niri workspace")
+    const spinner = ctx.silent ? null : p.spinner()
+    spinner?.start("Setting up niri workspace")
 
     try {
       // Step 1: Create or reuse named workspace (NIRI-01, NIRI-04)
@@ -145,7 +145,7 @@ export const niriIntegration: Integration = {
           try {
             await moveWindowToWorkspace(windowId, workspaceName)
           } catch (err) {
-            p.log.warn(`niri: failed to move window ${windowId}: ${String(err)}`)
+            if (!ctx.silent) p.log.warn(`niri: failed to move window ${windowId}: ${String(err)}`)
             // Continue — partial failure is acceptable
           }
         }
@@ -187,7 +187,7 @@ export const niriIntegration: Integration = {
                   windowId = sourceIds[0]
                   columnWindowIds.push(windowId)
                 } else {
-                  p.log.warn(`niri: source "${window.source}" not found in bag or has no window IDs`)
+                  if (!ctx.silent) p.log.warn(`niri: source "${window.source}" not found in bag or has no window IDs`)
                 }
               } else if (window.app !== undefined) {
                 // Direct spawn via niriSpawn (no shell)
@@ -220,7 +220,7 @@ export const niriIntegration: Integration = {
                 if (newIds.length > 0) windowId = newIds[0]
                 columnWindowIds.push(...newIds)
               } else {
-                p.log.warn("niri: window config has none of source/app/command — skipping")
+                if (!ctx.silent) p.log.warn("niri: window config has none of source/app/command — skipping")
               }
 
               // Track window-level focus
@@ -228,7 +228,7 @@ export const niriIntegration: Integration = {
                 focusWindowId = windowId
               }
             } catch (err) {
-              p.log.warn(`niri: failed to place window: ${String(err)}`)
+              if (!ctx.silent) p.log.warn(`niri: failed to place window: ${String(err)}`)
               // Continue — partial failure acceptable
             }
           }
@@ -251,7 +251,7 @@ export const niriIntegration: Integration = {
               await focusNiriWindow(firstWindowId)
               await moveColumnToIndex(ci + 1) // 1-based index
             } catch (err) {
-              p.log.warn(`niri: failed to reorder column ${ci}: ${String(err)}`)
+              if (!ctx.silent) p.log.warn(`niri: failed to reorder column ${ci}: ${String(err)}`)
             }
           }
 
@@ -263,7 +263,7 @@ export const niriIntegration: Integration = {
               try {
                 await consumeOrExpelWindowLeft(windowIds[i])
               } catch (err) {
-                p.log.warn(`niri: failed to stack window ${windowIds[i]}: ${String(err)}`)
+                if (!ctx.silent) p.log.warn(`niri: failed to stack window ${windowIds[i]}: ${String(err)}`)
               }
             }
           }
@@ -277,7 +277,7 @@ export const niriIntegration: Integration = {
             try {
               await setWindowWidth(windowIds[0], column.width)
             } catch (err) {
-              p.log.warn(`niri: failed to set column width: ${String(err)}`)
+              if (!ctx.silent) p.log.warn(`niri: failed to set column width: ${String(err)}`)
             }
           }
         }
@@ -294,10 +294,10 @@ export const niriIntegration: Integration = {
         try { await focusNiriWorkspace(currentlyFocused.name) } catch { /* best effort */ }
       }
 
-      spinner.stop("niri workspace ready")
+      spinner?.stop("niri workspace ready")
     } catch (err) {
-      spinner.stop("niri unavailable -- skipped")
-      p.log.warn(`niri: ${String(err)}`)
+      spinner?.stop("niri unavailable -- skipped")
+      if (!ctx.silent) p.log.warn(`niri: ${String(err)}`)
     }
 
     // Tier-3 integrations are consumers, not producers — always return null

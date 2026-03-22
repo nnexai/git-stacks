@@ -32,18 +32,18 @@ export const tmuxIntegration: Integration = {
   isEnabled: (ctx) => resolveEnabled("tmux", false, ctx),
 
   async open(ctx, _artifactPath, _bag): Promise<TmuxArtifact | null> {
-    const spinner = p.spinner()
-    spinner.start("Setting up tmux session")
+    const spinner = ctx.silent ? null : p.spinner()
+    spinner?.start("Setting up tmux session")
     try {
       const { created } = await openTmuxSession(ctx.workspace.name, ctx.tasksDir)
       if (created) {
         await applyPaneLayout(ctx)
       }
-      spinner.stop(`tmux session ready: ${ctx.workspace.name}`)
+      spinner?.stop(`tmux session ready: ${ctx.workspace.name}`)
       return { kind: "tmux", sessionName: ctx.workspace.name }
     } catch (err) {
-      spinner.stop("tmux unavailable — skipped")
-      p.log.warn(`tmux: ${String(err)}`)
+      spinner?.stop("tmux unavailable — skipped")
+      if (!ctx.silent) p.log.warn(`tmux: ${String(err)}`)
       return null
     }
   },

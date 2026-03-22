@@ -33,8 +33,8 @@ export const cmuxIntegration: Integration = {
   isEnabled: (ctx) => resolveEnabled("cmux", true, ctx),
 
   async open(ctx, _artifactPath, _bag): Promise<CmuxArtifact | null> {
-    const spinner = p.spinner()
-    spinner.start("Setting up cmux workspace")
+    const spinner = ctx.silent ? null : p.spinner()
+    spinner?.start("Setting up cmux workspace")
     try {
       const { ref, created } = await openCmuxWorkspace(
         ctx.workspace.name,
@@ -52,11 +52,11 @@ export const cmuxIntegration: Integration = {
         await applyPaneLayout(ref, ctx)
       }
 
-      spinner.stop("cmux workspace ready")
+      spinner?.stop("cmux workspace ready")
       return { kind: "cmux", workspaceRef: ref }
     } catch (err) {
-      spinner.stop("cmux unavailable — skipped")
-      p.log.warn(`cmux: ${String(err)}`)
+      spinner?.stop("cmux unavailable — skipped")
+      if (!ctx.silent) p.log.warn(`cmux: ${String(err)}`)
       return null
     }
   },
