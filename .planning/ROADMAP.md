@@ -119,7 +119,7 @@ Plans:
 | 21. Workspace Close Command | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 22. Niri Display Fix | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
-| 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete   | 2026-03-22 |
+| 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 0/? | Not started | - |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 0/? | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
