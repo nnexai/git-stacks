@@ -4,7 +4,7 @@ milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
 stopped_at: Completed 24.1-01-PLAN.md — eliminate dead @clack/prompts mocks from 7 test files
-last_updated: "2026-03-22T13:57:12.988Z"
+last_updated: "2026-03-22T14:01:23.746Z"
 progress:
   total_phases: 8
   completed_phases: 5
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 24.1 (test-mock-hygiene) — EXECUTING
-Plan: 1 of 1
+Phase: 25
+Plan: Not started
 
 ## Performance Metrics
 
