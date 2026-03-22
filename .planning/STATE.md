@@ -76,6 +76,8 @@ Plan: Not started
 - [Phase 20]: Niri integration returns null always (tier-3 consumer, not producer) — no NiriArtifact type needed
 - [Phase 20]: NIRI-05 cleanup on remove intentionally unimplemented per user decision — no remove/cleanup method
 - [Phase 20]: Window move failures logged as warnings and continue — partial failure acceptable for niri integration
+- [Quick 260322-9bm]: tmux open() no longer calls focusTmuxSession() — session is created in background, user explicitly attaches via "git-stacks integration tmux attach"
+- [Quick 260322-9bm]: Integration.commands?(parent: Command) optional method enables per-integration CLI helpers without requiring all integrations to implement it
 
 ### Pending Todos
 
@@ -94,10 +96,11 @@ None.
 | 260321-tdv | Add snapshot tests for 7 untested TUI dashboard components (16 tests, 7 files) | 2026-03-21 | 13a4ba0 | Verified | [260321-tdv-tui-snapshot-tests-for-intentional-visua](./quick/260321-tdv-tui-snapshot-tests-for-intentional-visua/) |
 | 260321-u1l | Add git-stacks install --hooks command with Claude Code agent hook plugin system | 2026-03-21 | 3cc797a | Verified | [260321-u1l-git-stacks-install-hooks-agent-framework](./quick/260321-u1l-git-stacks-install-hooks-agent-framework/) |
 | 260322-8sf | Fix niri integration: use snapshotWindowIds, correct workspace creation, add cleanup | 2026-03-22 | 4d5830d | Verified | [260322-8sf-fix-niri-integration-use-snapshotwindowi](./quick/260322-8sf-fix-niri-integration-use-snapshotwindowi/) |
+| 260322-9bm | tmux open() defocus, cleanup(), integration helper commands (tmux attach, niri focus-workspace) | 2026-03-22 | 285802d | Verified | [260322-9bm-tmux-integration-remove-focus-on-open-ad](./quick/260322-9bm-tmux-integration-remove-focus-on-open-ad/) |
 
 ## Session Continuity
 
-Last session: 2026-03-22T05:26:28.000Z
-Stopped at: Completed quick task 260322-8sf (niri integration bug fixes)
+Last session: 2026-03-22T05:42:00.000Z
+Stopped at: Completed quick task 260322-9bm (tmux defocus + integration commands)
 Resume file: None
 Next action: `/gsd:plan-phase 16`
