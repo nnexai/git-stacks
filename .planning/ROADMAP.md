@@ -124,7 +124,7 @@ Plans:
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
-| 27. Git Forge Integrations | v0.7.0 | 0/3 | Not started | - |
+| 27. Git Forge Integrations | v0.7.0 | 0/4 | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
 
@@ -200,12 +200,13 @@ Plans:
   5. `pr open --web` opens browser; `pr open` prints URL to stdout
   6. Forge detection at `repo add`/`repo scan` suggests forge from remote URL and CLI availability
   7. `git-stacks doctor` checks availability of `gh`, `glab`, `tea`
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] 27-01-PLAN.md — Schema: ForgeTypeSchema + forge field on RepoRegistryEntrySchema; forge-utils.ts with resolveForgeRepo
+- [ ] 27-01-PLAN.md — Schema: ForgeTypeSchema + forge field on RepoRegistryEntrySchema; forge-utils.ts with resolveForgeRepo (with forge validation per D-14)
 - [ ] 27-02-PLAN.md — Three forge integration plugins (github, gitlab, gitea) + registration + unit tests
 - [ ] 27-03-PLAN.md — Forge detection in repo add/scan + doctor binary checks
+- [ ] 27-04-PLAN.md — CHANGELOG and README documentation for forge integration features
 
 ### Phase 28: Issue & Task Tracking Integration
 
