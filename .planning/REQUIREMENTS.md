@@ -28,15 +28,15 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 
 ### Niri
 
-- [ ] **NIRI-01**: Niri integration creates/reuses a named niri workspace per git-stacks workspace via `set-workspace-name`
-- [ ] **NIRI-02**: Niri integration moves windows from prior integrations to the named workspace using artifact bag window info
-- [ ] **NIRI-03**: Niri integration spawns a terminal on the niri workspace attached to tmux session (reads tmux session name from artifact bag)
-- [ ] **NIRI-04**: Niri integration is idempotent on re-open: checks if named workspace exists with expected windows before recreating
-- [ ] **NIRI-05**: Niri integration cleans up (unnames workspace) when git-stacks workspace is removed
+- [x] **NIRI-01**: Niri integration creates/reuses a named niri workspace per git-stacks workspace via `set-workspace-name`
+- [x] **NIRI-02**: Niri integration moves windows from prior integrations to the named workspace using artifact bag window info
+- [x] **NIRI-03**: Niri integration spawns a terminal on the niri workspace attached to tmux session (reads tmux session name from artifact bag)
+- [x] **NIRI-04**: Niri integration is idempotent on re-open: checks if named workspace exists with expected windows before recreating
+- [x] **NIRI-05**: Niri integration cleans up (unnames workspace) when git-stacks workspace is removed
 - [x] **NIRI-06**: Window identification uses snapshot-diff of `niri msg -j windows` (before/after spawn) for spawned windows
 - [x] **NIRI-07**: Window identification uses PID matching from artifact bag for windows spawned by other integrations
-- [ ] **NIRI-08**: Niri integration is gated by `NIRI_SOCKET` env var presence (skips gracefully when niri is not running)
-- [ ] **NIRI-09**: Terminal emulator is configurable (e.g., `terminal: "ghostty"`) with sensible default
+- [x] **NIRI-08**: Niri integration is gated by `NIRI_SOCKET` env var presence (skips gracefully when niri is not running)
+- [x] **NIRI-09**: Terminal emulator is configurable (e.g., `terminal: "ghostty"`) with sensible default
 - [x] **NIRI-10**: Niri shell wrappers isolated in `src/lib/niri.ts` with clean mock boundary for automated tests
 
 ### Testing
@@ -44,7 +44,7 @@ Requirements for v0.6.0 Integration Orchestration & Niri. Each maps to roadmap p
 - [x] **TEST-01**: Niri shell wrappers (`src/lib/niri.ts`) have a mockable interface — automated tests never call real `niri msg`
 - [x] **TEST-02**: Integration runner has unit tests for artifact accumulation, tier ordering, and skip-flag behavior
 - [x] **TEST-03**: Existing integration tests continue to pass after `open()` return type change
-- [ ] **TEST-04**: Niri integration has unit tests with mocked niri shell wrappers covering workspace create, window move, tmux attach, cleanup
+- [x] **TEST-04**: Niri integration has unit tests with mocked niri shell wrappers covering workspace create, window move, tmux attach, cleanup
 
 ## Future Requirements
 
@@ -96,14 +96,14 @@ Deferred to v0.7.0+.
 | NIRI-07 | Phase 19 | Complete |
 | NIRI-10 | Phase 19 | Complete |
 | TEST-01 | Phase 19 | Complete |
-| NIRI-01 | Phase 20 | Pending |
-| NIRI-02 | Phase 20 | Pending |
-| NIRI-03 | Phase 20 | Pending |
-| NIRI-04 | Phase 20 | Pending |
-| NIRI-05 | Phase 20 | Pending |
-| NIRI-08 | Phase 20 | Pending |
-| NIRI-09 | Phase 20 | Pending |
-| TEST-04 | Phase 20 | Pending |
+| NIRI-01 | Phase 20 | Complete |
+| NIRI-02 | Phase 20 | Complete |
+| NIRI-03 | Phase 20 | Complete |
+| NIRI-04 | Phase 20 | Complete |
+| NIRI-05 | Phase 20 | Complete |
+| NIRI-08 | Phase 20 | Complete |
+| NIRI-09 | Phase 20 | Complete |
+| TEST-04 | Phase 20 | Complete |
 
 **Coverage:**
 - v1 requirements: 27 total

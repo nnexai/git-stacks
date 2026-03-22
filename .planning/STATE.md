@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
-stopped_at: Completed 19-niri-shell-wrappers-19-01-PLAN.md
-last_updated: "2026-03-22T00:32:39.788Z"
+stopped_at: Completed 20-niri-integration-20-01-PLAN.md
+last_updated: "2026-03-22T04:47:27.970Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 5
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 19 — niri-shell-wrappers
+**Current focus:** Phase 20 — niri-integration
 
 ## Current Position
 
-Phase: 20
-Plan: Not started
+Phase: 20 (niri-integration) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: Not started
 | Phase 17-integration-runner P02 | 5 | 1 tasks | 4 files |
 | Phase 18-artifact-population P01 | 3 | 2 tasks | 5 files |
 | Phase 19-niri-shell-wrappers P01 | 9min | 2 tasks | 2 files |
+| Phase 20 P01 | 3min | 2 tasks | 3 files |
 
 ### Decisions
 
@@ -72,6 +73,9 @@ Plan: Not started
 - [Phase 19-niri-shell-wrappers]: _exec mutable object pattern for ESM-safe Bun.$ test injection — mock.module(bun) and spyOn(Bun, '$') both fail for built-in modules; object property mutation works
 - [Phase 19-niri-shell-wrappers]: snapshotWindowIds uses _listWindows injectable param (not _exec.run) — avoids Zod parse overhead in tests and gives typed control over window state per poll
 - [Phase 19-niri-shell-wrappers]: NiriCommands interface exported so Phase 20 tests can type-safely use mock.module('@/lib/niri') with all 8 function signatures
+- [Phase 20]: Niri integration returns null always (tier-3 consumer, not producer) — no NiriArtifact type needed
+- [Phase 20]: NIRI-05 cleanup on remove intentionally unimplemented per user decision — no remove/cleanup method
+- [Phase 20]: Window move failures logged as warnings and continue — partial failure acceptable for niri integration
 
 ### Pending Todos
 
@@ -92,7 +96,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T00:29:21.002Z
-Stopped at: Completed 19-niri-shell-wrappers-19-01-PLAN.md
+Last session: 2026-03-22T04:47:27.968Z
+Stopped at: Completed 20-niri-integration-20-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 16`

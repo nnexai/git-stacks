@@ -52,7 +52,7 @@ See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md) for full detail
 - [x] **Phase 17: integration-runner** - Consolidate four duplicated integration loops into a single runner.ts module with tier ordering, artifact accumulation, and skip-flag preservation (completed 2026-03-21)
 - [x] **Phase 18: artifact-population** - Make existing integrations (tmux, cmux, vscode, intellij) return real artifact values so the bag is populated for downstream consumers (completed 2026-03-21)
 - [x] **Phase 19: niri-shell-wrappers** - Implement src/lib/niri.ts shell wrapper library with mockable interface covering all niri msg IPC operations (completed 2026-03-22)
-- [ ] **Phase 20: niri-integration** - Implement the full niri integration plugin: workspace lifecycle, window arrangement from artifact bag, user-configured commands, NIRI_SOCKET gating
+- [x] **Phase 20: niri-integration** - Implement the full niri integration plugin: workspace lifecycle, window arrangement from artifact bag, user-configured commands, NIRI_SOCKET gating (completed 2026-03-22)
 
 ## Phase Details
 
@@ -120,9 +120,9 @@ Plans:
   3. When `NIRI_SOCKET` is not set, the niri integration skips gracefully — no error, no output, other integrations unaffected
   4. User-configured `commands` array is executed via runHooks with hook env vars after workspace setup
   5. NIRI-05 (cleanup on remove) intentionally not implemented per user decision
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 20-01-PLAN.md — Create niri integration plugin, register in index.ts, unit tests with mocked niri wrappers
+- [x] 20-01-PLAN.md — Create niri integration plugin, register in index.ts, unit tests with mocked niri wrappers
 
 ## Progress
 
@@ -135,4 +135,4 @@ Plans:
 | 17. integration-runner | v0.6.0 | 2/2 | Complete    | 2026-03-21 |
 | 18. artifact-population | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
 | 19. niri-shell-wrappers | v0.6.0 | 1/1 | Complete    | 2026-03-22 |
-| 20. niri-integration | v0.6.0 | 0/1 | Not started | - |
+| 20. niri-integration | v0.6.0 | 1/1 | Complete   | 2026-03-22 |
