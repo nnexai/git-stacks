@@ -6,7 +6,7 @@
 - ✅ **v0.3.0 Dashboard UI Overhaul** — Phases 6-9 (shipped 2026-03-20) — Messaging system, tabbed dashboard, IPC push display, shell completion overhaul. See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md)
 - ✅ **v0.4.0 TUI Hardening & Polish** — Phases 10-15.2 (shipped 2026-03-21) — Test harness, workspace sync, wizard create, repo management, screen polish, centered dialogs, integration overrides. See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md)
 - ✅ **v0.6.0 Integration Orchestration & Niri** — Phases 16-20 (shipped 2026-03-22) — Typed artifact pipeline, centralized runner, niri compositor integration. See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md)
-- 🚧 **v0.7.0 Close Command & Polish** — Phases 21-23 (in progress) — Workspace close command, niri display fix, test isolation hardening.
+- 🚧 **v0.7.0 Close Command & Polish** — Phases 21-27 (in progress) — Workspace close command, niri display fix, test isolation, mock refactor, lifecycle phases, autocompletion polish, git forge integrations.
 
 ## Phases
 
@@ -60,11 +60,15 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 
 ### 🚧 v0.7.0 Close Command & Polish (In Progress)
 
-**Milestone Goal:** Add workspace close command, fix niri display bug, and harden test isolation so the tool is reliable and complete for lightweight teardown workflows.
+**Milestone Goal:** Close command, display fixes, test isolation, mock refactor, lifecycle phase separation, CLI polish, and git forge integrations.
 
 - [x] **Phase 21: Workspace Close Command** - CLI and TUI teardown for integrations without deleting workspace state (completed 2026-03-22)
 - [x] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config (completed 2026-03-22)
 - [x] **Phase 23: Test Environment Isolation** - Audit and enforce isolated config dirs across all tests (completed 2026-03-22)
+- [ ] **Phase 24: Mock Architecture Refactor** - Replace module-level mock.module() with injectable dependency mocking
+- [ ] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks
+- [ ] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements
+- [ ] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation and issue/task linking
 
 ## Phase Details
 
@@ -116,6 +120,9 @@ Plans:
 | 22. Niri Display Fix | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 24. Mock Architecture Refactor | v0.7.0 | 0/? | Not started | - |
+| 25. Dedicated Lifecycle Phases | v0.7.0 | 0/? | Not started | - |
+| 26. Autocompletion & Editor Polish | v0.7.0 | 0/? | Not started | - |
+| 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
 
@@ -126,3 +133,33 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd:plan-phase 24 to break down)
+
+### Phase 25: Dedicated Lifecycle Phases
+
+**Goal**: Introduce dedicated lifecycle phases so close happens before clean, and clean happens before remove. Hooks like `pre_close` should trigger in close/clean/remove commands, while `pre_remove` only fires in the remove command — giving users finer-grained control over teardown behavior.
+**Requirements**: TBD
+**Depends on:** Phase 24
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 25 to break down)
+
+### Phase 26: Autocompletion & Editor Polish
+
+**Goal**: Bundle of CLI quality-of-life improvements: enhance shell autocompletion to complete `new --from <template-name>`, add a quick command to open template/workspace YAML in $EDITOR, make `remove --force` delete folder and config even if config is incomplete, and make `cleanup --force` try removing the workspace folder.
+**Requirements**: TBD
+**Depends on:** Phase 25
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 26 to break down)
+
+### Phase 27: Git Forge Integrations
+
+**Goal**: Add integrations for GitHub, GitLab, and Gitea using their respective CLI tools (gh, glab, tea) to create MR/PRs and open them. Integrations should understand where repos are upstream (via git remote or explicit config). Additionally, provide issue/task linking so users can associate a workspace with a task/issue and quickly open or fetch it.
+**Requirements**: TBD
+**Depends on:** Phase 26
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 27 to break down)

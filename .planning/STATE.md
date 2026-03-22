@@ -6,7 +6,7 @@ status: unknown
 stopped_at: Completed 23-01-PLAN.md — test environment isolation implemented
 last_updated: "2026-03-22T11:46:01.369Z"
 progress:
-  total_phases: 3
+  total_phases: 7
   completed_phases: 3
   total_plans: 3
   completed_plans: 3
@@ -67,11 +67,12 @@ Plan: Not started
 
 ### Pending Todos
 
-3 todos converted to v0.7.0 milestone scope (now CLOSE-01 through TEST-02).
+None. 6 todos cleared: 3 already shipped (close command, niri fix, test isolation), 3 promoted to phases 25-27 (lifecycle phases, autocompletion polish, git forge integrations).
 
 ### Roadmap Evolution
 
 - Phase 24 added: Mock Architecture Refactor — replace module-level mock.module() with injectable dependency mocking (_exec pattern)
+- Phases 25-27 added from promoted todos: Dedicated Lifecycle Phases, Autocompletion & Editor Polish, Git Forge Integrations
 
 ### Blockers/Concerns
 
