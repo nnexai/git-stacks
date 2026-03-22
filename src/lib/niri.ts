@@ -5,6 +5,14 @@ import { z } from "zod"
 // All Option<T> Rust fields use .nullable().optional() so both null and
 // missing-key are accepted (Rust serializes None as null, not absent key).
 
+const NiriWindowLayoutSchema = z.object({
+  pos_in_scrolling_layout: z.tuple([z.number(), z.number()]).nullable().optional(),
+  tile_size: z.tuple([z.number(), z.number()]).optional(),
+  window_size: z.tuple([z.number(), z.number()]).optional(),
+  tile_pos_in_workspace_view: z.tuple([z.number(), z.number()]).nullable().optional(),
+  window_offset_in_tile: z.tuple([z.number(), z.number()]).optional(),
+})
+
 const NiriWindowSchema = z.object({
   id: z.number(),
   title: z.string().nullable().optional(),
@@ -14,6 +22,7 @@ const NiriWindowSchema = z.object({
   is_focused: z.boolean(),
   is_floating: z.boolean(),
   is_urgent: z.boolean(),
+  layout: NiriWindowLayoutSchema.optional(),
 })
 
 const NiriWorkspaceSchema = z.object({
@@ -60,6 +69,8 @@ export interface NiriCommands {
   setNiriColumnWidth(change: string): Promise<void>
   consumeOrExpelWindowLeft(windowId?: number): Promise<void>
   niriSpawnSh(command: string): Promise<void>
+  moveColumnToIndex(index: number): Promise<void>
+  setWindowWidth(windowId: number, change: string): Promise<void>
 }
 
 // ─── Internal runner — mutable for test injection ─────────────────────────────
@@ -268,4 +279,22 @@ export async function consumeOrExpelWindowLeft(windowId?: number): Promise<void>
  */
 export async function niriSpawnSh(command: string): Promise<void> {
   await _exec.run(["action", "spawn-sh", "--", command])
+}
+
+/**
+ * Moves the focused column to a specific 1-based index on its workspace.
+ * IMPORTANT: Caller must call focusNiriWindow(id) first — this command has no --id flag.
+ * Used in the two-phase layout approach (Phase 2 reorder step).
+ */
+export async function moveColumnToIndex(index: number): Promise<void> {
+  await _exec.run(["action", "move-column-to-index", String(index)])
+}
+
+/**
+ * Sets the width of a specific window by its numeric ID.
+ * change can be an absolute pixel value (e.g. "800") or percentage (e.g. "50%").
+ * Unlike setNiriColumnWidth, this uses --id and does not require the window to be focused.
+ */
+export async function setWindowWidth(windowId: number, change: string): Promise<void> {
+  await _exec.run(["action", "set-window-width", "--id", String(windowId), change])
 }

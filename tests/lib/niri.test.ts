@@ -27,6 +27,8 @@ const {
   setNiriColumnWidth,
   consumeOrExpelWindowLeft,
   niriSpawnSh,
+  moveColumnToIndex,
+  setWindowWidth,
   _exec,
 } = niriModule
 
@@ -174,6 +176,52 @@ describe("listNiriWindows", () => {
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe(42)
     expect(result[0].title).toBeNull()
+  })
+
+  test("parses window with layout.pos_in_scrolling_layout field", async () => {
+    const windows = [
+      {
+        id: 53,
+        title: "Terminal",
+        app_id: "com.mitchellh.ghostty",
+        pid: 9999,
+        workspace_id: 18,
+        is_focused: true,
+        is_floating: false,
+        is_urgent: false,
+        layout: {
+          pos_in_scrolling_layout: [2, 1],
+          tile_size: [1424.0, 914.0],
+          window_size: [1424, 914],
+        },
+      },
+    ]
+    mockResult = { exitCode: 0, stdout: JSON.stringify(windows) }
+
+    const result = await listNiriWindows()
+
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe(53)
+    expect(result[0].layout).toBeDefined()
+    expect(result[0].layout?.pos_in_scrolling_layout).toEqual([2, 1])
+    expect(result[0].layout?.tile_size).toEqual([1424.0, 914.0])
+  })
+
+  test("parses window without layout field (backward compat)", async () => {
+    const windows = [
+      {
+        id: 1,
+        is_focused: false,
+        is_floating: false,
+        is_urgent: false,
+      },
+    ]
+    mockResult = { exitCode: 0, stdout: JSON.stringify(windows) }
+
+    const result = await listNiriWindows()
+
+    expect(result).toHaveLength(1)
+    expect(result[0].layout).toBeUndefined()
   })
 })
 
@@ -558,6 +606,30 @@ describe("niriSpawnSh", () => {
   })
 })
 
+// ─── moveColumnToIndex ────────────────────────────────────────────────────────
+
+describe("moveColumnToIndex", () => {
+  beforeEach(() => resetMocks())
+
+  test("calls niri msg action move-column-to-index with 1-based index", async () => {
+    await moveColumnToIndex(5)
+
+    expect(capturedArgs).toEqual(["action", "move-column-to-index", "5"])
+  })
+})
+
+// ─── setWindowWidth ───────────────────────────────────────────────────────────
+
+describe("setWindowWidth", () => {
+  beforeEach(() => resetMocks())
+
+  test("calls niri msg action set-window-width --id with windowId and change", async () => {
+    await setWindowWidth(42, "60%")
+
+    expect(capturedArgs).toEqual(["action", "set-window-width", "--id", "42", "60%"])
+  })
+})
+
 // ─── NiriCommands interface type-check ────────────────────────────────────────
 // Structural check: assign module exports to NiriCommands — TypeScript will
 // catch missing or mismatched function signatures at bun run typecheck time.
@@ -579,8 +651,10 @@ describe("NiriCommands interface", () => {
       setNiriColumnWidth,
       consumeOrExpelWindowLeft,
       niriSpawnSh,
+      moveColumnToIndex,
+      setWindowWidth,
     }
-    // Runtime check: all 14 functions are present and callable
+    // Runtime check: all 16 functions are present and callable
     expect(typeof commands.isNiriRunning).toBe("function")
     expect(typeof commands.listNiriWindows).toBe("function")
     expect(typeof commands.listNiriWorkspaces).toBe("function")
@@ -595,6 +669,8 @@ describe("NiriCommands interface", () => {
     expect(typeof commands.setNiriColumnWidth).toBe("function")
     expect(typeof commands.consumeOrExpelWindowLeft).toBe("function")
     expect(typeof commands.niriSpawnSh).toBe("function")
+    expect(typeof commands.moveColumnToIndex).toBe("function")
+    expect(typeof commands.setWindowWidth).toBe("function")
   })
 })
 
