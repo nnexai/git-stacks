@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 24-01-PLAN.md — _exec injection for tmux.ts, cmux.ts, lifecycle.ts
-last_updated: "2026-03-22T13:24:12.011Z"
+stopped_at: Completed 24.1-01-PLAN.md — eliminate dead @clack/prompts mocks from 7 test files
+last_updated: "2026-03-22T13:57:12.988Z"
 progress:
-  total_phases: 7
-  completed_phases: 4
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 8
+  completed_phases: 5
+  total_plans: 9
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 24 — mock-architecture-refactor
+**Current focus:** Phase 24.1 — test-mock-hygiene
 
 ## Current Position
 
-Phase: 25
-Plan: Not started
+Phase: 24.1 (test-mock-hygiene) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Plan: Not started
 | Phase 23-test-environment-isolation P01 | 7min | 2 tasks | 4 files |
 | Phase 24-mock-architecture-refactor P02 | 8min | 2 tasks | 18 files |
 | Phase 24-mock-architecture-refactor P01 | 12min | 2 tasks | 6 files |
+| Phase 24.1-test-mock-hygiene P01 | 2min | 2 tasks | 7 files |
 
 ### Decisions
 
@@ -69,6 +70,8 @@ Plan: Not started
 - [Phase 24-mock-architecture-refactor]: prompts wrapper pattern: import { prompts as p } from @/tui/utils alias preserves all p.confirm/p.select call sites; tests mocking @/tui/utils directly need prompts in mock shape
 - [Phase 24-01]: lifecycle.ts _exec.spawn returns SpawnHandle not resolved result — required for concurrent stream drain in runHooksCaptured
 - [Phase 24-01]: Lifecycle real-shell tests use cache-busting import to prevent mock.module contamination from consumer tests
+- [Phase 24.1-test-mock-hygiene]: integration-commands.test.ts needs no @/tui/utils mock — tested code exercises command structure only, not prompt paths
+- [Phase 24.1-test-mock-hygiene]: Always mock @/tui/utils (not @clack/prompts) in tests — production code routes all prompts through the wrapper
 
 ### Pending Todos
 
@@ -85,7 +88,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T12:48:43.545Z
-Stopped at: Completed 24-01-PLAN.md — _exec injection for tmux.ts, cmux.ts, lifecycle.ts
+Last session: 2026-03-22T13:57:12.983Z
+Stopped at: Completed 24.1-01-PLAN.md — eliminate dead @clack/prompts mocks from 7 test files
 Resume file: None
 Next action: /gsd:plan-phase 21
