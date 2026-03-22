@@ -106,7 +106,9 @@ Plans:
   2. Each wrapper function has a corresponding entry in a mockable interface (or is exported as an injectable dependency) so unit tests substitute them without spawning niri processes
   3. `snapshotWindowIds()` implements the before/after snapshot-diff strategy with exponential-backoff polling up to a configurable timeout
   4. Unit tests for niri.ts wrappers pass without `NIRI_SOCKET` present in the test environment
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 19-01-PLAN.md — Create niri.ts wrapper module with Zod-validated types, NiriCommands interface, and unit tests
 
 ### Phase 20: niri-integration
 **Goal**: Users running niri get all workspace windows automatically arranged onto a dedicated named niri workspace when they open a git-stacks workspace; the integration is idempotent on re-open and cleans up on remove
@@ -130,5 +132,5 @@ Plans:
 | 16. artifact-type-foundation | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
 | 17. integration-runner | v0.6.0 | 2/2 | Complete    | 2026-03-21 |
 | 18. artifact-population | v0.6.0 | 1/1 | Complete    | 2026-03-21 |
-| 19. niri-shell-wrappers | v0.6.0 | 0/? | Not started | - |
+| 19. niri-shell-wrappers | v0.6.0 | 0/1 | Not started | - |
 | 20. niri-integration | v0.6.0 | 0/? | Not started | - |
