@@ -59,6 +59,17 @@ const {
 // @ts-ignore — cache-busting for isolated paths mock
 } = await import("@/lib/workspace-ops?ws-ops-test")
 
+const {
+  editTemplateYaml,
+  editGlobalConfigYaml,
+  editRegistryYaml,
+}: {
+  editTemplateYaml: (name: string) => { path: string; validate: () => { ok: boolean; error?: string } }
+  editGlobalConfigYaml: () => { path: string; validate: () => { ok: boolean; error?: string } }
+  editRegistryYaml: () => { path: string; validate: () => { ok: boolean; error?: string } }
+// @ts-ignore — cache-busting for isolated paths mock
+} = await import("@/lib/workspace-ops?ws-ops-edit-yaml-test")
+
 afterAll(() => isolated.cleanup())
 
 // Unique suffix per test file run to avoid collisions between parallel test runs
@@ -1308,5 +1319,61 @@ describe("lifecycle hook schemas (LC-01)", () => {
       },
     })
     expect(result.success).toBe(true)
+  })
+})
+
+// ============================================================================
+// describe("editYaml helpers") — path resolution and Zod validation
+// ============================================================================
+
+describe("editYaml helpers", () => {
+  test("editTemplateYaml returns correct path and validates", () => {
+    const name = `edit-yaml-tpl-${Date.now()}`
+    const { path, validate } = editTemplateYaml(name)
+
+    // Path should end with templates/{name}.yml
+    expect(path).toMatch(new RegExp(`templates[\\\\/]${name}\\.yml$`))
+
+    // Write a valid template YAML
+    mkdirSync(join(isolated.configDir, "templates"), { recursive: true })
+    writeFileSync(path, `name: ${name}\nschema_version: "1"\nrepos: []\n`, "utf-8")
+
+    const valid = validate()
+    expect(valid.ok).toBe(true)
+    expect(valid.error).toBeUndefined()
+
+    // Corrupt the file — validation should fail
+    writeFileSync(path, `{{{invalid yaml`, "utf-8")
+    const invalid = validate()
+    expect(invalid.ok).toBe(false)
+    expect(typeof invalid.error).toBe("string")
+  })
+
+  test("editGlobalConfigYaml returns correct path and validates", () => {
+    const { path, validate } = editGlobalConfigYaml()
+
+    // Path should end with config.yml
+    expect(path).toMatch(/config\.yml$/)
+
+    // Write a valid global config YAML
+    writeFileSync(path, `workspace_root: /tmp/ws\nintegrations: {}\n`, "utf-8")
+
+    const valid = validate()
+    expect(valid.ok).toBe(true)
+    expect(valid.error).toBeUndefined()
+  })
+
+  test("editRegistryYaml returns correct path and validates", () => {
+    const { path, validate } = editRegistryYaml()
+
+    // Path should end with registry.yml
+    expect(path).toMatch(/registry\.yml$/)
+
+    // Write a valid registry YAML (empty array)
+    writeFileSync(path, `[]\n`, "utf-8")
+
+    const valid = validate()
+    expect(valid.ok).toBe(true)
+    expect(valid.error).toBeUndefined()
   })
 })

@@ -8,10 +8,14 @@ import {
   workspacePath,
   readGlobalConfig,
   WorkspaceSchema,
+  TemplateSchema,
+  GlobalConfigSchema,
+  RepoRegistrySchema,
+  templatePath,
   type Workspace,
   type GlobalConfig,
 } from "./config"
-import { getTasksDir } from "./paths"
+import { getTasksDir, GLOBAL_CONFIG_FILE, REGISTRY_FILE } from "./paths"
 import {
   isRepoDirty,
   getCurrentBranch,
@@ -999,6 +1003,80 @@ export function editWorkspaceYaml(name: string): {
       try {
         const raw = readFileSync(path, "utf-8")
         WorkspaceSchema.parse(parse(raw))
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  }
+}
+
+export async function openYamlInEditor(
+  path: string,
+  validate: () => { ok: boolean; error?: string }
+): Promise<void> {
+  const editor = process.env.VISUAL || process.env.EDITOR || "vi"
+  const proc = Bun.spawn([editor, path], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  })
+  await proc.exited
+  const result = validate()
+  if (!result.ok) {
+    console.error(`\nWarning: file has validation errors:\n${result.error}`)
+  }
+}
+
+export function editTemplateYaml(name: string): {
+  path: string
+  validate: () => { ok: boolean; error?: string }
+} {
+  const path = templatePath(name)
+  return {
+    path,
+    validate: () => {
+      try {
+        const raw = readFileSync(path, "utf-8")
+        TemplateSchema.parse(parse(raw))
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  }
+}
+
+export function editGlobalConfigYaml(): {
+  path: string
+  validate: () => { ok: boolean; error?: string }
+} {
+  const path = GLOBAL_CONFIG_FILE
+  return {
+    path,
+    validate: () => {
+      try {
+        const raw = readFileSync(path, "utf-8")
+        GlobalConfigSchema.parse(parse(raw))
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    },
+  }
+}
+
+export function editRegistryYaml(): {
+  path: string
+  validate: () => { ok: boolean; error?: string }
+} {
+  const path = REGISTRY_FILE
+  return {
+    path,
+    validate: () => {
+      try {
+        const raw = readFileSync(path, "utf-8")
+        RepoRegistrySchema.parse(parse(raw))
         return { ok: true }
       } catch (err) {
         return { ok: false, error: String(err) }
