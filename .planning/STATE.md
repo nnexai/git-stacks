@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 25-01-PLAN.md — lifecycle schema foundation and closeWorkspace refactor
-last_updated: "2026-03-22T14:28:10.379Z"
+stopped_at: Completed 25-02-PLAN.md — _executeClean cascade and cleanWorkspace/removeWorkspace refactor
+last_updated: "2026-03-22T14:36:55.700Z"
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 12
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 25 (dedicated-lifecycle-phases) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Plan: 2 of 3
 | Phase 24-mock-architecture-refactor P01 | 12min | 2 tasks | 6 files |
 | Phase 24.1-test-mock-hygiene P01 | 2min | 2 tasks | 7 files |
 | Phase 25-dedicated-lifecycle-phases P01 | 17 | 2 tasks | 3 files |
+| Phase 25-dedicated-lifecycle-phases P02 | 4 | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -74,6 +75,8 @@ Plan: 2 of 3
 - [Phase 24.1-test-mock-hygiene]: integration-commands.test.ts needs no @/tui/utils mock — tested code exercises command structure only, not prompt paths
 - [Phase 24.1-test-mock-hygiene]: Always mock @/tui/utils (not @clack/prompts) in tests — production code routes all prompts through the wrapper
 - [Phase 25-dedicated-lifecycle-phases]: buildBaseEnv exported for reuse by plans 02 and 03; _executeClose private inner function; post_close fires after integration cleanup; restore real lifecycle in test to prevent parallel mock contamination
+- [Phase 25-dedicated-lifecycle-phases]: _executeClean cascade pattern: _executeClose called first, then pre_clean, then per-repo pre_clean interleaved with removal, then post_clean; triggeredBy propagated through entire chain
+- [Phase 25-dedicated-lifecycle-phases]: post_remove failure after YAML deletion logs but does not fail — YAML already gone, no rollback path
 
 ### Pending Todos
 
@@ -92,7 +95,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T14:28:10.374Z
-Stopped at: Completed 25-01-PLAN.md — lifecycle schema foundation and closeWorkspace refactor
+Last session: 2026-03-22T14:36:55.697Z
+Stopped at: Completed 25-02-PLAN.md — _executeClean cascade and cleanWorkspace/removeWorkspace refactor
 Resume file: None
 Next action: /gsd:plan-phase 21
