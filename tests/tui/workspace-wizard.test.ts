@@ -37,6 +37,21 @@ const mockCancelUtil = mock((): never => { throw new Error("cancelled") })
 mock.module("@/tui/utils", () => ({
   safeText: mockSafeText,
   cancel: mockCancelUtil,
+  prompts: {
+    intro: mockIntro,
+    outro: mockOutro,
+    log: mockLog,
+    spinner: mockSpinner,
+    text: mockText,
+    select: mockSelect,
+    multiselect: mockMultiselect,
+    confirm: mockConfirm,
+    isCancel: mockIsCancel,
+    cancel: mockCancel,
+    note: mock(() => {}),
+    group: mock(async () => ({})),
+    groupMultiselect: mock(async () => []),
+  },
 }))
 
 // Mock integrations

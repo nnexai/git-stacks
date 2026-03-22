@@ -1,5 +1,4 @@
-import * as p from "@clack/prompts"
-import { safeText, cancel } from "./utils"
+import { prompts as p, safeText, cancel } from "./utils"
 import {
   readRegistry,
   writeTemplate,

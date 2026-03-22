@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import * as p from "@clack/prompts"
+import { prompts as p } from "@/tui/utils"
 import { readTemplate, writeTemplate, listTemplates, templateExists, templatePath } from "../lib/config"
 import { runTemplateNew, runTemplateEdit } from "../tui/template-wizard"
 import { unlinkSync } from "fs"

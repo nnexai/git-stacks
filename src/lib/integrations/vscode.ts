@@ -1,8 +1,7 @@
-import * as p from "@clack/prompts"
+import { prompts as p, safeText } from "../../tui/utils"
 import { z } from "zod"
 import { $ } from "bun"
 import { generateCodeWorkspace } from "../vscode"
-import { safeText } from "../../tui/utils"
 import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 
 const configSchema = z.object({

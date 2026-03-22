@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import * as p from "@clack/prompts"
+import { prompts as p } from "@/tui/utils"
 import { existsSync, unlinkSync } from "fs"
 import { join } from "path"
 import { formatError } from "../lib/errors"

@@ -1,5 +1,4 @@
-import * as p from "@clack/prompts"
-import { cancel } from "./utils"
+import { prompts as p, cancel } from "./utils"
 import { readRegistry, writeRegistry } from "../lib/config"
 import { scanForRepos } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"

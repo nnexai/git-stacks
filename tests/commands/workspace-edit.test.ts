@@ -34,6 +34,21 @@ mock.module("@clack/prompts", () => ({
 mock.module("@/tui/utils", () => ({
   safeText: mockSafeText,
   cancel: mockCancelUtil,
+  prompts: {
+    intro: mockIntro,
+    outro: mockOutro,
+    log: mockLog,
+    spinner: mockSpinner,
+    select: mockSelect,
+    multiselect: mockMultiselect,
+    isCancel: mockIsCancel,
+    text: mockText,
+    confirm: mockConfirm,
+    cancel: mock(() => {}),
+    note: mock(() => {}),
+    group: mock(async () => ({})),
+    groupMultiselect: mock(async () => []),
+  },
 }))
 
 // Mock integrations

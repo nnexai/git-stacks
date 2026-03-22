@@ -1,5 +1,4 @@
-import * as p from "@clack/prompts"
-import { cancel } from "../../tui/utils"
+import { prompts as p, cancel } from "../../tui/utils"
 import { integrations } from "./index"
 
 /**

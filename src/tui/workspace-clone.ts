@@ -1,7 +1,6 @@
-import * as p from "@clack/prompts"
+import { prompts as p, safeText, cancel } from "./utils"
 import { mkdirSync, existsSync } from "fs"
 import { join } from "path"
-import { safeText, cancel } from "./utils"
 import {
   listWorkspaces,
   readWorkspace,

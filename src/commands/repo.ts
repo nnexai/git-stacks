@@ -6,6 +6,7 @@ import { expandHome } from "../lib/paths"
 import { detectRepoType } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
 import { runRepoScan } from "../tui/repo-wizard"
+import { prompts as p } from "@/tui/utils"
 
 export const repoCommand = new Command("repo").description("Manage repo registry")
 
@@ -103,7 +104,6 @@ repoCommand
     }
 
     if (!opts.force) {
-      const p = await import("@clack/prompts")
       const ok = await p.confirm({
         message: `Remove repo '${name}' from registry? (This does not delete any files.)`,
         initialValue: false,

@@ -1,8 +1,7 @@
 import { Command } from "commander"
-import * as p from "@clack/prompts"
+import { prompts as p, safeText, cancel } from "../tui/utils"
 import { readGlobalConfig, writeGlobalConfig } from "../lib/config"
 import { GLOBAL_CONFIG_FILE, HOME } from "../lib/paths"
-import { safeText, cancel } from "../tui/utils"
 import { integrations, resolveEnabledGlobally } from "../lib/integrations"
 
 export const configCommand = new Command("config")
