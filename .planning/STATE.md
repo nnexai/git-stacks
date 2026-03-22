@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T16:32:26.720Z"
+last_updated: "2026-03-22T17:37:11.659Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
   completed_phases: 8
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 27 — git-forge-integrations
+**Current focus:** Phase 28 — issue-task-tracking-integration
 
 ## Current Position
 
-Phase: 28
-Plan: Not started
+Phase: 28 (issue-task-tracking-integration) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Plan: Not started
 | Phase 27-git-forge-integrations P03 | 3min | 2 tasks | 5 files |
 | Phase 27-git-forge-integrations P02 | 7min | 2 tasks | 8 files |
 | Phase 27 P04 | 65s | 2 tasks | 2 files |
+| Phase 28-issue-task-tracking-integration P01 | 1min | 1 tasks | 2 files |
 
 ### Decisions
 
@@ -103,6 +104,8 @@ Plan: Not started
 - [Phase 27-02]: Gitea _exec has three methods: run (inherit stdio), runCapture (piped stdout for JSON), openUrl (platform-aware xdg-open/open)
 - [Phase 27-02]: All forge integrations pass forge identifier string as third arg to resolveForgeRepo — triggers D-14 forge mismatch validation
 - [Phase 27]: Forge entries inserted at top of [Unreleased] Added section for discoverability; forge table rows use tier 5 (command-only, no open() artifacts)
+- [Phase 28-01]: Issue IDs stored as strings regardless of source format (String(issueId) coercion) — unifies GitHub int and Jira alphanumeric
+- [Phase 28-01]: issue-utils mirrors forge-utils pattern: shared resolution + formatting helpers extracted once for all four tracker integrations
 
 ### Pending Todos
 
@@ -128,7 +131,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T16:27:48.559Z
+Last session: 2026-03-22T17:37:11.656Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21
