@@ -4,8 +4,8 @@ import { Command } from "commander"
 // --- Mocks ---
 const linkIssueMock = mock(() => {})
 const unlinkIssueMock = mock(() => {})
-const resolveIssueRefMock = mock(() => ({
-  ok: true as const,
+const resolveIssueRefMock = mock((): any => ({
+  ok: true,
   issueId: "PROJ-123",
   workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
 }))
@@ -36,6 +36,7 @@ mock.module("@/tui/utils", () => ({
   },
 }))
 
+// @ts-ignore — query param cache-busting
 const { _exec, jiraIntegration } = await import("@/lib/integrations/jira?unit-test")
 
 // Override process.exit to prevent test runner exit
@@ -76,7 +77,7 @@ describe("issue unlink", () => {
 describe("issue open", () => {
   test("calls _exec.runShell with default template and ISSUE_ID env", async () => {
     resolveIssueRefMock.mockImplementation(() => ({
-      ok: true as const, issueId: "PROJ-123", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
+      ok: true, issueId: "PROJ-123", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
     }))
     readGlobalConfigMock.mockImplementation(() => ({
       integrations: {},
@@ -93,7 +94,7 @@ describe("issue open", () => {
 
   test("uses custom open_cmd from global config", async () => {
     resolveIssueRefMock.mockImplementation(() => ({
-      ok: true as const, issueId: "PROJ-456", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
+      ok: true, issueId: "PROJ-456", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
     }))
     readGlobalConfigMock.mockImplementation(() => ({
       integrations: {
@@ -112,7 +113,7 @@ describe("issue open", () => {
 
   test("exits with error when no issue linked", async () => {
     resolveIssueRefMock.mockImplementation(() => ({
-      ok: false as const, error: "no_issue_linked" as const, tracker: "jira", workspace: "my-ws",
+      ok: false, error: "no_issue_linked", tracker: "jira", workspace: "my-ws",
     }))
     const parent = new Command()
     jiraIntegration.commands!(parent)

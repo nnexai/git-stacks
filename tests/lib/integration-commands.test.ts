@@ -1,5 +1,35 @@
 import { describe, test, expect, mock } from "bun:test"
 
+// Mock issue-utils so jira integration doesn't trigger real config I/O
+mock.module("@/lib/integrations/issue-utils", () => ({
+  linkIssue: mock(() => {}),
+  unlinkIssue: mock(() => {}),
+  resolveIssueRef: mock(() => ({ ok: false, error: "workspace_not_found", name: "test" })),
+  formatIssueError: mock(() => "test error"),
+}))
+
+// Mock config for workspaceExists/readGlobalConfig used in jira and other integrations
+mock.module("@/lib/config", () => ({
+  workspaceExists: mock(() => false),
+  readGlobalConfig: mock(() => ({ integrations: {}, workspace_root: "/tmp" })),
+  readWorkspace: mock(() => ({ name: "test", branch: "main", repos: [], settings: {} })),
+  writeWorkspace: mock(() => {}),
+  readRegistry: mock(() => []),
+  listWorkspaces: mock(() => []),
+}))
+
+// Mock tui/utils for Jira configurePrompt and other integration configurePrompts
+mock.module("@/tui/utils", () => ({
+  prompts: {
+    text: mock(async () => ""),
+    select: mock(async () => ""),
+    confirm: mock(async () => false),
+    isCancel: mock(() => false),
+  },
+  safeText: mock(async () => ""),
+  cancel: mock(() => {}),
+}))
+
 // Mock forge-utils so forge integrations don't trigger real config I/O
 mock.module("@/lib/integrations/forge-utils", () => ({
   resolveForgeRepo: mock(() => ({ ok: false, error: "workspace_not_found", name: "test" })),
@@ -121,5 +151,41 @@ describe("integrationCommand structure", () => {
     expect(prSubNames).toContain("create")
     expect(prSubNames).toContain("open")
     expect(prSubNames).toContain("status")
+  })
+
+  test("github subcommand has 'issue' sub-subcommand", () => {
+    const github = integrationCommand.commands.find((c: any) => c.name() === "github")
+    const subNames = github.commands.map((c: any) => c.name())
+    expect(subNames).toContain("issue")
+  })
+
+  test("github issue has link/unlink/open commands", () => {
+    const github = integrationCommand.commands.find((c: any) => c.name() === "github")
+    const issue = github.commands.find((c: any) => c.name() === "issue")
+    const issueSubNames = issue.commands.map((c: any) => c.name())
+    expect(issueSubNames).toContain("link")
+    expect(issueSubNames).toContain("unlink")
+    expect(issueSubNames).toContain("open")
+  })
+
+  test("has 'jira' subcommand", () => {
+    const names = integrationCommand.commands.map((c: any) => c.name())
+    expect(names).toContain("jira")
+  })
+
+  test("jira subcommand has 'issue' sub-subcommand", () => {
+    const jira = integrationCommand.commands.find((c: any) => c.name() === "jira")
+    expect(jira).toBeDefined()
+    const subNames = jira.commands.map((c: any) => c.name())
+    expect(subNames).toContain("issue")
+  })
+
+  test("jira issue has link/unlink/open commands", () => {
+    const jira = integrationCommand.commands.find((c: any) => c.name() === "jira")
+    const issue = jira.commands.find((c: any) => c.name() === "issue")
+    const issueSubNames = issue.commands.map((c: any) => c.name())
+    expect(issueSubNames).toContain("link")
+    expect(issueSubNames).toContain("unlink")
+    expect(issueSubNames).toContain("open")
   })
 })

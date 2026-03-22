@@ -217,6 +217,14 @@ export const doctorCommand = new Command("doctor")
       fix: teaAvailable ? undefined : "Install: https://gitea.com/gitea/tea",
     })
 
+    const jiraAvailable = await checkBinary("jira")
+    binaryIssues.push({
+      icon: jiraAvailable ? "pass" : "warn",
+      entity: "jira (Jira CLI)",
+      message: jiraAvailable ? "installed" : "not installed — Jira issue commands will use configurable template fallback",
+      fix: jiraAvailable ? undefined : "Install: https://github.com/ankitpokhrel/jira-cli",
+    })
+
     // Collect ALL issues into one flat array
     const allIssues: Issue[] = [
       ...orphaned,
