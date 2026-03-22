@@ -4,6 +4,35 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+**Dedicated lifecycle phases** — close, clean, remove, and merge now have their own hook pairs:
+- `pre_close` / `post_close` — fired when closing integration sessions
+- `pre_clean` / `post_clean` — fired when removing worktrees (config kept)
+- `pre_merge` — fired before git merge operations (complements existing `post_merge`)
+- `post_remove` — fired after workspace config deletion (complements existing `pre_remove`)
+- Per-repo `pre_clean` hook — runs before each individual worktree removal
+
+**Lifecycle cascade** — teardown operations compose in layers:
+- `remove` calls `clean` which calls `close` — each layer fires its own hooks
+- `merge` follows the full cascade: close → clean → merge-specific → remove
+- `WS_TRIGGERED_BY` env var injected into all hooks (`close`, `clean`, `remove`, or `merge`) so hooks know which top-level operation initiated the cascade
+
+### Changed
+
+- `mergeWorkspace` refactored to full D-10 lifecycle order via cascade composition instead of inline teardown
+- `cleanWorkspace` and `removeWorkspace` compose through inner `_executeClose` / `_executeClean` functions
+- TUI dashboard passes `captured: true` for all lifecycle dispatches (close, clean, remove, merge) — prevents hook stdout from corrupting the OpenTUI screen
+- `--gone` cleanup path in `git-stacks clean` now delegates to `removeWorkspace()` for full lifecycle coverage
+
+### Removed
+
+- `runPreRemoveHooks` internal function — superseded by the cascade system; all callers migrated
+
+---
+
 ## [0.6.0] — 2026-03-22
 
 ### Added

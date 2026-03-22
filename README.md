@@ -78,6 +78,7 @@ git-stacks rename <old> <new>      # Rename a workspace
 git-stacks sync [name]             # Sync branches with upstream base branches
 git-stacks run <name> [repo]       # Run a command or shell inside a workspace
 git-stacks merge <name>            # Merge branches into base branches, then clean
+git-stacks close <name>            # Close integration sessions (tmux, niri) without removing worktrees
 git-stacks clean [name]            # Remove worktrees (config kept), or --gone to remove all with deleted remote branches
 git-stacks remove <name>           # Permanently remove worktrees + config
 git-stacks edit <name>             # Edit workspace integration overrides
@@ -225,11 +226,13 @@ settings:
 
 Templates and workspaces support hook arrays (shell commands run in order):
 
-- Template: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_remove`, `post_merge`
-- Workspace: `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove`
-- Per-repo: `pre_open`
+- Template: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_close`, `post_close`, `pre_clean`, `post_clean`, `pre_merge`, `post_merge`, `pre_remove`, `post_remove`
+- Workspace: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_close`, `post_close`, `pre_clean`, `post_clean`, `pre_merge`, `post_merge`, `pre_remove`, `post_remove`
+- Per-repo: `pre_open`, `pre_clean`
 
-Hooks receive injected env vars: `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
+Lifecycle operations cascade: `remove` triggers `clean` which triggers `close`. Each layer fires its own hooks, so a `remove` fires close → clean → remove hooks in order. `merge` follows the same pattern: close → clean → merge-specific steps → remove. The `WS_TRIGGERED_BY` env var tells hooks which top-level operation initiated the cascade (`close`, `clean`, `remove`, or `merge`).
+
+Hooks receive injected env vars: `WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, `WS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
 
 **Using hooks with the notification system:**
 
