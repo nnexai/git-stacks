@@ -123,7 +123,7 @@ Plans:
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 0/3 | Not started | - |
-| 26. Autocompletion & Editor Polish | v0.7.0 | 0/? | Not started | - |
+| 26. Autocompletion & Editor Polish | v0.7.0 | 0/3 | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
@@ -169,13 +169,23 @@ Plans:
 
 ### Phase 26: Autocompletion & Editor Polish
 
-**Goal**: Bundle of CLI quality-of-life improvements: enhance shell autocompletion to complete `new --from <template-name>`, add a quick command to open template/workspace YAML in $EDITOR, make `remove --force` delete folder and config even if config is incomplete, and make `cleanup --force` try removing the workspace folder.
-**Requirements**: TBD
+**Goal**: Bundle of CLI quality-of-life improvements: enhance shell autocompletion to complete `new --from <template-name>`, add `--yaml` flag to open template/workspace/config/registry YAML in $EDITOR, make `remove --force` delete folder and config even if config is incomplete, and make `clean` remove the workspace folder after worktree cleanup.
+**Requirements**: POLISH-01, POLISH-02, POLISH-03, POLISH-04, POLISH-05, POLISH-06, POLISH-07, POLISH-08, POLISH-09, POLISH-10
 **Depends on:** Phase 25
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. `new --from <TAB>` completes template names in bash, zsh, and fish
+  2. `close <TAB>` completes workspace names in all three shells
+  3. `edit <name> --yaml` opens workspace YAML in $EDITOR with schema validation warning
+  4. `template edit <name> --yaml`, `config --yaml`, `repo --yaml` open respective YAML files
+  5. `clean` deletes the `tasks/{name}/` folder after worktree removal (with confirmation or --force)
+  6. `remove` always deletes the `tasks/{name}/` folder
+  7. `remove --force` handles malformed/unparseable YAML via name-based fallback
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 26 to break down)
+- [ ] 26-01-PLAN.md — Shell completion: COMMAND_FLAG_COMPLETIONS table, close in DYNAMIC_COMPLETIONS, new --from template completion
+- [ ] 26-02-PLAN.md — Editor --yaml flags: openYamlInEditor helper, editYaml functions, --yaml on 4 commands
+- [ ] 26-03-PLAN.md — Clean folder deletion + remove --force resilience (depends on Phase 25 refactor)
 
 ### Phase 27: Git Forge Integrations
 

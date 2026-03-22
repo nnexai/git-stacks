@@ -44,6 +44,19 @@
 - [ ] **LC-12**: `runPreRemoveHooks` function removed — no longer used by any lifecycle function
 - [ ] **LC-13**: TUI dashboard passes `captured: true` to `cleanWorkspace`, `removeWorkspace`, and `mergeWorkspace` to prevent OpenTUI screen corruption
 
+### CLI Polish (Autocompletion & Editor)
+
+- [ ] **POLISH-01**: `new --from` completes template names in bash, zsh, and fish via `COMMAND_FLAG_COMPLETIONS` table
+- [ ] **POLISH-02**: `close` completes workspace names in all three shell formats (missing since Phase 21)
+- [ ] **POLISH-03**: `message send --from` and `message clear --from` do NOT get template completion (sender is freeform)
+- [ ] **POLISH-04**: `git-stacks edit <name> --yaml` opens workspace YAML in $EDITOR with post-edit Zod validation warning
+- [ ] **POLISH-05**: `git-stacks template edit <name> --yaml` opens template YAML in $EDITOR with post-edit Zod validation warning
+- [ ] **POLISH-06**: `git-stacks config --yaml` opens config.yml and `git-stacks repo --yaml` opens registry.yml in $EDITOR with post-edit Zod validation
+- [ ] **POLISH-07**: `cleanWorkspace` deletes `tasks/{name}/` directory after worktree removal when deleteFolder is set
+- [ ] **POLISH-08**: CLI `clean` without `--force` prompts for folder deletion separately after worktree removal
+- [ ] **POLISH-09**: `removeWorkspace` always deletes `tasks/{name}/` directory as part of total removal
+- [ ] **POLISH-10**: `removeWorkspace --force` with malformed/unparseable YAML succeeds via name-based directory cleanup fallback
+
 ## Future Requirements
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type
@@ -88,12 +101,22 @@
 | LC-11 | Phase 25 | Planned |
 | LC-12 | Phase 25 | Planned |
 | LC-13 | Phase 25 | Planned |
+| POLISH-01 | Phase 26 | Planned |
+| POLISH-02 | Phase 26 | Planned |
+| POLISH-03 | Phase 26 | Planned |
+| POLISH-04 | Phase 26 | Planned |
+| POLISH-05 | Phase 26 | Planned |
+| POLISH-06 | Phase 26 | Planned |
+| POLISH-07 | Phase 26 | Planned |
+| POLISH-08 | Phase 26 | Planned |
+| POLISH-09 | Phase 26 | Planned |
+| POLISH-10 | Phase 26 | Planned |
 
 **Coverage:**
-- v0.7.0 requirements: 24 total
-- Mapped to phases: 24
+- v0.7.0 requirements: 34 total
+- Mapped to phases: 34
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after Phase 25 requirement definition*
+*Last updated: 2026-03-22 after Phase 26 requirement definition*
