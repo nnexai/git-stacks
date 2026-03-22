@@ -12,6 +12,15 @@ const mockMoveWindowToWorkspace = mock(async () => {})
 const mockFocusNiriWorkspace = mock(async () => {})
 const mockFocusNiriWorkspaceDown = mock(async () => {})
 const mockNiriSpawn = mock(async () => {})
+const mockFocusNiriWindow = mock(async () => {})
+const mockSetNiriColumnWidth = mock(async () => {})
+const mockConsumeOrExpelWindowLeft = mock(async () => {})
+const mockNiriSpawnSh = mock(async () => {})
+// snapshotWindowIds: call spawn fn and return [100] to simulate a window appearing
+const mockSnapshotWindowIds = mock(async (fn: () => Promise<void>) => {
+  await fn()
+  return [100]
+})
 
 mock.module("@/lib/niri", () => ({
   isNiriRunning: mockIsNiriRunning,
@@ -23,7 +32,11 @@ mock.module("@/lib/niri", () => ({
   focusNiriWorkspace: mockFocusNiriWorkspace,
   focusNiriWorkspaceDown: mockFocusNiriWorkspaceDown,
   niriSpawn: mockNiriSpawn,
-  snapshotWindowIds: mock(async () => []),
+  snapshotWindowIds: mockSnapshotWindowIds,
+  focusNiriWindow: mockFocusNiriWindow,
+  setNiriColumnWidth: mockSetNiriColumnWidth,
+  consumeOrExpelWindowLeft: mockConsumeOrExpelWindowLeft,
+  niriSpawnSh: mockNiriSpawnSh,
 }))
 
 mock.module("@clack/prompts", () => ({
@@ -38,7 +51,7 @@ mock.module("@/lib/lifecycle", () => ({
 // Cache-busted import after all mocks registered
 const { niriIntegration } = await import(
   // @ts-ignore
-  "@/lib/integrations/niri?niri-integration-test"
+  "@/lib/integrations/niri?niri-integration-test-v2"
 )
 
 // === Shared test context ===
@@ -59,10 +72,19 @@ beforeEach(() => {
   mockFocusNiriWorkspace.mockReset()
   mockFocusNiriWorkspaceDown.mockReset()
   mockNiriSpawn.mockReset()
+  mockFocusNiriWindow.mockReset()
+  mockSetNiriColumnWidth.mockReset()
+  mockConsumeOrExpelWindowLeft.mockReset()
+  mockNiriSpawnSh.mockReset()
+  mockSnapshotWindowIds.mockReset()
   // Re-set default implementations
   mockIsNiriRunning.mockImplementation(async () => true)
   mockListNiriWorkspaces.mockImplementation(async () => [])
   mockListNiriWindows.mockImplementation(async () => [])
+  mockSnapshotWindowIds.mockImplementation(async (fn: () => Promise<void>) => {
+    await fn()
+    return [100]
+  })
 })
 
 // ===================================================================
@@ -193,25 +215,451 @@ describe("window moves (NIRI-02)", () => {
 })
 
 // ===================================================================
-// User commands (NIRI-03, NIRI-09)
+// Column config — app: windows (niriSpawn, no shell)
 // ===================================================================
-describe("user commands (NIRI-03, NIRI-09)", () => {
-  test("spawns commands via niriSpawn with env var substitution (no shell)", async () => {
-    const ctxWithCommands: IntegrationContext = {
+describe("column config — app: windows", () => {
+  test("app: window uses niriSpawn (direct, no shell)", async () => {
+    const ctx: IntegrationContext = {
       ...fakeCtx,
-      config: { integrations: { niri: { enabled: true, commands: ["ghostty -e tmux attach $WS_WORKSPACE"] } } } as any,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [
+              { windows: [{ app: "firefox", args: ["--new-window", "localhost:3000"] }] },
+            ],
+          },
+        },
+      } as any,
     }
 
-    await niriIntegration.open(ctxWithCommands, null, emptyBag)
+    await niriIntegration.open(ctx, null, emptyBag)
 
+    expect(mockSnapshotWindowIds.mock.calls.length).toBe(1)
+    // The spawn fn passed to snapshotWindowIds should call niriSpawn
     expect(mockNiriSpawn.mock.calls.length).toBe(1)
-    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["ghostty", "-e", "tmux", "attach", "test-ws"])
+    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["firefox", "--new-window", "localhost:3000"])
+    // niriSpawnSh must NOT be called for app: windows
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(0)
   })
 
-  test("does not call niriSpawn when commands absent", async () => {
+  test("app: window with no args uses niriSpawn with just app name", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawn.mock.calls.length).toBe(1)
+    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["ghostty"])
+  })
+})
+
+// ===================================================================
+// Column config — command: windows (niriSpawnSh, shell)
+// ===================================================================
+describe("column config — command: windows", () => {
+  test("command: window uses niriSpawnSh (shell)", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ command: "ghostty -e npm run dev" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("ghostty -e npm run dev")
+    // niriSpawn must NOT be called for command: windows
+    expect(mockNiriSpawn.mock.calls.length).toBe(0)
+  })
+
+  test("command: window with repo prepends cd to niriSpawnSh", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      workspace: {
+        name: "test-ws",
+        branch: "feat/test",
+        repos: [{ name: "backend", repo: "backend", task_path: "/path/to/backend", main_path: "/main/backend", mode: "worktree" }],
+        settings: {},
+      } as any,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [
+              { windows: [{ command: "ghostty -e npm run dev", repo: "backend" }] },
+            ],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd /path/to/backend && ghostty -e npm run dev")
+  })
+
+  test("command: window with cwd prepends cd to niriSpawnSh", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ command: "ghostty", cwd: "/tmp" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd /tmp && ghostty")
+  })
+})
+
+// ===================================================================
+// Column config — source: windows (from ArtifactBag)
+// ===================================================================
+describe("column config — source: windows", () => {
+  test("source: window pulls niriWindowIds from bag — no spawn", async () => {
+    const bagWithVscode: ArtifactBag = {
+      vscode: { kind: "window", pid: 123, app_id: "code", title: "VS Code", niriWindowIds: [77] },
+    }
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ source: "vscode" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, bagWithVscode)
+
+    // No spawn calls — source windows are already on the compositor
+    expect(mockNiriSpawn.mock.calls.length).toBe(0)
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(0)
+    expect(mockSnapshotWindowIds.mock.calls.length).toBe(0)
+  })
+
+  test("source: window with niriWindowId as first column window — width applied", async () => {
+    const bagWithVscode: ArtifactBag = {
+      vscode: { kind: "window", pid: 123, app_id: "code", title: "VS Code", niriWindowIds: [77] },
+    }
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ width: "60%", windows: [{ source: "vscode" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, bagWithVscode)
+
+    // Width should be applied using the source window's ID
+    expect(mockFocusNiriWindow.mock.calls.length).toBe(1)
+    expect(mockFocusNiriWindow.mock.calls[0][0]).toBe(77)
+    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(1)
+    expect(mockSetNiriColumnWidth.mock.calls[0][0]).toBe("60%")
+  })
+
+  test("source: window missing from bag — skips gracefully", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ source: "missing-integration" }] }],
+          },
+        },
+      } as any,
+    }
+
+    // Should not throw — just skip
+    const result = await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(result).toBeNull()
+    expect(mockNiriSpawn.mock.calls.length).toBe(0)
+  })
+})
+
+// ===================================================================
+// Column config — width and multi-window stacking
+// ===================================================================
+describe("column config — width and stacking", () => {
+  test("applies width via focusNiriWindow + setNiriColumnWidth", async () => {
+    // snapshotWindowIds returns [100] by default
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ width: "60%", windows: [{ app: "ghostty" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    // After placing windows, focus first window then set width
+    expect(mockFocusNiriWindow.mock.calls.length).toBe(1)
+    expect(mockFocusNiriWindow.mock.calls[0][0]).toBe(100) // first window ID from snapshot
+    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(1)
+    expect(mockSetNiriColumnWidth.mock.calls[0][0]).toBe("60%")
+  })
+
+  test("no width call when column has no width configured", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockFocusNiriWindow.mock.calls.length).toBe(0)
+    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(0)
+  })
+
+  test("stacks multiple windows in column via consumeOrExpelWindowLeft", async () => {
+    // Two windows in the column: IDs 100 and 101
+    let callCount = 0
+    mockSnapshotWindowIds.mockImplementation(async (fn: () => Promise<void>) => {
+      await fn()
+      callCount++
+      return [callCount === 1 ? 100 : 101]
+    })
+
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty" }, { app: "firefox" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    // consumeOrExpelWindowLeft called for the 2nd window only
+    expect(mockConsumeOrExpelWindowLeft.mock.calls.length).toBe(1)
+    expect(mockConsumeOrExpelWindowLeft.mock.calls[0][0]).toBe(101)
+  })
+
+  test("no consumeOrExpelWindowLeft for single-window column", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockConsumeOrExpelWindowLeft.mock.calls.length).toBe(0)
+  })
+})
+
+// ===================================================================
+// Column config — no-op when no columns
+// ===================================================================
+describe("column config — no-op", () => {
+  test("no-op when columns not configured", async () => {
+    // fakeCtx has no columns in config
     await niriIntegration.open(fakeCtx, null, emptyBag)
 
     expect(mockNiriSpawn.mock.calls.length).toBe(0)
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(0)
+    expect(mockSnapshotWindowIds.mock.calls.length).toBe(0)
+    expect(mockFocusNiriWindow.mock.calls.length).toBe(0)
+    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(0)
+    expect(mockConsumeOrExpelWindowLeft.mock.calls.length).toBe(0)
+  })
+
+  test("no-op when columns is empty array", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: { niri: { enabled: true, columns: [] } },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawn.mock.calls.length).toBe(0)
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(0)
+  })
+})
+
+// ===================================================================
+// Column config — env var substitution
+// ===================================================================
+describe("column config — env var substitution", () => {
+  test("env var substitution in command", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      workspace: { name: "my-workspace", branch: "feat/test", repos: [], settings: {} } as any,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ command: "ghostty -e echo $WS_WORKSPACE" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("ghostty -e echo my-workspace")
+  })
+
+  test("env var substitution in args", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      workspace: { name: "my-workspace", branch: "feat/test", repos: [], settings: {} } as any,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "firefox", args: ["http://localhost/$WS_WORKSPACE"] }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawn.mock.calls.length).toBe(1)
+    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["firefox", "http://localhost/my-workspace"])
+  })
+
+  test("env var substitution in cwd", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      workspace: { name: "my-workspace", branch: "feat/test", repos: [], settings: {} } as any,
+      tasksDir: "/tmp/tasks",
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ command: "ghostty", cwd: "$WS_TASKS_DIR/mydir" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd /tmp/tasks/mydir && ghostty")
+  })
+})
+
+// ===================================================================
+// Column config — workspace settings override global config
+// ===================================================================
+describe("column config — config precedence", () => {
+  test("workspace settings columns override global config columns", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      workspace: {
+        name: "test-ws",
+        branch: "feat/test",
+        repos: [],
+        settings: {
+          integrations: {
+            niri: {
+              columns: [{ windows: [{ app: "alacritty" }] }],
+            },
+          },
+        },
+      } as any,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawn.mock.calls.length).toBe(1)
+    // workspace config wins — alacritty, not ghostty
+    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["alacritty"])
+  })
+
+  test("falls back to global config when workspace has no columns", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      workspace: {
+        name: "test-ws",
+        branch: "feat/test",
+        repos: [],
+        settings: {
+          integrations: { niri: { enabled: true } }, // no columns
+        },
+      } as any,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawn.mock.calls.length).toBe(1)
+    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["ghostty"])
   })
 })
 
