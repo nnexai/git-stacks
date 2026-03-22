@@ -66,6 +66,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 - [x] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config (completed 2026-03-22)
 - [x] **Phase 23: Test Environment Isolation** - Audit and enforce isolated config dirs across all tests (completed 2026-03-22)
 - [x] **Phase 24: Mock Architecture Refactor** - Replace module-level mock.module() with injectable dependency mocking (completed 2026-03-22)
+- [ ] **Phase 24.1: Test Mock Hygiene (INSERTED)** - Eliminate stale @clack/prompts mocks and fix incomplete @/tui/utils mocks left over from Phase 24
 - [ ] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks
 - [ ] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements
 - [ ] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation and issue/task linking
@@ -120,6 +121,7 @@ Plans:
 | 22. Niri Display Fix | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
+| 24.1. Test Mock Hygiene | v0.7.0 | 0/1 | Not started | - |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 0/? | Not started | - |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 0/? | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
@@ -134,6 +136,16 @@ Plans:
 Plans:
 - [x] 24-01-PLAN.md — Add _exec to tmux.ts, cmux.ts, lifecycle.ts + direct unit tests
 - [x] 24-02-PLAN.md — Prompts wrapper in tui/utils.ts + production import switchover
+
+### Phase 24.1: Test Mock Hygiene (INSERTED)
+
+**Goal:** Eliminate stale and incomplete test mocks left over from Phase 24's import migration. Remove dead `mock.module("@clack/prompts")` calls from 7 test files (production code no longer imports it), add `prompts` object to incomplete `@/tui/utils` mocks, and fix fragile implicit mock-cache ordering dependencies.
+**Requirements**: MOCK-05
+**Depends on:** Phase 24
+**Plans:** 1 plan
+
+Plans:
+- [ ] 24.1-01-PLAN.md — Remove dead @clack/prompts mocks from 7 files, add/fix @/tui/utils mocks in 3 files
 
 ### Phase 25: Dedicated Lifecycle Phases
 
