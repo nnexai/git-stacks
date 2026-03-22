@@ -1,5 +1,20 @@
 import { describe, test, expect, mock } from "bun:test"
 
+// Mock forge-utils so forge integrations don't trigger real config I/O
+mock.module("@/lib/integrations/forge-utils", () => ({
+  resolveForgeRepo: mock(() => ({ ok: false, error: "workspace_not_found", name: "test" })),
+  formatForgeError: mock(() => "test error"),
+  detectForgeForRepo: mock(async () => []),
+  detectGitHubForge: mock(async () => false),
+  detectGitLabForge: mock(async () => false),
+  detectGiteaForge: mock(async () => false),
+  _detect: {
+    which: mock(async () => false),
+    gitRemoteUrl: mock(async () => null),
+    teaPullsLs: mock(async () => false),
+  },
+}))
+
 // Mock tmux lib so no real shell commands run during import
 mock.module("@/lib/tmux", () => ({
   openTmuxSession: mock(async () => ({ created: false })),
@@ -75,5 +90,36 @@ describe("integrationCommand structure", () => {
     expect(niri).toBeDefined()
     const niriSubNames = niri.commands.map((c: any) => c.name())
     expect(niriSubNames).toContain("focus-workspace")
+  })
+
+  test("has 'github' subcommand", () => {
+    const names = integrationCommand.commands.map((c: any) => c.name())
+    expect(names).toContain("github")
+  })
+
+  test("has 'gitlab' subcommand", () => {
+    const names = integrationCommand.commands.map((c: any) => c.name())
+    expect(names).toContain("gitlab")
+  })
+
+  test("has 'gitea' subcommand", () => {
+    const names = integrationCommand.commands.map((c: any) => c.name())
+    expect(names).toContain("gitea")
+  })
+
+  test("github subcommand has 'pr' sub-subcommand", () => {
+    const github = integrationCommand.commands.find((c: any) => c.name() === "github")
+    expect(github).toBeDefined()
+    const subNames = github.commands.map((c: any) => c.name())
+    expect(subNames).toContain("pr")
+  })
+
+  test("github pr has create/open/status commands", () => {
+    const github = integrationCommand.commands.find((c: any) => c.name() === "github")
+    const pr = github.commands.find((c: any) => c.name() === "pr")
+    const prSubNames = pr.commands.map((c: any) => c.name())
+    expect(prSubNames).toContain("create")
+    expect(prSubNames).toContain("open")
+    expect(prSubNames).toContain("status")
   })
 })
