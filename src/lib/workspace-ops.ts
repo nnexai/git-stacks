@@ -213,9 +213,96 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
   )
 }
 
+async function _executeClean(
+  workspace: Workspace,
+  config: GlobalConfig,
+  tasksDir: string,
+  opts: { captured?: boolean; force?: boolean; triggeredBy: string },
+  onProgress?: ProgressCallback
+): Promise<{ ok: boolean; error?: string }> {
+  // Step 1: Call _executeClose (cascade: close before clean, per D-02)
+  const closeResult = await _executeClose(workspace, config, tasksDir, {
+    captured: opts.captured,
+    triggeredBy: opts.triggeredBy,
+  }, onProgress)
+  if (!closeResult.ok) return closeResult  // D-03: abort on failure
+
+  const baseEnv = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
+  const wsDir = join(tasksDir, workspace.name)
+  const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
+
+  // Step 2: Run workspace-level pre_clean hooks (D-05)
+  if (workspace.hooks?.pre_clean?.length) {
+    try {
+      if (opts.captured) {
+        await runHooksCaptured(workspace.hooks.pre_clean, hookCwd, baseEnv,
+          (output) => onProgress?.(output.line))
+      } else {
+        await runHooks(workspace.hooks.pre_clean, hookCwd, baseEnv)
+      }
+    } catch (err) {
+      return { ok: false, error: `pre_clean hook failed (${err})` }
+    }
+  }
+
+  // Step 3: Per-repo pre_clean + worktree removal (interleaved, D-08)
+  const failures: string[] = []
+  for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
+    if (!existsSync(repo.task_path)) {
+      onProgress?.(`skip  ${repo.name} (already removed)`)
+      continue
+    }
+    // Per-repo pre_clean hook fires immediately before this repo's worktree removal
+    if (repo.hooks?.pre_clean?.length) {
+      const repoEnv = {
+        ...baseEnv,
+        WS_REPO_NAME: repo.name,
+        WS_REPO_PATH: repo.task_path,
+        WS_MAIN_PATH: repo.main_path,
+      }
+      try {
+        if (opts.captured) {
+          await runHooksCaptured(repo.hooks.pre_clean, repo.task_path, repoEnv,
+            (output) => onProgress?.(output.line))
+        } else {
+          await runHooks(repo.hooks.pre_clean, repo.task_path, repoEnv)
+        }
+      } catch (err) {
+        return { ok: false, error: `pre_clean[${repo.name}] hook failed (${err})` }  // D-03: abort
+      }
+    }
+    try {
+      await removeWorktree(repo.main_path, repo.task_path)
+      onProgress?.(`removed  ${repo.name}`)
+    } catch (err) {
+      failures.push(`${repo.name} (${err})`)
+    }
+  }
+
+  if (failures.length > 0) {
+    return { ok: false, error: `Could not clean worktrees:\n  ${failures.join("\n  ")}` }
+  }
+
+  // Step 4: Run workspace-level post_clean hooks (D-06)
+  if (workspace.hooks?.post_clean?.length) {
+    try {
+      if (opts.captured) {
+        await runHooksCaptured(workspace.hooks.post_clean, hookCwd, baseEnv,
+          (output) => onProgress?.(output.line))
+      } else {
+        await runHooks(workspace.hooks.post_clean, hookCwd, baseEnv)
+      }
+    } catch (err) {
+      return { ok: false, error: `post_clean hook failed (${err})` }
+    }
+  }
+
+  return { ok: true }
+}
+
 export async function cleanWorkspace(
   name: string,
-  opts: { force?: boolean; dryRun?: boolean },
+  opts: { force?: boolean; dryRun?: boolean; captured?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -240,8 +327,9 @@ export async function cleanWorkspace(
     onProgress?.(w)
   }
 
-  // Dry-run short-circuit — skip hooks, just describe what would happen
+  // Dry-run short-circuit — skip cascade, hooks, and worktree removal
   if (opts.dryRun) {
+    onProgress?.("[dry-run] would close workspace (run pre_close, integration cleanup, post_close)")
     for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
       if (!existsSync(repo.task_path)) continue
       onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
@@ -250,36 +338,11 @@ export async function cleanWorkspace(
     return { ok: true }
   }
 
-  try {
-    await runPreRemoveHooks(workspace, tasksDir)
-  } catch (err) {
-    return { ok: false, error: `pre_remove hook failed (${err})` }
-  }
-
-  // Run integration cleanup (e.g., unname niri workspace)
-  const ctx: IntegrationContext = { workspace, tasksDir, config }
-  await runIntegrationCleanup(ctx)
-
-  // Stage: attempt all worktree removals, collect failures (BUG-02 fix)
-  const failures: string[] = []
-  for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
-    if (!existsSync(repo.task_path)) {
-      onProgress?.(`skip  ${repo.name} (already removed)`)
-      continue
-    }
-    try {
-      await removeWorktree(repo.main_path, repo.task_path)
-      onProgress?.(`removed  ${repo.name}`)
-    } catch (err) {
-      failures.push(`${repo.name} (${err})`)
-    }
-  }
-
-  if (failures.length > 0) {
-    return { ok: false, error: `Could not clean worktrees:\n  ${failures.join("\n  ")}` }
-  }
-
-  return { ok: true }
+  return _executeClean(workspace, config, tasksDir, {
+    captured: opts.captured,
+    force: opts.force,
+    triggeredBy: "clean",
+  }, onProgress)
 }
 
 async function _executeClose(

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, afterAll, mock } from "bun:test"
 import { join } from "path"
-import { existsSync, mkdirSync, writeFileSync, rmSync, unlinkSync } from "fs"
+import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from "fs"
 import { execSync } from "child_process"
 import { makeTmpDir, cleanup, makeGitRepo, useIsolatedConfig } from "../helpers"
 import {
@@ -323,6 +323,121 @@ describe("cleanWorkspace", () => {
     // Worktree directory must be gone
     expect(existsSync(repo.worktreePath)).toBe(false)
 
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: cascade order — close before clean
+  test("cleanWorkspace calls close before clean (cascade order)", async () => {
+    const wsName = uniqueWsName("clean-cascade-order")
+    const stackName = uniqueRegistryName()
+    const logFile = `/tmp/gsd-hook-log-cascade-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = {
+      pre_close: [`echo PRE_CLOSE >> ${logFile}`],
+      pre_clean: [`echo PRE_CLEAN >> ${logFile}`],
+    }
+    writeWorkspace(ws)
+
+    const result = await cleanWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+
+    const log = existsSync(logFile) ? readFileSync(logFile, "utf-8") : ""
+    const preCloseIdx = log.indexOf("PRE_CLOSE")
+    const preCleanIdx = log.indexOf("PRE_CLEAN")
+    expect(preCloseIdx).toBeGreaterThanOrEqual(0)
+    expect(preCleanIdx).toBeGreaterThanOrEqual(0)
+    expect(preCloseIdx).toBeLessThan(preCleanIdx)
+
+    try { unlinkSync(logFile) } catch { /* ignore */ }
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: post_clean fires after worktree removal
+  test("cleanWorkspace fires post_clean after worktree removal", async () => {
+    const wsName = uniqueWsName("clean-post-clean")
+    const stackName = uniqueRegistryName()
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = { post_clean: ["echo POST_CLEAN_RAN"] }
+    writeWorkspace(ws)
+
+    const result = await cleanWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+    expect(existsSync(repos[0].worktreePath)).toBe(false)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: WS_TRIGGERED_BY=clean propagated through cascade
+  test("cleanWorkspace sets WS_TRIGGERED_BY=clean in all hooks", async () => {
+    const wsName = uniqueWsName("clean-triggered-by")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = {
+      pre_close: ['test "$WS_TRIGGERED_BY" = "clean"'],
+      pre_clean: ['test "$WS_TRIGGERED_BY" = "clean"'],
+    }
+    writeWorkspace(ws)
+
+    const result = await cleanWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: abort on pre_clean hook failure (D-03)
+  test("cleanWorkspace aborts on pre_clean hook failure (D-03)", async () => {
+    const wsName = uniqueWsName("clean-abort-pre-clean")
+    const stackName = uniqueRegistryName()
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = { pre_clean: ["exit 1"] }
+    writeWorkspace(ws)
+
+    const result = await cleanWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/pre_clean/)
+    // Worktree still exists (aborted before removal)
+    expect(existsSync(repos[0].worktreePath)).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: per-repo pre_clean fires immediately before each worktree removal (D-08)
+  test("per-repo pre_clean fires before worktree removal (D-08)", async () => {
+    const wsName = uniqueWsName("clean-repo-pre-clean")
+    const stackName = uniqueRegistryName()
+    const logFile = `/tmp/gsd-hook-log-repo-preclean-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Patch workspace YAML to add per-repo pre_clean hook
+    const ws = readWorkspace(wsName)
+    ws.repos[0] = {
+      ...ws.repos[0],
+      hooks: { pre_clean: [`echo REPO_PRE_CLEAN >> ${logFile}`] },
+    }
+    writeWorkspace(ws)
+
+    const result = await cleanWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+    // Worktree was removed
+    expect(existsSync(repos[0].worktreePath)).toBe(false)
+
+    const log = existsSync(logFile) ? readFileSync(logFile, "utf-8") : ""
+    expect(log).toContain("REPO_PRE_CLEAN")
+
+    try { unlinkSync(logFile) } catch { /* ignore */ }
     cleanupFixture(wsName, stackName, tmp)
   })
 })
