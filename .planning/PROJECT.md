@@ -19,7 +19,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Existing integration updates — tmux/vscode/cmux return artifacts for downstream consumption
 - Window identification — snapshot-diff strategy, tmux client lookup, app_id matching
 
-## Current State — v0.6.0 Phase 19 complete (2026-03-22)
+## Current State — v0.6.0 Phase 20 complete (2026-03-22)
 
 ### What shipped in v0.4.0
 
@@ -95,7 +95,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - [x] Integration artifact population — tmux/cmux return session/workspace refs, vscode/intellij return WindowArtifact with PID — v0.6.0 Phase 18
 - [x] Integration runner — centralized runner.ts with tier-ordered execution, generate-only and generate+open modes — v0.6.0 Phase 17
 - [x] Niri shell wrappers — src/lib/niri.ts with 8 typed IPC wrappers, Zod validation, NiriCommands mockable interface — v0.6.0 Phase 19
-- [ ] Niri compositor integration — dedicated workspace, window arrangement, tmux terminal spawning
+- [x] Niri compositor integration — tier-3 plugin, named workspace, PID-based window moves, user-configurable commands — v0.6.0 Phase 20
 
 ### Out of Scope
 
@@ -186,4 +186,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-22 after v0.6.0 Phase 19 — niri-shell-wrappers complete*
+*Last updated: 2026-03-22 after v0.6.0 Phase 20 — niri-integration complete (all phases done)*
