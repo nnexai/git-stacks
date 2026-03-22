@@ -6,6 +6,7 @@ import { niriIntegration } from "./niri"
 import { githubIntegration } from "./github"
 import { gitlabIntegration } from "./gitlab"
 import { giteaIntegration } from "./gitea"
+import { jiraIntegration } from "./jira"
 
 export { type Integration, type IntegrationContext, type IntegrationArtifact, type ArtifactBag, resolveEnabledGlobally } from "./types"
 
@@ -15,5 +16,5 @@ export { type Integration, type IntegrationContext, type IntegrationArtifact, ty
  */
 export const integrations = [
   vscodeIntegration, intellijIntegration, cmuxIntegration, tmuxIntegration, niriIntegration,
-  githubIntegration, gitlabIntegration, giteaIntegration,
+  githubIntegration, gitlabIntegration, giteaIntegration, jiraIntegration,
 ]
