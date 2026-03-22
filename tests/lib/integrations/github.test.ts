@@ -187,6 +187,9 @@ describe("github issue commands", () => {
 
   test("issue open --web calls _exec.run with gh issue view --web", async () => {
     _exec.run = mock(async () => ({ exitCode: 0 }))
+    resolveIssueRefMock.mockImplementation(() => ({
+      ok: true, issueId: "42", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] }
+    }))
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "issue", "open", "my-ws", "--web"])
     expect(_exec.run).toHaveBeenCalledWith(
@@ -206,12 +209,12 @@ describe("github issue commands", () => {
   })
 
   test("issue open with no linked issue prints error and exits", async () => {
-    resolveIssueRefMock.mockImplementation(() => ({
+    resolveIssueRefMock.mockImplementation((() => ({
       ok: false,
       error: "no_issue_linked",
       tracker: "github",
       workspace: "my-ws",
-    }))
+    })) as any)
     const parent = buildParent()
     await expect(
       parent.parseAsync(["node", "x", "issue", "open", "my-ws"])

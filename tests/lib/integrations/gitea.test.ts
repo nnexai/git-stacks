@@ -281,7 +281,7 @@ describe("gitea issue commands", () => {
         { index: 99, html_url: "https://gitea.example.com/org/repo/issues/99" },
       ]),
     }))
-    resolveIssueRefMock.mockImplementation(() => ({ ok: true, issueId: "7", workspace: { name: "my-ws" } }))
+    resolveIssueRefMock.mockImplementation(() => ({ ok: true, issueId: "7", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] } }))
     const parent = buildParent()
     await expect(
       parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
