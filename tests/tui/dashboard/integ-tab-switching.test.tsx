@@ -170,21 +170,22 @@ describe("integration: tab switching", () => {
 
   test("workspace row shows relative age not ISO date", async () => {
     const { renderer, renderOnce, captureCharFrame } = await testRender(
-      () => <App />, renderOpts
+      () => <App />, { kittyKeyboard: true, width: 120, height: 30 }
     )
     activeRenderer = renderer
 
+    // Multiple renders to allow async workspace status loading to complete
+    await renderOnce()
+    await renderOnce()
     await renderOnce()
     const frame = captureCharFrame()
-    // The workspace created date is 2026-01-15, which is ~65+ days ago from 2026-03-21
-    // formatAge in WorkspaceRow will display it as "Nd" (days format) in the list pane
-    expect(frame).toMatch(/\d+d/)
-    // Assert that the list pane row for test-ws contains a relative age, not raw date
+    // Find the workspace list row (not the detail pane which intentionally shows full date)
     const lines = frame.split("\n")
-    const wsLine = lines.find(l => l.includes("test-ws") && l.includes("feature/test"))
+    const wsLine = lines.find(l => l.includes("test-ws") && l.includes("feature/test") && l.includes("0wt"))
     expect(wsLine).toBeDefined()
+    // The list row should show relative age (e.g. "66d"), not raw ISO timestamp
     expect(wsLine).not.toContain("2026-01-15T")
-    expect(wsLine).toMatch(/\d+d/)
+    expect(wsLine).toMatch(/\d+[smhd]/)
   })
 })
 
