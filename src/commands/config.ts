@@ -3,10 +3,17 @@ import { prompts as p, safeText, cancel } from "../tui/utils"
 import { readGlobalConfig, writeGlobalConfig } from "../lib/config"
 import { GLOBAL_CONFIG_FILE, HOME } from "../lib/paths"
 import { integrations, resolveEnabledGlobally } from "../lib/integrations"
+import { editGlobalConfigYaml, openYamlInEditor } from "../lib/workspace-ops"
 
 export const configCommand = new Command("config")
   .description("View and edit global git-stacks configuration")
-  .action(async () => {
+  .option("--yaml", "Open config.yml in $EDITOR")
+  .action(async (opts: { yaml?: boolean }) => {
+    if (opts.yaml) {
+      const { path, validate } = editGlobalConfigYaml()
+      await openYamlInEditor(path, validate)
+      return
+    }
     p.intro("Configure git-stacks")
     const config = readGlobalConfig()
 

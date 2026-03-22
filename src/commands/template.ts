@@ -3,6 +3,7 @@ import { prompts as p } from "@/tui/utils"
 import { readTemplate, writeTemplate, listTemplates, templateExists, templatePath } from "../lib/config"
 import { runTemplateNew, runTemplateEdit } from "../tui/template-wizard"
 import { unlinkSync } from "fs"
+import { editTemplateYaml, openYamlInEditor } from "../lib/workspace-ops"
 
 export const templateCommand = new Command("template").description("Manage workspace templates")
 
@@ -73,10 +74,16 @@ templateCommand
 templateCommand
   .command("edit <name>")
   .description("Edit an existing template")
-  .action(async (name: string) => {
+  .option("--yaml", "Open template YAML in $EDITOR")
+  .action(async (name: string, opts: { yaml?: boolean }) => {
     if (!templateExists(name)) {
       console.error(`Template '${name}' not found.`)
       process.exit(1)
+    }
+    if (opts.yaml) {
+      const { path, validate } = editTemplateYaml(name)
+      await openYamlInEditor(path, validate)
+      return
     }
     await runTemplateEdit(name)
   })

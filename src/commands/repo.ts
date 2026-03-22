@@ -7,8 +7,19 @@ import { detectRepoType } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
 import { runRepoScan } from "../tui/repo-wizard"
 import { prompts as p } from "@/tui/utils"
+import { editRegistryYaml, openYamlInEditor } from "../lib/workspace-ops"
 
-export const repoCommand = new Command("repo").description("Manage repo registry")
+export const repoCommand = new Command("repo")
+  .description("Manage repo registry")
+  .option("--yaml", "Open registry.yml in $EDITOR")
+  .action(async (opts: { yaml?: boolean }) => {
+    if (opts.yaml) {
+      const { path, validate } = editRegistryYaml()
+      await openYamlInEditor(path, validate)
+      return
+    }
+    repoCommand.help()
+  })
 
 repoCommand
   .command("add <path>")

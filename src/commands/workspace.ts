@@ -28,6 +28,8 @@ import {
   getWorkspaceListInfo,
   renameWorkspace,
   syncWorkspace,
+  editWorkspaceYaml,
+  openYamlInEditor,
 } from "../lib/workspace-ops"
 import type { SyncRow } from "../lib/workspace-ops"
 
@@ -55,10 +57,16 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("edit <name>")
     .description("Edit a workspace interactively")
-    .action(async (name: string) => {
+    .option("--yaml", "Open workspace YAML in $EDITOR")
+    .action(async (name: string, opts: { yaml?: boolean }) => {
       if (!workspaceExists(name)) {
         console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
         process.exit(1)
+      }
+      if (opts.yaml) {
+        const { path, validate } = editWorkspaceYaml(name)
+        await openYamlInEditor(path, validate)
+        return
       }
       await runWorkspaceEdit(name)
     })
