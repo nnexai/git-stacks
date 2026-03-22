@@ -13,9 +13,10 @@ const mockFocusNiriWorkspace = mock(async (_ref: string | number) => {})
 const mockFocusNiriWorkspaceDown = mock(async () => {})
 const mockNiriSpawn = mock(async (_cmd: string[]) => {})
 const mockFocusNiriWindow = mock(async (_windowId: number) => {})
-const mockSetNiriColumnWidth = mock(async (_width: string) => {})
 const mockConsumeOrExpelWindowLeft = mock(async (_windowId?: number) => {})
 const mockNiriSpawnSh = mock(async (_cmd: string) => {})
+const mockMoveColumnToIndex = mock(async (_index: number) => {})
+const mockSetWindowWidth = mock(async (_windowId: number, _change: string) => {})
 // snapshotWindowIds: call spawn fn and return [100] to simulate a window appearing
 const mockSnapshotWindowIds = mock(async (fn: () => Promise<void>) => {
   await fn()
@@ -34,9 +35,10 @@ mock.module("@/lib/niri", () => ({
   niriSpawn: mockNiriSpawn,
   snapshotWindowIds: mockSnapshotWindowIds,
   focusNiriWindow: mockFocusNiriWindow,
-  setNiriColumnWidth: mockSetNiriColumnWidth,
   consumeOrExpelWindowLeft: mockConsumeOrExpelWindowLeft,
   niriSpawnSh: mockNiriSpawnSh,
+  moveColumnToIndex: mockMoveColumnToIndex,
+  setWindowWidth: mockSetWindowWidth,
 }))
 
 mock.module("@clack/prompts", () => ({
@@ -73,9 +75,10 @@ beforeEach(() => {
   mockFocusNiriWorkspaceDown.mockReset()
   mockNiriSpawn.mockReset()
   mockFocusNiriWindow.mockReset()
-  mockSetNiriColumnWidth.mockReset()
   mockConsumeOrExpelWindowLeft.mockReset()
   mockNiriSpawnSh.mockReset()
+  mockMoveColumnToIndex.mockReset()
+  mockSetWindowWidth.mockReset()
   mockSnapshotWindowIds.mockReset()
   // Re-set default implementations
   mockIsNiriRunning.mockImplementation(async () => true)
@@ -364,7 +367,7 @@ describe("column config — source: windows", () => {
     expect(mockSnapshotWindowIds.mock.calls.length).toBe(0)
   })
 
-  test("source: window with windowIds['niri'] as first column window — width applied", async () => {
+  test("source: window with windowIds['niri'] as first column window — width applied via setWindowWidth", async () => {
     const bagWithVscode: ArtifactBag = {
       vscode: { kind: "window", pid: 123, app_id: "code", title: "VS Code", windowIds: { niri: [77] } },
     }
@@ -382,11 +385,10 @@ describe("column config — source: windows", () => {
 
     await niriIntegration.open(ctx, null, bagWithVscode)
 
-    // Width should be applied using the source window's ID
-    expect(mockFocusNiriWindow.mock.calls.length).toBe(1)
-    expect(mockFocusNiriWindow.mock.calls[0][0]).toBe(77)
-    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(1)
-    expect(mockSetNiriColumnWidth.mock.calls[0][0]).toBe("60%")
+    // Width applied via setWindowWidth(windowId, width) using source window ID
+    expect(mockSetWindowWidth.mock.calls.length).toBe(1)
+    expect(mockSetWindowWidth.mock.calls[0][0]).toBe(77)
+    expect(mockSetWindowWidth.mock.calls[0][1]).toBe("60%")
   })
 
   test("source: window missing from bag — skips gracefully", async () => {
@@ -414,7 +416,7 @@ describe("column config — source: windows", () => {
 // Column config — width and multi-window stacking
 // ===================================================================
 describe("column config — width and stacking", () => {
-  test("applies width via focusNiriWindow + setNiriColumnWidth", async () => {
+  test("applies width via setWindowWidth --id (not focusNiriWindow + setNiriColumnWidth)", async () => {
     // snapshotWindowIds returns [100] by default
     const ctx: IntegrationContext = {
       ...fakeCtx,
@@ -430,11 +432,10 @@ describe("column config — width and stacking", () => {
 
     await niriIntegration.open(ctx, null, emptyBag)
 
-    // After placing windows, focus first window then set width
-    expect(mockFocusNiriWindow.mock.calls.length).toBe(1)
-    expect(mockFocusNiriWindow.mock.calls[0][0]).toBe(100) // first window ID from snapshot
-    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(1)
-    expect(mockSetNiriColumnWidth.mock.calls[0][0]).toBe("60%")
+    // Width applied via setWindowWidth(windowId, width) — no focus dependency
+    expect(mockSetWindowWidth.mock.calls.length).toBe(1)
+    expect(mockSetWindowWidth.mock.calls[0][0]).toBe(100) // first window ID from snapshot
+    expect(mockSetWindowWidth.mock.calls[0][1]).toBe("60%")
   })
 
   test("no width call when column has no width configured", async () => {
@@ -452,8 +453,7 @@ describe("column config — width and stacking", () => {
 
     await niriIntegration.open(ctx, null, emptyBag)
 
-    expect(mockFocusNiriWindow.mock.calls.length).toBe(0)
-    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(0)
+    expect(mockSetWindowWidth.mock.calls.length).toBe(0)
   })
 
   test("stacks multiple windows in column via consumeOrExpelWindowLeft", async () => {
@@ -515,7 +515,8 @@ describe("column config — no-op", () => {
     expect(mockNiriSpawnSh.mock.calls.length).toBe(0)
     expect(mockSnapshotWindowIds.mock.calls.length).toBe(0)
     expect(mockFocusNiriWindow.mock.calls.length).toBe(0)
-    expect(mockSetNiriColumnWidth.mock.calls.length).toBe(0)
+    expect(mockSetWindowWidth.mock.calls.length).toBe(0)
+    expect(mockMoveColumnToIndex.mock.calls.length).toBe(0)
     expect(mockConsumeOrExpelWindowLeft.mock.calls.length).toBe(0)
   })
 
@@ -683,10 +684,11 @@ describe("focus behavior", () => {
 
     await niriIntegration.open(ctx, null, emptyBag)
 
-    // focusNiriWindow called: once for width (none here), once for focus: true window
+    // focusNiriWindow called: once for reorder (Phase 2a) + once for focus: true window (Phase 2d)
     const focusCalls = mockFocusNiriWindow.mock.calls
-    expect(focusCalls.length).toBe(1)
-    expect(focusCalls[0][0]).toBe(100) // window ID from snapshotWindowIds
+    expect(focusCalls.length).toBe(2)
+    // Last call is the focus: true window
+    expect(focusCalls[focusCalls.length - 1][0]).toBe(100) // window ID from snapshotWindowIds
   })
 
   test("focus: true on config prevents switching back to original workspace", async () => {
@@ -757,6 +759,115 @@ describe("cleanup (NIRI-05)", () => {
     await niriIntegration.cleanup!(fakeCtx)
 
     expect(mockUnsetNiriWorkspaceName.mock.calls.length).toBe(0)
+  })
+})
+
+// ===================================================================
+// Column reordering (Phase 2) — move-column-to-index
+// ===================================================================
+describe("column reordering (Phase 2)", () => {
+  test("reorders columns via focusNiriWindow + moveColumnToIndex for multi-column layout", async () => {
+    // Two columns, each with 1 app window: IDs 100, 101
+    let callCount = 0
+    mockSnapshotWindowIds.mockImplementation(async (fn: () => Promise<void>) => {
+      await fn()
+      callCount++
+      return [callCount === 1 ? 100 : 101]
+    })
+
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [
+              { windows: [{ app: "ghostty" }] },
+              { windows: [{ app: "firefox" }] },
+            ],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    // Phase 2a: focusNiriWindow then moveColumnToIndex for each column (left-to-right)
+    const focusCalls = mockFocusNiriWindow.mock.calls
+    const moveCalls = mockMoveColumnToIndex.mock.calls
+    expect(moveCalls.length).toBe(2)
+    // Column 0 (ci=0): focus window 100, move to index 1
+    expect(focusCalls[0][0]).toBe(100)
+    expect(moveCalls[0][0]).toBe(1)
+    // Column 1 (ci=1): focus window 101, move to index 2
+    expect(focusCalls[1][0]).toBe(101)
+    expect(moveCalls[1][0]).toBe(2)
+  })
+
+  test("calls moveColumnToIndex for single-column layout", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    // Single column: still positions it at index 1
+    expect(mockMoveColumnToIndex.mock.calls.length).toBe(1)
+    expect(mockMoveColumnToIndex.mock.calls[0][0]).toBe(1)
+  })
+
+  test("reorders before stacking — moveColumnToIndex calls happen before consumeOrExpelWindowLeft", async () => {
+    // 2 columns: first has 2 windows, second has 1. IDs: 100, 101, 102
+    let callCount = 0
+    mockSnapshotWindowIds.mockImplementation(async (fn: () => Promise<void>) => {
+      await fn()
+      callCount++
+      if (callCount === 1) return [100]
+      if (callCount === 2) return [101]
+      return [102]
+    })
+
+    const callOrder: string[] = []
+    mockMoveColumnToIndex.mockImplementation(async (_index: number) => {
+      callOrder.push("move")
+    })
+    mockConsumeOrExpelWindowLeft.mockImplementation(async (_windowId?: number) => {
+      callOrder.push("stack")
+    })
+
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [
+              { windows: [{ app: "ghostty" }, { app: "terminal" }] },
+              { windows: [{ app: "firefox" }] },
+            ],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    // All move calls must come before any stack calls
+    const firstMoveIdx = callOrder.indexOf("move")
+    const lastMoveIdx = callOrder.lastIndexOf("move")
+    const firstStackIdx = callOrder.indexOf("stack")
+
+    expect(firstMoveIdx).toBeGreaterThanOrEqual(0) // at least one move call
+    expect(firstStackIdx).toBeGreaterThanOrEqual(0) // at least one stack call
+    expect(lastMoveIdx).toBeLessThan(firstStackIdx) // all moves before first stack
   })
 })
 

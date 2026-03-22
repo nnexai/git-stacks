@@ -20,7 +20,8 @@ import {
   unsetNiriWorkspaceName,
   niriSpawn,
   focusNiriWindow,
-  setNiriColumnWidth,
+  moveColumnToIndex,
+  setWindowWidth,
   consumeOrExpelWindowLeft,
   niriSpawnSh,
   snapshotWindowIds,
@@ -150,7 +151,7 @@ export const niriIntegration: Integration = {
         }
       }
 
-      // Step 3: Process declarative column layout
+      // Step 3: Process declarative column layout — two-phase approach
       const columns = parsedConfig?.columns
 
       // Track which window should receive final focus (from focus: true on a window entry)
@@ -166,8 +167,12 @@ export const niriIntegration: Integration = {
         const expandVars = (s: string): string =>
           s.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")
 
-        // Process columns sequentially (left to right)
-        for (const column of columns) {
+        // ── Phase 1: Creation — spawn/resolve all windows, build columnMap ──
+        // columnMap: 0-based column config index -> window IDs in config order
+        const columnMap = new Map<number, number[]>()
+
+        for (let ci = 0; ci < columns.length; ci++) {
+          const column = columns[ci]
           const columnWindowIds: number[] = []
 
           for (const window of column.windows) {
@@ -228,20 +233,49 @@ export const niriIntegration: Integration = {
             }
           }
 
-          // Stack windows 2+ into the column via consumeOrExpelWindowLeft
-          for (let i = 1; i < columnWindowIds.length; i++) {
+          columnMap.set(ci, columnWindowIds)
+        }
+
+        // ── Phase 2: Layout — reorder, stack, width, focus ──
+        if (columnMap.size > 0) {
+          // Step 2a — Reorder columns left-to-right using focus + move-column-to-index
+          // Process columns in config order (0, 1, 2...). For each target column:
+          // - Focus the first window in that column
+          // - Move the focused column to target index (1-based)
+          // Left-to-right processing ensures already-placed columns are never displaced.
+          for (let ci = 0; ci < columns.length; ci++) {
+            const windowIds = columnMap.get(ci)
+            if (!windowIds?.length) continue
+            const firstWindowId = windowIds[0]
             try {
-              await consumeOrExpelWindowLeft(columnWindowIds[i])
+              await focusNiriWindow(firstWindowId)
+              await moveColumnToIndex(ci + 1) // 1-based index
             } catch (err) {
-              p.log.warn(`niri: failed to stack window ${columnWindowIds[i]}: ${String(err)}`)
+              p.log.warn(`niri: failed to reorder column ${ci}: ${String(err)}`)
             }
           }
 
-          // Apply column width if configured and we have at least one window
-          if (column.width && columnWindowIds[0] !== undefined) {
+          // Step 2b — Stack windows within columns (consumeOrExpelWindowLeft for windows 2+)
+          for (let ci = 0; ci < columns.length; ci++) {
+            const windowIds = columnMap.get(ci)
+            if (!windowIds || windowIds.length <= 1) continue
+            for (let i = 1; i < windowIds.length; i++) {
+              try {
+                await consumeOrExpelWindowLeft(windowIds[i])
+              } catch (err) {
+                p.log.warn(`niri: failed to stack window ${windowIds[i]}: ${String(err)}`)
+              }
+            }
+          }
+
+          // Step 2c — Apply widths via setWindowWidth --id (no focus dependency)
+          for (let ci = 0; ci < columns.length; ci++) {
+            const column = columns[ci]
+            if (!column.width) continue
+            const windowIds = columnMap.get(ci)
+            if (!windowIds?.length) continue
             try {
-              await focusNiriWindow(columnWindowIds[0])
-              await setNiriColumnWidth(column.width)
+              await setWindowWidth(windowIds[0], column.width)
             } catch (err) {
               p.log.warn(`niri: failed to set column width: ${String(err)}`)
             }
