@@ -122,7 +122,7 @@ Plans:
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
-| 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete   | 2026-03-22 |
+| 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 0/3 | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
@@ -185,7 +185,7 @@ Plans:
 Plans:
 - [ ] 26-01-PLAN.md — Shell completion: COMMAND_FLAG_COMPLETIONS table, close in DYNAMIC_COMPLETIONS, new --from template completion
 - [ ] 26-02-PLAN.md — Editor --yaml flags: openYamlInEditor helper, editYaml functions, --yaml on 4 commands
-- [ ] 26-03-PLAN.md — Clean folder deletion + remove --force resilience (depends on Phase 25 refactor)
+- [x] 26-03-PLAN.md — Clean folder deletion + remove --force resilience (depends on Phase 25 refactor) (completed 2026-03-22)
 
 ### Phase 27: Git Forge Integrations
 

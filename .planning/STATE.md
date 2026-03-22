@@ -4,7 +4,7 @@ milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
 stopped_at: Completed 25-03-PLAN.md — mergeWorkspace D-10 cascade, TUI captured flag fix, runPreRemoveHooks removal
-last_updated: "2026-03-22T14:45:03.712Z"
+last_updated: "2026-03-22T14:51:21.991Z"
 progress:
   total_phases: 9
   completed_phases: 6
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 25 (dedicated-lifecycle-phases) — EXECUTING
-Plan: 3 of 3
+Phase: 26
+Plan: Not started
 
 ## Performance Metrics
 
