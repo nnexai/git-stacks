@@ -371,10 +371,48 @@ export function registerWorkspaceCommands(program: Command) {
         }
       }
 
-      const result = await cleanWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
+      // First pass: clean worktrees without folder deletion
+      const result = await cleanWorkspace(name, {
+        force: opts.force,
+        dryRun: opts.dryRun,
+      }, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)
+      }
+
+      // Dry-run: show folder deletion info and exit (no actual deletion)
+      if (opts.dryRun) {
+        const config = readGlobalConfig()
+        const tasksDir = getTasksDir(config.workspace_root)
+        const { existsSync: fsExistsSync } = await import("fs")
+        if (fsExistsSync(join(tasksDir, name))) {
+          console.log(`  [dry-run] would delete folder: tasks/${name}/`)
+        }
+        return
+      }
+
+      // Second pass: folder deletion (D-08, D-09, D-10)
+      const config = readGlobalConfig()
+      const tasksDir = getTasksDir(config.workspace_root)
+      const { existsSync: fsExistsSync, rmSync: fsRmSync } = await import("fs")
+      const wsDir = join(tasksDir, name)
+
+      if (fsExistsSync(wsDir)) {
+        let shouldDelete = opts.force ?? false
+        if (!shouldDelete) {
+          const ok = await p.confirm({
+            message: `Delete workspace folder tasks/${name}/`,
+            initialValue: false,
+          })
+          if (!p.isCancel(ok) && ok) {
+            shouldDelete = true
+          }
+        }
+        if (shouldDelete) {
+          fsRmSync(wsDir, { recursive: true, force: true })
+          console.log(`  deleted  tasks/${name}/`)
+        }
       }
 
       console.log(`\nDone. Run \`git-stacks open ${name}\` to recreate worktrees.`)
