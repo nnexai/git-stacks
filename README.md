@@ -185,6 +185,9 @@ The plugin system is extensible — new agent frameworks can be added as plugins
 | 1 | tmux | Creates detached tmux session | Session name |
 | 2 | cmux | Creates/focuses cmux workspace | Workspace ref |
 | 3 | niri | Arranges windows on a named niri workspace | — |
+| 5 | GitHub | Creates GitHub PRs via `gh` CLI | — |
+| 5 | GitLab | Creates GitLab MRs via `glab` CLI | — |
+| 5 | Gitea | Creates Gitea PRs via `tea` CLI | — |
 
 Integrations are configured per-global, per-template, or per-workspace. Use `git-stacks config` to enable/disable globally, or pass overrides during `git-stacks new` / `git-stacks edit`.
 
@@ -222,6 +225,34 @@ settings:
           windows:
             - command: ghostty -e git-stacks integration tmux attach $GS_WORKSPACE_NAME
 ```
+
+**Forge integrations** (GitHub, GitLab, Gitea):
+
+Forge integrations connect workspaces to pull request workflows. Each wraps a forge CLI tool (`gh`, `glab`, `tea`) and resolves the correct repo path and base branch from workspace context.
+
+```bash
+# Create a PR for workspace branch against its base branch
+git-stacks integration github pr create my-feature
+git-stacks integration gitlab pr create my-feature      # translates to glab mr create
+git-stacks integration gitea pr create my-feature
+
+# View PR URL (prints to stdout, useful for piping)
+git-stacks integration github pr open my-feature
+
+# Open PR in browser
+git-stacks integration github pr open my-feature --web
+
+# Show PR status
+git-stacks integration github pr status my-feature
+```
+
+When a workspace has multiple worktree-mode repos, specify which repo:
+
+```bash
+git-stacks integration github pr create my-feature backend-api
+```
+
+Repos must have a `forge` field set in the registry (`github`, `gitlab`, or `gitea`). This is auto-detected during `repo add` / `repo scan` from remote URL and CLI availability. Check forge CLI availability with `git-stacks doctor`.
 
 ## Hooks & Env Injection
 
