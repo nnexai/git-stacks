@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T15:17:45.617Z"
+last_updated: "2026-03-22T15:24:30.918Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -61,6 +61,7 @@ Plan: 3 of 3
 | Phase 25-dedicated-lifecycle-phases P03 | 5 | 2 tasks | 4 files |
 | Phase 26-autocompletion-editor-polish P01 | 3min | 1 tasks | 2 files |
 | Phase 26-autocompletion-editor-polish P02 | 2min | 2 tasks | 6 files |
+| Phase 26-autocompletion-editor-polish P03 | 4min | 2 tasks | 3 files |
 
 ### Decisions
 
@@ -86,6 +87,9 @@ Plan: 3 of 3
 - [quick-260322-m2k]: All hook env vars renamed from WS_ to GS_ prefix; buildRepoEnv helper extracted; openWorkspace now uses buildBaseEnv (injects GS_TRIGGERED_BY=open); create flows inject GS_TRIGGERED_BY=create
 - [Phase 26-autocompletion-editor-polish]: COMMAND_FLAG_COMPLETIONS key format commandPath:--flag; message --from excluded (freeform); resolveFlagCompletion checks command-specific before global
 - [Phase 26-autocompletion-editor-polish]: openYamlInEditor: no path printed before editor opens (D-07), VISUAL|EDITOR|vi fallback chain, validates with correct Zod schema after editor exits
+- [Phase 26-autocompletion-editor-polish]: deleteFolder opt in _executeClean as last step after post_clean hooks — worktrees deregistered before folder deleted
+- [Phase 26-autocompletion-editor-polish]: removeWorkspace --force malformed YAML fallback: readGlobalConfig safe, name-based rmSync, no hook execution
+- [Phase 26-autocompletion-editor-polish]: CLI clean: folder deletion in command layer after cleanWorkspace returns — cleaner separation, second p.confirm prompt
 
 ### Pending Todos
 
@@ -111,7 +115,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T15:17:45.615Z
+Last session: 2026-03-22T15:24:30.916Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21

@@ -49,13 +49,13 @@
 - [x] **POLISH-01**: `new --from` completes template names in bash, zsh, and fish via `COMMAND_FLAG_COMPLETIONS` table
 - [x] **POLISH-02**: `close` completes workspace names in all three shell formats (missing since Phase 21)
 - [x] **POLISH-03**: `message send --from` and `message clear --from` do NOT get template completion (sender is freeform)
-- [ ] **POLISH-04**: `git-stacks edit <name> --yaml` opens workspace YAML in $EDITOR with post-edit Zod validation warning
-- [ ] **POLISH-05**: `git-stacks template edit <name> --yaml` opens template YAML in $EDITOR with post-edit Zod validation warning
-- [ ] **POLISH-06**: `git-stacks config --yaml` opens config.yml and `git-stacks repo --yaml` opens registry.yml in $EDITOR with post-edit Zod validation
-- [ ] **POLISH-07**: `cleanWorkspace` deletes `tasks/{name}/` directory after worktree removal when deleteFolder is set
-- [ ] **POLISH-08**: CLI `clean` without `--force` prompts for folder deletion separately after worktree removal
-- [ ] **POLISH-09**: `removeWorkspace` always deletes `tasks/{name}/` directory as part of total removal
-- [ ] **POLISH-10**: `removeWorkspace --force` with malformed/unparseable YAML succeeds via name-based directory cleanup fallback
+- [x] **POLISH-04**: `git-stacks edit <name> --yaml` opens workspace YAML in $EDITOR with post-edit Zod validation warning
+- [x] **POLISH-05**: `git-stacks template edit <name> --yaml` opens template YAML in $EDITOR with post-edit Zod validation warning
+- [x] **POLISH-06**: `git-stacks config --yaml` opens config.yml and `git-stacks repo --yaml` opens registry.yml in $EDITOR with post-edit Zod validation
+- [x] **POLISH-07**: `cleanWorkspace` deletes `tasks/{name}/` directory after worktree removal when deleteFolder is set
+- [x] **POLISH-08**: CLI `clean` without `--force` prompts for folder deletion separately after worktree removal
+- [x] **POLISH-09**: `removeWorkspace` always deletes `tasks/{name}/` directory as part of total removal
+- [x] **POLISH-10**: `removeWorkspace --force` with malformed/unparseable YAML succeeds via name-based directory cleanup fallback
 
 ## Future Requirements
 

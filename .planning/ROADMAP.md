@@ -68,7 +68,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 - [x] **Phase 24: Mock Architecture Refactor** - Replace module-level mock.module() with injectable dependency mocking (completed 2026-03-22)
 - [x] **Phase 24.1: Test Mock Hygiene (INSERTED)** - Eliminate stale @clack/prompts mocks and fix incomplete @/tui/utils mocks left over from Phase 24 (completed 2026-03-22)
 - [x] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks (completed 2026-03-22)
-- [ ] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements
+- [x] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements (completed 2026-03-22)
 - [ ] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation and issue/task linking
 
 ## Phase Details
@@ -123,7 +123,7 @@ Plans:
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
-| 26. Autocompletion & Editor Polish | v0.7.0 | 2/3 | In Progress|  |
+| 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete   | 2026-03-22 |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
@@ -180,7 +180,7 @@ Plans:
   5. `clean` deletes the `tasks/{name}/` folder after worktree removal (with confirmation or --force)
   6. `remove` always deletes the `tasks/{name}/` folder
   7. `remove --force` handles malformed/unparseable YAML via name-based fallback
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 26-01-PLAN.md — Shell completion: COMMAND_FLAG_COMPLETIONS table, close in DYNAMIC_COMPLETIONS, new --from template completion
