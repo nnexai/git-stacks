@@ -123,7 +123,7 @@ Plans:
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
-| 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete   | 2026-03-22 |
+| 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
