@@ -514,6 +514,71 @@ describe("removeWorkspace", () => {
 
     cleanupFixture(wsName, stackName, tmp)
   })
+
+  // Test: removeWorkspace deletes workspace folder after YAML deletion (D-11)
+  test("removeWorkspace deletes workspace folder (D-11)", async () => {
+    const wsName = uniqueWsName("remove-deletes-folder")
+    const stackName = uniqueRegistryName()
+
+    const { tasksDir } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const wsDir = join(tasksDir, wsName)
+    expect(existsSync(wsDir)).toBe(true)
+
+    const result = await removeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+    // Both YAML and folder are gone
+    expect(workspaceExists(wsName)).toBe(false)
+    expect(existsSync(wsDir)).toBe(false)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: removeWorkspace --force with malformed YAML succeeds (D-12)
+  test("removeWorkspace --force with malformed YAML succeeds (D-12)", async () => {
+    const wsName = uniqueWsName("remove-malformed-force")
+    const stackName = uniqueRegistryName()
+
+    const { tasksDir } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Overwrite workspace YAML with garbage (unparseable)
+    writeFileSync(workspacePath(wsName), "{{{not valid yaml:::")
+
+    // workspaceExists returns true (file exists), but readWorkspace throws on parse
+    expect(existsSync(workspacePath(wsName))).toBe(true)
+
+    const wsDir = join(tasksDir, wsName)
+    expect(existsSync(wsDir)).toBe(true)
+
+    const result = await removeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+    // YAML file is deleted
+    expect(existsSync(workspacePath(wsName))).toBe(false)
+    // Workspace folder is deleted
+    expect(existsSync(wsDir)).toBe(false)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: removeWorkspace without --force and malformed YAML returns error (D-12)
+  test("removeWorkspace without --force and malformed YAML returns error (D-12)", async () => {
+    const wsName = uniqueWsName("remove-malformed-no-force")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Overwrite workspace YAML with garbage (unparseable)
+    writeFileSync(workspacePath(wsName), "{{{not valid yaml:::")
+
+    const result = await removeWorkspace(wsName, { force: false })
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/Cannot parse/)
+    expect(result.error).toMatch(/--force/)
+
+    // Manually clean up since we have a corrupt file
+    try { unlinkSync(workspacePath(wsName)) } catch { /* ignore */ }
+    cleanup(tmp)
+  })
 })
 
 // ============================================================================
@@ -664,6 +729,64 @@ describe("cleanWorkspace", () => {
     expect(log).toContain("REPO_PRE_CLEAN")
 
     try { unlinkSync(logFile) } catch { /* ignore */ }
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: cleanWorkspace with deleteFolder:true removes workspace folder (D-08)
+  test("cleanWorkspace with deleteFolder:true removes workspace folder", async () => {
+    const wsName = uniqueWsName("clean-delete-folder")
+    const stackName = uniqueRegistryName()
+
+    const { tasksDir } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    // Workspace folder must exist before clean
+    expect(existsSync(join(tasksDir, wsName))).toBe(true)
+
+    // @ts-ignore — deleteFolder added in this plan
+    const result = await cleanWorkspace(wsName, { force: true, deleteFolder: true })
+    expect(result.ok).toBe(true)
+
+    // Workspace folder must be gone after clean with deleteFolder:true
+    expect(existsSync(join(tasksDir, wsName))).toBe(false)
+    // YAML still exists (clean != remove)
+    expect(workspaceExists(wsName)).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: cleanWorkspace without deleteFolder leaves workspace folder intact
+  test("cleanWorkspace without deleteFolder leaves workspace folder", async () => {
+    const wsName = uniqueWsName("clean-no-delete-folder")
+    const stackName = uniqueRegistryName()
+
+    const { tasksDir, repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const wsDir = join(tasksDir, wsName)
+    expect(existsSync(wsDir)).toBe(true)
+
+    const result = await cleanWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+    // Worktree inside is removed
+    expect(existsSync(repos[0].worktreePath)).toBe(false)
+    // But the workspace folder itself must still exist
+    expect(existsSync(wsDir)).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: cleanWorkspace dry-run with deleteFolder mentions folder
+  test("cleanWorkspace dry-run with deleteFolder mentions folder deletion", async () => {
+    const wsName = uniqueWsName("clean-dryrun-delete-folder")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const messages: string[] = []
+    // @ts-ignore — deleteFolder added in this plan
+    const result = await cleanWorkspace(wsName, { dryRun: true, deleteFolder: true }, (msg) => messages.push(msg))
+    expect(result.ok).toBe(true)
+    expect(messages.some(m => m.includes("[dry-run]") && m.includes("folder"))).toBe(true)
+
     cleanupFixture(wsName, stackName, tmp)
   })
 })

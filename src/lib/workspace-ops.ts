@@ -1,4 +1,4 @@
-import { existsSync, unlinkSync, readFileSync, writeFileSync, lstatSync } from "fs"
+import { existsSync, unlinkSync, readFileSync, writeFileSync, lstatSync, rmSync } from "fs"
 import { join } from "path"
 import { parse } from "yaml"
 import {
@@ -214,7 +214,7 @@ async function _executeClean(
   workspace: Workspace,
   config: GlobalConfig,
   tasksDir: string,
-  opts: { captured?: boolean; force?: boolean; triggeredBy: string },
+  opts: { captured?: boolean; force?: boolean; deleteFolder?: boolean; triggeredBy: string },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   // Step 1: Call _executeClose (cascade: close before clean, per D-02)
@@ -289,12 +289,21 @@ async function _executeClean(
     }
   }
 
+  // Step 5: Delete workspace folder if requested (D-08)
+  if (opts.deleteFolder) {
+    const wsFolderDir = join(tasksDir, workspace.name)
+    if (existsSync(wsFolderDir)) {
+      rmSync(wsFolderDir, { recursive: true, force: true })
+      onProgress?.(`deleted  tasks/${workspace.name}/`)
+    }
+  }
+
   return { ok: true }
 }
 
 export async function cleanWorkspace(
   name: string,
-  opts: { force?: boolean; dryRun?: boolean; captured?: boolean },
+  opts: { force?: boolean; dryRun?: boolean; captured?: boolean; deleteFolder?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -326,6 +335,9 @@ export async function cleanWorkspace(
       if (!existsSync(repo.task_path)) continue
       onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
     }
+    if (opts.deleteFolder) {
+      onProgress?.(`[dry-run] would delete folder: tasks/${name}/`)
+    }
     onProgress?.("Dry run complete. No changes made.")
     return { ok: true }
   }
@@ -333,6 +345,7 @@ export async function cleanWorkspace(
   return _executeClean(workspace, config, tasksDir, {
     captured: opts.captured,
     force: opts.force,
+    deleteFolder: opts.deleteFolder,
     triggeredBy: "clean",
   }, onProgress)
 }
@@ -407,9 +420,35 @@ export async function removeWorkspace(
     return { ok: false, error: `Workspace '${name}' not found.` }
   }
 
+  // Try to parse workspace YAML — if malformed, --force allows name-based fallback (D-12)
+  let workspace: ReturnType<typeof readWorkspace> | null = null
+  try {
+    workspace = readWorkspace(name)
+  } catch (_parseErr) {
+    if (!opts.force) {
+      return {
+        ok: false,
+        error: `Cannot parse workspace YAML for '${name}'. Use --force to remove directory and config without worktree cleanup.`,
+      }
+    }
+  }
+
+  // Force fallback for malformed YAML: name-based directory removal only (D-12)
+  if (workspace === null) {
+    const config = readGlobalConfig()
+    const tasksDir = getTasksDir(config.workspace_root)
+    const wsDir = join(tasksDir, name)
+    if (existsSync(wsDir)) {
+      rmSync(wsDir, { recursive: true, force: true })
+      onProgress?.(`deleted  tasks/${name}/ (force)`)
+    }
+    unlinkSync(workspacePath(name))
+    onProgress?.(`Workspace '${name}' force-removed (YAML was unparseable).`)
+    return { ok: true }
+  }
+
   const config = readGlobalConfig()
   const tasksDir = getTasksDir(config.workspace_root)
-  const workspace = readWorkspace(name)
 
   if (!opts.force) {
     const dirty = await getDirtyWorktrees(workspace)
@@ -441,6 +480,7 @@ export async function removeWorkspace(
   const cleanResult = await _executeClean(workspace, config, tasksDir, {
     captured: opts.captured,
     force: opts.force,
+    deleteFolder: true,  // D-11: remove always deletes the folder
     triggeredBy: "remove",
   }, onProgress)
   if (!cleanResult.ok) return cleanResult  // D-03: abort on failure
@@ -555,6 +595,7 @@ export async function mergeWorkspace(
   const cleanResult = await _executeClean(workspace, config, tasksDir, {
     captured: opts.captured,
     force: opts.force,
+    deleteFolder: true,  // D-11/D-13: merge = total erasure, always delete folder
     triggeredBy: "merge",
   }, onProgress)
   if (!cleanResult.ok) return cleanResult
