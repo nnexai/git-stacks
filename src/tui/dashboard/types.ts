@@ -21,7 +21,7 @@ export type WorkspaceEntry = {
 
 export type Tab = "workspaces" | "templates" | "repos"
 
-export type Action = "open" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync" | "create-workspace"
+export type Action = "open" | "close" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync" | "create-workspace"
 
 export type UIView =
   | { view: "list" }

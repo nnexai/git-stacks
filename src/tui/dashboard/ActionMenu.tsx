@@ -13,6 +13,7 @@ type Props = {
 
 const actions: { key: string; action: Action; label: string }[] = [
   { key: "o", action: "open", label: "Open" },
+  { key: "x", action: "close", label: "Close" },
   { key: "n", action: "rename", label: "Rename" },
   { key: "e", action: "edit", label: "Edit ($EDITOR)" },
   { key: "c", action: "clean", label: "Clean" },

@@ -25,6 +25,7 @@ import { RepoActionMenu } from "./RepoActionMenu"
 import { RemoveBlockedView } from "./RemoveBlockedView"
 import {
   cleanWorkspace,
+  closeWorkspace,
   removeWorkspace,
   mergeWorkspace,
   openWorkspace,
@@ -250,6 +251,18 @@ export default function App() {
       setProgressDone(false)
       setView({ view: "progress", message: `Opening ${name}...` })
       const result = await openWorkspace(name, { captured: true }, (msg) =>
+        setProgressLines((prev) => [...prev, msg])
+      )
+      if (!result.ok) setProgressLines((prev) => [...prev, `ERROR: ${result.error}`])
+      setProgressDone(true)
+      return
+    }
+
+    if (action === "close") {
+      setProgressLines([])
+      setProgressDone(false)
+      setView({ view: "progress", message: `Closing ${name}...` })
+      const result = await closeWorkspace(name, { captured: true }, (msg) =>
         setProgressLines((prev) => [...prev, msg])
       )
       if (!result.ok) setProgressLines((prev) => [...prev, `ERROR: ${result.error}`])

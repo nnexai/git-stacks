@@ -24,6 +24,7 @@ import {
   runPreRemoveHooks,
   getWorkspaceStatus,
   cleanWorkspace,
+  closeWorkspace,
   removeWorkspace,
   mergeWorkspace,
   openWorkspace,
@@ -161,6 +162,22 @@ export function registerWorkspaceCommands(program: Command) {
       }
 
       const result = await openWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
+      if (!result.ok) {
+        console.error(formatError(result.error!))
+        process.exit(1)
+      }
+    })
+
+  program
+    .command("close <name>")
+    .description("Close integration sessions (tmux, niri) without removing worktrees")
+    .action(async (name: string) => {
+      if (!workspaceExists(name)) {
+        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+        process.exit(1)
+      }
+
+      const result = await closeWorkspace(name, {}, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)

@@ -17,6 +17,7 @@ describe("ActionMenu", () => {
     await renderOnce()
     const frame = captureCharFrame()
     expect(frame).toContain("Open")
+    expect(frame).toContain("Close")
     expect(frame).toContain("Rename")
     expect(frame).toContain("Edit")
     expect(frame).toContain("Clean")
@@ -44,7 +45,7 @@ describe("ActionMenu", () => {
     mockInput.pressArrow("down")
     await renderOnce()
     const frame = captureCharFrame()
-    expect(frame).toContain("> [n] Rename")
+    expect(frame).toContain("> [x] Close")
   })
 
   test("up arrow after multiple downs moves cursor back", async () => {
@@ -60,8 +61,8 @@ describe("ActionMenu", () => {
     mockInput.pressArrow("up")
     await renderOnce()
     const frame = captureCharFrame()
-    // cursor should be at index 4 (Remove) after 5 downs then 1 up
-    expect(frame).toContain("> [r] Remove")
+    // cursor should be at index 4 (Clean) after 5 downs (→ Remove at idx 5) then 1 up
+    expect(frame).toContain("> [c] Clean")
   })
 
   test("enter dispatches action at cursor position (first item)", async () => {
@@ -82,6 +83,9 @@ describe("ActionMenu", () => {
       () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
       renderOpts
     )
+    await renderOnce()
+    // 3 downs from open(0): close(1) -> rename(2) -> edit(3)
+    mockInput.pressArrow("down")
     await renderOnce()
     mockInput.pressArrow("down")
     await renderOnce()
