@@ -53,8 +53,24 @@ mock.module("@/lib/integrations/index", () => ({
   integrations: fakeIntegrations,
 }))
 
-// Mock tui/utils
+// Mock tui/utils — must include `prompts` object since production code
+// imports { prompts as p } from "@/tui/utils" (not @clack/prompts directly)
 mock.module("@/tui/utils", () => ({
+  prompts: {
+    confirm: localConfirm,
+    multiselect: localMultiselect,
+    isCancel: localIsCancel,
+    cancel: mock(() => {}),
+    intro: mock(() => {}),
+    outro: mock(() => {}),
+    log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+    spinner: mock(() => ({ start: mock(() => {}), stop: mock(() => {}), message: mock(() => {}) })),
+    text: mock(async () => ""),
+    select: mock(async () => ""),
+    note: mock(() => {}),
+    group: mock(async () => ({})),
+    groupMultiselect: mock(async () => []),
+  },
   cancel: mock((): never => { throw new Error("cancelled") }),
   safeText: mock(async () => ""),
 }))
@@ -69,15 +85,13 @@ const { promptIntegrationOverrides } = await import(
   "@/lib/integrations/wizard-helpers?unit-test"
 )
 
-// Get bound references from the @clack/prompts module that wizard-helpers.ts is using.
-// These may be our registered mocks or another test file's — either way, these are
-// the objects we need to configure in each test.
-const p = await import("@clack/prompts")
-const mockConfirm = p.confirm as unknown as Mock<(...args: any[]) => any>
-const mockMultiselect = p.multiselect as unknown as Mock<(...args: any[]) => any>
-const mockIsCancel = p.isCancel as unknown as Mock<(...args: any[]) => any>
-
+// Get bound references from the @/tui/utils module that wizard-helpers.ts is using.
+// Production code imports { prompts as p } from "@/tui/utils", so we need the
+// mock references from the prompts object on the mocked @/tui/utils module.
 const utils = await import("@/tui/utils")
+const mockConfirm = (utils as any).prompts.confirm as Mock<(...args: any[]) => any>
+const mockMultiselect = (utils as any).prompts.multiselect as Mock<(...args: any[]) => any>
+const mockIsCancel = (utils as any).prompts.isCancel as Mock<(...args: any[]) => any>
 const mockCancel = utils.cancel as unknown as Mock<(...args: any[]) => any>
 
 describe("promptIntegrationOverrides", () => {
