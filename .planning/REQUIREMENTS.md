@@ -73,6 +73,19 @@
 - [x] **FORGE-12**: All three forge integrations registered in `src/lib/integrations/index.ts`
 - [x] **FORGE-13**: `git-stacks doctor` checks availability of `gh`, `glab`, `tea` binaries
 
+### Issue & Task Tracking
+
+- [ ] **ISSUE-01**: `resolveIssueRef(workspaceName, trackerId)` reads `workspace.settings.integrations.<id>.issue` and returns issue ID string or typed error (per D-02)
+- [ ] **ISSUE-02**: `linkIssue(workspaceName, trackerId, issueId)` stores issue ID as string under `workspace.settings.integrations.<id>.issue`, preserving other config fields (per D-02, Pitfall 3)
+- [ ] **ISSUE-03**: `unlinkIssue(workspaceName, trackerId)` removes only the `issue` key from tracker config, preserving other fields like `enabled` (per Pitfall 3)
+- [ ] **ISSUE-04**: GitHub integration gains `issue link`, `issue unlink`, `issue open` subcommands using `gh issue view` (per D-01, D-03, D-07)
+- [ ] **ISSUE-05**: GitLab integration gains `issue link`, `issue unlink`, `issue open` subcommands using `glab issue view` (per D-01, D-03, D-07)
+- [ ] **ISSUE-06**: Gitea integration gains `issue link`, `issue unlink`, `issue open` subcommands with `tea issues ls` JSON URL extraction (per D-01, D-03, D-07)
+- [ ] **ISSUE-07**: Jira standalone integration plugin with `issue link`, `issue unlink`, `issue open` commands (per D-01, D-05)
+- [ ] **ISSUE-08**: Jira `issue open` uses configurable command template with `$ISSUE_ID` env var via `sh -c` for shell injection safety (per D-06, Pitfall 5)
+- [ ] **ISSUE-09**: Jira integration registered in `src/lib/integrations/index.ts`
+- [ ] **ISSUE-10**: `git-stacks doctor` checks availability of `jira` binary
+
 ## Future Requirements
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type
@@ -88,7 +101,10 @@
 | Auto-close on branch merge | Adds complexity; user can run close manually after merge |
 | Close all workspaces command | Batch operations deferred; close one at a time for now |
 | Full mock.module() elimination sweep | Phase 24 covers direct unit tests only; caller tests stay as-is |
-| Issue/task linking (GitHub Issues, GitLab Issues, Gitea Issues, Jira) | Deferred to Phase 28 |
+| `--issue` flag on `git-stacks new` | Linking is retroactive only (per Phase 28 D-04) |
+| Cross-workspace issue search | Future enhancement |
+| Displaying issue title/status in `git-stacks list` | Future enhancement |
+| TUI-based issue management | Future enhancement |
 | TUI-based PR actions using non-interactive flags | Future enhancement |
 | PR status display formatted by git-stacks | Pass-through is the design choice per D-09 |
 | Cross-repo PR descriptions | Deferred |
@@ -131,25 +147,35 @@
 | POLISH-08 | Phase 26 | Complete |
 | POLISH-09 | Phase 26 | Complete |
 | POLISH-10 | Phase 26 | Complete |
-| FORGE-01 | Phase 27 | Planned |
-| FORGE-02 | Phase 27 | Planned |
-| FORGE-03 | Phase 27 | Planned |
-| FORGE-04 | Phase 27 | Planned |
-| FORGE-05 | Phase 27 | Planned |
-| FORGE-06 | Phase 27 | Planned |
-| FORGE-07 | Phase 27 | Planned |
-| FORGE-08 | Phase 27 | Planned |
-| FORGE-09 | Phase 27 | Planned |
-| FORGE-10 | Phase 27 | Planned |
-| FORGE-11 | Phase 27 | Planned |
-| FORGE-12 | Phase 27 | Planned |
-| FORGE-13 | Phase 27 | Planned |
+| FORGE-01 | Phase 27 | Complete |
+| FORGE-02 | Phase 27 | Complete |
+| FORGE-03 | Phase 27 | Complete |
+| FORGE-04 | Phase 27 | Complete |
+| FORGE-05 | Phase 27 | Complete |
+| FORGE-06 | Phase 27 | Complete |
+| FORGE-07 | Phase 27 | Complete |
+| FORGE-08 | Phase 27 | Complete |
+| FORGE-09 | Phase 27 | Complete |
+| FORGE-10 | Phase 27 | Complete |
+| FORGE-11 | Phase 27 | Complete |
+| FORGE-12 | Phase 27 | Complete |
+| FORGE-13 | Phase 27 | Complete |
+| ISSUE-01 | Phase 28 | Planned |
+| ISSUE-02 | Phase 28 | Planned |
+| ISSUE-03 | Phase 28 | Planned |
+| ISSUE-04 | Phase 28 | Planned |
+| ISSUE-05 | Phase 28 | Planned |
+| ISSUE-06 | Phase 28 | Planned |
+| ISSUE-07 | Phase 28 | Planned |
+| ISSUE-08 | Phase 28 | Planned |
+| ISSUE-09 | Phase 28 | Planned |
+| ISSUE-10 | Phase 28 | Planned |
 
 **Coverage:**
-- v0.7.0 requirements: 47 total
-- Mapped to phases: 47
+- v0.7.0 requirements: 57 total
+- Mapped to phases: 57
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after Phase 27 requirement definition*
+*Last updated: 2026-03-22 after Phase 28 requirement definition*

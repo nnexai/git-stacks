@@ -6,7 +6,7 @@
 - ✅ **v0.3.0 Dashboard UI Overhaul** — Phases 6-9 (shipped 2026-03-20) — Messaging system, tabbed dashboard, IPC push display, shell completion overhaul. See [milestones/v0.3.0-ROADMAP.md](milestones/v0.3.0-ROADMAP.md)
 - ✅ **v0.4.0 TUI Hardening & Polish** — Phases 10-15.2 (shipped 2026-03-21) — Test harness, workspace sync, wizard create, repo management, screen polish, centered dialogs, integration overrides. See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md)
 - ✅ **v0.6.0 Integration Orchestration & Niri** — Phases 16-20 (shipped 2026-03-22) — Typed artifact pipeline, centralized runner, niri compositor integration. See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md)
-- 🚧 **v0.7.0 Close Command & Polish** — Phases 21-27 (in progress) — Workspace close command, niri display fix, test isolation, mock refactor, lifecycle phases, autocompletion polish, git forge integrations.
+- 🚧 **v0.7.0 Close Command & Polish** — Phases 21-28 (in progress) — Workspace close command, niri display fix, test isolation, mock refactor, lifecycle phases, autocompletion polish, git forge integrations, issue tracking.
 
 ## Phases
 
@@ -60,7 +60,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 
 ### 🚧 v0.7.0 Close Command & Polish (In Progress)
 
-**Milestone Goal:** Close command, display fixes, test isolation, mock refactor, lifecycle phase separation, CLI polish, and git forge integrations.
+**Milestone Goal:** Close command, display fixes, test isolation, mock refactor, lifecycle phase separation, CLI polish, git forge integrations, and issue tracking.
 
 - [x] **Phase 21: Workspace Close Command** - CLI and TUI teardown for integrations without deleting workspace state (completed 2026-03-22)
 - [x] **Phase 22: Niri Display Fix** - Fix `[object Object]` rendering in TUI details pane for niri columns config (completed 2026-03-22)
@@ -70,6 +70,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 - [x] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks (completed 2026-03-22)
 - [x] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements (completed 2026-03-22)
 - [x] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation via forge CLI pass-through (completed 2026-03-22)
+- [ ] **Phase 28: Issue & Task Tracking Integration** - Issue linking for GitHub/GitLab/Gitea/Jira via forge CLIs and configurable templates
 
 ## Phase Details
 
@@ -125,6 +126,7 @@ Plans:
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 27. Git Forge Integrations | v0.7.0 | 4/4 | Complete   | 2026-03-22 |
+| 28. Issue & Task Tracking | v0.7.0 | 0/4 | Planned |  |
 
 ### Phase 24: Mock Architecture Refactor
 
@@ -210,10 +212,21 @@ Plans:
 
 ### Phase 28: Issue & Task Tracking Integration
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal**: Add issue linking commands to the three forge integration plugins (GitHub, GitLab, Gitea) and create a standalone Jira integration. Users can link workspace to issue, unlink it, and open the issue in browser — all via `git-stacks integration <tracker> issue link|unlink|open`. Issue references stored in workspace YAML settings (no schema migration). Jira uses a configurable command template for tool-agnostic issue opening.
+**Requirements**: ISSUE-01, ISSUE-02, ISSUE-03, ISSUE-04, ISSUE-05, ISSUE-06, ISSUE-07, ISSUE-08, ISSUE-09, ISSUE-10
 **Depends on:** Phase 27
-**Plans:** 0 plans
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks integration github issue link <workspace> <id>` stores issue ref in workspace YAML
+  2. `git-stacks integration github issue open <workspace> --web` opens issue in browser via `gh issue view`
+  3. GitLab and Gitea have equivalent issue commands using `glab issue view` and `tea issues ls` JSON extraction
+  4. Jira standalone integration with configurable `open_cmd` template (default: `jira open $ISSUE_ID`)
+  5. `issue unlink` removes only the issue key, preserving other integration config
+  6. `git-stacks doctor` checks availability of `jira` binary
+  7. All four trackers registered and visible as subcommands
+**Plans:** 4 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 28 to break down)
+- [ ] 28-01-PLAN.md — Shared issue-utils module (resolveIssueRef, linkIssue, unlinkIssue, formatIssueError)
+- [ ] 28-02-PLAN.md — Forge issue subcommands (GitHub, GitLab, Gitea issue link/unlink/open)
+- [ ] 28-03-PLAN.md — Jira standalone integration + doctor check + integration-commands tests
+- [ ] 28-04-PLAN.md — CHANGELOG and README documentation for issue tracking features
