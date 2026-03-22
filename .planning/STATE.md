@@ -4,7 +4,7 @@ milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
 stopped_at: Completed 22-01-PLAN.md — niri display fix implemented
-last_updated: "2026-03-22T09:51:40.868Z"
+last_updated: "2026-03-22T09:54:36.821Z"
 progress:
   total_phases: 3
   completed_phases: 2
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 
 ## Current Position
 
-Phase: 22 (Niri Display Fix) — EXECUTING
-Plan: 1 of 1
+Phase: 23
+Plan: Not started
 
 ## Performance Metrics
 
