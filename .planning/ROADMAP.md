@@ -122,7 +122,7 @@ Plans:
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 24. Mock Architecture Refactor | v0.7.0 | 2/2 | Complete    | 2026-03-22 |
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
-| 25. Dedicated Lifecycle Phases | v0.7.0 | 0/3 | Not started | - |
+| 25. Dedicated Lifecycle Phases | v0.7.0 | 1/3 | In Progress|  |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 0/3 | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
@@ -160,10 +160,10 @@ Plans:
   5. Per-repo `pre_clean` hooks fire immediately before each individual worktree removal (interleaved)
   6. Hook failure at any cascade step aborts the entire operation
   7. TUI dashboard passes `captured: true` to all lifecycle functions
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
-- [ ] 25-01-PLAN.md — Schema extensions + closeWorkspace refactor (buildBaseEnv, _executeClose, post_close, WS_TRIGGERED_BY)
+- [x] 25-01-PLAN.md — Schema extensions + closeWorkspace refactor (buildBaseEnv, _executeClose, post_close, WS_TRIGGERED_BY)
 - [ ] 25-02-PLAN.md — cleanWorkspace + removeWorkspace cascade refactor (_executeClean, pre_clean/post_clean, per-repo pre_clean, pre_remove/post_remove)
 - [ ] 25-03-PLAN.md — mergeWorkspace cascade (full D-10 order, pre_merge) + TUI captured flag fix + runPreRemoveHooks removal
 

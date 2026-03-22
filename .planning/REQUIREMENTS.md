@@ -30,14 +30,14 @@
 
 ### Lifecycle Cascade
 
-- [ ] **LC-01**: New hook fields (`post_close`, `pre_clean`, `post_clean`, `pre_merge`, `post_remove`) parse in `WorkspaceHooksSchema` and `TemplateSchema` without error
-- [ ] **LC-02**: Per-repo `pre_clean` field parses in `WorkspaceRepoHooksSchema` without error
-- [ ] **LC-03**: Existing YAML files without new hook fields continue to parse (backward compatible)
+- [x] **LC-01**: New hook fields (`post_close`, `pre_clean`, `post_clean`, `pre_merge`, `post_remove`) parse in `WorkspaceHooksSchema` and `TemplateSchema` without error
+- [x] **LC-02**: Per-repo `pre_clean` field parses in `WorkspaceRepoHooksSchema` without error
+- [x] **LC-03**: Existing YAML files without new hook fields continue to parse (backward compatible)
 - [ ] **LC-04**: `cleanWorkspace` calls `_executeClose` before worktree removal (close-before-clean cascade per D-02)
 - [ ] **LC-05**: `cleanWorkspace` fires `pre_clean` hooks before worktree removal and `post_clean` after
 - [ ] **LC-06**: Per-repo `pre_clean` hooks fire immediately before each individual worktree removal (interleaved, not batched, per D-08)
 - [ ] **LC-07**: Hook failure mid-cascade aborts the entire operation (per D-03)
-- [ ] **LC-08**: `closeWorkspace` fires `post_close` hooks after integration cleanup and injects `WS_TRIGGERED_BY` env var (per D-04)
+- [x] **LC-08**: `closeWorkspace` fires `post_close` hooks after integration cleanup and injects `WS_TRIGGERED_BY` env var (per D-04)
 - [ ] **LC-09**: `removeWorkspace` cascades through `_executeClean` then fires `pre_remove` before YAML delete and `post_remove` after (per D-06)
 - [ ] **LC-10**: `mergeWorkspace` follows full D-10 lifecycle order: `pre_close` -> integration cleanup -> `post_close` -> `pre_clean` -> per-repo `pre_clean` + worktree removal -> `post_clean` -> `pre_merge` -> git merge + branch delete -> `pre_remove` -> YAML delete -> `post_remove` -> `post_merge`
 - [ ] **LC-11**: `post_merge` fires after `post_remove` (per D-11)

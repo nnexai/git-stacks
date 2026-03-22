@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-stopped_at: Completed 24.1-01-PLAN.md — eliminate dead @clack/prompts mocks from 7 test files
-last_updated: "2026-03-22T14:01:23.746Z"
+stopped_at: Completed 25-01-PLAN.md — lifecycle schema foundation and closeWorkspace refactor
+last_updated: "2026-03-22T14:28:10.379Z"
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 9
-  completed_plans: 6
+  total_plans: 12
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 24.1 — test-mock-hygiene
+**Current focus:** Phase 25 — dedicated-lifecycle-phases
 
 ## Current Position
 
-Phase: 25
-Plan: Not started
+Phase: 25 (dedicated-lifecycle-phases) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Plan: Not started
 | Phase 24-mock-architecture-refactor P02 | 8min | 2 tasks | 18 files |
 | Phase 24-mock-architecture-refactor P01 | 12min | 2 tasks | 6 files |
 | Phase 24.1-test-mock-hygiene P01 | 2min | 2 tasks | 7 files |
+| Phase 25-dedicated-lifecycle-phases P01 | 17 | 2 tasks | 3 files |
 
 ### Decisions
 
@@ -72,10 +73,12 @@ Plan: Not started
 - [Phase 24-01]: Lifecycle real-shell tests use cache-busting import to prevent mock.module contamination from consumer tests
 - [Phase 24.1-test-mock-hygiene]: integration-commands.test.ts needs no @/tui/utils mock — tested code exercises command structure only, not prompt paths
 - [Phase 24.1-test-mock-hygiene]: Always mock @/tui/utils (not @clack/prompts) in tests — production code routes all prompts through the wrapper
+- [Phase 25-dedicated-lifecycle-phases]: buildBaseEnv exported for reuse by plans 02 and 03; _executeClose private inner function; post_close fires after integration cleanup; restore real lifecycle in test to prevent parallel mock contamination
 
 ### Pending Todos
 
 1 pending todo:
+
 - **Issue and task tracking integration (Jira, GitHub, GitLab, Gitea)** — deferred from phase 27 discussion; design unified issue/task linking across forges + Jira
 
 ### Roadmap Evolution
@@ -89,7 +92,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T13:57:12.983Z
-Stopped at: Completed 24.1-01-PLAN.md — eliminate dead @clack/prompts mocks from 7 test files
+Last session: 2026-03-22T14:28:10.374Z
+Stopped at: Completed 25-01-PLAN.md — lifecycle schema foundation and closeWorkspace refactor
 Resume file: None
 Next action: /gsd:plan-phase 21
