@@ -76,6 +76,63 @@ export function resolveForgeRepo(
   return { ok: true, workspace, repo, repoPath: repo.task_path, baseBranch }
 }
 
+export function resolveForgeRepoAnyMode(
+  workspaceName: string,
+  repoArg: string | undefined,
+  forge: string
+): ForgeRepoResolution | ForgeRepoResolutionError {
+  if (!workspaceExists(workspaceName)) {
+    return { ok: false, error: "workspace_not_found", name: workspaceName }
+  }
+
+  const workspace = readWorkspace(workspaceName)
+
+  let repo: WorkspaceRepo
+  if (repoArg !== undefined) {
+    const match = workspace.repos.find((r) => r.name === repoArg)
+    if (!match) {
+      return { ok: false, error: "repo_not_found", name: repoArg }
+    }
+    repo = match
+  } else if (workspace.repos.length === 1) {
+    repo = workspace.repos[0]
+  } else {
+    // Validate forge config to auto-select when exactly one repo has the correct forge
+    const registry = readRegistry()
+    const forgeMatches = workspace.repos.filter((r) => {
+      const entry = registry.find((reg) => reg.name === r.repo)
+      return entry?.forge === forge
+    })
+    if (forgeMatches.length === 1) {
+      repo = forgeMatches[0]
+    } else {
+      return {
+        ok: false,
+        error: "repo_required",
+        worktreeRepos: workspace.repos.map((r) => r.name),
+      }
+    }
+  }
+
+  // Validate forge configuration
+  const registry = readRegistry()
+  const registryEntry = registry.find((r) => r.name === repo.repo)
+  if (registryEntry?.forge !== forge) {
+    return {
+      ok: false,
+      error: "forge_not_configured",
+      repo: repo.name,
+      expected: forge,
+      actual: registryEntry?.forge,
+    }
+  }
+
+  const baseBranch = repo.base_branch ?? registryEntry?.default_branch ?? "main"
+
+  // Use main_path — always a real git clone regardless of mode
+  return { ok: true, workspace, repo, repoPath: repo.main_path, baseBranch }
+}
+
 // --- Forge Detection ---
 
 /** Injectable executor for detection shell commands. Tests can replace these. */
