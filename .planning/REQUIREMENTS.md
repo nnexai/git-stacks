@@ -7,10 +7,10 @@
 
 ### Workspace Close
 
-- [ ] **CLOSE-01**: User can run `git-stacks close [name]` to teardown integrations (tmux session, niri workspace) without deleting workspace directory or worktrees
-- [ ] **CLOSE-02**: Close runs teardown hooks and integration cleanup but preserves all filesystem state
-- [ ] **CLOSE-03**: Close is available as a dashboard action menu entry
-- [ ] **CLOSE-04**: Workspace can be re-opened after close with `git-stacks open`
+- [x] **CLOSE-01**: User can run `git-stacks close [name]` to teardown integrations (tmux session, niri workspace) without deleting workspace directory or worktrees
+- [x] **CLOSE-02**: Close runs teardown hooks and integration cleanup but preserves all filesystem state
+- [x] **CLOSE-03**: Close is available as a dashboard action menu entry
+- [x] **CLOSE-04**: Workspace can be re-opened after close with `git-stacks open`
 
 ### UI Fix
 
@@ -40,10 +40,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLOSE-01 | Phase 21 | Pending |
-| CLOSE-02 | Phase 21 | Pending |
-| CLOSE-03 | Phase 21 | Pending |
-| CLOSE-04 | Phase 21 | Pending |
+| CLOSE-01 | Phase 21 | Complete |
+| CLOSE-02 | Phase 21 | Complete |
+| CLOSE-03 | Phase 21 | Complete |
+| CLOSE-04 | Phase 21 | Complete |
 | UI-01 | Phase 22 | Pending |
 | TEST-01 | Phase 23 | Pending |
 | TEST-02 | Phase 23 | Pending |

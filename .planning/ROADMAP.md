@@ -108,6 +108,6 @@ Plans:
 | 6-9. Dashboard UI | v0.3.0 | 13/13 | Complete | 2026-03-20 |
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
-| 21. Workspace Close Command | v0.7.0 | 1/1 | Complete   | 2026-03-22 |
+| 21. Workspace Close Command | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 22. Niri Display Fix | v0.7.0 | 0/? | Not started | - |
 | 23. Test Environment Isolation | v0.7.0 | 0/? | Not started | - |
