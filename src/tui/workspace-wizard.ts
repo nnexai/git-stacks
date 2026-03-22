@@ -316,10 +316,11 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
     wsIntegrationSettings = userIntegrationOverrides
   }
 
-  const baseEnv = {
-    WS_WORKSPACE: wsName,
-    WS_BRANCH: branch,
-    WS_TASKS_DIR: tasksDir,
+  const baseEnv: Record<string, string> = {
+    GS_WORKSPACE_NAME: wsName,
+    GS_WORKSPACE_BRANCH: branch,
+    GS_WORKSPACE_PATH: tasksDir,
+    GS_TRIGGERED_BY: "create",
   }
 
   // Run pre_create hooks (from snapshot or workspace config)

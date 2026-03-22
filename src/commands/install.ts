@@ -8,7 +8,7 @@ import { sep } from "path"
 
 function detectWorkspaceFromCwd(): string | null {
   // Check environment variable first
-  if (process.env.WS_WORKSPACE) return process.env.WS_WORKSPACE
+  if (process.env.GS_WORKSPACE_NAME) return process.env.GS_WORKSPACE_NAME
 
   const globalConfig = readGlobalConfig()
   const workspaceRoot = globalConfig.workspace_root

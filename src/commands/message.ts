@@ -7,7 +7,7 @@ import { MESSAGES_DIR } from "../lib/paths"
 export const messageCommand = new Command("message").description("Workspace notifications")
 
 function resolveWorkspace(opts: { workspace?: string }): string | null {
-  return opts.workspace ?? process.env.WS_WORKSPACE ?? null
+  return opts.workspace ?? process.env.GS_WORKSPACE_NAME ?? null
 }
 
 function printTable(records: MessageRecord[]): void {
@@ -23,7 +23,7 @@ function printTable(records: MessageRecord[]): void {
 messageCommand
   .command("send <text>")
   .description("Send a notification to a workspace")
-  .option("--workspace <name>", "Target workspace (default: WS_WORKSPACE env)")
+  .option("--workspace <name>", "Target workspace (default: GS_WORKSPACE_NAME env)")
   .option("--from <sender>", "Sender name")
   .action(async (text: string, opts: { workspace?: string; from?: string }) => {
     const ws = resolveWorkspace(opts)
@@ -47,7 +47,7 @@ messageCommand
 messageCommand
   .command("list")
   .description("List notifications for a workspace")
-  .option("--workspace <name>", "Target workspace (default: WS_WORKSPACE env)")
+  .option("--workspace <name>", "Target workspace (default: GS_WORKSPACE_NAME env)")
   .option("--json", "Output as JSON array")
   .action(async (opts: { workspace?: string; json?: boolean }) => {
     const ws = resolveWorkspace(opts)
@@ -77,7 +77,7 @@ messageCommand
 messageCommand
   .command("clear")
   .description("Clear notifications for a workspace")
-  .option("--workspace <name>", "Target workspace (default: WS_WORKSPACE env)")
+  .option("--workspace <name>", "Target workspace (default: GS_WORKSPACE_NAME env)")
   .option("--from <sender>", "Clear only messages from this sender")
   .action(async (opts: { workspace?: string; from?: string }) => {
     const ws = resolveWorkspace(opts)

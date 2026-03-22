@@ -160,9 +160,9 @@ export const niriIntegration: Integration = {
       if (columns?.length) {
         // Build env var expand function
         const vars: Record<string, string> = {
-          WS_WORKSPACE: ctx.workspace.name,
-          WS_BRANCH: ctx.workspace.branch ?? "",
-          WS_TASKS_DIR: ctx.tasksDir,
+          GS_WORKSPACE_NAME: ctx.workspace.name,
+          GS_WORKSPACE_BRANCH: ctx.workspace.branch ?? "",
+          GS_WORKSPACE_PATH: ctx.tasksDir,
         }
         const expandVars = (s: string): string =>
           s.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")

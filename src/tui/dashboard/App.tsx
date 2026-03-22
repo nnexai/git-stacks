@@ -694,7 +694,12 @@ export default function App() {
       }))
       setCreateRows(initialRows)
 
-      const baseEnv = { WS_WORKSPACE: wsName, WS_BRANCH: branch, WS_TASKS_DIR: tasksDir }
+      const baseEnv: Record<string, string> = {
+        GS_WORKSPACE_NAME: wsName,
+        GS_WORKSPACE_BRANCH: branch,
+        GS_WORKSPACE_PATH: tasksDir,
+        GS_TRIGGERED_BY: "create",
+      }
       const worktreeRepos = repos.filter(r => r.mode === "worktree")
 
       // Pre-create hooks (D-17: abortOnFailure=false)

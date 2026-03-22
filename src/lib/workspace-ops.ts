@@ -106,11 +106,23 @@ export function buildBaseEnv(
   triggeredBy: string
 ): Record<string, string> {
   return {
-    WS_WORKSPACE: workspace.name,
-    WS_BRANCH: workspace.branch,
-    WS_TASKS_DIR: tasksDir,
-    WS_TRIGGERED_BY: triggeredBy,
+    GS_WORKSPACE_NAME: workspace.name,
+    GS_WORKSPACE_BRANCH: workspace.branch,
+    GS_WORKSPACE_PATH: tasksDir,
+    GS_TRIGGERED_BY: triggeredBy,
     ...mergeEnv(workspace),
+  }
+}
+
+export function buildRepoEnv(
+  baseEnv: Record<string, string>,
+  repo: { name: string; task_path: string; main_path: string }
+): Record<string, string> {
+  return {
+    ...baseEnv,
+    GS_REPO_NAME: repo.name,
+    GS_REPO_PATH: repo.task_path,
+    GS_REPO_CLONE_PATH: repo.main_path,
   }
 }
 
@@ -235,12 +247,7 @@ async function _executeClean(
     }
     // Per-repo pre_clean hook fires immediately before this repo's worktree removal
     if (repo.hooks?.pre_clean?.length) {
-      const repoEnv = {
-        ...baseEnv,
-        WS_REPO_NAME: repo.name,
-        WS_REPO_PATH: repo.task_path,
-        WS_MAIN_PATH: repo.main_path,
-      }
+      const repoEnv = buildRepoEnv(baseEnv, repo)
       try {
         if (opts.captured) {
           await runHooksCaptured(repo.hooks.pre_clean, repo.task_path, repoEnv,
@@ -619,7 +626,7 @@ export async function mergeWorkspace(
   if (workspace.hooks?.post_merge?.length) {
     const mergeBaseEnv = {
       ...baseEnv,
-      WS_MERGED_BRANCH: workspace.branch,
+      GS_MERGED_BRANCH: workspace.branch,
     }
     for (const cmd of workspace.hooks.post_merge) {
       onProgress?.(`post_merge: ${cmd}`)
@@ -682,11 +689,7 @@ export async function openWorkspace(
     onProgress?.(`${missing.length} worktree(s) recreated`)
   }
 
-  const baseEnv = {
-    WS_WORKSPACE: workspace.name,
-    WS_BRANCH: workspace.branch,
-    WS_TASKS_DIR: tasksDir,
-  }
+  const baseEnv = buildBaseEnv(workspace, tasksDir, "open")
 
   if (workspace.hooks?.pre_open?.length) {
     for (const cmd of workspace.hooks.pre_open) {
@@ -697,12 +700,7 @@ export async function openWorkspace(
 
   const repoHooks = workspace.repos.filter((r) => r.hooks?.pre_open?.length)
   for (const repo of repoHooks) {
-    const repoEnv = {
-      ...baseEnv,
-      WS_REPO_NAME: repo.name,
-      WS_REPO_PATH: repo.task_path,
-      WS_MAIN_PATH: repo.main_path,
-    }
+    const repoEnv = buildRepoEnv(baseEnv, repo)
     for (const cmd of repo.hooks!.pre_open!) {
       onProgress?.(`pre_open [${repo.name}]: ${cmd}`)
       await execHooks([cmd], repo.task_path, repoEnv)
