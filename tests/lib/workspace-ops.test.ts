@@ -1,29 +1,58 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test"
 import { join } from "path"
 import { existsSync, mkdirSync, writeFileSync, rmSync, unlinkSync } from "fs"
 import { execSync } from "child_process"
-import { makeTmpDir, cleanup, makeGitRepo } from "../helpers"
+import { makeTmpDir, cleanup, makeGitRepo, useIsolatedConfig } from "../helpers"
 import {
+  WorkspaceSchema,
+  TemplateSchema,
+} from "../../src/lib/config"
+
+// Set up isolated config dir once for this file — all tests in this file share it.
+// Dynamic imports below use cache-busting query strings so they pick up the mock.
+const isolated = useIsolatedConfig("ws-ops")
+
+// Dynamic imports with cache-busting so they resolve against the isolated mock.
+const {
   writeWorkspace,
   workspaceExists,
   workspacePath,
   writeGlobalConfig,
-  WorkspaceSchema,
-  TemplateSchema,
-} from "../../src/lib/config"
-import {
+  readWorkspace,
+}: {
+  writeWorkspace: (ws: ReturnType<typeof WorkspaceSchema.parse>) => void
+  workspaceExists: (name: string) => boolean
+  workspacePath: (name: string) => string
+  writeGlobalConfig: (cfg: { workspace_root: string; integrations: Record<string, unknown> }) => void
+  readWorkspace: (name: string) => ReturnType<typeof WorkspaceSchema.parse>
+// @ts-ignore — cache-busting for isolated paths mock
+} = await import("@/lib/config?ws-ops-test")
+
+const {
   createWorktree,
   isWorktreeRegistered,
-} from "../../src/lib/git"
-import {
+}: {
+  createWorktree: (repoPath: string, worktreePath: string, branch: string) => Promise<{ ok: boolean; error?: string }>
+  isWorktreeRegistered: (repoPath: string, worktreePath: string) => Promise<boolean>
+// @ts-ignore — cache-busting for isolated paths mock
+} = await import("@/lib/git?ws-ops-test")
+
+const {
   mergeWorkspace,
   removeWorkspace,
   cleanWorkspace,
   renameWorkspace,
   closeWorkspace,
-} from "../../src/lib/workspace-ops"
-import { GLOBAL_CONFIG_FILE } from "../../src/lib/paths"
+}: {
+  mergeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  removeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  cleanWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  renameWorkspace: (name: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  closeWorkspace: (name: string, opts: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+// @ts-ignore — cache-busting for isolated paths mock
+} = await import("@/lib/workspace-ops?ws-ops-test")
 
+afterAll(() => isolated.cleanup())
 
 // Unique suffix per test file run to avoid collisions between parallel test runs
 const FILE_RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -40,30 +69,6 @@ function uniqueWsName(prefix = "test-ws"): string {
 
 function uniqueRegistryName(prefix = "test-repo"): string {
   return `_wsops-${prefix}-${FILE_RUN_ID}-${_testCounter}`
-}
-
-/**
- * Save and restore the global config file around each test so tests don't
- * corrupt the user's real workspace_root setting.
- */
-let _savedGlobalConfig: string | null = null
-
-function saveGlobalConfig() {
-  if (existsSync(GLOBAL_CONFIG_FILE)) {
-    const { readFileSync } = require("fs")
-    _savedGlobalConfig = readFileSync(GLOBAL_CONFIG_FILE, "utf-8")
-  } else {
-    _savedGlobalConfig = null
-  }
-}
-
-function restoreGlobalConfig() {
-  if (_savedGlobalConfig !== null) {
-    mkdirSync(require("path").dirname(GLOBAL_CONFIG_FILE), { recursive: true })
-    writeFileSync(GLOBAL_CONFIG_FILE, _savedGlobalConfig, "utf-8")
-  } else {
-    try { unlinkSync(GLOBAL_CONFIG_FILE) } catch { /* didn't exist */ }
-  }
 }
 
 /**
@@ -88,6 +93,7 @@ async function setupWorkspaceFixture(
   mkdirSync(mainDir, { recursive: true })
 
   // Write global config pointing to tmp workspace root
+  // This now writes to isolated.configDir/config.yml (not real ~/.config/git-stacks)
   writeGlobalConfig({ workspace_root: wsRoot, integrations: {} })
 
   // Create real git repos and record their paths
@@ -147,11 +153,10 @@ describe("mergeWorkspace", () => {
 
   beforeEach(() => {
     tmp = makeTmpDir("ws-ops-merge")
-    saveGlobalConfig()
   })
 
   afterEach(() => {
-    restoreGlobalConfig()
+    // tmp dir is cleaned by cleanupFixture — nothing extra needed here
   })
 
   test("merges all repos and deletes workspace YAML on success", async () => {
@@ -226,11 +231,10 @@ describe("removeWorkspace", () => {
 
   beforeEach(() => {
     tmp = makeTmpDir("ws-ops-remove")
-    saveGlobalConfig()
   })
 
   afterEach(() => {
-    restoreGlobalConfig()
+    // tmp dir is cleaned by cleanupFixture — nothing extra needed here
   })
 
   test("removes worktrees and deletes workspace YAML", async () => {
@@ -288,11 +292,10 @@ describe("cleanWorkspace", () => {
 
   beforeEach(() => {
     tmp = makeTmpDir("ws-ops-clean")
-    saveGlobalConfig()
   })
 
   afterEach(() => {
-    restoreGlobalConfig()
+    // tmp dir is cleaned by cleanupFixture — nothing extra needed here
   })
 
   test("removes worktrees without deleting workspace YAML", async () => {
@@ -326,11 +329,10 @@ describe("renameWorkspace", () => {
 
   beforeEach(() => {
     tmp = makeTmpDir("ws-ops-rename")
-    saveGlobalConfig()
   })
 
   afterEach(() => {
-    restoreGlobalConfig()
+    // tmp dir is cleaned by cleanupFixture — nothing extra needed here
   })
 
   test("re-registers worktrees at new paths", async () => {
@@ -377,7 +379,6 @@ describe("renameWorkspace", () => {
 
     // Now add a trunk repo to the workspace YAML by re-writing it
     const trunkRepoPath = makeGitRepo(join(tmp, "workspaces", "main"), "trunk-repo")
-    const { readWorkspace } = await import("../../src/lib/config")
     const workspace = readWorkspace(wsName)
     workspace.repos.push({
       name: "trunk-repo",
@@ -419,11 +420,10 @@ describe("dry-run", () => {
 
   beforeEach(() => {
     tmp = makeTmpDir("ws-ops-dryrun")
-    saveGlobalConfig()
   })
 
   afterEach(() => {
-    restoreGlobalConfig()
+    // tmp dir is cleaned by cleanupFixture — nothing extra needed here
   })
 
   // Test 1 (SAFE-01 remove dry-run): removeWorkspace with dryRun=true returns ok=true,
@@ -552,7 +552,6 @@ describe("dry-run", () => {
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     // Re-write workspace YAML with an external symlink target
-    const { readWorkspace } = await import("../../src/lib/config")
     const workspace = readWorkspace(wsName)
     workspace.files = { symlink: ["/tmp/some-external-target"] }
     writeWorkspace(workspace)
@@ -579,7 +578,6 @@ describe("dry-run", () => {
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     // Re-write workspace YAML with an external symlink target
-    const { readWorkspace } = await import("../../src/lib/config")
     const workspace = readWorkspace(wsName)
     workspace.files = { symlink: ["/tmp/some-external-target"] }
     writeWorkspace(workspace)
@@ -602,7 +600,6 @@ describe("dry-run", () => {
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     // Re-write workspace YAML with an external symlink target
-    const { readWorkspace } = await import("../../src/lib/config")
     const workspace = readWorkspace(wsName)
     workspace.files = { symlink: ["/tmp/some-external-target"] }
     writeWorkspace(workspace)
@@ -634,11 +631,10 @@ describe("closeWorkspace", () => {
 
   beforeEach(() => {
     tmp = makeTmpDir("ws-ops-close")
-    saveGlobalConfig()
   })
 
   afterEach(() => {
-    restoreGlobalConfig()
+    // tmp dir is cleaned by cleanupFixture — nothing extra needed here
   })
 
   // Test 1: returns { ok: false, error } when workspace does not exist

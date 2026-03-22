@@ -1,8 +1,14 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test"
 import { mkdirSync, existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
-import { appendMessage, listMessages, clearMessages, pushToSocket } from "../../src/lib/messages"
-import { MESSAGES_DIR } from "../../src/lib/paths"
+import { useIsolatedConfig } from "../helpers"
+
+const isolated = useIsolatedConfig("messages-test")
+
+// @ts-ignore — cache-busting for isolated paths mock
+const { appendMessage, listMessages, clearMessages, pushToSocket } = await import("@/lib/messages?msg-test")
+
+afterAll(() => isolated.cleanup())
 
 const FILE_RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 let _testCounter = 0
@@ -13,20 +19,21 @@ function uniqueWs(prefix = "ws"): string {
 }
 
 function wsFile(workspace: string): string {
-  return join(MESSAGES_DIR, `${workspace}.jsonl`)
+  return join(isolated.configDir, "messages", `${workspace}.jsonl`)
 }
 
 beforeEach(() => {
-  mkdirSync(MESSAGES_DIR, { recursive: true })
+  mkdirSync(join(isolated.configDir, "messages"), { recursive: true })
 })
 
 afterEach(() => {
   // clean up only test-prefixed files
   const { readdirSync } = require("node:fs")
+  const messagesDir = join(isolated.configDir, "messages")
   try {
-    for (const f of readdirSync(MESSAGES_DIR)) {
+    for (const f of readdirSync(messagesDir)) {
       if (f.startsWith("_msgtest-")) {
-        rmSync(join(MESSAGES_DIR, f), { force: true })
+        rmSync(join(messagesDir, f), { force: true })
       }
     }
   } catch {

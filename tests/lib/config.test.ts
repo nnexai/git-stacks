@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, afterAll, mock } from "bun:test"
 import { join } from "path"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import {
@@ -7,11 +7,11 @@ import {
   RepoRegistryEntrySchema,
   TemplateSchema,
   formatZodError,
-  listWorkspaces,
   expandBranchPattern,
 } from "../../src/lib/config"
-import { WORKSPACES_DIR } from "../../src/lib/paths"
-import { makeTmpDir, cleanup } from "../helpers"
+import { makeTmpDir, cleanup, useIsolatedConfig } from "../helpers"
+
+const isolated = useIsolatedConfig("config-test")
 
 // --- Schema parsing ---
 
@@ -246,46 +246,54 @@ describe("CONF-02: minimal YAML shape guard", () => {
 })
 
 // --- corrupt YAML handling (CONF-01) ---
-// Note: WORKSPACES_DIR is resolved at module load time from the real HOME.
-// Tests write files directly to these dirs with unique test-prefixed names to avoid
-// interfering with real user data, then clean them up in afterEach.
+// Uses isolated config dir via useIsolatedConfig — no writes to real ~/.config/git-stacks.
 
 describe("corrupt YAML handling", () => {
   const TEST_PREFIX = "_test-corrupt-"
-  let createdWorkspaceFiles: string[] = []
+  const wsDir = join(isolated.configDir, "workspaces")
 
   beforeEach(() => {
-    createdWorkspaceFiles = []
-    mkdirSync(WORKSPACES_DIR, { recursive: true })
-  })
-
-  afterEach(() => {
-    for (const f of createdWorkspaceFiles) {
-      try { rmSync(f) } catch { /* ignore */ }
-    }
+    mkdirSync(wsDir, { recursive: true })
+    // Re-establish isolated mock in case the "workspace file I/O" test overrode it
+    mock.module("@/lib/paths", () => ({
+      HOME: isolated.configDir,
+      DEFAULT_WORKSPACE_ROOT: join(isolated.configDir, "ws-root"),
+      WS_CONFIG_DIR: isolated.configDir,
+      WORKSPACES_DIR: wsDir,
+      GLOBAL_CONFIG_FILE: join(isolated.configDir, "config.yml"),
+      REGISTRY_FILE: join(isolated.configDir, "registry.yml"),
+      TEMPLATES_DIR: join(isolated.configDir, "templates"),
+      MESSAGES_DIR: join(isolated.configDir, "messages"),
+      getMainDir: (r: string) => join(r, "main"),
+      getTasksDir: (r: string) => join(r, "tasks"),
+      expandHome: (p: string) => p.startsWith("~/") ? join(isolated.configDir, p.slice(2)) : p,
+    }))
   })
 
   function writeWorkspaceFile(name: string, content: string): string {
-    const p = join(WORKSPACES_DIR, `${TEST_PREFIX}${name}.yml`)
+    const p = join(wsDir, `${TEST_PREFIX}${name}.yml`)
     writeFileSync(p, content, "utf-8")
-    createdWorkspaceFiles.push(p)
     return p
   }
 
-  test("listWorkspaces skips corrupt workspace YAML and returns only valid ones", () => {
+  test("listWorkspaces skips corrupt workspace YAML and returns only valid ones", async () => {
     // Valid workspace
     writeWorkspaceFile("good", "name: \"_test-corrupt-good-ws\"\nbranch: main\ncreated: \"2026-01-01\"\n")
     // Invalid workspace (missing branch and created)
     writeWorkspaceFile("bad", "name: \"_test-corrupt-bad-ws\"\n")
 
+    // @ts-ignore — cache-busting for isolated paths mock
+    const { listWorkspaces } = await import("@/lib/config?corrupt-test")
     const workspaces = listWorkspaces()
-    const names = workspaces.map((w) => w.name)
+    const names = workspaces.map((w: { name: string }) => w.name)
 
     expect(names).toContain("_test-corrupt-good-ws")
     expect(names).not.toContain("_test-corrupt-bad-ws")
-    expect(names.filter((n) => n.startsWith("_test-corrupt"))).toHaveLength(1)
+    expect(names.filter((n: string) => n.startsWith("_test-corrupt"))).toHaveLength(1)
   })
 })
+
+afterAll(() => isolated.cleanup())
 
 // --- FilesSchema extensions ---
 
