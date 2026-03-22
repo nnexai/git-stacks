@@ -69,7 +69,7 @@ See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md) for full detail
 - [x] **Phase 24.1: Test Mock Hygiene (INSERTED)** - Eliminate stale @clack/prompts mocks and fix incomplete @/tui/utils mocks left over from Phase 24 (completed 2026-03-22)
 - [x] **Phase 25: Dedicated Lifecycle Phases** - Close before clean, clean before remove with finer-grained hooks (completed 2026-03-22)
 - [x] **Phase 26: Autocompletion & Editor Polish** - Shell completion for `new --from`, editor shortcuts, force cleanup improvements (completed 2026-03-22)
-- [ ] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation via forge CLI pass-through
+- [x] **Phase 27: Git Forge Integrations** - GitHub/GitLab/Gitea PR/MR creation via forge CLI pass-through (completed 2026-03-22)
 
 ## Phase Details
 
@@ -124,7 +124,7 @@ Plans:
 | 24.1. Test Mock Hygiene | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 3/3 | Complete    | 2026-03-22 |
-| 27. Git Forge Integrations | v0.7.0 | 3/4 | In Progress|  |
+| 27. Git Forge Integrations | v0.7.0 | 4/4 | Complete   | 2026-03-22 |
 
 ### Phase 24: Mock Architecture Refactor
 
@@ -200,13 +200,13 @@ Plans:
   5. `pr open --web` opens browser; `pr open` prints URL to stdout
   6. Forge detection at `repo add`/`repo scan` suggests forge from remote URL and CLI availability
   7. `git-stacks doctor` checks availability of `gh`, `glab`, `tea`
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 27-01-PLAN.md — Schema: ForgeTypeSchema + forge field on RepoRegistryEntrySchema; forge-utils.ts with resolveForgeRepo (with forge validation per D-14)
 - [x] 27-02-PLAN.md — Three forge integration plugins (github, gitlab, gitea) + registration + unit tests
 - [x] 27-03-PLAN.md — Forge detection in repo add/scan + doctor binary checks
-- [ ] 27-04-PLAN.md — CHANGELOG and README documentation for forge integration features
+- [x] 27-04-PLAN.md — CHANGELOG and README documentation for forge integration features
 
 ### Phase 28: Issue & Task Tracking Integration
 

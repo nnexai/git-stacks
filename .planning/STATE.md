@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Close Command & Polish
 status: unknown
-last_updated: "2026-03-22T16:23:49.980Z"
+last_updated: "2026-03-22T16:27:48.564Z"
 last_activity: 2026-03-22
 progress:
   total_phases: 9
-  completed_phases: 7
-  total_plans: 17
-  completed_plans: 15
+  completed_phases: 8
+  total_plans: 20
+  completed_plans: 16
 ---
 
 # Project State
@@ -65,6 +65,7 @@ Plan: 4 of 4
 | Phase 27-git-forge-integrations P01 | 2min | 2 tasks | 4 files |
 | Phase 27-git-forge-integrations P03 | 3min | 2 tasks | 5 files |
 | Phase 27-git-forge-integrations P02 | 7min | 2 tasks | 8 files |
+| Phase 27 P04 | 65s | 2 tasks | 2 files |
 
 ### Decisions
 
@@ -101,6 +102,7 @@ Plan: 4 of 4
 - [Phase 27-02]: GitLab pr status uses 'glab mr list' not 'glab mr status' — mr status subcommand does not exist in glab CLI
 - [Phase 27-02]: Gitea _exec has three methods: run (inherit stdio), runCapture (piped stdout for JSON), openUrl (platform-aware xdg-open/open)
 - [Phase 27-02]: All forge integrations pass forge identifier string as third arg to resolveForgeRepo — triggers D-14 forge mismatch validation
+- [Phase 27]: Forge entries inserted at top of [Unreleased] Added section for discoverability; forge table rows use tier 5 (command-only, no open() artifacts)
 
 ### Pending Todos
 
@@ -126,7 +128,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T16:23:49.974Z
+Last session: 2026-03-22T16:27:48.559Z
 Last activity: 2026-03-22
 Resume file: None
 Next action: /gsd:plan-phase 21
