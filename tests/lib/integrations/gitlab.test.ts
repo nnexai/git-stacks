@@ -72,17 +72,18 @@ describe("gitlab pr create", () => {
   test("calls resolveForgeRepo with forge='gitlab' as third argument", async () => {
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "pr", "create", "my-workspace"])
-    expect(resolveForgeRepoMock.mock.calls[0][2]).toBe("gitlab")
+    expect((resolveForgeRepoMock.mock.calls[0] as any[])[2]).toBe("gitlab")
   })
 
   test("calls resolveForgeRepo with workspaceName as first arg", async () => {
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "pr", "create", "my-workspace"])
-    expect(resolveForgeRepoMock.mock.calls[0][0]).toBe("my-workspace")
+    expect((resolveForgeRepoMock.mock.calls[0] as any[])[0]).toBe("my-workspace")
   })
 
   test("exits process when resolveForgeRepo returns error", async () => {
-    resolveForgeRepoMock.mockImplementation(() => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(resolveForgeRepoMock as any).mockImplementation(() => ({
       ok: false,
       error: "workspace_not_found",
       name: "bad-ws",
@@ -107,7 +108,7 @@ describe("gitlab pr open --web", () => {
   test("calls resolveForgeRepo with forge='gitlab' as third arg for pr open", async () => {
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "pr", "open", "my-workspace", "--web"])
-    expect(resolveForgeRepoMock.mock.calls[0][2]).toBe("gitlab")
+    expect((resolveForgeRepoMock.mock.calls[0] as any[])[2]).toBe("gitlab")
   })
 })
 
@@ -134,6 +135,6 @@ describe("gitlab pr status", () => {
   test("calls resolveForgeRepo with forge='gitlab' as third arg for pr status", async () => {
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "pr", "status", "my-workspace"])
-    expect(resolveForgeRepoMock.mock.calls[0][2]).toBe("gitlab")
+    expect((resolveForgeRepoMock.mock.calls[0] as any[])[2]).toBe("gitlab")
   })
 })
