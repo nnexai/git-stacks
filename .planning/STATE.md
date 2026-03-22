@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.6.0
 milestone_name: Integration Orchestration & Niri
 status: unknown
-stopped_at: Completed 20-niri-integration-20-01-PLAN.md
-last_updated: "2026-03-22T04:57:35.802Z"
+stopped_at: Completed quick task 260322-b5d (WindowDetector refactor)
+last_updated: "2026-03-22T07:18:32Z"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -78,6 +78,8 @@ Plan: Not started
 - [Phase 20]: Window move failures logged as warnings and continue — partial failure acceptable for niri integration
 - [Quick 260322-9bm]: tmux open() no longer calls focusTmuxSession() — session is created in background, user explicitly attaches via "git-stacks integration tmux attach"
 - [Quick 260322-9bm]: Integration.commands?(parent: Command) optional method enables per-integration CLI helpers without requiring all integrations to implement it
+- [Quick 260322-b5d]: WindowDetector.begin() called before every integration's open() — runner captures pre-spawn snapshot for each integration, not just window-producing ones (simplicity over optimization)
+- [Quick 260322-b5d]: WindowArtifact.niriWindowIds replaced with generic windowIds Record<string,number[]> — niri reads artifact.windowIds?.["niri"] for source windows and window moves
 
 ### Pending Todos
 
@@ -98,6 +100,7 @@ None.
 | 260322-8sf | Fix niri integration: use snapshotWindowIds, correct workspace creation, add cleanup | 2026-03-22 | 4d5830d | Verified | [260322-8sf-fix-niri-integration-use-snapshotwindowi](./quick/260322-8sf-fix-niri-integration-use-snapshotwindowi/) |
 | 260322-9bm | tmux open() defocus, cleanup(), integration helper commands (tmux attach, niri focus-workspace) | 2026-03-22 | 285802d | Verified | [260322-9bm-tmux-integration-remove-focus-on-open-ad](./quick/260322-9bm-tmux-integration-remove-focus-on-open-ad/) |
 | 260322-a6s | Rework niri integration config from commands[] to declarative columns with app/command/source windows | 2026-03-22 | 468d564 | Verified | [260322-a6s-rework-niri-integration-config-declarati](./quick/260322-a6s-rework-niri-integration-config-declarati/) |
+| 260322-b5d | Refactor window ID detection to WindowDetector interface — decouple vscode/intellij from niri.ts | 2026-03-22 | 9b38920 | Verified | [260322-b5d-refactor-window-id-detection-from-hardco](./quick/260322-b5d-refactor-window-id-detection-from-hardco/) |
 
 ## Session Continuity
 
