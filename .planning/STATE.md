@@ -99,9 +99,15 @@ Plan: Not started
 
 None.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260322-m2k | unify hook env vars — consistent naming and values across all lifecycle functions | 2026-03-22 | f653790 | [260322-m2k-unify-hook-env-vars-consistent-naming-an](./quick/260322-m2k-unify-hook-env-vars-consistent-naming-an/) |
+
 ## Session Continuity
 
-Last session: 2026-03-22T15:10:00.000Z
-Stopped at: Completed quick-260322-m2k — hook env var rename WS_ to GS_ prefix, buildRepoEnv helper, full test and doc update
+Last session: 2026-03-22T14:53:28.243Z
+Last activity: 2026-03-22 - Completed quick task 260322-m2k: unify hook env vars
 Resume file: None
 Next action: /gsd:plan-phase 21
