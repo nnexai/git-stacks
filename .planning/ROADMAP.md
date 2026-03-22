@@ -119,20 +119,21 @@ Plans:
 | 21. Workspace Close Command | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 22. Niri Display Fix | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
 | 23. Test Environment Isolation | v0.7.0 | 1/1 | Complete    | 2026-03-22 |
-| 24. Mock Architecture Refactor | v0.7.0 | 0/? | Not started | - |
+| 24. Mock Architecture Refactor | v0.7.0 | 0/2 | Planned | - |
 | 25. Dedicated Lifecycle Phases | v0.7.0 | 0/? | Not started | - |
 | 26. Autocompletion & Editor Polish | v0.7.0 | 0/? | Not started | - |
 | 27. Git Forge Integrations | v0.7.0 | 0/? | Not started | - |
 
 ### Phase 24: Mock Architecture Refactor
 
-**Goal**: Replace module-level `mock.module()` calls with injectable dependency mocking. Tests should mock the external commands (shell, IPC) not entire modules, following the `_exec` pattern already used in `niri.ts`. This eliminates the fragile requirement to keep mock export lists in sync with real modules.
-**Requirements**: TBD
+**Goal**: Add injectable `_exec` objects to shell-wrapper modules (tmux, cmux, lifecycle) and create a `prompts` wrapper in `tui/utils.ts`, following the proven `niri.ts` pattern. Update direct unit tests to use injection instead of `mock.module()`. Establishes the pattern without a full-codebase sweep.
+**Requirements**: MOCK-01, MOCK-02, MOCK-03, MOCK-04
 **Depends on:** Phase 23
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 24 to break down)
+- [ ] 24-01-PLAN.md — Add _exec to tmux.ts, cmux.ts, lifecycle.ts + direct unit tests
+- [ ] 24-02-PLAN.md — Prompts wrapper in tui/utils.ts + production import switchover
 
 ### Phase 25: Dedicated Lifecycle Phases
 
