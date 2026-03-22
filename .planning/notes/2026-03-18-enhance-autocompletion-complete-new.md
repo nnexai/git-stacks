@@ -1,6 +1,6 @@
 ---
 date: "2026-03-18 00:00"
-promoted: false
+promoted: true
 ---
 
 - enhance autocompletion to complete "new --from <templates"
