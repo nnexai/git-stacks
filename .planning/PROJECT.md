@@ -8,7 +8,11 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State — v0.6.0 shipped (2026-03-22)
+## Current State — v0.7.0 in progress (2026-03-22)
+
+### What shipped in v0.7.0 (Phase 21 complete)
+
+- **Workspace close command** — `git-stacks close <name>` tears down integration sessions (tmux kill, niri unname) and runs `pre_close` hooks without deleting worktrees or workspace YAML; workspace remains fully re-openable via `git-stacks open`; TUI dashboard action menu includes Close with `x` shortcut
 
 ### What shipped in v0.6.0
 
