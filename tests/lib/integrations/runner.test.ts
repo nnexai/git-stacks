@@ -1,5 +1,4 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
-import type { Mock } from "bun:test"
 import type { IntegrationContext, ArtifactBag, TmuxArtifact } from "@/lib/integrations/types"
 
 // Shared call-order tracker for ordering tests
@@ -188,7 +187,7 @@ describe("runIntegrationGenerate", () => {
   test("integration without generate method does not throw and has path=null", async () => {
     const results = await runIntegrationGenerate(fakeCtx)
 
-    const noGenResult = results.find((r) => r.integration.id === "no-generate")
+    const noGenResult = results.find((r: { integration: { id: string } }) => r.integration.id === "no-generate")
     expect(noGenResult).toBeDefined()
     expect(noGenResult!.path).toBeNull()
   })
@@ -197,7 +196,7 @@ describe("runIntegrationGenerate", () => {
     lowGenerateMock.mockImplementation(() => "/tmp/low-artifact")
     const results = await runIntegrationGenerate(fakeCtx)
 
-    const lowResult = results.find((r) => r.integration.id === "low")
+    const lowResult = results.find((r: { integration: { id: string } }) => r.integration.id === "low")
     expect(lowResult).toBeDefined()
     expect(lowResult!.path).toBe("/tmp/low-artifact")
   })

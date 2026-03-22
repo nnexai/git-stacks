@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { formatAge, isStale, groupBySender, type SenderGroup } from "../../src/tui/dashboard/messageUtils"
+import { formatAge, isStale, groupBySender } from "../../src/tui/dashboard/messageUtils"
 import type { MessageRecord } from "../../src/lib/messages"
 
 describe("formatAge", () => {

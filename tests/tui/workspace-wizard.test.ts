@@ -65,7 +65,7 @@ const fakeIntegrations = [
   },
 ]
 
-const mockResolveEnabledGlobally = mock((id: string, defaultEnabled: boolean, _config: unknown) => {
+const mockResolveEnabledGlobally = mock((id: string, _defaultEnabled: boolean, _config: unknown) => {
   if (id === "vscode") return true
   return false
 })

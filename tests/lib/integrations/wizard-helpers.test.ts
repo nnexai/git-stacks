@@ -73,12 +73,12 @@ const { promptIntegrationOverrides } = await import(
 // These may be our registered mocks or another test file's — either way, these are
 // the objects we need to configure in each test.
 const p = await import("@clack/prompts")
-const mockConfirm = p.confirm as Mock<(...args: unknown[]) => unknown>
-const mockMultiselect = p.multiselect as Mock<(...args: unknown[]) => unknown>
-const mockIsCancel = p.isCancel as Mock<(...args: unknown[]) => unknown>
+const mockConfirm = p.confirm as unknown as Mock<(...args: any[]) => any>
+const mockMultiselect = p.multiselect as unknown as Mock<(...args: any[]) => any>
+const mockIsCancel = p.isCancel as unknown as Mock<(...args: any[]) => any>
 
 const utils = await import("@/tui/utils")
-const mockCancel = utils.cancel as Mock<(...args: unknown[]) => unknown>
+const mockCancel = utils.cancel as unknown as Mock<(...args: any[]) => any>
 
 describe("promptIntegrationOverrides", () => {
   beforeEach(() => {

@@ -123,8 +123,6 @@ describe("list default columns", () => {
 
   test("default output includes dirty indicator", () => {
     // Add a modified file to one of the worktree repos to make it dirty
-    const taskPath1 = cfgDir.replace("/config", "") + "/workspaces/tasks/my-ws/api"
-
     // Re-read the config to get the actual task path
     const { readFileSync } = require("fs")
     const yaml = readFileSync(join(cfgDir, "workspaces", "my-ws.yml"), "utf8")

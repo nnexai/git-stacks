@@ -1,5 +1,4 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-import { join } from "path"
 import { readFileSync } from "fs"
 import { generateCodeWorkspace } from "../../src/lib/vscode"
 import { makeTmpDir, cleanup } from "../helpers"
@@ -12,12 +11,13 @@ afterEach(() => cleanup(tmp))
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     name: "WEB-1234",
+    schema_version: "1",
     branch: "feature/WEB-1234",
     created: "2026-01-01",
     repos: [
       {
         name: "auth-service",
-        stack: "platform",
+        repo: "platform",
         type: "java",
         mode: "worktree",
         main_path: "/main/auth-service",
@@ -25,7 +25,7 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
       },
       {
         name: "shared-lib",
-        stack: "platform",
+        repo: "platform",
         type: "java",
         mode: "trunk",
         main_path: "/main/shared-lib",

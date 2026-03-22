@@ -1,5 +1,4 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
-import type { Mock } from "bun:test"
 import type { IntegrationContext, ArtifactBag, WindowArtifact, WindowDetector } from "@/lib/integrations/types"
 
 // === TDD RED: WindowDetector interface and runner integration ===
@@ -164,9 +163,9 @@ describe("WindowDetector — runner integration", () => {
     windowOpenMock.mockImplementation(async () => ({
       kind: "tmux" as const,
       sessionName: "my-session",
-    }))
+    }) as any)
 
-    const bag = await runIntegrations(fakeCtx)
+    await runIntegrations(fakeCtx)
 
     // resolve() should NOT be called for non-window artifacts
     expect(mockResolve.mock.calls.length).toBe(0)

@@ -10,12 +10,12 @@ beforeEach(() => { tmp = makeTmpDir("intellij") })
 afterEach(() => cleanup(tmp))
 
 function makeWorkspace(repos: Workspace["repos"]): Workspace {
-  return { name: "WEB-1234", branch: "feature/WEB-1234", created: "2026-01-01", repos }
+  return { name: "WEB-1234", schema_version: "1", branch: "feature/WEB-1234", created: "2026-01-01", repos }
 }
 
 const javaRepo = (name: string, taskPath: string) => ({
   name,
-  stack: "platform",
+  repo: "platform",
   type: "java" as const,
   mode: "worktree" as const,
   main_path: `/main/${name}`,
@@ -24,7 +24,7 @@ const javaRepo = (name: string, taskPath: string) => ({
 
 const tsRepo = (name: string) => ({
   name,
-  stack: "platform",
+  repo: "platform",
   type: "typescript" as const,
   mode: "worktree" as const,
   main_path: `/main/${name}`,
