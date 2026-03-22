@@ -43,7 +43,7 @@ export type SnapshotOpts = {
 
 // ─── NiriCommands interface ───────────────────────────────────────────────────
 // Phase 20 tests mock.module("@/lib/niri", () => ({ ... })) using this type
-// as a constraint to ensure all 8 functions are mocked with correct signatures.
+// as a constraint to ensure all 10 functions are mocked with correct signatures.
 
 export interface NiriCommands {
   isNiriRunning(): Promise<boolean>
