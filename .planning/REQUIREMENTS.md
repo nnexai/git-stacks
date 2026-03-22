@@ -14,7 +14,7 @@
 
 ### UI Fix
 
-- [ ] **UI-01**: Niri columns configuration displays human-readable format in TUI details pane instead of `[object Object]`
+- [ ] **UI-01**: Niri columns configuration displays full column details (app, command, source windows, width) as readable text in TUI details pane instead of `[object Object]`
 
 ### Test Quality
 
@@ -40,19 +40,19 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLOSE-01 | — | Pending |
-| CLOSE-02 | — | Pending |
-| CLOSE-03 | — | Pending |
-| CLOSE-04 | — | Pending |
-| UI-01 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
+| CLOSE-01 | Phase 21 | Pending |
+| CLOSE-02 | Phase 21 | Pending |
+| CLOSE-03 | Phase 21 | Pending |
+| CLOSE-04 | Phase 21 | Pending |
+| UI-01 | Phase 22 | Pending |
+| TEST-01 | Phase 23 | Pending |
+| TEST-02 | Phase 23 | Pending |
 
 **Coverage:**
 - v0.7.0 requirements: 7 total
-- Mapped to phases: 0
-- Unmapped: 7 ⚠️
+- Mapped to phases: 7
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after initial definition*
+*Last updated: 2026-03-22 after roadmap creation (Phases 21-23)*
