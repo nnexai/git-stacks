@@ -56,6 +56,10 @@ export interface NiriCommands {
   focusNiriWorkspace(ref: string | number): Promise<void>
   focusNiriWorkspaceDown(): Promise<void>
   snapshotWindowIds(spawnFn: () => Promise<void>, opts?: SnapshotOpts): Promise<number[]>
+  focusNiriWindow(windowId: number): Promise<void>
+  setNiriColumnWidth(change: string): Promise<void>
+  consumeOrExpelWindowLeft(windowId?: number): Promise<void>
+  niriSpawnSh(command: string): Promise<void>
 }
 
 // ─── Internal runner — mutable for test injection ─────────────────────────────
@@ -226,4 +230,42 @@ export async function snapshotWindowIds(
   }
 
   return [] // timeout — caller handles gracefully
+}
+
+/**
+ * Focuses a specific niri window by its numeric ID.
+ * Used before setNiriColumnWidth to ensure the correct column is targeted.
+ */
+export async function focusNiriWindow(windowId: number): Promise<void> {
+  await _exec.run(["action", "focus-window", "--id", String(windowId)])
+}
+
+/**
+ * Sets the width of the currently focused column.
+ * change can be an absolute pixel value (e.g. "800") or percentage (e.g. "50%").
+ */
+export async function setNiriColumnWidth(change: string): Promise<void> {
+  await _exec.run(["action", "set-column-width", change])
+}
+
+/**
+ * Consumes (merges) a window into the column to the left, or expels it from
+ * a column if already the only window in it.
+ * If windowId is provided, targets that specific window; otherwise targets focused window.
+ */
+export async function consumeOrExpelWindowLeft(windowId?: number): Promise<void> {
+  if (windowId !== undefined) {
+    await _exec.run(["action", "consume-or-expel-window-left", "--id", String(windowId)])
+  } else {
+    await _exec.run(["action", "consume-or-expel-window-left"])
+  }
+}
+
+/**
+ * Spawns a shell command via niri's compositor spawn-sh action.
+ * Unlike niriSpawn, this wraps the command in a shell, allowing pipes,
+ * semicolons, and other shell features (cd, &&, etc.).
+ */
+export async function niriSpawnSh(command: string): Promise<void> {
+  await _exec.run(["action", "spawn-sh", "--", command])
 }

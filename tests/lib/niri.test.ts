@@ -17,10 +17,16 @@ const {
   listNiriWindows,
   listNiriWorkspaces,
   setNiriWorkspaceName,
+  unsetNiriWorkspaceName,
   moveWindowToWorkspace,
   niriSpawn,
   focusNiriWorkspace,
+  focusNiriWorkspaceDown,
   snapshotWindowIds,
+  focusNiriWindow,
+  setNiriColumnWidth,
+  consumeOrExpelWindowLeft,
+  niriSpawnSh,
   _exec,
 } = niriModule
 
@@ -485,6 +491,73 @@ describe("snapshotWindowIds", () => {
   })
 })
 
+// ─── focusNiriWindow ──────────────────────────────────────────────────────────
+
+describe("focusNiriWindow", () => {
+  beforeEach(() => resetMocks())
+
+  test("calls niri msg action focus-window --id with windowId", async () => {
+    await focusNiriWindow(42)
+
+    expect(capturedArgs).toContain("action")
+    expect(capturedArgs).toContain("focus-window")
+    expect(capturedArgs).toContain("--id")
+    expect(capturedArgs).toContain("42")
+  })
+})
+
+// ─── setNiriColumnWidth ───────────────────────────────────────────────────────
+
+describe("setNiriColumnWidth", () => {
+  beforeEach(() => resetMocks())
+
+  test("calls niri msg action set-column-width with change string", async () => {
+    await setNiriColumnWidth("50%")
+
+    expect(capturedArgs).toContain("action")
+    expect(capturedArgs).toContain("set-column-width")
+    expect(capturedArgs).toContain("50%")
+  })
+})
+
+// ─── consumeOrExpelWindowLeft ─────────────────────────────────────────────────
+
+describe("consumeOrExpelWindowLeft", () => {
+  beforeEach(() => resetMocks())
+
+  test("calls niri msg action consume-or-expel-window-left with --id when windowId provided", async () => {
+    await consumeOrExpelWindowLeft(99)
+
+    expect(capturedArgs).toContain("action")
+    expect(capturedArgs).toContain("consume-or-expel-window-left")
+    expect(capturedArgs).toContain("--id")
+    expect(capturedArgs).toContain("99")
+  })
+
+  test("calls niri msg action consume-or-expel-window-left without --id when no windowId provided", async () => {
+    await consumeOrExpelWindowLeft()
+
+    expect(capturedArgs).toContain("action")
+    expect(capturedArgs).toContain("consume-or-expel-window-left")
+    expect(capturedArgs).not.toContain("--id")
+  })
+})
+
+// ─── niriSpawnSh ──────────────────────────────────────────────────────────────
+
+describe("niriSpawnSh", () => {
+  beforeEach(() => resetMocks())
+
+  test("calls niri msg action spawn-sh -- with shell command string", async () => {
+    await niriSpawnSh("cd /tmp && ghostty")
+
+    expect(capturedArgs).toContain("action")
+    expect(capturedArgs).toContain("spawn-sh")
+    expect(capturedArgs).toContain("--")
+    expect(capturedArgs).toContain("cd /tmp && ghostty")
+  })
+})
+
 // ─── NiriCommands interface type-check ────────────────────────────────────────
 // Structural check: assign module exports to NiriCommands — TypeScript will
 // catch missing or mismatched function signatures at bun run typecheck time.
@@ -496,20 +569,32 @@ describe("NiriCommands interface", () => {
       listNiriWindows,
       listNiriWorkspaces,
       setNiriWorkspaceName,
+      unsetNiriWorkspaceName,
       moveWindowToWorkspace,
       niriSpawn,
       focusNiriWorkspace,
+      focusNiriWorkspaceDown,
       snapshotWindowIds,
+      focusNiriWindow,
+      setNiriColumnWidth,
+      consumeOrExpelWindowLeft,
+      niriSpawnSh,
     }
-    // Runtime check: all 8 functions are present and callable
+    // Runtime check: all 14 functions are present and callable
     expect(typeof commands.isNiriRunning).toBe("function")
     expect(typeof commands.listNiriWindows).toBe("function")
     expect(typeof commands.listNiriWorkspaces).toBe("function")
     expect(typeof commands.setNiriWorkspaceName).toBe("function")
+    expect(typeof commands.unsetNiriWorkspaceName).toBe("function")
     expect(typeof commands.moveWindowToWorkspace).toBe("function")
     expect(typeof commands.niriSpawn).toBe("function")
     expect(typeof commands.focusNiriWorkspace).toBe("function")
+    expect(typeof commands.focusNiriWorkspaceDown).toBe("function")
     expect(typeof commands.snapshotWindowIds).toBe("function")
+    expect(typeof commands.focusNiriWindow).toBe("function")
+    expect(typeof commands.setNiriColumnWidth).toBe("function")
+    expect(typeof commands.consumeOrExpelWindowLeft).toBe("function")
+    expect(typeof commands.niriSpawnSh).toBe("function")
   })
 })
 
