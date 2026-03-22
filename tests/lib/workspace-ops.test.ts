@@ -52,8 +52,8 @@ const {
   closeWorkspace,
 }: {
   mergeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  removeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  cleanWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  removeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  cleanWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   renameWorkspace: (name: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   closeWorkspace: (name: string, opts: { captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
 // @ts-ignore — cache-busting for isolated paths mock
@@ -286,6 +286,102 @@ describe("removeWorkspace", () => {
     expect(workspaceExists(wsName)).toBe(true)
 
     // Cleanup manually since removeWorkspace failed
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: cascades through close and clean before YAML deletion
+  test("removeWorkspace cascades through close and clean before YAML deletion", async () => {
+    const wsName = uniqueWsName("remove-cascade")
+    const stackName = uniqueRegistryName()
+    const logFile = `/tmp/gsd-hook-log-remove-cascade-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`
+
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = {
+      pre_close: [`echo PRE_CLOSE >> ${logFile}`],
+      pre_clean: [`echo PRE_CLEAN >> ${logFile}`],
+      pre_remove: [`echo PRE_REMOVE >> ${logFile}`],
+    }
+    writeWorkspace(ws)
+
+    const result = await removeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+
+    const log = existsSync(logFile) ? readFileSync(logFile, "utf-8") : ""
+    const preCloseIdx = log.indexOf("PRE_CLOSE")
+    const preCleanIdx = log.indexOf("PRE_CLEAN")
+    const preRemoveIdx = log.indexOf("PRE_REMOVE")
+    expect(preCloseIdx).toBeGreaterThanOrEqual(0)
+    expect(preCleanIdx).toBeGreaterThanOrEqual(0)
+    expect(preRemoveIdx).toBeGreaterThanOrEqual(0)
+    expect(preCloseIdx).toBeLessThan(preCleanIdx)
+    expect(preCleanIdx).toBeLessThan(preRemoveIdx)
+
+    // Worktree removed and YAML deleted
+    expect(existsSync(repos[0].worktreePath)).toBe(false)
+    expect(workspaceExists(wsName)).toBe(false)
+
+    try { unlinkSync(logFile) } catch { /* ignore */ }
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: post_remove fires after YAML deletion
+  test("removeWorkspace fires post_remove after YAML deletion", async () => {
+    const wsName = uniqueWsName("remove-post-remove")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = { post_remove: ["echo POST_REMOVE_RAN"] }
+    writeWorkspace(ws)
+
+    const result = await removeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+    expect(workspaceExists(wsName)).toBe(false)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: WS_TRIGGERED_BY=remove propagated through entire cascade
+  test("removeWorkspace sets WS_TRIGGERED_BY=remove in all cascaded hooks", async () => {
+    const wsName = uniqueWsName("remove-triggered-by")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = {
+      pre_close: ['test "$WS_TRIGGERED_BY" = "remove"'],
+      pre_clean: ['test "$WS_TRIGGERED_BY" = "remove"'],
+      pre_remove: ['test "$WS_TRIGGERED_BY" = "remove"'],
+    }
+    writeWorkspace(ws)
+
+    const result = await removeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  // Test: aborts if clean phase fails (D-03)
+  test("removeWorkspace aborts if clean phase fails (D-03)", async () => {
+    const wsName = uniqueWsName("remove-abort-clean")
+    const stackName = uniqueRegistryName()
+
+    await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+
+    const ws = readWorkspace(wsName)
+    ws.hooks = { pre_clean: ["exit 1"] }
+    writeWorkspace(ws)
+
+    const result = await removeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/pre_clean/)
+    // YAML still exists (no deletion happened)
+    expect(workspaceExists(wsName)).toBe(true)
+
     cleanupFixture(wsName, stackName, tmp)
   })
 })
