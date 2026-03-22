@@ -310,13 +310,13 @@ export default function App() {
 
       switch (action) {
         case "clean":
-          result = await cleanWorkspace(wsName, { force: false }, onProgress)
+          result = await cleanWorkspace(wsName, { force: false, captured: true }, onProgress)
           break
         case "remove":
-          result = await removeWorkspace(wsName, { force: false }, onProgress)
+          result = await removeWorkspace(wsName, { force: false, captured: true }, onProgress)
           break
         case "merge":
-          result = await mergeWorkspace(wsName, { force: false }, onProgress)
+          result = await mergeWorkspace(wsName, { force: false, captured: true }, onProgress)
           break
         default:
           result = { ok: false, error: `Unknown action: ${action}` }
