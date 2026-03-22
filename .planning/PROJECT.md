@@ -18,6 +18,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Test environment isolation** — `useIsolatedConfig` shared helper in `tests/helpers.ts` redirects all config I/O to temp directories; all mock.module calls export complete module interfaces to prevent cross-test contamination; 513 tests pass with 0 failures
 - **Mock architecture refactor** — injectable `_exec` objects in tmux.ts, cmux.ts, and lifecycle.ts (matching niri.ts pattern); centralized `prompts` wrapper in tui/utils.ts replaces all direct `@clack/prompts` imports across 15 production files; enables fast isolated unit tests via property replacement instead of `mock.module()`; 574 tests pass with 0 failures
 - **Test mock hygiene** — eliminated all dead `mock.module("@clack/prompts")` calls from 7 test files; added explicit `@/tui/utils` mocks where missing; completes Phase 24 import migration cleanup
+- **Git forge integrations** — GitHub (`gh`), GitLab (`glab`), and Gitea (`tea`) integration plugins add `pr create/open/status` subcommands; `forge` field on repo registry schema with auto-detection during `repo add`/`repo scan`; `git-stacks doctor` checks for forge CLI binaries; 682 tests pass
 
 ### What shipped in v0.6.0
 
