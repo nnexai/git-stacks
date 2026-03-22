@@ -146,7 +146,8 @@ describe("workspace creation (NIRI-01, NIRI-04)", () => {
 
     await niriIntegration.open(fakeCtx, null, emptyBag)
 
-    expect(mockFocusNiriWorkspace.mock.calls.length).toBe(1)
+    // Called twice: once for re-open setup, once to focus back (since focus: true not set)
+    expect(mockFocusNiriWorkspace.mock.calls.length).toBe(2)
     expect(mockFocusNiriWorkspace.mock.calls[0][0]).toBe("test-ws")
   })
 })
@@ -660,6 +661,68 @@ describe("column config — config precedence", () => {
 
     expect(mockNiriSpawn.mock.calls.length).toBe(1)
     expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["ghostty"])
+  })
+})
+
+// ===================================================================
+// Focus behavior
+// ===================================================================
+describe("focus behavior", () => {
+  test("window with focus: true gets focusNiriWindow after layout", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ windows: [{ app: "ghostty", focus: true }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    // focusNiriWindow called: once for width (none here), once for focus: true window
+    const focusCalls = mockFocusNiriWindow.mock.calls
+    expect(focusCalls.length).toBe(1)
+    expect(focusCalls[0][0]).toBe(100) // window ID from snapshotWindowIds
+  })
+
+  test("focus: true on config prevents switching back to original workspace", async () => {
+    mockListNiriWorkspaces.mockImplementation(async () => [
+      { id: 1, idx: 0, name: "other-ws", is_active: false, is_focused: true, is_urgent: false },
+    ])
+
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: { enabled: true, focus: true },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    // focusNiriWorkspace called only for workspace creation (focusNiriWorkspaceDown),
+    // NOT called again to switch back to "other-ws"
+    const focusWsCalls = mockFocusNiriWorkspace.mock.calls
+    // No re-open focus call since workspace doesn't exist yet (focusNiriWorkspaceDown used)
+    expect(focusWsCalls.length).toBe(0)
+  })
+
+  test("without focus: true, switches back to originally focused workspace", async () => {
+    mockListNiriWorkspaces.mockImplementation(async () => [
+      { id: 1, idx: 0, name: "other-ws", is_active: false, is_focused: true, is_urgent: false },
+    ])
+
+    await niriIntegration.open(fakeCtx, null, emptyBag)
+
+    // Should switch back to "other-ws" since focus is not set
+    const focusWsCalls = mockFocusNiriWorkspace.mock.calls
+    expect(focusWsCalls.length).toBe(1)
+    expect(focusWsCalls[0][0]).toBe("other-ws")
   })
 })
 

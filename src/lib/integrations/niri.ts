@@ -32,6 +32,7 @@ const niriWindowConfigSchema = z.object({
   repo: z.string().optional(),
   cwd: z.string().optional(),
   command: z.string().optional(),
+  focus: z.boolean().optional(),
 })
 
 const niriColumnSchema = z.object({
@@ -41,6 +42,7 @@ const niriColumnSchema = z.object({
 
 const niriConfigSchema = z.object({
   enabled: z.boolean().optional(),
+  focus: z.boolean().optional(),
   columns: z.array(niriColumnSchema).optional(),
 })
 
@@ -68,11 +70,24 @@ export const niriIntegration: Integration = {
       const workspaces = await listNiriWorkspaces()
       const alreadyNamed = workspaces.some((ws) => ws.name === workspaceName)
 
+      // Resolve focus config — workspace settings take precedence
+      const wsConfig = niriConfigSchema.safeParse(
+        ctx.workspace.settings?.integrations?.["niri"] ?? {}
+      )
+      const globalConfig = niriConfigSchema.safeParse(ctx.config.integrations["niri"] ?? {})
+      const parsedConfig = wsConfig.success && (wsConfig.data.columns?.length || wsConfig.data.focus !== undefined)
+        ? wsConfig.data
+        : globalConfig.success ? globalConfig.data : undefined
+      const shouldFocusWorkspace = parsedConfig?.focus === true
+
+      // Remember the currently focused workspace so we can switch back if !focus
+      const currentlyFocused = workspaces.find((ws) => ws.is_focused)
+
       if (alreadyNamed) {
-        // Re-open: just focus the existing named workspace
+        // Re-open: focus the workspace to place windows, then optionally switch back
         await focusNiriWorkspace(workspaceName)
       } else {
-        // First open: create a NEW workspace — do NOT rename the user's current workspace
+        // First open: create a NEW workspace
         await focusNiriWorkspaceDown()
         await setNiriWorkspaceName(workspaceName)
       }
@@ -92,18 +107,10 @@ export const niriIntegration: Integration = {
       }
 
       // Step 3: Process declarative column layout
-      const wsConfig = niriConfigSchema.safeParse(
-        ctx.workspace.settings?.integrations?.["niri"] ?? {}
-      )
-      const globalConfig = niriConfigSchema.safeParse(ctx.config.integrations["niri"] ?? {})
+      const columns = parsedConfig?.columns
 
-      // Workspace columns take precedence over global columns
-      const columns =
-        wsConfig.success && wsConfig.data.columns?.length
-          ? wsConfig.data.columns
-          : globalConfig.success
-            ? globalConfig.data.columns
-            : undefined
+      // Track which window should receive final focus (from focus: true on a window entry)
+      let focusWindowId: number | null = null
 
       if (columns?.length) {
         // Build env var expand function
@@ -121,11 +128,14 @@ export const niriIntegration: Integration = {
 
           for (const window of column.windows) {
             try {
+              let windowId: number | undefined
+
               if (window.source !== undefined) {
                 // Source window: resolve from ArtifactBag
                 const artifact = bag[window.source]
                 if (artifact?.kind === "window" && artifact.niriWindowIds?.length) {
-                  columnWindowIds.push(artifact.niriWindowIds[0])
+                  windowId = artifact.niriWindowIds[0]
+                  columnWindowIds.push(windowId)
                 } else {
                   p.log.warn(`niri: source "${window.source}" not found in bag or has no window IDs`)
                 }
@@ -135,6 +145,7 @@ export const niriIntegration: Integration = {
                 const newIds = await snapshotWindowIds(() =>
                   niriSpawn([window.app!, ...expandedArgs])
                 )
+                if (newIds.length > 0) windowId = newIds[0]
                 columnWindowIds.push(...newIds)
               } else if (window.command !== undefined) {
                 // Shell spawn via niriSpawnSh
@@ -156,9 +167,15 @@ export const niriIntegration: Integration = {
                 const shellCmd = parts.join(" && ")
 
                 const newIds = await snapshotWindowIds(() => niriSpawnSh(shellCmd))
+                if (newIds.length > 0) windowId = newIds[0]
                 columnWindowIds.push(...newIds)
               } else {
                 p.log.warn("niri: window config has none of source/app/command — skipping")
+              }
+
+              // Track window-level focus
+              if (window.focus && windowId !== undefined) {
+                focusWindowId = windowId
               }
             } catch (err) {
               p.log.warn(`niri: failed to place window: ${String(err)}`)
@@ -185,6 +202,17 @@ export const niriIntegration: Integration = {
             }
           }
         }
+      }
+
+      // Step 4: Apply focus
+      // Window-level focus: focus a specific window marked with focus: true
+      if (focusWindowId !== null) {
+        try { await focusNiriWindow(focusWindowId) } catch { /* best effort */ }
+      }
+
+      // Workspace-level focus: if focus is not set, switch back to the original workspace
+      if (!shouldFocusWorkspace && currentlyFocused?.name) {
+        try { await focusNiriWorkspace(currentlyFocused.name) } catch { /* best effort */ }
       }
 
       spinner.stop("niri workspace ready")
