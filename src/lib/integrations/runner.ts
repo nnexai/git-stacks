@@ -31,3 +31,18 @@ export async function runIntegrations(ctx: IntegrationContext, skip?: Set<string
   }
   return bag
 }
+
+export async function runIntegrationCleanup(ctx: IntegrationContext): Promise<void> {
+  const sorted = [...integrations].sort((a, b) => a.order - b.order)
+  for (const integration of sorted) {
+    if (!integration.isEnabled(ctx)) continue
+    if (integration.applies && !integration.applies(ctx.workspace)) continue
+    if (!integration.cleanup) continue
+    try {
+      await integration.cleanup(ctx)
+    } catch (err) {
+      // Cleanup failures are non-fatal — log and continue
+      console.warn(`${integration.id} cleanup: ${String(err)}`)
+    }
+  }
+}

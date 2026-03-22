@@ -16,6 +16,7 @@ export type WindowArtifact = {
   pid: number
   app_id: string
   title: string
+  niriWindowIds?: number[]  // Populated by snapshotWindowIds when niri is running
 }
 
 export type IntegrationArtifact = TmuxArtifact | CmuxArtifact | WindowArtifact
@@ -65,6 +66,9 @@ export interface Integration {
 
   /** Launch / activate the integration (open IDE, create terminal session, …) */
   open(ctx: IntegrationContext, artifactPath: string | null, bag: ArtifactBag): Promise<IntegrationArtifact | null>
+
+  /** Clean up integration resources (e.g., unname niri workspace). Called on workspace clean/remove. */
+  cleanup?(ctx: IntegrationContext): Promise<void>
 }
 
 const enabledSchema = z.object({ enabled: z.boolean() })

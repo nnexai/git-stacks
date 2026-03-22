@@ -50,9 +50,11 @@ export interface NiriCommands {
   listNiriWindows(): Promise<NiriWindow[]>
   listNiriWorkspaces(): Promise<NiriWorkspace[]>
   setNiriWorkspaceName(name: string, workspaceRef?: string | number): Promise<void>
+  unsetNiriWorkspaceName(workspaceRef?: string | number): Promise<void>
   moveWindowToWorkspace(windowId: number, workspaceRef: string | number): Promise<void>
   niriSpawn(command: string[]): Promise<void>
   focusNiriWorkspace(ref: string | number): Promise<void>
+  focusNiriWorkspaceDown(): Promise<void>
   snapshotWindowIds(spawnFn: () => Promise<void>, opts?: SnapshotOpts): Promise<number[]>
 }
 
@@ -159,6 +161,29 @@ export async function niriSpawn(command: string[]): Promise<void> {
  */
 export async function focusNiriWorkspace(ref: string | number): Promise<void> {
   await _exec.run(["action", "focus-workspace", String(ref)])
+}
+
+/**
+ * Moves focus to the next workspace (creates a new empty one at the end if needed).
+ * Used to create a fresh niri workspace for a new git-stacks workspace.
+ */
+export async function focusNiriWorkspaceDown(): Promise<void> {
+  await _exec.run(["action", "focus-workspace-down"])
+}
+
+/**
+ * Unsets the name of a niri workspace.
+ * If workspaceRef is provided, targets that specific workspace (by name or index).
+ * IMPORTANT: unset-workspace-name uses a POSITIONAL arg, NOT --workspace flag.
+ */
+export async function unsetNiriWorkspaceName(
+  workspaceRef?: string | number
+): Promise<void> {
+  if (workspaceRef !== undefined) {
+    await _exec.run(["action", "unset-workspace-name", String(workspaceRef)])
+  } else {
+    await _exec.run(["action", "unset-workspace-name"])
+  }
 }
 
 /**

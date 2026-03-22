@@ -26,7 +26,7 @@ import {
   getCommitsBehind,
 } from "./git"
 import { type IntegrationContext } from "./integrations"
-import { runIntegrations } from "./integrations/runner"
+import { runIntegrations, runIntegrationCleanup } from "./integrations/runner"
 import { runHooks } from "./lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
 import { $ } from "bun"
@@ -241,6 +241,10 @@ export async function cleanWorkspace(
     return { ok: false, error: `pre_remove hook failed (${err})` }
   }
 
+  // Run integration cleanup (e.g., unname niri workspace)
+  const ctx: IntegrationContext = { workspace, tasksDir, config }
+  await runIntegrationCleanup(ctx)
+
   // Stage: attempt all worktree removals, collect failures (BUG-02 fix)
   const failures: string[] = []
   for (const repo of workspace.repos.filter((r) => r.mode === "worktree")) {
@@ -306,6 +310,10 @@ export async function removeWorkspace(
   } catch (err) {
     return { ok: false, error: `pre_remove hook failed (${err})` }
   }
+
+  // Run integration cleanup (e.g., unname niri workspace)
+  const ctx: IntegrationContext = { workspace, tasksDir, config }
+  await runIntegrationCleanup(ctx)
 
   // Stage: attempt all worktree removals, collect failures (BUG-02 fix)
   const failures: string[] = []
@@ -399,6 +407,10 @@ export async function mergeWorkspace(
   } catch (err) {
     return { ok: false, error: `pre_remove hook failed (${err})` }
   }
+
+  // Run integration cleanup (e.g., unname niri workspace)
+  const mergeCtx: IntegrationContext = { workspace, tasksDir, config }
+  await runIntegrationCleanup(mergeCtx)
 
   // Merge (BUG-01 fix: check result and return early on failure -- YAML preserved)
   for (const { repo, baseBranch } of repoBases) {
