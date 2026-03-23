@@ -1,4 +1,4 @@
-import { prompts as p } from "@/tui/utils"
+import { prompts as p } from "../../tui/utils"
 import { z } from "zod"
 import { join } from "path"
 import { openCmuxWorkspace, addCmuxPane, addCmuxSurface, sendToCmuxSurface, getCmuxMainPane, focusCmuxSurface } from "../cmux"

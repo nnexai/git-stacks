@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import { prompts as p } from "@/tui/utils"
+import { prompts as p } from "../tui/utils"
 import { join } from "path"
 import { formatError } from "../lib/errors"
 import {

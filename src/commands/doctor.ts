@@ -2,7 +2,7 @@ import { Command } from "commander"
 import { existsSync, readdirSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
-import { prompts as p } from "@/tui/utils"
+import { prompts as p } from "../tui/utils"
 import {
   listWorkspaces,
   readRegistry,

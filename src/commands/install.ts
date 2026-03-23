@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import { prompts as p } from "@/tui/utils"
+import { prompts as p } from "../tui/utils"
 import type { Workspace } from "../lib/config"
 import { listWorkspaces, readWorkspace, readGlobalConfig } from "../lib/config"
 import { getTasksDir } from "../lib/paths"

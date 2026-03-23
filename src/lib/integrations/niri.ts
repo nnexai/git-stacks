@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { prompts as p } from "@/tui/utils"
+import { prompts as p } from "../../tui/utils"
 import type { Command } from "commander"
 import {
   resolveEnabled,
