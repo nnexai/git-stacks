@@ -4,6 +4,14 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.7.1] — 2026-03-23
+
+### Fixed
+
+- **Published package fails with "Cannot find module @/tui/utils"** — replaced all `@/*` path alias imports in `src/` with relative paths. Bun does not resolve tsconfig path aliases from within `node_modules`, so the `@/*` shorthand only works in local development/test contexts. The 8 affected files in `src/commands/` and `src/lib/integrations/` now use `../tui/utils` or `../../tui/utils` respectively.
+
+---
+
 ## [0.7.0] — 2026-03-22
 
 ### Breaking Changes

@@ -11,7 +11,7 @@ bun test tests/lib/detect.test.ts   # run a single test file
 bun run typecheck         # type-check without emitting (tsc --noEmit)
 ```
 
-No build step — Bun executes TypeScript source directly. The `@/*` path alias resolves to `./src/*`.
+No build step — Bun executes TypeScript source directly. The `@/*` path alias resolves to `./src/*` but is **test-only** — production code in src/ must use relative imports (the alias is not available in the published npm package).
 
 ## Architecture
 
@@ -192,8 +192,8 @@ Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE
 - No `any` — use type parameters or explicit unions instead
 - Structural typing used in config I/O: `schema.parse(data)` pattern
 ## Import Organization
-- `@/*` resolves to `./src/*` (configured in `tsconfig.json`)
-- Used in tests and deep-nested imports: `import { cancel } from "@/tui/utils"`
+- `@/*` resolves to `./src/*` (configured in `tsconfig.json`) — **test-only**; do NOT use in `src/` production code (the alias is not available in the published npm package since Bun does not resolve tsconfig paths from within `node_modules`)
+- Used in tests only: `import type { X } from "@/tui/utils"` (type imports are erased at compile time)
 - Import named exports: `import { readStack, writeStack } from "./config"`
 - Never use wildcard imports: no `import * as config from "./config"`
 - Group by functionality: all git functions together, all config functions together
