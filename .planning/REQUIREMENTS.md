@@ -62,17 +62,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | — | Pending |
-| BUG-02 | — | Pending |
-| WUX-01 | — | Pending |
-| WUX-02 | — | Pending |
-| WUX-03 | — | Pending |
+| BUG-01 | Phase 30 | Pending |
+| BUG-02 | Phase 32 | Pending |
+| WUX-01 | Phase 29 | Pending |
+| WUX-02 | Phase 31 | Pending |
+| WUX-03 | Phase 31 | Pending |
 
 **Coverage:**
 - v0.8.0 requirements: 5 total
-- Mapped to phases: 0
-- Unmapped: 5 ⚠️
+- Mapped to phases: 5
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after initial definition*
+*Last updated: 2026-03-24 — traceability updated after roadmap creation*
