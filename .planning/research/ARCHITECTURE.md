@@ -1,596 +1,366 @@
 # Architecture Research
 
-**Domain:** Integration orchestration pipeline with artifact passing and niri compositor integration — v0.6.0 milestone
-**Researched:** 2026-03-21
-**Confidence:** HIGH for integration interface changes (verified against live source); HIGH for niri API (verified against running niri binary); HIGH for consolidation approach (verified all 4 loop sites)
+**Domain:** CLI workspace manager — integration polish and workspace UX improvements (v0.8.0)
+**Researched:** 2026-03-24
+**Confidence:** HIGH (all source code read directly from repository)
 
----
+## Feature Integration Map
 
-## System Overview
+This milestone touches four distinct areas of the codebase. Each maps cleanly to existing seams without architectural changes.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Call Sites (4 today → 1 after consolidation)                                │
-│  ┌───────────────┐  ┌──────────────────┐  ┌──────────────────┐              │
-│  │workspace-ops  │  │ workspace-wizard  │  │ workspace-clone  │              │
-│  │ openWorkspace │  │  (generate only)  │  │  (generate only) │              │
-│  └───────┬───────┘  └────────┬─────────┘  └────────┬─────────┘              │
-│          │                   │                      │                         │
-│          │         ┌─────────┘──────────────────────┘                        │
-│          │         │  App.tsx (generate only — TUI create path)               │
-│          │         └────────────────────────────────────────────────────┐     │
-│          │                                                               │     │
-│          ▼                                                               ▼     │
-│  ┌───────────────────────────────────────────────────────────────────────┐   │
-│  │  src/lib/integrations/runner.ts  (NEW — consolidated loop)            │   │
-│  │                                                                        │   │
-│  │  runIntegrationGenerate(ctx, integrations[]) → ArtifactBag            │   │
-│  │  runIntegrationOpen(ctx, bag, integrations[]) → void                  │   │
-│  └──────────┬────────────────────────────────────────────────────────────┘   │
-│             │ calls in order                                                   │
-│  ┌──────────▼────────────────────────────────────────────────────────────┐   │
-│  │  Integration plugins (each reads from ArtifactBag, writes to it)      │   │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐              │   │
-│  │  │  vscode  │  │ intellij │  │   cmux   │  │   tmux   │              │   │
-│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘              │   │
-│  │                                           ┌──────────────┐             │   │
-│  │                                           │    niri      │ ← runs last  │   │
-│  │                                           │  (NEW file)  │             │   │
-│  │                                           └──────────────┘             │   │
-│  └───────────────────────────────────────────────────────────────────────┘   │
-│                                                                               │
-│  External tools invoked by open()                                             │
-│  niri msg -j windows (snapshot-diff)   tmux list-clients   code-insiders     │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                         TUI Dashboard Layer                           │
+│  src/tui/dashboard/WorkspaceDetail.tsx                               │
+│  Feature 1: Add linked issues section (read ws().settings only)      │
+└─────────────────────────────┬────────────────────────────────────────┘
+                              │ reads workspace data already in props
+┌─────────────────────────────▼────────────────────────────────────────┐
+│                      Integration Plugins Layer                        │
+│  src/lib/integrations/                                               │
+│  ┌─────────────────┐  ┌──────────────────┐  ┌───────────────────┐   │
+│  │   jira.ts       │  │   gitlab.ts      │  │  issue-utils.ts   │   │
+│  │ Feature 3:      │  │ Feature 2:       │  │ Feature 3:        │   │
+│  │ make workspace  │  │ investigate      │  │ new              │   │
+│  │ arg optional,   │  │ --branch flag    │  │ resolveWorkspace  │   │
+│  │ use CWD detect  │  │ for mr view      │  │ FromCwd()        │   │
+│  └─────────────────┘  └──────────────────┘  └───────────────────┘   │
+└─────────────────────────────┬────────────────────────────────────────┘
+                              │ Feature 4 sits here
+┌─────────────────────────────▼────────────────────────────────────────┐
+│                        Core Library Layer                             │
+│  src/lib/git.ts                                                      │
+│  createWorktree() — Feature 4: add remote branch check before        │
+│  creating new local branch                                           │
+│  + new checkRemoteBranchExists()                                     │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+## Feature 1: Dashboard Linked Issues Display Bug
 
-| Component | Responsibility | Status |
-|-----------|----------------|--------|
-| `src/lib/integrations/types.ts` | Integration interface, ArtifactBag type, IntegrationContext | Modify — add `ArtifactBag`, change `open()` signature |
-| `src/lib/integrations/runner.ts` | Consolidated generate+open loop, shared bag threading | New file |
-| `src/lib/integrations/index.ts` | Integration registry array | Modify — register niri last |
-| `src/lib/integrations/vscode.ts` | Generate `.code-workspace`, open code binary, return window id | Modify — return artifact |
-| `src/lib/integrations/tmux.ts` | Open/focus tmux session, return session name | Modify — return artifact |
-| `src/lib/integrations/cmux.ts` | Open/focus cmux workspace, return workspace ref | Modify — return artifact |
-| `src/lib/integrations/intellij.ts` | Open IntelliJ, return artifact | Modify — return artifact |
-| `src/lib/integrations/niri.ts` | Create niri workspace, spawn terminal into tmux, arrange windows | New file |
-| `src/lib/workspace-ops.ts` (openWorkspace) | Call runner instead of inline loop | Modify — ~8 lines |
-| `src/tui/workspace-wizard.ts` | Call runner for generate phase | Modify — ~8 lines |
-| `src/tui/workspace-clone.ts` | Call runner for generate phase | Modify — ~8 lines |
-| `src/tui/dashboard/App.tsx` | Call runner for generate phase | Modify — ~8 lines |
+### Root Cause
 
----
-
-## Artifact Type Design
-
-### ArtifactBag Shape
+`WorkspaceDetail.tsx` renders an "Integrations" section that shows enabled/disabled state and a `configSummary`. The config summary falls back to global config when the workspace has no explicit per-key override:
 
 ```typescript
-// src/lib/integrations/types.ts (additions)
-
-export interface TmuxArtifact {
-  type: "tmux"
-  sessionName: string
-}
-
-export interface CmuxArtifact {
-  type: "cmux"
-  workspaceRef: string
-}
-
-export interface VscodeArtifact {
-  type: "vscode"
-  pid: number | null          // process pid returned from spawn, if available
-  windowId: number | null     // niri window id, populated via snapshot-diff if niri present
-}
-
-export interface IntellijArtifact {
-  type: "intellij"
-  pid: number | null
-  windowId: number | null
-}
-
-export type IntegrationArtifact =
-  | TmuxArtifact
-  | CmuxArtifact
-  | VscodeArtifact
-  | IntellijArtifact
-
-/**
- * Shared bag accumulating artifacts from all preceding integrations.
- * Passed read-write through the open() pipeline.
- * Keyed by integration id for O(1) lookup.
- */
-export type ArtifactBag = Partial<{
-  tmux: TmuxArtifact
-  cmux: CmuxArtifact
-  vscode: VscodeArtifact
-  intellij: IntellijArtifact
-}>
+// WorkspaceDetail.tsx lines 130-133
+const rawConfig = (ws().settings?.integrations?.[integration.id]
+  ?? globalConfig.integrations[integration.id]  // BUG: falls back to global
+  ?? {}) as Record<string, unknown>
 ```
 
-### Updated Integration Interface
+When a workspace has a Jira `issue` field stored (via `linkIssue()`) but no explicit `enabled`/`open_cmd` override, the `??` fallback reaches `globalConfig.integrations["jira"]`, showing the global `open_cmd` setting. Additionally, there is no dedicated "Linked Issues" section anywhere in `WorkspaceDetail.tsx` — the `issue` key stored under `settings.integrations.jira.issue` is never rendered.
 
-The key change: `open()` receives `bag` (read access to prior artifacts) and returns `IntegrationArtifact | null` (its contribution).
+### Data Shape (already in YAML)
 
-```typescript
-export interface Integration {
-  id: string
-  label: string
-  hint: string
-  enabledByDefault: boolean
-
-  applies?(workspace: Workspace): boolean
-  isEnabled(ctx: IntegrationContext): boolean
-  configurePrompt(current: Record<string, unknown>): Promise<Record<string, unknown> | null>
-
-  /**
-   * Write artifact files to disk. Returns artifact path or null.
-   * Unchanged from current interface.
-   */
-  generate?(ctx: IntegrationContext): string | null
-
-  /**
-   * Launch / activate the integration.
-   * Receives ArtifactBag from preceding integrations (read-only for non-niri).
-   * Returns this integration's artifact contribution, or null.
-   *
-   * Backward compat: existing integrations that don't use bag can ignore it.
-   * Existing integrations that return void are updated to return null.
-   */
-  open(ctx: IntegrationContext, artifactPath: string | null, bag: ArtifactBag): Promise<IntegrationArtifact | null>
-}
+```
+workspace.settings.integrations.jira.issue = "PROJ-123"
+workspace.settings.integrations.github.issue = "456"
 ```
 
-The `bag` parameter is the third argument. Existing integrations pass `_bag` and return `null` — a mechanical update with no logic change.
+Written by `linkIssue()` in `src/lib/integrations/issue-utils.ts`. The workspace object is already passed to the component as `entry().workspace` — no new data loading needed.
 
----
+### Component to Modify
 
-## Consolidated Runner
+**File:** `src/tui/dashboard/WorkspaceDetail.tsx`
 
-### Why Consolidate
+Two changes:
 
-Four separate inline loops exist today:
+1. Add a "Linked Issues" section. After the Messages section, before the Integrations section, iterate through all integrations and check if `ws().settings?.integrations?.[integration.id]?.issue` is set. For those that have an issue, render the tracker ID and issue key.
 
-1. `workspace-ops.ts:openWorkspace` lines 573-579 — runs generate + open
-2. `workspace-wizard.ts` lines 458-464 — runs generate only (no open)
-3. `workspace-clone.ts` lines 165-171 — runs generate only (no open)
-4. `App.tsx` lines 790-793 — runs generate only (no open)
+2. Fix the configSummary source: use workspace-level config for display without falling back to global config. If there is no workspace-level override, show nothing in the configSummary rather than showing global config values that belong to a different scope.
 
-Each duplication is a maintenance vector: if filtering logic (applies/isEnabled) changes, all 4 sites must change. The consolidation should live in a new `runner.ts` file, not in `workspace-ops.ts`, because the generate-only callers live in TUI code that should not depend on workspace-ops.
+No new functions. No schema changes. Pure display logic fix.
 
-### runner.ts Design
+### Component Boundaries
+
+| Component | Change | Scope |
+|-----------|--------|-------|
+| `WorkspaceDetail.tsx` | Add linked issues section; fix configSummary source | Modified |
+| `issue-utils.ts` | No changes | Unchanged |
+| `jira.ts` | No changes | Unchanged |
+| `WorkspaceSchema` in `config.ts` | No changes — issue field already stored | Unchanged |
+
+## Feature 2: Branch Name '/' Escaping for GitLab
+
+### Investigation Result
+
+The `gitlab.ts` `pr open` command passes `["mr", "view", "--web"]` to `glab` via `Bun.spawn`. There is no branch name argument passed — `glab` infers the branch from the git CWD. The `glab mr create` command does pass `--target-branch baseBranch`, but this is the base branch (e.g. `main`), not the feature branch with `/` in it.
+
+Since `Bun.spawn` receives arguments as an array (not a shell string), there is no shell escaping involved. Slashes in branch names pass through as-is to glab.
+
+The actual issue is likely that `glab mr view --web` constructs a URL containing the branch name as a path segment. GitLab encodes `/` as `%2F` in MR URLs (e.g. `/-/merge_requests?source_branch=feature%2Fmy-ticket`). Whether glab does this encoding correctly is on glab's side. However, if glab fails to find the MR when the branch contains `/`, an explicit `--branch` flag may provide a workaround.
+
+### Targeted Investigation
+
+**File:** `src/lib/integrations/gitlab.ts`
+
+The `pr open` and `pr create` commands. The `resolution.workspace.branch` field contains the full branch name including `/`. The workspace object is available from `resolveForgeRepo()` return value.
+
+**Potential workaround if glab fails on `/` branches:**
 
 ```typescript
-// src/lib/integrations/runner.ts
+// pr open action — current:
+const result = await _exec.run(["mr", "view", "--web"], repoPath)
 
-import type { Integration, IntegrationContext, ArtifactBag, IntegrationArtifact } from "./types"
+// Potential fix — pass branch explicitly:
+const { repoPath, workspace } = resolution
+const result = await _exec.run(["mr", "view", "--web", "--source-branch", workspace.branch], repoPath)
+```
 
-/**
- * Run the generate phase for all applicable integrations.
- * Returns a map of integration id → artifact path (for callers that log artifact paths).
- * Used by: workspace-wizard, workspace-clone, App.tsx (create flow)
- */
-export function runIntegrationGenerate(
-  ctx: IntegrationContext,
-  integrationList: Integration[] = integrations
-): Map<string, string | null> {
-  const paths = new Map<string, string | null>()
-  for (const integration of integrationList) {
-    if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(ctx.workspace)) continue
-    const path = integration.generate?.(ctx) ?? null
-    paths.set(integration.id, path)
-  }
-  return paths
-}
+Needs verification against a GitLab project with a `/`-containing branch. The fix is a one-liner addition if needed.
 
-/**
- * Run generate + open phases with artifact threading.
- * Returns the final ArtifactBag after all integrations have run.
- * Used by: openWorkspace (the only caller that runs open())
- */
-export async function runIntegrations(
-  ctx: IntegrationContext,
-  skip: Set<string> = new Set(),
-  integrationList: Integration[] = integrations
-): Promise<ArtifactBag> {
-  const bag: ArtifactBag = {}
-  for (const integration of integrationList) {
-    if (skip.has(integration.id)) continue
-    if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(ctx.workspace)) continue
-    const artifactPath = integration.generate?.(ctx) ?? null
-    const artifact = await integration.open(ctx, artifactPath, bag)
-    if (artifact) {
-      // TypeScript-safe bag mutation — discriminated union ensures correct key
-      (bag as Record<string, IntegrationArtifact>)[integration.id] = artifact
+### Component Boundaries
+
+| Component | Change | Scope |
+|-----------|--------|-------|
+| `gitlab.ts` | Add explicit `--source-branch` to `glab mr view` if needed | Possibly modified |
+| `forge-utils.ts` | `ForgeRepoResolution` already includes `workspace` object | Unchanged |
+| `git.ts` | No changes | Unchanged |
+
+## Feature 3: Jira Workspace Auto-Detection from CWD
+
+### Data Flow
+
+Workspace task paths follow a deterministic pattern written at creation time:
+
+```
+{workspace_root}/tasks/{workspace_name}/{repo_name}/
+```
+
+A developer working inside a worktree has `process.cwd()` somewhere under `{workspace_root}/tasks/{workspace_name}/{repo_name}/`. The workspace detection algorithm:
+
+```
+process.cwd()
+    ↓ normalize path
+scan listWorkspaces() → [{name, repos: [{task_path}]}]
+    ↓ for each workspace, for each repo
+check: normalize(cwd).startsWith(normalize(task_path) + sep)
+    ↓ first match
+return workspace.name
+```
+
+This is synchronous and reads only from already-loaded YAML config. No git commands required.
+
+### New Function
+
+**File:** `src/lib/integrations/issue-utils.ts`
+
+```typescript
+/** Detect which workspace the current working directory belongs to, if any. */
+export function resolveWorkspaceFromCwd(cwd?: string): string | null {
+  const { normalize, sep } = require("path")
+  const dir = normalize(cwd ?? process.cwd())
+  const workspaces = listWorkspaces()
+  for (const ws of workspaces) {
+    for (const repo of ws.repos) {
+      const taskPath = normalize(repo.task_path)
+      if (dir === taskPath || dir.startsWith(taskPath + sep)) {
+        return ws.name
+      }
     }
-  }
-  return bag
-}
-```
-
-The generate-only callers replace their loops with `runIntegrationGenerate(ctx)`. The `openWorkspace` caller replaces its loop with `runIntegrations(ctx, skip)`.
-
----
-
-## Niri Integration Design
-
-### Window Identification: Snapshot-Diff Strategy
-
-Niri has no "spawn this command and return me the resulting window id" API. The approach:
-
-1. Take `before` snapshot: `niri msg -j windows` → array of `{ id, app_id, title, workspace_id, pid }`
-2. Spawn the terminal command (e.g. `ghostty -e tmux attach-session -t {name}`)
-3. Poll `niri msg -j windows` until new window appears (up to 5s, 100ms intervals)
-4. The new window is the diff: id present in `after` but not in `before`
-5. Return that window id as the artifact
-
-```typescript
-// Verified niri window JSON shape (from live niri on this machine):
-// { id: number, title: string, app_id: string, pid: number, workspace_id: number,
-//   is_focused: boolean, is_floating: boolean, is_urgent: boolean,
-//   layout: { ... }, focus_timestamp: { secs, nanos } }
-```
-
-### Niri Workspace: Named Workspaces
-
-`niri msg action focus-workspace <REFERENCE>` accepts a workspace name. Niri workspaces can have names. The approach:
-
-1. Before spawning windows: `niri msg action focus-workspace -- {workspaceName}` creates/focuses named workspace
-2. All subsequent spawns land on that workspace (niri places new windows on focused workspace)
-3. After all windows are spawned: `niri msg action focus-workspace -- {workspaceName}` re-focuses
-
-Niri does not have a "create named workspace" command — it creates the workspace on focus if it doesn't exist. Naming is done via niri config (`workspace` block in config.kdl) or the workspace automatically gets a name when focused by name.
-
-**Confirmed from live `niri msg -j workspaces`:** workspace `name` field is `null` for unnamed workspaces. A named workspace set via `niri msg action focus-workspace my-name` will create workspace with that name.
-
-### Terminal Spawning for tmux
-
-Niri does not directly attach to tmux sessions. The niri integration spawns a terminal (configurable, default: `ghostty`) with a command to attach to the tmux session:
-
-```
-niri msg action spawn -- ghostty -e tmux attach-session -t {sessionName}
-```
-
-This requires tmux to have already run. Since tmux runs before niri (ordering enforced by position in integration array), `bag.tmux?.sessionName` is available.
-
-If tmux is not in the bag (not enabled), niri spawns a plain terminal in the workspace directory instead.
-
-### Window-to-Workspace Movement
-
-After all terminals/IDEs are spawned by preceding integrations, niri needs to move those windows to the git-stacks workspace. The challenge: vscode/intellij spawn their own windows without going through `niri msg action spawn` (they use `Bun.$`), so their windows appear on whatever workspace is currently focused.
-
-Strategy: niri runs last and uses `--window-id` on `move-window-to-workspace`:
-
-```
-niri msg action move-window-to-workspace --window-id {id} {workspaceName}
-```
-
-This is why window IDs from preceding integrations are critical. If vscode puts its PID in the artifact, niri can match `windows[].pid === artifact.pid` to find the window id, then move it.
-
-**Confirmed from live niri:** `niri msg action move-window-to-workspace --window-id <WINDOW_ID> <REFERENCE>` is a real command with exactly this syntax.
-
-### Niri Integration Config Schema
-
-```typescript
-const niriConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  terminal: z.string().default("ghostty"),     // terminal binary to spawn
-  terminal_flags: z.string().default(""),      // extra flags passed before -e
-  workspace_name_prefix: z.string().default("gs-"),  // prefix for niri workspace name
-  arrange_windows: z.boolean().default(true),  // move preceding integration windows
-})
-```
-
-The niri workspace name is `{prefix}{workspaceName}`. Default: `gs-my-feature`.
-
-### Niri open() Implementation Flow
-
-```
-niri.open(ctx, _artifactPath, bag):
-  1. Resolve config (terminal, prefix, arrange_windows)
-  2. niriWorkspaceName = prefix + ctx.workspace.name
-  3. niri msg action focus-workspace -- niriWorkspaceName
-     (creates workspace if not exists, switches to it)
-  4. If bag.tmux exists:
-       sessionName = bag.tmux.sessionName
-       Snapshot before = niri msg -j windows
-       niri msg action spawn -- {terminal} -e tmux attach-session -t {sessionName}
-       Poll until new window appears (up to 5s)
-       terminalWindowId = diff(before, after)[0].id
-     Else:
-       Snapshot before = niri msg -j windows
-       niri msg action spawn -- {terminal} -- sh -c "cd {tasksDir}/{name} && {terminal}"
-       Poll until new window appears
-       terminalWindowId = diff(before, after)[0].id
-  5. If arrange_windows:
-       For each window_id in [bag.vscode?.windowId, bag.intellij?.windowId] (non-null):
-         niri msg action move-window-to-workspace --window-id {id} -- niriWorkspaceName
-  6. niri msg action focus-workspace -- niriWorkspaceName
-  7. Return { type: "niri", workspaceName: niriWorkspaceName, windowIds: [...] }
-```
-
-### Populating windowId in vscode/intellij Artifacts
-
-VSCode: `code-insiders path` spawns asynchronously and returns before the window exists. To get the window id:
-- Snapshot before, run the command, snapshot-diff after. Same pattern as terminal.
-- Store the result in `VscodeArtifact.windowId`. If niri is not running (check: `WAYLAND_DISPLAY` + `niri msg -j workspaces` succeeds), skip the snapshot.
-
-IntelliJ: Same approach. `intellij.sh` is fire-and-forget. Snapshot-diff works.
-
-tmux: No window to track — tmux is a session, not a GUI window. The terminal spawned by niri to attach tmux is tracked by niri's snapshot. `TmuxArtifact` only needs `sessionName`.
-
-The key insight: snapshot-diff is only needed when niri is in the integration list and enabled. The vscode/intellij integrations can skip the niri-specific window tracking if they don't know niri is enabled. Alternatively, they always track the window (cheap: one `niri msg` call) and store `null` if niri is not running.
-
-Recommendation: always attempt window id capture in vscode/intellij if `WAYLAND_DISPLAY` is set. Store `null` on failure. This way vscode/intellij have no dependency on niri's enabled state.
-
----
-
-## Data Flow
-
-### openWorkspace with Artifacts
-
-```
-git-stacks open my-feature
-  → openWorkspace("my-feature", opts)
-  → ctx = { workspace, tasksDir, config }
-  → runIntegrations(ctx, skip)
-      bag = {}
-      vscode.generate(ctx) → writes .code-workspace
-      vscode.open(ctx, path, bag={}) → spawns code-insiders, snapshot-diff → window_id
-        → returns VscodeArtifact { type: "vscode", pid, windowId }
-        → bag.vscode = { ... }
-      tmux.open(ctx, null, bag={vscode}) → opens session "my-feature"
-        → returns TmuxArtifact { type: "tmux", sessionName: "my-feature" }
-        → bag.tmux = { ... }
-      niri.open(ctx, null, bag={vscode, tmux})
-        → focus-workspace gs-my-feature
-        → spawn ghostty -e tmux attach-session -t my-feature
-        → move-window-to-workspace --window-id {vscode.windowId} gs-my-feature
-        → returns NiriArtifact { type: "niri", workspaceName: "gs-my-feature", windowIds: [...] }
-  → post_open hooks
-  → update last_opened
-```
-
-### Generate-Only Flow (workspace create)
-
-```
-workspace-wizard.ts creates new workspace
-  → runIntegrationGenerate(ctx)
-      for each integration: check enabled + applies, call generate?()
-      returns Map<id, artifactPath>
-  → log artifact paths (p.log.success)
-  → no open() called — open() happens later on `git-stacks open`
-```
-
----
-
-## Integration Ordering
-
-Order is determined by position in the `integrations` array in `index.ts`. No dynamic reordering. Niri must be last.
-
-```typescript
-// src/lib/integrations/index.ts
-export const integrations = [
-  vscodeIntegration,    // 1. generate + open: writes .code-workspace, spawns IDE
-  intellijIntegration,  // 2. generate + open: writes .idea/, spawns IDE
-  cmuxIntegration,      // 3. no generate, open: creates cmux workspace
-  tmuxIntegration,      // 4. no generate, open: creates tmux session → produces TmuxArtifact
-  niriIntegration,      // 5. no generate, open: creates niri workspace, spawns terminal, arranges
-]
-```
-
-This ordering guarantees `bag.tmux` is populated when niri runs. If a user wants to run only niri + vscode (no tmux), niri spawns a plain terminal instead (gracefully degraded from tmux-attach to plain terminal).
-
-Configurable ordering is explicitly out of scope for v0.6.0 per the milestone — it can be addressed later by adding an `order: number` field to each integration's global config.
-
----
-
-## Architectural Patterns
-
-### Pattern 1: Bag Threading Through Sequential Integration Loop
-
-**What:** The runner passes a single mutable `ArtifactBag` object through all integrations in order. Each integration reads artifacts from preceding ones (via `bag.tmux`, `bag.vscode`, etc.) and writes its own artifact back. The bag starts empty and grows.
-
-**When to use:** Any time a later integration needs to act on the output of an earlier one (niri needs tmux session name, niri needs vscode window id).
-
-**Trade-offs:** Simple and explicit. No publish/subscribe. No async coordination — integrations run sequentially, so bag is always populated before the next integration reads from it. Sequential is correct here because each integration may need to wait for its predecessor's window to appear before the next one starts. Parallelism would require complex synchronization with no benefit.
-
-**Example:**
-```typescript
-// niri.ts reads from bag
-async open(ctx, _artifactPath, bag) {
-  const sessionName = bag.tmux?.sessionName  // undefined if tmux not enabled
-  if (sessionName) {
-    await $`niri msg action spawn -- ${terminal} -e tmux attach-session -t ${sessionName}`
-  } else {
-    await $`niri msg action spawn -- ${terminal}`
-  }
-}
-```
-
-### Pattern 2: Snapshot-Diff for Window Identification
-
-**What:** Take a `niri msg -j windows` snapshot before spawning a window, then poll after spawn until a new window id appears in the diff.
-
-**When to use:** Any time a window must be identified after a fire-and-forget spawn command (vscode, intellij, terminal). Used by: niri.open(), and optionally by vscode.open()/intellij.open() for pre-populating windowId.
-
-**Trade-offs:** Polling is slightly fragile (window may take >5s on slow systems). Prefer 100ms intervals with a 5s ceiling. The diff approach is correct because window ids are monotonically increasing integers in niri — the new window will have a higher id than any pre-existing window.
-
-**Example:**
-```typescript
-async function spawnAndFindWindow(command: string[]): Promise<number | null> {
-  const before = await getNiriWindowIds()
-  await $`niri msg action spawn -- ${command}`.quiet().nothrow()
-  for (let i = 0; i < 50; i++) {
-    await Bun.sleep(100)
-    const after = await getNiriWindowIds()
-    const newIds = after.filter(id => !before.includes(id))
-    if (newIds.length > 0) return newIds[0]
   }
   return null
 }
+```
 
-async function getNiriWindowIds(): Promise<number[]> {
-  const result = await $`niri msg -j windows`.quiet().nothrow()
-  if (result.exitCode !== 0) return []
-  const windows = JSON.parse(result.stdout.toString()) as Array<{ id: number }>
-  return windows.map(w => w.id)
+Imports: `normalize`, `sep` from `"path"` (already available in Bun); `listWorkspaces` from `"../config"` (already imported in `issue-utils.ts`).
+
+### Component to Modify
+
+**File:** `src/lib/integrations/jira.ts`
+
+The three issue subcommands (`link`, `unlink`, `open`) each have `<workspace>` as a required positional argument. Change to `[workspace]` with CWD fallback:
+
+```typescript
+issue.command("link [workspace] <issue-id>")
+  .action(async (workspaceArg: string | undefined, issueId: string) => {
+    const workspaceName = workspaceArg ?? resolveWorkspaceFromCwd()
+    if (!workspaceName) {
+      console.error("No workspace specified and not inside a workspace directory.")
+      console.error("Usage: git-stacks integration jira issue link <workspace> <issue-id>")
+      process.exit(1)
+    }
+    // rest unchanged
+  })
+```
+
+Commander.js positional argument ordering consideration for `link [workspace] <issue-id>`: when a single positional arg is provided, Commander assigns it to `workspace` (the first declared), leaving `issue-id` undefined. This is incorrect behavior for the CWD-detection path where only the issue ID is provided.
+
+**Correct approach for `link`:** Keep `issue-id` as the only required positional, make `workspace` optional and placed after:
+
+```
+issue.command("link <issue-id> [workspace]")
+```
+
+Or use an `--workspace` option to avoid positional ordering ambiguity:
+
+```
+issue.command("link <issue-id>")
+  .option("-w, --workspace <name>", "Workspace name (default: detected from CWD)")
+```
+
+The option approach is cleaner and avoids positional ambiguity. For `unlink` and `open`, no second positional exists, so making `<workspace>` into `[workspace]` works cleanly.
+
+### Component Boundaries
+
+| Component | Change | Scope |
+|-----------|--------|-------|
+| `jira.ts` | Make workspace argument optional in link/unlink/open, add CWD fallback | Modified |
+| `issue-utils.ts` | Add `resolveWorkspaceFromCwd()` | New function |
+| `forge-utils.ts` | `resolveRepoCwd()` already exists for git root detection — not reused here | Unchanged |
+| `config.ts` | `listWorkspaces()` already exported, no changes | Unchanged |
+| `paths.ts` | No changes | Unchanged |
+
+### Why resolveRepoCwd() Is Not Reused
+
+`resolveRepoCwd()` in `forge-utils.ts` runs `git rev-parse --show-toplevel` and returns the git repository root. This is a git-level operation — it returns the repo root directory (e.g. `/home/user/workspaces/tasks/my-feature/api`). It does not know which git-stacks workspace that repo belongs to. `resolveWorkspaceFromCwd()` is a config-level operation that matches against stored `task_path` values in workspace YAMLs. They solve different problems.
+
+## Feature 4: Upstream Branch Checking During Worktree Creation
+
+### Current createWorktree Logic
+
+`src/lib/git.ts`:
+
+```typescript
+export async function createWorktree(repoPath, worktreePath, branch) {
+  const exists = await checkBranchExists(repoPath, branch)  // local refs only
+  if (exists) {
+    await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`
+  } else {
+    // Creates new branch from current HEAD — ignores remote
+    await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`
+  }
 }
 ```
 
-### Pattern 3: Runner Accepts Optional Integration List (Testability)
+`checkBranchExists()` uses `git rev-parse --verify <branch>` which checks local refs only. When a branch already exists on the remote (pushed by a colleague for review), the current code creates a new local branch from HEAD rather than checking out the existing remote branch. This breaks the reviews use case.
 
-**What:** Both `runIntegrationGenerate` and `runIntegrations` accept an optional `integrationList` parameter that defaults to the full `integrations` array. Tests pass a controlled subset.
+### Modified Logic
 
-**When to use:** Everywhere that integration loops are called. Avoids global state coupling in tests.
+**New function in `src/lib/git.ts`:**
 
-**Trade-offs:** Slightly more verbose call site in tests. Benefit: tests can pass `[mockIntegration]` without mocking the module. Production call sites pass nothing (default to full list).
+```typescript
+/** Check if a branch exists on the remote (origin). Makes a network call via ls-remote. */
+export async function checkRemoteBranchExists(
+  repoPath: string,
+  branch: string
+): Promise<boolean> {
+  const result = await $`git -C ${repoPath} ls-remote --exit-code --heads origin ${branch}`
+    .quiet()
+    .nothrow()
+  return result.exitCode === 0
+}
+```
 
----
+**Modified `createWorktree()`:**
 
-## Anti-Patterns
+```typescript
+export async function createWorktree(repoPath, worktreePath, branch) {
+  const existsLocally = await checkBranchExists(repoPath, branch)
+  if (existsLocally) {
+    // Branch exists locally — attach to it (existing behavior)
+    await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`
+  } else {
+    const existsRemotely = await checkRemoteBranchExists(repoPath, branch)
+    if (existsRemotely) {
+      // Branch exists on remote but not locally — checkout with tracking
+      await $`git -C ${repoPath} worktree add --track -b ${branch} ${worktreePath} origin/${branch}`
+    } else {
+      // Branch is new — create from current HEAD (existing behavior)
+      await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`
+    }
+  }
+}
+```
 
-### Anti-Pattern 1: Integrations Reading Other Integrations' Config Directly
+`git worktree add --track -b <branch> <path> origin/<branch>` creates a local branch tracking the remote tracking branch. This is the correct git idiom for checking out a remote branch that does not yet exist locally.
 
-**What people do:** `niri.open()` reads `ctx.workspace.settings.integrations.tmux` to find the session name.
+### Call Sites (all benefit automatically)
 
-**Why it's wrong:** Tight coupling between integration implementations. If tmux config schema changes, niri breaks. Also, the computed session name (after normalization) differs from the raw config value.
+| Location | Call | Context |
+|----------|------|---------|
+| `src/tui/workspace-wizard.ts` line 347 | `createWorktree(repo.main_path, repo.task_path, branch)` | `git-stacks new` |
+| `src/tui/workspace-clone.ts` line 133 | `createWorktree(repo.main_path, repo.task_path, newBranch)` | `git-stacks clone` |
+| `src/tui/dashboard/App.tsx` line 729 | `createWorktree(repo.main_path, repo.task_path, branch)` | TUI create flow |
+| `src/lib/workspace-ops.ts` line 732 | `createWorktree(repo.main_path, repo.task_path, workspace.branch)` | `open` missing worktree recreation |
+| `src/lib/workspace-ops.ts` line 807 | `createWorktree(repo.main_path, worktreePath, expectedBranch)` | trunk mode fallback |
+| `src/lib/workspace-ops.ts` line 879 | `createWorktree(repo.main_path, newWorktreePath, workspace.branch)` | `rename` command |
 
-**Do this instead:** Consume from the bag. `bag.tmux.sessionName` is the computed, normalized session name that the tmux integration actually used.
+One change in `git.ts` propagates to all six call sites.
 
-### Anti-Pattern 2: Open() Returning Void for All Integrations
+### Performance Note
 
-**What people do:** Keep `open()` returning `Promise<void>` for existing integrations, only adding return values to new integrations.
+`ls-remote` is a network call (100ms–2s depending on remote latency). It is only triggered on the new-branch code path — when a branch does not exist locally. In the common case (creating a brand-new workspace), the branch does not exist remotely either, so `ls-remote` runs once per repo and returns quickly. The existing `isBranchGoneOnRemote()` function in `git.ts` already uses `ls-remote` for cleanup operations, establishing this as an accepted pattern.
 
-**Why it's wrong:** The type system then cannot enforce that niri's bag consumption is safe. ArtifactBag entries will be `any` or require casts.
+### Component Boundaries
 
-**Do this instead:** Update all `open()` signatures to `Promise<IntegrationArtifact | null>` at once. The update is mechanical: add `return null` to the end of each existing `open()`. The type change enables the compiler to enforce correctness on niri's bag reads.
-
-### Anti-Pattern 3: Global Mutable Bag Object Shared Across Calls
-
-**What people do:** Create `const globalBag: ArtifactBag = {}` at module scope, reuse across `openWorkspace` calls.
-
-**Why it's wrong:** Stale artifacts from a previous workspace open would bleed into the next call. This is a correctness bug in long-running processes (TUI, daemon mode).
-
-**Do this instead:** Create a fresh `const bag: ArtifactBag = {}` inside `runIntegrations()` each invocation.
-
-### Anti-Pattern 4: Niri Polling Without Timeout
-
-**What people do:** `while (true) { await poll(); if (found) break }`.
-
-**Why it's wrong:** If the spawned application crashes immediately, the loop runs forever.
-
-**Do this instead:** Fixed iteration count with sleep — `for (let i = 0; i < 50; i++) { await Bun.sleep(100); ... }` gives a 5-second ceiling. Return `null` on timeout. Niri integration must gracefully handle `null` window ids.
-
-### Anti-Pattern 5: Duplicating the Integration Loop at New Call Sites
-
-**What people do:** Add a 5th inline integration loop for a new workflow (e.g., `git-stacks clone`).
-
-**Why it's wrong:** Defeats the consolidation effort. Each inline loop must independently handle filtering, bag threading, and skip logic.
-
-**Do this instead:** Call `runIntegrationGenerate(ctx)` or `runIntegrations(ctx, skip)` from `runner.ts`.
-
----
-
-## Integration Points
-
-### New vs Modified Components
-
-| Component | Action | Scope |
+| Component | Change | Scope |
 |-----------|--------|-------|
-| `src/lib/integrations/types.ts` | Modify | Add `ArtifactBag`, `IntegrationArtifact` types; change `open()` signature |
-| `src/lib/integrations/runner.ts` | New | `runIntegrationGenerate`, `runIntegrations` |
-| `src/lib/integrations/niri.ts` | New | Full niri integration plugin |
-| `src/lib/integrations/index.ts` | Modify | Import + register `niriIntegration` last |
-| `src/lib/integrations/vscode.ts` | Modify | Return `VscodeArtifact` from `open()` |
-| `src/lib/integrations/tmux.ts` | Modify | Return `TmuxArtifact` from `open()` |
-| `src/lib/integrations/cmux.ts` | Modify | Return `CmuxArtifact` from `open()` |
-| `src/lib/integrations/intellij.ts` | Modify | Return `IntellijArtifact` from `open()` |
-| `src/lib/workspace-ops.ts` | Modify | Replace inline loop with `runIntegrations(ctx, skip)` |
-| `src/tui/workspace-wizard.ts` | Modify | Replace inline loop with `runIntegrationGenerate(ctx)` |
-| `src/tui/workspace-clone.ts` | Modify | Replace inline loop with `runIntegrationGenerate(ctx)` |
-| `src/tui/dashboard/App.tsx` | Modify | Replace inline loop with `runIntegrationGenerate(ctx)` |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `runner.ts` ↔ integration plugins | Direct function calls, `ArtifactBag` passed by reference | Bag is mutated in-place in runner, not returned from plugin |
-| `niri.ts` ↔ `bag.tmux` | Read `bag.tmux?.sessionName` | Optional — degrades gracefully if tmux not enabled |
-| `niri.ts` ↔ `bag.vscode` / `bag.intellij` | Read `windowId` | Optional — skips window arrangement if null |
-| `vscode.ts` ↔ niri CLI | `niri msg -j windows` snapshot-diff | Only executed when `WAYLAND_DISPLAY` set |
-| `niri.ts` ↔ niri CLI | `niri msg action spawn`, `niri msg action focus-workspace`, `niri msg action move-window-to-workspace --window-id` | All via `Bun.$` shell |
-| `workspace-ops.ts` ↔ `runner.ts` | Import and call `runIntegrations` | Replaces the 7-line inline loop at line 573 |
-
-### Backward Compatibility
-
-- Existing workspace YAML files: no schema change. Artifact data is not persisted (it's runtime-only).
-- Existing integration configs: no change. `niri` integration adds a new key under `config.integrations.niri` only when the user runs `git-stacks config`.
-- `open()` signature change: the `bag` parameter is new but integrations that ignore it require only adding `_bag: ArtifactBag` to the parameter list. Return type changes from `Promise<void>` to `Promise<IntegrationArtifact | null>`, requiring `return null` at the end. These are mechanical, non-breaking updates.
-- Callers of `integration.open()` that exist outside `runner.ts` (none currently, but tests may mock it): must be updated to match new signature.
-
----
+| `git.ts` | Add `checkRemoteBranchExists()`; modify `createWorktree()` with remote check | Modified |
+| `workspace-wizard.ts` | No changes | Unchanged |
+| `workspace-clone.ts` | No changes | Unchanged |
+| `App.tsx` | No changes | Unchanged |
+| `workspace-ops.ts` | No changes | Unchanged |
 
 ## Build Order
 
-Dependencies flow bottom-up. Build in this order:
+Dependencies between the four features:
 
-1. **`types.ts` changes** — `ArtifactBag`, `IntegrationArtifact` union, updated `open()` signature. Everything else depends on this. This is the only change that creates a TypeScript compile error cascade — address it first to unblock all other work.
+```
+Feature 4 (git.ts only)            — no dependencies, smallest blast radius
+Feature 1 (TUI display fix)        — no dependencies, reads existing data
+Feature 3 (Jira CWD detection)     — new function in issue-utils.ts, changes jira.ts signatures
+Feature 2 (GitLab branch escaping) — investigation + targeted fix, uncertain scope
+```
 
-2. **Mechanical `open()` return-type updates** — vscode, tmux, cmux, intellij each get `_bag: ArtifactBag` parameter and `return null`. No logic change. All 4 files, ~2 lines each. Restores compile green.
+**Recommended sequence:**
 
-3. **`runner.ts`** — new file with `runIntegrationGenerate` and `runIntegrations`. Depends on updated types from step 1. Does not depend on any integration-specific logic.
+1. **Feature 4** — touches only `git.ts`, single-function change with clear correct behavior, immediately beneficial for all worktree creation paths
+2. **Feature 1** — dashboard display fix, TUI-only, clear root cause identified, no new functions
+3. **Feature 3** — adds `resolveWorkspaceFromCwd()` to `issue-utils.ts`, changes Jira command signatures; test carefully for Commander.js positional arg behavior
+4. **Feature 2** — investigate first with a real GitLab project containing a `/`-branch; fix only if confirmed to be on our side
 
-4. **Replace inline loops** — workspace-ops, workspace-wizard, workspace-clone, App.tsx each replace their loop with runner calls. This is safe to do before niri exists because runner behavior is identical to the old loops for integrations that return null.
+## Anti-Patterns to Avoid
 
-5. **tmux artifact population** — update `tmux.ts` `open()` to actually return `TmuxArtifact` with `sessionName`. This is the dependency for niri's terminal attach path.
+### Anti-Pattern 1: Using resolveRepoCwd() for Workspace Detection
 
-6. **vscode/intellij window id** — update `vscode.ts` and `intellij.ts` to do snapshot-diff and populate `windowId`. This is the dependency for niri's window arrangement path. Can be deferred to after niri basics work (niri can skip arrangement for these if windowId is null).
+`resolveRepoCwd()` in `forge-utils.ts` runs `git rev-parse --show-toplevel`. Do not use this for workspace detection. It returns the git repository root, not the workspace name. Use `resolveWorkspaceFromCwd()` (path prefix matching against stored `task_path` values) instead.
 
-7. **`niri.ts`** — new integration. Depends on steps 1-5. Reads `bag.tmux?.sessionName`. Builds the niri-workspace create, terminal spawn, and window arrange flows incrementally.
+### Anti-Pattern 2: Falling Back Across Config Scopes in Display Logic
 
-8. **`index.ts` registration** — add niriIntegration as the last entry. One line.
+The existing `configSummary` bug falls back from workspace config to global config for rendering. This produces misleading output. When displaying workspace-level data, only read from workspace-level config. If there is no workspace override, show nothing or a `[global]` indicator — do not inherit global values as if they were workspace values.
 
-9. **Tests** — integration tests for runner (unit), niri snapshot-diff helper (unit, can mock niri CLI), and end-to-end open flow with bag threading.
+### Anti-Pattern 3: Positional Arg Ambiguity in Commander.js
 
----
+For `jira issue link`, if both `workspace` and `issue-id` are positional args, Commander assigns them left-to-right. Making `workspace` optional before a required `issue-id` creates ambiguity. Use an `--workspace` option or reorder as `link <issue-id> [workspace]` to keep the required arg first.
 
-## Niri API Reference (Verified on Live System)
+### Anti-Pattern 4: Calling listWorkspaces() in a Hot Path
 
-All commands confirmed against running niri binary on this machine.
+`resolveWorkspaceFromCwd()` calls `listWorkspaces()`, which reads all workspace YAMLs from disk. Acceptable for a one-shot CLI invocation. Not acceptable in a TUI tick loop. The Jira issue commands are CLI-only, so this is not currently a problem.
 
-| Command | Purpose | Notes |
-|---------|---------|-------|
-| `niri msg -j windows` | List all windows as JSON | Returns `Array<{id,title,app_id,pid,workspace_id,...}>` |
-| `niri msg -j workspaces` | List all workspaces | Returns `Array<{id,idx,name,output,is_active,...}>`. `name` is null for unnamed. |
-| `niri msg action focus-workspace <name>` | Create+focus named workspace | Creates if not exists |
-| `niri msg action spawn -- <cmd>` | Spawn process on focused workspace | Window appears on current workspace |
-| `niri msg action move-window-to-workspace --window-id <id> <name>` | Move specific window to workspace | `--window-id` flag confirmed |
+### Anti-Pattern 5: ls-remote Without .nothrow()
 
----
+`checkRemoteBranchExists()` must use `.nothrow()` to prevent throwing on non-zero exit code (which means the branch does not exist). The pattern is established in the existing `isBranchGoneOnRemote()` function in the same file.
+
+## Integration Points Summary
+
+| Feature | Files Modified | Files Added | New Functions |
+|---------|---------------|-------------|---------------|
+| Dashboard linked issues display | `WorkspaceDetail.tsx` | none | none |
+| GitLab branch escaping | `gitlab.ts` (conditional) | none | none |
+| Jira CWD detection | `jira.ts`, `issue-utils.ts` | none | `resolveWorkspaceFromCwd()` |
+| Upstream branch check | `git.ts` | none | `checkRemoteBranchExists()` |
+
+All four features are additive changes to existing files. No new modules, no schema changes, no YAML migration needed. No existing function signatures change externally (only `createWorktree` internal behavior changes, all call sites remain the same).
 
 ## Sources
 
-- `src/lib/integrations/types.ts` — verified current Integration interface
-- `src/lib/integrations/tmux.ts` — verified current tmux open() pattern
-- `src/lib/integrations/cmux.ts` — verified current cmux open() + artifact ref pattern
-- `src/lib/integrations/vscode.ts` — verified current vscode open() pattern
-- `src/lib/integrations/index.ts` — verified current integration ordering
-- `src/lib/workspace-ops.ts` lines 573-579 — verified inline loop location
-- `src/tui/workspace-wizard.ts` lines 458-464 — verified generate-only loop
-- `src/tui/workspace-clone.ts` lines 165-171 — verified generate-only loop
-- `src/tui/dashboard/App.tsx` lines 790-793 — verified generate-only loop (TUI create path)
-- `niri msg -j windows` — live output verified, JSON shape documented
-- `niri msg -j workspaces` — live output verified, workspace name field confirmed as null for unnamed
-- `niri msg action move-window-to-workspace --help` — `--window-id` flag confirmed
-- `niri msg action spawn --help` — `-- <COMMAND>...` syntax confirmed
-- `niri msg action focus-workspace --help` — REFERENCE arg confirmed
+- Source code read directly: `src/lib/git.ts`, `src/lib/integrations/jira.ts`, `src/lib/integrations/gitlab.ts`, `src/lib/integrations/forge-utils.ts`, `src/lib/integrations/issue-utils.ts`, `src/lib/integrations/types.ts`, `src/lib/integrations/index.ts`, `src/tui/dashboard/WorkspaceDetail.tsx`, `src/lib/config.ts`, `src/lib/paths.ts`, `src/lib/workspace-ops.ts`
+- Planning notes: `.planning/notes/2026-03-23-linked-issues-not-correctly.md`, `-branch-name-slash-gitlab.md`, `-jira-integration-auto-detect-workspace.md`, `-worktrees-check-upstream-branch.md`
+- Todo files: `.planning/todos/pending/005` through `008`
+- `.planning/PROJECT.md` for milestone context and existing architectural decisions
 
 ---
-*Architecture research for: v0.6.0 integration orchestration, artifact passing, niri compositor integration*
-*Researched: 2026-03-21*
+*Architecture research for: git-stacks v0.8.0 Integration Polish and Workspace UX*
+*Researched: 2026-03-24*

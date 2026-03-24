@@ -1,225 +1,281 @@
-# Feature Research — v0.6.0 Integration Orchestration & Niri
+# Feature Research — v0.8.0 Integration Polish & Workspace UX
 
-**Domain:** CLI workspace manager — integration pipeline orchestration, niri compositor integration
-**Researched:** 2026-03-21
-**Confidence:** HIGH (existing codebase analysis) / MEDIUM (niri IPC patterns from official docs and community examples)
-
----
-
-## Current State Baseline (v0.5.1)
-
-The integration system today:
-- `integrations` array in `src/lib/integrations/index.ts` — order is implicit (vscode, intellij, cmux, tmux)
-- `openWorkspace()` runs integrations sequentially, calling `generate()` then `open()` for each
-- `open()` returns `Promise<void>` — no return value, no inter-integration communication
-- `IntegrationContext` carries `workspace`, `tasksDir`, `config` — no shared mutable bag
-- No niri integration exists; niri users cannot get workspace-per-task behavior
-
-What each integration currently produces:
-- **vscode**: launches `code-insiders <artifact-path>` — PID not captured
-- **intellij**: opens IDE project — PID not captured
-- **cmux**: creates/focuses a cmux workspace — `ref` (workspace ID) captured internally but not exported
-- **tmux**: creates/focuses a tmux session — session name is `workspace.name` but not exported
+**Domain:** CLI workspace manager — integration bug fixes and workspace UX improvements
+**Researched:** 2026-03-24
+**Confidence:** HIGH (codebase analysis + git/glab official docs) / MEDIUM (glab branch escaping — known upstream issue, fix direction confirmed)
 
 ---
 
-## Feature Area 1: Integration Artifact System
+## Feature Overview
+
+This milestone contains 4 features: 2 bug fixes and 2 UX enhancements. All 4 are additive or corrective — no architecture changes, no schema migrations. Each feature is scoped to one or two files in the integration layer.
+
+---
+
+## Feature 1: Fix Dashboard Linked Issues Display
+
+### What Is Broken
+
+The `WorkspaceDetail` component in `src/tui/dashboard/WorkspaceDetail.tsx` (lines 128-137) builds its "config summary" for enabled integrations by reading:
+
+```
+ws().settings?.integrations?.[integration.id] ?? globalConfig.integrations[integration.id] ?? {}
+```
+
+This fallback to `globalConfig` is correct for integration _settings_ (enabled flags, open_cmd templates) but incorrect for _linked issue IDs_. The `issue` field inside `settings.integrations.jira` is per-workspace — it is written there by `linkIssue()` in `issue-utils.ts`. The dashboard is displaying `issue: <first-linked-issue>` using global Jira config as the data source when the workspace has no linked issue, or showing the wrong workspace's issue data.
+
+The `open` command works correctly because it reads `workspace.settings.integrations.jira.issue` directly via `resolveIssueRef()`. The display bug is entirely in `WorkspaceDetail.tsx`.
 
 ### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| `open()` returns an artifact record | Niri integration needs tmux session names and window PIDs to move them onto a workspace. Without a return value, niri has no way to discover what was launched by prior integrations. | MEDIUM | Change signature from `Promise<void>` to `Promise<IntegrationArtifact \| null>`. Requires updating all four existing integrations and the execution loop in `workspace-ops.ts`. |
-| Accumulated artifact bag in context | Later integrations (niri) need to see what all earlier integrations produced. The natural place is an extended `IntegrationContext` field like `artifacts: Record<string, IntegrationArtifact>`. | LOW | Mutate the context object between integration runs in the execution loop. No new data structures needed beyond a typed record. |
-| Existing integrations return their primary identifier | tmux must return its session name; cmux must return its workspace ref; vscode/intellij should return window PID if detectable. This is what niri consumes. | MEDIUM | tmux session name is `workspace.name` — trivial to return. cmux `ref` already exists inside `open()`. VSCode/IntelliJ PID capture requires `$` spawn tracking or snapshot-diff strategy (see Window Identification below). |
-| Backward compatibility — `open()` returning null is valid | Most integrations run standalone and have nothing meaningful to pass forward. A null return must not cause failures. | LOW | Accumulation loop: `if (artifact) context.artifacts[integration.id] = artifact`. Null skipped silently. |
-
-### Differentiators
-
-| Feature | Value Proposition | Complexity | Notes |
-|---------|-------------------|------------|-------|
-| Typed artifact schema per integration | Each integration declares what it returns (tmux: `{ sessionName }`, vscode: `{ pid }`, etc.) in its own file. Downstream integrations can safely destructure without casting. | LOW | Add a discriminated union `IntegrationArtifact` type with a `kind` field. Each integration's return type is narrow. |
-| Artifact available in post_open hooks via env vars | After integration pipeline completes, export artifact values as env vars (`WS_TMUX_SESSION`, `WS_CMUX_REF`) before running `post_open` hooks. Hooks can then do custom window arrangement without a custom integration. | MEDIUM | Requires mapping artifact fields to env var names. Useful for power users. Could be a v0.6.x addition after the core artifact system ships. |
+| Per-workspace linked issue shown in detail pane | Users link issues to specific workspaces; the detail pane must show only that workspace's issue, not a global fallback or neighbor's data | LOW | Config summary in WorkspaceDetail reads issue IDs from workspace settings only. Filter out `issue` from the global config fallback path. Two options: (a) show linked issues as a separate section below integrations, or (b) ensure the configSummary only falls back to global for non-issue fields. Option (b) requires least UI change. |
+| No issue displayed when none is linked | Empty state must be correct — "no issue linked" not a stale issue from a previous selection | LOW | When `settings.integrations.<trackerId>.issue` is absent, omit that field from configSummary entirely. |
+| Source annotation "[global]" only for config, not issue IDs | The `[global]` annotation is correct for `enabled` and `open_cmd` settings, but issue IDs are always per-workspace (written by `linkIssue()`) — showing `[global]` for an issue ID is misleading | LOW | Issue IDs should only be displayed if present in workspace settings. Fallback to global must not source `issue` fields. |
 
 ### Anti-Features
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Full bidirectional inter-integration messaging (request/reply between plugins) | Seems like a natural extension of artifact passing | Turns simple sequential pipeline into async IPC between plugins. Ordering becomes non-deterministic, deadlock risk, major complexity. | Unidirectional artifact accumulation is sufficient. Niri reads from the bag; it never needs to call back into tmux. |
-| Global artifact store persisted to disk | Agent users might want to re-query what windows were opened | Adds persistence complexity, cache invalidation, stale state. A running niri workspace is queried live. | Query niri IPC directly for current window state when needed. |
+| Separate "Linked Issues" section in detail pane | Cleaner separation of concerns | Adds UI rows, requires more layout work in OpenTUI | Fix the configSummary extraction logic to filter issue fields; a sub-section can come later if demanded |
+| Cross-workspace issue aggregation view | See all linked issues in one view | Out of scope for this fix; a dashboard-wide issues view is a v0.9+ feature | Fix per-workspace display first |
+
+### Dependencies
+
+- Depends on: existing `settings.integrations` schema in WorkspaceSchema (already present)
+- Depends on: `resolveIssueRef` in `issue-utils.ts` (pattern to follow for correct field access)
+- No downstream dependencies
 
 ---
 
-## Feature Area 2: Integration Ordering
+## Feature 2: Fix Branch Name '/' Escaping for GitLab Open
+
+### What Is Known
+
+Branch names with `/` in them (e.g., `feature/PROJ-42`) are standard naming convention in git workflows. When `glab mr view` or `glab repo view --web` is called with a worktree whose branch contains a `/`, the branch name is passed as part of the URL path in GitLab's web interface.
+
+**glab upstream finding (MEDIUM confidence):** A merge request was merged into `gitlab-org/cli` that adds `url.PathEscape` to branch names in web URLs (MR !1183). This fix applies to `--web` flag path construction. However, glab does _not_ take a branch name as a CLI argument in `mr view` — it infers the current branch from the git repo's HEAD. The `/` issue in CLI-to-forge workflow likely manifests differently.
+
+**Our code path:** `git-stacks gitlab pr open <workspace> [repo]` calls `glab mr view --web` in the context of `repo.task_path`. The worktree at `task_path` has `HEAD` on the workspace branch (e.g., `feature/my-task`). `glab mr view` reads the current branch from git and constructs the MR URL. If glab's branch URL encoding is fixed in recent versions, the bug may be in glab's version the user has installed. If it manifests in our code, it would be in how we construct or pass arguments.
+
+**Our code does NOT pass the branch name as an argument** to `glab mr view` — glab reads it from git HEAD. So if there is an escaping bug, it is either:
+1. A glab version issue (fixed in recent glab, user needs to update), or
+2. Something in how we pass the worktree path as `cwd` to glab
 
 ### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Explicit per-integration ordering | Niri must run last. It depends on tmux/cmux/vscode having already opened their windows. Without ordering guarantees, the system is fragile. | LOW | Add a numeric `order` field to each `Integration` object (default 50). Sort the `integrations` array by `order` before execution in `openWorkspace()`. Niri gets `order: 100`. |
-| Order configurable per template/workspace | A template with only niri + tmux may want different order than one with all four. | MEDIUM | `settings.integrations.<id>.order` override in workspace/template YAML. The resolution cascade already exists; add `order` alongside `enabled`. |
-| Stable ordering for integrations with same order value | Deterministic execution for testing and predictability. | LOW | Use the position in the `integrations` registry array as a tiebreaker when orders are equal. |
+| Branch names with `/` work transparently for glab operations | `feature/my-task` is the most common branch naming pattern; any escaping that breaks URL construction must be fixed | LOW | Investigate: verify glab version, test with a `/` branch in worktree. If it is a glab version issue, document the minimum required version. If it is our code, add a test case. |
+| Investigation documented in code/comments | Future maintainers must understand what was checked | LOW | Add a comment in gitlab.ts near the `mr view --web` call if any workaround is needed |
+| Doctor check for minimum glab version | If the fix requires glab >= X.Y, the doctor command should verify this | MEDIUM | `glab --version` parses semver; add to doctor integration check. Optional depending on investigation result. |
 
 ### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| `git-stacks config` shows resolved integration order | Users can see the effective execution order before opening a workspace. Useful for debugging niri timing. | LOW | Extend the integration display in TUI detail pane and `config show` to include resolved order. |
+| Show the branch being used in verbose output | Print `Opening MR for branch: feature/my-task` before calling glab | LOW | Helps users debug issues; shows what branch glab will see |
 
 ### Anti-Features
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Dependency-based ordering (integration A declares `after: ["tmux"]`) | Seems more expressive than numeric order | Requires dependency graph resolution, cycle detection, and error messages. Niri always runs last — a simple high order number is sufficient. | Numeric order is unambiguous and easy to reason about. |
+| URL-encode branch names before passing to glab | Our code doesn't pass branch names to glab — glab reads HEAD | Would mask the actual issue and break glab's own encoding if it also encodes | Verify the bug location first; don't patch symptoms |
+
+### Dependencies
+
+- Depends on: `_exec.run()` in `src/lib/integrations/gitlab.ts`
+- Depends on: worktree path resolution in `forge-utils.ts` (provides the CWD)
+- No schema changes needed
 
 ---
 
-## Feature Area 3: Niri Integration — Core
+## Feature 3: Jira Integration Auto-Detect Workspace from CWD
+
+### What Is Expected
+
+When a user is working inside a worktree (e.g., `~/workspaces/tasks/my-task/api-repo/`), they should not need to type the workspace name to run issue commands. Parallel tools like `gh`, `glab`, and `tea` all auto-detect the repo context from the current directory. Users expect the same ergonomics from git-stacks issue commands.
+
+Current commands require explicit workspace name:
+```
+git-stacks jira issue open my-task     # current, requires workspace name
+git-stacks jira issue open             # desired, auto-detects from CWD
+```
+
+### Auto-Detection Pattern
+
+Workspace worktrees live at: `{workspace_root}/tasks/{workspace_name}/{repo_name}/`
+
+Auto-detection algorithm:
+1. Get `process.cwd()`
+2. Read `workspace_root` from global config
+3. Check if CWD starts with `{workspace_root}/tasks/`
+4. If yes, extract the workspace name segment: `cwd.split('/tasks/')[1]?.split('/')[0]`
+5. Verify the extracted name is a valid workspace (check YAML exists)
+6. If valid, use it; if not, fall back to requiring the argument
+
+This is a path-matching approach — pure string operations, no filesystem traversal beyond checking the workspace YAML exists. Fast and reliable for standard workspace layouts.
+
+**Edge case: custom workspace_root.** The global config `workspace_root` may be `~/workspaces` (default) or a custom path. The detection must read from config, not hardcode.
+
+**Edge case: trunk-mode repos.** Trunk repos use `main_path` (the main clone), not a tasks sub-path. CWD auto-detection only works from within a worktree path. Trunk repo paths cannot be auto-detected this way because they are not under `tasks/`.
 
 ### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Create a niri workspace named after the git-stacks workspace | The core value proposition. One niri workspace = one git-stacks workspace. Without this, niri integration is just another launcher. | MEDIUM | Use `niri msg action set-workspace-name <git-stacks-name>` to name the current empty workspace, or find an existing workspace with that name via `niri msg -j workspaces`. The name must survive niri restarts — named workspaces persist when non-empty. |
-| Focus the named niri workspace | After creating the workspace and placing windows on it, the compositor must switch to it. The user should land on their new dev environment. | LOW | `niri msg action focus-workspace <name>` — straightforward IPC call. |
-| Check if niri is running before attempting IPC | On non-niri systems or when niri is not the active compositor, `$NIRI_SOCKET` is unset. The integration must silently skip rather than crash. | LOW | `applies()` checks for `process.env.NIRI_SOCKET` (or existence of the socket path). If absent, return false and skip entirely. |
-| Move windows spawned by earlier integrations onto the niri workspace | The key orchestration feature. tmux terminal, VSCode window, cmux window should all land on the same niri workspace. | HIGH | See Window Identification section below. This is the hardest part of the feature. |
+| `<workspace>` argument optional when CWD is inside a worktree | Standard ergonomic pattern in all forge CLIs; reduces friction for the most common use case | LOW | Make `<workspace>` optional in Commander.js command definition (`[workspace]` not `<workspace>`). Add detection function `detectWorkspaceFromCwd()` in `issue-utils.ts` or a new `cwd-utils.ts`. |
+| Clear error when workspace cannot be determined and no argument given | When not inside a worktree, and no argument, the error must tell the user to specify a workspace | LOW | If detection returns null and no arg provided: `"Cannot determine workspace from current directory. Run from a worktree or provide workspace name: git-stacks jira issue open <workspace>"` |
+| Detection uses workspace_root from config, not hardcoded path | Users with custom workspace_root must get the same experience | LOW | Call `readGlobalConfig()` to get `workspace_root`. Expand `~` via `expandHome()` from `paths.ts`. |
+| Applies to all three Jira issue subcommands | `issue link`, `issue unlink`, `issue open` all take a workspace argument | LOW | Extract detection into a shared helper called by all three. link/unlink both need a workspace name; open also needs it. |
 
 ### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Spawn a tmux terminal inside niri without requiring the tmux integration to be enabled | Niri-only users who don't need tmux layout features still benefit from a terminal being opened on their workspace. If tmux integration is already running, skip this. | MEDIUM | Niri integration checks `artifacts["tmux"]` — if present, re-use that session. If absent and a `terminalCmd` is configured, spawn a new terminal with `kitty --app-id=git-stacks-<workspace>` or similar. |
-| `open-on-workspace` niri config snippet generation | Generate a `window-rules` block the user can paste into `~/.config/niri/config.kdl` to permanently associate specific apps with this workspace. | MEDIUM | Purely additive feature. Write the snippet to `.planning/` or print to stdout. Complex to implement correctly for dynamic workspace names. Defer to v0.6.x. |
-| Cleanup: unset workspace name on `git-stacks remove`/`clean` | When the git-stacks workspace is deleted, the niri workspace should revert to unnamed (becoming auto-removable when empty). | LOW | Add a hook in `runPreRemoveHooks()` that calls `niri msg action unset-workspace-name <name>`. Only runs if `$NIRI_SOCKET` is present. |
+| Auto-detection extended to GitHub/GitLab/Gitea issue commands | The same pattern would benefit all four tracker integrations | LOW | After implementing for Jira, apply the same helper to GitHub, GitLab, Gitea issue commands. Separate issue or same phase — coordination needed. |
+| Print detected workspace name when auto-detecting | `Detected workspace: my-task` gives users confirmation, prevents silent wrong-workspace operations | LOW | Print to stderr (not stdout) so it doesn't interfere with pipe-able output. Can be suppressed with `--quiet`. |
 
 ### Anti-Features
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Modify niri's `config.kdl` programmatically | Persistent window rules per workspace | Config.kdl manipulation is fragile (comment-stripping, KDL parser needed, file conflicts). Named workspaces created at runtime work fine without config changes. | Runtime `set-workspace-name` via IPC. Only static window rules need config.kdl — omit for v0.6.0. |
-| Per-workspace niri layout configuration (column widths, split ratios) | Power users want precise layout control | Niri's layout is inherently dynamic and scrollable. Static layout declarations are at odds with niri's UX model. | Let niri handle layout naturally. If needed, tmux/cmux pane layout config already handles terminal split ratios. |
+| Walk parent directories looking for git-stacks markers | More robust detection for unusual directory layouts | Creates O(depth) filesystem stat calls; slower and fragile if `tasks/` path convention is not followed | Path-prefix matching against `workspace_root/tasks/` is fast, reliable, and convention-based |
+| Fuzzy match workspace name from branch name | Infer workspace from current branch name | Branch names are not required to match workspace names (they often do, but not always — templates use `branch_pattern`) | Use path-based detection; it is deterministic |
+
+### Dependencies
+
+- Depends on: `readGlobalConfig()` in `config.ts` for `workspace_root`
+- Depends on: `expandHome()` in `paths.ts`
+- Depends on: `workspaceExists()` and `readWorkspace()` in `config.ts` for validation
+- Enhances: all four `issue link/unlink/open` subcommands in `jira.ts`
+- Can follow same pattern for: `github.ts`, `gitlab.ts`, `gitea.ts` issue commands
 
 ---
 
-## Feature Area 4: Window Identification and Arrangement
+## Feature 4: Worktree Creation Checks for Existing Upstream Branch
+
+### What Is Expected
+
+When `git-stacks new` creates a workspace, it calls `createWorktree()` in `src/lib/git.ts`. The current logic:
+
+```typescript
+const exists = await checkBranchExists(repoPath, branch)
+if (exists) {
+  // branch exists locally → check it out
+  await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`
+} else {
+  // branch does not exist → create new from HEAD
+  await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`
+}
+```
+
+This only checks for local branch existence. If the branch exists on `origin` but not locally (common when another developer pushed it, or when switching machines), the new worktree gets a fresh branch from HEAD instead of tracking the existing remote branch. The user then has no tracking link and `git push` fails with "set-upstream" error.
+
+**Expected behavior (matches git defaults):** If `origin/<branch>` exists and no local branch exists, create the worktree tracking `origin/<branch>`. This is what `git worktree add <path> <branch>` does automatically when the branch name matches a unique remote-tracking branch — git calls this "DWIM" (Do What I Mean).
+
+**git worktree DWIM behavior (HIGH confidence — official docs):** If `<commit-ish>` is a branch name not found locally, and exactly one remote has a tracking branch with that name, git automatically creates a local branch tracking it, equivalent to:
+```
+git worktree add --track -b <branch> <path> <remote>/<branch>
+```
+
+**The current code bypasses DWIM** by checking `checkBranchExists()` first and explicitly using `-b` (create new) when the branch doesn't exist locally. This skips the remote check and prevents the auto-tracking behavior.
+
+### Fix Strategy
+
+Change `createWorktree()` to:
+1. Check local branch existence (current behavior).
+2. If not found locally, check remote: `git ls-remote --exit-code --heads origin <branch>`.
+3. If found on remote: use `git worktree add --track -b <branch> <path> origin/<branch>` — this creates the local branch and sets upstream tracking.
+4. If not found on remote: use current behavior (`worktree add -b <branch> <path>` — new branch from HEAD).
+
+This restores the DWIM behavior that the current `checkBranchExists` optimization was unintentionally suppressing.
 
 ### Table Stakes
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| tmux session → niri window identification via client lookup | After tmux integration runs, niri needs to know which niri window contains the tmux session. The terminal emulator hosting tmux must be identified. | MEDIUM | Strategy: `tmux list-clients -t <session>` returns the terminal device (e.g., `/dev/pts/3`). Cross-reference with `niri msg -j windows` — windows include PID. Walk `/proc/<pid>/fd/` to find which window has that pts. Medium complexity but no snapshot diff needed. |
-| VSCode window identification via snapshot-diff | VSCode does not expose a queryable PID from `code . &`. The safest approach is: capture `niri msg -j windows` before spawning VSCode, spawn, wait briefly, capture again, diff to find new window. | MEDIUM | Snapshot before: list of window IDs. Spawn VSCode. Poll `niri msg -j windows` until a new window with `app_id` matching `code` or `code-insiders` appears (up to ~5 seconds). Diff identifies the specific window. |
-| Move identified windows to the niri workspace | Once a window ID is known, move it: `niri msg action move-window-to-workspace <name> --id <window-id>`. | LOW | Straightforward IPC. Window IDs are stable within a compositor session. |
-| Graceful degradation when window identification fails | Timeout waiting for VSCode, or tmux client lookup fails. The workspace still opens; only window arrangement is skipped with a warning. | LOW | Wrap in try/catch, log warning, continue. Window identification failure is not a fatal error. |
+| Worktree creation links to existing upstream branch | When `origin/<branch>` exists, the new worktree should track it automatically — `git push` and `git pull` work without `--set-upstream` | LOW | Add `checkRemoteBranchExists()` to `git.ts` using `git ls-remote --exit-code --heads origin <branch>`. Already have `isBranchGoneOnRemote()` as a reference — it uses the same command. Reuse or generalize. |
+| New branch (no remote) still creates fresh from HEAD | If neither local nor remote branch exists, behavior is unchanged | LOW | Three-way check: local → remote → new. No regression for the common new-workspace case. |
+| Existing local branch behavior unchanged | If local branch already exists, `worktree add <path> <branch>` without `-b` — already correct | LOW | The existing local branch code path is correct; only the "not found locally" path changes. |
+| `--track` flag used explicitly when tracking remote | Makes the tracking relationship explicit rather than relying on git's inference | LOW | `git worktree add --track -b <branch> <path> origin/<branch>` is the canonical form. |
 
 ### Differentiators
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| app_id matching as fallback for VSCode | After snapshot-diff identifies candidates, filter by `app_id` matching `^code` or `^codium` to reduce false positives if multiple VSCode windows are open. | LOW | Combine snapshot-diff (to narrow to new windows) with app_id filter (to confirm identity). Reliable in practice. |
-| Event-stream-based window detection instead of polling | Subscribe to `WindowOpenedOrChanged` events; resolve when a matching window appears. Avoids polling sleep. | MEDIUM | Uses `niri msg --json event-stream`. More precise than polling but requires concurrent stream consumption. Suitable for v0.6.x after polling approach is validated. |
-| cmux window identification via app_id | cmux is a Wayland application with a known `app_id`. After cmux integration opens its workspace, find the cmux window in `niri msg -j windows` by `app_id == "cmux"` and the most-recent opened timestamp. | LOW | Simpler than tmux because cmux has a known, queryable `app_id`. |
+| Progress message indicates remote tracking setup | `Tracking remote branch origin/<branch>` during workspace creation gives users confidence the link was established | LOW | `onProgress` callback in `workspace-ops.ts` calls `createWorktree`; add a return value or callback to convey tracking status. Or simply log in `createWorktree` itself. |
+| Doctor warns on worktrees missing upstream tracking | `git-stacks doctor` could check each worktree for missing upstream tracking and suggest `git branch --set-upstream-to` | MEDIUM | Useful for existing workspaces created before this fix. Post-MVP addition. |
 
 ### Anti-Features
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| IntelliJ window identification | IntelliJ's app_id varies by version and JetBrains toolbox installation. Multiple IntelliJ windows may be open simultaneously. | The snapshot-diff approach works but IntelliJ takes 15-30 seconds to open, making the diff window unreliable. Window arrangement for IntelliJ should be deferred. | Skip IntelliJ window arrangement in v0.6.0. IntelliJ users can manually move to the workspace. Document as known limitation. |
-| X11 window identification (xdotool, wmctrl) | Some users run XWayland apps | X11 ID space is separate from Wayland — adding xdotool/wmctrl is a parallel complexity track. | Scope v0.6.0 to native Wayland windows only. XWayland apps can be moved manually. |
+| Fetch before checking remote branch | Ensures remote branch list is up-to-date | Adds network latency to every workspace creation; most users just created the branch and pushed it | `git ls-remote` queries the remote directly without requiring a local fetch; it reflects current remote state |
+| Automatically push new branches to remote | Completes the round-trip | Too opinionated; some workflows push only after work begins; hooks handle this case if needed | Let the user push via hooks or manually; only set tracking when branch exists on remote |
+
+### Dependencies
+
+- Depends on: `checkBranchExists()` in `git.ts` (existing — only adds remote check)
+- Depends on: `isBranchGoneOnRemote()` in `git.ts` (same `ls-remote` pattern, can generalize)
+- Called from: `createWorktree()` in `git.ts`, which is called from `workspace-ops.ts` line 732
+- No schema changes needed; no config changes needed
 
 ---
 
 ## Feature Dependencies
 
 ```
-Integration Artifact System
-    └──enables──> Integration Ordering (ordering only matters once artifacts flow)
-    └──enables──> Niri Integration (niri needs tmux/cmux artifacts to identify windows)
+Feature 1: Dashboard Linked Issues Display Fix
+    └──reads──> workspace.settings.integrations (existing schema, no change)
+    └──independent──> Features 2, 3, 4
 
-Integration Ordering
-    └──required-by──> Niri Integration (niri must run AFTER tmux/cmux/vscode)
+Feature 2: GitLab Branch '/' Escaping Fix
+    └──reads──> gitlab.ts _exec.run() and forge-utils.ts
+    └──independent──> Features 1, 3, 4
 
-Niri applies() check ($NIRI_SOCKET)
-    └──required-by──> All niri IPC calls (guard against non-niri environments)
+Feature 3: Jira Workspace Auto-Detection
+    └──reads──> globalConfig.workspace_root
+    └──reads──> workspace task_path convention (tasks/<name>/<repo>)
+    └──enhances──> Feature 1 (less friction to get to issue open commands)
+    └──can-extend-to──> GitHub/GitLab/Gitea issue commands (same pattern)
+    └──independent──> Features 2, 4
 
-Window Identification (tmux client lookup)
-    └──requires──> tmux Artifact (session name from tmux integration)
-
-Window Identification (snapshot-diff)
-    └──requires──> VSCode already launched (must spawn before diff)
-    └──enables──> move-window-to-workspace (need window ID first)
-
-Cleanup (unset-workspace-name on remove)
-    └──independent──> Can be added to runPreRemoveHooks() without artifact system
+Feature 4: Upstream Branch Tracking
+    └──modifies──> createWorktree() in git.ts
+    └──called-from──> workspace-ops.ts createWorkspace flow
+    └──independent──> Features 1, 2, 3
 ```
 
 ### Dependency Notes
 
-- **Artifact system requires interface change**: `open()` signature changes from `Promise<void>` to `Promise<IntegrationArtifact | null>`. All four existing integrations must be updated simultaneously or the interface must have a transitional default.
-- **Niri ordering requires artifact system**: The ordering feature is only useful if niri can consume results. Ship both in the same phase.
-- **Window identification complexity is isolated**: The snapshot-diff and tmux-client-lookup strategies are internal to the niri integration. If they fail, the rest of the integration pipeline still completes. Implement with explicit fallback paths.
-- **Cleanup is independent**: Unsetting the niri workspace name on `git-stacks remove` can be added to `runPreRemoveHooks()` without touching the artifact system. It is a simple IPC call guarded by `$NIRI_SOCKET` presence.
+- **All four features are independent.** They do not share code paths or data structures. Phases can be parallelized or sequenced in any order.
+- **Feature 3 can extend to other trackers** after Jira is implemented, but extending is optional for v0.8.0.
+- **Feature 4 change is backward-safe.** Existing workspaces are unaffected. The fix changes only the branch-not-found-locally code path in `createWorktree()`. Any workspace that already has a local branch sees no difference.
+- **Feature 2 may be a glab version issue.** Investigation is required before coding. If the fix is "update glab," the deliverable is a doctor version check, not a code change.
 
 ---
 
-## Niri Workspace Lifecycle
+## MVP Definition for v0.8.0
 
-This documents the full create-to-cleanup lifecycle that the niri integration must implement:
+### Must Ship
 
-### Create (during `git-stacks open`)
+- [ ] Dashboard linked issues display fix — shows per-workspace issue only, no global fallback for `issue` field (Feature 1)
+- [ ] Jira workspace auto-detection from CWD — `[workspace]` becomes optional when inside a task worktree (Feature 3)
+- [ ] Upstream branch tracking in worktree creation — checks `origin/<branch>` and uses `--track` when found (Feature 4)
+- [ ] GitLab branch escaping investigation — identify root cause (glab version or our code) and fix or document (Feature 2)
 
-1. Check `$NIRI_SOCKET` — if unset, `applies()` returns false, skip entirely.
-2. Query `niri msg -j workspaces` — check if a workspace named `<git-stacks-name>` already exists (idempotent re-open).
-3. If not found: use current empty workspace via `set-workspace-name <name>`, or find any empty workspace and name it.
-4. Focus the named workspace: `niri msg action focus-workspace <name>`.
-5. Consume artifact bag — for each artifact, identify the corresponding niri window (tmux: client lookup, vscode: snapshot-diff, cmux: app_id match).
-6. Move identified windows: `niri msg action move-window-to-workspace <name> --id <window-id>` for each.
-7. (Optional) Spawn terminal if no tmux session was provided in artifacts.
+### Add After Validation (v0.8.x)
 
-### Re-open (idempotent)
+- [ ] Extend workspace auto-detection to GitHub/GitLab/Gitea issue commands — same pattern as Jira
+- [ ] Doctor warning for existing worktrees missing upstream tracking
+- [ ] Verbose output showing detected workspace name during auto-detection
 
-1. Query `niri msg -j workspaces` — workspace with this name found.
-2. Focus it: `niri msg action focus-workspace <name>`.
-3. Skip window arrangement (windows are already on the workspace).
+### Future Consideration (v0.9.0+)
 
-### Cleanup (during `git-stacks remove` or `git-stacks clean`)
-
-1. Check `$NIRI_SOCKET` — if unset, skip.
-2. Call `niri msg action unset-workspace-name <name>`.
-3. The workspace becomes unnamed and auto-removes when its last window closes.
-
----
-
-## MVP Definition for v0.6.0
-
-### Launch With
-
-- [ ] `IntegrationArtifact` type and `open()` return type change — foundation for everything else.
-- [ ] Artifact accumulation in `openWorkspace()` execution loop.
-- [ ] tmux integration returns `{ kind: "tmux", sessionName: string }`.
-- [ ] cmux integration returns `{ kind: "cmux", workspaceRef: string }`.
-- [ ] VSCode integration returns `{ kind: "vscode", pid: number | null }` (null if PID not captured).
-- [ ] Numeric `order` field on `Integration`, niri registered at order 100.
-- [ ] Niri integration: `applies()` guards on `$NIRI_SOCKET`, creates/names workspace, focuses it.
-- [ ] Window identification: tmux client lookup for tmux sessions; snapshot-diff for VSCode.
-- [ ] `move-window-to-workspace` for identified windows.
-- [ ] Graceful degradation: all identification failures are warnings, not errors.
-- [ ] Cleanup: `unset-workspace-name` called from `runPreRemoveHooks()` when `$NIRI_SOCKET` is set.
-
-### Add After Validation (v0.6.x)
-
-- [ ] Event-stream-based window detection (replace polling in snapshot-diff).
-- [ ] Artifact values exported as env vars to `post_open` hooks.
-- [ ] `git-stacks config` and TUI detail pane show resolved integration order.
-- [ ] Terminal spawning in niri integration when no tmux artifact is present.
-
-### Future Consideration (v0.7.0+)
-
-- [ ] Per-workspace niri layout configuration.
-- [ ] IntelliJ window arrangement (app startup timing problem must be solved first).
-- [ ] XWayland window identification via xdotool fallback.
-- [ ] `open-on-workspace` niri config snippet generation.
+- [ ] Separate "Linked Issues" section in dashboard detail pane (visual improvement beyond the fix)
+- [ ] Minimum glab version enforcement in doctor (if version gate found for branch escaping fix)
 
 ---
 
@@ -227,33 +283,24 @@ This documents the full create-to-cleanup lifecycle that the niri integration mu
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| `open()` returns artifact | HIGH | MEDIUM | P1 |
-| Artifact accumulation in context | HIGH | LOW | P1 |
-| tmux artifact (session name) | HIGH | LOW | P1 |
-| cmux artifact (workspace ref) | HIGH | LOW | P1 |
-| Numeric integration ordering | HIGH | LOW | P1 |
-| Niri: applies() + create workspace + focus | HIGH | MEDIUM | P1 |
-| Niri: tmux client → window ID lookup | HIGH | MEDIUM | P1 |
-| Niri: move-window-to-workspace | HIGH | LOW | P1 |
-| VSCode snapshot-diff identification | MEDIUM | MEDIUM | P2 |
-| VSCode artifact (PID) | MEDIUM | MEDIUM | P2 |
-| Niri cleanup on remove | MEDIUM | LOW | P2 |
-| cmux app_id window identification | MEDIUM | LOW | P2 |
-| Event-stream window detection | LOW | MEDIUM | P3 |
-| Artifact env var export to hooks | LOW | MEDIUM | P3 |
-| IntelliJ window arrangement | LOW | HIGH | P3 |
+| Fix dashboard linked issues display | HIGH — active bug, misleads users | LOW — logic change in one component | P1 |
+| Jira workspace auto-detection | HIGH — ergonomic, reduces friction | LOW — path-matching + optional arg | P1 |
+| Upstream branch tracking | HIGH — prevents "no tracking" push errors | LOW — add one ls-remote check | P1 |
+| GitLab branch '/' investigation + fix | MEDIUM — niche (affects `/` branch names) | LOW (code) or ZERO (glab version) — investigate first | P1 |
+| Extend auto-detection to GitHub/GitLab/Gitea | MEDIUM — consistency | LOW — same pattern repeated | P2 |
+| Doctor upstream tracking warning | LOW — existing workspaces only | MEDIUM — doctor expansion | P3 |
 
 ---
 
 ## Sources
 
-- Niri IPC wiki: https://github.com/YaLTeR/niri/wiki/IPC
-- Niri named workspaces: https://github.com/niri-wm/niri/wiki/Configuration:-Named-Workspaces
-- Niri IPC commands (DeepWiki): https://deepwiki.com/YaLTeR/niri/5.2-available-commands
-- Niri workspace scripting discussion: https://github.com/niri-wm/niri/discussions/3331
-- Niri event types (nirimgr Go package): https://pkg.go.dev/github.com/soderluk/nirimgr/events
-- Codebase: `src/lib/integrations/types.ts`, `src/lib/integrations/{tmux,cmux,vscode,intellij}.ts`, `src/lib/workspace-ops.ts` (openWorkspace function)
+- glab MR !1183 (URL-encode branch names in `--web`): https://gitlab.com/gitlab-org/cli/-/merge_requests/1183
+- glab issue #619 (MR create from pushed branch): https://github.com/profclems/glab/issues/619
+- git worktree documentation (--track, --guess-remote, DWIM behavior): https://git-scm.com/docs/git-worktree
+- git branch --set-upstream-to: https://git-scm.com/docs/git-branch
+- git ls-remote --exit-code for remote branch detection: multiple sources; used already in `isBranchGoneOnRemote()` in `src/lib/git.ts`
+- Codebase: `src/lib/integrations/jira.ts`, `src/lib/integrations/gitlab.ts`, `src/lib/integrations/issue-utils.ts`, `src/lib/integrations/forge-utils.ts`, `src/lib/git.ts`, `src/tui/dashboard/WorkspaceDetail.tsx`
 
 ---
-*Feature research for: v0.6.0 Integration Orchestration & Niri compositor*
-*Researched: 2026-03-21*
+*Feature research for: v0.8.0 Integration Polish & Workspace UX*
+*Researched: 2026-03-24*

@@ -1,198 +1,194 @@
 # Stack Research
 
-**Domain:** Bun CLI tool — v0.6.0 additions (niri compositor integration + integration orchestration)
-**Researched:** 2026-03-21
-**Confidence:** HIGH (all niri commands verified against live `niri 25.11` installation; integration interface verified against installed source)
+**Domain:** Bun CLI tool — v0.8.0 Integration Polish & Workspace UX
+**Researched:** 2026-03-24
+**Confidence:** HIGH (all git CLI flags verified against official docs; glab behavior traced to confirmed upstream behavior; implementation patterns derived from reading installed source)
 
 ---
 
 ## Scope
 
-This document covers **only the additions needed for v0.6.0**. The existing stack (Bun, TypeScript, Commander.js, `@opentui/solid`, SolidJS, YAML + Zod, `@clack/prompts`, OpenTUI test renderer) is unchanged and not re-researched.
+This document covers **only what is needed for v0.8.0**. The existing stack (Bun, TypeScript, Commander.js, SolidJS + OpenTUI, Zod + YAML, `@clack/prompts`) is unchanged and not re-researched.
 
-Two questions answered:
+Four questions answered:
 
-1. What niri IPC commands are available, what do they return, and how do we use them for workspace management and window identification?
-2. What interface changes are needed to the integration plugin system to support artifact passing and ordering?
+1. Why does the dashboard show global Jira config instead of per-workspace issues, and how is it fixed?
+2. Does glab handle branch names with '/' correctly, or does our code need to work around it?
+3. How can the Jira integration detect the current workspace from the working directory path?
+4. What git CLI flags set up upstream tracking when a remote branch already exists?
 
 ---
 
-## Finding 1: Niri IPC via `niri msg` — Fully Sufficient for Integration Needs
+## Finding 1: Dashboard Linked Issues Bug — Read Source, Not Read Config
 
-Niri 25.11 (installed) exposes all required compositor operations via `niri msg`. No Wayland protocol library, no socket-level IPC, and no Rust bindings are needed. The `niri msg` CLI is the correct interface.
+**Root cause identified by reading `WorkspaceDetail.tsx` lines 127–138.**
 
-All commands verified against the live compositor. HIGH confidence.
-
-### The JSON Output Contract
-
-Pass `-j` / `--json` to any query command to get machine-readable output. The `action` subcommand does not support `-j` (it has no return value to serialize).
-
-**`niri msg -j workspaces`** — returns a JSON array:
+The "config summary" block that shows integration settings for enabled integrations reads:
 
 ```typescript
-type NiriWorkspace = {
-  id: number          // stable compositor-assigned ID (survives focus changes)
-  idx: number         // 1-based display index on this output
-  name: string | null // user-set name, null if unnamed
-  output: string      // monitor name, e.g. "eDP-1"
-  is_urgent: boolean
-  is_active: boolean  // true if this workspace is visible on its output
-  is_focused: boolean // true if this workspace has keyboard focus
-  active_window_id: number | null
+const rawConfig = (ws().settings?.integrations?.[integration.id]
+  ?? globalConfig.integrations[integration.id]  // <-- fallback to global
+  ?? {}) as Record<string, unknown>
+```
+
+This is correct for rendering integration settings (e.g., `open_cmd`). However, this same code path renders `issue: PROJ-123` — the per-workspace issue ID stored in `ws().settings.integrations.jira.issue` — as if it were a config summary entry.
+
+**The rendering issue is separate from the data source bug.** The data is stored correctly per-workspace (confirmed in `issue-utils.ts`: `linkIssue` writes to `workspace.settings.integrations[trackerId].issue`). The display problem is that the config summary block shows "issue: PROJ-123" alongside integration settings like "open_cmd: ..." using the same rendering path, and the `??` fallback to `globalConfig` means that when a workspace has no issue linked, it falls through to any global Jira config that happens to contain an `issue` key.
+
+**Fix:** Add a dedicated "Linked issues" section in `WorkspaceDetail.tsx` that reads issue IDs from `ws().settings?.integrations?.[id]?.issue` directly. Do not render `issue` keys through the config summary path. The config summary filter should explicitly exclude the `issue` key.
+
+**No new dependencies.** The data is already in the workspace YAML — it just needs a separate display section.
+
+**Confidence:** HIGH (traced through installed source; data model confirmed in `issue-utils.ts` + `config.ts`).
+
+---
+
+## Finding 2: glab Branch Names with '/' — glab Handles It; Investigate Before Patching
+
+**Research finding:** The `glab mr view --web` command, when given no arguments, runs in the git repo directory and resolves the MR by the current branch name by querying the GitLab API. The branch name is **not passed as a URL path component by our code** — we call `_exec.run(["mr", "view", "--web"], repoPath)` and glab does the branch detection internally.
+
+The MR `!1183` in `gitlab-org/cli` confirmed that glab did add `url.PathEscape` for branch names in web URLs. This was released before 2024.
+
+**What we actually call:**
+```typescript
+// From gitlab.ts — no branch name passed at all
+const result = await _exec.run(["mr", "view", "--web"], repoPath)
+```
+
+Our code does not pass the branch name to glab. Glab detects the current branch from the git repo CWD and queries the GitLab API. The slash issue would be **inside glab**, not in our code.
+
+**The likely cause of the user-reported issue:** `glab mr view` (without `--web`) prints MR info, but with `--web` it opens the MR URL in a browser. If glab constructs a URL like `https://gitlab.com/org/repo/-/merge_requests?source_branch=feature%2Fname`, some browsers or OS `xdg-open` handlers may double-encode the `%2F` to `%252F`. This is a known pattern (confirmed by lazygit issue #4321 analysis above).
+
+**Fix strategy:** Investigate first by testing `glab mr view --web` on a branch with a slash. If it fails, the fix is on glab's side (file a bug). If glab works but our integration wrapper doesn't invoke it correctly, the fix is in `gitlab.ts`. No code change is warranted until the investigation confirms the failure is ours.
+
+**Confidence:** MEDIUM — glab's internal branch resolution is confirmed. The double-encoding pattern is confirmed from lazygit. Whether glab itself suffers from this in the current version requires live testing.
+
+---
+
+## Finding 3: Jira Workspace Auto-Detection from CWD — Path-Based Detection via WORKSPACES_DIR
+
+**How worktree paths are structured (from `paths.ts` + `config.ts`):**
+
+```
+{workspace_root}/tasks/{workspace_name}/{repo_name}/
+```
+
+Default `workspace_root` is `~/workspaces`, so a typical worktree path is:
+
+```
+~/workspaces/tasks/my-feature/api/
+```
+
+A user running `jira issue open` (no workspace arg) inside `~/workspaces/tasks/my-feature/api/` can be identified by checking whether their CWD starts with `{tasksDir}/`. The workspace name is the first path component after `{tasksDir}/`.
+
+**Detection algorithm:**
+
+```typescript
+import { readGlobalConfig } from "../config"
+import { getTasksDir } from "../paths"
+
+export function detectWorkspaceFromCwd(): string | null {
+  const config = readGlobalConfig()
+  const tasksDir = getTasksDir(config.workspace_root)
+  const cwd = process.cwd()
+  if (!cwd.startsWith(tasksDir + "/")) return null
+  const relative = cwd.slice(tasksDir.length + 1)
+  const wsName = relative.split("/")[0]
+  return wsName || null
 }
 ```
 
-**`niri msg -j windows`** — returns a JSON array:
+This is pure path arithmetic — no filesystem reads beyond `readGlobalConfig()` (which is already called in the existing Jira `open` action).
+
+**Workspace arg change:** The `<workspace>` positional arg in `issue link`, `issue unlink`, `issue open` commands should become `[workspace]` (optional). When omitted, call `detectWorkspaceFromCwd()`. If no workspace is detected and no arg provided, emit a clear error: "Not inside a workspace directory. Specify a workspace name."
+
+This same pattern should apply to `github.ts` and `gitlab.ts` `issue` subcommands for consistency — the Jira change is the immediate ask but the pattern is reusable.
+
+**No new dependencies.** Uses `process.cwd()` (built-in Node/Bun) + existing path utilities.
+
+**Confidence:** HIGH (derived directly from `paths.ts` path layout; `getTasksDir` confirmed in source; `process.cwd()` is standard).
+
+---
+
+## Finding 4: Upstream Branch Tracking During Worktree Creation
+
+**Current behavior in `git.ts` `createWorktree()`:**
 
 ```typescript
-type NiriWindow = {
-  id: number          // stable window ID — persists until window is closed
-  title: string | null
-  app_id: string | null  // Wayland app_id, e.g. "com.mitchellh.ghostty", "google-chrome"
-  pid: number | null  // PID of the process that owns the window surface
-  workspace_id: number | null
-  is_focused: boolean
-  is_floating: boolean
-  is_urgent: boolean
-  layout: {
-    pos_in_scrolling_layout: [number, number] | null
-    tile_size: [number, number]
-    window_size: [number, number]
-    tile_pos_in_workspace_view: [number, number] | null
-    window_offset_in_tile: [number, number]
+if (exists) {
+  // branch exists locally — check it out into the worktree
+  await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet()
+} else {
+  // branch does not exist locally — create new branch from HEAD
+  await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet()
+}
+```
+
+**The gap:** `checkBranchExists()` checks local refs (`git rev-parse --verify <branch>`). It does not check `origin/<branch>`. When a branch exists on the remote but not locally (e.g., a collaborator pushed it, or the user pushed from another machine), the current code creates a **new disconnected local branch** instead of tracking the remote.
+
+**The fix — two git operations:**
+
+**Step 1:** After the existing `checkBranchExists` local check fails, run a remote check:
+```bash
+git -C {repoPath} ls-remote --exit-code --heads origin {branch}
+```
+Exit code 0 = branch exists on remote. Exit code 2 = branch does not exist on remote.
+
+This command is already used in `isBranchGoneOnRemote()` in `git.ts`. The new function uses the same pattern.
+
+**Step 2:** If remote branch exists, fetch and set up tracking:
+```bash
+git -C {repoPath} fetch origin {branch}:{branch}
+git -C {repoPath} worktree add {worktreePath} {branch}
+git -C {repoPath} branch --set-upstream-to=origin/{branch} {branch}
+```
+
+Or more concisely using `--track`:
+```bash
+git -C {repoPath} fetch origin {branch}
+git -C {repoPath} worktree add --track -b {branch} {worktreePath} origin/{branch}
+```
+
+The `--track` flag on `git worktree add` marks the remote-tracking branch as upstream. Verified in official git docs: "When creating a new branch, if `<commit-ish>` is a branch, `--track` marks it as upstream from the new branch. This is the default if `<commit-ish>` is a remote-tracking branch."
+
+**Recommended implementation in `git.ts`:**
+
+```typescript
+export async function checkRemoteBranchExists(repoPath: string, branch: string): Promise<boolean> {
+  const result = await $`git -C ${repoPath} ls-remote --exit-code --heads origin ${branch}`
+    .quiet().nothrow()
+  return result.exitCode === 0
+}
+
+export async function createWorktree(
+  repoPath: string,
+  worktreePath: string,
+  branch: string
+): Promise<void> {
+  const localExists = await checkBranchExists(repoPath, branch)
+  if (localExists) {
+    await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet()
+  } else {
+    const remoteExists = await checkRemoteBranchExists(repoPath, branch)
+    if (remoteExists) {
+      // Fetch the remote branch and create local tracking worktree
+      await $`git -C ${repoPath} fetch origin ${branch}`.quiet()
+      await $`git -C ${repoPath} worktree add --track -b ${branch} ${worktreePath} origin/${branch}`.quiet()
+    } else {
+      // New branch — create from current HEAD (existing behavior)
+      await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet()
+    }
   }
-  focus_timestamp: { secs: number; nanos: number } | null
 }
 ```
 
-**`niri msg -j focused-window`** — same shape as a single `NiriWindow` entry.
+**`git ls-remote --exit-code --heads origin {branch}`** returns exit code 2 (not 1) when the pattern is not found. This is the same command already used in `isBranchGoneOnRemote()` — consistent with existing codebase patterns.
 
-**`niri msg -j focused-output`** — returns monitor info (not needed for this milestone).
+**`git fetch origin {branch}` (without a local ref spec)** fetches the remote branch into `FETCH_HEAD` and updates `origin/{branch}` in the remote-tracking refs. The subsequent `worktree add --track` correctly links the local branch to `origin/{branch}`.
 
-### Key Action Commands
+**No new dependencies.** Uses standard git CLI via existing `Bun.$` pattern.
 
-All verified via `niri msg action <cmd> --help`:
-
-| Command | Signature | Notes |
-|---------|-----------|-------|
-| `focus-workspace` | `<REFERENCE>` | REFERENCE = index (number) or name (string) |
-| `set-workspace-name` | `<NAME> [--workspace REFERENCE]` | Can name any workspace, not just focused |
-| `move-window-to-workspace` | `<REFERENCE> [--window-id ID] [--focus true\|false]` | Can move by window ID without focusing first |
-| `focus-window` | `--id <ID>` | Focus by stable window ID |
-| `spawn` | `-- <COMMAND>...` | Spawns command; fire-and-forget (no return value) |
-| `spawn-sh` | `-- <COMMAND>...` | Same as spawn but routes through shell |
-
-**Critical capability**: `move-window-to-workspace --window-id <ID> --focus false` moves a specific window to a named workspace **without switching focus to that workspace**. This is the key primitive for the niri integration's "gather all spawned windows onto the workspace" step.
-
-### Niri Workspace Model
-
-- Named workspaces are created on-demand: `niri msg action focus-workspace my-name` creates a workspace named `my-name` if it does not exist.
-- Workspace names are user-visible and persist in the compositor's workspace list.
-- The `id` field is a stable compositor-assigned integer. The `name` field is null until explicitly set.
-- `set-workspace-name` accepts `--workspace REFERENCE` to name any workspace by index or existing name — it does not require the workspace to be focused first.
-
-### Event Stream (Available but Not Needed for v0.6.0)
-
-`niri msg event-stream` streams compositor events as text lines (non-JSON in the live output; JSON events when the IPC socket is used directly). It emits `Window opened or changed: ...`, `Workspaces changed: ...`, etc. Useful for reactive window tracking but introduces a subprocess that must be managed. The snapshot-diff approach (below) avoids this complexity for v0.6.0.
-
----
-
-## Finding 2: Window Identification Strategy — Snapshot-Diff via PID
-
-The challenge: after a terminal emulator window is spawned, we need to find its niri window ID to move it to the workspace. Niri windows expose a `pid` field — the PID of the process that owns the Wayland surface.
-
-**Recommended approach: Bun.spawn PID + poll `niri msg -j windows` by pid match.**
-
-```
-1. Before spawning: take snapshot of current window IDs (niri msg -j windows → Set<id>)
-2. Spawn the terminal via Bun.spawn(), capture child.pid
-3. Poll niri msg -j windows (up to ~3s, 200ms intervals)
-4. Find window where window.pid === child.pid OR window.pid is in the process subtree of child.pid
-5. Return window.id
-```
-
-Why PID match over snapshot-diff: snapshot-diff returns only "what's new" but cannot distinguish which new window belongs to which spawned process when multiple windows appear simultaneously. PID match is precise.
-
-**PID subtree consideration**: when spawning `ghostty --working-directory /path`, the ghostty window's `pid` in niri equals the direct child PID. Verified by cross-referencing `/run/user/1000/systemd/transient/app-niri-ghostty-<PID>.scope` — niri uses the spawned process's PID directly in the scope name. Direct PID match is sufficient; no process tree traversal needed.
-
-**Tmux client PID lookup**: tmux exposes `#{client_pid}` via `tmux list-clients -F "#{client_pid} #{session_name}"`. This returns the PID of the terminal emulator attached to the session. When the tmux artifact is `{ sessionName: string }`, the niri integration can run `tmux list-clients` to find the terminal PID and then match against niri windows.
-
----
-
-## Finding 3: Integration Artifact System — Interface Changes Required
-
-Currently `open()` returns `Promise<void>`. The new contract must return spawned window/session identifiers so downstream integrations (niri) can locate and arrange them.
-
-### New `IntegrationArtifact` Type
-
-```typescript
-// src/lib/integrations/types.ts — add alongside existing exports
-
-export type IntegrationArtifact =
-  | { kind: "tmux-session"; sessionName: string }
-  | { kind: "cmux-workspace"; ref: string }
-  | { kind: "vscode-window"; pid: number }
-  | { kind: "niri-workspace"; workspaceName: string; windowIds: number[] }
-  | { kind: "process"; pid: number }
-  | null
-
-export interface IntegrationResult {
-  artifact: IntegrationArtifact
-}
-```
-
-### Updated `Integration` Interface
-
-```typescript
-// open() return type changes from Promise<void> to Promise<IntegrationArtifact>
-open(ctx: IntegrationContext, artifactPath: string | null): Promise<IntegrationArtifact>
-```
-
-### Updated `IntegrationContext`
-
-```typescript
-export interface IntegrationContext {
-  workspace: Workspace
-  tasksDir: string
-  config: GlobalConfig
-  // Artifacts from integrations that ran before this one (in pipeline order)
-  priorArtifacts: IntegrationArtifact[]
-}
-```
-
-### Integration Ordering
-
-The `integrations` array in `src/lib/integrations/index.ts` is already ordered. Explicit ordering is enforced by the array position — niri goes last. Configurable per-workspace ordering is a v0.7.0 concern; for v0.6.0, position in the array is sufficient.
-
-The workspace-ops loop becomes:
-
-```typescript
-const priorArtifacts: IntegrationArtifact[] = []
-for (const integration of integrations) {
-  if (skip.has(integration.id)) continue
-  if (!integration.isEnabled(ctx)) continue
-  if (integration.applies && !integration.applies(workspace)) continue
-  const artifactPath = integration.generate?.(ctx) ?? null
-  const ctxWithArtifacts = { ...ctx, priorArtifacts }
-  const artifact = await integration.open(ctxWithArtifacts, artifactPath)
-  if (artifact !== null) priorArtifacts.push(artifact)
-}
-```
-
----
-
-## Finding 4: Niri Integration Config Schema
-
-The niri integration needs minimal config — whether it's enabled and the terminal command to spawn (defaulting to the user's `$TERM` or a configured terminal).
-
-```typescript
-const niriConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  terminal: z.string().optional(), // e.g. "ghostty", "foot", "alacritty" — defaults to $TERM_PROGRAM or "foot"
-})
-```
-
-The niri integration does not need a `panes` layout config — it arranges windows based on what prior integrations spawned (via `priorArtifacts`). Layout control is a v0.7.0 concern.
+**Confidence:** HIGH (git docs + existing codebase pattern for `ls-remote --exit-code`; `--track` flag verified in official git-worktree docs).
 
 ---
 
@@ -200,82 +196,31 @@ The niri integration does not need a `panes` layout config — it arranges windo
 
 ### No New npm Dependencies Required
 
-| Need | Approach | Why No Library |
-|------|----------|---------------|
-| Niri IPC | `Bun.$\`niri msg -j ...\`` shell calls | `niri msg` is the correct API; socket-level IPC adds complexity with no benefit at this scale |
-| JSON parsing | `JSON.parse()` + Zod validation | Already used throughout the codebase |
-| PID-based window lookup | Bun `$` shell + `JSON.parse` | No library adds value over direct shell calls |
-| Process spawning | `Bun.spawn()` (already used) | Returns `.pid` directly |
-| Polling / retry | Simple `await sleep()` loop in `niri.ts` | Overkill for a 3s poll with 200ms intervals |
+All 4 features are pure logic fixes / new git CLI invocations:
 
-### New Files
+| Feature | What's Needed | Why No Library |
+|---------|--------------|---------------|
+| Dashboard issues display | Read `ws().settings.integrations[id].issue` in JSX | Data already in workspace YAML |
+| glab branch slash | Investigation first; likely a glab-side behavior | If it's ours: URL-encode via built-in `encodeURIComponent` |
+| Jira CWD detection | `process.cwd()` + path split | Built-in; no library adds value |
+| Upstream tracking | `git ls-remote` + `git fetch` + `--track` flag | Existing Bun `$` shell pattern |
 
-| File | Purpose |
-|------|---------|
-| `src/lib/niri.ts` | Shell wrappers for `niri msg` commands (mirrors `src/lib/tmux.ts` pattern) |
-| `src/lib/integrations/niri.ts` | Niri integration plugin |
+### New Functions
+
+| Function | File | Purpose |
+|----------|------|---------|
+| `checkRemoteBranchExists(repoPath, branch)` | `src/lib/git.ts` | Check `origin/<branch>` via `ls-remote --exit-code` |
+| `detectWorkspaceFromCwd()` | `src/lib/workspace-ops.ts` or new `src/lib/workspace-detect.ts` | Derive workspace name from `process.cwd()` vs `tasksDir` |
 
 ### Modified Files
 
 | File | Change |
 |------|--------|
-| `src/lib/integrations/types.ts` | Add `IntegrationArtifact`, `IntegrationResult`; update `open()` return type and `IntegrationContext` |
-| `src/lib/integrations/index.ts` | Register `niriIntegration` last in the array |
-| `src/lib/integrations/tmux.ts` | Return `{ kind: "tmux-session", sessionName }` from `open()` |
-| `src/lib/integrations/cmux.ts` | Return `{ kind: "cmux-workspace", ref }` from `open()` |
-| `src/lib/integrations/vscode.ts` | Return `{ kind: "process", pid }` from `open()` (or null if not launched) |
-| `src/lib/integrations/intellij.ts` | Return `{ kind: "process", pid }` from `open()` (or null if not launched) |
-| `src/lib/workspace-ops.ts` | Thread `priorArtifacts` through the integration loop |
-
----
-
-## The `niri.ts` Shell Wrapper API (Mirrors `tmux.ts`)
-
-```typescript
-// src/lib/niri.ts
-
-// Check if niri compositor is running (NIRI_SOCKET env var is set by niri)
-export function isNiriRunning(): boolean
-
-// List all current workspaces
-export async function listNiriWorkspaces(): Promise<NiriWorkspace[]>
-
-// List all current windows
-export async function listNiriWindows(): Promise<NiriWindow[]>
-
-// Focus or create a named workspace
-export async function focusNiriWorkspace(name: string): Promise<void>
-
-// Set the name of a workspace (by reference — name or index)
-export async function setNiriWorkspaceName(name: string, workspace?: string | number): Promise<void>
-
-// Move a specific window to a named workspace without following focus
-export async function moveWindowToWorkspace(windowId: number, workspaceName: string, followFocus?: boolean): Promise<void>
-
-// Spawn a command via niri (runs in compositor context)
-export async function niriSpawn(command: string[]): Promise<void>
-
-// Poll windows until a window with the given pid appears (timeout in ms, default 3000)
-export async function waitForWindowByPid(pid: number, timeoutMs?: number): Promise<NiriWindow | null>
-
-// Snapshot current window IDs (for snapshot-diff if needed)
-export async function snapshotWindowIds(): Promise<Set<number>>
-```
-
-The implementation of each function follows the exact pattern of `tmux.ts`: `await $\`niri msg ...\`.quiet().nothrow()` and parse stdout.
-
----
-
-## Installation
-
-No new packages required.
-
-```bash
-# Verify nothing broken
-bun install
-
-# No new packages needed
-```
+| `src/lib/git.ts` | Add `checkRemoteBranchExists()`; update `createWorktree()` to check remote and use `--track` |
+| `src/tui/dashboard/WorkspaceDetail.tsx` | Add "Linked Issues" section; exclude `issue` key from config summary |
+| `src/lib/integrations/jira.ts` | Make `<workspace>` optional; call `detectWorkspaceFromCwd()` when omitted |
+| `src/lib/integrations/gitlab.ts` | (Phase 2 optional) Apply same CWD detection for issue subcommands |
+| `src/lib/integrations/github.ts` | (Phase 2 optional) Apply same CWD detection for issue subcommands |
 
 ---
 
@@ -283,11 +228,22 @@ bun install
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `niri-ipc` npm package (if one exists) | The niri IPC socket protocol is internal and subject to change. `niri msg` is the stable, versioned CLI interface. The compositor maintainers explicitly ship `niri msg` as the intended API surface. | `Bun.$\`niri msg ...\`` |
-| `@wayland-protocols` / any Wayland library | Requires native bindings, incompatible with Bun's module resolution for most native addons; massively over-engineered for reading compositor state. | `niri msg -j` JSON parsing |
-| `event-stream` subprocess for window tracking | Requires managing a long-lived subprocess, error recovery, and line parsing. The 3-second poll approach is simpler and sufficient since windows appear within 500ms in practice. | PID-match poll loop in `waitForWindowByPid` |
-| Configurable integration ordering in YAML (v0.6.0) | Array position in `integrations` index is sufficient — niri must run last and that's the only ordering constraint. Per-workspace ordering is a v0.7.0 concern. | Hard-coded array order in `src/lib/integrations/index.ts` |
-| `child_process.execSync` / Node `exec` | Project uses Bun `$` shell throughout. Mixing APIs creates inconsistency. | `Bun.$\`...\`` with `.quiet().nothrow()` |
+| New npm dependency for path detection | `process.cwd()` + string operations on the known `tasks/{name}/` structure is 5 lines | Built-in `process.cwd()` + `paths.ts` |
+| `git worktree.guessRemote` config | This git config is user-global and would affect all their git repos; we must not set it | Explicit `--track` flag per worktree creation |
+| Fetching all branches (`git fetch origin`) during worktree create | Slow; fetches everything. We only need the one branch | `git fetch origin {branch}` (single-branch fetch) |
+| URL-encoding branch names before passing to glab | We don't pass branch names to glab — glab detects them from CWD; encoding our own args would double-encode | Investigate glab behavior first; only fix if confirmed ours |
+| Jira API client (e.g., `jira-client` npm package) | The open_cmd design is intentionally tool-agnostic; any specific client ties to one Jira variant | Keep the `sh -c "$open_cmd"` with `$ISSUE_ID` env pattern |
+
+---
+
+## Git CLI Flags Reference (v0.8.0 additions)
+
+| Flag / Command | Behavior | Confidence |
+|----------------|----------|------------|
+| `git ls-remote --exit-code --heads origin <branch>` | Exit 0 if branch found on remote, exit 2 if not found | HIGH — same as `isBranchGoneOnRemote()` in `git.ts` |
+| `git fetch origin <branch>` | Fetches single branch, updates `origin/<branch>` remote-tracking ref | HIGH — standard git; no side effects on other branches |
+| `git worktree add --track -b <branch> <path> origin/<branch>` | Creates worktree at `<path>` with new branch `<branch>` tracking `origin/<branch>` | HIGH — verified in git-worktree official docs |
+| `git branch --set-upstream-to=origin/<branch> <branch>` | Alternative to `--track`; sets upstream on existing local branch | HIGH — standard git; use `--track` during worktree add instead |
 
 ---
 
@@ -295,26 +251,25 @@ bun install
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| niri | 25.11 (installed) | `move-window-to-workspace --window-id` verified as supported |
-| `niri msg -j` | 25.11 | JSON output flag verified working on all query commands |
-| Bun | 1.3.10 (project runtime) | `Bun.spawn()` returns `.pid`; `$` shell available |
-| Zod | installed (project) | Schema validation for parsed niri JSON |
+| Bun | current (project runtime) | `Bun.$` shell, `.quiet().nothrow()` pattern; unchanged |
+| git | 2.24+ (project requirement) | `git worktree add --track` available since git 2.5; `ls-remote --exit-code` since ancient — no version concern |
+| glab | current user installation | `glab mr view --web` resolves branch from CWD; slash behavior requires live testing to confirm |
+| SolidJS | 1.9.11 (project) | `createMemo`, `For`, `Show` — dashboard changes use existing primitives only |
 
 ---
 
 ## Sources
 
-- `niri msg --help`, `niri msg action --help` — full command list verified, HIGH confidence (live compositor 25.11)
-- `niri msg -j workspaces` live output — workspace JSON schema verified, HIGH confidence (live output)
-- `niri msg -j windows` live output — window JSON schema with `pid`, `app_id`, `id`, `workspace_id` fields verified, HIGH confidence (live output)
-- `niri msg action move-window-to-workspace --help` — `--window-id` flag confirmed, HIGH confidence (live compositor)
-- `niri msg action set-workspace-name --help` — `--workspace` flag confirmed, HIGH confidence (live compositor)
-- `/run/user/1000/systemd/transient/app-niri-ghostty-<PID>.scope` — niri spawns via systemd transient scopes using the process PID, confirming PID match strategy, HIGH confidence (live filesystem)
-- `src/lib/integrations/types.ts` (installed source) — current `Integration.open()` signature returns `Promise<void>`, HIGH confidence (installed source)
-- `src/lib/integrations/tmux.ts` (installed source) — pattern for shell wrappers and `open()` implementation, HIGH confidence (installed source)
-- `src/lib/workspace-ops.ts` (installed source) — integration loop structure confirmed, HIGH confidence (installed source)
+- `src/tui/dashboard/WorkspaceDetail.tsx` (installed source) — config summary fallback bug identified at lines 127–138, HIGH confidence
+- `src/lib/integrations/issue-utils.ts` (installed source) — `linkIssue` confirmed writes to `workspace.settings.integrations[id].issue`, HIGH confidence
+- `src/lib/git.ts` (installed source) — `isBranchGoneOnRemote` uses `ls-remote --exit-code`; same pattern reused, HIGH confidence
+- `src/lib/paths.ts` (installed source) — `getTasksDir()` layout `{workspace_root}/tasks/` confirmed, HIGH confidence
+- https://git-scm.com/docs/git-worktree — `--track` flag for `worktree add` verified, HIGH confidence
+- https://gitlab.com/gitlab-org/cli/-/merge_requests/1183 — glab added `url.PathEscape` for branch names in web URLs (fix already shipped); slash issue is not a current glab regression, MEDIUM confidence
+- https://github.com/jesseduffield/lazygit/issues/4321 — double-encoding pattern from `%2F` → `%252F` confirmed in browser URL handling, MEDIUM confidence
+- WebSearch: `git ls-remote --exit-code` exit code 2 behavior, MEDIUM confidence (consistent with project source usage)
 
 ---
 
-*Stack research for: git-stacks v0.6.0 — niri compositor integration and integration orchestration*
-*Researched: 2026-03-21*
+*Stack research for: git-stacks v0.8.0 — Integration Polish & Workspace UX*
+*Researched: 2026-03-24*

@@ -1,170 +1,188 @@
 # Project Research Summary
 
-**Project:** git-stacks v0.6.0 — Integration Orchestration & Niri Compositor Integration
-**Domain:** CLI workspace manager — integration pipeline orchestration, Wayland/niri compositor integration
-**Researched:** 2026-03-21
+**Project:** git-stacks v0.8.0 — Integration Polish & Workspace UX
+**Domain:** CLI workspace manager — bug fixes and ergonomic improvements to integration layer
+**Researched:** 2026-03-24
 **Confidence:** HIGH
 
 ## Executive Summary
 
-git-stacks v0.6.0 adds two tightly coupled capabilities to the existing integration system: an artifact-passing pipeline that allows integrations to share runtime state, and a niri compositor integration that consumes those artifacts to arrange all workspace windows onto a single named niri workspace. The current system runs integrations sequentially but discards their return values — each integration is isolated. The v0.6.0 goal is to turn that isolated sequence into a cooperative pipeline where later integrations (niri) can act on what earlier integrations produced (tmux session names, vscode window IDs).
+v0.8.0 is a focused integration polish release containing two confirmed bugs and two UX ergonomic improvements. All four features are additive or corrective changes to the existing codebase — no new npm dependencies, no schema migrations, no architectural changes. The existing stack (Bun, TypeScript, Commander.js, SolidJS + OpenTUI, Zod + YAML, `@clack/prompts`) is unchanged. Each feature maps cleanly to one or two files in the integration layer and is independent of the others.
 
-The recommended approach is to add a typed `ArtifactBag` that flows through the sequential integration loop, introduce a consolidated `runner.ts` module to replace four duplicated inline loops, and build a new `niri.ts` integration plugin that creates a named niri workspace and moves all spawned windows onto it. The entire niri IPC surface is available via the `niri msg` CLI — no Wayland protocol libraries or socket-level IPC are needed. The niri compositor is already installed at version 25.11 and all required commands have been verified against the live binary.
+The recommended implementation order, derived from architecture research, is: (1) the upstream branch tracking fix in `git.ts` — smallest blast radius, six call sites benefit automatically; (2) the dashboard linked issues display fix in `WorkspaceDetail.tsx` — pure display logic, root cause fully understood; (3) the Jira workspace auto-detection change in `jira.ts` and `issue-utils.ts` — requires careful Commander.js argument design to avoid positional ambiguity; (4) the GitLab branch slash investigation — must diagnose root cause before writing any code. Feature 4 is the most uncertain because the failure may be in glab itself rather than our code.
 
-The key risks are (1) breaking the `Integration.open()` signature atomically across all four existing integrations, (2) the inherent async gap between spawning a Wayland window and the compositor registering it, and (3) tmux environment variable contamination when `git-stacks open` is run from inside an existing tmux session. All three have clear mitigation strategies documented in the research.
+The key risks are: (a) path normalization correctness in workspace CWD detection — must use `resolve()` + `expandHome()` on both sides with `startsWith(path + "/")` not `===`; (b) Commander.js positional argument ambiguity for the Jira `issue link` command when workspace becomes optional — use `--workspace` flag, not an optional positional; (c) performance regression if upstream branch check uses `git ls-remote` directly instead of checking local remote-tracking refs after an existing `fetchOrigin()` call.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new npm dependencies are required. All niri IPC is handled via `Bun.$\`niri msg -j ...\`` shell calls — the same pattern used throughout the codebase for tmux and git operations. JSON output from `niri msg -j` is parsed with `JSON.parse()` and validated with the existing Zod setup. Two new source files are needed: `src/lib/niri.ts` (a shell wrapper library mirroring `tmux.ts`) and `src/lib/integrations/niri.ts` (the integration plugin). Six existing files require modification for the interface change and artifact returns.
+No new dependencies are needed for any of the four features. All changes use standard git CLI commands already established in the codebase (`ls-remote --exit-code`, `fetch origin`, `worktree add --track`), built-in `process.cwd()` and `path.resolve()`, and existing SolidJS primitives (`createMemo`, `For`, `Show`).
 
-**Core technologies:**
-- `Bun.$` shell — niri IPC via `niri msg` CLI — the compositor's stable, versioned API surface; socket-level IPC is explicitly avoided
-- `Zod` (already installed) — schema validation for parsed niri JSON responses
-- `Bun.spawn()` (already used) — returns `.pid` directly for process tracking
-- `niri msg -j windows` / `niri msg -j workspaces` — verified JSON output shapes on live niri 25.11
-- `niri msg action move-window-to-workspace --window-id` — confirmed flag syntax on live binary
+**Core technologies relevant to v0.8.0:**
+- `Bun.$` shell — git CLI invocations for upstream branch check; same `.quiet().nothrow()` pattern already used in `isBranchGoneOnRemote()` in `git.ts`
+- `process.cwd()` + `path.resolve()` — CWD-to-workspace detection; no library needed, 5-line implementation
+- SolidJS `ws()` reactive signal — already available in `WorkspaceDetail.tsx` props; data is already present, only the display path needs fixing
+- Commander.js `--workspace` flag pattern — cleaner than optional positional for the Jira argument redesign
+
+**New functions (no new files needed):**
+- `checkRemoteBranchExists(repoPath, branch)` — in `src/lib/git.ts`; uses `git ls-remote --exit-code --heads origin <branch>`
+- `resolveWorkspaceFromCwd(cwd?)` — in `src/lib/integrations/issue-utils.ts`; path-prefix match against all workspace `task_path` values
+
+**Version-sensitive note:** `git worktree add --track` is available since git 2.5. Project already requires git 2.24+. No version concern.
 
 ### Expected Features
 
-**Must have (table stakes):**
-- `IntegrationArtifact` discriminated union type and `open()` return type change — foundation; nothing else works without this
-- Artifact accumulation bag (`ArtifactBag`) threaded through the integration loop — enables niri to read what tmux and vscode produced
-- tmux integration returns `{ type: "tmux", sessionName }` — trivial change, high value
-- cmux integration returns `{ type: "cmux", workspaceRef }` — trivial change
-- Consolidated `runner.ts` replacing four duplicated inline loops
-- Numeric `order` field on `Integration`; niri hardcoded to `Number.MAX_SAFE_INTEGER` (always last)
-- Niri integration: `applies()` guards on `$NIRI_SOCKET`, creates/names workspace, focuses it
-- Window identification via snapshot-diff (poll `niri msg -j windows` before and after spawn)
-- `move-window-to-workspace --window-id` to arrange identified windows onto the niri workspace
-- Graceful degradation: all window identification failures are warnings, not errors
-- Cleanup: `unset-workspace-name` called from `runPreRemoveHooks()` when niri is running
+All four features have been scoped to their minimal correct implementation. Extended features (applying auto-detection to GitHub/GitLab/Gitea, doctor checks for missing upstream tracking) are explicitly deferred to v0.8.x or v0.9.0.
 
-**Should have (v0.6.x after validation):**
-- Event-stream-based window detection replacing polling (more precise, avoids sleep loops)
-- Artifact values exported as env vars (`WS_TMUX_SESSION`, `WS_CMUX_REF`) for `post_open` hooks
-- `git-stacks config` TUI shows resolved integration execution order
-- Terminal spawning in niri integration when no tmux artifact is present
+**Must ship (v0.8.0):**
+- Per-workspace linked issue displayed correctly in dashboard detail pane — active bug, shows global Jira config as if it were workspace data
+- Upstream branch tracking during worktree creation — prevents silent "no tracking" defect causing `git push --set-upstream` requirement for every new workspace on an existing branch
+- Jira workspace auto-detection from CWD — ergonomic improvement reducing friction in the most common single-developer workflow
+- GitLab branch slash investigation — identify root cause and either fix (one-liner in `gitlab.ts`) or document (known glab limitation)
 
-**Defer (v0.7.0+):**
-- Per-workspace niri layout configuration (column widths, split ratios)
-- IntelliJ window arrangement (app startup timing problem unsolved)
-- XWayland window identification via xdotool fallback
-- Configurable per-workspace integration ordering in YAML
-- `open-on-workspace` niri `config.kdl` snippet generation
+**Defer to v0.8.x:**
+- Extend workspace auto-detection to GitHub/GitLab/Gitea issue commands (same pattern as Jira, low complexity)
+- Verbose output showing detected workspace name during auto-detection
+- Doctor warning for existing worktrees missing upstream tracking
+
+**Defer to v0.9.0+:**
+- Separate "Linked Issues" visual section in dashboard detail pane (beyond the minimum bug fix)
+- Minimum glab version enforcement in doctor (contingent on slash investigation result)
+- Cross-workspace issue aggregation view
 
 ### Architecture Approach
 
-The central architectural change is introducing `src/lib/integrations/runner.ts` as the single authoritative place where the integration loop runs. This replaces four duplicated inline loops across `workspace-ops.ts`, `workspace-wizard.ts`, `workspace-clone.ts`, and `App.tsx`. The runner exposes two functions: `runIntegrationGenerate()` for the workspace-create flow (no `open()` calls needed) and `runIntegrations()` for the workspace-open flow (full pipeline with artifact accumulation). The `ArtifactBag` is created fresh per invocation inside the runner, preventing stale artifact bleed between calls.
+All four features sit at well-defined architectural seams with no cross-layer changes required. Feature 4 (`git.ts`) is a pure core library change that propagates to six existing call sites automatically — none of the callers need modification. Feature 1 (`WorkspaceDetail.tsx`) is a TUI display-only change with no data model impact. Feature 3 (`jira.ts` + `issue-utils.ts`) is confined to the integration plugin layer. Feature 2 (`gitlab.ts`) is investigation-first with a conditional one-line fix.
 
-**Major components:**
-1. `src/lib/integrations/types.ts` — add `ArtifactBag`, per-integration artifact types, and update `open()` signature; this is the compile-time contract between all integrations
-2. `src/lib/integrations/runner.ts` (new) — consolidated generate and open loops with bag threading; optional `integrationList` parameter for testability
-3. `src/lib/niri.ts` (new) — `niri msg` shell wrappers (`listNiriWindows`, `focusNiriWorkspace`, `waitForWindowByPid`, `moveWindowToWorkspace`, etc.) mirroring the `tmux.ts` pattern
-4. `src/lib/integrations/niri.ts` (new) — full integration plugin: applies-check on `$NIRI_SOCKET`, workspace create/focus, terminal spawn with tmux attach, window arrangement from bag
-5. All four existing integration plugins — mechanical `open()` return type updates; tmux and cmux populate their artifact fields with actual values
+**Major components touched:**
+1. `src/lib/git.ts` — `createWorktree()` internal logic change; new `checkRemoteBranchExists()` function following existing `isBranchGoneOnRemote()` pattern
+2. `src/tui/dashboard/WorkspaceDetail.tsx` — configSummary source corrected to read from workspace settings only; linked issue display section added
+3. `src/lib/integrations/issue-utils.ts` — new `resolveWorkspaceFromCwd()` using path-prefix matching against all workspace `task_path` values
+4. `src/lib/integrations/jira.ts` — workspace argument made optional; CWD fallback wired in; `--workspace` flag used to avoid positional ambiguity
+5. `src/lib/integrations/gitlab.ts` — conditional one-liner adding `--source-branch` to `glab mr view` if investigation confirms our code is at fault
 
 ### Critical Pitfalls
 
-1. **Breaking the `Integration.open()` interface non-atomically** — use a transitional `Promise<IntegrationArtifact | null | void>` union type to keep the build green while updating integrations one-by-one; tighten to `Promise<IntegrationArtifact | null>` only after all four are updated.
+1. **Commander.js positional ambiguity for `jira issue link`** — making `[workspace]` optional before `<issue-id>` causes Commander to assign a single positional arg to `workspace`, leaving `issue-id` undefined and silently wrong. Use `--workspace <name>` flag instead of an optional positional. The `issue open` and `issue unlink` commands have only one positional each and can use `[workspace]` safely.
 
-2. **Niri window spawn is asynchronous with no guaranteed PID-to-window mapping** — use snapshot-diff (capture window IDs before spawn, poll after with exponential backoff up to 3s) rather than direct PID lookup; PID matching is unreliable for Xwayland apps and flatpak-sandboxed processes per official niri documentation and maintainer statements.
+2. **Path normalization in CWD workspace detection** — comparing `process.cwd()` to stored `task_path` without normalization fails when `task_path` uses `~/` prefix (common; written at workspace creation time with tilde unexpanded). Fix: apply `path.resolve(expandHome(repo.task_path))` to every stored path before comparison; use `cwd.startsWith(taskPath + "/")` with the trailing separator to match subdirectories and prevent false-positive prefix collisions (e.g., `/tasks/ws` should not match `/tasks/ws-other`).
 
-3. **Niri named workspaces are ephemeral — they disappear when empty** — always query `niri msg -j workspaces` at the start of `niriIntegration.open()` to check if the workspace already exists; never save niri workspace numeric IDs to YAML (they are session-scoped and change every session).
+3. **ls-remote latency on multi-repo workspace creation** — `git ls-remote` is a network call (0.5–3s per repo). For a 5-repo workspace this adds 2–15 seconds of overhead. Fix: verify whether `fetchOrigin()` is already called before `createWorktree()` in the workspace creation flow in `workspace-ops.ts`. If yes, use `git rev-parse --verify origin/<branch>` (local remote-tracking ref check) instead of `ls-remote`. Only use `ls-remote` if no prior fetch is guaranteed.
 
-4. **tmux environment contamination when spawning from inside tmux** — use `env -u TMUX -u TMUX_PANE foot -e tmux new-session -A -s {name}` for all terminal spawn commands in the niri integration; `tmux new-session -A` is more robust than `tmux attach-session` (handles session not yet existing).
+4. **Dashboard configSummary config-scope conflation** — the `??` fallback from workspace to global config in `WorkspaceDetail.tsx` lines 127–138 is correct for integration config fields (`open_cmd`) but wrong for linked issue IDs. The `issue` key must be read exclusively from workspace settings; the global fallback path must explicitly exclude `issue` keys. Two separate read paths: config summary from global config, linked issue from workspace settings.
 
-5. **Integration skip flags broken by orchestration refactor** — `skip.has(integration.id)` must remain the first guard in the new orchestration loop, before ordering and before `isEnabled`; add regression tests for `--no-ide` and `--no-cmux` before touching `workspace-ops.ts`.
+5. **Double-encoding risk for glab branch slash** — our code does not pass branch names to glab for `mr view --web`; glab reads HEAD branch from the CWD. Adding `encodeURIComponent()` on our side would double-encode if glab also encodes. Confirm bug ownership via manual testing before writing any encoding fix.
 
 ## Implications for Roadmap
 
-Based on research, the build order has strict dependencies that dictate phase structure. The interface change creates a TypeScript compile error cascade — it must be the first atomic step before any other work can proceed.
+Based on research, the four features map to four independent phases. The recommended sequence minimizes risk by addressing the lowest-blast-radius change first and the most uncertain change last. Phases 1 and 2 are independent and can be parallelized.
 
-### Phase 1: Artifact Type Foundation
-**Rationale:** Every other change in this milestone depends on the `ArtifactBag` and updated `Integration.open()` signature being defined and compiling. Doing this first keeps the build green throughout the rest of the work.
-**Delivers:** `IntegrationArtifact` discriminated union, `ArtifactBag` type, updated `open()` signature using `void | T` transition union; all four existing integrations compile with mechanical `_bag` parameter and `return null` additions.
-**Addresses:** Interface migration (table stakes), artifact type confusion pitfall (Pitfall 5), integration interface breaking change pitfall (Pitfall 1).
-**Avoids:** Pitfall 1 (non-atomic interface break) via the `void | T` transitional signature.
+### Phase 1: Upstream Worktree Branch Tracking
 
-### Phase 2: Integration Runner Consolidation
-**Rationale:** The four duplicated loops must be replaced before the artifact accumulation logic is built — otherwise the new bag-threading code would be written in one loop and need to be duplicated to three others. This phase has no external dependencies and unblocks all subsequent phases.
-**Delivers:** `src/lib/integrations/runner.ts` with `runIntegrationGenerate()` and `runIntegrations()`; all four call sites updated; existing behavior preserved; skip-flag regression tests written and passing.
-**Uses:** Updated types from Phase 1.
-**Avoids:** Pitfall 8 (skip flags broken) and Anti-Pattern 5 (new inline loops at new call sites).
+**Rationale:** Single-function change in `git.ts` with no dependencies on other features. Root cause fully understood, fix strategy verified against official git docs. Six call sites benefit automatically with no caller changes required. Lowest risk, highest correctness payoff. Resolves a silent defect present in all workspace creation paths.
 
-### Phase 3: Artifact Population in Existing Integrations
-**Rationale:** Niri needs real values from tmux and cmux to do its job. This phase makes the bag actually useful rather than always-empty. VSCode/IntelliJ window ID capture is included here but can produce `null` — niri gracefully degrades when these are absent.
-**Delivers:** tmux returns `{ type: "tmux", sessionName }`; cmux returns `{ type: "cmux", workspaceRef }`; vscode returns `{ type: "vscode", pid, windowId }` (windowId via snapshot-diff if `WAYLAND_DISPLAY` set, else null); intellij same; `open()` return type tightened from `void | T` to `T | null`.
-**Implements:** Artifact accumulation loop in runner producing a populated `ArtifactBag`.
-**Addresses:** tmux artifact (P1), cmux artifact (P1), VSCode artifact (P2) from feature prioritization matrix.
+**Delivers:** Worktrees for branches that already exist on `origin` are created with upstream tracking set. `git push` and `git pull` work without `--set-upstream`. Brand-new branch behavior (no remote counterpart) is unchanged — three-way check: local exists, remote exists, neither.
 
-### Phase 4: Niri Shell Wrapper Library
-**Rationale:** Isolating all `niri msg` CLI calls into `src/lib/niri.ts` before writing the integration plugin keeps the plugin testable and follows the established `tmux.ts` / `git.ts` pattern. The wrapper functions can be unit-tested independently of the integration lifecycle.
-**Delivers:** `src/lib/niri.ts` with `isNiriRunning()`, `listNiriWindows()`, `listNiriWorkspaces()`, `focusNiriWorkspace()`, `setNiriWorkspaceName()`, `moveWindowToWorkspace()`, `niriSpawn()`, `waitForWindowByPid()`, `snapshotWindowIds()`.
-**Avoids:** Pitfall 7 (IPC state inconsistency) by building name-based action calls from the start; Pitfall 2 (async window spawn) by building the snapshot-diff poll in `waitForWindowByPid()` with exponential backoff.
+**Addresses:** FEATURES.md Feature 4 table stakes (upstream branch tracking)
 
-### Phase 5: Niri Integration Plugin
-**Rationale:** All dependencies are in place — types defined, runner consolidated, artifacts populated, shell wrappers available. This is the full niri integration implementation.
-**Delivers:** `src/lib/integrations/niri.ts` with full open lifecycle (applies-check, workspace create/focus, terminal spawn with tmux attach, window arrangement from bag); registered last in `index.ts`; cleanup hook in `runPreRemoveHooks()`; Zod config schema with `terminal`, `terminal_flags`, `workspace_name_prefix`, `arrange_windows`.
-**Addresses:** All niri integration table stakes features; Pitfall 3 (workspace lifecycle), Pitfall 6 (tmux env contamination).
+**Avoids:** PITFALLS.md Pitfall 5 (missing `--track` during worktree creation) and Pitfall 6 (ls-remote latency — resolve fetch-vs-ls-remote strategy before implementing)
+
+**No research phase needed** — git CLI flags verified against official docs; `ls-remote --exit-code` pattern established in `isBranchGoneOnRemote()` in same file.
+
+### Phase 2: Dashboard Linked Issues Display Fix
+
+**Rationale:** Pure TUI display change. Root cause identified precisely in `WorkspaceDetail.tsx` lines 127–138. Data is already in workspace props; no new data loading, no schema changes. Fix isolates two concerns that are currently conflated: integration config display (reads from global config) vs. linked issue data (reads from workspace settings only).
+
+**Delivers:** Dashboard detail pane shows per-workspace linked issue ID for each tracker integration that has one. Empty state is correct when no issue is linked. Global config values are not shown in the linked issue row. Source annotation shows `[workspace]` not `[global]` for issue fields.
+
+**Addresses:** FEATURES.md Feature 1 table stakes (per-workspace linked issue display, correct empty state, correct source annotation)
+
+**Avoids:** PITFALLS.md Pitfall 1 (global config fallback contaminating workspace display) and the technical debt anti-pattern of conflating config scope in display logic
+
+**No research phase needed** — root cause confirmed by direct source inspection; fix is pure JSX/display logic using already-loaded workspace props.
+
+### Phase 3: Jira Workspace Auto-Detection from CWD
+
+**Rationale:** Adds `resolveWorkspaceFromCwd()` to `issue-utils.ts` and rewires three Jira issue subcommands in `jira.ts`. Requires careful Commander.js argument design — the positional ambiguity pitfall is well-understood and the solution (use `--workspace` flag) is unambiguous. Follows Phases 1 and 2 to keep PR scope manageable.
+
+**Delivers:** `git-stacks integration jira issue link PROJ-123` (no workspace arg) auto-detects workspace when run from inside a worktree. Clear, actionable error when workspace cannot be determined from CWD. Custom `workspace_root` paths honored via global config. Existing explicit `--workspace my-workspace` invocations continue to work (backward compatible).
+
+**Addresses:** FEATURES.md Feature 3 table stakes (optional workspace arg, error message, config-sourced workspace root, all three Jira subcommands covered)
+
+**Avoids:** PITFALLS.md Pitfall 3 (path normalization with `expandHome` + `resolve`), Pitfall 4 (Commander.js positional arg ambiguity via `--workspace` flag), and the UX pitfall of silent detection failure
+
+**No research phase needed** — path detection algorithm derived directly from `paths.ts` and `config.ts` source. Commander.js argument design decision already resolved.
+
+**Shell completion update required:** `src/lib/completion-generator.ts` walks the Commander.js tree to generate completions automatically — verify post-implementation that the new `--workspace` flag appears in fish/bash/zsh completions.
+
+### Phase 4: GitLab Branch Slash Investigation and Fix
+
+**Rationale:** Must be last because investigation is required before any code is written. If the bug is in glab (not our code), the deliverable shifts to documentation and optionally a doctor version check — no code change in `gitlab.ts`. If the bug is confirmed in our code, the fix is a one-line addition. Placing this last avoids blocking earlier phases on an uncertain investigation.
+
+**Delivers:** Confirmed root cause documented. Either: (a) one-line fix in `gitlab.ts` adding `--source-branch workspace.branch` to `glab mr view --web` invocation, or (b) release notes stating the known glab limitation and recommended glab version. Not both.
+
+**Addresses:** FEATURES.md Feature 2 (GitLab branch slash escaping — all three table stakes items: transparent slash handling, investigation documented, root cause confirmed)
+
+**Avoids:** PITFALLS.md Pitfall 2 (double-encoding risk — do not add encoding before confirming our code is at fault) and the FEATURES.md anti-feature warning against URL-encoding branch names before passing to glab
+
+**Investigation required** — manual test with a real GitLab project on a `feature/...` branch before writing any code. This is the only phase with a conditional deliverable.
 
 ### Phase Ordering Rationale
 
-- Phases 1 and 2 are pure refactors that must precede feature work to avoid duplicate bug-fixing across multiple loop implementations.
-- Phase 3 depends on Phase 1 (types) and Phase 2 (runner); it makes the pipeline useful without requiring niri.
-- Phase 4 is independent of Phase 3 and can be built in parallel but must precede Phase 5.
-- Phase 5 depends on all prior phases; it is the integration point where everything comes together.
-- This order means the build stays green and existing tests pass after each phase — no phase creates a partial state where the system is broken.
+- Phases 1 and 2 touch different layers (`git.ts` core library vs. TUI dashboard) with no shared state — they can be developed in parallel by two developers.
+- Phase 3 has no technical dependency on Phases 1 or 2 but should follow them to keep each PR reviewable in isolation.
+- Phase 4 must be last because the investigation determines what (if anything) gets coded. Assigning it last prevents discovery of a "it's glab's bug" from blocking shipping the other three features.
+- The `--workspace` flag change in Phase 3 requires verifying shell completions post-implementation — this is automatic via the Commander.js tree walker but must be confirmed.
 
 ### Research Flags
 
-Phases with well-documented patterns (standard implementation, skip research-phase):
-- **Phase 1:** TypeScript interface migration is a standard refactor pattern; no domain research needed.
-- **Phase 2:** Loop consolidation is mechanical; the `runner.ts` pseudocode from ARCHITECTURE.md is implementation-ready.
-- **Phase 3:** All four integration files have been read; artifact values (session names, refs) are trivially accessible from existing code paths.
-- **Phase 4:** The `niri msg` API is fully documented in STACK.md with verified command signatures. The snapshot-diff pattern is specified precisely in ARCHITECTURE.md. No additional research needed.
+Phases with standard patterns (no `research-phase` needed):
+- **Phase 1** — git CLI pattern established in `isBranchGoneOnRemote()` in same file; `--track` flag verified in official git docs; implementation is mechanical
+- **Phase 2** — pure display logic fix using already-loaded SolidJS reactive props; no new API surface
+- **Phase 3** — path detection algorithm fully derived from `paths.ts`; Commander.js arg design decision resolved (use flag not positional)
 
-Phases that warrant careful implementation attention (no research-phase needed, but execution risk present):
-- **Phase 5:** The full `niriIntegration.open()` flow is specified step-by-step in ARCHITECTURE.md. The tmux env-contamination fix (Pitfall 6) and workspace existence check (Pitfall 3) must be built from the start, not retrofitted. The "looks done but isn't" checklist in PITFALLS.md is the verification guide.
+Phase requiring investigation before coding:
+- **Phase 4** — glab behavior with slash-containing branch names must be tested manually on a real GitLab instance before determining whether a code change is warranted. Document findings; write code only if the bug is confirmed to be in our invocation of glab.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All niri commands verified against live niri 25.11; no new dependencies; existing codebase patterns confirmed from installed source |
-| Features | HIGH | Feature list derived from direct codebase analysis of existing integration system combined with verified niri IPC capabilities |
-| Architecture | HIGH | All four inline loop sites verified in source; runner design matches established patterns; build order has no ambiguous dependencies |
-| Pitfalls | HIGH (niri-specific: MEDIUM) | Codebase pitfalls are code-verified with file/line evidence; niri async/IPC pitfalls sourced from official niri docs and maintainer statements |
+| Stack | HIGH | No new dependencies; all git CLI flags verified against official docs and codebase; existing patterns reused throughout |
+| Features | HIGH | All four features grounded in direct source code inspection; scope tightly bounded; must-ship vs. defer line explicitly drawn |
+| Architecture | HIGH | All modified files read directly; component boundaries confirmed; six call sites for Feature 4 enumerated in source |
+| Pitfalls | HIGH (except glab) | Pitfalls 1, 3, 4, 5, 6 derived directly from codebase inspection with file/line evidence; Pitfall 2 (glab slash) is MEDIUM — upstream glab behavior requires live testing to confirm |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **VSCode window ID via snapshot-diff** — VSCode takes 2-5 seconds to open; the 5s polling timeout should be sufficient but is untested against actual VSCode startup time in this environment. If VSCode consistently exceeds the timeout, `windowId` will be `null` and window arrangement is silently skipped. Validate timing during Phase 3 implementation.
-- **Multiple empty workspaces at open time** — when `niriIntegration.open()` calls `focus-workspace <name>` to create a workspace, niri may have multiple unnamed empty workspaces if the user scrolled past the last workspace. The `set-workspace-name` logic needs to handle this case. Explicit test required during Phase 5.
-- **cmux `app_id` string for window identification** — the research notes cmux has a known Wayland `app_id` that could be used for direct window lookup rather than snapshot-diff. The exact string was not verified against a running cmux instance. Verify during Phase 5 if cmux window arrangement is desired.
+- **ls-remote vs. fetch strategy for Phase 1**: Before implementing `createWorktree()` changes, inspect `workspace-ops.ts` to confirm whether `fetchOrigin()` is called before the `createWorktree()` loop for each repo. If yes, use `git rev-parse --verify origin/<branch>` (local check, zero network) rather than `git ls-remote` (network call per repo). This decision affects latency for every workspace creation and must be made before writing Phase 1 code.
+
+- **GitLab slash branch root cause (Phase 4)**: Whether the deliverable is a code fix or documentation depends entirely on whether manual testing with a `feature/...` branch shows the failure in our `gitlab.ts` invocation or in glab's URL construction. Allocate investigation time before Phase 4 work begins. If glab is the cause, consider whether a minimum glab version check in `git-stacks doctor` is worth adding as a v0.8.x follow-up.
+
+- **Shell completion verification (Phase 3)**: The `--workspace` flag addition changes the CLI signature for three Jira issue subcommands. `completion-generator.ts` auto-generates from the Commander.js tree (confirmed in CLAUDE.md architecture section), so the completion update should be automatic. Verify by running `git-stacks completion fish` and checking for the new flag after Phase 3 ships.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `niri msg --help`, `niri msg -j windows`, `niri msg -j workspaces` (live niri 25.11) — all command signatures and JSON output shapes verified on running compositor
-- `niri msg action move-window-to-workspace --help`, `niri msg action focus-workspace --help`, `niri msg action spawn --help` — flag syntax confirmed
-- `src/lib/integrations/types.ts` (installed source) — current `open()` signature returns `Promise<void>`
-- `src/lib/integrations/{tmux,cmux,vscode,intellij}.ts` (installed source) — existing artifact values and open() patterns
-- `src/lib/workspace-ops.ts` lines 573-579 and 462-469 (installed source) — inline loop location and skip logic
-- `src/tui/{workspace-wizard,workspace-clone}.ts` and `src/tui/dashboard/App.tsx` (installed source) — all three generate-only loop sites confirmed
+- `src/tui/dashboard/WorkspaceDetail.tsx` lines 127–138 — configSummary fallback bug, direct source read
+- `src/lib/integrations/issue-utils.ts` — `linkIssue()` writes to `workspace.settings.integrations[id].issue`; confirms data model for linked issues
+- `src/lib/git.ts` — `createWorktree()` and `isBranchGoneOnRemote()` implementation; `ls-remote --exit-code` pattern established
+- `src/lib/paths.ts` — `getTasksDir()` layout confirmed; `expandHome()` available for tilde expansion in CWD detection
+- `src/lib/integrations/jira.ts` — current command structure with required `<workspace>` positional args; call sites confirmed
+- `src/lib/workspace-ops.ts` — six `createWorktree()` call sites enumerated; confirms single-function change propagates everywhere
+- https://git-scm.com/docs/git-worktree — `--track` flag for `worktree add` verified
+- https://git-scm.com/docs/git-ls-remote — `--exit-code --heads` exit code behavior confirmed
 
 ### Secondary (MEDIUM confidence)
-- Niri IPC wiki: https://github.com/YaLTeR/niri/wiki/IPC — IPC state inconsistency warning
-- Niri maintainer statement: https://github.com/niri-wm/niri/discussions/3208 — "no way to reliably associate a new window with a spawn command"
-- Niri ephemeral workspaces: https://github.com/niri-wm/niri/discussions/3198 — workspace lifecycle documentation
-- Niri async timing: https://github.com/niri-wm/niri/discussions/2602 — "might take a few hundred ms sometimes due to system load"
-- Niri Xwayland PID issue: https://github.com/YaLTeR/niri/issues/2563 — PID matching unreliable for Xwayland apps
+- https://gitlab.com/gitlab-org/cli/-/merge_requests/1183 — glab added `url.PathEscape` for branch names in web URLs; whether current released glab has a regression requires live testing
+- https://github.com/jesseduffield/lazygit/issues/4321 — double-encoding pattern `%2F` to `%252F` confirmed in browser URL handling; informs the "don't encode on our side" recommendation
 
-### Tertiary (LOW confidence)
-- cmux `app_id` for Wayland window identification — inferred from integration research; exact string not verified against a running cmux instance
+### Tertiary (informational)
+- https://gitlab.com/gitlab-org/cli/-/work_items/8020 — glab issue: slash in branch name causes `mr checkout` 404; confirms the problem class exists in glab ecosystem; specific fix status requires live verification
 
 ---
-*Research completed: 2026-03-21*
+*Research completed: 2026-03-24*
 *Ready for roadmap: yes*
