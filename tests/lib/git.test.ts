@@ -323,10 +323,11 @@ describe("fetchOrigin", () => {
 // Helper: set up local origin with optional pushed branches
 // ---------------------------------------------------------------------------
 
-function makeRepoWithOrigin(tmp: string): { repoPath: string; originPath: string } {
-  const originPath = makeGitRepo(tmp, "origin-bare")
-  execSync(`git -C ${originPath} config --bool core.bare false`, { stdio: "pipe" })
-  const repoPath = makeGitRepo(tmp, "repo")
+function makeRepoWithOrigin(tmp: string, repoName = "repo"): { repoPath: string; originPath: string } {
+  // Create a true bare repo as origin (no initial commit — accepts any push)
+  const originPath = join(tmp, "origin-bare")
+  execSync(`git init --bare ${originPath}`, { stdio: "pipe" })
+  const repoPath = makeGitRepo(tmp, repoName)
   execSync(`git -C ${repoPath} remote add origin ${originPath}`, { stdio: "pipe" })
   execSync(`git -C ${repoPath} push origin main`, { stdio: "pipe" })
   return { repoPath, originPath }
@@ -460,15 +461,21 @@ describe("ensureUpstreamTracking", () => {
   })
 
   test("sets tracking via ls-remote when remote ref exists but not fetched locally (source: remote)", async () => {
-    const originPath = makeGitRepo(tmp, "origin2")
-    const repoPath2 = makeGitRepo(tmp, "repo2")
-    execSync(`git -C ${repoPath2} remote add origin ${originPath}`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath2} push origin main`, { stdio: "pipe" })
+    // Set up a second pair to avoid name collisions with beforeEach setup
+    const { repoPath: repoPath2, originPath: originPath2 } = makeRepoWithOrigin(tmp, "repo2")
 
-    // Create a branch and push it to origin WITHOUT fetching back (so no local remote-tracking ref)
+    // Push the branch from origin directly (simulates a colleague pushing) so it exists on remote
+    // but repoPath2 never fetched it — so no local remote-tracking ref exists
+    execSync(`git -C ${originPath2} branch feature-remote-only`, { stdio: "pipe" })
+
+    // Create the local branch in repoPath2 (no push, no fetch — so origin/feature-remote-only not in local refs)
     execSync(`git -C ${repoPath2} branch feature-remote-only`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath2} push origin feature-remote-only`, { stdio: "pipe" })
-    // Do NOT run git fetch origin here — so origin/feature-remote-only ref is not in local cache
+    // Verify no local remote-tracking ref exists
+    const localRef = execSync(
+      `git -C ${repoPath2} rev-parse --verify origin/feature-remote-only 2>/dev/null || echo "missing"`,
+      { stdio: "pipe" }
+    ).toString().trim()
+    expect(localRef).toBe("missing")
 
     const result = await ensureUpstreamTracking(repoPath2, "feature-remote-only")
     expect(result.tracked).toBe(true)

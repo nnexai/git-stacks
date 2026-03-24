@@ -112,6 +112,62 @@ export async function fetchOrigin(repoPath: string): Promise<void> {
   await $`git -C ${repoPath} -c fetch.timeout=30 fetch origin`.quiet()
 }
 
+// --- Upstream tracking ---
+
+/** Returns true when origin/<branch> remote-tracking ref exists in local refs (e.g. after a fetch). */
+export async function checkRemoteTrackingRef(repoPath: string, branch: string): Promise<boolean> {
+  const result = await $`git -C ${repoPath} rev-parse --verify ${"origin/" + branch}`.quiet().nothrow()
+  return result.exitCode === 0
+}
+
+/** Returns true when <branch> exists on the remote origin (network call with 10s timeout). */
+export async function checkBranchExistsOnRemote(repoPath: string, branch: string): Promise<boolean> {
+  const result = await $`git -C ${repoPath} -c fetch.timeout=10 ls-remote --exit-code --heads origin ${branch}`
+    .quiet()
+    .nothrow()
+  return result.exitCode === 0
+}
+
+/** Returns true when branch.<name>.remote git config is set (branch has upstream configured). */
+export async function hasUpstreamTracking(repoPath: string, branch: string): Promise<boolean> {
+  const result = await $`git -C ${repoPath} config ${"branch." + branch + ".remote"}`.quiet().nothrow()
+  return result.exitCode === 0
+}
+
+/**
+ * Ensures the given branch has upstream tracking configured.
+ *
+ * - If already tracked: returns `{ tracked: false }` immediately (skip path)
+ * - If local remote-tracking ref exists: sets tracking, returns `{ tracked: true, source: "local" }`
+ * - If local ref missing but branch exists on remote: sets tracking, returns `{ tracked: true, source: "remote" }`
+ * - If branch not on remote: returns `{ tracked: false }` (brand-new branch, no upstream)
+ * - If network fails: returns `{ tracked: false }` (non-fatal)
+ */
+export async function ensureUpstreamTracking(
+  repoPath: string,
+  branch: string
+): Promise<{ tracked: boolean; source?: "local" | "remote" }> {
+  // Early return: branch already has upstream configured
+  if (await hasUpstreamTracking(repoPath, branch)) {
+    return { tracked: false }
+  }
+
+  // Check local remote-tracking ref first (fast, no network)
+  if (await checkRemoteTrackingRef(repoPath, branch)) {
+    await $`git -C ${repoPath} branch ${"--set-upstream-to=origin/" + branch} ${branch}`.quiet().nothrow()
+    return { tracked: true, source: "local" }
+  }
+
+  // Fall back to ls-remote (network call, non-fatal on failure)
+  const onRemote = await checkBranchExistsOnRemote(repoPath, branch)
+  if (!onRemote) {
+    return { tracked: false }
+  }
+
+  await $`git -C ${repoPath} branch ${"--set-upstream-to=origin/" + branch} ${branch}`.quiet().nothrow()
+  return { tracked: true, source: "remote" }
+}
+
 export async function rebaseBranch(
   repoPath: string,
   upstream: string
