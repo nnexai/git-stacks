@@ -3,23 +3,47 @@ import { useIsolatedConfig } from "../helpers"
 import type { Workspace } from "@/lib/config"
 
 // ============================================================
-// Section 1: detectWorkspaceFromCwd tests
-// Uses isolated config "cwd-detect"
+// Single isolated config for ALL tests in this file.
+// Must set up isolated config ONCE — calling useIsolatedConfig multiple times
+// in the same file replaces the @/lib/paths mock each time, invalidating
+// live bindings in config.ts (WORKSPACES_DIR changes).
 // ============================================================
 
 const isolated = useIsolatedConfig("cwd-detect")
 
-// Cache-busting imports so they pick up the mocked paths
-// @ts-ignore — cache-busting avoids contamination from other test files
-const { writeWorkspace, workspaceExists }: {
+// Cache-busting imports so they pick up the mocked paths.
+const { writeWorkspace }: {
   writeWorkspace: (ws: Workspace) => void
-  workspaceExists: (name: string) => boolean
+// @ts-ignore — cache-busting avoids contamination from other test files
 } = await import("@/lib/config?cwd-detect")
 
-// @ts-ignore — cache-busting avoids contamination from other test files
 const { detectWorkspaceFromCwd }: {
   detectWorkspaceFromCwd: (cwd?: string) => { ok: true; workspace: Workspace } | { ok: false; error: "no_match" }
+// @ts-ignore — cache-busting avoids contamination from other test files
 } = await import("@/lib/workspace-ops?cwd-detect")
+
+// ============================================================
+// Section 2: resolveWorkspaceArg mocking setup
+// mock.module("@/lib/workspace-ops") is set up here (before issue-utils import).
+// NOTE: This mock does NOT affect the cache-busted workspace-ops?cwd-detect import
+// captured above because bun treats query-param variants as separate module entries.
+// ============================================================
+
+// Mutable state for the mock to return different results per test
+let mockDetectResult: { ok: true; workspace: Workspace } | { ok: false; error: "no_match" } = {
+  ok: false,
+  error: "no_match",
+}
+
+// Mock workspace-ops BEFORE importing issue-utils (which imports detectWorkspaceFromCwd)
+mock.module("@/lib/workspace-ops", () => ({
+  detectWorkspaceFromCwd: () => mockDetectResult,
+}))
+
+const { resolveWorkspaceArg }: {
+  resolveWorkspaceArg: (workspaceName: string | undefined, tracker: string, action: string) => string
+// @ts-ignore — cache-busting avoids contamination from other test files
+} = await import("@/lib/integrations/issue-utils?cwd-detect")
 
 afterAll(() => isolated.cleanup())
 
@@ -28,6 +52,7 @@ afterAll(() => isolated.cleanup())
 function makeWorktreeWorkspace(name: string, taskPath: string, extraRepos: Workspace["repos"] = []): Workspace {
   return {
     name,
+    schema_version: "1",
     branch: `feat/${name}`,
     created: "2026-01-01",
     repos: [
@@ -47,6 +72,7 @@ function makeWorktreeWorkspace(name: string, taskPath: string, extraRepos: Works
 function makeTrunkWorkspace(name: string, mainPath: string): Workspace {
   return {
     name,
+    schema_version: "1",
     branch: `feat/${name}`,
     created: "2026-01-01",
     repos: [
@@ -101,6 +127,7 @@ describe("detectWorkspaceFromCwd", () => {
     // ws-nested has task_path that is a subdirectory of ws-parent's repo
     writeWorkspace({
       name: "ws-nested",
+      schema_version: "1",
       branch: "feat/ws-nested",
       created: "2026-01-01",
       repos: [
@@ -146,11 +173,14 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("tilde paths in task_path are normalized before comparison", () => {
-    // In isolated config, expandHome("~/...") maps to configDir/...
-    const taskPath = `~/tasks/tilde-ws/repo-a`
+    // useIsolatedConfig mocks expandHome so "~/" expands to configDir + "/"
+    // (the mocked expandHome maps "~/" to the isolated config dir)
+    const taskPath = `~/tilde-ws-detect/repo-a`
+    const resolvedPath = `${isolated.configDir}/tilde-ws-detect/repo-a`
 
     writeWorkspace({
       name: "tilde-ws",
+      schema_version: "1",
       branch: "feat/tilde-ws",
       created: "2026-01-01",
       repos: [
@@ -165,8 +195,7 @@ describe("detectWorkspaceFromCwd", () => {
       ],
     })
 
-    // The isolated expandHome maps "~/" to configDir + "/"
-    const resolvedPath = `${isolated.configDir}/tasks/tilde-ws/repo-a`
+    // detectWorkspaceFromCwd expands "~/" via the mocked expandHome (configDir)
     const result = detectWorkspaceFromCwd(resolvedPath)
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.workspace.name).toBe("tilde-ws")
@@ -175,6 +204,7 @@ describe("detectWorkspaceFromCwd", () => {
   test("workspace with mix of trunk and worktree repos only matches on worktree repos", () => {
     writeWorkspace({
       name: "mixed-ws",
+      schema_version: "1",
       branch: "feat/mixed-ws",
       created: "2026-01-01",
       repos: [
@@ -208,36 +238,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 })
 
-// ============================================================
-// Section 2: resolveWorkspaceArg tests
-// Uses a separate isolated config "cwd-detect-resolve"
-// Mocks detectWorkspaceFromCwd via mock.module on workspace-ops
-// ============================================================
-
-// We need to set mockDetectResult as a variable that mock.module can reference
-let mockDetectResult: { ok: true; workspace: Workspace } | { ok: false; error: "no_match" } = {
-  ok: false,
-  error: "no_match",
-}
-
-// Mock workspace-ops BEFORE importing issue-utils (which imports from workspace-ops)
-mock.module("@/lib/workspace-ops", () => ({
-  detectWorkspaceFromCwd: () => mockDetectResult,
-}))
-
-const isolated2 = useIsolatedConfig("cwd-detect-resolve")
-
-// @ts-ignore — cache-busting
-const { writeWorkspace: writeWs2 }: {
-  writeWorkspace: (ws: Workspace) => void
-} = await import("@/lib/config?cwd-detect-resolve")
-
-// @ts-ignore — cache-busting
-const { resolveWorkspaceArg }: {
-  resolveWorkspaceArg: (workspaceName: string | undefined, tracker: string, action: string) => string
-} = await import("@/lib/integrations/issue-utils?cwd-detect-resolve")
-
-afterAll(() => isolated2.cleanup())
+// --- resolveWorkspaceArg tests ---
 
 describe("resolveWorkspaceArg", () => {
   let exitCode: number | undefined
@@ -262,8 +263,9 @@ describe("resolveWorkspaceArg", () => {
   })
 
   test("explicit workspace name that exists returns the name", () => {
-    writeWs2({
+    writeWorkspace({
       name: "my-ws",
+      schema_version: "1",
       branch: "feat/my-ws",
       created: "2026-01-01",
       repos: [],
@@ -284,6 +286,7 @@ describe("resolveWorkspaceArg", () => {
       ok: true,
       workspace: {
         name: "detected-ws",
+        schema_version: "1",
         branch: "feat/detected-ws",
         created: "2026-01-01",
         repos: [],

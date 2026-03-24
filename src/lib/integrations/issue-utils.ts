@@ -4,6 +4,7 @@ import {
   writeWorkspace,
   type Workspace,
 } from "../config"
+import { detectWorkspaceFromCwd } from "../workspace-ops"
 
 // --- Types ---
 
@@ -77,6 +78,44 @@ export function formatIssueError(err: IssueRefResolutionError): string {
     case "workspace_not_found":
       return `Workspace '${err.name}' not found.`
     case "no_issue_linked":
-      return `No issue linked to workspace '${err.workspace}' for ${err.tracker}. Run: git-stacks integration ${err.tracker} issue link ${err.workspace} <issue-id>`
+      return (
+        `No issue linked to workspace '${err.workspace}' for ${err.tracker}. ` +
+        `Run: git-stacks integration ${err.tracker} issue link <issue-id> (from inside a worktree) ` +
+        `or: git-stacks integration ${err.tracker} issue link ${err.workspace} <issue-id>`
+      )
   }
+}
+
+// --- Workspace argument resolution ---
+
+/**
+ * Resolve workspace name from an explicit argument or CWD detection.
+ * Returns workspace name on success, calls process.exit(1) on failure.
+ *
+ * @param workspaceName - Explicitly provided workspace name (or undefined for CWD detection)
+ * @param tracker - Tracker integration ID (e.g. "jira", "github") — used in error messages
+ * @param action - Command action name (e.g. "link", "unlink", "open") — used in error messages
+ */
+export function resolveWorkspaceArg(
+  workspaceName: string | undefined,
+  tracker: string,
+  action: string
+): string {
+  if (workspaceName) {
+    if (!workspaceExists(workspaceName)) {
+      console.error(`Workspace '${workspaceName}' not found.`)
+      process.exit(1)
+    }
+    return workspaceName
+  }
+  const detection = detectWorkspaceFromCwd()
+  if (!detection.ok) {
+    console.error(
+      `Could not detect workspace from current directory. ` +
+      `Run from inside a worktree or specify: ` +
+      `git-stacks integration ${tracker} issue ${action} <workspace> ...`
+    )
+    process.exit(1)
+  }
+  return detection.workspace.name
 }

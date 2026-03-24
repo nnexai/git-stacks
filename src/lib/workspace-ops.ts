@@ -1,11 +1,12 @@
 import { existsSync, unlinkSync, readFileSync, writeFileSync, lstatSync, rmSync } from "fs"
-import { join } from "path"
+import { join, resolve } from "path"
 import { parse } from "yaml"
 import {
   readWorkspace,
   writeWorkspace,
   workspaceExists,
   workspacePath,
+  listWorkspaces,
   readGlobalConfig,
   WorkspaceSchema,
   TemplateSchema,
@@ -15,7 +16,7 @@ import {
   type Workspace,
   type GlobalConfig,
 } from "./config"
-import { getTasksDir, GLOBAL_CONFIG_FILE, REGISTRY_FILE } from "./paths"
+import { getTasksDir, GLOBAL_CONFIG_FILE, REGISTRY_FILE, expandHome } from "./paths"
 import {
   isRepoDirty,
   getCurrentBranch,
@@ -1141,4 +1142,46 @@ export function editRegistryYaml(): {
       }
     },
   }
+}
+
+// --- CWD-based workspace detection ---
+
+export type CwdDetectionResult =
+  | { ok: true; workspace: Workspace }
+  | { ok: false; error: "no_match" }
+
+/**
+ * Detect the current workspace by matching the working directory against
+ * stored worktree task_path values. Only worktree-mode repos are considered
+ * (trunk repos share a single clone path across workspaces).
+ *
+ * @param cwd - Directory to match against (defaults to process.cwd())
+ * @returns The workspace whose worktree task_path contains cwd, or no_match
+ */
+export function detectWorkspaceFromCwd(cwd?: string): CwdDetectionResult {
+  const currentDir = cwd ?? process.cwd()
+  const workspaces = listWorkspaces()
+
+  let bestMatch: Workspace | null = null
+  let bestPathLen = 0
+
+  for (const ws of workspaces) {
+    for (const repo of ws.repos) {
+      if (repo.mode !== "worktree") continue
+      const resolvedTaskPath = resolve(expandHome(repo.task_path))
+      // Match CWD exactly OR as a subdirectory (trailing separator prevents prefix collisions)
+      if (
+        currentDir === resolvedTaskPath ||
+        currentDir.startsWith(resolvedTaskPath + "/")
+      ) {
+        if (resolvedTaskPath.length > bestPathLen) {
+          bestMatch = ws
+          bestPathLen = resolvedTaskPath.length
+        }
+      }
+    }
+  }
+
+  if (!bestMatch) return { ok: false, error: "no_match" }
+  return { ok: true, workspace: bestMatch }
 }
