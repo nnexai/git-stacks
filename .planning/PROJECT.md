@@ -8,7 +8,14 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State — v0.7.0 shipped (2026-03-22)
+## Current State — v0.8.0 shipped (2026-03-24)
+
+### What shipped in v0.8.0
+
+- **Upstream worktree branch tracking** — `ensureUpstreamTracking()` auto-detects existing upstream branches during worktree creation and sets up tracking; two-layer detection (local rev-parse first, ls-remote fallback); wired into all 4 creation flows (new, clone, TUI wizard, open); 781 tests pass
+- **Dashboard linked issues fix** — separate Linked Issues section in WorkspaceDetail reads exclusively from `ws().settings`; issue key filtered from config summary to prevent global config leak
+- **Workspace CWD auto-detection** — `detectWorkspaceFromCwd()` matches worktree task_paths with deepest-match, trunk-skip, and prefix-collision guard; `resolveWorkspaceArg()` shared helper; all 4 tracker integrations (Jira, GitHub, GitLab, Gitea) now accept optional `[workspace]` on `link`/`unlink`/`open`
+- **GitLab branch slash investigation** — confirmed glab CLI bug (#948, fixed in MR !1183); our `gitlab.ts` does not manipulate branch names; workaround: update glab to v1.28+
 
 ### What shipped in v0.7.0
 
@@ -112,12 +119,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Git forge integrations — GitHub/GitLab/Gitea PR creation via CLI pass-through — v0.7.0 Phase 27
 - ✓ Issue & task tracking — link/unlink/open across GitHub/GitLab/Gitea/Jira — v0.7.0 Phase 28
 
+- ✓ Upstream worktree branch tracking — auto-detect and set up tracking for existing upstream branches — v0.8.0 Phase 29
+- ✓ Dashboard linked issues fix — workspace-only data, no global config fallback — v0.8.0 Phase 30
+- ✓ CWD auto-detection for all 4 tracker integrations — optional [workspace] on link/unlink/open — v0.8.0 Phase 31
+- ✓ GitLab branch '/' investigation — glab CLI bug confirmed, documented with version guidance — v0.8.0 Phase 32
+
 ### Active
 
-- ✓ Fix dashboard linked issues display — separate Linked Issues section, workspace-only data — v0.8.0 Phase 30
-- ✓ GitLab branch '/' investigation — confirmed glab CLI bug (issue #948, fixed in MR !1183, Feb 2023); our code is not at fault — v0.8.0 Phase 32
-- ✓ Jira integration auto-detects workspace from working directory path — v0.8.0 Phase 31
-- ✓ Worktree creation checks for existing upstream branch and sets up tracking — v0.8.0 Phase 29
+(None — next milestone not yet defined)
 
 ### Out of Scope
 
@@ -132,19 +141,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 
-## Current Milestone: v0.8.0 Integration Polish & Workspace UX
-
-**Goal:** Fix integration bugs and improve workspace UX — dashboard issue display, GitLab branch escaping, Jira workspace auto-detection, and upstream branch linking.
-
-**Target features:**
-- Fix dashboard linked issues display (shows global Jira config instead of per-workspace issues)
-- Fix branch name '/' escaping for GitLab open
-- Jira integration auto-detects workspace from working directory path
-- Worktree creation checks for existing upstream branch and sets up tracking
-
 ## Next Milestone Goals
 
-After v0.8.0 — candidates for v0.9.0+:
+Candidates for v0.9.0+:
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type; version gate for v1.0
 - **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, per-repo ahead/behind in status
@@ -153,7 +152,7 @@ After v0.8.0 — candidates for v0.9.0+:
 
 ## Versioning
 
-**Current release:** `v0.7.1`
+**Current release:** `v0.8.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -199,6 +198,10 @@ After v0.8.0 — candidates for v0.9.0+:
 | Forge CLI pass-through (gh/glab/tea) | Inherit stdio for interactive auth; no custom API clients | ✓ Good |
 | Issue IDs stored as strings | Unifies GitHub integers and Jira alphanumeric keys | ✓ Good |
 | Jira configurable `open_cmd` template | Tool-agnostic via `sh -c` with `$ISSUE_ID` env var; no hard dependency | ✓ Good |
+| Two-layer upstream detection (rev-parse first, ls-remote fallback) | Local check avoids network; fallback catches fresh pushes | ✓ Good |
+| CWD detection via task_path longest-match | Deepest worktree path wins; trailing separator guard prevents prefix collisions | ✓ Good |
+| Injectable `_cwdDetect` / `_resolveWorkspaceDeps` | Same `_exec` pattern for test isolation; bypasses bun mock.module cache issues | ✓ Good |
+| `link [workspace-or-issue] [issue-id]` Commander.js signature | Both optional; workspaceExists() disambiguation for single-arg case | ✓ Good |
 
 ## Out of Scope
 
@@ -230,4 +233,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-24 after Phase 30 complete — dashboard linked issues display fix*
+*Last updated: 2026-03-24 after v0.8.0 milestone — Integration Polish & Workspace UX*

@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Integration Polish & Workspace UX
-status: Ready to execute
-stopped_at: Completed 31-01-PLAN.md — implemented detectWorkspaceFromCwd and resolveWorkspaceArg
-last_updated: "2026-03-24T15:49:08.791Z"
+status: Milestone complete — ready for next milestone
+stopped_at: v0.8.0 shipped, archived, tagged
+last_updated: "2026-03-24T19:00:00.000Z"
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 4
+  completed_phases: 4
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,54 +19,37 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 31 — workspace-cwd-auto-detection
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 31 (workspace-cwd-auto-detection) — EXECUTING
-Plan: 2 of 2
+v0.8.0 complete. No active milestone.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0 (this milestone)
-- Average duration: —
-- Total execution time: —
+- Total plans completed: 6 (v0.8.0)
+- Timeline: 2026-03-14 → 2026-03-24
+- Phases: 4
 
 ## Accumulated Context
 
 ### Decisions
 
-Archived to .planning/milestones/v0.7.0-ROADMAP.md — see full decision log there.
-
-Recent decisions affecting v0.8.0 work:
-
-- Use `--workspace` flag (not optional positional) for Jira issue commands to avoid Commander.js positional ambiguity
-- Use local remote-tracking ref check (`git rev-parse --verify origin/<branch>`) instead of `git ls-remote` for upstream check if fetchOrigin() already runs before createWorktree() — confirm in workspace-ops.ts before implementing Phase 29
-- Path normalization for CWD detection: apply `resolve(expandHome(repo.task_path))` on stored paths; use `startsWith(taskPath + "/")` not `===` to match subdirectories without false-positive collisions
-- Phase 32 (GitLab slash) is investigate-first — do not add URL encoding before confirming root cause via manual testing
-- [Phase 29]: Used bare git repo (git init --bare) for test origins to avoid push rejection from diverging histories
-- [Phase 29]: ensureUpstreamTracking returns tracked:false on early-return (already tracked) — distinguishing skip path from new-tracking path
-- [Phase 29]: ensureUpstreamTracking integrated in parallel via Promise.all() in all 3 creation flows and openWorkspace
-- [Phase 29]: TUI dashboard creation flow: silent tracking (no visual feedback) to avoid corrupting row-based progress UI
-- [Phase 30-dashboard-linked-issues-display-fix]: TRACKER_IDS hardcoded as const array — no isTracker property on Integration interface; stable list matches 4 forge/issue integrations
-- [Phase 30-dashboard-linked-issues-display-fix]: Linked Issues reads only from ws().settings — never falls back to globalConfig; issue key filtered from config summary for all integrations
-- [Phase 31]: CwdDetectionResult discriminated union for workspace CWD auto-detection; resolveWorkspaceArg calls process.exit(1) on failure; trailing-separator guard prevents path prefix collision
-- [Phase 31]: Test isolation pattern: manual configDir + applyPathsMock() + beforeAll() to survive cross-file mock contamination from config.test.ts inline mock.module calls
+Archived to .planning/milestones/v0.8.0-ROADMAP.md — see full decision log there.
 
 ### Pending Todos
 
-5 pending todos — see .planning/todos/pending/
+4 pending todos — see .planning/todos/pending/
 
 ### Blockers/Concerns
 
-- Phase 29: Must inspect workspace-ops.ts to confirm whether fetchOrigin() is called before createWorktree() — determines ls-remote vs. rev-parse strategy
-- Phase 32: Uncertain deliverable — may be code fix or documentation depending on glab investigation result
+None — all v0.8.0 blockers resolved.
 
 ## Session Continuity
 
-Last session: 2026-03-24T15:49:08.786Z
-Stopped at: Completed 31-01-PLAN.md — implemented detectWorkspaceFromCwd and resolveWorkspaceArg
+Last session: 2026-03-24
+Stopped at: v0.8.0 milestone complete
 Resume file: None
-Next action: /gsd:plan-phase 29
+Next action: /gsd:new-milestone

@@ -1,5 +1,20 @@
 # Milestones
 
+## v0.8.0 Integration Polish & Workspace UX (Shipped: 2026-03-24)
+
+**Phases completed:** 4 phases, 6 plans, 5 tasks
+
+**Key accomplishments:**
+
+- 1. [Rule 1 - Bug] Test helper makeRepoWithOrigin used conflicting repo initialization
+- Task 1 — Creation flows (3 files):
+- WorkspaceDetail bug fixed: global Jira config no longer leaks into per-workspace display; new Linked Issues section reads exclusively from workspace settings for github/gitlab/gitea/jira tracker IDs
+- CWD-based workspace detection via worktree task_path matching plus resolveWorkspaceArg shared helper — foundation for optional [workspace] arg across all 4 tracker integrations
+- Optional [workspace] argument on all 4 tracker integrations via Commander.js signature changes and resolveWorkspaceArg() dispatch — `git-stacks integration jira issue link PROJ-123` from inside a worktree now just works
+- Investigation confirms glab CLI bug (#948) — our code does not manipulate branch names and is not at fault
+
+---
+
 ## v0.7.0 Close Command & Polish (Shipped: 2026-03-22)
 
 **Phases completed:** 9 phases (21–28 + 24.1), 20 plans, 34 tasks

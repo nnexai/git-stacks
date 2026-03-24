@@ -7,7 +7,7 @@
 - ✅ **v0.4.0 TUI Hardening & Polish** — Phases 10-15.2 (shipped 2026-03-21) — Test harness, workspace sync, wizard create, repo management, screen polish, centered dialogs, integration overrides. See [milestones/v0.4.0-ROADMAP.md](milestones/v0.4.0-ROADMAP.md)
 - ✅ **v0.6.0 Integration Orchestration & Niri** — Phases 16-20 (shipped 2026-03-22) — Typed artifact pipeline, centralized runner, niri compositor integration. See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md)
 - ✅ **v0.7.0 Close Command & Polish** — Phases 21-28 (shipped 2026-03-22) — Workspace close, lifecycle cascade, mock refactor, forge integrations, issue tracking, CLI polish. See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md)
-- 🚧 **v0.8.0 Integration Polish & Workspace UX** — Phases 29-32 (in progress) — Upstream branch tracking, dashboard linked issues fix, workspace auto-detection from CWD, GitLab branch slash investigation.
+- ✅ **v0.8.0 Integration Polish & Workspace UX** — Phases 29-32 (shipped 2026-03-24) — Upstream branch tracking, dashboard linked issues fix, workspace CWD auto-detection, GitLab branch slash investigation. See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md)
 
 ## Phases
 
@@ -76,70 +76,17 @@ See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md) for full detail
 
 </details>
 
-### v0.8.0 Integration Polish & Workspace UX (In Progress)
+<details>
+<summary>✅ v0.8.0 Integration Polish & Workspace UX (Phases 29-32) — SHIPPED 2026-03-24</summary>
 
-**Milestone Goal:** Fix integration bugs and improve workspace UX — upstream branch tracking, dashboard issue display, workspace CWD auto-detection, and GitLab branch slash investigation.
+- [x] Phase 29: Upstream Worktree Branch Tracking (2/2 plans) — completed 2026-03-24
+- [x] Phase 30: Dashboard Linked Issues Display Fix (1/1 plan) — completed 2026-03-24
+- [x] Phase 31: Workspace CWD Auto-Detection (2/2 plans) — completed 2026-03-24
+- [x] Phase 32: GitLab Branch Slash Investigation (1/1 plan) — completed 2026-03-24
 
-- [x] **Phase 29: Upstream Worktree Branch Tracking** - Worktree creation detects existing upstream branches and sets up tracking automatically (completed 2026-03-24)
-- [x] **Phase 30: Dashboard Linked Issues Display Fix** - Dashboard detail pane shows per-workspace linked issues, not global config fallback (completed 2026-03-24)
-- [x] **Phase 31: Workspace CWD Auto-Detection** - Jira and all tracker integrations detect current workspace from working directory (completed 2026-03-24)
-- [x] **Phase 32: GitLab Branch Slash Investigation** - Confirmed glab CLI bug (#948, fixed MR !1183); our code not at fault (completed 2026-03-24)
+See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full details.
 
-## Phase Details
-
-### Phase 29: Upstream Worktree Branch Tracking
-**Goal**: Worktrees for branches that already exist on origin are created with upstream tracking configured, so `git push` and `git pull` work without `--set-upstream`
-**Depends on**: Nothing (first phase of v0.8.0)
-**Requirements**: WUX-01
-**Success Criteria** (what must be TRUE):
-  1. Running `git-stacks new` with a branch name that already exists on origin creates the worktree with upstream tracking set (verified by `git branch -vv` showing `[origin/branch-name]`)
-  2. Running `git push` inside a worktree created from an existing upstream branch succeeds without requiring `--set-upstream`
-  3. Creating a worktree for a brand-new branch (no remote counterpart) continues to work unchanged — no upstream tracking is attempted
-  4. Workspace creation performance is not degraded — the branch check uses local remote-tracking refs after an existing fetch, not a separate network call
-**Plans**: 2 plans
-Plans:
-- [x] 29-01-PLAN.md — TDD: upstream tracking core functions in git.ts
-- [x] 29-02-PLAN.md — Wire ensureUpstreamTracking into all creation and open flows
-
-### Phase 30: Dashboard Linked Issues Display Fix
-**Goal**: The workspace detail pane in the dashboard shows per-workspace linked issue IDs for each tracker integration, with a correct empty state when no issue is linked
-**Depends on**: Phase 29
-**Requirements**: BUG-01
-**Success Criteria** (what must be TRUE):
-  1. Opening a workspace detail pane shows the linked issue ID (e.g., `PROJ-123`) for each tracker integration that has a linked issue on that workspace
-  2. Opening a workspace detail pane that has no linked issues shows an empty or absent "Linked Issues" section — not a global Jira config value
-  3. The linked issue display reads exclusively from workspace settings, never from the global integration config fallback
-**Plans**: 1 plan
-Plans:
-- [x] 30-01-PLAN.md — Fix config summary issue leak and add Linked Issues section
-**UI hint**: yes
-
-### Phase 31: Workspace CWD Auto-Detection
-**Goal**: Jira issue commands and all other tracker integration issue commands auto-detect the current workspace when run from inside a worktree directory, making the `--workspace` argument optional
-**Depends on**: Phase 30
-**Requirements**: WUX-02, WUX-03
-**Success Criteria** (what must be TRUE):
-  1. Running `git-stacks integration jira issue link PROJ-123` from inside a worktree directory links the issue to the correct workspace without requiring an explicit `--workspace` argument
-  2. Running the same command from outside any known workspace prints a clear error: the workspace cannot be detected from the current directory and the user must use `--workspace`
-  3. Passing `--workspace my-workspace` explicitly still works, overriding CWD detection — backward compatibility preserved
-  4. GitHub, GitLab, and Gitea issue commands also auto-detect workspace from CWD (same detection logic applied to all four tracker integrations)
-  5. Custom `workspace_root` paths configured in global config are honored during CWD detection
-**Plans**: 2 plans
-Plans:
-- [x] 31-01-PLAN.md — TDD: detectWorkspaceFromCwd and resolveWorkspaceArg core functions
-- [x] 31-02-PLAN.md — Wire CWD auto-detection into all 4 tracker issue commands
-
-### Phase 32: GitLab Branch Slash Investigation
-**Goal**: The root cause of GitLab `open` and `pr` command failures on branch names containing '/' is confirmed, and either fixed (one-line code change) or documented (known glab limitation with version guidance)
-**Depends on**: Phase 31
-**Requirements**: BUG-02
-**Success Criteria** (what must be TRUE):
-  1. The failure mode for branches with '/' in their name has been reproduced and the root cause is documented — confirmed as either our `gitlab.ts` invocation or a glab binary behavior
-  2. If the bug is in our code: `git-stacks integration gitlab open` and `git-stacks integration gitlab pr` work correctly for branches named `feature/my-feature` — the URL resolves without a 404
-  3. If the bug is in glab: release notes for v0.8.0 document the known glab limitation, the affected glab version range, and any available workaround
-**Plans**: 1 plan (investigation + documentation)
-Plans:
-- [x] 32-01-PLAN.md — Root cause investigation and documentation
+</details>
 
 ## Progress
 
@@ -150,7 +97,4 @@ Plans:
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
-| 29. Upstream Worktree Branch Tracking | v0.8.0 | 2/2 | Complete    | 2026-03-24 |
-| 30. Dashboard Linked Issues Display Fix | v0.8.0 | 1/1 | Complete    | 2026-03-24 |
-| 31. Workspace CWD Auto-Detection | v0.8.0 | 2/2 | Complete    | 2026-03-24 |
-| 32. GitLab Branch Slash Investigation | v0.8.0 | 1/1 | Complete    | 2026-03-24 |
+| 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
