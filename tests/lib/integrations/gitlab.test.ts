@@ -15,6 +15,8 @@ const formatForgeErrorMock = mock((err: any) => `Error: ${err.error}`)
 
 mock.module("@/lib/integrations/forge-utils", () => ({
   resolveForgeRepo: resolveForgeRepoMock,
+  resolveForgeRepoAnyMode: mock(() => ({ ok: true, repoPath: "/tmp/task/repo-a" })),
+  resolveRepoCwd: mock(async () => "/tmp/task/repo-a"),
   formatForgeError: formatForgeErrorMock,
 }))
 
@@ -28,24 +30,29 @@ const resolveIssueRefMock = mock(() => ({
   workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
 }))
 const formatIssueErrorMock = mock((err: any) => `Issue error: ${err.error}`)
+const resolveWorkspaceArgMock = mock((name: string | undefined) => name ?? "detected-ws")
 
 mock.module("@/lib/integrations/issue-utils", () => ({
   linkIssue: linkIssueMock,
   unlinkIssue: unlinkIssueMock,
   resolveIssueRef: resolveIssueRefMock,
   formatIssueError: formatIssueErrorMock,
+  resolveWorkspaceArg: resolveWorkspaceArgMock,
 }))
 
 // --- Mock config (for workspaceExists) ---
 
+// workspaceExists returns true only for "my-ws" to support disambiguation tests
+const workspaceExistsMock = mock((name: string) => name === "my-ws")
+
 mock.module("@/lib/config", () => ({
-  workspaceExists: mock(() => true),
+  workspaceExists: workspaceExistsMock,
 }))
 
 // Cache-busting import
 const { _exec, gitlabIntegration } = await import(
   // @ts-ignore — query param cache-busting
-  "@/lib/integrations/gitlab?unit-test-gl"
+  "@/lib/integrations/gitlab?unit-test-gl2"
 )
 
 // --- Override process.exit to prevent test runner from exiting ---
@@ -70,6 +77,10 @@ beforeEach(() => {
     issueId: "15",
     workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
   }))
+  resolveWorkspaceArgMock.mockReset()
+  resolveWorkspaceArgMock.mockImplementation((name: string | undefined) => name ?? "detected-ws")
+  workspaceExistsMock.mockReset()
+  workspaceExistsMock.mockImplementation((name: string) => name === "my-ws")
   linkIssueMock.mockReset()
   unlinkIssueMock.mockReset()
   exitMock.mockReset()
@@ -172,16 +183,47 @@ describe("gitlab pr status", () => {
 })
 
 describe("gitlab issue commands", () => {
-  test("issue link calls linkIssue with correct args", async () => {
+  test("issue link with two args calls linkIssue with correct args (backward compat)", async () => {
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "issue", "link", "my-ws", "15"])
     expect(linkIssueMock).toHaveBeenCalledWith("my-ws", "gitlab", "15")
   })
 
-  test("issue unlink calls unlinkIssue with correct args", async () => {
+  test("issue link with one arg (CWD fallback) calls resolveWorkspaceArg and linkIssue", async () => {
+    // "99" is not a workspace name (workspaceExists returns false)
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "link", "99"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith(undefined, "gitlab", "link")
+    expect(linkIssueMock).toHaveBeenCalledWith("detected-ws", "gitlab", "99")
+  })
+
+  test("issue link with one arg that is a workspace name exits with missing issue ID error", async () => {
+    // "my-ws" is a workspace name (workspaceExists returns true)
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "link", "my-ws"])
+    ).rejects.toThrow("process.exit(1)")
+  })
+
+  test("issue link with no args exits with missing issue ID error", async () => {
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "link"])
+    ).rejects.toThrow("process.exit(1)")
+  })
+
+  test("issue unlink with explicit workspace calls resolveWorkspaceArg and unlinkIssue", async () => {
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "issue", "unlink", "my-ws"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith("my-ws", "gitlab", "unlink")
     expect(unlinkIssueMock).toHaveBeenCalledWith("my-ws", "gitlab")
+  })
+
+  test("issue unlink with no args (CWD fallback) calls resolveWorkspaceArg with undefined", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "unlink"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith(undefined, "gitlab", "unlink")
+    expect(unlinkIssueMock).toHaveBeenCalledWith("detected-ws", "gitlab")
   })
 
   test("issue open --web calls _exec.run with glab issue view --web", async () => {
@@ -205,6 +247,15 @@ describe("gitlab issue commands", () => {
       ["issue", "view", "15", "--output", "json"],
       "/tmp/task/repo-a"
     )
+  })
+
+  test("issue open with no args (CWD fallback) calls resolveWorkspaceArg with undefined", async () => {
+    resolveIssueRefMock.mockImplementation(() => ({
+      ok: true, issueId: "15", workspace: { name: "detected-ws", branch: "feat/my-ws", repos: [] }
+    }))
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "issue", "open"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith(undefined, "gitlab", "open")
   })
 
   test("issue open with no linked issue prints error and exits", async () => {

@@ -40,21 +40,27 @@ applyPathsMock()
 const isolated = { configDir, cleanup: () => cleanup(configDir) }
 
 // Cache-busting imports so they pick up the mocked paths.
-const { writeWorkspace }: {
+const configMod: {
   writeWorkspace: (ws: Workspace) => void
+  listWorkspaces: () => Workspace[]
+  workspaceExists: (name: string) => boolean
+  readWorkspace: (name: string) => Workspace
+  [key: string]: unknown
 // @ts-ignore — cache-busting avoids contamination from other test files
 } = await import("@/lib/config?cwd-detect")
 
-const { detectWorkspaceFromCwd }: {
+const { writeWorkspace, listWorkspaces } = configMod
+
+const { detectWorkspaceFromCwd, _cwdDetect }: {
   detectWorkspaceFromCwd: (cwd?: string) => { ok: true; workspace: Workspace } | { ok: false; error: "no_match" }
+  _cwdDetect: { listWorkspaces: () => Workspace[] }
 // @ts-ignore — cache-busting avoids contamination from other test files
 } = await import("@/lib/workspace-ops?cwd-detect")
 
 // ============================================================
-// Section 2: resolveWorkspaceArg mocking setup
-// mock.module("@/lib/workspace-ops") is set up here (before issue-utils import).
-// NOTE: This mock does NOT affect the cache-busted workspace-ops?cwd-detect import
-// captured above because bun treats query-param variants as separate module entries.
+// Section 2: resolveWorkspaceArg setup
+// Uses injectable _resolveWorkspaceDeps (same pattern as _exec in niri/tmux/cmux)
+// to avoid bun mock.module cross-file contamination issues.
 // ============================================================
 
 // Mutable state for the mock to return different results per test
@@ -63,13 +69,12 @@ let mockDetectResult: { ok: true; workspace: Workspace } | { ok: false; error: "
   error: "no_match",
 }
 
-// Mock workspace-ops BEFORE importing issue-utils (which imports detectWorkspaceFromCwd)
-mock.module("@/lib/workspace-ops", () => ({
-  detectWorkspaceFromCwd: () => mockDetectResult,
-}))
-
-const { resolveWorkspaceArg }: {
+const { resolveWorkspaceArg, _resolveWorkspaceDeps }: {
   resolveWorkspaceArg: (workspaceName: string | undefined, tracker: string, action: string) => string
+  _resolveWorkspaceDeps: {
+    workspaceExists: (name: string) => boolean
+    detectWorkspaceFromCwd: () => { ok: true; workspace: Workspace } | { ok: false; error: "no_match" }
+  }
 // @ts-ignore — cache-busting avoids contamination from other test files
 } = await import("@/lib/integrations/issue-utils?cwd-detect")
 
@@ -122,6 +127,13 @@ describe("detectWorkspaceFromCwd", () => {
   // Re-apply paths mock before tests run to survive contamination from other test files
   // (e.g., config.test.ts calls mock.module("@/lib/paths", ...) inside tests)
   beforeAll(() => applyPathsMock())
+
+  // Inject the cache-busted listWorkspaces into _cwdDetect so detectWorkspaceFromCwd
+  // reads from our isolated config dir (not the stale module-level import from ./config)
+  beforeEach(() => {
+    applyPathsMock()
+    _cwdDetect.listWorkspaces = () => listWorkspaces()
+  })
 
   test("returns no_match when CWD is not inside any known worktree", () => {
     const result = detectWorkspaceFromCwd("/tmp/tasks/nothing-at-all")
@@ -285,11 +297,15 @@ describe("resolveWorkspaceArg", () => {
   })
 
   beforeEach(() => {
+    applyPathsMock()
     exitCode = undefined
     // @ts-ignore — override process.exit for testing
     process.exit = exitMock
     // Reset to no match by default
     mockDetectResult = { ok: false, error: "no_match" }
+    // Inject cache-busted deps to avoid cross-file contamination
+    _resolveWorkspaceDeps.workspaceExists = (name: string) => configMod.workspaceExists(name)
+    _resolveWorkspaceDeps.detectWorkspaceFromCwd = () => mockDetectResult
   })
 
   afterAll(() => {

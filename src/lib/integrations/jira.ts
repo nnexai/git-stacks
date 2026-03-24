@@ -1,8 +1,8 @@
 import { z } from "zod"
 import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
-import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
-import { readGlobalConfig, workspaceExists } from "../config"
+import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError, resolveWorkspaceArg } from "./issue-utils"
+import { workspaceExists, readGlobalConfig } from "../config"
 import { prompts as p } from "../../tui/utils"
 
 // --- Config Schema ---
@@ -56,32 +56,50 @@ export const jiraIntegration: Integration = {
   commands(parent: Command): void {
     const issue = parent.command("issue").description("Link and open Jira issues")
 
-    issue.command("link <workspace> <issue-id>")
+    // Both positionals are optional to allow: link PROJ-123 (CWD detect) or link my-ws PROJ-123 (explicit)
+    issue.command("link [workspace-or-issue] [issue-id]")
       .description("Link a Jira issue to a workspace (e.g. PROJ-123)")
-      .action(async (workspaceName: string, issueId: string) => {
-        if (!workspaceExists(workspaceName)) {
-          console.error(`Workspace '${workspaceName}' not found.`)
+      .action(async (firstArg: string | undefined, secondArg: string | undefined) => {
+        let workspaceName: string
+        let issueId: string
+
+        if (secondArg !== undefined) {
+          // Two args: link <workspace> <issue-id> (backward compatible)
+          workspaceName = firstArg!
+          issueId = secondArg
+        } else if (firstArg !== undefined) {
+          // One arg: is it a workspace name or an issue ID?
+          if (workspaceExists(firstArg)) {
+            // It's a workspace name but no issue ID provided
+            console.error(`Missing issue ID. Usage: git-stacks integration jira issue link [workspace] <issue-id>`)
+            process.exit(1)
+          }
+          // It's an issue ID — detect workspace from CWD
+          issueId = firstArg
+          workspaceName = resolveWorkspaceArg(undefined, "jira", "link")
+        } else {
+          // No args at all
+          console.error(`Missing issue ID. Usage: git-stacks integration jira issue link [workspace] <issue-id>`)
           process.exit(1)
         }
+
         linkIssue(workspaceName, "jira", issueId)
         console.log(`Linked Jira issue ${issueId} to workspace '${workspaceName}'.`)
       })
 
-    issue.command("unlink <workspace>")
+    issue.command("unlink [workspace]")
       .description("Remove Jira issue link from a workspace")
-      .action(async (workspaceName: string) => {
-        if (!workspaceExists(workspaceName)) {
-          console.error(`Workspace '${workspaceName}' not found.`)
-          process.exit(1)
-        }
-        unlinkIssue(workspaceName, "jira")
-        console.log(`Unlinked Jira issue from workspace '${workspaceName}'.`)
+      .action(async (workspaceName: string | undefined) => {
+        const resolved = resolveWorkspaceArg(workspaceName, "jira", "unlink")
+        unlinkIssue(resolved, "jira")
+        console.log(`Unlinked Jira issue from workspace '${resolved}'.`)
       })
 
-    issue.command("open <workspace>")
+    issue.command("open [workspace]")
       .description("Open linked Jira issue in browser")
-      .action(async (workspaceName: string) => {
-        const resolution = resolveIssueRef(workspaceName, "jira")
+      .action(async (workspaceName: string | undefined) => {
+        const resolved = resolveWorkspaceArg(workspaceName, "jira", "open")
+        const resolution = resolveIssueRef(resolved, "jira")
         if (!resolution.ok) {
           console.error(formatIssueError(resolution))
           process.exit(1)

@@ -2,7 +2,7 @@ import type { Command } from "commander"
 import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
 import { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
-import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError } from "./issue-utils"
+import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError, resolveWorkspaceArg } from "./issue-utils"
 
 // --- Exec ---
 
@@ -115,42 +115,60 @@ export const githubIntegration: Integration = {
         if (result.exitCode !== 0) process.exit(result.exitCode)
       })
 
-    // --- Issue commands (Phase 28) ---
+    // --- Issue commands (Phase 28, updated Phase 31) ---
     const issue = parent.command("issue").description("Link and open GitHub issues")
 
-    issue.command("link <workspace> <issue-id>")
+    // Both positionals optional: link <workspace> <issue-id> OR link <issue-id> (CWD detect)
+    issue.command("link [workspace-or-issue] [issue-id]")
       .description("Link a GitHub issue to a workspace")
-      .action(async (workspaceName: string, issueId: string) => {
-        if (!workspaceExists(workspaceName)) {
-          console.error(`Workspace '${workspaceName}' not found.`)
+      .action(async (firstArg: string | undefined, secondArg: string | undefined) => {
+        let workspaceName: string
+        let issueId: string
+
+        if (secondArg !== undefined) {
+          // Two args: link <workspace> <issue-id> (backward compatible)
+          workspaceName = firstArg!
+          issueId = secondArg
+        } else if (firstArg !== undefined) {
+          // One arg: is it a workspace name or an issue ID?
+          if (workspaceExists(firstArg)) {
+            // It's a workspace name but no issue ID provided
+            console.error(`Missing issue ID. Usage: git-stacks integration github issue link [workspace] <issue-id>`)
+            process.exit(1)
+          }
+          // It's an issue ID — detect workspace from CWD
+          issueId = firstArg
+          workspaceName = resolveWorkspaceArg(undefined, "github", "link")
+        } else {
+          // No args at all
+          console.error(`Missing issue ID. Usage: git-stacks integration github issue link [workspace] <issue-id>`)
           process.exit(1)
         }
+
         linkIssue(workspaceName, "github", issueId)
         console.log(`Linked GitHub issue #${issueId} to workspace '${workspaceName}'.`)
       })
 
-    issue.command("unlink <workspace>")
+    issue.command("unlink [workspace]")
       .description("Remove GitHub issue link from a workspace")
-      .action(async (workspaceName: string) => {
-        if (!workspaceExists(workspaceName)) {
-          console.error(`Workspace '${workspaceName}' not found.`)
-          process.exit(1)
-        }
-        unlinkIssue(workspaceName, "github")
-        console.log(`Unlinked GitHub issue from workspace '${workspaceName}'.`)
+      .action(async (workspaceName: string | undefined) => {
+        const resolved = resolveWorkspaceArg(workspaceName, "github", "unlink")
+        unlinkIssue(resolved, "github")
+        console.log(`Unlinked GitHub issue from workspace '${resolved}'.`)
       })
 
-    issue.command("open <workspace> [repo]")
+    issue.command("open [workspace] [repo]")
       .description("Open linked GitHub issue (--web opens in browser)")
       .option("--web", "Open in browser")
-      .action(async (workspaceName: string, repoArg: string | undefined, opts: { web?: boolean }) => {
-        const issueRes = resolveIssueRef(workspaceName, "github")
+      .action(async (workspaceName: string | undefined, repoArg: string | undefined, opts: { web?: boolean }) => {
+        const resolved = resolveWorkspaceArg(workspaceName, "github", "open")
+        const issueRes = resolveIssueRef(resolved, "github")
         if (!issueRes.ok) {
           console.error(formatIssueError(issueRes))
           process.exit(1)
         }
         // gh issue view requires git repo CWD to resolve project (per Pitfall 1)
-        const forgeRes = resolveForgeRepo(workspaceName, repoArg, "github")
+        const forgeRes = resolveForgeRepo(resolved, repoArg, "github")
         if (!forgeRes.ok) {
           console.error(formatForgeError(forgeRes))
           process.exit(1)

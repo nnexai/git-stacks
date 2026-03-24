@@ -1150,6 +1150,11 @@ export type CwdDetectionResult =
   | { ok: true; workspace: Workspace }
   | { ok: false; error: "no_match" }
 
+/** Injectable deps for test isolation (same pattern as _exec in niri/tmux/cmux) */
+export const _cwdDetect = {
+  listWorkspaces: () => listWorkspaces(),
+}
+
 /**
  * Detect the current workspace by matching the working directory against
  * stored worktree task_path values. Only worktree-mode repos are considered
@@ -1160,7 +1165,7 @@ export type CwdDetectionResult =
  */
 export function detectWorkspaceFromCwd(cwd?: string): CwdDetectionResult {
   const currentDir = cwd ?? process.cwd()
-  const workspaces = listWorkspaces()
+  const workspaces = _cwdDetect.listWorkspaces()
 
   let bestMatch: Workspace | null = null
   let bestPathLen = 0

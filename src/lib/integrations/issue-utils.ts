@@ -88,6 +88,12 @@ export function formatIssueError(err: IssueRefResolutionError): string {
 
 // --- Workspace argument resolution ---
 
+/** Injectable deps for test isolation (same pattern as _exec in niri/tmux/cmux) */
+export const _resolveWorkspaceDeps = {
+  workspaceExists: (name: string) => workspaceExists(name),
+  detectWorkspaceFromCwd: () => detectWorkspaceFromCwd(),
+}
+
 /**
  * Resolve workspace name from an explicit argument or CWD detection.
  * Returns workspace name on success, calls process.exit(1) on failure.
@@ -102,13 +108,13 @@ export function resolveWorkspaceArg(
   action: string
 ): string {
   if (workspaceName) {
-    if (!workspaceExists(workspaceName)) {
+    if (!_resolveWorkspaceDeps.workspaceExists(workspaceName)) {
       console.error(`Workspace '${workspaceName}' not found.`)
       process.exit(1)
     }
     return workspaceName
   }
-  const detection = detectWorkspaceFromCwd()
+  const detection = _resolveWorkspaceDeps.detectWorkspaceFromCwd()
   if (!detection.ok) {
     console.error(
       `Could not detect workspace from current directory. ` +
