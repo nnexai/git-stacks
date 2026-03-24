@@ -1,15 +1,43 @@
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test"
-import { useIsolatedConfig } from "../helpers"
+import { describe, test, expect, mock, beforeEach, beforeAll, afterAll } from "bun:test"
+import { join } from "path"
+import { mkdirSync } from "fs"
+import { makeTmpDir, cleanup } from "../helpers"
 import type { Workspace } from "@/lib/config"
 
 // ============================================================
 // Single isolated config for ALL tests in this file.
-// Must set up isolated config ONCE — calling useIsolatedConfig multiple times
-// in the same file replaces the @/lib/paths mock each time, invalidating
-// live bindings in config.ts (WORKSPACES_DIR changes).
+// We do NOT use useIsolatedConfig() here because its mock.module("@/lib/paths") call
+// runs at module-load time. Other test files (e.g., config.test.ts) call
+// mock.module("@/lib/paths", ...) DURING test execution, overwriting our mock.
+// Instead, we manage the configDir directly and re-apply the mock in beforeAll/beforeEach.
 // ============================================================
 
-const isolated = useIsolatedConfig("cwd-detect")
+const configDir = makeTmpDir("cwd-detect")
+mkdirSync(join(configDir, "workspaces"), { recursive: true })
+mkdirSync(join(configDir, "templates"), { recursive: true })
+mkdirSync(join(configDir, "messages"), { recursive: true })
+
+// Apply the paths mock now (at module load) so imports get the right paths.
+// This will be re-applied in beforeAll to survive contamination from other test files.
+function applyPathsMock() {
+  mock.module("@/lib/paths", () => ({
+    HOME: configDir,
+    DEFAULT_WORKSPACE_ROOT: join(configDir, "ws-root"),
+    WS_CONFIG_DIR: configDir,
+    WORKSPACES_DIR: join(configDir, "workspaces"),
+    GLOBAL_CONFIG_FILE: join(configDir, "config.yml"),
+    REGISTRY_FILE: join(configDir, "registry.yml"),
+    TEMPLATES_DIR: join(configDir, "templates"),
+    MESSAGES_DIR: join(configDir, "messages"),
+    getMainDir: (wsRoot: string) => join(wsRoot, "main"),
+    getTasksDir: (wsRoot: string) => join(wsRoot, "tasks"),
+    expandHome: (p: string) => p.startsWith("~/") ? join(configDir, p.slice(2)) : p,
+  }))
+}
+
+applyPathsMock()
+
+const isolated = { configDir, cleanup: () => cleanup(configDir) }
 
 // Cache-busting imports so they pick up the mocked paths.
 const { writeWorkspace }: {
@@ -91,6 +119,10 @@ function makeTrunkWorkspace(name: string, mainPath: string): Workspace {
 // --- detectWorkspaceFromCwd tests ---
 
 describe("detectWorkspaceFromCwd", () => {
+  // Re-apply paths mock before tests run to survive contamination from other test files
+  // (e.g., config.test.ts calls mock.module("@/lib/paths", ...) inside tests)
+  beforeAll(() => applyPathsMock())
+
   test("returns no_match when CWD is not inside any known worktree", () => {
     const result = detectWorkspaceFromCwd("/tmp/tasks/nothing-at-all")
     expect(result.ok).toBe(false)
@@ -241,6 +273,9 @@ describe("detectWorkspaceFromCwd", () => {
 // --- resolveWorkspaceArg tests ---
 
 describe("resolveWorkspaceArg", () => {
+  // Re-apply paths mock before tests run (same reason as detectWorkspaceFromCwd above)
+  beforeAll(() => applyPathsMock())
+
   let exitCode: number | undefined
   const originalExit = process.exit.bind(process)
 
