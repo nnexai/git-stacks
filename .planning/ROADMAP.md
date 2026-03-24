@@ -109,7 +109,9 @@ Plans:
   1. Opening a workspace detail pane shows the linked issue ID (e.g., `PROJ-123`) for each tracker integration that has a linked issue on that workspace
   2. Opening a workspace detail pane that has no linked issues shows an empty or absent "Linked Issues" section — not a global Jira config value
   3. The linked issue display reads exclusively from workspace settings, never from the global integration config fallback
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 30-01-PLAN.md — Fix config summary issue leak and add Linked Issues section
 **UI hint**: yes
 
 ### Phase 31: Workspace CWD Auto-Detection
@@ -144,6 +146,6 @@ Plans:
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | Complete    | 2026-03-24 |
-| 30. Dashboard Linked Issues Display Fix | v0.8.0 | 0/? | Not started | - |
+| 30. Dashboard Linked Issues Display Fix | v0.8.0 | 0/1 | Not started | - |
 | 31. Workspace CWD Auto-Detection | v0.8.0 | 0/? | Not started | - |
 | 32. GitLab Branch Slash Investigation | v0.8.0 | 0/? | Not started | - |
