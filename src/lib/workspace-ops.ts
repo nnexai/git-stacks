@@ -29,6 +29,7 @@ import {
   rebaseBranch,
   mergeBranchFF,
   getCommitsBehind,
+  ensureUpstreamTracking,
 } from "./git"
 import { type IntegrationContext } from "./integrations"
 import { runIntegrations, runIntegrationCleanup } from "./integrations/runner"
@@ -732,6 +733,22 @@ export async function openWorkspace(
       await createWorktree(repo.main_path, repo.task_path, workspace.branch)
     }
     onProgress?.(`${missing.length} worktree(s) recreated`)
+  }
+
+  // Ensure upstream tracking for all worktree repos (parallel)
+  const worktreeReposForTracking = workspace.repos.filter(
+    (r) => r.mode === "worktree" && existsSync(r.task_path)
+  )
+  if (worktreeReposForTracking.length > 0) {
+    const trackingResults = await Promise.all(
+      worktreeReposForTracking.map(repo =>
+        ensureUpstreamTracking(repo.main_path, workspace.branch)
+      )
+    )
+    const tracked = trackingResults.filter(r => r.tracked)
+    if (tracked.length > 0) {
+      onProgress?.(`Upstream tracking set for ${tracked.length} repo(s)`)
+    }
   }
 
   const baseEnv = buildBaseEnv(workspace, tasksDir, "open")

@@ -143,6 +143,7 @@ mock.module("@/lib/paths", () => ({
 mock.module("@/lib/git", () => ({
   createWorktree: mock(async () => {}),
   getCurrentBranch: mock(async () => "main"),
+  ensureUpstreamTracking: mock(async () => ({ tracked: false })),
 }))
 
 // Mock lib/detect

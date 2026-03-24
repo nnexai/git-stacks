@@ -70,6 +70,7 @@ mock.module("../../../src/lib/git", () => ({
   isWorktreeRegistered: mock(async () => false),
   getWorktreeStatus: mock(async () => ({ dirty: false, ahead: 0, behind: 0 })),
   getCommitsBehind: mock(async () => 0),
+  ensureUpstreamTracking: mock(async () => ({ tracked: false })),
 }))
 
 mock.module("../../../src/lib/workspace-ops", () => ({
