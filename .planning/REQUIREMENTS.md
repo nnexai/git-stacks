@@ -47,21 +47,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IDEN-01 | — | Pending |
-| IDEN-02 | — | Pending |
-| IDEN-03 | — | Pending |
-| IDEN-04 | — | Pending |
-| COMP-01 | — | Pending |
-| COMP-02 | — | Pending |
-| COMP-03 | — | Pending |
-| COMP-04 | — | Pending |
-| COMP-05 | — | Pending |
+| IDEN-01 | Phase 33 | Pending |
+| IDEN-02 | Phase 33 | Pending |
+| IDEN-03 | Phase 33 | Pending |
+| IDEN-04 | Phase 35 | Pending |
+| COMP-01 | Phase 34 | Pending |
+| COMP-02 | Phase 34 | Pending |
+| COMP-03 | Phase 34 | Pending |
+| COMP-04 | Phase 35 | Pending |
+| COMP-05 | Phase 35 | Pending |
 
 **Coverage:**
 - v0.9.0 requirements: 9 total
-- Mapped to phases: 0
-- Unmapped: 9 ⚠️
+- Mapped to phases: 9
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after initial definition*
+*Last updated: 2026-03-24 after roadmap creation — all 9 requirements mapped to phases 33-35*

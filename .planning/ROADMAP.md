@@ -8,6 +8,7 @@
 - ✅ **v0.6.0 Integration Orchestration & Niri** — Phases 16-20 (shipped 2026-03-22) — Typed artifact pipeline, centralized runner, niri compositor integration. See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md)
 - ✅ **v0.7.0 Close Command & Polish** — Phases 21-28 (shipped 2026-03-22) — Workspace close, lifecycle cascade, mock refactor, forge integrations, issue tracking, CLI polish. See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md)
 - ✅ **v0.8.0 Integration Polish & Workspace UX** — Phases 29-32 (shipped 2026-03-24) — Upstream branch tracking, dashboard linked issues fix, workspace CWD auto-detection, GitLab branch slash investigation. See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md)
+- 🚧 **v0.9.0 Identity & Completion Integrity** — Phases 33-35 (in progress)
 
 ## Phases
 
@@ -88,6 +89,48 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
 
 </details>
 
+### 🚧 v0.9.0 Identity & Completion Integrity (In Progress)
+
+**Milestone Goal:** Make workspace/template identity robust using name fields as canonical keys, and ensure shell completions cover all commands shipped to date.
+
+- [ ] **Phase 33: Name-Based Identity** - Workspaces and templates are looked up, operated on, and renamed by their YAML `name` field; filename is storage only
+- [ ] **Phase 34: Completion Audit & Forge/Issue Coverage** - All CLI commands audited for completion gaps; forge and issue subcommands have full bash/zsh/fish coverage
+- [ ] **Phase 35: Dynamic Name Completion** - Workspace and template name arguments resolve dynamically from YAML name fields at completion time
+
+## Phase Details
+
+### Phase 33: Name-Based Identity
+**Goal**: Users can look up, operate on, and rename workspaces and templates using the `name` field in YAML — filename is an internal storage detail, not an exposed identity
+**Depends on**: Phase 32
+**Requirements**: IDEN-01, IDEN-02, IDEN-03
+**Success Criteria** (what must be TRUE):
+  1. User can open, remove, list, and look up a workspace using the name stored in the YAML `name` field even if the filename differs
+  2. User can edit, remove, list, and look up a template using the name stored in the YAML `name` field even if the filename differs
+  3. User can rename a workspace and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
+  4. User can rename a template and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
+**Plans**: TBD
+
+### Phase 34: Completion Audit & Forge/Issue Coverage
+**Goal**: Every CLI command has verified shell completion coverage in bash, zsh, and fish; forge (`pr`) and issue subcommands newly receive complete tab-completion support
+**Depends on**: Phase 33
+**Requirements**: COMP-01, COMP-02, COMP-03
+**Success Criteria** (what must be TRUE):
+  1. A documented audit identifies every command/subcommand present in the Commander.js tree and confirms each has completion coverage or records the gap with a fix applied
+  2. User can tab-complete `pr create`, `pr open`, and `pr status` for GitHub, GitLab, and Gitea integrations in bash, zsh, and fish
+  3. User can tab-complete `issue link`, `issue unlink`, and `issue open` for GitHub, GitLab, Gitea, and Jira integrations in bash, zsh, and fish
+**Plans**: TBD
+
+### Phase 35: Dynamic Name Completion
+**Goal**: Shell completion for workspace and template arguments resolves candidate values dynamically from YAML `name` fields rather than filename globs
+**Depends on**: Phase 34
+**Requirements**: IDEN-04, COMP-04, COMP-05
+**Success Criteria** (what must be TRUE):
+  1. Shell autocompletion for workspace arguments reads candidate names from YAML `name` fields and presents them to the user
+  2. Shell autocompletion for template arguments reads candidate names from YAML `name` fields and presents them to the user
+  3. Dynamic completion works in all three shells (bash, zsh, fish) for all commands that accept a `<workspace>` or `[workspace]` argument
+  4. Dynamic completion works in all three shells for all commands that accept a `<template>` or `[template]` argument
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -98,3 +141,6 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
+| 33. Name-Based Identity | v0.9.0 | 0/? | Not started | - |
+| 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 0/? | Not started | - |
+| 35. Dynamic Name Completion | v0.9.0 | 0/? | Not started | - |
