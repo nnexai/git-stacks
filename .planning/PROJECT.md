@@ -114,7 +114,10 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-(Pending next milestone — see Next Milestone Goals)
+- [ ] Fix dashboard linked issues display — shows global Jira config instead of per-workspace issues
+- [ ] Fix branch name '/' escaping for GitLab open — investigate whether it's our code or glab
+- [ ] Jira integration auto-detects workspace from working directory path
+- [ ] Worktree creation checks for existing upstream branch and sets up tracking
 
 ### Out of Scope
 
@@ -129,15 +132,19 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 
-## Current Milestone: v0.7.0 Close Command & Polish — SHIPPED
+## Current Milestone: v0.8.0 Integration Polish & Workspace UX
 
-Shipped 2026-03-22. 9 phases, 20 plans, 58 requirements, 727 tests passing.
+**Goal:** Fix integration bugs and improve workspace UX — dashboard issue display, GitLab branch escaping, Jira workspace auto-detection, and upstream branch linking.
 
-**Delivered:** Workspace close command, cascading lifecycle hooks, mock architecture refactor, git forge integrations (GitHub/GitLab/Gitea), issue tracking (GitHub/GitLab/Gitea/Jira), shell completion polish, editor YAML flags.
+**Target features:**
+- Fix dashboard linked issues display (shows global Jira config instead of per-workspace issues)
+- Fix branch name '/' escaping for GitLab open
+- Jira integration auto-detects workspace from working directory path
+- Worktree creation checks for existing upstream branch and sets up tracking
 
 ## Next Milestone Goals
 
-After v0.7.0 — candidates for v0.8.0+:
+After v0.8.0 — candidates for v0.9.0+:
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type; version gate for v1.0
 - **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, per-repo ahead/behind in status
@@ -146,7 +153,7 @@ After v0.7.0 — candidates for v0.8.0+:
 
 ## Versioning
 
-**Current release:** `v0.7.0`
+**Current release:** `v0.7.1`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -223,4 +230,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-22 after v0.7.0 milestone shipped — Close Command & Polish*
+*Last updated: 2026-03-24 after v0.8.0 milestone started — Integration Polish & Workspace UX*
