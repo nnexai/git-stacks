@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Integration Polish & Workspace UX
-status: Ready to plan
-stopped_at: Completed 29-02-PLAN.md — upstream tracking integrated into all workspace creation and open flows
-last_updated: "2026-03-24T13:45:47.754Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 30-01-PLAN.md — fixed WorkspaceDetail linked issues display bug
+last_updated: "2026-03-24T14:22:27.856Z"
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  completed_phases: 2
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 29 — upstream-worktree-branch-tracking
+**Current focus:** Phase 30 — dashboard-linked-issues-display-fix
 
 ## Current Position
 
-Phase: 30
-Plan: Not started
+Phase: 30 (dashboard-linked-issues-display-fix) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -50,6 +50,8 @@ Recent decisions affecting v0.8.0 work:
 - [Phase 29]: ensureUpstreamTracking returns tracked:false on early-return (already tracked) — distinguishing skip path from new-tracking path
 - [Phase 29]: ensureUpstreamTracking integrated in parallel via Promise.all() in all 3 creation flows and openWorkspace
 - [Phase 29]: TUI dashboard creation flow: silent tracking (no visual feedback) to avoid corrupting row-based progress UI
+- [Phase 30-dashboard-linked-issues-display-fix]: TRACKER_IDS hardcoded as const array — no isTracker property on Integration interface; stable list matches 4 forge/issue integrations
+- [Phase 30-dashboard-linked-issues-display-fix]: Linked Issues reads only from ws().settings — never falls back to globalConfig; issue key filtered from config summary for all integrations
 
 ### Pending Todos
 
@@ -62,7 +64,7 @@ Recent decisions affecting v0.8.0 work:
 
 ## Session Continuity
 
-Last session: 2026-03-24T13:38:08.540Z
-Stopped at: Completed 29-02-PLAN.md — upstream tracking integrated into all workspace creation and open flows
+Last session: 2026-03-24T14:22:27.851Z
+Stopped at: Completed 30-01-PLAN.md — fixed WorkspaceDetail linked issues display bug
 Resume file: None
 Next action: /gsd:plan-phase 29

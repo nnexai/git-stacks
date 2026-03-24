@@ -9,7 +9,7 @@ Requirements for v0.8.0 Integration Polish & Workspace UX. Each maps to roadmap 
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: Dashboard displays per-workspace linked issues instead of falling back to global Jira config
+- [x] **BUG-01**: Dashboard displays per-workspace linked issues instead of falling back to global Jira config
 - [ ] **BUG-02**: Branch names containing '/' are handled correctly for GitLab `open` and `pr` commands
 
 ### Workspace UX
@@ -62,7 +62,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | Phase 30 | Pending |
+| BUG-01 | Phase 30 | Complete |
 | BUG-02 | Phase 32 | Pending |
 | WUX-01 | Phase 29 | Complete |
 | WUX-02 | Phase 31 | Pending |
