@@ -38,7 +38,7 @@ import { readTemplate, writeTemplate, templateExists, templatePath, readWorkspac
 import { SyncProgressView } from "./SyncProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
 import { CreateProgressView, type CreateRow } from "./CreateProgressView"
-import { createWorktree, removeWorktree } from "../../lib/git"
+import { createWorktree, removeWorktree, ensureUpstreamTracking } from "../../lib/git"
 import { getTasksDir } from "../../lib/paths"
 import { runHooksCaptured, type HookOutputLine } from "../../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../../lib/files"
@@ -746,6 +746,11 @@ export default function App() {
           return  // abort — don't write workspace YAML
         }
       }
+
+      // Set upstream tracking for branches that exist on origin (parallel)
+      await Promise.all(
+        createdWorktrees.map(({ main_path }) => ensureUpstreamTracking(main_path, branch))
+      )
 
       // File ops (per-repo)
       for (const wsRepo of repos.filter(r => r.mode === "worktree")) {

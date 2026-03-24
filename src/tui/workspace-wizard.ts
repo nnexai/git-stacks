@@ -18,7 +18,7 @@ import {
   type RepoRegistryEntry,
 } from "../lib/config"
 import { getTasksDir, expandHome } from "../lib/paths"
-import { createWorktree, getCurrentBranch } from "../lib/git"
+import { createWorktree, getCurrentBranch, ensureUpstreamTracking } from "../lib/git"
 import { detectRepoType } from "../lib/detect"
 import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
 import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
@@ -352,6 +352,15 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
       }
     }
     spinner.stop(`${worktreeRepos.length} worktree(s) created`)
+
+    // Set upstream tracking for branches that exist on origin
+    const trackingResults = await Promise.all(
+      worktreeRepos.map(repo => ensureUpstreamTracking(repo.main_path, branch))
+    )
+    const tracked = trackingResults.filter(r => r.tracked)
+    if (tracked.length > 0) {
+      p.log.info(`Upstream tracking set for ${tracked.length} repo(s)`)
+    }
   }
 
   // Merge env (workspace-level)

@@ -10,7 +10,7 @@ import {
   readTemplate,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
-import { createWorktree } from "../lib/git"
+import { createWorktree, ensureUpstreamTracking } from "../lib/git"
 import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
 import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
 import { runIntegrationGenerate } from "../lib/integrations/runner"
@@ -138,6 +138,15 @@ export async function runWorkspaceClone(sourceArg?: string) {
       }
     }
     spinner.stop(`${worktreeRepos.length} worktree(s) created`)
+
+    // Set upstream tracking for branches that exist on origin
+    const trackingResults = await Promise.all(
+      worktreeRepos.map(repo => ensureUpstreamTracking(repo.main_path, newBranch))
+    )
+    const tracked = trackingResults.filter(r => r.tracked)
+    if (tracked.length > 0) {
+      p.log.info(`Upstream tracking set for ${tracked.length} repo(s)`)
+    }
   }
 
   // Build and save new workspace (drop cmux_workspace_id, preserve template ref)
