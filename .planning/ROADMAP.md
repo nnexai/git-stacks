@@ -82,8 +82,8 @@ See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md) for full detail
 
 - [x] **Phase 29: Upstream Worktree Branch Tracking** - Worktree creation detects existing upstream branches and sets up tracking automatically (completed 2026-03-24)
 - [x] **Phase 30: Dashboard Linked Issues Display Fix** - Dashboard detail pane shows per-workspace linked issues, not global config fallback (completed 2026-03-24)
-- [ ] **Phase 31: Workspace CWD Auto-Detection** - Jira and all tracker integrations detect current workspace from working directory
-- [ ] **Phase 32: GitLab Branch Slash Investigation** - Investigate and resolve branch names containing '/' in GitLab commands
+- [x] **Phase 31: Workspace CWD Auto-Detection** - Jira and all tracker integrations detect current workspace from working directory (completed 2026-03-24)
+- [x] **Phase 32: GitLab Branch Slash Investigation** - Confirmed glab CLI bug (#948, fixed MR !1183); our code not at fault (completed 2026-03-24)
 
 ## Phase Details
 
@@ -99,7 +99,7 @@ See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md) for full detail
 **Plans**: 2 plans
 Plans:
 - [x] 29-01-PLAN.md — TDD: upstream tracking core functions in git.ts
-- [ ] 29-02-PLAN.md — Wire ensureUpstreamTracking into all creation and open flows
+- [x] 29-02-PLAN.md — Wire ensureUpstreamTracking into all creation and open flows
 
 ### Phase 30: Dashboard Linked Issues Display Fix
 **Goal**: The workspace detail pane in the dashboard shows per-workspace linked issue IDs for each tracker integration, with a correct empty state when no issue is linked
@@ -127,7 +127,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 31-01-PLAN.md — TDD: detectWorkspaceFromCwd and resolveWorkspaceArg core functions
-- [ ] 31-02-PLAN.md — Wire CWD auto-detection into all 4 tracker issue commands
+- [x] 31-02-PLAN.md — Wire CWD auto-detection into all 4 tracker issue commands
 
 ### Phase 32: GitLab Branch Slash Investigation
 **Goal**: The root cause of GitLab `open` and `pr` command failures on branch names containing '/' is confirmed, and either fixed (one-line code change) or documented (known glab limitation with version guidance)
@@ -137,7 +137,9 @@ Plans:
   1. The failure mode for branches with '/' in their name has been reproduced and the root cause is documented — confirmed as either our `gitlab.ts` invocation or a glab binary behavior
   2. If the bug is in our code: `git-stacks integration gitlab open` and `git-stacks integration gitlab pr` work correctly for branches named `feature/my-feature` — the URL resolves without a 404
   3. If the bug is in glab: release notes for v0.8.0 document the known glab limitation, the affected glab version range, and any available workaround
-**Plans**: TBD
+**Plans**: 1 plan (investigation + documentation)
+Plans:
+- [x] 32-01-PLAN.md — Root cause investigation and documentation
 
 ## Progress
 
@@ -148,7 +150,7 @@ Plans:
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
-| 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | Complete    | 2026-03-24 |
+| 29. Upstream Worktree Branch Tracking | v0.8.0 | 2/2 | Complete    | 2026-03-24 |
 | 30. Dashboard Linked Issues Display Fix | v0.8.0 | 1/1 | Complete    | 2026-03-24 |
-| 31. Workspace CWD Auto-Detection | v0.8.0 | 1/2 | In Progress|  |
-| 32. GitLab Branch Slash Investigation | v0.8.0 | 0/? | Not started | - |
+| 31. Workspace CWD Auto-Detection | v0.8.0 | 2/2 | Complete    | 2026-03-24 |
+| 32. GitLab Branch Slash Investigation | v0.8.0 | 1/1 | Complete    | 2026-03-24 |

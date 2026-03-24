@@ -115,8 +115,8 @@ One command should take you from "I need to work on feature X" to a fully runnin
 ### Active
 
 - ✓ Fix dashboard linked issues display — separate Linked Issues section, workspace-only data — v0.8.0 Phase 30
-- [ ] Fix branch name '/' escaping for GitLab open — investigate whether it's our code or glab
-- [ ] Jira integration auto-detects workspace from working directory path
+- ✓ GitLab branch '/' investigation — confirmed glab CLI bug (issue #948, fixed in MR !1183, Feb 2023); our code is not at fault — v0.8.0 Phase 32
+- ✓ Jira integration auto-detects workspace from working directory path — v0.8.0 Phase 31
 - ✓ Worktree creation checks for existing upstream branch and sets up tracking — v0.8.0 Phase 29
 
 ### Out of Scope
