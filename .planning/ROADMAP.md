@@ -80,7 +80,7 @@ See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md) for full detail
 
 **Milestone Goal:** Fix integration bugs and improve workspace UX — upstream branch tracking, dashboard issue display, workspace CWD auto-detection, and GitLab branch slash investigation.
 
-- [ ] **Phase 29: Upstream Worktree Branch Tracking** - Worktree creation detects existing upstream branches and sets up tracking automatically
+- [x] **Phase 29: Upstream Worktree Branch Tracking** - Worktree creation detects existing upstream branches and sets up tracking automatically (completed 2026-03-24)
 - [ ] **Phase 30: Dashboard Linked Issues Display Fix** - Dashboard detail pane shows per-workspace linked issues, not global config fallback
 - [ ] **Phase 31: Workspace CWD Auto-Detection** - Jira and all tracker integrations detect current workspace from working directory
 - [ ] **Phase 32: GitLab Branch Slash Investigation** - Investigate and resolve branch names containing '/' in GitLab commands
@@ -143,7 +143,7 @@ Plans:
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
-| 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | In Progress|  |
+| 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | Complete    | 2026-03-24 |
 | 30. Dashboard Linked Issues Display Fix | v0.8.0 | 0/? | Not started | - |
 | 31. Workspace CWD Auto-Detection | v0.8.0 | 0/? | Not started | - |
 | 32. GitLab Branch Slash Investigation | v0.8.0 | 0/? | Not started | - |

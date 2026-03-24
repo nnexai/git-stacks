@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Integration Polish & Workspace UX
-status: Ready to execute
-stopped_at: Completed 29-01-PLAN.md — upstream tracking functions added to git.ts
-last_updated: "2026-03-24T13:27:46.317Z"
+status: Ready to plan
+stopped_at: Completed 29-02-PLAN.md — upstream tracking integrated into all workspace creation and open flows
+last_updated: "2026-03-24T13:45:47.754Z"
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 
 ## Current Position
 
-Phase: 29 (upstream-worktree-branch-tracking) — EXECUTING
-Plan: 2 of 2
+Phase: 30
+Plan: Not started
 
 ## Performance Metrics
 
@@ -48,6 +48,8 @@ Recent decisions affecting v0.8.0 work:
 - Phase 32 (GitLab slash) is investigate-first — do not add URL encoding before confirming root cause via manual testing
 - [Phase 29]: Used bare git repo (git init --bare) for test origins to avoid push rejection from diverging histories
 - [Phase 29]: ensureUpstreamTracking returns tracked:false on early-return (already tracked) — distinguishing skip path from new-tracking path
+- [Phase 29]: ensureUpstreamTracking integrated in parallel via Promise.all() in all 3 creation flows and openWorkspace
+- [Phase 29]: TUI dashboard creation flow: silent tracking (no visual feedback) to avoid corrupting row-based progress UI
 
 ### Pending Todos
 
@@ -60,7 +62,7 @@ Recent decisions affecting v0.8.0 work:
 
 ## Session Continuity
 
-Last session: 2026-03-24T13:27:46.312Z
-Stopped at: Completed 29-01-PLAN.md — upstream tracking functions added to git.ts
+Last session: 2026-03-24T13:38:08.540Z
+Stopped at: Completed 29-02-PLAN.md — upstream tracking integrated into all workspace creation and open flows
 Resume file: None
 Next action: /gsd:plan-phase 29
