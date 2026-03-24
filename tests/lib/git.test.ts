@@ -325,7 +325,7 @@ describe("fetchOrigin", () => {
 
 function makeRepoWithOrigin(tmp: string, repoName = "repo"): { repoPath: string; originPath: string } {
   // Create a true bare repo as origin (no initial commit — accepts any push)
-  const originPath = join(tmp, "origin-bare")
+  const originPath = join(tmp, `${repoName}-origin-bare`)
   execSync(`git init --bare ${originPath}`, { stdio: "pipe" })
   const repoPath = makeGitRepo(tmp, repoName)
   execSync(`git -C ${repoPath} remote add origin ${originPath}`, { stdio: "pipe" })
