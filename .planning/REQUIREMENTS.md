@@ -11,7 +11,7 @@ Requirements for v0.9.0 Identity & Completion Integrity milestone.
 
 - [x] **IDEN-01**: User can look up, open, remove, and list workspaces by the `name` field in YAML (not by filename)
 - [x] **IDEN-02**: User can look up, edit, remove, and list templates by the `name` field in YAML (not by filename)
-- [ ] **IDEN-03**: User can rename a workspace or template and have both the YAML `name` field and the filename updated atomically; no drift possible
+- [x] **IDEN-03**: User can rename a workspace or template and have both the YAML `name` field and the filename updated atomically; no drift possible
 - [ ] **IDEN-04**: Shell autocompletion for workspace/template arguments reads candidate names from YAML `name` fields, not from filename glob
 
 ### Completion
@@ -49,7 +49,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | IDEN-01 | Phase 33 | Complete |
 | IDEN-02 | Phase 33 | Complete |
-| IDEN-03 | Phase 33 | Pending |
+| IDEN-03 | Phase 33 | Complete |
 | IDEN-04 | Phase 35 | Pending |
 | COMP-01 | Phase 34 | Pending |
 | COMP-02 | Phase 34 | Pending |

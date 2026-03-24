@@ -93,7 +93,7 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
 
 **Milestone Goal:** Make workspace/template identity robust using name fields as canonical keys, and ensure shell completions cover all commands shipped to date.
 
-- [ ] **Phase 33: Name-Based Identity** - Workspaces and templates are looked up, operated on, and renamed by their YAML `name` field; filename is storage only
+- [x] **Phase 33: Name-Based Identity** - Workspaces and templates are looked up, operated on, and renamed by their YAML `name` field; filename is storage only (completed 2026-03-24)
 - [ ] **Phase 34: Completion Audit & Forge/Issue Coverage** - All CLI commands audited for completion gaps; forge and issue subcommands have full bash/zsh/fish coverage
 - [ ] **Phase 35: Dynamic Name Completion** - Workspace and template name arguments resolve dynamically from YAML name fields at completion time
 - [ ] **Phase 36: Release Prep** - Bump version to v0.9.0 in package.json, update CHANGELOG.md with all v0.9.0 changes, and update README.md if new commands or behaviours require documenting
@@ -109,10 +109,10 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
   2. User can edit, remove, list, and look up a template using the name stored in the YAML `name` field even if the filename differs
   3. User can rename a workspace and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
   4. User can rename a template and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 33-01-PLAN.md — Scan-based lookup helpers for workspaces and templates + doctor drift detection
-- [ ] 33-02-PLAN.md — Template rename with workspace cascade + dry-run support
+- [x] 33-02-PLAN.md — Template rename with workspace cascade + dry-run support
 
 ### Phase 34: Completion Audit & Forge/Issue Coverage
 **Goal**: Every CLI command has verified shell completion coverage in bash, zsh, and fish; forge (`pr`) and issue subcommands newly receive complete tab-completion support
@@ -155,7 +155,7 @@ Plans:
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
-| 33. Name-Based Identity | v0.9.0 | 1/2 | In Progress|  |
+| 33. Name-Based Identity | v0.9.0 | 2/2 | Complete   | 2026-03-24 |
 | 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 0/? | Not started | - |
 | 35. Dynamic Name Completion | v0.9.0 | 0/? | Not started | - |
 | 36. Release Prep | v0.9.0 | 0/1 | Not started | - |
