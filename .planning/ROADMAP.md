@@ -76,7 +76,7 @@ See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md) for full detail
 
 </details>
 
-### 🚧 v0.8.0 Integration Polish & Workspace UX (In Progress)
+### v0.8.0 Integration Polish & Workspace UX (In Progress)
 
 **Milestone Goal:** Fix integration bugs and improve workspace UX — upstream branch tracking, dashboard issue display, workspace CWD auto-detection, and GitLab branch slash investigation.
 
@@ -124,7 +124,10 @@ Plans:
   3. Passing `--workspace my-workspace` explicitly still works, overriding CWD detection — backward compatibility preserved
   4. GitHub, GitLab, and Gitea issue commands also auto-detect workspace from CWD (same detection logic applied to all four tracker integrations)
   5. Custom `workspace_root` paths configured in global config are honored during CWD detection
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 31-01-PLAN.md — TDD: detectWorkspaceFromCwd and resolveWorkspaceArg core functions
+- [ ] 31-02-PLAN.md — Wire CWD auto-detection into all 4 tracker issue commands
 
 ### Phase 32: GitLab Branch Slash Investigation
 **Goal**: The root cause of GitLab `open` and `pr` command failures on branch names containing '/' is confirmed, and either fixed (one-line code change) or documented (known glab limitation with version guidance)
@@ -147,5 +150,5 @@ Plans:
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | Complete    | 2026-03-24 |
 | 30. Dashboard Linked Issues Display Fix | v0.8.0 | 1/1 | Complete    | 2026-03-24 |
-| 31. Workspace CWD Auto-Detection | v0.8.0 | 0/? | Not started | - |
+| 31. Workspace CWD Auto-Detection | v0.8.0 | 0/2 | Not started | - |
 | 32. GitLab Branch Slash Investigation | v0.8.0 | 0/? | Not started | - |
