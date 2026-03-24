@@ -391,6 +391,74 @@ describe("scan-based lookup", () => {
   })
 })
 
+// --- doctor drift detection ---
+// Tests for workspace/template name/filename drift detection in doctor.ts.
+// Since findWorkspaceNameDrift and findTemplateNameDrift are module-private, we test
+// by scanning the YAML directly using the same WorkspaceSchema/TemplateSchema safeParse logic
+// that doctor uses — verifying the drift-detectable data condition.
+
+describe("doctor drift detection", () => {
+  const driftIsolated = useIsolatedConfig("config-drift-test")
+  const wsDir = join(driftIsolated.configDir, "workspaces")
+  const tplDir = join(driftIsolated.configDir, "templates")
+
+  beforeEach(() => {
+    mkdirSync(wsDir, { recursive: true })
+    mkdirSync(tplDir, { recursive: true })
+  })
+
+  afterAll(() => driftIsolated.cleanup())
+
+  test("drift detection: workspace name differs from filename stem is detectable", () => {
+    // Write a file where YAML name != filename stem
+    const filePath = join(wsDir, "old-name.yml")
+    writeFileSync(filePath, "name: new-name\nbranch: main\ncreated: \"2026-01-01\"\n")
+
+    // Simulate doctor scan logic: read the file, check name !== stem
+    const { readFileSync: rfs } = require("fs")
+    const { parse: yamlParse } = require("yaml")
+    const raw = rfs(filePath, "utf-8")
+    const parsed = WorkspaceSchema.safeParse(yamlParse(raw))
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      const stem = "old-name"
+      expect(parsed.data.name).toBe("new-name")
+      expect(parsed.data.name !== stem).toBe(true) // drift condition
+    }
+  })
+
+  test("drift detection: matching name/filename produces no drift", () => {
+    const filePath = join(wsDir, "correct.yml")
+    writeFileSync(filePath, "name: correct\nbranch: main\ncreated: \"2026-01-01\"\n")
+
+    const { readFileSync: rfs } = require("fs")
+    const { parse: yamlParse } = require("yaml")
+    const raw = rfs(filePath, "utf-8")
+    const parsed = WorkspaceSchema.safeParse(yamlParse(raw))
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      const stem = "correct"
+      expect(parsed.data.name === stem).toBe(true) // no drift
+    }
+  })
+
+  test("drift detection: template name differs from filename stem is detectable", () => {
+    const filePath = join(tplDir, "old.yml")
+    writeFileSync(filePath, "name: current\n")
+
+    const { readFileSync: rfs } = require("fs")
+    const { parse: yamlParse } = require("yaml")
+    const raw = rfs(filePath, "utf-8")
+    const parsed = TemplateSchema.safeParse(yamlParse(raw))
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      const stem = "old"
+      expect(parsed.data.name).toBe("current")
+      expect(parsed.data.name !== stem).toBe(true) // drift condition
+    }
+  })
+})
+
 // --- RepoRegistryEntrySchema forge field ---
 
 describe("RepoRegistryEntrySchema forge field", () => {

@@ -1,16 +1,19 @@
 import { Command } from "commander"
-import { existsSync, readdirSync } from "fs"
+import { existsSync, readdirSync, readFileSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
+import { parse } from "yaml"
 import { prompts as p } from "../tui/utils"
 import {
   listWorkspaces,
   readRegistry,
   readGlobalConfig,
+  WorkspaceSchema,
+  TemplateSchema,
   type Workspace,
   type RepoRegistryEntry,
 } from "../lib/config"
-import { getTasksDir } from "../lib/paths"
+import { getTasksDir, WORKSPACES_DIR, TEMPLATES_DIR } from "../lib/paths"
 import { formatError } from "../lib/errors"
 
 interface Issue {
@@ -148,6 +151,50 @@ function findDeadRegistryPaths(registry: RepoRegistryEntry[]): Issue[] {
   return issues
 }
 
+/** Workspaces where YAML name field does not match filename stem. */
+function findWorkspaceNameDrift(): Issue[] {
+  if (!existsSync(WORKSPACES_DIR)) return []
+  const issues: Issue[] = []
+  for (const f of readdirSync(WORKSPACES_DIR).filter((f) => f.endsWith(".yml"))) {
+    const stem = f.replace(".yml", "")
+    try {
+      const raw = readFileSync(join(WORKSPACES_DIR, f), "utf-8")
+      const parsed = WorkspaceSchema.safeParse(parse(raw))
+      if (parsed.success && parsed.data.name !== stem) {
+        issues.push({
+          icon: "warn",
+          entity: parsed.data.name,
+          message: `name field '${parsed.data.name}' does not match filename '${f}'`,
+          fix: `git-stacks rename ${parsed.data.name} ${parsed.data.name}`,
+        })
+      }
+    } catch { /* skip unreadable */ }
+  }
+  return issues
+}
+
+/** Templates where YAML name field does not match filename stem. */
+function findTemplateNameDrift(): Issue[] {
+  if (!existsSync(TEMPLATES_DIR)) return []
+  const issues: Issue[] = []
+  for (const f of readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith(".yml"))) {
+    const stem = f.replace(".yml", "")
+    try {
+      const raw = readFileSync(join(TEMPLATES_DIR, f), "utf-8")
+      const parsed = TemplateSchema.safeParse(parse(raw))
+      if (parsed.success && parsed.data.name !== stem) {
+        issues.push({
+          icon: "warn",
+          entity: parsed.data.name,
+          message: `name field '${parsed.data.name}' does not match filename '${f}'`,
+          fix: `git-stacks template rename ${parsed.data.name} ${parsed.data.name}`,
+        })
+      }
+    } catch { /* skip unreadable */ }
+  }
+  return issues
+}
+
 export const doctorCommand = new Command("doctor")
   .description("Check workspace health — detect drift between config and filesystem")
   .option("--json", "Output as JSON")
@@ -168,6 +215,10 @@ export const doctorCommand = new Command("doctor")
 
     // --- Registry checks ---
     const deadRegistryPaths = findDeadRegistryPaths(registry)
+
+    // --- Name/filename drift checks ---
+    const workspaceNameDrift = findWorkspaceNameDrift()
+    const templateNameDrift = findTemplateNameDrift()
 
     // --- Runtime dependency checks ---
     const binaries = [
@@ -233,6 +284,8 @@ export const doctorCommand = new Command("doctor")
       ...staleCmux,
       ...deadRepoRefs,
       ...deadRegistryPaths,
+      ...workspaceNameDrift,
+      ...templateNameDrift,
       ...binaryIssues,
     ]
 
@@ -265,7 +318,7 @@ export const doctorCommand = new Command("doctor")
     // --- Human-readable output ---
     // Group workspace issues by entity
     const wsIssuesByEntity = new Map<string, Issue[]>()
-    for (const issue of [...missingWorktrees, ...missingMains, ...staleCmux, ...deadRepoRefs]) {
+    for (const issue of [...missingWorktrees, ...missingMains, ...staleCmux, ...deadRepoRefs, ...workspaceNameDrift, ...templateNameDrift]) {
       const existing = wsIssuesByEntity.get(issue.entity) ?? []
       existing.push(issue)
       wsIssuesByEntity.set(issue.entity, existing)
