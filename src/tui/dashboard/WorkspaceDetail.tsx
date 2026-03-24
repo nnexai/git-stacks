@@ -8,6 +8,8 @@ import { readGlobalConfig, readTemplate } from "../../lib/config"
 import { integrations } from "../../lib/integrations"
 import { resolveEnabledGlobally } from "../../lib/integrations/types"
 
+const TRACKER_IDS = ["github", "gitlab", "gitea", "jira"] as const
+
 type Props = {
   entry: WorkspaceEntry | undefined
   messages: MessageRecord[]
@@ -31,6 +33,19 @@ export function WorkspaceDetail(props: Props) {
           return msgs.slice(0, 3)  // last 3 in detail pane; full list via m overlay
         })
         const totalCount = createMemo(() => (props.messages ?? []).length)
+
+        const linkedIssues = createMemo(() => {
+          const results: { trackerId: string; issueId: string }[] = []
+          for (const id of TRACKER_IDS) {
+            const trackerConfig = ws().settings?.integrations?.[id] as
+              Record<string, unknown> | undefined
+            const issue = trackerConfig?.issue
+            if (issue !== undefined && issue !== null) {
+              results.push({ trackerId: id, issueId: String(issue) })
+            }
+          }
+          return results
+        })
 
         return (
           <>
@@ -131,7 +146,7 @@ export function WorkspaceDetail(props: Props) {
                     ?? globalConfig.integrations[integration.id]
                     ?? {}) as Record<string, unknown>
                   const extras = Object.entries(rawConfig)
-                    .filter(([k]) => k !== "enabled")
+                    .filter(([k]) => k !== "enabled" && k !== "issue")
                     .map(([k, v]) => `${k}: ${formatConfigValue(v)}`)
                     .join(", ")
                   if (extras) configSummary = `(${extras})`
@@ -148,6 +163,15 @@ export function WorkspaceDetail(props: Props) {
                 )
               }}
             </For>
+            <Show when={linkedIssues().length > 0}>
+              <text>{""}</text>
+              <text fg="white">  Linked Issues:</text>
+              <For each={linkedIssues()}>
+                {(item) => (
+                  <text fg="cyan">    {item.trackerId.padEnd(10)}  {item.issueId}</text>
+                )}
+              </For>
+            </Show>
           </>
         )
       }}

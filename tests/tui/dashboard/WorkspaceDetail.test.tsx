@@ -66,6 +66,7 @@ mock.module("../../../src/lib/config", () => ({
     workspace_root: "/tmp/ws-detail-root",
     integrations: {
       vscode: { enabled: true, cmd: "code" },
+      jira: { issue: "GLOBAL-999" },
     },
   })),
   readTemplate: mock((name: string) => ({
@@ -225,5 +226,67 @@ describe("WorkspaceDetail integration display", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("2 cols")
     expect(frame).not.toContain("[object Object]")
+  })
+})
+
+describe("WorkspaceDetail linked issues display", () => {
+  test("Test A: workspace with linked jira issue shows Linked Issues section", async () => {
+    const entry = makeEntry({
+      workspace: {
+        settings: {
+          integrations: {
+            jira: { issue: "PROJ-123" },
+          },
+        },
+      },
+    })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("Linked Issues:")
+    expect(frame).toContain("PROJ-123")
+  })
+
+  test("Test B: workspace with no linked issues does not show Linked Issues section", async () => {
+    const entry = makeEntry()
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).not.toContain("Linked Issues:")
+  })
+
+  test("Test C: issue key is filtered from config summary parenthetical", async () => {
+    const entry = makeEntry({
+      workspace: {
+        settings: {
+          integrations: {
+            vscode: { enabled: true, cmd: "code", issue: "42" },
+          },
+        },
+      },
+    })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("(cmd: code)")
+    expect(frame).not.toContain("issue: 42")
+  })
+
+  test("Test D: global config jira issue does not appear when workspace has no jira settings", async () => {
+    // Global config has jira: { issue: "GLOBAL-999" } (set in mock above)
+    // Workspace has no jira settings at all
+    const entry = makeEntry()
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).not.toContain("GLOBAL-999")
   })
 })
