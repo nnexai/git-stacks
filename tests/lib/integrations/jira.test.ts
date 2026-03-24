@@ -10,12 +10,14 @@ const resolveIssueRefMock = mock((): any => ({
   workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
 }))
 const formatIssueErrorMock = mock((err: any) => `Issue error: ${err.error}`)
+const resolveWorkspaceArgMock = mock((name: string | undefined) => name ?? "detected-ws")
 
 mock.module("@/lib/integrations/issue-utils", () => ({
   linkIssue: linkIssueMock,
   unlinkIssue: unlinkIssueMock,
   resolveIssueRef: resolveIssueRefMock,
   formatIssueError: formatIssueErrorMock,
+  resolveWorkspaceArg: resolveWorkspaceArgMock,
 }))
 
 // Named reference so tests can swap return values via .mockImplementation()
@@ -24,8 +26,11 @@ const readGlobalConfigMock = mock(() => ({
   workspace_root: "/tmp",
 }))
 
+// workspaceExists returns true only for "my-ws" (function-based mock for disambiguation tests)
+const workspaceExistsMock = mock((name: string) => name === "my-ws")
+
 mock.module("@/lib/config", () => ({
-  workspaceExists: mock(() => true),
+  workspaceExists: workspaceExistsMock,
   readGlobalConfig: readGlobalConfigMock,
 }))
 
@@ -37,7 +42,7 @@ mock.module("@/tui/utils", () => ({
 }))
 
 // @ts-ignore — query param cache-busting
-const { _exec, jiraIntegration } = await import("@/lib/integrations/jira?unit-test")
+const { _exec, jiraIntegration } = await import("@/lib/integrations/jira?unit-test-jira2")
 
 // Override process.exit to prevent test runner exit
 const exitMock = mock((_code?: number) => { throw new Error(`process.exit(${_code})`) })
@@ -46,7 +51,13 @@ beforeEach(() => {
   linkIssueMock.mockClear()
   unlinkIssueMock.mockClear()
   resolveIssueRefMock.mockClear()
+  resolveWorkspaceArgMock.mockClear()
+  workspaceExistsMock.mockClear()
   readGlobalConfigMock.mockClear()
+  exitMock.mockClear()
+  exitMock.mockImplementation((_code?: number) => { throw new Error(`process.exit(${_code})`) })
+  resolveWorkspaceArgMock.mockImplementation((name: string | undefined) => name ?? "detected-ws")
+  workspaceExistsMock.mockImplementation((name: string) => name === "my-ws")
   _exec.runShell = mock(async () => ({ exitCode: 0 }))
 })
 
@@ -56,25 +67,98 @@ describe("jiraIntegration properties", () => {
   test("order is 53", () => expect(jiraIntegration.order).toBe(53))
 })
 
-describe("issue link", () => {
-  test("calls linkIssue with jira tracker", async () => {
+describe("issue link — two-arg backward compat", () => {
+  test("link with two args calls linkIssue with explicit workspace (backward compat)", async () => {
     const parent = new Command()
+    parent.exitOverride()
     jiraIntegration.commands!(parent)
     await parent.parseAsync(["node", "x", "issue", "link", "my-ws", "PROJ-123"])
     expect(linkIssueMock).toHaveBeenCalledWith("my-ws", "jira", "PROJ-123")
   })
+
+  test("link with two args does NOT call resolveWorkspaceArg", async () => {
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await parent.parseAsync(["node", "x", "issue", "link", "my-ws", "PROJ-123"])
+    expect(resolveWorkspaceArgMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("issue link — one arg (CWD fallback)", () => {
+  test("link with one arg that is NOT a workspace name treats it as issue-id and CWD-detects workspace", async () => {
+    // "PROJ-123" is not a workspace name (workspaceExists returns false for it)
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await parent.parseAsync(["node", "x", "issue", "link", "PROJ-123"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith(undefined, "jira", "link")
+    expect(linkIssueMock).toHaveBeenCalledWith("detected-ws", "jira", "PROJ-123")
+  })
+
+  test("link with one arg that IS a workspace name exits with missing issue ID error", async () => {
+    // "my-ws" is a workspace name (workspaceExists returns true)
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "link", "my-ws"])
+    ).rejects.toThrow("process.exit(1)")
+  })
+
+  test("link with no args exits with missing issue ID error", async () => {
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "link"])
+    ).rejects.toThrow("process.exit(1)")
+  })
 })
 
 describe("issue unlink", () => {
-  test("calls unlinkIssue with jira tracker", async () => {
+  test("unlink with explicit workspace calls resolveWorkspaceArg with workspace name", async () => {
     const parent = new Command()
+    parent.exitOverride()
     jiraIntegration.commands!(parent)
     await parent.parseAsync(["node", "x", "issue", "unlink", "my-ws"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith("my-ws", "jira", "unlink")
     expect(unlinkIssueMock).toHaveBeenCalledWith("my-ws", "jira")
+  })
+
+  test("unlink with no args (CWD fallback) calls resolveWorkspaceArg with undefined", async () => {
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await parent.parseAsync(["node", "x", "issue", "unlink"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith(undefined, "jira", "unlink")
+    expect(unlinkIssueMock).toHaveBeenCalledWith("detected-ws", "jira")
   })
 })
 
 describe("issue open", () => {
+  test("open with explicit workspace calls resolveWorkspaceArg with workspace name", async () => {
+    resolveIssueRefMock.mockImplementation(() => ({
+      ok: true, issueId: "PROJ-123", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
+    }))
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith("my-ws", "jira", "open")
+  })
+
+  test("open with no args (CWD fallback) calls resolveWorkspaceArg with undefined", async () => {
+    resolveIssueRefMock.mockImplementation(() => ({
+      ok: true, issueId: "PROJ-123", workspace: { name: "detected-ws", branch: "feat/detected", repos: [] },
+    }))
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await parent.parseAsync(["node", "x", "issue", "open"])
+    expect(resolveWorkspaceArgMock).toHaveBeenCalledWith(undefined, "jira", "open")
+  })
+
   test("calls _exec.runShell with default template and ISSUE_ID env", async () => {
     resolveIssueRefMock.mockImplementation(() => ({
       ok: true, issueId: "PROJ-123", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
@@ -84,6 +168,7 @@ describe("issue open", () => {
       workspace_root: "/tmp",
     }))
     const parent = new Command()
+    parent.exitOverride()
     jiraIntegration.commands!(parent)
     await parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
     expect(_exec.runShell).toHaveBeenCalledWith(
@@ -103,6 +188,7 @@ describe("issue open", () => {
       workspace_root: "/tmp",
     }))
     const parent = new Command()
+    parent.exitOverride()
     jiraIntegration.commands!(parent)
     await parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
     expect(_exec.runShell).toHaveBeenCalledWith(
@@ -116,6 +202,7 @@ describe("issue open", () => {
       ok: false, error: "no_issue_linked", tracker: "jira", workspace: "my-ws",
     }))
     const parent = new Command()
+    parent.exitOverride()
     jiraIntegration.commands!(parent)
     await expect(
       parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
