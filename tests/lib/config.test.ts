@@ -295,6 +295,102 @@ describe("corrupt YAML handling", () => {
 
 afterAll(() => isolated.cleanup())
 
+// --- scan-based lookup ---
+// Tests for scan-based workspace/template lookup by YAML name field (not filename).
+
+describe("scan-based lookup", () => {
+  const scanIsolated = useIsolatedConfig("config-scan-test")
+  const wsDir = join(scanIsolated.configDir, "workspaces")
+  const tplDir = join(scanIsolated.configDir, "templates")
+
+  beforeEach(() => {
+    mkdirSync(wsDir, { recursive: true })
+    mkdirSync(tplDir, { recursive: true })
+    mock.module("@/lib/paths", () => ({
+      HOME: scanIsolated.configDir,
+      DEFAULT_WORKSPACE_ROOT: join(scanIsolated.configDir, "ws-root"),
+      WS_CONFIG_DIR: scanIsolated.configDir,
+      WORKSPACES_DIR: wsDir,
+      GLOBAL_CONFIG_FILE: join(scanIsolated.configDir, "config.yml"),
+      REGISTRY_FILE: join(scanIsolated.configDir, "registry.yml"),
+      TEMPLATES_DIR: tplDir,
+      MESSAGES_DIR: join(scanIsolated.configDir, "messages"),
+      getMainDir: (r: string) => join(r, "main"),
+      getTasksDir: (r: string) => join(r, "tasks"),
+      expandHome: (p: string) => p.startsWith("~/") ? join(scanIsolated.configDir, p.slice(2)) : p,
+    }))
+  })
+
+  afterAll(() => scanIsolated.cleanup())
+
+  test("workspaceExists finds workspace by YAML name even when filename differs", async () => {
+    writeFileSync(join(wsDir, "foo.yml"), "name: bar\nbranch: main\ncreated: \"2026-01-01\"\n")
+
+    // @ts-ignore — cache-busting
+    const { workspaceExists } = await import("@/lib/config?scan-exists-1")
+    expect(workspaceExists("bar")).toBe(true)
+    expect(workspaceExists("foo")).toBe(false)
+  })
+
+  test("readWorkspace returns workspace from drifted file", async () => {
+    writeFileSync(join(wsDir, "old.yml"), "name: current\nbranch: main\ncreated: \"2026-01-01\"\n")
+
+    // @ts-ignore — cache-busting
+    const { readWorkspace } = await import("@/lib/config?scan-read-1")
+    const ws = readWorkspace("current")
+    expect(ws.name).toBe("current")
+  })
+
+  test("readWorkspace throws for non-existent name", async () => {
+    // @ts-ignore — cache-busting
+    const { readWorkspace } = await import("@/lib/config?scan-read-notfound")
+    expect(() => readWorkspace("ghost")).toThrow(/not found/)
+  })
+
+  test("duplicate YAML name warns to stderr", async () => {
+    writeFileSync(join(wsDir, "a.yml"), "name: dup\nbranch: main\ncreated: \"2026-01-01\"\n")
+    writeFileSync(join(wsDir, "b.yml"), "name: dup\nbranch: main\ncreated: \"2026-01-01\"\n")
+
+    const errors: string[] = []
+    const origError = console.error
+    console.error = (...args: unknown[]) => { errors.push(args.join(" ")); origError(...args) }
+    try {
+      // @ts-ignore — cache-busting
+      const { workspaceExists } = await import("@/lib/config?scan-dup-1")
+      workspaceExists("dup")
+    } finally {
+      console.error = origError
+    }
+    expect(errors.some((e) => e.includes("multiple workspaces with name 'dup'"))).toBe(true)
+  })
+
+  test("templateExists finds template by YAML name even when filename differs", async () => {
+    writeFileSync(join(tplDir, "old.yml"), "name: current\n")
+
+    // @ts-ignore — cache-busting
+    const { templateExists } = await import("@/lib/config?scan-tpl-exists-1")
+    expect(templateExists("current")).toBe(true)
+  })
+
+  test("readTemplate returns template from drifted file", async () => {
+    writeFileSync(join(tplDir, "old.yml"), "name: current\n")
+
+    // @ts-ignore — cache-busting
+    const { readTemplate } = await import("@/lib/config?scan-tpl-read-1")
+    const tpl = readTemplate("current")
+    expect(tpl.name).toBe("current")
+  })
+
+  test("listWorkspaces returns workspaces regardless of filename drift", async () => {
+    writeFileSync(join(wsDir, "drifted.yml"), "name: actual\nbranch: main\ncreated: \"2026-01-01\"\n")
+
+    // @ts-ignore — cache-busting
+    const { listWorkspaces } = await import("@/lib/config?scan-list-1")
+    const workspaces = listWorkspaces()
+    expect(workspaces.some((w: { name: string }) => w.name === "actual")).toBe(true)
+  })
+})
+
 // --- RepoRegistryEntrySchema forge field ---
 
 describe("RepoRegistryEntrySchema forge field", () => {

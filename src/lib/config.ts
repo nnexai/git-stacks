@@ -180,6 +180,54 @@ function writeYaml(path: string, data: unknown) {
   writeFileSync(path, stringify(data), "utf-8")
 }
 
+// --- Scan-based lookup helpers ---
+
+type WorkspaceLookup = { data: Workspace; filePath: string }
+
+function findWorkspaceFile(name: string): WorkspaceLookup | null {
+  if (!existsSync(WORKSPACES_DIR)) return null
+  const matches: WorkspaceLookup[] = []
+  for (const f of readdirSync(WORKSPACES_DIR).filter((f) => f.endsWith(".yml"))) {
+    const filePath = join(WORKSPACES_DIR, f)
+    try {
+      const raw = readFileSync(filePath, "utf-8")
+      const parsed = WorkspaceSchema.safeParse(parse(raw))
+      if (parsed.success && parsed.data.name === name) {
+        matches.push({ data: parsed.data, filePath })
+      }
+    } catch {
+      // skip unreadable files — same policy as listWorkspaces
+    }
+  }
+  if (matches.length > 1) {
+    console.error(`[git-stacks] Warning: multiple workspaces with name '${name}' — using first match`)
+  }
+  return matches[0] ?? null
+}
+
+type TemplateLookup = { data: Template; filePath: string }
+
+function findTemplateFile(name: string): TemplateLookup | null {
+  if (!existsSync(TEMPLATES_DIR)) return null
+  const matches: TemplateLookup[] = []
+  for (const f of readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith(".yml"))) {
+    const filePath = join(TEMPLATES_DIR, f)
+    try {
+      const raw = readFileSync(filePath, "utf-8")
+      const parsed = TemplateSchema.safeParse(parse(raw))
+      if (parsed.success && parsed.data.name === name) {
+        matches.push({ data: parsed.data, filePath })
+      }
+    } catch {
+      // skip unreadable files — same policy as listTemplates
+    }
+  }
+  if (matches.length > 1) {
+    console.error(`[git-stacks] Warning: multiple templates with name '${name}' — using first match`)
+  }
+  return matches[0] ?? null
+}
+
 // --- Global Config ---
 
 export function readGlobalConfig(): GlobalConfig {
@@ -198,11 +246,13 @@ export function workspacePath(name: string): string {
 }
 
 export function workspaceExists(name: string): boolean {
-  return existsSync(workspacePath(name))
+  return findWorkspaceFile(name) !== null
 }
 
 export function readWorkspace(name: string): Workspace {
-  return readYaml(workspacePath(name), WorkspaceSchema)
+  const found = findWorkspaceFile(name)
+  if (!found) throw new Error(`Workspace '${name}' not found.`)
+  return found.data
 }
 
 export function writeWorkspace(workspace: Workspace) {
@@ -214,17 +264,17 @@ export function listWorkspaces(): Workspace[] {
   if (!existsSync(WORKSPACES_DIR)) return []
   const results: Workspace[] = []
   for (const f of readdirSync(WORKSPACES_DIR).filter((f) => f.endsWith(".yml"))) {
-    const name = f.replace(".yml", "")
+    const filePath = join(WORKSPACES_DIR, f)
     try {
-      const raw = readFileSync(workspacePath(name), "utf-8")
+      const raw = readFileSync(filePath, "utf-8")
       const parsed = WorkspaceSchema.safeParse(parse(raw))
       if (parsed.success) {
         results.push(parsed.data)
       } else {
-        console.error(`[git-stacks] Skipping corrupt workspace '${name}': ${formatZodError(parsed.error)}`)
+        console.error(`[git-stacks] Skipping corrupt workspace '${f}': ${formatZodError(parsed.error)}`)
       }
     } catch (err) {
-      console.error(`[git-stacks] Skipping unreadable workspace '${name}': ${err}`)
+      console.error(`[git-stacks] Skipping unreadable workspace '${f}': ${err}`)
     }
   }
   return results
@@ -262,11 +312,13 @@ export function templatePath(name: string): string {
 }
 
 export function templateExists(name: string): boolean {
-  return existsSync(templatePath(name))
+  return findTemplateFile(name) !== null
 }
 
 export function readTemplate(name: string): Template {
-  return readYaml(templatePath(name), TemplateSchema)
+  const found = findTemplateFile(name)
+  if (!found) throw new Error(`Template '${name}' not found.`)
+  return found.data
 }
 
 export function writeTemplate(template: Template) {
@@ -278,17 +330,17 @@ export function listTemplates(): Template[] {
   if (!existsSync(TEMPLATES_DIR)) return []
   const results: Template[] = []
   for (const f of readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith(".yml"))) {
-    const name = f.replace(".yml", "")
+    const filePath = join(TEMPLATES_DIR, f)
     try {
-      const raw = readFileSync(templatePath(name), "utf-8")
+      const raw = readFileSync(filePath, "utf-8")
       const parsed = TemplateSchema.safeParse(parse(raw))
       if (parsed.success) {
         results.push(parsed.data)
       } else {
-        console.error(`[git-stacks] Skipping corrupt template '${name}': ${formatZodError(parsed.error)}`)
+        console.error(`[git-stacks] Skipping corrupt template '${f}': ${formatZodError(parsed.error)}`)
       }
     } catch (err) {
-      console.error(`[git-stacks] Skipping unreadable template '${name}': ${err}`)
+      console.error(`[git-stacks] Skipping unreadable template '${f}': ${err}`)
     }
   }
   return results
