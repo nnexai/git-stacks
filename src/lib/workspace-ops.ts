@@ -13,6 +13,9 @@ import {
   GlobalConfigSchema,
   RepoRegistrySchema,
   templatePath,
+  templateExists,
+  readTemplate,
+  writeTemplate,
   type Workspace,
   type GlobalConfig,
 } from "./config"
@@ -919,6 +922,54 @@ export async function renameWorkspace(
   if (workspace.cmux_workspace_id) {
     onProgress?.(`⚠ cmux session name is stale — will update on next \`git-stacks open ${newName}\``)
   }
+
+  return { ok: true }
+}
+
+export async function renameTemplate(
+  oldName: string,
+  newName: string,
+  opts: { dryRun?: boolean } = {},
+  onProgress?: ProgressCallback
+): Promise<{ ok: boolean; error?: string }> {
+  if (!templateExists(oldName)) {
+    return { ok: false, error: `Template '${oldName}' not found.` }
+  }
+  if (templateExists(newName)) {
+    return { ok: false, error: `Template '${newName}' already exists.` }
+  }
+
+  const workspaces = listWorkspaces()
+  const affectedWorkspaces = workspaces.filter((w) => w.template === oldName)
+
+  if (opts.dryRun) {
+    onProgress?.(`[dry-run] would rename template: ${oldName} -> ${newName}`)
+    for (const ws of affectedWorkspaces) {
+      onProgress?.(`[dry-run] would update workspace: ${ws.name} (template: ${oldName} -> ${newName})`)
+    }
+    onProgress?.("Dry run complete. No changes made.")
+    return { ok: true }
+  }
+
+  // Step 1: Write new template file with updated name
+  const tpl = readTemplate(oldName)
+  tpl.name = newName
+  writeTemplate(tpl)
+  onProgress?.(`wrote  ${newName}.yml`)
+
+  // Step 2: Cascade — update all workspaces referencing old template name
+  // Done BEFORE deleting old file so state is recoverable on failure
+  for (const ws of affectedWorkspaces) {
+    ws.template = newName
+    writeWorkspace(ws)
+    onProgress?.(`updated workspace  ${ws.name}`)
+  }
+
+  // Step 3: Delete old template file
+  if (existsSync(templatePath(oldName))) {
+    unlinkSync(templatePath(oldName))
+  }
+  onProgress?.(`deleted  ${oldName}.yml`)
 
   return { ok: true }
 }

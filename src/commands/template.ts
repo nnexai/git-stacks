@@ -3,7 +3,7 @@ import { prompts as p } from "../tui/utils"
 import { readTemplate, writeTemplate, listTemplates, templateExists, templatePath } from "../lib/config"
 import { runTemplateNew, runTemplateEdit } from "../tui/template-wizard"
 import { unlinkSync } from "fs"
-import { editTemplateYaml, openYamlInEditor } from "../lib/workspace-ops"
+import { editTemplateYaml, openYamlInEditor, renameTemplate } from "../lib/workspace-ops"
 
 export const templateCommand = new Command("template").description("Manage workspace templates")
 
@@ -108,21 +108,19 @@ templateCommand
 
 templateCommand
   .command("rename <old> <new>")
-  .description("Rename a template")
-  .action((oldName: string, newName: string) => {
-    if (!templateExists(oldName)) {
-      console.error(`Template '${oldName}' not found.`)
+  .description("Rename a template (updates all workspace references)")
+  .option("--dry-run", "Show what would change without writing")
+  .action(async (oldName: string, newName: string, opts: { dryRun?: boolean }) => {
+    const result = await renameTemplate(oldName, newName, { dryRun: opts.dryRun }, (msg) =>
+      console.log(`  ${msg}`)
+    )
+    if (!result.ok) {
+      console.error(result.error)
       process.exit(1)
     }
-    if (templateExists(newName)) {
-      console.error(`Template '${newName}' already exists.`)
-      process.exit(1)
+    if (!opts.dryRun) {
+      console.log(`Renamed '${oldName}' \u2192 '${newName}'.`)
     }
-    const tpl = readTemplate(oldName)
-    tpl.name = newName
-    writeTemplate(tpl)
-    unlinkSync(templatePath(oldName))
-    console.log(`Renamed '${oldName}' \u2192 '${newName}'.`)
   })
 
 templateCommand

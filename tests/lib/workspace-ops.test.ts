@@ -26,12 +26,16 @@ const {
   workspacePath,
   writeGlobalConfig,
   readWorkspace,
+  templateExists,
+  writeTemplate,
 }: {
   writeWorkspace: (ws: ReturnType<typeof WorkspaceSchema.parse>) => void
   workspaceExists: (name: string) => boolean
   workspacePath: (name: string) => string
   writeGlobalConfig: (cfg: { workspace_root: string; integrations: Record<string, unknown> }) => void
   readWorkspace: (name: string) => ReturnType<typeof WorkspaceSchema.parse>
+  templateExists: (name: string) => boolean
+  writeTemplate: (tpl: ReturnType<typeof TemplateSchema.parse>) => void
 // @ts-ignore — cache-busting for isolated paths mock
 } = await import("@/lib/config?ws-ops-test")
 
@@ -50,12 +54,14 @@ const {
   cleanWorkspace,
   renameWorkspace,
   closeWorkspace,
+  renameTemplate,
 }: {
   mergeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   removeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   cleanWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   renameWorkspace: (name: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
   closeWorkspace: (name: string, opts: { captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
+  renameTemplate: (oldName: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
 // @ts-ignore — cache-busting for isolated paths mock
 } = await import("@/lib/workspace-ops?ws-ops-test")
 
@@ -1498,5 +1504,97 @@ describe("editYaml helpers", () => {
     const valid = validate()
     expect(valid.ok).toBe(true)
     expect(valid.error).toBeUndefined()
+  })
+})
+
+// ============================================================================
+// describe("renameTemplate") — IDEN-03
+// ============================================================================
+
+describe("renameTemplate", () => {
+  // Helper: create a minimal template YAML in the isolated config dir
+  function createTemplateFixture(name: string, extraWorkspaceTemplate?: string): void {
+    mkdirSync(join(isolated.configDir, "templates"), { recursive: true })
+    const tpl = TemplateSchema.parse({ name, repos: [] })
+    writeTemplate(tpl)
+
+    if (extraWorkspaceTemplate !== undefined) {
+      // Write a workspace YAML that references this template
+      mkdirSync(join(isolated.configDir, "workspaces"), { recursive: true })
+      const ws = WorkspaceSchema.parse({
+        name: `ws-for-${name}`,
+        branch: "feature/test",
+        created: new Date().toISOString(),
+        repos: [],
+        template: extraWorkspaceTemplate,
+      })
+      writeWorkspace(ws)
+    }
+  }
+
+  test("renames template file and updates YAML name field", async () => {
+    const oldName = `tpl-rename-from-${FILE_RUN_ID}-${++_testCounter}`
+    const newName = `tpl-rename-to-${FILE_RUN_ID}-${_testCounter}`
+
+    createTemplateFixture(oldName)
+    expect(templateExists(oldName)).toBe(true)
+
+    const result = await renameTemplate(oldName, newName)
+
+    expect(result.ok).toBe(true)
+    expect(templateExists(newName)).toBe(true)
+    expect(templateExists(oldName)).toBe(false)
+  })
+
+  test("cascades template reference to workspace YAML", async () => {
+    const oldName = `tpl-cascade-from-${FILE_RUN_ID}-${++_testCounter}`
+    const newName = `tpl-cascade-to-${FILE_RUN_ID}-${_testCounter}`
+    const wsName = `ws-for-${oldName}`
+
+    createTemplateFixture(oldName, oldName)
+
+    const result = await renameTemplate(oldName, newName)
+    expect(result.ok).toBe(true)
+
+    // Re-read workspace and verify template reference updated
+    const updatedWs = readWorkspace(wsName)
+    expect(updatedWs.template).toBe(newName)
+  })
+
+  test("dry-run reports changes but does not write", async () => {
+    const oldName = `tpl-dryrun-from-${FILE_RUN_ID}-${++_testCounter}`
+    const newName = `tpl-dryrun-to-${FILE_RUN_ID}-${_testCounter}`
+
+    createTemplateFixture(oldName, oldName)
+
+    const messages: string[] = []
+    const result = await renameTemplate(oldName, newName, { dryRun: true }, (msg) => messages.push(msg))
+
+    expect(result.ok).toBe(true)
+    // Template old still exists, new does not
+    expect(templateExists(oldName)).toBe(true)
+    expect(templateExists(newName)).toBe(false)
+    // Messages contain [dry-run] prefix
+    expect(messages.some(m => m.includes("[dry-run]"))).toBe(true)
+    // Dry run completion message present
+    expect(messages[messages.length - 1]).toContain("Dry run complete")
+  })
+
+  test("returns error for nonexistent template", async () => {
+    const result = await renameTemplate(`ghost-tpl-${FILE_RUN_ID}`, `new-tpl-${FILE_RUN_ID}`)
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/not found/)
+  })
+
+  test("returns error if new name already exists", async () => {
+    const nameA = `tpl-a-${FILE_RUN_ID}-${++_testCounter}`
+    const nameB = `tpl-b-${FILE_RUN_ID}-${_testCounter}`
+
+    createTemplateFixture(nameA)
+    createTemplateFixture(nameB)
+
+    const result = await renameTemplate(nameA, nameB)
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/already exists/)
   })
 })
