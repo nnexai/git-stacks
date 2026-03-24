@@ -11,6 +11,10 @@ import {
   rebaseBranch,
   getCommitsBehind,
   fetchOrigin,
+  checkRemoteTrackingRef,
+  checkBranchExistsOnRemote,
+  hasUpstreamTracking,
+  ensureUpstreamTracking,
 } from "../../src/lib/git"
 
 // ---------------------------------------------------------------------------
@@ -312,5 +316,188 @@ describe("fetchOrigin", () => {
       "utf-8"
     )
     expect(source).toContain("fetch.timeout=30")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Helper: set up local origin with optional pushed branches
+// ---------------------------------------------------------------------------
+
+function makeRepoWithOrigin(tmp: string): { repoPath: string; originPath: string } {
+  const originPath = makeGitRepo(tmp, "origin-bare")
+  execSync(`git -C ${originPath} config --bool core.bare false`, { stdio: "pipe" })
+  const repoPath = makeGitRepo(tmp, "repo")
+  execSync(`git -C ${repoPath} remote add origin ${originPath}`, { stdio: "pipe" })
+  execSync(`git -C ${repoPath} push origin main`, { stdio: "pipe" })
+  return { repoPath, originPath }
+}
+
+// ---------------------------------------------------------------------------
+// describe("checkRemoteTrackingRef")
+// ---------------------------------------------------------------------------
+
+describe("checkRemoteTrackingRef", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-upstream-test")
+    const setup = makeRepoWithOrigin(tmp)
+    repoPath = setup.repoPath
+    // Push a feature branch so origin/feature-upstream exists
+    execSync(`git -C ${repoPath} branch feature-upstream`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} push origin feature-upstream`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} fetch origin`, { stdio: "pipe" })
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("returns true when origin/<branch> remote-tracking ref exists locally", async () => {
+    const result = await checkRemoteTrackingRef(repoPath, "feature-upstream")
+    expect(result).toBe(true)
+  })
+
+  test("returns false when origin/<branch> does not exist locally", async () => {
+    const result = await checkRemoteTrackingRef(repoPath, "branch-not-pushed")
+    expect(result).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("checkBranchExistsOnRemote")
+// ---------------------------------------------------------------------------
+
+describe("checkBranchExistsOnRemote", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-upstream-test")
+    const setup = makeRepoWithOrigin(tmp)
+    repoPath = setup.repoPath
+    execSync(`git -C ${repoPath} branch feature-remote`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} push origin feature-remote`, { stdio: "pipe" })
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("returns true when branch exists on remote origin", async () => {
+    const result = await checkBranchExistsOnRemote(repoPath, "feature-remote")
+    expect(result).toBe(true)
+  })
+
+  test("returns false when branch does not exist on remote", async () => {
+    const result = await checkBranchExistsOnRemote(repoPath, "branch-never-pushed")
+    expect(result).toBe(false)
+  })
+
+  test("returns false when origin is unreachable (non-existent remote path)", async () => {
+    // Override origin to point to a non-existent path to simulate network failure
+    execSync(`git -C ${repoPath} remote set-url origin /nonexistent/path/that/does/not/exist`, { stdio: "pipe" })
+    const result = await checkBranchExistsOnRemote(repoPath, "feature-remote")
+    expect(result).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("hasUpstreamTracking")
+// ---------------------------------------------------------------------------
+
+describe("hasUpstreamTracking", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-upstream-test")
+    const setup = makeRepoWithOrigin(tmp)
+    repoPath = setup.repoPath
+    execSync(`git -C ${repoPath} branch feature-tracked`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} push origin feature-tracked`, { stdio: "pipe" })
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("returns true when branch has upstream tracking configured", async () => {
+    // Manually set upstream tracking
+    execSync(`git -C ${repoPath} branch --set-upstream-to=origin/feature-tracked feature-tracked`, { stdio: "pipe" })
+    const result = await hasUpstreamTracking(repoPath, "feature-tracked")
+    expect(result).toBe(true)
+  })
+
+  test("returns false when branch has no upstream tracking configured", async () => {
+    // feature-tracked was created without -u flag so no tracking set
+    const result = await hasUpstreamTracking(repoPath, "feature-tracked")
+    expect(result).toBe(false)
+  })
+
+  test("returns false for a brand-new local branch with no remote", async () => {
+    execSync(`git -C ${repoPath} branch brand-new-local`, { stdio: "pipe" })
+    const result = await hasUpstreamTracking(repoPath, "brand-new-local")
+    expect(result).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("ensureUpstreamTracking")
+// ---------------------------------------------------------------------------
+
+describe("ensureUpstreamTracking", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-upstream-test")
+    const setup = makeRepoWithOrigin(tmp)
+    repoPath = setup.repoPath
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("sets tracking via local ref when origin/<branch> exists after fetch (source: local)", async () => {
+    execSync(`git -C ${repoPath} branch feature-local`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} push origin feature-local`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} fetch origin`, { stdio: "pipe" })
+
+    const result = await ensureUpstreamTracking(repoPath, "feature-local")
+    expect(result.tracked).toBe(true)
+    expect(result.source).toBe("local")
+  })
+
+  test("sets tracking via ls-remote when remote ref exists but not fetched locally (source: remote)", async () => {
+    const originPath = makeGitRepo(tmp, "origin2")
+    const repoPath2 = makeGitRepo(tmp, "repo2")
+    execSync(`git -C ${repoPath2} remote add origin ${originPath}`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath2} push origin main`, { stdio: "pipe" })
+
+    // Create a branch and push it to origin WITHOUT fetching back (so no local remote-tracking ref)
+    execSync(`git -C ${repoPath2} branch feature-remote-only`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath2} push origin feature-remote-only`, { stdio: "pipe" })
+    // Do NOT run git fetch origin here — so origin/feature-remote-only ref is not in local cache
+
+    const result = await ensureUpstreamTracking(repoPath2, "feature-remote-only")
+    expect(result.tracked).toBe(true)
+    expect(result.source).toBe("remote")
+  })
+
+  test("returns tracked:false for brand-new branch not yet on remote", async () => {
+    execSync(`git -C ${repoPath} branch brand-new-not-pushed`, { stdio: "pipe" })
+    const result = await ensureUpstreamTracking(repoPath, "brand-new-not-pushed")
+    expect(result.tracked).toBe(false)
+  })
+
+  test("returns tracked:false immediately when branch already has upstream tracking (skip)", async () => {
+    execSync(`git -C ${repoPath} branch already-tracked`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} push origin already-tracked`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} fetch origin`, { stdio: "pipe" })
+    execSync(`git -C ${repoPath} branch --set-upstream-to=origin/already-tracked already-tracked`, { stdio: "pipe" })
+
+    const result = await ensureUpstreamTracking(repoPath, "already-tracked")
+    // Already tracked — should return tracked:false (skip path, not setting tracking again)
+    expect(result.tracked).toBe(false)
+  })
+
+  test("is non-fatal when ls-remote fails (network unreachable)", async () => {
+    execSync(`git -C ${repoPath} branch offline-branch`, { stdio: "pipe" })
+    // Point origin at non-existent path to simulate network failure
+    execSync(`git -C ${repoPath} remote set-url origin /nonexistent/path`, { stdio: "pipe" })
+    // Should not throw — returns tracked:false
+    const result = await ensureUpstreamTracking(repoPath, "offline-branch")
+    expect(result.tracked).toBe(false)
   })
 })
