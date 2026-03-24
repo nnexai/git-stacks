@@ -205,6 +205,48 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.8.0 — Integration Polish & Workspace UX
+
+**Shipped:** 2026-03-24
+**Phases:** 4 (Phases 29–32) | **Plans:** 6 | **Commits:** 35
+
+### What Was Built
+
+- Upstream worktree branch tracking with two-layer detection (local rev-parse + ls-remote fallback)
+- Dashboard linked issues fix — workspace-only data, no global config leak
+- CWD-based workspace auto-detection for all 4 tracker integrations (Jira, GitHub, GitLab, Gitea)
+- GitLab branch slash investigation — confirmed glab CLI bug, documented workaround
+
+### What Worked
+
+- **Parallel worktree execution** for Phase 31 Plans 01 and 02 — both plans executed concurrently in separate worktrees, then merged. Saved ~30min of sequential execution.
+- **Injectable `_deps` pattern** (from v0.7.0's `_exec`) extended to `_cwdDetect` and `_resolveWorkspaceDeps` — solved bun mock.module cross-file contamination that `beforeAll` re-application couldn't fix.
+- **Investigation-only phase** (32) kept scope tight — no speculative code changes before confirming root cause.
+
+### What Was Inefficient
+
+- **Parallel worktree merge conflicts** required manual resolution — the worktree agent re-implemented functions that Plan 01 had already merged to main. The handoff didn't prevent this because worktrees branch from the point of creation.
+- **Cross-file test contamination debugging** took ~20min to diagnose that cache-busted imports still resolve their internal dependencies to stale module cache entries. The fix (injectable deps) was fast once the root cause was clear.
+
+### Patterns Established
+
+- `_cwdDetect` / `_resolveWorkspaceDeps` injectable deps pattern for functions that depend on module-cached singletons
+- `mock.module("@/lib/config", () => configMod)` is unreliable for deep dependency chains — prefer property injection
+- Commander.js `[workspace-or-issue] [issue-id]` signature with `workspaceExists()` disambiguation for mixed optional positionals
+
+### Key Lessons
+
+- Parallel worktree agents are powerful but need merge planning — the HANDOFF.json correctly predicted the conflict files but couldn't prevent the re-implementation
+- Pure investigation phases work well — Phase 32 took 15 minutes and avoided premature code changes
+
+### Cost Observations
+
+- Model mix: opus for orchestration/merge, sonnet for verification/integration check
+- Sessions: 1 session for completion (~2 hours including merge conflict resolution and investigation)
+- Notable: Test suite grew from 727 to 781 (+7%). Smallest milestone by plan count (6 plans) but largest merge complexity due to parallel execution.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -214,5 +256,6 @@ Living document — one section per shipped milestone.
 | v0.4.0 TUI Hardening & Polish | 8 | 21 | 1 | 0 |
 | v0.6.0 Integration & Niri | 5 | 6 | 1 | 0 |
 | v0.7.0 Close Command & Polish | 9 | 20 | 1 | 0 |
+| v0.8.0 Integration Polish | 4 | 6 | 1 | 0 |
 
-**Trend:** v0.7.0 is the largest milestone by phase+plan count (9 phases, 20 plans) yet maintained zero rework — the mock architecture refactor (Phase 24) eliminated the cross-test contamination class of bugs that caused rework in earlier milestones. Test count grew 66% (438 → 727) in one milestone. Autonomous mode scaled to 9 consecutive phases with minimal user interaction. Scope expansion via promoted todos (3 → 9 phases) worked well — each addition was small and well-defined.
+**Trend:** v0.8.0 is the smallest milestone by plan count (6 plans) but introduced parallel worktree execution for the first time — Plan 01 and 02 of Phase 31 ran concurrently. Zero rework streak extends to 4 milestones. Test suite at 781 (+7% from v0.7.0). Investigation-only phases (no code changes, just documentation) proved effective for ambiguous bugs.
