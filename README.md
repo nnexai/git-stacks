@@ -265,21 +265,24 @@ Repos must have a `forge` field set in the registry (`github`, `gitlab`, or `git
 
 **Issue tracking** (GitHub, GitLab, Gitea, Jira):
 
-Link workspaces to issues from any supported tracker. Issue references are stored in workspace YAML — no external state.
+Link workspaces to issues from any supported tracker. Issue references are stored in workspace YAML — no external state. When run from inside a worktree, the workspace is auto-detected from your working directory — no need to specify it.
 
 ```bash
-# Link an issue to a workspace
-git-stacks integration github issue link my-feature 42
-git-stacks integration jira issue link my-feature PROJ-123
+# Link an issue — auto-detects workspace from CWD
+git-stacks integration jira issue link PROJ-123
+git-stacks integration github issue link 42
 
-# View linked issue URL
-git-stacks integration github issue open my-feature
+# Or specify workspace explicitly (backward compatible)
+git-stacks integration github issue link my-feature 42
+
+# View linked issue URL (auto-detects workspace)
+git-stacks integration github issue open
 
 # Open in browser
-git-stacks integration github issue open my-feature --web
+git-stacks integration github issue open --web
 
-# Remove link
-git-stacks integration github issue unlink my-feature
+# Remove link (auto-detects workspace)
+git-stacks integration github issue unlink
 ```
 
 Jira uses a configurable command template (default: `jira open $ISSUE_ID`). Configure via `git-stacks config` or edit the config YAML directly:

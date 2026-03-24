@@ -4,6 +4,28 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.8.0] — 2026-03-24
+
+### Added
+
+**Upstream branch tracking** — worktree creation automatically detects existing upstream branches and sets up tracking, so `git push` and `git pull` work without `--set-upstream`. Uses local remote-tracking refs first (no extra network call); falls back to `git ls-remote` when local refs are stale. Wired into all creation flows: `git-stacks new`, `git-stacks clone`, TUI wizard, and `git-stacks open`.
+
+**Workspace auto-detection from CWD** — issue commands on all four tracker integrations (Jira, GitHub, GitLab, Gitea) now auto-detect the current workspace when run from inside a worktree directory:
+- `git-stacks integration jira issue link PROJ-123` — no `--workspace` needed when inside a worktree
+- `git-stacks integration github issue open` — auto-detects workspace from CWD
+- Explicit `<workspace>` argument still works (backward compatible)
+- Clear error when run outside any known worktree
+
+### Fixed
+
+- **Dashboard linked issues display** — the workspace detail pane now shows a dedicated "Linked Issues" section that reads exclusively from workspace settings. Previously, global Jira config values leaked into the display when no per-workspace issue was linked.
+
+### Known Issues
+
+- **GitLab branch names with `/`** — `glab repo view --web` fails to URL-encode branch names containing `/` (e.g., `feature/my-feature`). This is a [glab CLI bug](https://gitlab.com/gitlab-org/cli/-/issues/948), fixed in [MR !1183](https://gitlab.com/gitlab-org/cli/-/merge_requests/1183) (Feb 2023). **Workaround:** update glab to v1.28+ (any version after Feb 2023).
+
+---
+
 ## [0.7.1] — 2026-03-23
 
 ### Fixed
