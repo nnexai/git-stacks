@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Integration Polish & Workspace UX
-status: ready to plan
-last_updated: "2026-03-24T00:00:00.000Z"
-last_activity: 2026-03-24
+status: Ready to execute
+stopped_at: Completed 29-01-PLAN.md — upstream tracking functions added to git.ts
+last_updated: "2026-03-24T13:27:46.317Z"
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
 ---
 
 # Project State
@@ -19,20 +19,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** v0.8.0 Phase 29 — Upstream Worktree Branch Tracking
+**Current focus:** Phase 29 — upstream-worktree-branch-tracking
 
 ## Current Position
 
-Phase: 29 of 32 (Upstream Worktree Branch Tracking)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-24 — Roadmap created for v0.8.0
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 29 (upstream-worktree-branch-tracking) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0 (this milestone)
 - Average duration: —
 - Total execution time: —
@@ -44,10 +41,13 @@ Progress: [░░░░░░░░░░] 0%
 Archived to .planning/milestones/v0.7.0-ROADMAP.md — see full decision log there.
 
 Recent decisions affecting v0.8.0 work:
+
 - Use `--workspace` flag (not optional positional) for Jira issue commands to avoid Commander.js positional ambiguity
 - Use local remote-tracking ref check (`git rev-parse --verify origin/<branch>`) instead of `git ls-remote` for upstream check if fetchOrigin() already runs before createWorktree() — confirm in workspace-ops.ts before implementing Phase 29
 - Path normalization for CWD detection: apply `resolve(expandHome(repo.task_path))` on stored paths; use `startsWith(taskPath + "/")` not `===` to match subdirectories without false-positive collisions
 - Phase 32 (GitLab slash) is investigate-first — do not add URL encoding before confirming root cause via manual testing
+- [Phase 29]: Used bare git repo (git init --bare) for test origins to avoid push rejection from diverging histories
+- [Phase 29]: ensureUpstreamTracking returns tracked:false on early-return (already tracked) — distinguishing skip path from new-tracking path
 
 ### Pending Todos
 
@@ -60,7 +60,7 @@ Recent decisions affecting v0.8.0 work:
 
 ## Session Continuity
 
-Last session: 2026-03-24
-Stopped at: Roadmap created — all 5 v0.8.0 requirements mapped to phases 29-32
+Last session: 2026-03-24T13:27:46.312Z
+Stopped at: Completed 29-01-PLAN.md — upstream tracking functions added to git.ts
 Resume file: None
 Next action: /gsd:plan-phase 29

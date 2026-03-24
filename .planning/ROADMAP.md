@@ -98,7 +98,7 @@ See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md) for full detail
   4. Workspace creation performance is not degraded — the branch check uses local remote-tracking refs after an existing fetch, not a separate network call
 **Plans**: 2 plans
 Plans:
-- [ ] 29-01-PLAN.md — TDD: upstream tracking core functions in git.ts
+- [x] 29-01-PLAN.md — TDD: upstream tracking core functions in git.ts
 - [ ] 29-02-PLAN.md — Wire ensureUpstreamTracking into all creation and open flows
 
 ### Phase 30: Dashboard Linked Issues Display Fix
@@ -143,7 +143,7 @@ Plans:
 | 10-15.2. TUI Hardening | v0.4.0 | 21/21 | Complete | 2026-03-21 |
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
-| 29. Upstream Worktree Branch Tracking | v0.8.0 | 0/2 | Planned | - |
+| 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | In Progress|  |
 | 30. Dashboard Linked Issues Display Fix | v0.8.0 | 0/? | Not started | - |
 | 31. Workspace CWD Auto-Detection | v0.8.0 | 0/? | Not started | - |
 | 32. GitLab Branch Slash Investigation | v0.8.0 | 0/? | Not started | - |
