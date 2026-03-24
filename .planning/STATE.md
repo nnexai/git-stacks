@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: Integration Polish & Workspace UX
-status: Ready to plan
-stopped_at: Completed 30-01-PLAN.md — fixed WorkspaceDetail linked issues display bug
-last_updated: "2026-03-24T14:26:01.271Z"
+status: Ready to execute
+stopped_at: Completed 31-01-PLAN.md — implemented detectWorkspaceFromCwd and resolveWorkspaceArg
+last_updated: "2026-03-24T15:49:08.791Z"
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 30 — dashboard-linked-issues-display-fix
+**Current focus:** Phase 31 — workspace-cwd-auto-detection
 
 ## Current Position
 
-Phase: 31
-Plan: Not started
+Phase: 31 (workspace-cwd-auto-detection) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -52,6 +52,8 @@ Recent decisions affecting v0.8.0 work:
 - [Phase 29]: TUI dashboard creation flow: silent tracking (no visual feedback) to avoid corrupting row-based progress UI
 - [Phase 30-dashboard-linked-issues-display-fix]: TRACKER_IDS hardcoded as const array — no isTracker property on Integration interface; stable list matches 4 forge/issue integrations
 - [Phase 30-dashboard-linked-issues-display-fix]: Linked Issues reads only from ws().settings — never falls back to globalConfig; issue key filtered from config summary for all integrations
+- [Phase 31]: CwdDetectionResult discriminated union for workspace CWD auto-detection; resolveWorkspaceArg calls process.exit(1) on failure; trailing-separator guard prevents path prefix collision
+- [Phase 31]: Test isolation pattern: manual configDir + applyPathsMock() + beforeAll() to survive cross-file mock contamination from config.test.ts inline mock.module calls
 
 ### Pending Todos
 
@@ -64,7 +66,7 @@ Recent decisions affecting v0.8.0 work:
 
 ## Session Continuity
 
-Last session: 2026-03-24T14:22:27.851Z
-Stopped at: Completed 30-01-PLAN.md — fixed WorkspaceDetail linked issues display bug
+Last session: 2026-03-24T15:49:08.786Z
+Stopped at: Completed 31-01-PLAN.md — implemented detectWorkspaceFromCwd and resolveWorkspaceArg
 Resume file: None
 Next action: /gsd:plan-phase 29

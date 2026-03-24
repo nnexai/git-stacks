@@ -15,7 +15,7 @@ Requirements for v0.8.0 Integration Polish & Workspace UX. Each maps to roadmap 
 ### Workspace UX
 
 - [x] **WUX-01**: Worktree creation checks for existing upstream branch and sets up tracking automatically
-- [ ] **WUX-02**: Jira integration auto-detects current workspace from working directory path
+- [x] **WUX-02**: Jira integration auto-detects current workspace from working directory path
 - [ ] **WUX-03**: Auto-detection extends to all tracker integrations (GitHub, GitLab, Gitea issue commands)
 
 ## Future Requirements
@@ -65,7 +65,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUG-01 | Phase 30 | Complete |
 | BUG-02 | Phase 32 | Pending |
 | WUX-01 | Phase 29 | Complete |
-| WUX-02 | Phase 31 | Pending |
+| WUX-02 | Phase 31 | Complete |
 | WUX-03 | Phase 31 | Pending |
 
 **Coverage:**

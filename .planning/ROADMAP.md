@@ -126,7 +126,7 @@ Plans:
   5. Custom `workspace_root` paths configured in global config are honored during CWD detection
 **Plans**: 2 plans
 Plans:
-- [ ] 31-01-PLAN.md — TDD: detectWorkspaceFromCwd and resolveWorkspaceArg core functions
+- [x] 31-01-PLAN.md — TDD: detectWorkspaceFromCwd and resolveWorkspaceArg core functions
 - [ ] 31-02-PLAN.md — Wire CWD auto-detection into all 4 tracker issue commands
 
 ### Phase 32: GitLab Branch Slash Investigation
@@ -150,5 +150,5 @@ Plans:
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | Complete    | 2026-03-24 |
 | 30. Dashboard Linked Issues Display Fix | v0.8.0 | 1/1 | Complete    | 2026-03-24 |
-| 31. Workspace CWD Auto-Detection | v0.8.0 | 0/2 | Not started | - |
+| 31. Workspace CWD Auto-Detection | v0.8.0 | 1/2 | In Progress|  |
 | 32. GitLab Branch Slash Investigation | v0.8.0 | 0/? | Not started | - |
