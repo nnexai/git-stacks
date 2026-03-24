@@ -126,7 +126,13 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-(None — next milestone not yet defined)
+- [ ] Name field is canonical identity for workspaces and templates (not filename)
+- [ ] Rename keeps name field and filename in sync; no drift
+- [ ] TUI and CLI reverse-lookups use name field
+- [ ] Autocompletion resolves workspace/template names from YAML name fields
+- [ ] Shell completion audit — all commands covered (bash/zsh/fish)
+- [ ] Forge/issue subcommands have completion coverage (`pr create/open/status`, `issue link/unlink/open`)
+- [ ] Dynamic completion for workspace names, template names, repo names in forge/issue args
 
 ### Out of Scope
 
@@ -141,9 +147,20 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 
+## Current Milestone: v0.9.0 Identity & Completion Integrity
+
+**Goal:** Make workspace/template identity robust using name fields as canonical keys, and ensure shell completions cover all commands shipped to date.
+
+**Target features:**
+- Name-based identity everywhere (workspace + template YAML `name` is canonical; filename is storage only)
+- Rename correctness (rename keeps name field and filename in sync; reverse-lookups use name)
+- Full shell completion audit + fix across all commands (bash/zsh/fish)
+- Forge/issue completion coverage (`pr create/open/status`, `issue link/unlink/open` across all 4 integrations)
+- Dynamic value completion (workspace names, template names, repo names in forge/issue args)
+
 ## Next Milestone Goals
 
-Candidates for v0.9.0+:
+Candidates for v1.0.0+:
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type; version gate for v1.0
 - **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, per-repo ahead/behind in status
@@ -215,6 +232,23 @@ Candidates for v0.9.0+:
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd:transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd:complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
 
 <details>
@@ -233,4 +267,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-24 after v0.8.0 milestone — Integration Polish & Workspace UX*
+*Last updated: 2026-03-24 after v0.9.0 milestone started — Identity & Completion Integrity*

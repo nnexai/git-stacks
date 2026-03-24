@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.8.0
-milestone_name: Integration Polish & Workspace UX
-status: Milestone complete — ready for next milestone
-stopped_at: v0.8.0 shipped, archived, tagged
-last_updated: "2026-03-24T19:00:00.000Z"
+milestone: v0.9.0
+milestone_name: Identity & Completion Integrity
+status: Defining requirements
+stopped_at: ~
+last_updated: "2026-03-24T00:00:00.000Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
@@ -19,11 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Planning next milestone
+**Current focus:** v0.9.0 — Identity & Completion Integrity
 
 ## Current Position
 
-v0.8.0 complete. No active milestone.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-24 — Milestone v0.9.0 started
 
 ## Performance Metrics
 
