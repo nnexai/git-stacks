@@ -28,7 +28,6 @@ const {
   readWorkspace,
   templateExists,
   writeTemplate,
-  templatePath,
 }: {
   writeWorkspace: (ws: ReturnType<typeof WorkspaceSchema.parse>) => void
   workspaceExists: (name: string) => boolean
@@ -37,7 +36,6 @@ const {
   readWorkspace: (name: string) => ReturnType<typeof WorkspaceSchema.parse>
   templateExists: (name: string) => boolean
   writeTemplate: (tpl: ReturnType<typeof TemplateSchema.parse>) => void
-  templatePath: (name: string) => string
 // @ts-ignore — cache-busting for isolated paths mock
 } = await import("@/lib/config?ws-ops-test")
 
@@ -1566,7 +1564,6 @@ describe("renameTemplate", () => {
   test("dry-run reports changes but does not write", async () => {
     const oldName = `tpl-dryrun-from-${FILE_RUN_ID}-${++_testCounter}`
     const newName = `tpl-dryrun-to-${FILE_RUN_ID}-${_testCounter}`
-    const wsName = `ws-for-${oldName}`
 
     createTemplateFixture(oldName, oldName)
 
