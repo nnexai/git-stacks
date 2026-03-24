@@ -109,9 +109,9 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
   2. User can edit, remove, list, and look up a template using the name stored in the YAML `name` field even if the filename differs
   3. User can rename a workspace and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
   4. User can rename a template and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 33-01-PLAN.md — Scan-based lookup helpers for workspaces and templates + doctor drift detection
+- [x] 33-01-PLAN.md — Scan-based lookup helpers for workspaces and templates + doctor drift detection
 - [ ] 33-02-PLAN.md — Template rename with workspace cascade + dry-run support
 
 ### Phase 34: Completion Audit & Forge/Issue Coverage
@@ -155,7 +155,7 @@ Plans:
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
-| 33. Name-Based Identity | v0.9.0 | 0/2 | In progress | - |
+| 33. Name-Based Identity | v0.9.0 | 1/2 | In Progress|  |
 | 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 0/? | Not started | - |
 | 35. Dynamic Name Completion | v0.9.0 | 0/? | Not started | - |
 | 36. Release Prep | v0.9.0 | 0/1 | Not started | - |
