@@ -117,7 +117,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - [ ] Fix dashboard linked issues display — shows global Jira config instead of per-workspace issues
 - [ ] Fix branch name '/' escaping for GitLab open — investigate whether it's our code or glab
 - [ ] Jira integration auto-detects workspace from working directory path
-- [ ] Worktree creation checks for existing upstream branch and sets up tracking
+- ✓ Worktree creation checks for existing upstream branch and sets up tracking — v0.8.0 Phase 29
 
 ### Out of Scope
 
@@ -230,4 +230,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-24 after v0.8.0 milestone started — Integration Polish & Workspace UX*
+*Last updated: 2026-03-24 after Phase 29 complete — upstream worktree branch tracking*
