@@ -146,6 +146,6 @@ Plans:
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29. Upstream Worktree Branch Tracking | v0.8.0 | 1/2 | Complete    | 2026-03-24 |
-| 30. Dashboard Linked Issues Display Fix | v0.8.0 | 1/1 | Complete   | 2026-03-24 |
+| 30. Dashboard Linked Issues Display Fix | v0.8.0 | 1/1 | Complete    | 2026-03-24 |
 | 31. Workspace CWD Auto-Detection | v0.8.0 | 0/? | Not started | - |
 | 32. GitLab Branch Slash Investigation | v0.8.0 | 0/? | Not started | - |
