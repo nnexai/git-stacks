@@ -1,226 +1,207 @@
 # Stack Research
 
-**Domain:** Bun CLI tool — v0.8.0 Integration Polish & Workspace UX
-**Researched:** 2026-03-24
-**Confidence:** HIGH (all git CLI flags verified against official docs; glab behavior traced to confirmed upstream behavior; implementation patterns derived from reading installed source)
+**Domain:** Bun CLI tool — v0.10.0 Multi-Agent Workspace Tooling
+**Researched:** 2026-03-25
+**Confidence:** HIGH (all findings verified against current source, official git docs, Commander.js README, and SolidJS docs)
 
 ---
 
 ## Scope
 
-This document covers **only what is needed for v0.8.0**. The existing stack (Bun, TypeScript, Commander.js, SolidJS + OpenTUI, Zod + YAML, `@clack/prompts`) is unchanged and not re-researched.
+This document covers **only what is new for v0.10.0**. The existing stack (Bun runtime, TypeScript strict, Commander.js 12.1.0, SolidJS 1.9.11 + @opentui/core 0.1.87, Zod 3.25.76 + yaml 2.8.2, @clack/prompts 0.9.1) is unchanged and not re-researched.
 
-Four questions answered:
+Five features, three questions:
 
-1. Why does the dashboard show global Jira config instead of per-workspace issues, and how is it fixed?
-2. Does glab handle branch names with '/' correctly, or does our code need to work around it?
-3. How can the Jira integration detect the current workspace from the working directory path?
-4. What git CLI flags set up upstream tracking when a remote branch already exists?
-
----
-
-## Finding 1: Dashboard Linked Issues Bug — Read Source, Not Read Config
-
-**Root cause identified by reading `WorkspaceDetail.tsx` lines 127–138.**
-
-The "config summary" block that shows integration settings for enabled integrations reads:
-
-```typescript
-const rawConfig = (ws().settings?.integrations?.[integration.id]
-  ?? globalConfig.integrations[integration.id]  // <-- fallback to global
-  ?? {}) as Record<string, unknown>
-```
-
-This is correct for rendering integration settings (e.g., `open_cmd`). However, this same code path renders `issue: PROJ-123` — the per-workspace issue ID stored in `ws().settings.integrations.jira.issue` — as if it were a config summary entry.
-
-**The rendering issue is separate from the data source bug.** The data is stored correctly per-workspace (confirmed in `issue-utils.ts`: `linkIssue` writes to `workspace.settings.integrations[trackerId].issue`). The display problem is that the config summary block shows "issue: PROJ-123" alongside integration settings like "open_cmd: ..." using the same rendering path, and the `??` fallback to `globalConfig` means that when a workspace has no issue linked, it falls through to any global Jira config that happens to contain an `issue` key.
-
-**Fix:** Add a dedicated "Linked issues" section in `WorkspaceDetail.tsx` that reads issue IDs from `ws().settings?.integrations?.[id]?.issue` directly. Do not render `issue` keys through the config summary path. The config summary filter should explicitly exclude the `issue` key.
-
-**No new dependencies.** The data is already in the workspace YAML — it just needs a separate display section.
-
-**Confidence:** HIGH (traced through installed source; data model confirmed in `issue-utils.ts` + `config.ts`).
+1. `git-stacks paths` and `git-stacks pull` — what git CLI patterns are needed beyond what already exists?
+2. `git-stacks env` — how do the three output formats (shell, dotenv, json) map to implementation?
+3. TUI staleness indicator — how should periodic background git checks integrate with the existing SolidJS/OpenTUI hook pattern?
+4. Template composition — what does `includes:` field resolution and multi-template `--template a --template b` require?
+5. What NOT to add — libraries that are tempting but wrong for this context.
 
 ---
 
-## Finding 2: glab Branch Names with '/' — glab Handles It; Investigate Before Patching
+## Recommended Stack
 
-**Research finding:** The `glab mr view --web` command, when given no arguments, runs in the git repo directory and resolves the MR by the current branch name by querying the GitLab API. The branch name is **not passed as a URL path component by our code** — we call `_exec.run(["mr", "view", "--web"], repoPath)` and glab does the branch detection internally.
+### Core Technologies
 
-The MR `!1183` in `gitlab-org/cli` confirmed that glab did add `url.PathEscape` for branch names in web URLs. This was released before 2024.
+All existing. No new runtime, framework, or language additions required for v0.10.0.
 
-**What we actually call:**
-```typescript
-// From gitlab.ts — no branch name passed at all
-const result = await _exec.run(["mr", "view", "--web"], repoPath)
-```
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| Bun `$` shell | (runtime) | git pull, git rev-list behind check | Already used for all git ops in `src/lib/git.ts`; add `pullBranch()` alongside existing functions |
+| Commander.js | 12.1.0 | `paths`, `pull`, `env` commands + multi-value `--template` | Already installed; `.option('-t, --template <name...>')` variadic syntax supports repeated flag natively |
+| Zod | 3.25.76 | `includes:` field on TemplateSchema | Already installed; add `z.array(z.string()).optional()` field, Zod handles forward-compat via `.optional()` |
+| SolidJS `onCleanup` + `setInterval` | 1.9.11 | Periodic background staleness polling in TUI | Already used for periodic tick in `useMessages.ts`; same pattern with `setInterval` + `onCleanup` |
 
-Our code does not pass the branch name to glab. Glab detects the current branch from the git repo CWD and queries the GitLab API. The slash issue would be **inside glab**, not in our code.
+### Supporting Libraries
 
-**The likely cause of the user-reported issue:** `glab mr view` (without `--web`) prints MR info, but with `--web` it opens the MR URL in a browser. If glab constructs a URL like `https://gitlab.com/org/repo/-/merge_requests?source_branch=feature%2Fname`, some browsers or OS `xdg-open` handlers may double-encode the `%2F` to `%252F`. This is a known pattern (confirmed by lazygit issue #4321 analysis above).
+No new dependencies are required. All capabilities map to existing tools or Bun built-ins.
 
-**Fix strategy:** Investigate first by testing `glab mr view --web` on a branch with a slash. If it fails, the fix is on glab's side (file a bug). If glab works but our integration wrapper doesn't invoke it correctly, the fix is in `gitlab.ts`. No code change is warranted until the investigation confirms the failure is ours.
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| (none new) | — | — | — |
 
-**Confidence:** MEDIUM — glab's internal branch resolution is confirmed. The double-encoding pattern is confirmed from lazygit. Whether glab itself suffers from this in the current version requires live testing.
+### Development Tools
 
----
-
-## Finding 3: Jira Workspace Auto-Detection from CWD — Path-Based Detection via WORKSPACES_DIR
-
-**How worktree paths are structured (from `paths.ts` + `config.ts`):**
-
-```
-{workspace_root}/tasks/{workspace_name}/{repo_name}/
-```
-
-Default `workspace_root` is `~/workspaces`, so a typical worktree path is:
-
-```
-~/workspaces/tasks/my-feature/api/
-```
-
-A user running `jira issue open` (no workspace arg) inside `~/workspaces/tasks/my-feature/api/` can be identified by checking whether their CWD starts with `{tasksDir}/`. The workspace name is the first path component after `{tasksDir}/`.
-
-**Detection algorithm:**
-
-```typescript
-import { readGlobalConfig } from "../config"
-import { getTasksDir } from "../paths"
-
-export function detectWorkspaceFromCwd(): string | null {
-  const config = readGlobalConfig()
-  const tasksDir = getTasksDir(config.workspace_root)
-  const cwd = process.cwd()
-  if (!cwd.startsWith(tasksDir + "/")) return null
-  const relative = cwd.slice(tasksDir.length + 1)
-  const wsName = relative.split("/")[0]
-  return wsName || null
-}
-```
-
-This is pure path arithmetic — no filesystem reads beyond `readGlobalConfig()` (which is already called in the existing Jira `open` action).
-
-**Workspace arg change:** The `<workspace>` positional arg in `issue link`, `issue unlink`, `issue open` commands should become `[workspace]` (optional). When omitted, call `detectWorkspaceFromCwd()`. If no workspace is detected and no arg provided, emit a clear error: "Not inside a workspace directory. Specify a workspace name."
-
-This same pattern should apply to `github.ts` and `gitlab.ts` `issue` subcommands for consistency — the Jira change is the immediate ask but the pattern is reusable.
-
-**No new dependencies.** Uses `process.cwd()` (built-in Node/Bun) + existing path utilities.
-
-**Confidence:** HIGH (derived directly from `paths.ts` path layout; `getTasksDir` confirmed in source; `process.cwd()` is standard).
+No changes to dev tooling.
 
 ---
 
-## Finding 4: Upstream Branch Tracking During Worktree Creation
+## Feature-Specific Implementation Notes
 
-**Current behavior in `git.ts` `createWorktree()`:**
+### `git-stacks paths` Command
 
-```typescript
-if (exists) {
-  // branch exists locally — check it out into the worktree
-  await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet()
-} else {
-  // branch does not exist locally — create new branch from HEAD
-  await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet()
-}
-```
+**What it does:** Outputs repo paths from a workspace YAML — one per line, or with a `--prefix` string prepended to each.
 
-**The gap:** `checkBranchExists()` checks local refs (`git rev-parse --verify <branch>`). It does not check `origin/<branch>`. When a branch exists on the remote but not locally (e.g., a collaborator pushed it, or the user pushed from another machine), the current code creates a **new disconnected local branch** instead of tracking the remote.
+**Implementation:** Pure TypeScript over existing `readWorkspace()` + `WorkspaceRepo`. No new git calls needed. The `--prefix` flag maps directly to string concatenation before `console.log`. Output goes to stdout so it is pipeline-composable.
 
-**The fix — two git operations:**
+**Format variants:**
+- Default: one absolute path per line
+- `--prefix <str>`: `${prefix}${path}` per line (e.g. `--prefix --repo=` produces `--repo=/path/to/repo`)
+- `--format json`: JSON array of objects `{ name, path, mode }` (add alongside `--prefix` as independent flag)
 
-**Step 1:** After the existing `checkBranchExists` local check fails, run a remote check:
-```bash
-git -C {repoPath} ls-remote --exit-code --heads origin {branch}
-```
-Exit code 0 = branch exists on remote. Exit code 2 = branch does not exist on remote.
+**Commander.js pattern:** No special syntax needed; standard `.option()` flags.
 
-This command is already used in `isBranchGoneOnRemote()` in `git.ts`. The new function uses the same pattern.
+**Integration point:** Reads from `WorkspaceRepo.task_path` (worktree repos) or `WorkspaceRepo.main_path` (trunk repos). Existing `readWorkspace()` in `src/lib/config.ts` provides this directly.
 
-**Step 2:** If remote branch exists, fetch and set up tracking:
-```bash
-git -C {repoPath} fetch origin {branch}:{branch}
-git -C {repoPath} worktree add {worktreePath} {branch}
-git -C {repoPath} branch --set-upstream-to=origin/{branch} {branch}
-```
-
-Or more concisely using `--track`:
-```bash
-git -C {repoPath} fetch origin {branch}
-git -C {repoPath} worktree add --track -b {branch} {worktreePath} origin/{branch}
-```
-
-The `--track` flag on `git worktree add` marks the remote-tracking branch as upstream. Verified in official git docs: "When creating a new branch, if `<commit-ish>` is a branch, `--track` marks it as upstream from the new branch. This is the default if `<commit-ish>` is a remote-tracking branch."
-
-**Recommended implementation in `git.ts`:**
-
-```typescript
-export async function checkRemoteBranchExists(repoPath: string, branch: string): Promise<boolean> {
-  const result = await $`git -C ${repoPath} ls-remote --exit-code --heads origin ${branch}`
-    .quiet().nothrow()
-  return result.exitCode === 0
-}
-
-export async function createWorktree(
-  repoPath: string,
-  worktreePath: string,
-  branch: string
-): Promise<void> {
-  const localExists = await checkBranchExists(repoPath, branch)
-  if (localExists) {
-    await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet()
-  } else {
-    const remoteExists = await checkRemoteBranchExists(repoPath, branch)
-    if (remoteExists) {
-      // Fetch the remote branch and create local tracking worktree
-      await $`git -C ${repoPath} fetch origin ${branch}`.quiet()
-      await $`git -C ${repoPath} worktree add --track -b ${branch} ${worktreePath} origin/${branch}`.quiet()
-    } else {
-      // New branch — create from current HEAD (existing behavior)
-      await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet()
-    }
-  }
-}
-```
-
-**`git ls-remote --exit-code --heads origin {branch}`** returns exit code 2 (not 1) when the pattern is not found. This is the same command already used in `isBranchGoneOnRemote()` — consistent with existing codebase patterns.
-
-**`git fetch origin {branch}` (without a local ref spec)** fetches the remote branch into `FETCH_HEAD` and updates `origin/{branch}` in the remote-tracking refs. The subsequent `worktree add --track` correctly links the local branch to `origin/{branch}`.
-
-**No new dependencies.** Uses standard git CLI via existing `Bun.$` pattern.
-
-**Confidence:** HIGH (git docs + existing codebase pattern for `ls-remote --exit-code`; `--track` flag verified in official git-worktree docs).
+**Confidence:** HIGH — entirely additive over existing data structures.
 
 ---
 
-## Recommended Stack Additions
+### `git-stacks pull` Command
 
-### No New npm Dependencies Required
+**What it does:** For each repo in a workspace, runs `git pull` (or `git fetch` + `git merge --ff-only`) to bring the local branch up to date with its upstream.
 
-All 4 features are pure logic fixes / new git CLI invocations:
+**git CLI approach:** Use `git -C <path> pull --ff-only` for both worktree and trunk repos. `--ff-only` aborts on non-fast-forward to prevent unexpected merge commits, which is the safe default for multi-repo automation. A `--rebase` flag can be offered as an opt-in.
 
-| Feature | What's Needed | Why No Library |
-|---------|--------------|---------------|
-| Dashboard issues display | Read `ws().settings.integrations[id].issue` in JSX | Data already in workspace YAML |
-| glab branch slash | Investigation first; likely a glab-side behavior | If it's ours: URL-encode via built-in `encodeURIComponent` |
-| Jira CWD detection | `process.cwd()` + path split | Built-in; no library adds value |
-| Upstream tracking | `git ls-remote` + `git fetch` + `--track` flag | Existing Bun `$` shell pattern |
+**Why not `git pull` plain?** Plain `git pull` with merge strategy can create merge commits, which is undesirable for automated multi-repo sync. `--ff-only` keeps the operation safe and predictable.
 
-### New Functions
+**Bun `$` pattern:** Add a `pullBranch(repoPath: string, opts?: { rebase?: boolean }): Promise<{ ok: boolean; error?: string }>` function to `src/lib/git.ts`, consistent with existing patterns like `rebaseBranch()` and `mergeBranchFF()`.
 
-| Function | File | Purpose |
-|----------|------|---------|
-| `checkRemoteBranchExists(repoPath, branch)` | `src/lib/git.ts` | Check `origin/<branch>` via `ls-remote --exit-code` |
-| `detectWorkspaceFromCwd()` | `src/lib/workspace-ops.ts` or new `src/lib/workspace-detect.ts` | Derive workspace name from `process.cwd()` vs `tasksDir` |
+**Worktree vs trunk distinction:**
+- Worktree repos: pull the workspace branch (`repo.task_path`, branch = `workspace.branch`)
+- Trunk repos: pull the default branch (`repo.main_path`, branch = registry `default_branch`)
 
-### Modified Files
+This is consistent with how `syncWorkspace()` currently handles per-mode logic in `workspace-ops.ts`.
 
-| File | Change |
-|------|--------|
-| `src/lib/git.ts` | Add `checkRemoteBranchExists()`; update `createWorktree()` to check remote and use `--track` |
-| `src/tui/dashboard/WorkspaceDetail.tsx` | Add "Linked Issues" section; exclude `issue` key from config summary |
-| `src/lib/integrations/jira.ts` | Make `<workspace>` optional; call `detectWorkspaceFromCwd()` when omitted |
-| `src/lib/integrations/gitlab.ts` | (Phase 2 optional) Apply same CWD detection for issue subcommands |
-| `src/lib/integrations/github.ts` | (Phase 2 optional) Apply same CWD detection for issue subcommands |
+**Output:** Per-repo progress via `ProgressCallback` pattern already established. `--json` flag for machine-readable results.
+
+**Confidence:** HIGH — `git pull --ff-only` is standard; pattern mirrors `fetchOrigin()` and `rebaseBranch()` already in `git.ts`.
+
+---
+
+### `git-stacks env` Command
+
+**What it does:** Dumps the merged env var set for a workspace — global config → template env → workspace env → injected GS_* vars.
+
+**Merge chain:** The existing `mergeEnv()` in `workspace-ops.ts` only merges `workspace.env`. The `env` command needs the full chain:
+
+```
+template.env (from workspace.template reference)
+  → workspace.env
+    → buildBaseEnv() GS_* vars
+```
+
+**Reading env_file:** If `workspace.env_file` is set, read the file and parse it into key=value pairs, then merge (workspace YAML `env` field wins over `env_file` on key collision). This is a new read path — currently `writeEnvFiles()` only writes, never reads back.
+
+**Output formats — no new libraries needed:**
+
+| Format | Output | Implementation |
+|--------|--------|----------------|
+| `shell` (default) | `export KEY=VALUE` | String template, one per line |
+| `dotenv` | `KEY=VALUE` | Same as `writeEnvFiles()` existing format |
+| `json` | `{ "KEY": "VALUE" }` | `JSON.stringify(envMap, null, 2)` |
+
+All three formats are trivial string transformations. `JSON.stringify` is a Bun/Node built-in. No `dotenv` npm package is needed — the format is so simple it's not worth a dependency.
+
+**Confidence:** HIGH — formats are string-trivial; merge logic extends existing `mergeEnv()`/`buildBaseEnv()` without new patterns.
+
+---
+
+### TUI Upstream Staleness Indicator
+
+**What it does:** Periodically checks how many commits each repo is behind its upstream. Displays a "N behind" badge in `WorkspaceDetail` (or `WorkspaceRow`).
+
+**git CLI:** `git rev-list --count HEAD..origin/<branch>` already exists as `getCommitsBehind()` in `src/lib/git.ts`. No new git functions needed.
+
+**Periodic polling pattern:** The existing `useMessages.ts` hook uses `setInterval` + `onCleanup` for periodic message refresh. The same pattern applies here:
+
+```typescript
+// In a new useStalenessPoll hook or extended useWorkspaces
+const POLL_INTERVAL_MS = 60_000  // 1 minute
+
+onCleanup(() => clearInterval(id))
+const id = setInterval(async () => {
+  const result = await getCommitsBehind(repoPath, "origin/" + branch, "HEAD")
+  setBehinds(prev => ({ ...prev, [repoName]: result }))
+}, POLL_INTERVAL_MS)
+```
+
+**Why NOT `@solid-primitives/timer`:** The project currently has zero dependencies on `@solid-primitives/*`. The `setInterval` + `onCleanup` pattern is already used in the codebase (`useMessages.ts`). Adding a new package for something that is two lines of code is not justified.
+
+**Fetch requirement:** `getCommitsBehind` uses local remote-tracking refs (`origin/<branch>`) which require a prior `git fetch`. The existing `fetchOrigin()` function handles this. The polling implementation should:
+1. Call `fetchOrigin(repoPath)` first to update remote-tracking refs
+2. Then call `getCommitsBehind()` for the count
+
+This matches the existing pattern in `syncWorkspace()`.
+
+**Cache strategy:** The result is stored in a `createSignal` map keyed by `repoName`. It is refreshed on workspace focus change (existing reload trigger) and by the interval. No external caching library needed.
+
+**RepoStatus type extension:** Add `behind?: number` to `RepoStatus` in `types.ts`. This is backward-compatible (optional field) and avoids a breaking change to the existing status pipeline.
+
+**Confidence:** HIGH — all git operations already exist; SolidJS polling pattern already used in the same codebase.
+
+---
+
+### Template Composition
+
+**What it does:**
+- `includes:` field on TemplateSchema: a template can list other template names; at workspace creation time, all included templates are resolved and merged.
+- `--template a --template b` on `git-stacks new`: ad-hoc multi-template selection from CLI.
+
+**Schema change — Zod:**
+
+```typescript
+// In TemplateSchema, add:
+includes: z.array(z.string()).optional(),
+```
+
+This is a backward-compatible additive change. Existing template YAML files without `includes:` parse fine (Zod `.optional()` default is `undefined`).
+
+**Commander.js multi-value option:**
+
+```javascript
+// Variadic option using ... syntax (Commander.js 12 native):
+.option('-t, --template <name...>', 'template(s) to use')
+
+// OR collect pattern (both work in Commander.js 12):
+const collect = (val: string, acc: string[]) => { acc.push(val); return acc }
+.option('-t, --template <name>', 'template (repeatable)', collect, [])
+```
+
+The variadic `<name...>` syntax is simpler; the `collect` pattern is more explicit. Either works. The `collect` pattern is preferable because it handles single `--template foo` and multiple `--template foo --template bar` identically, and is consistent with how Commander.js handles this in the existing completion generator's flag traversal.
+
+**Merge rules (per PROJECT.md):**
+- Repos: union, worktree mode wins on conflict
+- Hooks: concatenate (all pre_create arrays merged in order)
+- Env: shallow merge, later template wins on key collision
+- `includes:` resolution is depth-first, cycle detection required
+
+**Cycle detection:** When resolving `includes:`, track visited template names in a `Set<string>`. If a template name is encountered twice in the resolution path, skip with a warning. No dedicated graph library needed — this is a simple DFS with a seen set.
+
+**Confidence:** HIGH — Zod schema extension is additive; Commander.js variadic options are documented; merge logic is pure TypeScript object manipulation.
+
+---
+
+## Alternatives Considered
+
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| `git pull --ff-only` in Bun `$` | `simple-git` npm package | Adds a production dependency for git operations the project already handles directly via Bun `$`; `simple-git` is designed for Node.js, not Bun |
+| `setInterval` + `onCleanup` for polling | `@solid-primitives/timer` | Already used in the codebase; zero new dependency for two lines of code |
+| `JSON.stringify` for env JSON output | `json-stringify-pretty-compact` or similar | Overkill; `JSON.stringify(obj, null, 2)` is sufficient and built-in |
+| Custom merge function for template composition | `deepmerge` or `deepmerge-ts` | The merge rules are domain-specific (hooks concatenate, repos union, env shallow-merge) — no generic deep-merge library handles this correctly without configuration that is as complex as writing it directly |
+| Zod `.optional()` for `includes:` field | Schema migration shim | Not needed; `.optional()` is backward-compatible with existing template YAML files |
 
 ---
 
@@ -228,48 +209,65 @@ All 4 features are pure logic fixes / new git CLI invocations:
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| New npm dependency for path detection | `process.cwd()` + string operations on the known `tasks/{name}/` structure is 5 lines | Built-in `process.cwd()` + `paths.ts` |
-| `git worktree.guessRemote` config | This git config is user-global and would affect all their git repos; we must not set it | Explicit `--track` flag per worktree creation |
-| Fetching all branches (`git fetch origin`) during worktree create | Slow; fetches everything. We only need the one branch | `git fetch origin {branch}` (single-branch fetch) |
-| URL-encoding branch names before passing to glab | We don't pass branch names to glab — glab detects them from CWD; encoding our own args would double-encode | Investigate glab behavior first; only fix if confirmed ours |
-| Jira API client (e.g., `jira-client` npm package) | The open_cmd design is intentionally tool-agnostic; any specific client ties to one Jira variant | Keep the `sh -c "$open_cmd"` with `$ISSUE_ID` env pattern |
+| `dotenv` npm package | Parses `.env` files but the project's env output formats are string-trivial; adds a production dep for 3 lines of code | String templates: `export K=V`, `K=V`, `JSON.stringify` |
+| `@solid-primitives/timer` | Wraps `setInterval`/`setTimeout` reactively — good library, but the codebase already uses `setInterval` + `onCleanup` directly | The existing `useMessages.ts` polling pattern |
+| `simple-git` | Node.js-oriented wrapper around git — redundant with Bun `$` shell and the established `src/lib/git.ts` patterns | Bun `$` + functions in `git.ts` |
+| `deepmerge` / `deepmerge-ts` | Generic deep merge can't express the domain-specific rules: hooks concatenate (not merge), repos union with worktree-wins, env shallow-merge | Plain TypeScript: union with a `Map` for repos, `concat` for hook arrays, `Object.assign` for env |
+| `p-limit` or `p-map` | Concurrency limiting for pull operations — the existing `useWorkspaces.ts` already implements a manual `CONCURRENCY = 5` batching pattern | Existing batch loop pattern in `fetchStatuses()` |
 
 ---
 
-## Git CLI Flags Reference (v0.8.0 additions)
+## Stack Patterns by Variant
 
-| Flag / Command | Behavior | Confidence |
-|----------------|----------|------------|
-| `git ls-remote --exit-code --heads origin <branch>` | Exit 0 if branch found on remote, exit 2 if not found | HIGH — same as `isBranchGoneOnRemote()` in `git.ts` |
-| `git fetch origin <branch>` | Fetches single branch, updates `origin/<branch>` remote-tracking ref | HIGH — standard git; no side effects on other branches |
-| `git worktree add --track -b <branch> <path> origin/<branch>` | Creates worktree at `<path>` with new branch `<branch>` tracking `origin/<branch>` | HIGH — verified in git-worktree official docs |
-| `git branch --set-upstream-to=origin/<branch> <branch>` | Alternative to `--track`; sets upstream on existing local branch | HIGH — standard git; use `--track` during worktree add instead |
+**If `git-stacks pull` encounters a repo that is not on its remote branch:**
+- Return `{ ok: false, error: "no upstream tracking" }` from `pullBranch()`
+- Report per-repo in output, continue with remaining repos (non-fatal per-repo failure)
+- Do NOT abort the entire pull on one missing upstream — same philosophy as `syncWorkspace()`
+
+**If template `includes:` creates a cycle:**
+- Detect via `Set<string>` in resolution DFS
+- Skip the cycling template, log a warning: `[git-stacks] Warning: circular template include '${name}' — skipping`
+- Do NOT throw — workspace creation should still succeed with the resolvable subset
+
+**If multiple `--template` values have conflicting repos (same registry name, different modes):**
+- Worktree mode wins over trunk (per PROJECT.md spec)
+- First-seen base_branch wins (templates are merged left-to-right in argument order)
 
 ---
 
 ## Version Compatibility
 
-| Component | Version | Notes |
-|-----------|---------|-------|
-| Bun | current (project runtime) | `Bun.$` shell, `.quiet().nothrow()` pattern; unchanged |
-| git | 2.24+ (project requirement) | `git worktree add --track` available since git 2.5; `ls-remote --exit-code` since ancient — no version concern |
-| glab | current user installation | `glab mr view --web` resolves branch from CWD; slash behavior requires live testing to confirm |
-| SolidJS | 1.9.11 (project) | `createMemo`, `For`, `Show` — dashboard changes use existing primitives only |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| Commander.js 12.1.0 | Variadic `<name...>` options | Supported since Commander.js 7; verified in v12 README and `options-variadic.js` example |
+| Zod 3.25.76 | `z.array(z.string()).optional()` on existing schema | Fully backward-compatible; `.optional()` means undefined if key missing |
+| SolidJS 1.9.11 | `setInterval` + `onCleanup` | Standard SolidJS lifecycle pattern; used in same codebase already |
+
+---
+
+## Installation
+
+No new packages to install for v0.10.0. All capabilities are covered by the existing dependency set plus Bun built-ins.
+
+```bash
+# No new dependencies
+```
 
 ---
 
 ## Sources
 
-- `src/tui/dashboard/WorkspaceDetail.tsx` (installed source) — config summary fallback bug identified at lines 127–138, HIGH confidence
-- `src/lib/integrations/issue-utils.ts` (installed source) — `linkIssue` confirmed writes to `workspace.settings.integrations[id].issue`, HIGH confidence
-- `src/lib/git.ts` (installed source) — `isBranchGoneOnRemote` uses `ls-remote --exit-code`; same pattern reused, HIGH confidence
-- `src/lib/paths.ts` (installed source) — `getTasksDir()` layout `{workspace_root}/tasks/` confirmed, HIGH confidence
-- https://git-scm.com/docs/git-worktree — `--track` flag for `worktree add` verified, HIGH confidence
-- https://gitlab.com/gitlab-org/cli/-/merge_requests/1183 — glab added `url.PathEscape` for branch names in web URLs (fix already shipped); slash issue is not a current glab regression, MEDIUM confidence
-- https://github.com/jesseduffield/lazygit/issues/4321 — double-encoding pattern from `%2F` → `%252F` confirmed in browser URL handling, MEDIUM confidence
-- WebSearch: `git ls-remote --exit-code` exit code 2 behavior, MEDIUM confidence (consistent with project source usage)
+- `src/lib/git.ts` — verified existing `getCommitsBehind()`, `fetchOrigin()`, `rebaseBranch()` patterns (HIGH confidence)
+- `src/lib/workspace-ops.ts` — verified `mergeEnv()`, `buildBaseEnv()`, `writeEnvFiles()`, `syncWorkspace()` patterns (HIGH confidence)
+- `src/tui/dashboard/hooks/useMessages.ts` — verified `setInterval` + `onCleanup` polling pattern already in use (HIGH confidence)
+- `src/tui/dashboard/types.ts` — verified `RepoStatus` structure; `behind?: number` extension is additive (HIGH confidence)
+- Commander.js 12 README (github.com/tj/commander.js) — verified variadic `<name...>` option syntax and `collect` function pattern (HIGH confidence)
+- SolidJS docs (docs.solidjs.com) — confirmed `createEffect`/`onCleanup` pattern for intervals; `@solid-primitives/timer` noted but not needed (MEDIUM confidence — docs current as of 2025)
+- git-scm.com/docs/git-rev-list — confirmed `--count HEAD..origin/<branch>` syntax for behind count (HIGH confidence)
+- git-scm.com/docs/git-pull — confirmed `--ff-only` and `--rebase` flags (HIGH confidence)
+- package.json — current dependency versions confirmed (HIGH confidence)
 
 ---
 
-*Stack research for: git-stacks v0.8.0 — Integration Polish & Workspace UX*
-*Researched: 2026-03-24*
+*Stack research for: git-stacks v0.10.0 Multi-Agent Workspace Tooling*
+*Researched: 2026-03-25*

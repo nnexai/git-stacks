@@ -1,235 +1,228 @@
 # Pitfalls Research
 
-**Domain:** CLI workspace manager — integration polish and workspace UX improvements (v0.8.0)
-**Researched:** 2026-03-24
-**Confidence:** HIGH (codebase-grounded, direct file inspection) / MEDIUM (glab behavior, verified against glab issue tracker)
+**Domain:** CLI workspace manager — multi-agent workspace tooling (v0.10.0)
+**Researched:** 2026-03-25
+**Confidence:** HIGH (all pitfalls grounded in direct codebase reads of `src/lib/config.ts`, `src/lib/git.ts`, `src/lib/workspace-ops.ts`, `src/tui/dashboard/hooks/useWorkspaces.ts`, and the existing YAML schema)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Dashboard Reads Integration Config From Global Config Instead of Workspace Settings
+### Pitfall 1: Template Composition Schema Change Breaks Existing YAML on Read
 
 **What goes wrong:**
-`WorkspaceDetail.tsx` constructs `configSummary` from `ws().settings?.integrations?.[integration.id]` with a fallback to `globalConfig.integrations[integration.id]`. The `??` short-circuits: if the workspace has NO per-integration settings key at all (the common case — most workspaces don't override integrations), it falls through entirely to `globalConfig.integrations["jira"]`. The global Jira config object contains `{ enabled: true, open_cmd: "jira open $ISSUE_ID" }` — not an `issue` field. But the "linked issue ID" is stored at `workspace.settings.integrations.jira.issue` — it lives in the workspace YAML, not in global config. Since the detail pane only renders `configSummary` from what it finds at `integrations["jira"]`, and the global config wins when the workspace has no override, the displayed config is the global Jira settings (not the linked issue ID).
+Adding `includes: z.array(z.string()).optional()` to `TemplateSchema` in `src/lib/config.ts` is safe by itself. The danger is if `includes` is added as a required field (no `.optional()`) or if any downstream code tries to read `template.includes` without guarding for `undefined`. Existing template YAML files have no `includes` key — if the Zod schema makes the field required (even accidentally), every `readTemplate()` call against existing user files throws a Zod parse error: "required field missing at includes."
 
-The linked issue is stored at a completely different path (`ws().settings.integrations.jira.issue`) than the integration enabled/config data (`globalConfig.integrations.jira`). The current display code conflates "integration enabled/config state" with "linked tracker data." These are different concerns stored in different locations.
+A subtler form: if the composition resolver function throws when `includes` is `undefined` (e.g., `template.includes.map(...)` without a null-guard), every command that touches templates crashes for all existing users.
 
 **Why it happens:**
-The integration display block in `WorkspaceDetail.tsx` (lines 127-138) builds `configSummary` by reading the raw integration config object and filtering out the `enabled` key. This works correctly for integration config fields like `open_cmd`, but `issue` is not an integration config field — it is a per-workspace tracker link. The code does not distinguish between "integration config" (`globalConfig.integrations`) and "per-workspace integration data" (`workspace.settings.integrations`).
+New features are added by editing `TemplateSchema` incrementally without running existing-config regression tests. The `TemplateSchema.safeParse()` path is used in `listTemplates()` for resilient scanning, but `readTemplate()` uses `.parse()` which throws. If an existing template file fails the upgraded schema, `readTemplate()` throws and the user's workspace cannot be opened or recreated.
 
 **How to avoid:**
-Separate the two concerns in `WorkspaceDetail.tsx`:
-
-1. For the `configSummary` block, read from `globalConfig.integrations[id]` only — this is configuration (how to run the tool).
-2. Add a separate display section for tracker-linked data. For any integration that is a tracker (github, gitlab, gitea, jira), check `ws().settings?.integrations?.[id]?.issue` and display it as "Linked issue: PROJ-123" if present.
-
-The guard should be: if `integrations[id]` object contains an `issue` key, display it as a linked issue. This key path is defined in `issue-utils.ts` — it writes to `integrations[trackerId].issue`.
+- Always add new template schema fields with `.optional()` and no `.default()` unless the field has a safe default that applies to all existing configs.
+- Add a unit test: parse an existing-format YAML fixture through the new schema and verify it succeeds without the new field present.
+- Guard all access to the new field: `template.includes?.map(...)` not `template.includes.map(...)`.
+- Run `bun test tests/lib/config.test.ts` before any schema change ships.
 
 **Warning signs:**
-- Dashboard "Integrations" section shows `open_cmd` for Jira instead of the linked issue ID
-- Source annotation says `[global]` for a workspace that has `settings.integrations.jira.issue` set
-- `resolveIssueRef()` succeeds for the workspace from CLI, but dashboard shows different data
+- `TemplateSchema` edit that adds a field without `.optional()` or `.default()`
+- Composition resolver that destructures `includes` without optional chaining
+- No test fixture covering an old-format template YAML through the new schema
 
 **Phase to address:**
-Dashboard linked issues display fix — first phase, before the other three features.
+Template composition schema and resolver — first action in that phase, before any resolver logic is written.
 
 ---
 
-### Pitfall 2: glab mr view --web Silently URL-Encodes Slash-Containing Branch Names
+### Pitfall 2: `git pull` in a Worktree Requires the Branch to Have Upstream Tracking
 
 **What goes wrong:**
-When a workspace branch is `feature/PROJ-123-my-feature`, the branch name is passed to `glab mr view --web` via `_exec.run(["mr", "view", "--web"], repoPath)` in `gitlab.ts`. The glab CLI uses the current git checkout's HEAD branch to resolve which MR to view. It does NOT receive the branch name as a CLI argument — but `glab mr create` uses `--target-branch baseBranch` and does not pass the source branch at all. The source branch is inferred by glab from the current worktree's HEAD.
+A worktree's branch may not have upstream tracking configured if it was created before `ensureUpstreamTracking()` was wired (v0.8.0), or if the workspace was imported/cloned from another machine. Running `git pull` inside a worktree without upstream tracking configured returns:
 
-The actual bug is in `glab repo view --web` (not `glab mr view --web`). When `glab repo view` opens the GitLab project URL in the browser, it constructs the URL as `https://gitlab.com/org/repo/-/tree/{branch}`. If branch is `feature/PROJ-123`, glab's URL builder may either:
-- Leave the slash unencoded, which browsers handle correctly
-- URL-encode it as `feature%2FPROJ-123`, which GitLab does NOT accept in its web URLs (GitLab's web router treats `%2F` in path segments as a 404)
+```
+There is no tracking information for the current branch.
+```
 
-A confirmed glab issue (MR !1183, 2023) addressed URL encoding of branch names with special characters for `glab repo view --web`. The fix uses `url.PathEscape` which encodes slashes as `%2F` — but GitLab's web router requires literal slashes in branch path segments. This creates a regression specifically for slash-containing branch names.
+The `git pull` exits non-zero. If `git-stacks pull` iterates repos and aborts on first error, the remaining repos in the workspace are not pulled. If it silently swallows the error, the user believes the pull succeeded but repos are stale.
 
 **Why it happens:**
-GitLab web URLs use literal slashes in branch names as path separators (e.g., `/-/tree/feature/my-branch`). RFC 3986 would require encoding the slash in a path segment, but GitLab's web router expects the literal slash. Tools that apply path escaping at the segment level (Go's `url.PathEscape`) will break GitLab branch navigation for slash-containing names.
+`git pull` without `--set-upstream` or without prior tracking configured uses the default merge strategy on the tracked branch. When there is no tracking, git has no upstream to pull from and fails. This is distinct from repos in trunk mode — trunk repos have a default_branch in the registry and can be pulled with `git pull origin <default_branch>` explicitly.
 
 **How to avoid:**
-Before fixing, determine root cause: is the issue in our code or in glab?
-
-1. Test manually: `glab repo view --web` in a worktree checked out on a `feature/...` branch. If the browser opens a 404 URL with `%2F`, the bug is in glab. If the URL is correct, the issue is elsewhere.
-2. If bug is in glab: our code does not pass branch names to glab for `repo view` or `mr view --web` — glab reads HEAD branch itself. We cannot fix glab behavior from our code. The mitigation is to document the known limitation and upgrade glab when a fix ships.
-3. If bug is in our code: check if we are constructing any URL or branch string passed to glab. Our `gitlab.ts` `pr create` passes `--target-branch baseBranch` but not the source branch. The source branch name never goes through our code to glab for `mr view`.
-
-The safe approach: investigate before fixing. Do not add URL encoding on our side — this will double-encode if glab also encodes.
+In the `git-stacks pull` implementation, for each worktree-mode repo:
+1. Check `hasUpstreamTracking()` (already in `src/lib/git.ts` line 132). If tracking is absent, call `ensureUpstreamTracking()` first.
+2. Use explicit `git pull origin <branch>` rather than bare `git pull` — this works regardless of tracking state.
+3. For trunk-mode repos: pull with `git pull origin <default_branch>` using the registry's `default_branch` field.
+4. Report per-repo status clearly: pulled / skipped (not a worktree) / failed (dirty) / failed (no remote).
 
 **Warning signs:**
-- Browser opens `https://gitlab.com/org/repo/-/tree/feature%2FPROJ-123` (404)
-- `glab repo view --web` works for `main` but fails for `feature/...` branches
-- Any attempt to encode branch names with `encodeURIComponent()` in our code before passing to glab
+- `git pull` implemented as bare `$ git -C ${path} pull` without specifying remote and branch
+- No call to `hasUpstreamTracking()` or `ensureUpstreamTracking()` before pull
+- Pull loop that aborts on first error instead of collecting per-repo results
+- Test only covers the happy path (tracking already configured)
 
 **Phase to address:**
-GitLab branch slash investigation — diagnose root cause first; fix only if it is in our code.
+`git-stacks pull` command — tracking guard must be part of the pull implementation, not a separate phase.
 
 ---
 
-### Pitfall 3: CWD-to-Workspace Matching Uses Path Prefix Without Normalizing Trailing Slashes and Symlinks
+### Pitfall 3: `git pull --rebase` on a Dirty Worktree Leaves a Partially-Applied Rebase State
 
 **What goes wrong:**
-Jira workspace auto-detection requires matching the current working directory against workspace task paths to identify which workspace the user is inside. The workspace task path is stored in `WorkspaceRepo.task_path` as an absolute path like `~/workspaces/tasks/my-workspace/my-repo` (with `~` unexpanded). The result of `process.cwd()` is an OS-resolved path — no `~`, fully canonicalized.
-
-Common failure modes:
-1. `task_path` contains `~/workspaces/tasks/...` but `process.cwd()` starts with `/home/user/workspaces/tasks/...` — tilde not expanded, prefix check fails
-2. `task_path` points to a path containing a symlink component; `process.cwd()` may resolve the symlink or not depending on the shell's `CDPATH`/`-P` flag behavior
-3. Trailing slash mismatch: `task_path` is `/home/user/workspaces/tasks/ws/repo` but CWD is `/home/user/workspaces/tasks/ws/repo/src/components` — a prefix check that uses exact match fails for subdirectories
+If `git-stacks pull` uses `--rebase` strategy (consistent with `git-stacks sync`) and a worktree has uncommitted changes, `git pull --rebase` starts, hits a conflict or dirty state, and exits non-zero. Git leaves the repo in `REBASE_HEAD` state — a partially applied rebase. The user now has to run `git rebase --abort` manually. If git-stacks does not auto-abort on failure, the worktree is broken until the user manually recovers.
 
 **Why it happens:**
-Path comparison without normalization is a common source of subtle bugs. The workspace YAML stores paths as-written at creation time; git-stacks paths use `expandHome` from `src/lib/paths.ts` for expansion, but workspace YAML `task_path` may have been written pre-expansion. The `resolveRepoCwd()` function in `forge-utils.ts` uses `git rev-parse --show-toplevel` which gives the git root, but the Jira detection needs to match against `task_path` which includes the repo directory.
+`syncWorkspace()` in `workspace-ops.ts` (which already handles rebase) guards with `getDirtyWorktrees()` before proceeding. A naive `git-stacks pull` implementation may skip this guard because "it's just a pull, not a sync." But a rebase-based pull has the same dirty-worktree fragility.
 
 **How to avoid:**
-Use `expandHome()` from `src/lib/paths.ts` on all stored paths before comparison. Use `process.cwd().startsWith(expandHome(repo.task_path))` for the check — CWD may be a subdirectory of `task_path`. Use `path.resolve()` on both sides to eliminate symlink and relative-path differences.
+For `git-stacks pull`:
+- Use `git pull --ff-only` as the default strategy. Fast-forward only: if remote has diverged and local has commits, it fails cleanly without a rebase state. The error is clear and safe.
+- If a rebase pull option is desired, check `isRepoDirty()` first and skip that repo with a warning, consistent with how `syncWorkspace()` works.
+- Never use `--rebase` without a pre-flight dirty check.
+- Always auto-abort on rebase failure: the pattern in `rebaseBranch()` in `git.ts` (lines 171-180) is the correct template — call `git rebase --abort` on non-zero exit.
 
-Recommended detection function:
+**Warning signs:**
+- `git pull --rebase` without calling `isRepoDirty()` first
+- No `git rebase --abort` on failure
+- `git-stacks pull` implemented as a thin wrapper that does not check dirty state
+
+**Phase to address:**
+`git-stacks pull` command — dirty state guard is a prerequisite, not optional.
+
+---
+
+### Pitfall 4: `git-stacks env` Output Used in Shell Eval Without Escaping — Injection via Env Values
+
+**What goes wrong:**
+`git-stacks env --format shell` is designed to be eval'd: `eval "$(git-stacks env --format shell)"`. If a workspace env var value contains shell metacharacters (spaces, `$`, backticks, semicolons, newlines), the shell output is unescaped and the eval executes arbitrary code. Example: a workspace YAML contains `DATABASE_URL: "postgresql://host/db; rm -rf ~/workspaces"` — the shell format output would be:
+
+```sh
+export DATABASE_URL=postgresql://host/db; rm -rf ~/workspaces
+```
+
+When eval'd, the semicolon terminates the export command and the destructive command runs.
+
+**Why it happens:**
+Env var values come from YAML, which accepts arbitrary strings. The `--format shell` output must quote every value. The naive implementation `export ${key}=${value}` is unsafe for any value containing shell special characters. This is a known class of vulnerability in dotenv-style tools.
+
+**How to avoid:**
+For `--format shell`, always use single-quote wrapping with single-quote escaping: `export KEY='${value.replace(/'/g, "'\\''")}'`. This is the only safe approach for arbitrary values in shell output intended for eval.
+
+For `--format dotenv`, use double-quote wrapping with escaping of `$`, `\`, and `"` characters: `KEY="${escaped_value}"`. Do NOT output raw values without quoting.
+
+For `--format json`, use `JSON.stringify()` on the entire output object — this handles all special characters correctly by design.
+
+The GS_* variables injected by git-stacks (workspace name, branch, path) are safe because they come from internal data. But user-defined env vars from YAML must be treated as untrusted strings.
+
+**Warning signs:**
+- Shell format output that uses `export KEY=VALUE` without quoting
+- Template string like `\`export ${key}=${value}\`` in the implementation
+- Tests that only use safe alphanumeric env values (do not exercise special characters)
+- No test case with values containing spaces, `$`, backticks, or semicolons
+
+**Phase to address:**
+`git-stacks env` command — escaping must be correct on the first implementation; retrofitting it after users have scripts using the output is a breaking change.
+
+---
+
+### Pitfall 5: TUI Staleness Check Triggers a Network Fetch Per Repo on Every Focus Event
+
+**What goes wrong:**
+If the staleness indicator triggers `fetchOrigin()` for every repo every time the workspace is focused in the dashboard, with 3-5 repos per workspace and 10+ workspaces, the TUI hangs for several seconds every time the cursor moves. `fetchOrigin()` uses `fetch.timeout=30` — up to 30 seconds per repo in the worst case.
+
+The `useWorkspaces` hook already fetches git status for all workspaces on initial load (via `getWorkspaceStatus()` which calls `isRepoDirty()` per repo). Adding a network fetch to that loop multiplies the initial load time by 5-10x.
+
+**Why it happens:**
+Staleness requires knowing how far behind `origin/<branch>` the local branch is. This requires either: (a) a remote fetch to update `refs/remotes/origin/*`, or (b) using stale cached remote refs. Developers implement (a) naively — fetch every time — because it is "correct." But in a TUI, correctness does not justify multi-second hangs on cursor movement.
+
+**How to avoid:**
+Use a time-gated fetch strategy:
+- Fetch at most once per workspace per N minutes (5 minutes is a reasonable default). Cache the last-fetch timestamp per workspace in-memory in the TUI hook.
+- On workspace focus (cursor move), check if the cache is stale. If stale, trigger a background fetch and update the indicator asynchronously. Do NOT block the TUI render.
+- Use `getCommitsBehind()` (already in `src/lib/git.ts` line 193) against local `origin/<branch>` refs — this is a local git operation and fast. Only the fetch needs to be time-gated.
+- Provide a manual refresh keybinding (e.g., `F5` or `r`) that forces a fetch regardless of the cache.
+- The fetch should run in a non-blocking async call: fire the fetch, update the indicator signal when it resolves. The TUI remains responsive while the fetch is in-flight.
+
+**Warning signs:**
+- `fetchOrigin()` called synchronously before rendering the staleness badge
+- `fetchOrigin()` called in `useWorkspaces.fetchStatuses()` alongside `getWorkspaceStatus()`
+- No time-gate or cache on fetch frequency
+- Staleness check that blocks the reactive update cycle
+
+**Phase to address:**
+TUI upstream staleness indicator — the fetch strategy must be decided before any TUI code is written. A wrong approach requires a complete rewrite.
+
+---
+
+### Pitfall 6: Template Composition Repo Union Uses Last-Wins Instead of Worktree-Wins
+
+**What goes wrong:**
+When composing templates via `includes:`, the same repo may appear in both the base template and an included template. The spec says "worktree wins over trunk" — a repo declared as `mode: worktree` in any included template should override a `mode: trunk` declaration in another. A naive merge implementation using last-wins (`Object.assign` or spread in declaration order) will use whichever definition appears last in the `includes` array, which may be trunk if the order is wrong.
+
+Additionally, if two included templates both declare the same repo as `mode: worktree`, a naive union takes the first or last definition, silently discarding the other's `base_branch`, `branch_pattern`, or `hooks` overrides.
+
+**Why it happens:**
+The merge rule "worktree wins" requires an explicit priority check, not a simple spread. When iterating repos from `[...baseTemplate.repos, ...includedTemplate.repos]`, a `reduce` or `Map` dedup that uses the last occurrence will not implement the worktree-wins rule if the trunk declaration happens to appear last.
+
+**How to avoid:**
+Implement the union with an explicit priority function:
+
 ```typescript
-import { expandHome } from "../paths"
-import { listWorkspaces } from "../config"
-import { resolve } from "path"
-
-export function detectWorkspaceFromCwd(): string | null {
-  const cwd = resolve(process.cwd())
-  for (const ws of listWorkspaces()) {
-    for (const repo of ws.repos) {
-      const taskPath = resolve(expandHome(repo.task_path))
-      if (cwd === taskPath || cwd.startsWith(taskPath + "/")) {
-        return ws.name
+function mergeRepoDeclarations(repos: TemplateRepo[]): TemplateRepo[] {
+  const seen = new Map<string, TemplateRepo>()
+  for (const repo of repos) {
+    const existing = seen.get(repo.repo)
+    if (!existing) {
+      seen.set(repo.repo, repo)
+    } else {
+      // worktree always wins over trunk
+      if (repo.mode === "worktree" && existing.mode === "trunk") {
+        seen.set(repo.repo, repo)
       }
+      // if both are worktree: keep the later definition (last-wins for same mode)
+      else if (repo.mode === "worktree" && existing.mode === "worktree") {
+        seen.set(repo.repo, repo)
+      }
+      // trunk never overwrites worktree
     }
   }
-  return null
+  return Array.from(seen.values())
 }
 ```
 
-The `+ "/"` prevents false positives where one path is a prefix of another (e.g., `/tasks/ws` matching `/tasks/ws-other`).
-
 **Warning signs:**
-- Auto-detection fails when run from inside a repo but works when workspace name is specified explicitly
-- Path comparison using `===` or `includes()` instead of `startsWith()` with a separator
-- `expandHome` not applied to `task_path` before comparison
-- Tests written with fully-resolved paths only, not testing the `~/` form
+- Repo union implemented with `new Map()` where keys are repo names but values use simple last-wins spread
+- No test case: include a template with `mode: trunk` that overlaps with a `mode: worktree` repo in the base template — verify worktree wins
+- Composition logic that iterates includes in array order without explicit mode comparison
 
 **Phase to address:**
-Jira workspace auto-detection — the path normalization logic must be correct before any command wiring.
+Template composition resolver — the worktree-wins rule must be implemented and tested before the composition feature ships.
 
 ---
 
-### Pitfall 4: Making Workspace Argument Optional Breaks Commander.js Strict Argument Parsing
+### Pitfall 7: Hook Concatenation During Template Composition Creates Double-Execution at Wrong Lifecycle Phase
 
 **What goes wrong:**
-The Jira issue commands are currently defined as `issue link <workspace> <issue-id>` and `issue open <workspace>` with required positional arguments. Making the workspace optional (CWD detection fallback) requires changing these to `issue link [workspace] <issue-id>` and `issue open [workspace]`. Commander.js positional argument parsing is order-dependent: `[workspace] <issue-id>` means the first positional arg is optionally the workspace, and the second is always the issue-id. But if the user provides only one argument to `issue link`, Commander will assign it to `workspace`, leaving `issue-id` undefined — not to `issue-id` as the user intended.
+Template composition concatenates hooks from multiple templates: `post_create: [...baseHooks, ...includedHooks]`. If the same hook command appears in both the base and included template (e.g., both run `npm install`), it runs twice — doubling dependency install time or causing race conditions if the hook writes shared state. More critically, if a hook is declared in `post_create` in one template and `post_open` in another, the composition merges them into their respective lifecycle arrays without cross-lifecycle deduplication. This is correct behavior, but it means hooks pile up across templates without the user being aware.
 
-This positional ambiguity is inherent to Commander.js when mixing optional and required positional arguments. The issue: `git-stacks integration jira issue link PROJ-123` — did the user mean workspace=PROJ-123 and issue-id=undefined? Or workspace=auto-detected and issue-id=PROJ-123?
-
-**Why it happens:**
-Commander.js resolves positional arguments left-to-right. An optional argument before a required one means the required argument shifts right only when the optional is supplied. If a user provides one argument to a command with `[workspace] <issue-id>`, Commander assigns it to `workspace` (the leftmost slot) — it cannot infer intent.
-
-**How to avoid:**
-Use a flag instead of positional disambiguation. For `issue link`, make workspace a flag: `issue link <issue-id> [--workspace <name>]`. This clearly signals intent: if `--workspace` is omitted, auto-detect from CWD. The `issue open` command similarly becomes `issue open [--workspace <name>]`.
-
-Alternatively, if positional must be kept: detect at runtime whether the first argument looks like a workspace name (check `workspaceExists(arg)`) and if not, treat it as the issue-id with CWD-detected workspace. But this heuristic breaks when workspace names resemble issue IDs (e.g., workspace named `PROJ-123`).
-
-**Warning signs:**
-- `git-stacks integration jira issue link PROJ-123` silently assigns `PROJ-123` to the workspace argument
-- Commander error "missing required argument 'issue-id'" when no workspace specified
-- CWD detection logic that is never reached because Commander fails before the action fires
-
-**Phase to address:**
-Jira workspace auto-detection — CLI argument design must be decided before implementation. Prefer `--workspace` flag to avoid ambiguity.
-
----
-
-### Pitfall 5: Upstream Branch Check Fetches Remote But Does Not Set Tracking — `git worktree add` Misses the Opportunity
-
-**What goes wrong:**
-The goal is: if the intended branch already exists on `origin`, set up tracking so `git status` shows `ahead/behind` and `git pull/push` works without explicit remote arguments. The current `createWorktree()` in `git.ts` (lines 9-21) checks if the branch exists locally via `git rev-parse --verify <branch>` — it does NOT check if the branch exists on the remote.
-
-If an upstream branch exists (say `origin/feature/PROJ-123`) but the local branch does not yet exist, the correct git command is:
-```
-git worktree add -b feature/PROJ-123 <path> origin/feature/PROJ-123
-```
-This creates a new local branch tracking the remote. The current code does:
-```
-git worktree add -b feature/PROJ-123 <path>
-```
-which branches from the local HEAD with no tracking. The user sees a branch with 50 commits "ahead" of nothing because the tracking is not set.
+A related issue: workspace-level hooks (copied from the first/primary template during workspace creation in `workspace-ops.ts`) would need to be updated to reflect the composed hook arrays from all templates. Currently, `workspace.hooks` is set from a single template at creation time (see `workspace-wizard.ts` line 173). If composition is applied at workspace-creation time, the workspace YAML must persist the composed hook arrays, not the single-template hooks.
 
 **Why it happens:**
-`checkBranchExists()` calls `git rev-parse --verify <branch>` — this checks local refs only. Remote refs are `origin/<branch>`, a different namespace. `git rev-parse --verify feature/PROJ-123` returns non-zero even when `origin/feature/PROJ-123` exists. The fix requires querying `origin/feature/PROJ-123` specifically.
+The current workspace creation flow copies hooks from one template. Composition that merges hooks at workspace creation time requires the wizard/creation code to compute the merged hook array and write it to the workspace YAML. If this step is omitted, the workspace only runs one template's hooks, silently ignoring the rest.
 
 **How to avoid:**
-Add an `ls-remote` check (already present for `isBranchGoneOnRemote` in `git.ts`) before creating the worktree. The logic:
-
-```typescript
-export async function checkRemoteBranchExists(repoPath: string, branch: string): Promise<boolean> {
-  const result = await $`git -C ${repoPath} ls-remote --exit-code --heads origin ${branch}`
-    .quiet().nothrow()
-  return result.exitCode === 0
-}
-```
-
-Then in `createWorktree()`:
-
-```typescript
-const localExists = await checkBranchExists(repoPath, branch)
-if (localExists) {
-  await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet()
-} else {
-  const remoteExists = await checkRemoteBranchExists(repoPath, branch)
-  if (remoteExists) {
-    // Branch from remote ref to establish tracking
-    await $`git -C ${repoPath} worktree add --track -b ${branch} ${worktreePath} origin/${branch}`.quiet()
-  } else {
-    // New branch — branch from current HEAD
-    await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet()
-  }
-}
-```
+- At workspace creation with composed templates: compute the full merged hook arrays (concatenated per lifecycle phase), write them to `workspace.hooks` in the YAML.
+- For duplicate commands within the same hook array: consider a dedup pass on exact-match strings (but do not dedup non-identical commands — order matters).
+- Document in the template YAML that `includes:` hooks concatenate in declaration order.
+- Provide a `--dry-run` output for `git-stacks new` that shows all hooks that will run, including composed sources.
 
 **Warning signs:**
-- `git status` inside a worktree for a pre-existing remote branch shows no upstream tracking
-- `git push` requires `--set-upstream origin <branch>` on every new workspace for an existing PR
-- `checkBranchExists()` is the only check in `createWorktree()` — remote namespace not checked
+- Composition logic that sets `workspace.hooks` from only the first/primary template
+- No dedup of identical hook commands in the same lifecycle phase
+- Tests that verify hook execution count (should fire once per unique command per phase)
 
 **Phase to address:**
-Upstream branch check — modify `git.ts` `createWorktree()` and add `checkRemoteBranchExists()` helper before workspace creation is wired.
-
----
-
-### Pitfall 6: ls-remote Requires a Fetch — Adds Latency to Every Worktree Creation
-
-**What goes wrong:**
-`git ls-remote` queries the remote server directly. It is a network operation, not a local cache lookup. For every repo in a workspace being created (which may be 3-5 repos), an `ls-remote` call adds 0.5-3 seconds of latency each, totaling 2-15 seconds of network overhead before any local git operations.
-
-This is different from `git fetch` in terms of performance: `ls-remote` is faster (no delta transfer) but still requires a round-trip per call.
-
-**Why it happens:**
-`ls-remote` contacts the remote directly. The existing `fetchOrigin()` function in `git.ts` already fetches the remote, which would update `refs/remotes/origin/*` in the local clone. After a fetch, `git rev-parse origin/feature/PROJ-123` works locally without another network call.
-
-**How to avoid:**
-Use `fetchOrigin()` first (already called during workspace creation in `workspace-ops.ts`), then check local remote-tracking refs with `git rev-parse origin/<branch>` instead of calling `ls-remote`. This reuses the already-fetched remote state:
-
-```typescript
-export async function checkRemoteTrackingBranchExists(repoPath: string, branch: string): Promise<boolean> {
-  const result = await $`git -C ${repoPath} rev-parse --verify origin/${branch}`
-    .quiet().nothrow()
-  return result.exitCode === 0
-}
-```
-
-If the workspace creation flow does NOT fetch before creating worktrees, add a `fetchOrigin()` call before the loop over repos in `workspace-ops.ts`, and then use local remote-tracking ref checks.
-
-**Warning signs:**
-- Multiple `ls-remote` calls in sequence for a multi-repo workspace creation
-- No `fetchOrigin()` call before the upstream branch check
-- Workspace creation time increases by 2-10 seconds for remote repositories
-
-**Phase to address:**
-Upstream branch check — resolve fetch-vs-ls-remote strategy before implementing `createWorktree()` changes.
+Template composition resolver — hook merging must be computed and persisted at workspace creation time.
 
 ---
 
@@ -237,10 +230,13 @@ Upstream branch check — resolve fetch-vs-ls-remote strategy before implementin
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Check `workspaceExists(arg)` heuristic for jira CLI argument disambiguation | No CLI API change needed | Breaks when workspace names look like issue IDs (e.g., `PROJ-123`) | Never — use `--workspace` flag instead |
-| Use `ls-remote` for upstream check instead of local remote-tracking refs | No dependency on prior fetch | Network call per repo; 2-15s added latency on workspace creation | Only acceptable if workspace creation has no prior fetch; document clearly |
-| Skip upstream tracking setup and just check existence | Simpler implementation | User still has to set up tracking manually; defeats the purpose | Never — the goal is automatic tracking setup |
-| Display issue ID in Jira config summary without a dedicated "Linked issue" section | No new UI code | Dashboard conflates integration config display with tracker data | Never — these are different data types and must be clearly separated |
+| `git pull` without tracking check | Simpler implementation | Silently fails for non-tracked branches; user has no feedback | Never — always check tracking or use explicit remote/branch |
+| Fetch on every staleness check | Always fresh data | TUI hangs for seconds per cursor move; unusable with slow network | Never — time-gate fetches |
+| Shell format without quoting | Simpler string formatting | Arbitrary code execution when env values contain shell metacharacters | Never — always quote values |
+| `template.includes` schema field without `.optional()` | Simpler schema definition | Parse failures for all existing user template YAML | Never — all new schema fields must be optional |
+| Composition worktree-wins via last-wins array order | Simpler merge code | Trunk can silently override worktree depending on include order | Never — explicit priority check required |
+| Copy hooks from first template only during composition | No change to workspace creation flow | Workspace misses hooks from included templates | Never — must merge all templates' hooks |
+| JSON format using template strings | No extra dependency | Values with `"` or `\` break JSON syntax | Never — always use `JSON.stringify()` |
 
 ---
 
@@ -248,13 +244,13 @@ Upstream branch check — resolve fetch-vs-ls-remote strategy before implementin
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Jira in WorkspaceDetail.tsx | Read issue ID from `globalConfig.integrations.jira` | Read issue ID from `ws().settings.integrations.jira.issue` — these are different storage locations |
-| Jira CLI | Keep `<workspace>` as required positional arg | Make workspace optional via `--workspace` flag; fall back to CWD detection |
-| GitLab glab | Encode branch slashes with `encodeURIComponent()` before passing to glab | Do NOT encode — glab reads HEAD branch itself; encoding doubles the problem |
-| GitLab glab | Assume `glab repo view --web` handles all special chars | Verify independently with `feature/...` branches; glab has known issues with path-escaped slashes on GitLab web URLs |
-| git worktree creation | Check only local branch existence before creating worktree | Check remote-tracking refs too; set up tracking with `--track` when remote branch pre-exists |
-| CWD-to-workspace matching | Compare `process.cwd()` to `task_path` with `===` | Use `resolve()` + `expandHome()` on both sides; use `startsWith(taskPath + "/")` not `===` |
-| `listWorkspaces()` in CWD detection | Call `listWorkspaces()` on every keystroke or integration call | Call once per command invocation; `listWorkspaces()` reads all YAML from disk |
+| `git-stacks env --format shell` | `export KEY=VALUE` with raw value | `export KEY='${value.replace(/'/g, "'\\''")}' ` — single-quote wrap with escaped single quotes |
+| `git-stacks env --format dotenv` | Emit raw values without quoting | Double-quote values, escape `$` and `\` inside; match what Node.js dotenv parsers expect |
+| `git-stacks pull` on worktree repos | `git pull` with no remote/branch args | `git pull origin <branch>` explicitly, or set upstream first with `ensureUpstreamTracking()` |
+| `git-stacks pull` on trunk repos | Pull from branch of same name | Pull from `registryEntry.default_branch` — trunk repos do not have a workspace branch |
+| `git-stacks paths --prefix` | Output raw paths without quoting | Paths may contain spaces; always quote in shell format output; use JSON format for programmatic use |
+| TUI staleness badge | Fetch inside the reactive render | Fetch in background async; update signal after fetch completes; never block render |
+| Template composition circular includes | No cycle detection | A template that includes itself (directly or transitively) causes infinite recursion in the resolver |
 
 ---
 
@@ -262,9 +258,22 @@ Upstream branch check — resolve fetch-vs-ls-remote strategy before implementin
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `ls-remote` per repo in workspace creation | Multi-repo workspace creation takes 10-15s instead of 1-2s | Fetch once with `fetchOrigin()`, then check local `origin/<branch>` refs | Immediately, on first multi-repo workspace with network latency |
-| `listWorkspaces()` in CWD detection called per Jira subcommand | Disk reads every command invocation | Acceptable — it is called once per CLI invocation, not in a loop | Not a problem until user has 100+ workspaces |
-| `readGlobalConfig()` called inside SolidJS render function | Re-reads global config file on every reactive update cycle in WorkspaceDetail | Call once outside the reactive scope (already done at line 26 in WorkspaceDetail.tsx) | On dashboard with frequent tick updates |
+| `fetchOrigin()` per repo on workspace focus | TUI hangs 2-30 seconds per cursor move | Time-gate: at most one fetch per workspace per 5 minutes; use in-memory cache | Immediately with any network latency |
+| `fetchOrigin()` added to `useWorkspaces.fetchStatuses()` | Initial dashboard load takes 30-60 seconds with 10 workspaces × 3 repos | Keep `fetchStatuses` local-only (dirty check, branch name); staleness check is separate | Immediately on load |
+| Circular template include resolution | Infinite loop / stack overflow during `readTemplate()` | Detect cycles with a `Set<string>` of visited template names in the resolver | On any circular reference |
+| `listTemplates()` + `readTemplate()` called N times in composition resolver for N includes | N²  disk reads for deep composition chains | Memoize by name within a single resolution call | With 5+ levels of template nesting |
+| `getCommitsBehind()` called for every repo on every workspace list refresh | Dashboard list refresh takes seconds | Call `getCommitsBehind()` only after a fetch has occurred; cache results until next fetch | Immediately on a 3-repo workspace |
+
+---
+
+## Security Mistakes
+
+| Mistake | Risk | Prevention |
+|---------|------|------------|
+| Unquoted values in `--format shell` output | Arbitrary shell code execution when `eval`'d | Single-quote all values; escape embedded single quotes with `'\''` |
+| Printing env vars in `--format json` with template strings | JSON syntax error or injection if value contains `"` | Always use `JSON.stringify()` for the full output object |
+| Logging env var values in debug output | Secrets (tokens, passwords) appear in logs | Never log env var values; log key names only |
+| `includes:` template resolver following symlinks or absolute paths | Path traversal to templates outside the config dir | Resolve template names against the TEMPLATES_DIR only; reject names containing `/` or `..` |
 
 ---
 
@@ -272,23 +281,28 @@ Upstream branch check — resolve fetch-vs-ls-remote strategy before implementin
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Jira detection fails silently when CWD is not inside a workspace | User gets "workspace required" error with no hint that auto-detection is possible | Check CWD first; if detection fails, show "Run from inside a workspace or use --workspace <name>" |
-| Upstream tracking set up for a branch that diverged significantly from remote | Confusing "5 ahead, 200 behind" status | Show a warning if tracking branch differs by more than N commits; let user decide |
-| Dashboard "Integrations" section shows nothing about linked issues | User cannot see issue links without using CLI | Add a dedicated "Linked issues" row in WorkspaceDetail for each tracker with a linked issue |
-| "Not sure if this is our bug or glab's bug" message in release notes | User confusion about GitLab slash branch behavior | Test and document the finding explicitly; either "fixed" or "known glab limitation, upgrade glab to vX.Y.Z" |
+| `git-stacks pull` aborts on first failure and leaves remaining repos unpulled | User must re-run; no visibility into which repos succeeded | Collect per-repo results; pull all repos best-effort; report summary at end |
+| `git-stacks env` with no workspace argument is ambiguous from root cwd | Error: "workspace required" with no hint | Auto-detect from CWD using `detectWorkspaceFromCwd()`; fall back to explicit error with example |
+| `git-stacks paths` outputs absolute paths with no format option | Agent scripts must handle platform path differences | Support `--format json` for structured output; `--relative` for relative-to-cwd output |
+| Staleness indicator shows stale numbers after user runs `git-stacks sync` | Badge shows "5 behind" even after successful sync | Invalidate the per-workspace staleness cache after `sync`, `pull`, or `new` operations |
+| Template composition silently applies divergent hooks and env from included templates | User is surprised by extra behavior they didn't write | Show a composition summary when creating a workspace from a meta-template |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Dashboard issue display:** Linked issue shows in detail pane — verify the display reads from `ws().settings.integrations.jira.issue`, NOT from `globalConfig.integrations.jira`
-- [ ] **Dashboard source annotation:** Linked issue row shows `[workspace]` source annotation, not `[global]`
-- [ ] **GitLab slash branch:** `glab repo view --web` opens a valid URL for `feature/PROJ-123` branches — verify in a real GitLab repo before marking as fixed
-- [ ] **Jira CWD detection:** Auto-detection works when CWD is a subdirectory inside the repo (e.g., `~/workspaces/tasks/ws/repo/src/`) not just the root of `task_path`
-- [ ] **Jira CWD detection with tilde:** Detection works when `task_path` in YAML was stored with `~/` prefix — verify `expandHome()` is applied
-- [ ] **Worktree tracking setup:** After `git-stacks new` for a workspace whose branch exists on remote, `git status` inside the worktree shows `Your branch is up to date with 'origin/...'`
-- [ ] **Worktree tracking setup does not break new branches:** Creating a workspace for a brand-new branch (no remote counterpart) still works without errors
-- [ ] **Jira CLI argument change is backward compatible:** Existing `git-stacks integration jira issue link my-workspace PROJ-123` still works after making workspace optional
+- [ ] **`git-stacks env --format shell` safety:** Test with a value containing a space, `$VAR`, backtick, and semicolon — verify the output is safely quoted and `eval "$(git-stacks env --format shell)"` does not interpret those characters
+- [ ] **`git-stacks env --format dotenv`:** Verify the output is parseable by `dotenv` npm package and by the bash `set -a; source .env; set +a` pattern
+- [ ] **`git-stacks pull` trunk repos:** Verify trunk-mode repos pull from `default_branch` in registry, not from the workspace branch
+- [ ] **`git-stacks pull` missing tracking:** Verify pull succeeds for a worktree where `hasUpstreamTracking()` returns false — it should call `ensureUpstreamTracking()` or use explicit `git pull origin <branch>`
+- [ ] **`git-stacks pull` dirty worktree:** Verify dirty repos are skipped with a clear warning, not silently failed or errored
+- [ ] **Template composition backward compat:** Parse an existing template YAML with no `includes` field through the updated `TemplateSchema` — verify it succeeds without errors
+- [ ] **Template composition circular includes:** Include a template that includes itself — verify the resolver detects the cycle and returns a clear error, not an infinite loop
+- [ ] **Template composition worktree-wins:** Create a meta-template that includes template A (repo X as trunk) and template B (repo X as worktree) — verify the composed result has repo X as worktree
+- [ ] **TUI staleness indicator non-blocking:** Verify the dashboard cursor remains responsive while a background fetch is in-flight — navigate between workspaces while fetch is pending
+- [ ] **TUI staleness time-gate:** Verify that focusing the same workspace twice within 5 minutes does NOT trigger a second fetch
+- [ ] **`git-stacks paths --prefix`:** Verify the prefix is correctly prepended and output is one-arg-per-line or shell-quoted for paths with spaces
+- [ ] **`git-stacks env` GS_* injection:** Verify `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH` appear in output alongside user-defined env vars
 
 ---
 
@@ -296,11 +310,12 @@ Upstream branch check — resolve fetch-vs-ls-remote strategy before implementin
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Dashboard shows wrong issue data after display fix | LOW | Reload dashboard (`q` then `git-stacks manage`); check workspace YAML `settings.integrations.jira.issue` is populated |
-| CWD detection matches wrong workspace (path prefix collision) | LOW | Add `+ "/"` separator to `startsWith()` check; the collision is prevented by the separator |
-| Tracking setup causes `worktree add` to fail for diverged branches | MEDIUM | Wrap `--track` worktree add in try/catch; fall back to no-tracking creation with a warning message; let user run `git branch -u` manually |
-| glab slash encoding is in glab (not our code) | LOW | Document in release notes; no code change required; pin glab version recommendation |
-| Commander.js argument ambiguity causes wrong workspace inference | MEDIUM | Rename to `--workspace` flag; update shell completion entries in `src/lib/completion-generator.ts` to match |
+| Schema change breaks existing template YAML | HIGH | Revert schema change; add `.optional()` to the new field; re-release; no migration file needed for optional fields |
+| Shell env output causes eval injection | HIGH | Remove `--format shell` output from user scripts; audit for any executed malicious payloads; re-release with correct quoting |
+| Pull leaves repo in REBASE_HEAD state | MEDIUM | Run `git rebase --abort` in the affected worktree; add auto-abort to pull implementation |
+| Composition circular reference causes stack overflow | MEDIUM | Restart git-stacks; add cycle detection; re-release; existing workspace YAML is unaffected |
+| TUI staleness causes hang on load | LOW | Press `q` to exit dashboard; revert staleness fetch to be background-only; re-release |
+| Wrong worktree-wins merge silently creates trunk repos | MEDIUM | User re-runs `git-stacks new` after fix; existing workspaces created with wrong mode require `task_path` worktree recreation |
 
 ---
 
@@ -308,29 +323,34 @@ Upstream branch check — resolve fetch-vs-ls-remote strategy before implementin
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Dashboard reads global config instead of workspace issue data | Dashboard linked issues fix | Unit test: create workspace with linked jira issue; verify `WorkspaceDetail` renders issue ID, source is `[workspace]` |
-| glab slash branch encoding | GitLab slash investigation | Manual test: `glab repo view --web` on `feature/...` branch; automated: test passes correct args to `_exec.run` (no branch encoding in our code) |
-| CWD path normalization for workspace detection | Jira CWD auto-detection | Unit test: CWD = `expandHome(task_path) + "/src/deep/path"` → workspace detected; CWD = sibling path → null returned |
-| Commander.js positional arg ambiguity | Jira CWD auto-detection | Manual test: `jira issue link PROJ-123` (no workspace arg) triggers CWD detection, not a Commander parse error |
-| `createWorktree()` misses remote tracking setup | Upstream branch check | Unit test: branch exists on remote but not locally → worktree created with tracking; `git branch -vv` shows upstream ref |
-| ls-remote latency on workspace creation | Upstream branch check | Use `checkRemoteTrackingBranchExists()` via local refs after fetch, not `ls-remote`; verify with workspace creation timing test |
+| Schema change breaks existing YAML | Template composition — schema first | Unit test: parse existing template fixture through new schema without `includes` field |
+| `git pull` fails without upstream tracking | `git-stacks pull` implementation | Unit test: mock `hasUpstreamTracking` returning false → verify `ensureUpstreamTracking` is called before pull |
+| Rebase-based pull leaves REBASE_HEAD state | `git-stacks pull` implementation | Use `--ff-only` by default; unit test: dirty worktree → repo skipped with warning |
+| Shell eval injection via unquoted env values | `git-stacks env` implementation | Unit test: value with `$`, space, semicolon → output is single-quoted with escaped inner quotes |
+| TUI staleness triggers blocking fetch | TUI staleness indicator | Integration test: focus workspace → verify render completes before fetch resolves; fetch runs in background |
+| Template composition worktree-wins | Template composition resolver | Unit test: two templates with same repo, different modes → composed result uses worktree mode |
+| Hook concatenation not persisted to workspace YAML | Template composition + workspace creation | Unit test: workspace created from meta-template → `workspace.hooks.post_create` contains hooks from all included templates |
+| Circular template includes | Template composition resolver | Unit test: circular reference → resolver returns error, does not stack overflow |
 
 ---
 
 ## Sources
 
-- `src/tui/dashboard/WorkspaceDetail.tsx` lines 127-138 — configSummary construction bug (direct codebase read)
-- `src/lib/integrations/issue-utils.ts` lines 39-53 — linkIssue writes to `settings.integrations[trackerId].issue` (direct codebase read)
-- `src/lib/integrations/jira.ts` — current command structure with required `<workspace>` args (direct codebase read)
-- `src/lib/git.ts` lines 4-21 — `checkBranchExists()` checks local refs only; `createWorktree()` current implementation (direct codebase read)
-- `src/lib/integrations/forge-utils.ts` lines 138-143 — `resolveRepoCwd()` pattern for CWD detection (direct codebase read)
-- `src/lib/paths.ts` (referenced via imports) — `expandHome` helper available for tilde expansion
-- glab MR !1183 — URL encoding fix for branch names in `glab repo view --web`: https://gitlab.com/gitlab-org/cli/-/merge_requests/1183
-- glab issue: slash in branch name causes `mr checkout` 404: https://gitlab.com/gitlab-org/cli/-/work_items/8020
-- lazygit issue: "Opening MR on GitLab with slash in branchname": https://github.com/jesseduffield/lazygit/issues/4321
-- git-scm docs: `git worktree add --track`: https://git-scm.com/docs/git-worktree
-- git-scm: checking remote branch existence via `ls-remote --exit-code --heads`: https://git-scm.com/docs/git-ls-remote
+- `src/lib/config.ts` lines 59-91 — `TemplateSchema` current structure; `includes` field not yet present (direct codebase read)
+- `src/lib/git.ts` lines 132-168 — `hasUpstreamTracking()`, `ensureUpstreamTracking()` — available for pull implementation reuse
+- `src/lib/git.ts` lines 193-201 — `getCommitsBehind()` — staleness count using local remote-tracking refs
+- `src/lib/git.ts` line 111-113 — `fetchOrigin()` uses `fetch.timeout=30` — network operation; 30s worst case
+- `src/lib/workspace-ops.ts` lines 106-136 — `mergeEnv()`, `buildBaseEnv()`, `writeEnvFiles()` — existing env merge pattern
+- `src/lib/workspace-ops.ts` lines 991-1100 — `syncWorkspace()` — dirty check + rebase pattern to replicate in pull
+- `src/tui/dashboard/hooks/useWorkspaces.ts` — `fetchStatuses()` batch pattern; where staleness must NOT be added
+- `src/tui/workspace-wizard.ts` lines 173-177 — single-template hook/env copy; must be updated for composition
+- git-scm docs: git pull without upstream tracking: https://git-scm.com/docs/git-pull
+- git-scm docs: git worktree and shared remote refs: https://git-scm.com/docs/git-worktree
+- Shell quoting for eval-safe output: https://mywiki.wooledge.org/Quotes
+- Dotenv format quoting edge cases: https://github.com/symfony/symfony/issues/23306
+- SolidJS timer/polling patterns: https://primitives.solidjs.community/package/timer/
+- git rev-list count ahead/behind: https://brandonrozek.com/blog/ahead-behind-git/
 
 ---
-*Pitfalls research for: v0.8.0 — integration polish and workspace UX improvements in git-stacks*
-*Researched: 2026-03-24*
+*Pitfalls research for: v0.10.0 — multi-agent workspace tooling in git-stacks*
+*Researched: 2026-03-25*

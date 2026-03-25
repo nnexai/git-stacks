@@ -1,188 +1,213 @@
 # Project Research Summary
 
-**Project:** git-stacks v0.8.0 — Integration Polish & Workspace UX
-**Domain:** CLI workspace manager — bug fixes and ergonomic improvements to integration layer
-**Researched:** 2026-03-24
+**Project:** git-stacks v0.10.0 — Multi-Agent Workspace Tooling
+**Domain:** CLI workspace manager — agent bootstrap primitives, multi-repo sync, template composition
+**Researched:** 2026-03-25
 **Confidence:** HIGH
 
 ## Executive Summary
 
-v0.8.0 is a focused integration polish release containing two confirmed bugs and two UX ergonomic improvements. All four features are additive or corrective changes to the existing codebase — no new npm dependencies, no schema migrations, no architectural changes. The existing stack (Bun, TypeScript, Commander.js, SolidJS + OpenTUI, Zod + YAML, `@clack/prompts`) is unchanged. Each feature maps cleanly to one or two files in the integration layer and is independent of the others.
+git-stacks v0.10.0 adds five targeted features to an already-working v0.9.1 codebase. The milestone is motivated by a specific use case: AI agents that need to bootstrap into a workspace (discover repo paths, inspect active env vars, pull latest code) without human intervention. The three CLI commands (`paths`, `env`, `pull`) are the direct agent primitives; the TUI staleness indicator and template composition complete the developer workflow around them. Research confirms that all five features are additive — no breaking changes, no schema migrations, no new runtime dependencies.
 
-The recommended implementation order, derived from architecture research, is: (1) the upstream branch tracking fix in `git.ts` — smallest blast radius, six call sites benefit automatically; (2) the dashboard linked issues display fix in `WorkspaceDetail.tsx` — pure display logic, root cause fully understood; (3) the Jira workspace auto-detection change in `jira.ts` and `issue-utils.ts` — requires careful Commander.js argument design to avoid positional ambiguity; (4) the GitLab branch slash investigation — must diagnose root cause before writing any code. Feature 4 is the most uncertain because the failure may be in glab itself rather than our code.
+The recommended build order is CLI commands first (paths → env → pull), then TUI staleness, then template composition. The first three features reuse only existing functions in `git.ts` and `workspace-ops.ts` and have the smallest blast radius (changes confined to `workspace.ts` and thin additions to lib). Template composition is deliberately last because it has the widest blast radius (schema, config, multiple wizard files) and carries the most pitfall surface area. This order ensures agents get working primitives early while the riskier composition feature is developed with full context.
 
-The key risks are: (a) path normalization correctness in workspace CWD detection — must use `resolve()` + `expandHome()` on both sides with `startsWith(path + "/")` not `===`; (b) Commander.js positional argument ambiguity for the Jira `issue link` command when workspace becomes optional — use `--workspace` flag, not an optional positional; (c) performance regression if upstream branch check uses `git ls-remote` directly instead of checking local remote-tracking refs after an existing `fetchOrigin()` call.
+The primary risks are: shell injection in `env --format shell` output (single-quote all values, no exceptions), silent pull failures when worktree branches lack upstream tracking (check and set tracking before every pull), and TUI blocking on network fetches for the staleness indicator (fetch must be background-only with TTL cache). All three risks have known prevention patterns already established in the codebase.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new dependencies are needed for any of the four features. All changes use standard git CLI commands already established in the codebase (`ls-remote --exit-code`, `fetch origin`, `worktree add --track`), built-in `process.cwd()` and `path.resolve()`, and existing SolidJS primitives (`createMemo`, `For`, `Show`).
+No new dependencies are required for v0.10.0. All five features are covered by the existing Bun runtime, Commander.js 12.1.0, Zod 3.25.76, SolidJS 1.9.11 + @opentui/core 0.1.87, and Bun's native `$` shell. The `git-stacks env` JSON output uses `JSON.stringify` (built-in), shell quoting uses string replacement (no `dotenv` package needed), and the TUI polling pattern (`setInterval` + `onCleanup`) already exists in `useMessages.ts`. Resisting dependency additions is a deliberate choice: each alternative considered (`simple-git`, `@solid-primitives/timer`, `deepmerge`, `p-limit`) would add a production dependency for functionality the existing stack already provides.
 
-**Core technologies relevant to v0.8.0:**
-- `Bun.$` shell — git CLI invocations for upstream branch check; same `.quiet().nothrow()` pattern already used in `isBranchGoneOnRemote()` in `git.ts`
-- `process.cwd()` + `path.resolve()` — CWD-to-workspace detection; no library needed, 5-line implementation
-- SolidJS `ws()` reactive signal — already available in `WorkspaceDetail.tsx` props; data is already present, only the display path needs fixing
-- Commander.js `--workspace` flag pattern — cleaner than optional positional for the Jira argument redesign
-
-**New functions (no new files needed):**
-- `checkRemoteBranchExists(repoPath, branch)` — in `src/lib/git.ts`; uses `git ls-remote --exit-code --heads origin <branch>`
-- `resolveWorkspaceFromCwd(cwd?)` — in `src/lib/integrations/issue-utils.ts`; path-prefix match against all workspace `task_path` values
-
-**Version-sensitive note:** `git worktree add --track` is available since git 2.5. Project already requires git 2.24+. No version concern.
+**Core technologies:**
+- Bun `$` shell — all git operations; add `pullBranch()` alongside existing `fetchOrigin()`, `rebaseBranch()` patterns
+- Commander.js 12.1.0 — new command registrations (`paths`, `pull`, `env`) and variadic `--template <name...>` option
+- Zod 3.25.76 — backward-compatible schema extension with `includes: z.array(z.string()).optional()` on `TemplateSchema`
+- SolidJS `setInterval` + `onCleanup` — periodic staleness polling; same pattern as existing `useMessages.ts`
 
 ### Expected Features
 
-All four features have been scoped to their minimal correct implementation. Extended features (applying auto-detection to GitHub/GitLab/Gitea, doctor checks for missing upstream tracking) are explicitly deferred to v0.8.x or v0.9.0.
+All five features are in scope for v0.10.0. The prioritization matrix distinguishes between agent-facing primitives (P1, must ship) and developer workflow enhancers (P2, complete the story).
 
-**Must ship (v0.8.0):**
-- Per-workspace linked issue displayed correctly in dashboard detail pane — active bug, shows global Jira config as if it were workspace data
-- Upstream branch tracking during worktree creation — prevents silent "no tracking" defect causing `git push --set-upstream` requirement for every new workspace on an existing branch
-- Jira workspace auto-detection from CWD — ergonomic improvement reducing friction in the most common single-developer workflow
-- GitLab branch slash investigation — identify root cause and either fix (one-liner in `gitlab.ts`) or document (known glab limitation)
+**Must have (table stakes):**
+- `git-stacks paths [workspace] [--prefix <flag>]` — workspace paths for agent CLI injection; pure read over existing `WorkspaceRepo` data
+- `git-stacks env [workspace] [--format shell|dotenv|json]` — merged env var dump; `mise env` is the canonical format reference
+- `git-stacks pull [workspace]` — parallel multi-repo pull with dirty-repo guard; `--ff-only` default prevents merge commits
 
-**Defer to v0.8.x:**
-- Extend workspace auto-detection to GitHub/GitLab/Gitea issue commands (same pattern as Jira, low complexity)
-- Verbose output showing detected workspace name during auto-detection
-- Doctor warning for existing worktrees missing upstream tracking
+**Should have (competitive differentiators):**
+- TUI upstream staleness indicator — "N behind" badge per repo in `WorkspaceDetail`; fetch-on-focus with TTL cache
+- Template composition (`includes:` field + `--template a --template b` on `git-stacks new`) — composable workspace recipes; `mergeTemplates()` implemented once and shared by both paths
 
-**Defer to v0.9.0+:**
-- Separate "Linked Issues" visual section in dashboard detail pane (beyond the minimum bug fix)
-- Minimum glab version enforcement in doctor (contingent on slash investigation result)
-- Cross-workspace issue aggregation view
+**Anti-features confirmed out of scope:**
+- `pull` with auto-rebase (destroys in-progress state; agents use `git-stacks sync` for intentional rebase)
+- `env` dump including `env_file` contents (may contain secrets; `env_file` is a write-target, not a read-input)
+- Global staleness poll across all workspaces (N×M concurrent fetches every 2 minutes; TUI unusable on slow connections)
+- Template composition deep-merge of nested keys (unpredictable; flat last-wins matches `mise`/`Hatch` conventions)
 
 ### Architecture Approach
 
-All four features sit at well-defined architectural seams with no cross-layer changes required. Feature 4 (`git.ts`) is a pure core library change that propagates to six existing call sites automatically — none of the callers need modification. Feature 1 (`WorkspaceDetail.tsx`) is a TUI display-only change with no data model impact. Feature 3 (`jira.ts` + `issue-utils.ts`) is confined to the integration plugin layer. Feature 2 (`gitlab.ts`) is investigation-first with a conditional one-line fix.
+All five features are additive to existing files — no new top-level modules, no YAML schema migrations, no breaking changes to existing function signatures. The established three-layer split (thin command → workspace-ops business logic → git.ts primitives) is maintained throughout. The only structural judgment call is whether to extend `useWorkspaces.ts` for TUI staleness or extract a separate `useStaleness.ts` hook; extracting is cleaner for separation of concerns.
 
-**Major components touched:**
-1. `src/lib/git.ts` — `createWorktree()` internal logic change; new `checkRemoteBranchExists()` function following existing `isBranchGoneOnRemote()` pattern
-2. `src/tui/dashboard/WorkspaceDetail.tsx` — configSummary source corrected to read from workspace settings only; linked issue display section added
-3. `src/lib/integrations/issue-utils.ts` — new `resolveWorkspaceFromCwd()` using path-prefix matching against all workspace `task_path` values
-4. `src/lib/integrations/jira.ts` — workspace argument made optional; CWD fallback wired in; `--workspace` flag used to avoid positional ambiguity
-5. `src/lib/integrations/gitlab.ts` — conditional one-liner adding `--source-branch` to `glab mr view` if investigation confirms our code is at fault
+**Major components and what changes:**
+1. `src/commands/workspace.ts` — three new command blocks (`paths`, `pull`, `env`); variadic `--template` option on `new`
+2. `src/lib/workspace-ops.ts` — two new functions: `pullWorkspace()` (returns `PullResult`), `getWorkspaceEnv()` (returns `Record<string, string>`)
+3. `src/lib/git.ts` — one new function: `pullBranch(path, opts?)` returning `{ ok, error? }`
+4. `src/lib/config.ts` — `includes` field on `TemplateSchema`; new pure functions `composeTemplates()` and `resolveIncludes()`
+5. `src/tui/dashboard/` — `RepoStatus.behind` type extension; staleness hook; badge rendering in `WorkspaceRow` and `WorkspaceDetail`
+6. `src/tui/template-wizard.ts` and `workspace-wizard.ts` — multi-select for `includes:` and multi-template composition
 
 ### Critical Pitfalls
 
-1. **Commander.js positional ambiguity for `jira issue link`** — making `[workspace]` optional before `<issue-id>` causes Commander to assign a single positional arg to `workspace`, leaving `issue-id` undefined and silently wrong. Use `--workspace <name>` flag instead of an optional positional. The `issue open` and `issue unlink` commands have only one positional each and can use `[workspace]` safely.
+1. **Schema field without `.optional()` breaks all existing user template YAML** — add `includes` only as `.optional()`, guard all access with `?.`; test by parsing an old-format fixture through the new schema before writing resolver logic
 
-2. **Path normalization in CWD workspace detection** — comparing `process.cwd()` to stored `task_path` without normalization fails when `task_path` uses `~/` prefix (common; written at workspace creation time with tilde unexpanded). Fix: apply `path.resolve(expandHome(repo.task_path))` to every stored path before comparison; use `cwd.startsWith(taskPath + "/")` with the trailing separator to match subdirectories and prevent false-positive prefix collisions (e.g., `/tasks/ws` should not match `/tasks/ws-other`).
+2. **Shell env format injection via unquoted values** — use `export KEY='${value.replace(/'/g, "'\\''")}'` unconditionally; never use template-string output without quoting; test with a value containing `$`, space, `;`, and backtick
 
-3. **ls-remote latency on multi-repo workspace creation** — `git ls-remote` is a network call (0.5–3s per repo). For a 5-repo workspace this adds 2–15 seconds of overhead. Fix: verify whether `fetchOrigin()` is already called before `createWorktree()` in the workspace creation flow in `workspace-ops.ts`. If yes, use `git rev-parse --verify origin/<branch>` (local remote-tracking ref check) instead of `ls-remote`. Only use `ls-remote` if no prior fetch is guaranteed.
+3. **`git pull` fails silently when worktree branch has no upstream tracking** — call `hasUpstreamTracking()` before every pull; use explicit `git pull origin <branch>` when tracking is absent; never use bare `git pull`
 
-4. **Dashboard configSummary config-scope conflation** — the `??` fallback from workspace to global config in `WorkspaceDetail.tsx` lines 127–138 is correct for integration config fields (`open_cmd`) but wrong for linked issue IDs. The `issue` key must be read exclusively from workspace settings; the global fallback path must explicitly exclude `issue` keys. Two separate read paths: config summary from global config, linked issue from workspace settings.
+4. **TUI blocking on network fetch for staleness** — `fetchOrigin()` is a 30-second worst-case network call; fire it in a background async path only, update via `setBehinds(prev => ...)` after it resolves, enforce a 5-minute TTL to prevent fetch storms on cursor movement
 
-5. **Double-encoding risk for glab branch slash** — our code does not pass branch names to glab for `mr view --web`; glab reads HEAD branch from the CWD. Adding `encodeURIComponent()` on our side would double-encode if glab also encodes. Confirm bug ownership via manual testing before writing any encoding fix.
+5. **Template composition worktree-wins requires explicit priority check** — naive last-wins spread can silently install trunk mode over worktree; implement `mergeRepoDeclarations()` with explicit mode comparison; test with a trunk/worktree conflict case before shipping
+
+6. **Hook concatenation from composition must be persisted to workspace YAML** — current workspace creation copies hooks from one template only; with composition, merged hook arrays from all included templates must be written to `workspace.hooks` at creation time
 
 ## Implications for Roadmap
 
-Based on research, the four features map to four independent phases. The recommended sequence minimizes risk by addressing the lowest-blast-radius change first and the most uncertain change last. Phases 1 and 2 are independent and can be parallelized.
+Based on research, the five features map cleanly to a 6-phase structure. Phases 1-3 are independent of each other and can be built in any order within the grouping, but all should complete before the TUI and composition phases to establish the agent primitive baseline.
 
-### Phase 1: Upstream Worktree Branch Tracking
+### Phase 1: Agent Path Discovery (`git-stacks paths`)
 
-**Rationale:** Single-function change in `git.ts` with no dependencies on other features. Root cause fully understood, fix strategy verified against official git docs. Six call sites benefit automatically with no caller changes required. Lowest risk, highest correctness payoff. Resolves a silent defect present in all workspace creation paths.
+**Rationale:** Zero new lib functions, zero risk. Reads existing `WorkspaceRepo.task_path` / `main_path` and formats output. Unblocks agent CLI injection (`claude $(git-stacks paths myws --prefix --add-dir)`) immediately. Establishes the command pattern that `env` and `pull` will follow.
 
-**Delivers:** Worktrees for branches that already exist on `origin` are created with upstream tracking set. `git push` and `git pull` work without `--set-upstream`. Brand-new branch behavior (no remote counterpart) is unchanged — three-way check: local exists, remote exists, neither.
+**Delivers:** `git-stacks paths [workspace] [--prefix <str>] [--format json]` — pipeline-composable path output per repo
 
-**Addresses:** FEATURES.md Feature 4 table stakes (upstream branch tracking)
+**Addresses:** Table-stakes paths feature; `--prefix --add-dir` differentiator for Claude Code integration
 
-**Avoids:** PITFALLS.md Pitfall 5 (missing `--track` during worktree creation) and Pitfall 6 (ls-remote latency — resolve fetch-vs-ls-remote strategy before implementing)
+**Avoids:** No pitfalls in this phase — pure read-only with no side effects
 
-**No research phase needed** — git CLI flags verified against official docs; `ls-remote --exit-code` pattern established in `isBranchGoneOnRemote()` in same file.
+**Research flag:** No research phase needed — entirely additive over existing data structures.
 
-### Phase 2: Dashboard Linked Issues Display Fix
+### Phase 2: Agent Env Inspection (`git-stacks env`)
 
-**Rationale:** Pure TUI display change. Root cause identified precisely in `WorkspaceDetail.tsx` lines 127–138. Data is already in workspace props; no new data loading, no schema changes. Fix isolates two concerns that are currently conflated: integration config display (reads from global config) vs. linked issue data (reads from workspace settings only).
+**Rationale:** The `mergeEnv()` and `buildBaseEnv()` functions already exist; this feature assembles their output into a user-facing command. One gap to fix: extend the merge chain to include `template.env` (currently only `workspace.env` is read). Shell injection quoting must be correct from the first commit.
 
-**Delivers:** Dashboard detail pane shows per-workspace linked issue ID for each tracker integration that has one. Empty state is correct when no issue is linked. Global config values are not shown in the linked issue row. Source annotation shows `[workspace]` not `[global]` for issue fields.
+**Delivers:** `git-stacks env [workspace] [--format shell|dotenv|json]` — safe, eval-able env dump including GS_* workspace vars
 
-**Addresses:** FEATURES.md Feature 1 table stakes (per-workspace linked issue display, correct empty state, correct source annotation)
+**Addresses:** Table-stakes env dump; GS_* vars inclusion differentiator for agent context bootstrap
 
-**Avoids:** PITFALLS.md Pitfall 1 (global config fallback contaminating workspace display) and the technical debt anti-pattern of conflating config scope in display logic
+**Avoids:** Pitfall 2 (shell injection) — single-quote all values before this ships
 
-**No research phase needed** — root cause confirmed by direct source inspection; fix is pure JSX/display logic using already-loaded workspace props.
+**Research flag:** No research phase needed — format specifications fully documented against `mise env` reference.
 
-### Phase 3: Jira Workspace Auto-Detection from CWD
+### Phase 3: Multi-Repo Pull (`git-stacks pull`)
 
-**Rationale:** Adds `resolveWorkspaceFromCwd()` to `issue-utils.ts` and rewires three Jira issue subcommands in `jira.ts`. Requires careful Commander.js argument design — the positional ambiguity pitfall is well-understood and the solution (use `--workspace` flag) is unambiguous. Follows Phases 1 and 2 to keep PR scope manageable.
+**Rationale:** Network I/O and per-repo state management add complexity. Must implement dirty-repo guard, upstream tracking check, and worktree-vs-trunk branch selection correctly. `--ff-only` default prevents merge commits in multi-repo automation. Parallel execution with per-repo result collection matches the existing `syncWorkspace()` philosophy.
 
-**Delivers:** `git-stacks integration jira issue link PROJ-123` (no workspace arg) auto-detects workspace when run from inside a worktree. Clear, actionable error when workspace cannot be determined from CWD. Custom `workspace_root` paths honored via global config. Existing explicit `--workspace my-workspace` invocations continue to work (backward compatible).
+**Delivers:** `git-stacks pull [workspace]` — parallel pull across all repos; skips dirty repos with warning; exits non-zero if any repo was skipped
 
-**Addresses:** FEATURES.md Feature 3 table stakes (optional workspace arg, error message, config-sourced workspace root, all three Jira subcommands covered)
+**Addresses:** Table-stakes multi-repo sync feature; P1 agent primitive
 
-**Avoids:** PITFALLS.md Pitfall 3 (path normalization with `expandHome` + `resolve`), Pitfall 4 (Commander.js positional arg ambiguity via `--workspace` flag), and the UX pitfall of silent detection failure
+**Avoids:** Pitfall 3 (missing upstream tracking) and Pitfall 4 (rebase-based pull leaving REBASE_HEAD state)
 
-**No research phase needed** — path detection algorithm derived directly from `paths.ts` and `config.ts` source. Commander.js argument design decision already resolved.
+**Research flag:** No research phase needed — `--ff-only` is standard; patterns mirror existing `rebaseBranch()` and `syncWorkspace()`.
 
-**Shell completion update required:** `src/lib/completion-generator.ts` walks the Commander.js tree to generate completions automatically — verify post-implementation that the new `--workspace` flag appears in fish/bash/zsh completions.
+### Phase 4: TUI Upstream Staleness Indicator
 
-### Phase 4: GitLab Branch Slash Investigation and Fix
+**Rationale:** Self-contained TUI change; independent of CLI commands and template composition. Extending `RepoStatus` with `behind: number | null` is additive. The critical constraint is non-blocking fetch — fire fetch in background, update via signal, never block render.
 
-**Rationale:** Must be last because investigation is required before any code is written. If the bug is in glab (not our code), the deliverable shifts to documentation and optionally a doctor version check — no code change in `gitlab.ts`. If the bug is confirmed in our code, the fix is a one-line addition. Placing this last avoids blocking earlier phases on an uncertain investigation.
+**Delivers:** "N↓" badge per repo in `WorkspaceDetail`; aggregate badge in `WorkspaceRow`; manual `r` refresh; TTL-gated background fetch per focused workspace
 
-**Delivers:** Confirmed root cause documented. Either: (a) one-line fix in `gitlab.ts` adding `--source-branch workspace.branch` to `glab mr view --web` invocation, or (b) release notes stating the known glab limitation and recommended glab version. Not both.
+**Addresses:** P2 TUI staleness indicator feature
 
-**Addresses:** FEATURES.md Feature 2 (GitLab branch slash escaping — all three table stakes items: transparent slash handling, investigation documented, root cause confirmed)
+**Avoids:** Pitfall 5 (blocking TUI render on fetch) — TTL cache and background-only fetch are architectural requirements, not optimizations
 
-**Avoids:** PITFALLS.md Pitfall 2 (double-encoding risk — do not add encoding before confirming our code is at fault) and the FEATURES.md anti-feature warning against URL-encoding branch names before passing to glab
+**Research flag:** No research phase needed — `getCommitsBehind()` and `fetchOrigin()` already exist; SolidJS polling pattern already used in codebase.
 
-**Investigation required** — manual test with a real GitLab project on a `feature/...` branch before writing any code. This is the only phase with a conditional deliverable.
+### Phase 5: Template Composition
+
+**Rationale:** Widest blast radius of all five features: schema change, new config functions, wizard updates, multi-template `new` command. Saved for last so it cannot destabilize the agent primitives already shipped in phases 1-3. Schema change must be validated against existing user template YAML before any resolver logic is written. `composeTemplates()` must be pure (no I/O) to be fully unit-testable.
+
+**Delivers:** `includes: [name, ...]` field on `TemplateSchema`; `composeTemplates()` with worktree-wins repo union, hook concatenation, and last-wins env; `resolveIncludes()` with cycle detection; variadic `--template a --template b` on `git-stacks new`; multi-select in TUI template wizard
+
+**Addresses:** P2 template composition `includes:` and ad-hoc multi-template features
+
+**Avoids:** Pitfall 1 (schema breaks existing YAML), Pitfall 6 (wrong repo union mode), Pitfall 7 (hooks not persisted from composition)
+
+**Research flag:** No research phase needed — Zod patterns, Commander.js variadic options, and merge rules all fully specified.
+
+### Phase 6: Release Prep (v0.10.0)
+
+**Rationale:** Every milestone ends with release prep per project conventions.
+
+**Delivers:** v0.10.0 tagged release; docs covering `paths`, `env`, `pull`, staleness badge, and template composition with examples for the agent CLI injection pattern
+
+**Research flag:** No research needed — follows established release-prep pattern.
 
 ### Phase Ordering Rationale
 
-- Phases 1 and 2 touch different layers (`git.ts` core library vs. TUI dashboard) with no shared state — they can be developed in parallel by two developers.
-- Phase 3 has no technical dependency on Phases 1 or 2 but should follow them to keep each PR reviewable in isolation.
-- Phase 4 must be last because the investigation determines what (if anything) gets coded. Assigning it last prevents discovery of a "it's glab's bug" from blocking shipping the other three features.
-- The `--workspace` flag change in Phase 3 requires verifying shell completions post-implementation — this is automatic via the Commander.js tree walker but must be confirmed.
+- **Phases 1-3 before 4-5:** CLI commands are the stated reason for v0.10.0. Shipping them first delivers the milestone's core value without waiting for TUI or composition work.
+- **Phases 1, 2, 3 are fully independent** — they can be developed in parallel if multiple agents are assigned, or sequentially in any order within that group.
+- **Phase 4 before 5:** TUI staleness is self-contained; shipping it before template composition avoids blast-radius interference.
+- **Phase 5 last:** Template composition touches the most files and carries the most pitfall risk. Building it after phases 1-4 are stable means any composition bugs do not destabilize the agent primitives.
 
 ### Research Flags
 
-Phases with standard patterns (no `research-phase` needed):
-- **Phase 1** — git CLI pattern established in `isBranchGoneOnRemote()` in same file; `--track` flag verified in official git docs; implementation is mechanical
-- **Phase 2** — pure display logic fix using already-loaded SolidJS reactive props; no new API surface
-- **Phase 3** — path detection algorithm fully derived from `paths.ts`; Commander.js arg design decision resolved (use flag not positional)
+No phase requires a `research-phase` step during planning. All research is complete and actionable.
 
-Phase requiring investigation before coding:
-- **Phase 4** — glab behavior with slash-containing branch names must be tested manually on a real GitLab instance before determining whether a code change is warranted. Document findings; write code only if the bug is confirmed to be in our invocation of glab.
+Phases with standard patterns (research confirms skip):
+- **Phase 1 (paths):** Pure read-and-format over existing data structures; zero risk
+- **Phase 2 (env):** Format specs verified against `mise env`; merge chain already exists
+- **Phase 3 (pull):** `git pull --ff-only` is standard; patterns mirror `rebaseBranch()` and `syncWorkspace()`
+- **Phase 4 (TUI staleness):** All git ops already exist; SolidJS polling pattern already in codebase
+- **Phase 5 (template composition):** Zod, Commander.js variadic, and merge rules fully specified
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | No new dependencies; all git CLI flags verified against official docs and codebase; existing patterns reused throughout |
-| Features | HIGH | All four features grounded in direct source code inspection; scope tightly bounded; must-ship vs. defer line explicitly drawn |
-| Architecture | HIGH | All modified files read directly; component boundaries confirmed; six call sites for Feature 4 enumerated in source |
-| Pitfalls | HIGH (except glab) | Pitfalls 1, 3, 4, 5, 6 derived directly from codebase inspection with file/line evidence; Pitfall 2 (glab slash) is MEDIUM — upstream glab behavior requires live testing to confirm |
+| Stack | HIGH | All findings verified against live codebase and official docs; zero new dependencies required |
+| Features | HIGH | Official docs for `--add-dir` and `mise env` verified; codebase inspection confirms all primitives exist |
+| Architecture | HIGH | Primary source is live codebase analysis of all affected files; all integration points confirmed |
+| Pitfalls | HIGH | All pitfalls grounded in direct reads of `config.ts`, `git.ts`, `workspace-ops.ts`, and `useWorkspaces.ts` |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **ls-remote vs. fetch strategy for Phase 1**: Before implementing `createWorktree()` changes, inspect `workspace-ops.ts` to confirm whether `fetchOrigin()` is called before the `createWorktree()` loop for each repo. If yes, use `git rev-parse --verify origin/<branch>` (local check, zero network) rather than `git ls-remote` (network call per repo). This decision affects latency for every workspace creation and must be made before writing Phase 1 code.
+- **`env` merge chain gap:** `mergeEnv()` currently reads only `workspace.env`, not `template.env`. The `env` command must implement the full merge chain. Decide at implementation time whether to add a new `mergeFullEnv()` function or extend the existing one — check all call sites of `mergeEnv()` before touching it to avoid breaking existing callers.
 
-- **GitLab slash branch root cause (Phase 4)**: Whether the deliverable is a code fix or documentation depends entirely on whether manual testing with a `feature/...` branch shows the failure in our `gitlab.ts` invocation or in glab's URL construction. Allocate investigation time before Phase 4 work begins. If glab is the cause, consider whether a minimum glab version check in `git-stacks doctor` is worth adding as a v0.8.x follow-up.
+- **TUI staleness indicator placement:** Research recommends optionally extracting a `useStaleness.ts` hook separate from `useWorkspaces.ts`. This is a design judgment call during implementation — both approaches work; extraction is cleaner for separation of concerns.
 
-- **Shell completion verification (Phase 3)**: The `--workspace` flag addition changes the CLI signature for three Jira issue subcommands. `completion-generator.ts` auto-generates from the Commander.js tree (confirmed in CLAUDE.md architecture section), so the completion update should be automatic. Verify by running `git-stacks completion fish` and checking for the new flag after Phase 3 ships.
+- **Template composition `includes:` nesting depth:** Research recommends limiting to 1 level of nesting for v0.10.0 (no includes-of-includes). `resolveIncludes()` supports arbitrary depth if the limit is lifted; document the v0.10.0 constraint and revisit in v1.0 if demanded.
+
+- **`git-stacks paths --prefix` space handling:** Paths with spaces require quoting in shell output. The exact quoting approach is unspecified — handle in implementation with a test case for a path containing a space.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `src/tui/dashboard/WorkspaceDetail.tsx` lines 127–138 — configSummary fallback bug, direct source read
-- `src/lib/integrations/issue-utils.ts` — `linkIssue()` writes to `workspace.settings.integrations[id].issue`; confirms data model for linked issues
-- `src/lib/git.ts` — `createWorktree()` and `isBranchGoneOnRemote()` implementation; `ls-remote --exit-code` pattern established
-- `src/lib/paths.ts` — `getTasksDir()` layout confirmed; `expandHome()` available for tilde expansion in CWD detection
-- `src/lib/integrations/jira.ts` — current command structure with required `<workspace>` positional args; call sites confirmed
-- `src/lib/workspace-ops.ts` — six `createWorktree()` call sites enumerated; confirms single-function change propagates everywhere
-- https://git-scm.com/docs/git-worktree — `--track` flag for `worktree add` verified
-- https://git-scm.com/docs/git-ls-remote — `--exit-code --heads` exit code behavior confirmed
+
+- Live codebase: `src/lib/git.ts` — `getCommitsBehind()`, `fetchOrigin()`, `hasUpstreamTracking()`, `ensureUpstreamTracking()`, `rebaseBranch()`
+- Live codebase: `src/lib/workspace-ops.ts` — `mergeEnv()`, `buildBaseEnv()`, `writeEnvFiles()`, `syncWorkspace()`, `resolveWorkspaceArg()`
+- Live codebase: `src/lib/config.ts` — `TemplateSchema`, `WorkspaceRepoSchema`, `WorkspaceSchema`, YAML I/O patterns
+- Live codebase: `src/tui/dashboard/hooks/useMessages.ts` — `setInterval` + `onCleanup` polling pattern confirmed in use
+- Live codebase: `src/tui/dashboard/types.ts` — `RepoStatus` structure; `behind?: number` extension is additive
+- Live codebase: `src/tui/workspace-wizard.ts` — single-template hook copy at creation time; must be updated for composition
+- [Commander.js 12 README](https://github.com/tj/commander.js) — variadic `<name...>` option syntax; `collect` function pattern
+- [git-scm.com/docs/git-pull](https://git-scm.com/docs/git-pull) — `--ff-only` and `--rebase` flags
+- [git-scm.com/docs/git-rev-list](https://git-scm.com/docs/git-rev-list) — `--count HEAD..origin/<branch>` for behind count
+- [git-scm.com/docs/git-worktree](https://git-scm.com/docs/git-worktree) — shared fetch behavior across linked worktrees
+- [Claude Code CLI Reference](https://code.claude.com/docs/en/cli-reference) — `--add-dir` flag; space-separated and repeated-flag syntax confirmed
+- [mise env command docs](https://mise.jdx.dev/cli/env.html) — canonical reference for env dump format flags (`-D`, `-J`, `--shell`)
 
 ### Secondary (MEDIUM confidence)
-- https://gitlab.com/gitlab-org/cli/-/merge_requests/1183 — glab added `url.PathEscape` for branch names in web URLs; whether current released glab has a regression requires live testing
-- https://github.com/jesseduffield/lazygit/issues/4321 — double-encoding pattern `%2F` to `%252F` confirmed in browser URL handling; informs the "don't encode on our side" recommendation
 
-### Tertiary (informational)
-- https://gitlab.com/gitlab-org/cli/-/work_items/8020 — glab issue: slash in branch name causes `mr checkout` 404; confirms the problem class exists in glab ecosystem; specific fix status requires live verification
+- [Hatch environment composition issue #2029](https://github.com/pypa/hatch/issues/2029) — merge rules for template inheritance (last-wins for env, concatenate for hooks)
+- [SolidJS docs](https://docs.solidjs.com) — `createEffect`/`onCleanup` interval pattern; `@solid-primitives/timer` noted but not needed given existing codebase pattern
+- [mywiki.wooledge.org/Quotes](https://mywiki.wooledge.org/Quotes) — shell quoting for eval-safe output
+
+### Tertiary (LOW confidence)
+
+- [Dotenv format quoting edge cases](https://github.com/symfony/symfony/issues/23306) — dotenv double-quote quoting behavior; verify against actual dotenv parsers during implementation
 
 ---
-*Research completed: 2026-03-24*
+*Research completed: 2026-03-25*
 *Ready for roadmap: yes*
