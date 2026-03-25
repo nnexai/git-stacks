@@ -27,6 +27,44 @@ const DYNAMIC_COMPLETIONS: Record<string, DynamicCompletion> = {
   "message.send":    "workspace",
   "message.list":    "workspace",
   "message.clear":   "workspace",
+
+  // GitHub
+  "integration.github.open":             "workspace",
+  "integration.github.pr.create":        "workspace",
+  "integration.github.pr.open":          "workspace",
+  "integration.github.pr.status":        "workspace",
+  "integration.github.issue.link":       "workspace",
+  "integration.github.issue.unlink":     "workspace",
+  "integration.github.issue.open":       "workspace",
+
+  // GitLab
+  "integration.gitlab.open":             "workspace",
+  "integration.gitlab.pr.create":        "workspace",
+  "integration.gitlab.pr.open":          "workspace",
+  "integration.gitlab.pr.status":        "workspace",
+  "integration.gitlab.issue.link":       "workspace",
+  "integration.gitlab.issue.unlink":     "workspace",
+  "integration.gitlab.issue.open":       "workspace",
+
+  // Gitea
+  "integration.gitea.open":              "workspace",
+  "integration.gitea.pr.create":         "workspace",
+  "integration.gitea.pr.open":           "workspace",
+  "integration.gitea.pr.status":         "workspace",
+  "integration.gitea.issue.link":        "workspace",
+  "integration.gitea.issue.unlink":      "workspace",
+  "integration.gitea.issue.open":        "workspace",
+
+  // Jira
+  "integration.jira.issue.link":         "workspace",
+  "integration.jira.issue.unlink":       "workspace",
+  "integration.jira.issue.open":         "workspace",
+
+  // Niri
+  "integration.niri.focus-workspace":    "workspace",
+
+  // Tmux
+  "integration.tmux.attach":             "workspace",
 }
 
 const OPTION_ENUMS: Record<string, string[]> = {
@@ -114,11 +152,37 @@ function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string
   return ""
 }
 
-function bashCaseBody(node: CommandNode, name: string): string {
-  const { subcommands, options, dynamic } = node
+function bashCaseBodyRecursive(node: CommandNode, depth: number, name: string, indent: string): string {
+  const { subcommands, dynamic } = node
 
   if (subcommands.length > 0) {
     const subcmdNames = subcommands.map(s => s.name).join(" ")
+
+    // Check if any sub has its own subcommands (needs deeper nesting)
+    const hasDeepSubs = subcommands.some(s => s.subcommands.length > 0)
+
+    if (hasDeepSubs) {
+      // Generate nested case statements for deeper nesting
+      let out = `${indent}case "\${words[${depth}]}" in\n`
+      for (const sub of subcommands) {
+        if (sub.subcommands.length > 0) {
+          out += `${indent}  ${sub.name})\n`
+          out += bashCaseBodyRecursive(sub, depth + 1, name, indent + "    ")
+          out += `${indent}    ;;\n`
+        } else if (sub.dynamic && sub.dynamic !== "shells") {
+          out += `${indent}  ${sub.name})\n`
+          out += bashDynamicLookup(sub.dynamic, indent + "    ", name)
+          out += `${indent}    ;;\n`
+        }
+      }
+      out += `${indent}  *)\n`
+      out += `${indent}    COMPREPLY=($(compgen -W "${subcmdNames}" -- "$cur"))\n`
+      out += `${indent}    ;;\n`
+      out += `${indent}esac\n`
+      return out
+    }
+
+    // Flat subcommands (no deeper nesting) — original behavior
     const byDynamic = new Map<DynamicCompletion, string[]>()
     for (const sub of subcommands) {
       if (sub.dynamic && sub.dynamic !== "shells") {
@@ -126,15 +190,30 @@ function bashCaseBody(node: CommandNode, name: string): string {
         byDynamic.get(sub.dynamic)!.push(sub.name)
       }
     }
-    let out = `      if [[ \${COMP_CWORD} -eq 2 ]]; then\n`
-    out += `        COMPREPLY=($(compgen -W "${subcmdNames}" -- "$cur"))\n`
+    let out = `${indent}if [[ \${COMP_CWORD} -eq ${depth} ]]; then\n`
+    out += `${indent}  COMPREPLY=($(compgen -W "${subcmdNames}" -- "$cur"))\n`
     for (const [dynType, names] of byDynamic) {
       const pattern = names.length === 1 ? names[0] : `@(${names.join("|")})`
-      out += `      elif [[ \${COMP_CWORD} -eq 3 ]] && [[ "\${words[2]}" == ${pattern} ]]; then\n`
-      out += bashDynamicLookup(dynType, "        ", name)
+      out += `${indent}elif [[ \${COMP_CWORD} -eq ${depth + 1} ]] && [[ "\${words[${depth}]}" == ${pattern} ]]; then\n`
+      out += bashDynamicLookup(dynType, indent + "  ", name)
     }
-    out += "      fi\n"
+    out += `${indent}fi\n`
     return out
+  }
+
+  // Leaf node with dynamic completion
+  if (dynamic && dynamic !== "shells") {
+    return bashDynamicLookup(dynamic, indent, name)
+  }
+
+  return ""
+}
+
+function bashCaseBody(node: CommandNode, name: string): string {
+  const { subcommands, options, dynamic } = node
+
+  if (subcommands.length > 0) {
+    return bashCaseBodyRecursive(node, 2, name, "      ")
   }
 
   if (dynamic === "shells") {
@@ -352,7 +431,7 @@ function zshCaseBody(node: CommandNode, id: string): string {
   return ""
 }
 
-function generateZshSubcmdHelper(node: CommandNode, id: string): string {
+function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcName: string): string {
   const subcmds = node.subcommands
   const byDynamic = new Map<DynamicCompletion, string[]>()
   for (const sub of subcmds) {
@@ -362,7 +441,7 @@ function generateZshSubcmdHelper(node: CommandNode, id: string): string {
     }
   }
 
-  let out = `_${id}_${node.name}() {\n`
+  let out = `${funcName}() {\n`
   out += `  if (( CURRENT == 2 )); then\n`
   out += `    local subcmds\n`
   out += `    subcmds=(\n`
@@ -373,9 +452,15 @@ function generateZshSubcmdHelper(node: CommandNode, id: string): string {
   out += `    _describe 'subcommand' subcmds\n`
   out += `  else\n`
   out += `    case $words[2] in\n`
-  // Subcommands that have options — emit _arguments with OPTION_ENUMS/FLAG_COMPLETIONS awareness
   for (const sub of subcmds) {
-    if (sub.options.length > 0) {
+    if (sub.subcommands.length > 0) {
+      // Sub-node has its own subcommands — dispatch to a deeper recursive helper
+      const subFuncName = `${funcName}_${sub.name}`
+      out += `      ${sub.name})\n`
+      out += `        CURRENT=$((CURRENT - 1))\n`
+      out += `        words=(${sub.name} \${words[3,-1]})\n`
+      out += `        ${subFuncName} ;;\n`
+    } else if (sub.options.length > 0) {
       out += `      ${sub.name})\n`
       out += `        _arguments \\\n`
       for (const opt of sub.options) {
@@ -392,8 +477,7 @@ function generateZshSubcmdHelper(node: CommandNode, id: string): string {
   }
   // Fallback: byDynamic grouping for subcommands without options (backward compat)
   for (const [dynType, names] of byDynamic) {
-    // Skip any names already handled above (those with options)
-    const unhandled = names.filter(n => !subcmds.find(s => s.name === n && s.options.length > 0))
+    const unhandled = names.filter(n => !subcmds.find(s => s.name === n && (s.options.length > 0 || s.subcommands.length > 0)))
     if (unhandled.length === 0) continue
     const helper = dynType === "repo" ? `_${id}_repos`
       : dynType === "template" ? `_${id}_templates`
@@ -404,7 +488,20 @@ function generateZshSubcmdHelper(node: CommandNode, id: string): string {
   out += `    esac\n`
   out += `  fi\n`
   out += `}\n`
+
+  // Recursively generate helpers for sub-nodes that have their own subcommands
+  for (const sub of subcmds) {
+    if (sub.subcommands.length > 0) {
+      out += "\n"
+      out += generateZshSubcmdHelperRecursive(sub, id, `${funcName}_${sub.name}`)
+    }
+  }
+
   return out
+}
+
+function generateZshSubcmdHelper(node: CommandNode, id: string): string {
+  return generateZshSubcmdHelperRecursive(node, id, `_${id}_${node.name}`)
 }
 
 export function generateZsh(program: Command): string {
@@ -493,6 +590,67 @@ export function generateZsh(program: Command): string {
 }
 
 // ─── Fish ────────────────────────────────────────────────────────────────────
+
+function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name: string, id: string, lines: string[]): void {
+  for (const node of nodes) {
+    if (node.subcommands.length === 0) continue
+    const subcmdNames = node.subcommands.map(s => s.name).join(" ")
+    const chain = [...ancestorChain, node.name]
+
+    // Build the condition for "we've seen all ancestors + this node, but not yet a sub-subcommand"
+    const seenParts = chain.map(c => `__fish_seen_subcommand_from ${c}`).join("; and ")
+    const notSeen = `not __fish_seen_subcommand_from ${subcmdNames}`
+
+    lines.push(`\n# ${chain.join(" ")} subcommands\n`)
+    for (const sub of node.subcommands) {
+      lines.push(`complete -c ${name} -f -n '${seenParts}; and ${notSeen}' \\\n`)
+      lines.push(`  -a '${sub.name}' -d '${sub.description}'\n`)
+    }
+
+    // Flags for subcommands
+    for (const sub of node.subcommands) {
+      if (sub.options.length === 0) continue
+      lines.push(`\n# Flags for ${chain.join(" ")} ${sub.name}\n`)
+      for (const opt of sub.options) {
+        const longName = opt.long.slice(2)
+        lines.push(`complete -c ${name} -f -n '${seenParts}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -d '${opt.description}'\n`)
+      }
+    }
+
+    // Dynamic completions for leaf subcommands
+    const dynHelper = (dynType: DynamicCompletion): string =>
+      dynType === "repo" ? `__${id}_repos`
+        : dynType === "template" ? `__${id}_templates`
+        : `__${id}_workspaces`
+
+    const repoDynSubs = node.subcommands.filter(s => s.dynamic === "repo" && s.subcommands.length === 0)
+    if (repoDynSubs.length > 0) {
+      lines.push(`\nfor cmd in ${repoDynSubs.map(s => s.name).join(" ")}\n`)
+      lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
+      lines.push(`    -a "(${dynHelper("repo")})"\n`)
+      lines.push("end\n")
+    }
+
+    const templateDynSubs = node.subcommands.filter(s => s.dynamic === "template" && s.subcommands.length === 0)
+    if (templateDynSubs.length > 0) {
+      lines.push(`\nfor cmd in ${templateDynSubs.map(s => s.name).join(" ")}\n`)
+      lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
+      lines.push(`    -a "(${dynHelper("template")})"\n`)
+      lines.push("end\n")
+    }
+
+    const workspaceDynSubs = node.subcommands.filter(s => s.dynamic === "workspace" && s.subcommands.length === 0)
+    if (workspaceDynSubs.length > 0) {
+      lines.push(`\nfor cmd in ${workspaceDynSubs.map(s => s.name).join(" ")}\n`)
+      lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
+      lines.push(`    -a "(${dynHelper("workspace")})"\n`)
+      lines.push("end\n")
+    }
+
+    // Recurse into sub-nodes that have their own subcommands
+    emitFishSubcommands(node.subcommands, chain, name, id, lines)
+  }
+}
 
 export function generateFish(program: Command): string {
   const name = program.name()
@@ -621,42 +779,10 @@ export function generateFish(program: Command): string {
     }
   }
 
-  // Commands with subcommands (e.g. stack)
-  for (const node of nodes) {
-    if (node.subcommands.length === 0) continue
-    const subcmdNames = node.subcommands.map(s => s.name).join(" ")
-    out += `\n# ${node.name} subcommands\n`
-    for (const sub of node.subcommands) {
-      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and not __fish_seen_subcommand_from ${subcmdNames}' \\\n`
-      out += `  -a '${sub.name}' -d '${sub.description}'\n`
-    }
-    // Flags for subcommands
-    for (const sub of node.subcommands) {
-      if (sub.options.length === 0) continue
-      out += `\n# Flags for ${node.name} ${sub.name}\n`
-      for (const opt of sub.options) {
-        const longName = opt.long.slice(2)
-        out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -d '${opt.description}'\n`
-      }
-    }
-
-    // Repo-name completions for subcommands that need it
-    const repoDynSubs = node.subcommands.filter(s => s.dynamic === "repo")
-    if (repoDynSubs.length > 0) {
-      out += `\nfor cmd in ${repoDynSubs.map(s => s.name).join(" ")}\n`
-      out += `  complete -c ${name} -f -n "__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from $cmd" \\\n`
-      out += `    -a "(__${id}_repos)"\n`
-      out += "end\n"
-    }
-    // Template-name completions for subcommands that need it
-    const templateDynSubs = node.subcommands.filter(s => s.dynamic === "template")
-    if (templateDynSubs.length > 0) {
-      out += `\nfor cmd in ${templateDynSubs.map(s => s.name).join(" ")}\n`
-      out += `  complete -c ${name} -f -n "__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from $cmd" \\\n`
-      out += `    -a "(__${id}_templates)"\n`
-      out += "end\n"
-    }
-  }
+  // Commands with subcommands — recursive helper for arbitrary depth
+  const fishSubLines: string[] = []
+  emitFishSubcommands(nodes, [], name, id, fishSubLines)
+  out += fishSubLines.join("")
 
   // Shells completion
   const shellsNode = nodes.find(n => n.dynamic === "shells")
