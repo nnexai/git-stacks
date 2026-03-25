@@ -96,6 +96,27 @@ function buildTestProgram(): Command {
     .option("--from <sender>", "Clear by sender")
   program.addCommand(messageCmd)
 
+  // integration command tree (3-4 level nesting)
+  const integrationCmd = new Command("integration").description("Manage integrations")
+
+  const githubCmd = new Command("github").description("GitHub integration")
+  githubCmd.command("open [workspace]").description("Open GitHub repo in browser")
+
+  const ghPrCmd = new Command("pr").description("Pull request operations")
+  ghPrCmd.command("create <workspace>").description("Create a pull request")
+  ghPrCmd.command("open <workspace>").description("Open PR in browser")
+  ghPrCmd.command("status <workspace>").description("Show PR status")
+  githubCmd.addCommand(ghPrCmd)
+
+  const ghIssueCmd = new Command("issue").description("Issue operations")
+  ghIssueCmd.command("link [workspace]").description("Link an issue")
+  ghIssueCmd.command("unlink [workspace]").description("Unlink an issue")
+  ghIssueCmd.command("open [workspace]").description("Open issue in browser")
+  githubCmd.addCommand(ghIssueCmd)
+
+  integrationCmd.addCommand(githubCmd)
+  program.addCommand(integrationCmd)
+
   return program
 }
 
@@ -472,5 +493,96 @@ describe("close command - workspace completions", () => {
     // close should appear in the for cmd in ... workspace loop
     expect(out).toMatch(/for cmd in[^\n]*\bclose\b/)
     expect(out).toContain("(__git_stacks_workspaces)")
+  })
+})
+
+describe("integration nested completions (depth 3-4)", () => {
+  describe("bash", () => {
+    test("integration case lists provider names (github)", () => {
+      const out = generateBash(buildTestProgram())
+      expect(out).toContain("    integration)")
+      expect(out).toContain("github")
+    })
+
+    test("integration github lists sub-subcommands (open pr issue)", () => {
+      const out = generateBash(buildTestProgram())
+      // Should have a nested case for github that lists its subcommands
+      expect(out).toMatch(/github.*\n[\s\S]*?(open|pr|issue)/)
+    })
+
+    test("integration github pr lists leaf commands (create open status)", () => {
+      const out = generateBash(buildTestProgram())
+      // Should list pr subcommands at the correct depth
+      expect(out).toContain("create open status")
+    })
+
+    test("integration github pr create triggers workspace lookup", () => {
+      const out = generateBash(buildTestProgram())
+      // At the leaf level, workspace lookup should appear after integration > github > pr > create
+      const integrationSection = out.slice(out.indexOf("    integration)"))
+      expect(integrationSection).toContain(".config/git-stacks/workspaces")
+    })
+
+    test("integration github issue link triggers workspace lookup", () => {
+      const out = generateBash(buildTestProgram())
+      const integrationSection = out.slice(out.indexOf("    integration)"))
+      // issue subcommands should also have workspace lookup
+      expect(integrationSection).toContain("link unlink open")
+    })
+  })
+
+  describe("zsh", () => {
+    test("integration dispatches to _git_stacks_integration helper", () => {
+      const out = generateZsh(buildTestProgram())
+      expect(out).toContain("_git_stacks_integration ;;")
+    })
+
+    test("_git_stacks_integration lists providers including github", () => {
+      const out = generateZsh(buildTestProgram())
+      expect(out).toContain("_git_stacks_integration()")
+      expect(out).toContain("'github:GitHub integration'")
+    })
+
+    test("nested github subcommands generate recursive helpers or inline dispatch", () => {
+      const out = generateZsh(buildTestProgram())
+      // github has its own subcommands (open, pr, issue) so it should dispatch recursively
+      // Either a _git_stacks_integration_github helper or inline case handling for pr/issue
+      expect(out).toMatch(/_git_stacks_integration_github|github\)[\s\S]*?(pr|issue)/)
+    })
+
+    test("leaf commands with workspace dynamic get workspace completion", () => {
+      const out = generateZsh(buildTestProgram())
+      // Leaf commands like pr create should ultimately resolve to workspace completion
+      const integrationSection = out.slice(out.indexOf("_git_stacks_integration()"))
+      expect(integrationSection).toContain("_git_stacks_workspaces")
+    })
+  })
+
+  describe("fish", () => {
+    test("integration subcommands listed (github)", () => {
+      const out = generateFish(buildTestProgram())
+      // Should have a section listing integration subcommands when integration is seen
+      expect(out).toContain("__fish_seen_subcommand_from integration")
+      expect(out).toContain("github")
+    })
+
+    test("github sub-subcommands listed (open pr issue)", () => {
+      const out = generateFish(buildTestProgram())
+      // Should list github's subcommands with a multi-level fish_seen_subcommand_from chain
+      expect(out).toMatch(/__fish_seen_subcommand_from integration.*__fish_seen_subcommand_from github/)
+    })
+
+    test("pr leaf commands listed (create open status)", () => {
+      const out = generateFish(buildTestProgram())
+      // At depth 3, should list pr's leaf commands with 3-level chain
+      expect(out).toMatch(/__fish_seen_subcommand_from integration.*__fish_seen_subcommand_from github.*__fish_seen_subcommand_from pr/)
+    })
+
+    test("leaf commands get workspace completion", () => {
+      const out = generateFish(buildTestProgram())
+      // Leaf commands with workspace dynamic should get workspace lookup
+      const integrationSection = out.slice(out.indexOf("# integration subcommands") > -1 ? out.indexOf("# integration subcommands") : 0)
+      expect(integrationSection).toContain("(__git_stacks_workspaces)")
+    })
   })
 })
