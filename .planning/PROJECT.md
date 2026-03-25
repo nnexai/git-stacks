@@ -139,7 +139,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-(No active requirements — v0.9.0 milestone complete)
+- [ ] `git-stacks paths` — output workspace repo paths with `--prefix` flag for agent CLI arg injection
+- [ ] `git-stacks pull` — pull latest for all repos in a workspace (worktrees pull branch, trunk repos pull default branch)
+- [ ] `git-stacks env` — dump merged workspace env vars with `--format shell|dotenv|json`
+- [ ] TUI upstream staleness indicator — periodic "N behind" badge per repo with cached fetch check
+- [ ] Template composition — `includes:` field for meta-templates + ad-hoc `--template a --template b` on `git-stacks new`
+- [ ] Release prep — version bump, CHANGELOG, README updates
 
 ### Out of Scope
 
@@ -154,18 +159,28 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 
+## Current Milestone: v0.10.0 Multi-Agent Workspace Tooling
+
+**Goal:** Make git-stacks the infrastructure layer for humans managing multiple AI agents — queryable workspace data for agent bootstrap, repo sync primitives, and composable templates.
+
+**Target features:**
+- `git-stacks paths` — output workspace repo paths with `--prefix` flag for agent CLI arg injection
+- `git-stacks pull` — pull latest for all repos in a workspace (worktrees pull branch, trunk repos pull default branch)
+- `git-stacks env` — dump merged workspace env vars (global → template → workspace → GS_* injected); `--format shell|dotenv|json`
+- TUI upstream staleness indicator — periodic "N behind" badge per repo; cached fetch check on workspace focus + manual refresh
+- Template composition — `includes:` field for meta-templates + ad-hoc `--template a --template b` on `git-stacks new`; merge rules: repos union (worktree wins), hooks concatenate, env merges
+- Release prep — version bump, CHANGELOG, README
+
 ## Completed Milestone: v0.9.0 Identity & Completion Integrity (2026-03-25)
 
 **Goal:** Make workspace/template identity robust using name fields as canonical keys, and ensure shell completions cover all commands shipped to date.
 
 **Shipped:** All target features delivered across 6 phases (33-36, plus 34.1 test isolation insert).
 
-## Next Milestone Goals
-
-Candidates for v1.0.0+:
+## Future Candidates (v1.0.0+)
 
 - **Programmatic API** — export `workspace-ops.ts` as typed package; `Result<T>` return type; version gate for v1.0
-- **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations, per-repo ahead/behind in status
+- **Power user features** — `clone --pr <N>`, WezTerm/Zellij integrations
 - **Agent-aware** — batch workspace generation (`new --count N`), agent status file protocol, Windows IPC fallback
 - **TUI completeness** — R-02 (add repo from TUI), R-03 (scan repos from TUI), T-03 cursor movement tests
 
@@ -269,4 +284,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-25 — Phase 34.1 complete: test isolation framework (custom test runner, complete mock factories, zero cache-busting imports, zero DI hack objects)*
+*Last updated: 2026-03-25 — Milestone v0.10.0 started: Multi-Agent Workspace Tooling*
