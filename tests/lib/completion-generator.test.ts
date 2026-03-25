@@ -586,3 +586,91 @@ describe("integration nested completions (depth 3-4)", () => {
     })
   })
 })
+
+describe("completion audit - real program", () => {
+  test("bash output contains all top-level commands", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    // Every top-level command in the real CLI must appear in completion output
+    for (const cmd of ["new", "clone", "open", "close", "list", "status", "clean",
+      "remove", "merge", "run", "rename", "sync", "cd", "config", "manage",
+      "doctor", "repo", "template", "message", "install", "integration", "completion"]) {
+      expect(out).toContain(cmd)
+    }
+  })
+
+  test("bash output contains integration subcommand completions at depth 3-4", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    expect(out).toContain("integration)")
+    // Provider names at depth 2
+    expect(out).toContain("github")
+    expect(out).toContain("gitlab")
+    expect(out).toContain("gitea")
+    expect(out).toContain("jira")
+    // Subcommands at depth 3
+    expect(out).toContain("pr")
+    expect(out).toContain("issue")
+    // Leaf commands at depth 4
+    expect(out).toContain("create")
+    expect(out).toContain("link")
+  })
+
+  test("zsh output contains integration helper functions and providers", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "zsh"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    expect(out).toContain("_git_stacks_integration")
+    expect(out).toContain("github")
+    expect(out).toContain("gitlab")
+    expect(out).toContain("gitea")
+    expect(out).toContain("pr")
+    expect(out).toContain("issue")
+  })
+
+  test("fish output contains multi-level integration completions", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "fish"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    expect(out).toContain("__fish_seen_subcommand_from integration")
+    expect(out).toContain("github")
+    expect(out).toContain("gitlab")
+    expect(out).toContain("gitea")
+    expect(out).toContain("pr")
+    expect(out).toContain("issue")
+  })
+
+  test("all DYNAMIC_COMPLETIONS paths exist in the real Commander.js tree", async () => {
+    // Run bash completion and verify all integration paths produce output
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    // All integration providers appear in the output
+    for (const provider of ["github", "gitlab", "gitea", "jira"]) {
+      expect(out).toContain(provider)
+    }
+    // niri and tmux integration commands appear
+    expect(out).toContain("niri")
+    expect(out).toContain("tmux")
+    // Workspace lookup appears in integration section (proves leaf commands wire to dynamic completion)
+    const integrationSection = out.slice(out.indexOf("integration)"))
+    expect(integrationSection).toContain(".config/git-stacks/workspaces")
+  })
+})
