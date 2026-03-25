@@ -8,7 +8,7 @@
 - ✅ **v0.6.0 Integration Orchestration & Niri** — Phases 16-20 (shipped 2026-03-22) — Typed artifact pipeline, centralized runner, niri compositor integration. See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md)
 - ✅ **v0.7.0 Close Command & Polish** — Phases 21-28 (shipped 2026-03-22) — Workspace close, lifecycle cascade, mock refactor, forge integrations, issue tracking, CLI polish. See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md)
 - ✅ **v0.8.0 Integration Polish & Workspace UX** — Phases 29-32 (shipped 2026-03-24) — Upstream branch tracking, dashboard linked issues fix, workspace CWD auto-detection, GitLab branch slash investigation. See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md)
-- 🚧 **v0.9.0 Identity & Completion Integrity** — Phases 33-35 (in progress)
+- 🚧 **v0.9.0 Identity & Completion Integrity** — Phases 33-36 (in progress)
 
 ## Phases
 
@@ -153,7 +153,9 @@ Plans:
   2. Shell autocompletion for template arguments reads candidate names from YAML `name` fields and presents them to the user
   3. Dynamic completion works in all three shells (bash, zsh, fish) for all commands that accept a `<workspace>` or `[workspace]` argument
   4. Dynamic completion works in all three shells for all commands that accept a `<template>` or `[template]` argument
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 35-01-PLAN.md — Switch completion helpers from filename globs to YAML name-field extraction
 
 ### Phase 36: Release Prep
 **Goal**: Ship v0.9.0 — bump version in package.json, document all changes in CHANGELOG.md, and update README.md for any new or changed commands introduced in this milestone
@@ -163,7 +165,9 @@ Plans:
   1. `package.json` version field is `0.9.0`
   2. `CHANGELOG.md` has a `## [0.9.0]` section listing all user-facing changes from phases 33-35
   3. `README.md` reflects any new or renamed commands (template rename, doctor drift output, dynamic completion) introduced in this milestone
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 36-01-PLAN.md — Version bump, CHANGELOG, README updates, TUI dashboard integration filtering fix
 
 ## Progress
 
