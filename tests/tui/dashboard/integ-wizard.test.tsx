@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup } from "../../helpers"
+import { makeTmpDir, cleanup, makeWorkspaceOpsMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -58,7 +58,7 @@ mock.module("../../../src/lib/git", () => ({
 }))
 
 // Mock workspace-ops so executeCreateWorkspace does not attempt real git operations
-mock.module("../../../src/lib/workspace-ops", () => ({
+mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
@@ -73,7 +73,6 @@ mock.module("../../../src/lib/workspace-ops", () => ({
   getWorkspaceStatus: mock(async () => []),
   getWorkspaceListInfo: mock(async () => []),
   getDirtyWorktrees: mock(async () => []),
-  runPreRemoveHooks: mock(async () => {}),
   mergeEnv: mock(() => ({})),
   writeEnvFiles: mock(() => {}),
   editWorkspaceYaml: mock(() => ({ path: "/tmp/fake.yml", validate: () => ({ ok: true }) })),

@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll, afterEach, beforeEach } from "bun:test"
 import { existsSync } from "fs"
-import { makeTmpDir, cleanup, write } from "../../helpers"
+import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -83,7 +83,7 @@ mock.module("../../../src/lib/git", () => ({
 
 // Mock workspace-ops — removeWorkspace deletes the YAML file and sets wsRemoved flag
 // to satisfy D-18 side-effect assertion: workspace YAML must not exist after confirm.
-mock.module("../../../src/lib/workspace-ops", () => ({
+mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => ({ ok: true })),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),

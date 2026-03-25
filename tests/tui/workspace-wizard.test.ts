@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { makeWorkspaceOpsMock, makeConfigMock } from "../helpers"
 
 // Shared mock instances used by @/tui/utils mock below
 const mockIntro = mock(() => {})
@@ -119,7 +120,7 @@ const mockExpandBranchPattern = mock((pattern: string, _name: string) => pattern
 const mockReadWorkspace = mock((_name: string) => ({ name: "test-ws", schema_version: "1" as const, branch: "feature/x", repos: [], created: "2024-01-01" }))
 const mockListWorkspaces = mock(() => [])
 
-mock.module("@/lib/config", () => ({
+mock.module("@/lib/config", () => makeConfigMock({
   readGlobalConfig: mockReadGlobalConfig,
   readTemplate: mockReadTemplate,
   listTemplates: mockListTemplates,
@@ -164,14 +165,13 @@ mock.module("@/lib/files", () => ({
 }))
 
 // Mock lib/workspace-ops
-mock.module("@/lib/workspace-ops", () => ({
+mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => ({ ok: true })),
   getWorkspaceStatus: mock(async () => []),
   editWorkspaceYaml: mock(() => ({ path: "/tmp/test.yml", validate: () => ({ ok: true }) })),
   mergeEnv: mock(() => ({})),
   writeEnvFiles: mock(() => {}),
   getDirtyWorktrees: mock(async () => []),
-  runPreRemoveHooks: mock(async () => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
   removeWorkspace: mock(async () => ({ ok: true })),

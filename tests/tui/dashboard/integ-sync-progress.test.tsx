@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup, write } from "../../helpers"
+import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock } from "../../helpers"
 
 // Config isolation — MUST be set before any import that touches paths.ts
 // Each test file has its own Bun module scope, so this env override takes effect
@@ -107,7 +107,7 @@ mock.module("../../../src/lib/git", () => ({
 }))
 
 // Mock workspace-ops: syncWorkspace with controllable progress callback
-mock.module("../../../src/lib/workspace-ops", () => ({
+mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
@@ -130,7 +130,6 @@ mock.module("../../../src/lib/workspace-ops", () => ({
   getWorkspaceStatus: mock(async () => []),
   getWorkspaceListInfo: mock(async () => []),
   getDirtyWorktrees: mock(async () => []),
-  runPreRemoveHooks: mock(async () => {}),
   mergeEnv: mock(() => ({})),
   writeEnvFiles: mock(() => {}),
   editWorkspaceYaml: mock(() => ({ path: "/tmp/fake.yml", validate: () => ({ ok: true }) })),

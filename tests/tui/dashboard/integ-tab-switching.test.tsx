@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll, afterEach, beforeEach } from "bun:test"
-import { makeTmpDir, cleanup, write } from "../../helpers"
+import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -73,7 +73,7 @@ mock.module("../../../src/lib/git", () => ({
   ensureUpstreamTracking: mock(async () => ({ tracked: false })),
 }))
 
-mock.module("../../../src/lib/workspace-ops", () => ({
+mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
