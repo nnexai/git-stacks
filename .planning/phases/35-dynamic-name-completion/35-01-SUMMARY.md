@@ -117,3 +117,13 @@ None - no external service configuration required.
 ---
 *Phase: 35-dynamic-name-completion*
 *Completed: 2026-03-25*
+
+## Self-Check: PASSED
+
+- FOUND: .planning/phases/35-dynamic-name-completion/35-01-SUMMARY.md
+- FOUND: src/lib/completion-generator.ts
+- FOUND: tests/lib/completion-generator.test.ts
+- FOUND: commit 46405b1 (test - RED)
+- FOUND: commit 68eeffd (feat - GREEN)
+- FOUND: commit 58507c4 (test - audit)
+- FOUND: commit a6da75b (docs - metadata)
