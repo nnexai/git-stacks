@@ -27,9 +27,11 @@
   ],
   "scripts": {
     "dev": "bun run src/index.ts",
-    "test": "bun test tests/",
+    "test": "bun run scripts/test-runner.ts",
+    "test:unit": "bun run scripts/test-runner.ts --unit",
+    "test:integ": "bun run scripts/test-runner.ts --integ",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run typecheck && bun test"
+    "prepublishOnly": "bun run typecheck && bun run test"
   },
   "dependencies": {
     "@clack/prompts": "^0.9.1",
