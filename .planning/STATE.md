@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Identity & Completion Integrity
 status: Ready to plan
-stopped_at: Completed 34-02-PLAN.md
-last_updated: "2026-03-25T03:39:59.594Z"
+stopped_at: Phase 34.1 context gathered (discuss mode)
+last_updated: "2026-03-25T04:27:11.572Z"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 2
   total_plans: 5
   completed_plans: 5
@@ -53,13 +53,17 @@ Recent decisions affecting current work:
 
 4 pending todos — see .planning/todos/pending/
 
+### Roadmap Evolution
+
+- Phase 34.1 inserted after Phase 34: fix bun mock module corruption - tests are passing in isolation but not when run together (URGENT)
+
 ### Blockers/Concerns
 
 None — all v0.8.0 blockers resolved.
 
 ## Session Continuity
 
-Last session: 2026-03-25T03:34:38.390Z
-Stopped at: Completed 34-02-PLAN.md
-Resume file: None
+Last session: 2026-03-25T04:27:11.566Z
+Stopped at: Phase 34.1 context gathered (discuss mode)
+Resume file: .planning/phases/34.1-fix-bun-mock-module-corruption-tests-are-passing-in-isolation-but-not-when-run-together-this-has-been-a-constant-problem-in-the-project-and-requires-a-real-fix/34.1-CONTEXT.md
 Next action: /gsd:plan-phase 33
