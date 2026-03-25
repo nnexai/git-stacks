@@ -4,7 +4,7 @@ milestone: v0.9.0
 milestone_name: Identity & Completion Integrity
 status: v0.9.0 milestone complete
 stopped_at: Completed 36-01-PLAN.md
-last_updated: "2026-03-25T14:08:26.723Z"
+last_updated: "2026-03-25T21:12:10Z"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -74,11 +74,12 @@ None — all v0.8.0 blockers resolved.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260325-mrf | Fix TUI enter menu showing shortcuts twice and bump version to v0.9.1 | 2026-03-25 | 47c0eb6 | [260325-mrf-fix-tui-enter-menu-showing-shortcuts-twi](./quick/260325-mrf-fix-tui-enter-menu-showing-shortcuts-twi/) |
+| 260325-uns | Fix fish completion "too many arguments" error from unescaped apostrophes in descriptions | 2026-03-25 | 67102bd | [260325-uns-fix-fish-completion-error-too-many-argum](./quick/260325-uns-fix-fish-completion-error-too-many-argum/) |
 
 ## Session Continuity
 
-Last activity: 2026-03-25 - Completed quick task 260325-mrf: Fix TUI enter menu showing shortcuts twice and bump version to v0.9.1
-Last session: 2026-03-25T15:23:19.964Z
-Stopped at: Completed quick task 260325-mrf
+Last activity: 2026-03-25 - Completed quick task 260325-uns: Fix fish completion "too many arguments" error from unescaped apostrophes in descriptions
+Last session: 2026-03-25T21:12:10Z
+Stopped at: Completed quick task 260325-uns
 Resume file: None
 Next action: /gsd:quick
