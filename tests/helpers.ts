@@ -3,6 +3,15 @@ import { join, dirname } from "path"
 import { execSync } from "child_process"
 import { mock } from "bun:test"
 
+// --- Schema stub helper ---
+
+function makeSchemaStub() {
+  return {
+    parse: mock((x: unknown) => x),
+    safeParse: mock((x: unknown) => ({ success: true, data: x })),
+  }
+}
+
 export function makeTmpDir(prefix = "ws-test"): string {
   const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   mkdirSync(dir, { recursive: true })
@@ -91,5 +100,186 @@ export function useIsolatedConfig(prefix = "isolated-config"): { configDir: stri
   return {
     configDir,
     cleanup: () => cleanup(configDir),
+  }
+}
+
+// --- Mock factory helpers ---
+// Each factory returns ALL runtime-value exports of the target module with sensible stubs.
+// Tests spread overrides: makeConfigMock({ listWorkspaces: mock(() => myWorkspaces) })
+
+/**
+ * Returns a complete mock of src/lib/config.ts exports.
+ * Includes all schema stubs and all function stubs.
+ */
+export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    // Schemas
+    RepoTypeSchema: makeSchemaStub(),
+    ForgeTypeSchema: makeSchemaStub(),
+    FilesSchema: makeSchemaStub(),
+    RepoRegistryEntrySchema: makeSchemaStub(),
+    RepoRegistrySchema: makeSchemaStub(),
+    TemplateRepoSchema: makeSchemaStub(),
+    TemplateSchema: makeSchemaStub(),
+    WorkspaceRepoSchema: makeSchemaStub(),
+    WorkspaceSettingsSchema: makeSchemaStub(),
+    WorkspaceSchema: makeSchemaStub(),
+    GlobalConfigSchema: makeSchemaStub(),
+    // Functions
+    formatZodError: mock(() => "zod error"),
+    readGlobalConfig: mock(() => ({ workspace_root: "/tmp/test-ws", integrations: {} })),
+    writeGlobalConfig: mock(() => {}),
+    workspacePath: mock((name: string) => `/tmp/test-ws/workspaces/${name}.yml`),
+    workspaceExists: mock(() => false),
+    readWorkspace: mock(() => ({ name: "test-ws", branch: "main", repos: [], settings: {} })),
+    writeWorkspace: mock(() => {}),
+    listWorkspaces: mock(() => []),
+    readRegistry: mock(() => []),
+    writeRegistry: mock(() => {}),
+    listRegistryEntries: mock(() => []),
+    templatePath: mock((name: string) => `/tmp/test-ws/templates/${name}.yml`),
+    templateExists: mock(() => false),
+    readTemplate: mock(() => ({ name: "test-template", repos: [] })),
+    writeTemplate: mock(() => {}),
+    listTemplates: mock(() => []),
+    expandBranchPattern: mock((pattern: string) => pattern),
+    expandHome: mock((p: string) => p),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a complete mock of src/lib/workspace-ops.ts exports.
+ * Includes all function stubs and the _cwdDetect injectable object.
+ */
+export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    getWorkspaceListInfo: mock(async () => []),
+    mergeEnv: mock(() => ({})),
+    buildBaseEnv: mock(() => ({})),
+    buildRepoEnv: mock(() => ({})),
+    writeEnvFiles: mock(async () => {}),
+    getDirtyWorktrees: mock(async () => []),
+    getWorkspaceStatus: mock(async () => []),
+    cleanWorkspace: mock(async () => ({ ok: true })),
+    closeWorkspace: mock(async () => ({ ok: true })),
+    removeWorkspace: mock(async () => ({ ok: true })),
+    mergeWorkspace: mock(async () => ({ ok: true })),
+    openWorkspace: mock(async () => ({ ok: true })),
+    renameWorkspace: mock(async () => ({ ok: true })),
+    renameTemplate: mock(async () => ({ ok: true })),
+    syncWorkspace: mock(async () => ({ ok: true, rows: [] })),
+    editWorkspaceYaml: mock(() => ({ path: "/tmp/ws.yml", validate: mock(() => true) })),
+    openYamlInEditor: mock(async () => {}),
+    editTemplateYaml: mock(() => ({ path: "/tmp/template.yml", validate: mock(() => true) })),
+    editGlobalConfigYaml: mock(() => ({ path: "/tmp/config.yml", validate: mock(() => true) })),
+    editRegistryYaml: mock(() => ({ path: "/tmp/registry.yml", validate: mock(() => true) })),
+    _cwdDetect: {
+      readdirSync: mock(() => []),
+      readFileSync: mock(() => ""),
+    },
+    detectWorkspaceFromCwd: mock(() => ({ found: false })),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a complete mock of src/lib/integrations/forge-utils.ts exports.
+ * Includes all function stubs and the _detect injectable object.
+ */
+export function makeForgeUtilsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    resolveForgeRepo: mock(() => ({ ok: false, error: "no-forge" })),
+    resolveForgeRepoAnyMode: mock(() => ({ ok: false, error: "no-forge" })),
+    resolveRepoCwd: mock(async () => null),
+    _detect: {
+      which: mock(async () => null),
+      gitRemoteUrl: mock(async () => null),
+      teaPullsLs: mock(async () => ({ exitCode: 1, stdout: "" })),
+    },
+    detectGitHubForge: mock(async () => false),
+    detectGitLabForge: mock(async () => false),
+    detectGiteaForge: mock(async () => false),
+    detectForgeForRepo: mock(async () => []),
+    formatForgeError: mock(() => "forge error"),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a complete mock of src/lib/integrations/issue-utils.ts exports.
+ * Includes all function stubs and the _resolveWorkspaceDeps injectable object.
+ */
+export function makeIssueUtilsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    resolveIssueRef: mock(() => ({ ok: false, error: "no-issue" })),
+    linkIssue: mock(() => {}),
+    unlinkIssue: mock(() => {}),
+    formatIssueError: mock(() => "issue error"),
+    _resolveWorkspaceDeps: {
+      workspaceExists: mock(() => false),
+      readWorkspace: mock(() => ({ name: "test-ws", branch: "main", repos: [], settings: {} })),
+    },
+    resolveWorkspaceArg: mock(() => "test-ws"),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a complete mock of src/lib/paths.ts exports.
+ * Uses /tmp/test-home as a safe test base path.
+ */
+export function makePathsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const testHome = "/tmp/test-home"
+  return {
+    HOME: testHome,
+    DEFAULT_WORKSPACE_ROOT: `${testHome}/workspaces`,
+    WS_CONFIG_DIR: `${testHome}/.config/git-stacks`,
+    WORKSPACES_DIR: `${testHome}/.config/git-stacks/workspaces`,
+    GLOBAL_CONFIG_FILE: `${testHome}/.config/git-stacks/config.yml`,
+    REGISTRY_FILE: `${testHome}/.config/git-stacks/registry.yml`,
+    TEMPLATES_DIR: `${testHome}/.config/git-stacks/templates`,
+    MESSAGES_DIR: `${testHome}/.config/git-stacks/messages`,
+    getMainDir: mock((wsRoot: string) => `${wsRoot}/main`),
+    getTasksDir: mock((wsRoot: string) => `${wsRoot}/tasks`),
+    expandHome: mock((p: string) => p.startsWith("~/") ? `${testHome}/${p.slice(2)}` : p),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a complete mock of src/lib/lifecycle.ts exports.
+ * Includes the _exec injectable object and all function stubs.
+ */
+export function makeLifecycleMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    _exec: {
+      spawn: mock(() => ({ exited: Promise.resolve(0), stdout: null, stderr: null })),
+    },
+    runHooks: mock(async () => {}),
+    runHooksCaptured: mock(async () => {}),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a complete mock of src/lib/tmux.ts exports.
+ * Includes the _exec injectable object and all function stubs.
+ */
+export function makeTmuxMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    _exec: {
+      run: mock(async () => ({ exitCode: 0, stdout: "" })),
+    },
+    killTmuxSession: mock(async () => {}),
+    tmuxSessionExists: mock(async () => false),
+    focusTmuxSession: mock(async () => {}),
+    createTmuxSession: mock(async () => {}),
+    openTmuxSession: mock(async () => ({ created: false })),
+    getTmuxMainPane: mock(async () => "main"),
+    addTmuxPane: mock(async () => null),
+    sendToTmuxPane: mock(async () => {}),
+    focusTmuxPane: mock(async () => false),
+    ...overrides,
   }
 }
