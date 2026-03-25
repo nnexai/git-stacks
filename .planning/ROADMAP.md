@@ -8,7 +8,7 @@
 - ✅ **v0.6.0 Integration Orchestration & Niri** — Phases 16-20 (shipped 2026-03-22) — Typed artifact pipeline, centralized runner, niri compositor integration. See [milestones/v0.6.0-ROADMAP.md](milestones/v0.6.0-ROADMAP.md)
 - ✅ **v0.7.0 Close Command & Polish** — Phases 21-28 (shipped 2026-03-22) — Workspace close, lifecycle cascade, mock refactor, forge integrations, issue tracking, CLI polish. See [milestones/v0.7.0-ROADMAP.md](milestones/v0.7.0-ROADMAP.md)
 - ✅ **v0.8.0 Integration Polish & Workspace UX** — Phases 29-32 (shipped 2026-03-24) — Upstream branch tracking, dashboard linked issues fix, workspace CWD auto-detection, GitLab branch slash investigation. See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md)
-- 🚧 **v0.9.0 Identity & Completion Integrity** — Phases 33-36 (in progress)
+- ✅ **v0.9.0 Identity & Completion Integrity** — Phases 33-36 (shipped 2026-03-25) — Name-based identity, completion audit, test isolation, dynamic name completion. See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md)
 
 ## Phases
 
@@ -89,85 +89,18 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
 
 </details>
 
-### v0.9.0 Identity & Completion Integrity (In Progress)
+<details>
+<summary>✅ v0.9.0 Identity & Completion Integrity (Phases 33-36) — SHIPPED 2026-03-25</summary>
 
-**Milestone Goal:** Make workspace/template identity robust using name fields as canonical keys, and ensure shell completions cover all commands shipped to date.
+- [x] Phase 33: Name-Based Identity (3/3 plans) — completed 2026-03-25
+- [x] Phase 34: Completion Audit & Forge/Issue Coverage (2/2 plans) — completed 2026-03-25
+- [x] Phase 34.1: Test Isolation Framework (3/3 plans) — completed 2026-03-25
+- [x] Phase 35: Dynamic Name Completion (1/1 plan) — completed 2026-03-25
+- [x] Phase 36: Release Prep (1/1 plan) — completed 2026-03-25
 
-- [x] **Phase 33: Name-Based Identity** - Workspaces and templates are looked up, operated on, and renamed by their YAML `name` field; filename is storage only (gap closure in progress) (completed 2026-03-25)
-- [x] **Phase 34: Completion Audit & Forge/Issue Coverage** - All CLI commands audited for completion gaps; forge and issue subcommands have full bash/zsh/fish coverage (completed 2026-03-25)
-- [x] **Phase 34.1: Test Isolation Framework** - Custom test runner + complete mock factories + cache-busting and DI hack removal (INSERTED - urgent) (completed 2026-03-25)
-- [x] **Phase 35: Dynamic Name Completion** - Workspace and template name arguments resolve dynamically from YAML name fields at completion time (completed 2026-03-25)
-- [x] **Phase 36: Release Prep** - Bump version to v0.9.0 in package.json, update CHANGELOG.md with all v0.9.0 changes, and update README.md if new commands or behaviours require documenting (completed 2026-03-25)
+See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full details.
 
-## Phase Details
-
-### Phase 33: Name-Based Identity
-**Goal**: Users can look up, operate on, and rename workspaces and templates using the `name` field in YAML — filename is an internal storage detail, not an exposed identity
-**Depends on**: Phase 32
-**Requirements**: IDEN-01, IDEN-02, IDEN-03
-**Success Criteria** (what must be TRUE):
-  1. User can open, remove, list, and look up a workspace using the name stored in the YAML `name` field even if the filename differs
-  2. User can edit, remove, list, and look up a template using the name stored in the YAML `name` field even if the filename differs
-  3. User can rename a workspace and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
-  4. User can rename a template and both the `name` field in YAML and the filename are updated atomically — no state where they diverge
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 33-01-PLAN.md — Scan-based lookup helpers for workspaces and templates + doctor drift detection
-- [x] 33-02-PLAN.md — Template rename with workspace cascade + dry-run support
-- [ ] 33-03-PLAN.md — Gap closure: fix removeWorkspace D-12 corrupt YAML regression
-
-### Phase 34: Completion Audit & Forge/Issue Coverage
-**Goal**: Every CLI command has verified shell completion coverage in bash, zsh, and fish; forge (`pr`) and issue subcommands newly receive complete tab-completion support
-**Depends on**: Phase 33
-**Requirements**: COMP-01, COMP-02, COMP-03
-**Success Criteria** (what must be TRUE):
-  1. A documented audit identifies every command/subcommand present in the Commander.js tree and confirms each has completion coverage or records the gap with a fix applied
-  2. User can tab-complete `pr create`, `pr open`, and `pr status` for GitHub, GitLab, and Gitea integrations in bash, zsh, and fish
-  3. User can tab-complete `issue link`, `issue unlink`, and `issue open` for GitHub, GitLab, Gitea, and Jira integrations in bash, zsh, and fish
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 34-01-PLAN.md — Extend generators for arbitrary-depth nesting + add 26 integration DYNAMIC_COMPLETIONS entries (TDD)
-- [x] 34-02-PLAN.md — Programmatic audit test against real program + audit documentation
-
-### Phase 34.1: Test Isolation Framework (INSERTED)
-**Goal**: Replace hack-on-hack test isolation (partial mock.module exports, cache-busting query-string imports, internal DI objects) with a robust framework: custom test runner separating unit/integ modes, complete mock factories, zero cache-busting imports, zero isolation-only DI objects
-**Depends on**: Phase 34
-**Requirements**: TFIX-01, TFIX-02, TFIX-03, TFIX-04
-**Success Criteria** (what must be TRUE):
-  1. `bun test tests/` produces 0 failures (currently 20 fail)
-  2. `bun run test` invokes the custom runner, aggregates results, and exits non-zero on any failure
-  3. No cache-busting query-string imports exist in any test file
-  4. No `_cwdDetect` or `_resolveWorkspaceDeps` DI objects exist in production code
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 34.1-01-PLAN.md — Test runner script + complete mock factory helpers
-- [x] 34.1-02-PLAN.md — Surgical root cause fixes (replace partial mocks with factory-based complete mocks)
-- [x] 34.1-03-PLAN.md — Cache-busting removal + DI object removal from production code
-
-### Phase 35: Dynamic Name Completion
-**Goal**: Shell completion for workspace and template arguments resolves candidate values dynamically from YAML `name` fields rather than filename globs
-**Depends on**: Phase 34
-**Requirements**: IDEN-04, COMP-04, COMP-05
-**Success Criteria** (what must be TRUE):
-  1. Shell autocompletion for workspace arguments reads candidate names from YAML `name` fields and presents them to the user
-  2. Shell autocompletion for template arguments reads candidate names from YAML `name` fields and presents them to the user
-  3. Dynamic completion works in all three shells (bash, zsh, fish) for all commands that accept a `<workspace>` or `[workspace]` argument
-  4. Dynamic completion works in all three shells for all commands that accept a `<template>` or `[template]` argument
-**Plans:** 1 plan
-Plans:
-- [ ] 35-01-PLAN.md — Switch completion helpers from filename globs to YAML name-field extraction
-
-### Phase 36: Release Prep
-**Goal**: Ship v0.9.0 — bump version in package.json, document all changes in CHANGELOG.md, and update README.md for any new or changed commands introduced in this milestone
-**Depends on**: Phase 35
-**Requirements**: (none — release bookkeeping)
-**Success Criteria** (what must be TRUE):
-  1. `package.json` version field is `0.9.0`
-  2. `CHANGELOG.md` has a `## [0.9.0]` section listing all user-facing changes from phases 33-35
-  3. `README.md` reflects any new or renamed commands (template rename, doctor drift output, dynamic completion) introduced in this milestone
-**Plans:** 1/1 plans complete
-Plans:
-- [x] 36-01-PLAN.md — Version bump, CHANGELOG, README updates, TUI dashboard integration filtering fix
+</details>
 
 ## Progress
 
@@ -179,8 +112,4 @@ Plans:
 | 16-20. Integration & Niri | v0.6.0 | 6/6 | Complete | 2026-03-22 |
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
-| 33. Name-Based Identity | v0.9.0 | 2/3 | Complete    | 2026-03-25 |
-| 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 2/2 | Complete    | 2026-03-25 |
-| 34.1. Test Isolation Framework | v0.9.0 | 3/3 | Complete    | 2026-03-25 |
-| 35. Dynamic Name Completion | v0.9.0 | 1/1 | Complete    | 2026-03-25 |
-| 36. Release Prep | v0.9.0 | 1/1 | Complete    | 2026-03-25 |
+| 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |

@@ -1,5 +1,23 @@
 # Milestones
 
+## v0.9.0 Identity & Completion Integrity (Shipped: 2026-03-25)
+
+**Phases completed:** 5 phases, 10 plans, 18 tasks
+
+**Key accomplishments:**
+
+- scan-based lookup in `src/lib/config.ts`:
+- renameTemplate() in workspace-ops with cascade to workspace YAMLs, dry-run support, and --dry-run flag on `git-stacks template rename`
+- Recursive shell completion generators (bash/zsh/fish) for depth 3-4 integration commands with 26 DYNAMIC_COMPLETIONS entries
+- Subprocess-based audit tests proving all CLI commands have shell completion coverage across bash/zsh/fish, with documented audit table
+- Custom test runner separating unit/integ execution modes, plus 7 complete mock factory helpers covering all exports of config, workspace-ops, forge-utils, issue-utils, paths, lifecycle, and tmux
+- Replaced all partial mock.module calls across 14 test files with factory-based complete mocks, eliminating all 20 test failures when running `bun test tests/` (full suite: 814 pass, 0 fail)
+- Removed all 23 cache-busting query-string imports from tests/, deleted `_cwdDetect` and `_resolveWorkspaceDeps` DI objects from production code, and added a custom test runner that auto-isolates files using mock.module() into separate processes
+- Shell completion helpers for workspaces and templates now extract names from YAML `name:` fields via `grep -h '^name:'` instead of listing filenames with `ls`/glob
+- v0.9.0 shipped: version bump, CHANGELOG documenting phases 33-35, README updated for name-based identity and dynamic completion, TUI dashboard no longer shows globally disabled integrations
+
+---
+
 ## v0.8.0 Integration Polish & Workspace UX (Shipped: 2026-03-24)
 
 **Phases completed:** 4 phases, 6 plans, 5 tasks
