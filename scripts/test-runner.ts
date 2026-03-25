@@ -25,6 +25,15 @@ function discoverTests(): string[] {
   )
 }
 
+function fileUsesMockModule(filePath: string): boolean {
+  try {
+    const content = require("fs").readFileSync(filePath, "utf8") as string
+    return content.includes("mock.module(")
+  } catch {
+    return false
+  }
+}
+
 function classifyFiles(): { unit: string[]; integ: string[] } {
   const unit: string[] = []
   const integ: string[] = []
@@ -51,13 +60,28 @@ function classifyFiles(): { unit: string[]; integ: string[] } {
       continue
     }
 
+    // Any test file using mock.module runs in isolation — mock.module is
+    // process-global and contaminates other files in the shared process.
+    // Only files with no mock.module calls are safe to share a process.
+    if (rel.startsWith("lib/") && fileUsesMockModule(file)) {
+      integ.push(file)
+      continue
+    }
+
     // Unit: tests/lib/*.test.ts and tests/lib/integrations/*.test.ts
+    // (only files without mock.module reach here)
     if (rel.startsWith("lib/")) {
       unit.push(file)
       continue
     }
 
-    // Unit: tests/tui/dashboard/*.test.tsx (not integ-, caught above)
+    // Dashboard files using mock.module also need isolation
+    if (rel.startsWith("tui/dashboard/") && fileUsesMockModule(file)) {
+      integ.push(file)
+      continue
+    }
+
+    // Unit: tests/tui/dashboard/*.test.tsx (no mock.module)
     if (rel.startsWith("tui/dashboard/")) {
       unit.push(file)
       continue

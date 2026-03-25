@@ -1,16 +1,18 @@
-import { describe, test, expect, mock, beforeEach, beforeAll, afterAll } from "bun:test"
+import { describe, test, expect, mock, beforeEach, beforeAll, afterAll, afterEach } from "bun:test"
 import { join } from "path"
-import { mkdirSync } from "fs"
-import { makeTmpDir, cleanup, makeConfigMock, makeWorkspaceOpsMock, makeIssueUtilsMock } from "../helpers"
+import { mkdirSync, rmSync } from "fs"
+import { makeTmpDir, cleanup, makeIssueUtilsMock, realWriteWorkspace } from "../helpers"
 import type { Workspace } from "@/lib/config"
 
 // ============================================================
 // Isolation strategy (shared unit test process):
 //
 // detectWorkspaceFromCwd tests:
-//   - mock.module("@/lib/config") so workspace-ops.detectWorkspaceFromCwd calls mockWorkspaceList
-//   - Import the REAL detectWorkspaceFromCwd BEFORE mocking workspace-ops
-//   - Each test sets mockWorkspaceList before calling detectWorkspaceFromCwd
+//   - paths mock redirects WORKSPACES_DIR to configDir/workspaces
+//   - Each test writes real workspace YAML files via realWriteWorkspace (captured
+//     in helpers.ts before any mock.module calls), then cleans up in beforeEach.
+//   - detectWorkspaceFromCwd calls listWorkspaces() which reads the real YAML files.
+//   - No mock.module("@/lib/config") needed — avoids contaminating config.test.ts.
 //
 // resolveWorkspaceArg tests:
 //   - other test files (integration-commands.test.ts, jira.test.ts, etc.) mock @/lib/integrations/issue-utils
@@ -28,8 +30,7 @@ mkdirSync(join(configDir, "messages"), { recursive: true })
 
 const isolated = { configDir, cleanup: () => cleanup(configDir) }
 
-// Mutable state for mocks
-let mockWorkspaceList: Workspace[] = []
+// Mutable state for resolveWorkspaceArg mocks
 let mockWorkspaceExists: (name: string) => boolean = () => false
 let mockDetectResult: { ok: true; workspace: Workspace } | { ok: false; error: "no_match" } = {
   ok: false,
@@ -54,25 +55,14 @@ function applyPathsMock() {
 
 applyPathsMock()
 
-// Mock @/lib/config: listWorkspaces and workspaceExists delegate to closure variables
-mock.module("@/lib/config", () => makeConfigMock({
-  listWorkspaces: mock(() => mockWorkspaceList),
-  workspaceExists: mock((name: string) => mockWorkspaceExists(name)),
-}))
-
-// Import the REAL detectWorkspaceFromCwd BEFORE mocking workspace-ops.
-// In the shared unit test process, no other unit test file mocks workspace-ops,
-// so this import gets the real module. The real detectWorkspaceFromCwd will call
-// listWorkspaces() from @/lib/config (which is now mocked above).
+// Import detectWorkspaceFromCwd from workspace-ops.
+// No need to mock @/lib/config — we write real YAML files to the temp dir.
+// The paths mock redirects WORKSPACES_DIR → configDir/workspaces so real
+// file I/O is isolated. detectWorkspaceFromCwd calls listWorkspaces() which
+// reads from that directory.
 const { detectWorkspaceFromCwd }: {
   detectWorkspaceFromCwd: (cwd?: string) => { ok: true; workspace: Workspace } | { ok: false; error: "no_match" }
 } = await import("@/lib/workspace-ops")
-
-// Now mock workspace-ops so that issue-utils.resolveWorkspaceArg gets a mocked detectWorkspaceFromCwd.
-// The detectWorkspaceFromCwd variable above is already captured and is the real function.
-mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
-  detectWorkspaceFromCwd: mock(() => mockDetectResult),
-}))
 
 // Import issue-utils as a module namespace object (not destructured).
 // Other unit test files mock @/lib/integrations/issue-utils, so by the time this
@@ -123,6 +113,17 @@ function makeTrunkWorkspace(name: string, mainPath: string): Workspace {
   }
 }
 
+// Helper to write a workspace YAML to the temp configDir
+function writeWorkspace(ws: Workspace) {
+  realWriteWorkspace(ws)
+}
+
+// Helper to clear all workspace files before each test
+function clearWorkspaces() {
+  rmSync(join(configDir, "workspaces"), { recursive: true, force: true })
+  mkdirSync(join(configDir, "workspaces"), { recursive: true })
+}
+
 // --- detectWorkspaceFromCwd tests ---
 
 describe("detectWorkspaceFromCwd", () => {
@@ -130,18 +131,18 @@ describe("detectWorkspaceFromCwd", () => {
 
   beforeEach(() => {
     applyPathsMock()
-    mockWorkspaceList = []
+    clearWorkspaces()
   })
 
   test("returns no_match when CWD is not inside any known worktree", () => {
-    mockWorkspaceList = []
+    // No workspace files written
     const result = detectWorkspaceFromCwd("/tmp/tasks/nothing-at-all")
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toBe("no_match")
   })
 
   test("exact CWD match on worktree task_path returns that workspace", () => {
-    mockWorkspaceList = [makeWorktreeWorkspace("exact-ws", "/tmp/tasks/exact-ws/repo-a")]
+    writeWorkspace(makeWorktreeWorkspace("exact-ws", "/tmp/tasks/exact-ws/repo-a"))
 
     const result = detectWorkspaceFromCwd("/tmp/tasks/exact-ws/repo-a")
     expect(result.ok).toBe(true)
@@ -149,7 +150,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("subdirectory of worktree task_path returns that workspace", () => {
-    mockWorkspaceList = [makeWorktreeWorkspace("subdir-ws", "/tmp/tasks/subdir-ws/repo-a")]
+    writeWorkspace(makeWorktreeWorkspace("subdir-ws", "/tmp/tasks/subdir-ws/repo-a"))
 
     const result = detectWorkspaceFromCwd("/tmp/tasks/subdir-ws/repo-a/src/components")
     expect(result.ok).toBe(true)
@@ -157,7 +158,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("CWD outside all worktree task_paths returns no_match", () => {
-    mockWorkspaceList = [makeWorktreeWorkspace("other-ws", "/tmp/tasks/other-ws/repo-a")]
+    writeWorkspace(makeWorktreeWorkspace("other-ws", "/tmp/tasks/other-ws/repo-a"))
 
     const result = detectWorkspaceFromCwd("/tmp/completely/different/path")
     expect(result.ok).toBe(false)
@@ -165,25 +166,23 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("deepest match wins when CWD matches multiple workspace paths", () => {
-    mockWorkspaceList = [
-      makeWorktreeWorkspace("ws-parent", "/tmp/tasks/a/repo"),
-      {
-        name: "ws-nested",
-        schema_version: "1",
-        branch: "feat/ws-nested",
-        created: "2026-01-01",
-        repos: [
-          {
-            name: "repo-nested",
-            repo: "repo-nested",
-            type: "other",
-            mode: "worktree",
-            main_path: "/tmp/main/repo-nested",
-            task_path: "/tmp/tasks/a/repo/nested-subdir",
-          },
-        ],
-      },
-    ]
+    writeWorkspace(makeWorktreeWorkspace("ws-parent", "/tmp/tasks/a/repo"))
+    writeWorkspace({
+      name: "ws-nested",
+      schema_version: "1",
+      branch: "feat/ws-nested",
+      created: "2026-01-01",
+      repos: [
+        {
+          name: "repo-nested",
+          repo: "repo-nested",
+          type: "other",
+          mode: "worktree",
+          main_path: "/tmp/main/repo-nested",
+          task_path: "/tmp/tasks/a/repo/nested-subdir",
+        },
+      ],
+    })
 
     // CWD is inside the more specific path (ws-nested)
     const result = detectWorkspaceFromCwd("/tmp/tasks/a/repo/nested-subdir/src")
@@ -192,7 +191,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("trunk-mode repos are never matched even if CWD equals main_path", () => {
-    mockWorkspaceList = [makeTrunkWorkspace("trunk-ws", "/tmp/main/trunk-repo")]
+    writeWorkspace(makeTrunkWorkspace("trunk-ws", "/tmp/main/trunk-repo"))
 
     const result = detectWorkspaceFromCwd("/tmp/main/trunk-repo")
     expect(result.ok).toBe(false)
@@ -200,7 +199,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("trunk-mode CWD subdirectory does not match", () => {
-    mockWorkspaceList = [makeTrunkWorkspace("trunk-ws2", "/tmp/main/trunk-repo2")]
+    writeWorkspace(makeTrunkWorkspace("trunk-ws2", "/tmp/main/trunk-repo2"))
 
     const result = detectWorkspaceFromCwd("/tmp/main/trunk-repo2/src")
     expect(result.ok).toBe(false)
@@ -208,7 +207,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("path prefix collision guard: task_path=/tmp/tasks/repo-na, CWD=/tmp/tasks/repo-name does not match", () => {
-    mockWorkspaceList = [makeWorktreeWorkspace("collision-ws", "/tmp/tasks/repo-na")]
+    writeWorkspace(makeWorktreeWorkspace("collision-ws", "/tmp/tasks/repo-na"))
 
     const result = detectWorkspaceFromCwd("/tmp/tasks/repo-name")
     expect(result.ok).toBe(false)
@@ -220,24 +219,22 @@ describe("detectWorkspaceFromCwd", () => {
     const taskPath = `~/tilde-ws-detect/repo-a`
     const resolvedPath = `${isolated.configDir}/tilde-ws-detect/repo-a`
 
-    mockWorkspaceList = [
-      {
-        name: "tilde-ws",
-        schema_version: "1",
-        branch: "feat/tilde-ws",
-        created: "2026-01-01",
-        repos: [
-          {
-            name: "repo-a",
-            repo: "repo-a",
-            type: "other",
-            mode: "worktree",
-            main_path: "/tmp/main/repo-a",
-            task_path: taskPath,
-          },
-        ],
-      },
-    ]
+    writeWorkspace({
+      name: "tilde-ws",
+      schema_version: "1",
+      branch: "feat/tilde-ws",
+      created: "2026-01-01",
+      repos: [
+        {
+          name: "repo-a",
+          repo: "repo-a",
+          type: "other",
+          mode: "worktree",
+          main_path: "/tmp/main/repo-a",
+          task_path: taskPath,
+        },
+      ],
+    })
 
     // detectWorkspaceFromCwd expands "~/" via the mocked expandHome (configDir)
     const result = detectWorkspaceFromCwd(resolvedPath)
@@ -246,32 +243,30 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("workspace with mix of trunk and worktree repos only matches on worktree repos", () => {
-    mockWorkspaceList = [
-      {
-        name: "mixed-ws",
-        schema_version: "1",
-        branch: "feat/mixed-ws",
-        created: "2026-01-01",
-        repos: [
-          {
-            name: "trunk-repo",
-            repo: "trunk-repo",
-            type: "other",
-            mode: "trunk",
-            main_path: "/tmp/main/trunk-repo",
-            task_path: "/tmp/main/trunk-repo",
-          },
-          {
-            name: "worktree-repo",
-            repo: "worktree-repo",
-            type: "other",
-            mode: "worktree",
-            main_path: "/tmp/main/worktree-repo",
-            task_path: "/tmp/tasks/mixed-ws/worktree-repo",
-          },
-        ],
-      },
-    ]
+    writeWorkspace({
+      name: "mixed-ws",
+      schema_version: "1",
+      branch: "feat/mixed-ws",
+      created: "2026-01-01",
+      repos: [
+        {
+          name: "trunk-repo",
+          repo: "trunk-repo",
+          type: "other",
+          mode: "trunk",
+          main_path: "/tmp/main/trunk-repo",
+          task_path: "/tmp/main/trunk-repo",
+        },
+        {
+          name: "worktree-repo",
+          repo: "worktree-repo",
+          type: "other",
+          mode: "worktree",
+          main_path: "/tmp/main/worktree-repo",
+          task_path: "/tmp/tasks/mixed-ws/worktree-repo",
+        },
+      ],
+    })
 
     // Trunk repo should NOT match
     const trunkResult = detectWorkspaceFromCwd("/tmp/main/trunk-repo/src")

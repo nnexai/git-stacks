@@ -2,79 +2,46 @@ import { describe, test, expect, beforeEach, afterEach, afterAll, mock } from "b
 import { join } from "path"
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from "fs"
 import { execSync } from "child_process"
-import { makeTmpDir, cleanup, makeGitRepo, useIsolatedConfig } from "../helpers"
+import {
+  makeTmpDir, cleanup, makeGitRepo, useIsolatedConfig,
+  realWriteWorkspace as writeWorkspace,
+  realWorkspaceExists as workspaceExists,
+  realWorkspacePath as workspacePath,
+  realWriteGlobalConfig as writeGlobalConfig,
+  realReadWorkspace as readWorkspace,
+  realTemplateExists as templateExists,
+  realWriteTemplate as writeTemplate,
+  realCreateWorktree as createWorktree,
+  realIsWorktreeRegistered as isWorktreeRegistered,
+  realMergeWorkspace as mergeWorkspace,
+  realRemoveWorkspace as removeWorkspace,
+  realCleanWorkspace as cleanWorkspace,
+  realRenameWorkspace as renameWorkspace,
+  realCloseWorkspace as closeWorkspace,
+  realRenameTemplate as renameTemplate,
+  realEditTemplateYaml as editTemplateYaml,
+  realEditGlobalConfigYaml as editGlobalConfigYaml,
+  realEditRegistryYaml as editRegistryYaml,
+  realRunHooks,
+  realRunHooksCaptured,
+  lifecycleRealExec,
+} from "../helpers"
 import {
   WorkspaceSchema,
   TemplateSchema,
 } from "../../src/lib/config"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
-// Dynamic imports below use cache-busting query strings so they pick up the mock.
 const isolated = useIsolatedConfig("ws-ops")
 
-// Restore @/lib/lifecycle to the real implementation (cache-busted) so that
+// Restore @/lib/lifecycle to the real implementation so that
 // workspace-ops hook execution tests use actual shell commands, not stubs left
 // by other test files that call mock.module("@/lib/lifecycle", ...).
-// @ts-ignore — cache-busting avoids contamination from consumer test mocks
-const realLifecycle = await import("@/lib/lifecycle?ws-ops-lifecycle-real")
-mock.module("@/lib/lifecycle", () => realLifecycle)
-
-// Dynamic imports with cache-busting so they resolve against the isolated mock.
-const {
-  writeWorkspace,
-  workspaceExists,
-  workspacePath,
-  writeGlobalConfig,
-  readWorkspace,
-  templateExists,
-  writeTemplate,
-}: {
-  writeWorkspace: (ws: ReturnType<typeof WorkspaceSchema.parse>) => void
-  workspaceExists: (name: string) => boolean
-  workspacePath: (name: string) => string
-  writeGlobalConfig: (cfg: { workspace_root: string; integrations: Record<string, unknown> }) => void
-  readWorkspace: (name: string) => ReturnType<typeof WorkspaceSchema.parse>
-  templateExists: (name: string) => boolean
-  writeTemplate: (tpl: ReturnType<typeof TemplateSchema.parse>) => void
-// @ts-ignore — cache-busting for isolated paths mock
-} = await import("@/lib/config?ws-ops-test")
-
-const {
-  createWorktree,
-  isWorktreeRegistered,
-}: {
-  createWorktree: (repoPath: string, worktreePath: string, branch: string) => Promise<{ ok: boolean; error?: string }>
-  isWorktreeRegistered: (repoPath: string, worktreePath: string) => Promise<boolean>
-// @ts-ignore — cache-busting for isolated paths mock
-} = await import("@/lib/git?ws-ops-test")
-
-const {
-  mergeWorkspace,
-  removeWorkspace,
-  cleanWorkspace,
-  renameWorkspace,
-  closeWorkspace,
-  renameTemplate,
-}: {
-  mergeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  removeWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  cleanWorkspace: (name: string, opts: { force?: boolean; dryRun?: boolean; captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  renameWorkspace: (name: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  closeWorkspace: (name: string, opts: { captured?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-  renameTemplate: (oldName: string, newName: string, opts?: { dryRun?: boolean }, onProgress?: (msg: string) => void) => Promise<{ ok: boolean; error?: string }>
-// @ts-ignore — cache-busting for isolated paths mock
-} = await import("@/lib/workspace-ops?ws-ops-test")
-
-const {
-  editTemplateYaml,
-  editGlobalConfigYaml,
-  editRegistryYaml,
-}: {
-  editTemplateYaml: (name: string) => { path: string; validate: () => { ok: boolean; error?: string } }
-  editGlobalConfigYaml: () => { path: string; validate: () => { ok: boolean; error?: string } }
-  editRegistryYaml: () => { path: string; validate: () => { ok: boolean; error?: string } }
-// @ts-ignore — cache-busting for isolated paths mock
-} = await import("@/lib/workspace-ops?ws-ops-edit-yaml-test")
+mock.module("@/lib/lifecycle", () => ({
+  runHooks: realRunHooks,
+  runHooksCaptured: realRunHooksCaptured,
+  _exec: lifecycleRealExec,
+}))
 
 afterAll(() => isolated.cleanup())
 
