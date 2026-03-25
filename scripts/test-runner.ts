@@ -2,11 +2,8 @@
  * Custom test runner: separates unit tests (shared bun test process) from
  * integration tests (per-file isolated bun test processes).
  *
- * Unit tests: tests/lib/, tests/lib/integrations/, tests/tui/dashboard/ (excluding integ-*.test.tsx),
- *             tests/tui/dashboard/snapshots/, tests/tui/dashboard/configUtils.test.ts
- *
- * Integration tests: tests/commands/, tests/tui/*.test.ts,
- *                    tests/tui/dashboard/integ-*.test.tsx
+ * Unit tests: tests/lib/, tests/lib/integrations/, tests/tui/dashboard/ (excluding integ-*.test.tsx)
+ * Integration tests: tests/commands/, tests/tui/*.test.ts, tests/tui/dashboard/integ-*.test.tsx
  *
  * Usage:
  *   bun run scripts/test-runner.ts           -- run all
@@ -14,7 +11,6 @@
  *   bun run scripts/test-runner.ts --integ   -- run integration tests only
  */
 
-import { readdirSync, statSync } from "fs"
 import { join, relative, basename } from "path"
 
 const ROOT = join(import.meta.dir, "..")
@@ -22,31 +18,18 @@ const TESTS_DIR = join(ROOT, "tests")
 
 // --- File discovery ---
 
-function scanDir(dir: string, results: string[] = []): string[] {
-  let entries: ReturnType<typeof readdirSync>
-  try {
-    entries = readdirSync(dir, { withFileTypes: true })
-  } catch {
-    return results
-  }
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name)
-    if (entry.isDirectory()) {
-      scanDir(fullPath, results)
-    } else if (entry.isFile() && (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx"))) {
-      results.push(fullPath)
-    }
-  }
-  return results
+function discoverTests(): string[] {
+  const glob = new Bun.Glob("**/*.test.{ts,tsx}")
+  return Array.from(glob.scanSync({ cwd: TESTS_DIR, onlyFiles: true })).map(
+    (rel) => join(TESTS_DIR, rel)
+  )
 }
 
 function classifyFiles(): { unit: string[]; integ: string[] } {
   const unit: string[] = []
   const integ: string[] = []
 
-  const allTests = scanDir(TESTS_DIR)
-
-  for (const file of allTests) {
+  for (const file of discoverTests()) {
     const rel = relative(TESTS_DIR, file)
     const name = basename(file)
 
