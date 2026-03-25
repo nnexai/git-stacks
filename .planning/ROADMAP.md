@@ -123,9 +123,9 @@ Plans:
   1. A documented audit identifies every command/subcommand present in the Commander.js tree and confirms each has completion coverage or records the gap with a fix applied
   2. User can tab-complete `pr create`, `pr open`, and `pr status` for GitHub, GitLab, and Gitea integrations in bash, zsh, and fish
   3. User can tab-complete `issue link`, `issue unlink`, and `issue open` for GitHub, GitLab, Gitea, and Jira integrations in bash, zsh, and fish
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 34-01-PLAN.md — Extend generators for arbitrary-depth nesting + add 26 integration DYNAMIC_COMPLETIONS entries (TDD)
+- [x] 34-01-PLAN.md — Extend generators for arbitrary-depth nesting + add 26 integration DYNAMIC_COMPLETIONS entries (TDD)
 - [ ] 34-02-PLAN.md — Programmatic audit test against real program + audit documentation
 
 ### Phase 35: Dynamic Name Completion
@@ -160,6 +160,6 @@ Plans:
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33. Name-Based Identity | v0.9.0 | 2/3 | Complete    | 2026-03-25 |
-| 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 0/2 | Not started | - |
+| 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 1/2 | In Progress|  |
 | 35. Dynamic Name Completion | v0.9.0 | 0/? | Not started | - |
 | 36. Release Prep | v0.9.0 | 0/1 | Not started | - |

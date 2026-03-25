@@ -16,9 +16,9 @@ Requirements for v0.9.0 Identity & Completion Integrity milestone.
 
 ### Completion
 
-- [ ] **COMP-01**: All CLI commands are audited for missing shell completion coverage (bash/zsh/fish); gaps are documented and fixed
-- [ ] **COMP-02**: User can tab-complete `pr create`, `pr open`, and `pr status` subcommands for GitHub, GitLab, and Gitea integrations
-- [ ] **COMP-03**: User can tab-complete `issue link`, `issue unlink`, and `issue open` subcommands across all four integrations (GitHub, GitLab, Gitea, Jira)
+- [x] **COMP-01**: All CLI commands are audited for missing shell completion coverage (bash/zsh/fish); gaps are documented and fixed
+- [x] **COMP-02**: User can tab-complete `pr create`, `pr open`, and `pr status` subcommands for GitHub, GitLab, and Gitea integrations
+- [x] **COMP-03**: User can tab-complete `issue link`, `issue unlink`, and `issue open` subcommands across all four integrations (GitHub, GitLab, Gitea, Jira)
 - [ ] **COMP-04**: User can tab-complete workspace names dynamically in all command arguments that accept `<workspace>` or `[workspace]`
 - [ ] **COMP-05**: User can tab-complete template names dynamically in all command arguments that accept `<template>` or `[template]`
 
@@ -51,9 +51,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IDEN-02 | Phase 33 | Complete |
 | IDEN-03 | Phase 33 | Complete |
 | IDEN-04 | Phase 35 | Pending |
-| COMP-01 | Phase 34 | Pending |
-| COMP-02 | Phase 34 | Pending |
-| COMP-03 | Phase 34 | Pending |
+| COMP-01 | Phase 34 | Complete |
+| COMP-02 | Phase 34 | Complete |
+| COMP-03 | Phase 34 | Complete |
 | COMP-04 | Phase 35 | Pending |
 | COMP-05 | Phase 35 | Pending |
 
