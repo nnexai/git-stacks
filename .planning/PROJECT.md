@@ -267,4 +267,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-24 after v0.9.0 milestone started — Identity & Completion Integrity*
+*Last updated: 2026-03-25 — Phase 34.1 complete: test isolation framework (custom test runner, complete mock factories, zero cache-busting imports, zero DI hack objects)*
