@@ -108,14 +108,14 @@ describe("integrationCommand structure", () => {
   test("tmux subcommand has 'attach' sub-subcommand", () => {
     const tmux = integrationCommand.commands.find((c: any) => c.name() === "tmux")
     expect(tmux).toBeDefined()
-    const tmuxSubNames = tmux.commands.map((c: any) => c.name())
+    const tmuxSubNames = tmux!.commands.map((c: any) => c.name())
     expect(tmuxSubNames).toContain("attach")
   })
 
   test("niri subcommand has 'focus-workspace' sub-subcommand", () => {
     const niri = integrationCommand.commands.find((c: any) => c.name() === "niri")
     expect(niri).toBeDefined()
-    const niriSubNames = niri.commands.map((c: any) => c.name())
+    const niriSubNames = niri!.commands.map((c: any) => c.name())
     expect(niriSubNames).toContain("focus-workspace")
   })
 
@@ -137,14 +137,14 @@ describe("integrationCommand structure", () => {
   test("github subcommand has 'pr' sub-subcommand", () => {
     const github = integrationCommand.commands.find((c: any) => c.name() === "github")
     expect(github).toBeDefined()
-    const subNames = github.commands.map((c: any) => c.name())
+    const subNames = github!.commands.map((c: any) => c.name())
     expect(subNames).toContain("pr")
   })
 
   test("github pr has create/open/status commands", () => {
     const github = integrationCommand.commands.find((c: any) => c.name() === "github")
-    const pr = github.commands.find((c: any) => c.name() === "pr")
-    const prSubNames = pr.commands.map((c: any) => c.name())
+    const pr = github!.commands.find((c: any) => c.name() === "pr")
+    const prSubNames = pr!.commands.map((c: any) => c.name())
     expect(prSubNames).toContain("create")
     expect(prSubNames).toContain("open")
     expect(prSubNames).toContain("status")
@@ -152,14 +152,14 @@ describe("integrationCommand structure", () => {
 
   test("github subcommand has 'issue' sub-subcommand", () => {
     const github = integrationCommand.commands.find((c: any) => c.name() === "github")
-    const subNames = github.commands.map((c: any) => c.name())
+    const subNames = github!.commands.map((c: any) => c.name())
     expect(subNames).toContain("issue")
   })
 
   test("github issue has link/unlink/open commands", () => {
     const github = integrationCommand.commands.find((c: any) => c.name() === "github")
-    const issue = github.commands.find((c: any) => c.name() === "issue")
-    const issueSubNames = issue.commands.map((c: any) => c.name())
+    const issue = github!.commands.find((c: any) => c.name() === "issue")
+    const issueSubNames = issue!.commands.map((c: any) => c.name())
     expect(issueSubNames).toContain("link")
     expect(issueSubNames).toContain("unlink")
     expect(issueSubNames).toContain("open")
@@ -173,14 +173,14 @@ describe("integrationCommand structure", () => {
   test("jira subcommand has 'issue' sub-subcommand", () => {
     const jira = integrationCommand.commands.find((c: any) => c.name() === "jira")
     expect(jira).toBeDefined()
-    const subNames = jira.commands.map((c: any) => c.name())
+    const subNames = jira!.commands.map((c: any) => c.name())
     expect(subNames).toContain("issue")
   })
 
   test("jira issue has link/unlink/open commands", () => {
     const jira = integrationCommand.commands.find((c: any) => c.name() === "jira")
-    const issue = jira.commands.find((c: any) => c.name() === "issue")
-    const issueSubNames = issue.commands.map((c: any) => c.name())
+    const issue = jira!.commands.find((c: any) => c.name() === "issue")
+    const issueSubNames = issue!.commands.map((c: any) => c.name())
     expect(issueSubNames).toContain("link")
     expect(issueSubNames).toContain("unlink")
     expect(issueSubNames).toContain("open")

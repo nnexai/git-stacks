@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
+import type { Workspace } from "@/lib/config"
 import { makeConfigMock } from "../../helpers"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
@@ -139,7 +140,7 @@ describe("resolveIssueRef", () => {
     expect(result).toEqual({
       ok: true,
       issueId: "42",
-      workspace: mockWorkspaceData["my-ws"],
+      workspace: mockWorkspaceData["my-ws"] as Workspace,
     })
   })
 

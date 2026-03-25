@@ -92,7 +92,7 @@ afterAll(() => {
 
 function buildParent() {
   const parent = new Command("gitlab")
-  gitlabIntegration.commands(parent)
+  gitlabIntegration.commands!(parent)
   parent.exitOverride()
   return parent
 }

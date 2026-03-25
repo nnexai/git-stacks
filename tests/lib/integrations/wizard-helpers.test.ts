@@ -7,7 +7,6 @@ import type { Mock } from "bun:test"
 const localConfirm = mock(async () => false as boolean | symbol)
 const localMultiselect = mock(async () => [] as string[] | symbol)
 const localIsCancel = mock((v: unknown) => typeof v === "symbol")
-const localCancel = mock((): never => { throw new Error("cancelled") })
 
 // Mock integrations
 const mockConfigurePrompt = mock(async (current: Record<string, unknown>) => ({

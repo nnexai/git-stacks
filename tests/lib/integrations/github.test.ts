@@ -92,7 +92,7 @@ afterAll(() => {
 
 function buildParent() {
   const parent = new Command("github")
-  githubIntegration.commands(parent)
+  githubIntegration.commands!(parent)
   parent.exitOverride() // prevent commander from calling process.exit on parse errors
   return parent
 }

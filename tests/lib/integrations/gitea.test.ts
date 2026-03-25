@@ -94,7 +94,7 @@ afterAll(() => {
 
 function buildParent() {
   const parent = new Command("gitea")
-  giteaIntegration.commands(parent)
+  giteaIntegration.commands!(parent)
   parent.exitOverride()
   return parent
 }

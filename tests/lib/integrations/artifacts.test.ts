@@ -185,7 +185,7 @@ describe("vscode artifact", () => {
     // If which sh succeeds (it will on Linux), we get a WindowArtifact
     expect(result).not.toBeNull()
     expect(result?.kind).toBe("window")
-    expect(typeof result?.pid).toBe("number")
+    expect(typeof (result as any)?.pid).toBe("number")
     expect((result as any)?.app_id).toBe("sh")
     expect((result as any)?.title).toBe("")
   })
@@ -231,7 +231,7 @@ describe("intellij artifact", () => {
     // Either null (idea not installed) or a WindowArtifact
     if (result !== null) {
       expect(result.kind).toBe("window")
-      expect(typeof result.pid).toBe("number")
+      expect(typeof (result as any).pid).toBe("number")
       expect((result as any).app_id).toBe("idea")
       expect((result as any).title).toBe("")
     }

@@ -90,13 +90,13 @@ describe("tmux cleanup()", () => {
 
   test("calls killTmuxSession when session exists", async () => {
     tmuxSessionExistsMock.mockImplementation(async () => true)
-    await tmuxIntegration.cleanup(fakeCtx)
+    await tmuxIntegration.cleanup!(fakeCtx)
     expect(killTmuxSessionMock).toHaveBeenCalledWith("my-workspace")
   })
 
   test("does NOT call killTmuxSession when session does not exist", async () => {
     tmuxSessionExistsMock.mockImplementation(async () => false)
-    await tmuxIntegration.cleanup(fakeCtx)
+    await tmuxIntegration.cleanup!(fakeCtx)
     expect(killTmuxSessionMock).not.toHaveBeenCalled()
   })
 })

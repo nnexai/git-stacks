@@ -842,12 +842,12 @@ describe("renameWorkspace", () => {
 
     // Read the renamed workspace and verify trunk repo's main_path is unchanged
     const renamed = readWorkspace(newWsName)
-    const trunkRepo = renamed.repos.find((r) => r.name === "trunk-repo")
+    const trunkRepo = renamed.repos.find((r: { name: string }) => r.name === "trunk-repo")
     expect(trunkRepo).toBeDefined()
     expect(trunkRepo!.main_path).toBe(trunkRepoPath)
 
     // Worktree repo path was updated to new name
-    const wtRepo = renamed.repos.find((r) => r.name === repos[0].name)
+    const wtRepo = renamed.repos.find((r: { name: string }) => r.name === repos[0].name)
     expect(wtRepo).toBeDefined()
     expect(wtRepo!.task_path).toContain(newWsName)
 
@@ -879,7 +879,7 @@ describe("dry-run", () => {
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     const messages: string[] = []
-    const result = await removeWorkspace(wsName, { force: true, dryRun: true }, msg => messages.push(msg))
+    const result = await removeWorkspace(wsName, { force: true, dryRun: true }, (msg: string) => messages.push(msg))
 
     // Returns ok: true
     expect(result.ok).toBe(true)
@@ -907,7 +907,7 @@ describe("dry-run", () => {
     const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     const messages: string[] = []
-    const result = await cleanWorkspace(wsName, { force: true, dryRun: true }, msg => messages.push(msg))
+    const result = await cleanWorkspace(wsName, { force: true, dryRun: true }, (msg: string) => messages.push(msg))
 
     expect(result.ok).toBe(true)
 
@@ -939,7 +939,7 @@ describe("dry-run", () => {
     execSync('git commit -m "feature commit"', opts)
 
     const messages: string[] = []
-    const result = await mergeWorkspace(wsName, { force: true, dryRun: true }, msg => messages.push(msg))
+    const result = await mergeWorkspace(wsName, { force: true, dryRun: true }, (msg: string) => messages.push(msg))
 
     expect(result.ok).toBe(true)
 
@@ -969,7 +969,7 @@ describe("dry-run", () => {
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     const messages: string[] = []
-    const result = await renameWorkspace(wsName, newWsName, { dryRun: true }, msg => messages.push(msg))
+    const result = await renameWorkspace(wsName, newWsName, { dryRun: true }, (msg: string) => messages.push(msg))
 
     expect(result.ok).toBe(true)
 
@@ -1001,7 +1001,7 @@ describe("dry-run", () => {
     writeWorkspace(workspace)
 
     const messages: string[] = []
-    const result = await removeWorkspace(wsName, { force: true }, msg => messages.push(msg))
+    const result = await removeWorkspace(wsName, { force: true }, (msg: string) => messages.push(msg))
 
     // Should succeed overall
     expect(result.ok).toBe(true)
@@ -1027,7 +1027,7 @@ describe("dry-run", () => {
     writeWorkspace(workspace)
 
     const messages: string[] = []
-    const result = await cleanWorkspace(wsName, { force: true }, msg => messages.push(msg))
+    const result = await cleanWorkspace(wsName, { force: true }, (msg: string) => messages.push(msg))
 
     expect(result.ok).toBe(true)
     expect(messages.some(m => m.includes("Warning: external destination"))).toBe(true)
@@ -1049,7 +1049,7 @@ describe("dry-run", () => {
     writeWorkspace(workspace)
 
     const messages: string[] = []
-    const result = await removeWorkspace(wsName, { force: true, dryRun: true }, msg => messages.push(msg))
+    const result = await removeWorkspace(wsName, { force: true, dryRun: true }, (msg: string) => messages.push(msg))
 
     expect(result.ok).toBe(true)
 
@@ -1114,7 +1114,7 @@ describe("closeWorkspace", () => {
     await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
 
     const messages: string[] = []
-    const result = await closeWorkspace(wsName, {}, (msg) => messages.push(msg))
+    const result = await closeWorkspace(wsName, {}, (msg: string) => messages.push(msg))
 
     expect(result.ok).toBe(true)
     expect(messages.some(m => m.includes(`Closed '${wsName}'.`))).toBe(true)
@@ -1157,7 +1157,7 @@ describe("closeWorkspace", () => {
 
     // Use captured mode so hook output is delivered via onProgress callback
     const captured: string[] = []
-    const result = await closeWorkspace(wsName, { captured: true }, (msg) => captured.push(msg))
+    const result = await closeWorkspace(wsName, { captured: true }, (msg: string) => captured.push(msg))
     expect(result.ok).toBe(true)
 
     // Hook output arrives via captured lines — order verified
@@ -1535,7 +1535,7 @@ describe("renameTemplate", () => {
     createTemplateFixture(oldName, oldName)
 
     const messages: string[] = []
-    const result = await renameTemplate(oldName, newName, { dryRun: true }, (msg) => messages.push(msg))
+    const result = await renameTemplate(oldName, newName, { dryRun: true }, (msg: string) => messages.push(msg))
 
     expect(result.ok).toBe(true)
     // Template old still exists, new does not
