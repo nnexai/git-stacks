@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Identity & Completion Integrity
 status: Ready to execute
-stopped_at: Phase 36 context gathered
-last_updated: "2026-03-25T05:19:02.887Z"
+stopped_at: Completed 34.1-02-PLAN.md
+last_updated: "2026-03-25T07:58:01.367Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 34.1 (fix-bun-mock-module-corruption) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Recent decisions affecting current work:
 - [Phase 34]: Subprocess-based audit tests via Bun.spawn for real CLI verification
 - [Phase 34.1-fix-bun-mock-module-corruption]: Mock factory pattern: each factory returns complete module interface with overrides spread at end — makes partial mocks structurally impossible
 - [Phase 34.1-fix-bun-mock-module-corruption]: Unit/integ test runner separation: unit tests share single bun process, integration tests run per-file in isolated processes to prevent mock.module cache contamination
+- [Phase 34.1-fix-bun-mock-module-corruption]: Factory helper usage pattern: mock.module calls use makeXxxMock() from helpers.ts with test-specific overrides spread at end — makes partial mocks structurally impossible
 
 ### Pending Todos
 
@@ -65,7 +66,7 @@ None — all v0.8.0 blockers resolved.
 
 ## Session Continuity
 
-Last session: 2026-03-25T05:19:02.885Z
-Stopped at: Phase 36 context gathered
-Resume file: .planning/phases/36-release-prep/36-CONTEXT.md
+Last session: 2026-03-25T07:58:01.363Z
+Stopped at: Completed 34.1-02-PLAN.md
+Resume file: None
 Next action: /gsd:plan-phase 33
