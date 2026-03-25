@@ -139,6 +139,9 @@ export function WorkspaceDetail(props: Props) {
                   source = "global"
                 }
 
+                // Hide integrations that are globally disabled with no override
+                if (!enabled && source === "global") return null
+
                 // Config summary for enabled integrations (D-11)
                 let configSummary = ""
                 if (enabled) {

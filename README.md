@@ -20,9 +20,9 @@ bun add -g git-stacks
 
 **Repo Registry** — a flat list of local git repos with names, paths, types, and default branches. Stored at `~/.config/git-stacks/registry.yml`. Managed via `git-stacks repo add|scan|list|show|remove|rename`.
 
-**Template** — a named set of repos (by registry name) with modes and branch patterns, used to stamp out workspaces. Stored at `~/.config/git-stacks/templates/{name}.yml`. Managed via `git-stacks template new|list|show|edit|clone|rename|remove`.
+**Template** — a named set of repos (by registry name) with modes and branch patterns, used to stamp out workspaces. Stored at `~/.config/git-stacks/templates/{name}.yml`. Looked up by the name field inside the YAML, not by filename. Managed via `git-stacks template new|list|show|edit|clone|rename|remove`.
 
-**Workspace** — a task/ticket-scoped instance created from a template. Each workspace has a branch; repos can be in `worktree` mode (isolated git worktree at `{workspace_root}/tasks/{workspace_name}/{repo_name}`) or `trunk` mode (references the main clone directly). Stored at `~/.config/git-stacks/workspaces/{name}.yml`.
+**Workspace** — a task/ticket-scoped instance created from a template. Each workspace has a branch; repos can be in `worktree` mode (isolated git worktree at `{workspace_root}/tasks/{workspace_name}/{repo_name}`) or `trunk` mode (references the main clone directly). Stored at `~/.config/git-stacks/workspaces/{name}.yml`. Looked up by the name field inside the YAML, not by filename.
 
 ## Quick Start
 
@@ -154,6 +154,7 @@ The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs
 git-stacks config    # Interactive config wizard (or --yaml to open raw YAML in $EDITOR)
 git-stacks doctor    # Health check — detect drift between config and filesystem
 git-stacks doctor --fix   # Auto-repair drift
+# Doctor also detects name/filename drift in workspaces and templates
 ```
 
 Global config lives at `~/.config/git-stacks/config.yml`. Default workspace root is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
@@ -338,7 +339,7 @@ git-stacks completion zsh  >> ~/.zshrc
 git-stacks completion fish > ~/.config/fish/completions/git-stacks.fish
 ```
 
-Completions cover all commands, subcommands, dynamic entity names (workspaces, templates, repos), fixed enum flag values (`--strategy rebase|merge`, `--sort date|name|status`), and per-command flag completions (`new --from` completes template names).
+Completions cover all commands, subcommands, dynamic entity names (workspaces, templates, repos), fixed enum flag values (`--strategy rebase|merge`, `--sort date|name|status`), and per-command flag completions (`new --from` completes template names). Workspace and template names are resolved dynamically from YAML `name` fields at completion time, so tab-completion always reflects the current config even when filenames diverge from names.
 
 ## License
 
