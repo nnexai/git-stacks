@@ -4,6 +4,14 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.9.1] — 2026-03-25
+
+### Fixed
+
+- **TUI repo action menu** — keyboard shortcuts no longer appear doubled in the repo context menu (e.g., `[r] [r] Remove` now correctly shows `[r] Remove`).
+
+---
+
 ## [0.9.0] — 2026-03-25
 
 ### Changed
