@@ -12,15 +12,15 @@ Requirements for v0.9.0 Identity & Completion Integrity milestone.
 - [x] **IDEN-01**: User can look up, open, remove, and list workspaces by the `name` field in YAML (not by filename)
 - [x] **IDEN-02**: User can look up, edit, remove, and list templates by the `name` field in YAML (not by filename)
 - [x] **IDEN-03**: User can rename a workspace or template and have both the YAML `name` field and the filename updated atomically; no drift possible
-- [ ] **IDEN-04**: Shell autocompletion for workspace/template arguments reads candidate names from YAML `name` fields, not from filename glob
+- [x] **IDEN-04**: Shell autocompletion for workspace/template arguments reads candidate names from YAML `name` fields, not from filename glob
 
 ### Completion
 
 - [x] **COMP-01**: All CLI commands are audited for missing shell completion coverage (bash/zsh/fish); gaps are documented and fixed
 - [x] **COMP-02**: User can tab-complete `pr create`, `pr open`, and `pr status` subcommands for GitHub, GitLab, and Gitea integrations
 - [x] **COMP-03**: User can tab-complete `issue link`, `issue unlink`, and `issue open` subcommands across all four integrations (GitHub, GitLab, Gitea, Jira)
-- [ ] **COMP-04**: User can tab-complete workspace names dynamically in all command arguments that accept `<workspace>` or `[workspace]`
-- [ ] **COMP-05**: User can tab-complete template names dynamically in all command arguments that accept `<template>` or `[template]`
+- [x] **COMP-04**: User can tab-complete workspace names dynamically in all command arguments that accept `<workspace>` or `[workspace]`
+- [x] **COMP-05**: User can tab-complete template names dynamically in all command arguments that accept `<template>` or `[template]`
 
 ### Test Infrastructure (Phase 34.1 — inserted urgent fix)
 
@@ -57,12 +57,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | IDEN-01 | Phase 33 | Complete |
 | IDEN-02 | Phase 33 | Complete |
 | IDEN-03 | Phase 33 | Complete |
-| IDEN-04 | Phase 35 | Pending |
+| IDEN-04 | Phase 35 | Complete |
 | COMP-01 | Phase 34 | Complete |
 | COMP-02 | Phase 34 | Complete |
 | COMP-03 | Phase 34 | Complete |
-| COMP-04 | Phase 35 | Pending |
-| COMP-05 | Phase 35 | Pending |
+| COMP-04 | Phase 35 | Complete |
+| COMP-05 | Phase 35 | Complete |
 | TFIX-01 | Phase 34.1 | Complete |
 | TFIX-02 | Phase 34.1 | Complete |
 | TFIX-03 | Phase 34.1 | Complete |

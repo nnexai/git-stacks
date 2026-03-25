@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Identity & Completion Integrity
-status: Ready to plan
-stopped_at: Completed 34.1-03-PLAN.md
-last_updated: "2026-03-25T13:11:22.097Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 35-01-PLAN.md
+last_updated: "2026-03-25T13:35:11.310Z"
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 34.1 — fix-bun-mock-module-corruption
+**Current focus:** Phase 35 — dynamic-name-completion
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
+Phase: 35 (dynamic-name-completion) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -53,6 +53,8 @@ Recent decisions affecting current work:
 - [Phase 34.1-fix-bun-mock-module-corruption]: Factory helper usage pattern: mock.module calls use makeXxxMock() from helpers.ts with test-specific overrides spread at end — makes partial mocks structurally impossible
 - [Phase 34.1-fix-bun-mock-module-corruption]: mock.module detection for test classification: any test file containing mock.module() runs in isolated process — structurally correct fix
 - [Phase 34.1-fix-bun-mock-module-corruption]: Production DI objects (_cwdDetect, _resolveWorkspaceDeps) removed: factory helpers + isolated process runner make them unnecessary
+- [Phase 35]: grep -h '^name:' with quoted dir variable and /*.yml glob is the canonical extraction pattern for all three shells
+- [Phase 35]: Shell completion test assertions use shell-specific substrings matching actual generated paths (full path for bash, variable name for zsh/fish)
 
 ### Pending Todos
 
@@ -68,7 +70,7 @@ None — all v0.8.0 blockers resolved.
 
 ## Session Continuity
 
-Last session: 2026-03-25T13:01:36.768Z
-Stopped at: Completed 34.1-03-PLAN.md
+Last session: 2026-03-25T13:35:11.307Z
+Stopped at: Completed 35-01-PLAN.md
 Resume file: None
 Next action: /gsd:plan-phase 33
