@@ -1,5 +1,6 @@
 import { describe, test, expect, mock, beforeEach, spyOn } from "bun:test"
 import type { IntegrationContext, ArtifactBag } from "@/lib/integrations/types"
+import { makeTmuxMock, makeConfigMock } from "../../helpers"
 
 // === Register ALL mocks BEFORE any integration imports ===
 
@@ -13,7 +14,7 @@ const mockAddTmuxPane = mock(() => Promise.resolve(null))
 const mockSendToTmuxPane = mock(() => Promise.resolve())
 const mockGetTmuxMainPane = mock(() => Promise.resolve(null))
 const mockFocusTmuxPane = mock(() => Promise.resolve())
-mock.module("@/lib/tmux", () => ({
+mock.module("@/lib/tmux", () => makeTmuxMock({
   openTmuxSession: mockOpenTmuxSession,
   focusTmuxSession: mockFocusTmuxSession,
   addTmuxPane: mockAddTmuxPane,
@@ -34,10 +35,10 @@ mock.module("@/lib/cmux", () => ({
 }))
 
 // 4. Mock @/lib/config for cmux
-mock.module("@/lib/config", () => ({
-  workspaceExists: () => false,
-  readWorkspace: () => ({}),
-  writeWorkspace: () => {},
+mock.module("@/lib/config", () => makeConfigMock({
+  workspaceExists: mock(() => false),
+  readWorkspace: mock(() => ({})),
+  writeWorkspace: mock(() => {}),
 }))
 
 // 5. Mock @/lib/vscode

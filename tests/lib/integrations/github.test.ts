@@ -1,5 +1,6 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test"
 import { Command } from "commander"
+import { makeConfigMock, makeForgeUtilsMock, makeIssueUtilsMock } from "../../helpers"
 
 // --- Mock forge-utils BEFORE importing github.ts ---
 
@@ -13,7 +14,7 @@ const resolveForgeRepoMock = mock(() => ({
 
 const formatForgeErrorMock = mock((err: any) => `Error: ${err.error}`)
 
-mock.module("@/lib/integrations/forge-utils", () => ({
+mock.module("@/lib/integrations/forge-utils", () => makeForgeUtilsMock({
   resolveForgeRepo: resolveForgeRepoMock,
   resolveForgeRepoAnyMode: mock(() => ({ ok: true, repoPath: "/tmp/task/repo-a" })),
   resolveRepoCwd: mock(async () => "/tmp/task/repo-a"),
@@ -32,7 +33,7 @@ const resolveIssueRefMock = mock(() => ({
 const formatIssueErrorMock = mock((err: any) => `Issue error: ${err.error}`)
 const resolveWorkspaceArgMock = mock((name: string | undefined) => name ?? "detected-ws")
 
-mock.module("@/lib/integrations/issue-utils", () => ({
+mock.module("@/lib/integrations/issue-utils", () => makeIssueUtilsMock({
   linkIssue: linkIssueMock,
   unlinkIssue: unlinkIssueMock,
   resolveIssueRef: resolveIssueRefMock,
@@ -45,7 +46,7 @@ mock.module("@/lib/integrations/issue-utils", () => ({
 // workspaceExists returns true only for "my-ws" to support disambiguation tests
 const workspaceExistsMock = mock((name: string) => name === "my-ws")
 
-mock.module("@/lib/config", () => ({
+mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
 }))
 

@@ -1,5 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
 import { Command } from "commander"
+import { makeConfigMock, makeIssueUtilsMock } from "../../helpers"
 
 // --- Mocks ---
 const linkIssueMock = mock(() => {})
@@ -12,7 +13,7 @@ const resolveIssueRefMock = mock((): any => ({
 const formatIssueErrorMock = mock((err: any) => `Issue error: ${err.error}`)
 const resolveWorkspaceArgMock = mock((name: string | undefined) => name ?? "detected-ws")
 
-mock.module("@/lib/integrations/issue-utils", () => ({
+mock.module("@/lib/integrations/issue-utils", () => makeIssueUtilsMock({
   linkIssue: linkIssueMock,
   unlinkIssue: unlinkIssueMock,
   resolveIssueRef: resolveIssueRefMock,
@@ -29,7 +30,7 @@ const readGlobalConfigMock = mock(() => ({
 // workspaceExists returns true only for "my-ws" (function-based mock for disambiguation tests)
 const workspaceExistsMock = mock((name: string) => name === "my-ws")
 
-mock.module("@/lib/config", () => ({
+mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
   readGlobalConfig: readGlobalConfigMock,
 }))

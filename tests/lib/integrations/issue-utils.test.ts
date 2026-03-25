@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { makeConfigMock } from "../../helpers"
 
 // --- Mock config module ---
 
@@ -6,9 +7,9 @@ const workspaceExistsMock = mock((_name: string) => false)
 const writeWorkspaceMock = mock((_ws: unknown) => {})
 let mockWorkspaceData: Record<string, unknown> = {}
 
-mock.module("@/lib/config", () => ({
+mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
-  readWorkspace: (_name: string) => mockWorkspaceData[_name],
+  readWorkspace: mock((_name: string) => mockWorkspaceData[_name]),
   writeWorkspace: writeWorkspaceMock,
 }))
 

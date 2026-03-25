@@ -1,7 +1,8 @@
 import { describe, test, expect, mock } from "bun:test"
+import { makeConfigMock, makeForgeUtilsMock, makeIssueUtilsMock, makeTmuxMock } from "../helpers"
 
 // Mock issue-utils so jira integration doesn't trigger real config I/O
-mock.module("@/lib/integrations/issue-utils", () => ({
+mock.module("@/lib/integrations/issue-utils", () => makeIssueUtilsMock({
   linkIssue: mock(() => {}),
   unlinkIssue: mock(() => {}),
   resolveIssueRef: mock(() => ({ ok: false, error: "workspace_not_found", name: "test" })),
@@ -9,7 +10,7 @@ mock.module("@/lib/integrations/issue-utils", () => ({
 }))
 
 // Mock config for workspaceExists/readGlobalConfig used in jira and other integrations
-mock.module("@/lib/config", () => ({
+mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: mock(() => false),
   readGlobalConfig: mock(() => ({ integrations: {}, workspace_root: "/tmp" })),
   readWorkspace: mock(() => ({ name: "test", branch: "main", repos: [], settings: {} })),
@@ -31,7 +32,7 @@ mock.module("@/tui/utils", () => ({
 }))
 
 // Mock forge-utils so forge integrations don't trigger real config I/O
-mock.module("@/lib/integrations/forge-utils", () => ({
+mock.module("@/lib/integrations/forge-utils", () => makeForgeUtilsMock({
   resolveForgeRepo: mock(() => ({ ok: false, error: "workspace_not_found", name: "test" })),
   formatForgeError: mock(() => "test error"),
   detectForgeForRepo: mock(async () => []),
@@ -46,7 +47,7 @@ mock.module("@/lib/integrations/forge-utils", () => ({
 }))
 
 // Mock tmux lib so no real shell commands run during import
-mock.module("@/lib/tmux", () => ({
+mock.module("@/lib/tmux", () => makeTmuxMock({
   openTmuxSession: mock(async () => ({ created: false })),
   focusTmuxSession: mock(async () => {}),
   killTmuxSession: mock(async () => {}),

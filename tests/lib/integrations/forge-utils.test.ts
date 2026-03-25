@@ -1,5 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { Workspace, WorkspaceRepo, RepoRegistryEntry } from "@/lib/config"
+import { makeConfigMock } from "../../helpers"
 
 // --- Mocks for config module ---
 
@@ -7,7 +8,7 @@ const workspaceExistsMock = mock((_name: string) => false)
 const readWorkspaceMock = mock((_name: string): Workspace => { throw new Error("not set") })
 const readRegistryMock = mock((): RepoRegistryEntry[] => [])
 
-mock.module("@/lib/config", () => ({
+mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
   readWorkspace: readWorkspaceMock,
   readRegistry: readRegistryMock,
