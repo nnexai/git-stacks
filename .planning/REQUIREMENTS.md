@@ -24,8 +24,8 @@ Requirements for v0.9.0 Identity & Completion Integrity milestone.
 
 ### Test Infrastructure (Phase 34.1 — inserted urgent fix)
 
-- [ ] **TFIX-01**: Full test suite (`bun test tests/`) produces 0 failures when all test files run together in one process
-- [ ] **TFIX-02**: Custom test runner (`bun run test`) separates unit tests (shared process) from integration tests (per-file isolated process) and aggregates results
+- [x] **TFIX-01**: Full test suite (`bun test tests/`) produces 0 failures when all test files run together in one process
+- [x] **TFIX-02**: Custom test runner (`bun run test`) separates unit tests (shared process) from integration tests (per-file isolated process) and aggregates results
 - [ ] **TFIX-03**: No cache-busting query-string imports (`await import("@/lib/X?suffix")`) exist in any test file
 - [ ] **TFIX-04**: No test-isolation-only DI objects (`_cwdDetect`, `_resolveWorkspaceDeps`) exist in production source code
 
@@ -63,8 +63,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMP-03 | Phase 34 | Complete |
 | COMP-04 | Phase 35 | Pending |
 | COMP-05 | Phase 35 | Pending |
-| TFIX-01 | Phase 34.1 | Pending |
-| TFIX-02 | Phase 34.1 | Pending |
+| TFIX-01 | Phase 34.1 | Complete |
+| TFIX-02 | Phase 34.1 | Complete |
 | TFIX-03 | Phase 34.1 | Pending |
 | TFIX-04 | Phase 34.1 | Pending |
 

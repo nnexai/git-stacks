@@ -138,9 +138,9 @@ Plans:
   2. `bun run test` invokes the custom runner, aggregates results, and exits non-zero on any failure
   3. No cache-busting query-string imports exist in any test file
   4. No `_cwdDetect` or `_resolveWorkspaceDeps` DI objects exist in production code
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
-- [ ] 34.1-01-PLAN.md — Test runner script + complete mock factory helpers
+- [x] 34.1-01-PLAN.md — Test runner script + complete mock factory helpers
 - [ ] 34.1-02-PLAN.md — Surgical root cause fixes (replace partial mocks with factory-based complete mocks)
 - [ ] 34.1-03-PLAN.md — Cache-busting removal + DI object removal from production code
 
@@ -177,6 +177,6 @@ Plans:
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33. Name-Based Identity | v0.9.0 | 2/3 | Complete    | 2026-03-25 |
 | 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 2/2 | Complete    | 2026-03-25 |
-| 34.1. Test Isolation Framework | v0.9.0 | 0/3 | In progress | - |
+| 34.1. Test Isolation Framework | v0.9.0 | 1/3 | In Progress|  |
 | 35. Dynamic Name Completion | v0.9.0 | 0/? | Not started | - |
 | 36. Release Prep | v0.9.0 | 0/1 | Not started | - |
