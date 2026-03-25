@@ -4,6 +4,28 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.9.0] — 2026-03-25
+
+### Changed
+
+**Name-based identity** — workspaces and templates are now looked up by the `name` field in their YAML config, not by filename. Existing configs work without changes (the `name` field defaults to the filename stem). `git-stacks doctor` detects and reports name/filename drift.
+
+**Template rename cascade** — `git-stacks template rename` now updates all workspace YAML files that reference the renamed template. Supports `--dry-run` to preview changes before applying.
+
+**Dynamic shell completion** — tab-completing workspace and template names now reads candidate values from YAML `name` fields instead of listing filenames. Works in bash, zsh, and fish.
+
+**Shell completion coverage** — all integration subcommands (forge `pr create/open/status`, `issue link/unlink/open` for GitHub/GitLab/Gitea/Jira, `tmux attach`, `niri focus-workspace`) now have full tab-completion support in all three shells.
+
+### Fixed
+
+- **TUI dashboard integration display** — integrations that are globally disabled no longer appear in the workspace and template detail panes. Only integrations that are enabled or have an explicit per-workspace/template override are shown.
+
+### Internal
+
+- **Test isolation framework** — custom test runner separates unit tests (shared process) from integration tests (per-file isolated process). Mock factory pattern replaces partial mock.module exports. All cache-busting query-string imports and test-isolation-only DI objects removed from production code.
+
+---
+
 ## [0.8.0] — 2026-03-24
 
 ### Added
