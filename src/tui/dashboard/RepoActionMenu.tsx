@@ -13,18 +13,18 @@ type Props = {
 export function RepoActionMenu(props: Props) {
   const wsLabel = () =>
     props.selectionCount > 0
-      ? `[w] Create workspace (${props.selectionCount} repos)`
-      : "[w] Create workspace"
+      ? `Create workspace (${props.selectionCount} repos)`
+      : "Create workspace"
 
   const tplLabel = () =>
     props.selectionCount > 0
-      ? `[t] Create template (${props.selectionCount} repos)`
-      : "[t] Create template"
+      ? `Create template (${props.selectionCount} repos)`
+      : "Create template"
 
   const removeLabel = () =>
     props.selectionCount > 0
-      ? `[r] Remove (${props.selectionCount})`
-      : "[r] Remove"
+      ? `Remove (${props.selectionCount})`
+      : "Remove"
 
   const items = [
     { key: "w", action: "create-workspace" as const, getLabel: () => wsLabel() },
