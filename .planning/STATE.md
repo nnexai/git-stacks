@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Identity & Completion Integrity
-status: Ready to plan
-stopped_at: Phase 34.1 context gathered (discuss mode)
-last_updated: "2026-03-25T04:27:11.572Z"
+status: Ready to execute
+stopped_at: Completed 34.1-01-PLAN.md
+last_updated: "2026-03-25T04:58:17.151Z"
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 34 — completion-audit-forge-issue-coverage
+**Current focus:** Phase 34.1 — fix-bun-mock-module-corruption
 
 ## Current Position
 
-Phase: 35
-Plan: Not started
+Phase: 34.1 (fix-bun-mock-module-corruption) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -48,10 +48,12 @@ Recent decisions affecting current work:
 - [Phase 33]: existsSync guard on unlinkSync(templatePath) handles drifted filename edge case; orphan detected by doctor
 - [Phase 34]: Recursive completion generators handle arbitrary depth via bashCaseBodyRecursive, generateZshSubcmdHelperRecursive, emitFishSubcommands
 - [Phase 34]: Subprocess-based audit tests via Bun.spawn for real CLI verification
+- [Phase 34.1-fix-bun-mock-module-corruption]: Mock factory pattern: each factory returns complete module interface with overrides spread at end — makes partial mocks structurally impossible
+- [Phase 34.1-fix-bun-mock-module-corruption]: Unit/integ test runner separation: unit tests share single bun process, integration tests run per-file in isolated processes to prevent mock.module cache contamination
 
 ### Pending Todos
 
-4 pending todos — see .planning/todos/pending/
+5 pending todos — see .planning/todos/pending/
 
 ### Roadmap Evolution
 
@@ -63,7 +65,7 @@ None — all v0.8.0 blockers resolved.
 
 ## Session Continuity
 
-Last session: 2026-03-25T04:27:11.566Z
-Stopped at: Phase 34.1 context gathered (discuss mode)
-Resume file: .planning/phases/34.1-fix-bun-mock-module-corruption-tests-are-passing-in-isolation-but-not-when-run-together-this-has-been-a-constant-problem-in-the-project-and-requires-a-real-fix/34.1-CONTEXT.md
+Last session: 2026-03-25T04:58:17.146Z
+Stopped at: Completed 34.1-01-PLAN.md
+Resume file: None
 Next action: /gsd:plan-phase 33
