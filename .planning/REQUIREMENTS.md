@@ -22,6 +22,13 @@ Requirements for v0.9.0 Identity & Completion Integrity milestone.
 - [ ] **COMP-04**: User can tab-complete workspace names dynamically in all command arguments that accept `<workspace>` or `[workspace]`
 - [ ] **COMP-05**: User can tab-complete template names dynamically in all command arguments that accept `<template>` or `[template]`
 
+### Test Infrastructure (Phase 34.1 — inserted urgent fix)
+
+- [ ] **TFIX-01**: Full test suite (`bun test tests/`) produces 0 failures when all test files run together in one process
+- [ ] **TFIX-02**: Custom test runner (`bun run test`) separates unit tests (shared process) from integration tests (per-file isolated process) and aggregates results
+- [ ] **TFIX-03**: No cache-busting query-string imports (`await import("@/lib/X?suffix")`) exist in any test file
+- [ ] **TFIX-04**: No test-isolation-only DI objects (`_cwdDetect`, `_resolveWorkspaceDeps`) exist in production source code
+
 ## Future Requirements
 
 ### Identity
@@ -56,12 +63,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMP-03 | Phase 34 | Complete |
 | COMP-04 | Phase 35 | Pending |
 | COMP-05 | Phase 35 | Pending |
+| TFIX-01 | Phase 34.1 | Pending |
+| TFIX-02 | Phase 34.1 | Pending |
+| TFIX-03 | Phase 34.1 | Pending |
+| TFIX-04 | Phase 34.1 | Pending |
 
 **Coverage:**
-- v0.9.0 requirements: 9 total
-- Mapped to phases: 9
-- Unmapped: 0 ✓
+- v0.9.0 requirements: 13 total
+- Mapped to phases: 13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after roadmap creation — all 9 requirements mapped to phases 33-35*
+*Last updated: 2026-03-25 after phase 34.1 planning — added TFIX-01 through TFIX-04*
