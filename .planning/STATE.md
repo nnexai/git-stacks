@@ -59,7 +59,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-1 pending todo — see .planning/todos/pending/
+0 pending todos — see .planning/todos/pending/
 
 ### Roadmap Evolution
 
@@ -69,9 +69,16 @@ Recent decisions affecting current work:
 
 None — all v0.8.0 blockers resolved.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260325-mrf | Fix TUI enter menu showing shortcuts twice and bump version to v0.9.1 | 2026-03-25 | 47c0eb6 | [260325-mrf-fix-tui-enter-menu-showing-shortcuts-twi](./quick/260325-mrf-fix-tui-enter-menu-showing-shortcuts-twi/) |
+
 ## Session Continuity
 
-Last session: 2026-03-25T13:55:46.496Z
-Stopped at: Completed 36-01-PLAN.md
+Last activity: 2026-03-25 - Completed quick task 260325-mrf: Fix TUI enter menu showing shortcuts twice and bump version to v0.9.1
+Last session: 2026-03-25T15:23:19.964Z
+Stopped at: Completed quick task 260325-mrf
 Resume file: None
-Next action: /gsd:plan-phase 33
+Next action: /gsd:quick
