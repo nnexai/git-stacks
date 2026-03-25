@@ -94,7 +94,7 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
 **Milestone Goal:** Make workspace/template identity robust using name fields as canonical keys, and ensure shell completions cover all commands shipped to date.
 
 - [x] **Phase 33: Name-Based Identity** - Workspaces and templates are looked up, operated on, and renamed by their YAML `name` field; filename is storage only (gap closure in progress) (completed 2026-03-25)
-- [ ] **Phase 34: Completion Audit & Forge/Issue Coverage** - All CLI commands audited for completion gaps; forge and issue subcommands have full bash/zsh/fish coverage
+- [x] **Phase 34: Completion Audit & Forge/Issue Coverage** - All CLI commands audited for completion gaps; forge and issue subcommands have full bash/zsh/fish coverage (completed 2026-03-25)
 - [ ] **Phase 35: Dynamic Name Completion** - Workspace and template name arguments resolve dynamically from YAML name fields at completion time
 - [ ] **Phase 36: Release Prep** - Bump version to v0.9.0 in package.json, update CHANGELOG.md with all v0.9.0 changes, and update README.md if new commands or behaviours require documenting
 
@@ -123,10 +123,10 @@ Plans:
   1. A documented audit identifies every command/subcommand present in the Commander.js tree and confirms each has completion coverage or records the gap with a fix applied
   2. User can tab-complete `pr create`, `pr open`, and `pr status` for GitHub, GitLab, and Gitea integrations in bash, zsh, and fish
   3. User can tab-complete `issue link`, `issue unlink`, and `issue open` for GitHub, GitLab, Gitea, and Jira integrations in bash, zsh, and fish
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 34-01-PLAN.md — Extend generators for arbitrary-depth nesting + add 26 integration DYNAMIC_COMPLETIONS entries (TDD)
-- [ ] 34-02-PLAN.md — Programmatic audit test against real program + audit documentation
+- [x] 34-02-PLAN.md — Programmatic audit test against real program + audit documentation
 
 ### Phase 35: Dynamic Name Completion
 **Goal**: Shell completion for workspace and template arguments resolves candidate values dynamically from YAML `name` fields rather than filename globs
@@ -160,6 +160,6 @@ Plans:
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33. Name-Based Identity | v0.9.0 | 2/3 | Complete    | 2026-03-25 |
-| 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 1/2 | In Progress|  |
+| 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 2/2 | Complete   | 2026-03-25 |
 | 35. Dynamic Name Completion | v0.9.0 | 0/? | Not started | - |
 | 36. Release Prep | v0.9.0 | 0/1 | Not started | - |
