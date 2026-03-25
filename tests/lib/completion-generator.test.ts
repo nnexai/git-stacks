@@ -77,6 +77,11 @@ function buildTestProgram(): Command {
     .command("close <name>")
     .description("Close a workspace without deleting it")
 
+  // tmux-like subcommand with apostrophe in description (quote escaping test)
+  program
+    .command("attach <name>")
+    .description("Attach to a workspace's tmux session")
+
   // message command group (for CMPL-05, CMPL-06 testing)
   const messageCmd = new Command("message").description("Workspace notifications")
   messageCmd
@@ -261,6 +266,13 @@ describe("generateZsh", () => {
     const out = generateZsh(p)
     expect(out).toContain("'frobnicate:A new command'")
   })
+
+  test("escapes single quotes in descriptions", () => {
+    const out = generateZsh(buildTestProgram())
+    // Zsh _describe arrays use 'name:description' — apostrophes must be escaped
+    expect(out).toContain("workspace'\\''s tmux session")
+    expect(out).not.toContain("'attach:Attach to a workspace's tmux session'")
+  })
 })
 
 describe("generateFish", () => {
@@ -329,6 +341,14 @@ describe("generateFish", () => {
     const out = generateFish(p)
     expect(out).toContain("-a frobnicate")
     expect(out).toContain("frobnicate")
+  })
+
+  test("escapes single quotes in descriptions", () => {
+    const out = generateFish(buildTestProgram())
+    // The description must not contain a raw unescaped apostrophe inside the -d '...' string
+    // Correct escaping: -d 'Attach to a workspace'\''s tmux session'
+    expect(out).toContain("workspace'\\''s tmux session")
+    expect(out).not.toContain("-d 'Attach to a workspace's tmux session'")
   })
 })
 

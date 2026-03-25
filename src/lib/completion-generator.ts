@@ -102,6 +102,11 @@ interface CommandNode {
   firstArgRequired: boolean
 }
 
+/** Escape single quotes for embedding in single-quoted shell strings: ' -> '\'' */
+function shellEscapeSingleQuote(s: string): string {
+  return s.replace(/'/g, "'\\''")
+}
+
 function buildNode(cmd: Command, parentPath: string): CommandNode {
   const name = cmd.name()
   const path = parentPath ? `${parentPath}.${name}` : name
@@ -367,15 +372,15 @@ function zshOptionSpec(opt: OptionInfo, id: string, commandPath = ""): string {
   const flagDynamic = resolveFlagCompletion(commandPath, flagName)
   if (enumValues) {
     const valName = flagName.slice(2) // "strategy"
-    return `'${opt.long}[${opt.description}]:${valName}:(${enumValues.join(" ")})'`
+    return `'${opt.long}[${shellEscapeSingleQuote(opt.description)}]:${valName}:(${enumValues.join(" ")})'`
   } else if (flagDynamic) {
     const helper = flagDynamic === "repo" ? `_${id}_repos`
       : flagDynamic === "template" ? `_${id}_templates`
       : `_${id}_workspaces`
     const valName = flagName.slice(2)
-    return `'${opt.long}[${opt.description}]:${valName}:${helper}'`
+    return `'${opt.long}[${shellEscapeSingleQuote(opt.description)}]:${valName}:${helper}'`
   } else {
-    return `'${opt.long}[${opt.description}]'`
+    return `'${opt.long}[${shellEscapeSingleQuote(opt.description)}]'`
   }
 }
 
@@ -446,7 +451,7 @@ function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcNam
   out += `    local subcmds\n`
   out += `    subcmds=(\n`
   for (const sub of subcmds) {
-    out += `      '${sub.name}:${sub.description}'\n`
+    out += `      '${sub.name}:${shellEscapeSingleQuote(sub.description)}'\n`
   }
   out += `    )\n`
   out += `    _describe 'subcommand' subcmds\n`
@@ -552,7 +557,7 @@ export function generateZsh(program: Command): string {
   out += "  local cmds\n"
   out += "  cmds=(\n"
   for (const node of nodes) {
-    out += `    '${node.name}:${node.description}'\n`
+    out += `    '${node.name}:${shellEscapeSingleQuote(node.description)}'\n`
   }
   out += "  )\n"
   out += "  _describe 'command' cmds\n"
@@ -606,7 +611,7 @@ function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name
     lines.push(`\n# ${chain.join(" ")} subcommands\n`)
     for (const sub of node.subcommands) {
       lines.push(`complete -c ${name} -f -n '${seenParts}; and ${notSeen}' \\\n`)
-      lines.push(`  -a '${sub.name}' -d '${sub.description}'\n`)
+      lines.push(`  -a '${sub.name}' -d '${shellEscapeSingleQuote(sub.description)}'\n`)
     }
 
     // Flags for subcommands
@@ -615,7 +620,7 @@ function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name
       lines.push(`\n# Flags for ${chain.join(" ")} ${sub.name}\n`)
       for (const opt of sub.options) {
         const longName = opt.long.slice(2)
-        lines.push(`complete -c ${name} -f -n '${seenParts}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -d '${opt.description}'\n`)
+        lines.push(`complete -c ${name} -f -n '${seenParts}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -d '${shellEscapeSingleQuote(opt.description)}'\n`)
       }
     }
 
@@ -702,7 +707,7 @@ export function generateFish(program: Command): string {
   out += "# Top-level completions\n"
   for (const node of nodes) {
     const namePadded = node.name.padEnd(10)
-    out += `complete -c ${name} -f -n __${id}_no_subcommand -a ${namePadded} -d '${node.description}'\n`
+    out += `complete -c ${name} -f -n __${id}_no_subcommand -a ${namePadded} -d '${shellEscapeSingleQuote(node.description)}'\n`
   }
 
   // Workspace dynamic completions — group commands into for loop
@@ -720,7 +725,7 @@ export function generateFish(program: Command): string {
     out += `\n# Flags for ${node.name}\n`
     for (const opt of node.options) {
       const longName = opt.long.slice(2)  // strip "--"
-      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName}  -d '${opt.description}'\n`
+      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName}  -d '${shellEscapeSingleQuote(opt.description)}'\n`
     }
   }
 
