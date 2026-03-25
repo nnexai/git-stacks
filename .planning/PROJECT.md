@@ -123,16 +123,15 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Dashboard linked issues fix — workspace-only data, no global config fallback — v0.8.0 Phase 30
 - ✓ CWD auto-detection for all 4 tracker integrations — optional [workspace] on link/unlink/open — v0.8.0 Phase 31
 - ✓ GitLab branch '/' investigation — glab CLI bug confirmed, documented with version guidance — v0.8.0 Phase 32
+- ✓ Name-based identity — name field is canonical for workspaces and templates; rename keeps name+filename in sync; TUI/CLI reverse-lookups use name — v0.9.0 Phase 33
+- ✓ Shell completion audit — full bash/zsh/fish coverage for all commands including forge/issue subcommands — v0.9.0 Phase 34
+- ✓ Test isolation framework — custom test runner, complete mock factories, zero cache-busting imports — v0.9.0 Phase 34.1
+- ✓ Dynamic name completion — shell completion resolves workspace/template names from YAML `name` fields instead of filename globs — v0.9.0 Phase 35
 
 ### Active
 
-- [ ] Name field is canonical identity for workspaces and templates (not filename)
-- [ ] Rename keeps name field and filename in sync; no drift
-- [ ] TUI and CLI reverse-lookups use name field
-- [ ] Autocompletion resolves workspace/template names from YAML name fields
 - [ ] Shell completion audit — all commands covered (bash/zsh/fish)
 - [ ] Forge/issue subcommands have completion coverage (`pr create/open/status`, `issue link/unlink/open`)
-- [ ] Dynamic completion for workspace names, template names, repo names in forge/issue args
 
 ### Out of Scope
 
