@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Identity & Completion Integrity
 status: Ready to execute
-stopped_at: Completed 34.1-02-PLAN.md
-last_updated: "2026-03-25T07:58:01.367Z"
+stopped_at: Completed 34.1-03-PLAN.md
+last_updated: "2026-03-25T13:01:36.770Z"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 34.1 (fix-bun-mock-module-corruption) — EXECUTING
-Plan: 3 of 3
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -51,6 +51,8 @@ Recent decisions affecting current work:
 - [Phase 34.1-fix-bun-mock-module-corruption]: Mock factory pattern: each factory returns complete module interface with overrides spread at end — makes partial mocks structurally impossible
 - [Phase 34.1-fix-bun-mock-module-corruption]: Unit/integ test runner separation: unit tests share single bun process, integration tests run per-file in isolated processes to prevent mock.module cache contamination
 - [Phase 34.1-fix-bun-mock-module-corruption]: Factory helper usage pattern: mock.module calls use makeXxxMock() from helpers.ts with test-specific overrides spread at end — makes partial mocks structurally impossible
+- [Phase 34.1-fix-bun-mock-module-corruption]: mock.module detection for test classification: any test file containing mock.module() runs in isolated process — structurally correct fix
+- [Phase 34.1-fix-bun-mock-module-corruption]: Production DI objects (_cwdDetect, _resolveWorkspaceDeps) removed: factory helpers + isolated process runner make them unnecessary
 
 ### Pending Todos
 
@@ -66,7 +68,7 @@ None — all v0.8.0 blockers resolved.
 
 ## Session Continuity
 
-Last session: 2026-03-25T07:58:01.363Z
-Stopped at: Completed 34.1-02-PLAN.md
+Last session: 2026-03-25T13:01:36.768Z
+Stopped at: Completed 34.1-03-PLAN.md
 Resume file: None
 Next action: /gsd:plan-phase 33

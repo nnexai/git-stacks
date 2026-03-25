@@ -95,7 +95,7 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
 
 - [x] **Phase 33: Name-Based Identity** - Workspaces and templates are looked up, operated on, and renamed by their YAML `name` field; filename is storage only (gap closure in progress) (completed 2026-03-25)
 - [x] **Phase 34: Completion Audit & Forge/Issue Coverage** - All CLI commands audited for completion gaps; forge and issue subcommands have full bash/zsh/fish coverage (completed 2026-03-25)
-- [ ] **Phase 34.1: Test Isolation Framework** - Custom test runner + complete mock factories + cache-busting and DI hack removal (INSERTED - urgent)
+- [x] **Phase 34.1: Test Isolation Framework** - Custom test runner + complete mock factories + cache-busting and DI hack removal (INSERTED - urgent) (completed 2026-03-25)
 - [ ] **Phase 35: Dynamic Name Completion** - Workspace and template name arguments resolve dynamically from YAML name fields at completion time
 - [ ] **Phase 36: Release Prep** - Bump version to v0.9.0 in package.json, update CHANGELOG.md with all v0.9.0 changes, and update README.md if new commands or behaviours require documenting
 
@@ -138,11 +138,11 @@ Plans:
   2. `bun run test` invokes the custom runner, aggregates results, and exits non-zero on any failure
   3. No cache-busting query-string imports exist in any test file
   4. No `_cwdDetect` or `_resolveWorkspaceDeps` DI objects exist in production code
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 34.1-01-PLAN.md — Test runner script + complete mock factory helpers
 - [x] 34.1-02-PLAN.md — Surgical root cause fixes (replace partial mocks with factory-based complete mocks)
-- [ ] 34.1-03-PLAN.md — Cache-busting removal + DI object removal from production code
+- [x] 34.1-03-PLAN.md — Cache-busting removal + DI object removal from production code
 
 ### Phase 35: Dynamic Name Completion
 **Goal**: Shell completion for workspace and template arguments resolves candidate values dynamically from YAML `name` fields rather than filename globs
@@ -177,6 +177,6 @@ Plans:
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33. Name-Based Identity | v0.9.0 | 2/3 | Complete    | 2026-03-25 |
 | 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 2/2 | Complete    | 2026-03-25 |
-| 34.1. Test Isolation Framework | v0.9.0 | 2/3 | In Progress|  |
+| 34.1. Test Isolation Framework | v0.9.0 | 3/3 | Complete   | 2026-03-25 |
 | 35. Dynamic Name Completion | v0.9.0 | 0/? | Not started | - |
 | 36. Release Prep | v0.9.0 | 0/1 | Not started | - |
