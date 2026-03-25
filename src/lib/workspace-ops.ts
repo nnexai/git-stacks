@@ -421,7 +421,7 @@ export async function removeWorkspace(
   opts: { force?: boolean; dryRun?: boolean; captured?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!workspaceExists(name)) {
+  if (!workspaceExists(name) && !existsSync(workspacePath(name))) {
     return { ok: false, error: `Workspace '${name}' not found.` }
   }
 
