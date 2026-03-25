@@ -9,6 +9,7 @@ All notable changes to `git-stacks` are documented here.
 ### Fixed
 
 - **TUI repo action menu** — keyboard shortcuts no longer appear doubled in the repo context menu (e.g., `[r] [r] Remove` now correctly shows `[r] Remove`).
+- **Fish/zsh shell completions** — descriptions containing apostrophes (e.g., "workspace's") no longer cause `complete: too many arguments` errors when sourcing completions.
 
 ---
 
