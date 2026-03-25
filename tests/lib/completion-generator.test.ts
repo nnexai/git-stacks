@@ -674,3 +674,79 @@ describe("completion audit - real program", () => {
     expect(integrationSection).toContain(".config/git-stacks/workspaces")
   })
 })
+
+describe("dynamic name completion - YAML name field extraction", () => {
+  describe("bash", () => {
+    test("workspace lookup uses grep on name field, not ls on filenames", () => {
+      const out = generateBash(buildTestProgram())
+      // New pattern: grep name: from YAML files
+      expect(out).toContain("grep -h '^name:'")
+      expect(out).toContain(".config/git-stacks/workspaces/*.yml")
+      // Old pattern must be gone
+      expect(out).not.toContain('ls "$HOME/.config/git-stacks/workspaces"')
+    })
+
+    test("template lookup uses grep on name field, not ls on filenames", () => {
+      const out = generateBash(buildTestProgram())
+      // New pattern: grep name: from YAML files
+      expect(out).toContain("grep -h '^name:'")
+      expect(out).toContain(".config/git-stacks/templates/*.yml")
+      // Old pattern must be gone
+      expect(out).not.toContain('ls "$HOME/.config/git-stacks/templates"')
+    })
+
+    test("repo lookup unchanged (still uses grep on registry.yml)", () => {
+      const out = generateBash(buildTestProgram())
+      expect(out).toContain("grep '^- name:'")
+      expect(out).toContain("registry.yml")
+    })
+  })
+
+  describe("zsh", () => {
+    test("_workspaces helper uses grep on name field, not glob", () => {
+      const out = generateZsh(buildTestProgram())
+      expect(out).toContain("grep -h '^name:'")
+      expect(out).toContain(".config/git-stacks/workspaces/*.yml")
+      // Old glob pattern must be gone
+      expect(out).not.toContain("*.yml(N:t:r)")
+    })
+
+    test("_templates helper uses grep on name field, not glob", () => {
+      const out = generateZsh(buildTestProgram())
+      expect(out).toContain("grep -h '^name:'")
+      expect(out).toContain(".config/git-stacks/templates/*.yml")
+      // Old glob pattern must be gone (checked separately from workspaces)
+      expect(out).not.toContain("*.yml(N:t:r)")
+    })
+
+    test("_repos helper unchanged (still uses grep on registry.yml)", () => {
+      const out = generateZsh(buildTestProgram())
+      expect(out).toContain("grep '^- name:'")
+      expect(out).toContain("registry.yml")
+    })
+  })
+
+  describe("fish", () => {
+    test("__workspaces uses grep on name field, not ls on filenames", () => {
+      const out = generateFish(buildTestProgram())
+      expect(out).toContain("grep -h '^name:'")
+      expect(out).toContain(".config/git-stacks/workspaces/*.yml")
+      // Old ls pattern must be gone
+      expect(out).not.toContain("ls $ws_dir | sed")
+    })
+
+    test("__templates uses grep on name field, not ls on filenames", () => {
+      const out = generateFish(buildTestProgram())
+      expect(out).toContain("grep -h '^name:'")
+      expect(out).toContain(".config/git-stacks/templates/*.yml")
+      // Old ls pattern must be gone
+      expect(out).not.toContain("ls $templates_dir | sed")
+    })
+
+    test("__repos unchanged (still uses grep on registry.yml)", () => {
+      const out = generateFish(buildTestProgram())
+      expect(out).toContain("grep '^- name:'")
+      expect(out).toContain("registry.yml")
+    })
+  })
+})
