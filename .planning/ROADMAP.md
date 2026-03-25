@@ -97,7 +97,7 @@ See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md) for full detail
 - [x] **Phase 34: Completion Audit & Forge/Issue Coverage** - All CLI commands audited for completion gaps; forge and issue subcommands have full bash/zsh/fish coverage (completed 2026-03-25)
 - [x] **Phase 34.1: Test Isolation Framework** - Custom test runner + complete mock factories + cache-busting and DI hack removal (INSERTED - urgent) (completed 2026-03-25)
 - [x] **Phase 35: Dynamic Name Completion** - Workspace and template name arguments resolve dynamically from YAML name fields at completion time (completed 2026-03-25)
-- [ ] **Phase 36: Release Prep** - Bump version to v0.9.0 in package.json, update CHANGELOG.md with all v0.9.0 changes, and update README.md if new commands or behaviours require documenting
+- [x] **Phase 36: Release Prep** - Bump version to v0.9.0 in package.json, update CHANGELOG.md with all v0.9.0 changes, and update README.md if new commands or behaviours require documenting (completed 2026-03-25)
 
 ## Phase Details
 
@@ -165,9 +165,9 @@ Plans:
   1. `package.json` version field is `0.9.0`
   2. `CHANGELOG.md` has a `## [0.9.0]` section listing all user-facing changes from phases 33-35
   3. `README.md` reflects any new or renamed commands (template rename, doctor drift output, dynamic completion) introduced in this milestone
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 36-01-PLAN.md — Version bump, CHANGELOG, README updates, TUI dashboard integration filtering fix
+- [x] 36-01-PLAN.md — Version bump, CHANGELOG, README updates, TUI dashboard integration filtering fix
 
 ## Progress
 
@@ -183,4 +183,4 @@ Plans:
 | 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 2/2 | Complete    | 2026-03-25 |
 | 34.1. Test Isolation Framework | v0.9.0 | 3/3 | Complete    | 2026-03-25 |
 | 35. Dynamic Name Completion | v0.9.0 | 1/1 | Complete    | 2026-03-25 |
-| 36. Release Prep | v0.9.0 | 0/1 | Not started | - |
+| 36. Release Prep | v0.9.0 | 1/1 | Complete   | 2026-03-25 |

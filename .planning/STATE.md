@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Identity & Completion Integrity
-status: Ready to plan
-stopped_at: Completed 35-01-PLAN.md
-last_updated: "2026-03-25T13:40:46.995Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 36-01-PLAN.md
+last_updated: "2026-03-25T13:55:46.498Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 9
-  completed_plans: 9
+  completed_phases: 5
+  total_plans: 10
+  completed_plans: 10
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 35 — dynamic-name-completion
+**Current focus:** Phase 36 — release-prep
 
 ## Current Position
 
-Phase: 36
-Plan: Not started
+Phase: 36 (release-prep) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Recent decisions affecting current work:
 - [Phase 34.1-fix-bun-mock-module-corruption]: Production DI objects (_cwdDetect, _resolveWorkspaceDeps) removed: factory helpers + isolated process runner make them unnecessary
 - [Phase 35]: grep -h '^name:' with quoted dir variable and /*.yml glob is the canonical extraction pattern for all three shells
 - [Phase 35]: Shell completion test assertions use shell-specific substrings matching actual generated paths (full path for bash, variable name for zsh/fish)
+- [Phase 36]: TUI integration display: hide globally-disabled integrations without override to reduce clutter; red X only for conscious disable decisions
 
 ### Pending Todos
 
@@ -70,7 +71,7 @@ None — all v0.8.0 blockers resolved.
 
 ## Session Continuity
 
-Last session: 2026-03-25T13:35:11.307Z
-Stopped at: Completed 35-01-PLAN.md
+Last session: 2026-03-25T13:55:46.496Z
+Stopped at: Completed 36-01-PLAN.md
 Resume file: None
 Next action: /gsd:plan-phase 33
