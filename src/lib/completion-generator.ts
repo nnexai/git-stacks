@@ -131,7 +131,7 @@ function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string
   if (type === "workspace") {
     return (
       `${indent}local names\n` +
-      `${indent}names=$(ls "$HOME/.config/${name}/workspaces" 2>/dev/null | sed 's/\\.yml$//')\n` +
+      `${indent}names=$(grep -h '^name:' "$HOME/.config/${name}/workspaces"/*.yml 2>/dev/null | sed 's/^name:[[:space:]]*//')\n` +
       `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
     )
   }
@@ -145,7 +145,7 @@ function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string
   if (type === "template") {
     return (
       `${indent}local names\n` +
-      `${indent}names=$(ls "$HOME/.config/${name}/templates" 2>/dev/null | sed 's/\\.yml$//')\n` +
+      `${indent}names=$(grep -h '^name:' "$HOME/.config/${name}/templates"/*.yml 2>/dev/null | sed 's/^name:[[:space:]]*//')\n` +
       `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
     )
   }
@@ -560,7 +560,8 @@ export function generateZsh(program: Command): string {
   out += "\n"
   out += `_${id}_workspaces() {\n`
   out += `  local ws_dir="$HOME/.config/${name}/workspaces"\n`
-  out += `  local workspaces=(\${ws_dir}/*.yml(N:t:r))\n`
+  out += `  local workspaces\n`
+  out += `  workspaces=($(grep -h '^name:' "$ws_dir"/*.yml 2>/dev/null | sed 's/^name:[[:space:]]*//'))\n`
   out += `  _values 'workspace' $workspaces\n`
   out += `}\n`
   out += "\n"
@@ -572,7 +573,8 @@ export function generateZsh(program: Command): string {
   out += "\n"
   out += `_${id}_templates() {\n`
   out += `  local templates_dir="$HOME/.config/${name}/templates"\n`
-  out += `  local templates=(\${templates_dir}/*.yml(N:t:r))\n`
+  out += `  local templates\n`
+  out += `  templates=($(grep -h '^name:' "$templates_dir"/*.yml 2>/dev/null | sed 's/^name:[[:space:]]*//'))\n`
   out += `  _values 'template' $templates\n`
   out += `}\n`
 
@@ -675,7 +677,7 @@ export function generateFish(program: Command): string {
   out += `function __${id}_workspaces\n`
   out += `  set -l ws_dir "$HOME/.config/${name}/workspaces"\n`
   out += "  if test -d $ws_dir\n"
-  out += "    ls $ws_dir | sed 's/\\.yml$//'\n"
+  out += `    grep -h '^name:' "$ws_dir"/*.yml 2>/dev/null | sed 's/^name:[[:space:]]*//' \n`
   out += "  end\n"
   out += "end\n"
   out += "\n"
@@ -689,7 +691,7 @@ export function generateFish(program: Command): string {
   out += `function __${id}_templates\n`
   out += `  set -l templates_dir "$HOME/.config/${name}/templates"\n`
   out += "  if test -d $templates_dir\n"
-  out += "    ls $templates_dir | sed 's/\\.yml$//'\n"
+  out += `    grep -h '^name:' "$templates_dir"/*.yml 2>/dev/null | sed 's/^name:[[:space:]]*//' \n`
   out += "  end\n"
   out += "end\n"
   out += "\n"

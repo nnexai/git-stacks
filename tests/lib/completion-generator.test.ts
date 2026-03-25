@@ -681,7 +681,7 @@ describe("dynamic name completion - YAML name field extraction", () => {
       const out = generateBash(buildTestProgram())
       // New pattern: grep name: from YAML files
       expect(out).toContain("grep -h '^name:'")
-      expect(out).toContain(".config/git-stacks/workspaces/*.yml")
+      expect(out).toContain('git-stacks/workspaces"/*.yml')
       // Old pattern must be gone
       expect(out).not.toContain('ls "$HOME/.config/git-stacks/workspaces"')
     })
@@ -690,7 +690,7 @@ describe("dynamic name completion - YAML name field extraction", () => {
       const out = generateBash(buildTestProgram())
       // New pattern: grep name: from YAML files
       expect(out).toContain("grep -h '^name:'")
-      expect(out).toContain(".config/git-stacks/templates/*.yml")
+      expect(out).toContain('git-stacks/templates"/*.yml')
       // Old pattern must be gone
       expect(out).not.toContain('ls "$HOME/.config/git-stacks/templates"')
     })
@@ -706,7 +706,8 @@ describe("dynamic name completion - YAML name field extraction", () => {
     test("_workspaces helper uses grep on name field, not glob", () => {
       const out = generateZsh(buildTestProgram())
       expect(out).toContain("grep -h '^name:'")
-      expect(out).toContain(".config/git-stacks/workspaces/*.yml")
+      // zsh helper uses $ws_dir variable — verify it greps from *.yml
+      expect(out).toContain('"$ws_dir"/*.yml')
       // Old glob pattern must be gone
       expect(out).not.toContain("*.yml(N:t:r)")
     })
@@ -714,7 +715,8 @@ describe("dynamic name completion - YAML name field extraction", () => {
     test("_templates helper uses grep on name field, not glob", () => {
       const out = generateZsh(buildTestProgram())
       expect(out).toContain("grep -h '^name:'")
-      expect(out).toContain(".config/git-stacks/templates/*.yml")
+      // zsh helper uses $templates_dir variable — verify it greps from *.yml
+      expect(out).toContain('"$templates_dir"/*.yml')
       // Old glob pattern must be gone (checked separately from workspaces)
       expect(out).not.toContain("*.yml(N:t:r)")
     })
@@ -730,7 +732,8 @@ describe("dynamic name completion - YAML name field extraction", () => {
     test("__workspaces uses grep on name field, not ls on filenames", () => {
       const out = generateFish(buildTestProgram())
       expect(out).toContain("grep -h '^name:'")
-      expect(out).toContain(".config/git-stacks/workspaces/*.yml")
+      // fish helper uses $ws_dir variable — verify it greps from *.yml
+      expect(out).toContain('"$ws_dir"/*.yml')
       // Old ls pattern must be gone
       expect(out).not.toContain("ls $ws_dir | sed")
     })
@@ -738,7 +741,8 @@ describe("dynamic name completion - YAML name field extraction", () => {
     test("__templates uses grep on name field, not ls on filenames", () => {
       const out = generateFish(buildTestProgram())
       expect(out).toContain("grep -h '^name:'")
-      expect(out).toContain(".config/git-stacks/templates/*.yml")
+      // fish helper uses $templates_dir variable — verify it greps from *.yml
+      expect(out).toContain('"$templates_dir"/*.yml')
       // Old ls pattern must be gone
       expect(out).not.toContain("ls $templates_dir | sed")
     })
