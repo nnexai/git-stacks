@@ -178,5 +178,5 @@ Plans:
 | 33. Name-Based Identity | v0.9.0 | 2/3 | Complete    | 2026-03-25 |
 | 34. Completion Audit & Forge/Issue Coverage | v0.9.0 | 2/2 | Complete    | 2026-03-25 |
 | 34.1. Test Isolation Framework | v0.9.0 | 3/3 | Complete    | 2026-03-25 |
-| 35. Dynamic Name Completion | v0.9.0 | 1/1 | Complete   | 2026-03-25 |
+| 35. Dynamic Name Completion | v0.9.0 | 1/1 | Complete    | 2026-03-25 |
 | 36. Release Prep | v0.9.0 | 0/1 | Not started | - |
