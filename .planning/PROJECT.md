@@ -8,7 +8,16 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State — v0.8.0 shipped (2026-03-24)
+## Current State — v0.9.0 shipped (2026-03-25)
+
+### What shipped in v0.9.0
+
+- **Name-based identity** — workspace and template `name` field is canonical identity; filename is storage only; all lookups, operations, and TUI display use the name field; rename keeps name+filename in sync
+- **Template rename cascade** — `template rename` updates all workspace YAML files referencing the old template name
+- **Dynamic shell completion** — tab-completion for workspace/template arguments reads YAML `name` fields instead of filename globs; works in bash, zsh, and fish
+- **Shell completion audit** — full completion coverage for all commands including forge (`pr create/open/status`) and issue (`link/unlink/open`) subcommands across all shells
+- **TUI integration display fix** — dashboard hides globally disabled integrations that have no workspace/template override
+- **Test isolation framework** — custom test runner separating unit/integration modes, complete mock factories, zero cache-busting imports
 
 ### What shipped in v0.8.0
 
@@ -130,8 +139,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-- [ ] Shell completion audit — all commands covered (bash/zsh/fish)
-- [ ] Forge/issue subcommands have completion coverage (`pr create/open/status`, `issue link/unlink/open`)
+(No active requirements — v0.9.0 milestone complete)
 
 ### Out of Scope
 
@@ -146,16 +154,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 
-## Current Milestone: v0.9.0 Identity & Completion Integrity
+## Completed Milestone: v0.9.0 Identity & Completion Integrity (2026-03-25)
 
 **Goal:** Make workspace/template identity robust using name fields as canonical keys, and ensure shell completions cover all commands shipped to date.
 
-**Target features:**
-- Name-based identity everywhere (workspace + template YAML `name` is canonical; filename is storage only)
-- Rename correctness (rename keeps name field and filename in sync; reverse-lookups use name)
-- Full shell completion audit + fix across all commands (bash/zsh/fish)
-- Forge/issue completion coverage (`pr create/open/status`, `issue link/unlink/open` across all 4 integrations)
-- Dynamic value completion (workspace names, template names, repo names in forge/issue args)
+**Shipped:** All target features delivered across 6 phases (33-36, plus 34.1 test isolation insert).
 
 ## Next Milestone Goals
 
@@ -168,7 +171,7 @@ Candidates for v1.0.0+:
 
 ## Versioning
 
-**Current release:** `v0.8.0`
+**Current release:** `v0.9.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
