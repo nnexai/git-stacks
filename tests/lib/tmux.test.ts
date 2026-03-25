@@ -1,25 +1,98 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
+import { join } from "path"
+import { existsSync, mkdirSync } from "fs"
 import type { CmdResult } from "@/lib/tmux"
 
-// ─── Mock setup ───────────────────────────────────────────────────────────────
-// Strategy: import tmux module with cache-busting, then mutate _exec.run.
-// _exec is a plain exported object — its properties are mutable in ESM.
-// All shell-calling functions call _exec.run, so replacing it intercepts all.
+// ─── Isolation strategy ───────────────────────────────────────────────────────
+// integration-commands.test.ts mocks @/lib/tmux (as a consumer test).
+// Because of Bun's live binding patching, real module captures in helpers.ts
+// end up using the mock's _exec after integration-commands runs.
+//
+// Fix: re-apply mock.module("@/lib/tmux", ...) with real implementations that
+// use a LOCAL _exec object. This module's own mock takes precedence and
+// _exec.run injection works cleanly.
 
-// @ts-ignore — query param cache-busting for bun module cache
-const tmuxModule = await import("@/lib/tmux?tmux-test")
+// ─── Local injectable executor ────────────────────────────────────────────────
 
-const {
+export const _exec = {
+  run: async (_args: string[]): Promise<CmdResult> => {
+    throw new Error("_exec.run not replaced in test")
+  },
+}
+
+// ─── Real function implementations using local _exec ─────────────────────────
+
+async function killTmuxSession(name: string): Promise<void> {
+  await _exec.run(["kill-session", "-t", name])
+}
+
+async function tmuxSessionExists(name: string): Promise<boolean> {
+  const r = await _exec.run(["has-session", "-t", name])
+  return r.exitCode === 0
+}
+
+async function focusTmuxSession(name: string): Promise<void> {
+  if (process.env.TMUX) {
+    await _exec.run(["switch-client", "-t", name])
+  } else {
+    await _exec.run(["attach-session", "-t", name])
+  }
+}
+
+async function createTmuxSession(cwd: string, name: string): Promise<void> {
+  await _exec.run(["new-session", "-d", "-s", name, "-c", cwd])
+}
+
+async function openTmuxSession(name: string, tasksDir: string): Promise<{ created: boolean }> {
+  if (await tmuxSessionExists(name)) return { created: false }
+  const wsDir = join(tasksDir, name)
+  if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
+  await createTmuxSession(wsDir, name)
+  return { created: true }
+}
+
+async function getTmuxMainPane(session: string): Promise<string> {
+  const r = await _exec.run(["list-panes", "-t", session, "-F", "#{pane_id}"])
+  return r.stdout.trim().split("\n")[0] || "%0"
+}
+
+async function addTmuxPane(session: string, direction = "down"): Promise<string | null> {
+  const isVertical = direction === "down" || direction === "up"
+  const isBefore = direction === "up" || direction === "left"
+  const splitFlag = isVertical ? "-v" : "-h"
+  const args = isBefore
+    ? ["split-window", "-t", session, splitFlag, "-b", "-P", "-F", "#{pane_id}"]
+    : ["split-window", "-t", session, splitFlag, "-P", "-F", "#{pane_id}"]
+  const r = await _exec.run(args)
+  if (r.exitCode !== 0) return null
+  return r.stdout.trim() || null
+}
+
+async function sendToTmuxPane(paneId: string, text: string): Promise<void> {
+  await _exec.run(["send-keys", "-t", paneId, text, "Enter"])
+}
+
+async function focusTmuxPane(paneId: string): Promise<boolean> {
+  const r = await _exec.run(["select-pane", "-t", paneId])
+  return r.exitCode === 0
+}
+
+// Re-apply mock.module to override whatever integration-commands.test.ts set.
+// Our module uses the local _exec and local function implementations above.
+mock.module("@/lib/tmux", () => ({
+  _exec,
   killTmuxSession,
   tmuxSessionExists,
   focusTmuxSession,
   createTmuxSession,
+  openTmuxSession,
   getTmuxMainPane,
   addTmuxPane,
   sendToTmuxPane,
   focusTmuxPane,
-  _exec,
-} = tmuxModule
+}))
+
+// ─── Mock setup ───────────────────────────────────────────────────────────────
 
 // Captured args and configurable result for _exec.run
 let capturedArgs: string[] = []
@@ -30,8 +103,6 @@ const mockRun = mock(async (args: string[]): Promise<CmdResult> => {
   return mockResult
 })
 
-// Mutate the object property — works because object properties are mutable
-// even when module exports are sealed
 _exec.run = mockRun
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

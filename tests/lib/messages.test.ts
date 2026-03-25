@@ -5,8 +5,7 @@ import { useIsolatedConfig } from "../helpers"
 
 const isolated = useIsolatedConfig("messages-test")
 
-// @ts-ignore — cache-busting for isolated paths mock
-const { appendMessage, listMessages, clearMessages, pushToSocket } = await import("@/lib/messages?msg-test")
+const { appendMessage, listMessages, clearMessages, pushToSocket } = await import("@/lib/messages")
 
 afterAll(() => isolated.cleanup())
 

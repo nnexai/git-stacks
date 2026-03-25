@@ -119,11 +119,7 @@ mock.module("@/lib/integrations/index", () => ({
   integrations: fakeIntegrations,
 }))
 
-// Use query-parameter cache-busting to force fresh load with our mocked dependencies
-const { runIntegrationGenerate, runIntegrations } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/runner?unit-test"
-)
+const { runIntegrationGenerate, runIntegrations } = await import("@/lib/integrations/runner")
 
 // Fake context
 const fakeCtx: IntegrationContext = {

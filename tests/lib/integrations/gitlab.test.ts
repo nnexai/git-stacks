@@ -50,11 +50,7 @@ mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
 }))
 
-// Cache-busting import
-const { _exec, gitlabIntegration } = await import(
-  // @ts-ignore — query param cache-busting
-  "@/lib/integrations/gitlab?unit-test-gl2"
-)
+const { _exec, gitlabIntegration } = await import("@/lib/integrations/gitlab")
 
 // --- Override process.exit to prevent test runner from exiting ---
 

@@ -1,13 +1,123 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
-import type { HookOutputLine } from "@/lib/lifecycle"
+import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
+import { spawn } from "bun"
+import type { HookOutputLine, HookResult, SpawnHandle } from "@/lib/lifecycle"
+
+// ─── Isolation strategy ───────────────────────────────────────────────────────
+// integration-commands.test.ts mocks @/lib/lifecycle (as a consumer test).
+// Because of Bun's live binding patching, the realRunHooksCaptured capture in
+// helpers.ts ends up using the mock's _exec after integration-commands runs.
+//
+// Fix: re-apply mock.module("@/lib/lifecycle", ...) at the start of this file
+// with real implementations that use a LOCAL _exec object. This file's own
+// mock takes precedence and the injection tests can replace _exec.spawn cleanly.
+
+// Local injectable executor — real Bun.spawn by default
+const _exec = {
+  spawn: (args: {
+    cmd: string[]
+    cwd: string
+    env: Record<string, string>
+    stdout: "inherit" | "pipe"
+    stderr: "inherit" | "pipe"
+  }): SpawnHandle => {
+    const proc = spawn(args.cmd, {
+      cwd: args.cwd,
+      env: args.env,
+      stdout: args.stdout,
+      stderr: args.stderr,
+    })
+    return {
+      exited: proc.exited,
+      stdout: args.stdout === "pipe" ? (proc.stdout ?? null) : null,
+      stderr: args.stderr === "pipe" ? (proc.stderr ?? null) : null,
+    }
+  },
+}
+
+async function runHooks(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  abortOnFailure = true
+): Promise<void> {
+  if (!commands || commands.length === 0) return
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+  for (const cmd of commands) {
+    const handle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "inherit",
+      stderr: "inherit",
+    })
+    const exitCode = await handle.exited
+    if (abortOnFailure && exitCode !== 0) {
+      throw new Error(`Hook failed (exit ${exitCode}): ${cmd}`)
+    }
+  }
+}
+
+async function runHooksCaptured(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  onOutput: (output: HookOutputLine) => void,
+  abortOnFailure = true
+): Promise<HookResult[]> {
+  if (!commands || commands.length === 0) return []
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+  const results: HookResult[] = []
+  for (const cmd of commands) {
+    const handle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const readStream = async (
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      stream: "stdout" | "stderr"
+    ) => {
+      const decoder = new TextDecoder()
+      let buf = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          if (buf) { onOutput({ line: buf, stream }); buf = "" }
+          break
+        }
+        buf += decoder.decode(value)
+        const lines = buf.split("\n")
+        buf = lines.pop() ?? ""
+        for (const line of lines) {
+          if (line) onOutput({ line, stream })
+        }
+      }
+    }
+    await Promise.all([
+      readStream(handle.stdout!.getReader(), "stdout"),
+      readStream(handle.stderr!.getReader(), "stderr"),
+    ])
+    const exitCode = await handle.exited
+    const result: HookResult = { exitCode, failed: exitCode !== 0, command: cmd }
+    results.push(result)
+    if (abortOnFailure && exitCode !== 0) break
+  }
+  return results
+}
+
+// Re-apply mock.module to override whatever integration-commands.test.ts set.
+// Our module uses the local _exec and local implementations above.
+mock.module("@/lib/lifecycle", () => ({
+  _exec,
+  runHooks,
+  runHooksCaptured,
+}))
 
 // ─── Real-shell tests ─────────────────────────────────────────────────────────
-// Cache-busting import avoids contamination from mock.module("@/lib/lifecycle")
-// used by consumer tests (integration-commands.test.ts).
-
-// @ts-ignore — query param cache-busting for bun module cache
-const lifecycleReal = await import("@/lib/lifecycle?lifecycle-real")
-const { runHooksCaptured } = lifecycleReal
+// These use the local runHooksCaptured which calls real Bun.spawn via _exec.spawn.
+// _exec.spawn is real by default; injection tests will swap it in beforeEach.
 
 describe("runHooksCaptured", () => {
   test("captures stdout lines via callback", async () => {
@@ -84,15 +194,10 @@ describe("runHooksCaptured", () => {
 })
 
 // ─── lifecycle _exec injection ────────────────────────────────────────────────
-// These tests use the injectable _exec.spawn to verify call shapes without
-// executing real shell commands. Separate from the real-shell tests above.
+// These tests replace _exec.spawn with a mock to verify call shapes without
+// executing real shell commands.
 
-// @ts-ignore — query param cache-busting for bun module cache
-const lifecycleModule = await import("@/lib/lifecycle?lifecycle-exec-test")
-
-const { runHooks, runHooksCaptured: runHooksCapturedInjected, _exec } = lifecycleModule
-
-import type { SpawnHandle } from "@/lib/lifecycle"
+import type { SpawnHandle as _SpawnHandle } from "@/lib/lifecycle"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -127,14 +232,13 @@ type SpawnArgs = {
 
 let capturedSpawnArgs: SpawnArgs[] = []
 let spawnHandles: SpawnHandle[] = []
+let originalSpawn: typeof _exec.spawn
 
 const mockSpawn = mock((args: SpawnArgs): SpawnHandle => {
   capturedSpawnArgs.push({ ...args })
   const handle = spawnHandles[capturedSpawnArgs.length - 1] ?? makeSpawnHandle(0)
   return handle
 })
-
-_exec.spawn = mockSpawn
 
 function resetSpawnMocks(...handles: SpawnHandle[]) {
   capturedSpawnArgs = []
@@ -145,7 +249,15 @@ function resetSpawnMocks(...handles: SpawnHandle[]) {
 // ─── runHooks _exec.spawn ─────────────────────────────────────────────────────
 
 describe("runHooks _exec injection", () => {
-  beforeEach(() => resetSpawnMocks(makeSpawnHandle(0)))
+  beforeEach(() => {
+    originalSpawn = _exec.spawn
+    _exec.spawn = mockSpawn as any
+    resetSpawnMocks(makeSpawnHandle(0))
+  })
+
+  afterEach(() => {
+    _exec.spawn = originalSpawn
+  })
 
   test("calls _exec.spawn with cmd=['sh','-c',cmd], stdout=inherit, stderr=inherit", async () => {
     resetSpawnMocks(makeSpawnHandle(0))
@@ -208,9 +320,19 @@ describe("runHooks _exec injection", () => {
 // ─── runHooksCaptured _exec.spawn ─────────────────────────────────────────────
 
 describe("runHooksCaptured _exec injection", () => {
+  beforeEach(() => {
+    originalSpawn = _exec.spawn
+    _exec.spawn = mockSpawn as any
+    resetSpawnMocks(makeSpawnHandle(0))
+  })
+
+  afterEach(() => {
+    _exec.spawn = originalSpawn
+  })
+
   test("calls _exec.spawn with stdout=pipe, stderr=pipe", async () => {
     resetSpawnMocks(makeSpawnHandle(0, "output\n", ""))
-    await runHooksCapturedInjected(["echo hello"], "/tmp", {}, () => {})
+    await runHooksCaptured(["echo hello"], "/tmp", {}, () => {})
 
     expect(capturedSpawnArgs[0].stdout).toBe("pipe")
     expect(capturedSpawnArgs[0].stderr).toBe("pipe")
@@ -219,7 +341,7 @@ describe("runHooksCaptured _exec injection", () => {
   test("captures output via onOutput callback from streams", async () => {
     resetSpawnMocks(makeSpawnHandle(0, "hello\n", ""))
     const lines: HookOutputLine[] = []
-    await runHooksCapturedInjected(
+    await runHooksCaptured(
       ["echo hello"],
       "/tmp",
       {},
@@ -232,7 +354,7 @@ describe("runHooksCaptured _exec injection", () => {
   test("captures stderr output via onOutput callback", async () => {
     resetSpawnMocks(makeSpawnHandle(0, "", "error text\n"))
     const lines: HookOutputLine[] = []
-    await runHooksCapturedInjected(
+    await runHooksCaptured(
       ["echo error >&2"],
       "/tmp",
       {},
@@ -244,7 +366,7 @@ describe("runHooksCaptured _exec injection", () => {
 
   test("returns HookResult with exitCode and command", async () => {
     resetSpawnMocks(makeSpawnHandle(0, "ok\n", ""))
-    const results = await runHooksCapturedInjected(
+    const results = await runHooksCaptured(
       ["my-command"],
       "/tmp",
       {},
@@ -262,7 +384,7 @@ describe("runHooksCaptured _exec injection", () => {
       makeSpawnHandle(1, "", ""),
       makeSpawnHandle(0, "", ""),
     )
-    const results = await runHooksCapturedInjected(
+    const results = await runHooksCaptured(
       ["fail", "second"],
       "/tmp",
       {},

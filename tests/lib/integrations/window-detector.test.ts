@@ -66,10 +66,7 @@ mock.module("@/lib/integrations/index", () => ({
   integrations: fakeIntegrations,
 }))
 
-const { runIntegrations } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/runner?window-detector-test"
-)
+const { runIntegrations } = await import("@/lib/integrations/runner")
 
 const fakeCtx: IntegrationContext = {
   workspace: { name: "test-ws", repos: [], settings: {} } as any,

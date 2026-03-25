@@ -50,11 +50,7 @@ mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
 }))
 
-// Cache-busting import
-const { _exec, giteaIntegration } = await import(
-  // @ts-ignore — query param cache-busting
-  "@/lib/integrations/gitea?unit-test-gitea2"
-)
+const { _exec, giteaIntegration } = await import("@/lib/integrations/gitea")
 
 // --- Override process.exit to prevent test runner from exiting ---
 

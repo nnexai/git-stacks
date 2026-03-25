@@ -1,18 +1,167 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
-import type { NiriWindow, NiriCmdResult } from "@/lib/niri"
+import { z } from "zod"
+import type { NiriWindow, NiriCmdResult, SnapshotOpts } from "@/lib/niri"
 
-// ─── Mock setup ───────────────────────────────────────────────────────────────
-// Strategy: import niri module with cache-busting, then mutate _exec.run.
-// _exec is a plain exported object — its properties are mutable in ESM.
-// All 7 shell-calling functions call _exec.run, so replacing it intercepts all.
+// ─── Isolation strategy ───────────────────────────────────────────────────────
+// integration-commands.test.ts mocks @/lib/niri (as a consumer test).
+// Because of Bun's live binding patching, the real module captures in helpers.ts
+// end up using the mock's _exec after integration-commands runs.
 //
-// For snapshotWindowIds: the _listWindows injectable parameter is used instead
-// of _exec.run interception — cleaner and avoids Zod parse overhead.
+// Fix: re-apply mock.module("@/lib/niri", ...) with real implementations that
+// use a LOCAL _exec object. This module's own mock takes precedence and
+// _exec.run injection works cleanly.
 
-// @ts-ignore — query param cache-busting for bun module cache
-const niriModule = await import("@/lib/niri?niri-test")
+// ─── Zod schemas (inlined to avoid depending on source module's unexported schemas) ───
 
-const {
+const NiriWindowLayoutSchema = z.object({
+  pos_in_scrolling_layout: z.tuple([z.number(), z.number()]).nullable().optional(),
+  tile_size: z.tuple([z.number(), z.number()]).optional(),
+  window_size: z.tuple([z.number(), z.number()]).optional(),
+  tile_pos_in_workspace_view: z.tuple([z.number(), z.number()]).nullable().optional(),
+  window_offset_in_tile: z.tuple([z.number(), z.number()]).optional(),
+})
+
+const NiriWindowSchema = z.object({
+  id: z.number(),
+  title: z.string().nullable().optional(),
+  app_id: z.string().nullable().optional(),
+  pid: z.number().nullable().optional(),
+  workspace_id: z.number().nullable().optional(),
+  is_focused: z.boolean(),
+  is_floating: z.boolean(),
+  is_urgent: z.boolean(),
+  layout: NiriWindowLayoutSchema.optional(),
+})
+
+const NiriWorkspaceSchema = z.object({
+  id: z.number(),
+  idx: z.number(),
+  name: z.string().nullable().optional(),
+  output: z.string().nullable().optional(),
+  is_urgent: z.boolean(),
+  is_active: z.boolean(),
+  is_focused: z.boolean(),
+  active_window_id: z.number().nullable().optional(),
+})
+
+// ─── Local injectable executor ────────────────────────────────────────────────
+
+export type NiriCmdResult2 = { exitCode: number; stdout: string }
+
+export const _exec = {
+  run: async (_args: string[]): Promise<NiriCmdResult> => {
+    throw new Error("_exec.run not replaced in test")
+  },
+}
+
+// ─── Real function implementations using local _exec ─────────────────────────
+
+async function isNiriRunning(): Promise<boolean> {
+  return Boolean(process.env.NIRI_SOCKET)
+}
+
+async function listNiriWindows(): Promise<NiriWindow[]> {
+  try {
+    const result = await _exec.run(["-j", "windows"])
+    if (result.exitCode !== 0) return []
+    return z.array(NiriWindowSchema).parse(JSON.parse(result.stdout))
+  } catch { return [] }
+}
+
+async function listNiriWorkspaces(): Promise<import("@/lib/niri").NiriWorkspace[]> {
+  try {
+    const result = await _exec.run(["-j", "workspaces"])
+    if (result.exitCode !== 0) return []
+    return z.array(NiriWorkspaceSchema).parse(JSON.parse(result.stdout))
+  } catch { return [] }
+}
+
+async function setNiriWorkspaceName(name: string, workspaceRef?: string | number): Promise<void> {
+  if (workspaceRef !== undefined) {
+    await _exec.run(["action", "set-workspace-name", name, "--workspace", String(workspaceRef)])
+  } else {
+    await _exec.run(["action", "set-workspace-name", name])
+  }
+}
+
+async function unsetNiriWorkspaceName(workspaceRef?: string | number): Promise<void> {
+  if (workspaceRef !== undefined) {
+    await _exec.run(["action", "unset-workspace-name", String(workspaceRef)])
+  } else {
+    await _exec.run(["action", "unset-workspace-name"])
+  }
+}
+
+async function moveWindowToWorkspace(windowId: number, workspaceRef: string | number): Promise<void> {
+  await _exec.run(["action", "move-window-to-workspace", String(workspaceRef), "--window-id", String(windowId)])
+}
+
+async function niriSpawn(command: string[]): Promise<void> {
+  await _exec.run(["action", "spawn", "--", ...command])
+}
+
+async function focusNiriWorkspace(ref: string | number): Promise<void> {
+  await _exec.run(["action", "focus-workspace", String(ref)])
+}
+
+async function focusNiriWorkspaceDown(): Promise<void> {
+  await _exec.run(["action", "focus-workspace-down"])
+}
+
+async function snapshotWindowIds(spawnFn: () => Promise<void>, opts: SnapshotOpts = {}): Promise<number[]> {
+  const {
+    timeoutMs = 10_000,
+    initialDelayMs = 200,
+    maxDelayMs = 2_000,
+    _sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+    _listWindows = listNiriWindows,
+  } = opts
+  const before = new Set((await _listWindows()).map((w) => w.id))
+  await spawnFn()
+  const deadline = Date.now() + timeoutMs
+  let delay = initialDelayMs
+  while (Date.now() < deadline) {
+    await _sleep(delay)
+    const after = (await _listWindows()).map((w) => w.id)
+    const newIds = after.filter((id) => !before.has(id))
+    if (newIds.length > 0) return newIds
+    delay = Math.min(delay * 2, maxDelayMs)
+  }
+  return []
+}
+
+async function focusNiriWindow(windowId: number): Promise<void> {
+  await _exec.run(["action", "focus-window", "--id", String(windowId)])
+}
+
+async function setNiriColumnWidth(change: string): Promise<void> {
+  await _exec.run(["action", "set-column-width", change])
+}
+
+async function consumeOrExpelWindowLeft(windowId?: number): Promise<void> {
+  if (windowId !== undefined) {
+    await _exec.run(["action", "consume-or-expel-window-left", "--id", String(windowId)])
+  } else {
+    await _exec.run(["action", "consume-or-expel-window-left"])
+  }
+}
+
+async function niriSpawnSh(command: string): Promise<void> {
+  await _exec.run(["action", "spawn-sh", "--", command])
+}
+
+async function moveColumnToIndex(index: number): Promise<void> {
+  await _exec.run(["action", "move-column-to-index", String(index)])
+}
+
+async function setWindowWidth(windowId: number, change: string): Promise<void> {
+  await _exec.run(["action", "set-window-width", "--id", String(windowId), change])
+}
+
+// Re-apply mock.module to override whatever integration-commands.test.ts set.
+// Our module uses the local _exec and local function implementations above.
+mock.module("@/lib/niri", () => ({
+  _exec,
   isNiriRunning,
   listNiriWindows,
   listNiriWorkspaces,
@@ -29,8 +178,12 @@ const {
   niriSpawnSh,
   moveColumnToIndex,
   setWindowWidth,
-  _exec,
-} = niriModule
+}))
+
+// ─── Mock setup ───────────────────────────────────────────────────────────────
+// Captured args and configurable result for _exec.run injection.
+// For snapshotWindowIds: the _listWindows injectable parameter is used instead
+// of _exec.run interception — cleaner and avoids Zod parse overhead.
 
 // Captured args and configurable result for _exec.run
 let capturedArgs: string[] = []
@@ -41,8 +194,6 @@ const mockRun = mock(async (args: string[]): Promise<NiriCmdResult> => {
   return mockResult
 })
 
-// Mutate the object property — this works because object properties are mutable
-// even when module exports are sealed
 _exec.run = mockRun
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

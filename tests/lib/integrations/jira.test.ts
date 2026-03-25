@@ -42,8 +42,7 @@ mock.module("@/tui/utils", () => ({
   },
 }))
 
-// @ts-ignore — query param cache-busting
-const { _exec, jiraIntegration } = await import("@/lib/integrations/jira?unit-test-jira2")
+const { _exec, jiraIntegration } = await import("@/lib/integrations/jira")
 
 // Override process.exit to prevent test runner exit
 const exitMock = mock((_code?: number) => { throw new Error(`process.exit(${_code})`) })

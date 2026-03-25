@@ -9,7 +9,11 @@ import {
   formatZodError,
   expandBranchPattern,
 } from "../../src/lib/config"
-import { makeTmpDir, cleanup, useIsolatedConfig } from "../helpers"
+import {
+  makeTmpDir, cleanup, useIsolatedConfig,
+  realWriteWorkspace, realReadWorkspace, realListWorkspaces,
+  realWorkspaceExists, realTemplateExists, realReadTemplate,
+} from "../helpers"
 
 const isolated = useIsolatedConfig("config-test")
 
@@ -156,10 +160,7 @@ describe("workspace file I/O", () => {
       expandHome: (p: string) => p.startsWith("~/") ? join(tmp, p.slice(2)) : p,
     }))
 
-    const { writeWorkspace, readWorkspace } = await import(
-      // @ts-ignore — cache-busting for isolated paths mock
-      "@/lib/config?io-roundtrip-test"
-    )
+    const { writeWorkspace, readWorkspace } = { writeWorkspace: realWriteWorkspace, readWorkspace: realReadWorkspace }
 
     const ws = WorkspaceSchema.parse({
       name: "test-workspace",
@@ -282,9 +283,7 @@ describe("corrupt YAML handling", () => {
     // Invalid workspace (missing branch and created)
     writeWorkspaceFile("bad", "name: \"_test-corrupt-bad-ws\"\n")
 
-    // @ts-ignore — cache-busting for isolated paths mock
-    const { listWorkspaces } = await import("@/lib/config?corrupt-test")
-    const workspaces = listWorkspaces()
+    const workspaces = realListWorkspaces()
     const names = workspaces.map((w: { name: string }) => w.name)
 
     expect(names).toContain("_test-corrupt-good-ws")
@@ -326,25 +325,19 @@ describe("scan-based lookup", () => {
   test("workspaceExists finds workspace by YAML name even when filename differs", async () => {
     writeFileSync(join(wsDir, "foo.yml"), "name: bar\nbranch: main\ncreated: \"2026-01-01\"\n")
 
-    // @ts-ignore — cache-busting
-    const { workspaceExists } = await import("@/lib/config?scan-exists-1")
-    expect(workspaceExists("bar")).toBe(true)
-    expect(workspaceExists("foo")).toBe(false)
+    expect(realWorkspaceExists("bar")).toBe(true)
+    expect(realWorkspaceExists("foo")).toBe(false)
   })
 
   test("readWorkspace returns workspace from drifted file", async () => {
     writeFileSync(join(wsDir, "old.yml"), "name: current\nbranch: main\ncreated: \"2026-01-01\"\n")
 
-    // @ts-ignore — cache-busting
-    const { readWorkspace } = await import("@/lib/config?scan-read-1")
-    const ws = readWorkspace("current")
+    const ws = realReadWorkspace("current")
     expect(ws.name).toBe("current")
   })
 
   test("readWorkspace throws for non-existent name", async () => {
-    // @ts-ignore — cache-busting
-    const { readWorkspace } = await import("@/lib/config?scan-read-notfound")
-    expect(() => readWorkspace("ghost")).toThrow(/not found/)
+    expect(() => realReadWorkspace("ghost")).toThrow(/not found/)
   })
 
   test("duplicate YAML name warns to stderr", async () => {
@@ -355,9 +348,7 @@ describe("scan-based lookup", () => {
     const origError = console.error
     console.error = (...args: unknown[]) => { errors.push(args.join(" ")); origError(...args) }
     try {
-      // @ts-ignore — cache-busting
-      const { workspaceExists } = await import("@/lib/config?scan-dup-1")
-      workspaceExists("dup")
+      realWorkspaceExists("dup")
     } finally {
       console.error = origError
     }
@@ -367,26 +358,20 @@ describe("scan-based lookup", () => {
   test("templateExists finds template by YAML name even when filename differs", async () => {
     writeFileSync(join(tplDir, "old.yml"), "name: current\n")
 
-    // @ts-ignore — cache-busting
-    const { templateExists } = await import("@/lib/config?scan-tpl-exists-1")
-    expect(templateExists("current")).toBe(true)
+    expect(realTemplateExists("current")).toBe(true)
   })
 
   test("readTemplate returns template from drifted file", async () => {
     writeFileSync(join(tplDir, "old.yml"), "name: current\n")
 
-    // @ts-ignore — cache-busting
-    const { readTemplate } = await import("@/lib/config?scan-tpl-read-1")
-    const tpl = readTemplate("current")
+    const tpl = realReadTemplate("current")
     expect(tpl.name).toBe("current")
   })
 
   test("listWorkspaces returns workspaces regardless of filename drift", async () => {
     writeFileSync(join(wsDir, "drifted.yml"), "name: actual\nbranch: main\ncreated: \"2026-01-01\"\n")
 
-    // @ts-ignore — cache-busting
-    const { listWorkspaces } = await import("@/lib/config?scan-list-1")
-    const workspaces = listWorkspaces()
+    const workspaces = realListWorkspaces()
     expect(workspaces.some((w: { name: string }) => w.name === "actual")).toBe(true)
   })
 })

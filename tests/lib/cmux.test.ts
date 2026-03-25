@@ -7,8 +7,7 @@ import type { CmdResult } from "@/lib/cmux"
 // Multiple cmux functions make sequential _exec.run calls (e.g. createCmuxWorkspace
 // calls new-workspace, rename-workspace, select-workspace), so we track all calls.
 
-// @ts-ignore — query param cache-busting for bun module cache
-const cmuxModule = await import("@/lib/cmux?cmux-test")
+const cmuxModule = await import("@/lib/cmux")
 
 const {
   createCmuxWorkspace,

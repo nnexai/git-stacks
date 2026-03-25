@@ -275,3 +275,97 @@ export function makeTmuxMock(overrides: Record<string, unknown> = {}): Record<st
     ...overrides,
   }
 }
+
+// --- Real module captures ---
+// Captured here at helpers.ts load time (before any test file applies mock.module).
+// helpers.ts is first imported by agent-hooks.test.ts (alphabetically first test file),
+// so these captures precede all mock.module calls from test files.
+//
+// Destructured named exports are STABLE references — they are not updated when
+// mock.module replaces the module later. This allows test files to access real
+// implementations even after other test files have mocked those modules.
+//
+// Use case: test files that need real module behavior (e.g. to test real shell
+// execution or real file I/O) import these captures instead of using cache-busting
+// query strings like `await import("@/lib/X?cache-bust")`.
+
+export const {
+  runHooks: realRunHooks,
+  runHooksCaptured: realRunHooksCaptured,
+  _exec: lifecycleRealExec,
+} = await import("@/lib/lifecycle") as any
+
+export const {
+  _exec: tmuxRealExec,
+  killTmuxSession: realKillTmuxSession,
+  tmuxSessionExists: realTmuxSessionExists,
+  focusTmuxSession: realFocusTmuxSession,
+  createTmuxSession: realCreateTmuxSession,
+  openTmuxSession: realOpenTmuxSession,
+  getTmuxMainPane: realGetTmuxMainPane,
+  addTmuxPane: realAddTmuxPane,
+  sendToTmuxPane: realSendToTmuxPane,
+  focusTmuxPane: realFocusTmuxPane,
+} = await import("@/lib/tmux") as any
+
+export const {
+  _exec: niriRealExec,
+  isNiriRunning: realIsNiriRunning,
+  listNiriWindows: realListNiriWindows,
+  listNiriWorkspaces: realListNiriWorkspaces,
+  setNiriWorkspaceName: realSetNiriWorkspaceName,
+  unsetNiriWorkspaceName: realUnsetNiriWorkspaceName,
+  moveWindowToWorkspace: realMoveWindowToWorkspace,
+  niriSpawn: realNiriSpawn,
+  focusNiriWorkspace: realFocusNiriWorkspace,
+  focusNiriWorkspaceDown: realFocusNiriWorkspaceDown,
+  snapshotWindowIds: realSnapshotWindowIds,
+  focusNiriWindow: realFocusNiriWindow,
+  setNiriColumnWidth: realSetNiriColumnWidth,
+  consumeOrExpelWindowLeft: realConsumeOrExpelWindowLeft,
+  niriSpawnSh: realNiriSpawnSh,
+  moveColumnToIndex: realMoveColumnToIndex,
+  setWindowWidth: realSetWindowWidth,
+} = await import("@/lib/niri") as any
+
+export const {
+  listWorkspaces: realListWorkspaces,
+  workspaceExists: realWorkspaceExists,
+  workspacePath: realWorkspacePath,
+  writeWorkspace: realWriteWorkspace,
+  readWorkspace: realReadWorkspace,
+  writeGlobalConfig: realWriteGlobalConfig,
+  readGlobalConfig: realReadGlobalConfig,
+  templateExists: realTemplateExists,
+  readTemplate: realReadTemplate,
+  writeTemplate: realWriteTemplate,
+  listTemplates: realListTemplates,
+  readRegistry: realReadRegistry,
+  writeRegistry: realWriteRegistry,
+  listRegistryEntries: realListRegistryEntries,
+  expandBranchPattern: realExpandBranchPattern,
+} = await import("@/lib/config") as any
+
+export const {
+  createWorktree: realCreateWorktree,
+  isWorktreeRegistered: realIsWorktreeRegistered,
+} = await import("@/lib/git") as any
+
+export const {
+  mergeWorkspace: realMergeWorkspace,
+  removeWorkspace: realRemoveWorkspace,
+  cleanWorkspace: realCleanWorkspace,
+  renameWorkspace: realRenameWorkspace,
+  closeWorkspace: realCloseWorkspace,
+  renameTemplate: realRenameTemplate,
+  editTemplateYaml: realEditTemplateYaml,
+  editGlobalConfigYaml: realEditGlobalConfigYaml,
+  editRegistryYaml: realEditRegistryYaml,
+} = await import("@/lib/workspace-ops") as any
+
+export const {
+  appendMessage: realAppendMessage,
+  listMessages: realListMessages,
+  clearMessages: realClearMessages,
+  pushToSocket: realPushToSocket,
+} = await import("@/lib/messages") as any

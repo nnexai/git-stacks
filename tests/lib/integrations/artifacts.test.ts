@@ -76,23 +76,11 @@ mock.module("@/tui/utils", () => ({
 // Note: @/lib/niri mock is NOT needed here — vscode and intellij no longer import from niri.ts.
 // Window ID detection is handled externally by runner.ts via WindowDetector instances.
 
-// === Cache-busting imports after all mocks registered ===
-const { tmuxIntegration } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/tmux?artifacts-test"
-)
-const { cmuxIntegration } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/cmux?artifacts-test"
-)
-const { vscodeIntegration } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/vscode?artifacts-test"
-)
-const { intellijIntegration } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/intellij?artifacts-test"
-)
+// === Imports after all mocks registered ===
+const { tmuxIntegration } = await import("@/lib/integrations/tmux")
+const { cmuxIntegration } = await import("@/lib/integrations/cmux")
+const { vscodeIntegration } = await import("@/lib/integrations/vscode")
+const { intellijIntegration } = await import("@/lib/integrations/intellij")
 
 // === Shared context ===
 const fakeCtx: IntegrationContext = {

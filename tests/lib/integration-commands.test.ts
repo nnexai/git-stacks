@@ -88,11 +88,7 @@ mock.module("@/lib/lifecycle", () => ({
   runHooksCaptured: mock(async () => []),
 }))
 
-// Cache-busting import of the integration command
-const { integrationCommand } = await import(
-  // @ts-ignore — query param cache-busting
-  "@/commands/integration?unit-test-cmds"
-)
+const { integrationCommand } = await import("@/commands/integration")
 
 describe("integrationCommand structure", () => {
   test("has 'integration' as the command name", () => {

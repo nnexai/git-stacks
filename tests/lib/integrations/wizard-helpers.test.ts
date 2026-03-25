@@ -1,10 +1,13 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach, beforeAll } from "bun:test"
 import type { Mock } from "bun:test"
 
-// Shared mock instances used by @/tui/utils mock below
+// Shared mock instances used by @/tui/utils mock below.
+// Declared here so applyTuiUtilsMock() always uses the SAME objects,
+// even when called multiple times (e.g. in beforeAll to override workspace-wizard's mock).
 const localConfirm = mock(async () => false as boolean | symbol)
 const localMultiselect = mock(async () => [] as string[] | symbol)
 const localIsCancel = mock((v: unknown) => typeof v === "symbol")
+const localCancel = mock((): never => { throw new Error("cancelled") })
 
 // Mock integrations
 const mockConfigurePrompt = mock(async (current: Record<string, unknown>) => ({
@@ -40,35 +43,39 @@ mock.module("@/lib/integrations/index", () => ({
 
 // Mock tui/utils — must include `prompts` object since production code
 // imports { prompts as p } from "@/tui/utils" (not @clack/prompts directly)
-mock.module("@/tui/utils", () => ({
-  prompts: {
-    confirm: localConfirm,
-    multiselect: localMultiselect,
-    isCancel: localIsCancel,
-    cancel: mock(() => {}),
-    intro: mock(() => {}),
-    outro: mock(() => {}),
-    log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
-    spinner: mock(() => ({ start: mock(() => {}), stop: mock(() => {}), message: mock(() => {}) })),
-    text: mock(async () => ""),
-    select: mock(async () => ""),
-    note: mock(() => {}),
-    group: mock(async () => ({})),
-    groupMultiselect: mock(async () => []),
-  },
-  cancel: mock((): never => { throw new Error("cancelled") }),
-  safeText: mock(async () => ""),
-}))
+//
+// Isolation: workspace-wizard.test.ts (in tests/tui/) also mocks @/tui/utils.
+// When bun loads all test files, workspace-wizard's mock.module runs AFTER this file
+// (all module-level code runs before tests). This replaces @/tui/utils and breaks
+// wizard-helpers tests because promptIntegrationOverrides then uses workspace-wizard's mocks.
+//
+// Fix: re-apply this mock.module in beforeAll so wizard-helpers' mocks are restored
+// before the tests run (after all module-level code has executed).
+function applyTuiUtilsMock() {
+  mock.module("@/tui/utils", () => ({
+    prompts: {
+      confirm: localConfirm,
+      multiselect: localMultiselect,
+      isCancel: localIsCancel,
+      cancel: mock(() => {}),
+      intro: mock(() => {}),
+      outro: mock(() => {}),
+      log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+      spinner: mock(() => ({ start: mock(() => {}), stop: mock(() => {}), message: mock(() => {}) })),
+      text: mock(async () => ""),
+      select: mock(async () => ""),
+      note: mock(() => {}),
+      group: mock(async () => ({})),
+      groupMultiselect: mock(async () => []),
+    },
+    cancel: mock((): never => { throw new Error("cancelled") }),
+    safeText: mock(async () => ""),
+  }))
+}
 
-// CRITICAL: workspace-edit.test.ts mocks @/lib/integrations/wizard-helpers entirely.
-// Bun caches mock.module globally; if workspace-edit runs first (alphabetically
-// tests/commands/ < tests/lib/), the wizard-helpers module is replaced with a stub.
-// Use query-parameter cache-busting to force bun to load the real module from disk
-// with our mocked @clack/prompts, integrations, and utils dependencies.
-const { promptIntegrationOverrides } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/wizard-helpers?unit-test"
-)
+applyTuiUtilsMock()
+
+const { promptIntegrationOverrides } = await import("@/lib/integrations/wizard-helpers")
 
 // Get bound references from the @/tui/utils module that wizard-helpers.ts is using.
 // Production code imports { prompts as p } from "@/tui/utils", so we need the
@@ -80,6 +87,14 @@ const mockIsCancel = (utils as any).prompts.isCancel as Mock<(...args: any[]) =>
 const mockCancel = utils.cancel as unknown as Mock<(...args: any[]) => any>
 
 describe("promptIntegrationOverrides", () => {
+  beforeAll(() => {
+    // Re-apply @/tui/utils mock to restore wizard-helpers' mocks.
+    // workspace-wizard.test.ts (tests/tui/) mocks @/tui/utils at module level,
+    // and bun loads all test modules before running tests — so workspace-wizard's
+    // mock runs before our tests execute.
+    applyTuiUtilsMock()
+  })
+
   beforeEach(() => {
     mockConfirm.mockReset()
     mockMultiselect.mockReset()

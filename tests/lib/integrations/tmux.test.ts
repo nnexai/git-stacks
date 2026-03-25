@@ -45,11 +45,7 @@ mock.module("@/lib/tmux", () => ({
   createTmuxSession: mock(async () => {}),
 }))
 
-// Cache-busting import
-const { tmuxIntegration } = await import(
-  // @ts-ignore — query param cache-busting for bun module cache
-  "@/lib/integrations/tmux?unit-test-tmux"
-)
+const { tmuxIntegration } = await import("@/lib/integrations/tmux")
 
 const fakeCtx: IntegrationContext = {
   workspace: {
