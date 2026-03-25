@@ -675,6 +675,53 @@ describe("completion audit - real program", () => {
   })
 })
 
+describe("completion audit - YAML name-field extraction", () => {
+  test("bash real output uses name-field extraction for workspaces", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    // Must use grep on YAML name: field
+    expect(out).toContain("grep -h '^name:'")
+    expect(out).toContain('workspaces"/*.yml')
+    expect(out).toContain('templates"/*.yml')
+    // Must NOT use ls-based filename extraction for workspaces
+    expect(out).not.toMatch(/ls "\$HOME\/\.config\/git-stacks\/workspaces"/)
+    expect(out).not.toMatch(/ls "\$HOME\/\.config\/git-stacks\/templates"/)
+  })
+
+  test("zsh real output uses name-field extraction for workspaces", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "zsh"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    expect(out).toContain("grep -h '^name:'")
+    expect(out).toContain('"$ws_dir"/*.yml')
+    expect(out).toContain('"$templates_dir"/*.yml')
+    // Must NOT use glob filename extraction
+    expect(out).not.toContain("*.yml(N:t:r)")
+  })
+
+  test("fish real output uses name-field extraction for workspaces", async () => {
+    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "fish"], {
+      stdout: "pipe", stderr: "pipe",
+      cwd: import.meta.dir + "/../..",
+    })
+    const out = await new Response(proc.stdout).text()
+    await proc.exited
+    expect(out).toContain("grep -h '^name:'")
+    expect(out).toContain('"$ws_dir"/*.yml')
+    expect(out).toContain('"$templates_dir"/*.yml')
+    // Must NOT use ls-based filename extraction
+    expect(out).not.toMatch(/ls \$ws_dir \| sed/)
+    expect(out).not.toMatch(/ls \$templates_dir \| sed/)
+  })
+})
+
 describe("dynamic name completion - YAML name field extraction", () => {
   describe("bash", () => {
     test("workspace lookup uses grep on name field, not ls on filenames", () => {
