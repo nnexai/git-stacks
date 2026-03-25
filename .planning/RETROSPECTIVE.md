@@ -247,6 +247,54 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.9.0 — Identity & Completion Integrity
+
+**Shipped:** 2026-03-25
+**Phases:** 5 (Phases 33–36 + 34.1) | **Plans:** 10 | **Tasks:** 18
+
+### What Was Built
+
+- Name-based identity: YAML `name` field is canonical for workspaces and templates; filename is storage only; scan-based lookup, rename cascade, doctor drift detection
+- Template rename with workspace cascade and dry-run support
+- Shell completion audit: recursive generators (bash/zsh/fish) for depth 3-4 integration commands with 26 DYNAMIC_COMPLETIONS entries
+- Test isolation framework: custom test runner separating unit/integ modes, 7 mock factory helpers, zero cache-busting imports, DI hack removal
+- Dynamic name completion: shell completion resolves names from YAML `name:` fields instead of filename globs
+- Release prep: version bump to 0.9.0, CHANGELOG, README updates, TUI integration filter fix
+
+### What Worked
+
+- **Inserted phase (34.1) paid off immediately**: The test isolation framework eliminated 20 pre-existing test failures and removed all cache-busting import hacks — Phase 35 and 36 benefited from clean test infrastructure
+- **Autonomous execution for final phases**: Phases 35 and 36 ran fully autonomously (discuss skipped, research skipped for release prep) — the right scope detection kept overhead minimal
+- **Single-file phases**: Phases 35 (1 plan, 3 tasks) and 36 (1 plan, 2 tasks) were correctly scoped as small focused changes — no over-planning
+- **Integration check thoroughness**: The milestone audit integration checker verified 12 cross-phase connections and 5 E2E flows — caught the IDEN-01/IDEN-02 tracking gap before it became an issue
+
+### What Was Inefficient
+
+- **45 pre-existing test failures remain**: workspace-ops.test.ts mock architecture was not fully migrated in Phase 34.1 — the scope was limited to eliminating cache-busting and DI hacks, not fixing all mock-related failures
+- **SUMMARY frontmatter tracking gap**: IDEN-01 and IDEN-02 not explicitly claimed in Phase 33 SUMMARY `requirements-completed` field — the code was verified correct but the planning artifact omitted the claim
+- **Research skipped for Phase 35**: While correct (it was a simple grep-based change), the Nyquist VALIDATION.md was also skipped — creating a gap in the validation chain
+
+### Patterns Established
+
+- **scan-based lookup for YAML identity**: `findWorkspaceFile()` / `findTemplateFile()` pattern — read all *.yml, match on `name` field, return first match
+- **Mock factory helpers**: `makeConfigMock()`, `makeWorkspaceOpsMock()`, etc. — complete export coverage eliminates partial-mock contamination
+- **Custom test runner with auto-classification**: `fileUsesMockModule()` content scan routes files to shared or isolated processes automatically
+- **Template rename cascade**: `renameTemplate()` updates all workspace YAML references atomically
+
+### Key Lessons
+
+1. **Test infrastructure is force-multiplier work**: Phase 34.1 (inserted urgently) eliminated the most persistent testing problem in the project — mock.module contamination. Every subsequent phase benefited.
+2. **Name-based identity simplifies completion**: Once config.ts scans by name field, completion generators can use the same `grep '^name:'` approach — the identity model and completion model are aligned.
+3. **Release prep phases are predictable**: Version bump + CHANGELOG + README is pure bookkeeping — skip research, skip discuss, plan and execute in one pass.
+
+### Cost Observations
+
+- Model mix: opus for planning, sonnet for execution/verification (balanced profile)
+- Sessions: 1 session, autonomous mode for phases 35-36
+- Notable: 70 commits, 88 files changed, +9505/-504 lines. Test suite at 814 (from 781).
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -257,5 +305,6 @@ Living document — one section per shipped milestone.
 | v0.6.0 Integration & Niri | 5 | 6 | 1 | 0 |
 | v0.7.0 Close Command & Polish | 9 | 20 | 1 | 0 |
 | v0.8.0 Integration Polish | 4 | 6 | 1 | 0 |
+| v0.9.0 Identity & Completion | 5 | 10 | 1 | 0 |
 
-**Trend:** v0.8.0 is the smallest milestone by plan count (6 plans) but introduced parallel worktree execution for the first time — Plan 01 and 02 of Phase 31 ran concurrently. Zero rework streak extends to 4 milestones. Test suite at 781 (+7% from v0.7.0). Investigation-only phases (no code changes, just documentation) proved effective for ambiguous bugs.
+**Trend:** v0.9.0 continues the zero-rework streak (now 5 milestones). Inserted phase (34.1) was the largest scope item — test infrastructure investment that immediately benefited subsequent phases. Test suite at 814 (+4% from v0.8.0). Autonomous execution for final 2 phases with correct scope detection (research/discuss skipped where unnecessary). 7 milestones shipped in 8 days (2026-03-18 → 2026-03-25).
