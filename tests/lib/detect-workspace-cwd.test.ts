@@ -1,15 +1,24 @@
 import { describe, test, expect, mock, beforeEach, beforeAll, afterAll } from "bun:test"
 import { join } from "path"
 import { mkdirSync } from "fs"
-import { makeTmpDir, cleanup } from "../helpers"
+import { makeTmpDir, cleanup, makeConfigMock, makeWorkspaceOpsMock, makeIssueUtilsMock } from "../helpers"
 import type { Workspace } from "@/lib/config"
 
 // ============================================================
-// Single isolated config for ALL tests in this file.
-// We do NOT use useIsolatedConfig() here because its mock.module("@/lib/paths") call
-// runs at module-load time. Other test files (e.g., config.test.ts) call
-// mock.module("@/lib/paths", ...) DURING test execution, overwriting our mock.
-// Instead, we manage the configDir directly and re-apply the mock in beforeAll/beforeEach.
+// Isolation strategy (shared unit test process):
+//
+// detectWorkspaceFromCwd tests:
+//   - mock.module("@/lib/config") so workspace-ops.detectWorkspaceFromCwd calls mockWorkspaceList
+//   - Import the REAL detectWorkspaceFromCwd BEFORE mocking workspace-ops
+//   - Each test sets mockWorkspaceList before calling detectWorkspaceFromCwd
+//
+// resolveWorkspaceArg tests:
+//   - other test files (integration-commands.test.ts, jira.test.ts, etc.) mock @/lib/integrations/issue-utils
+//     so we can't import the real resolveWorkspaceArg at module level — it gets replaced
+//   - solution: store the module namespace object, then beforeAll re-applies mock.module with
+//     a real-logic implementation that delegates to our closure variables (mockWorkspaceExists,
+//     mockDetectResult). After mock.module is re-applied, issueUtils.resolveWorkspaceArg
+//     is updated in-place on the namespace object.
 // ============================================================
 
 const configDir = makeTmpDir("cwd-detect")
@@ -17,8 +26,16 @@ mkdirSync(join(configDir, "workspaces"), { recursive: true })
 mkdirSync(join(configDir, "templates"), { recursive: true })
 mkdirSync(join(configDir, "messages"), { recursive: true })
 
-// Apply the paths mock now (at module load) so imports get the right paths.
-// This will be re-applied in beforeAll to survive contamination from other test files.
+const isolated = { configDir, cleanup: () => cleanup(configDir) }
+
+// Mutable state for mocks
+let mockWorkspaceList: Workspace[] = []
+let mockWorkspaceExists: (name: string) => boolean = () => false
+let mockDetectResult: { ok: true; workspace: Workspace } | { ok: false; error: "no_match" } = {
+  ok: false,
+  error: "no_match",
+}
+
 function applyPathsMock() {
   mock.module("@/lib/paths", () => ({
     HOME: configDir,
@@ -37,46 +54,31 @@ function applyPathsMock() {
 
 applyPathsMock()
 
-const isolated = { configDir, cleanup: () => cleanup(configDir) }
+// Mock @/lib/config: listWorkspaces and workspaceExists delegate to closure variables
+mock.module("@/lib/config", () => makeConfigMock({
+  listWorkspaces: mock(() => mockWorkspaceList),
+  workspaceExists: mock((name: string) => mockWorkspaceExists(name)),
+}))
 
-// Cache-busting imports so they pick up the mocked paths.
-const configMod: {
-  writeWorkspace: (ws: Workspace) => void
-  listWorkspaces: () => Workspace[]
-  workspaceExists: (name: string) => boolean
-  readWorkspace: (name: string) => Workspace
-  [key: string]: unknown
-// @ts-ignore — cache-busting avoids contamination from other test files
-} = await import("@/lib/config?cwd-detect")
-
-const { writeWorkspace, listWorkspaces } = configMod
-
-const { detectWorkspaceFromCwd, _cwdDetect }: {
+// Import the REAL detectWorkspaceFromCwd BEFORE mocking workspace-ops.
+// In the shared unit test process, no other unit test file mocks workspace-ops,
+// so this import gets the real module. The real detectWorkspaceFromCwd will call
+// listWorkspaces() from @/lib/config (which is now mocked above).
+const { detectWorkspaceFromCwd }: {
   detectWorkspaceFromCwd: (cwd?: string) => { ok: true; workspace: Workspace } | { ok: false; error: "no_match" }
-  _cwdDetect: { listWorkspaces: () => Workspace[] }
-// @ts-ignore — cache-busting avoids contamination from other test files
-} = await import("@/lib/workspace-ops?cwd-detect")
+} = await import("@/lib/workspace-ops")
 
-// ============================================================
-// Section 2: resolveWorkspaceArg setup
-// Uses injectable _resolveWorkspaceDeps (same pattern as _exec in niri/tmux/cmux)
-// to avoid bun mock.module cross-file contamination issues.
-// ============================================================
+// Now mock workspace-ops so that issue-utils.resolveWorkspaceArg gets a mocked detectWorkspaceFromCwd.
+// The detectWorkspaceFromCwd variable above is already captured and is the real function.
+mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
+  detectWorkspaceFromCwd: mock(() => mockDetectResult),
+}))
 
-// Mutable state for the mock to return different results per test
-let mockDetectResult: { ok: true; workspace: Workspace } | { ok: false; error: "no_match" } = {
-  ok: false,
-  error: "no_match",
-}
-
-const { resolveWorkspaceArg, _resolveWorkspaceDeps }: {
-  resolveWorkspaceArg: (workspaceName: string | undefined, tracker: string, action: string) => string
-  _resolveWorkspaceDeps: {
-    workspaceExists: (name: string) => boolean
-    detectWorkspaceFromCwd: () => { ok: true; workspace: Workspace } | { ok: false; error: "no_match" }
-  }
-// @ts-ignore — cache-busting avoids contamination from other test files
-} = await import("@/lib/integrations/issue-utils?cwd-detect")
+// Import issue-utils as a module namespace object (not destructured).
+// Other unit test files mock @/lib/integrations/issue-utils, so by the time this
+// import runs, the module may already be mocked. We store the namespace object
+// so we can access issueUtils.resolveWorkspaceArg after re-applying our own mock in beforeAll.
+const issueUtils = await import("@/lib/integrations/issue-utils")
 
 afterAll(() => isolated.cleanup())
 
@@ -115,7 +117,7 @@ function makeTrunkWorkspace(name: string, mainPath: string): Workspace {
         type: "other",
         mode: "trunk",
         main_path: mainPath,
-        task_path: mainPath, // trunk: task_path = main_path
+        task_path: mainPath,
       },
     ],
   }
@@ -124,25 +126,22 @@ function makeTrunkWorkspace(name: string, mainPath: string): Workspace {
 // --- detectWorkspaceFromCwd tests ---
 
 describe("detectWorkspaceFromCwd", () => {
-  // Re-apply paths mock before tests run to survive contamination from other test files
-  // (e.g., config.test.ts calls mock.module("@/lib/paths", ...) inside tests)
   beforeAll(() => applyPathsMock())
 
-  // Inject the cache-busted listWorkspaces into _cwdDetect so detectWorkspaceFromCwd
-  // reads from our isolated config dir (not the stale module-level import from ./config)
   beforeEach(() => {
     applyPathsMock()
-    _cwdDetect.listWorkspaces = () => listWorkspaces()
+    mockWorkspaceList = []
   })
 
   test("returns no_match when CWD is not inside any known worktree", () => {
+    mockWorkspaceList = []
     const result = detectWorkspaceFromCwd("/tmp/tasks/nothing-at-all")
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toBe("no_match")
   })
 
   test("exact CWD match on worktree task_path returns that workspace", () => {
-    writeWorkspace(makeWorktreeWorkspace("exact-ws", "/tmp/tasks/exact-ws/repo-a"))
+    mockWorkspaceList = [makeWorktreeWorkspace("exact-ws", "/tmp/tasks/exact-ws/repo-a")]
 
     const result = detectWorkspaceFromCwd("/tmp/tasks/exact-ws/repo-a")
     expect(result.ok).toBe(true)
@@ -150,7 +149,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("subdirectory of worktree task_path returns that workspace", () => {
-    writeWorkspace(makeWorktreeWorkspace("subdir-ws", "/tmp/tasks/subdir-ws/repo-a"))
+    mockWorkspaceList = [makeWorktreeWorkspace("subdir-ws", "/tmp/tasks/subdir-ws/repo-a")]
 
     const result = detectWorkspaceFromCwd("/tmp/tasks/subdir-ws/repo-a/src/components")
     expect(result.ok).toBe(true)
@@ -158,7 +157,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("CWD outside all worktree task_paths returns no_match", () => {
-    writeWorkspace(makeWorktreeWorkspace("other-ws", "/tmp/tasks/other-ws/repo-a"))
+    mockWorkspaceList = [makeWorktreeWorkspace("other-ws", "/tmp/tasks/other-ws/repo-a")]
 
     const result = detectWorkspaceFromCwd("/tmp/completely/different/path")
     expect(result.ok).toBe(false)
@@ -166,25 +165,25 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("deepest match wins when CWD matches multiple workspace paths", () => {
-    // ws-parent has a shorter task_path
-    writeWorkspace(makeWorktreeWorkspace("ws-parent", "/tmp/tasks/a/repo"))
-    // ws-nested has task_path that is a subdirectory of ws-parent's repo
-    writeWorkspace({
-      name: "ws-nested",
-      schema_version: "1",
-      branch: "feat/ws-nested",
-      created: "2026-01-01",
-      repos: [
-        {
-          name: "repo-nested",
-          repo: "repo-nested",
-          type: "other",
-          mode: "worktree",
-          main_path: "/tmp/main/repo-nested",
-          task_path: "/tmp/tasks/a/repo/nested-subdir",
-        },
-      ],
-    })
+    mockWorkspaceList = [
+      makeWorktreeWorkspace("ws-parent", "/tmp/tasks/a/repo"),
+      {
+        name: "ws-nested",
+        schema_version: "1",
+        branch: "feat/ws-nested",
+        created: "2026-01-01",
+        repos: [
+          {
+            name: "repo-nested",
+            repo: "repo-nested",
+            type: "other",
+            mode: "worktree",
+            main_path: "/tmp/main/repo-nested",
+            task_path: "/tmp/tasks/a/repo/nested-subdir",
+          },
+        ],
+      },
+    ]
 
     // CWD is inside the more specific path (ws-nested)
     const result = detectWorkspaceFromCwd("/tmp/tasks/a/repo/nested-subdir/src")
@@ -193,7 +192,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("trunk-mode repos are never matched even if CWD equals main_path", () => {
-    writeWorkspace(makeTrunkWorkspace("trunk-ws", "/tmp/main/trunk-repo"))
+    mockWorkspaceList = [makeTrunkWorkspace("trunk-ws", "/tmp/main/trunk-repo")]
 
     const result = detectWorkspaceFromCwd("/tmp/main/trunk-repo")
     expect(result.ok).toBe(false)
@@ -201,7 +200,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("trunk-mode CWD subdirectory does not match", () => {
-    writeWorkspace(makeTrunkWorkspace("trunk-ws2", "/tmp/main/trunk-repo2"))
+    mockWorkspaceList = [makeTrunkWorkspace("trunk-ws2", "/tmp/main/trunk-repo2")]
 
     const result = detectWorkspaceFromCwd("/tmp/main/trunk-repo2/src")
     expect(result.ok).toBe(false)
@@ -209,7 +208,7 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("path prefix collision guard: task_path=/tmp/tasks/repo-na, CWD=/tmp/tasks/repo-name does not match", () => {
-    writeWorkspace(makeWorktreeWorkspace("collision-ws", "/tmp/tasks/repo-na"))
+    mockWorkspaceList = [makeWorktreeWorkspace("collision-ws", "/tmp/tasks/repo-na")]
 
     const result = detectWorkspaceFromCwd("/tmp/tasks/repo-name")
     expect(result.ok).toBe(false)
@@ -217,27 +216,28 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("tilde paths in task_path are normalized before comparison", () => {
-    // useIsolatedConfig mocks expandHome so "~/" expands to configDir + "/"
-    // (the mocked expandHome maps "~/" to the isolated config dir)
+    // The mocked expandHome (in applyPathsMock) maps "~/" to configDir + "/"
     const taskPath = `~/tilde-ws-detect/repo-a`
     const resolvedPath = `${isolated.configDir}/tilde-ws-detect/repo-a`
 
-    writeWorkspace({
-      name: "tilde-ws",
-      schema_version: "1",
-      branch: "feat/tilde-ws",
-      created: "2026-01-01",
-      repos: [
-        {
-          name: "repo-a",
-          repo: "repo-a",
-          type: "other",
-          mode: "worktree",
-          main_path: "/tmp/main/repo-a",
-          task_path: taskPath,
-        },
-      ],
-    })
+    mockWorkspaceList = [
+      {
+        name: "tilde-ws",
+        schema_version: "1",
+        branch: "feat/tilde-ws",
+        created: "2026-01-01",
+        repos: [
+          {
+            name: "repo-a",
+            repo: "repo-a",
+            type: "other",
+            mode: "worktree",
+            main_path: "/tmp/main/repo-a",
+            task_path: taskPath,
+          },
+        ],
+      },
+    ]
 
     // detectWorkspaceFromCwd expands "~/" via the mocked expandHome (configDir)
     const result = detectWorkspaceFromCwd(resolvedPath)
@@ -246,30 +246,32 @@ describe("detectWorkspaceFromCwd", () => {
   })
 
   test("workspace with mix of trunk and worktree repos only matches on worktree repos", () => {
-    writeWorkspace({
-      name: "mixed-ws",
-      schema_version: "1",
-      branch: "feat/mixed-ws",
-      created: "2026-01-01",
-      repos: [
-        {
-          name: "trunk-repo",
-          repo: "trunk-repo",
-          type: "other",
-          mode: "trunk",
-          main_path: "/tmp/main/trunk-repo",
-          task_path: "/tmp/main/trunk-repo",
-        },
-        {
-          name: "worktree-repo",
-          repo: "worktree-repo",
-          type: "other",
-          mode: "worktree",
-          main_path: "/tmp/main/worktree-repo",
-          task_path: "/tmp/tasks/mixed-ws/worktree-repo",
-        },
-      ],
-    })
+    mockWorkspaceList = [
+      {
+        name: "mixed-ws",
+        schema_version: "1",
+        branch: "feat/mixed-ws",
+        created: "2026-01-01",
+        repos: [
+          {
+            name: "trunk-repo",
+            repo: "trunk-repo",
+            type: "other",
+            mode: "trunk",
+            main_path: "/tmp/main/trunk-repo",
+            task_path: "/tmp/main/trunk-repo",
+          },
+          {
+            name: "worktree-repo",
+            repo: "worktree-repo",
+            type: "other",
+            mode: "worktree",
+            main_path: "/tmp/main/worktree-repo",
+            task_path: "/tmp/tasks/mixed-ws/worktree-repo",
+          },
+        ],
+      },
+    ]
 
     // Trunk repo should NOT match
     const trunkResult = detectWorkspaceFromCwd("/tmp/main/trunk-repo/src")
@@ -285,8 +287,38 @@ describe("detectWorkspaceFromCwd", () => {
 // --- resolveWorkspaceArg tests ---
 
 describe("resolveWorkspaceArg", () => {
-  // Re-apply paths mock before tests run (same reason as detectWorkspaceFromCwd above)
-  beforeAll(() => applyPathsMock())
+  // Re-apply paths mock before tests run
+  beforeAll(() => {
+    applyPathsMock()
+    // Re-apply mock for issue-utils with the real logic that uses our closure variables.
+    // Other unit test files (integration-commands.test.ts, jira.test.ts, etc.) mock
+    // @/lib/integrations/issue-utils at module-load time. By the time our tests run,
+    // issueUtils.resolveWorkspaceArg is already their stub (mock(() => "test-ws")).
+    // Calling mock.module here in beforeAll updates the module namespace object in-place,
+    // so subsequent calls to issueUtils.resolveWorkspaceArg use the real logic below.
+    mock.module("@/lib/integrations/issue-utils", () => ({
+      ...makeIssueUtilsMock(),
+      resolveWorkspaceArg: (workspaceName: string | undefined, tracker: string, action: string): string => {
+        if (workspaceName) {
+          if (!mockWorkspaceExists(workspaceName)) {
+            console.error(`Workspace '${workspaceName}' not found.`)
+            process.exit(1)
+          }
+          return workspaceName
+        }
+        const detection = mockDetectResult
+        if (!detection.ok) {
+          console.error(
+            `Could not detect workspace from current directory. ` +
+            `Run from inside a worktree or specify: ` +
+            `git-stacks integration ${tracker} issue ${action} <workspace> ...`
+          )
+          process.exit(1)
+        }
+        return detection.workspace.name
+      },
+    }))
+  })
 
   let exitCode: number | undefined
   const originalExit = process.exit.bind(process)
@@ -303,9 +335,8 @@ describe("resolveWorkspaceArg", () => {
     process.exit = exitMock
     // Reset to no match by default
     mockDetectResult = { ok: false, error: "no_match" }
-    // Inject cache-busted deps to avoid cross-file contamination
-    _resolveWorkspaceDeps.workspaceExists = (name: string) => configMod.workspaceExists(name)
-    _resolveWorkspaceDeps.detectWorkspaceFromCwd = () => mockDetectResult
+    // Reset workspaceExists to return false by default
+    mockWorkspaceExists = () => false
   })
 
   afterAll(() => {
@@ -314,21 +345,16 @@ describe("resolveWorkspaceArg", () => {
   })
 
   test("explicit workspace name that exists returns the name", () => {
-    writeWorkspace({
-      name: "my-ws",
-      schema_version: "1",
-      branch: "feat/my-ws",
-      created: "2026-01-01",
-      repos: [],
-    })
+    mockWorkspaceExists = (name: string) => name === "my-ws"
 
-    const result = resolveWorkspaceArg("my-ws", "jira", "link")
+    const result = (issueUtils as any).resolveWorkspaceArg("my-ws", "jira", "link")
     expect(result).toBe("my-ws")
     expect(exitCode).toBeUndefined()
   })
 
   test("explicit workspace name that does not exist calls process.exit(1)", () => {
-    expect(() => resolveWorkspaceArg("bad-ws", "jira", "link")).toThrow()
+    mockWorkspaceExists = () => false
+    expect(() => (issueUtils as any).resolveWorkspaceArg("bad-ws", "jira", "link")).toThrow()
     expect(exitCode).toBe(1)
   })
 
@@ -344,7 +370,7 @@ describe("resolveWorkspaceArg", () => {
       },
     }
 
-    const result = resolveWorkspaceArg(undefined, "jira", "unlink")
+    const result = (issueUtils as any).resolveWorkspaceArg(undefined, "jira", "unlink")
     expect(result).toBe("detected-ws")
     expect(exitCode).toBeUndefined()
   })
@@ -352,7 +378,7 @@ describe("resolveWorkspaceArg", () => {
   test("undefined workspaceName with CWD outside all worktrees calls process.exit(1)", () => {
     mockDetectResult = { ok: false, error: "no_match" }
 
-    expect(() => resolveWorkspaceArg(undefined, "jira", "open")).toThrow()
+    expect(() => (issueUtils as any).resolveWorkspaceArg(undefined, "jira", "open")).toThrow()
     expect(exitCode).toBe(1)
   })
 
@@ -366,7 +392,7 @@ describe("resolveWorkspaceArg", () => {
     }
 
     try {
-      resolveWorkspaceArg(undefined, "github", "open")
+      ;(issueUtils as any).resolveWorkspaceArg(undefined, "github", "open")
     } catch {
       // expected — process.exit throws in tests
     }

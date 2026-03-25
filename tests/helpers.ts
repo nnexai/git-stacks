@@ -150,7 +150,7 @@ export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<
 
 /**
  * Returns a complete mock of src/lib/workspace-ops.ts exports.
- * Includes all function stubs and the _cwdDetect injectable object.
+ * Includes all function stubs.
  */
 export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -174,11 +174,7 @@ export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): R
     editTemplateYaml: mock(() => ({ path: "/tmp/template.yml", validate: mock(() => true) })),
     editGlobalConfigYaml: mock(() => ({ path: "/tmp/config.yml", validate: mock(() => true) })),
     editRegistryYaml: mock(() => ({ path: "/tmp/registry.yml", validate: mock(() => true) })),
-    _cwdDetect: {
-      readdirSync: mock(() => []),
-      readFileSync: mock(() => ""),
-    },
-    detectWorkspaceFromCwd: mock(() => ({ found: false })),
+    detectWorkspaceFromCwd: mock(() => ({ ok: false, error: "no_match" })),
     ...overrides,
   }
 }
@@ -208,7 +204,7 @@ export function makeForgeUtilsMock(overrides: Record<string, unknown> = {}): Rec
 
 /**
  * Returns a complete mock of src/lib/integrations/issue-utils.ts exports.
- * Includes all function stubs and the _resolveWorkspaceDeps injectable object.
+ * Includes all function stubs.
  */
 export function makeIssueUtilsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -216,10 +212,6 @@ export function makeIssueUtilsMock(overrides: Record<string, unknown> = {}): Rec
     linkIssue: mock(() => {}),
     unlinkIssue: mock(() => {}),
     formatIssueError: mock(() => "issue error"),
-    _resolveWorkspaceDeps: {
-      workspaceExists: mock(() => false),
-      readWorkspace: mock(() => ({ name: "test-ws", branch: "main", repos: [], settings: {} })),
-    },
     resolveWorkspaceArg: mock(() => "test-ws"),
     ...overrides,
   }
