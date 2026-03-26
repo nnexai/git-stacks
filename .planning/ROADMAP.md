@@ -111,7 +111,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 - [x] **Phase 38: Multi-Repo Pull** - `git-stacks pull` pulls latest across all repos in a workspace (completed 2026-03-26)
 - [x] **Phase 39: TUI Upstream Staleness** - Dashboard shows "N behind" badge per repo with TTL-cached fetch (completed 2026-03-26)
 - [x] **Phase 40: Template Composition** - `includes:` field and multi-`--template` ad-hoc composition (completed 2026-03-26)
-- [ ] **Phase 41: Release Prep** - v0.10.0 version bump, CHANGELOG, README (1 plan, 1 wave)
+- [x] **Phase 41: Release Prep** - v0.10.0 version bump, CHANGELOG, README (1 plan, 1 wave) (completed 2026-03-26)
 
 ## Phase Details
 
@@ -189,4 +189,4 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 38. Multi-Repo Pull | v0.10.0 | 1/1 | Complete    | 2026-03-26 |
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Complete    | 2026-03-26 |
 | 40. Template Composition | v0.10.0 | 0/2 | Complete    | 2026-03-26 |
-| 41. Release Prep | v0.10.0 | 0/1 | Planned | - |
+| 41. Release Prep | v0.10.0 | 1/1 | Complete   | 2026-03-26 |

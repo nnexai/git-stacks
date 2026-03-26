@@ -43,9 +43,9 @@ Requirements for Multi-Agent Workspace Tooling milestone. Each maps to roadmap p
 
 ### Release Prep
 
-- [ ] **REL-01**: Version bumped to v0.10.0 in package.json
-- [ ] **REL-02**: CHANGELOG updated with all v0.10.0 features
-- [ ] **REL-03**: README updated with new command documentation and usage examples
+- [x] **REL-01**: Version bumped to v0.10.0 in package.json
+- [x] **REL-02**: CHANGELOG updated with all v0.10.0 features
+- [x] **REL-03**: README updated with new command documentation and usage examples
 
 ## v0.11.0+ Requirements
 
@@ -96,9 +96,9 @@ Deferred to future release. Tracked but not in current roadmap.
 | COMP-05 | Phase 40 | Pending |
 | COMP-06 | Phase 40 | Pending |
 | COMP-07 | Phase 40 | Pending |
-| REL-01 | Phase 41 | Pending |
-| REL-02 | Phase 41 | Pending |
-| REL-03 | Phase 41 | Pending |
+| REL-01 | Phase 41 | Complete |
+| REL-02 | Phase 41 | Complete |
+| REL-03 | Phase 41 | Complete |
 
 **Coverage:**
 - v0.10.0 requirements: 25 total
