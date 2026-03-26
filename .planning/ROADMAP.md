@@ -148,7 +148,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
   3. User can press `r` on a focused workspace to force-refresh staleness, bypassing the TTL cache
   4. Repos without upstream tracking show a dash or blank — no error, no badge
   5. Network failures produce a `?` badge per affected repo and do not crash or block the TUI
-**Plans**: TBD
+**Plans**: 1 plan, 1 wave (3 tasks)
 **UI hint**: yes
 
 ### Phase 40: Template Composition
@@ -187,6 +187,6 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37. Agent Path Discovery | v0.10.0 | 1/1 | Complete    | 2026-03-26 |
 | 38. Multi-Repo Pull | v0.10.0 | 0/TBD | Not started | - |
-| 39. TUI Upstream Staleness | v0.10.0 | 0/TBD | Not started | - |
+| 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Planned | - |
 | 40. Template Composition | v0.10.0 | 0/TBD | Not started | - |
 | 41. Release Prep | v0.10.0 | 0/TBD | Not started | - |
