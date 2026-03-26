@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js"
+import { createSignal, untrack } from "solid-js"
 import { fetchOrigin, getCommitsBehind, hasUpstreamTracking, getCurrentBranch } from "../../../lib/git"
 import type { Workspace } from "../../../lib/config"
 
@@ -26,7 +26,9 @@ export function useStaleness() {
     }
 
     const now = Date.now()
-    const current = staleness()
+    // untrack: fetchStaleness is called from createEffect — reading staleness()
+    // inside a tracked scope would cause infinite re-triggers when setStaleness runs.
+    const current = untrack(staleness)
 
     // Filter to repos that need fetching (TTL expired or not cached)
     const needsFetch: typeof repos = []

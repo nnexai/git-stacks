@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock } from "../../helpers"
+import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeGitMock } from "../../helpers"
 
 // Config isolation — MUST be set before any import that touches paths.ts
 // Each test file has its own Bun module scope, so this env override takes effect
@@ -96,15 +96,7 @@ mock.module("../../../src/lib/config", () => ({
 }))
 
 // Mock git operations to prevent real filesystem git work
-mock.module("../../../src/lib/git", () => ({
-  createWorktree: mock(async () => {}),
-  fetchOrigin: mock(async () => {}),
-  removeWorktree: mock(async () => {}),
-  isWorktreeRegistered: mock(async () => false),
-  getWorktreeStatus: mock(async () => ({ dirty: false, ahead: 0, behind: 0 })),
-  getCommitsBehind: mock(async () => 0),
-  ensureUpstreamTracking: mock(async () => ({ tracked: false })),
-}))
+mock.module("../../../src/lib/git", () => makeGitMock())
 
 // Mock workspace-ops: syncWorkspace with controllable progress callback
 mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({

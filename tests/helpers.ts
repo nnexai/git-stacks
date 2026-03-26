@@ -219,6 +219,36 @@ export function makeIssueUtilsMock(overrides: Record<string, unknown> = {}): Rec
 }
 
 /**
+ * Returns a complete mock of src/lib/git.ts exports.
+ * Covers all exported git functions including staleness-related ones.
+ */
+export function makeGitMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    checkBranchExists: mock(async () => false),
+    createWorktree: mock(async () => {}),
+    removeWorktree: mock(async () => {}),
+    isWorktreeRegistered: mock(async () => false),
+    isRepoDirty: mock(async () => false),
+    getCurrentBranch: mock(async () => "main"),
+    isBranchGoneOnRemote: mock(async () => false),
+    getMergeConflicts: mock(async () => []),
+    mergeNoFF: mock(async () => ({ ok: true })),
+    deleteLocalBranch: mock(async () => {}),
+    fetchOrigin: mock(async () => {}),
+    pullFFOnly: mock(async () => ({ ok: true })),
+    checkRemoteTrackingRef: mock(async () => false),
+    checkBranchExistsOnRemote: mock(async () => false),
+    hasUpstreamTracking: mock(async () => false),
+    ensureUpstreamTracking: mock(async () => ({ tracked: false })),
+    rebaseBranch: mock(async () => ({ ok: true })),
+    mergeBranchFF: mock(async () => ({ ok: true })),
+    getCommitsBehind: mock(async () => 0),
+    getWorktreeStatus: mock(async () => ({ dirty: false, ahead: 0, behind: 0 })),
+    ...overrides,
+  }
+}
+
+/**
  * Returns a complete mock of src/lib/paths.ts exports.
  * Uses /tmp/test-home as a safe test base path.
  */
