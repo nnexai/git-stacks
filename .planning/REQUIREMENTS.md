@@ -74,37 +74,37 @@ Deferred to future release. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PATH-01 | TBD | Pending |
-| PATH-02 | TBD | Pending |
-| PATH-03 | TBD | Pending |
-| PATH-04 | TBD | Pending |
-| PULL-01 | TBD | Pending |
-| PULL-02 | TBD | Pending |
-| PULL-03 | TBD | Pending |
-| PULL-04 | TBD | Pending |
-| PULL-05 | TBD | Pending |
-| PULL-06 | TBD | Pending |
-| STALE-01 | TBD | Pending |
-| STALE-02 | TBD | Pending |
-| STALE-03 | TBD | Pending |
-| STALE-04 | TBD | Pending |
-| STALE-05 | TBD | Pending |
-| COMP-01 | TBD | Pending |
-| COMP-02 | TBD | Pending |
-| COMP-03 | TBD | Pending |
-| COMP-04 | TBD | Pending |
-| COMP-05 | TBD | Pending |
-| COMP-06 | TBD | Pending |
-| COMP-07 | TBD | Pending |
-| REL-01 | TBD | Pending |
-| REL-02 | TBD | Pending |
-| REL-03 | TBD | Pending |
+| PATH-01 | Phase 37 | Pending |
+| PATH-02 | Phase 37 | Pending |
+| PATH-03 | Phase 37 | Pending |
+| PATH-04 | Phase 37 | Pending |
+| PULL-01 | Phase 38 | Pending |
+| PULL-02 | Phase 38 | Pending |
+| PULL-03 | Phase 38 | Pending |
+| PULL-04 | Phase 38 | Pending |
+| PULL-05 | Phase 38 | Pending |
+| PULL-06 | Phase 38 | Pending |
+| STALE-01 | Phase 39 | Pending |
+| STALE-02 | Phase 39 | Pending |
+| STALE-03 | Phase 39 | Pending |
+| STALE-04 | Phase 39 | Pending |
+| STALE-05 | Phase 39 | Pending |
+| COMP-01 | Phase 40 | Pending |
+| COMP-02 | Phase 40 | Pending |
+| COMP-03 | Phase 40 | Pending |
+| COMP-04 | Phase 40 | Pending |
+| COMP-05 | Phase 40 | Pending |
+| COMP-06 | Phase 40 | Pending |
+| COMP-07 | Phase 40 | Pending |
+| REL-01 | Phase 41 | Pending |
+| REL-02 | Phase 41 | Pending |
+| REL-03 | Phase 41 | Pending |
 
 **Coverage:**
 - v0.10.0 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25
+- Mapped to phases: 25
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after initial definition*
+*Last updated: 2026-03-26 — traceability complete after roadmap creation*

@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v0.10.0
 milestone_name: Multi-Agent Workspace Tooling
-status: Defining requirements
-stopped_at: Milestone started
-last_updated: "2026-03-25T22:00:00Z"
+status: Ready to plan
+stopped_at: Roadmap created — Phase 37 ready to plan
+last_updated: "2026-03-26T00:00:00Z"
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,32 +19,49 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-25)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Defining requirements for v0.10.0
+**Current focus:** Phase 37 — Agent Path Discovery
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-25 — Milestone v0.10.0 started
+Phase: 37 of 41 (Agent Path Discovery)
+Plan: — of — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-03-26 — Roadmap created for v0.10.0
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0 (this milestone)
+- Average duration: —
+- Total execution time: 0 hours
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-Archived to .planning/milestones/ — see full decision log there.
+- [Research]: `env` command deferred to v0.11.0+ — not in this milestone's scope
+- [Research]: Template composition `includes:` limited to 1 level of nesting for v0.10.0
+- [Research]: `git pull --ff-only` is the safe default for multi-repo pull (no rebase)
+- [Research]: TUI staleness uses fetch-on-focus + 5-minute TTL; no global background poll
 
 ### Pending Todos
 
 0 pending todos — see .planning/todos/pending/
 
-### Roadmap Evolution
-
-(New milestone — no roadmap changes yet)
-
 ### Blockers/Concerns
 
-None.
+- [Phase 38]: `mergeEnv()` currently reads only `workspace.env`, not `template.env` — check all call sites before touching (env command deferred but awareness needed for composition)
+- [Phase 40]: Hook concatenation from composition must be persisted to workspace YAML at creation time — current wizard copies hooks from one template only
 
 ### Quick Tasks Completed
 
@@ -55,8 +72,8 @@ None.
 
 ## Session Continuity
 
-Last activity: 2026-03-25 - Milestone v0.10.0 started
-Last session: 2026-03-25T22:00:00Z
-Stopped at: Milestone initialization
+Last activity: 2026-03-26 - Roadmap created
+Last session: 2026-03-26T00:00:00Z
+Stopped at: Roadmap created — 5 phases (37-41), 25 requirements mapped
 Resume file: None
-Next action: /gsd:new-milestone (in progress)
+Next action: /gsd:plan-phase 37
