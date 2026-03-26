@@ -136,7 +136,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
   3. Repos with uncommitted changes are skipped with a warning, and the command exits non-zero if any repo was skipped
   4. Pull uses `--ff-only`; a diverged branch produces a clear failure message identifying the repo and branch
   5. Running `git-stacks pull` from inside a workspace directory autodetects the workspace
-**Plans**: TBD
+**Plans**: 1 plan, 1 wave (3 tasks)
 
 ### Phase 39: TUI Upstream Staleness
 **Goal**: The dashboard workspace detail pane shows how many commits each repo is behind upstream, fetched non-blocking with a TTL cache
@@ -186,7 +186,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37. Agent Path Discovery | v0.10.0 | 1/1 | Complete    | 2026-03-26 |
-| 38. Multi-Repo Pull | v0.10.0 | 0/TBD | Not started | - |
+| 38. Multi-Repo Pull | v0.10.0 | 0/1 | Planned | - |
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Planned | - |
 | 40. Template Composition | v0.10.0 | 0/TBD | Not started | - |
 | 41. Release Prep | v0.10.0 | 0/TBD | Not started | - |
