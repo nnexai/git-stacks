@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import { mapLimited } from "../../src/lib/concurrency"
+import { mapLimited } from "@/lib/concurrency"
 
 describe("mapLimited", () => {
   it("runs at most N tasks concurrently (max=3)", async () => {
