@@ -112,6 +112,44 @@ export async function fetchOrigin(repoPath: string): Promise<void> {
   await $`git -C ${repoPath} -c fetch.timeout=30 fetch origin`.quiet()
 }
 
+/**
+ * Pull with --ff-only. Returns ok:true with commit count on success,
+ * ok:false with reason on failure (diverged, no upstream, etc.).
+ */
+export async function pullFFOnly(
+  repoPath: string,
+  branch: string
+): Promise<{ ok: true; commits: number } | { ok: false; reason: string }> {
+  // Count commits before pull to report how many were pulled
+  const beforeResult = await $`git -C ${repoPath} rev-parse HEAD`.quiet().nothrow()
+  if (beforeResult.exitCode !== 0) {
+    return { ok: false, reason: "could not resolve HEAD" }
+  }
+  const beforeSha = beforeResult.stdout.toString().trim()
+
+  const result = await $`git -C ${repoPath} pull --ff-only origin ${branch}`.quiet().nothrow()
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString()
+    if (stderr.includes("divergent") || stderr.includes("Not possible to fast-forward")) {
+      return { ok: false, reason: `diverged: ${branch}` }
+    }
+    if (stderr.includes("couldn't find remote ref")) {
+      return { ok: false, reason: `no remote branch: ${branch}` }
+    }
+    return { ok: false, reason: stderr.split("\n")[0] || "pull failed" }
+  }
+
+  // Count commits pulled
+  const afterResult = await $`git -C ${repoPath} rev-parse HEAD`.quiet().nothrow()
+  const afterSha = afterResult.exitCode === 0 ? afterResult.stdout.toString().trim() : beforeSha
+  if (beforeSha === afterSha) {
+    return { ok: true, commits: 0 }
+  }
+  const countResult = await $`git -C ${repoPath} rev-list --count ${beforeSha}..${afterSha}`.quiet().nothrow()
+  const commits = countResult.exitCode === 0 ? parseInt(countResult.stdout.toString().trim(), 10) || 0 : 0
+  return { ok: true, commits }
+}
+
 // --- Upstream tracking ---
 
 /** Returns true when origin/<branch> remote-tracking ref exists in local refs (e.g. after a fetch). */
