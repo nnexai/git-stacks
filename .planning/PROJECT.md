@@ -8,7 +8,7 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State — v0.10.0 in progress (Phase 37 complete, 2026-03-26)
+## Current State — v0.10.0 in progress (Phase 39 complete, 2026-03-26)
 
 ### What shipped in v0.9.0
 
@@ -285,4 +285,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-26 — Phase 37 (Agent Path Discovery) complete*
+*Last updated: 2026-03-26 — Phase 39 (TUI Upstream Staleness) complete*
