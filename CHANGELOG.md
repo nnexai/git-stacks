@@ -4,6 +4,20 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.10.0] — 2026-03-26
+
+### Added
+
+**Agent path discovery** — `git-stacks paths [workspace]` outputs one repo path per line to stdout, designed for piping into agent CLI tools. Pass `--prefix "--add-dir"` to prepend each path with a flag string (e.g., `--add-dir /home/user/workspaces/tasks/ws/api`). Supports `--filter worktree|trunk` to restrict output by repo mode. Autodetects workspace from current directory when no argument is given.
+
+**Multi-repo pull** — `git-stacks pull [workspace]` pulls the latest commits for all repos in a workspace with a single command. Worktree repos pull their workspace branch; trunk repos pull their default branch. Uses `--ff-only` for safety — diverged branches fail fast with a clear message. Dirty repos are skipped with a warning and the command exits non-zero. Deduplicates fetches per unique clone path.
+
+**TUI upstream staleness** — the dashboard workspace detail pane now shows an "N behind" badge per repo when upstream has newer commits. Staleness is fetched on workspace focus with a 5-minute TTL cache. Press `r` on a focused workspace to force-refresh. Network failures show a `?` badge without crashing the TUI.
+
+**Template composition** — templates can declare `includes: [base, api]` to merge repos from other templates as building blocks. `git-stacks new --template api --template frontend` composes templates ad-hoc without requiring a saved meta-template. When the same repo appears in multiple templates, worktree mode wins over trunk. Hooks concatenate in include order with the top-level template's hooks running last. Circular includes are detected with a clear error.
+
+---
+
 ## [0.9.1] — 2026-03-25
 
 ### Fixed
