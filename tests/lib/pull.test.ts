@@ -1,30 +1,29 @@
 import { describe, test, expect, afterAll } from "bun:test"
 import { join } from "path"
-import { mkdirSync, writeFileSync } from "fs"
+import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { execSync } from "child_process"
-import { makeTmpDir, cleanup, useIsolatedConfig } from "../helpers"
-import { stringify } from "yaml"
+import type { Workspace } from "@/lib/config"
 
-// --- Test-scoped isolation ---
-const { configDir, cleanup: cleanupConfig } = useIsolatedConfig("pull-test")
+// Import real functions from git.ts (no config dependency, safe to import directly)
+import { pullFFOnly } from "../../src/lib/git"
+import { pullWorkspace } from "../../src/lib/workspace-ops"
 
-// Dynamic imports after isolation
-const { pullFFOnly } = await import("@/lib/git")
-const { pullWorkspace } = await import("@/lib/workspace-ops")
-const { workspaceExists, readWorkspace } = await import("@/lib/config")
-
-// Track all tmp dirs for cleanup
 const tmpDirs: string[] = []
 
 afterAll(() => {
-  for (const d of tmpDirs) cleanup(d)
-  cleanupConfig()
+  for (const d of tmpDirs) rmSync(d, { recursive: true, force: true })
 })
 
 // --- Helpers ---
 
 function git(cwd: string, cmd: string): string {
   return execSync(`git ${cmd}`, { cwd, stdio: "pipe" }).toString().trim()
+}
+
+function makeTmpDir(prefix: string): string {
+  const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  mkdirSync(dir, { recursive: true })
+  return dir
 }
 
 function createBareAndClone(tmp: string, name: string, branch = "main"): { barePath: string; clonePath: string } {
@@ -53,9 +52,13 @@ function pushUpstreamCommit(barePath: string, tmp: string, filename: string, bra
   git(pushClone, `push origin ${branch}`)
 }
 
-function writeWorkspaceYaml(name: string, workspace: Record<string, unknown>): void {
-  const wsPath = join(configDir, "workspaces", `${name}.yml`)
-  writeFileSync(wsPath, stringify(workspace))
+function makeWorkspace(name: string, branch: string, repos: Workspace["repos"]): Workspace {
+  return {
+    name,
+    branch,
+    created: new Date().toISOString(),
+    repos,
+  } as Workspace
 }
 
 // --- pullFFOnly tests ---
@@ -111,6 +114,7 @@ describe("pullFFOnly", () => {
 })
 
 // --- pullWorkspace tests ---
+// Pass Workspace objects directly to avoid config module isolation issues.
 
 describe("pullWorkspace", () => {
   test("pulls all repos in a workspace", async () => {
@@ -127,29 +131,19 @@ describe("pullWorkspace", () => {
     git(repo1.clonePath, `worktree add -b feat-branch ${wt1}`)
     git(repo2.clonePath, `worktree add -b feat-branch ${wt2}`)
 
-    // Push upstream commits to the feature branch via push clones
-    // We need the feature branch on remote first
+    // Push feature branches to remote first
     git(repo1.clonePath, "push origin feat-branch")
     git(repo2.clonePath, "push origin feat-branch")
 
     pushUpstreamCommit(repo1.barePath, tmp, "new1.txt", "feat-branch")
     pushUpstreamCommit(repo2.barePath, tmp, "new2.txt", "feat-branch")
 
-    writeWorkspaceYaml("test-ws", {
-      name: "test-ws",
-      branch: "feat-branch",
-      created: new Date().toISOString(),
-      repos: [
-        { name: "repo1", repo: "repo1", type: "generic", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
-        { name: "repo2", repo: "repo2", type: "generic", mode: "worktree", main_path: repo2.clonePath, task_path: wt2, base_branch: "main" },
-      ],
-    })
+    const ws = makeWorkspace("test-ws", "feat-branch", [
+      { name: "repo1", repo: "repo1", type: "other", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
+      { name: "repo2", repo: "repo2", type: "other", mode: "worktree", main_path: repo2.clonePath, task_path: wt2, base_branch: "main" },
+    ] as Workspace["repos"])
 
-    // Fetch first so the worktrees know about the remote branch
-    git(wt1, "fetch origin")
-    git(wt2, "fetch origin")
-
-    const result = await pullWorkspace("test-ws")
+    const result = await pullWorkspace(ws)
     expect(result.ok).toBe(true)
     expect(result.pulled.length).toBe(2)
     expect(result.pulled[0].commits).toBe(1)
@@ -169,16 +163,11 @@ describe("pullWorkspace", () => {
     // Make the worktree dirty
     writeFileSync(join(wt1, "uncommitted.txt"), "dirty")
 
-    writeWorkspaceYaml("dirty-ws", {
-      name: "dirty-ws",
-      branch: "feat-dirty",
-      created: new Date().toISOString(),
-      repos: [
-        { name: "repo1", repo: "repo1", type: "generic", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
-      ],
-    })
+    const ws = makeWorkspace("dirty-ws", "feat-dirty", [
+      { name: "repo1", repo: "repo1", type: "other", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
+    ] as Workspace["repos"])
 
-    const result = await pullWorkspace("dirty-ws")
+    const result = await pullWorkspace(ws)
     expect(result.ok).toBe(false)
     expect(result.skipped.length).toBe(1)
     expect(result.skipped[0].reason).toBe("dirty")
@@ -202,16 +191,11 @@ describe("pullWorkspace", () => {
     git(wt1, "add .")
     git(wt1, 'commit -m "local diverge"')
 
-    writeWorkspaceYaml("diverge-ws", {
-      name: "diverge-ws",
-      branch: "feat-div",
-      created: new Date().toISOString(),
-      repos: [
-        { name: "repo1", repo: "repo1", type: "generic", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
-      ],
-    })
+    const ws = makeWorkspace("diverge-ws", "feat-div", [
+      { name: "repo1", repo: "repo1", type: "other", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
+    ] as Workspace["repos"])
 
-    const result = await pullWorkspace("diverge-ws")
+    const result = await pullWorkspace(ws)
     expect(result.ok).toBe(false)
     expect(result.failed.length).toBe(1)
     expect(result.failed[0].reason).toContain("diverged")
@@ -230,23 +214,16 @@ describe("pullWorkspace", () => {
     git(repo1.clonePath, `worktree add -b feat-mixed ${wt1}`)
     git(repo1.clonePath, "push origin feat-mixed")
     pushUpstreamCommit(repo1.barePath, tmp, "wt-update.txt", "feat-mixed")
-    git(wt1, "fetch origin")
 
     // Trunk repo uses main branch
     pushUpstreamCommit(repo2.barePath, tmp, "trunk-update.txt", "main")
-    git(repo2.clonePath, "fetch origin")
 
-    writeWorkspaceYaml("mixed-ws", {
-      name: "mixed-ws",
-      branch: "feat-mixed",
-      created: new Date().toISOString(),
-      repos: [
-        { name: "repo1", repo: "repo1", type: "generic", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
-        { name: "repo2", repo: "repo2", type: "generic", mode: "trunk", main_path: repo2.clonePath, task_path: repo2.clonePath, base_branch: "main" },
-      ],
-    })
+    const ws = makeWorkspace("mixed-ws", "feat-mixed", [
+      { name: "repo1", repo: "repo1", type: "other", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
+      { name: "repo2", repo: "repo2", type: "other", mode: "trunk", main_path: repo2.clonePath, task_path: repo2.clonePath, base_branch: "main" },
+    ] as Workspace["repos"])
 
-    const result = await pullWorkspace("mixed-ws")
+    const result = await pullWorkspace(ws)
     expect(result.ok).toBe(true)
     expect(result.pulled.length).toBe(2)
     // repo1 (worktree) pulled feat-mixed, repo2 (trunk) pulled main
@@ -274,31 +251,26 @@ describe("pullWorkspace", () => {
     pushUpstreamCommit(repo1.barePath, tmp, "shared-update.txt", "feat-a")
     pushUpstreamCommit(repo1.barePath, tmp, "shared-update2.txt", "feat-b")
 
-    writeWorkspaceYaml("dedup-ws", {
-      name: "dedup-ws",
-      branch: "feat-a",
-      created: new Date().toISOString(),
-      repos: [
-        { name: "wt1", repo: "repo1", type: "generic", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
-        { name: "wt2", repo: "repo1", type: "generic", mode: "worktree", main_path: repo1.clonePath, task_path: wt2, base_branch: "main" },
-      ],
-    })
+    const ws = makeWorkspace("dedup-ws", "feat-a", [
+      { name: "wt1", repo: "repo1", type: "other", mode: "worktree", main_path: repo1.clonePath, task_path: wt1, base_branch: "main" },
+      { name: "wt2", repo: "repo1", type: "other", mode: "worktree", main_path: repo1.clonePath, task_path: wt2, base_branch: "main" },
+    ] as Workspace["repos"])
 
     // Track fetching events to verify deduplication
     const fetchEvents: string[] = []
-    const result = await pullWorkspace("dedup-ws", (row) => {
+    const result = await pullWorkspace(ws, (row) => {
       if (row.status === "fetching") fetchEvents.push(row.repo)
     })
 
     // Both repos should report fetching (they're in the same group),
     // but the actual fetch only happens once per main_path
-    expect(fetchEvents.length).toBe(2) // both repos reported
-    // Both should have been pulled (the pull itself uses different branches)
+    expect(fetchEvents.length).toBe(2)
+    // Both should have been pulled
     expect(result.pulled.length).toBe(2)
   })
 
-  test("returns error for nonexistent workspace", async () => {
-    const result = await pullWorkspace("nonexistent-ws")
+  test("returns error for nonexistent workspace by name", async () => {
+    const result = await pullWorkspace("nonexistent-ws-xyz123")
     expect(result.ok).toBe(false)
     expect(result.error).toContain("not found")
   })

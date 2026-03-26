@@ -169,6 +169,7 @@ export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): R
     renameWorkspace: mock(async () => ({ ok: true })),
     renameTemplate: mock(async () => ({ ok: true })),
     syncWorkspace: mock(async () => ({ ok: true, rows: [] })),
+    pullWorkspace: mock(async () => ({ ok: true, pulled: [], skipped: [], failed: [] })),
     editWorkspaceYaml: mock(() => ({ path: "/tmp/ws.yml", validate: mock(() => true) })),
     openYamlInEditor: mock(async () => {}),
     editTemplateYaml: mock(() => ({ path: "/tmp/template.yml", validate: mock(() => true) })),

@@ -29,15 +29,21 @@ import {
   getWorkspaceListInfo,
   renameWorkspace,
   syncWorkspace,
+  pullWorkspace,
   editWorkspaceYaml,
   openYamlInEditor,
   detectWorkspaceFromCwd,
 } from "../lib/workspace-ops"
-import type { SyncRow } from "../lib/workspace-ops"
+import type { SyncRow, PullRow } from "../lib/workspace-ops"
 
 function formatSyncRow(row: SyncRow): string {
   const label = row.status === "synced" ? "synced" : row.status === "skipped" ? "skipped" : "failed"
   return `${label}  ${row.repo}  ${row.detail}`
+}
+
+function formatPullRow(row: PullRow): string {
+  const label = row.status === "pulled" ? "pulled" : row.status === "skipped" ? "skipped" : "failed"
+  return `${label}  ${row.repo}  (${row.detail})`
 }
 
 // --- Path discovery ---
@@ -881,6 +887,48 @@ export function registerWorkspaceCommands(program: Command) {
       // Output paths to stdout, one per line
       for (const p of result.paths) {
         console.log(p)
+      }
+    })
+
+  program
+    .command("pull [name]")
+    .description("Pull latest commits for all repos in a workspace (--ff-only)")
+    .action(async (name: string | undefined) => {
+      let workspaceName: string
+
+      if (name) {
+        if (!workspaceExists(name)) {
+          console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+          process.exit(1)
+        }
+        workspaceName = name
+      } else {
+        const detection = detectWorkspaceFromCwd()
+        if (!detection.ok) {
+          console.error(formatError(
+            "Could not detect workspace from current directory",
+            "run from inside a worktree or specify: git-stacks pull <workspace>"
+          ))
+          process.exit(1)
+        }
+        workspaceName = detection.workspace.name
+      }
+
+      const result = await pullWorkspace(workspaceName, (row) => {
+        if (row.status === "skipped" || row.status === "failed") {
+          console.error(`  ${formatPullRow(row)}`)
+        } else if (row.status === "pulled") {
+          console.log(`  ${formatPullRow(row)}`)
+        }
+      })
+
+      if (!result.ok) {
+        if (result.error) console.error(formatError(result.error))
+        process.exit(1)
+      }
+
+      if (result.pulled.length === 0 && result.skipped.length === 0 && result.failed.length === 0) {
+        console.log("Nothing to pull.")
       }
     })
 }

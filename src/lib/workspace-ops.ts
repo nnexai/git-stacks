@@ -30,6 +30,7 @@ import {
   mergeNoFF,
   deleteLocalBranch,
   fetchOrigin,
+  pullFFOnly,
   rebaseBranch,
   mergeBranchFF,
   getCommitsBehind,
@@ -1100,6 +1101,122 @@ export async function syncWorkspace(
   }
 
   return { ok: skipped.length === 0 || opts.bestEffort === true, synced, skipped }
+}
+
+// --- Pull types ---
+
+export type PullRow = {
+  repo: string
+  status: "pending" | "fetching" | "pulling" | "pulled" | "skipped" | "failed"
+  detail: string
+}
+
+export type PullResult = {
+  ok: boolean
+  pulled: Array<{ repo: string; commits: number }>
+  skipped: Array<{ repo: string; reason: string }>
+  failed: Array<{ repo: string; reason: string }>
+  error?: string
+}
+
+export async function pullWorkspace(
+  nameOrWorkspace: string | Workspace,
+  onProgress?: (update: PullRow) => void
+): Promise<PullResult> {
+  let workspace: Workspace
+  if (typeof nameOrWorkspace === "string") {
+    if (!workspaceExists(nameOrWorkspace)) {
+      return { ok: false, pulled: [], skipped: [], failed: [], error: `Workspace '${nameOrWorkspace}' not found.` }
+    }
+    workspace = readWorkspace(nameOrWorkspace)
+  } else {
+    workspace = nameOrWorkspace
+  }
+
+  const repos = workspace.repos
+
+  if (repos.length === 0) {
+    return { ok: true, pulled: [], skipped: [], failed: [] }
+  }
+
+  // Phase 1: Parallel fetch, deduplicated by main_path
+  const fetchGroups = new Map<string, typeof repos>()
+  for (const repo of repos) {
+    const key = repo.main_path
+    if (!fetchGroups.has(key)) fetchGroups.set(key, [])
+    fetchGroups.get(key)!.push(repo)
+  }
+
+  const fetchFailures = new Map<string, string>()
+  await Promise.all(
+    Array.from(fetchGroups.entries()).map(async ([mainPath, groupRepos]) => {
+      for (const r of groupRepos) {
+        onProgress?.({ repo: r.name, status: "fetching", detail: "" })
+      }
+      try {
+        await fetchOrigin(mainPath)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "fetch failed"
+        const detail = msg.includes("timeout") ? "fetch failed (timeout)" : "fetch failed"
+        for (const r of groupRepos) {
+          fetchFailures.set(r.name, detail)
+          onProgress?.({ repo: r.name, status: "failed", detail })
+        }
+      }
+    })
+  )
+
+  // Phase 2: Sequential pull per repo
+  const pulled: PullResult["pulled"] = []
+  const skipped: PullResult["skipped"] = []
+  const failed: PullResult["failed"] = []
+
+  for (const repo of repos) {
+    const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
+    const pullBranch = repo.mode === "worktree"
+      ? workspace.branch
+      : (repo.base_branch ?? "main")
+
+    if (!existsSync(repoPath)) {
+      skipped.push({ repo: repo.name, reason: "path missing" })
+      onProgress?.({ repo: repo.name, status: "skipped", detail: "path missing" })
+      continue
+    }
+
+    if (fetchFailures.has(repo.name)) {
+      failed.push({ repo: repo.name, reason: fetchFailures.get(repo.name)! })
+      onProgress?.({ repo: repo.name, status: "failed", detail: fetchFailures.get(repo.name)! })
+      continue
+    }
+
+    if (await isRepoDirty(repoPath)) {
+      skipped.push({ repo: repo.name, reason: "dirty" })
+      onProgress?.({ repo: repo.name, status: "skipped", detail: "dirty" })
+      continue
+    }
+
+    onProgress?.({ repo: repo.name, status: "pulling", detail: "" })
+    const pullResult = await pullFFOnly(repoPath, pullBranch)
+
+    if (!pullResult.ok) {
+      failed.push({ repo: repo.name, reason: pullResult.reason })
+      onProgress?.({ repo: repo.name, status: "failed", detail: pullResult.reason })
+      continue
+    }
+
+    const detail = pullResult.commits === 0
+      ? "already up to date"
+      : `${pullResult.commits} commit${pullResult.commits === 1 ? "" : "s"}`
+    pulled.push({ repo: repo.name, commits: pullResult.commits })
+    onProgress?.({ repo: repo.name, status: "pulled", detail })
+  }
+
+  return {
+    ok: skipped.length === 0 && failed.length === 0,
+    pulled,
+    skipped,
+    failed,
+  }
 }
 
 export function editWorkspaceYaml(name: string): {
