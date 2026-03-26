@@ -124,7 +124,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
   2. User can pass `--prefix "--add-dir"` and receive each path prefixed with the flag string (e.g., `--add-dir /path/a`)
   3. Running `git-stacks paths` from inside a workspace worktree directory autodetects the workspace without an explicit argument
   4. Worktree repos emit `task_path`, trunk repos emit `main_path`; repos with missing task_paths are skipped with a stderr warning
-**Plans**: TBD
+**Plans**: 1 plan, 1 wave (3 tasks)
 
 ### Phase 38: Multi-Repo Pull
 **Goal**: Users can pull latest commits for all repos in a workspace with a single command, with safe defaults that prevent data loss
@@ -185,7 +185,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 21-28. Close Command & Polish | v0.7.0 | 20/20 | Complete | 2026-03-22 |
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
-| 37. Agent Path Discovery | v0.10.0 | 0/TBD | Not started | - |
+| 37. Agent Path Discovery | v0.10.0 | 0/1 | Planned | - |
 | 38. Multi-Repo Pull | v0.10.0 | 0/TBD | Not started | - |
 | 39. TUI Upstream Staleness | v0.10.0 | 0/TBD | Not started | - |
 | 40. Template Composition | v0.10.0 | 0/TBD | Not started | - |
