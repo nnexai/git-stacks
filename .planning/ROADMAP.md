@@ -162,7 +162,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
   4. Hooks from included templates concatenate in include order, with the top-level template's hooks running last
   5. A circular `includes:` chain produces a clear error message and does not hang or crash
   6. Existing templates without `includes:` continue to load and work without changes
-**Plans**: TBD
+**Plans**: 2 plans, 2 waves (3 tasks)
 
 ### Phase 41: Release Prep
 **Goal**: v0.10.0 is tagged and documented with all new features covered in CHANGELOG and README
@@ -188,5 +188,5 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 37. Agent Path Discovery | v0.10.0 | 1/1 | Complete    | 2026-03-26 |
 | 38. Multi-Repo Pull | v0.10.0 | 0/1 | Planned | - |
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Planned | - |
-| 40. Template Composition | v0.10.0 | 0/TBD | Not started | - |
+| 40. Template Composition | v0.10.0 | 0/2 | Planned | - |
 | 41. Release Prep | v0.10.0 | 0/TBD | Not started | - |
