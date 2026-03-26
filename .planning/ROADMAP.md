@@ -111,7 +111,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 - [ ] **Phase 38: Multi-Repo Pull** - `git-stacks pull` pulls latest across all repos in a workspace
 - [ ] **Phase 39: TUI Upstream Staleness** - Dashboard shows "N behind" badge per repo with TTL-cached fetch
 - [ ] **Phase 40: Template Composition** - `includes:` field and multi-`--template` ad-hoc composition
-- [ ] **Phase 41: Release Prep** - v0.10.0 version bump, CHANGELOG, README
+- [ ] **Phase 41: Release Prep** - v0.10.0 version bump, CHANGELOG, README (1 plan, 1 wave)
 
 ## Phase Details
 
@@ -172,7 +172,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
   1. `package.json` version field reads `0.10.0`
   2. CHANGELOG contains an entry for v0.10.0 covering `paths`, `pull`, TUI staleness, and template composition
   3. README documents `paths` and `pull` with usage examples including the agent CLI injection pattern
-**Plans**: TBD
+**Plans**: 1 plan, 1 wave (3 tasks)
 
 ## Progress
 
@@ -189,4 +189,4 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 38. Multi-Repo Pull | v0.10.0 | 0/1 | Planned | - |
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Planned | - |
 | 40. Template Composition | v0.10.0 | 0/2 | Planned | - |
-| 41. Release Prep | v0.10.0 | 0/TBD | Not started | - |
+| 41. Release Prep | v0.10.0 | 0/1 | Planned | - |
