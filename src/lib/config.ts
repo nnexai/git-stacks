@@ -87,6 +87,7 @@ export const TemplateSchema = z.object({
   env_file: z.string().optional(),
   files: FilesSchema,
   integrations: z.record(z.unknown()).optional(),
+  includes: z.array(z.string()).optional(),
 })
 export type Template = z.infer<typeof TemplateSchema>
 
