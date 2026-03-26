@@ -16,12 +16,12 @@ Requirements for Multi-Agent Workspace Tooling milestone. Each maps to roadmap p
 
 ### Multi-Repo Pull
 
-- [ ] **PULL-01**: User can run `git-stacks pull [workspace]` to pull latest for all repos in a workspace
-- [ ] **PULL-02**: Worktree repos pull their workspace branch; trunk repos pull their default branch
-- [ ] **PULL-03**: Dirty repos are skipped with a warning; command exits non-zero if any repo was skipped
-- [ ] **PULL-04**: Fetch is deduplicated per unique `main_path` (shared across worktrees of the same repo)
-- [ ] **PULL-05**: Pull uses `--ff-only`; diverged branches fail fast with a clear message
-- [ ] **PULL-06**: Command autodetects workspace from cwd when no workspace argument is given
+- [x] **PULL-01**: User can run `git-stacks pull [workspace]` to pull latest for all repos in a workspace
+- [x] **PULL-02**: Worktree repos pull their workspace branch; trunk repos pull their default branch
+- [x] **PULL-03**: Dirty repos are skipped with a warning; command exits non-zero if any repo was skipped
+- [x] **PULL-04**: Fetch is deduplicated per unique `main_path` (shared across worktrees of the same repo)
+- [x] **PULL-05**: Pull uses `--ff-only`; diverged branches fail fast with a clear message
+- [x] **PULL-06**: Command autodetects workspace from cwd when no workspace argument is given
 
 ### TUI Upstream Staleness
 
@@ -78,12 +78,12 @@ Deferred to future release. Tracked but not in current roadmap.
 | PATH-02 | Phase 37 | Pending |
 | PATH-03 | Phase 37 | Pending |
 | PATH-04 | Phase 37 | Pending |
-| PULL-01 | Phase 38 | Pending |
-| PULL-02 | Phase 38 | Pending |
-| PULL-03 | Phase 38 | Pending |
-| PULL-04 | Phase 38 | Pending |
-| PULL-05 | Phase 38 | Pending |
-| PULL-06 | Phase 38 | Pending |
+| PULL-01 | Phase 38 | Verified |
+| PULL-02 | Phase 38 | Verified |
+| PULL-03 | Phase 38 | Verified |
+| PULL-04 | Phase 38 | Verified |
+| PULL-05 | Phase 38 | Verified |
+| PULL-06 | Phase 38 | Verified |
 | STALE-01 | Phase 39 | Pending |
 | STALE-02 | Phase 39 | Pending |
 | STALE-03 | Phase 39 | Pending |

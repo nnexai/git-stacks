@@ -186,7 +186,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37. Agent Path Discovery | v0.10.0 | 1/1 | Complete    | 2026-03-26 |
-| 38. Multi-Repo Pull | v0.10.0 | 1/1 | Complete   | 2026-03-26 |
+| 38. Multi-Repo Pull | v0.10.0 | 1/1 | Complete    | 2026-03-26 |
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Planned | - |
 | 40. Template Composition | v0.10.0 | 0/2 | Planned | - |
 | 41. Release Prep | v0.10.0 | 0/1 | Planned | - |
