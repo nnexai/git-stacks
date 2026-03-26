@@ -67,6 +67,17 @@ git-stacks template rename <old> <new>  # Rename a template
 git-stacks template remove <name>       # Remove a template
 ```
 
+Templates support composition via `includes:` — declare building-block templates that merge their repos:
+
+```yaml
+# ~/.config/git-stacks/templates/full-stack.yml
+name: full-stack
+includes: [api, frontend]    # Merges repos from both templates
+repos: []                     # Can add additional repos on top
+```
+
+Ad-hoc composition on the command line: `git-stacks new my-feature --template api --template frontend`. When the same repo appears in multiple templates, worktree mode wins over trunk. Hooks concatenate in include order with the top-level template's hooks running last.
+
 ## Workspaces
 
 ```bash
@@ -84,6 +95,8 @@ git-stacks clean [name]            # Remove worktrees + folder (config kept), or
 git-stacks remove <name>           # Permanently remove worktrees + config (--force handles corrupt YAML)
 git-stacks edit <name>             # Edit workspace interactively, or --yaml to open raw YAML in $EDITOR
 git-stacks cd <name> [repo]        # Print path — use via shell function
+git-stacks paths [workspace]       # Output repo paths (one per line) for agent CLI injection
+git-stacks pull [workspace]        # Pull latest for all repos (--ff-only, skips dirty)
 ```
 
 ### Shell `cd` integration
@@ -99,6 +112,49 @@ wcd() { cd "$(git-stacks cd "$@")"; }
 ```fish
 function wcd; cd (git-stacks cd $argv); end
 ```
+
+## Agent Path Discovery
+
+Query workspace repo paths for injection into agent CLI tools:
+
+```bash
+# List all repo paths in a workspace (one per line)
+git-stacks paths my-feature
+
+# Prepend each path with a CLI flag for piping into an agent command
+git-stacks paths my-feature --prefix "--add-dir"
+# Output:
+#   --add-dir /home/user/workspaces/tasks/my-feature/api
+#   --add-dir /home/user/workspaces/tasks/my-feature/frontend
+#   --add-dir /home/user/workspaces/main/shared-lib
+
+# Inject directly into an agent CLI invocation
+claude $(git-stacks paths my-feature --prefix "--add-dir")
+
+# Filter by repo mode
+git-stacks paths my-feature --filter worktree   # Only worktree repos
+git-stacks paths my-feature --filter trunk       # Only trunk repos
+
+# Autodetects workspace when run inside a worktree directory
+cd ~/workspaces/tasks/my-feature/api
+git-stacks paths    # same as: git-stacks paths my-feature
+```
+
+Worktree repos emit their task path; trunk repos emit their main clone path. Repos with missing task directories are skipped with a stderr warning.
+
+## Multi-Repo Pull
+
+Pull latest commits for all repos in a workspace:
+
+```bash
+# Pull all repos in a workspace
+git-stacks pull my-feature
+
+# Autodetects workspace from current directory
+git-stacks pull
+```
+
+Worktree repos pull their workspace branch; trunk repos pull their default branch. Uses `--ff-only` for safety — diverged branches produce a clear error identifying the repo and branch. Dirty repos (uncommitted changes) are skipped with a warning. Exit code is non-zero if any repo was skipped or failed.
 
 ## Workspace Notifications
 
@@ -137,7 +193,7 @@ The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs
 - Switch tabs with `1` / `2` / `3` or `[` / `]`
 - Each tab shows a split list + detail pane — detail updates as you move the cursor
 - All dialogs render as centered overlays with dimmed backgrounds
-- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane
+- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane; per-repo "N behind" staleness badges in detail view
   - `s` — sync workspace (per-repo progress with 30s fetch timeout)
   - `m` — open full-screen message overlay for selected workspace
   - `c` — clear messages from a sender in the detail pane
