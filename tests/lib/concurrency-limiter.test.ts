@@ -1,17 +1,6 @@
 import { describe, it, expect } from "bun:test"
 import { mapLimited } from "../../src/lib/concurrency"
 
-// Helper: a deferred promise that can be resolved/rejected externally
-function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void; reject: (e: unknown) => void } {
-  let resolve!: (v: T) => void
-  let reject!: (e: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
-
 describe("mapLimited", () => {
   it("runs at most N tasks concurrently (max=3)", async () => {
     let peak = 0

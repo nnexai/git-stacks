@@ -1,5 +1,6 @@
 import { createSignal, untrack } from "solid-js"
 import { fetchOrigin, getCommitsBehind, hasUpstreamTracking, getCurrentBranch } from "../../../lib/git"
+import { mapLimited } from "../../../lib/concurrency"
 import type { Workspace } from "../../../lib/config"
 
 export type StaleInfo = {
@@ -9,11 +10,14 @@ export type StaleInfo = {
 }
 
 const STALENESS_TTL = 5 * 60 * 1000 // 5 minutes
+const MAX_CONCURRENT_FETCHES = 3
 
 export function useStaleness() {
   const [staleness, setStaleness] = createSignal<Map<string, StaleInfo>>(new Map())
+  let fetching = false
 
   function fetchStaleness(workspace: Workspace): void {
+    if (fetching) return
     const repos = workspace.repos
     // Deduplicate by main_path
     const seen = new Set<string>()
@@ -49,9 +53,12 @@ export function useStaleness() {
       return next
     })
 
-    // Fetch all concurrently
-    Promise.allSettled(
-      needsFetch.map(async (repo) => {
+    fetching = true
+
+    // Fetch with bounded concurrency
+    mapLimited(
+      needsFetch,
+      async (repo) => {
         const branch = repo.mode === "worktree"
           ? workspace.branch
           : await getCurrentBranch(repo.main_path)
@@ -69,7 +76,8 @@ export function useStaleness() {
 
         const count = await getCommitsBehind(repo.main_path, "origin/" + branch, branch)
         return { mainPath: repo.main_path, info: { count, error: false, fetchedAt: Date.now() } satisfies StaleInfo }
-      })
+      },
+      MAX_CONCURRENT_FETCHES
     ).then(results => {
       setStaleness(prev => {
         const next = new Map(prev)
@@ -80,6 +88,8 @@ export function useStaleness() {
         }
         return next
       })
+    }).finally(() => {
+      fetching = false
     })
   }
 
