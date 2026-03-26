@@ -75,11 +75,12 @@ Progress: [██████████] 100%
 |---|-------------|------|--------|-----------|
 | 260325-mrf | Fix TUI enter menu showing shortcuts twice and bump version to v0.9.1 | 2026-03-25 | 47c0eb6 | [260325-mrf-fix-tui-enter-menu-showing-shortcuts-twi](./quick/260325-mrf-fix-tui-enter-menu-showing-shortcuts-twi/) |
 | 260325-uns | Fix fish completion "too many arguments" error from unescaped apostrophes in descriptions | 2026-03-25 | 67102bd | [260325-uns-fix-fish-completion-error-too-many-argum](./quick/260325-uns-fix-fish-completion-error-too-many-argum/) |
+| 260326-w2u | Add concurrency limiter (max 3) and re-entrancy guard to useStaleness TUI hook | 2026-03-26 | bb377be | [260326-w2u-add-concurrency-limiter-to-usestaleness-](./quick/260326-w2u-add-concurrency-limiter-to-usestaleness-/) |
 
 ## Session Continuity
 
 Last activity: 2026-03-26 - Phase 38 planned
-Last session: 2026-03-26T20:50:04.885Z
-Stopped at: Completed 41-01-PLAN.md
+Last session: 2026-03-26T22:10:14Z
+Stopped at: Completed quick task 260326-w2u
 Resume file: None
 Next action: /gsd:complete-milestone
