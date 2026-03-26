@@ -26,6 +26,7 @@ import { runIntegrationGenerate } from "../lib/integrations/runner"
 import { runHooks } from "../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
 import { openWorkspace } from "../lib/workspace-ops"
+import { composeTemplates } from "../lib/composition"
 
 async function pickReposFromRegistry(
   registry: RepoRegistryEntry[],
@@ -97,7 +98,7 @@ function buildReposFromTemplate(
   return repos
 }
 
-export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
+export async function runWorkspaceNew(nameArg?: string, fromSource?: string, templateNames?: string[]) {
   p.intro("New workspace")
 
   const config = readGlobalConfig()
@@ -124,7 +125,26 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
   let wsIntegrationSettings: Record<string, unknown> | undefined
 
   // Determine creation mode
-  if (fromSource) {
+  if (templateNames && templateNames.length > 0) {
+    // CLI --template flag: compose from multiple templates
+    const registry = readRegistry()
+    let template: Template
+
+    try {
+      template = composeTemplates(templateNames)
+    } catch (err) {
+      p.cancel(err instanceof Error ? err.message : String(err))
+      process.exit(1)
+    }
+
+    templateName = templateNames[templateNames.length - 1] // top-level template name for metadata
+    repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
+    wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+    wsEnv = template.env ? { ...template.env } : undefined
+    wsEnvFile = template.env_file
+    wsFiles = template.files
+    wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+  } else if (fromSource) {
     // --from was specified: resolve as local path or template name
     const expanded = expandHome(fromSource)
     const resolved = resolve(expanded)
@@ -162,10 +182,22 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
         base_branch: regEntry.default_branch,
       }]
     } else if (templateExists(fromSource)) {
-      // --from <template-name>: create from template
+      // --from <template-name>: create from template (resolve includes if present)
       templateName = fromSource
-      const template = readTemplate(fromSource)
+      const rawTemplate = readTemplate(fromSource)
       const registry = readRegistry()
+
+      let template: Template
+      if (rawTemplate.includes && rawTemplate.includes.length > 0) {
+        try {
+          template = composeTemplates([...rawTemplate.includes, templateName])
+        } catch (err) {
+          p.cancel(err instanceof Error ? err.message : String(err))
+          process.exit(1)
+        }
+      } else {
+        template = rawTemplate
+      }
 
       repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
 
@@ -213,7 +245,21 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string) {
       })
       if (p.isCancel(tplRaw)) cancel()
       templateName = tplRaw as string
-      const template = readTemplate(templateName)
+      const rawTemplate = readTemplate(templateName)
+
+      // Resolve includes if present
+      let template: Template
+      if (rawTemplate.includes && rawTemplate.includes.length > 0) {
+        try {
+          template = composeTemplates([...rawTemplate.includes, templateName])
+        } catch (err) {
+          p.cancel(err instanceof Error ? err.message : String(err))
+          process.exit(1)
+        }
+      } else {
+        template = rawTemplate
+      }
+
       repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
 
       // Snapshot template config

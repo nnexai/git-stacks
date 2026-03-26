@@ -90,8 +90,14 @@ export function registerWorkspaceCommands(program: Command) {
     .command("new [name]")
     .description("Create a new workspace interactively")
     .option("--from <source>", "Create from template name or local repo path")
-    .action(async (name: string | undefined, opts: { from?: string }) => {
-      await runWorkspaceNew(name, opts.from)
+    .option("--template <name>", "Compose from template(s) — repeatable", (val: string, arr: string[]) => { arr.push(val); return arr }, [] as string[])
+    .action(async (name: string | undefined, opts: { from?: string; template?: string[] }) => {
+      if (opts.from && opts.template && opts.template.length > 0) {
+        console.error("[git-stacks] Error: --from and --template are mutually exclusive")
+        process.exit(1)
+      }
+      const templateNames = opts.template && opts.template.length > 0 ? opts.template : undefined
+      await runWorkspaceNew(name, opts.from, templateNames)
     })
 
   program
