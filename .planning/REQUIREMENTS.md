@@ -33,13 +33,13 @@ Requirements for Multi-Agent Workspace Tooling milestone. Each maps to roadmap p
 
 ### Template Composition
 
-- [ ] **COMP-01**: Templates support an `includes: string[]` field that references other template names as building blocks
-- [ ] **COMP-02**: `git-stacks new` accepts multiple `--template` flags for ad-hoc composition (e.g., `--template api --template frontend`)
-- [ ] **COMP-03**: Repos are merged as a union; if the same repo appears in multiple templates, worktree mode wins over trunk
-- [ ] **COMP-04**: Hooks concatenate in include order; the top-level template's hooks run last
-- [ ] **COMP-05**: Env vars merge with last-wins per key; top-level template env wins over included templates
-- [ ] **COMP-06**: Circular `includes:` chains are detected and produce a clear error message
-- [ ] **COMP-07**: Existing templates without `includes:` continue to work (backward-compatible schema change)
+- [x] **COMP-01**: Templates support an `includes: string[]` field that references other template names as building blocks — Phase 40
+- [x] **COMP-02**: `git-stacks new` accepts multiple `--template` flags for ad-hoc composition (e.g., `--template api --template frontend`) — Phase 40
+- [x] **COMP-03**: Repos are merged as a union; if the same repo appears in multiple templates, worktree mode wins over trunk — Phase 40
+- [x] **COMP-04**: Hooks concatenate in include order; the top-level template's hooks run last — Phase 40
+- [x] **COMP-05**: Env vars merge with last-wins per key; top-level template env wins over included templates — Phase 40
+- [x] **COMP-06**: Circular `includes:` chains are detected and produce a clear error message — Phase 40
+- [x] **COMP-07**: Existing templates without `includes:` continue to work (backward-compatible schema change) — Phase 40
 
 ### Release Prep
 
