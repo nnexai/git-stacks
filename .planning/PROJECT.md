@@ -8,7 +8,7 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State — v0.9.0 shipped (2026-03-25)
+## Current State — v0.10.0 in progress (Phase 37 complete, 2026-03-26)
 
 ### What shipped in v0.9.0
 
@@ -136,10 +136,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Shell completion audit — full bash/zsh/fish coverage for all commands including forge/issue subcommands — v0.9.0 Phase 34
 - ✓ Test isolation framework — custom test runner, complete mock factories, zero cache-busting imports — v0.9.0 Phase 34.1
 - ✓ Dynamic name completion — shell completion resolves workspace/template names from YAML `name` fields instead of filename globs — v0.9.0 Phase 35
+- ✓ `git-stacks paths` — workspace repo path output with `--prefix`/`--filter` flags for agent CLI injection — v0.10.0 Phase 37
 
 ### Active
 
-- [ ] `git-stacks paths` — output workspace repo paths with `--prefix` flag for agent CLI arg injection
+- [x] `git-stacks paths` — output workspace repo paths with `--prefix` flag for agent CLI arg injection — v0.10.0 Phase 37
 - [ ] `git-stacks pull` — pull latest for all repos in a workspace (worktrees pull branch, trunk repos pull default branch)
 - [ ] `git-stacks env` — dump merged workspace env vars with `--format shell|dotenv|json`
 - [ ] TUI upstream staleness indicator — periodic "N behind" badge per repo with cached fetch check
@@ -284,4 +285,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-25 — Milestone v0.10.0 started: Multi-Agent Workspace Tooling*
+*Last updated: 2026-03-26 — Phase 37 (Agent Path Discovery) complete*
