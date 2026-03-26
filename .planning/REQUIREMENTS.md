@@ -25,11 +25,11 @@ Requirements for Multi-Agent Workspace Tooling milestone. Each maps to roadmap p
 
 ### TUI Upstream Staleness
 
-- [ ] **STALE-01**: Workspace detail pane shows "N behind" badge per repo when upstream has newer commits
-- [ ] **STALE-02**: Fetch is triggered on workspace focus (entering detail pane) with results cached per `main_path` with a TTL (e.g., 5 minutes)
-- [ ] **STALE-03**: User can manually refresh staleness via a keybinding (e.g., `r`) that bypasses TTL cache
-- [ ] **STALE-04**: Repos without upstream tracking show a dash or no badge (no error)
-- [ ] **STALE-05**: Network failures show a `?` badge and do not crash the TUI
+- [x] **STALE-01**: Workspace detail pane shows "N behind" badge per repo when upstream has newer commits
+- [x] **STALE-02**: Fetch is triggered on workspace focus (entering detail pane) with results cached per `main_path` with a TTL (e.g., 5 minutes)
+- [x] **STALE-03**: User can manually refresh staleness via a keybinding (e.g., `r`) that bypasses TTL cache
+- [x] **STALE-04**: Repos without upstream tracking show a dash or no badge (no error)
+- [x] **STALE-05**: Network failures show a `?` badge and do not crash the TUI
 
 ### Template Composition
 
@@ -84,11 +84,11 @@ Deferred to future release. Tracked but not in current roadmap.
 | PULL-04 | Phase 38 | Verified |
 | PULL-05 | Phase 38 | Verified |
 | PULL-06 | Phase 38 | Verified |
-| STALE-01 | Phase 39 | Pending |
-| STALE-02 | Phase 39 | Pending |
-| STALE-03 | Phase 39 | Pending |
-| STALE-04 | Phase 39 | Pending |
-| STALE-05 | Phase 39 | Pending |
+| STALE-01 | Phase 39 | Verified |
+| STALE-02 | Phase 39 | Verified |
+| STALE-03 | Phase 39 | Verified |
+| STALE-04 | Phase 39 | Verified |
+| STALE-05 | Phase 39 | Verified |
 | COMP-01 | Phase 40 | Pending |
 | COMP-02 | Phase 40 | Pending |
 | COMP-03 | Phase 40 | Pending |
