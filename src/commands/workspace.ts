@@ -1,4 +1,5 @@
 import { Command } from "commander"
+import { existsSync } from "fs"
 import { prompts as p } from "../tui/utils"
 import { join } from "path"
 import { formatError } from "../lib/errors"
@@ -30,12 +31,52 @@ import {
   syncWorkspace,
   editWorkspaceYaml,
   openYamlInEditor,
+  detectWorkspaceFromCwd,
 } from "../lib/workspace-ops"
 import type { SyncRow } from "../lib/workspace-ops"
 
 function formatSyncRow(row: SyncRow): string {
   const label = row.status === "synced" ? "synced" : row.status === "skipped" ? "skipped" : "failed"
   return `${label}  ${row.repo}  ${row.detail}`
+}
+
+// --- Path discovery ---
+
+export type PathsResult =
+  | { ok: true; paths: string[]; skipped: string[] }
+  | { ok: false; error: string }
+
+export function getWorkspacePaths(
+  workspaceName: string,
+  opts: { prefix?: string; filter?: "worktree" | "trunk" }
+): PathsResult {
+  if (!workspaceExists(workspaceName)) {
+    return { ok: false, error: `Workspace '${workspaceName}' not found` }
+  }
+
+  const workspace = readWorkspace(workspaceName)
+  const paths: string[] = []
+  const skipped: string[] = []
+
+  for (const repo of workspace.repos) {
+    // Apply filter
+    if (opts.filter && repo.mode !== opts.filter) continue
+
+    // Resolve path based on mode
+    const resolvedPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
+
+    // Check if path exists on disk
+    if (!existsSync(resolvedPath)) {
+      skipped.push(`${repo.name}: ${resolvedPath}`)
+      continue
+    }
+
+    // Format with optional prefix
+    const line = opts.prefix ? `${opts.prefix} ${resolvedPath}` : resolvedPath
+    paths.push(line)
+  }
+
+  return { ok: true, paths, skipped }
 }
 
 export function registerWorkspaceCommands(program: Command) {
@@ -785,6 +826,61 @@ export function registerWorkspaceCommands(program: Command) {
 
       if (result.synced.length === 0 && result.skipped.length === 0) {
         console.log("Nothing to sync.")
+      }
+    })
+
+  program
+    .command("paths [workspace]")
+    .description("Output repo paths for a workspace (one per line) -- for agent CLI injection")
+    .option("--prefix <str>", "Prepend each path with a flag string (e.g., --prefix '--add-dir')")
+    .option("--filter <mode>", "Filter repos by mode: worktree or trunk")
+    .action(async (name: string | undefined, opts: { prefix?: string; filter?: string }) => {
+      let workspaceName: string
+
+      if (name) {
+        if (!workspaceExists(name)) {
+          console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+          process.exit(1)
+        }
+        workspaceName = name
+      } else {
+        const detection = detectWorkspaceFromCwd()
+        if (!detection.ok) {
+          console.error(formatError(
+            "Could not detect workspace from current directory",
+            "run from inside a worktree or specify: git-stacks paths <workspace>"
+          ))
+          process.exit(1)
+        }
+        workspaceName = detection.workspace.name
+      }
+
+      // Validate filter option
+      const filter = opts.filter as "worktree" | "trunk" | undefined
+      if (filter && filter !== "worktree" && filter !== "trunk") {
+        console.error(formatError(`Invalid filter '${filter}'`, "use: --filter worktree or --filter trunk"))
+        process.exit(1)
+      }
+
+      const result = getWorkspacePaths(workspaceName, { prefix: opts.prefix, filter })
+      if (!result.ok) {
+        console.error(formatError(result.error))
+        process.exit(1)
+      }
+
+      // Warn about skipped repos on stderr
+      for (const warning of result.skipped) {
+        console.error(`warning: skipping ${warning}`)
+      }
+
+      if (result.paths.length === 0) {
+        console.error(formatError("No paths to output -- all repos were skipped or filtered out"))
+        process.exit(1)
+      }
+
+      // Output paths to stdout, one per line
+      for (const p of result.paths) {
+        console.log(p)
       }
     })
 }
