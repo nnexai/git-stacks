@@ -1,11 +1,12 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, createMemo, Show, Switch, Match } from "solid-js"
+import { createSignal, createMemo, createEffect, Show, Switch, Match } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
 import { useTemplates } from "./hooks/useTemplates"
 import { useRepos } from "./hooks/useRepos"
 import { useMessages } from "./hooks/useMessages"
+import { useStaleness } from "./hooks/useStaleness"
 import { socketStatus } from "./run"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
@@ -55,6 +56,7 @@ export default function App() {
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
   const { msgMap, tick, ipcCount, clearSender, reloadMessages } = useMessages()
+  const { staleness, fetchStaleness, invalidateCache } = useStaleness()
   const [refreshFlash, setRefreshFlash] = createSignal("")
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
@@ -139,6 +141,14 @@ export default function App() {
   const currentRepo = createMemo(() => filteredRepos()[tabCursor.repos[0]()])
 
   const allWorkspaces = createMemo(() => entries().map(e => e.workspace))
+
+  // Fetch staleness when workspace cursor changes (STALE-02: fetch on focus)
+  createEffect(() => {
+    const entry = currentEntry()
+    if (entry && tab() === "workspaces") {
+      fetchStaleness(entry.workspace)
+    }
+  })
 
   const selectedName = createMemo(() => {
     const t = tab()
@@ -1037,6 +1047,9 @@ export default function App() {
       if (key.name === "r") {
         if (tab() === "templates") { reloadTemplates(); setRefreshFlash("Refreshed templates"); setTimeout(() => setRefreshFlash(""), 1500); return }
         if (tab() === "repos") { reloadRepos(); setRefreshFlash("Refreshed repos"); setTimeout(() => setRefreshFlash(""), 1500); return }
+        invalidateCache()  // STALE-03: bypass TTL on manual refresh
+        const entry = currentEntry()
+        if (entry) fetchStaleness(entry.workspace)
         reloadMessages()  // sync — setMsgMap fires before reload()
         reload()
         setRefreshFlash("Refreshed")
@@ -1297,7 +1310,7 @@ export default function App() {
           {/* Tab-specific detail — always visible (dialogs overlay via absolute positioning) */}
           <Switch>
               <Match when={tab() === "workspaces"}>
-                <WorkspaceDetail entry={currentEntry()} messages={currentEntry() ? (msgMap().get(currentEntry()!.workspace.name) ?? []) : []} tick={tick()} />
+                <WorkspaceDetail entry={currentEntry()} messages={currentEntry() ? (msgMap().get(currentEntry()!.workspace.name) ?? []) : []} tick={tick()} staleness={staleness()} />
               </Match>
               <Match when={tab() === "templates"}>
                 <TemplateDetail template={currentTemplate()} />
