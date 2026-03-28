@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect, beforeAll, afterAll } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { WorkspaceRow } from "../../../../src/tui/dashboard/WorkspaceRow"
 import type { WorkspaceEntry } from "../../../../src/tui/dashboard/types"
@@ -24,7 +24,20 @@ function makeEntry(overrides: Partial<typeof baseWorkspace> = {}, status: Worksp
   }
 }
 
+// Freeze time to exactly 70 days after baseWorkspace.created
+// so formatAge produces a deterministic "70d" output
+const FROZEN_NOW = new Date("2026-01-15T10:00:00Z").getTime() + (70 * 24 * 60 * 60 * 1000)
+const originalDateNow = Date.now
+
 describe("WorkspaceRow snapshots", () => {
+  beforeAll(() => {
+    Date.now = () => FROZEN_NOW
+  })
+
+  afterAll(() => {
+    Date.now = originalDateNow
+  })
+
   test("renders focused row with no messages (shows creation date)", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
       () => (
