@@ -4,6 +4,23 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.10.1] — 2026-03-28
+
+### Security
+
+- **Input validation** — workspace, template, and repo names are now validated against a strict `NameSchema` (`[A-Za-z0-9._-]+`). Names containing path separators (`/`, `\`), traversal sequences (`..`), or shell metacharacters (`;`, backticks, `$()`) are rejected at schema parse time and at CLI entry points.
+- **Atomic config writes** — `writeYaml` now writes to a temporary file and renames, preventing config corruption from interrupted writes.
+- **env_file path boundary** — `writeEnvFiles` rejects `env_file` values that resolve outside the repo root directory.
+- **Doctor structured fixes** — `doctor --fix` no longer executes shell strings via `sh -c`. All fix operations use structured `FixOperation` objects dispatched to direct Bun APIs (`rmSync`, `spawnSync` with explicit argument arrays).
+- **Shell path quoting** — tmux and niri integrations now single-quote all interpolated paths in `cd` commands, preventing breakage with spaces or special characters.
+
+### Fixed
+
+- **Snapshot test stability** — `WorkspaceRow` snapshot tests now freeze `Date.now` to produce deterministic output regardless of when they run.
+- **Test command docs** — `CLAUDE.md` corrected from `bun test tests/` to `bun run test` with explanation of mock isolation.
+
+---
+
 ## [0.10.0] — 2026-03-26
 
 ### Added
