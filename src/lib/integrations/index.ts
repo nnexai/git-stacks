@@ -3,6 +3,7 @@ import { intellijIntegration } from "./intellij"
 import { cmuxIntegration } from "./cmux"
 import { tmuxIntegration } from "./tmux"
 import { niriIntegration } from "./niri"
+import { aerospaceIntegration } from "./aerospace"
 import { githubIntegration } from "./github"
 import { gitlabIntegration } from "./gitlab"
 import { giteaIntegration } from "./gitea"
@@ -15,6 +16,6 @@ export { type Integration, type IntegrationContext, type IntegrationArtifact, ty
  * Add new integrations here and in their own file — no other files need touching.
  */
 export const integrations = [
-  vscodeIntegration, intellijIntegration, cmuxIntegration, tmuxIntegration, niriIntegration,
+  vscodeIntegration, intellijIntegration, cmuxIntegration, tmuxIntegration, niriIntegration, aerospaceIntegration,
   githubIntegration, gitlabIntegration, giteaIntegration, jiraIntegration,
 ]
