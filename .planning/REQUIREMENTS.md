@@ -54,26 +54,26 @@ Requirements for AeroSpace Window Management milestone. Each maps to roadmap pha
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WRAP-01 | — | Pending |
-| WRAP-02 | — | Pending |
-| WRAP-03 | — | Pending |
-| DETECT-01 | — | Pending |
-| DETECT-02 | — | Pending |
-| DETECT-03 | — | Pending |
-| DETECT-04 | — | Pending |
-| DETECT-05 | — | Pending |
-| LAYOUT-01 | — | Pending |
-| LAYOUT-02 | — | Pending |
-| LAYOUT-03 | — | Pending |
-| LAYOUT-04 | — | Pending |
-| LAUNCH-01 | — | Pending |
-| LAUNCH-02 | — | Pending |
+| WRAP-01 | Phase 43 | Pending |
+| WRAP-02 | Phase 43 | Pending |
+| WRAP-03 | Phase 43 | Pending |
+| DETECT-01 | Phase 44 | Pending |
+| DETECT-02 | Phase 44 | Pending |
+| DETECT-03 | Phase 44 | Pending |
+| DETECT-04 | Phase 44 | Pending |
+| DETECT-05 | Phase 44 | Pending |
+| LAYOUT-01 | Phase 45 | Pending |
+| LAYOUT-02 | Phase 45 | Pending |
+| LAYOUT-03 | Phase 45 | Pending |
+| LAYOUT-04 | Phase 45 | Pending |
+| LAUNCH-01 | Phase 45 | Pending |
+| LAUNCH-02 | Phase 45 | Pending |
 
 **Coverage:**
 - v0.11.0 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*

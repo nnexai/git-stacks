@@ -10,6 +10,7 @@
 - ✅ **v0.8.0 Integration Polish & Workspace UX** — Phases 29-32 (shipped 2026-03-24) — Upstream branch tracking, dashboard linked issues fix, workspace CWD auto-detection, GitLab branch slash investigation. See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md)
 - ✅ **v0.9.0 Identity & Completion Integrity** — Phases 33-36 (shipped 2026-03-25) — Name-based identity, completion audit, test isolation, dynamic name completion. See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md)
 - ✅ **v0.10.0 Multi-Agent Workspace Tooling** — Phases 37-42 (shipped 2026-03-28) — Agent path discovery, multi-repo pull, TUI staleness, template composition, security hardening. See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md)
+- 🚧 **v0.11.0 AeroSpace Window Management** — Phases 43-46 (in progress) — AeroSpace shell wrappers, core integration plugin, layout control, release prep.
 
 ## Phases
 
@@ -117,6 +118,63 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 
 </details>
 
+### 🚧 v0.11.0 AeroSpace Window Management (In Progress)
+
+**Milestone Goal:** Add AeroSpace tiling window manager integration for macOS — typed CLI wrappers, snapshot-delta window detection, workspace targeting, normalization-aware layout, app launching, and doctor checks.
+
+- [ ] **Phase 43: AeroSpace Shell Wrappers & Doctor** - Typed async CLI wrappers with injectable `_exec`, platform gate, and doctor binary check
+- [ ] **Phase 44: Core Integration Plugin** - Snapshot-delta window detection, workspace validation, window movement, integration plugin registration
+- [ ] **Phase 45: Layout Control & App Launching** - Normalization-aware layout, flatten-before-open, workspace focus, commands array with delta detection
+- [ ] **Phase 46: Release Prep** - v0.11.0 version bump, CHANGELOG entry, README AeroSpace section
+
+## Phase Details
+
+### Phase 43: AeroSpace Shell Wrappers & Doctor
+**Goal**: Users can use typed AeroSpace CLI wrappers with full test isolation, and `git-stacks doctor` reports binary availability on macOS
+**Depends on**: Phase 42 (prior milestone complete)
+**Requirements**: WRAP-01, WRAP-02, WRAP-03
+**Success Criteria** (what must be TRUE):
+  1. `src/lib/aerospace.ts` exports typed async wrappers for `list-windows`, `list-workspaces`, `move-node-to-workspace`, `focus`, `layout`, and `flatten-workspace-tree` — all testable without a running AeroSpace instance via injectable `_exec`
+  2. `isAerospaceRunning()` returns false on non-macOS platforms (CI passes without `aerospace` binary)
+  3. `git-stacks doctor` prints a warn-level entry for missing `aerospace` binary on macOS and silently passes on Linux
+  4. `--format` TSV output is parsed with tab-split (not whitespace split), validated by unit tests with multi-word app names
+**Plans**: TBD
+
+### Phase 44: Core Integration Plugin
+**Goal**: Users can configure the AeroSpace integration in workspace/template YAML and newly opened windows are automatically moved to their target AeroSpace workspace
+**Depends on**: Phase 43
+**Requirements**: DETECT-01, DETECT-02, DETECT-03, DETECT-04, DETECT-05
+**Success Criteria** (what must be TRUE):
+  1. `settings.integrations.aerospace.workspace` in workspace or template YAML controls which AeroSpace workspace windows are moved to
+  2. When `git-stacks open` runs with AeroSpace integration enabled, windows appearing after launch are detected via snapshot-delta and moved to the configured workspace
+  3. Integration validates the target workspace exists via `list-workspaces` before attempting any window moves; unknown workspace names produce a clear error
+  4. `cleanup()` is a no-op — removing a workspace does not modify AeroSpace state
+  5. Integration is registered in `src/lib/integrations/index.ts` as a tier-3 plugin (order 31, disabled by default)
+**Plans**: TBD
+
+### Phase 45: Layout Control & App Launching
+**Goal**: Users can configure root layout, normalization behavior, pre-open flattening, workspace focus, and arbitrary app launch commands that are automatically arranged in the target AeroSpace workspace
+**Depends on**: Phase 44
+**Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03, LAYOUT-04, LAUNCH-01, LAUNCH-02
+**Success Criteria** (what must be TRUE):
+  1. `layout` config field (`h_tiles`/`v_tiles`/`h_accordion`/`v_accordion`) applies the chosen root layout to the target workspace after window placement
+  2. `normalization: true` (default) uses `flatten-workspace-tree` + `layout` commands; `normalization: false` uses `split`-based alternatives — preventing the silent `split` failure on normalization-enabled setups
+  3. `flatten_before_open: true` resets nested containers before window placement, producing a clean layout on repeated `git-stacks open`
+  4. `focus: true` switches AeroSpace to the target workspace after setup so it is immediately visible
+  5. A `commands` array in integration config launches arbitrary apps and their windows are detected via snapshot-delta and moved to the target workspace
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 46: Release Prep
+**Goal**: v0.11.0 is published with version bump, changelog, and README documentation
+**Depends on**: Phase 45
+**Requirements**: (no new v0.11.0 requirements — release deliverable)
+**Success Criteria** (what must be TRUE):
+  1. `package.json` version is bumped to `0.11.0`
+  2. CHANGELOG contains an entry for v0.11.0 covering all four shipped features (shell wrappers, core plugin, layout control, app launching)
+  3. README documents AeroSpace integration with a config YAML example showing `workspace`, `layout`, `normalization`, `flatten_before_open`, `focus`, and `commands` fields
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -129,3 +187,7 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
+| 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 0/TBD | Not started | - |
+| 44. Core Integration Plugin | v0.11.0 | 0/TBD | Not started | - |
+| 45. Layout Control & App Launching | v0.11.0 | 0/TBD | Not started | - |
+| 46. Release Prep | v0.11.0 | 0/TBD | Not started | - |
