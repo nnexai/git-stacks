@@ -30,6 +30,9 @@ import {
   WorkspaceSchema,
   TemplateSchema,
 } from "../../src/lib/config"
+import {
+  writeEnvFiles,
+} from "../../src/lib/workspace-ops"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
 const isolated = useIsolatedConfig("ws-ops")
@@ -1563,5 +1566,91 @@ describe("renameTemplate", () => {
     const result = await renameTemplate(nameA, nameB)
     expect(result.ok).toBe(false)
     expect(result.error).toMatch(/already exists/)
+  })
+})
+
+// ============================================================================
+// describe("writeEnvFiles path boundary") — CR-03
+// ============================================================================
+
+describe("writeEnvFiles path boundary", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-env-boundary")
+  })
+
+  afterEach(() => cleanup(tmp))
+
+  function makeEnvFixture(envFileName: string) {
+    const repoPath = join(tmp, "repo")
+    mkdirSync(repoPath, { recursive: true })
+
+    const ws = WorkspaceSchema.parse({
+      name: "env-test",
+      branch: "main",
+      created: "2026-01-01",
+      env_file: envFileName,
+      repos: [{
+        name: "repo",
+        repo: "platform",
+        type: "other",
+        mode: "worktree",
+        main_path: repoPath,
+        task_path: repoPath,
+      }],
+    })
+
+    return { ws, repoPath }
+  }
+
+  test("normal .env filename writes file at repo root", () => {
+    const { ws, repoPath } = makeEnvFixture(".env")
+    const warns: string[] = []
+
+    writeEnvFiles(ws, { API_KEY: "test-value" }, (msg) => warns.push(msg))
+
+    const envPath = join(repoPath, ".env")
+    expect(existsSync(envPath)).toBe(true)
+    expect(warns).toHaveLength(0)
+    const content = readFileSync(envPath, "utf-8")
+    expect(content).toContain("API_KEY=test-value")
+  })
+
+  test("../../outside.env is rejected and onWarn is called", () => {
+    const { ws, repoPath } = makeEnvFixture("../../outside.env")
+    const warns: string[] = []
+
+    writeEnvFiles(ws, { SECRET: "nope" }, (msg) => warns.push(msg))
+
+    // Warning must be issued — boundary check blocked the write
+    expect(warns.length).toBeGreaterThan(0)
+    expect(warns[0]).toMatch(/resolves outside repo root/)
+    // File must NOT be written inside the repo (the path-traversal destination is outside)
+    const insideRepo = join(repoPath, "outside.env")
+    expect(existsSync(insideRepo)).toBe(false)
+  })
+
+  test("subdir/.env within repo root is written successfully", () => {
+    const { ws, repoPath } = makeEnvFixture("subdir/.env")
+    mkdirSync(join(repoPath, "subdir"), { recursive: true })
+    const warns: string[] = []
+
+    writeEnvFiles(ws, { DB_URL: "postgres://localhost" }, (msg) => warns.push(msg))
+
+    const envPath = join(repoPath, "subdir", ".env")
+    expect(existsSync(envPath)).toBe(true)
+    expect(warns).toHaveLength(0)
+  })
+
+  test("absolute path /tmp/evil.env is rejected and onWarn is called", () => {
+    const { ws } = makeEnvFixture("/tmp/evil.env")
+    const warns: string[] = []
+
+    writeEnvFiles(ws, { SECRET: "nope" }, (msg) => warns.push(msg))
+
+    expect(existsSync("/tmp/evil.env")).toBe(false)
+    expect(warns.length).toBeGreaterThan(0)
+    expect(warns[0]).toMatch(/resolves outside repo root/)
   })
 })

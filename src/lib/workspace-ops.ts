@@ -146,7 +146,16 @@ export function writeEnvFiles(
 
   for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
     if (!existsSync(repo.task_path)) continue
-    const targetPath = join(repo.task_path, envFileName)
+
+    // Per D-08/D-09: reject env_file paths that escape repo root
+    const resolvedTarget = resolve(repo.task_path, envFileName)
+    const resolvedRoot = resolve(repo.task_path)
+    if (!resolvedTarget.startsWith(resolvedRoot + "/") && resolvedTarget !== resolvedRoot) {
+      onWarn?.(`skipping env file write: '${envFileName}' resolves outside repo root '${repo.task_path}'`)
+      continue
+    }
+
+    const targetPath = resolvedTarget
 
     // Guard: if the env file is a symlink, skip and warn — never write through a symlink
     try {

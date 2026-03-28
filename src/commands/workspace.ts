@@ -12,6 +12,7 @@ import {
   readRegistry,
   templateExists,
   writeWorkspace,
+  NameSchema,
   type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
@@ -44,6 +45,16 @@ function formatSyncRow(row: SyncRow): string {
 function formatPullRow(row: PullRow): string {
   const label = row.status === "pulled" ? "pulled" : row.status === "skipped" ? "skipped" : "failed"
   return `${label}  ${row.repo}  (${row.detail})`
+}
+
+// --- Name validation ---
+
+function validateName(name: string, entity = "workspace"): void {
+  const result = NameSchema.safeParse(name)
+  if (!result.success) {
+    console.error(`Invalid ${entity} name '${name}': ${result.error.issues[0].message}`)
+    process.exit(1)
+  }
 }
 
 // --- Path discovery ---
@@ -92,6 +103,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--from <source>", "Create from template name or local repo path")
     .option("--template <name>", "Compose from template(s) — repeatable", (val: string, arr: string[]) => { arr.push(val); return arr }, [] as string[])
     .action(async (name: string | undefined, opts: { from?: string; template?: string[] }) => {
+      if (name !== undefined) validateName(name)
       if (opts.from && opts.template && opts.template.length > 0) {
         console.error("[git-stacks] Error: --from and --template are mutually exclusive")
         process.exit(1)
@@ -132,6 +144,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--recreate", "Re-sync workspace from template")
     .option("--force", "Skip confirmation in --recreate")
     .action(async (name: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean }) => {
+      validateName(name)
       if (opts.recreate) {
         if (!workspaceExists(name)) {
           console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
@@ -295,6 +308,7 @@ export function registerWorkspaceCommands(program: Command) {
     .description("Show workspace status — dirty state, worktree health")
     .option("--json", "Output as JSON")
     .action(async (name?: string, opts: { json?: boolean } = {}) => {
+      if (name !== undefined) validateName(name)
       const workspaces = name ? [readWorkspace(name)] : listWorkspaces()
       if (workspaces.length === 0) {
         console.log("No workspaces.")
@@ -477,6 +491,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--force", "Skip dirty worktree check and confirmation")
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
+      validateName(name)
       if (!workspaceExists(name)) {
         console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
         process.exit(1)
@@ -530,6 +545,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--force", "Skip dirty worktree check and confirmation")
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
+      validateName(name)
       if (!workspaceExists(name)) {
         console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
         process.exit(1)
@@ -709,6 +725,8 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--force", "Skip confirmation prompt")
     .option("--dry-run", "Show what would be done without making changes")
     .action(async (oldName: string, newName: string, opts: { force?: boolean; dryRun?: boolean }) => {
+      validateName(oldName)
+      validateName(newName)
       if (!opts.force && !opts.dryRun) {
         const ok = await p.confirm({
           message: `Rename '${oldName}' \u2192 '${newName}'?`,
