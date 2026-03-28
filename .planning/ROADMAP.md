@@ -123,7 +123,7 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 **Milestone Goal:** Add AeroSpace tiling window manager integration for macOS — typed CLI wrappers, snapshot-delta window detection, workspace targeting, normalization-aware layout, app launching, and doctor checks.
 
 - [x] **Phase 43: AeroSpace Shell Wrappers & Doctor** - Typed async CLI wrappers with injectable `_exec`, platform gate, and doctor binary check (completed 2026-03-28)
-- [ ] **Phase 44: Core Integration Plugin** - Snapshot-delta window detection, workspace validation, window movement, integration plugin registration
+- [x] **Phase 44: Core Integration Plugin** - Snapshot-delta window detection, workspace validation, window movement, integration plugin registration (completed 2026-03-28)
 - [ ] **Phase 45: Layout Control & App Launching** - Normalization-aware layout, flatten-before-open, workspace focus, commands array with delta detection (2 plans)
 - [ ] **Phase 46: Release Prep** - v0.11.0 version bump, CHANGELOG entry, README AeroSpace section
 
@@ -165,7 +165,7 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
   4. `focus: true` switches AeroSpace to the target workspace after setup so it is immediately visible
   5. A `commands` array in integration config launches arbitrary apps and their windows are detected via snapshot-delta and moved to the target workspace
 **Plans**: 2 plans
-- [ ] 45-01-PLAN.md — Extend AeroSpace Integration with Layout, Commands, and Focus (config schema, open() sequence)
+- [x] 45-01-PLAN.md — Extend AeroSpace Integration with Layout, Commands, and Focus (config schema, open() sequence)
 - [ ] 45-02-PLAN.md — AeroSpace Layout & Commands Tests (all LAYOUT + LAUNCH requirement coverage)
 **UI hint**: yes
 
@@ -192,7 +192,7 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
-| 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 2/2 | Complete   | 2026-03-28 |
-| 44. Core Integration Plugin | v0.11.0 | 0/2 | Planned | - |
-| 45. Layout Control & App Launching | v0.11.0 | 0/2 | Planned | - |
+| 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 2/2 | Complete    | 2026-03-28 |
+| 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete | 2026-03-28 |
+| 45. Layout Control & App Launching | v0.11.0 | 1/2 | In Progress|  |
 | 46. Release Prep | v0.11.0 | 0/1 | Planned | - |

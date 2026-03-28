@@ -23,15 +23,15 @@ Requirements for AeroSpace Window Management milestone. Each maps to roadmap pha
 
 ### Layout Control
 
-- [ ] **LAYOUT-01**: User can configure root layout for target workspace (`layout` field: `h_tiles`/`v_tiles`/`h_accordion`/`v_accordion`)
-- [ ] **LAYOUT-02**: User can declare normalization state (`normalization` config field, default `true`) to control layout command selection
-- [ ] **LAYOUT-03**: User can enable `flatten_before_open` to reset nested containers before window placement
-- [ ] **LAYOUT-04**: Integration focuses the target AeroSpace workspace after setup when `focus: true` is configured
+- [x] **LAYOUT-01**: User can configure root layout for target workspace (`layout` field: `h_tiles`/`v_tiles`/`h_accordion`/`v_accordion`)
+- [x] **LAYOUT-02**: User can declare normalization state (`normalization` config field, default `true`) to control layout command selection
+- [x] **LAYOUT-03**: User can enable `flatten_before_open` to reset nested containers before window placement
+- [x] **LAYOUT-04**: Integration focuses the target AeroSpace workspace after setup when `focus: true` is configured
 
 ### App Launching
 
-- [ ] **LAUNCH-01**: User can configure a `commands` array to launch arbitrary apps on the target AeroSpace workspace
-- [ ] **LAUNCH-02**: Windows created by launched commands are detected via snapshot-delta and moved to the target workspace
+- [x] **LAUNCH-01**: User can configure a `commands` array to launch arbitrary apps on the target AeroSpace workspace
+- [x] **LAUNCH-02**: Windows created by launched commands are detected via snapshot-delta and moved to the target workspace
 
 ## Future Requirements
 
@@ -62,12 +62,12 @@ Requirements for AeroSpace Window Management milestone. Each maps to roadmap pha
 | DETECT-03 | Phase 44 | Pending |
 | DETECT-04 | Phase 44 | Pending |
 | DETECT-05 | Phase 44 | Pending |
-| LAYOUT-01 | Phase 45 | Pending |
-| LAYOUT-02 | Phase 45 | Pending |
-| LAYOUT-03 | Phase 45 | Pending |
-| LAYOUT-04 | Phase 45 | Pending |
-| LAUNCH-01 | Phase 45 | Pending |
-| LAUNCH-02 | Phase 45 | Pending |
+| LAYOUT-01 | Phase 45 | Complete |
+| LAYOUT-02 | Phase 45 | Complete |
+| LAYOUT-03 | Phase 45 | Complete |
+| LAYOUT-04 | Phase 45 | Complete |
+| LAUNCH-01 | Phase 45 | Complete |
+| LAUNCH-02 | Phase 45 | Complete |
 
 **Coverage:**
 - v0.11.0 requirements: 14 total
