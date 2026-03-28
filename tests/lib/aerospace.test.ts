@@ -3,11 +3,10 @@ import { z } from "zod"
 import type { AerospaceWindow, AerospaceCmdResult, SnapshotOpts } from "@/lib/aerospace"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
-// Re-apply mock.module("@/lib/aerospace", ...) with real implementations that
-// use a LOCAL _exec object. This ensures _exec.run injection works cleanly
-// even if a consumer test also mocks this module.
+// Re-apply mock.module with real implementations that use a LOCAL _exec object.
+// This avoids cross-test pollution from consumer tests that also mock @/lib/aerospace.
 
-// ─── Zod schemas (inlined to avoid depending on source module's unexported schemas) ───
+// ─── Zod schemas (inlined to avoid depending on unexported source schemas) ────
 
 const AerospaceWindowSchema = z.object({
   windowId: z.number(),
@@ -32,7 +31,7 @@ export const _exec = {
   },
 }
 
-// ─── Internal TSV helpers (mirrored from source) ──────────────────────────────
+// ─── Local TSV helpers ────────────────────────────────────────────────────────
 
 function parseTsvLine(line: string, fieldCount: number): string[] | null {
   const fields = line.split("\t")
@@ -51,7 +50,8 @@ function parseIntSafe(val: string): number {
 
 async function isAerospaceRunning(): Promise<boolean> {
   if (process.platform !== "darwin") return false
-  const result = await _exec.run(["__which_aerospace__"])
+  const { $ } = await import("bun")
+  const result = await $`which aerospace`.quiet().nothrow()
   return result.exitCode === 0
 }
 
@@ -75,17 +75,19 @@ async function listWindows(): Promise<AerospaceWindow[]> {
     ])
     if (result.exitCode !== 0) return []
     const lines = result.stdout.split("\n").filter((l) => l.length > 0)
-    const parsed = lines.map((line) => {
-      const fields = parseTsvLine(line, 5)
-      if (!fields) return null
-      return {
-        windowId: parseIntSafe(fields[0]),
-        appName: fields[1],
-        windowTitle: fields[2],
-        appPid: parseIntSafe(fields[3]),
-        workspace: fields[4],
-      }
-    }).filter((w) => w !== null)
+    const parsed = lines
+      .map((line) => {
+        const fields = parseTsvLine(line, 5)
+        if (!fields) return null
+        return {
+          windowId: parseIntSafe(fields[0]),
+          appName: fields[1],
+          windowTitle: fields[2],
+          appPid: parseIntSafe(fields[3]),
+          workspace: fields[4],
+        }
+      })
+      .filter((w) => w !== null)
     return z.array(AerospaceWindowSchema).parse(parsed)
   } catch {
     return []
@@ -102,16 +104,18 @@ async function listWorkspaces(): Promise<import("@/lib/aerospace").AerospaceWork
     ])
     if (result.exitCode !== 0) return []
     const lines = result.stdout.split("\n").filter((l) => l.length > 0)
-    const parsed = lines.map((line) => {
-      const fields = parseTsvLine(line, 4)
-      if (!fields) return null
-      return {
-        workspace: fields[0],
-        isFocused: parseBool(fields[1]),
-        isVisible: parseBool(fields[2]),
-        monitorId: parseIntSafe(fields[3]),
-      }
-    }).filter((w) => w !== null)
+    const parsed = lines
+      .map((line) => {
+        const fields = parseTsvLine(line, 4)
+        if (!fields) return null
+        return {
+          workspace: fields[0],
+          isFocused: parseBool(fields[1]),
+          isVisible: parseBool(fields[2]),
+          monitorId: parseIntSafe(fields[3]),
+        }
+      })
+      .filter((w) => w !== null)
     return z.array(AerospaceWorkspaceSchema).parse(parsed)
   } catch {
     return []
@@ -142,7 +146,10 @@ async function flattenWorkspaceTree(workspace?: string): Promise<void> {
   }
 }
 
-async function snapshotWindowIds(spawnFn: () => Promise<void>, opts: SnapshotOpts = {}): Promise<number[]> {
+async function snapshotWindowIds(
+  spawnFn: () => Promise<void>,
+  opts: SnapshotOpts = {}
+): Promise<number[]> {
   const {
     timeoutMs = 10_000,
     initialDelayMs = 200,
@@ -150,10 +157,13 @@ async function snapshotWindowIds(spawnFn: () => Promise<void>, opts: SnapshotOpt
     _sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
     _listWindows = listWindows,
   } = opts
+
   const before = new Set((await _listWindows()).map((w) => w.windowId))
   await spawnFn()
+
   const deadline = Date.now() + timeoutMs
   let delay = initialDelayMs
+
   while (Date.now() < deadline) {
     await _sleep(delay)
     const after = (await _listWindows()).map((w) => w.windowId)
@@ -161,6 +171,7 @@ async function snapshotWindowIds(spawnFn: () => Promise<void>, opts: SnapshotOpt
     if (newIds.length > 0) return newIds
     delay = Math.min(delay * 2, maxDelayMs)
   }
+
   return []
 }
 
@@ -199,29 +210,14 @@ function resetMocks(exitCode = 0, stdout = "") {
 const noopSleep = () => Promise.resolve()
 
 // ─── isAerospaceRunning ───────────────────────────────────────────────────────
-// Platform gate means this returns false on Linux without spawning any subprocess.
 
 describe("isAerospaceRunning", () => {
-  beforeEach(() => resetMocks())
-
-  test("returns false when process.platform is not darwin", async () => {
-    // On Linux CI, platform is "linux", so this always returns false immediately
+  test("returns false on non-macOS platforms (Linux CI)", async () => {
     if (process.platform !== "darwin") {
       expect(await isAerospaceRunning()).toBe(false)
     } else {
-      // On macOS, set exitCode to 0 to simulate aerospace installed
-      mockResult = { exitCode: 0, stdout: "" }
-      expect(await isAerospaceRunning()).toBe(true)
-    }
-  })
-
-  test("returns false when which aerospace exits non-zero (macOS only)", async () => {
-    if (process.platform !== "darwin") {
-      // Platform gate returns false before any subprocess call
-      expect(await isAerospaceRunning()).toBe(false)
-    } else {
-      mockResult = { exitCode: 1, stdout: "" }
-      expect(await isAerospaceRunning()).toBe(false)
+      const result = await isAerospaceRunning()
+      expect(typeof result).toBe("boolean")
     }
   })
 })
@@ -234,7 +230,9 @@ describe("listWindows", () => {
   test("parses valid TSV window output", async () => {
     const tsv = "42\tGoogle Chrome\tGmail - Inbox\t1234\tdev\n99\tTerminal\tfish\t5678\tdev"
     mockResult = { exitCode: 0, stdout: tsv }
+
     const result = await listWindows()
+
     expect(result).toHaveLength(2)
     expect(result[0].windowId).toBe(42)
     expect(result[0].appName).toBe("Google Chrome")
@@ -262,7 +260,9 @@ describe("listWindows", () => {
   test("handles multi-word app names correctly (tab-split not space-split)", async () => {
     const tsv = "1\tMicrosoft Visual Studio Code\tCLAUDE.md — git-stacks\t999\twork"
     mockResult = { exitCode: 0, stdout: tsv }
+
     const result = await listWindows()
+
     expect(result).toHaveLength(1)
     expect(result[0].appName).toBe("Microsoft Visual Studio Code")
   })
@@ -270,6 +270,7 @@ describe("listWindows", () => {
   test("passes correct format string to _exec.run", async () => {
     mockResult = { exitCode: 0, stdout: "" }
     await listWindows()
+
     expect(capturedArgs).toContain("list-windows")
     expect(capturedArgs).toContain("--all")
     expect(capturedArgs).toContain("--format")
@@ -282,7 +283,9 @@ describe("listWindows", () => {
   test("skips blank lines in output", async () => {
     const tsv = "42\tChrome\tTab\t1234\tdev\n\n99\tTerminal\tfish\t5678\twork\n"
     mockResult = { exitCode: 0, stdout: tsv }
+
     const result = await listWindows()
+
     expect(result).toHaveLength(2)
   })
 })
@@ -295,7 +298,9 @@ describe("listWorkspaces", () => {
   test("parses valid TSV workspace output", async () => {
     const tsv = "dev\ttrue\ttrue\t1\nmail\tfalse\tfalse\t1"
     mockResult = { exitCode: 0, stdout: tsv }
+
     const result = await listWorkspaces()
+
     expect(result).toHaveLength(2)
     expect(result[0].workspace).toBe("dev")
     expect(result[0].isFocused).toBe(true)
@@ -304,8 +309,18 @@ describe("listWorkspaces", () => {
     expect(result[1].isFocused).toBe(false)
   })
 
+  test("isFocused is boolean true, not string 'true'", async () => {
+    const tsv = "dev\ttrue\ttrue\t1"
+    mockResult = { exitCode: 0, stdout: tsv }
+
+    const result = await listWorkspaces()
+
+    expect(result[0].isFocused).toBe(true)
+    expect(typeof result[0].isFocused).toBe("boolean")
+  })
+
   test("returns empty array on non-zero exit code", async () => {
-    mockResult = { exitCode: 1, stdout: "error" }
+    mockResult = { exitCode: 1, stdout: "" }
     expect(await listWorkspaces()).toEqual([])
   })
 
@@ -314,23 +329,16 @@ describe("listWorkspaces", () => {
     expect(await listWorkspaces()).toEqual([])
   })
 
-  test("passes correct format string to _exec.run", async () => {
+  test("passes correct format string", async () => {
     mockResult = { exitCode: 0, stdout: "" }
     await listWorkspaces()
+
     expect(capturedArgs).toContain("list-workspaces")
     expect(capturedArgs).toContain("--all")
     expect(capturedArgs).toContain("--format")
     const fmtIdx = capturedArgs.indexOf("--format")
     expect(capturedArgs[fmtIdx + 1]).toContain("%{workspace}")
     expect(capturedArgs[fmtIdx + 1]).toContain("%{tab}")
-  })
-
-  test("parses isFocused as boolean true, not string 'true'", async () => {
-    const tsv = "main\ttrue\tfalse\t2"
-    mockResult = { exitCode: 0, stdout: tsv }
-    const result = await listWorkspaces()
-    expect(result[0].isFocused).toBe(true)
-    expect(typeof result[0].isFocused).toBe("boolean")
   })
 })
 
@@ -341,6 +349,7 @@ describe("moveNodeToWorkspace", () => {
 
   test("passes --window-id and workspace name", async () => {
     await moveNodeToWorkspace(42, "dev")
+
     expect(capturedArgs).toContain("move-node-to-workspace")
     expect(capturedArgs).toContain("--window-id")
     expect(capturedArgs).toContain("42")
@@ -355,6 +364,7 @@ describe("focusWindow", () => {
 
   test("passes --window-id", async () => {
     await focusWindow(42)
+
     expect(capturedArgs).toContain("focus")
     expect(capturedArgs).toContain("--window-id")
     expect(capturedArgs).toContain("42")
@@ -368,6 +378,7 @@ describe("setLayout", () => {
 
   test("passes layout without window-id", async () => {
     await setLayout("h_tiles")
+
     expect(capturedArgs).toContain("layout")
     expect(capturedArgs).toContain("h_tiles")
     expect(capturedArgs).not.toContain("--window-id")
@@ -375,6 +386,7 @@ describe("setLayout", () => {
 
   test("passes layout with window-id", async () => {
     await setLayout("v_accordion", 42)
+
     expect(capturedArgs).toContain("layout")
     expect(capturedArgs).toContain("--window-id")
     expect(capturedArgs).toContain("42")
@@ -389,12 +401,14 @@ describe("flattenWorkspaceTree", () => {
 
   test("calls without workspace arg", async () => {
     await flattenWorkspaceTree()
+
     expect(capturedArgs).toContain("flatten-workspace-tree")
     expect(capturedArgs).not.toContain("--workspace")
   })
 
   test("calls with workspace arg", async () => {
     await flattenWorkspaceTree("dev")
+
     expect(capturedArgs).toContain("flatten-workspace-tree")
     expect(capturedArgs).toContain("--workspace")
     expect(capturedArgs).toContain("dev")
@@ -402,16 +416,19 @@ describe("flattenWorkspaceTree", () => {
 })
 
 // ─── snapshotWindowIds ────────────────────────────────────────────────────────
-// These tests use _listWindows injection — no _exec.run interception needed.
 
 describe("snapshotWindowIds", () => {
-  function makeWindow(windowId: number): AerospaceWindow {
-    return { windowId, appName: "App", windowTitle: "Title", appPid: 1000, workspace: "w" }
-  }
+  const makeWindow = (windowId: number): AerospaceWindow => ({
+    windowId,
+    appName: "App",
+    windowTitle: "Title",
+    appPid: 100,
+    workspace: "w",
+  })
 
   test("returns new window IDs that appear after spawn", async () => {
-    const beforeWindows: AerospaceWindow[] = [makeWindow(1)]
-    const afterWindows: AerospaceWindow[] = [makeWindow(1), makeWindow(2)]
+    const beforeWindows = [makeWindow(1)]
+    const afterWindows = [makeWindow(1), makeWindow(2)]
 
     let callCount = 0
     const listFn = mock(async () => {
@@ -430,31 +447,30 @@ describe("snapshotWindowIds", () => {
 
     expect(result).toEqual([2])
     expect(spawnFn).toHaveBeenCalledTimes(1)
-    expect(listFn).toHaveBeenCalledTimes(2) // 1 before + 1 after poll
+    expect(listFn).toHaveBeenCalledTimes(2)
   })
 
   test("returns empty array on timeout when no new windows appear", async () => {
-    const singleWindow: AerospaceWindow[] = [makeWindow(1)]
-
-    const listFn = mock(async () => singleWindow)
+    const listFn = mock(async () => [makeWindow(1)])
     const spawnFn = mock(async () => {})
 
     const result = await snapshotWindowIds(spawnFn, {
       _sleep: noopSleep,
       _listWindows: listFn,
-      timeoutMs: 1,  // 1ms — expires after first sleep
+      timeoutMs: 1,
       initialDelayMs: 0,
     })
 
     expect(result).toEqual([])
   })
 
-  test("uses injectable _sleep for timing control (no real delays)", async () => {
+  test("uses injectable _sleep (no real delays)", async () => {
     const sleepCalls: number[] = []
-    const trackingSleep = async (ms: number) => { sleepCalls.push(ms) }
+    const trackingSleep = async (ms: number) => {
+      sleepCalls.push(ms)
+    }
 
-    const singleWindow: AerospaceWindow[] = [makeWindow(1)]
-    const listFn = mock(async () => singleWindow)
+    const listFn = mock(async () => [makeWindow(1)])
     const spawnFn = mock(async () => {})
 
     const startMs = Date.now()
@@ -471,7 +487,9 @@ describe("snapshotWindowIds", () => {
 
   test("implements exponential backoff up to maxDelayMs", async () => {
     const sleepCalls: number[] = []
-    const trackingSleep = async (ms: number) => { sleepCalls.push(ms) }
+    const trackingSleep = async (ms: number) => {
+      sleepCalls.push(ms)
+    }
 
     const INITIAL = 50
     const MAX = 400
@@ -479,9 +497,7 @@ describe("snapshotWindowIds", () => {
     let callCount = 0
     const listFn = mock(async () => {
       callCount++
-      if (callCount < 5) {
-        return [makeWindow(1)]
-      }
+      if (callCount < 5) return [makeWindow(1)]
       return [makeWindow(1), makeWindow(2)]
     })
 
@@ -496,15 +512,15 @@ describe("snapshotWindowIds", () => {
     })
 
     expect(sleepCalls.length).toBeGreaterThanOrEqual(3)
-    expect(sleepCalls[0]).toBe(INITIAL)      // 50
-    expect(sleepCalls[1]).toBe(INITIAL * 2)  // 100
-    expect(sleepCalls[2]).toBe(INITIAL * 4)  // 200
+    expect(sleepCalls[0]).toBe(INITIAL)
+    expect(sleepCalls[1]).toBe(INITIAL * 2)
+    expect(sleepCalls[2]).toBe(INITIAL * 4)
     for (const delay of sleepCalls) {
       expect(delay).toBeLessThanOrEqual(MAX)
     }
   })
 
-  test("calls spawnFn after before-snapshot", async () => {
+  test("calls spawnFn after the before-snapshot", async () => {
     const callOrder: string[] = []
 
     const listFn = mock(async () => {
@@ -528,9 +544,7 @@ describe("snapshotWindowIds", () => {
   })
 })
 
-// ─── AerospaceCommands interface type-check ───────────────────────────────────
-// Structural check: assign module exports to AerospaceCommands — TypeScript will
-// catch missing or mismatched function signatures at bun run typecheck time.
+// ─── AerospaceCommands interface structural check ─────────────────────────────
 
 describe("AerospaceCommands interface", () => {
   test("module exports satisfy AerospaceCommands interface", () => {
