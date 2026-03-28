@@ -1,11 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach, afterAll, mock } from "bun:test"
 import { join } from "path"
-import { mkdirSync, writeFileSync } from "fs"
+import { mkdirSync, writeFileSync, existsSync } from "fs"
 import {
   WorkspaceSchema,
   WorkspaceRepoSchema,
   RepoRegistryEntrySchema,
   TemplateSchema,
+  NameSchema,
   formatZodError,
   expandBranchPattern,
 } from "../../src/lib/config"
@@ -441,6 +442,125 @@ describe("doctor drift detection", () => {
       expect(parsed.data.name).toBe("current")
       expect(parsed.data.name !== stem).toBe(true) // drift condition
     }
+  })
+})
+
+// --- NameSchema validation (CR-01) ---
+
+describe("NameSchema", () => {
+  test("accepts a simple lowercase name", () => {
+    expect(() => NameSchema.parse("valid-name")).not.toThrow()
+  })
+
+  test("accepts name with dots", () => {
+    expect(() => NameSchema.parse("valid.name")).not.toThrow()
+  })
+
+  test("accepts name with underscores", () => {
+    expect(() => NameSchema.parse("valid_name")).not.toThrow()
+  })
+
+  test("accepts alphanumeric with mixed case", () => {
+    expect(() => NameSchema.parse("Valid123")).not.toThrow()
+  })
+
+  test("rejects path traversal (../escape)", () => {
+    expect(() => NameSchema.parse("../escape")).toThrow()
+  })
+
+  test("rejects forward slash (foo/bar)", () => {
+    expect(() => NameSchema.parse("foo/bar")).toThrow()
+  })
+
+  test("rejects backslash (foo\\bar)", () => {
+    expect(() => NameSchema.parse("foo\\bar")).toThrow()
+  })
+
+  test("rejects shell semicolon (name;rm -rf)", () => {
+    expect(() => NameSchema.parse("name;rm -rf")).toThrow()
+  })
+
+  test("rejects backtick command substitution (name`cmd`)", () => {
+    expect(() => NameSchema.parse("name`cmd`")).toThrow()
+  })
+
+  test("rejects dollar-paren command substitution (name$(cmd))", () => {
+    expect(() => NameSchema.parse("name$(cmd)")).toThrow()
+  })
+
+  test("rejects empty string", () => {
+    expect(() => NameSchema.parse("")).toThrow()
+  })
+})
+
+describe("NameSchema composed into entity schemas", () => {
+  test("WorkspaceSchema rejects name with path traversal", () => {
+    expect(() => WorkspaceSchema.parse({ name: "../evil", branch: "main", created: "2026-01-01" })).toThrow()
+  })
+
+  test("TemplateSchema rejects name with slash", () => {
+    expect(() => TemplateSchema.parse({ name: "foo/bar" })).toThrow()
+  })
+
+  test("RepoRegistryEntrySchema rejects name with semicolon", () => {
+    expect(() => RepoRegistryEntrySchema.parse({ name: "a;b", local_path: "/x" })).toThrow()
+  })
+
+  test("WorkspaceRepoSchema still accepts any string for name (not NameSchema)", () => {
+    // WorkspaceRepoSchema.name is display-only, not a file-path key
+    expect(() => WorkspaceRepoSchema.parse({
+      name: "my repo (display)",
+      repo: "platform",
+      type: "other",
+      mode: "worktree",
+      main_path: "/m",
+      task_path: "/t",
+    })).not.toThrow()
+  })
+})
+
+// --- atomic writeYaml (CR-04) ---
+
+describe("atomic writeYaml", () => {
+  const atomicIsolated = useIsolatedConfig("config-atomic-test")
+  const wsDir = join(atomicIsolated.configDir, "workspaces")
+
+  beforeEach(() => {
+    mkdirSync(wsDir, { recursive: true })
+    mock.module("@/lib/paths", () => ({
+      HOME: atomicIsolated.configDir,
+      DEFAULT_WORKSPACE_ROOT: join(atomicIsolated.configDir, "ws-root"),
+      WS_CONFIG_DIR: atomicIsolated.configDir,
+      WORKSPACES_DIR: wsDir,
+      GLOBAL_CONFIG_FILE: join(atomicIsolated.configDir, "config.yml"),
+      REGISTRY_FILE: join(atomicIsolated.configDir, "registry.yml"),
+      TEMPLATES_DIR: join(atomicIsolated.configDir, "templates"),
+      MESSAGES_DIR: join(atomicIsolated.configDir, "messages"),
+      getMainDir: (r: string) => join(r, "main"),
+      getTasksDir: (r: string) => join(r, "tasks"),
+      expandHome: (p: string) => p.startsWith("~/") ? join(atomicIsolated.configDir, p.slice(2)) : p,
+    }))
+  })
+
+  afterAll(() => atomicIsolated.cleanup())
+
+  test("writeWorkspace creates file with correct content and leaves no .tmp sibling", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "atomic-test-ws",
+      branch: "feature/atomic",
+      created: "2026-01-01",
+    })
+
+    realWriteWorkspace(ws)
+
+    // File should exist with correct content
+    const loaded = realReadWorkspace("atomic-test-ws")
+    expect(loaded.name).toBe("atomic-test-ws")
+    expect(loaded.branch).toBe("feature/atomic")
+
+    // .tmp sibling should NOT persist
+    const tmpPath = join(wsDir, "atomic-test-ws.yml.tmp")
+    expect(existsSync(tmpPath)).toBe(false)
   })
 })
 

@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { ZodError } from "zod"
 import { parse, stringify } from "yaml"
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, renameSync } from "fs"
 import { join, dirname } from "path"
 import {
   WORKSPACES_DIR,
@@ -39,10 +39,15 @@ export const FilesSchema = z
   .optional()
 export type Files = z.infer<typeof FilesSchema>
 
+/** Shared name validation — rejects path separators, traversal, and shell metacharacters. */
+export const NameSchema = z.string()
+  .min(1, "Name must not be empty")
+  .regex(/^[A-Za-z0-9._-]+$/, "Name may only contain letters, digits, dots, hyphens, and underscores")
+
 // --- Registry ---
 
 export const RepoRegistryEntrySchema = z.object({
-  name: z.string(),
+  name: NameSchema,
   schema_version: z.string().default("1"),
   local_path: z.string(),
   default_branch: z.string().default("main"),
@@ -65,7 +70,7 @@ export const TemplateRepoSchema = z.object({
 export type TemplateRepo = z.infer<typeof TemplateRepoSchema>
 
 export const TemplateSchema = z.object({
-  name: z.string(),
+  name: NameSchema,
   schema_version: z.string().default("1"),
   description: z.string().optional(),
   repos: z.array(TemplateRepoSchema).default([]),
@@ -132,7 +137,7 @@ const WorkspaceHooksSchema = z.object({
 })
 
 export const WorkspaceSchema = z.object({
-  name: z.string(),
+  name: NameSchema,
   // Migration strategy: bump default when schema changes; read-time migration functions keyed by version
   schema_version: z.string().default("1"),
   description: z.string().optional(),
@@ -178,7 +183,9 @@ function readYaml<T>(path: string, schema: { parse: (data: unknown) => T }): T {
 
 function writeYaml(path: string, data: unknown) {
   ensureDir(dirname(path))
-  writeFileSync(path, stringify(data), "utf-8")
+  const tmpPath = `${path}.tmp`
+  writeFileSync(tmpPath, stringify(data), "utf-8")
+  renameSync(tmpPath, path)
 }
 
 // --- Scan-based lookup helpers ---
