@@ -242,6 +242,7 @@ The plugin system is extensible — new agent frameworks can be added as plugins
 | 1 | tmux | Creates detached tmux session | Session name |
 | 2 | cmux | Creates/focuses cmux workspace | Workspace ref |
 | 3 | niri | Arranges windows on a named niri workspace | — |
+| 3 | AeroSpace | Moves windows to a named AeroSpace workspace (macOS) | — |
 | 5 | GitHub | GitHub repo browse, PRs, and issues via `gh` CLI | — |
 | 5 | GitLab | GitLab repo browse, MRs, and issues via `glab` CLI | — |
 | 5 | Gitea | Gitea repo browse, PRs, and issues via `tea` CLI | — |
@@ -282,6 +283,31 @@ settings:
         - width: "40%"
           windows:
             - command: ghostty -e git-stacks integration tmux attach $GS_WORKSPACE_NAME
+```
+
+**AeroSpace integration** (for [AeroSpace](https://nikitabobko.github.io/AeroSpace/) tiling window manager on macOS):
+- Moves newly opened windows (VSCode, IntelliJ, etc.) to a dedicated AeroSpace workspace per git-stacks workspace
+- Normalization-aware layout: `flatten-workspace-tree` + `layout` when normalization is on (default), `split`-based alternatives when off
+- `flatten_before_open` resets nested containers for clean repeated opens
+- `commands` array launches arbitrary apps with automatic snapshot-delta window detection and movement
+- Requires `aerospace` binary on macOS — silently skips on Linux/Windows
+- `git-stacks doctor` reports binary availability as a warn-level check on macOS
+
+```yaml
+# Example AeroSpace config in workspace YAML
+settings:
+  integrations:
+    aerospace:
+      workspace: "2"
+      layout: h_tiles
+      normalization: true
+      flatten_before_open: true
+      focus: true
+      commands:
+        - source: vscode
+        - app: kitty
+          cwd: "$GS_WORKSPACE_PATH"
+        - command: "open -a Firefox"
 ```
 
 **Forge integrations** (GitHub, GitLab, Gitea):
