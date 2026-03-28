@@ -103,7 +103,7 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 
 </details>
 
-### 🚧 v0.10.0 Multi-Agent Workspace Tooling (In Progress)
+### v0.10.0 Multi-Agent Workspace Tooling (In Progress)
 
 **Milestone Goal:** Make git-stacks the infrastructure layer for humans managing multiple AI agents — queryable workspace data for agent bootstrap, repo sync primitives, and composable templates.
 
@@ -174,6 +174,25 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
   3. README documents `paths` and `pull` with usage examples including the agent CLI injection pattern
 **Plans**: 1 plan, 1 wave (3 tasks)
 
+### Phase 42: Code Review and Audit Findings
+**Goal**: Address all 7 findings from external code review — input validation, shell injection fixes, path escape prevention, atomic writes, shell quoting, snapshot determinism, and docs correction
+**Depends on**: Phase 41
+**Requirements**: CR-01, CR-02, CR-03, CR-04, CR-05, CR-06, CR-07
+**Success Criteria** (what must be TRUE):
+  1. Names containing path separators, traversal sequences, or shell metacharacters are rejected at schema and CLI level
+  2. Doctor --fix executes structured operations via Bun APIs, not shell strings
+  3. env_file values that resolve outside repo root are rejected at write time
+  4. YAML config writes use atomic temp-file + rename pattern
+  5. tmux/niri shell commands quote interpolated paths
+  6. WorkspaceRow snapshot tests produce deterministic output
+  7. CLAUDE.md documents `bun run test` as the correct test command
+**Plans:** 3 plans, 1 wave (6 tasks)
+
+Plans:
+- [ ] 42-01-PLAN.md — Input validation (NameSchema), atomic writes, CLI guards, env_file boundary
+- [ ] 42-02-PLAN.md — Doctor structured fixes, tmux/niri shell quoting
+- [ ] 42-03-PLAN.md — Snapshot determinism, docs correction
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -190,13 +209,4 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Complete    | 2026-03-26 |
 | 40. Template Composition | v0.10.0 | 0/2 | Complete    | 2026-03-26 |
 | 41. Release Prep | v0.10.0 | 1/1 | Complete   | 2026-03-26 |
-
-### Phase 42: code-review and audit findings
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 41
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 42 to break down)
+| 42. Code Review Findings | v0.10.0 | 0/3 | Planned | — |
