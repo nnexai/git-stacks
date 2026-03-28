@@ -4,6 +4,20 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.11.0] — 2026-03-28
+
+### Added
+
+**AeroSpace shell wrappers** — typed async CLI wrappers for `aerospace` commands (`list-windows`, `list-workspaces`, `move-node-to-workspace`, `focus`, `layout`, `flatten-workspace-tree`) with injectable `_exec` for test isolation. Platform-gated: silently skips on non-macOS. `git-stacks doctor` reports `aerospace` binary availability as a warn-level check on macOS.
+
+**AeroSpace integration plugin** — tier-3 integration (order 31, disabled by default) that detects newly opened windows via snapshot-delta and moves them to a configured AeroSpace workspace. Configure `settings.integrations.aerospace.workspace` in workspace or template YAML to set the target workspace. Validates the target workspace exists before attempting moves.
+
+**AeroSpace layout control** — normalization-aware layout management for the target AeroSpace workspace. Set `layout` to `h_tiles`, `v_tiles`, `h_accordion`, or `v_accordion`. Enable `flatten_before_open` to reset nested containers before window placement. `normalization: true` (default) uses `flatten-workspace-tree` + `layout` commands; `normalization: false` uses `split`-based alternatives. `focus: true` switches to the target workspace after setup.
+
+**AeroSpace app launching** — a `commands` array in AeroSpace integration config launches arbitrary apps whose windows are automatically detected via snapshot-delta and moved to the target workspace. Supports `app` (direct spawn), `command` (shell string), `source` (reuse prior integration windows), `repo` (resolves to task path for cwd), and environment variable expansion (`$GS_WORKSPACE_NAME`, `$GS_WORKSPACE_PATH`, etc.).
+
+---
+
 ## [0.10.1] — 2026-03-28
 
 ### Security
