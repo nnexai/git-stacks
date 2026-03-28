@@ -186,11 +186,11 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
   5. tmux/niri shell commands quote interpolated paths
   6. WorkspaceRow snapshot tests produce deterministic output
   7. CLAUDE.md documents `bun run test` as the correct test command
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 42-01-PLAN.md — Input validation (NameSchema), atomic writes, CLI guards, env_file boundary
-- [ ] 42-02-PLAN.md — Doctor structured fixes, tmux/niri shell quoting
+- [x] 42-02-PLAN.md — Doctor structured fixes, tmux/niri shell quoting
 - [x] 42-03-PLAN.md — Snapshot determinism, docs correction
 
 ## Progress
@@ -209,4 +209,4 @@ Plans:
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Complete    | 2026-03-26 |
 | 40. Template Composition | v0.10.0 | 0/2 | Complete    | 2026-03-26 |
 | 41. Release Prep | v0.10.0 | 1/1 | Complete   | 2026-03-26 |
-| 42. Code Review Findings | v0.10.0 | 2/3 | In Progress|  |
+| 42. Code Review Findings | v0.10.0 | 3/3 | Complete   | 2026-03-28 |
