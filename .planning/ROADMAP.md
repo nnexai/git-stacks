@@ -124,7 +124,7 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 
 - [ ] **Phase 43: AeroSpace Shell Wrappers & Doctor** - Typed async CLI wrappers with injectable `_exec`, platform gate, and doctor binary check
 - [ ] **Phase 44: Core Integration Plugin** - Snapshot-delta window detection, workspace validation, window movement, integration plugin registration
-- [ ] **Phase 45: Layout Control & App Launching** - Normalization-aware layout, flatten-before-open, workspace focus, commands array with delta detection
+- [ ] **Phase 45: Layout Control & App Launching** - Normalization-aware layout, flatten-before-open, workspace focus, commands array with delta detection (2 plans)
 - [ ] **Phase 46: Release Prep** - v0.11.0 version bump, CHANGELOG entry, README AeroSpace section
 
 ## Phase Details
@@ -164,7 +164,9 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
   3. `flatten_before_open: true` resets nested containers before window placement, producing a clean layout on repeated `git-stacks open`
   4. `focus: true` switches AeroSpace to the target workspace after setup so it is immediately visible
   5. A `commands` array in integration config launches arbitrary apps and their windows are detected via snapshot-delta and moved to the target workspace
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 45-01-PLAN.md — Extend AeroSpace Integration with Layout, Commands, and Focus (config schema, open() sequence)
+- [ ] 45-02-PLAN.md — AeroSpace Layout & Commands Tests (all LAYOUT + LAUNCH requirement coverage)
 **UI hint**: yes
 
 ### Phase 46: Release Prep
@@ -191,5 +193,5 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
 | 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 0/TBD | Not started | - |
 | 44. Core Integration Plugin | v0.11.0 | 0/2 | Planned | - |
-| 45. Layout Control & App Launching | v0.11.0 | 0/TBD | Not started | - |
+| 45. Layout Control & App Launching | v0.11.0 | 0/2 | Planned | - |
 | 46. Release Prep | v0.11.0 | 0/TBD | Not started | - |
