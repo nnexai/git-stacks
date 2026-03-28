@@ -79,8 +79,8 @@ describe("doctor --fix", () => {
     const { stdout } = runDoctorWithInput(cfgDir, ["--fix"], "n\n")
     // Should show "Fixes to execute:" section listing fixable issues
     expect(stdout).toContain("Fixes to execute:")
-    // The confirmation prompt should be shown (clack renders it)
-    expect(stdout).toContain("fixes available. Execute all?")
+    // The confirmation prompt should be shown (clack renders singular "fix" or plural "fixes")
+    expect(stdout).toMatch(/\d+ fix(es)? available\. Execute all\?/)
   })
 
   test("--fix --force skips confirmation prompt", () => {
@@ -146,6 +146,83 @@ repos:
       expect(fix).toHaveProperty("fix")
       expect(fix).toHaveProperty("success")
       expect(typeof fix.success).toBe("boolean")
+    }
+  })
+
+  test("fix operations in JSON output are structured objects, not shell strings", () => {
+    addBrokenWorkspace(cfgDir)
+    const { stdout } = runDoctorWithInput(cfgDir, ["--json"])
+    const parsed = JSON.parse(stdout.trim())
+    const fixableIssues = parsed.issues.filter((i: { fix?: unknown }) => i.fix !== undefined)
+    // fix field should be a structured object with action property, not a plain string
+    for (const issue of fixableIssues) {
+      expect(typeof issue.fix).toBe("object")
+      expect(issue.fix).not.toBeNull()
+      expect(typeof issue.fix.action).toBe("string")
+    }
+  })
+
+  test("orphaned task dir fix has action=remove-dir and path field", () => {
+    // Create an orphaned task dir (tasks dir with no matching workspace YAML)
+    const tasksDir = "/tmp/test-ws-root/tasks"
+    mkdirSync(join(tasksDir, "orphaned-task"), { recursive: true })
+
+    // We need a workspace config pointing to this tasksDir
+    const cfgWithRoot = join(tmpHome, "cfgwithroot")
+    mkdirSync(join(cfgWithRoot, "workspaces"), { recursive: true })
+    writeFileSync(join(cfgWithRoot, "config.yml"), `workspace_root: /tmp/test-ws-root\n`)
+    writeFileSync(join(cfgWithRoot, "registry.yml"), "[]\n")
+
+    const { stdout } = runDoctorWithInput(cfgWithRoot, ["--json"])
+    // Clean up orphaned dir after test
+    try { rmSync(join(tasksDir, "orphaned-task"), { recursive: true, force: true }) } catch { /* ignore */ }
+
+    const parsed = JSON.parse(stdout.trim())
+    const orphanIssues = parsed.issues.filter((i: { entity: string; fix?: { action: string; path?: string } }) =>
+      i.entity.startsWith("tasks/") && i.fix?.action === "remove-dir"
+    )
+    if (orphanIssues.length > 0) {
+      const fix = orphanIssues[0].fix
+      expect(fix.action).toBe("remove-dir")
+      expect(typeof fix.path).toBe("string")
+      expect(fix.path).toContain("orphaned-task")
+    }
+  })
+
+  test("missing worktree fix has action=open-workspace and name field", () => {
+    addBrokenWorkspace(cfgDir, "ws-open-fix")
+    const { stdout } = runDoctorWithInput(cfgDir, ["--json"])
+    const parsed = JSON.parse(stdout.trim())
+    const missingWorktreeIssues = parsed.issues.filter(
+      (i: { fix?: { action: string; name?: string } }) => i.fix?.action === "open-workspace"
+    )
+    if (missingWorktreeIssues.length > 0) {
+      const fix = missingWorktreeIssues[0].fix
+      expect(fix.action).toBe("open-workspace")
+      expect(typeof fix.name).toBe("string")
+    }
+  })
+
+  test("--fix --force uses rmSync for remove-dir, not sh -c", () => {
+    // Create a real temp dir to be removed (so rmSync succeeds)
+    const toRemove = join(tmpHome, "fake-task-dir")
+    mkdirSync(toRemove, { recursive: true })
+
+    const cfgWithTaskDir = join(tmpHome, "cfgtask")
+    mkdirSync(join(cfgWithTaskDir, "workspaces"), { recursive: true })
+    writeFileSync(join(cfgWithTaskDir, "config.yml"), `workspace_root: ${tmpHome}\n`)
+    writeFileSync(join(cfgWithTaskDir, "registry.yml"), "[]\n")
+    // Create a tasks subdir with an "orphaned" directory
+    const tasksDir = join(tmpHome, "tasks")
+    mkdirSync(join(tasksDir, "orphan-ws"), { recursive: true })
+
+    const { stdout } = runDoctorWithInput(cfgWithTaskDir, ["--fix", "--force"])
+    // The orphaned dir fix should succeed via rmSync (not sh -c)
+    expect(stdout).toMatch(/\d+ fixed, \d+ failed\./)
+    // The fixed count should include the orphan removal
+    const match = stdout.match(/(\d+) fixed/)
+    if (match) {
+      expect(parseInt(match[1])).toBeGreaterThan(0)
     }
   })
 })

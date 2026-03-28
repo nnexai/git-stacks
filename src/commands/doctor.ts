@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import { existsSync, readdirSync, readFileSync } from "fs"
+import { existsSync, readdirSync, readFileSync, rmSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
 import { parse } from "yaml"
@@ -14,13 +14,84 @@ import {
   type RepoRegistryEntry,
 } from "../lib/config"
 import { getTasksDir, WORKSPACES_DIR, TEMPLATES_DIR } from "../lib/paths"
-import { formatError } from "../lib/errors"
+
+// --- Fix operation types ---
+
+type FixOperation =
+  | { action: "remove-dir"; path: string }
+  | { action: "open-workspace"; name: string }
+  | { action: "remove-repo"; name: string }
+  | { action: "rename-workspace"; name: string }
+  | { action: "rename-template"; name: string }
+  | { action: "info"; message: string }
 
 interface Issue {
   icon: "pass" | "fail" | "warn"
   entity: string
   message: string
-  fix?: string
+  fix?: FixOperation
+}
+
+function formatFix(fix: FixOperation): string {
+  switch (fix.action) {
+    case "remove-dir": return `rm -rf ${fix.path}`
+    case "open-workspace": return `git-stacks open ${fix.name}`
+    case "remove-repo": return `git-stacks repo remove ${fix.name}`
+    case "rename-workspace": return `git-stacks rename ${fix.name} ${fix.name}`
+    case "rename-template": return `git-stacks template rename ${fix.name} ${fix.name}`
+    case "info": return fix.message
+  }
+}
+
+async function executeFix(
+  fix: FixOperation,
+  opts: { silent?: boolean } = {}
+): Promise<{ ok: boolean; error?: string }> {
+  // silent=true uses pipe stdio (for JSON mode); default uses inherit (for interactive mode)
+  const stdio = opts.silent
+    ? (["pipe", "pipe", "pipe"] as ["pipe", "pipe", "pipe"])
+    : (["inherit", "inherit", "inherit"] as ["inherit", "inherit", "inherit"])
+
+  switch (fix.action) {
+    case "remove-dir":
+      try {
+        rmSync(fix.path, { recursive: true, force: true })
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
+    case "open-workspace": {
+      const result = Bun.spawnSync(
+        ["bun", "run", join(import.meta.dir, "../index.ts"), "open", fix.name],
+        { stdio }
+      )
+      return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }
+    }
+    case "remove-repo": {
+      const result = Bun.spawnSync(
+        ["bun", "run", join(import.meta.dir, "../index.ts"), "repo", "remove", fix.name, "--force"],
+        { stdio }
+      )
+      return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }
+    }
+    case "rename-workspace": {
+      const result = Bun.spawnSync(
+        ["bun", "run", join(import.meta.dir, "../index.ts"), "rename", fix.name, fix.name],
+        { stdio }
+      )
+      return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }
+    }
+    case "rename-template": {
+      const result = Bun.spawnSync(
+        ["bun", "run", join(import.meta.dir, "../index.ts"), "template", "rename", fix.name, fix.name],
+        { stdio }
+      )
+      return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }
+    }
+    case "info":
+      // Info-only — not executable, display only
+      return { ok: true }
+  }
 }
 
 function icon(type: Issue["icon"]): string {
@@ -50,7 +121,7 @@ function findOrphanedTaskDirs(tasksDir: string, workspaces: Workspace[]): Issue[
       icon: "fail" as const,
       entity: `tasks/${name}`,
       message: "not tracked by any workspace",
-      fix: `rm -rf ${join(tasksDir, name)}`,
+      fix: { action: "remove-dir" as const, path: join(tasksDir, name) },
     }))
 }
 
@@ -64,7 +135,7 @@ function findMissingWorktrees(workspaces: Workspace[]): Issue[] {
           icon: "fail",
           entity: ws.name,
           message: `task_path missing: ${repo.task_path}`,
-          fix: `git-stacks open ${ws.name}`,
+          fix: { action: "open-workspace", name: ws.name },
         })
       }
     }
@@ -82,7 +153,7 @@ function findMissingMainClones(workspaces: Workspace[]): Issue[] {
           icon: "fail",
           entity: ws.name,
           message: `main_path missing: ${repo.main_path}`,
-          fix: `git-stacks repo show ${repo.repo}`,
+          fix: { action: "info", message: `Run: git-stacks repo show ${repo.repo}` },
         })
       }
     }
@@ -144,7 +215,7 @@ function findDeadRegistryPaths(registry: RepoRegistryEntry[]): Issue[] {
         icon: "fail",
         entity: entry.name,
         message: `local_path not found: ${entry.local_path}`,
-        fix: `git-stacks repo remove ${entry.name}`,
+        fix: { action: "remove-repo", name: entry.name },
       })
     }
   }
@@ -165,7 +236,7 @@ function findWorkspaceNameDrift(): Issue[] {
           icon: "warn",
           entity: parsed.data.name,
           message: `name field '${parsed.data.name}' does not match filename '${f}'`,
-          fix: `git-stacks rename ${parsed.data.name} ${parsed.data.name}`,
+          fix: { action: "rename-workspace", name: parsed.data.name },
         })
       }
     } catch { /* skip unreadable */ }
@@ -187,7 +258,7 @@ function findTemplateNameDrift(): Issue[] {
           icon: "warn",
           entity: parsed.data.name,
           message: `name field '${parsed.data.name}' does not match filename '${f}'`,
-          fix: `git-stacks template rename ${parsed.data.name} ${parsed.data.name}`,
+          fix: { action: "rename-template", name: parsed.data.name },
         })
       }
     } catch { /* skip unreadable */ }
@@ -238,7 +309,7 @@ export const doctorCommand = new Command("doctor")
           icon: required ? "fail" : "warn",
           entity: name,
           message: "not found",
-          fix: `Install: ${install}`,
+          fix: { action: "info", message: `Install: ${install}` },
         })
       }
     }
@@ -249,7 +320,7 @@ export const doctorCommand = new Command("doctor")
       icon: ghAvailable ? "pass" : "warn",
       entity: "gh (GitHub CLI)",
       message: ghAvailable ? "installed" : "not installed — GitHub PR commands unavailable",
-      fix: ghAvailable ? undefined : "Install: https://cli.github.com/",
+      fix: ghAvailable ? undefined : { action: "info", message: "Install: https://cli.github.com/" },
     })
 
     const glabAvailable = await checkBinary("glab")
@@ -257,7 +328,7 @@ export const doctorCommand = new Command("doctor")
       icon: glabAvailable ? "pass" : "warn",
       entity: "glab (GitLab CLI)",
       message: glabAvailable ? "installed" : "not installed — GitLab MR commands unavailable",
-      fix: glabAvailable ? undefined : "Install: https://gitlab.com/gitlab-org/cli",
+      fix: glabAvailable ? undefined : { action: "info", message: "Install: https://gitlab.com/gitlab-org/cli" },
     })
 
     const teaAvailable = await checkBinary("tea")
@@ -265,7 +336,7 @@ export const doctorCommand = new Command("doctor")
       icon: teaAvailable ? "pass" : "warn",
       entity: "tea (Gitea CLI)",
       message: teaAvailable ? "installed" : "not installed — Gitea PR commands unavailable",
-      fix: teaAvailable ? undefined : "Install: https://gitea.com/gitea/tea",
+      fix: teaAvailable ? undefined : { action: "info", message: "Install: https://gitea.com/gitea/tea" },
     })
 
     const jiraAvailable = await checkBinary("jira")
@@ -273,7 +344,7 @@ export const doctorCommand = new Command("doctor")
       icon: jiraAvailable ? "pass" : "warn",
       entity: "jira (Jira CLI)",
       message: jiraAvailable ? "installed" : "not installed — Jira issue commands will use configurable template fallback",
-      fix: jiraAvailable ? undefined : "Install: https://github.com/ankitpokhrel/jira-cli",
+      fix: jiraAvailable ? undefined : { action: "info", message: "Install: https://github.com/ankitpokhrel/jira-cli" },
     })
 
     // Collect ALL issues into one flat array
@@ -292,16 +363,16 @@ export const doctorCommand = new Command("doctor")
     // --- JSON output (UX-02) ---
     if (opts.json) {
       if (opts.fix) {
-        const fixableIssues = allIssues.filter(i => i.fix)
+        const fixableIssues = allIssues.filter(i => i.fix && i.fix.action !== "info")
         const fixResults = []
         for (const issue of fixableIssues) {
-          try {
-            const proc = Bun.spawn(["sh", "-c", issue.fix!], { stdio: ["pipe", "pipe", "pipe"] })
-            const exitCode = await proc.exited
-            fixResults.push({ entity: issue.entity, fix: issue.fix, success: exitCode === 0, exit_code: exitCode })
-          } catch (err) {
-            fixResults.push({ entity: issue.entity, fix: issue.fix, success: false, error: String(err) })
-          }
+          const result = await executeFix(issue.fix!, { silent: true })
+          fixResults.push({
+            entity: issue.entity,
+            fix: issue.fix,
+            success: result.ok,
+            ...(result.error && { error: result.error }),
+          })
         }
         const healthy = allIssues.length === 0
         const output = { healthy, issues: allIssues, fixes: fixResults }
@@ -342,7 +413,7 @@ export const doctorCommand = new Command("doctor")
         for (const issue of issues) {
           console.log(`       ${issue.message}`)
           if (issue.fix) {
-            console.log(`       \u2192 run: ${issue.fix}`)
+            console.log(`       \u2192 run: ${formatFix(issue.fix)}`)
           }
         }
       }
@@ -351,7 +422,7 @@ export const doctorCommand = new Command("doctor")
       for (const issue of orphaned) {
         console.log(`  ${icon(issue.icon)}  ${issue.entity}  (${issue.message})`)
         if (issue.fix) {
-          console.log(`       \u2192 run: ${issue.fix}`)
+          console.log(`       \u2192 run: ${formatFix(issue.fix)}`)
         }
       }
     }
@@ -363,7 +434,7 @@ export const doctorCommand = new Command("doctor")
       for (const issue of deadRegistryPaths) {
         console.log(`  ${icon(issue.icon)}  ${issue.entity}: ${issue.message}`)
         if (issue.fix) {
-          console.log(`       \u2192 run: ${issue.fix}`)
+          console.log(`       \u2192 run: ${formatFix(issue.fix)}`)
         }
       }
     }
@@ -373,7 +444,7 @@ export const doctorCommand = new Command("doctor")
       for (const issue of binaryIssues) {
         console.log(`  ${icon(issue.icon)}  ${issue.entity}  (${issue.message})`)
         if (issue.fix) {
-          console.log(`       \u2192 ${issue.fix}`)
+          console.log(`       \u2192 ${formatFix(issue.fix)}`)
         }
       }
     }
@@ -384,13 +455,20 @@ export const doctorCommand = new Command("doctor")
 
     // --- Fix execution (UX-03) ---
     if (opts.fix) {
-      const fixableIssues = allIssues.filter(i => i.fix)
-      const unfixableIssues = allIssues.filter(i => !i.fix && i.icon !== "pass")
+      const fixableIssues = allIssues.filter(i => i.fix && i.fix.action !== "info")
+      // Unfixable: no fix at all, or only an info hint (display-only) — exclude pass icons
+      const unfixableIssues = allIssues.filter(
+        i => (!i.fix || i.fix.action === "info") && i.icon !== "pass"
+      )
 
       if (fixableIssues.length === 0) {
         console.log("\n  No auto-fixable issues found.")
         if (unfixableIssues.length > 0) {
           console.log(`  ${unfixableIssues.length} issue(s) require manual action.`)
+          for (const issue of unfixableIssues) {
+            const hint = issue.fix ? ` (hint: ${formatFix(issue.fix)})` : ""
+            console.log(`    ${issue.entity}: ${issue.message} (no auto-fix — manual action needed)${hint}`)
+          }
         }
         return
       }
@@ -398,14 +476,15 @@ export const doctorCommand = new Command("doctor")
       // Show fixable issues with their commands
       console.log(`\n  Fixes to execute:`)
       for (const issue of fixableIssues) {
-        console.log(`    ${issue.entity}: ${issue.fix}`)
+        console.log(`    ${issue.entity}: ${formatFix(issue.fix!)}`)
       }
 
       // Annotate unfixable issues
       if (unfixableIssues.length > 0) {
         console.log("")
         for (const issue of unfixableIssues) {
-          console.log(`    ${issue.entity}: ${issue.message} (no auto-fix — manual action needed)`)
+          const hint = issue.fix ? ` (hint: ${formatFix(issue.fix)})` : ""
+          console.log(`    ${issue.entity}: ${issue.message} (no auto-fix — manual action needed)${hint}`)
         }
       }
 
@@ -425,21 +504,13 @@ export const doctorCommand = new Command("doctor")
       let fixed = 0
       let failed = 0
       for (const issue of fixableIssues) {
-        try {
-          const proc = Bun.spawn(["sh", "-c", issue.fix!], {
-            stdio: ["inherit", "inherit", "inherit"],
-          })
-          const exitCode = await proc.exited
-          if (exitCode === 0) {
-            fixed++
-            console.log(`  \u2713 fixed: ${issue.entity}`)
-          } else {
-            failed++
-            console.error(`  \u2717 failed: ${issue.entity} (exit ${exitCode})`)
-          }
-        } catch (err) {
+        const result = await executeFix(issue.fix!)
+        if (result.ok) {
+          fixed++
+          console.log(`  \u2713 fixed: ${issue.entity}`)
+        } else {
           failed++
-          console.error(`  \u2717 failed: ${issue.entity} (${formatError(String(err))})`)
+          console.error(`  \u2717 failed: ${issue.entity} (${result.error ?? "unknown error"})`)
         }
       }
 

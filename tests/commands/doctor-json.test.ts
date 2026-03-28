@@ -118,9 +118,11 @@ repos:
       expect(issue).toHaveProperty("entity")
       expect(issue).toHaveProperty("message")
       expect(["pass", "fail", "warn"]).toContain(issue.icon)
-      // fix is optional
+      // fix is optional — now a structured FixOperation object, not a plain string
       if ("fix" in issue) {
-        expect(typeof issue.fix).toBe("string")
+        expect(typeof issue.fix).toBe("object")
+        expect(issue.fix).not.toBeNull()
+        expect(typeof issue.fix.action).toBe("string")
       }
     }
   })
