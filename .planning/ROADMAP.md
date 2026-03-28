@@ -177,7 +177,8 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
   1. `package.json` version is bumped to `0.11.0`
   2. CHANGELOG contains an entry for v0.11.0 covering all four shipped features (shell wrappers, core plugin, layout control, app launching)
   3. README documents AeroSpace integration with a config YAML example showing `workspace`, `layout`, `normalization`, `flatten_before_open`, `focus`, and `commands` fields
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 46-01-PLAN.md — Release prep (version verify, CHANGELOG, README AeroSpace docs)
 
 ## Progress
 
@@ -194,4 +195,4 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 0/TBD | Not started | - |
 | 44. Core Integration Plugin | v0.11.0 | 0/2 | Planned | - |
 | 45. Layout Control & App Launching | v0.11.0 | 0/2 | Planned | - |
-| 46. Release Prep | v0.11.0 | 0/TBD | Not started | - |
+| 46. Release Prep | v0.11.0 | 0/1 | Planned | - |
