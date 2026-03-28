@@ -5,6 +5,11 @@ import type { Command } from "commander"
 import { openTmuxSession, addTmuxPane, sendToTmuxPane, getTmuxMainPane, focusTmuxPane, killTmuxSession, tmuxSessionExists, focusTmuxSession } from "../tmux"
 import { resolveEnabled, type Integration, type IntegrationContext, type TmuxArtifact } from "./types"
 
+/** Wrap a string in single quotes, escaping any embedded single quotes. */
+function shellQuote(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'"
+}
+
 const surfaceSchema = z.object({
   repo: z.string().optional(),
   cwd: z.string().optional(),
@@ -102,7 +107,7 @@ async function applyPaneLayout(ctx: IntegrationContext): Promise<void> {
         ? (ctx.workspace.repos.find((r) => r.name === surface.repo)?.task_path ?? wsRoot)
         : (surface.cwd ?? wsRoot)
 
-      await sendToTmuxPane(paneId, `cd ${cwd}`)
+      await sendToTmuxPane(paneId, `cd ${shellQuote(cwd)}`)
       if (surface.command) await sendToTmuxPane(paneId, surface.command)
     }
   }

@@ -1,6 +1,12 @@
 import { z } from "zod"
 import { prompts as p } from "../../tui/utils"
 import type { Command } from "commander"
+
+/** Wrap a string in single quotes, escaping any embedded single quotes. */
+function shellQuote(s: string): string {
+  return "'" + s.replace(/'/g, "'\\''") + "'"
+}
+
 import {
   resolveEnabled,
   type Integration,
@@ -212,7 +218,7 @@ export const niriIntegration: Integration = {
 
                 // Build shell string
                 const parts: string[] = []
-                if (resolvedCwd) parts.push(`cd ${resolvedCwd}`)
+                if (resolvedCwd) parts.push(`cd ${shellQuote(resolvedCwd)}`)
                 parts.push(expandedCommand)
                 const shellCmd = parts.join(" && ")
 
