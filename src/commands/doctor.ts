@@ -347,6 +347,17 @@ export const doctorCommand = new Command("doctor")
       fix: jiraAvailable ? undefined : { action: "info", message: "Install: https://github.com/ankitpokhrel/jira-cli" },
     })
 
+    // AeroSpace binary check (macOS only — D-07)
+    if (process.platform === "darwin") {
+      const aerospaceAvailable = await checkBinary("aerospace")
+      binaryIssues.push({
+        icon: aerospaceAvailable ? "pass" : "warn",
+        entity: "aerospace",
+        message: aerospaceAvailable ? "installed" : "not installed \u2014 AeroSpace window management unavailable",
+        fix: aerospaceAvailable ? undefined : { action: "info", message: "Install: https://github.com/nikitabobko/AeroSpace" },
+      })
+    }
+
     // Collect ALL issues into one flat array
     const allIssues: Issue[] = [
       ...orphaned,
