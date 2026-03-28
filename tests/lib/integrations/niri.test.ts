@@ -335,7 +335,7 @@ describe("column config — command: windows", () => {
     await niriIntegration.open(ctx, null, emptyBag)
 
     expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
-    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd /path/to/backend && ghostty -e npm run dev")
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd '/path/to/backend' && ghostty -e npm run dev")
   })
 
   test("command: window with cwd prepends cd to niriSpawnSh", async () => {
@@ -354,7 +354,7 @@ describe("column config — command: windows", () => {
     await niriIntegration.open(ctx, null, emptyBag)
 
     expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
-    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd /tmp && ghostty")
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd '/tmp' && ghostty")
   })
 })
 
@@ -616,7 +616,7 @@ describe("column config — env var substitution", () => {
     await niriIntegration.open(ctx, null, emptyBag)
 
     expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
-    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd /tmp/tasks/mydir && ghostty")
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd '/tmp/tasks/mydir' && ghostty")
   })
 })
 
