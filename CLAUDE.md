@@ -6,10 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 bun run src/index.ts      # run the CLI (alias: bun run dev)
-bun test tests/           # run all tests
+bun run test              # run all tests (uses isolated test runner)
 bun test tests/lib/detect.test.ts   # run a single test file
 bun run typecheck         # type-check without emitting (tsc --noEmit)
 ```
+
+**Important:** Do not use `bun test tests/` directly — it runs all test files in a shared Bun process where `mock.module()` calls from one file pollute others, producing false failures. The project's `bun run test` script (`scripts/test-runner.ts`) isolates mock-heavy files into separate processes.
 
 No build step — Bun executes TypeScript source directly. The `@/*` path alias resolves to `./src/*` but is **test-only** — production code in src/ must use relative imports (the alias is not available in the published npm package).
 
