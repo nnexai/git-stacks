@@ -125,7 +125,7 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 - [x] **Phase 43: AeroSpace Shell Wrappers & Doctor** - Typed async CLI wrappers with injectable `_exec`, platform gate, and doctor binary check (completed 2026-03-28)
 - [x] **Phase 44: Core Integration Plugin** - Snapshot-delta window detection, workspace validation, window movement, integration plugin registration (completed 2026-03-28)
 - [x] **Phase 45: Layout Control & App Launching** - Normalization-aware layout, flatten-before-open, workspace focus, commands array with delta detection (2 plans) (completed 2026-03-28)
-- [ ] **Phase 46: Release Prep** - v0.11.0 version bump, CHANGELOG entry, README AeroSpace section
+- [x] **Phase 46: Release Prep** - v0.11.0 version bump, CHANGELOG entry, README AeroSpace section (completed 2026-03-28)
 
 ## Phase Details
 
@@ -178,7 +178,7 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
   2. CHANGELOG contains an entry for v0.11.0 covering all four shipped features (shell wrappers, core plugin, layout control, app launching)
   3. README documents AeroSpace integration with a config YAML example showing `workspace`, `layout`, `normalization`, `flatten_before_open`, `focus`, and `commands` fields
 **Plans**: 1 plan
-- [ ] 46-01-PLAN.md — Release prep (version verify, CHANGELOG, README AeroSpace docs)
+- [x] 46-01-PLAN.md — Release prep (version verify, CHANGELOG, README AeroSpace docs)
 
 ## Progress
 
@@ -193,6 +193,6 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
 | 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 2/2 | Complete    | 2026-03-28 |
-| 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete | 2026-03-28 |
+| 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete    | 2026-03-28 |
 | 45. Layout Control & App Launching | v0.11.0 | 2/2 | Complete   | 2026-03-28 |
-| 46. Release Prep | v0.11.0 | 0/1 | Planned | - |
+| 46. Release Prep | v0.11.0 | 1/1 | Complete   | 2026-03-28 |
