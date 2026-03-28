@@ -1,21 +1,21 @@
 # Stack Research
 
-**Domain:** Bun CLI tool — v0.10.0 Multi-Agent Workspace Tooling
-**Researched:** 2026-03-25
-**Confidence:** HIGH (all findings verified against current source, official git docs, Commander.js README, and SolidJS docs)
+**Domain:** Bun CLI tool — v0.11.0 AeroSpace Window Management Integration
+**Researched:** 2026-03-28
+**Confidence:** HIGH (AeroSpace CLI verified against local exploration notes + official docs; Bun.TOML verified against official Bun docs; niri integration pattern verified against source)
 
 ---
 
 ## Scope
 
-This document covers **only what is new for v0.10.0**. The existing stack (Bun runtime, TypeScript strict, Commander.js 12.1.0, SolidJS 1.9.11 + @opentui/core 0.1.87, Zod 3.25.76 + yaml 2.8.2, @clack/prompts 0.9.1) is unchanged and not re-researched.
+This document covers **only what is new for v0.11.0**. The existing stack (Bun runtime, TypeScript strict, Commander.js 12.1.0, SolidJS 1.9.11 + @opentui/core 0.1.87, Zod 3.25.76 + yaml 2.8.2, @clack/prompts 0.9.1) is unchanged and not re-researched.
 
-Five features, three questions:
+Two new components, five questions:
 
-1. `git-stacks paths` and `git-stacks pull` — what git CLI patterns are needed beyond what already exists?
-2. `git-stacks env` — how do the three output formats (shell, dotenv, json) map to implementation?
-3. TUI staleness indicator — how should periodic background git checks integrate with the existing SolidJS/OpenTUI hook pattern?
-4. Template composition — what does `includes:` field resolution and multi-template `--template a --template b` require?
+1. `src/lib/aerospace.ts` — what CLI invocation pattern replaces niri's JSON IPC?
+2. `--format` string parsing — how do we parse tab-delimited `%{field}` output into typed structs?
+3. TOML config reading — do we need a TOML parser to read `aerospace.toml` for normalization detection, and which one?
+4. `src/lib/integrations/aerospace.ts` — what differs from the niri plugin pattern?
 5. What NOT to add — libraries that are tempting but wrong for this context.
 
 ---
@@ -24,18 +24,17 @@ Five features, three questions:
 
 ### Core Technologies
 
-All existing. No new runtime, framework, or language additions required for v0.10.0.
+All existing. No new runtime, framework, or language additions required for v0.11.0.
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| Bun `$` shell | (runtime) | git pull, git rev-list behind check | Already used for all git ops in `src/lib/git.ts`; add `pullBranch()` alongside existing functions |
-| Commander.js | 12.1.0 | `paths`, `pull`, `env` commands + multi-value `--template` | Already installed; `.option('-t, --template <name...>')` variadic syntax supports repeated flag natively |
-| Zod | 3.25.76 | `includes:` field on TemplateSchema | Already installed; add `z.array(z.string()).optional()` field, Zod handles forward-compat via `.optional()` |
-| SolidJS `onCleanup` + `setInterval` | 1.9.11 | Periodic background staleness polling in TUI | Already used for periodic tick in `useMessages.ts`; same pattern with `setInterval` + `onCleanup` |
+| Bun `$` shell | (runtime) | All `aerospace` CLI invocations | Same pattern as niri's `_exec.run(args)` — `$\`aerospace ${args}\`.quiet().nothrow()`; AeroSpace uses CLI not IPC socket |
+| Zod | 3.25.76 | Typed schemas for parsed `--format` rows | Already installed; `z.object({ windowId: z.number(), appBundleId: z.string(), ... })` for validated row structs after `splitFormatRow()` |
+| `Bun.TOML.parse` | (runtime built-in) | Read `aerospace.toml` for normalization detection | Bun has a native `TOML.parse(string)` API — no npm package needed; use `import { TOML } from "bun"` |
 
 ### Supporting Libraries
 
-No new dependencies are required. All capabilities map to existing tools or Bun built-ins.
+No new npm dependencies are required. All capabilities map to existing tools or Bun built-ins.
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
@@ -49,147 +48,213 @@ No changes to dev tooling.
 
 ## Feature-Specific Implementation Notes
 
-### `git-stacks paths` Command
+### `src/lib/aerospace.ts` — Shell Wrappers
 
-**What it does:** Outputs repo paths from a workspace YAML — one per line, or with a `--prefix` string prepended to each.
+**Key difference from niri.ts:** AeroSpace has no IPC socket. All commands go through the `aerospace` CLI binary. niri uses `niri msg -j <action>` with JSON output; AeroSpace uses `aerospace <subcommand> --format '%{field}\t...'` with tab-delimited text output.
 
-**Implementation:** Pure TypeScript over existing `readWorkspace()` + `WorkspaceRepo`. No new git calls needed. The `--prefix` flag maps directly to string concatenation before `console.log`. Output goes to stdout so it is pipeline-composable.
-
-**Format variants:**
-- Default: one absolute path per line
-- `--prefix <str>`: `${prefix}${path}` per line (e.g. `--prefix --repo=` produces `--repo=/path/to/repo`)
-- `--format json`: JSON array of objects `{ name, path, mode }` (add alongside `--prefix` as independent flag)
-
-**Commander.js pattern:** No special syntax needed; standard `.option()` flags.
-
-**Integration point:** Reads from `WorkspaceRepo.task_path` (worktree repos) or `WorkspaceRepo.main_path` (trunk repos). Existing `readWorkspace()` in `src/lib/config.ts` provides this directly.
-
-**Confidence:** HIGH — entirely additive over existing data structures.
-
----
-
-### `git-stacks pull` Command
-
-**What it does:** For each repo in a workspace, runs `git pull` (or `git fetch` + `git merge --ff-only`) to bring the local branch up to date with its upstream.
-
-**git CLI approach:** Use `git -C <path> pull --ff-only` for both worktree and trunk repos. `--ff-only` aborts on non-fast-forward to prevent unexpected merge commits, which is the safe default for multi-repo automation. A `--rebase` flag can be offered as an opt-in.
-
-**Why not `git pull` plain?** Plain `git pull` with merge strategy can create merge commits, which is undesirable for automated multi-repo sync. `--ff-only` keeps the operation safe and predictable.
-
-**Bun `$` pattern:** Add a `pullBranch(repoPath: string, opts?: { rebase?: boolean }): Promise<{ ok: boolean; error?: string }>` function to `src/lib/git.ts`, consistent with existing patterns like `rebaseBranch()` and `mergeBranchFF()`.
-
-**Worktree vs trunk distinction:**
-- Worktree repos: pull the workspace branch (`repo.task_path`, branch = `workspace.branch`)
-- Trunk repos: pull the default branch (`repo.main_path`, branch = registry `default_branch`)
-
-This is consistent with how `syncWorkspace()` currently handles per-mode logic in `workspace-ops.ts`.
-
-**Output:** Per-repo progress via `ProgressCallback` pattern already established. `--json` flag for machine-readable results.
-
-**Confidence:** HIGH — `git pull --ff-only` is standard; pattern mirrors `fetchOrigin()` and `rebaseBranch()` already in `git.ts`.
-
----
-
-### `git-stacks env` Command
-
-**What it does:** Dumps the merged env var set for a workspace — global config → template env → workspace env → injected GS_* vars.
-
-**Merge chain:** The existing `mergeEnv()` in `workspace-ops.ts` only merges `workspace.env`. The `env` command needs the full chain:
-
-```
-template.env (from workspace.template reference)
-  → workspace.env
-    → buildBaseEnv() GS_* vars
-```
-
-**Reading env_file:** If `workspace.env_file` is set, read the file and parse it into key=value pairs, then merge (workspace YAML `env` field wins over `env_file` on key collision). This is a new read path — currently `writeEnvFiles()` only writes, never reads back.
-
-**Output formats — no new libraries needed:**
-
-| Format | Output | Implementation |
-|--------|--------|----------------|
-| `shell` (default) | `export KEY=VALUE` | String template, one per line |
-| `dotenv` | `KEY=VALUE` | Same as `writeEnvFiles()` existing format |
-| `json` | `{ "KEY": "VALUE" }` | `JSON.stringify(envMap, null, 2)` |
-
-All three formats are trivial string transformations. `JSON.stringify` is a Bun/Node built-in. No `dotenv` npm package is needed — the format is so simple it's not worth a dependency.
-
-**Confidence:** HIGH — formats are string-trivial; merge logic extends existing `mergeEnv()`/`buildBaseEnv()` without new patterns.
-
----
-
-### TUI Upstream Staleness Indicator
-
-**What it does:** Periodically checks how many commits each repo is behind its upstream. Displays a "N behind" badge in `WorkspaceDetail` (or `WorkspaceRow`).
-
-**git CLI:** `git rev-list --count HEAD..origin/<branch>` already exists as `getCommitsBehind()` in `src/lib/git.ts`. No new git functions needed.
-
-**Periodic polling pattern:** The existing `useMessages.ts` hook uses `setInterval` + `onCleanup` for periodic message refresh. The same pattern applies here:
+**`_exec` injectable pattern — same as niri:**
 
 ```typescript
-// In a new useStalenessPoll hook or extended useWorkspaces
-const POLL_INTERVAL_MS = 60_000  // 1 minute
+export type AerospaceCmdResult = { exitCode: number; stdout: string }
 
-onCleanup(() => clearInterval(id))
-const id = setInterval(async () => {
-  const result = await getCommitsBehind(repoPath, "origin/" + branch, "HEAD")
-  setBehinds(prev => ({ ...prev, [repoName]: result }))
-}, POLL_INTERVAL_MS)
+export const _exec = {
+  run: async (args: string[]): Promise<AerospaceCmdResult> => {
+    const result = await $`aerospace ${args}`.quiet().nothrow()
+    return { exitCode: result.exitCode, stdout: result.text() }
+  },
+}
 ```
 
-**Why NOT `@solid-primitives/timer`:** The project currently has zero dependencies on `@solid-primitives/*`. The `setInterval` + `onCleanup` pattern is already used in the codebase (`useMessages.ts`). Adding a new package for something that is two lines of code is not justified.
+Tests replace `_exec.run` with a mock. No `mock.module()` needed — the mutable object property pattern is established in `niri.ts`, `tmux.ts`, `cmux.ts`.
 
-**Fetch requirement:** `getCommitsBehind` uses local remote-tracking refs (`origin/<branch>`) which require a prior `git fetch`. The existing `fetchOrigin()` function handles this. The polling implementation should:
-1. Call `fetchOrigin(repoPath)` first to update remote-tracking refs
-2. Then call `getCommitsBehind()` for the count
+**`isAeroSpaceRunning()` — availability gate:**
 
-This matches the existing pattern in `syncWorkspace()`.
+AeroSpace is macOS-only. The guard is not an env var check (unlike `NIRI_SOCKET`) — it is a binary presence check:
 
-**Cache strategy:** The result is stored in a `createSignal` map keyed by `repoName`. It is refreshed on workspace focus change (existing reload trigger) and by the interval. No external caching library needed.
+```typescript
+export async function isAeroSpaceRunning(): Promise<boolean> {
+  const result = await $`which aerospace`.quiet().nothrow()
+  return result.exitCode === 0
+}
+```
 
-**RepoStatus type extension:** Add `behind?: number` to `RepoStatus` in `types.ts`. This is backward-compatible (optional field) and avoids a breaking change to the existing status pipeline.
+This is sufficient because `aerospace` is only installed on macOS and only available when AeroSpace is running. Do NOT check for a socket file or process name — the `which` check covers the "binary available" case; a separate `list-workspaces` health probe can verify the daemon is actually responsive if needed.
 
-**Confidence:** HIGH — all git operations already exist; SolidJS polling pattern already used in the same codebase.
+**`--format` string parsing — no library needed:**
+
+`list-windows` and `list-workspaces` use `--format '%{field1}\t%{field2}\t...'` with tab-separated output. Each line is a record. Parsing is:
+
+```typescript
+function splitFormatRow(line: string, fields: number): string[] {
+  const parts = line.split('\t')
+  return parts.length === fields ? parts : []  // discard malformed rows
+}
+```
+
+The format string is fixed in the wrapper (not user-configurable), so the field count is always known at compile time. No CSV/TSV parsing library needed.
+
+**Recommended format string for `listAerospaceWindows()`:**
+
+```
+%{window-id}\t%{app-bundle-id}\t%{app-name}\t%{app-pid}\t%{workspace}\t%{window-layout}\t%{window-is-fullscreen}\t%{window-title}
+```
+
+This captures all fields needed for snapshot-delta detection and window identity. `window-id` is the operational handle; `app-bundle-id` is stable app identity.
+
+**Recommended format string for `listAerospaceWorkspaces()`:**
+
+```
+%{workspace}\t%{workspace-is-focused}\t%{workspace-is-visible}\t%{workspace-root-container-layout}\t%{monitor-id}
+```
+
+**Zod schemas for parsed output:**
+
+```typescript
+const AerospaceWindowSchema = z.object({
+  windowId: z.number(),
+  appBundleId: z.string(),
+  appName: z.string(),
+  appPid: z.number(),
+  workspace: z.string(),
+  windowLayout: z.string(),
+  windowIsFullscreen: z.boolean(),
+  windowTitle: z.string(),
+})
+
+const AerospaceWorkspaceSchema = z.object({
+  workspace: z.string(),
+  isFocused: z.boolean(),
+  isVisible: z.boolean(),
+  rootContainerLayout: z.string(),
+  monitorId: z.number(),
+})
+```
+
+Parse with `AerospaceWindowSchema.parse({ windowId: parseInt(parts[0]), ... })` after `splitFormatRow`. Return `[]` on any parse failure (same defensive pattern as niri.ts).
+
+**Core wrapper functions to implement:**
+
+| Function | AeroSpace command | Notes |
+|---|---|---|
+| `isAeroSpaceRunning()` | `which aerospace` | Binary gate — returns bool |
+| `listAerospaceWindows()` | `list-windows --all --format '...'` | Returns `AerospaceWindow[]` |
+| `listAerospaceWorkspaces()` | `list-workspaces --all --format '...'` | Returns `AerospaceWorkspace[]` |
+| `moveWindowToAerospaceWorkspace(windowId, workspace)` | `move-node-to-workspace --window-id <id> <ws>` | Moves one window |
+| `focusAerospaceWorkspace(workspace)` | `workspace <ws>` | Switch focus to workspace |
+| `aerospaceLayout(layout)` | `layout <layout>` | Set root container layout |
+| `aerospaceFlattenWorkspaceTree(workspace?)` | `flatten-workspace-tree [--workspace <ws>]` | Reset/normalize layout |
+
+**AerospaceCLI interface for test mock completeness (mirrors NiriCommands):**
+
+```typescript
+export interface AerospaceCommands {
+  isAeroSpaceRunning(): Promise<boolean>
+  listAerospaceWindows(): Promise<AerospaceWindow[]>
+  listAerospaceWorkspaces(): Promise<AerospaceWorkspace[]>
+  moveWindowToAerospaceWorkspace(windowId: number, workspace: string): Promise<void>
+  focusAerospaceWorkspace(workspace: string): Promise<void>
+  aerospaceLayout(layout: string): Promise<void>
+  aerospaceFlattenWorkspaceTree(workspace?: string): Promise<void>
+}
+```
+
+**Confidence:** HIGH — all functions directly derived from verified CLI exploration in `_references/aerospace.md`.
 
 ---
 
-### Template Composition
+### TOML Config Reading for Normalization Detection
 
-**What it does:**
-- `includes:` field on TemplateSchema: a template can list other template names; at workspace creation time, all included templates are resolved and merged.
-- `--template a --template b` on `git-stacks new`: ad-hoc multi-template selection from CLI.
+**The problem:** `aerospace split` is a no-op when `enable-normalization-flatten-containers = true` in `aerospace.toml`. The controller must either:
+1. Detect this setting and use `join-with` instead of `split`, or
+2. Let the user configure which strategy to use via `settings.integrations.aerospace.layout_strategy`
 
-**Schema change — Zod:**
+**Recommendation:** Use the user-configuration approach (option 2) as the default path. This avoids a fragile file-path assumption. The normalization detection via TOML is a **secondary enhancement** for better defaults.
+
+**If TOML reading is implemented** (for normalization auto-detection):
+
+Use `Bun.TOML.parse()` — it is a native Bun built-in. No npm package needed.
 
 ```typescript
-// In TemplateSchema, add:
-includes: z.array(z.string()).optional(),
+import { TOML } from "bun"
+
+async function readAerospaceConfig(): Promise<Record<string, unknown>> {
+  const configPath = `${process.env.HOME}/.config/aerospace/aerospace.toml`
+  try {
+    const text = await Bun.file(configPath).text()
+    return TOML.parse(text) as Record<string, unknown>
+  } catch {
+    return {}
+  }
+}
 ```
 
-This is a backward-compatible additive change. Existing template YAML files without `includes:` parse fine (Zod `.optional()` default is `undefined`).
+`Bun.TOML.parse(string)` is documented and available in Bun 1.x (confirmed in official Bun docs, last updated 2026-03-21 for Bun 1.3.11).
 
-**Commander.js multi-value option:**
+**Important caveat:** `aerospace config --get` does not expose all TOML keys reliably (confirmed in `_references/aerospace.md`). Do not use the `aerospace config` CLI for normalization detection. Read the file directly with `Bun.TOML.parse`.
 
-```javascript
-// Variadic option using ... syntax (Commander.js 12 native):
-.option('-t, --template <name...>', 'template(s) to use')
+**Default config path:** `~/.config/aerospace/aerospace.toml`. AeroSpace also supports `~/.aerospace.toml`. Check both with existence checks; prefer `~/.config/aerospace/aerospace.toml`.
 
-// OR collect pattern (both work in Commander.js 12):
-const collect = (val: string, acc: string[]) => { acc.push(val); return acc }
-.option('-t, --template <name>', 'template (repeatable)', collect, [])
+**Confidence:** HIGH — Bun.TOML.parse verified in official Bun docs; file path confirmed in exploration notes.
+
+---
+
+### `src/lib/integrations/aerospace.ts` — Integration Plugin
+
+**Pattern match to niri.ts** — tier-3 plugin at `order: 31` (one above niri's 30 to allow coexistence on Linux when only niri is running).
+
+**Key structural differences from niri.ts:**
+
+| Aspect | niri | AeroSpace |
+|---|---|---|
+| Availability gate | `process.env.NIRI_SOCKET` | `which aerospace` exit 0 |
+| Window identification | niri window ID (integer) | AeroSpace window ID (integer, `%{window-id}`) |
+| Workspace creation | `focusNiriWorkspaceDown()` + `setNiriWorkspaceName()` | Use existing named/numbered workspace — AeroSpace workspaces are pre-configured names in config |
+| Window movement | `moveWindowToWorkspace(windowId, workspaceName)` | `moveWindowToAerospaceWorkspace(windowId, workspace)` |
+| Layout commands | Not applicable | `aerospaceLayout()` + `aerospaceFlattenWorkspaceTree()` |
+| Cleanup | `unsetNiriWorkspaceName()` | No cleanup needed — AeroSpace workspaces are config-defined |
+| WindowDetector | Yes — `snapshotWindowIds` via poll | Yes — before/after `listAerospaceWindows()` diff by window-id |
+
+**Snapshot-delta detection — no polling needed:**
+
+Unlike niri (which must poll because niri creates windows asynchronously), AeroSpace's `list-windows` output is synchronous CLI state. The integration opens a process via `Bun.spawn` (to capture PID) and waits for the window to appear. The `WindowDetector.begin()` / `WindowDetector.resolve()` pattern from `types.ts` works directly:
+
+```typescript
+windowDetector: {
+  id: "aerospace",
+  async begin(): Promise<DetectorSnapshot> {
+    const running = await isAeroSpaceRunning()
+    if (!running) return { _brand: "aerospace", data: new Set<number>() }
+    const windows = await listAerospaceWindows()
+    return { _brand: "aerospace", data: new Set(windows.map(w => w.windowId)) }
+  },
+  async resolve(snapshot, _hints): Promise<number[]> {
+    // Poll with exponential backoff, same as niri WindowDetector
+    // ...
+  }
+}
 ```
 
-The variadic `<name...>` syntax is simpler; the `collect` pattern is more explicit. Either works. The `collect` pattern is preferable because it handles single `--template foo` and multiple `--template foo --template bar` identically, and is consistent with how Commander.js handles this in the existing completion generator's flag traversal.
+**Config schema:**
 
-**Merge rules (per PROJECT.md):**
-- Repos: union, worktree mode wins on conflict
-- Hooks: concatenate (all pre_create arrays merged in order)
-- Env: shallow merge, later template wins on key collision
-- `includes:` resolution is depth-first, cycle detection required
+```typescript
+const aerospaceConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  workspace: z.string().optional(),          // target AeroSpace workspace name (e.g. "5", "work")
+  focus: z.boolean().optional(),             // whether to focus workspace after setup
+  layout: z.string().optional(),             // root layout to apply (h_tiles, h_accordion, etc.)
+  flatten_after: z.boolean().optional(),     // run flatten-workspace-tree before layout
+})
+```
 
-**Cycle detection:** When resolving `includes:`, track visited template names in a `Set<string>`. If a template name is encountered twice in the resolution path, skip with a warning. No dedicated graph library needed — this is a simple DFS with a seen set.
+**Confidence:** HIGH — derived from niri.ts pattern + AeroSpace CLI verified in exploration notes.
 
-**Confidence:** HIGH — Zod schema extension is additive; Commander.js variadic options are documented; merge logic is pure TypeScript object manipulation.
+---
+
+### `git-stacks doctor` Check
+
+Add to `src/commands/doctor.ts`: a check that verifies `aerospace` binary is available when AeroSpace integration is enabled. Follow the existing pattern for `tmux`, `niri` binary checks already in doctor.ts.
+
+**Confidence:** HIGH — pattern already established for niri binary check.
 
 ---
 
@@ -197,11 +262,13 @@ The variadic `<name...>` syntax is simpler; the `collect` pattern is more explic
 
 | Recommended | Alternative | Why Not |
 |-------------|-------------|---------|
-| `git pull --ff-only` in Bun `$` | `simple-git` npm package | Adds a production dependency for git operations the project already handles directly via Bun `$`; `simple-git` is designed for Node.js, not Bun |
-| `setInterval` + `onCleanup` for polling | `@solid-primitives/timer` | Already used in the codebase; zero new dependency for two lines of code |
-| `JSON.stringify` for env JSON output | `json-stringify-pretty-compact` or similar | Overkill; `JSON.stringify(obj, null, 2)` is sufficient and built-in |
-| Custom merge function for template composition | `deepmerge` or `deepmerge-ts` | The merge rules are domain-specific (hooks concatenate, repos union, env shallow-merge) — no generic deep-merge library handles this correctly without configuration that is as complex as writing it directly |
-| Zod `.optional()` for `includes:` field | Schema migration shim | Not needed; `.optional()` is backward-compatible with existing template YAML files |
+| `Bun.TOML.parse` (built-in) | `smol-toml` npm package | Bun has native TOML parsing; no dependency justified |
+| `Bun.TOML.parse` (built-in) | `@iarna/toml` npm package | Same — adds production dep for something Bun provides natively |
+| `Bun.TOML.parse` (built-in) | `js-toml` npm package | Same — native Bun API is sufficient |
+| Tab-split parsing in `splitFormatRow()` | CSV/TSV parsing library | The format string is controlled by our code; field count is fixed; `String.split('\t')` is sufficient |
+| User-configured `layout_strategy` field | Auto-detect normalization via `aerospace config --get` | `aerospace config --get` does not reliably expose all TOML keys (confirmed in exploration notes); file read is more reliable but adds complexity |
+| `which aerospace` binary check | `AEROSPACE_SOCKET` env var | AeroSpace does not expose an env var equivalent to `NIRI_SOCKET`; binary presence is the correct gate |
+| `order: 31` for AeroSpace plugin | `order: 30` (same as niri) | Both can be installed; different order allows coexistence when only niri or only AeroSpace is present; niri is Linux, AeroSpace is macOS so they won't both run, but separate order values are cleaner |
 
 ---
 
@@ -209,45 +276,42 @@ The variadic `<name...>` syntax is simpler; the `collect` pattern is more explic
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `dotenv` npm package | Parses `.env` files but the project's env output formats are string-trivial; adds a production dep for 3 lines of code | String templates: `export K=V`, `K=V`, `JSON.stringify` |
-| `@solid-primitives/timer` | Wraps `setInterval`/`setTimeout` reactively — good library, but the codebase already uses `setInterval` + `onCleanup` directly | The existing `useMessages.ts` polling pattern |
-| `simple-git` | Node.js-oriented wrapper around git — redundant with Bun `$` shell and the established `src/lib/git.ts` patterns | Bun `$` + functions in `git.ts` |
-| `deepmerge` / `deepmerge-ts` | Generic deep merge can't express the domain-specific rules: hooks concatenate (not merge), repos union with worktree-wins, env shallow-merge | Plain TypeScript: union with a `Map` for repos, `concat` for hook arrays, `Object.assign` for env |
-| `p-limit` or `p-map` | Concurrency limiting for pull operations — the existing `useWorkspaces.ts` already implements a manual `CONCURRENCY = 5` batching pattern | Existing batch loop pattern in `fetchStatuses()` |
+| `smol-toml` / `@iarna/toml` / `js-toml` | Bun has `TOML.parse()` built in; adding a dep for built-in functionality is unnecessary | `import { TOML } from "bun"` |
+| `aerospace config --get <key>` for normalization detection | The reference notes explicitly confirm this does not expose all TOML keys reliably | `Bun.TOML.parse(await Bun.file(configPath).text())` |
+| `aerospace` JSON output (`--json` flag on `list-windows`) | `list-windows --json` only returns `app-name`, `window-id`, `window-title` — insufficient for stable app identity and workspace tracking | `list-windows --format '%{window-id}\t%{app-bundle-id}\t...'` |
+| Node.js `fs.readFileSync` for TOML reading | Use Bun-native APIs throughout; `Bun.file(path).text()` is the established pattern | `Bun.file(configPath).text()` |
+| Hardcoded AeroSpace workspace creation | AeroSpace workspaces are defined in `aerospace.toml`; the integration should target existing named workspaces, not create new ones | `workspace` config field in integration settings pointing to an existing workspace name |
 
 ---
 
-## Stack Patterns by Variant
+## AeroSpace Version Compatibility
 
-**If `git-stacks pull` encounters a repo that is not on its remote branch:**
-- Return `{ ok: false, error: "no upstream tracking" }` from `pullBranch()`
-- Report per-repo in output, continue with remaining repos (non-fatal per-repo failure)
-- Do NOT abort the entire pull on one missing upstream — same philosophy as `syncWorkspace()`
+**Current version:** v0.20.3-Beta (March 8, 2025) — project is pre-1.0 beta only; no stable releases exist.
 
-**If template `includes:` creates a cycle:**
-- Detect via `Set<string>` in resolution DFS
-- Skip the cycling template, log a warning: `[git-stacks] Warning: circular template include '${name}' — skipping`
-- Do NOT throw — workspace creation should still succeed with the resolvable subset
+**Breaking change in v0.20.0:** `--stdin` flag now required for stdin-piped workspace names on `workspace` and `move-node-to-workspace`. Our implementation uses explicit `--window-id` and positional workspace args — not stdin — so this breaking change does not affect us.
 
-**If multiple `--template` values have conflicting repos (same registry name, different modes):**
-- Worktree mode wins over trunk (per PROJECT.md spec)
-- First-seen base_branch wins (templates are merged left-to-right in argument order)
+**`--format` flag stability:** The `%{field}` interpolation variables for `list-windows` and `list-workspaces` have been stable across the beta versions documented. The reference notes were collected against v0.20.3-Beta and the format variables documented in the official AeroSpace commands page match.
+
+**Minimum version for our feature set:** v0.20.x-Beta. All commands we use (`list-windows --format`, `list-workspaces --format`, `move-node-to-workspace --window-id`, `workspace`, `layout`, `flatten-workspace-tree`) are present and working in v0.20.3-Beta.
+
+**Version check in doctor:** The doctor check should verify `aerospace` is available but does not need to enforce a minimum version — the CLI behavior is stable enough for our use.
 
 ---
 
 ## Version Compatibility
 
-| Package | Compatible With | Notes |
-|---------|-----------------|-------|
-| Commander.js 12.1.0 | Variadic `<name...>` options | Supported since Commander.js 7; verified in v12 README and `options-variadic.js` example |
-| Zod 3.25.76 | `z.array(z.string()).optional()` on existing schema | Fully backward-compatible; `.optional()` means undefined if key missing |
-| SolidJS 1.9.11 | `setInterval` + `onCleanup` | Standard SolidJS lifecycle pattern; used in same codebase already |
+| Component | Requires | Notes |
+|-----------|----------|-------|
+| `Bun.TOML.parse` | Bun 1.x | Documented in Bun 1.3.11 official docs; available across all recent Bun 1.x versions |
+| AeroSpace `--format` parsing | AeroSpace v0.20.x+ | `%{window-id}` and all fields used were confirmed in v0.20.3-Beta exploration; v0.20.0 added `persistent-workspaces` (not relevant to our use) |
+| `_exec` injectable pattern | (no version) | Established pattern in niri.ts, tmux.ts, cmux.ts — no version constraint |
+| `WindowDetector` interface | (no version) | Defined in `src/lib/integrations/types.ts`; no changes needed |
 
 ---
 
 ## Installation
 
-No new packages to install for v0.10.0. All capabilities are covered by the existing dependency set plus Bun built-ins.
+No new npm packages to install for v0.11.0. All capabilities are covered by the existing dependency set plus Bun built-ins.
 
 ```bash
 # No new dependencies
@@ -257,17 +321,17 @@ No new packages to install for v0.10.0. All capabilities are covered by the exis
 
 ## Sources
 
-- `src/lib/git.ts` — verified existing `getCommitsBehind()`, `fetchOrigin()`, `rebaseBranch()` patterns (HIGH confidence)
-- `src/lib/workspace-ops.ts` — verified `mergeEnv()`, `buildBaseEnv()`, `writeEnvFiles()`, `syncWorkspace()` patterns (HIGH confidence)
-- `src/tui/dashboard/hooks/useMessages.ts` — verified `setInterval` + `onCleanup` polling pattern already in use (HIGH confidence)
-- `src/tui/dashboard/types.ts` — verified `RepoStatus` structure; `behind?: number` extension is additive (HIGH confidence)
-- Commander.js 12 README (github.com/tj/commander.js) — verified variadic `<name...>` option syntax and `collect` function pattern (HIGH confidence)
-- SolidJS docs (docs.solidjs.com) — confirmed `createEffect`/`onCleanup` pattern for intervals; `@solid-primitives/timer` noted but not needed (MEDIUM confidence — docs current as of 2025)
-- git-scm.com/docs/git-rev-list — confirmed `--count HEAD..origin/<branch>` syntax for behind count (HIGH confidence)
-- git-scm.com/docs/git-pull — confirmed `--ff-only` and `--rebase` flags (HIGH confidence)
-- package.json — current dependency versions confirmed (HIGH confidence)
+- `_references/aerospace.md` — Full CLI exploration against AeroSpace v0.20.3-Beta; `--format` variables verified, normalization behavior confirmed, snapshot strategy documented (HIGH confidence)
+- `src/lib/niri.ts` — Verified injectable `_exec` pattern and `SnapshotOpts` approach to adopt (HIGH confidence)
+- `src/lib/integrations/niri.ts` — Verified `WindowDetector` implementation and `order: 30` tier-3 plugin structure (HIGH confidence)
+- `src/lib/integrations/types.ts` — Verified `WindowDetector`, `DetectorSnapshot`, `ArtifactBag`, `Integration` interface contracts (HIGH confidence)
+- `bun.com/reference/bun/TOML` — Confirmed `Bun.TOML.parse(string)` API exists, documented for Bun 1.3.11 (HIGH confidence)
+- `bun.sh/guides/runtime/import-toml` — Confirmed `import { TOML } from "bun"` syntax (HIGH confidence)
+- `nikitabobko.github.io/AeroSpace/commands` — Official command reference: `list-windows`, `list-workspaces`, `move-node-to-workspace --window-id` flags verified (HIGH confidence)
+- `github.com/nikitabobko/AeroSpace/releases` — Confirmed current version is v0.20.3-Beta; no stable release; v0.20.0 breaking change documented (MEDIUM confidence — GitHub releases page, no official stable channel)
+- `package.json` — Current dependency versions confirmed; no new dependencies needed (HIGH confidence)
 
 ---
 
-*Stack research for: git-stacks v0.10.0 Multi-Agent Workspace Tooling*
-*Researched: 2026-03-25*
+*Stack research for: git-stacks v0.11.0 AeroSpace Window Management Integration*
+*Researched: 2026-03-28*

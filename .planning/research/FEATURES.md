@@ -1,16 +1,22 @@
-# Feature Research — v0.10.0 Multi-Agent Workspace Tooling
+# Feature Research — v0.11.0 AeroSpace Window Management Integration
 
-**Domain:** CLI workspace manager — agent bootstrap primitives, repo sync, template composition
-**Researched:** 2026-03-25
-**Confidence:** HIGH (official docs + codebase inspection + verified tooling patterns)
+**Domain:** CLI workspace manager — macOS tiling window manager integration (AeroSpace)
+**Researched:** 2026-03-28
+**Confidence:** HIGH (codebase inspection + direct CLI exploration notes in _references/aerospace.md)
 
 ---
 
 ## Context
 
-This is a subsequent milestone on an existing codebase (v0.9.1 shipped 2026-03-25). This research
-covers ONLY the five new features; existing functionality is assumed stable. Each feature's
-dependencies on existing primitives are identified explicitly with file/function references.
+Subsequent milestone on an existing codebase (v0.10.1 shipped 2026-03-28). This research covers
+ONLY the new AeroSpace integration features. Existing functionality — integration plugin system,
+`WindowDetector` interface, `ArtifactBag`, tier ordering, injectable `_exec` pattern — is assumed
+stable and is the direct implementation substrate.
+
+**Niri integration (`src/lib/integrations/niri.ts`) is the feature parity reference.** The AeroSpace
+integration must match niri's capability shape while adapting for AeroSpace's fundamentally different
+model: numbered/named workspaces (not dynamic), `window-id` as the operational handle (not niri
+window ID), and normalization-sensitive layout commands.
 
 ---
 
@@ -18,229 +24,223 @@ dependencies on existing primitives are identified explicitly with file/function
 
 ### Table Stakes (Users Expect These)
 
-Features that users will assume work correctly from day one of the milestone.
+Features users assume work from day one. Missing any of these makes the integration feel
+incomplete or broken.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| `git-stacks paths` — emit repo paths | Any workspace-aware CLI must be queryable; agents cannot discover paths themselves | LOW | Paths already in `WorkspaceRepo.task_path` / `main_path`; pure read + format |
-| `paths --prefix` flag | Claude Code `--add-dir` and all similar agent tools require `--add-dir path1 --add-dir path2`; a prefix flag is the standard way to produce this in command substitution | LOW | Official Claude docs confirm: `claude --add-dir ../apps ../lib` (space-sep) or `--add-dir A --add-dir B` (repeated); `--prefix --add-dir` handles both |
-| `git-stacks pull` — sync all repos | Multi-repo workspace convention: one command to bring everything current; no reason to visit each repo individually | MEDIUM | Worktrees and trunk repos behave differently; worktrees pull the feature branch, trunk repos pull default branch |
-| `git-stacks env` — dump merged env vars | Agent bootstrapping requires knowing what env vars are active; `mise env`, `direnv export` set the convention; workspace env must be inspectable | LOW | `mergeEnv()` already exists in `workspace-ops.ts`; needs GS_* injected vars added plus output formatting |
-| `env --format dotenv\|json\|shell` | `mise env` established this as the standard: `-D --dotenv`, `-J --json`, `--shell <shell>`; agents and scripts expect multiple output formats | LOW | dotenv = `KEY=VALUE` per line; json = flat object; shell = `export KEY=VALUE`; matches mise env API shape |
-| TUI upstream staleness — "N behind" per repo | Multi-worktree workflows need glanceable staleness; git clients (Tower, VS Code) all show this; absence means TUI is not a useful workspace dashboard | MEDIUM | `getCommitsBehind()` already in `git.ts`; caching required to avoid network call per TUI render |
+| AeroSpace shell wrappers (`src/lib/aerospace.ts`) | Niri has `src/lib/niri.ts` with typed async wrappers + injectable `_exec`; AeroSpace must follow the same pattern for testability | MEDIUM | `list-windows --format`, `list-workspaces --format`, `move-node-to-workspace`, `layout`, `workspace`, `flatten-workspace-tree`; `--format` tab-delimited parsing; injectable `_exec.run` for test isolation |
+| Integration plugin (`src/lib/integrations/aerospace.ts`) | Every integration in the codebase is a plugin; adding AeroSpace any other way breaks the pattern | MEDIUM | Tier-3 (order 30-39); `enabledByDefault: false`; `isEnabled()` via `resolveEnabled()`; `open()` returns null; macOS-only gate via binary check |
+| Binary availability gate (`isAeroSpaceRunning()` / binary check) | Niri gates on `NIRI_SOCKET`; AeroSpace should gate on binary availability + process running; absence must be silent, not an error | LOW | `which aerospace` + process detection; return null from `open()` without error output when not available; clean silent gate |
+| Target workspace configuration (`settings.integrations.aerospace.workspace`) | User must specify which AeroSpace workspace to send windows to; AeroSpace workspaces are numbered/named by user config — not auto-created | LOW | Zod schema field: `workspace: z.string()` (e.g. `"5"`, `"dev"`, `"work"`); workspace must already exist in AeroSpace config |
+| Snapshot-delta window detection (`WindowDetector`) | Niri has `windowDetector` with `begin()`/`resolve()`; runner.ts calls it for all tier-1 artifacts; AeroSpace needs the same for its window IDs | MEDIUM | `begin()` calls `list-windows --format`, captures `Set<number>` of window-ids; `resolve()` polls with exponential backoff (same 10s timeout / 200ms initial as niri); returns new window-ids |
+| Move new windows to target workspace | The core reason to use the integration: windows spawned by tier-1 integrations (vscode, intellij) should appear on the configured AeroSpace workspace | MEDIUM | Iterate `ArtifactBag`; for each `WindowArtifact` with `windowIds["aerospace"]`, call `move-node-to-workspace --window-id <id> <target>`; partial failure is acceptable (log warn, continue) |
+| Doctor check for `aerospace` binary | All integration binaries are checked in `doctor.ts`; AeroSpace must appear in the binary list | LOW | Add `{ name: "aerospace", required: false, install: "https://nikitabobko.github.io/AeroSpace/guide" }` to binary list in `doctor.ts`; follow existing warn-level pattern |
+| `cleanup()` on workspace close/remove | Niri has cleanup (unnames the workspace); AeroSpace has no named-workspace state to clean up, but cleanup hook must exist | LOW | AeroSpace cleanup is a no-op: the integration does not create AeroSpace workspaces (user-configured, numbered); implement `cleanup()` as async no-op returning void |
 
-### Differentiators (Competitive Advantage)
+### Differentiators (Features Unique to AeroSpace)
 
-Features specific to the multi-agent use case that generic workspace tools do not provide.
+Features that niri does not have, enabled by AeroSpace-specific CLI capabilities.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| `paths --prefix` for agent CLI injection | Zero-friction path from workspace definition to agent invocation: `claude $(git-stacks paths myws --prefix --add-dir)`; no other workspace manager produces this output shape | LOW | Pure output formatting; high agent UX value for minimal implementation cost |
-| Template composition (`includes:`) | Composable workspace recipes are rare in CLI tools; "java-base + api-team + my-extras" meta-template is a genuine power feature for managing many agent workspaces | HIGH | Merge rules are the complexity: repos union (worktree wins on conflict), hooks concatenate, env last-wins |
-| Ad-hoc `--template a --template b` on `new` | One-shot composition without defining a named meta-template; useful for agents creating transient workspaces | MEDIUM | Commander.js variadic option; same merge logic as `includes:` so no second implementation needed |
-| GS_* vars in `env` dump | Other env dump tools show only user-defined vars; including `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH` makes the output a complete agent context bootstrap document | LOW | `buildBaseEnv()` already constructs these in `workspace-ops.ts`; just include them in the dump |
-| TUI staleness with fetch-on-focus + TTL | Fetch when user focuses a workspace, cache for 5 min, manual refresh via `r`; avoids the VS Code "periodically run git fetch?" prompt anti-pattern | MEDIUM | In-memory TTL cache per main_path; re-fetch on workspace focus or manual refresh; show "fetched 3m ago" in footer |
+| Normalization-aware layout control | AeroSpace's `split` is a no-op when `enable-normalization-flatten-containers = true`; using the right command matters; integration should detect normalization state and use `join-with`/`flatten-workspace-tree` vs `split` | HIGH | Two approaches: (1) read TOML directly (`~/.config/aerospace/aerospace.toml`) and inspect `enable-normalization-flatten-containers`; (2) user configures `normalization: true|false` in workspace YAML; approach (2) is simpler and does not require TOML parsing; document that `aerospace config --get` is unreliable for all keys |
+| Root layout control via `layout` command | Set the workspace's root container layout (`h_tiles`, `v_tiles`, `h_accordion`, `v_accordion`) on open; niri has no equivalent root-layout concept | MEDIUM | Config field: `layout: z.enum(["h_tiles", "v_tiles", "h_accordion", "v_accordion"]).optional()`; issued after moving windows; scoped to `--workspace <target>` |
+| `flatten-workspace-tree` normalization reset | Reset any nested container structure on the target workspace before placing windows; ensures clean state when re-opening a workspace | LOW | Optional config flag: `flatten_before_open: z.boolean().optional()`; call `aerospace flatten-workspace-tree --workspace <target>` before window placement; useful when user re-opens a workspace with leftover container nesting |
+| `focus-workspace` subcommand | Bring an AeroSpace workspace to focus by workspace name; matches niri's `focus-workspace` subcommand under `git-stacks integration aerospace` | LOW | `aerospace workspace <id>` under the `commands()` subcommand hook; same pattern as niri's `focus-workspace [workspace]` subcommand |
+| `commands` array for launching apps | Niri supports `commands` array in config; AeroSpace integration should support equivalent: launch arbitrary commands on the target workspace | MEDIUM | Config field: `commands: z.array(z.string()).optional()`; each command launched via `Bun.spawn`/`niriSpawnSh`-equivalent; snapshot-delta detects resulting windows; move to target workspace |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| `pull` with auto-rebase | Users want "pull and rebase" in one step | Rebase on a feature branch mid-work destroys in-progress state; conflicts need human resolution; not safe for headless agent use | `pull --ff-only` (abort on divergence); agent calls `git-stacks sync` for intentional rebase |
-| `pull` force-pulling dirty repos | Seems convenient — just overwrite local changes | Destroys uncommitted work silently; agents may have active in-progress edits | Report dirty repos, skip them, exit non-zero; let the agent decide |
-| `env` dump including `env_file` contents | Users want one command to see all env vars | `env_file` contents may contain secrets not suitable for stdout piping in CI/CD or log capture | Dump only in-memory `workspace.env` + injected GS_* vars; document this scope boundary explicitly |
-| Template composition deep-merge (nested keys) | Seems like natural extension of env merging | Nested YAML merging is unpredictable: which level wins? What if types differ? | Flat `env` merge (last-wins on top-level keys); document clearly; matches what mise/Hatch do |
-| TUI auto-fetch on every list render | Users want staleness always current | Network fetch in a render loop causes jank, timeouts, error noise; TUI becomes unusable on slow connections | TTL-cached fetch on focus + manual `r` refresh; show stale-data age in footer |
-| `paths` deduplication across workspaces | See all paths from all workspaces | Breaks workspace isolation; agents would access wrong feature branches | `paths` strictly scoped to one named workspace; cross-workspace queries are caller's responsibility |
+| Auto-creating AeroSpace workspaces | User wants integration to "just work" without pre-configuring | AeroSpace workspaces are defined in `~/.config/aerospace/aerospace.toml`; the CLI cannot create new workspaces at runtime — only move windows to existing ones; attempting to move to a non-existent workspace would fail silently or error | Validate target workspace exists via `list-workspaces --format` before moving; fail with clear error if not found; document that user must define the workspace in AeroSpace config |
+| `split` for layout control when normalization is unknown | Seems like a natural layout primitive | When `enable-normalization-flatten-containers = true` (the common default), `split` exits with code 1 and a warning; using it silently fails; this is documented in _references/aerospace.md | Use `join-with` for local nesting, `layout` for root policy; expose `normalization` config field so user declares their AeroSpace config; or default to never using `split` |
+| Multi-monitor window placement | User wants to send windows to a workspace on a specific monitor | `move-node-to-workspace` does not accept a monitor target; `move-workspace-to-monitor` requires multiple monitors; with a single monitor the command errors; single-monitor is the common case | Move windows to target workspace only; do not attempt monitor routing; document as a future enhancement when multi-monitor patterns are better understood |
+| `reload-config` after window placement | Ensures AeroSpace config is fresh | `reload-config` on a live session disrupts all workspace state and window assignments; too high-impact for unattended automation | Trust AeroSpace's live state; do not reload config; if user changes AeroSpace config they should reload manually |
+| Window decoration / title setting via AeroSpace | User wants IDE windows labeled per workspace | AeroSpace does not expose window title mutation; that is an OS-level capability | Leave titles to the IDE itself; tmux session naming handles terminal labeling |
+| Reading AeroSpace config via `aerospace config --get` | Introspect normalization state programmatically | `aerospace config --get` does not reliably expose all TOML keys (confirmed in _references/aerospace.md); only some keys are accessible | Read `~/.config/aerospace/aerospace.toml` directly for TOML introspection, or require user to declare `normalization` in workspace YAML config |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[git-stacks paths]
-    └──reads──> WorkspaceRepo.task_path / main_path (already exists in WorkspaceSchema)
-    └──reuses──> resolveWorkspaceArg() (CWD auto-detection, already in workspace-ops.ts)
-    └──enhances──> claude --add-dir (agent CLI injection)
+[AeroSpace shell wrappers — src/lib/aerospace.ts]
+    └──required by──> AeroSpace integration plugin (aerospace.ts)
+    └──required by──> WindowDetector (begin/resolve use list-windows --format)
+    └──pattern from──> src/lib/niri.ts (injectable _exec, Zod schemas, typed wrappers)
 
-[git-stacks env]
-    └──reuses──> mergeEnv() (workspace-ops.ts — reads workspace.env)
-    └──reuses──> buildBaseEnv() (workspace-ops.ts — produces GS_* vars)
-    └──extends──> mergeEnv() to also include template.env (current gap: only workspace.env is read)
-    └──reuses──> resolveWorkspaceArg() (CWD auto-detection)
+[WindowDetector — begin() / resolve()]
+    └──required by──> runner.ts (calls begin() before open(), resolve() after for WindowArtifacts)
+    └──required by──> move windows by ArtifactBag IDs
+    └──uses──> list-windows --format (shell wrapper)
+    └──interface from──> src/lib/integrations/types.ts WindowDetector
 
-[git-stacks pull]
-    └──reuses──> fetchOrigin() (git.ts — fetches per main_path)
-    └──reuses──> isRepoDirty() (git.ts — dirty guard)
-    └──reuses──> getCurrentBranch() (git.ts — confirm worktree is on expected branch)
-    └──reads──> WorkspaceRepo.mode (worktree vs trunk branch selection)
-    └──reads──> WorkspaceRepo.main_path (fetch target per repo clone)
-    └──reuses──> resolveWorkspaceArg() (CWD auto-detection)
+[AeroSpace integration plugin — src/lib/integrations/aerospace.ts]
+    └──requires──> AeroSpace shell wrappers (aerospace.ts)
+    └──requires──> WindowDetector (detect new windows)
+    └──requires──> target workspace config (where to send windows)
+    └──requires──> binary availability gate (silent skip when not present)
+    └──registered in──> src/lib/integrations/index.ts
+    └──follows pattern of──> src/lib/integrations/niri.ts
 
-[TUI staleness indicator]
-    └──reuses──> getCommitsBehind() (git.ts — rev-list --count)
-    └──reuses──> fetchOrigin() (git.ts — update remote refs before count)
-    └──extends──> WorkspaceListInfo or detail pane per-repo data model
-    └──requires──> in-memory TTL cache (new, Map<mainPath, {fetchedAt, repoResults}>)
-    └──wires into──> TUI dashboard WorkspaceDetail per-repo rows
+[Target workspace config — `settings.integrations.aerospace.workspace`]
+    └──required by──> integration open() (which workspace to target)
+    └──stored in──> workspace YAML + GlobalConfig integrations["aerospace"] map
+    └──cascade from──> resolveEnabled() pattern in types.ts
 
-[Template composition `includes:`]
-    └──extends──> TemplateSchema (new `includes: string[]` optional field — backward-compatible)
-    └──requires──> mergeTemplates(templates: Template[]) => Template (new function)
-    └──enhances──> git-stacks new --template variadic (Commander.js option change)
-    └──enhances──> workspace creation wizard (TUI multi-select for templates)
+[Normalization-aware layout — `normalization` config field]
+    └──requires──> target workspace config (layout applied to target workspace)
+    └──uses──> `layout` command (root policy) OR `join-with` (nested grouping)
+    └──uses──> `flatten-workspace-tree` (reset before layout)
+    └──requires──> user declaration OR TOML file read
 
-[git-stacks new --template a --template b (ad-hoc)]
-    └──requires──> mergeTemplates() (same as includes: — single implementation)
-    └──modifies──> git-stacks new command (variadic --template option)
+[Doctor check — `aerospace` binary]
+    └──independent——> no new dependencies; add entry to existing binary list in doctor.ts
+    └──pattern from——> existing warn-level binary checks (gh, glab, tmux, niri)
 ```
 
 ### Dependency Notes
 
-- **`paths` is fully independent** — no new primitives needed; pure read + format over existing WorkspaceRepo data.
-- **`env` has one gap to fix**: `mergeEnv()` currently reads only `workspace.env`, not `template.env`. The `env` command should implement the full merge chain (global config vars → template.env → workspace.env → GS_*).
-- **`pull` needs dirty-check guard before touching any repo** — `isRepoDirty()` already exists; the gate is mandatory or agents lose in-progress work.
-- **Template composition shares merge logic with `--template a --template b`** — implement once as `mergeTemplates(templates: Template[]): Template`; both `includes:` and ad-hoc call it.
-- **TUI staleness needs a per-main_path fetch cache** — without TTL, the TUI issues a `git fetch` on every detail pane focus; this causes visible lag and potential rate-limiting on hosted git.
-- **`paths`, `env`, `pull` are the fastest wins** — all three reuse existing primitives with minimal new logic; template composition is the highest-effort feature.
+- **Shell wrappers are the foundation** — all other features depend on `src/lib/aerospace.ts`; build it first with injectable `_exec` and Zod-validated `--format` parsing.
+- **WindowDetector is independent of layout** — detect windows first, move them, then apply layout; the ordering matters: layout commands issued before window placement will affect the pre-existing windows on that workspace.
+- **Target workspace config is required by `open()`** — if not configured, `open()` should skip window placement entirely (no target = nothing to do); log a hint to configure.
+- **Normalization-aware layout is the highest-risk feature** — it requires either TOML parsing or a user config field; the user config field approach is simpler and matches how niri columns are user-declared; default to safe commands (`layout` + `join-with`) that work regardless of normalization state; `flatten-workspace-tree` is always safe.
+- **Doctor check is fully independent** — can be added in any phase; zero risk.
 
 ---
 
 ## MVP Definition
 
-All five features are in scope for v0.10.0. Build order should follow dependency complexity:
+### Build First (foundation — all other features depend on this)
 
-### Build First (no new dependencies, foundational)
+- [ ] AeroSpace shell wrappers (`src/lib/aerospace.ts`) — `listAeroSpaceWindows()`, `listAeroSpaceWorkspaces()`, `moveNodeToWorkspace()`, `aerospaceWorkspace()`, `isAeroSpaceRunning()`; `--format` tab-delimited parsing with Zod validation; injectable `_exec`; unit tests without AeroSpace binary; estimated MEDIUM effort
+- [ ] Doctor check for `aerospace` binary — add to binary list in `doctor.ts`; one-liner addition; estimated LOW effort
 
-- [ ] `git-stacks paths [workspace] [--prefix <str>]` — reads WorkspaceRepo data, emits formatted output; unblocks agent CLI injection immediately; estimated LOW effort
-- [ ] `git-stacks env [workspace] [--format shell|dotenv|json]` — reads `mergeEnv()` + `buildBaseEnv()`, adds template.env to merge chain, formats output; estimated LOW effort
+### Build Second (core integration behavior)
 
-### Build Second (network I/O, dirty-check protocol)
+- [ ] AeroSpace integration plugin with `WindowDetector` — `src/lib/integrations/aerospace.ts`; tier-3 (order 31 after niri at 30); binary gate; `begin()`/`resolve()` snapshot-delta detection; `open()` moves detected windows to target workspace; target workspace config schema; `cleanup()` no-op; register in `index.ts`; estimated MEDIUM effort
 
-- [ ] `git-stacks pull [workspace]` — fetch per main_path, `git pull --ff-only` per repo; skip dirty repos with warning; parallel execution; estimated MEDIUM effort
-- [ ] TUI staleness indicator — `getCommitsBehind()` per repo on focus, TTL cache per main_path, `N↓` badge in detail pane; estimated MEDIUM effort
+### Build Third (layout control)
 
-### Build Third (schema change, highest surface area)
-
-- [ ] Template composition — `includes:` field on TemplateSchema + `mergeTemplates()` + `--template` variadic on `git-stacks new` + TUI multi-template wizard; estimated HIGH effort
+- [ ] Root layout command (`layout` field in config) — apply `aerospace layout <value> --window-id` or scoped layout after window placement; schema: `layout: z.enum([...]).optional()`; estimated LOW effort
+- [ ] Normalization-aware layout (`normalization` config field + `flatten_before_open`) — `flatten-workspace-tree --workspace <target>` for reset; `join-with` vs `split` selection; schema field `normalization: z.boolean().optional()`; estimated MEDIUM effort (TOML reading adds complexity if chosen over user config field)
 
 ### Release Prep
 
-- [ ] Version bump v0.10.0, CHANGELOG, README — documents all five new features with usage examples
+- [ ] Version bump v0.11.0, CHANGELOG, README — documents AeroSpace integration with config examples
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | Agent Value | Implementation Cost | Priority |
-|---------|-------------|---------------------|----------|
-| `paths` + `--prefix` flag | HIGH | LOW | P1 |
-| `env` + format flags | HIGH | LOW | P1 |
-| `pull` command | HIGH | MEDIUM | P1 |
-| TUI staleness badge | MEDIUM | MEDIUM | P2 |
-| Template composition `includes:` | MEDIUM | HIGH | P2 |
-| `--template a --template b` ad-hoc | MEDIUM | LOW (once merge logic exists) | P2 |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| AeroSpace shell wrappers | HIGH | MEDIUM | P1 — unblocks everything |
+| WindowDetector (snapshot-delta) | HIGH | MEDIUM | P1 — core detection mechanism |
+| Move windows to target workspace | HIGH | LOW (once wrappers exist) | P1 — main integration value |
+| Target workspace config schema | HIGH | LOW | P1 — required for move |
+| Binary availability gate | HIGH | LOW | P1 — silent skip is mandatory |
+| Doctor check | MEDIUM | LOW | P1 — consistency with all other integrations |
+| Root layout control (`layout` command) | MEDIUM | LOW | P2 — enhances placement |
+| `flatten-workspace-tree` on open | MEDIUM | LOW | P2 — clean state on re-open |
+| Normalization-aware layout | MEDIUM | MEDIUM | P2 — config field approach keeps cost bounded |
+| `commands` array launch support | LOW | MEDIUM | P3 — niri feature parity; defer unless demanded |
+| `focus-workspace` subcommand | LOW | LOW | P2 — trivial, good for UX |
+| `cleanup()` | LOW | LOW | P1 — must exist for interface compliance; no-op |
 
 **Priority key:**
-- P1: Must have — these are the direct agent bootstrap primitives; v0.10.0 loses its core value without them
-- P2: Should have — composition and staleness complete the agent workflow story
-- P3: Nice to have, future consideration (nothing deferred — all in scope for this milestone)
+- P1: Required for a functional integration — without these, the plugin does nothing useful
+- P2: Enhances the integration to match niri feature parity
+- P3: Nice to have; niri differentiator not yet established as expected behavior
 
 ---
 
-## Competitor Feature Analysis
+## AeroSpace vs Niri: Feature Parity Map
 
-| Feature | mise | direnv | GitKraken Workspaces | git-stacks approach |
-|---------|------|--------|----------------------|---------------------|
-| Env dump formats | `--dotenv`, `--json`, `--json-extended`, `--shell <shell>` | `direnv export bash/zsh` | N/A | `--format shell\|dotenv\|json` (shell = `export KEY=VALUE`) |
-| Path output | N/A | N/A | "Open all in IDE" (GUI button) | `--prefix` flag for CLI-injectable arg string |
-| Multi-repo pull | N/A | N/A | "Pull all" button (GUI) | `git-stacks pull` per workspace; parallel; dirty-skip |
-| Staleness indicator | N/A | N/A | "N commits behind" (GUI) | TUI `N↓` badge per repo; fetch-on-focus + TTL cache |
-| Template composition | `[env]` inheritance via `extends` | N/A | N/A | `includes:` field + ad-hoc `--template` variadic |
-
-### Key observations
-
-**`mise env` is the canonical reference for env dump format** (HIGH confidence — official docs verified). Its flag set (`-D`, `-J`, `-s <shell>`) is the established pattern. `git-stacks env --format` is a simpler single-flag variant appropriate for a narrower use case.
-
-**Claude Code `--add-dir` takes space-separated paths OR repeated flags** (HIGH confidence — official docs verified at code.claude.com). Example from docs: `claude --add-dir ../apps ../lib`. The `--prefix --add-dir` approach on `git-stacks paths` lets users do: `claude $(git-stacks paths myws --prefix --add-dir)` → produces `--add-dir /path/a --add-dir /path/b` which matches the repeated-flag form.
-
-**Git worktrees share a single git object store and fetch** (HIGH confidence — official git docs). Fetching in any linked worktree updates remote-tracking refs for all linked worktrees of the same repo. `git-stacks pull` should fetch once per `main_path`, then `git pull --ff-only` in each worktree individually.
-
-**Template composition merge rules** are consistent across tools (Hatch, mise) (MEDIUM confidence — Hatch issue #2029): dependencies/hooks = concatenate (order matters); env/settings = last-wins per key. The `includes:` declaration order determines precedence.
+| Capability | Niri | AeroSpace | Gap / Notes |
+|------------|------|-----------|-------------|
+| Binary/process gate | `NIRI_SOCKET` env var check | `which aerospace` + process check | Different gate mechanism; AeroSpace is always a binary not a socket |
+| Workspace targeting | Name-based; creates new workspace dynamically | Numbered/named; must exist in TOML config | AeroSpace does not create workspaces; user must pre-configure |
+| Window detection | `WindowDetector` with niri IPC | `WindowDetector` with `list-windows --format` polling | Same interface; different backend; polling vs event-driven |
+| Move window to workspace | `niri msg action move-window-to-workspace` | `aerospace move-node-to-workspace --window-id <id> <ws>` | Equivalent capability; different CLI |
+| Layout control | `columns` declarative array; `setWindowWidth`, `consumeOrExpelWindowLeft`, `moveColumnToIndex` | `layout h_tiles\|v_tiles\|h_accordion\|v_accordion`; `join-with`; `flatten-workspace-tree` | Different model: niri is pixel-width + stacking; AeroSpace is root-policy + container nesting |
+| Cleanup | `unsetNiriWorkspaceName` — removes the dynamic name | No-op — AeroSpace workspaces are user-defined; nothing to clean | Structural difference; not a gap |
+| `commands` array | Supported (spawn via niriSpawnSh) | Should support (spawn via Bun.spawn equivalent) | P3 — bring in if demanded |
+| `focus` control | `focus: true` on workspace or window level | `aerospace workspace <id>` — summon target workspace | Equivalent; different command |
+| Subcommand (`commands()`) | `focus-workspace [workspace]` | `focus-workspace [workspace]` | Identical UX |
 
 ---
 
-## Edge Cases and Implementation Notes
+## Implementation Correctness Notes
 
-### `git-stacks paths`
+These are not edge cases to discover later — they are established facts from `_references/aerospace.md`
+that must drive implementation choices.
 
-- **Trunk repos**: emit `main_path` (the main clone directory; trunk repos have `task_path === main_path` but use `main_path` as the canonical field)
-- **Missing task_path** (worktree not yet materialized): skip with a warning to stderr; default behavior should not hard-fail
-- **No workspace arg**: use `resolveWorkspaceArg()` (CWD auto-detection — already implemented, shared with other commands)
-- **Output without `--prefix`**: one path per line; suitable for scripts that iterate paths
-- **Output with `--prefix <str>`**: `<str> <path>` per line; with `--prefix --add-dir`, output is `--add-dir /path/a\n--add-dir /path/b` which shell expands correctly in `$(...)` substitution
-- **`--json` flag (future)**: emit `[{ name, path, mode }]`; not required for v0.10.0 but leave room in design
+### Use `--format`, not `--json`
 
-### `git-stacks pull`
+`list-windows --json` returns only `app-name`, `window-id`, `window-title`. This is insufficient.
+`list-windows --format` with the right template returns `window-id`, `app-bundle-id`, `app-name`,
+`app-pid`, `workspace`, `window-layout`, `window-is-fullscreen`, `window-title`. The format approach
+is the only viable option for the snapshot/delta detection and window identity tuple.
 
-- **Dirty repo guard**: `isRepoDirty()` before any pull; if dirty, print warning to stderr, skip that repo, continue others; exit non-zero if any repo was skipped (signals to agents that pull was incomplete)
-- **Worktree repos**: `git -C task_path pull --ff-only` — pulls the workspace feature branch
-- **Trunk repos**: `git -C main_path pull --ff-only` on `default_branch` (from registry entry)
-- **No upstream tracking**: if no tracking branch configured, skip with warning "no upstream configured for <repo>"
-- **Fetch before pull**: `fetchOrigin()` once per unique `main_path` (shared across all worktrees of same repo); avoids redundant network calls when a workspace has multiple worktrees of the same repo
-- **Parallel execution**: pull across repos in parallel using existing `--parallel` pattern from `workspace-ops.ts`; report per-repo status as each completes
-- **`--ff-only` rationale**: never rebase automatically; fail fast on divergence so agent can decide next step explicitly
-- **Exit codes**: 0 = all repos updated; 1 = one or more repos skipped (dirty or no upstream); messages on stderr
+Recommended format string (verified against actual AeroSpace output):
+```
+%{window-id}\t%{app-bundle-id}\t%{app-name}\t%{app-pid}\t%{workspace}\t%{window-layout}\t%{window-is-fullscreen}\t%{window-title}
+```
 
-### `git-stacks env`
+### `window-id` is the operational handle
 
-- **Merge chain** (left-to-right, later wins): global config env → template env (if `workspace.template` is set, read the template YAML and merge its `env`) → workspace `env` field → GS_* injected vars
-- **Current gap in `mergeEnv()`**: it only reads `workspace.env`, not template.env; the `env` command needs to implement the full chain; consider whether to update `mergeEnv()` itself or add a new function `mergeFullEnv()` to avoid breaking existing callers
-- **GS_* vars to include**: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH` (from `buildBaseEnv()`); do NOT include per-repo vars (`GS_REPO_NAME`, `GS_REPO_PATH`) in the workspace-level dump since they are per-repo
-- **`env_file` exclusion**: do NOT read `env_file` file contents; `env_file` is a write-target at `open` time, not an input for `env dump`; document this scope boundary
-- **Shell format**: `export KEY=VALUE` with values single-quoted and internal single-quotes escaped; suitable for `eval "$(git-stacks env myws --format shell)"`
-- **Dotenv format**: `KEY=VALUE` per line; values quoted only if they contain spaces or special chars; follows standard dotenv conventions
-- **JSON format**: `{ "KEY": "VALUE" }` flat object; no nesting; suitable for `jq` piping
+Use `window-id` (integer) for all subsequent commands (`move-node-to-workspace`, `focus`, `fullscreen`).
+`app-bundle-id` is the stable app identity for matching when multiple windows appear simultaneously.
+`app-pid` is the process identity — use to correlate with `WindowArtifact.pid` from tier-1 integrations.
 
-### TUI Staleness Indicator
+### `split` is often a no-op
 
-- **Fetch cadence**: trigger `fetchOrigin()` the first time user focuses a workspace in the list or detail pane; cache result in-memory with a 5-minute TTL per `main_path`
-- **Cache structure**: `Map<mainPath, { fetchedAt: number; repoBehind: Map<repoName, number> }>` — keyed by main_path (one fetch serves all worktrees of same repo)
-- **Where to store cache**: in dashboard reactive state (a SolidJS signal or store); not persisted to disk; resets on TUI restart
-- **Display location**: per-repo rows in the workspace detail pane; show `N↓` badge (down arrow = behind upstream); if 0 or fetch not yet run, show nothing; if fetch failed, show `?`
-- **Worktree repos**: compare `task_path` HEAD to `origin/<workspace-branch>`; upstream tracking must be set (use `hasUpstreamTracking()` guard)
-- **Trunk repos**: compare `main_path` HEAD to `origin/<default_branch>`
-- **No upstream tracking**: show `—` (dash) or omit; do not fetch or count; log "no upstream" in the tooltip or footer
-- **Network failure**: mark all repos for that main_path as `fetchFailed = true`; show `?` badge; do not crash TUI; show error in footer
-- **Manual refresh**: `r` key in detail pane triggers immediate re-fetch (bypasses TTL); consistent with existing workspace sync keyboard shortcut
-- **Footer annotation**: "fetched 3m ago" in detail pane footer alongside repo-level badges; gives users confidence in data freshness
+When `enable-normalization-flatten-containers = true` (common default), `aerospace split` exits
+with code 1 and a warning. Never use `split` in the integration. Use `layout` for root policy and
+`join-with` for local nesting. `flatten-workspace-tree` is always safe and is the normalization reset.
 
-### Template Composition
+### `aerospace config --get` is unreliable
 
-- **Schema change**: add `includes: z.array(z.string()).optional()` to `TemplateSchema`; backward-compatible (existing templates without `includes` parse correctly)
-- **Merge rules** (verified against Hatch and mise patterns):
-  - `repos`: union by `repo` name; if both define the same `repo` name, `worktree` mode wins over `trunk`; other fields from last-seen definition win
-  - `hooks`: concatenate in declaration order (base template hooks first, then included templates left-to-right, then meta-template's own hooks)
-  - `env`: last-wins per key; later template in `includes:` list wins; meta-template's own `env` wins over all
-  - `integrations`: same override cascade pattern as workspace/template integration overrides (already established in codebase)
-  - `files`: union; file ops are idempotent so duplicates are harmless
-- **Cycle detection**: detect circular `includes:` chains before resolution; fail with a clear error message listing the cycle; do not recurse infinitely
-- **Depth limit for v0.10.0**: limit to 1 level of `includes:` nesting (no includes-of-includes); document this constraint; revisit in v1.0 if demanded
-- **Ad-hoc `--template a --template b`**: same `mergeTemplates()` function; templates applied left-to-right (last wins on env conflicts); if a named template also has `includes:`, those are resolved first, then ad-hoc ordering applies on top
-- **TUI wizard update**: workspace creation wizard template select becomes multi-select; display selected templates in order; order matters for merge
+Not all TOML keys are exposed. If normalization state introspection is needed, read the TOML file
+directly at `~/.config/aerospace/aerospace.toml`. The safer approach: expose `normalization` as a
+user config field in the workspace YAML and default to never using `split`.
+
+### Target workspace must pre-exist
+
+`move-node-to-workspace` succeeds only if the destination workspace ID is defined in AeroSpace's
+TOML config. The integration must validate the target workspace exists via `list-workspaces` before
+attempting window moves. If the target workspace does not exist, log a clear error and skip — do not
+silently discard windows.
+
+### Polling, not events
+
+AeroSpace has no event subscription model (unlike niri's IPC). Window detection requires before/after
+polling with exponential backoff. The same strategy documented in niri.ts (10s timeout, 200ms initial
+delay, 2s max delay) applies directly. The `_sleep` injectable and `_listWindows` injectable
+from `SnapshotOpts` pattern in `niri.ts` should be replicated for test isolation.
 
 ---
 
 ## Sources
 
-- [Claude Code CLI Reference](https://code.claude.com/docs/en/cli-reference) — official `--add-dir` flag documentation; confirmed space-separated and repeated-flag syntax; HIGH confidence
-- [mise env command docs](https://mise.jdx.dev/cli/env.html) — canonical reference for env dump format flags (`-D`, `-J`, `--shell`); HIGH confidence
-- [Git worktree documentation](https://git-scm.com/docs/git-worktree) — shared fetch behavior across linked worktrees; HIGH confidence
-- [Hatch environment composition issue #2029](https://github.com/pypa/hatch/issues/2029) — established merge rules for template inheritance (last-wins for env, concatenate for hooks); MEDIUM confidence
-- Codebase inspection: `src/lib/git.ts` `getCommitsBehind()`, `fetchOrigin()`, `ensureUpstreamTracking()`, `hasUpstreamTracking()` — confirmed existing primitives available for reuse; HIGH confidence
-- Codebase inspection: `src/lib/workspace-ops.ts` `mergeEnv()`, `buildBaseEnv()`, `writeEnvFiles()`, `resolveWorkspaceArg()` — confirmed existing env merge and CWD auto-detection primitives; HIGH confidence
-- Codebase inspection: `src/lib/config.ts` `TemplateSchema`, `WorkspaceRepoSchema`, `WorkspaceSchema` — confirmed schema shapes and extension points for `includes:` addition; HIGH confidence
+- `_references/aerospace.md` — direct CLI exploration: `list-windows --format`, snapshot/delta,
+  `split` normalization warning, `flatten-workspace-tree`, `layout`, `join-with`, `move-node-to-workspace`
+  behavior; HIGH confidence (locally tested against AeroSpace 0.20.3-Beta)
+- `src/lib/integrations/niri.ts` — feature parity reference; `WindowDetector`, column layout,
+  `commands` array, `cleanup()`, `configurePrompt()`, `commands()` subcommand patterns; HIGH confidence
+- `src/lib/integrations/types.ts` — `WindowDetector`, `DetectorSnapshot`, `ArtifactBag`, `Integration`
+  interface; tier ordering comment; HIGH confidence
+- `src/lib/integrations/runner.ts` — how `WindowDetector.begin()/resolve()` is called relative to
+  `open()`; bag population; HIGH confidence
+- `src/commands/doctor.ts` — binary check pattern (`checkBinary`, warn-level entries, install URL
+  format); HIGH confidence
+- `src/lib/niri.ts` — `NiriCommands` interface, `SnapshotOpts` injectable pattern, `_exec` mutable
+  property for test isolation; HIGH confidence
 
 ---
 
-*Feature research for: git-stacks v0.10.0 Multi-Agent Workspace Tooling*
-*Researched: 2026-03-25*
+*Feature research for: git-stacks v0.11.0 AeroSpace Window Management Integration*
+*Researched: 2026-03-28*
