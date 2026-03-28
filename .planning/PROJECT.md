@@ -8,6 +8,18 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
+## Current Milestone: v0.11.0 AeroSpace Window Management
+
+**Goal:** Add AeroSpace tiling window manager integration for macOS — arrange workspace windows on named/numbered AeroSpace workspaces using snapshot-delta detection, matching the niri integration pattern.
+
+**Target features:**
+- AeroSpace shell wrappers (`src/lib/aerospace.ts`) — typed async CLI wrappers with `--format` parsing and injectable `_exec`
+- AeroSpace integration plugin (`src/lib/integrations/aerospace.ts`) — tier-3 plugin: detect AeroSpace, snapshot windows, move new windows to target workspace, apply layout
+- Normalization-aware layout control — detect or configure whether normalization is enabled (`join-with`/`flatten-workspace-tree`) vs disabled (`split`)
+- Target workspace configuration — `settings.integrations.aerospace.workspace` in workspace/template YAML
+- Snapshot-delta window detection — before/after `list-windows --format` diffing by `window-id`
+- Doctor checks — verify `aerospace` binary availability
+
 ## Current State — v0.10.1 shipped (2026-03-28)
 
 ### What shipped in v0.10.0/v0.10.1
@@ -154,6 +166,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
+- [ ] AeroSpace shell wrappers — typed async CLI wrappers for list-windows, list-workspaces, move-node-to-workspace, layout, focus with `--format` parsing
+- [ ] AeroSpace integration plugin — tier-3 plugin matching niri pattern with snapshot-delta window detection
+- [ ] Normalization-aware layout control — detect/configure split vs join-with based on normalization state
+- [ ] Target AeroSpace workspace configuration in workspace/template YAML
+- [ ] Doctor checks for aerospace binary
 - [ ] `git-stacks env` — dump merged workspace env vars with `--format shell|dotenv|json`
 
 ### Out of Scope
@@ -296,4 +313,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-28 after v0.10.0 milestone*
+*Last updated: 2026-03-28 after v0.11.0 milestone start*
