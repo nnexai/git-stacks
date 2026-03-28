@@ -131,3 +131,12 @@ None - no external service configuration required.
 ---
 *Phase: 42-code-review-and-audit-findings*
 *Completed: 2026-03-28*
+
+## Self-Check: PASSED
+
+- FOUND: src/commands/doctor.ts
+- FOUND: src/lib/integrations/tmux.ts
+- FOUND: src/lib/integrations/niri.ts
+- FOUND: .planning/phases/42-code-review-and-audit-findings/42-02-SUMMARY.md
+- FOUND commit: d3fa0c0 (Task 1)
+- FOUND commit: 983e723 (Task 2)

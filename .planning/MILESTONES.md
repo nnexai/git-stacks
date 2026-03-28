@@ -1,5 +1,23 @@
 # Milestones
 
+## v0.10.0 Multi-Agent Workspace Tooling (Shipped: 2026-03-28)
+
+**Phases completed:** 6 phases, 9 plans, 21 tasks
+
+**Key accomplishments:**
+
+- `git-stacks paths` command with --prefix/--filter flags for agent CLI path injection (e.g., `claude --add-dir $(git-stacks paths myws --prefix "--add-dir")`)
+- `git-stacks pull` command with --ff-only, dirty skip, fetch dedup by main_path, and CWD autodetection
+- Per-repo "N behind" badges in dashboard workspace detail with 5-minute TTL cache, cursor-triggered fetch, and r-key force refresh
+- TemplateSchema extended with `includes` field; `composeTemplates()` merges repos (union, worktree wins), hooks (concatenated), env (last-wins), files, and integrations across templates
+- Repeatable --template flag on git-stacks new for ad-hoc composition; all wizard paths auto-resolve template includes
+- v0.10.0 release preparation: version bump to 0.10.0, CHANGELOG entry for four features (paths, pull, TUI staleness, template composition), and README documentation with agent CLI injection examples
+- NameSchema (Zod regex) blocks path traversal and shell metacharacters; writeYaml atomicity via temp-file+rename; CLI validateName() guards and env_file repo-root boundary checking
+- doctor --fix uses FixOperation discriminated union with direct Bun API execution (rmSync/spawnSync); tmux and niri quote all interpolated cwd paths with POSIX shellQuote
+- WorkspaceRow snapshot tests now freeze Date.now at 70 days past the fixture date, producing deterministic "70d" output; CLAUDE.md corrected to `bun run test` with mock pollution warning
+
+---
+
 ## v0.9.0 Identity & Completion Integrity (Shipped: 2026-03-25)
 
 **Phases completed:** 5 phases, 10 plans, 18 tasks

@@ -8,7 +8,15 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State — v0.10.0 in progress (Phase 40 complete, 2026-03-26)
+## Current State — v0.10.1 shipped (2026-03-28)
+
+### What shipped in v0.10.0/v0.10.1
+
+- **Agent path discovery** — `git-stacks paths` outputs workspace repo paths for agent CLI injection with `--prefix`/`--filter` flags
+- **Multi-repo pull** — `git-stacks pull` with `--ff-only`, dirty-repo skip, fetch dedup by `main_path`, and CWD autodetection
+- **TUI upstream staleness** — per-repo "N behind" badges in dashboard with 5-minute TTL cache, cursor-triggered fetch, `r`-key force refresh
+- **Template composition** — `includes:` field for meta-templates + repeatable `--template` on `git-stacks new`; repos union (worktree wins), hooks concatenated, env last-wins
+- **Security hardening** (v0.10.1) — NameSchema input validation blocks path traversal/shell metacharacters; atomic writeYaml; env_file boundary check; doctor structured fixes; tmux/niri shell quoting; deterministic snapshot tests
 
 ### What shipped in v0.9.0
 
@@ -137,16 +145,16 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Test isolation framework — custom test runner, complete mock factories, zero cache-busting imports — v0.9.0 Phase 34.1
 - ✓ Dynamic name completion — shell completion resolves workspace/template names from YAML `name` fields instead of filename globs — v0.9.0 Phase 35
 - ✓ `git-stacks paths` — workspace repo path output with `--prefix`/`--filter` flags for agent CLI injection — v0.10.0 Phase 37
+- ✓ `git-stacks pull` — multi-repo pull with `--ff-only`, dirty skip, fetch dedup, CWD autodetection — v0.10.0 Phase 38
+- ✓ TUI upstream staleness — per-repo "N behind" badges with 5-min TTL cache and `r`-key force refresh — v0.10.0 Phase 39
 - ✓ Template composition — `includes:` field for meta-templates, ad-hoc `--template` on `git-stacks new`, repo union with worktree-wins, hook concatenation — v0.10.0 Phase 40
+- ✓ NameSchema input validation — Zod regex blocks path traversal and shell metacharacters at schema level — v0.10.1 Phase 42
+- ✓ Atomic writeYaml — temp-file + rename prevents config corruption on interrupted writes — v0.10.1 Phase 42
+- ✓ Shell path quoting — tmux/niri quote interpolated cwd paths with POSIX shellQuote — v0.10.1 Phase 42
 
 ### Active
 
-- [x] `git-stacks paths` — output workspace repo paths with `--prefix` flag for agent CLI arg injection — v0.10.0 Phase 37
-- [ ] `git-stacks pull` — pull latest for all repos in a workspace (worktrees pull branch, trunk repos pull default branch)
 - [ ] `git-stacks env` — dump merged workspace env vars with `--format shell|dotenv|json`
-- [ ] TUI upstream staleness indicator — periodic "N behind" badge per repo with cached fetch check
-- [x] Template composition — `includes:` field for meta-templates + ad-hoc `--template a --template b` on `git-stacks new`
-- [ ] Release prep — version bump, CHANGELOG, README updates
 
 ### Out of Scope
 
@@ -161,17 +169,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 
-## Current Milestone: v0.10.0 Multi-Agent Workspace Tooling
+## Completed Milestone: v0.10.0 Multi-Agent Workspace Tooling (2026-03-28)
 
 **Goal:** Make git-stacks the infrastructure layer for humans managing multiple AI agents — queryable workspace data for agent bootstrap, repo sync primitives, and composable templates.
 
-**Target features:**
-- `git-stacks paths` — output workspace repo paths with `--prefix` flag for agent CLI arg injection
-- `git-stacks pull` — pull latest for all repos in a workspace (worktrees pull branch, trunk repos pull default branch)
-- `git-stacks env` — dump merged workspace env vars (global → template → workspace → GS_* injected); `--format shell|dotenv|json`
-- TUI upstream staleness indicator — periodic "N behind" badge per repo; cached fetch check on workspace focus + manual refresh
-- Template composition — `includes:` field for meta-templates + ad-hoc `--template a --template b` on `git-stacks new`; merge rules: repos union (worktree wins), hooks concatenate, env merges
-- Release prep — version bump, CHANGELOG, README
+**Shipped:** All target features delivered across 6 phases (37-42). `git-stacks paths` and `git-stacks pull` commands, TUI upstream staleness badges, template composition via `includes:`, plus post-release security hardening (input validation, atomic writes, shell quoting).
 
 ## Completed Milestone: v0.9.0 Identity & Completion Integrity (2026-03-25)
 
@@ -188,7 +190,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Versioning
 
-**Current release:** `v0.9.0`
+**Current release:** `v0.10.1`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -238,6 +240,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | CWD detection via task_path longest-match | Deepest worktree path wins; trailing separator guard prevents prefix collisions | ✓ Good |
 | Injectable `_cwdDetect` / `_resolveWorkspaceDeps` | Same `_exec` pattern for test isolation; bypasses bun mock.module cache issues | ✓ Good |
 | `link [workspace-or-issue] [issue-id]` Commander.js signature | Both optional; workspaceExists() disambiguation for single-arg case | ✓ Good |
+| `--ff-only` as pull default (no `--rebase`) | Rebase mid-work destroys in-progress state; ff-only is the safe default | ✓ Good |
+| Fetch dedup by `main_path` in pull | Shared clones across worktrees only need one fetch | ✓ Good |
+| Fetch-on-focus + 5-min TTL for staleness | Background polling causes jank; cursor-triggered fetch with cache is clean | ✓ Good |
+| Template `includes:` limited to 1 level | Deep nesting adds complexity without demand; revisit if requested | ✓ Good |
+| NameSchema `^[A-Za-z0-9._-]+$` regex | Blocks path traversal and shell metacharacters at Zod parse time | ✓ Good |
+| Atomic writeYaml via temp-file + rename | Prevents config corruption on interrupted writes | ✓ Good |
+| shellQuote for tmux/niri path interpolation | POSIX single-quote escaping prevents shell injection in path values | ✓ Good |
+| FixOperation discriminated union for doctor --fix | Structured operations via Bun APIs, not shell strings | ✓ Good |
 
 ## Out of Scope
 
@@ -286,4 +296,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-26 — Phase 40 (Template Composition) complete*
+*Last updated: 2026-03-28 after v0.10.0 milestone*

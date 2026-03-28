@@ -295,6 +295,55 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.10.0 — Multi-Agent Workspace Tooling
+
+**Shipped:** 2026-03-28
+**Phases:** 6 (Phases 37–42) | **Plans:** 9 | **Tasks:** 21
+
+### What Was Built
+
+- `git-stacks paths` command with `--prefix`/`--filter` flags for agent CLI path injection
+- `git-stacks pull` with `--ff-only`, dirty skip, fetch dedup by `main_path`, and CWD autodetection
+- Per-repo "N behind" staleness badges in dashboard with 5-minute TTL cache and `r`-key force refresh
+- Template composition via `includes:` field and repeatable `--template` flag on `git-stacks new`
+- v0.10.0 release prep (version bump, CHANGELOG, README with agent CLI injection examples)
+- Security hardening (v0.10.1): NameSchema input validation, atomic writeYaml, env_file boundary check, doctor structured fixes, tmux/niri shell quoting, deterministic snapshot tests
+
+### What Worked
+
+- **Phase sequencing was clean**: Phases 37-40 built progressively (paths → pull → staleness → composition) with no rework — each phase had stable dependencies from the prior one
+- **Post-release audit phase**: Phase 42 (code review findings) as a separate phase after release kept the release clean while addressing all 7 audit findings systematically
+- **Quick task mechanism**: The concurrency limiter for useStaleness was done as a quick task between phases — fast, atomic, didn't delay phase sequencing
+- **Single-plan phases**: Phases 37, 38, 39, and 41 were correctly scoped as single-plan phases — no over-planning for focused features
+- **Milestone audit before completion**: The v0.10.0 audit confirmed 25/25 requirements satisfied, catching documentation gaps (unchecked PATH boxes, pending traceability entries) without blocking completion
+
+### What Was Inefficient
+
+- **REQUIREMENTS.md checkbox maintenance**: PATH-01 through PATH-04 checkboxes were never ticked despite the features being shipped and verified. Same issue as v0.3.0 — the lesson about checking off requirements as you go was not consistently applied
+- **Traceability table drift**: COMP-01 through COMP-07 remained "Pending" in traceability despite being checked off in the requirements section — two tracking surfaces that diverged
+- **Phase 42 not in original scope**: The roadmap header said "Phases 37-41" but Phase 42 was added post-release. This is normal scope evolution but required header correction at archive time
+
+### Patterns Established
+
+- **`shellQuote()` for path interpolation**: POSIX single-quote escaping defined inline in tmux.ts and niri.ts for all shell command construction
+- **NameSchema at Zod level**: Input validation in the schema itself prevents bad names from ever entering the system — no separate validation step needed
+- **Atomic writeYaml**: temp-file + renameSync pattern for all YAML config writes
+- **FixOperation discriminated union**: doctor --fix actions as typed operations executed via Bun APIs, not shell strings
+
+### Key Lessons
+
+1. **Requirements checkbox maintenance remains a gap**: Third milestone (v0.3.0, v0.8.0, v0.10.0) where requirement checkboxes weren't updated during execution. Consider automating this in the plan completion gate or removing the checkbox layer entirely in favor of the traceability table.
+2. **Post-release audit phases work well**: Shipping first, then addressing audit findings in a dedicated phase keeps velocity high while ensuring quality. The v0.10.1 patch release model (ship features → audit → patch) is a good pattern.
+3. **Concurrency limiter as quick task was correct**: The useStaleness race condition was a real bug found during Phase 39 testing — fixing it as a quick task rather than a phase avoided scope creep while solving the problem immediately.
+
+### Cost Observations
+
+- Model mix: opus for planning/orchestration, sonnet for execution (balanced profile)
+- Sessions: 3-4 sessions across 3 days (2026-03-26 → 2026-03-28)
+- Notable: 259 files changed, +12,157 / -1,610 lines. Test suite stability maintained throughout.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -306,5 +355,6 @@ Living document — one section per shipped milestone.
 | v0.7.0 Close Command & Polish | 9 | 20 | 1 | 0 |
 | v0.8.0 Integration Polish | 4 | 6 | 1 | 0 |
 | v0.9.0 Identity & Completion | 5 | 10 | 1 | 0 |
+| v0.10.0 Multi-Agent Workspace | 6 | 9 | 3 | 0 |
 
-**Trend:** v0.9.0 continues the zero-rework streak (now 5 milestones). Inserted phase (34.1) was the largest scope item — test infrastructure investment that immediately benefited subsequent phases. Test suite at 814 (+4% from v0.8.0). Autonomous execution for final 2 phases with correct scope detection (research/discuss skipped where unnecessary). 7 milestones shipped in 8 days (2026-03-18 → 2026-03-25).
+**Trend:** v0.10.0 maintains the zero-rework streak (now 6 milestones). Post-release audit phase (42) is a new pattern — shipping first, then addressing findings in a dedicated patch release. 8 milestones shipped in 11 days (2026-03-18 → 2026-03-28). Requirements checkbox maintenance remains a recurring gap (v0.3.0, v0.8.0, v0.10.0).
