@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.11.0
 milestone_name: AeroSpace Window Management
 status: planned
-stopped_at: Phase 43 planned (2 plans, 1 wave)
-last_updated: "2026-03-28T19:00:00.000Z"
-last_activity: 2026-03-28 — Phase 43 planned (2 plans in 1 wave, WRAP-01/02/03 covered)
+stopped_at: Phase 44 planned (2 plans, 1 wave)
+last_updated: "2026-03-28T20:00:00.000Z"
+last_activity: 2026-03-28 — Phase 44 planned (2 plans in 1 wave, DETECT-01/02/03/04/05 covered)
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 2
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Milestone v0.11.0 — Phase 43: AeroSpace Shell Wrappers & Doctor
+**Current focus:** Milestone v0.11.0 — Phase 44: Core Integration Plugin (planned)
 
 ## Current Position
 
-Phase: 43 of 46 (AeroSpace Shell Wrappers & Doctor)
+Phase: 44 of 46 (Core Integration Plugin)
 Plan: 0 of 2 (planned, ready to execute)
-Status: Planned — ready to execute
-Last activity: 2026-03-28 — Phase 43 planned (2 plans, 1 wave)
+Status: Planned — phases 43 and 44 planned, ready to execute
+Last activity: 2026-03-28 — Phase 44 planned (2 plans, 1 wave)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -70,6 +70,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-28T19:00:00.000Z
-Stopped at: Phase 43 planned
+Last session: 2026-03-28T20:00:00.000Z
+Stopped at: Phase 44 planned
 Next action: /gsd:execute-phase 43
