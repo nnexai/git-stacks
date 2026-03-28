@@ -9,9 +9,9 @@ Requirements for AeroSpace Window Management milestone. Each maps to roadmap pha
 
 ### Shell Wrappers & Infrastructure
 
-- [ ] **WRAP-01**: User can use AeroSpace integration on macOS when `aerospace` binary is available (typed async CLI wrappers in `src/lib/aerospace.ts` with injectable `_exec`)
-- [ ] **WRAP-02**: Integration silently skips when AeroSpace is not running (`isAerospaceRunning()` with `process.platform === "darwin"` + binary probe)
-- [ ] **WRAP-03**: `git-stacks doctor` reports AeroSpace binary availability as warn-level check (macOS-gated)
+- [x] **WRAP-01**: User can use AeroSpace integration on macOS when `aerospace` binary is available (typed async CLI wrappers in `src/lib/aerospace.ts` with injectable `_exec`)
+- [x] **WRAP-02**: Integration silently skips when AeroSpace is not running (`isAerospaceRunning()` with `process.platform === "darwin"` + binary probe)
+- [x] **WRAP-03**: `git-stacks doctor` reports AeroSpace binary availability as warn-level check (macOS-gated)
 
 ### Window Detection & Movement
 
@@ -54,9 +54,9 @@ Requirements for AeroSpace Window Management milestone. Each maps to roadmap pha
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WRAP-01 | Phase 43 | Pending |
-| WRAP-02 | Phase 43 | Pending |
-| WRAP-03 | Phase 43 | Pending |
+| WRAP-01 | Phase 43 | Complete |
+| WRAP-02 | Phase 43 | Complete |
+| WRAP-03 | Phase 43 | Complete |
 | DETECT-01 | Phase 44 | Pending |
 | DETECT-02 | Phase 44 | Pending |
 | DETECT-03 | Phase 44 | Pending |
