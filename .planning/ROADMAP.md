@@ -190,3 +190,13 @@ See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md) for full detail
 | 39. TUI Upstream Staleness | v0.10.0 | 0/1 | Complete    | 2026-03-26 |
 | 40. Template Composition | v0.10.0 | 0/2 | Complete    | 2026-03-26 |
 | 41. Release Prep | v0.10.0 | 1/1 | Complete   | 2026-03-26 |
+
+### Phase 42: code-review and audit findings
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 41
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 42 to break down)

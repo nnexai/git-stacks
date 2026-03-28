@@ -64,6 +64,10 @@ Progress: [██████████] 100%
 
 0 pending todos — see .planning/todos/pending/
 
+### Roadmap Evolution
+
+- Phase 42 added: code-review and audit findings
+
 ### Blockers/Concerns
 
 - [Phase 38]: `mergeEnv()` currently reads only `workspace.env`, not `template.env` — check all call sites before touching (env command deferred but awareness needed for composition)
