@@ -150,7 +150,9 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
   3. Integration validates the target workspace exists via `list-workspaces` before attempting any window moves; unknown workspace names produce a clear error
   4. `cleanup()` is a no-op — removing a workspace does not modify AeroSpace state
   5. Integration is registered in `src/lib/integrations/index.ts` as a tier-3 plugin (order 31, disabled by default)
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 44-01-PLAN.md — AeroSpace integration plugin (config schema, WindowDetector, Integration object, registration)
+- [ ] 44-02-PLAN.md — AeroSpace integration tests (all DETECT requirement coverage)
 
 ### Phase 45: Layout Control & App Launching
 **Goal**: Users can configure root layout, normalization behavior, pre-open flattening, workspace focus, and arbitrary app launch commands that are automatically arranged in the target AeroSpace workspace
@@ -188,6 +190,6 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
 | 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 0/TBD | Not started | - |
-| 44. Core Integration Plugin | v0.11.0 | 0/TBD | Not started | - |
+| 44. Core Integration Plugin | v0.11.0 | 0/2 | Planned | - |
 | 45. Layout Control & App Launching | v0.11.0 | 0/TBD | Not started | - |
 | 46. Release Prep | v0.11.0 | 0/TBD | Not started | - |
