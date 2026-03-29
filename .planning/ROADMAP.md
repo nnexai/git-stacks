@@ -150,7 +150,9 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
   2. A config with two entries both having `focus: true` produces a validation error with a plain-English message identifying the conflict
   3. A config with two entries sharing the same `workspace` name produces a validation error identifying the duplicate
   4. `SnapshotOpts` in `src/lib/aerospace.ts` accepts an optional `beforeSet: Set<number>` field (used downstream by the loop for cross-entry snapshot isolation)
-**Plans**: TBD
+**Plans**:
+  - Plan 01 (wave 1): Multi-Workspace Schema, Validation, and beforeSet
+  - Plan 02 (wave 1): Schema Validation and beforeSet Tests
 
 ### Phase 48: Multi-Workspace Loop & Tests
 **Goal**: `git-stacks open` with a multi-workspace AeroSpace config iterates all workspace entries sequentially, routes windows correctly, and the behavior is verified by targeted tests
@@ -190,6 +192,6 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete | 2026-03-28 |
 | 45. Layout Control & App Launching | v0.11.0 | 2/2 | Complete | 2026-03-28 |
 | 46. Release Prep | v0.11.0 | 1/1 | Complete | 2026-03-28 |
-| 47. Multi-Workspace Schema | v0.12.0 | 0/TBD | Not started | - |
+| 47. Multi-Workspace Schema | v0.12.0 | 0/2 | Planned | - |
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 0/TBD | Not started | - |
 | 49. Release Prep | v0.12.0 | 0/TBD | Not started | - |
