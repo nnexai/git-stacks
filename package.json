@@ -34,17 +34,17 @@
     "prepublishOnly": "bun run typecheck && bun run test"
   },
   "dependencies": {
-    "@clack/prompts": "^0.9.1",
-    "@opentui/core": "^0.1.87",
-    "@opentui/solid": "^0.1.87",
-    "commander": "^12.1.0",
+    "@clack/prompts": "^1.1.0",
+    "@opentui/core": "^0.1.92",
+    "@opentui/solid": "^0.1.92",
+    "commander": "^14.0.3",
     "opentui-spinner": "^0.0.6",
-    "solid-js": "^1.9.11",
-    "yaml": "^2.8.2",
-    "zod": "^3.25.76"
+    "solid-js": "^1.9.12",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   }
 }
