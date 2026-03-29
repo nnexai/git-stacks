@@ -109,7 +109,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
     message: "Workspace name (ticket or purpose)",
     fallbackValue: nameArg || undefined,
     validate: (v) => {
-      if (!v.trim()) return "Required"
+      if (!v?.trim()) return "Required"
       if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
     },
   })
@@ -323,7 +323,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
   const branchRaw = await safeText({
     message: "Branch name",
     fallbackValue: defaultBranch,
-    validate: (v) => (v.trim() ? undefined : "Required"),
+    validate: (v) => (v?.trim() ? undefined : "Required"),
   })
   if (p.isCancel(branchRaw)) cancel()
   const branch = (branchRaw as string).trim()

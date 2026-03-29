@@ -49,7 +49,7 @@ export async function runWorkspaceClone(sourceArg?: string) {
   const nameRaw = await safeText({
     message: "New workspace name",
     validate: (v) => {
-      if (!v.trim()) return "Required"
+      if (!v?.trim()) return "Required"
       if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
     },
   })
@@ -60,7 +60,7 @@ export async function runWorkspaceClone(sourceArg?: string) {
   const branchRaw = await safeText({
     message: "Branch name",
     fallbackValue: `feature/${newName}`,
-    validate: (v) => (v.trim() ? undefined : "Required"),
+    validate: (v) => (v?.trim() ? undefined : "Required"),
   })
   if (p.isCancel(branchRaw)) cancel()
   const newBranch = (branchRaw as string).trim()

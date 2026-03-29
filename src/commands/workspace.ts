@@ -576,6 +576,7 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--parallel", "Run command in every worktree repo simultaneously")
     .option("--json", "Output results as JSON (requires --parallel)")
     .passThroughOptions()
+    .allowExcessArguments(true)
     .action(async (name: string, repo: string | undefined, opts: { allRepos?: boolean; parallel?: boolean; json?: boolean }) => {
       if (!workspaceExists(name)) {
         console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))

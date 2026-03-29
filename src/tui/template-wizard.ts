@@ -62,7 +62,7 @@ export async function runTemplateNew(nameArg?: string) {
     message: "Template name",
     fallbackValue: nameArg || undefined,
     validate: (v) => {
-      if (!v.trim()) return "Required"
+      if (!v?.trim()) return "Required"
       if (templateExists(v.trim())) return `Template '${v.trim()}' already exists`
     },
   })
@@ -100,7 +100,7 @@ export async function runTemplateNew(nameArg?: string) {
     const baseBranchRaw = await safeText({
       message: `  ${repoName} \u2014 base branch`,
       fallbackValue: registryEntry.default_branch,
-      validate: (v) => (!v.trim() ? "Required" : undefined),
+      validate: (v) => (!v?.trim() ? "Required" : undefined),
     })
     if (p.isCancel(baseBranchRaw)) cancel()
     const baseBranch = (baseBranchRaw as string).trim()
@@ -135,7 +135,7 @@ export async function runTemplateNew(nameArg?: string) {
     while (addMore) {
       const cmdRaw = await safeText({
         message: "Hook command",
-        validate: (v) => (!v.trim() ? "Required" : undefined),
+        validate: (v) => (!v?.trim() ? "Required" : undefined),
       })
       if (p.isCancel(cmdRaw)) cancel()
       hookCmds.push((cmdRaw as string).trim())

@@ -88,10 +88,10 @@ export const TemplateSchema = z.object({
     pre_merge: z.array(z.string()).optional(),
     post_remove: z.array(z.string()).optional(),
   }).optional(),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   env_file: z.string().optional(),
   files: FilesSchema,
-  integrations: z.record(z.unknown()).optional(),
+  integrations: z.record(z.string(), z.unknown()).optional(),
   includes: z.array(z.string()).optional(),
 })
 export type Template = z.infer<typeof TemplateSchema>
@@ -117,7 +117,7 @@ export type WorkspaceRepo = z.infer<typeof WorkspaceRepoSchema>
 
 export const WorkspaceSettingsSchema = z.object({
   /** Per-integration overrides keyed by integration id, e.g. { cmux: { enabled: false } } */
-  integrations: z.record(z.unknown()).optional(),
+  integrations: z.record(z.string(), z.unknown()).optional(),
 })
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettingsSchema>
 
@@ -149,7 +149,7 @@ export const WorkspaceSchema = z.object({
   hooks: WorkspaceHooksSchema.optional(),
   settings: WorkspaceSettingsSchema.optional(),
   repos: z.array(WorkspaceRepoSchema).default([]),
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   env_file: z.string().optional(),
   files: FilesSchema,
 })
@@ -158,7 +158,7 @@ export type Workspace = z.infer<typeof WorkspaceSchema>
 export const GlobalConfigSchema = z.object({
   workspace_root: z.string().default(DEFAULT_WORKSPACE_ROOT),
   /** Per-integration config keyed by integration id, e.g. { vscode: { enabled: true, cmd: "code" } } */
-  integrations: z.record(z.unknown()).default({}),
+  integrations: z.record(z.string(), z.unknown()).default({}),
 })
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>
 
