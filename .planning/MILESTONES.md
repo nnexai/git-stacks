@@ -1,5 +1,20 @@
 # Milestones
 
+## v0.11.0 AeroSpace Window Management (Shipped: 2026-03-29)
+
+**Phases completed:** 4 phases, 7 plans
+
+**Key accomplishments:**
+
+- Typed async AeroSpace CLI wrappers in `src/lib/aerospace.ts` with `--format` TSV parsing, injectable `_exec` for test isolation, and `snapshotWindowIds()` for snapshot-delta window detection
+- Tier-3 AeroSpace integration plugin (order 31) in `src/lib/integrations/aerospace.ts` with snapshot-delta window detection, `move-node-to-workspace` targeting, `list-workspaces` validation, and no-op cleanup
+- Normalization-aware layout control: `flatten-workspace-tree` + `layout` commands, `flatten_before_open` container reset, workspace-level `focus` switching
+- App launching via `commands` array with `source`/`app`/`command` entries, per-command `cwd`/`repo`/`args`/`focus`, and snapshot-delta detection for launched windows
+- Doctor binary availability check for `aerospace` on macOS (warn-level, silent skip on Linux)
+- v0.11.1 patch: pinned @opentui/core and @opentui/solid to 0.1.87; suppressed git credential prompts in TUI-reachable network commands
+
+---
+
 ## v0.10.0 Multi-Agent Workspace Tooling (Shipped: 2026-03-28)
 
 **Phases completed:** 6 phases, 9 plans, 21 tasks
