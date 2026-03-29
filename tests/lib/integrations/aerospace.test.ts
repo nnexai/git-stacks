@@ -124,11 +124,24 @@ beforeEach(() => {
   mockListWindows.mockClear()
   mockListWorkspaces.mockClear()
   mockMoveNodeToWorkspace.mockClear()
-  mockFlattenWorkspaceTree.mockClear()
-  mockSetLayout.mockClear()
-  mockFocusWindow.mockClear()
-  mockSnapshotWindowIds.mockClear()
-  mockExecRun.mockClear()
+  // Restore original implementations (mockClear only resets call tracking, not overridden implementations)
+  mockFlattenWorkspaceTree.mockImplementation(async (workspace?: string) => {
+    flattenedWorkspaces.push(workspace ?? "")
+  })
+  mockSetLayout.mockImplementation(async (layout: string, windowId?: number) => {
+    layoutCalls.push({ layout, windowId })
+  })
+  mockFocusWindow.mockImplementation(async (windowId: number) => {
+    focusedWindows.push(windowId)
+  })
+  mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>) => {
+    try { await spawnFn() } catch { /* platform differences (e.g. no `open -a` on Linux) */ }
+    return [...mockSnapshotResult]
+  })
+  mockExecRun.mockImplementation(async (args: string[]) => {
+    execCalls.push([...args])
+    return { exitCode: 0, stdout: "" }
+  })
 })
 
 // ─── Registration tests ───────────────────────────────────────────────────────
@@ -445,7 +458,7 @@ describe("layout", () => {
       wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", layout: "h_tiles" }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
-    expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: undefined })
+    expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: 10 })
     // Verify a window was focused before layout
     expect(focusedWindows).toContain(10)
   })
@@ -460,7 +473,7 @@ describe("layout", () => {
         wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", layout: layoutType }] } },
       })
       await aerospaceIntegration.open(ctx, null, {})
-      expect(layoutCalls).toContainEqual({ layout: layoutType, windowId: undefined })
+      expect(layoutCalls).toContainEqual({ layout: layoutType, windowId: 10 })
     }
   })
 
@@ -498,7 +511,7 @@ describe("layout", () => {
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(flattenedWorkspaces).toContain("dev")
-    expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: undefined })
+    expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: 10 })
   })
 
   test("normalization: false — layout still applied (LAYOUT-02)", async () => {
@@ -515,7 +528,7 @@ describe("layout", () => {
       },
     })
     await aerospaceIntegration.open(ctx, null, {})
-    expect(layoutCalls).toContainEqual({ layout: "v_tiles", windowId: undefined })
+    expect(layoutCalls).toContainEqual({ layout: "v_tiles", windowId: 10 })
   })
 })
 
@@ -940,5 +953,614 @@ describe("validateAerospaceConfig", () => {
         { workspace: "2", focus: true },
       ])
     ).toThrow("AeroSpace: multiple entries have focus: true")
+  })
+})
+
+// ─── multi-workspace loop tests (PROC-01) ──────────────────────────────────
+
+describe("multi-workspace loop", () => {
+  test("iterates all entries in order — flatten per entry (PROC-01)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", flatten_before_open: true },
+            { workspace: "3", flatten_before_open: true },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Both workspaces should have been flattened in order
+    expect(flattenedWorkspaces).toEqual(["2", "3"])
+  })
+
+  test("iterates all entries — layout applied per entry (PROC-01)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    // Set up mockWindows to contain windows in both workspaces
+    mockWindows = [
+      { windowId: 10, appName: "Chrome", windowTitle: "Tab", appPid: 100, workspace: "2" },
+      { windowId: 20, appName: "Firefox", windowTitle: "Page", appPid: 200, workspace: "3" },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", layout: "h_tiles" },
+            { workspace: "3", layout: "v_accordion" },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: 10 })
+    expect(layoutCalls).toContainEqual({ layout: "v_accordion", windowId: 20 })
+    expect(layoutCalls).toHaveLength(2)
+  })
+
+  test("commands execute per entry with correct workspace targeting (PROC-01)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    // First call returns [50], second returns [60]
+    let snapshotCallCount = 0
+    mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>) => {
+      try { await spawnFn() } catch {}
+      snapshotCallCount++
+      return snapshotCallCount === 1 ? [50] : [60]
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", commands: [{ app: "kitty" }] },
+            { workspace: "3", commands: [{ app: "firefox" }] },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    expect(movedWindows).toContainEqual({ windowId: 50, workspace: "2" })
+    expect(movedWindows).toContainEqual({ windowId: 60, workspace: "3" })
+  })
+
+  test("single-entry array produces one iteration (edge case)", async () => {
+    mockWorkspaces = [
+      { workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [{ workspace: "dev", flatten_before_open: true }],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    expect(flattenedWorkspaces).toEqual(["dev"])
+  })
+
+  test("entry failure does not abort loop — skip-and-continue (D-01)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    // Make flattenWorkspaceTree throw for workspace "2"
+    mockFlattenWorkspaceTree.mockImplementation(async (workspace?: string) => {
+      if (workspace === "2") throw new Error("flatten broke")
+      flattenedWorkspaces.push(workspace ?? "")
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", flatten_before_open: true },
+            { workspace: "3", flatten_before_open: true },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Workspace "3" should still have been flattened despite "2" failing
+    expect(flattenedWorkspaces).toContain("3")
+  })
+})
+
+// ─── bag routing tests (PROC-02) ───────────────────────────────────────────
+
+describe("bag routing", () => {
+  test("bag windows are moved to workspaces[0] only (PROC-02)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const bag: ArtifactBag = {
+      vscode: {
+        kind: "window", pid: 1234, app_id: "vscode", title: "project",
+        windowIds: { aerospace: [42, 43] },
+      } as WindowArtifact,
+      intellij: {
+        kind: "window", pid: 5678, app_id: "intellij", title: "project",
+        windowIds: { aerospace: [99] },
+      } as WindowArtifact,
+    }
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2" },
+            { workspace: "3" },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, bag)
+    // All bag windows should go to workspace "2" (index 0)
+    expect(movedWindows).toContainEqual({ windowId: 42, workspace: "2" })
+    expect(movedWindows).toContainEqual({ windowId: 43, workspace: "2" })
+    expect(movedWindows).toContainEqual({ windowId: 99, workspace: "2" })
+    // No bag windows should go to workspace "3"
+    const ws3Moves = movedWindows.filter(m => m.workspace === "3")
+    expect(ws3Moves).toHaveLength(0)
+  })
+
+  test("subsequent entries do NOT receive bag windows (PROC-02)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "4", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const bag: ArtifactBag = {
+      vscode: {
+        kind: "window", pid: 1234, app_id: "vscode", title: "project",
+        windowIds: { aerospace: [10] },
+      } as WindowArtifact,
+    }
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2" },
+            { workspace: "3" },
+            { workspace: "4" },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, bag)
+    // Window 10 should only be moved to workspace "2"
+    const window10Moves = movedWindows.filter(m => m.windowId === 10)
+    expect(window10Moves).toHaveLength(1)
+    expect(window10Moves[0].workspace).toBe("2")
+  })
+
+  test("subsequent entries get their own command-launched windows only (PROC-02)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const bag: ArtifactBag = {
+      vscode: {
+        kind: "window", pid: 1234, app_id: "vscode", title: "project",
+        windowIds: { aerospace: [10] },
+      } as WindowArtifact,
+    }
+    // Commands return different window IDs per call
+    let snapshotCallCount = 0
+    mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>) => {
+      try { await spawnFn() } catch {}
+      snapshotCallCount++
+      return snapshotCallCount === 1 ? [50] : [60]
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", commands: [{ app: "kitty" }] },
+            { workspace: "3", commands: [{ app: "firefox" }] },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, bag)
+    // Bag window 10 → workspace "2" only
+    expect(movedWindows).toContainEqual({ windowId: 10, workspace: "2" })
+    // Command windows: 50 → workspace "2", 60 → workspace "3"
+    expect(movedWindows).toContainEqual({ windowId: 50, workspace: "2" })
+    expect(movedWindows).toContainEqual({ windowId: 60, workspace: "3" })
+    // No bag window should appear in workspace "3"
+    const ws3Moves = movedWindows.filter(m => m.workspace === "3")
+    expect(ws3Moves.every(m => m.windowId !== 10)).toBe(true)
+  })
+})
+
+// ─── listWorkspaces hoist tests (PROC-03) ──────────────────────────────────
+
+describe("listWorkspaces hoist", () => {
+  test("listWorkspaces called exactly once for multi-entry config (PROC-03)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "4", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2" },
+            { workspace: "3" },
+            { workspace: "4" },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // listWorkspaces should be called exactly once (hoisted before loop)
+    expect(mockListWorkspaces).toHaveBeenCalledTimes(1)
+  })
+
+  test("listWorkspaces called exactly once for single-entry config (PROC-03)", async () => {
+    mockWorkspaces = [
+      { workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [{ workspace: "dev" }],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    expect(mockListWorkspaces).toHaveBeenCalledTimes(1)
+  })
+
+  test("unknown workspace name produces error before any windows are moved (PROC-03)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const bag: ArtifactBag = {
+      vscode: {
+        kind: "window", pid: 1234, app_id: "vscode", title: "project",
+        windowIds: { aerospace: [42] },
+      } as WindowArtifact,
+    }
+    // Config references workspace "3" which does not exist
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2" },
+            { workspace: "3" },  // unknown
+          ],
+        },
+      },
+    })
+    const result = await aerospaceIntegration.open(ctx, null, bag)
+    expect(result).toBeNull()
+    // No windows should have been moved — validation failed upfront
+    expect(movedWindows).toHaveLength(0)
+  })
+
+  test("all workspace names valid — loop executes normally", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", flatten_before_open: true },
+            { workspace: "3", flatten_before_open: true },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Both entries processed
+    expect(flattenedWorkspaces).toEqual(["2", "3"])
+  })
+})
+
+// ─── deferred focus tests (D-05, D-06) ─────────────────────────────────────
+
+describe("deferred focus", () => {
+  test("workspace-level focus applies after all entries complete (D-05)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", flatten_before_open: true },
+            { workspace: "3", focus: true, flatten_before_open: true },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Both entries should have been processed (flatten proves loop ran)
+    expect(flattenedWorkspaces).toEqual(["2", "3"])
+    // Focus should have been applied to workspace "3" (the entry with focus: true)
+    expect(execCalls.some(c => c[0] === "workspace" && c[1] === "3")).toBe(true)
+  })
+
+  test("workspace-level focus targets the entry with focus: true, not the last entry", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", focus: true },
+            { workspace: "3" },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Focus should go to "2" (the entry with focus: true), not "3" (last entry)
+    const focusCalls = execCalls.filter(c => c[0] === "workspace")
+    expect(focusCalls).toHaveLength(1)
+    expect(focusCalls[0][1]).toBe("2")
+  })
+
+  test("no workspace focus when no entry has focus: true", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2" },
+            { workspace: "3" },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    expect(execCalls.some(c => c[0] === "workspace")).toBe(false)
+  })
+
+  test("window-level focus (command focus: true) deferred to post-loop (D-06)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    // First command returns window 50, second returns window 60
+    let snapshotCallCount = 0
+    mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>) => {
+      try { await spawnFn() } catch {}
+      snapshotCallCount++
+      return snapshotCallCount === 1 ? [50] : [60]
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", commands: [{ app: "kitty", focus: true }] },
+            { workspace: "3", commands: [{ app: "firefox" }] },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Window 50 from entry 0's command should be focused post-loop
+    expect(focusedWindows).toContain(50)
+  })
+
+  test("last command with focus: true wins window-level focus", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    let snapshotCallCount = 0
+    mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>) => {
+      try { await spawnFn() } catch {}
+      snapshotCallCount++
+      return snapshotCallCount === 1 ? [50] : [60]
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", commands: [{ app: "kitty", focus: true }] },
+            { workspace: "3", commands: [{ app: "firefox", focus: true }] },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Last command with focus: true wins — window 60 from entry 1
+    expect(focusedWindows).toContain(60)
+  })
+})
+
+// ─── beforeSet accumulation tests (PROC-04) ────────────────────────────────
+
+describe("beforeSet accumulation", () => {
+  test("snapshotWindowIds receives beforeSet containing prior entry window IDs (PROC-04)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const bag: ArtifactBag = {
+      vscode: {
+        kind: "window", pid: 1234, app_id: "vscode", title: "project",
+        windowIds: { aerospace: [10] },
+      } as WindowArtifact,
+    }
+    // Capture a snapshot of beforeSet contents at each call (beforeSet is a live reference)
+    const capturedBeforeSets: Set<number>[] = []
+    mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>, opts?: any) => {
+      try { await spawnFn() } catch {}
+      capturedBeforeSets.push(new Set(opts?.beforeSet ?? []))
+      return [100 + capturedBeforeSets.length]
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", commands: [{ app: "kitty" }] },
+            { workspace: "3", commands: [{ app: "firefox" }] },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, bag)
+    // Second snapshotWindowIds call (entry index 1) should have beforeSet containing:
+    // - bag window IDs (10) from entry 0
+    // - command window IDs (101) from entry 0
+    expect(capturedBeforeSets.length).toBeGreaterThanOrEqual(2)
+    const secondCallBeforeSet = capturedBeforeSets[1]
+    expect(secondCallBeforeSet.has(10)).toBe(true)   // bag window from entry 0
+    expect(secondCallBeforeSet.has(101)).toBe(true)  // command window from entry 0
+  })
+
+  test("beforeSet is empty for first entry's commands (no prior entries)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    // Capture beforeSet SIZE at call time (beforeSet is a live reference —
+    // the production code adds returned window IDs to it after the mock returns)
+    const capturedSizes: number[] = []
+    mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>, opts?: any) => {
+      try { await spawnFn() } catch {}
+      capturedSizes.push(opts?.beforeSet?.size ?? -1)
+      return [50]
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", commands: [{ app: "kitty" }] },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    expect(capturedSizes).toHaveLength(1)
+    // beforeSet should have been empty at call time (no prior entries, no bag windows)
+    expect(capturedSizes[0]).toBe(0)
+  })
+
+  test("bag window IDs are added to beforeSet for subsequent entries (PROC-04)", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    const bag: ArtifactBag = {
+      vscode: {
+        kind: "window", pid: 1234, app_id: "vscode", title: "project",
+        windowIds: { aerospace: [10, 11] },
+      } as WindowArtifact,
+    }
+    // Capture a snapshot of beforeSet contents at each call
+    const capturedBeforeSets: Set<number>[] = []
+    mockSnapshotWindowIds.mockImplementation(async (spawnFn: () => Promise<void>, opts?: any) => {
+      try { await spawnFn() } catch {}
+      capturedBeforeSets.push(new Set(opts?.beforeSet ?? []))
+      return [200]
+    })
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2" },
+            { workspace: "3", commands: [{ app: "firefox" }] },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, bag)
+    // Entry 0 has no commands, so no snapshotWindowIds call for it
+    // Entry 1 has a command — its beforeSet should contain bag window IDs 10 and 11
+    expect(capturedBeforeSets).toHaveLength(1)
+    expect(capturedBeforeSets[0].has(10)).toBe(true)
+    expect(capturedBeforeSets[0].has(11)).toBe(true)
+  })
+})
+
+// ─── setLayout with windowId tests ─────────────────────────────────────────
+
+describe("setLayout with windowId", () => {
+  test("setLayout receives windowId from target workspace window", async () => {
+    mockWorkspaces = [
+      { workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    mockWindows = [
+      { windowId: 77, appName: "Chrome", windowTitle: "Tab", appPid: 100, workspace: "dev" },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [{ workspace: "dev", layout: "h_tiles" }],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: 77 })
+  })
+
+  test("setLayout with windowId avoids cross-entry focus contamination", async () => {
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    mockWindows = [
+      { windowId: 10, appName: "Chrome", windowTitle: "Tab", appPid: 100, workspace: "2" },
+      { windowId: 20, appName: "Firefox", windowTitle: "Page", appPid: 200, workspace: "3" },
+    ]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", layout: "h_tiles" },
+            { workspace: "3", layout: "v_accordion" },
+          ],
+        },
+      },
+    })
+    await aerospaceIntegration.open(ctx, null, {})
+    // Each layout call should have its own workspace's windowId
+    expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: 10 })
+    expect(layoutCalls).toContainEqual({ layout: "v_accordion", windowId: 20 })
+    // Layout should NOT have been called without windowId
+    expect(layoutCalls.every(c => c.windowId !== undefined)).toBe(true)
   })
 })

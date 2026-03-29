@@ -155,169 +155,204 @@ export const aerospaceIntegration: Integration = {
         return null
       }
 
-      // Temporary: read from first entry only (Phase 48 adds the loop)
-      const entry = parsedConfig.workspaces[0]
-      const targetWorkspace = entry.workspace
-      const shouldFlatten = entry.flatten_before_open === true
-      const normalization = entry.normalization !== false  // default true
-      const layout = entry.layout
-      const shouldFocusWorkspace = entry.focus === true
-      const commands = entry.commands
+      // Validate config constraints (focus uniqueness, duplicate names)
+      validateAerospaceConfig(parsedConfig.workspaces)
 
-      // Validate target workspace exists (DETECT-04)
-      const workspaces = await listWorkspaces()
-      const workspaceExists = workspaces.some((ws) => ws.workspace === targetWorkspace)
-      if (!workspaceExists) {
-        spinner?.stop(`AeroSpace workspace "${targetWorkspace}" not found — skipping window placement`)
-        if (!ctx.silent) p.log.warn(`AeroSpace workspace "${targetWorkspace}" not found — skipping window placement`)
-        return null
+      // Hoist listWorkspaces — call exactly once before the loop (D-09)
+      const knownWorkspaces = await listWorkspaces()
+      const knownNames = new Set(knownWorkspaces.map((ws) => ws.workspace))
+
+      // Validate all target workspace names upfront — error before any windows move (PROC-03)
+      for (const entry of parsedConfig.workspaces) {
+        if (!knownNames.has(entry.workspace)) {
+          spinner?.stop(`AeroSpace workspace "${entry.workspace}" not found — aborting`)
+          if (!ctx.silent) p.log.warn(`AeroSpace workspace "${entry.workspace}" not found — skipping window placement`)
+          return null
+        }
       }
 
-      // ── Step 1: Flatten before open (LAYOUT-03) ──
-      if (shouldFlatten) {
+      // Shared state across all entries
+      const beforeSet = new Set<number>()
+      let deferredWorkspaceFocus: string | null = null
+      let deferredWindowFocus: number | null = null
+
+      const entries = parsedConfig.workspaces
+      const totalEntries = entries.length
+
+      // Shared variable expansion for commands
+      const vars: Record<string, string> = {
+        GS_WORKSPACE_NAME: ctx.workspace.name,
+        GS_WORKSPACE_BRANCH: ctx.workspace.branch ?? "",
+        GS_WORKSPACE_PATH: ctx.tasksDir,
+      }
+      const expandVars = (s: string): string =>
+        s.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")
+
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i]
+        const targetWorkspace = entry.workspace
+        const shouldFlatten = entry.flatten_before_open === true
+        const normalization = entry.normalization !== false  // default true
+        const layout = entry.layout
+        const commands = entry.commands
+
+        // Update spinner message per entry (D-03)
+        if (totalEntries > 1) {
+          spinner?.message(`AeroSpace: setting up workspace ${targetWorkspace} (${i + 1}/${totalEntries})`)
+        }
+
         try {
-          await flattenWorkspaceTree(targetWorkspace)
-        } catch (err) {
-          if (!ctx.silent) p.log.warn(`AeroSpace: flatten failed: ${String(err)}`)
-        }
-      }
-
-      // ── Step 2: Move bag windows (DETECT-02) ──
-      for (const artifact of Object.values(bag)) {
-        if (artifact?.kind !== "window") continue
-        const aerospaceIds = artifact.windowIds?.["aerospace"]
-        if (!aerospaceIds?.length) continue
-        for (const windowId of aerospaceIds) {
-          try {
-            await moveNodeToWorkspace(windowId, targetWorkspace)
-          } catch (err) {
-            if (!ctx.silent) p.log.warn(`AeroSpace: failed to move window ${windowId}: ${String(err)}`)
-          }
-        }
-      }
-
-      // ── Step 3: Launch commands (LAUNCH-01, LAUNCH-02) ──
-      let focusWindowId: number | null = null
-
-      if (commands?.length) {
-        const vars: Record<string, string> = {
-          GS_WORKSPACE_NAME: ctx.workspace.name,
-          GS_WORKSPACE_BRANCH: ctx.workspace.branch ?? "",
-          GS_WORKSPACE_PATH: ctx.tasksDir,
-        }
-        const expandVars = (s: string): string =>
-          s.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")
-
-        for (const cmd of commands) {
-          try {
-            let newWindowIds: number[] = []
-
-            if (cmd.source !== undefined) {
-              // Source: resolve window IDs from ArtifactBag — no spawning needed
-              const artifact = bag[cmd.source]
-              const sourceIds = artifact?.kind === "window" ? artifact.windowIds?.["aerospace"] : undefined
-              if (sourceIds?.length) {
-                for (const wid of sourceIds) {
-                  try { await moveNodeToWorkspace(wid, targetWorkspace) } catch { /* already moved or stale */ }
-                }
-                newWindowIds = sourceIds
-              } else {
-                if (!ctx.silent) p.log.warn(`AeroSpace: source "${cmd.source}" not found in bag or has no aerospace window IDs`)
-              }
-            } else if (cmd.app !== undefined) {
-              // App: launch via macOS open -a
-              const expandedApp = expandVars(cmd.app)
-              const expandedArgs = (cmd.args ?? []).map(expandVars)
-
-              newWindowIds = await snapshotWindowIds(async () => {
-                const args = ["open", "-a", expandedApp]
-                if (expandedArgs.length) args.push("--args", ...expandedArgs)
-                Bun.spawn(args, { stdout: "ignore", stderr: "ignore" })
-              })
-
-              for (const wid of newWindowIds) {
-                try { await moveNodeToWorkspace(wid, targetWorkspace) } catch (err) {
-                  if (!ctx.silent) p.log.warn(`AeroSpace: failed to move launched window ${wid}: ${String(err)}`)
-                }
-              }
-            } else if (cmd.command !== undefined) {
-              // Command: shell execution
-              const expandedCommand = expandVars(cmd.command)
-
-              // Resolve cwd: repo takes precedence over cwd
-              let resolvedCwd: string | undefined
-              if (cmd.repo !== undefined) {
-                const repoEntry = ctx.workspace.repos.find((r) => r.name === cmd.repo)
-                resolvedCwd = repoEntry?.task_path
-              } else if (cmd.cwd !== undefined) {
-                resolvedCwd = expandVars(cmd.cwd)
-              }
-
-              // Build shell string with cwd
-              const parts: string[] = []
-              if (resolvedCwd) parts.push(`cd ${shellQuote(resolvedCwd)}`)
-              parts.push(expandedCommand)
-              const shellCmd = parts.join(" && ")
-
-              newWindowIds = await snapshotWindowIds(async () => {
-                Bun.spawn(["sh", "-c", shellCmd], { stdout: "ignore", stderr: "ignore" })
-              })
-
-              for (const wid of newWindowIds) {
-                try { await moveNodeToWorkspace(wid, targetWorkspace) } catch (err) {
-                  if (!ctx.silent) p.log.warn(`AeroSpace: failed to move launched window ${wid}: ${String(err)}`)
-                }
-              }
-            } else {
-              if (!ctx.silent) p.log.warn("AeroSpace: command entry has none of source/app/command — skipping")
+          // ── Step 1: Flatten (per-entry) ──
+          if (shouldFlatten) {
+            try {
+              await flattenWorkspaceTree(targetWorkspace)
+            } catch (err) {
+              if (!ctx.silent) p.log.warn(`AeroSpace: flatten failed for ${targetWorkspace}: ${String(err)}`)
             }
+          }
 
-            // Track window-level focus
-            if (cmd.focus && newWindowIds.length > 0) {
-              focusWindowId = newWindowIds[0]
+          // ── Step 2: Bag-move (index 0 only — D-07, PROC-02) ──
+          if (i === 0) {
+            for (const artifact of Object.values(bag)) {
+              if (artifact?.kind !== "window") continue
+              const aerospaceIds = artifact.windowIds?.["aerospace"]
+              if (!aerospaceIds?.length) continue
+              for (const windowId of aerospaceIds) {
+                try {
+                  await moveNodeToWorkspace(windowId, targetWorkspace)
+                  beforeSet.add(windowId)
+                } catch (err) {
+                  if (!ctx.silent) p.log.warn(`AeroSpace: failed to move window ${windowId}: ${String(err)}`)
+                }
+              }
             }
-          } catch (err) {
-            if (!ctx.silent) p.log.warn(`AeroSpace: command failed: ${String(err)}`)
-            // Continue — partial failure acceptable
           }
-        }
-      }
 
-      // ── Step 4: Apply layout (LAYOUT-01, LAYOUT-02) ──
-      if (layout) {
-        try {
-          // Both normalization paths: focus a window in target workspace, then set layout
-          // normalization field affects whether the user's tree is auto-managed by AeroSpace;
-          // layout application itself is the same for both paths
-          const wsWindows = await listWindows()
-          const targetWindow = wsWindows.find((w) => w.workspace === targetWorkspace)
-          if (targetWindow) {
-            await focusWindow(targetWindow.windowId)
-            await setLayout(layout)
+          // ── Step 3: Commands (per-entry) ──
+          if (commands?.length) {
+            for (const cmd of commands) {
+              try {
+                let newWindowIds: number[] = []
+
+                if (cmd.source !== undefined) {
+                  // Source: resolve window IDs from ArtifactBag — no spawning needed
+                  const artifact = bag[cmd.source]
+                  const sourceIds = artifact?.kind === "window" ? artifact.windowIds?.["aerospace"] : undefined
+                  if (sourceIds?.length) {
+                    for (const wid of sourceIds) {
+                      try { await moveNodeToWorkspace(wid, targetWorkspace) } catch { /* already moved or stale */ }
+                    }
+                    newWindowIds = sourceIds
+                  } else {
+                    if (!ctx.silent) p.log.warn(`AeroSpace: source "${cmd.source}" not found in bag or has no aerospace window IDs`)
+                  }
+                } else if (cmd.app !== undefined) {
+                  // App: launch via macOS open -a
+                  const expandedApp = expandVars(cmd.app)
+                  const expandedArgs = (cmd.args ?? []).map(expandVars)
+
+                  newWindowIds = await snapshotWindowIds(async () => {
+                    const args = ["open", "-a", expandedApp]
+                    if (expandedArgs.length) args.push("--args", ...expandedArgs)
+                    Bun.spawn(args, { stdout: "ignore", stderr: "ignore" })
+                  }, { beforeSet })
+
+                  for (const wid of newWindowIds) {
+                    try { await moveNodeToWorkspace(wid, targetWorkspace) } catch (err) {
+                      if (!ctx.silent) p.log.warn(`AeroSpace: failed to move launched window ${wid}: ${String(err)}`)
+                    }
+                  }
+                } else if (cmd.command !== undefined) {
+                  // Command: shell execution
+                  const expandedCommand = expandVars(cmd.command)
+
+                  // Resolve cwd: repo takes precedence over cwd
+                  let resolvedCwd: string | undefined
+                  if (cmd.repo !== undefined) {
+                    const repoEntry = ctx.workspace.repos.find((r) => r.name === cmd.repo)
+                    resolvedCwd = repoEntry?.task_path
+                  } else if (cmd.cwd !== undefined) {
+                    resolvedCwd = expandVars(cmd.cwd)
+                  }
+
+                  // Build shell string with cwd
+                  const parts: string[] = []
+                  if (resolvedCwd) parts.push(`cd ${shellQuote(resolvedCwd)}`)
+                  parts.push(expandedCommand)
+                  const shellCmd = parts.join(" && ")
+
+                  newWindowIds = await snapshotWindowIds(async () => {
+                    Bun.spawn(["sh", "-c", shellCmd], { stdout: "ignore", stderr: "ignore" })
+                  }, { beforeSet })
+
+                  for (const wid of newWindowIds) {
+                    try { await moveNodeToWorkspace(wid, targetWorkspace) } catch (err) {
+                      if (!ctx.silent) p.log.warn(`AeroSpace: failed to move launched window ${wid}: ${String(err)}`)
+                    }
+                  }
+                } else {
+                  if (!ctx.silent) p.log.warn("AeroSpace: command entry has none of source/app/command — skipping")
+                }
+
+                // Track window-level focus (deferred — D-06)
+                if (cmd.focus && newWindowIds.length > 0) {
+                  deferredWindowFocus = newWindowIds[0]
+                }
+
+                // Accumulate all new window IDs into beforeSet for cross-entry isolation (D-08, PROC-04)
+                for (const wid of newWindowIds) {
+                  beforeSet.add(wid)
+                }
+              } catch (err) {
+                if (!ctx.silent) p.log.warn(`AeroSpace: command failed: ${String(err)}`)
+                // Continue — partial failure acceptable
+              }
+            }
           }
-          // suppress unused variable warning — normalization read above
-          void normalization
+
+          // ── Step 4: Layout (per-entry) ──
+          if (layout) {
+            try {
+              const wsWindows = await listWindows()
+              const targetWindow = wsWindows.find((w) => w.workspace === targetWorkspace)
+              if (targetWindow) {
+                await focusWindow(targetWindow.windowId)
+                await setLayout(layout, targetWindow.windowId)
+              }
+              // suppress unused variable warning — normalization read above
+              void normalization
+            } catch (err) {
+              if (!ctx.silent) p.log.warn(`AeroSpace: layout failed for ${targetWorkspace}: ${String(err)}`)
+            }
+          }
+
+          // Track workspace-level focus (deferred — D-05)
+          if (entry.focus === true) {
+            deferredWorkspaceFocus = targetWorkspace
+          }
         } catch (err) {
-          if (!ctx.silent) p.log.warn(`AeroSpace: layout failed: ${String(err)}`)
+          // Skip-and-continue on per-entry failure (D-01)
+          if (!ctx.silent) p.log.warn(`AeroSpace: workspace ${targetWorkspace} failed: ${String(err)}`)
         }
       }
 
-      // ── Step 5: Focus (LAYOUT-04) ──
+      // ── Post-loop: Deferred focus (D-05, D-06) ──
       // Window-level focus: focus a specific window marked with focus: true
-      if (focusWindowId !== null) {
-        try { await focusWindow(focusWindowId) } catch { /* best effort */ }
+      if (deferredWindowFocus !== null) {
+        try { await focusWindow(deferredWindowFocus) } catch { /* best effort */ }
       }
 
       // Workspace-level focus: switch AeroSpace to the target workspace
-      if (shouldFocusWorkspace) {
+      if (deferredWorkspaceFocus !== null) {
         try {
-          await _exec.run(["workspace", targetWorkspace])
+          await _exec.run(["workspace", deferredWorkspaceFocus])
         } catch (err) {
           if (!ctx.silent) p.log.warn(`AeroSpace: workspace focus failed: ${String(err)}`)
         }
       }
 
-      spinner?.stop("AeroSpace workspace ready")
+      // Spinner stop message (D-04)
+      spinner?.stop(totalEntries > 1 ? "AeroSpace workspaces ready" : "AeroSpace workspace ready")
     } catch (err) {
       spinner?.stop("AeroSpace unavailable — skipped")
       if (!ctx.silent) p.log.warn(`AeroSpace: ${String(err)}`)
