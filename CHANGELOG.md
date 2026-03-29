@@ -4,6 +4,55 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.12.0] — 2026-03-29
+
+### Changed
+
+**BREAKING: Multi-workspace AeroSpace config** — the AeroSpace integration config now uses a `workspaces` array instead of a flat single-workspace format. Each entry independently configures its own AeroSpace workspace with layout, normalization, flatten, focus, and commands. This enables distributing windows across multiple AeroSpace workspaces from a single `git-stacks open` command.
+
+**Migration example:**
+
+```yaml
+# Before (v0.11.x) — flat single-workspace config
+settings:
+  integrations:
+    aerospace:
+      workspace: "2"
+      layout: h_tiles
+      normalization: true
+      flatten_before_open: true
+      focus: true
+      commands:
+        - source: vscode
+        - app: kitty
+```
+
+```yaml
+# After (v0.12.0) — workspaces array
+settings:
+  integrations:
+    aerospace:
+      workspaces:
+        - workspace: "2"
+          layout: h_tiles
+          normalization: true
+          flatten_before_open: true
+          focus: true
+          commands:
+            - source: vscode
+            - app: kitty
+```
+
+### Added
+
+**Multi-workspace support** — configure multiple AeroSpace workspace entries in a single integration config. Each entry in the `workspaces` array is processed sequentially: flatten, window movement, commands, and layout execute independently per entry. VSCode and IntelliJ windows from the artifact bag route to the first entry (`workspaces[0]`) only; subsequent entries receive only their own command-launched windows.
+
+**Focus and duplicate validation** — at most one workspace entry may have `focus: true`; duplicate workspace names in the array produce a validation error. Errors use plain-English messages (e.g., `AeroSpace: multiple entries have focus: true (ws1, ws2) — at most one allowed`).
+
+**Cross-entry snapshot isolation** — a shared `beforeSet` accumulates window IDs across all workspace entries, preventing a slow-launching app from one entry being incorrectly detected as a new window by a subsequent entry. `listWorkspaces()` is called exactly once before the loop to validate all target workspace names upfront.
+
+---
+
 ## [0.11.1] — 2026-03-29
 
 ### Changed
