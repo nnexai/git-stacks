@@ -135,7 +135,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 
 **Milestone Goal:** Extend AeroSpace integration to support a `workspaces` array — each entry independently configured with layout, normalization, flatten, focus, and commands — replacing the flat single-workspace config from v0.11.0.
 
-- [ ] **Phase 47: Multi-Workspace Schema** - `workspaces` array schema, per-entry Zod types, focus/duplicate validation, `beforeSet` extension to `SnapshotOpts`
+- [x] **Phase 47: Multi-Workspace Schema** - `workspaces` array schema, per-entry Zod types, focus/duplicate validation, `beforeSet` extension to `SnapshotOpts` (completed 2026-03-29)
 - [ ] **Phase 48: Multi-Workspace Loop & Tests** - Rewritten `open()` with `for...of` loop, bag-window routing to index 0, upfront `listWorkspaces()` hoist, post-loop focus, full test coverage
 - [ ] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs (1 plan)
 
@@ -195,6 +195,6 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete | 2026-03-28 |
 | 45. Layout Control & App Launching | v0.11.0 | 2/2 | Complete | 2026-03-28 |
 | 46. Release Prep | v0.11.0 | 1/1 | Complete | 2026-03-28 |
-| 47. Multi-Workspace Schema | v0.12.0 | 0/2 | Planned | - |
+| 47. Multi-Workspace Schema | v0.12.0 | 2/2 | Complete   | 2026-03-29 |
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 0/2 | Planned | - |
 | 49. Release Prep | v0.12.0 | 0/1 | Planned | - |
