@@ -286,28 +286,34 @@ settings:
 ```
 
 **AeroSpace integration** (for [AeroSpace](https://nikitabobko.github.io/AeroSpace/) tiling window manager on macOS):
-- Moves newly opened windows (VSCode, IntelliJ, etc.) to a dedicated AeroSpace workspace per git-stacks workspace
+- Distributes windows across multiple AeroSpace workspaces from a single `git-stacks open` command
+- Each entry in the `workspaces` array independently configures layout, normalization, flatten, focus, and commands
+- VSCode/IntelliJ windows route to the first workspace entry; subsequent entries receive their own command-launched windows
 - Normalization-aware layout: `flatten-workspace-tree` + `layout` when normalization is on (default), `split`-based alternatives when off
-- `flatten_before_open` resets nested containers for clean repeated opens
 - `commands` array launches arbitrary apps with automatic snapshot-delta window detection and movement
+- Focus and duplicate validation: at most one entry may have `focus: true`; duplicate workspace names are rejected
 - Requires `aerospace` binary on macOS — silently skips on Linux/Windows
 - `git-stacks doctor` reports binary availability as a warn-level check on macOS
 
 ```yaml
-# Example AeroSpace config in workspace YAML
+# Example multi-workspace AeroSpace config
 settings:
   integrations:
     aerospace:
-      workspace: "2"
-      layout: h_tiles
-      normalization: true
-      flatten_before_open: true
-      focus: true
-      commands:
-        - source: vscode
-        - app: kitty
-          cwd: "$GS_WORKSPACE_PATH"
-        - command: "open -a Firefox"
+      workspaces:
+        - workspace: "2"
+          layout: h_tiles
+          flatten_before_open: true
+          focus: true
+          commands:
+            - source: vscode
+            - app: kitty
+              cwd: "$GS_WORKSPACE_PATH"
+        - workspace: "3"
+          layout: v_accordion
+          commands:
+            - command: "open -a Firefox"
+            - app: Slack
 ```
 
 **Forge integrations** (GitHub, GitLab, Gitea):
