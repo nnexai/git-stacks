@@ -16,10 +16,10 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 ### Multi-Workspace Processing
 
-- [ ] **PROC-01**: `open()` iterates the workspaces array sequentially, executing flatten → bag-move → commands → layout per entry
-- [ ] **PROC-02**: Tier-1 bag windows (vscode, intellij) route to `workspaces[0]` only — subsequent entries receive only their own command-launched windows
-- [ ] **PROC-03**: All target workspace names are validated via a single upfront `listWorkspaces()` call before the loop
-- [ ] **PROC-04**: Cross-entry snapshot isolation via shared `beforeSet` prevents a slow app from entry A appearing as entry B's window
+- [x] **PROC-01**: `open()` iterates the workspaces array sequentially, executing flatten → bag-move → commands → layout per entry
+- [x] **PROC-02**: Tier-1 bag windows (vscode, intellij) route to `workspaces[0]` only — subsequent entries receive only their own command-launched windows
+- [x] **PROC-03**: All target workspace names are validated via a single upfront `listWorkspaces()` call before the loop
+- [x] **PROC-04**: Cross-entry snapshot isolation via shared `beforeSet` prevents a slow app from entry A appearing as entry B's window
 
 ### Release
 
@@ -51,10 +51,10 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 | SCHEMA-02 | Phase 47 | Complete |
 | SCHEMA-03 | Phase 47 | Complete |
 | SCHEMA-04 | Phase 47 | Complete |
-| PROC-01 | Phase 48 | Pending |
-| PROC-02 | Phase 48 | Pending |
-| PROC-03 | Phase 48 | Pending |
-| PROC-04 | Phase 48 | Pending |
+| PROC-01 | Phase 48 | Complete |
+| PROC-02 | Phase 48 | Complete |
+| PROC-03 | Phase 48 | Complete |
+| PROC-04 | Phase 48 | Complete |
 | REL-01 | Phase 49 | Pending |
 
 **Coverage:**
@@ -64,4 +64,4 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 ---
 *Requirements defined: 2026-03-29*
-*Last updated: 2026-03-29 after Phase 47 completion*
+*Last updated: 2026-03-29 after Phase 48 completion*
