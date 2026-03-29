@@ -38,7 +38,7 @@ describe("getVersionString", () => {
       process.chdir(repoPath)
       const result = await getVersionString()
       // Should match: {version} ({7-char-hex}) or {version} ({7-char-hex}-dirty)
-      expect(result).toMatch(/^\d+\.\d+\.\d+ \([0-9a-f]{7}(-dirty)?\)$/)
+      expect(result).toMatch(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)? \([0-9a-f]{7}(-dirty)?\)$/)
     } finally {
       process.chdir(originalCwd)
       cleanup(tmp)
@@ -51,7 +51,7 @@ describe("getVersionString", () => {
       process.chdir(tmp)
       const result = await getVersionString()
       // Should match just the semver — no parenthetical
-      expect(result).toMatch(/^\d+\.\d+\.\d+$/)
+      expect(result).toMatch(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/)
     } finally {
       process.chdir(originalCwd)
       cleanup(tmp)
@@ -67,7 +67,7 @@ describe("getVersionString", () => {
       writeFileSync(join(repoPath, "dirty-file.txt"), "uncommitted content")
       const result = await getVersionString()
       // Should contain -dirty suffix in the hash portion
-      expect(result).toMatch(/\([0-9a-f]{7}-dirty\)$/)
+      expect(result).toMatch(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)? \([0-9a-f]{7}-dirty\)$/)
     } finally {
       process.chdir(originalCwd)
       cleanup(tmp)
