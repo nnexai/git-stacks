@@ -37,8 +37,7 @@ const aerospaceCommandSchema = z.object({
   focus: z.boolean().optional(),
 })
 
-const aerospaceConfigSchema = z.object({
-  enabled: z.boolean().optional(),
+const aerospaceWorkspaceEntrySchema = z.object({
   workspace: z.string(),
   layout: z.enum(["h_tiles", "v_tiles", "h_accordion", "v_accordion"]).optional(),
   normalization: z.boolean().optional(),
@@ -46,6 +45,45 @@ const aerospaceConfigSchema = z.object({
   focus: z.boolean().optional(),
   commands: z.array(aerospaceCommandSchema).optional(),
 })
+
+const aerospaceConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  workspaces: z.array(aerospaceWorkspaceEntrySchema).min(1),
+})
+
+export type AerospaceWorkspaceEntry = z.infer<typeof aerospaceWorkspaceEntrySchema>
+
+/**
+ * Validates an AeroSpace config's workspaces array for focus-uniqueness
+ * and duplicate workspace names. Throws Error with plain-English message
+ * on violation. Call before the processing loop.
+ */
+export function validateAerospaceConfig(
+  workspaces: AerospaceWorkspaceEntry[]
+): void {
+  // Check focus uniqueness — at most one entry may have focus: true
+  const focusEntries = workspaces.filter((e) => e.focus === true)
+  if (focusEntries.length > 1) {
+    const names = focusEntries.map((e) => e.workspace).join(", ")
+    throw new Error(
+      `AeroSpace: multiple entries have focus: true (${names}) — at most one allowed`
+    )
+  }
+
+  // Check duplicate workspace names
+  const seen = new Set<string>()
+  const duplicates: string[] = []
+  for (const entry of workspaces) {
+    if (seen.has(entry.workspace)) {
+      duplicates.push(entry.workspace)
+    }
+    seen.add(entry.workspace)
+  }
+  if (duplicates.length > 0) {
+    const unique = [...new Set(duplicates)].join(", ")
+    throw new Error(`AeroSpace: duplicate workspace names: ${unique}`)
+  }
+}
 
 // ─── Integration ─────────────────────────────────────────────────────────────
 
@@ -103,7 +141,7 @@ export const aerospaceIntegration: Integration = {
     spinner?.start("Setting up AeroSpace workspace")
 
     try {
-      // Parse config from workspace-level or global-level
+      // Parse config from workspace-level or global-level (D-08, D-09: full replace semantics)
       const wsConfig = aerospaceConfigSchema.safeParse(
         ctx.workspace.settings?.integrations?.["aerospace"] ?? {}
       )
@@ -112,17 +150,19 @@ export const aerospaceIntegration: Integration = {
       )
       const parsedConfig = wsConfig.success ? wsConfig.data : globalConfig.success ? globalConfig.data : undefined
 
-      if (!parsedConfig?.workspace) {
-        spinner?.stop("AeroSpace: no workspace configured — skipped")
+      if (!parsedConfig?.workspaces?.length) {
+        spinner?.stop("AeroSpace: no workspaces configured — skipped")
         return null
       }
 
-      const targetWorkspace = parsedConfig.workspace
-      const shouldFlatten = parsedConfig.flatten_before_open === true
-      const normalization = parsedConfig.normalization !== false  // default true
-      const layout = parsedConfig.layout
-      const shouldFocusWorkspace = parsedConfig.focus === true
-      const commands = parsedConfig.commands
+      // Temporary: read from first entry only (Phase 48 adds the loop)
+      const entry = parsedConfig.workspaces[0]
+      const targetWorkspace = entry.workspace
+      const shouldFlatten = entry.flatten_before_open === true
+      const normalization = entry.normalization !== false  // default true
+      const layout = entry.layout
+      const shouldFocusWorkspace = entry.focus === true
+      const commands = entry.commands
 
       // Validate target workspace exists (DETECT-04)
       const workspaces = await listWorkspaces()

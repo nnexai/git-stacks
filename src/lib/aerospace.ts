@@ -27,6 +27,7 @@ export type SnapshotOpts = {
   timeoutMs?: number       // default 10_000
   initialDelayMs?: number  // default 200
   maxDelayMs?: number      // default 2_000
+  beforeSet?: Set<number>  // accumulated IDs from prior entries to exclude
   _sleep?: (ms: number) => Promise<void>
   _listWindows?: () => Promise<AerospaceWindow[]>
 }
@@ -219,6 +220,7 @@ export async function snapshotWindowIds(
     timeoutMs = 10_000,
     initialDelayMs = 200,
     maxDelayMs = 2_000,
+    beforeSet,
     _sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
     _listWindows = listWindows,
   } = opts
@@ -232,7 +234,7 @@ export async function snapshotWindowIds(
   while (Date.now() < deadline) {
     await _sleep(delay)
     const after = (await _listWindows()).map((w) => w.windowId)
-    const newIds = after.filter((id) => !before.has(id))
+    const newIds = after.filter((id) => !before.has(id) && (!beforeSet || !beforeSet.has(id)))
     if (newIds.length > 0) return newIds
     delay = Math.min(delay * 2, maxDelayMs)
   }
