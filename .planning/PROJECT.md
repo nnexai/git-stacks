@@ -20,7 +20,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Sequential processing — iterate workspaces array in order, setup each
 - Release prep (version bump, CHANGELOG, README update for new config format)
 
-## Current State — v0.11.1 shipped (2026-03-29)
+## Current State — v0.12.0 shipped (2026-03-29)
+
+### What shipped in v0.12.0
+
+- **Multi-workspace AeroSpace config** (BREAKING) — `workspaces` array replaces flat `workspace:` field; each entry independently configures layout, normalization, flatten, focus, and commands
+- **Multi-workspace loop** — `open()` iterates all entries sequentially; bag windows (vscode, intellij) route to `workspaces[0]` only; subsequent entries get own command windows
+- **Focus and duplicate validation** — at most one entry may have `focus: true`; duplicate workspace names rejected with plain-English errors
+- **Cross-entry snapshot isolation** — shared `beforeSet` prevents cross-entry window misattribution; `listWorkspaces()` hoisted before loop (called once)
 
 ### What shipped in v0.11.0/v0.11.1
 
@@ -180,12 +187,15 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Doctor checks for aerospace binary (macOS-gated) — v0.11.0 Phase 43
 - ✓ App launching commands array with source/app/command entries and snapshot-delta — v0.11.0 Phase 45
 
+- ✓ Multi-workspace AeroSpace config — `workspaces` array replacing flat single-workspace config — v0.12.0 Phase 47
+- ✓ Per-workspace-entry independent configuration (layout, normalization, flatten, focus, commands) — v0.12.0 Phase 47
+- ✓ Focus validation — at most one workspace entry may have `focus: true` — v0.12.0 Phase 47
+- ✓ Unrouted tier-1 windows (vscode, intellij) default to first workspace in array — v0.12.0 Phase 48
+- ✓ Cross-entry snapshot isolation via shared `beforeSet` — v0.12.0 Phase 48
+- ✓ `listWorkspaces()` hoisted before loop for upfront validation — v0.12.0 Phase 48
+
 ### Active
 
-- [ ] Multi-workspace AeroSpace config — `workspaces` array replacing flat single-workspace config
-- [ ] Per-workspace-entry independent configuration (layout, normalization, flatten, focus, commands)
-- [ ] Focus validation — at most one workspace entry may have `focus: true`
-- [ ] Unrouted tier-1 windows (vscode, intellij) default to first workspace in array
 - [ ] `git-stacks env` — dump merged workspace env vars with `--format shell|dotenv|json`
 
 ### Out of Scope
@@ -334,4 +344,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-29 after v0.12.0 milestone start*
+*Last updated: 2026-03-29 after v0.12.0 milestone completion*
