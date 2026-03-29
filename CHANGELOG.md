@@ -4,7 +4,7 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
-## [0.11.1-rc.0] — 2026-03-29
+## [0.11.1] — 2026-03-29
 
 ### Changed
 
