@@ -4,6 +4,20 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.11.1-rc.0] — 2026-03-29
+
+### Changed
+
+- **Dependency upgrades** — updated all dependencies to latest versions: zod 3.25 → 4.3, commander 12.1 → 14.0, typescript 5.9 → 6.0, @clack/prompts 0.9 → 1.1, @opentui/core+solid 0.1.87 → 0.1.92, solid-js 1.9.11 → 1.9.12, yaml 2.8.2 → 2.8.3, @types/bun 1.3.10 → 1.3.11.
+
+### Fixed
+
+- **Zod 4 migration** — updated all `z.record()` calls to the required two-argument form (`z.record(z.string(), valueSchema)`).
+- **Commander 14 compatibility** — added `.allowExcessArguments(true)` to the `run` command to preserve passthrough behavior.
+- **@clack/prompts 1.1 types** — added optional chaining in `validate` callbacks to handle `string | undefined` parameter type.
+
+---
+
 ## [0.11.0] — 2026-03-28
 
 ### Added
