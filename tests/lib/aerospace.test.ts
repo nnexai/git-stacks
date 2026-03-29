@@ -154,6 +154,7 @@ async function snapshotWindowIds(
     timeoutMs = 10_000,
     initialDelayMs = 200,
     maxDelayMs = 2_000,
+    beforeSet,
     _sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
     _listWindows = listWindows,
   } = opts
@@ -167,7 +168,7 @@ async function snapshotWindowIds(
   while (Date.now() < deadline) {
     await _sleep(delay)
     const after = (await _listWindows()).map((w) => w.windowId)
-    const newIds = after.filter((id) => !before.has(id))
+    const newIds = after.filter((id) => !before.has(id) && (!beforeSet || !beforeSet.has(id)))
     if (newIds.length > 0) return newIds
     delay = Math.min(delay * 2, maxDelayMs)
   }
@@ -541,6 +542,128 @@ describe("snapshotWindowIds", () => {
 
     expect(callOrder[0]).toBe("list")
     expect(callOrder[1]).toBe("spawn")
+  })
+
+  test("beforeSet filters out accumulated IDs from prior entries", async () => {
+    const beforeWindows = [makeWindow(1)]
+    const afterWindows = [makeWindow(1), makeWindow(2), makeWindow(3)]
+    const priorEntryIds = new Set([2])  // window 2 was from a previous entry
+
+    let callCount = 0
+    const listFn = mock(async () => {
+      callCount++
+      return callCount === 1 ? beforeWindows : afterWindows
+    })
+
+    const spawnFn = mock(async () => {})
+
+    const result = await snapshotWindowIds(spawnFn, {
+      _sleep: noopSleep,
+      _listWindows: listFn,
+      timeoutMs: 5000,
+      initialDelayMs: 0,
+      beforeSet: priorEntryIds,
+    })
+
+    // Window 2 is filtered by beforeSet, window 3 is genuinely new
+    expect(result).toEqual([3])
+    expect(result).not.toContain(2)
+  })
+
+  test("beforeSet does not filter IDs not in the set", async () => {
+    const beforeWindows = [makeWindow(1)]
+    const afterWindows = [makeWindow(1), makeWindow(4), makeWindow(5)]
+    const priorEntryIds = new Set([2, 3])  // unrelated IDs
+
+    let callCount = 0
+    const listFn = mock(async () => {
+      callCount++
+      return callCount === 1 ? beforeWindows : afterWindows
+    })
+
+    const spawnFn = mock(async () => {})
+
+    const result = await snapshotWindowIds(spawnFn, {
+      _sleep: noopSleep,
+      _listWindows: listFn,
+      timeoutMs: 5000,
+      initialDelayMs: 0,
+      beforeSet: priorEntryIds,
+    })
+
+    // 4 and 5 are new and not in beforeSet — should be returned
+    expect(result).toEqual([4, 5])
+  })
+
+  test("empty beforeSet has no effect", async () => {
+    const beforeWindows = [makeWindow(1)]
+    const afterWindows = [makeWindow(1), makeWindow(2)]
+
+    let callCount = 0
+    const listFn = mock(async () => {
+      callCount++
+      return callCount === 1 ? beforeWindows : afterWindows
+    })
+
+    const spawnFn = mock(async () => {})
+
+    const result = await snapshotWindowIds(spawnFn, {
+      _sleep: noopSleep,
+      _listWindows: listFn,
+      timeoutMs: 5000,
+      initialDelayMs: 0,
+      beforeSet: new Set(),
+    })
+
+    expect(result).toEqual([2])
+  })
+
+  test("beforeSet combined with own before-snapshot filters both", async () => {
+    const beforeWindows = [makeWindow(1), makeWindow(10)]  // own before: 1, 10
+    const afterWindows = [makeWindow(1), makeWindow(2), makeWindow(3), makeWindow(10)]
+    const priorEntryIds = new Set([2])  // prior entry claimed window 2
+
+    let callCount = 0
+    const listFn = mock(async () => {
+      callCount++
+      return callCount === 1 ? beforeWindows : afterWindows
+    })
+
+    const spawnFn = mock(async () => {})
+
+    const result = await snapshotWindowIds(spawnFn, {
+      _sleep: noopSleep,
+      _listWindows: listFn,
+      timeoutMs: 5000,
+      initialDelayMs: 0,
+      beforeSet: priorEntryIds,
+    })
+
+    // 1 and 10 filtered by own before, 2 filtered by beforeSet, only 3 is new
+    expect(result).toEqual([3])
+  })
+
+  test("undefined beforeSet (no option) works same as before", async () => {
+    const beforeWindows = [makeWindow(1)]
+    const afterWindows = [makeWindow(1), makeWindow(2)]
+
+    let callCount = 0
+    const listFn = mock(async () => {
+      callCount++
+      return callCount === 1 ? beforeWindows : afterWindows
+    })
+
+    const spawnFn = mock(async () => {})
+
+    // No beforeSet in opts at all
+    const result = await snapshotWindowIds(spawnFn, {
+      _sleep: noopSleep,
+      _listWindows: listFn,
+      timeoutMs: 5000,
+      initialDelayMs: 0,
+    })
+
+    expect(result).toEqual([2])
   })
 })
 

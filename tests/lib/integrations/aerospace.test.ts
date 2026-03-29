@@ -77,7 +77,7 @@ mock.module("@/tui/utils", () => ({
 }))
 
 // Cache-busted import after all mocks registered
-const { aerospaceIntegration } = await import(
+const { aerospaceIntegration, validateAerospaceConfig } = await import(
   // @ts-ignore
   "@/lib/integrations/aerospace?aerospace-integration-test-v1"
 )
@@ -250,7 +250,7 @@ describe("windowDetector", () => {
 describe("open()", () => {
   test("returns null when aerospace is not running (gate check)", async () => {
     mockIsRunning = false
-    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } } })
+    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } } })
     const result = await aerospaceIntegration.open(ctx, null, {})
     expect(result).toBeNull()
     expect(movedWindows).toHaveLength(0)
@@ -266,7 +266,7 @@ describe("open()", () => {
     mockWorkspaces = [
       { workspace: "mail", isFocused: true, isVisible: true, monitorId: 1 },
     ]
-    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } } })
+    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } } })
     const result = await aerospaceIntegration.open(ctx, null, {})
     expect(result).toBeNull()
     expect(movedWindows).toHaveLength(0)
@@ -292,7 +292,7 @@ describe("open()", () => {
         windowIds: { aerospace: [99] },
       } as WindowArtifact,
     }
-    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } } })
+    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } } })
     const result = await aerospaceIntegration.open(ctx, null, bag)
     expect(result).toBeNull()
     expect(movedWindows).toHaveLength(3)
@@ -318,7 +318,7 @@ describe("open()", () => {
         sessionName: "test",
       },
     }
-    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } } })
+    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } } })
     await aerospaceIntegration.open(ctx, null, bag)
     expect(movedWindows).toHaveLength(0)
   })
@@ -336,7 +336,7 @@ describe("open()", () => {
         windowIds: { aerospace: [50] },
       } as WindowArtifact,
     }
-    const ctx = makeCtx({ globalIntegrations: { aerospace: { enabled: true, workspace: "global-ws" } } })
+    const ctx = makeCtx({ globalIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "global-ws" }] } } })
     await aerospaceIntegration.open(ctx, null, bag)
     expect(movedWindows).toHaveLength(1)
     expect(movedWindows[0]).toEqual({ windowId: 50, workspace: "global-ws" })
@@ -356,8 +356,8 @@ describe("open()", () => {
       } as WindowArtifact,
     }
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "ws-target" } },
-      globalIntegrations: { aerospace: { enabled: true, workspace: "global-target" } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "ws-target" }] } },
+      globalIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "global-target" }] } },
     })
     await aerospaceIntegration.open(ctx, null, bag)
     expect(movedWindows).toHaveLength(1)
@@ -379,7 +379,7 @@ describe("open()", () => {
         windowIds: { aerospace: [42, 43] },
       } as WindowArtifact,
     }
-    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } } })
+    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } } })
     const result = await aerospaceIntegration.open(ctx, null, bag)
     expect(result).toBeNull()
     // Window 43 should still have been moved despite 42 failing
@@ -394,7 +394,7 @@ describe("flatten_before_open", () => {
   test("calls flattenWorkspaceTree with target workspace when enabled", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev", flatten_before_open: true } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", flatten_before_open: true }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(flattenedWorkspaces).toContain("dev")
@@ -403,7 +403,7 @@ describe("flatten_before_open", () => {
   test("does not call flattenWorkspaceTree when disabled", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev", flatten_before_open: false } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", flatten_before_open: false }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(flattenedWorkspaces).toHaveLength(0)
@@ -412,7 +412,7 @@ describe("flatten_before_open", () => {
   test("does not call flattenWorkspaceTree when not configured (default)", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(flattenedWorkspaces).toHaveLength(0)
@@ -427,7 +427,7 @@ describe("flatten_before_open", () => {
       } as WindowArtifact,
     }
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev", flatten_before_open: true } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", flatten_before_open: true }] } },
     })
     await aerospaceIntegration.open(ctx, null, bag)
     expect(flattenedWorkspaces).toContain("dev")
@@ -442,7 +442,7 @@ describe("layout", () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     mockWindows = [{ windowId: 10, appName: "Chrome", windowTitle: "Tab", appPid: 100, workspace: "dev" }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev", layout: "h_tiles" } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", layout: "h_tiles" }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(layoutCalls).toContainEqual({ layout: "h_tiles", windowId: undefined })
@@ -457,7 +457,7 @@ describe("layout", () => {
       mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
       mockWindows = [{ windowId: 10, appName: "Chrome", windowTitle: "Tab", appPid: 100, workspace: "dev" }]
       const ctx = makeCtx({
-        wsIntegrations: { aerospace: { enabled: true, workspace: "dev", layout: layoutType } },
+        wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", layout: layoutType }] } },
       })
       await aerospaceIntegration.open(ctx, null, {})
       expect(layoutCalls).toContainEqual({ layout: layoutType, windowId: undefined })
@@ -467,7 +467,7 @@ describe("layout", () => {
   test("does not apply layout when not configured", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(layoutCalls).toHaveLength(0)
@@ -477,7 +477,7 @@ describe("layout", () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     mockWindows = []  // No windows
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev", layout: "h_tiles" } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", layout: "h_tiles" }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(layoutCalls).toHaveLength(0)
@@ -489,8 +489,10 @@ describe("layout", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          layout: "h_tiles", normalization: true, flatten_before_open: true,
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            layout: "h_tiles", normalization: true, flatten_before_open: true,
+          }],
         },
       },
     })
@@ -505,8 +507,10 @@ describe("layout", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          layout: "v_tiles", normalization: false,
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            layout: "v_tiles", normalization: false,
+          }],
         },
       },
     })
@@ -521,7 +525,7 @@ describe("focus", () => {
   test("switches to target workspace when focus: true (LAYOUT-04)", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev", focus: true } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", focus: true }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(execCalls.some(c => c[0] === "workspace" && c[1] === "dev")).toBe(true)
@@ -530,7 +534,7 @@ describe("focus", () => {
   test("does not switch workspace when focus: false", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev", focus: false } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev", focus: false }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(execCalls.some(c => c[0] === "workspace")).toBe(false)
@@ -539,7 +543,7 @@ describe("focus", () => {
   test("does not switch workspace when focus not configured (default)", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } },
     })
     await aerospaceIntegration.open(ctx, null, {})
     expect(execCalls.some(c => c[0] === "workspace")).toBe(false)
@@ -551,8 +555,10 @@ describe("focus", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ app: "kitty", focus: true }],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ app: "kitty", focus: true }],
+          }],
         },
       },
     })
@@ -570,8 +576,10 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ app: "kitty" }],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ app: "kitty" }],
+          }],
         },
       },
     })
@@ -586,8 +594,10 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ command: "open -a Firefox" }],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ command: "open -a Firefox" }],
+          }],
         },
       },
     })
@@ -606,8 +616,10 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ source: "vscode" }],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ source: "vscode" }],
+          }],
         },
       },
     })
@@ -620,8 +632,10 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ source: "nonexistent" }],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ source: "nonexistent" }],
+          }],
         },
       },
       silent: false,
@@ -636,8 +650,10 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ command: "echo hello", cwd: "$GS_WORKSPACE_PATH" }],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ command: "echo hello", cwd: "$GS_WORKSPACE_PATH" }],
+          }],
         },
       },
     })
@@ -651,8 +667,10 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ command: "echo hello", repo: "my-repo" }],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ command: "echo hello", repo: "my-repo" }],
+          }],
         },
       },
       repos: [{ name: "my-repo", task_path: "/tmp/repos/my-repo" }],
@@ -667,11 +685,13 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [
-            { app: "kitty" },
-            { app: "Firefox" },
-          ],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [
+              { app: "kitty" },
+              { app: "Firefox" },
+            ],
+          }],
         },
       },
     })
@@ -686,8 +706,10 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [{ focus: true }],  // No source, app, or command
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ focus: true }],  // No source, app, or command
+          }],
         },
       },
     })
@@ -701,11 +723,13 @@ describe("commands array", () => {
     const ctx = makeCtx({
       wsIntegrations: {
         aerospace: {
-          enabled: true, workspace: "dev",
-          commands: [
-            { source: "nonexistent" },  // Will warn — source not in bag
-            { app: "kitty" },           // Should still execute
-          ],
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [
+              { source: "nonexistent" },  // Will warn — source not in bag
+              { app: "kitty" },           // Should still execute
+            ],
+          }],
         },
       },
     })
@@ -717,8 +741,8 @@ describe("commands array", () => {
 
 // ─── backward compatibility tests ────────────────────────────────────────────
 
-describe("backward compatibility", () => {
-  test("Phase 44 config (workspace-only) still works with extended schema", async () => {
+describe("minimal config", () => {
+  test("minimal workspaces array config works (workspace name only)", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const bag: ArtifactBag = {
       vscode: {
@@ -726,9 +750,9 @@ describe("backward compatibility", () => {
         windowIds: { aerospace: [42] },
       } as WindowArtifact,
     }
-    // Minimal Phase 44 config — only workspace, no layout/normalization/commands
+    // Minimal config — only workspaces array with workspace name, no layout/normalization/commands
     const ctx = makeCtx({
-      wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } },
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } },
     })
     await aerospaceIntegration.open(ctx, null, bag)
     expect(movedWindows.some(m => m.windowId === 42 && m.workspace === "dev")).toBe(true)
@@ -743,7 +767,7 @@ describe("backward compatibility", () => {
 
 describe("cleanup()", () => {
   test("is a no-op — does not call any aerospace functions", async () => {
-    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspace: "dev" } } })
+    const ctx = makeCtx({ wsIntegrations: { aerospace: { enabled: true, workspaces: [{ workspace: "dev" }] } } })
     await aerospaceIntegration.cleanup!(ctx)
     expect(movedWindows).toHaveLength(0)
     expect(mockMoveNodeToWorkspace).not.toHaveBeenCalled()
@@ -758,5 +782,163 @@ describe("configurePrompt()", () => {
   test("returns { enabled: true }", async () => {
     const result = await aerospaceIntegration.configurePrompt({})
     expect(result).toEqual({ enabled: true })
+  })
+})
+
+// ─── schema parsing tests ───────────────────────────────────────────────────
+
+describe("schema parsing", () => {
+  test("accepts minimal config with one workspace entry (SCHEMA-01)", async () => {
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [{ workspace: "2" }],
+        },
+      },
+    })
+    mockWorkspaces = [{ workspace: "2", isFocused: false, isVisible: false, monitorId: 1 }]
+    const result = await aerospaceIntegration.open(ctx, null, {})
+    expect(result).toBeNull()
+    // Should not skip — workspace "2" exists
+    expect(mockListWorkspaces).toHaveBeenCalled()
+  })
+
+  test("accepts multi-entry config with different layouts (SCHEMA-01, SCHEMA-02)", async () => {
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [
+            { workspace: "2", layout: "h_tiles" },
+            { workspace: "3", layout: "v_accordion" },
+          ],
+        },
+      },
+    })
+    mockWorkspaces = [
+      { workspace: "2", isFocused: false, isVisible: false, monitorId: 1 },
+      { workspace: "3", isFocused: false, isVisible: false, monitorId: 1 },
+    ]
+    // Should parse and execute without error (reads from workspaces[0] in Phase 47)
+    const result = await aerospaceIntegration.open(ctx, null, {})
+    expect(result).toBeNull()
+  })
+
+  test("accepts entry with all optional fields (SCHEMA-02)", async () => {
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true,
+          workspaces: [{
+            workspace: "dev",
+            layout: "h_tiles",
+            normalization: true,
+            flatten_before_open: true,
+            focus: true,
+            commands: [{ app: "kitty" }],
+          }],
+        },
+      },
+    })
+    mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
+    mockSnapshotResult = [55]
+    const result = await aerospaceIntegration.open(ctx, null, {})
+    expect(result).toBeNull()
+  })
+
+  test("rejects config without workspaces array (falls through to skip)", async () => {
+    const ctx = makeCtx({
+      wsIntegrations: { aerospace: { enabled: true } },
+    })
+    const result = await aerospaceIntegration.open(ctx, null, {})
+    expect(result).toBeNull()
+    // Should not attempt to list workspaces — config parse failed
+    expect(mockListWorkspaces).not.toHaveBeenCalled()
+  })
+
+  test("rejects config with empty workspaces array (falls through to skip)", async () => {
+    const ctx = makeCtx({
+      wsIntegrations: { aerospace: { enabled: true, workspaces: [] } },
+    })
+    const result = await aerospaceIntegration.open(ctx, null, {})
+    expect(result).toBeNull()
+  })
+})
+
+// ─── validateAerospaceConfig tests ──────────────────────────────────────────
+
+describe("validateAerospaceConfig", () => {
+  test("does not throw for valid single-entry config", () => {
+    expect(() =>
+      validateAerospaceConfig([{ workspace: "2" }])
+    ).not.toThrow()
+  })
+
+  test("does not throw for valid multi-entry config with one focus", () => {
+    expect(() =>
+      validateAerospaceConfig([
+        { workspace: "2", focus: true },
+        { workspace: "3" },
+      ])
+    ).not.toThrow()
+  })
+
+  test("does not throw when no entries have focus: true", () => {
+    expect(() =>
+      validateAerospaceConfig([
+        { workspace: "2" },
+        { workspace: "3" },
+      ])
+    ).not.toThrow()
+  })
+
+  test("throws on focus conflict — two entries with focus: true (SCHEMA-03)", () => {
+    expect(() =>
+      validateAerospaceConfig([
+        { workspace: "2", focus: true },
+        { workspace: "3", focus: true },
+      ])
+    ).toThrow("AeroSpace: multiple entries have focus: true (2, 3) — at most one allowed")
+  })
+
+  test("throws on focus conflict — three entries with focus: true (SCHEMA-03)", () => {
+    expect(() =>
+      validateAerospaceConfig([
+        { workspace: "1", focus: true },
+        { workspace: "2", focus: true },
+        { workspace: "3", focus: true },
+      ])
+    ).toThrow("AeroSpace: multiple entries have focus: true (1, 2, 3) — at most one allowed")
+  })
+
+  test("throws on duplicate workspace names (SCHEMA-04)", () => {
+    expect(() =>
+      validateAerospaceConfig([
+        { workspace: "2" },
+        { workspace: "2" },
+      ])
+    ).toThrow("AeroSpace: duplicate workspace names: 2")
+  })
+
+  test("throws on duplicate workspace names — multiple duplicates (SCHEMA-04)", () => {
+    expect(() =>
+      validateAerospaceConfig([
+        { workspace: "2" },
+        { workspace: "3" },
+        { workspace: "2" },
+        { workspace: "3" },
+      ])
+    ).toThrow("AeroSpace: duplicate workspace names: 2, 3")
+  })
+
+  test("focus conflict checked before duplicate names (both present)", () => {
+    // When both violations exist, focus conflict is thrown first
+    expect(() =>
+      validateAerospaceConfig([
+        { workspace: "2", focus: true },
+        { workspace: "2", focus: true },
+      ])
+    ).toThrow("AeroSpace: multiple entries have focus: true")
   })
 })
