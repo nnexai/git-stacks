@@ -40,7 +40,7 @@ export async function getCurrentBranch(repoPath: string): Promise<string> {
 }
 
 export async function isBranchGoneOnRemote(mainPath: string, branch: string): Promise<boolean> {
-  const result = await $`git -C ${mainPath} ls-remote --exit-code --heads origin ${branch}`
+  const result = await $`GIT_TERMINAL_PROMPT=0 git -C ${mainPath} ls-remote --exit-code --heads origin ${branch}`
     .quiet()
     .nothrow()
   return result.exitCode !== 0
@@ -109,7 +109,7 @@ export async function deleteLocalBranch(repoPath: string, branch: string): Promi
 }
 
 export async function fetchOrigin(repoPath: string): Promise<void> {
-  await $`git -C ${repoPath} -c fetch.timeout=30 fetch origin`.quiet()
+  await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} -c fetch.timeout=30 fetch origin`.quiet()
 }
 
 /**
@@ -127,7 +127,7 @@ export async function pullFFOnly(
   }
   const beforeSha = beforeResult.stdout.toString().trim()
 
-  const result = await $`git -C ${repoPath} pull --ff-only origin ${branch}`.quiet().nothrow()
+  const result = await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} pull --ff-only origin ${branch}`.quiet().nothrow()
   if (result.exitCode !== 0) {
     const stderr = result.stderr.toString()
     if (stderr.includes("divergent") || stderr.includes("Not possible to fast-forward")) {
@@ -160,7 +160,7 @@ export async function checkRemoteTrackingRef(repoPath: string, branch: string): 
 
 /** Returns true when <branch> exists on the remote origin (network call with 10s timeout). */
 export async function checkBranchExistsOnRemote(repoPath: string, branch: string): Promise<boolean> {
-  const result = await $`git -C ${repoPath} -c fetch.timeout=10 ls-remote --exit-code --heads origin ${branch}`
+  const result = await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} -c fetch.timeout=10 ls-remote --exit-code --heads origin ${branch}`
     .quiet()
     .nothrow()
   return result.exitCode === 0
