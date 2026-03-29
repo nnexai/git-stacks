@@ -195,4 +195,4 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 2/2 | Complete    | 2026-03-28 |
 | 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete    | 2026-03-28 |
 | 45. Layout Control & App Launching | v0.11.0 | 2/2 | Complete   | 2026-03-28 |
-| 46. Release Prep | v0.11.0 | 1/1 | Complete   | 2026-03-28 |
+| 46. Release Prep | v0.11.0 | 1/1 | Complete    | 2026-03-28 |
