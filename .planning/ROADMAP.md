@@ -137,7 +137,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 
 - [ ] **Phase 47: Multi-Workspace Schema** - `workspaces` array schema, per-entry Zod types, focus/duplicate validation, `beforeSet` extension to `SnapshotOpts`
 - [ ] **Phase 48: Multi-Workspace Loop & Tests** - Rewritten `open()` with `for...of` loop, bag-window routing to index 0, upfront `listWorkspaces()` hoist, post-loop focus, full test coverage
-- [ ] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs
+- [ ] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs (1 plan)
 
 ## Phase Details
 
@@ -174,7 +174,8 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
   1. `package.json` version is bumped to `0.12.0`
   2. CHANGELOG contains a v0.12.0 entry that documents the breaking schema change and includes a side-by-side migration example (old flat `workspace:` field vs new `workspaces: [{...}]` array)
   3. README AeroSpace section is updated with a multi-workspace config example showing at least two entries with different layout and focus settings
-**Plans**: TBD
+**Plans**:
+  - Plan 01 (wave 1): Version Bump, CHANGELOG Breaking Change, README Multi-Workspace Config
 
 ## Progress
 
@@ -194,4 +195,4 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 46. Release Prep | v0.11.0 | 1/1 | Complete | 2026-03-28 |
 | 47. Multi-Workspace Schema | v0.12.0 | 0/2 | Planned | - |
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 0/TBD | Not started | - |
-| 49. Release Prep | v0.12.0 | 0/TBD | Not started | - |
+| 49. Release Prep | v0.12.0 | 0/1 | Planned | - |
