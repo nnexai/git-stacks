@@ -164,7 +164,9 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
   3. `listWorkspaces()` is called exactly once before the loop regardless of how many workspace entries are configured; unknown workspace names produce a clear error before any windows are moved
   4. A shared `beforeSet` accumulated across all entries prevents a window from entry A's slow-launching app being detected as a new window by entry B
   5. Tests in `tests/lib/integrations/aerospace.test.ts` verify: array schema parsing, focus validation, duplicate name rejection, bag routing to index 0 only, `listWorkspaces` call count (exactly 1), entry ordering, deferred post-loop focus, and `setLayout` called with `windowId`
-**Plans**: TBD
+**Plans**:
+  - Plan 01 (wave 1): Multi-Workspace Loop in open()
+  - Plan 02 (wave 1): Multi-Workspace Loop Tests
 
 ### Phase 49: Release Prep
 **Goal**: v0.12.0 is published with version bump, breaking-change CHANGELOG, and README showing the new multi-workspace config format
@@ -194,5 +196,5 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 45. Layout Control & App Launching | v0.11.0 | 2/2 | Complete | 2026-03-28 |
 | 46. Release Prep | v0.11.0 | 1/1 | Complete | 2026-03-28 |
 | 47. Multi-Workspace Schema | v0.12.0 | 0/2 | Planned | - |
-| 48. Multi-Workspace Loop & Tests | v0.12.0 | 0/TBD | Not started | - |
+| 48. Multi-Workspace Loop & Tests | v0.12.0 | 0/2 | Planned | - |
 | 49. Release Prep | v0.12.0 | 0/1 | Planned | - |
