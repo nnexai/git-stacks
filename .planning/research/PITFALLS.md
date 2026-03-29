@@ -1,234 +1,256 @@
 # Pitfalls Research
 
-**Domain:** AeroSpace window manager integration — adding macOS tiling WM support to an existing CLI workspace manager (git-stacks v0.11.0)
-**Researched:** 2026-03-28
-**Confidence:** HIGH (pitfalls grounded in direct reads of `_references/aerospace.md`, `src/lib/niri.ts`, `src/lib/integrations/niri.ts`, `tests/lib/niri.test.ts`, `tests/lib/integrations/niri.test.ts`, and `src/lib/integrations/types.ts`)
+**Domain:** AeroSpace multi-workspace integration — adding `workspaces` array support to the existing single-workspace AeroSpace plugin in git-stacks v0.12.0
+**Researched:** 2026-03-29
+**Confidence:** HIGH — pitfalls grounded in direct reads of `src/lib/integrations/aerospace.ts` (the full `open()` sequence), `src/lib/aerospace.ts` (snapshot-delta with exponential backoff), `tests/lib/integrations/aerospace.test.ts` (test structure), `src/lib/integrations/runner.ts` (WindowDetector lifecycle), and `src/lib/integrations/types.ts` (ArtifactBag shape)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Using `split` When Normalization Is Enabled
+### Pitfall 1: Bag Window Routing — All Bag Windows Move to First Entry When Routing Logic Is Wrong
 
 **What goes wrong:**
-`aerospace split vertical` (and `split horizontal`, `split opposite`) returns exit code `1` with the message:
+The current `open()` iterates `Object.values(bag)` and moves every window artifact to a single `targetWorkspace`. When `workspaces` is an array, the most natural refactor loops over `workspaces` entries and moves all bag windows on every iteration — resulting in every window being sent to every AeroSpace workspace entry, not just the intended one.
 
-```
-'split' has no effect when 'enable-normalization-flatten-containers' normalization enabled.
-My recommendation: keep the normalizations enabled, and prefer 'join-with' over 'split'.
-```
+The opposite failure: if the routing logic is too narrow (only the last entry processes bag windows, or only the first), tier-1 windows from VSCode/IntelliJ land in the wrong AeroSpace workspace.
 
-If the implementation calls `split` without first detecting normalization state, it silently fails — the command exits non-zero, the layout does not change, and no window stacking occurs. With the default AeroSpace config (`enable-normalization-flatten-containers = true`), `split` is effectively unavailable for the vast majority of users.
+The requirement is: bag windows from tier-1 integrations default to `workspaces[0]` unless explicitly routed by a `source` command in a specific workspace entry. If routing is not explicitly coded, the default-to-first behavior must be enforced by the schema or by the loop — not by accident.
 
 **Why it happens:**
-The AeroSpace beta documentation treats `split` and `join-with` as alternatives. Developers familiar with i3/Sway assume `split` works unconditionally. The normalization setting is buried in TOML config and not surfaced by `aerospace split` itself until it fails. Since `_exec.run` calls in tests use mocked responses, tests pass even when the real command would fail.
+The v0.11.0 implementation processes bag windows in one step (Step 2) and command-sourced windows in another step (Step 3). In the multi-workspace loop, developers naturally process both steps for each entry without tracking which bag windows have already been routed. There is no "consumed" flag on ArtifactBag entries — an entry can be read any number of times. This makes it easy to write a loop that double-routes.
 
 **How to avoid:**
-Do not expose `split` as a user-facing layout primitive at all. Use `join-with` plus `flatten-workspace-tree` as the layout substrate for all implementations. The implementation should not accept a `split` option in its config schema. If a future AeroSpace version makes `split` normalization-aware, it can be added then.
+Assign bag window routing to exactly one workspace entry. The simplest safe approach: process bag windows only for `workspaces[0]` unconditionally, then process commands for each entry independently. If a later workspace entry needs a specific bag window, it uses a `source` command entry — which already handles the move-to-workspace step.
 
-If normalization detection is needed for any other purpose, read `enable-normalization-flatten-containers` from the TOML config file directly — `aerospace config --get` does not reliably expose all TOML keys (observed in `_references/aerospace.md`).
+Alternatively, add a `bag_windows: true | false` field (default `true` on `workspaces[0]`, `false` on all others) to make routing explicit. This is more configurable but adds schema complexity.
 
 **Warning signs:**
-- Any call to `_exec.run(["split", ...])` anywhere in `src/lib/aerospace.ts`
-- A config schema that includes a `split_direction` or `split` option for users
-- Tests that only verify `split` exits 0 using a mocked `_exec` without testing the real exit-code behavior
+- The multi-workspace loop calls the bag-iteration block (the `for (const artifact of Object.values(bag))` block) unconditionally for every entry
+- No test that sets up two workspace entries and verifies each bag window is moved to exactly one target
+- A test with two entries and one bag window that passes when the window appears in `movedWindows` twice (one per entry)
 
 **Phase to address:**
-AeroSpace shell wrappers (`src/lib/aerospace.ts`) — never implement a `split` wrapper. The layout control wrapper should be `joinWith(direction)` and `flattenWorkspaceTree(workspace?)` only.
+Schema + core loop implementation phase. The routing rule must be in the design spec before code is written, not discovered during test failures.
 
 ---
 
-### Pitfall 2: Parsing `--format` Output with Split on Whitespace Instead of Tab
+### Pitfall 2: `listWorkspaces()` Called Once Per Entry — N Subprocess Calls for N Workspace Entries
 
 **What goes wrong:**
-`list-windows --format '%{window-id}\t%{app-name}\t...'` uses tab as separator, but tab-delimited fields may have multiple spaces in `app-name` or `window-title` values. If the parser uses `.split(/\s+/)` or `.split(" ")` instead of `.split("\t")`, a window titled "My App — Feature Branch" splits into 4+ tokens instead of the expected field count. The `window-id` may parse correctly (it is numeric and always first), but `app-pid` or `workspace` shifts position and is read from the wrong column.
+The current `open()` calls `listWorkspaces()` once to validate the target workspace exists. In a multi-workspace loop, naively calling `listWorkspaces()` once per entry spawns one `aerospace list-workspaces` subprocess per entry. With 4 workspace entries, that is 4 process spawns that all return the same data.
 
-A subtler form: `window-title` can contain tabs if the application title contains one (rare but possible). A split-on-tab parser then produces more columns than expected for that row.
+More critically: if `flattenWorkspaceTree(targetWorkspace)` is called per entry, and `listWindows()` is called per entry for layout application, the total subprocess count per `git-stacks open` call grows linearly with the number of workspace entries. On a slow machine or with AeroSpace under load, this can add several seconds to workspace open time.
 
 **Why it happens:**
-The niri integration uses JSON output (parsed with `JSON.parse`), which has no delimiter ambiguity. Developers copying the niri pattern and adapting to AeroSpace may use a quick `.split(/\s+/)` without noticing that the format string uses `\t` delimiters. The `_references/aerospace.md` shows example rows with multiple spaces used for visual alignment — these are not the actual tab-separated values.
+The sequential processing requirement ("iterate workspaces array in order") reads naturally as "run the full current `open()` body in a loop." The existing body calls `listWorkspaces()`, `flattenWorkspaceTree()`, and `listWindows()` with no caching. Wrapping in a loop inherits all of them uncached.
 
 **How to avoid:**
-Always split on `"\t"` (literal tab, not whitespace regex). Use a named-field parsing function that validates column count before accessing by index. If the column count does not match the format string's field count, skip the row and log a warning rather than indexing out of bounds.
+Hoist `listWorkspaces()` and the initial `isAerospaceRunning()` check out of the loop. Call them once before the loop starts, validate all targets up front, and pass the result into each iteration. Similarly, cache the pre-loop `listWindows()` call if needed for layout — though layout requires a post-move window list, so caching the pre-loop snapshot is only useful for the "does this workspace have any windows" check.
 
-For `window-title`, treat everything after the last expected fixed-position field as the title — do not assume title is free of tabs.
-
-Example safe parsing approach:
 ```typescript
-function parseWindowRow(row: string): AerospaceWindow | null {
-  const fields = row.split("\t")
-  if (fields.length < 7) return null  // guard: must have all expected fields
-  const [windowId, appBundleId, appName, appPid, workspace, windowLayout, windowIsFullscreen, ...titleParts] = fields
-  const windowTitle = titleParts.join("\t")  // re-join if title had embedded tabs
-  // ...parse remaining fields
+// Correct pattern:
+const running = await isAerospaceRunning()
+if (!running) return null
+const workspaces = await listWorkspaces()
+
+for (const entry of config.workspaces) {
+  const exists = workspaces.some(ws => ws.workspace === entry.workspace)
+  if (!exists) { warn(…); continue }
+  // ... per-entry logic
 }
 ```
 
 **Warning signs:**
-- `.split(/\s+/)` or `.split(" ")` anywhere in the `--format` output parser
-- Column access by fixed index without a field-count guard
-- Tests that only use `app-name` values with no spaces and `window-title` values with no special characters
+- `listWorkspaces()` call inside the workspace-entry loop
+- `isAerospaceRunning()` call inside the workspace-entry loop
+- No test counting how many times `mockListWorkspaces` was called for a 3-entry config
 
 **Phase to address:**
-AeroSpace shell wrappers — the parsing function in `listAerospaceWindows()` must use tab splitting from the first implementation.
+Core loop implementation phase. Structure the loop with hoisted pre-checks before writing any per-entry logic.
 
 ---
 
-### Pitfall 3: Cross-Platform Code Running `aerospace` Binary on Linux Build Machine
+### Pitfall 3: Focus Stealing — Multiple Workspace Entries With `focus: true`, Last One Wins Silently
 
 **What goes wrong:**
-`aerospace` is a macOS-only binary. There is no `aerospace` command on Linux. If the implementation does not gate at the `isAerospaceRunning()` check, any code path that calls `_exec.run(["list-windows", ...])` on the Linux CI machine will fail with:
+The requirement states at most one workspace entry may have `focus: true`. If the schema does not enforce this and the loop processes entries sequentially, each entry with `focus: true` calls `_exec.run(["workspace", targetWorkspace])`, switching AeroSpace focus mid-processing. The result: the last `focus: true` entry wins, overriding all previous focus operations. Earlier focus calls wasted subprocess calls and may have disrupted layout application on subsequent entries (layout requires a window focus call to set context).
 
-```
-bun: command not found: aerospace
-```
-
-This causes tests to fail if the tests call the real `_exec.run` rather than the mocked version. It also causes the `open()` method in the integration plugin to crash rather than silently return `null`.
-
-A related risk: the `doctor` command checks for `aerospace` binary availability. If doctor does not guard `macOS-only` and runs on a Linux developer machine, it outputs a false-positive "aerospace not found" error for every Linux user, polluting their doctor output with irrelevant warnings.
+A subtler form: a workspace entry has `focus: true` AND a `commands` entry with `focus: true`. Both the workspace-level focus and the window-level focus fire. The window focus runs after the workspace focus (`focusWindow()` after `_exec.run(["workspace", ...])`). This is correct within one entry but if another entry has `focus: true`, the workspace-level focus of the second entry then overrides the window-level focus of the first.
 
 **Why it happens:**
-The niri integration uses `process.env.NIRI_SOCKET` as its runtime gate — an environment variable that is only set when niri is running on Linux. AeroSpace has no equivalent socket env var. The gate for AeroSpace must be: (1) macOS platform check and (2) `aerospace` binary exists on PATH. If either check is omitted, the integration tries to run on Linux.
+Focus validation is only needed in the multi-workspace case — single entry has no conflict. When adding multi-workspace support, it is easy to forget to add the validation because the single-entry test suite passes without it. The schema change is mechanical (add `workspaces` array) but the cross-entry constraint is a new concern that the original schema had no concept of.
 
 **How to avoid:**
-`isAerospaceRunning()` must be a two-condition gate:
+Add a Zod `.superRefine()` or `.refine()` on the `workspaces` array schema that counts entries with `focus: true` and rejects if count > 1:
 
 ```typescript
-export async function isAerospaceRunning(): Promise<boolean> {
-  if (process.platform !== "darwin") return false
-  const result = await _exec.run(["--version"])
-  return result.exitCode === 0
+z.array(aerospaceWorkspaceEntrySchema).refine(
+  (entries) => entries.filter(e => e.focus === true).length <= 1,
+  { message: "At most one workspace entry may have focus: true" }
+)
+```
+
+This must trigger at `aerospaceConfigSchema.safeParse()` time in `open()`, so invalid configs are caught before any subprocess calls are made.
+
+**Warning signs:**
+- `workspaces` array schema that validates each entry independently but has no cross-entry constraint
+- `open()` that calls `_exec.run(["workspace", ...])` per-entry without a pre-check that only one entry has `focus: true`
+- No test: two entries with `focus: true` → parse fails with specific message
+
+**Phase to address:**
+Schema definition phase. The `.refine()` must be on the array schema, not on individual entries.
+
+---
+
+### Pitfall 4: Snapshot-Delta Interference — Concurrent `snapshotWindowIds` Polls Merge New Windows From Different Entries
+
+**What goes wrong:**
+`snapshotWindowIds` takes a before-snapshot, spawns an app, then polls `listWindows()` until new IDs appear. In a multi-workspace loop, if entry A's `snapshotWindowIds` poll is still running (has not returned because the app is slow) when entry B starts its own `snapshotWindowIds` call, both polls may detect the same new window ID. Entry A returns `[winId]`, entry B also returns `[winId]` (because the window appeared during its polling window). Both entries try to move `winId` to their respective target workspaces. The second `move-node-to-workspace` call wins — the window ends up in entry B's workspace regardless of which entry launched it.
+
+In practice the current loop is sequential (not concurrent), so entry B's poll does not start until entry A's commands finish. But if entry A has a slow app (`timeout: 10s`), entry B is blocked for 10 seconds. If someone refactors the loop to `Promise.all` for performance, the race becomes active.
+
+**Why it happens:**
+The snapshot strategy was designed for single-entry use. Each call to `snapshotWindowIds` takes a fresh `before` snapshot that includes all windows visible at that instant — including ones that entry A just launched and moved. If entry A launched a terminal and moved it to workspace "dev", that window is now in the global window list. Entry B's before-snapshot includes it. Entry B's poll will not re-detect it as new. This is actually correct behavior. The real risk is the concurrent case above.
+
+A secondary risk with sequential processing: if entry A's app launch produces 2 windows quickly (e.g., VSCode main window + status bar window), `snapshotWindowIds` returns both. Entry A moves both to its target. Entry B's before-snapshot now includes both. Entry B's subsequent commands launch a different app, and all is correct. This case is safe.
+
+**How to avoid:**
+Keep the loop sequential. Do not introduce `Promise.all` over workspace entries. Document the reason:
+
+```typescript
+// Sequential: snapshotWindowIds polls are not concurrent-safe across entries.
+// Promise.all would cause delta interference for apps that launch slowly.
+for (const entry of config.workspaces) { ... }
+```
+
+If a future performance optimization introduces parallelism, each parallel task must take its own `before` snapshot at the start of its execution (before any other task launches a window), not at a shared pre-loop snapshot point. This is a hard constraint.
+
+**Warning signs:**
+- `await Promise.all(config.workspaces.map(entry => processEntry(entry)))` anywhere in `open()`
+- A performance comment like "parallelize for speed" without acknowledging the snapshot interference risk
+- No test that verifies entry B's `snapshotWindowIds` before-snapshot includes windows launched by entry A
+
+**Phase to address:**
+Core loop implementation phase. The sequential constraint must be called out in a code comment so it is not "optimized away" later.
+
+---
+
+### Pitfall 5: Layout Focus Contamination — `focusWindow()` for Layout Context Switches AeroSpace Focus Between Entries
+
+**What goes wrong:**
+The current `open()` Step 4 (layout application) calls `focusWindow(targetWindow.windowId)` to set AeroSpace context before calling `setLayout(layout)`. The `focus` command in AeroSpace moves the user's visible focus to that window — it is not a silent internal context set. In a multi-workspace loop:
+
+- Entry A focuses a window in workspace "dev" to apply its layout → user's AeroSpace focus is now on workspace "dev"
+- Entry B focuses a window in workspace "tools" to apply its layout → user's AeroSpace focus is now on workspace "tools"
+- Entry C has `focus: false` but its layout step focuses a window in workspace "chat" → user ends up on "chat" even though no entry requested focus
+
+If only entry A should be the final focus (it has `focus: true`), the layout focus calls for B and C override it mid-loop, and then entry A's workspace focus call at the end of its processing restores focus correctly. But if entry A is processed before B and C, A's workspace focus fires before B and C's layout focus calls, so the net result is focus on C's workspace, not A's.
+
+**Why it happens:**
+The layout implementation unconditionally calls `focusWindow()` to establish context for `setLayout()`. In the single-workspace case, this is fine — the final focus call immediately follows in Step 5. In multi-workspace, layout focus for each entry interferes with the ordered focus intent.
+
+**How to avoid:**
+Two options:
+1. Defer all `focus: true` workspace switching to after the loop completes. Process all entries first (flatten, move windows, commands, layout — including the layout-context `focusWindow()` calls), then at the very end switch to the designated workspace if any entry had `focus: true`.
+2. Use `--window-id` variant of `setLayout` (already supported: `setLayout(layout, windowId)`) which does not require a prior `focusWindow()` call. Check if AeroSpace's `layout --window-id` works without focus context (verified: `aerospace layout h_tiles --window-id 123` is supported syntax in `src/lib/aerospace.ts:setLayout()`).
+
+Option 2 is cleaner: pass `windowId` to `setLayout` and remove the `focusWindow()` call from the layout step. This eliminates the focus contamination entirely.
+
+**Warning signs:**
+- Layout step calls `focusWindow()` then `setLayout()` without `windowId` inside the per-entry loop
+- No test: two entries both with layouts → verify final focus state matches the entry with `focus: true`, not the entry processed last in the layout step
+
+**Phase to address:**
+Core loop implementation phase. Decide between option 1 (deferred focus) or option 2 (windowId-aware setLayout) before writing the loop.
+
+---
+
+### Pitfall 6: Schema Migration — `workspace: "dev"` (v0.11.0 flat) Silently Drops to No-Op When `workspaces` Array Replaces It
+
+**What goes wrong:**
+The v0.11.0 config shape is:
+```yaml
+settings:
+  integrations:
+    aerospace:
+      workspace: "dev"
+      layout: h_tiles
+```
+
+The v0.12.0 shape will be:
+```yaml
+settings:
+  integrations:
+    aerospace:
+      workspaces:
+        - workspace: "dev"
+          layout: h_tiles
+```
+
+If the new schema parses the `workspaces` field and the old flat `workspace` field is gone, existing v0.11.0 YAML files silently parse to a config with no workspace entries. The integration skips entirely with no warning. The user sees no AeroSpace setup on `git-stacks open`, with no explanation.
+
+The milestone context says "breaking change: replacing flat config with workspaces array (no backward compat)." Even with no backward compat, the failure must be loud — not silent.
+
+**Why it happens:**
+Zod's `.optional()` on `workspaces` means an empty or absent array parses successfully. The `open()` method checks `if (!parsedConfig?.workspace)` in v0.11.0 — in v0.12.0, if the check becomes `if (!parsedConfig?.workspaces?.length)`, a user with old-style `workspace: "dev"` config gets a silent no-op.
+
+**How to avoid:**
+Add an explicit detection and error path for the old flat-config shape. In `open()`, after parsing:
+
+```typescript
+// Detect v0.11.0 config shape (flat `workspace` field without `workspaces` array)
+if (!parsedConfig?.workspaces?.length) {
+  const hasLegacyField = 'workspace' in (rawConfig ?? {})
+  if (hasLegacyField) {
+    p.log.warn(`AeroSpace: config uses v0.11.0 format (flat 'workspace' field). Update to 'workspaces' array format.`)
+  } else {
+    spinner?.stop("AeroSpace: no workspaces configured — skipped")
+  }
+  return null
 }
 ```
 
-The `open()` method in the integration plugin must check `isAerospaceRunning()` as its first line and return `null` immediately if false — matching the niri pattern exactly.
-
-For doctor: doctor checks should gate on `process.platform === "darwin"` before attempting to resolve the aerospace binary. Report the check as "not applicable" (or skip entirely) on non-macOS platforms.
+This way users with old YAML get an actionable migration message instead of a silent skip.
 
 **Warning signs:**
-- `isAerospaceRunning()` that only checks binary exit code without a `process.platform !== "darwin"` guard
-- Doctor check for `aerospace` that runs unconditionally on all platforms
-- Tests that do not set up the `_exec` mock and rely on the real binary being absent (accidental integration test rather than unit test)
+- `open()` that checks `!parsedConfig?.workspaces?.length` and returns null without checking for legacy `workspace` field
+- No test: v0.11.0-style YAML with flat `workspace: "dev"` → warn is emitted, not silent skip
+- No `bun run test` run against the existing `backward compatibility` test block — the v0.11.0 test at line 721 of `aerospace.test.ts` will fail after the schema migration and must be either updated or removed explicitly
 
 **Phase to address:**
-AeroSpace shell wrappers — `isAerospaceRunning()` must include the platform guard. Doctor checks — add `platform: "darwin"` condition before the binary check.
+Schema definition phase. The legacy detection path must be part of the schema change, not a follow-up fix.
 
 ---
 
-### Pitfall 4: Window Detection Race — Snapshot Taken After App Launch Instead of Before
+### Pitfall 7: `snapshotWindowIds` Polling Finds Windows From Previous Entry's App Launch
 
 **What goes wrong:**
-The snapshot-delta strategy requires capturing the window list BEFORE the app launch action, then polling AFTER. If the `before` snapshot is taken after the launch command is issued (e.g., because the developer swaps the order), windows that appear very quickly (already-running apps opening a new window) may already appear in the "before" set. The delta then contains zero new IDs and the window is never moved to the target AeroSpace workspace.
+The `snapshotWindowIds` function in `src/lib/aerospace.ts` takes a before-snapshot, calls `spawnFn()`, then polls until `after.filter(id => !before.has(id)).length > 0` returns true. In the multi-workspace loop, if entry A launches an app that is slow to produce a window (> 200ms), entry A's `snapshotWindowIds` call times out and returns `[]`. Entry A proceeds without moving any windows.
 
-A subtler form: there is a window between "before snapshot" and "launch" where another application opens a window. That window appears in the delta as a false positive. The integration then moves the wrong window to the target workspace.
+Entry B then starts. Entry B's `snapshotWindowIds` takes a before-snapshot. The slow app from entry A NOW appears as a new window (it finished launching during entry B's before-snapshot delay). Entry B's poll immediately finds the app from entry A as a "new" window and returns its ID. Entry B moves that window to its workspace target — the wrong target.
 
-**Why it happens:**
-The niri `snapshotWindowIds()` function in `src/lib/niri.ts` handles this correctly — it takes the before-snapshot first, then calls `spawnFn()`. But the AeroSpace integration bypasses `snapshotWindowIds` (which is niri-specific) and implements its own before/after diff using `listAerospaceWindows()`. A copy-paste that misorders the steps introduces a race.
-
-**How to avoid:**
-The AeroSpace `snapshotWindowIds()` equivalent must follow the exact same ordering as niri:
-
-```
-1. before = await listAerospaceWindows()   // before set
-2. await spawnFn()                          // launch
-3. poll: after = await listAerospaceWindows()
-4. newIds = after.filter(w => !before.has(w.windowId))
-```
-
-Make the ordering a test: the unit test for `snapshotAerospaceWindows` must assert that `spawnFn` is called AFTER the first `listAerospaceWindows` call (use call-order tracking as in `tests/lib/niri.test.ts` line 668).
-
-**Warning signs:**
-- Any snapshot implementation that calls `spawnFn()` before the before-snapshot
-- Integration plugin that calls `listAerospaceWindows()` only once after spawn, not once before
-- Missing exponential backoff — polling immediately once after spawn without a retry loop means slow-starting apps are always missed
-
-**Phase to address:**
-AeroSpace shell wrappers — implement `snapshotAerospaceWindows(spawnFn, opts)` with `_sleep` and `_listWindows` injection matching niri's pattern. The integration plugin then delegates to this function.
-
----
-
-### Pitfall 5: `mock.module("@/lib/aerospace")` Not Re-Applied in aerospace.test.ts — Stale Mock From Integration Test Pollutes Unit Tests
-
-**What goes wrong:**
-The niri test file (`tests/lib/niri.test.ts`) contains a detailed comment explaining this exact problem (lines 6-11):
-
-> `integration-commands.test.ts` mocks `@/lib/niri` (as a consumer test). Because of Bun's live binding patching, the real module captures in helpers.ts end up using the mock's `_exec` after integration-commands runs.
-
-If `tests/lib/aerospace.test.ts` does not re-apply `mock.module("@/lib/aerospace", ...)` with its own local `_exec` implementation, the test runner may share a polluted module state from `tests/lib/integrations/aerospace.test.ts`. The `_exec.run` inside `aerospace.test.ts` would be the integration test's mock, which returns fixed responses regardless of the `args` passed. Tests would pass but verify nothing.
+This is a cross-entry delta contamination at the timing boundary, distinct from the concurrent-snapshot case in Pitfall 4.
 
 **Why it happens:**
-Bun's `mock.module` patches live bindings at the module level. When the test runner executes files in the same process, mocks from file A can leak into file B. The project's test runner (`scripts/test-runner.ts`) runs mock-heavy files in isolated processes, but the isolation is only effective if aerospace.test.ts is added to the isolation list. If it is not listed, it runs in the shared process and is vulnerable.
+`snapshotWindowIds` is stateless — it has no memory of what entry A launched. Entry B's before-snapshot includes everything currently visible. When a slow app appears between entry A's timeout and entry B's first poll, it looks exactly like a new window launched by entry B.
 
 **How to avoid:**
-Follow the niri test pattern exactly:
-1. `tests/lib/aerospace.test.ts` must re-apply `mock.module("@/lib/aerospace", ...)` at the top using its own local `_exec` object and inline implementations of all wrappers.
-2. Add `tests/lib/aerospace.test.ts` and `tests/lib/integrations/aerospace.test.ts` to the isolation list in `scripts/test-runner.ts` (check how niri tests are listed there).
-3. The integration test (`tests/lib/integrations/aerospace.test.ts`) must register all mocks via `mock.module("@/lib/aerospace", ...)` BEFORE any import of the integration module.
+Track a "globally seen window IDs" set across all entries. Initialize it once before the loop with a `listWindows()` call. Pass it as the baseline for each entry's delta detection instead of taking a fresh `listWindows()` call at the start of each entry's `snapshotWindowIds`. Update the set after each entry completes its commands.
+
+This requires either:
+- A custom snapshot function that accepts an external `before` set (modify `snapshotWindowIds` to accept `beforeSet?: Set<number>` in `SnapshotOpts`), or
+- Inline snapshot logic inside the multi-workspace loop rather than delegating to `snapshotWindowIds`
+
+The injectable `_listWindows` in `SnapshotOpts` is already there for test isolation, but `beforeSet` injection would need to be added.
 
 **Warning signs:**
-- `tests/lib/aerospace.test.ts` that imports from `@/lib/aerospace` without a `mock.module` re-application at the top
-- `scripts/test-runner.ts` does not include `aerospace.test.ts` in its isolation list
-- Integration test that imports `@/lib/integrations/aerospace` before registering mocks (cross-file contamination pattern)
+- Multi-workspace loop where each entry calls `snapshotWindowIds` independently with no shared before-set
+- No test: entry A launches slow app that times out, entry B's `snapshotWindowIds` detects it as new
+- The existing `snapshotWindowIds` signature not extended with `beforeSet` option
 
 **Phase to address:**
-AeroSpace shell wrappers test file — the mock re-application must be in the test file from the start, not added as a fix after mysteriously passing tests are observed.
-
----
-
-### Pitfall 6: AeroSpace Workspace Named as Number vs. String — Move-Node-to-Workspace Type Confusion
-
-**What goes wrong:**
-AeroSpace workspaces can be named with numbers (e.g., `5`, `6`) or strings (e.g., `"main"`, `"feature-x"`). `move-node-to-workspace --window-id 21106 5` uses numeric name `5`. If the TypeScript implementation accepts the workspace target as `string | number` but the CLI always expects a string argument, passing `5` (number) calls `String(5)` which produces `"5"` — this works correctly for numeric workspace names.
-
-The problem is the reverse: if a user configures `workspace: "05"` (zero-padded string) and the implementation coerces it through `Number()` somewhere, the leading zero is stripped and the window moves to workspace `5` instead of `05`. This may be a different workspace entirely.
-
-A related issue: AeroSpace workspace names are case-sensitive. If the config stores `workspace: "Feature"` but the actual workspace is named `"feature"`, `move-node-to-workspace` will silently fail (likely creating a new empty workspace named "Feature" rather than targeting the existing one, depending on AeroSpace version).
-
-**Why it happens:**
-The config schema `workspace: z.string().or(z.number()).optional()` accepts both forms. When the implementation converts to string via `String(value)`, numeric names work. But if any validation, normalization, or comparison path treats the workspace name as a number (e.g., `parseInt` or `Number()`), zero-padded names are corrupted. Case sensitivity is easy to miss because the user types the name in YAML and never sees it compared.
-
-**How to avoid:**
-Store and pass workspace names as strings throughout. Use `z.string()` in the config schema (not `z.string().or(z.number())`). If users configure numeric workspace names like `5`, they write them as strings in YAML: `workspace: "5"`. The string `"5"` is passed directly to `aerospace move-node-to-workspace ... 5` without conversion.
-
-Never call `Number()`, `parseInt()`, or numeric coercion on workspace name values.
-
-Add a test case for zero-padded workspace name `"05"` — verify the string is passed unchanged to `_exec.run`.
-
-**Warning signs:**
-- Config schema `workspace: z.string().or(z.number())`
-- `String(workspaceName)` calls in the implementation (numeric coercion risk)
-- No test with a workspace name that has a leading zero or mixed case
-
-**Phase to address:**
-AeroSpace shell wrappers — workspace name type must be `string` only from the schema definition forward.
-
----
-
-### Pitfall 7: `list-windows --all` vs `list-windows --focused` — Wrong Flag Returns Empty or Partial Results
-
-**What goes wrong:**
-`aerospace list-windows` without `--all` returns windows only from the currently focused workspace. During workspace setup, git-stacks has just switched the AeroSpace focus to the target workspace and launched apps. If any of those apps appear on a different AeroSpace workspace (e.g., because AeroSpace placed them on the focused space at launch time before the workspace was switched), the snapshot-delta misses those windows.
-
-`list-windows --all` is the correct flag for the snapshot strategy. But `--all` may not exist in older AeroSpace beta versions, or its behavior may differ (observed: `--all` is confirmed working in v0.20.3-Beta).
-
-**Why it happens:**
-The niri equivalent uses `listNiriWindows()` which internally calls `niri msg -j windows` — niri returns all windows regardless of workspace. AeroSpace's default behavior is workspace-scoped, which is different from niri's global default. A direct translation of the niri pattern without checking the AeroSpace scoping semantics produces a wrapper that silently returns incomplete window lists.
-
-**How to avoid:**
-Always use `--all` in `listAerospaceWindows()`. Document the reason in a comment:
-
-```typescript
-// --all: required for snapshot-delta strategy — default scopes to focused workspace only
-const result = await _exec.run(["list-windows", "--all", "--format", FORMAT_STRING])
-```
-
-**Warning signs:**
-- `list-windows` call without `--all`
-- Snapshot function that produces empty `before` set when no windows are on the target workspace yet (may be correct behavior, but verify it is not a missing `--all`)
-- Tests that do not cover windows on non-focused workspaces
-
-**Phase to address:**
-AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
+Core loop implementation phase. The shared before-set pattern must be designed before writing the per-entry command processing.
 
 ---
 
@@ -236,13 +258,13 @@ AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Expose `split` command as layout option | Matches AeroSpace docs | Fails with exit 1 for majority of users who have normalization enabled; breaks silently | Never — use `join-with` only |
-| Parse `--format` output with `.split(/\s+/)` | One-liner parser | Wrong column indices for app/window names with spaces; data corruption | Never — always split on `"\t"` |
-| Omit `process.platform !== "darwin"` in `isAerospaceRunning()` | Simpler check | Integration silently runs (and fails) on Linux CI; doctor emits false warnings for Linux users | Never |
-| Accept workspace name as `string \| number` in config schema | Matches user intuition | Zero-padded names corrupted by numeric coercion | Never — strings only in schema |
-| Skip mock re-application in `aerospace.test.ts` | Less boilerplate | Stale mocks from integration test file; passing tests that verify nothing | Never |
-| Skip `_sleep` injection in snapshot polling function | Simpler function signature | Tests run real delays (up to 10 seconds per test); CI timeout failures | Never — always injectable |
-| Single-poll snapshot (no retry loop) | Simpler implementation | Slow-starting apps always missed; integration silently does nothing | Never — exponential backoff required |
+| Process bag windows in every entry's loop iteration | Simple uniform loop body | Every bag window moved to every AeroSpace workspace; wrong UX for 2+ entries | Never — route bag windows to workspaces[0] only (or explicit source commands) |
+| Call `listWorkspaces()` per entry | Simple reads | N subprocess calls for N entries; adds 200-500ms per extra entry | Never — hoist before loop |
+| Allow `focus: true` on multiple entries without validation | No Zod refine needed | Last-processed entry wins focus; user intent violated silently | Never — enforce at schema level |
+| Use `focusWindow()` before `setLayout()` in multi-workspace loop | Matches current single-entry pattern | Focus contamination between entries; final focus lands on last-layout entry | Never — use `setLayout(layout, windowId)` or defer all workspace focus to post-loop |
+| Sequential `snapshotWindowIds` per entry with independent before-sets | Simple — reuses existing function unchanged | Slow-app IDs from entry A detected as new by entry B; wrong workspace routing | Never — pass shared before-set or use global seen-set |
+| Skip legacy `workspace` field detection | Simpler schema change | v0.11.0 users get silent no-op; no migration guidance | Never — explicit warning required |
+| `Promise.all` for parallel entry processing | Faster open for many entries | Snapshot delta interference; order-dependent race for focus | Never — entries must be sequential |
 
 ---
 
@@ -250,16 +272,14 @@ AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| AeroSpace `split` | Call `split` for layout control | Use `join-with <direction>` and `flatten-workspace-tree`; never call `split` |
-| AeroSpace `--format` parsing | `.split(/\s+/)` | `.split("\t")` with field-count guard; re-join tail fields for window-title |
-| AeroSpace `list-windows` | Omit `--all` flag | Always `list-windows --all --format ...` — default is workspace-scoped |
-| AeroSpace `isAerospaceRunning()` | Binary check only | Platform check (`process.platform !== "darwin"`) first, then binary check |
-| AeroSpace doctor check | Run unconditionally | Gate on `process.platform === "darwin"` before checking binary |
-| AeroSpace workspace target config | Accept number type | Store and pass workspace names as strings always; `z.string()` in Zod schema |
-| AeroSpace snapshot-delta | Snapshot after spawn | Snapshot BEFORE spawn, spawn, then poll — same ordering as `snapshotWindowIds` in niri.ts |
-| AeroSpace `move-node-to-workspace` on single monitor | No monitor count check | Monitor-moving commands (`move-node-to-monitor`) fail on single monitor; gate or skip |
-| Bun mock.module pollution | Import aerospace module without re-applying mock | Re-apply `mock.module("@/lib/aerospace", ...)` at top of `aerospace.test.ts` with local `_exec` |
-| AeroSpace config TOML reading | `aerospace config --get` | Read TOML file directly for normalization flags — `--get` does not expose all keys reliably |
+| AeroSpace `workspaces` loop | Process bag windows per-entry | Route bag windows to `workspaces[0]` only; subsequent entries use `source` commands |
+| AeroSpace multi-entry validation | Validate each entry independently | Add `z.array(...).refine(entries => entries.filter(e => e.focus).length <= 1)` on the array |
+| AeroSpace `listWorkspaces()` | Call inside entry loop | Call once before loop; pass results into loop |
+| AeroSpace `focusWindow()` in layout step | Call per-entry for layout context | Use `setLayout(layout, windowId)` to avoid focus side effects during layout application |
+| AeroSpace `snapshotWindowIds` cross-entry | Fresh before-set per entry | Pass shared global before-set accumulated across entries; update after each entry |
+| AeroSpace legacy config detection | Silent no-op on old `workspace` field | Detect old flat field; warn with migration instructions |
+| AeroSpace workspace focus ordering | Fire `_exec.run(["workspace", ...])` per-entry during loop | Collect the focus target and fire exactly once after all entries complete |
+| Bun `mock.module` test isolation | Existing test file structure unchanged for multi-workspace tests | New `beforeEach` state for `workspaces`-array configs; extend existing mock file, do not create parallel one |
 
 ---
 
@@ -267,10 +287,10 @@ AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Snapshot polling with real `setTimeout` in tests | Each snapshot test takes 200ms–10s waiting for poll | Inject `_sleep` parameter (same pattern as niri `SnapshotOpts._sleep`) | Immediately — every test run |
-| Calling `isAerospaceRunning()` per window move in integration `open()` | Multiple `aerospace --version` subprocess calls per workspace open | Call `isAerospaceRunning()` once at start of `open()` and gate the entire function | With 5+ windows per workspace |
-| `listAerospaceWindows()` called without caching inside snapshot poll loop | N subprocess calls for N poll iterations, each spawning `aerospace` | Use injectable `_listWindows` parameter like niri's `SnapshotOpts._listWindows` | Immediately in tests |
-| Snapshot timeout too short for slow app launch | Windows missed; integration silently skips moves | Default `timeoutMs: 10_000` matching niri; make configurable | On any slow-starting app |
+| `listWorkspaces()` inside entry loop | Open time grows linearly with entry count | Hoist `listWorkspaces()` before loop; pass results as argument | With 3+ entries (~600ms overhead) |
+| `isAerospaceRunning()` inside entry loop | Multiple `which aerospace` spawns | Hoist to top of `open()`; existing code already does this for single-entry; ensure refactor keeps it outside loop | With 2+ entries |
+| Snapshot polling timeout per entry (10s each) | `git-stacks open` hangs for up to N×10s when apps are slow | Share global before-set; a window that did not appear for entry A is still detectable by entry B's delta | With N entries where any app is slow |
+| `listWindows()` call for layout per entry | N list-windows calls during layout phase | Call `listWindows()` once after all moves complete; filter per workspace target | With 4+ entries |
 
 ---
 
@@ -278,9 +298,8 @@ AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Passing user-configured workspace name directly to shell string interpolation | Shell injection if name contains metacharacters | Pass workspace name as a positional argument to `_exec.run([..., workspaceName])`, never via shell string; NameSchema regex already blocks metacharacters at YAML parse time |
-| Logging `window-title` values from `list-windows` output | Window titles may contain sensitive information (passwords in terminal, private filenames) | Log window IDs only, never titles, in debug/warn output |
-| AeroSpace config TOML path traversal in `configPath` option | User could configure a config path pointing to sensitive files | Do not expose `configPath` as a user-configurable option; read from default AeroSpace config location only |
+| Per-entry `workspace` name from `workspaces[i].workspace` passed to shell via string interpolation | Shell injection if name has metacharacters | Already blocked by NameSchema at YAML parse time; pass as positional arg to `_exec.run([..., workspaceName])` — maintain existing pattern |
+| Duplicate workspace names in `workspaces` array | Two entries target the same AeroSpace workspace; second entry's flatten destroys first entry's layout | Add `.refine(entries => new Set(entries.map(e => e.workspace)).size === entries.length)` to workspaces array schema |
 
 ---
 
@@ -288,27 +307,25 @@ AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Integration fails silently when AeroSpace is not running | User opens a workspace, windows are not moved, no feedback | Log "aerospace: not running — skipped" at info level (not warning) so user knows why |
-| Integration moves windows to wrong AeroSpace workspace number | User's windows appear on wrong space; disorienting | Validate workspace name exists via `list-workspaces` before attempting move; warn if not found |
-| Snapshot detection times out and logs a warning on every slow app launch | Repeated "timed out waiting for window" warnings become noise | Log timeout as info level with note about increasing `timeout_ms` config; not an error |
-| `flatten-workspace-tree` applied to wrong workspace | Destroys user's manually arranged layout | Always pass `--workspace <name>` to `flatten-workspace-tree`; never call without explicit workspace argument |
-| AeroSpace workspace named `5` conflicts with user's existing workspace | git-stacks moves windows to user's existing workspace 5 without warning | Document that `settings.integrations.aerospace.workspace` must be a dedicated workspace name; doctor check warns if configured workspace already has windows |
+| Silent no-op when v0.11.0 `workspace` flat field is present | User loses AeroSpace integration with no explanation after upgrade | Detect legacy field; emit actionable warning with migration example |
+| `flatten_before_open: true` on multiple entries | Second entry's flatten resets layout applied by first entry | Document: `flatten_before_open` should only be on the first entry that targets a given AeroSpace workspace; warn if two entries target same workspace both with `flatten_before_open: true` |
+| Focus switches N times during open (N entries with `focus: true`) | Visible flicker as AeroSpace switches workspaces mid-setup | Schema validates at most 1; focus deferred to post-loop |
+| Spinner message shows only first workspace name | User cannot see progress across entries | Update spinner text per entry: `"AeroSpace: setting up workspace 'dev' (1/3)"` |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **`isAerospaceRunning()` platform gate:** Run the integration on a Linux machine — verify `open()` returns `null` immediately without calling `_exec.run`
-- [ ] **`split` rejection:** Verify the implementation has no `split` call anywhere; `grep -r "split" src/lib/aerospace.ts` should return 0 matches for split as an aerospace command
-- [ ] **`--format` tab parsing:** Test with a window title containing spaces and verify `window-id`, `app-pid`, and `workspace` fields parse to correct values (not shifted)
-- [ ] **Snapshot ordering:** Unit test verifies `listAerospaceWindows` is called BEFORE `spawnFn` in the before-snapshot; use call-order tracking array
-- [ ] **Snapshot backoff:** Test with 3 failed polls then success — verify `_sleep` delays follow exponential backoff and all delays are at or below `maxDelayMs`
-- [ ] **Mock isolation:** Add `aerospace.test.ts` to `scripts/test-runner.ts` isolation list; verify tests pass in isolation AND when run after `integrations/aerospace.test.ts` in the same process
-- [ ] **Workspace name as string:** Configure `workspace: 5` (integer) in YAML and verify `listAerospaceWindows` receives `"5"` (string) not `5` (number) as the arg
-- [ ] **`--all` flag present:** `grep` the implementation for `list-windows` — every call must include `--all`
-- [ ] **Doctor macOS gate:** Run `git-stacks doctor` on a Linux machine — verify no aerospace check appears in output
-- [ ] **`flatten-workspace-tree` workspace arg:** Every call to `flattenWorkspaceTree()` passes the target workspace name — grep for bare `flatten-workspace-tree` calls without `--workspace`
-- [ ] **Normalization detection read from TOML:** If normalization detection is needed, verify it reads the TOML file directly, not `aerospace config --get`
+- [ ] **Bag window routing:** Test with two entries and one VSCode artifact — verify the window is moved to exactly one AeroSpace workspace (the first entry's target), not both
+- [ ] **`focus: true` validation:** Parse a `workspaces` array with two `focus: true` entries — verify `.safeParse()` returns `success: false` with a message about at most one focus
+- [ ] **Duplicate workspace names:** Parse a `workspaces` array with two entries targeting `"dev"` — verify `.safeParse()` returns `success: false`
+- [ ] **`listWorkspaces()` call count:** Run `open()` with a 3-entry config — verify `mockListWorkspaces` was called exactly once (not 3 times)
+- [ ] **Legacy config warning:** Parse v0.11.0-style `{ workspace: "dev" }` config in v0.12.0 — verify a warning is logged, not a silent skip
+- [ ] **Sequential entry ordering:** Entries are processed in array order — verify via call-order tracking that entry[0]'s `flattenWorkspaceTree` is called before entry[1]'s
+- [ ] **Focus deferred to post-loop:** Entry[0] has `focus: true`, entry[1] has `layout: h_tiles` — verify `_exec.run(["workspace", ...])` is called AFTER entry[1]'s layout step, not during entry[0]'s processing
+- [ ] **Cross-entry snapshot pollution:** Entry[0] launches a slow app (times out), entry[1] launches a fast app — verify entry[1]'s `snapshotWindowIds` only returns the fast app's window ID, not the slow app's ID that appeared after entry[0]'s timeout
+- [ ] **`setLayout` uses `windowId`:** In layout step, `setLayout` is called with `windowId` argument — no bare `focusWindow()` call in the multi-workspace path
+- [ ] **Existing backward-compat test updated:** The `backward compatibility` describe block in `aerospace.test.ts` is updated to use `workspaces: [{ workspace: "dev" }]` format, and the old flat-field test case is explicitly removed with a comment
 
 ---
 
@@ -316,12 +333,13 @@ AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| `split` used and silently no-ops for majority of users | MEDIUM | Replace all `split` calls with `join-with`; existing workspace YAML does not store layout commands so no migration needed |
-| `--format` parser returns wrong fields | MEDIUM | Fix parser to split on `"\t"`; existing workspaces unaffected (no layout state stored in YAML) |
-| Integration runs on Linux and crashes | LOW | Add `process.platform !== "darwin"` guard; re-release; no user data affected |
-| Snapshot race moves wrong window | LOW | window was moved to wrong AeroSpace workspace; user manually moves it back; fix detection ordering |
-| Mock pollution causes false-passing tests | MEDIUM | Add mock re-application to aerospace.test.ts; re-run test suite; no production code change needed |
-| `flatten-workspace-tree` without `--workspace` destroys wrong workspace layout | HIGH | User must manually rebuild their AeroSpace workspace layout; add `--workspace` arg in fix |
+| Bag windows moved to every entry | LOW | Fix routing logic; no state persisted in YAML; user manually moves windows back |
+| `focus: true` on multiple entries, last wins | LOW | Add schema validation; user updates config; no YAML migration |
+| `listWorkspaces()` called per entry | LOW | Hoist before loop; no behavior change, only performance fix |
+| Focus contamination from layout step | MEDIUM | Switch to `setLayout(layout, windowId)` or post-loop focus; verify with test |
+| Cross-entry snapshot pollution | MEDIUM | Add shared before-set to `SnapshotOpts`; requires `snapshotWindowIds` signature change |
+| v0.11.0 config silently no-ops | HIGH | Users lose integration silently; requires doc + warning message; no automated migration possible |
+| Concurrent loop introduced later | HIGH | Any future `Promise.all` refactor breaks snapshot correctness; sequential constraint must be commented |
 
 ---
 
@@ -329,30 +347,28 @@ AeroSpace shell wrappers — `listAerospaceWindows()` always uses `--all`.
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| `split` used for layout | AeroSpace shell wrappers — exclude `split` from implementation | `grep -r '"split"' src/lib/aerospace.ts` returns no matches |
-| `--format` tab parsing | AeroSpace shell wrappers — `listAerospaceWindows` parser | Unit test: row with multi-word app name → all fields parse to correct positions |
-| Cross-platform `aerospace` binary call | AeroSpace shell wrappers — `isAerospaceRunning()` | Unit test: `process.platform = "linux"` → returns false without calling `_exec.run` |
-| Snapshot ordering race | AeroSpace shell wrappers — `snapshotAerospaceWindows()` | Unit test: call-order tracking verifies before-snapshot before spawnFn |
-| Test mock pollution | AeroSpace shell wrappers tests | Run `bun test tests/lib/aerospace.test.ts` after `tests/lib/integrations/aerospace.test.ts` in same process — all tests still pass |
-| Workspace name as string only | AeroSpace integration plugin — config schema | Unit test: YAML with numeric `workspace: 5` → `_exec.run` receives `"5"` string |
-| `--all` missing from list-windows | AeroSpace shell wrappers — `listAerospaceWindows` | `grep` assertion in tests: captured args always contain `"--all"` |
-| Doctor false warnings on Linux | Doctor checks — platform gate | Run doctor on Linux — no aerospace entry in output |
-| `flatten-workspace-tree` bare call | AeroSpace integration plugin — layout step | Code review gate: all `flattenWorkspaceTree` calls pass workspace name |
+| Bag window double-routing | Schema + loop design phase | Test: 2 entries + 1 VSCode artifact → `movedWindows` length === 1 |
+| `listWorkspaces()` per-entry overhead | Core loop implementation phase | Test: 3-entry config → `mockListWorkspaces.mock.calls.length === 1` |
+| Multiple `focus: true` entries | Schema definition phase | Test: array with 2 focus entries → `safeParse().success === false` |
+| Layout focus contamination across entries | Core loop implementation phase | Test: 2 entries with layouts + 1 with `focus: true` → final focus is on correct workspace |
+| Cross-entry snapshot pollution | Core loop implementation phase | Test: entry[0] times out, entry[1] detects only its own app |
+| Legacy `workspace` flat field | Schema definition phase | Test: old-format config → warn logged, not silent skip |
+| Sequential constraint violated | Code review / documentation | Comment on loop; no `Promise.all` for entry processing |
+| Duplicate workspace names | Schema definition phase | Test: 2 entries with same `workspace` value → `safeParse().success === false` |
 
 ---
 
 ## Sources
 
-- `_references/aerospace.md` — direct CLI exploration on macOS v0.20.3-Beta; `split` no-op finding; `--format` field inventory; single-monitor findings; snapshot-delta algorithm
-- `src/lib/niri.ts` lines 76-92 — injectable `_exec` pattern; `SnapshotOpts` with `_sleep` and `_listWindows` injection
-- `src/lib/niri.ts` lines 217-244 — `snapshotWindowIds()` — correct ordering: before-snapshot, spawnFn, poll loop
-- `src/lib/integrations/niri.ts` lines 1-9 — `isNiriRunning()` used as first gate in `open()` — pattern to replicate
-- `tests/lib/niri.test.ts` lines 1-20 — Bun mock.module pollution comment; re-application pattern
-- `tests/lib/niri.test.ts` lines 668-690 — call-order tracking test for snapshot ordering
-- `tests/lib/integrations/niri.test.ts` lines 1-44 — mock registration before import pattern
-- AeroSpace v0.20.3-Beta behavior observed: `split` exits 1 when normalization enabled; `--format` uses `\t` delimiters; `list-windows` default is workspace-scoped; `aerospace config --get` unreliable for all TOML keys
-- Bun test mock isolation: `scripts/test-runner.ts` — project-specific isolation list for mock-heavy test files
+- `src/lib/integrations/aerospace.ts` lines 98-288 — full `open()` method sequence: gate check, config parse, validation, flatten, bag window move, commands, layout, focus
+- `src/lib/aerospace.ts` lines 214-241 — `snapshotWindowIds()` implementation: before-snapshot, spawnFn, exponential backoff poll
+- `src/lib/aerospace.ts` lines 182-188 — `setLayout(layout, windowId?)` accepts optional `windowId` — enables focus-free layout application
+- `tests/lib/integrations/aerospace.test.ts` lines 112-132 — `beforeEach` reset pattern; test structure to extend for multi-workspace
+- `tests/lib/integrations/aerospace.test.ts` lines 721-740 — existing `backward compatibility` block that will fail after schema migration and must be explicitly updated
+- `src/lib/integrations/runner.ts` lines 21-62 — WindowDetector snapshot lifecycle: `begin()` before each `open()` call, `resolve()` after; relevant because WindowDetector's `begin()` also takes a before-snapshot — a second snapshot source to keep consistent with the shared-before-set strategy
+- `src/lib/integrations/types.ts` lines 17-29 — `ArtifactBag` is `Record<string, IntegrationArtifact | null>` with no "consumed" flag; multiple entries can read the same bag entry freely
+- `.planning/PROJECT.md` lines 185-187 — v0.12.0 active requirements: `workspaces` array, focus validation, tier-1 windows default to `workspaces[0]`, sequential processing
 
 ---
-*Pitfalls research for: v0.11.0 — AeroSpace window management integration in git-stacks*
-*Researched: 2026-03-28*
+*Pitfalls research for: v0.12.0 — multi-workspace AeroSpace support in git-stacks*
+*Researched: 2026-03-29*

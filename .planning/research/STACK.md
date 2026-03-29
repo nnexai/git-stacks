@@ -1,22 +1,35 @@
 # Stack Research
 
-**Domain:** Bun CLI tool — v0.11.0 AeroSpace Window Management Integration
-**Researched:** 2026-03-28
-**Confidence:** HIGH (AeroSpace CLI verified against local exploration notes + official docs; Bun.TOML verified against official Bun docs; niri integration pattern verified against source)
+**Domain:** Bun CLI tool — v0.12.0 Multi-Workspace AeroSpace Configuration
+**Researched:** 2026-03-29
+**Confidence:** HIGH (Zod v4 API verified against official docs; AeroSpace CLI timing verified against GitHub issues #278 and #868 + official commands reference; existing codebase verified by direct file read)
 
 ---
 
 ## Scope
 
-This document covers **only what is new for v0.11.0**. The existing stack (Bun runtime, TypeScript strict, Commander.js 12.1.0, SolidJS 1.9.11 + @opentui/core 0.1.87, Zod 3.25.76 + yaml 2.8.2, @clack/prompts 0.9.1) is unchanged and not re-researched.
+This document covers **only what is new or changed for v0.12.0**. The base stack (Bun runtime, TypeScript strict, Commander.js, SolidJS + OpenTUI, yaml, @clack/prompts) is unchanged and not re-researched.
 
-Two new components, five questions:
+**What changed in v0.11.0** (documented in prior STACK.md) is also not re-researched — the `_exec` injectable pattern, TSV parsing, `snapshotWindowIds`, and AeroSpace binary gate are all stable and unchanged.
 
-1. `src/lib/aerospace.ts` — what CLI invocation pattern replaces niri's JSON IPC?
-2. `--format` string parsing — how do we parse tab-delimited `%{field}` output into typed structs?
-3. TOML config reading — do we need a TOML parser to read `aerospace.toml` for normalization detection, and which one?
-4. `src/lib/integrations/aerospace.ts` — what differs from the niri plugin pattern?
-5. What NOT to add — libraries that are tempting but wrong for this context.
+**Three questions this milestone adds:**
+
+1. Zod schema — how to express `workspaces: WorkspaceEntry | WorkspaceEntry[]` with backward-compatible parsing of the old flat single-object format
+2. AeroSpace CLI timing — can we loop `moveNodeToWorkspace` calls for multiple workspaces rapidly without rate limiting or hang risk?
+3. Sequential workspace setup — any ordering constraints imposed by AeroSpace's server model?
+
+---
+
+## Current Dependency Versions (Verified from package.json)
+
+| Package | Version | Notes |
+|---------|---------|-------|
+| zod | ^4.3.6 | Upgraded from 3.x used in v0.11.0 STACK research; verify APIs below use v4 |
+| typescript | ^6.0.2 | Strict mode enforced |
+| bun | (runtime) | All Bun APIs (spawn, $, file) available |
+| commander | ^14.0.3 | CLI framework; no changes needed |
+
+> **Note:** The prior STACK.md listed Zod 3.25.76. package.json now shows `^4.3.6`. All Zod patterns below use the v4 API.
 
 ---
 
@@ -24,251 +37,212 @@ Two new components, five questions:
 
 ### Core Technologies
 
-All existing. No new runtime, framework, or language additions required for v0.11.0.
+No new dependencies. All required patterns are covered by Zod v4 (already installed) plus the existing `_exec` injectable pattern from `src/lib/aerospace.ts`.
 
 | Technology | Version | Purpose | Why |
 |------------|---------|---------|-----|
-| Bun `$` shell | (runtime) | All `aerospace` CLI invocations | Same pattern as niri's `_exec.run(args)` — `$\`aerospace ${args}\`.quiet().nothrow()`; AeroSpace uses CLI not IPC socket |
-| Zod | 3.25.76 | Typed schemas for parsed `--format` rows | Already installed; `z.object({ windowId: z.number(), appBundleId: z.string(), ... })` for validated row structs after `splitFormatRow()` |
-| `Bun.TOML.parse` | (runtime built-in) | Read `aerospace.toml` for normalization detection | Bun has a native `TOML.parse(string)` API — no npm package needed; use `import { TOML } from "bun"` |
+| Zod v4 `z.preprocess` | ^4.3.6 | Coerce old flat config object into single-element array for backward compat | `z.preprocess` in v4 returns `ZodPipe` internally; usage API is identical to v3 — `z.preprocess(fn, schema)` still works; `(val) => Array.isArray(val) ? val : [val]` is the correct normalizer |
+| Zod v4 `z.union` | ^4.3.6 | Accept either old format (flat object with `workspace: string`) or new format (object with `workspaces: array`) at parse time | `z.union([oldSchema, newSchema])` tries each in order; first match wins; use this at the top-level integration config schema boundary |
+| AeroSpace CLI `move-node-to-workspace` | v0.20.3-Beta | Sequential window moves across multiple AeroSpace workspaces | No batching API exists in CLI; each call is a separate subprocess via `_exec.run`; each invocation costs ~100ms IPC round-trip (see Timing Constraints below) |
 
 ### Supporting Libraries
 
-No new npm dependencies are required. All capabilities map to existing tools or Bun built-ins.
-
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| (none new) | — | — | — |
-
-### Development Tools
-
-No changes to dev tooling.
+No new npm dependencies required.
 
 ---
 
-## Feature-Specific Implementation Notes
+## Zod Pattern: Single Object → Array Backward Compat
 
-### `src/lib/aerospace.ts` — Shell Wrappers
+**Problem:** v0.11.0 config format is a flat object:
 
-**Key difference from niri.ts:** AeroSpace has no IPC socket. All commands go through the `aerospace` CLI binary. niri uses `niri msg -j <action>` with JSON output; AeroSpace uses `aerospace <subcommand> --format '%{field}\t...'` with tab-delimited text output.
+```yaml
+integrations:
+  aerospace:
+    enabled: true
+    workspace: "5"
+    layout: h_tiles
+    focus: true
+```
 
-**`_exec` injectable pattern — same as niri:**
+v0.12.0 format is an array:
+
+```yaml
+integrations:
+  aerospace:
+    enabled: true
+    workspaces:
+      - workspace: "5"
+        layout: h_tiles
+        focus: true
+      - workspace: "6"
+        layout: v_tiles
+```
+
+**Recommended Zod pattern — two-stage parse:**
+
+Stage 1: Normalize input shape (preprocess before union discrimination)
+Stage 2: Validate the normalized shape
 
 ```typescript
-export type AerospaceCmdResult = { exitCode: number; stdout: string }
-
-export const _exec = {
-  run: async (args: string[]): Promise<AerospaceCmdResult> => {
-    const result = await $`aerospace ${args}`.quiet().nothrow()
-    return { exitCode: result.exitCode, stdout: result.text() }
-  },
-}
-```
-
-Tests replace `_exec.run` with a mock. No `mock.module()` needed — the mutable object property pattern is established in `niri.ts`, `tmux.ts`, `cmux.ts`.
-
-**`isAeroSpaceRunning()` — availability gate:**
-
-AeroSpace is macOS-only. The guard is not an env var check (unlike `NIRI_SOCKET`) — it is a binary presence check:
-
-```typescript
-export async function isAeroSpaceRunning(): Promise<boolean> {
-  const result = await $`which aerospace`.quiet().nothrow()
-  return result.exitCode === 0
-}
-```
-
-This is sufficient because `aerospace` is only installed on macOS and only available when AeroSpace is running. Do NOT check for a socket file or process name — the `which` check covers the "binary available" case; a separate `list-workspaces` health probe can verify the daemon is actually responsive if needed.
-
-**`--format` string parsing — no library needed:**
-
-`list-windows` and `list-workspaces` use `--format '%{field1}\t%{field2}\t...'` with tab-separated output. Each line is a record. Parsing is:
-
-```typescript
-function splitFormatRow(line: string, fields: number): string[] {
-  const parts = line.split('\t')
-  return parts.length === fields ? parts : []  // discard malformed rows
-}
-```
-
-The format string is fixed in the wrapper (not user-configurable), so the field count is always known at compile time. No CSV/TSV parsing library needed.
-
-**Recommended format string for `listAerospaceWindows()`:**
-
-```
-%{window-id}\t%{app-bundle-id}\t%{app-name}\t%{app-pid}\t%{workspace}\t%{window-layout}\t%{window-is-fullscreen}\t%{window-title}
-```
-
-This captures all fields needed for snapshot-delta detection and window identity. `window-id` is the operational handle; `app-bundle-id` is stable app identity.
-
-**Recommended format string for `listAerospaceWorkspaces()`:**
-
-```
-%{workspace}\t%{workspace-is-focused}\t%{workspace-is-visible}\t%{workspace-root-container-layout}\t%{monitor-id}
-```
-
-**Zod schemas for parsed output:**
-
-```typescript
-const AerospaceWindowSchema = z.object({
-  windowId: z.number(),
-  appBundleId: z.string(),
-  appName: z.string(),
-  appPid: z.number(),
+// The per-workspace entry schema (identical fields to old flat config, minus `enabled`)
+const aerospaceWorkspaceEntrySchema = z.object({
   workspace: z.string(),
-  windowLayout: z.string(),
-  windowIsFullscreen: z.boolean(),
-  windowTitle: z.string(),
+  layout: z.enum(["h_tiles", "v_tiles", "h_accordion", "v_accordion"]).optional(),
+  normalization: z.boolean().optional(),
+  flatten_before_open: z.boolean().optional(),
+  focus: z.boolean().optional(),
+  commands: z.array(aerospaceCommandSchema).optional(),
 })
 
-const AerospaceWorkspaceSchema = z.object({
-  workspace: z.string(),
-  isFocused: z.boolean(),
-  isVisible: z.boolean(),
-  rootContainerLayout: z.string(),
-  monitorId: z.number(),
-})
-```
-
-Parse with `AerospaceWindowSchema.parse({ windowId: parseInt(parts[0]), ... })` after `splitFormatRow`. Return `[]` on any parse failure (same defensive pattern as niri.ts).
-
-**Core wrapper functions to implement:**
-
-| Function | AeroSpace command | Notes |
-|---|---|---|
-| `isAeroSpaceRunning()` | `which aerospace` | Binary gate — returns bool |
-| `listAerospaceWindows()` | `list-windows --all --format '...'` | Returns `AerospaceWindow[]` |
-| `listAerospaceWorkspaces()` | `list-workspaces --all --format '...'` | Returns `AerospaceWorkspace[]` |
-| `moveWindowToAerospaceWorkspace(windowId, workspace)` | `move-node-to-workspace --window-id <id> <ws>` | Moves one window |
-| `focusAerospaceWorkspace(workspace)` | `workspace <ws>` | Switch focus to workspace |
-| `aerospaceLayout(layout)` | `layout <layout>` | Set root container layout |
-| `aerospaceFlattenWorkspaceTree(workspace?)` | `flatten-workspace-tree [--workspace <ws>]` | Reset/normalize layout |
-
-**AerospaceCLI interface for test mock completeness (mirrors NiriCommands):**
-
-```typescript
-export interface AerospaceCommands {
-  isAeroSpaceRunning(): Promise<boolean>
-  listAerospaceWindows(): Promise<AerospaceWindow[]>
-  listAerospaceWorkspaces(): Promise<AerospaceWorkspace[]>
-  moveWindowToAerospaceWorkspace(windowId: number, workspace: string): Promise<void>
-  focusAerospaceWorkspace(workspace: string): Promise<void>
-  aerospaceLayout(layout: string): Promise<void>
-  aerospaceFlattenWorkspaceTree(workspace?: string): Promise<void>
-}
-```
-
-**Confidence:** HIGH — all functions directly derived from verified CLI exploration in `_references/aerospace.md`.
-
----
-
-### TOML Config Reading for Normalization Detection
-
-**The problem:** `aerospace split` is a no-op when `enable-normalization-flatten-containers = true` in `aerospace.toml`. The controller must either:
-1. Detect this setting and use `join-with` instead of `split`, or
-2. Let the user configure which strategy to use via `settings.integrations.aerospace.layout_strategy`
-
-**Recommendation:** Use the user-configuration approach (option 2) as the default path. This avoids a fragile file-path assumption. The normalization detection via TOML is a **secondary enhancement** for better defaults.
-
-**If TOML reading is implemented** (for normalization auto-detection):
-
-Use `Bun.TOML.parse()` — it is a native Bun built-in. No npm package needed.
-
-```typescript
-import { TOML } from "bun"
-
-async function readAerospaceConfig(): Promise<Record<string, unknown>> {
-  const configPath = `${process.env.HOME}/.config/aerospace/aerospace.toml`
-  try {
-    const text = await Bun.file(configPath).text()
-    return TOML.parse(text) as Record<string, unknown>
-  } catch {
-    return {}
-  }
-}
-```
-
-`Bun.TOML.parse(string)` is documented and available in Bun 1.x (confirmed in official Bun docs, last updated 2026-03-21 for Bun 1.3.11).
-
-**Important caveat:** `aerospace config --get` does not expose all TOML keys reliably (confirmed in `_references/aerospace.md`). Do not use the `aerospace config` CLI for normalization detection. Read the file directly with `Bun.TOML.parse`.
-
-**Default config path:** `~/.config/aerospace/aerospace.toml`. AeroSpace also supports `~/.aerospace.toml`. Check both with existence checks; prefer `~/.config/aerospace/aerospace.toml`.
-
-**Confidence:** HIGH — Bun.TOML.parse verified in official Bun docs; file path confirmed in exploration notes.
-
----
-
-### `src/lib/integrations/aerospace.ts` — Integration Plugin
-
-**Pattern match to niri.ts** — tier-3 plugin at `order: 31` (one above niri's 30 to allow coexistence on Linux when only niri is running).
-
-**Key structural differences from niri.ts:**
-
-| Aspect | niri | AeroSpace |
-|---|---|---|
-| Availability gate | `process.env.NIRI_SOCKET` | `which aerospace` exit 0 |
-| Window identification | niri window ID (integer) | AeroSpace window ID (integer, `%{window-id}`) |
-| Workspace creation | `focusNiriWorkspaceDown()` + `setNiriWorkspaceName()` | Use existing named/numbered workspace — AeroSpace workspaces are pre-configured names in config |
-| Window movement | `moveWindowToWorkspace(windowId, workspaceName)` | `moveWindowToAerospaceWorkspace(windowId, workspace)` |
-| Layout commands | Not applicable | `aerospaceLayout()` + `aerospaceFlattenWorkspaceTree()` |
-| Cleanup | `unsetNiriWorkspaceName()` | No cleanup needed — AeroSpace workspaces are config-defined |
-| WindowDetector | Yes — `snapshotWindowIds` via poll | Yes — before/after `listAerospaceWindows()` diff by window-id |
-
-**Snapshot-delta detection — no polling needed:**
-
-Unlike niri (which must poll because niri creates windows asynchronously), AeroSpace's `list-windows` output is synchronous CLI state. The integration opens a process via `Bun.spawn` (to capture PID) and waits for the window to appear. The `WindowDetector.begin()` / `WindowDetector.resolve()` pattern from `types.ts` works directly:
-
-```typescript
-windowDetector: {
-  id: "aerospace",
-  async begin(): Promise<DetectorSnapshot> {
-    const running = await isAeroSpaceRunning()
-    if (!running) return { _brand: "aerospace", data: new Set<number>() }
-    const windows = await listAerospaceWindows()
-    return { _brand: "aerospace", data: new Set(windows.map(w => w.windowId)) }
-  },
-  async resolve(snapshot, _hints): Promise<number[]> {
-    // Poll with exponential backoff, same as niri WindowDetector
-    // ...
-  }
-}
-```
-
-**Config schema:**
-
-```typescript
+// Top-level config: accept either old flat format OR new workspaces-array format
 const aerospaceConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  workspace: z.string().optional(),          // target AeroSpace workspace name (e.g. "5", "work")
-  focus: z.boolean().optional(),             // whether to focus workspace after setup
-  layout: z.string().optional(),             // root layout to apply (h_tiles, h_accordion, etc.)
-  flatten_after: z.boolean().optional(),     // run flatten-workspace-tree before layout
+  // Preprocess coerces old format (flat object with workspace key) into
+  // new format (array with one entry). Union then validates either shape.
+  workspaces: z.preprocess(
+    (val) => {
+      // Already an array — new format, pass through
+      if (Array.isArray(val)) return val
+      // Has `workspace` key — old single-workspace flat format, wrap in array
+      if (val && typeof val === "object" && "workspace" in (val as object)) return [val]
+      // No workspaces key present — return undefined to allow optional()
+      return undefined
+    },
+    z.array(aerospaceWorkspaceEntrySchema).optional()
+  ),
 })
 ```
 
-**Confidence:** HIGH — derived from niri.ts pattern + AeroSpace CLI verified in exploration notes.
+**Why this approach over `z.union` at the workspaces field level:**
+
+`z.union` at the top level tries each schema in order and returns the first match — it handles the case where callers pass either `{ workspace: "5", ... }` (old) or `{ workspaces: [...] }` (new). However, `z.preprocess` at the `workspaces` field level is cleaner because:
+- It normalizes the shape before validation, producing a single canonical runtime type (`WorkspaceEntry[]`)
+- Consumers of the parsed config never need to branch on old vs new — they always iterate an array
+- The field is marked `.optional()` so configs that omit `workspaces` entirely still parse (for cases where only `enabled: true/false` is set at the workspace-override level)
+
+**Alternative: top-level union schema for two-format dispatch**
+
+If the old format must be accepted at the outer config level (where `workspace: "5"` is a sibling of `enabled`), wrap the entire config in a union with a preprocess normalizer:
+
+```typescript
+const aerospaceConfigSchema = z.preprocess(
+  (val) => {
+    if (!val || typeof val !== "object") return val
+    const obj = val as Record<string, unknown>
+    // Migrate: if flat `workspace` field present and no `workspaces` array, convert
+    if (typeof obj.workspace === "string" && !obj.workspaces) {
+      const { workspace, layout, normalization, flatten_before_open, focus, commands, ...rest } = obj
+      return {
+        ...rest,
+        workspaces: [{ workspace, layout, normalization, flatten_before_open, focus, commands }],
+      }
+    }
+    return val
+  },
+  z.object({
+    enabled: z.boolean().optional(),
+    workspaces: z.array(aerospaceWorkspaceEntrySchema).optional(),
+  })
+)
+```
+
+**This is the recommended approach** for this milestone because it migrates cleanly at parse time — the integration plugin code never sees the old format. `parsedConfig.workspaces` is always `WorkspaceEntry[] | undefined` at runtime.
+
+**Confidence:** HIGH — `z.preprocess` v4 API verified against zod.dev/api; v4 internal `ZodPipe` return does not change the `z.preprocess(fn, schema)` calling convention; tested pattern matches official Zod v4 documentation examples.
 
 ---
 
-### `git-stacks doctor` Check
+## Focus Validation: At Most One `focus: true`
 
-Add to `src/commands/doctor.ts`: a check that verifies `aerospace` binary is available when AeroSpace integration is enabled. Follow the existing pattern for `tmux`, `niri` binary checks already in doctor.ts.
+**Recommended approach — Zod `.superRefine` after array parse:**
 
-**Confidence:** HIGH — pattern already established for niri binary check.
+```typescript
+const aerospaceConfigSchema = z.preprocess(
+  migrateToWorkspacesArray, // preprocess fn from above
+  z.object({
+    enabled: z.boolean().optional(),
+    workspaces: z.array(aerospaceWorkspaceEntrySchema)
+      .optional()
+      .superRefine((entries, ctx) => {
+        if (!entries) return
+        const focusCount = entries.filter((e) => e.focus === true).length
+        if (focusCount > 1) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `At most one AeroSpace workspace entry may have focus: true (found ${focusCount})`,
+          })
+        }
+      }),
+  })
+)
+```
+
+`.superRefine` on the array is the correct hook — it fires after all individual entries pass validation, so you can count across the full array. Do not use `.refine` (it can't access `ctx.addIssue` with custom message in all Zod versions) — use `.superRefine`.
+
+**Confidence:** HIGH — `.superRefine` is stable in Zod v3 and v4; cross-element validation is its canonical use case.
 
 ---
 
-## Alternatives Considered
+## AeroSpace CLI Timing Constraints
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| `Bun.TOML.parse` (built-in) | `smol-toml` npm package | Bun has native TOML parsing; no dependency justified |
-| `Bun.TOML.parse` (built-in) | `@iarna/toml` npm package | Same — adds production dep for something Bun provides natively |
-| `Bun.TOML.parse` (built-in) | `js-toml` npm package | Same — native Bun API is sufficient |
-| Tab-split parsing in `splitFormatRow()` | CSV/TSV parsing library | The format string is controlled by our code; field count is fixed; `String.split('\t')` is sufficient |
-| User-configured `layout_strategy` field | Auto-detect normalization via `aerospace config --get` | `aerospace config --get` does not reliably expose all TOML keys (confirmed in exploration notes); file read is more reliable but adds complexity |
-| `which aerospace` binary check | `AEROSPACE_SOCKET` env var | AeroSpace does not expose an env var equivalent to `NIRI_SOCKET`; binary presence is the correct gate |
-| `order: 31` for AeroSpace plugin | `order: 30` (same as niri) | Both can be installed; different order allows coexistence when only niri or only AeroSpace is present; niri is Linux, AeroSpace is macOS so they won't both run, but separate order values are cleaner |
+**Summary: No rate limits, but IPC round-trip cost is ~100ms per CLI invocation. Sequential multi-workspace setup is safe.**
+
+**Details:**
+
+AeroSpace communicates via a Unix socket at `/tmp/(aeroSpaceAppId)-(unixUserName).sock`. Each `aerospace <cmd>` invocation is a subprocess that connects to the socket, sends the command, waits for a response, then exits. There is:
+
+- No documented rate limiting or command throttling
+- No queue saturation at typical workloads (5-10 windows, 2-4 workspaces)
+- An acknowledged ~100ms IPC round-trip overhead per CLI call (GitHub issue #278 — documented by maintainer, labeled 1.0-blocker for a batching solution)
+
+**Implication for sequential workspace setup:**
+
+Iterating a `workspaces` array and calling `moveNodeToWorkspace`, `setLayout`, `flattenWorkspaceTree`, and optionally `focusWindow` per workspace entry is safe. For a typical config (2-4 workspace entries, 3-8 windows total), the total sequential duration is:
+
+```
+2 workspace entries × (1 flatten + 1 layout + N move calls + 1 focus) × ~100ms each
+```
+
+For a 4-entry config with 2 windows each = ~8 calls = ~800ms total. This is acceptable for an `open` operation (which already runs other integrations and hooks).
+
+**The sporadic hang bug (issue #868)** was fixed in builds after v0.16.2 — "non-issue in all the recent builds" per the reporter. Current version is v0.20.3-Beta. This is not a concern.
+
+**Batching (issue #278)** — shell-like combinators (`&&`, `||`, `;`) for single-round-trip multi-command execution — is a planned 1.0-blocker feature. As of v0.20.3-Beta it has **not shipped**. Our `for...of` loop over workspace entries using individual `_exec.run` calls is the correct current approach. When batching ships, refactoring would reduce latency but is not required for correctness.
+
+**No rate limit mitigation is needed.** Do not add `sleep()` calls between workspace entries. Do not add retry logic. The AeroSpace server processes commands synchronously and awaiting each `_exec.run` call is sufficient sequencing.
+
+**Confidence:** HIGH — timing cost from GitHub issue #278 (maintainer statement); hang fix from issue #868 (reporter confirmation); batching feature status from issue #278 (open, 1.0-blocker label); AeroSpace version v0.20.3-Beta from releases page.
+
+---
+
+## Sequential Workspace Setup: Ordering Constraints
+
+**Window routing to first workspace (unrouted tier-1 windows):**
+
+VSCode and IntelliJ are tier-1 integrations that deposit window IDs into `ArtifactBag`. The AeroSpace integration (tier-3, order 31) reads from the bag. When the `workspaces` array has multiple entries, unrouted tier-1 windows should go to the first entry in the array.
+
+Implementation: before the workspace iteration loop, move all bag windows to `workspaces[0].workspace`. Then iterate `workspaces[1..n]` for layout/focus/commands on subsequent entries.
+
+**`focus: true` workspace selection:**
+
+Only one workspace entry may have `focus: true`. The workspace-level focus (switching AeroSpace to that workspace) should be the final step after all entries are processed — otherwise focus would switch mid-setup as each workspace is configured.
+
+**Recommended processing order per workspace entry:**
+
+1. Validate workspace exists (`listWorkspaces()` result check)
+2. Flatten if `flatten_before_open: true`
+3. Move bag windows (first entry only; subsequent entries get only command-launched windows)
+4. Launch `commands` (and move newly launched windows to this workspace)
+5. Apply layout
+6. Accumulate `focusWindowId` if `cmd.focus: true`
+
+**Workspace-level focus last:**
+
+After all entries are processed:
+1. Focus specific window (`focusWindowId`) if any command set `focus: true`
+2. Switch AeroSpace workspace (`_exec.run(["workspace", targetWorkspace])`) for the entry with `focus: true`
+
+**Confidence:** HIGH — derived directly from existing single-workspace flow in `src/lib/integrations/aerospace.ts`; the multi-workspace generalization follows the same step order with an outer loop added.
 
 ---
 
@@ -276,25 +250,22 @@ Add to `src/commands/doctor.ts`: a check that verifies `aerospace` binary is ava
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `smol-toml` / `@iarna/toml` / `js-toml` | Bun has `TOML.parse()` built in; adding a dep for built-in functionality is unnecessary | `import { TOML } from "bun"` |
-| `aerospace config --get <key>` for normalization detection | The reference notes explicitly confirm this does not expose all TOML keys reliably | `Bun.TOML.parse(await Bun.file(configPath).text())` |
-| `aerospace` JSON output (`--json` flag on `list-windows`) | `list-windows --json` only returns `app-name`, `window-id`, `window-title` — insufficient for stable app identity and workspace tracking | `list-windows --format '%{window-id}\t%{app-bundle-id}\t...'` |
-| Node.js `fs.readFileSync` for TOML reading | Use Bun-native APIs throughout; `Bun.file(path).text()` is the established pattern | `Bun.file(configPath).text()` |
-| Hardcoded AeroSpace workspace creation | AeroSpace workspaces are defined in `aerospace.toml`; the integration should target existing named workspaces, not create new ones | `workspace` config field in integration settings pointing to an existing workspace name |
+| `z.discriminatedUnion` for old/new format dispatch | No discriminator key exists — old format uses `workspace: string` at top level, new format uses `workspaces: array`; these can't be discriminated by a shared enum key | `z.preprocess` to normalize old → new at parse time |
+| Sleep/delay between workspace setup steps | AeroSpace server processes commands synchronously; each `_exec.run` awaits the round-trip; no timing gaps needed between moves/layouts | `for await...of` loop over workspace entries |
+| Batch command construction (building `;`-delimited strings) | Issue #278 batch syntax is not released in v0.20.3-Beta; undocumented behavior risk | Sequential `_exec.run` calls |
+| `aerospace config --get` for reading workspaces | Does not reliably expose all TOML keys (documented in v0.11.0 STACK.md); this applies to multi-workspace config too | User-provided YAML config in git-stacks workspace/template YAML |
+| Zod v3 API patterns (`.refine` for cross-field) | Project is now on Zod v4 (`^4.3.6`); use `.superRefine` for cross-element validation with `ctx.addIssue` | `.superRefine` on the array field |
+| New npm dependencies for schema migration | All needed patterns are in Zod v4 already | `z.preprocess` + `z.array` + `.superRefine` |
 
 ---
 
-## AeroSpace Version Compatibility
+## Alternatives Considered
 
-**Current version:** v0.20.3-Beta (March 8, 2025) — project is pre-1.0 beta only; no stable releases exist.
-
-**Breaking change in v0.20.0:** `--stdin` flag now required for stdin-piped workspace names on `workspace` and `move-node-to-workspace`. Our implementation uses explicit `--window-id` and positional workspace args — not stdin — so this breaking change does not affect us.
-
-**`--format` flag stability:** The `%{field}` interpolation variables for `list-windows` and `list-workspaces` have been stable across the beta versions documented. The reference notes were collected against v0.20.3-Beta and the format variables documented in the official AeroSpace commands page match.
-
-**Minimum version for our feature set:** v0.20.x-Beta. All commands we use (`list-windows --format`, `list-workspaces --format`, `move-node-to-workspace --window-id`, `workspace`, `layout`, `flatten-workspace-tree`) are present and working in v0.20.3-Beta.
-
-**Version check in doctor:** The doctor check should verify `aerospace` is available but does not need to enforce a minimum version — the CLI behavior is stable enough for our use.
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| `z.preprocess` migration at parse boundary | Separate read paths for v1 (flat) and v2 (array) config | Two code paths require the integration plugin to branch; runtime type is ambiguous after parse; preprocess collapses to single type |
+| `.superRefine` for focus count validation | Validate in `open()` function body at runtime | Runtime validation produces user-visible error logs but not Zod parse errors; `.superRefine` integrates with Zod's error reporting and prevents invalid config from being accepted |
+| Sequential per-entry processing loop | Concurrent `Promise.all` across workspace entries | AeroSpace commands are stateful (focus, layout) — concurrent calls produce non-deterministic workspace state; sequential is required |
 
 ---
 
@@ -302,16 +273,17 @@ Add to `src/commands/doctor.ts`: a check that verifies `aerospace` binary is ava
 
 | Component | Requires | Notes |
 |-----------|----------|-------|
-| `Bun.TOML.parse` | Bun 1.x | Documented in Bun 1.3.11 official docs; available across all recent Bun 1.x versions |
-| AeroSpace `--format` parsing | AeroSpace v0.20.x+ | `%{window-id}` and all fields used were confirmed in v0.20.3-Beta exploration; v0.20.0 added `persistent-workspaces` (not relevant to our use) |
-| `_exec` injectable pattern | (no version) | Established pattern in niri.ts, tmux.ts, cmux.ts — no version constraint |
-| `WindowDetector` interface | (no version) | Defined in `src/lib/integrations/types.ts`; no changes needed |
+| `z.preprocess(fn, schema)` | Zod v4+ | API identical to v3; returns `ZodPipe` internally in v4 but calling convention unchanged |
+| `.superRefine` | Zod v3+ | Stable across v3 and v4 |
+| `z.union([a, b])` | Zod v3+ | Stable; tries schemas in order |
+| AeroSpace sequential CLI calls | v0.20.x-Beta | No rate limiting; ~100ms per call; sporadic hang bug fixed after v0.16.2 |
+| `move-node-to-workspace --window-id` | v0.20.x-Beta | `--window-id` flag stable; used by existing v0.11.0 integration |
 
 ---
 
 ## Installation
 
-No new npm packages to install for v0.11.0. All capabilities are covered by the existing dependency set plus Bun built-ins.
+No new npm packages to install for v0.12.0. All capabilities are covered by the existing dependency set.
 
 ```bash
 # No new dependencies
@@ -321,17 +293,17 @@ No new npm packages to install for v0.11.0. All capabilities are covered by the 
 
 ## Sources
 
-- `_references/aerospace.md` — Full CLI exploration against AeroSpace v0.20.3-Beta; `--format` variables verified, normalization behavior confirmed, snapshot strategy documented (HIGH confidence)
-- `src/lib/niri.ts` — Verified injectable `_exec` pattern and `SnapshotOpts` approach to adopt (HIGH confidence)
-- `src/lib/integrations/niri.ts` — Verified `WindowDetector` implementation and `order: 30` tier-3 plugin structure (HIGH confidence)
-- `src/lib/integrations/types.ts` — Verified `WindowDetector`, `DetectorSnapshot`, `ArtifactBag`, `Integration` interface contracts (HIGH confidence)
-- `bun.com/reference/bun/TOML` — Confirmed `Bun.TOML.parse(string)` API exists, documented for Bun 1.3.11 (HIGH confidence)
-- `bun.sh/guides/runtime/import-toml` — Confirmed `import { TOML } from "bun"` syntax (HIGH confidence)
-- `nikitabobko.github.io/AeroSpace/commands` — Official command reference: `list-windows`, `list-workspaces`, `move-node-to-workspace --window-id` flags verified (HIGH confidence)
-- `github.com/nikitabobko/AeroSpace/releases` — Confirmed current version is v0.20.3-Beta; no stable release; v0.20.0 breaking change documented (MEDIUM confidence — GitHub releases page, no official stable channel)
-- `package.json` — Current dependency versions confirmed; no new dependencies needed (HIGH confidence)
+- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/aerospace.ts` — Existing v0.11.0 config schema (`aerospaceConfigSchema`) and `open()` processing order; direct file read (HIGH confidence)
+- `/home/nnex/dev/prj/git-stacks/src/lib/aerospace.ts` — Existing `_exec.run`, `AerospaceCommands` interface, `snapshotWindowIds`; direct file read (HIGH confidence)
+- `/home/nnex/dev/prj/git-stacks/package.json` — Confirmed Zod `^4.3.6`, TypeScript `^6.0.2`; direct file read (HIGH confidence)
+- `zod.dev/api` — Confirmed `z.preprocess(fn, schema)` v4 API; `z.union` first-match behavior; `.superRefine` cross-element validation (HIGH confidence)
+- `zod.dev/v4/changelog` — Confirmed `z.preprocess` returns `ZodPipe` in v4 but calling convention unchanged; `z.union` and `z.discriminatedUnion` have no breaking changes (HIGH confidence)
+- `github.com/nikitabobko/AeroSpace/issues/278` — Maintainer-documented ~100ms IPC round-trip cost per CLI call; shell-like batch combinators planned but not yet shipped in v0.20.3-Beta (HIGH confidence)
+- `github.com/nikitabobko/AeroSpace/issues/868` — Sporadic hang bug confirmed fixed after v0.16.2; "non-issue in all the recent builds" (MEDIUM confidence — reporter statement, not maintainer)
+- `nikitabobko.github.io/AeroSpace/commands` — `move-node-to-workspace --window-id` flag confirmed stable; no rate limiting documented (HIGH confidence)
+- `github.com/nikitabobko/AeroSpace/releases` — Current version v0.20.3-Beta (March 8, 2025) confirmed (HIGH confidence)
 
 ---
 
-*Stack research for: git-stacks v0.11.0 AeroSpace Window Management Integration*
-*Researched: 2026-03-28*
+*Stack research for: git-stacks v0.12.0 Multi-Workspace AeroSpace Configuration*
+*Researched: 2026-03-29*

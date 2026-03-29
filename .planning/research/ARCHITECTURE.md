@@ -1,384 +1,327 @@
 # Architecture Research
 
-**Domain:** AeroSpace window manager integration for git-stacks CLI (v0.11.0)
-**Researched:** 2026-03-28
-**Confidence:** HIGH — based on direct code analysis of all existing integration files plus verified AeroSpace CLI behavior from `_references/aerospace.md`
+**Domain:** Multi-workspace AeroSpace integration — v0.12.0 extension of existing v0.11.1 plugin
+**Researched:** 2026-03-29
+**Confidence:** HIGH — direct code analysis of all affected files; no third-party unknowns
+
+## Context: What Already Exists
+
+The v0.11.1 AeroSpace integration is a complete, working tier-3 plugin. The architecture for v0.12.0 is an extension of that plugin only. No other integrations, runner.ts, types.ts, or shell wrappers change.
+
+Existing state at the start of this milestone:
+
+- `src/lib/aerospace.ts` — all CLI wrappers, `_exec`, `snapshotWindowIds` (unchanged)
+- `src/lib/integrations/aerospace.ts` — single-workspace `open()`, flat `aerospaceConfigSchema`, one `WindowDetector` (modified here)
+- `src/lib/integrations/types.ts` — `Integration`, `WindowDetector`, `ArtifactBag` contracts (unchanged)
+- `src/lib/integrations/runner.ts` — tier-ordered loop, calls `begin()`/`open()`/`resolve()` per integration (unchanged)
 
 ## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Integration Plugin Layer                         │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────────────────┐ │
-│  │ vscode   │  │ intellij │  │  tmux    │  │  niri (order 30)    │ │
-│  │ (ord 10) │  │ (ord 11) │  │ (ord 20) │  │  aerospace (ord 31) │ │
-│  └──────────┘  └──────────┘  └──────────┘  │  NEW                │ │
-│                                             └─────────────────────┘ │
-├─────────────────────────────────────────────────────────────────────┤
-│             runner.ts — tier-ordered begin/open/resolve loop         │
-│             WindowDetectors called around every open() that produces │
-│             a WindowArtifact. AeroSpace adds detector id "aerospace" │
-├─────────────────────────────────────────────────────────────────────┤
-│                  Shell Wrapper Layer (lib/*.ts)                       │
-│  ┌────────────────────────┐  ┌──────────────────────────────────┐   │
-│  │  src/lib/niri.ts       │  │  src/lib/aerospace.ts  NEW       │   │
-│  │  _exec.run via         │  │  _exec.run via $`aerospace`      │   │
-│  │  $`niri msg`           │  │  --format TSV field parsing      │   │
-│  │  JSON → Zod schemas    │  │  TypeScript types + manual parse │   │
-│  └────────────────────────┘  └──────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────────────┤
-│                     External Process Layer                           │
-│  ┌───────────────────────┐    ┌─────────────────────────────────┐   │
-│  │  niri compositor      │    │  aerospace CLI binary           │   │
-│  │  IPC socket           │    │  CLI subprocess (macOS only)    │   │
-│  │  NIRI_SOCKET env gate │    │  no env var gate — probe binary │   │
-│  └───────────────────────┘    └─────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│              git-stacks open (workspace-ops.ts)                       │
+│                     runIntegrations(ctx)                              │
+├──────────────────────────────────────────────────────────────────────┤
+│              runner.ts  (UNCHANGED)                                   │
+│  vscode(10) → intellij(11) → tmux(20) → niri(30) → aerospace(31)     │
+│  begin() → open() → resolve() loop per integration                   │
+├──────────────────────────────────────────────────────────────────────┤
+│              aerospaceIntegration  (MODIFIED)                         │
+│                                                                       │
+│  windowDetector.begin()  ──────────────────────────────────────────► │
+│    one global snapshot before aerospace.open() is called             │
+│                                                                       │
+│  open(ctx, null, bag)                                                 │
+│    ├─ isAerospaceRunning() gate                                       │
+│    ├─ parse config → workspaces[] (new schema)                        │
+│    ├─ SINGLE global listWorkspaces() call                            │
+│    └─ for ws of workspaces[] in order:                               │
+│         ├─ validate ws.workspace exists (reuse global list)          │
+│         ├─ if ws.flatten_before_open → flattenWorkspaceTree()        │
+│         ├─ move bag windows (first entry only — see §bag-routing)    │
+│         ├─ launch ws.commands[]                                      │
+│         ├─ apply ws.layout                                           │
+│         └─ if ws.focus → _exec.run(["workspace", ws.workspace])      │
+│                                                                       │
+│  windowDetector.resolve()  ────────────────────────────────────────► │
+│    one global resolve after open() returns                           │
+│                                                                       │
+├──────────────────────────────────────────────────────────────────────┤
+│              src/lib/aerospace.ts  (UNCHANGED)                        │
+│  _exec, listWindows, listWorkspaces, moveNodeToWorkspace, etc.        │
+└──────────────────────────────────────────────────────────────────────┘
 ```
-
-### Component Responsibilities
-
-| Component | Responsibility | Status |
-|-----------|----------------|--------|
-| `src/lib/aerospace.ts` | Typed async CLI wrappers; `--format` TSV parsing; injectable `_exec` for test isolation | NEW |
-| `src/lib/integrations/aerospace.ts` | Tier-3 plugin (order 31); WindowDetector; snapshot-delta detection; workspace movement; normalization-aware layout | NEW |
-| `src/lib/integrations/index.ts` | Plugin registry — add `aerospaceIntegration` import + array entry | MODIFIED (one line) |
-| `src/commands/doctor.ts` | Runtime dependency checks — add `aerospace` to `binaries` array | MODIFIED (one entry) |
-| `src/lib/integrations/types.ts` | Integration, WindowDetector, ArtifactBag interfaces | UNCHANGED |
-| `src/lib/integrations/runner.ts` | Tier-ordered execution; multi-detector WindowDetector support | UNCHANGED |
 
 ## Recommended Project Structure
 
+The change is confined to a single file:
+
 ```
 src/
-├── lib/
-│   ├── niri.ts              # existing
-│   ├── aerospace.ts         # NEW — CLI wrappers + TSV parser
-│   └── integrations/
-│       ├── types.ts         # unchanged
-│       ├── niri.ts          # unchanged
-│       ├── aerospace.ts     # NEW — tier-3 plugin
-│       ├── index.ts         # MODIFIED — add aerospaceIntegration
-│       └── runner.ts        # unchanged
-└── commands/
-    └── doctor.ts            # MODIFIED — add aerospace binary check
+└── lib/
+    └── integrations/
+        └── aerospace.ts   MODIFIED — new schema + multi-workspace loop inside open()
 ```
 
-### Structure Rationale
+No other production files change. Tests gain a new test file or new describes in the existing `tests/lib/integrations/aerospace.test.ts`.
 
-- `aerospace.ts` lives at `lib/` (not inside `integrations/`) for the same reason `niri.ts` does: low-level CLI wrappers are independently testable without the integration plugin layer. Unit tests import `lib/aerospace.ts` directly and mock `_exec`. Integration plugin tests mock the whole `lib/aerospace.ts` module.
-- No new directories. The feature slots into exactly two existing locations.
+## The Four Key Architecture Questions
 
-## Architectural Patterns
+### Question 1: Loop inside open() vs calling open() multiple times
 
-### Pattern 1: Injectable `_exec` for CLI Subprocess Isolation
+**Decision: loop inside open().**
 
-**What:** A mutable object `_exec` whose `run` method executes the subprocess. Tests replace `_exec.run` with a mock, bypassing Bun's module mock cache issues.
+Calling `open()` multiple times is wrong for two reasons:
 
-**When to use:** Any module that wraps an external binary via `$` shell calls. This is the established pattern for `niri.ts`, `tmux.ts`, `cmux.ts`.
+1. `runner.ts` calls `windowDetector.begin()` once before `open()` and `windowDetector.resolve()` once after. Calling `open()` N times would require N begin/resolve cycles in runner.ts, which runner.ts does not do and must not be changed to do.
 
-**Trade-offs:** Requires test files to import `_exec` and mutate it. More explicit than `mock.module()`, and avoids cache pollution in Bun's test runner when multiple test files run in the same process.
+2. The `WindowDetector.begin()` snapshot purpose is to capture the universe of windows before tier-1 integrations run. That snapshot is already complete by the time aerospace's `open()` is called at order 31. The snapshot is shared across all N workspace entries — there is no per-workspace-entry snapshot.
+
+The correct architecture: `open()` contains a single `for...of` loop over the `workspaces` array. Each iteration processes one aerospace workspace entry: validate, flatten, move windows, launch commands, apply layout, focus. The loop is entirely inside the existing `open()` method body.
 
 ```typescript
-// src/lib/aerospace.ts
-export type AerospaceCmdResult = { exitCode: number; stdout: string }
+async open(ctx: IntegrationContext, _artifactPath: string | null, bag: ArtifactBag): Promise<null> {
+  if (!(await isAerospaceRunning())) return null
 
-export const _exec = {
-  run: async (args: string[]): Promise<AerospaceCmdResult> => {
-    const result = await $`aerospace ${args}`.quiet().nothrow()
-    return { exitCode: result.exitCode, stdout: result.text() }
-  },
+  const config = parseConfig(ctx)
+  if (!config.workspaces?.length) { /* skip */ return null }
+
+  const allWorkspaces = await listWorkspaces()  // one call, reused per iteration
+
+  for (const wsEntry of config.workspaces) {
+    await processWorkspaceEntry(wsEntry, allWorkspaces, bag, ctx)
+  }
+
+  return null
 }
 ```
 
-The only difference from niri's `_exec`: `$\`aerospace ${args}\`` instead of `$\`niri msg ${args}\``. No IPC socket involved — direct subprocess call.
+### Question 2: WindowDetector — one global snapshot or per-workspace
 
-### Pattern 2: `--format` TSV Parsing vs JSON Parsing
+**Decision: one global snapshot (no change to WindowDetector).**
 
-**What:** AeroSpace outputs tab-separated values when `--format` is used. The caller provides a format string with `%{field-name}` tokens separated by `\t`. The output is parsed by splitting on `\n` then `\t` and mapping positionally to typed fields.
+`WindowDetector.begin()` and `resolve()` operate at the integration level, not the workspace-entry level. The snapshot captured in `begin()` is the set of all windows before any tier-1 integration (vscode, intellij) opens. The `resolve()` after aerospace's `open()` returns returns any windows that appeared after tier-1 integrations ran and before aerospace's `open()` finished.
 
-**When to use:** All `list-windows` and `list-workspaces` calls. `list-windows --json` is too sparse (only 3 fields). `--format` provides `app-pid`, `app-bundle-id`, `workspace` and other fields essential for window identification and ArtifactBag matching.
+Within `open()`, each workspace entry's `commands` array uses `snapshotWindowIds()` directly — this is per-command snapshot-delta, which already exists in v0.11.1 and does not involve `WindowDetector`.
 
-**Trade-offs:** Field order is determined by the format string, not the API. The format string is the schema contract — it must stay in sync with the parser. Use a named constant to prevent drift.
+The `WindowDetector` interface stays completely unchanged. Its begin/resolve cycle happens exactly once around the entire `open()` call, which now contains the N-entry loop internally.
+
+### Question 3: Bag window routing — first workspace only
+
+**Decision: unrouted tier-1 windows (vscode, intellij artifacts in bag) go to `workspaces[0]`.**
+
+"Bag windows" means window IDs accumulated in `ArtifactBag` by tier-1 integrations (vscode, intellij). In v0.11.1, every bag window was moved to the single configured workspace. With a workspaces array, the bag windows have no explicit per-window routing annotation.
+
+The routing rule: bag windows are moved to `workspaces[0]` only, during the first loop iteration.
+
+Implementation: extract bag-window movement out of the general loop body and apply it only when the loop index is 0:
 
 ```typescript
-// src/lib/aerospace.ts
+for (let i = 0; i < config.workspaces.length; i++) {
+  const wsEntry = config.workspaces[i]
+  const isBagTarget = i === 0  // only first entry receives bag windows
 
-// Format string is the schema — keep in sync with parseWindowRow()
-const WINDOW_FORMAT =
-  "%{window-id}\t%{app-bundle-id}\t%{app-name}\t%{app-pid}\t%{workspace}" +
-  "\t%{window-layout}\t%{window-is-fullscreen}\t%{window-title}"
-
-export type AerospaceWindow = {
-  windowId: number
-  appBundleId: string
-  appName: string
-  appPid: number
-  workspace: string
-  windowLayout: string
-  windowIsFullscreen: boolean
-  windowTitle: string
-}
-
-function parseWindowRow(line: string): AerospaceWindow | null {
-  const parts = line.split("\t")
-  if (parts.length < 8) return null
-  const windowId = parseInt(parts[0], 10)
-  if (isNaN(windowId)) return null
-  return {
-    windowId,
-    appBundleId: parts[1],
-    appName: parts[2],
-    appPid: parseInt(parts[3], 10),
-    workspace: parts[4],
-    windowLayout: parts[5],
-    windowIsFullscreen: parts[6] === "true",
-    windowTitle: parts[7],
+  if (isBagTarget) {
+    await moveBagWindowsToWorkspace(wsEntry.workspace, bag, ctx)
   }
-}
 
-export async function listAerospaceWindows(): Promise<AerospaceWindow[]> {
-  try {
-    const result = await _exec.run(["list-windows", "--all", "--format", WINDOW_FORMAT])
-    if (result.exitCode !== 0) return []
-    return result.stdout
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map(parseWindowRow)
-      .filter((w): w is AerospaceWindow => w !== null)
-  } catch {
-    return []
-  }
+  // ... flatten, commands, layout, focus for this entry
 }
 ```
 
-Contrast with niri: `JSON.parse(result.stdout)` then `z.array(NiriWindowSchema).parse(...)`. AeroSpace uses positional parsing — simpler but the exported TypeScript type still provides the same level of consumer-facing type safety.
+This rule is simple, predictable, and documented in the schema hint. A future schema extension could add an explicit `receives_bag: true` field to opt other entries in, but that is out of scope for v0.12.0.
 
-### Pattern 3: Normalization-Aware Layout Control
+### Question 4: Schema design
 
-**What:** AeroSpace's `enable-normalization-flatten-containers` config setting changes which layout commands are effective. With normalization on (the default and most common user config), `split` returns exit code 1 with a message saying it has no effect. With normalization off, `split` works but `join-with` and `flatten-workspace-tree` are the correct primitives.
+**Decision: `workspaces` array replaces flat fields. Per-entry config is a named sub-schema.**
 
-**When to use:** Any time the integration issues layout commands after moving windows.
-
-**Trade-offs:** Detecting normalization state from `aerospace config --get` is unreliable — reference testing showed the command does not expose all TOML keys even when they exist in the config file. Reading the TOML file directly is more reliable but adds a TOML parser dependency. The cleanest approach: let the user declare normalization mode in the git-stacks config schema, defaulting to `true` (normalization on, which matches the AeroSpace default). The integration never calls `split` by default.
-
-Config schema in `integrations/aerospace.ts`:
+The v0.11.1 flat schema:
 
 ```typescript
 const aerospaceConfigSchema = z.object({
   enabled: z.boolean().optional(),
-  workspace: z.string().optional(),          // target AeroSpace workspace name or number
-  focus: z.boolean().optional(),             // switch to workspace after opening
-  normalization: z.boolean().optional(),     // true=use join-with/flatten, false=use split
-  layout: z.enum([
-    "h_tiles", "v_tiles", "h_accordion", "v_accordion"
-  ]).optional(),
+  workspace: z.string(),              // required in v0.11.1
+  layout: z.enum([...]).optional(),
+  normalization: z.boolean().optional(),
+  flatten_before_open: z.boolean().optional(),
+  focus: z.boolean().optional(),
+  commands: z.array(aerospaceCommandSchema).optional(),
 })
 ```
 
-Runtime selection:
+The v0.12.0 schema:
 
 ```typescript
-const normalization = config.normalization ?? true  // default: normalization enabled
-if (normalization) {
-  await flattenWorkspaceTree(targetWorkspace)        // reset to root policy
-  await applyRootLayout(layout)                      // layout h_tiles etc.
-} else {
-  await splitLayout(layout)                          // split horizontal/vertical
+// Per-entry schema — same fields as flat schema minus `enabled`
+const aerospaceWorkspaceEntrySchema = z.object({
+  workspace: z.string(),
+  layout: z.enum(["h_tiles", "v_tiles", "h_accordion", "v_accordion"]).optional(),
+  normalization: z.boolean().optional(),
+  flatten_before_open: z.boolean().optional(),
+  focus: z.boolean().optional(),
+  commands: z.array(aerospaceCommandSchema).optional(),
+})
+
+// Top-level schema — `enabled` stays at this level
+const aerospaceConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  workspaces: z.array(aerospaceWorkspaceEntrySchema).optional(),
+})
+```
+
+**Focus validation** is a post-parse check, not a Zod refinement. Zod refinements on arrays produce confusing error messages. Instead, validate after `safeParse` succeeds:
+
+```typescript
+const focusCount = config.workspaces.filter((ws) => ws.focus === true).length
+if (focusCount > 1) {
+  spinner?.stop("AeroSpace: at most one workspace entry may have focus: true — skipping")
+  return null
 }
 ```
 
-### Pattern 4: Snapshot-Delta WindowDetector for AeroSpace
+**Breaking change handling:** The v0.11.1 format has flat fields (`workspace: "5"`, not a `workspaces` array). v0.12.0 drops the flat format — this is an intentional breaking change from v0.11.1, aligned with the milestone goal. No migration shim is required; users must update their YAML. The CHANGELOG entry must clearly state this.
 
-**What:** Implement the `WindowDetector` interface on the integration plugin (same as niri). `begin()` captures the current `window-id` set via `listAerospaceWindows()`. `resolve()` polls until new IDs appear. `runner.ts` calls `begin()` before each integration's `open()` and `resolve()` after it returns a `WindowArtifact`, populating `artifact.windowIds["aerospace"]` without those integrations importing from `aerospace.ts`.
+## Data Flow
 
-**When to use:** Required so that tier-3 AeroSpace integration can receive window IDs from tier-1/tier-2 integrations (vscode, intellij, tmux) and move those windows to the target AeroSpace workspace.
+### Multi-workspace open() sequence
 
-**Trade-offs:** Same polling loop as niri — 200ms initial delay, exponential backoff, 10s timeout. Works reliably for both new-app launches and new-window-in-running-app cases per the reference exploration.
+```
+open(ctx, null, bag)
+    |
+    v
+isAerospaceRunning() → false → return null
+    |
+    v
+parse aerospaceConfigSchema from ctx.workspace.settings?.integrations?.["aerospace"]
+    |
+    v
+if !config.workspaces?.length → log "skipped" → return null
+    |
+    v
+focusCount = count entries with focus: true
+if focusCount > 1 → log error → return null
+    |
+    v
+allWorkspaces = await listWorkspaces()   ← ONE call for all entries
+    |
+    v
+for i = 0..N-1 (wsEntry of config.workspaces):
+    |
+    ├─ validate wsEntry.workspace in allWorkspaces → warn + continue if missing
+    |
+    ├─ if wsEntry.flatten_before_open:
+    |     flattenWorkspaceTree(wsEntry.workspace)
+    |
+    ├─ if i === 0:   ← BAG-ROUTING: first entry receives all bag windows
+    |     for artifact of bag values:
+    |       if artifact.kind === "window":
+    |         for wid of artifact.windowIds?.["aerospace"]:
+    |           moveNodeToWorkspace(wid, wsEntry.workspace)
+    |
+    ├─ if wsEntry.commands?.length:   ← per-entry commands
+    |     for cmd of wsEntry.commands:
+    |       [source / app / command branching — same as v0.11.1]
+    |
+    ├─ if wsEntry.layout:   ← per-entry layout
+    |     focus a window in wsEntry.workspace
+    |     setLayout(wsEntry.layout)
+    |
+    └─ if wsEntry.focus:   ← workspace-level focus
+          _exec.run(["workspace", wsEntry.workspace])
 
-```typescript
-// integrations/aerospace.ts
-windowDetector: {
-  id: "aerospace",
-  async begin(): Promise<DetectorSnapshot> {
-    const running = await isAerospaceRunning()
-    if (!running) return { _brand: "aerospace", data: new Set<number>() }
-    const windows = await listAerospaceWindows()
-    return { _brand: "aerospace", data: new Set(windows.map((w) => w.windowId)) }
-  },
-  async resolve(snapshot: DetectorSnapshot): Promise<number[]> {
-    const beforeIds = snapshot.data as Set<number>
-    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-    const deadline = Date.now() + 10_000
-    let delay = 200
-    while (Date.now() < deadline) {
-      await sleep(delay)
-      const after = await listAerospaceWindows()
-      const newIds = after.map((w) => w.windowId).filter((id) => !beforeIds.has(id))
-      if (newIds.length > 0) return newIds
-      delay = Math.min(delay * 2, 2_000)
-    }
-    return []
-  },
-} satisfies WindowDetector,
+    v
+return null
 ```
 
-Key field name difference from niri: `w.windowId` (camelCase, from TSV parser) vs `w.id` (Zod-validated JSON field). The `_brand: "aerospace"` string prevents DetectorSnapshot values from different detectors from being cross-consumed.
+### WindowDetector flow (unchanged from v0.11.1)
 
-### Pattern 5: AeroSpace Running Check (macOS-Only Gate)
+```
+runner.ts processes aerospace (order 31):
 
-**What:** niri uses `Boolean(process.env.NIRI_SOCKET)` as a zero-cost running check. AeroSpace exports no equivalent env var. The gate is: `process.platform === "darwin"` first, then probe the binary with a lightweight command.
+  aerospaceDetector.begin()
+  → snapshot all current window IDs as Set<number>
 
-**When to use:** At the top of `open()` in the integration plugin — return null immediately if AeroSpace is not available.
+  aerospace.open(ctx, null, bag)   ← multi-workspace loop runs here
+  → bag already contains vscode/intellij WindowArtifacts with windowIds["aerospace"]
+
+  aerospaceDetector.resolve(snapshot)
+  → polls for any NEW window IDs since begin()
+  → returns new IDs (used by runner to populate bag["aerospace"] if aerospace returned WindowArtifact)
+  → aerospace always returns null, so resolve() result is unused
+```
+
+Note: `resolve()` still runs because runner.ts calls it for all detectors after every `open()`. The result is ignored because aerospace returns null (tier-3 consumer, never a WindowArtifact producer). This is unchanged from v0.11.1.
+
+## Architectural Patterns
+
+### Pattern 1: Single listWorkspaces() call, reused per loop iteration
+
+**What:** Call `listWorkspaces()` once before the loop. Pass the result into each iteration for existence-checking.
+
+**When to use:** Always — even for a 1-entry array. Avoids N subprocess calls for N workspace entries.
+
+**Trade-offs:** The list is a snapshot taken at open() start. A workspace removed from AeroSpace during open() would produce a false-positive existence check. This is acceptable — the window between snapshot and use is milliseconds in practice.
 
 ```typescript
-// src/lib/aerospace.ts
-export async function isAerospaceRunning(): Promise<boolean> {
-  if (process.platform !== "darwin") return false
+const allWorkspaces = await listWorkspaces()
+for (const wsEntry of config.workspaces) {
+  const exists = allWorkspaces.some((ws) => ws.workspace === wsEntry.workspace)
+  if (!exists) {
+    if (!ctx.silent) p.log.warn(`AeroSpace workspace "${wsEntry.workspace}" not found — skipping`)
+    continue  // skip this entry, continue loop
+  }
+  // ...
+}
+```
+
+### Pattern 2: Partial failure tolerance — continue on entry failure
+
+**What:** A try/catch wraps each loop iteration body. Failure of one entry does not abort subsequent entries.
+
+**When to use:** Required for multi-workspace. If workspace entry "5" fails to set layout, workspace entry "6" should still have its commands launched.
+
+**Trade-offs:** Silent continuation makes debugging harder. Mitigated by logging a warn per caught error with the workspace name in context.
+
+```typescript
+for (const wsEntry of config.workspaces) {
   try {
-    const result = await _exec.run(["list-workspaces", "--json"])
-    return result.exitCode === 0
-  } catch {
-    return false
+    await processEntry(wsEntry, ...)
+  } catch (err) {
+    if (!ctx.silent) p.log.warn(`AeroSpace: workspace "${wsEntry.workspace}" failed: ${String(err)}`)
+    // continue — partial failure acceptable
   }
 }
 ```
 
-`list-workspaces --json` is cheap, read-only, and exits 0 when AeroSpace is running and manages the display. Cache the result within a single `open()` invocation to avoid repeated probes.
+This extends the existing per-command try/catch in v0.11.1 to the per-entry level.
 
-## Data Flow
+### Pattern 3: Focus validation as post-parse check
 
-### Integration Open Flow (AeroSpace at Order 31)
+**What:** After `safeParse()` succeeds, count entries with `focus: true`. Reject configs with more than one.
 
-```
-runIntegrations(ctx)
-    |
-    v
-sorted: vscode(10) → intellij(11) → tmux(20) → niri(30) → aerospace(31)
-    |
-    v
-For each integration:
-  detector.begin()  <-- aerospaceDetector.begin() captures window-id Set
-      |
-      v
-  integration.open(ctx, artifactPath, bag)  <-- e.g. vscode opens, returns WindowArtifact{pid}
-      |
-      v
-  if artifact.kind === "window":
-    aerospaceDetector.resolve(snapshot)
-    --> polls listAerospaceWindows() until new windowId appears
-    artifact.windowIds["aerospace"] = [newWindowId]
-      |
-      v
-  bag["vscode"] = artifact  <-- now has windowIds["aerospace"]
+**When to use:** Any cross-entry validation that is awkward to express in Zod (cross-array constraints).
 
-... at order 31 ...
+**Trade-offs:** Zod's `.superRefine()` could handle this, but error messages from Zod refinements on array items are less user-friendly than a manual check with a plain English log message.
 
-aerospace.open(ctx, null, bag)
-    |
-    v
-  isAerospaceRunning()  --> false? return null immediately
-    |
-    v
-  resolve target workspace from:
-    ctx.workspace.settings?.integrations?.["aerospace"]?.workspace ?? "1"
-    |
-    v
-  for each artifact in bag:
-    artifact.windowIds?.["aerospace"]?.forEach(id =>
-      moveNodeToWorkspace(id, targetWorkspace)
-    )
-    |
-    v
-  apply layout (normalization-aware):
-    normalization=true  --> flattenWorkspaceTree + applyRootLayout
-    normalization=false --> splitLayout
-    |
-    v
-  optionally focus or return to prior workspace (mirrors niri focus: true/false)
-    |
-    v
-  return null  <-- tier-3 is consumer, not producer
+```typescript
+const parsed = aerospaceConfigSchema.safeParse(rawConfig)
+if (!parsed.success) { /* skip */ return null }
+const config = parsed.data
+
+const focusEntries = config.workspaces?.filter((ws) => ws.focus === true) ?? []
+if (focusEntries.length > 1) {
+  spinner?.stop("AeroSpace: at most one workspace entry may have focus: true — skipped")
+  return null
+}
 ```
 
-### TSV Parsing Data Flow
+### Pattern 4: Preserving per-entry spinner messages
 
-```
-_exec.run(["list-windows", "--all", "--format", WINDOW_FORMAT])
-    |
-result.stdout = "21096\tcom.apple.Notes\tNotes\t59035\t5\th_tiles\tfalse\tNotes\n..."
-    |
-result.stdout.trim().split("\n").filter(Boolean)
-    |
-.map(parseWindowRow)  --> positional split on \t --> typed AerospaceWindow objects
-    |
-.filter(w => w !== null)  --> AerospaceWindow[]
-    |
-used for:
-  begin()   --> new Set(windows.map(w => w.windowId))
-  resolve() --> diff against beforeIds Set
-  open()    --> filter by workspace name for context
-```
+**What:** The spinner is started once at open() entry, updated per meaningful action, and stopped at the end.
 
-### Workspace YAML Config Path
+**When to use:** Same as v0.11.1 — `ctx.silent` gates all spinner and log calls.
 
-```
-User workspace YAML:
-  settings:
-    integrations:
-      aerospace:
-        enabled: true
-        workspace: "5"          # target AeroSpace workspace
-        focus: false            # don't switch to it after opening
-        normalization: true     # use join-with/flatten (default)
-        layout: "h_tiles"       # root layout to apply
-    |
-    v
-aerospaceConfigSchema.safeParse(ctx.workspace.settings?.integrations?.["aerospace"] ?? {})
-```
-
-## Build Order and Dependencies
-
-```
-Step 1: src/lib/aerospace.ts
-  deps: none
-  blast radius: new file only
-  test approach: _exec.run = mockFn directly (unit tests, no mock.module)
-
-Step 2: src/lib/integrations/aerospace.ts
-  deps: aerospace.ts (Step 1)
-  blast radius: new file only
-  test approach: mock.module("@/lib/aerospace", () => ({...})) — all exports mocked
-                 same pattern as Phase 20 niri integration tests
-
-Step 3: src/lib/integrations/index.ts
-  deps: aerospace.ts plugin (Step 2)
-  blast radius: single import line + array entry
-
-Step 4: src/commands/doctor.ts
-  deps: none — independent of Steps 1-3
-  blast radius: one entry in binaries array
-  can be done in any order relative to Steps 1-3
-```
-
-All four steps are additive. No existing function signatures change. No YAML schema migrations.
-
-## Key Differences: AeroSpace vs Niri
-
-| Concern | Niri | AeroSpace |
-|---------|------|-----------|
-| Transport | IPC socket (`niri msg`) | CLI subprocess (`aerospace <cmd>`) |
-| Running check | `process.env.NIRI_SOCKET` | `platform === "darwin" && exit code 0` |
-| Output format | JSON → Zod validation | `--format` TSV → positional field parsing |
-| Output schema definition | Zod schemas (`NiriWindowSchema`) | TypeScript types + format string constant |
-| Workspace model | Dynamic; create new on demand via `focusWorkspaceDown` | Static; user-defined in aerospace.toml |
-| Create workspace | `focusWorkspaceDown()` + `setWorkspaceName()` | Not possible — move to existing target workspace |
-| Window movement command | `move-window-to-workspace` | `move-node-to-workspace` |
-| Layout primitives | `set-column-width`, `consume-or-expel`, `move-column-to-index` | `layout`, `join-with`, `flatten-workspace-tree` |
-| Normalization concept | N/A | `enable-normalization-flatten-containers` gates which layout cmds work |
-| Cleanup on remove | `unsetNiriWorkspaceName` | None — static workspace; user manages lifecycle |
-| Plugin order | 30 | 31 (runs after niri when both enabled) |
+**Trade-offs:** The spinner text can only show one message at a time. For a 3-entry workspaces array, the last meaningful action's message is shown at stop. This is acceptable for terminal UX; the alternative (one spinner per entry) would cause flicker.
 
 ## Integration Points
 
@@ -386,76 +329,100 @@ All four steps are additive. No existing function signatures change. No YAML sch
 
 | File | Status | Nature of Change |
 |------|--------|-----------------|
-| `src/lib/aerospace.ts` | NEW | ~100 lines — TSV-parsing CLI wrappers with `_exec` injection |
-| `src/lib/integrations/aerospace.ts` | NEW | ~150 lines — tier-3 plugin mirroring niri integration structure |
-| `src/lib/integrations/index.ts` | MODIFIED | +1 import line, +1 array entry |
-| `src/commands/doctor.ts` | MODIFIED | +1 entry in `binaries` array inside `doctorCommand.action` |
-| `src/lib/integrations/types.ts` | UNCHANGED | No interface changes needed |
-| `src/lib/integrations/runner.ts` | UNCHANGED | Already supports multiple WindowDetectors |
+| `src/lib/integrations/aerospace.ts` | MODIFIED | New `aerospaceWorkspaceEntrySchema`, replace flat `aerospaceConfigSchema`, loop in `open()`, focus validation, bag routing to index 0 |
+| `tests/lib/integrations/aerospace.test.ts` | MODIFIED | New test cases for multi-entry array, focus validation, bag routing, partial failure |
+| `src/lib/aerospace.ts` | UNCHANGED | No new shell wrappers needed |
+| `src/lib/integrations/types.ts` | UNCHANGED | No interface changes |
+| `src/lib/integrations/runner.ts` | UNCHANGED | Already correct — open() loop is internal to aerospace |
+| `src/lib/integrations/index.ts` | UNCHANGED | Already registered |
+| `src/commands/doctor.ts` | UNCHANGED | Binary check already in place from v0.11.0 |
 
 ### Internal Module Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| `aerospace.ts` → `integrations/aerospace.ts` | Direct named imports | Mirrors `niri.ts` → `integrations/niri.ts` |
-| `runner.ts` → `integrations/aerospace.ts` | `Integration` interface only | No runner changes |
-| `integrations/aerospace.ts` → `ArtifactBag` | Read `bag[id]?.windowIds?.["aerospace"]` | Consumer, not producer |
-| `doctor.ts` → `aerospace` binary | `checkBinary("aerospace")` helper | No new helper needed |
+| `runner.ts` → `aerospace.open()` | Single call, returns null | runner.ts does not know about per-entry looping |
+| `runner.ts` → `aerospace.windowDetector` | begin()/resolve() once each | Global snapshot — unchanged |
+| `aerospace.open()` → `bag` | Read-only: `bag[id]?.windowIds?.["aerospace"]` | Only index-0 entry consumes bag windows |
+| `aerospace.open()` → `listWorkspaces()` | One call, result reused | No per-entry subprocess call |
+
+## Build Order
+
+```
+Step 1: Update aerospaceWorkspaceEntrySchema + aerospaceConfigSchema
+  File: src/lib/integrations/aerospace.ts
+  Scope: schema definitions only — no behavior changes yet
+  Dependency: none
+
+Step 2: Update open() to loop over workspaces[]
+  File: src/lib/integrations/aerospace.ts
+  Scope: replace single-workspace body with for-loop; add focus validation; add bag routing
+  Dependency: Step 1 (new schema types must exist)
+
+Step 3: Tests
+  File: tests/lib/integrations/aerospace.test.ts
+  Scope: new test cases for array schema, focus validation, bag routing to [0], per-entry failure tolerance
+  Dependency: Step 2 (tests verify new behavior)
+
+Step 4: CHANGELOG + README update
+  Scope: document breaking schema change from flat to workspaces array
+  Dependency: Steps 1-3 complete
+```
+
+All steps are confined to `src/lib/integrations/aerospace.ts`. No cascading changes to other production files. The WindowDetector on the same object is not modified.
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Using `list-windows --json` Instead of `--format`
+### Anti-Pattern 1: Calling open() multiple times from runner.ts
 
-**What people do:** Call `aerospace list-windows --json` because JSON looks more structured.
+**What people do:** Add a loop in runner.ts or workspace-ops.ts that calls `aerospaceIntegration.open()` once per workspace entry.
 
-**Why it's wrong:** Default `--json` returns only 3 fields: `app-name`, `window-id`, `window-title`. Missing `app-pid`, `app-bundle-id`, and `workspace`. Without `app-pid`, matching windows to `WindowArtifact` entries in `ArtifactBag` for `windowIds` population is not possible.
+**Why it's wrong:** runner.ts calls `windowDetector.begin()` before `open()` and `windowDetector.resolve()` after. Multiple open() calls with the same snapshot would cause the snapshot delta to include windows from previous open() calls as "new" windows in subsequent calls. The bag window state also changes between calls. The Integration interface contract is one call per integration per workspace open.
 
-**Do this instead:** Always use `list-windows --all --format WINDOW_FORMAT`. Define `WINDOW_FORMAT` as a named constant that includes all 8 required fields in a fixed order.
+**Do this instead:** Put the loop entirely inside `open()`. The Integration interface is unchanged.
 
-### Anti-Pattern 2: Using `split` Without Normalization Check
+### Anti-Pattern 2: Keeping the flat schema as a fallback
 
-**What people do:** Issue `aerospace split vertical` to create a layout split.
+**What people do:** Add a compatibility path: if `workspaces` array is absent, fall back to reading flat `workspace: "5"` from the same config object.
 
-**Why it's wrong:** With `enable-normalization-flatten-containers = true` (the AeroSpace default), `split` returns exit code 1 and a message saying it has no effect. The integration would silently fail to set layout.
+**Why it's wrong:** v0.12.0 is explicitly a breaking change. Maintaining two schema paths doubles the test surface, the code paths, and the documentation surface. The config is user-editable YAML with no automatic migration — a clear CHANGELOG entry is the correct mitigation.
 
-**Do this instead:** Default to normalization-on behavior (`join-with` + `flatten-workspace-tree`). Expose `normalization: boolean` in the config schema for users who have disabled normalization in their `aerospace.toml`.
+**Do this instead:** Parse only `aerospaceConfigSchema` with the `workspaces` array. If `workspaces` is absent or empty, log "no workspaces configured" and return null. Document the migration in the CHANGELOG.
 
-### Anti-Pattern 3: Probing `aerospace config --get` for Normalization State
+### Anti-Pattern 3: Per-entry listWorkspaces() calls
 
-**What people do:** Call `aerospace config --get enable-normalization-flatten-containers` to detect normalization state automatically without requiring user config.
+**What people do:** Inside the loop, call `listWorkspaces()` per entry to get a "fresh" workspace list for existence-checking.
 
-**Why it's wrong:** Reference testing showed `aerospace config --get` does not reliably expose all TOML keys even when they exist in the config file. Automating on unreliable output causes non-deterministic layout behavior.
+**Why it's wrong:** Each `listWorkspaces()` call spawns an `aerospace` subprocess. With 3 workspace entries, that is 3 extra subprocess calls that return the same data. AeroSpace workspaces are static (defined in aerospace.toml). They do not appear or disappear during an open() call.
 
-**Do this instead:** Provide an explicit `normalization` field in the git-stacks integration config schema. Default `true` (the safest assumption). Document the setting in the hint string so users with non-default configs know to set it.
+**Do this instead:** Call `listWorkspaces()` once before the loop and reuse the result.
 
-### Anti-Pattern 4: Treating AeroSpace Workspaces as Dynamic Like Niri
+### Anti-Pattern 4: Routing bag windows to every workspace entry
 
-**What people do:** Attempt to create a fresh AeroSpace workspace per git-stacks workspace, mirroring `focusNiriWorkspaceDown()`.
+**What people do:** In each loop iteration, move all bag windows (vscode/intellij window IDs) to the current workspace entry's target.
 
-**Why it's wrong:** AeroSpace workspaces are static, user-defined in `aerospace.toml` and bound to keyboard shortcuts. There is no "create new workspace" command. AeroSpace's model is permanent numbered/named slots, not a dynamic list.
+**Why it's wrong:** A vscode window can only live in one AeroSpace workspace at a time. Moving it to entry[0] and then entry[1] leaves it in entry[1]. The final position is determined by the last iteration that processes it, not the user's intent. The result is non-deterministic from the user's perspective.
 
-**Do this instead:** Require the user to specify a `workspace` in `settings.integrations.aerospace.workspace`. Default to `"1"` if unset. Move windows to that workspace with `move-node-to-workspace`. Document in the hint that the workspace must exist in the user's `aerospace.toml`.
+**Do this instead:** Bag windows go to `workspaces[0]` only. This is the primary workspace — the one most likely to receive the IDEs. Document this rule in the schema hint.
 
-### Anti-Pattern 5: Importing Integration Directly in Tests Without Module-Level Mocking
+### Anti-Pattern 5: Zod `.superRefine()` for focus count validation
 
-**What people do:** Import `aerospaceIntegration` and call `open()` in tests while expecting the actual `aerospace` CLI subprocess to be skipped.
+**What people do:** Add a `.superRefine()` on `aerospaceConfigSchema` to enforce "at most one focus: true entry".
 
-**Why it's wrong:** The `$` shell in Bun cannot be intercepted via `mock.module()`. The integration calls `listAerospaceWindows()` which calls `_exec.run()` which calls `$\`aerospace\``.
+**Why it's wrong:** Zod refinement errors on array items produce path-qualified messages like `"workspaces[1].focus: invalid"` which are unhelpful in a CLI context where the user needs a plain English explanation. Zod also short-circuits `.safeParse()` on refinement failure, making it harder to surface which entry violated the rule.
 
-**Do this instead:**
-- Unit tests for `src/lib/aerospace.ts`: import `{ _exec }` and set `_exec.run = mockFn` directly.
-- Integration tests for `src/lib/integrations/aerospace.ts`: use `mock.module("@/lib/aerospace", () => ({ listAerospaceWindows: mockFn, isAerospaceRunning: mockFn, moveNodeToWorkspace: mockFn, ... }))` — same pattern Phase 20 niri integration tests use.
+**Do this instead:** Let `.safeParse()` validate field types only. After parsing succeeds, count `focus: true` entries manually and log a user-readable message if the count exceeds 1.
 
 ## Sources
 
-- `src/lib/niri.ts` — authoritative pattern for `_exec` injection and CLI wrapper structure (direct code analysis)
-- `src/lib/integrations/niri.ts` — authoritative pattern for tier-3 plugin, WindowDetector, ArtifactBag consumption (direct code analysis)
-- `src/lib/integrations/types.ts` — `Integration`, `WindowDetector`, `DetectorSnapshot`, `ArtifactBag` contracts (direct code analysis)
-- `src/lib/integrations/runner.ts` — how WindowDetectors are called around `open()` (direct code analysis)
-- `src/commands/doctor.ts` — binary check pattern: `checkBinary()`, `binaries` array structure (direct code analysis)
-- `_references/aerospace.md` — direct AeroSpace CLI exploration: TSV format fields, normalization behavior, snapshot-delta strategy, commands classification
+- `src/lib/integrations/aerospace.ts` — full v0.11.1 implementation, direct code analysis
+- `src/lib/integrations/runner.ts` — begin/open/resolve loop, direct code analysis
+- `src/lib/integrations/types.ts` — Integration and WindowDetector interface contracts, direct code analysis
+- `src/lib/aerospace.ts` — CLI wrapper layer, direct code analysis
+- `tests/lib/integrations/aerospace.test.ts` — existing test structure and mock patterns, direct code analysis
+- `.planning/PROJECT.md` — milestone goals and v0.12.0 feature list, direct read
 
 ---
 
-*Architecture research for: AeroSpace window manager integration (git-stacks v0.11.0)*
-*Researched: 2026-03-28*
+*Architecture research for: multi-workspace AeroSpace integration (git-stacks v0.12.0)*
+*Researched: 2026-03-29*
