@@ -23,7 +23,7 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 ### Release
 
-- [ ] **REL-01**: Version bump to 0.12.0, CHANGELOG with breaking change migration example, README updated with multi-workspace config
+- [x] **REL-01**: Version bump to 0.12.0, CHANGELOG with breaking change migration example, README updated with multi-workspace config
 
 ## Future Requirements
 
@@ -55,7 +55,7 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 | PROC-02 | Phase 48 | Complete |
 | PROC-03 | Phase 48 | Complete |
 | PROC-04 | Phase 48 | Complete |
-| REL-01 | Phase 49 | Pending |
+| REL-01 | Phase 49 | Complete |
 
 **Coverage:**
 - v0.12.0 requirements: 9 total
@@ -64,4 +64,4 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 ---
 *Requirements defined: 2026-03-29*
-*Last updated: 2026-03-29 after Phase 48 completion*
+*Last updated: 2026-03-29 after Phase 49 completion*
