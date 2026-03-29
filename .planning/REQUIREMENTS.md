@@ -47,21 +47,21 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | TBD | Pending |
-| SCHEMA-02 | TBD | Pending |
-| SCHEMA-03 | TBD | Pending |
-| SCHEMA-04 | TBD | Pending |
-| PROC-01 | TBD | Pending |
-| PROC-02 | TBD | Pending |
-| PROC-03 | TBD | Pending |
-| PROC-04 | TBD | Pending |
-| REL-01 | TBD | Pending |
+| SCHEMA-01 | Phase 47 | Pending |
+| SCHEMA-02 | Phase 47 | Pending |
+| SCHEMA-03 | Phase 47 | Pending |
+| SCHEMA-04 | Phase 47 | Pending |
+| PROC-01 | Phase 48 | Pending |
+| PROC-02 | Phase 48 | Pending |
+| PROC-03 | Phase 48 | Pending |
+| PROC-04 | Phase 48 | Pending |
+| REL-01 | Phase 49 | Pending |
 
 **Coverage:**
 - v0.12.0 requirements: 9 total
-- Mapped to phases: 0
-- Unmapped: 9
+- Mapped to phases: 9
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-29*
-*Last updated: 2026-03-29 after initial definition*
+*Last updated: 2026-03-29 after roadmap creation*

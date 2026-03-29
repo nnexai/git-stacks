@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: Multi-Workspace AeroSpace
-status: defining
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-03-29"
 last_activity: 2026-03-29
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-29)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Milestone v0.12.0 — Defining requirements
+**Current focus:** Phase 47 — Multi-Workspace Schema
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-29 — Milestone v0.12.0 started
+Phase: 47 of 49 (Multi-Workspace Schema)
+Plan: — of TBD
+Status: Ready to plan
+Last activity: 2026-03-29 — Roadmap created for v0.12.0
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -53,10 +55,10 @@ Last activity: 2026-03-29 — Milestone v0.12.0 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [v0.11.0]: AeroSpace single-workspace config is being replaced with `workspaces` array (breaking change)
-- [v0.11.0]: Tier-3 plugin (order 31) for AeroSpace — same order carries forward
-- [v0.12.0]: Bag windows from tier-1 integrations default to workspaces[0]
-- [v0.12.0]: Focus validation — at most one workspace entry may have `focus: true`
+- [v0.12.0]: Breaking change — `workspaces` array replaces flat `workspace:` field; no backward compat in schema
+- [v0.12.0]: Bag windows (vscode, intellij) route to `workspaces[0]` only; subsequent entries get own command windows
+- [v0.12.0]: Focus validation done as post-parse runtime check (plain-English log), not Zod `.superRefine` (produces unfriendly path-qualified error strings in CLI context)
+- [v0.12.0]: `listWorkspaces()` hoisted before loop — called exactly once regardless of entry count
 
 ### Pending Todos
 
@@ -75,5 +77,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-03-29
-Stopped at: Milestone v0.12.0 initialization
-Next action: Define requirements and create roadmap
+Stopped at: Roadmap created — 3 phases (47-49), 9/9 requirements mapped
+Next action: `/gsd:plan-phase 47`

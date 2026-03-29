@@ -10,7 +10,8 @@
 - ✅ **v0.8.0 Integration Polish & Workspace UX** — Phases 29-32 (shipped 2026-03-24) — Upstream branch tracking, dashboard linked issues fix, workspace CWD auto-detection, GitLab branch slash investigation. See [milestones/v0.8.0-ROADMAP.md](milestones/v0.8.0-ROADMAP.md)
 - ✅ **v0.9.0 Identity & Completion Integrity** — Phases 33-36 (shipped 2026-03-25) — Name-based identity, completion audit, test isolation, dynamic name completion. See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md)
 - ✅ **v0.10.0 Multi-Agent Workspace Tooling** — Phases 37-42 (shipped 2026-03-28) — Agent path discovery, multi-repo pull, TUI staleness, template composition, security hardening. See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md)
-- 🚧 **v0.11.0 AeroSpace Window Management** — Phases 43-46 (in progress) — AeroSpace shell wrappers, core integration plugin, layout control, release prep.
+- ✅ **v0.11.0 AeroSpace Window Management** — Phases 43-46 (shipped 2026-03-28) — AeroSpace shell wrappers, core integration plugin, layout control, release prep. See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md)
+- 🚧 **v0.12.0 Multi-Workspace AeroSpace** — Phases 47-49 (in progress) — Multi-workspace schema, loop implementation + tests, release prep.
 
 ## Phases
 
@@ -118,67 +119,60 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 
 </details>
 
-### 🚧 v0.11.0 AeroSpace Window Management (In Progress)
-
-**Milestone Goal:** Add AeroSpace tiling window manager integration for macOS — typed CLI wrappers, snapshot-delta window detection, workspace targeting, normalization-aware layout, app launching, and doctor checks.
+<details>
+<summary>✅ v0.11.0 AeroSpace Window Management (Phases 43-46) — SHIPPED 2026-03-28</summary>
 
 - [x] **Phase 43: AeroSpace Shell Wrappers & Doctor** - Typed async CLI wrappers with injectable `_exec`, platform gate, and doctor binary check (completed 2026-03-28)
 - [x] **Phase 44: Core Integration Plugin** - Snapshot-delta window detection, workspace validation, window movement, integration plugin registration (completed 2026-03-28)
-- [x] **Phase 45: Layout Control & App Launching** - Normalization-aware layout, flatten-before-open, workspace focus, commands array with delta detection (2 plans) (completed 2026-03-28)
+- [x] **Phase 45: Layout Control & App Launching** - Normalization-aware layout, flatten-before-open, workspace focus, commands array with delta detection (completed 2026-03-28)
 - [x] **Phase 46: Release Prep** - v0.11.0 version bump, CHANGELOG entry, README AeroSpace section (completed 2026-03-28)
+
+See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full details.
+
+</details>
+
+### 🚧 v0.12.0 Multi-Workspace AeroSpace (In Progress)
+
+**Milestone Goal:** Extend AeroSpace integration to support a `workspaces` array — each entry independently configured with layout, normalization, flatten, focus, and commands — replacing the flat single-workspace config from v0.11.0.
+
+- [ ] **Phase 47: Multi-Workspace Schema** - `workspaces` array schema, per-entry Zod types, focus/duplicate validation, `beforeSet` extension to `SnapshotOpts`
+- [ ] **Phase 48: Multi-Workspace Loop & Tests** - Rewritten `open()` with `for...of` loop, bag-window routing to index 0, upfront `listWorkspaces()` hoist, post-loop focus, full test coverage
+- [ ] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs
 
 ## Phase Details
 
-### Phase 43: AeroSpace Shell Wrappers & Doctor
-**Goal**: Users can use typed AeroSpace CLI wrappers with full test isolation, and `git-stacks doctor` reports binary availability on macOS
-**Depends on**: Phase 42 (prior milestone complete)
-**Requirements**: WRAP-01, WRAP-02, WRAP-03
+### Phase 47: Multi-Workspace Schema
+**Goal**: The AeroSpace integration accepts a `workspaces` array config where each entry is independently validated with its own layout, normalization, flatten, focus, and commands fields
+**Depends on**: Phase 46
+**Requirements**: SCHEMA-01, SCHEMA-02, SCHEMA-03, SCHEMA-04
 **Success Criteria** (what must be TRUE):
-  1. `src/lib/aerospace.ts` exports typed async wrappers for `list-windows`, `list-workspaces`, `move-node-to-workspace`, `focus`, `layout`, and `flatten-workspace-tree` — all testable without a running AeroSpace instance via injectable `_exec`
-  2. `isAerospaceRunning()` returns false on non-macOS platforms (CI passes without `aerospace` binary)
-  3. `git-stacks doctor` prints a warn-level entry for missing `aerospace` binary on macOS and silently passes on Linux
-  4. `--format` TSV output is parsed with tab-split (not whitespace split), validated by unit tests with multi-word app names
+  1. A workspace/template YAML with `integrations.aerospace.workspaces: [{workspace: "2", layout: "h_tiles"}, {workspace: "3"}]` is accepted by the Zod schema without error
+  2. A config with two entries both having `focus: true` produces a validation error with a plain-English message identifying the conflict
+  3. A config with two entries sharing the same `workspace` name produces a validation error identifying the duplicate
+  4. `SnapshotOpts` in `src/lib/aerospace.ts` accepts an optional `beforeSet: Set<number>` field (used downstream by the loop for cross-entry snapshot isolation)
 **Plans**: TBD
 
-### Phase 44: Core Integration Plugin
-**Goal**: Users can configure the AeroSpace integration in workspace/template YAML and newly opened windows are automatically moved to their target AeroSpace workspace
-**Depends on**: Phase 43
-**Requirements**: DETECT-01, DETECT-02, DETECT-03, DETECT-04, DETECT-05
+### Phase 48: Multi-Workspace Loop & Tests
+**Goal**: `git-stacks open` with a multi-workspace AeroSpace config iterates all workspace entries sequentially, routes windows correctly, and the behavior is verified by targeted tests
+**Depends on**: Phase 47
+**Requirements**: PROC-01, PROC-02, PROC-03, PROC-04
 **Success Criteria** (what must be TRUE):
-  1. `settings.integrations.aerospace.workspace` in workspace or template YAML controls which AeroSpace workspace windows are moved to
-  2. When `git-stacks open` runs with AeroSpace integration enabled, windows appearing after launch are detected via snapshot-delta and moved to the configured workspace
-  3. Integration validates the target workspace exists via `list-workspaces` before attempting any window moves; unknown workspace names produce a clear error
-  4. `cleanup()` is a no-op — removing a workspace does not modify AeroSpace state
-  5. Integration is registered in `src/lib/integrations/index.ts` as a tier-3 plugin (order 31, disabled by default)
-**Plans**: 2 plans
-- [ ] 44-01-PLAN.md — AeroSpace integration plugin (config schema, WindowDetector, Integration object, registration)
-- [ ] 44-02-PLAN.md — AeroSpace integration tests (all DETECT requirement coverage)
+  1. `open()` iterates all entries in the `workspaces` array in order — flatten, bag-move, commands, and layout execute once per entry
+  2. VSCode and IntelliJ windows from `ArtifactBag` are moved only to the first workspace entry (`workspaces[0]`); subsequent entries receive only their own command-launched windows
+  3. `listWorkspaces()` is called exactly once before the loop regardless of how many workspace entries are configured; unknown workspace names produce a clear error before any windows are moved
+  4. A shared `beforeSet` accumulated across all entries prevents a window from entry A's slow-launching app being detected as a new window by entry B
+  5. Tests in `tests/lib/integrations/aerospace.test.ts` verify: array schema parsing, focus validation, duplicate name rejection, bag routing to index 0 only, `listWorkspaces` call count (exactly 1), entry ordering, deferred post-loop focus, and `setLayout` called with `windowId`
+**Plans**: TBD
 
-### Phase 45: Layout Control & App Launching
-**Goal**: Users can configure root layout, normalization behavior, pre-open flattening, workspace focus, and arbitrary app launch commands that are automatically arranged in the target AeroSpace workspace
-**Depends on**: Phase 44
-**Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03, LAYOUT-04, LAUNCH-01, LAUNCH-02
+### Phase 49: Release Prep
+**Goal**: v0.12.0 is published with version bump, breaking-change CHANGELOG, and README showing the new multi-workspace config format
+**Depends on**: Phase 48
+**Requirements**: REL-01
 **Success Criteria** (what must be TRUE):
-  1. `layout` config field (`h_tiles`/`v_tiles`/`h_accordion`/`v_accordion`) applies the chosen root layout to the target workspace after window placement
-  2. `normalization: true` (default) uses `flatten-workspace-tree` + `layout` commands; `normalization: false` uses `split`-based alternatives — preventing the silent `split` failure on normalization-enabled setups
-  3. `flatten_before_open: true` resets nested containers before window placement, producing a clean layout on repeated `git-stacks open`
-  4. `focus: true` switches AeroSpace to the target workspace after setup so it is immediately visible
-  5. A `commands` array in integration config launches arbitrary apps and their windows are detected via snapshot-delta and moved to the target workspace
-**Plans**: 2 plans
-- [x] 45-01-PLAN.md — Extend AeroSpace Integration with Layout, Commands, and Focus (config schema, open() sequence)
-- [x] 45-02-PLAN.md — AeroSpace Layout & Commands Tests (all LAYOUT + LAUNCH requirement coverage)
-**UI hint**: yes
-
-### Phase 46: Release Prep
-**Goal**: v0.11.0 is published with version bump, changelog, and README documentation
-**Depends on**: Phase 45
-**Requirements**: (no new v0.11.0 requirements — release deliverable)
-**Success Criteria** (what must be TRUE):
-  1. `package.json` version is bumped to `0.11.0`
-  2. CHANGELOG contains an entry for v0.11.0 covering all four shipped features (shell wrappers, core plugin, layout control, app launching)
-  3. README documents AeroSpace integration with a config YAML example showing `workspace`, `layout`, `normalization`, `flatten_before_open`, `focus`, and `commands` fields
-**Plans**: 1 plan
-- [x] 46-01-PLAN.md — Release prep (version verify, CHANGELOG, README AeroSpace docs)
+  1. `package.json` version is bumped to `0.12.0`
+  2. CHANGELOG contains a v0.12.0 entry that documents the breaking schema change and includes a side-by-side migration example (old flat `workspace:` field vs new `workspaces: [{...}]` array)
+  3. README AeroSpace section is updated with a multi-workspace config example showing at least two entries with different layout and focus settings
+**Plans**: TBD
 
 ## Progress
 
@@ -192,7 +186,10 @@ See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md) for full deta
 | 29-32. Integration Polish | v0.8.0 | 6/6 | Complete | 2026-03-24 |
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
-| 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 2/2 | Complete    | 2026-03-28 |
-| 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete    | 2026-03-28 |
-| 45. Layout Control & App Launching | v0.11.0 | 2/2 | Complete   | 2026-03-28 |
-| 46. Release Prep | v0.11.0 | 1/1 | Complete    | 2026-03-28 |
+| 43. AeroSpace Shell Wrappers & Doctor | v0.11.0 | 2/2 | Complete | 2026-03-28 |
+| 44. Core Integration Plugin | v0.11.0 | 2/2 | Complete | 2026-03-28 |
+| 45. Layout Control & App Launching | v0.11.0 | 2/2 | Complete | 2026-03-28 |
+| 46. Release Prep | v0.11.0 | 1/1 | Complete | 2026-03-28 |
+| 47. Multi-Workspace Schema | v0.12.0 | 0/TBD | Not started | - |
+| 48. Multi-Workspace Loop & Tests | v0.12.0 | 0/TBD | Not started | - |
+| 49. Release Prep | v0.12.0 | 0/TBD | Not started | - |
