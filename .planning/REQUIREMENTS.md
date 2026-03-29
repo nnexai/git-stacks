@@ -9,10 +9,10 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 ### Schema & Config
 
-- [ ] **SCHEMA-01**: User configures multiple AeroSpace workspaces via a `workspaces` array in integration config
-- [ ] **SCHEMA-02**: Each workspace entry independently specifies workspace name, layout, normalization, flatten_before_open, focus, and commands
-- [ ] **SCHEMA-03**: At most one workspace entry may have `focus: true` — validation error otherwise
-- [ ] **SCHEMA-04**: Duplicate workspace names in the array produce a validation error
+- [x] **SCHEMA-01**: User configures multiple AeroSpace workspaces via a `workspaces` array in integration config
+- [x] **SCHEMA-02**: Each workspace entry independently specifies workspace name, layout, normalization, flatten_before_open, focus, and commands
+- [x] **SCHEMA-03**: At most one workspace entry may have `focus: true` — validation error otherwise
+- [x] **SCHEMA-04**: Duplicate workspace names in the array produce a validation error
 
 ### Multi-Workspace Processing
 
@@ -47,10 +47,10 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | Phase 47 | Pending |
-| SCHEMA-02 | Phase 47 | Pending |
-| SCHEMA-03 | Phase 47 | Pending |
-| SCHEMA-04 | Phase 47 | Pending |
+| SCHEMA-01 | Phase 47 | Complete |
+| SCHEMA-02 | Phase 47 | Complete |
+| SCHEMA-03 | Phase 47 | Complete |
+| SCHEMA-04 | Phase 47 | Complete |
 | PROC-01 | Phase 48 | Pending |
 | PROC-02 | Phase 48 | Pending |
 | PROC-03 | Phase 48 | Pending |
@@ -64,4 +64,4 @@ Requirements for Multi-Workspace AeroSpace milestone. Each maps to roadmap phase
 
 ---
 *Requirements defined: 2026-03-29*
-*Last updated: 2026-03-29 after roadmap creation*
+*Last updated: 2026-03-29 after Phase 47 completion*
