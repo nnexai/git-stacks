@@ -8,13 +8,14 @@ All notable changes to `git-stacks` are documented here.
 
 ### Changed
 
-- **Dependency upgrades** — updated all dependencies to latest versions: zod 3.25 → 4.3, commander 12.1 → 14.0, typescript 5.9 → 6.0, @clack/prompts 0.9 → 1.1, @opentui/core+solid 0.1.87 → 0.1.92, solid-js 1.9.11 → 1.9.12, yaml 2.8.2 → 2.8.3, @types/bun 1.3.10 → 1.3.11.
+- **Dependency upgrades** — updated all dependencies to latest versions: zod 3.25 → 4.3, commander 12.1 → 14.0, typescript 5.9 → 6.0, @clack/prompts 0.9 → 1.1, solid-js 1.9.11 → 1.9.12, yaml 2.8.2 → 2.8.3, @types/bun 1.3.10 → 1.3.11. @opentui/core+solid pinned at 0.1.87 (0.1.92 has a macOS-specific TUI crash).
 
 ### Fixed
 
 - **Zod 4 migration** — updated all `z.record()` calls to the required two-argument form (`z.record(z.string(), valueSchema)`).
 - **Commander 14 compatibility** — added `.allowExcessArguments(true)` to the `run` command to preserve passthrough behavior.
 - **@clack/prompts 1.1 types** — added optional chaining in `validate` callbacks to handle `string | undefined` parameter type.
+- **TUI git credential safety** — all network-hitting git commands (fetch, pull, ls-remote) now set `GIT_TERMINAL_PROMPT=0` to prevent credential prompts from corrupting the TUI terminal state.
 
 ---
 
