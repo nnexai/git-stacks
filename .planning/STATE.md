@@ -1,36 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.11.0
-milestone_name: AeroSpace Window Management
-status: executing
-stopped_at: Completed quick/260329-9ll-upgrade-dependencies
-last_updated: "2026-03-29T05:09:56.064Z"
-last_activity: 2026-03-28
+milestone: v0.12.0
+milestone_name: Multi-Workspace AeroSpace
+status: defining
+stopped_at: null
+last_updated: "2026-03-29"
+last_activity: 2026-03-29
 progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 5
-  percent: 57
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-28)
+See: .planning/PROJECT.md (updated 2026-03-29)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Milestone v0.11.0 — All 4 phases planned (7 plans), ready to execute
+**Current focus:** Milestone v0.12.0 — Defining requirements
 
 ## Current Position
 
-Phase: 46 of 46 (layout control app launching)
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-03-29 - Completed quick task 260329-9ll: upgrade dependencies
-
-Progress: [█████░░░░░] 57%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-29 — Milestone v0.12.0 started
 
 ## Performance Metrics
 
@@ -47,9 +45,6 @@ Progress: [█████░░░░░] 57%
 | - | - | - | - |
 
 *Updated after each plan completion*
-| Phase 45 P1 | 8 min | 2 tasks | 1 files |
-| Phase 45 P2 | 6 min | 2 tasks | 1 files |
-| Phase 46 P01 | 7 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -58,9 +53,10 @@ Progress: [█████░░░░░] 57%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [v0.6.0 Phase 19-20]: Injectable `_exec` pattern for shell wrappers — use same approach for `src/lib/aerospace.ts`
-- [v0.6.0 Phase 20]: Tier-3 plugin (order 30) for niri — AeroSpace uses order 31 (one above niri)
-- [v0.10.1 Phase 42]: shellQuote for path interpolation — apply to any path strings in aerospace wrappers
+- [v0.11.0]: AeroSpace single-workspace config is being replaced with `workspaces` array (breaking change)
+- [v0.11.0]: Tier-3 plugin (order 31) for AeroSpace — same order carries forward
+- [v0.12.0]: Bag windows from tier-1 integrations default to workspaces[0]
+- [v0.12.0]: Focus validation — at most one workspace entry may have `focus: true`
 
 ### Pending Todos
 
@@ -68,8 +64,7 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- LAUNCH-01/LAUNCH-02 (commands array) was marked "defer" in research but is included in Phase 45 per requirements — confirm scope during plan-phase
-- Research notes `process.platform !== "darwin"` gate must be the FIRST condition in `isAerospaceRunning()` before any subprocess call
+(none)
 
 ### Quick Tasks Completed
 
@@ -79,6 +74,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-29T05:09:56.048Z
-Stopped at: Completed quick/260329-9ll-upgrade-dependencies
-Next action: /gsd:execute-phase 45
+Last session: 2026-03-29
+Stopped at: Milestone v0.12.0 initialization
+Next action: Define requirements and create roadmap

@@ -8,19 +8,28 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.11.0 AeroSpace Window Management
+## Current Milestone: v0.12.0 Multi-Workspace AeroSpace
 
-**Goal:** Add AeroSpace tiling window manager integration for macOS — arrange workspace windows on named/numbered AeroSpace workspaces using snapshot-delta detection, matching the niri integration pattern.
+**Goal:** Extend AeroSpace integration to support an array of workspace configurations per git-stacks workspace — each with its own layout, commands, focus, and normalization settings.
 
 **Target features:**
-- AeroSpace shell wrappers (`src/lib/aerospace.ts`) — typed async CLI wrappers with `--format` parsing and injectable `_exec`
-- AeroSpace integration plugin (`src/lib/integrations/aerospace.ts`) — tier-3 plugin: detect AeroSpace, snapshot windows, move new windows to target workspace, apply layout
-- Normalization-aware layout control — detect or configure whether normalization is enabled (`join-with`/`flatten-workspace-tree`) vs disabled (`split`)
-- Target workspace configuration — `settings.integrations.aerospace.workspace` in workspace/template YAML
-- Snapshot-delta window detection — before/after `list-windows --format` diffing by `window-id`
-- Doctor checks — verify `aerospace` binary availability
+- `workspaces` array schema replacing flat single-workspace config (breaking change from v0.11.0 format)
+- Per-workspace-entry layout, normalization, flatten_before_open, focus, and commands
+- Focus validation — at most one workspace entry may have `focus: true`
+- Unrouted tier-1 windows (vscode, intellij) default to first workspace in array
+- Sequential processing — iterate workspaces array in order, setup each
+- Release prep (version bump, CHANGELOG, README update for new config format)
 
-## Current State — v0.10.1 shipped (2026-03-28)
+## Current State — v0.11.1 shipped (2026-03-29)
+
+### What shipped in v0.11.0/v0.11.1
+
+- **AeroSpace shell wrappers** — typed async CLI wrappers in `src/lib/aerospace.ts` with `--format` TSV parsing, injectable `_exec` for test isolation, and `snapshotWindowIds()` for snapshot-delta detection
+- **AeroSpace integration plugin** — tier-3 plugin (order 31) in `src/lib/integrations/aerospace.ts`; snapshot-delta window detection, `move-node-to-workspace` targeting, `list-workspaces` validation, no-op cleanup
+- **Layout control** — normalization-aware layout application (`flatten-workspace-tree` + `layout`), `flatten_before_open` container reset, `focus` workspace switching
+- **App launching** — `commands` array with `source`/`app`/`command` entries, per-command `cwd`/`repo`/`args`/`focus`, snapshot-delta detection for launched windows
+- **Doctor checks** — warn-level `aerospace` binary availability check on macOS, silent skip on Linux
+- **Bug fixes** (v0.11.1) — pinned @opentui/core and @opentui/solid to 0.1.87; suppressed git credential prompts in TUI-reachable network commands
 
 ### What shipped in v0.10.0/v0.10.1
 
@@ -164,13 +173,19 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Atomic writeYaml — temp-file + rename prevents config corruption on interrupted writes — v0.10.1 Phase 42
 - ✓ Shell path quoting — tmux/niri quote interpolated cwd paths with POSIX shellQuote — v0.10.1 Phase 42
 
+- ✓ AeroSpace shell wrappers — typed async CLI wrappers with injectable `_exec` and snapshot-delta detection — v0.11.0 Phase 43
+- ✓ AeroSpace integration plugin — tier-3 plugin (order 31) with snapshot-delta window detection and workspace targeting — v0.11.0 Phase 44
+- ✓ Normalization-aware layout control — flatten-workspace-tree + layout commands with normalization config — v0.11.0 Phase 45
+- ✓ Target AeroSpace workspace configuration in workspace/template YAML — v0.11.0 Phase 44
+- ✓ Doctor checks for aerospace binary (macOS-gated) — v0.11.0 Phase 43
+- ✓ App launching commands array with source/app/command entries and snapshot-delta — v0.11.0 Phase 45
+
 ### Active
 
-- [ ] AeroSpace shell wrappers — typed async CLI wrappers for list-windows, list-workspaces, move-node-to-workspace, layout, focus with `--format` parsing
-- [ ] AeroSpace integration plugin — tier-3 plugin matching niri pattern with snapshot-delta window detection
-- [ ] Normalization-aware layout control — detect/configure split vs join-with based on normalization state
-- [ ] Target AeroSpace workspace configuration in workspace/template YAML
-- [ ] Doctor checks for aerospace binary
+- [ ] Multi-workspace AeroSpace config — `workspaces` array replacing flat single-workspace config
+- [ ] Per-workspace-entry independent configuration (layout, normalization, flatten, focus, commands)
+- [ ] Focus validation — at most one workspace entry may have `focus: true`
+- [ ] Unrouted tier-1 windows (vscode, intellij) default to first workspace in array
 - [ ] `git-stacks env` — dump merged workspace env vars with `--format shell|dotenv|json`
 
 ### Out of Scope
@@ -185,6 +200,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
+
+## Completed Milestone: v0.11.0 AeroSpace Window Management (2026-03-29)
+
+**Goal:** Add AeroSpace tiling window manager integration for macOS — arrange workspace windows on named/numbered AeroSpace workspaces using snapshot-delta detection, matching the niri integration pattern.
+
+**Shipped:** All target features delivered across 4 phases (43-46). Typed async CLI wrappers with injectable `_exec`, tier-3 integration plugin with snapshot-delta window detection, normalization-aware layout control, app launching via `commands` array, doctor binary checks. v0.11.1 patch: pinned OpenTUI deps, suppressed git credential prompts.
 
 ## Completed Milestone: v0.10.0 Multi-Agent Workspace Tooling (2026-03-28)
 
@@ -207,7 +228,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Versioning
 
-**Current release:** `v0.10.1`
+**Current release:** `v0.11.1`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -313,4 +334,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-28 after v0.11.0 milestone start*
+*Last updated: 2026-03-29 after v0.12.0 milestone start*
