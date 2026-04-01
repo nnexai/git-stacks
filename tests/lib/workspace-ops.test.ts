@@ -32,6 +32,7 @@ import {
 } from "../../src/lib/config"
 import {
   writeEnvFiles,
+  mergeEnv,
 } from "../../src/lib/workspace-ops"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
@@ -1652,5 +1653,47 @@ describe("writeEnvFiles path boundary", () => {
     expect(existsSync("/tmp/evil.env")).toBe(false)
     expect(warns.length).toBeGreaterThan(0)
     expect(warns[0]).toMatch(/resolves outside repo root/)
+  })
+})
+
+describe("mergeEnv port injection (PORT-INJECT-01)", () => {
+  test("mergeEnv includes resolved ports as string env vars", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "port-ws", branch: "b", created: "d",
+      ports: { PORT: 12400, DEBUG_PORT: 12401 },
+    })
+    const result = mergeEnv(ws)
+    expect(result.PORT).toBe("12400")
+    expect(result.DEBUG_PORT).toBe("12401")
+  })
+
+  test("mergeEnv skips null (unresolved) ports", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "port-ws", branch: "b", created: "d",
+      ports: { PORT: 12400, UNRESOLVED: null },
+    })
+    const result = mergeEnv(ws)
+    expect(result.PORT).toBe("12400")
+    expect(result.UNRESOLVED).toBeUndefined()
+  })
+
+  test("mergeEnv returns only env when no ports", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "no-port-ws", branch: "b", created: "d",
+      env: { FOO: "bar" },
+    })
+    const result = mergeEnv(ws)
+    expect(result).toEqual({ FOO: "bar" })
+  })
+
+  test("mergeEnv merges env and ports (ports added after env)", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "both-ws", branch: "b", created: "d",
+      env: { FOO: "bar" },
+      ports: { PORT: 12400 },
+    })
+    const result = mergeEnv(ws)
+    expect(result.FOO).toBe("bar")
+    expect(result.PORT).toBe("12400")
   })
 })

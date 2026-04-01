@@ -41,6 +41,7 @@ import { runIntegrations, runIntegrationCleanup } from "./integrations/runner"
 import { runHooks, runHooksCaptured } from "./lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
 import { $ } from "bun"
+import { allocatePorts } from "./ports"
 
 export type ProgressCallback = (message: string) => void
 
@@ -107,6 +108,14 @@ export async function getWorkspaceListInfo(
 export function mergeEnv(workspace: Workspace): Record<string, string> {
   const merged: Record<string, string> = {}
   if (workspace.env) Object.assign(merged, workspace.env)
+  // Inject resolved ports as env vars (PORT-INJECT-01)
+  if (workspace.ports) {
+    for (const [key, value] of Object.entries(workspace.ports)) {
+      if (typeof value === "number") {
+        merged[key] = String(value)
+      }
+    }
+  }
   return merged
 }
 
@@ -709,7 +718,7 @@ export async function mergeWorkspace(
 
 export async function openWorkspace(
   name: string,
-  opts: { ide?: boolean; cmux?: boolean; captured?: boolean },
+  opts: { ide?: boolean; cmux?: boolean; captured?: boolean; reallocate?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -719,6 +728,17 @@ export async function openWorkspace(
   const config = readGlobalConfig()
   const tasksDir = getTasksDir(config.workspace_root)
   const workspace = readWorkspace(name)
+
+  // --- Port allocation (before buildBaseEnv) ---
+  const portResult = allocatePorts(workspace, config, { reallocate: opts.reallocate ?? false })
+  if (!portResult.ok) return { ok: false, error: portResult.error }
+
+  // Use the potentially-updated workspace (ports resolved)
+  const wsWithPorts = portResult.workspace
+  if (portResult.changed) {
+    writeWorkspace(wsWithPorts)
+    onProgress?.(`Ports allocated: ${Object.entries(wsWithPorts.ports ?? {}).map(([k, v]) => `${k}=${v}`).join(", ")}`)
+  }
 
   const execHooks = async (commands: string[] | undefined, cwd: string, env: Record<string, string>) => {
     if (opts.captured) {
@@ -738,25 +758,25 @@ export async function openWorkspace(
   }
 
   // Recreate missing worktrees
-  const missing = workspace.repos.filter(
+  const missing = wsWithPorts.repos.filter(
     (r) => r.mode === "worktree" && !existsSync(r.task_path)
   )
   if (missing.length > 0) {
     for (const repo of missing) {
       onProgress?.(`Recreating worktree: ${repo.name}`)
-      await createWorktree(repo.main_path, repo.task_path, workspace.branch)
+      await createWorktree(repo.main_path, repo.task_path, wsWithPorts.branch)
     }
     onProgress?.(`${missing.length} worktree(s) recreated`)
   }
 
   // Ensure upstream tracking for all worktree repos (parallel)
-  const worktreeReposForTracking = workspace.repos.filter(
+  const worktreeReposForTracking = wsWithPorts.repos.filter(
     (r) => r.mode === "worktree" && existsSync(r.task_path)
   )
   if (worktreeReposForTracking.length > 0) {
     const trackingResults = await Promise.all(
       worktreeReposForTracking.map(repo =>
-        ensureUpstreamTracking(repo.main_path, workspace.branch)
+        ensureUpstreamTracking(repo.main_path, wsWithPorts.branch)
       )
     )
     const tracked = trackingResults.filter(r => r.tracked)
@@ -765,16 +785,16 @@ export async function openWorkspace(
     }
   }
 
-  const baseEnv = buildBaseEnv(workspace, tasksDir, "open")
+  const baseEnv = buildBaseEnv(wsWithPorts, tasksDir, "open")
 
-  if (workspace.hooks?.pre_open?.length) {
-    for (const cmd of workspace.hooks.pre_open) {
+  if (wsWithPorts.hooks?.pre_open?.length) {
+    for (const cmd of wsWithPorts.hooks.pre_open) {
       onProgress?.(`pre_open: ${cmd}`)
       await execHooks([cmd], join(tasksDir, name), baseEnv)
     }
   }
 
-  const repoHooks = workspace.repos.filter((r) => r.hooks?.pre_open?.length)
+  const repoHooks = wsWithPorts.repos.filter((r) => r.hooks?.pre_open?.length)
   for (const repo of repoHooks) {
     const repoEnv = buildRepoEnv(baseEnv, repo)
     for (const cmd of repo.hooks!.pre_open!) {
@@ -786,7 +806,7 @@ export async function openWorkspace(
   const wsDir = join(tasksDir, name)
 
   // Per-repo file ops — workspace repos carry their own files config
-  for (const wsRepo of workspace.repos.filter(r => r.mode === "worktree")) {
+  for (const wsRepo of wsWithPorts.repos.filter(r => r.mode === "worktree")) {
     if (!wsRepo.files) continue
     // Construct a FileOpsRepoSource-compatible object for applyFileOpsForRepo
     const repoSource = {
@@ -803,8 +823,8 @@ export async function openWorkspace(
   }
 
   // Workspace-instance file ops
-  if (workspace.files) {
-    const wsFileResult = applyFileOpsForWorkspace({ files: workspace.files }, workspace, wsDir)
+  if (wsWithPorts.files) {
+    const wsFileResult = applyFileOpsForWorkspace({ files: wsWithPorts.files }, wsWithPorts, wsDir)
     if (!wsFileResult.ok) {
       onProgress?.(`file-ops warning [workspace]: ${wsFileResult.error}`)
     } else if (wsFileResult.warnings) {
@@ -813,12 +833,12 @@ export async function openWorkspace(
   }
 
   // Write env files — after file ops, before integrations
-  const mergedEnvVars = mergeEnv(workspace)
-  writeEnvFiles(workspace, mergedEnvVars, msg => onProgress?.(msg))
+  const mergedEnvVars = mergeEnv(wsWithPorts)
+  writeEnvFiles(wsWithPorts, mergedEnvVars, msg => onProgress?.(msg))
   const hookEnv = { ...baseEnv, ...mergedEnvVars }
 
   // TMPL-04: Ensure trunk repos have their expected base branch accessible
-  for (const repo of workspace.repos.filter(r => r.mode === "trunk")) {
+  for (const repo of wsWithPorts.repos.filter(r => r.mode === "trunk")) {
     if (!existsSync(repo.task_path)) continue
     const currentBranch = await getCurrentBranch(repo.task_path)
     const expectedBranch = repo.base_branch ?? "main"
@@ -834,7 +854,7 @@ export async function openWorkspace(
 
       // Step 2: If checkout fails (branch doesn't exist locally), create a worktree at that branch
       try {
-        const worktreePath = join(tasksDir, workspace.name, `${repo.name}-${expectedBranch}`)
+        const worktreePath = join(tasksDir, wsWithPorts.name, `${repo.name}-${expectedBranch}`)
         await createWorktree(repo.main_path, worktreePath, expectedBranch)
         onProgress?.(`trunk repo '${repo.name}': created worktree at '${expectedBranch}' (checkout failed, branch may not exist locally)`)
       } catch (wtErr) {
@@ -844,12 +864,12 @@ export async function openWorkspace(
     }
   }
 
-  const ctx: IntegrationContext = { workspace, tasksDir, config, ...(opts.captured && { silent: true }) }
+  const ctx: IntegrationContext = { workspace: wsWithPorts, tasksDir, config, ...(opts.captured && { silent: true }) }
   await runIntegrations(ctx, skip)
 
   // Workspace-level post_open hooks (includes template hooks if copied at creation)
-  if (workspace.hooks?.post_open?.length) {
-    for (const cmd of workspace.hooks.post_open) {
+  if (wsWithPorts.hooks?.post_open?.length) {
+    for (const cmd of wsWithPorts.hooks.post_open) {
       onProgress?.(`post_open: ${cmd}`)
       await execHooks([cmd], join(tasksDir, name), hookEnv)
     }
