@@ -120,13 +120,13 @@ repoCommand
   })
 
 repoCommand
-  .command("show <name>")
+  .command("show <repo>")
   .description("Show details of a registered repo")
-  .action((name: string) => {
+  .action((repo: string) => {
     const registry = readRegistry()
-    const entry = registry.find((r) => r.name === name)
+    const entry = registry.find((r) => r.name === repo)
     if (!entry) {
-      console.error(`Repo '${name}' not found in registry.`)
+      console.error(`Repo '${repo}' not found in registry.`)
       process.exit(1)
     }
     console.log(`Name:           ${entry.name}`)
@@ -137,20 +137,20 @@ repoCommand
   })
 
 repoCommand
-  .command("remove <name>")
+  .command("remove <repo>")
   .description("Remove a repo from the registry")
   .option("--force", "Skip confirmation prompt")
-  .action(async (name: string, opts: { force?: boolean }) => {
+  .action(async (repo: string, opts: { force?: boolean }) => {
     const registry = readRegistry()
-    const idx = registry.findIndex((r) => r.name === name)
+    const idx = registry.findIndex((r) => r.name === repo)
     if (idx === -1) {
-      console.error(`Repo '${name}' not found in registry.`)
+      console.error(`Repo '${repo}' not found in registry.`)
       process.exit(1)
     }
 
     if (!opts.force) {
       const ok = await p.confirm({
-        message: `Remove repo '${name}' from registry? (This does not delete any files.)`,
+        message: `Remove repo '${repo}' from registry? (This does not delete any files.)`,
         initialValue: false,
       })
       if (p.isCancel(ok) || !ok) {
@@ -161,17 +161,17 @@ repoCommand
 
     registry.splice(idx, 1)
     writeRegistry(registry)
-    console.log(`Removed '${name}' from registry.`)
+    console.log(`Removed '${repo}' from registry.`)
   })
 
 repoCommand
-  .command("rename <old> <new>")
+  .command("rename <repo> <new-name>")
   .description("Rename a registered repo in the registry")
-  .action((oldName: string, newName: string) => {
+  .action((repo: string, newName: string) => {
     const registry = readRegistry()
-    const entry = registry.find((r) => r.name === oldName)
+    const entry = registry.find((r) => r.name === repo)
     if (!entry) {
-      console.error(`Repo '${oldName}' not found in registry.`)
+      console.error(`Repo '${repo}' not found in registry.`)
       process.exit(1)
     }
     if (registry.some((r) => r.name === newName)) {
@@ -180,5 +180,5 @@ repoCommand
     }
     entry.name = newName
     writeRegistry(registry)
-    console.log(`Renamed '${oldName}' \u2192 '${newName}' in registry.`)
+    console.log(`Renamed '${repo}' \u2192 '${newName}' in registry.`)
   })

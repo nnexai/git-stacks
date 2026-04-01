@@ -35,14 +35,14 @@ templateCommand
   })
 
 templateCommand
-  .command("show <name>")
+  .command("show <template>")
   .description("Show template details")
-  .action((name: string) => {
-    if (!templateExists(name)) {
-      console.error(`Template '${name}' not found.`)
+  .action((template: string) => {
+    if (!templateExists(template)) {
+      console.error(`Template '${template}' not found.`)
       process.exit(1)
     }
-    const tpl = readTemplate(name)
+    const tpl = readTemplate(template)
     console.log(`Template:    ${tpl.name}`)
     if (tpl.description) console.log(`Description: ${tpl.description}`)
     console.log(`\nRepos (${tpl.repos.length}):`)
@@ -72,46 +72,46 @@ templateCommand
   })
 
 templateCommand
-  .command("edit <name>")
+  .command("edit <template>")
   .description("Edit an existing template")
   .option("--yaml", "Open template YAML in $EDITOR")
-  .action(async (name: string, opts: { yaml?: boolean }) => {
-    if (!templateExists(name)) {
-      console.error(`Template '${name}' not found.`)
+  .action(async (template: string, opts: { yaml?: boolean }) => {
+    if (!templateExists(template)) {
+      console.error(`Template '${template}' not found.`)
       process.exit(1)
     }
     if (opts.yaml) {
-      const { path, validate } = editTemplateYaml(name)
+      const { path, validate } = editTemplateYaml(template)
       await openYamlInEditor(path, validate)
       return
     }
-    await runTemplateEdit(name)
+    await runTemplateEdit(template)
   })
 
 templateCommand
-  .command("clone <name> <new-name>")
+  .command("clone <template> <new-name>")
   .description("Clone a template under a new name")
-  .action((name: string, newName: string) => {
-    if (!templateExists(name)) {
-      console.error(`Template '${name}' not found.`)
+  .action((template: string, newName: string) => {
+    if (!templateExists(template)) {
+      console.error(`Template '${template}' not found.`)
       process.exit(1)
     }
     if (templateExists(newName)) {
       console.error(`Template '${newName}' already exists.`)
       process.exit(1)
     }
-    const tpl = readTemplate(name)
+    const tpl = readTemplate(template)
     tpl.name = newName
     writeTemplate(tpl)
-    console.log(`Cloned '${name}' \u2192 '${newName}'.`)
+    console.log(`Cloned '${template}' \u2192 '${newName}'.`)
   })
 
 templateCommand
-  .command("rename <old> <new>")
+  .command("rename <template> <new-name>")
   .description("Rename a template (updates all workspace references)")
   .option("--dry-run", "Show what would change without writing")
-  .action(async (oldName: string, newName: string, opts: { dryRun?: boolean }) => {
-    const result = await renameTemplate(oldName, newName, { dryRun: opts.dryRun }, (msg) =>
+  .action(async (template: string, newName: string, opts: { dryRun?: boolean }) => {
+    const result = await renameTemplate(template, newName, { dryRun: opts.dryRun }, (msg) =>
       console.log(`  ${msg}`)
     )
     if (!result.ok) {
@@ -119,23 +119,23 @@ templateCommand
       process.exit(1)
     }
     if (!opts.dryRun) {
-      console.log(`Renamed '${oldName}' \u2192 '${newName}'.`)
+      console.log(`Renamed '${template}' \u2192 '${newName}'.`)
     }
   })
 
 templateCommand
-  .command("remove <name>")
+  .command("remove <template>")
   .description("Remove a template")
   .option("--force", "Skip confirmation prompt")
-  .action(async (name: string, opts: { force?: boolean }) => {
-    if (!templateExists(name)) {
-      console.error(`Template '${name}' not found.`)
+  .action(async (template: string, opts: { force?: boolean }) => {
+    if (!templateExists(template)) {
+      console.error(`Template '${template}' not found.`)
       process.exit(1)
     }
 
     if (!opts.force) {
       const ok = await p.confirm({
-        message: `Remove template '${name}'?`,
+        message: `Remove template '${template}'?`,
         initialValue: false,
       })
       if (p.isCancel(ok) || !ok) {
@@ -144,6 +144,6 @@ templateCommand
       }
     }
 
-    unlinkSync(templatePath(name))
-    console.log(`Removed template '${name}'.`)
+    unlinkSync(templatePath(template))
+    console.log(`Removed template '${template}'.`)
   })
