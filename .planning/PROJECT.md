@@ -22,6 +22,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Current State — Phase 51 complete (2026-04-01)
 
+### What shipped in Phase 50.1
+
+- **Convention-based completion inference** — `completion-generator.ts` infers completion types from Commander.js argument names (`<workspace>` → workspace, `<repo>` → repo, etc.) via `NAME_TO_COMPLETION_TYPE` map, replacing 50-entry `DYNAMIC_COMPLETIONS` with 4 override entries (issue.link edge cases only)
+- **Integration ID completion** — new `integration` completion type emits hardcoded integration ID list (`vscode`, `intellij`, `cmux`, etc.) in bash, zsh, and fish helpers
+- **Multi-position argument dispatch** — commands with two completable args (`run <workspace> [repo]`, `cd <workspace> [repo]`) produce position-aware completions in all three shells
+- **argChoices extraction** — Commander `.choices()` arrays automatically produce fixed-value completions
+- **Command argument renames** — 21 positional argument renames across workspace.ts, repo.ts, and template.ts to use convention-matching names (`<workspace>`, `<repo>`, `<template>`)
+
 ### What shipped in Phase 50
 
 - **Integration config introspection** — `git-stacks integration list` shows all 10 integrations with enabled/configured status; `config example` prints YAML snippets for aerospace, vscode, niri, tmux; `config show` dumps current global + workspace-level config
