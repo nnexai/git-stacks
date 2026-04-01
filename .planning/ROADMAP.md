@@ -198,3 +198,27 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 47. Multi-Workspace Schema | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 49. Release Prep | v0.12.0 | 1/1 | Complete    | 2026-03-29 |
+
+### Phase 50: Integration Specific Tools
+
+**Goal:** Add utility subcommands to `git-stacks integration <id>` — config introspection, standalone open, and workspace focus commands.
+
+**Requirements:**
+- `git-stacks integration <id> config example` — print a static example YAML snippet showing how to configure the integration (new `configExample?: string` property on `Integration` interface)
+- `git-stacks integration <id> config show [workspace]` — dump current global config for the integration; if workspace given, also show workspace-level overrides
+- `git-stacks integration list [workspace]` — non-interactive table of all integrations with enabled/disabled status; workspace-aware when argument provided
+- `git-stacks integration aerospace focus <workspace>` — focus the AeroSpace workspace mapped to a git-stacks workspace (reads workspace config, finds focus entry or first entry, runs `aerospace workspace <name>`)
+- `git-stacks integration vscode open <workspace>` — generate `.code-workspace` artifact and open it, without running hooks or other integrations
+
+**Depends on:** Phase 49
+**Plans:** 2 plans
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks integration list` prints a table of all 10 integrations with ID, Label, Enabled, Configured columns
+  2. `git-stacks integration <id> config example` prints a YAML snippet for integrations with configExample, or a fallback message for others
+  3. `git-stacks integration <id> config show [workspace]` prints enabled state and config; supports --json
+  4. `git-stacks integration aerospace focus <workspace>` focuses the AeroSpace workspace mapped to a git-stacks workspace
+  5. `git-stacks integration vscode open <workspace>` generates .code-workspace and opens VSCode standalone
+
+Plans:
+- [ ] 50-01-PLAN.md — Interface extension, configExample strings, generic config/list commands
+- [ ] 50-02-PLAN.md — AeroSpace focus command, VSCode open command, test coverage
