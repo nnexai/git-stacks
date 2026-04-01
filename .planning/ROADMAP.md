@@ -138,7 +138,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 - [x] **Phase 47: Multi-Workspace Schema** - `workspaces` array schema, per-entry Zod types, focus/duplicate validation, `beforeSet` extension to `SnapshotOpts` (completed 2026-03-29)
 - [x] **Phase 48: Multi-Workspace Loop & Tests** - Rewritten `open()` with `for...of` loop, bag-window routing to index 0, upfront `listWorkspaces()` hoist, post-loop focus, full test coverage (completed 2026-03-29)
 - [x] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs (1 plan) (completed 2026-03-29)
-- [ ] **Phase 50: Integration Specific Tools** - Config introspection, integration listing, AeroSpace focus, VSCode standalone open (2 plans)
+- [x] **Phase 50: Integration Specific Tools** - Config introspection, integration listing, AeroSpace focus, VSCode standalone open (2 plans) (completed 2026-04-01)
 - [ ] **Phase 51: Workspace Port Allocation** - Named port declarations, contiguous range allocation on open, atomic writeYaml, race-safe lockfile (4 plans)
 - [ ] **Phase 52: Release Prep** - v0.12.0 CHANGELOG and README updates covering phases 50-51 (1 plan)
 
@@ -201,7 +201,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 47. Multi-Workspace Schema | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 49. Release Prep | v0.12.0 | 1/1 | Complete    | 2026-03-29 |
-| 50. Integration Specific Tools | v0.12.0 | 1/2 | In Progress|  |
+| 50. Integration Specific Tools | v0.12.0 | 2/2 | Complete   | 2026-04-01 |
 | 51. Workspace Port Allocation | v0.12.0 | 0/4 | Planned | — |
 | 52. Release Prep | v0.12.0 | 0/1 | Planned | — |
 
@@ -217,7 +217,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 - `git-stacks integration vscode open <workspace>` — generate `.code-workspace` artifact and open it, without running hooks or other integrations
 
 **Depends on:** Phase 49
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 **Success Criteria** (what must be TRUE):
   1. `git-stacks integration list` prints a table of all 10 integrations with ID, Label, Enabled, Configured columns
   2. `git-stacks integration <id> config example` prints a YAML snippet for integrations with configExample, or a fallback message for others
@@ -227,7 +227,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 
 Plans:
 - [x] 50-01-PLAN.md — Interface extension, configExample strings, generic config/list commands
-- [ ] 50-02-PLAN.md — AeroSpace focus command, VSCode open command, test coverage
+- [x] 50-02-PLAN.md — AeroSpace focus command, VSCode open command, test coverage
 
 ### Phase 51: Workspace Port Allocation
 
