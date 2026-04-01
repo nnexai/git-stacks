@@ -143,7 +143,8 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--no-cmux", "Skip cmux session")
     .option("--recreate", "Re-sync workspace from template")
     .option("--force", "Skip confirmation in --recreate")
-    .action(async (name: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean }) => {
+    .option("--reallocate", "Reallocate conflicting ports")
+    .action(async (name: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean; reallocate?: boolean }) => {
       validateName(name)
       if (opts.recreate) {
         if (!workspaceExists(name)) {
@@ -232,7 +233,7 @@ export function registerWorkspaceCommands(program: Command) {
         }
       }
 
-      const result = await openWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
+      const result = await openWorkspace(name, { ide: opts.ide, cmux: opts.cmux, reallocate: opts.reallocate }, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)
