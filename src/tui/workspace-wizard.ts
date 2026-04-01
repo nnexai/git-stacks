@@ -27,6 +27,7 @@ import { runHooks } from "../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
 import { openWorkspace } from "../lib/workspace-ops"
 import { composeTemplates } from "../lib/composition"
+import { mergePorts } from "../lib/ports"
 
 async function pickReposFromRegistry(
   registry: RepoRegistryEntry[],
@@ -123,6 +124,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
   let wsEnvFile: string | undefined
   let wsFiles: Workspace["files"]
   let wsIntegrationSettings: Record<string, unknown> | undefined
+  let wsPorts: Record<string, number | null> | undefined
 
   // Determine creation mode
   if (templateNames && templateNames.length > 0) {
@@ -144,6 +146,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
     wsEnvFile = template.env_file
     wsFiles = template.files
     wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+    wsPorts = template.ports ? { ...template.ports } : undefined
   } else if (fromSource) {
     // --from was specified: resolve as local path or template name
     const expanded = expandHome(fromSource)
@@ -207,6 +210,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
       wsEnvFile = template.env_file
       wsFiles = template.files
       wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+      wsPorts = template.ports ? { ...template.ports } : undefined
     } else {
       p.cancel(`'${fromSource}' is not a local path or known template name.`)
       process.exit(1)
@@ -268,6 +272,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
       wsEnvFile = template.env_file
       wsFiles = template.files
       wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+      wsPorts = template.ports ? { ...template.ports } : undefined
     } else {
       // Ad-hoc: pick repos from registry
       if (registry.length === 0) {
@@ -332,6 +337,25 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
   const descRaw = await safeText({ message: "Description (optional)" })
   if (p.isCancel(descRaw)) cancel()
   const description = (descRaw as string).trim()
+
+  // Port names (optional) — per D-01
+  const portsRaw = await safeText({
+    message: "Port names (comma-separated, leave empty to skip):",
+  })
+  if (p.isCancel(portsRaw)) cancel()
+  const portNamesInput = (portsRaw as string).trim()
+  const portNames = portNamesInput
+    ? portNamesInput.split(",").map(s => s.trim()).filter(Boolean)
+    : []
+
+  // Build user-declared ports (all null = unresolved)
+  const userDeclaredPorts: Record<string, number | null> | undefined =
+    portNames.length > 0
+      ? Object.fromEntries(portNames.map(n => [n, null]))
+      : undefined
+
+  // Merge template ports + user-declared ports (workspace/user wins per D-04)
+  wsPorts = mergePorts(wsPorts, userDeclaredPorts)
 
   // Optional: integration overrides (D-05, D-06, D-07)
   let userIntegrationOverrides: Record<string, unknown> | undefined
@@ -434,6 +458,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
     ...(wsEnvFile ? { env_file: wsEnvFile } : {}),
     ...(wsFiles ? { files: wsFiles } : {}),
     ...settingsIntegrations,
+    ...(wsPorts ? { ports: wsPorts } : {}),
   } as Workspace
 
   // File ops
