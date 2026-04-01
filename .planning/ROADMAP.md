@@ -140,7 +140,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 - [x] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs (1 plan) (completed 2026-03-29)
 - [x] **Phase 50: Integration Specific Tools** - Config introspection, integration listing, AeroSpace focus, VSCode standalone open (2 plans) (completed 2026-04-01)
 - [ ] **Phase 50.1: Argument-Based Dynamic Completion** - Convention-based completion inference, integration ID completion, multi-position dispatch, DYNAMIC_COMPLETIONS elimination (2 plans)
-- [ ] **Phase 51: Workspace Port Allocation** - Named port declarations, contiguous range allocation on open, atomic writeYaml, race-safe lockfile (4 plans)
+- [x] **Phase 51: Workspace Port Allocation** - Named port declarations, contiguous range allocation on open, atomic writeYaml, race-safe lockfile (4 plans) (completed 2026-04-01)
 - [ ] **Phase 52: Release Prep** - v0.12.0 CHANGELOG and README updates covering phases 50-51 (1 plan)
 
 ## Phase Details
@@ -204,7 +204,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 49. Release Prep | v0.12.0 | 1/1 | Complete    | 2026-03-29 |
 | 50. Integration Specific Tools | v0.12.0 | 2/2 | Complete    | 2026-04-01 |
 | 50.1. Argument-Based Dynamic Completion | v0.12.0 | 0/2 | Planned | — |
-| 51. Workspace Port Allocation | v0.12.0 | 3/4 | In Progress|  |
+| 51. Workspace Port Allocation | v0.12.0 | 4/4 | Complete   | 2026-04-01 |
 | 52. Release Prep | v0.12.0 | 0/1 | Planned | — |
 
 ### Phase 50: Integration Specific Tools
@@ -267,7 +267,7 @@ Plans:
 - PORT-TEMPLATE-01: Templates can declare ports. Workspaces inherit template ports and can add more. Workspace-level ports merge with (not replace) template ports.
 
 **Depends on:** Phase 49
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 **Success Criteria** (what must be TRUE):
   1. A workspace with `ports: { PORT: ~, DEBUG_PORT: ~ }` that is opened receives two contiguous port numbers within the global range, and those numbers persist in the workspace YAML after open
   2. Two workspaces opened concurrently never receive overlapping port ranges
@@ -281,7 +281,7 @@ Plans:
 Plans:
 - [x] 51-01-PLAN.md — Atomic writeYaml (fsync), PortsSchema, schema fields (WorkspaceSchema, TemplateSchema, GlobalConfigSchema), PORTS_LOCK_FILE
 - [x] 51-02-PLAN.md — Port allocator module (ports.ts): lock, scan, first-fit allocation, conflict detection, unit tests
-- [ ] 51-03-PLAN.md — Wire allocatePorts into openWorkspace, mergeEnv port injection, --reallocate flag
+- [x] 51-03-PLAN.md — Wire allocatePorts into openWorkspace, mergeEnv port injection, --reallocate flag
 - [x] 51-04-PLAN.md — Wizard port name prompt, template port snapshot, composition ports merge
 
 ### Phase 52: Release Prep
