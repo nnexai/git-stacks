@@ -34,6 +34,10 @@ export const tmuxIntegration: Integration = {
   enabledByDefault: false,
   order: 12,
 
+  configExample: `integrations:
+  tmux:
+    enabled: true`,
+
   isEnabled: (ctx) => resolveEnabled("tmux", false, ctx),
 
   async open(ctx, _artifactPath, _bag): Promise<TmuxArtifact | null> {

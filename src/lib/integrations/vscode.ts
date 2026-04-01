@@ -20,6 +20,11 @@ export const vscodeIntegration: Integration = {
   enabledByDefault: true,
   order: 10,
 
+  configExample: `integrations:
+  vscode:
+    enabled: true
+    cmd: code-insiders`,
+
   isEnabled: (ctx) => resolveEnabled("vscode", true, ctx),
 
   generate: (ctx) => generateCodeWorkspace(ctx.workspace, ctx.tasksDir),

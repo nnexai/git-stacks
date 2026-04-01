@@ -65,6 +65,16 @@ export const niriIntegration: Integration = {
   enabledByDefault: false,
   order: 30,
 
+  configExample: `integrations:
+  niri:
+    enabled: true
+    columns:
+      - source: vscode
+        width: "60%"
+      - source: terminal
+        command: "kitty"
+        width: "40%"`,
+
   isEnabled: (ctx) => resolveEnabled("niri", false, ctx),
 
   /**

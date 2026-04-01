@@ -94,6 +94,23 @@ export const aerospaceIntegration: Integration = {
   enabledByDefault: false,
   order: 31,
 
+  configExample: `integrations:
+  aerospace:
+    enabled: true
+    workspaces:
+      - workspace: "2"
+        layout: h_tiles
+        flatten_before_open: true
+        focus: true
+        commands:
+          - app: "Safari"
+          - command: "open -a Terminal"
+            cwd: /tmp
+      - workspace: "3"
+        layout: v_tiles
+        commands:
+          - source: vscode`,
+
   isEnabled: (ctx) => resolveEnabled("aerospace", false, ctx),
 
   /**

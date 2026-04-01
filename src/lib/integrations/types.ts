@@ -83,6 +83,9 @@ export interface Integration {
   /** Register helper subcommands under `git-stacks integration <id>`. */
   commands?(parent: Command): void
 
+  /** Static YAML snippet showing how to configure this integration. Printed by `config example`. */
+  configExample?: string
+
   /**
    * Optional window ID detector. When present, runner.ts calls begin() before open()
    * and resolve() after open() for any integration that returns a WindowArtifact.
