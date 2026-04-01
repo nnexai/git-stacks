@@ -139,6 +139,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 - [x] **Phase 48: Multi-Workspace Loop & Tests** - Rewritten `open()` with `for...of` loop, bag-window routing to index 0, upfront `listWorkspaces()` hoist, post-loop focus, full test coverage (completed 2026-03-29)
 - [x] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs (1 plan) (completed 2026-03-29)
 - [x] **Phase 50: Integration Specific Tools** - Config introspection, integration listing, AeroSpace focus, VSCode standalone open (2 plans) (completed 2026-04-01)
+- [ ] **Phase 50.1: Argument-Based Dynamic Completion** - Convention-based completion inference, integration ID completion, multi-position dispatch, DYNAMIC_COMPLETIONS elimination (2 plans)
 - [ ] **Phase 51: Workspace Port Allocation** - Named port declarations, contiguous range allocation on open, atomic writeYaml, race-safe lockfile (4 plans)
 - [ ] **Phase 52: Release Prep** - v0.12.0 CHANGELOG and README updates covering phases 50-51 (1 plan)
 
@@ -202,6 +203,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 49. Release Prep | v0.12.0 | 1/1 | Complete    | 2026-03-29 |
 | 50. Integration Specific Tools | v0.12.0 | 2/2 | Complete    | 2026-04-01 |
+| 50.1. Argument-Based Dynamic Completion | v0.12.0 | 0/2 | Planned | — |
 | 51. Workspace Port Allocation | v0.12.0 | 0/4 | Planned | — |
 | 52. Release Prep | v0.12.0 | 0/1 | Planned | — |
 
@@ -231,13 +233,22 @@ Plans:
 
 ### Phase 50.1: Argument-Based Dynamic Completion (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Replace the manually maintained `DYNAMIC_COMPLETIONS` static map with convention-based inference from Commander.js argument names. The completion generator automatically derives completion types from argument names, supports per-argument-position completions, and extracts `.choices()` from Commander arguments. New completion type: integration IDs.
+**Requirements**: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08
 **Depends on:** Phase 50
-**Plans:** 0 plans
+**Plans:** 2 plans
+
+**Success Criteria** (what must be TRUE):
+  1. Commands with convention-named arguments (`<workspace>`, `<repo>`, `<template>`) auto-complete without any DYNAMIC_COMPLETIONS entry
+  2. DYNAMIC_COMPLETIONS shrinks from ~40 entries to 0-1 entries
+  3. Integration IDs (vscode, intellij, cmux, tmux, niri, aerospace, github, gitlab, gitea, jira) appear in bash/zsh/fish completion output
+  4. Multi-arg commands (run, cd) complete different types at each cursor position
+  5. Arguments with `.choices()` produce fixed-value completions in all shells
+  6. OPTION_ENUMS, FLAG_COMPLETIONS, COMMAND_FLAG_COMPLETIONS are unchanged
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 50.1 to break down)
+- [ ] 50.1-01-PLAN.md — Rename command argument names to match convention (workspace, repo, template)
+- [ ] 50.1-02-PLAN.md — Refactor completion-generator.ts (CommandNode, buildNode, generators, integration type) + test updates
 
 ### Phase 51: Workspace Port Allocation
 
