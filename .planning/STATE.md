@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: Multi-Workspace AeroSpace
 status: executing
-stopped_at: Completed 51-02-PLAN.md
-last_updated: "2026-04-01T19:45:13.717Z"
+stopped_at: Completed 51-04-PLAN.md
+last_updated: "2026-04-01T19:53:45.780Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 13
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-29)
 ## Current Position
 
 Phase: 51 (workspace-port-allocation) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-04-01
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 50-integration-specific-tools P02 | 4min | 2 tasks | 3 files |
 | Phase 51-workspace-port-allocation P01 | 6min | 2 tasks | 5 files |
 | Phase 51-workspace-port-allocation P02 | 5min | 1 tasks | 2 files |
+| Phase 51-workspace-port-allocation P04 | 6min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Recent decisions affecting current work:
 - [Phase 51-workspace-port-allocation]: Zod nested default uses factory .default(() => ({...})) form to satisfy strict TypeScript type checking
 - [Phase 51-workspace-port-allocation]: Config wizard writeGlobalConfig spreads existing config to preserve new ports field on every save
 - [Phase 51-workspace-port-allocation]: buildTakenSet merges adjacent ports into PortRanges; allocatePorts does not call writeWorkspace — caller handles persistence
+- [Phase 51-workspace-port-allocation]: composition.ts mergeTemplatePorts is self-contained — no import from ports.ts to avoid coupling
+- [Phase 51-workspace-port-allocation]: port names prompt placed after description, before integration overrides, applies to all creation modes (template, from, adhoc)
 
 ### Pending Todos
 
@@ -92,6 +95,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-01T19:45:13.714Z
-Stopped at: Completed 51-02-PLAN.md
+Last session: 2026-04-01T19:53:45.777Z
+Stopped at: Completed 51-04-PLAN.md
 Next action: `/gsd:execute-phase 48`
