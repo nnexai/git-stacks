@@ -20,7 +20,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Sequential processing — iterate workspaces array in order, setup each
 - Release prep (version bump, CHANGELOG, README update for new config format)
 
-## Current State — Phase 50 complete (2026-04-01)
+## Current State — Phase 51 complete (2026-04-01)
 
 ### What shipped in Phase 50
 
@@ -351,4 +351,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-01 after Phase 50 completion*
+*Last updated: 2026-04-01 after Phase 51 completion*
