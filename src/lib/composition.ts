@@ -97,6 +97,17 @@ function mergeEnvVars(templates: Template[]): Record<string, string> | undefined
   return result
 }
 
+function mergeTemplatePorts(templates: Template[]): Record<string, number | null> | undefined {
+  let result: Record<string, number | null> | undefined
+  for (const tpl of templates) {
+    if (tpl.ports) {
+      if (!result) result = {}
+      Object.assign(result, tpl.ports)  // last-wins, same as env merge
+    }
+  }
+  return result
+}
+
 function mergeFiles(templates: Template[]): Template["files"] {
   const copy: string[] = []
   const symlink: string[] = []
@@ -229,6 +240,7 @@ export function composeTemplates(templateNames: string[]): Template {
     env_file: envFile,
     files: mergeFiles(orderedTemplates),
     integrations: mergeIntegrations(orderedTemplates),
+    ports: mergeTemplatePorts(orderedTemplates),
     // includes is not carried forward — the result is a fully resolved template
   }
 }
