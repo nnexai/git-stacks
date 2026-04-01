@@ -1,70 +1,24 @@
 import { Command } from "commander"
+import { integrations } from "./integrations/index"
 
-type DynamicCompletion = "workspace" | "repo" | "template" | "shells"
+type DynamicCompletion = "workspace" | "repo" | "template" | "shells" | "integration" | "choices"
+
+// Convention map: argument name → completion type
+// Commands whose first arg name matches a key auto-complete without any DYNAMIC_COMPLETIONS entry
+const NAME_TO_COMPLETION_TYPE: Record<string, DynamicCompletion> = {
+  workspace:   "workspace",
+  template:    "template",
+  repo:        "repo",
+  shell:       "shells",
+  integration: "integration",
+}
 
 const DYNAMIC_COMPLETIONS: Record<string, DynamicCompletion> = {
-  clone:             "workspace",
-  open:              "workspace",
-  close:             "workspace",
-  edit:              "workspace",
-  status:            "workspace",
-  clean:             "workspace",
-  remove:            "workspace",
-  merge:             "workspace",
-  rename:            "workspace",
-  run:               "workspace",
-  sync:              "workspace",
-  cd:                "workspace",
-  "repo.show":       "repo",
-  "repo.remove":     "repo",
-  "repo.rename":     "repo",
-  "template.show":   "template",
-  "template.edit":   "template",
-  "template.clone":  "template",
-  "template.rename": "template",
-  "template.remove": "template",
-  completion:        "shells",
-  "message.send":    "workspace",
-  "message.list":    "workspace",
-  "message.clear":   "workspace",
-
-  // GitHub
-  "integration.github.open":             "workspace",
-  "integration.github.pr.create":        "workspace",
-  "integration.github.pr.open":          "workspace",
-  "integration.github.pr.status":        "workspace",
-  "integration.github.issue.link":       "workspace",
-  "integration.github.issue.unlink":     "workspace",
-  "integration.github.issue.open":       "workspace",
-
-  // GitLab
-  "integration.gitlab.open":             "workspace",
-  "integration.gitlab.pr.create":        "workspace",
-  "integration.gitlab.pr.open":          "workspace",
-  "integration.gitlab.pr.status":        "workspace",
-  "integration.gitlab.issue.link":       "workspace",
-  "integration.gitlab.issue.unlink":     "workspace",
-  "integration.gitlab.issue.open":       "workspace",
-
-  // Gitea
-  "integration.gitea.open":              "workspace",
-  "integration.gitea.pr.create":         "workspace",
-  "integration.gitea.pr.open":           "workspace",
-  "integration.gitea.pr.status":         "workspace",
-  "integration.gitea.issue.link":        "workspace",
-  "integration.gitea.issue.unlink":      "workspace",
-  "integration.gitea.issue.open":        "workspace",
-
-  // Jira
-  "integration.jira.issue.link":         "workspace",
-  "integration.jira.issue.unlink":       "workspace",
-  "integration.jira.issue.open":         "workspace",
-
-  // Niri
-  "integration.niri.focus-workspace":    "workspace",
-
-  // Tmux
-  "integration.tmux.attach":             "workspace",
+  // Override: arg name is [workspace-or-issue], not [workspace] — convention inference misses these
+  "integration.github.issue.link":  "workspace",
+  "integration.gitlab.issue.link":  "workspace",
+  "integration.gitea.issue.link":   "workspace",
+  "integration.jira.issue.link":    "workspace",
 }
 
 const OPTION_ENUMS: Record<string, string[]> = {
@@ -92,14 +46,20 @@ interface OptionInfo {
   description: string
 }
 
+interface ArgCompletion {
+  name: string
+  type: DynamicCompletion
+  required: boolean
+  choices?: string[]
+}
+
 interface CommandNode {
   path: string
   name: string
   description: string
   options: OptionInfo[]
   subcommands: CommandNode[]
-  dynamic: DynamicCompletion | null
-  firstArgRequired: boolean
+  argCompletions: ArgCompletion[]   // replaces: dynamic + firstArgRequired
 }
 
 /** Escape single quotes for embedding in single-quoted shell strings: ' -> '\'' */
@@ -114,16 +74,27 @@ function buildNode(cmd: Command, parentPath: string): CommandNode {
     .filter(opt => opt.long !== undefined && opt.long !== "--help" && opt.long !== "--version")
     .map(opt => ({ long: opt.long!, description: opt.description }))
   const subcommands = cmd.commands.map(sub => buildNode(sub, path))
-  const firstArg = cmd.registeredArguments[0]
-  return {
-    path,
-    name,
-    description: cmd.description(),
-    options,
-    subcommands,
-    dynamic: DYNAMIC_COMPLETIONS[path] ?? null,
-    firstArgRequired: firstArg?.required === true,
-  }
+
+  const firstArgOverride = DYNAMIC_COMPLETIONS[path]
+  const argCompletions: ArgCompletion[] = cmd.registeredArguments.flatMap((arg, index) => {
+    // Priority 1: path-based override (first arg only) per D-02
+    if (index === 0 && firstArgOverride) {
+      return [{ name: arg.name(), type: firstArgOverride, required: arg.required }]
+    }
+    // Priority 2: convention inference from arg name per D-01
+    const inferred = NAME_TO_COMPLETION_TYPE[arg.name()]
+    if (inferred) {
+      return [{ name: arg.name(), type: inferred, required: arg.required }]
+    }
+    // Priority 3: Commander .argChoices extraction per D-04
+    if (arg.argChoices && arg.argChoices.length > 0) {
+      return [{ name: arg.name(), type: "choices" as DynamicCompletion, required: arg.required, choices: arg.argChoices }]
+    }
+    // Priority 4: no completion for this position
+    return []
+  })
+
+  return { path, name, description: cmd.description(), options, subcommands, argCompletions }
 }
 
 function buildTree(program: Command): CommandNode[] {
@@ -132,7 +103,7 @@ function buildTree(program: Command): CommandNode[] {
 
 // ─── Bash ────────────────────────────────────────────────────────────────────
 
-function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string): string {
+function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string, choices?: string[]): string {
   if (type === "workspace") {
     return (
       `${indent}local names\n` +
@@ -154,11 +125,19 @@ function bashDynamicLookup(type: DynamicCompletion, indent: string, name: string
       `${indent}COMPREPLY=($(compgen -W "$names" -- "$cur"))\n`
     )
   }
+  if (type === "integration") {
+    const ids = integrations.map(i => i.id).join(" ")
+    return `${indent}COMPREPLY=($(compgen -W "${ids}" -- "$cur"))\n`
+  }
+  if (type === "choices" && choices) {
+    return `${indent}COMPREPLY=($(compgen -W "${choices.join(" ")}" -- "$cur"))\n`
+  }
   return ""
 }
 
 function bashCaseBodyRecursive(node: CommandNode, depth: number, name: string, indent: string): string {
-  const { subcommands, dynamic } = node
+  const { subcommands } = node
+  const firstDynamic = node.argCompletions[0]?.type ?? null
 
   if (subcommands.length > 0) {
     const subcmdNames = subcommands.map(s => s.name).join(" ")
@@ -170,13 +149,14 @@ function bashCaseBodyRecursive(node: CommandNode, depth: number, name: string, i
       // Generate nested case statements for deeper nesting
       let out = `${indent}case "\${words[${depth}]}" in\n`
       for (const sub of subcommands) {
+        const subFirstDynamic = sub.argCompletions[0]?.type ?? null
         if (sub.subcommands.length > 0) {
           out += `${indent}  ${sub.name})\n`
           out += bashCaseBodyRecursive(sub, depth + 1, name, indent + "    ")
           out += `${indent}    ;;\n`
-        } else if (sub.dynamic && sub.dynamic !== "shells") {
+        } else if (subFirstDynamic && subFirstDynamic !== "shells") {
           out += `${indent}  ${sub.name})\n`
-          out += bashDynamicLookup(sub.dynamic, indent + "    ", name)
+          out += bashDynamicLookup(subFirstDynamic, indent + "    ", name, sub.argCompletions[0]?.choices)
           out += `${indent}    ;;\n`
         }
       }
@@ -190,9 +170,10 @@ function bashCaseBodyRecursive(node: CommandNode, depth: number, name: string, i
     // Flat subcommands (no deeper nesting) — original behavior
     const byDynamic = new Map<DynamicCompletion, string[]>()
     for (const sub of subcommands) {
-      if (sub.dynamic && sub.dynamic !== "shells") {
-        if (!byDynamic.has(sub.dynamic)) byDynamic.set(sub.dynamic, [])
-        byDynamic.get(sub.dynamic)!.push(sub.name)
+      const subFirstDynamic = sub.argCompletions[0]?.type ?? null
+      if (subFirstDynamic && subFirstDynamic !== "shells") {
+        if (!byDynamic.has(subFirstDynamic)) byDynamic.set(subFirstDynamic, [])
+        byDynamic.get(subFirstDynamic)!.push(sub.name)
       }
     }
     let out = `${indent}if [[ \${COMP_CWORD} -eq ${depth} ]]; then\n`
@@ -207,15 +188,17 @@ function bashCaseBodyRecursive(node: CommandNode, depth: number, name: string, i
   }
 
   // Leaf node with dynamic completion
-  if (dynamic && dynamic !== "shells") {
-    return bashDynamicLookup(dynamic, indent, name)
+  if (firstDynamic && firstDynamic !== "shells") {
+    return bashDynamicLookup(firstDynamic, indent, name, node.argCompletions[0]?.choices)
   }
 
   return ""
 }
 
 function bashCaseBody(node: CommandNode, name: string): string {
-  const { subcommands, options, dynamic } = node
+  const { subcommands, options } = node
+  const dynamic = node.argCompletions[0]?.type ?? null
+  const firstArgChoices = node.argCompletions[0]?.choices
 
   if (subcommands.length > 0) {
     return bashCaseBodyRecursive(node, 2, name, "      ")
@@ -248,13 +231,37 @@ function bashCaseBody(node: CommandNode, name: string): string {
       out += `        esac\n`
     }
 
-    out += bashDynamicLookup(dynamic, "        ", name)
+    // Multi-arg position dispatch (D-06)
+    if (node.argCompletions.length > 1) {
+      out += `        if [[ \${COMP_CWORD} -eq 2 ]]; then\n`
+      out += bashDynamicLookup(dynamic, "          ", name, firstArgChoices)
+      for (let i = 1; i < node.argCompletions.length; i++) {
+        const ac = node.argCompletions[i]
+        out += `        elif [[ \${COMP_CWORD} -eq ${i + 2} ]]; then\n`
+        out += bashDynamicLookup(ac.type, "          ", name, ac.choices)
+      }
+      out += `        fi\n`
+    } else {
+      out += bashDynamicLookup(dynamic, "        ", name, firstArgChoices)
+    }
     out += `      fi\n`
     return out
   }
 
   if (dynamic) {
-    return bashDynamicLookup(dynamic, "      ", name)
+    // Multi-arg position dispatch without flags (D-06)
+    if (node.argCompletions.length > 1) {
+      let out = `      if [[ \${COMP_CWORD} -eq 2 ]]; then\n`
+      out += bashDynamicLookup(dynamic, "        ", name, firstArgChoices)
+      for (let i = 1; i < node.argCompletions.length; i++) {
+        const ac = node.argCompletions[i]
+        out += `      elif [[ \${COMP_CWORD} -eq ${i + 2} ]]; then\n`
+        out += bashDynamicLookup(ac.type, "        ", name, ac.choices)
+      }
+      out += `      fi\n`
+      return out
+    }
+    return bashDynamicLookup(dynamic, "      ", name, firstArgChoices)
   }
 
   // No positional dynamic, but command has COMMAND_FLAG_COMPLETIONS entries
@@ -376,6 +383,7 @@ function zshOptionSpec(opt: OptionInfo, id: string, commandPath = ""): string {
   } else if (flagDynamic) {
     const helper = flagDynamic === "repo" ? `_${id}_repos`
       : flagDynamic === "template" ? `_${id}_templates`
+      : flagDynamic === "integration" ? `_${id}_integrations`
       : `_${id}_workspaces`
     const valName = flagName.slice(2)
     return `'${opt.long}[${shellEscapeSingleQuote(opt.description)}]:${valName}:${helper}'`
@@ -385,7 +393,9 @@ function zshOptionSpec(opt: OptionInfo, id: string, commandPath = ""): string {
 }
 
 function zshCaseBody(node: CommandNode, id: string): string {
-  const { subcommands, options, dynamic, firstArgRequired } = node
+  const { subcommands, options } = node
+  const dynamic = node.argCompletions[0]?.type ?? null
+  const firstArgRequired = node.argCompletions[0]?.required ?? false
 
   if (subcommands.length > 0) {
     return `        _${id}_${node.name} ;;\n`
@@ -395,10 +405,49 @@ function zshCaseBody(node: CommandNode, id: string): string {
     return `        _values 'shell' bash zsh fish ;;\n`
   }
 
+  if (dynamic === "choices") {
+    const choices = node.argCompletions[0]?.choices ?? []
+    const pos = firstArgRequired ? ":" : "::"
+    if (options.length > 0) {
+      let out = `        _arguments \\\n`
+      for (const opt of options) {
+        out += `          ${zshOptionSpec(opt, id, node.path)} \\\n`
+      }
+      out += `          '${pos} :(${choices.join(" ")})'\n`
+      out += `          ;;\n`
+      return out
+    }
+    return `        _values 'choice' ${choices.join(" ")} ;;\n`
+  }
+
   if (dynamic && options.length > 0) {
     const helper = dynamic === "repo" ? `_${id}_repos`
       : dynamic === "template" ? `_${id}_templates`
+      : dynamic === "integration" ? `_${id}_integrations`
       : `_${id}_workspaces`
+
+    // Multi-arg dispatch (D-06)
+    if (node.argCompletions.length > 1) {
+      let out = `        _arguments \\\n`
+      for (const opt of options) {
+        out += `          ${zshOptionSpec(opt, id, node.path)} \\\n`
+      }
+      out += `          '${firstArgRequired ? ":" : "::"} :${helper}' \\\n`
+      for (let i = 1; i < node.argCompletions.length; i++) {
+        const ac = node.argCompletions[i]
+        const acHelper = ac.type === "repo" ? `_${id}_repos`
+          : ac.type === "template" ? `_${id}_templates`
+          : ac.type === "integration" ? `_${id}_integrations`
+          : `_${id}_workspaces`
+        const acPos = ac.required ? ":" : "::"
+        out += `          '${acPos} :${acHelper}'`
+        if (i < node.argCompletions.length - 1) out += " \\\n"
+        else out += "\n"
+      }
+      out += `          ;;\n`
+      return out
+    }
+
     const pos = `'${firstArgRequired ? ":" : "::"} :${helper}'`
     let out = `        _arguments \\\n`
     for (const opt of options) {
@@ -410,6 +459,24 @@ function zshCaseBody(node: CommandNode, id: string): string {
   }
 
   if (dynamic === "workspace") {
+    // Multi-arg dispatch without options (D-06)
+    if (node.argCompletions.length > 1) {
+      let out = `        _arguments \\\n`
+      out += `          '${firstArgRequired ? ":" : "::"} :_${id}_workspaces' \\\n`
+      for (let i = 1; i < node.argCompletions.length; i++) {
+        const ac = node.argCompletions[i]
+        const acHelper = ac.type === "repo" ? `_${id}_repos`
+          : ac.type === "template" ? `_${id}_templates`
+          : ac.type === "integration" ? `_${id}_integrations`
+          : `_${id}_workspaces`
+        const acPos = ac.required ? ":" : "::"
+        out += `          '${acPos} :${acHelper}'`
+        if (i < node.argCompletions.length - 1) out += " \\\n"
+        else out += "\n"
+      }
+      out += `          ;;\n`
+      return out
+    }
     return `        _${id}_workspaces ;;\n`
   }
 
@@ -419,6 +486,10 @@ function zshCaseBody(node: CommandNode, id: string): string {
 
   if (dynamic === "template") {
     return `        _${id}_templates ;;\n`
+  }
+
+  if (dynamic === "integration") {
+    return `        _${id}_integrations ;;\n`
   }
 
   // No positional dynamic, but command has options that are in OPTION_ENUMS or FLAG_COMPLETIONS
@@ -440,9 +511,10 @@ function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcNam
   const subcmds = node.subcommands
   const byDynamic = new Map<DynamicCompletion, string[]>()
   for (const sub of subcmds) {
-    if (sub.dynamic && sub.dynamic !== "shells") {
-      if (!byDynamic.has(sub.dynamic)) byDynamic.set(sub.dynamic, [])
-      byDynamic.get(sub.dynamic)!.push(sub.name)
+    const subFirstDynamic = sub.argCompletions[0]?.type ?? null
+    if (subFirstDynamic && subFirstDynamic !== "shells") {
+      if (!byDynamic.has(subFirstDynamic)) byDynamic.set(subFirstDynamic, [])
+      byDynamic.get(subFirstDynamic)!.push(sub.name)
     }
   }
 
@@ -458,6 +530,7 @@ function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcNam
   out += `  else\n`
   out += `    case $words[2] in\n`
   for (const sub of subcmds) {
+    const subFirstDynamic = sub.argCompletions[0]?.type ?? null
     if (sub.subcommands.length > 0) {
       // Sub-node has its own subcommands — dispatch to a deeper recursive helper
       const subFuncName = `${funcName}_${sub.name}`
@@ -472,9 +545,10 @@ function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcNam
         out += `          ${zshOptionSpec(opt, id, sub.path)} \\\n`
       }
       out += `          ;;\n`
-    } else if (sub.dynamic && sub.dynamic !== "shells") {
-      const helper = sub.dynamic === "repo" ? `_${id}_repos`
-        : sub.dynamic === "template" ? `_${id}_templates`
+    } else if (subFirstDynamic && subFirstDynamic !== "shells") {
+      const helper = subFirstDynamic === "repo" ? `_${id}_repos`
+        : subFirstDynamic === "template" ? `_${id}_templates`
+        : subFirstDynamic === "integration" ? `_${id}_integrations`
         : `_${id}_workspaces`
       out += `      ${sub.name})\n`
       out += `        ${helper} ;;\n`
@@ -486,6 +560,7 @@ function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcNam
     if (unhandled.length === 0) continue
     const helper = dynType === "repo" ? `_${id}_repos`
       : dynType === "template" ? `_${id}_templates`
+      : dynType === "integration" ? `_${id}_integrations`
       : `_${id}_workspaces`
     out += `      ${unhandled.join("|")})\n`
     out += `        ${helper} ;;\n`
@@ -582,6 +657,10 @@ export function generateZsh(program: Command): string {
   out += `  templates=($(grep -h '^name:' "$templates_dir"/*.yml 2>/dev/null | sed 's/^name:[[:space:]]*//'))\n`
   out += `  _values 'template' $templates\n`
   out += `}\n`
+  out += "\n"
+  out += `_${id}_integrations() {\n`
+  out += `  _values 'integration' ${integrations.map(i => i.id).join(" ")}\n`
+  out += `}\n`
 
   for (const node of nodes) {
     if (node.subcommands.length > 0) {
@@ -628,9 +707,10 @@ function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name
     const dynHelper = (dynType: DynamicCompletion): string =>
       dynType === "repo" ? `__${id}_repos`
         : dynType === "template" ? `__${id}_templates`
+        : dynType === "integration" ? `__${id}_integrations`
         : `__${id}_workspaces`
 
-    const repoDynSubs = node.subcommands.filter(s => s.dynamic === "repo" && s.subcommands.length === 0)
+    const repoDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "repo" && s.subcommands.length === 0)
     if (repoDynSubs.length > 0) {
       lines.push(`\nfor cmd in ${repoDynSubs.map(s => s.name).join(" ")}\n`)
       lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
@@ -638,7 +718,7 @@ function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name
       lines.push("end\n")
     }
 
-    const templateDynSubs = node.subcommands.filter(s => s.dynamic === "template" && s.subcommands.length === 0)
+    const templateDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "template" && s.subcommands.length === 0)
     if (templateDynSubs.length > 0) {
       lines.push(`\nfor cmd in ${templateDynSubs.map(s => s.name).join(" ")}\n`)
       lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
@@ -646,7 +726,7 @@ function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name
       lines.push("end\n")
     }
 
-    const workspaceDynSubs = node.subcommands.filter(s => s.dynamic === "workspace" && s.subcommands.length === 0)
+    const workspaceDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "workspace" && s.subcommands.length === 0)
     if (workspaceDynSubs.length > 0) {
       lines.push(`\nfor cmd in ${workspaceDynSubs.map(s => s.name).join(" ")}\n`)
       lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
@@ -700,6 +780,10 @@ export function generateFish(program: Command): string {
   out += "  end\n"
   out += "end\n"
   out += "\n"
+  out += `function __${id}_integrations\n`
+  out += `  string split ' ' '${integrations.map(i => i.id).join(" ")}'\n`
+  out += "end\n"
+  out += "\n"
   out += `function __${id}_no_subcommand\n`
   out += `  not __fish_seen_subcommand_from ${allTopNames}\n`
   out += "end\n"
@@ -711,12 +795,29 @@ export function generateFish(program: Command): string {
   }
 
   // Workspace dynamic completions — group commands into for loop
-  const workspaceCmds = nodes.filter(n => n.dynamic === "workspace").map(n => n.name)
+  // Exclude multi-arg commands (they get individual position-aware completions below)
+  const workspaceCmds = nodes.filter(n => n.argCompletions[0]?.type === "workspace" && n.argCompletions.length === 1).map(n => n.name)
   if (workspaceCmds.length > 0) {
     out += "\n# Workspace name completions\n"
     out += `for cmd in ${workspaceCmds.join(" ")}\n`
     out += `  complete -c ${name} -f -n "__fish_seen_subcommand_from $cmd" -a "(__${id}_workspaces)"\n`
     out += "end\n"
+  }
+
+  // Multi-arg commands: emit position-aware completions individually
+  const multiArgTopNodes = nodes.filter(n => n.argCompletions.length > 1)
+  for (const node of multiArgTopNodes) {
+    const dynHelper = (dynType: DynamicCompletion): string =>
+      dynType === "repo" ? `__${id}_repos`
+        : dynType === "template" ? `__${id}_templates`
+        : dynType === "integration" ? `__${id}_integrations`
+        : `__${id}_workspaces`
+    out += `\n# Position-aware completions for ${node.name}\n`
+    out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and test (count (commandline -opc)) -eq 2' -a '(${dynHelper(node.argCompletions[0].type)})'\n`
+    for (let i = 1; i < node.argCompletions.length; i++) {
+      const ac = node.argCompletions[i]
+      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and test (count (commandline -opc)) -eq ${i + 2}' -a '(${dynHelper(ac.type)})'\n`
+    }
   }
 
   // Per-command flags
@@ -792,10 +893,18 @@ export function generateFish(program: Command): string {
   out += fishSubLines.join("")
 
   // Shells completion
-  const shellsNode = nodes.find(n => n.dynamic === "shells")
+  const shellsNode = nodes.find(n => n.argCompletions[0]?.type === "shells")
   if (shellsNode) {
     out += `\n# Completion shell options\n`
     out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${shellsNode.name}' -a 'bash zsh fish'\n`
+  }
+
+  // Choices completions for top-level commands
+  const choicesCmds = nodes.filter(n => n.argCompletions[0]?.type === "choices")
+  for (const node of choicesCmds) {
+    const choices = node.argCompletions[0]?.choices ?? []
+    out += `\n# Choices for ${node.name}\n`
+    out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -a '${choices.join(" ")}'\n`
   }
 
   return out

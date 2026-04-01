@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { Command } from "commander"
+import { Command, Argument } from "commander"
 import { generateBash, generateZsh, generateFish } from "../../src/lib/completion-generator"
 
 function buildTestProgram(): Command {
@@ -7,28 +7,28 @@ function buildTestProgram(): Command {
   program.name("git-stacks").description("Test workspace manager")
 
   program
-    .command("open <name>")
+    .command("open <workspace>")
     .description("Open a workspace")
     .option("--no-ide", "Skip opening IDEs")
     .option("--no-cmux", "Skip cmux session")
 
   program
-    .command("clone [source]")
+    .command("clone [workspace]")
     .description("Clone a workspace")
 
   program
-    .command("clean [name]")
+    .command("clean [workspace]")
     .description("Remove worktrees for a workspace")
     .option("--gone", "Remove workspaces with deleted remote branches")
     .option("--force", "Skip dirty worktree check")
 
   program
-    .command("remove <name>")
+    .command("remove <workspace>")
     .description("Permanently remove a workspace")
     .option("--force", "Skip dirty worktree check")
 
   program
-    .command("merge <name>")
+    .command("merge <workspace>")
     .description("Merge worktree branches")
     .option("--force", "Skip dirty worktree check")
 
@@ -40,19 +40,19 @@ function buildTestProgram(): Command {
   const repoCmd = new Command("repo").description("Manage repo registry")
   repoCmd.command("add <path>").description("Register a repo from a local path")
   repoCmd.command("list").description("List registered repos")
-  repoCmd.command("show <name>").description("Show repo details")
-  repoCmd.command("remove <name>").description("Remove a repo from the registry")
-  repoCmd.command("rename <name> <new-name>").description("Rename a registered repo")
+  repoCmd.command("show <repo>").description("Show repo details")
+  repoCmd.command("remove <repo>").description("Remove a repo from the registry")
+  repoCmd.command("rename <repo> <new-name>").description("Rename a registered repo")
   program.addCommand(repoCmd)
 
   const templateCmd = new Command("template").description("Manage workspace templates")
   templateCmd.command("new [name]").description("Create a new template interactively")
   templateCmd.command("list").description("List all templates")
-  templateCmd.command("show <name>").description("Show template details")
-  templateCmd.command("edit <name>").description("Edit an existing template")
-  templateCmd.command("clone <name> <new-name>").description("Clone a template under a new name")
-  templateCmd.command("rename <name> <new-name>").description("Rename a template")
-  templateCmd.command("remove <name>").description("Remove a template")
+  templateCmd.command("show <template>").description("Show template details")
+  templateCmd.command("edit <template>").description("Edit an existing template")
+  templateCmd.command("clone <template> <new-name>").description("Clone a template under a new name")
+  templateCmd.command("rename <template> <new-name>").description("Rename a template")
+  templateCmd.command("remove <template>").description("Remove a template")
   program.addCommand(templateCmd)
 
   program
@@ -61,7 +61,7 @@ function buildTestProgram(): Command {
 
   // sync command (has --strategy flag for OPTION_ENUMS testing)
   program
-    .command("sync [name]")
+    .command("sync [workspace]")
     .description("Sync workspace branches")
     .option("--all", "Sync all workspaces")
     .option("--strategy <strategy>", "Sync strategy: rebase or merge")
@@ -74,13 +74,29 @@ function buildTestProgram(): Command {
 
   // close command (should complete workspace names)
   program
-    .command("close <name>")
+    .command("close <workspace>")
     .description("Close a workspace without deleting it")
 
   // tmux-like subcommand with apostrophe in description (quote escaping test)
   program
-    .command("attach <name>")
+    .command("attach <workspace>")
     .description("Attach to a workspace's tmux session")
+
+  // run command (multi-arg: workspace + repo) for D-06 testing
+  program
+    .command("run <workspace> [repo]")
+    .description("Run a command in workspace repos")
+
+  // cd command (multi-arg: workspace + repo) for D-06 testing
+  program
+    .command("cd <workspace> [repo]")
+    .description("Change to workspace directory")
+
+  // format command with .choices() for D-04 testing
+  program
+    .command("format")
+    .description("Format output")
+    .addArgument(new Argument("[style]", "Output style").choices(["json", "yaml", "table"]))
 
   // message command group (for CMPL-05, CMPL-06 testing)
   const messageCmd = new Command("message").description("Workspace notifications")
