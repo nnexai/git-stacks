@@ -229,6 +229,16 @@ Plans:
 - [x] 50-01-PLAN.md — Interface extension, configExample strings, generic config/list commands
 - [x] 50-02-PLAN.md — AeroSpace focus command, VSCode open command, test coverage
 
+### Phase 50.1: Argument-Based Dynamic Completion (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 50
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 50.1 to break down)
+
 ### Phase 51: Workspace Port Allocation
 
 **Goal:** Workspaces and templates can declare named ports (env var name → null); `git-stacks open` allocates non-overlapping contiguous port ranges from a global pool and injects them as environment variables. Allocation is collision-free, race-safe, and stable across repeated opens.
@@ -258,10 +268,10 @@ Plans:
   8. The `new` wizard allows declaring port names without numbers
 
 Plans:
-- [ ] 51-01-PLAN.md — Atomic writeYaml, schema changes (WorkspaceSchema, StackSchema, GlobalConfigSchema)
-- [ ] 51-02-PLAN.md — Port allocator: scan, lock, allocate, write-back logic in workspace-ops
-- [ ] 51-03-PLAN.md — mergeEnv integration, conflict detection, env injection
-- [ ] 51-04-PLAN.md — Wizard support, template port inheritance, tests
+- [ ] 51-01-PLAN.md — Atomic writeYaml (fsync), PortsSchema, schema fields (WorkspaceSchema, TemplateSchema, GlobalConfigSchema), PORTS_LOCK_FILE
+- [ ] 51-02-PLAN.md — Port allocator module (ports.ts): lock, scan, first-fit allocation, conflict detection, unit tests
+- [ ] 51-03-PLAN.md — Wire allocatePorts into openWorkspace, mergeEnv port injection, --reallocate flag
+- [ ] 51-04-PLAN.md — Wizard port name prompt, template port snapshot, composition ports merge
 
 ### Phase 52: Release Prep
 
