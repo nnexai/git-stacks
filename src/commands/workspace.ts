@@ -113,48 +113,48 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("clone [source]")
+    .command("clone [workspace]")
     .description("Clone a workspace with a new name and branch")
-    .action(async (source?: string) => {
-      await runWorkspaceClone(source)
+    .action(async (workspace?: string) => {
+      await runWorkspaceClone(workspace)
     })
 
   program
-    .command("edit <name>")
+    .command("edit <workspace>")
     .description("Edit a workspace interactively")
     .option("--yaml", "Open workspace YAML in $EDITOR")
-    .action(async (name: string, opts: { yaml?: boolean }) => {
-      if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+    .action(async (workspace: string, opts: { yaml?: boolean }) => {
+      if (!workspaceExists(workspace)) {
+        console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
       if (opts.yaml) {
-        const { path, validate } = editWorkspaceYaml(name)
+        const { path, validate } = editWorkspaceYaml(workspace)
         await openYamlInEditor(path, validate)
         return
       }
-      await runWorkspaceEdit(name)
+      await runWorkspaceEdit(workspace)
     })
 
   program
-    .command("open <name>")
+    .command("open <workspace>")
     .description("Open a workspace (VSCode, IntelliJ, cmux, tmux)")
     .option("--no-ide", "Skip opening IDEs")
     .option("--no-cmux", "Skip cmux session")
     .option("--recreate", "Re-sync workspace from template")
     .option("--force", "Skip confirmation in --recreate")
     .option("--reallocate", "Reallocate conflicting ports")
-    .action(async (name: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean; reallocate?: boolean }) => {
-      validateName(name)
+    .action(async (workspace: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean; reallocate?: boolean }) => {
+      validateName(workspace)
       if (opts.recreate) {
-        if (!workspaceExists(name)) {
-          console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+        if (!workspaceExists(workspace)) {
+          console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
           process.exit(1)
         }
 
-        const ws = readWorkspace(name)
+        const ws = readWorkspace(workspace)
         if (!ws.template) {
-          console.error(formatError(`Workspace '${name}' has no template field`, "only workspaces created from templates support --recreate"))
+          console.error(formatError(`Workspace '${workspace}' has no template field`, "only workspaces created from templates support --recreate"))
           process.exit(1)
         }
 
@@ -223,7 +223,7 @@ export function registerWorkspaceCommands(program: Command) {
               type: regEntry.type,
               mode: tplRepo.mode ?? "worktree",
               main_path: regEntry.local_path,
-              task_path: tplRepo.mode === "trunk" ? regEntry.local_path : join(td, name, regEntry.name),
+              task_path: tplRepo.mode === "trunk" ? regEntry.local_path : join(td, workspace, regEntry.name),
               base_branch: tplRepo.base_branch ?? regEntry.default_branch,
             }
           }).filter(Boolean) as typeof ws.repos
@@ -233,7 +233,7 @@ export function registerWorkspaceCommands(program: Command) {
         }
       }
 
-      const result = await openWorkspace(name, { ide: opts.ide, cmux: opts.cmux, reallocate: opts.reallocate }, (msg) => console.log(`  ${msg}`))
+      const result = await openWorkspace(workspace, { ide: opts.ide, cmux: opts.cmux, reallocate: opts.reallocate }, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)
@@ -241,15 +241,15 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("close <name>")
+    .command("close <workspace>")
     .description("Close integration sessions (tmux, niri) without removing worktrees")
-    .action(async (name: string) => {
-      if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+    .action(async (workspace: string) => {
+      if (!workspaceExists(workspace)) {
+        console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
 
-      const result = await closeWorkspace(name, {}, (msg) => console.log(`  ${msg}`))
+      const result = await closeWorkspace(workspace, {}, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)
@@ -305,10 +305,11 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("status [name]")
+    .command("status [workspace]")
     .description("Show workspace status — dirty state, worktree health")
     .option("--json", "Output as JSON")
-    .action(async (name?: string, opts: { json?: boolean } = {}) => {
+    .action(async (workspace?: string, opts: { json?: boolean } = {}) => {
+      const name = workspace
       if (name !== undefined) validateName(name)
       const workspaces = name ? [readWorkspace(name)] : listWorkspaces()
       if (workspaces.length === 0) {
@@ -352,12 +353,13 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("clean [name]")
+    .command("clean [workspace]")
     .description("Remove worktrees for a workspace (config is kept), or --gone to remove all with deleted remote branches")
     .option("--gone", "Remove workspaces whose upstream branches are deleted")
     .option("--force", "Skip dirty worktree check and confirmation")
     .option("--dry-run", "Show what would be done without making changes")
-    .action(async (name: string | undefined, opts: { gone?: boolean; force?: boolean; dryRun?: boolean }) => {
+    .action(async (workspace: string | undefined, opts: { gone?: boolean; force?: boolean; dryRun?: boolean }) => {
+      const name = workspace
       if (opts.gone) {
         // --- git-stacks clean --gone ---
         const allWorkspaces = listWorkspaces()
@@ -487,20 +489,20 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("remove <name>")
+    .command("remove <workspace>")
     .description("Permanently remove a workspace (worktrees + config YAML)")
     .option("--force", "Skip dirty worktree check and confirmation")
     .option("--dry-run", "Show what would be done without making changes")
-    .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
-      validateName(name)
-      if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+    .action(async (workspace: string, opts: { force?: boolean; dryRun?: boolean }) => {
+      validateName(workspace)
+      if (!workspaceExists(workspace)) {
+        console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
 
       if (!opts.force && !opts.dryRun) {
         const ok = await p.confirm({
-          message: `Permanently remove workspace '${name}' (worktrees + config)?`,
+          message: `Permanently remove workspace '${workspace}' (worktrees + config)?`,
           initialValue: false,
         })
         if (p.isCancel(ok) || !ok) {
@@ -509,7 +511,7 @@ export function registerWorkspaceCommands(program: Command) {
         }
       }
 
-      const result = await removeWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
+      const result = await removeWorkspace(workspace, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)
@@ -517,44 +519,44 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("cd <name> [repo]")
+    .command("cd <workspace> [repo]")
     .description("Print path to a workspace (or repo within it) — use via shell function")
-    .action((name: string, repo?: string) => {
-      if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+    .action((workspace: string, repo?: string) => {
+      if (!workspaceExists(workspace)) {
+        console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
       const config = readGlobalConfig()
       const tasksDir = getTasksDir(config.workspace_root)
-      const workspace = readWorkspace(name)
+      const ws = readWorkspace(workspace)
 
       if (repo) {
-        const found = workspace.repos.find((r) => r.name === repo)
+        const found = ws.repos.find((r) => r.name === repo)
         if (!found) {
-          console.error(formatError(`Repo '${repo}' not found in workspace '${name}'`, `available repos: ${workspace.repos.map(r => r.name).join(", ")}`))
+          console.error(formatError(`Repo '${repo}' not found in workspace '${workspace}'`, `available repos: ${ws.repos.map(r => r.name).join(", ")}`))
           process.exit(1)
         }
         process.stdout.write(found.task_path + "\n")
       } else {
-        process.stdout.write(join(tasksDir, name) + "\n")
+        process.stdout.write(join(tasksDir, workspace) + "\n")
       }
     })
 
   program
-    .command("merge <name>")
+    .command("merge <workspace>")
     .description("Merge all worktree branches into their base branches, then clean workspace")
     .option("--force", "Skip dirty worktree check and confirmation")
     .option("--dry-run", "Show what would be done without making changes")
-    .action(async (name: string, opts: { force?: boolean; dryRun?: boolean }) => {
-      validateName(name)
-      if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+    .action(async (workspace: string, opts: { force?: boolean; dryRun?: boolean }) => {
+      validateName(workspace)
+      if (!workspaceExists(workspace)) {
+        console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
 
       if (!opts.force && !opts.dryRun) {
         const ok = await p.confirm({
-          message: `Merge and clean workspace '${name}'?`,
+          message: `Merge and clean workspace '${workspace}'?`,
           initialValue: false,
         })
         if (p.isCancel(ok) || !ok) {
@@ -563,7 +565,7 @@ export function registerWorkspaceCommands(program: Command) {
         }
       }
 
-      const result = await mergeWorkspace(name, opts, (msg) => console.log(`  ${msg}`))
+      const result = await mergeWorkspace(workspace, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)
@@ -571,20 +573,20 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("run <name> [repo]")
+    .command("run <workspace> [repo]")
     .description("Run a command or shell inside a workspace")
     .option("--all-repos", "Run command in every worktree repo sequentially")
     .option("--parallel", "Run command in every worktree repo simultaneously")
     .option("--json", "Output results as JSON (requires --parallel)")
     .passThroughOptions()
     .allowExcessArguments(true)
-    .action(async (name: string, repo: string | undefined, opts: { allRepos?: boolean; parallel?: boolean; json?: boolean }) => {
-      if (!workspaceExists(name)) {
-        console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+    .action(async (workspace: string, repo: string | undefined, opts: { allRepos?: boolean; parallel?: boolean; json?: boolean }) => {
+      if (!workspaceExists(workspace)) {
+        console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
         process.exit(1)
       }
 
-      const workspace = readWorkspace(name)
+      const ws = readWorkspace(workspace)
       const config = readGlobalConfig()
       const tasksDir = getTasksDir(config.workspace_root)
 
@@ -599,9 +601,9 @@ export function registerWorkspaceCommands(program: Command) {
           process.exit(1)
         }
 
-        const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+        const worktreeRepos = ws.repos.filter((r) => r.mode === "worktree")
         if (worktreeRepos.length === 0) {
-          console.error(formatError(`No worktree repos in workspace '${name}'`))
+          console.error(formatError(`No worktree repos in workspace '${workspace}'`))
           process.exit(1)
         }
 
@@ -669,9 +671,9 @@ export function registerWorkspaceCommands(program: Command) {
           process.exit(1)
         }
 
-        const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+        const worktreeRepos = ws.repos.filter((r) => r.mode === "worktree")
         if (worktreeRepos.length === 0) {
-          console.error(formatError(`No worktree repos in workspace '${name}'`))
+          console.error(formatError(`No worktree repos in workspace '${workspace}'`))
           process.exit(1)
         }
 
@@ -692,14 +694,14 @@ export function registerWorkspaceCommands(program: Command) {
       // Determine cwd
       let cwd: string
       if (repo) {
-        const found = workspace.repos.find((r) => r.name === repo)
+        const found = ws.repos.find((r) => r.name === repo)
         if (!found) {
-          console.error(formatError(`Repo '${repo}' not found in workspace '${name}'`, `available repos: ${workspace.repos.map(r => r.name).join(", ")}`))
+          console.error(formatError(`Repo '${repo}' not found in workspace '${workspace}'`, `available repos: ${ws.repos.map(r => r.name).join(", ")}`))
           process.exit(1)
         }
         cwd = found.task_path
       } else {
-        cwd = join(tasksDir, name)
+        cwd = join(tasksDir, workspace)
       }
 
       if (!shellCmd) {
@@ -722,16 +724,16 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("rename <old> <new>")
+    .command("rename <workspace> <new-name>")
     .description("Rename a workspace")
     .option("--force", "Skip confirmation prompt")
     .option("--dry-run", "Show what would be done without making changes")
-    .action(async (oldName: string, newName: string, opts: { force?: boolean; dryRun?: boolean }) => {
-      validateName(oldName)
+    .action(async (workspace: string, newName: string, opts: { force?: boolean; dryRun?: boolean }) => {
+      validateName(workspace)
       validateName(newName)
       if (!opts.force && !opts.dryRun) {
         const ok = await p.confirm({
-          message: `Rename '${oldName}' \u2192 '${newName}'?`,
+          message: `Rename '${workspace}' \u2192 '${newName}'?`,
           initialValue: false,
         })
         if (p.isCancel(ok) || !ok) {
@@ -740,24 +742,25 @@ export function registerWorkspaceCommands(program: Command) {
         }
       }
 
-      const result = await renameWorkspace(oldName, newName, opts, (msg) => console.log(`  ${msg}`))
+      const result = await renameWorkspace(workspace, newName, opts, (msg) => console.log(`  ${msg}`))
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)
       }
       if (!opts.dryRun) {
-        console.log(`\nRenamed '${oldName}' \u2192 '${newName}'.`)
+        console.log(`\nRenamed '${workspace}' \u2192 '${newName}'.`)
       }
     })
 
   program
-    .command("sync [name]")
+    .command("sync [workspace]")
     .description("Sync workspace branches with upstream base branches")
     .option("--all", "Sync all workspaces")
     .option("--strategy <strategy>", "Sync strategy: rebase or merge")
     .option("--best-effort", "Skip conflicting repos instead of aborting")
     .option("--json", "Output results as JSON")
-    .action(async (name: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean; json?: boolean }) => {
+    .action(async (workspace: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean; json?: boolean }) => {
+      const name = workspace
       const strategy = opts.strategy as "rebase" | "merge" | undefined
 
       // --json mode: suppress all progress output, emit pure JSON at end
@@ -917,17 +920,17 @@ export function registerWorkspaceCommands(program: Command) {
     })
 
   program
-    .command("pull [name]")
+    .command("pull [workspace]")
     .description("Pull latest commits for all repos in a workspace (--ff-only)")
-    .action(async (name: string | undefined) => {
+    .action(async (workspace: string | undefined) => {
       let workspaceName: string
 
-      if (name) {
-        if (!workspaceExists(name)) {
-          console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
+      if (workspace) {
+        if (!workspaceExists(workspace)) {
+          console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
           process.exit(1)
         }
-        workspaceName = name
+        workspaceName = workspace
       } else {
         const detection = detectWorkspaceFromCwd()
         if (!detection.ok) {
