@@ -207,11 +207,12 @@ describe("workspace-wizard integration overrides", () => {
 
   test("Test 1: template-based workspace calls promptIntegrationOverrides with template integration IDs as initial selection (D-06)", async () => {
     // Setup: user picks template mode, selects "my-template", enters name/branch/description
-    // safeText returns: name, branch, description
+    // safeText returns: name, branch, description, port names
     mockSafeText
       .mockResolvedValueOnce("ws-from-template") // name
       .mockResolvedValueOnce("feature/ws-from-template") // branch
       .mockResolvedValueOnce("") // description
+      .mockResolvedValueOnce("") // port names (empty = skip)
 
     // select returns: creation mode "template", then template name "my-template"
     mockSelect
@@ -230,11 +231,12 @@ describe("workspace-wizard integration overrides", () => {
     // Setup: no templates available -> direct to ad-hoc
     mockListTemplates.mockReturnValueOnce([])
 
-    // safeText: name, branch, description
+    // safeText: name, branch, description, port names
     mockSafeText
       .mockResolvedValueOnce("ws-adhoc") // name
       .mockResolvedValueOnce("feature/ws-adhoc") // branch
       .mockResolvedValueOnce("") // description
+      .mockResolvedValueOnce("") // port names (empty = skip)
 
     // multiselect for repo selection
     mockMultiselect.mockResolvedValueOnce(["frontend"])
@@ -257,7 +259,8 @@ describe("workspace-wizard integration overrides", () => {
     mockSafeText
       .mockResolvedValueOnce("ws-with-overrides")
       .mockResolvedValueOnce("feature/ws-with-overrides")
-      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("") // description
+      .mockResolvedValueOnce("") // port names (empty = skip)
 
     mockSelect
       .mockResolvedValueOnce("template")
@@ -277,7 +280,8 @@ describe("workspace-wizard integration overrides", () => {
     mockSafeText
       .mockResolvedValueOnce("ws-no-override")
       .mockResolvedValueOnce("feature/ws-no-override")
-      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("") // description
+      .mockResolvedValueOnce("") // port names (empty = skip)
 
     mockSelect
       .mockResolvedValueOnce("template")
