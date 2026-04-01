@@ -201,7 +201,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 47. Multi-Workspace Schema | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 49. Release Prep | v0.12.0 | 1/1 | Complete    | 2026-03-29 |
-| 50. Integration Specific Tools | v0.12.0 | 2/2 | Complete   | 2026-04-01 |
+| 50. Integration Specific Tools | v0.12.0 | 2/2 | Complete    | 2026-04-01 |
 | 51. Workspace Port Allocation | v0.12.0 | 0/4 | Planned | — |
 | 52. Release Prep | v0.12.0 | 0/1 | Planned | — |
 
