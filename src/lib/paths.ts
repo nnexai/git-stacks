@@ -14,6 +14,7 @@ export const GLOBAL_CONFIG_FILE = join(WS_CONFIG_DIR, "config.yml")
 export const REGISTRY_FILE = join(WS_CONFIG_DIR, "registry.yml")
 export const TEMPLATES_DIR = join(WS_CONFIG_DIR, "templates")
 export const MESSAGES_DIR = join(WS_CONFIG_DIR, "messages")
+export const PORTS_LOCK_FILE = join(WS_CONFIG_DIR, ".ports.lock")
 
 export function getMainDir(wsRoot: string): string {
   return join(wsRoot, "main")
