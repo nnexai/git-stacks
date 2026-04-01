@@ -203,8 +203,8 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 49. Release Prep | v0.12.0 | 1/1 | Complete    | 2026-03-29 |
 | 50. Integration Specific Tools | v0.12.0 | 2/2 | Complete    | 2026-04-01 |
-| 50.1. Argument-Based Dynamic Completion | v0.12.0 | 0/2 | Planned | — |
-| 51. Workspace Port Allocation | v0.12.0 | 4/4 | Complete   | 2026-04-01 |
+| 50.1. Argument-Based Dynamic Completion | v0.12.0 | 1/2 | In Progress|  |
+| 51. Workspace Port Allocation | v0.12.0 | 4/4 | Complete    | 2026-04-01 |
 | 52. Release Prep | v0.12.0 | 0/1 | Planned | — |
 
 ### Phase 50: Integration Specific Tools
@@ -236,7 +236,7 @@ Plans:
 **Goal:** Replace the manually maintained `DYNAMIC_COMPLETIONS` static map with convention-based inference from Commander.js argument names. The completion generator automatically derives completion types from argument names, supports per-argument-position completions, and extracts `.choices()` from Commander arguments. New completion type: integration IDs.
 **Requirements**: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08
 **Depends on:** Phase 50
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 **Success Criteria** (what must be TRUE):
   1. Commands with convention-named arguments (`<workspace>`, `<repo>`, `<template>`) auto-complete without any DYNAMIC_COMPLETIONS entry
@@ -247,7 +247,7 @@ Plans:
   6. OPTION_ENUMS, FLAG_COMPLETIONS, COMMAND_FLAG_COMPLETIONS are unchanged
 
 Plans:
-- [ ] 50.1-01-PLAN.md — Rename command argument names to match convention (workspace, repo, template)
+- [x] 50.1-01-PLAN.md — Rename command argument names to match convention (workspace, repo, template)
 - [ ] 50.1-02-PLAN.md — Refactor completion-generator.ts (CommandNode, buildNode, generators, integration type) + test updates
 
 ### Phase 51: Workspace Port Allocation
