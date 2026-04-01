@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { prompts as p } from "../../tui/utils"
+import type { Command } from "commander"
 import {
   resolveEnabled,
   type Integration,
@@ -19,6 +20,7 @@ import {
   snapshotWindowIds,
   _exec,
 } from "../aerospace"
+import { readGlobalConfig, readWorkspace, workspaceExists } from "../config"
 
 /** Wrap a string in single quotes, escaping any embedded single quotes. */
 function shellQuote(s: string): string {
@@ -386,5 +388,39 @@ export const aerospaceIntegration: Integration = {
 
   async configurePrompt(_current: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     return { enabled: true }
+  },
+
+  commands(parent: Command): void {
+    parent
+      .command("focus <workspace>")
+      .description("Focus the AeroSpace workspace mapped to a git-stacks workspace")
+      .action(async (workspaceName: string) => {
+        if (!workspaceExists(workspaceName)) {
+          console.error(`Workspace '${workspaceName}' not found.`)
+          process.exit(1)
+        }
+        const globalConfig = readGlobalConfig()
+        const ws = readWorkspace(workspaceName)
+        // Config resolution: workspace override takes precedence (same cascade as open())
+        const wsConfig = aerospaceConfigSchema.safeParse(
+          ws.settings?.integrations?.["aerospace"] ?? {}
+        )
+        const gc = aerospaceConfigSchema.safeParse(
+          globalConfig.integrations["aerospace"] ?? {}
+        )
+        const parsed = wsConfig.success ? wsConfig.data : gc.success ? gc.data : undefined
+        if (!parsed?.workspaces?.length) {
+          console.error(`No AeroSpace workspaces configured for workspace '${workspaceName}'.`)
+          process.exit(1)
+        }
+        // D-05: find focus:true entry, else workspaces[0]
+        const focusEntry = parsed.workspaces.find((e) => e.focus === true) ?? parsed.workspaces[0]
+        try {
+          await _exec.run(["workspace", focusEntry.workspace])
+        } catch (err) {
+          console.error(`AeroSpace focus failed: ${String(err)}`)
+          process.exit(1)
+        }
+      })
   },
 }

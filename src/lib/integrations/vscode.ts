@@ -1,8 +1,11 @@
 import { prompts as p, safeText } from "../../tui/utils"
 import { z } from "zod"
 import { $ } from "bun"
+import type { Command } from "commander"
 import { generateCodeWorkspace } from "../vscode"
 import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
+import { readGlobalConfig, readWorkspace, workspaceExists } from "../config"
+import { getTasksDir } from "../paths"
 
 const configSchema = z.object({
   enabled: z.boolean().default(true),
@@ -77,5 +80,28 @@ export const vscodeIntegration: Integration = {
     }
 
     return { enabled: true, cmd }
+  },
+
+  commands(parent: Command): void {
+    parent
+      .command("open <workspace>")
+      .description("Generate .code-workspace and open VSCode without running hooks")
+      .action(async (workspaceName: string) => {
+        if (!workspaceExists(workspaceName)) {
+          console.error(`Workspace '${workspaceName}' not found.`)
+          process.exit(1)
+        }
+        const globalConfig = readGlobalConfig()
+        const ws = readWorkspace(workspaceName)
+        const tasksDir = getTasksDir(globalConfig.workspace_root)
+        const ctx: IntegrationContext = { workspace: ws, tasksDir, config: globalConfig }
+        const artifactPath = vscodeIntegration.generate?.(ctx) ?? null
+        if (!artifactPath) {
+          console.error("Failed to generate .code-workspace file.")
+          process.exit(1)
+        }
+        await vscodeIntegration.open(ctx, artifactPath, {})
+        console.log(`Opened: ${artifactPath}`)
+      })
   },
 }
