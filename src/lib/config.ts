@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { ZodError } from "zod"
 import { parse, stringify } from "yaml"
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, renameSync } from "fs"
+import { readFileSync, existsSync, mkdirSync, readdirSync, renameSync, openSync, writeSync, fsyncSync, closeSync } from "fs"
 import { join, dirname } from "path"
 import {
   WORKSPACES_DIR,
@@ -38,6 +38,9 @@ export const FilesSchema = z
   })
   .optional()
 export type Files = z.infer<typeof FilesSchema>
+
+export const PortsSchema = z.record(z.string(), z.number().nullable()).optional()
+export type Ports = z.infer<typeof PortsSchema>
 
 /** Shared name validation — rejects path separators, traversal, and shell metacharacters. */
 export const NameSchema = z.string()
@@ -93,6 +96,7 @@ export const TemplateSchema = z.object({
   files: FilesSchema,
   integrations: z.record(z.string(), z.unknown()).optional(),
   includes: z.array(z.string()).optional(),
+  ports: PortsSchema,
 })
 export type Template = z.infer<typeof TemplateSchema>
 
@@ -152,6 +156,7 @@ export const WorkspaceSchema = z.object({
   env: z.record(z.string(), z.string()).optional(),
   env_file: z.string().optional(),
   files: FilesSchema,
+  ports: PortsSchema,
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 
@@ -159,6 +164,10 @@ export const GlobalConfigSchema = z.object({
   workspace_root: z.string().default(DEFAULT_WORKSPACE_ROOT),
   /** Per-integration config keyed by integration id, e.g. { vscode: { enabled: true, cmd: "code" } } */
   integrations: z.record(z.string(), z.unknown()).default({}),
+  ports: z.object({
+    range_start: z.number().int().default(10000),
+    range_end: z.number().int().default(65000),
+  }).default(() => ({ range_start: 10000, range_end: 65000 })),
 })
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>
 
@@ -184,7 +193,14 @@ function readYaml<T>(path: string, schema: { parse: (data: unknown) => T }): T {
 function writeYaml(path: string, data: unknown) {
   ensureDir(dirname(path))
   const tmpPath = `${path}.tmp`
-  writeFileSync(tmpPath, stringify(data), "utf-8")
+  const content = stringify(data)
+  const fd = openSync(tmpPath, "w")
+  try {
+    writeSync(fd, content, 0, "utf-8")
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
   renameSync(tmpPath, path)
 }
 

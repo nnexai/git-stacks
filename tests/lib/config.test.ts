@@ -6,6 +6,7 @@ import {
   WorkspaceRepoSchema,
   RepoRegistryEntrySchema,
   TemplateSchema,
+  GlobalConfigSchema,
   NameSchema,
   formatZodError,
   expandBranchPattern,
@@ -638,5 +639,91 @@ describe("FilesSchema extensions", () => {
     })
     expect(result.files?.copy).toEqual([".env"])
     expect(result.files?.symlink).toEqual(["node_modules"])
+  })
+})
+
+// --- writeYaml fsync (PORT-WRITE-01) ---
+
+describe("writeYaml fsync (PORT-WRITE-01)", () => {
+  const fsyncIsolated = useIsolatedConfig("config-fsync-test")
+  const wsDir = join(fsyncIsolated.configDir, "workspaces")
+
+  beforeEach(() => {
+    mkdirSync(wsDir, { recursive: true })
+    mock.module("@/lib/paths", () => ({
+      HOME: fsyncIsolated.configDir,
+      DEFAULT_WORKSPACE_ROOT: join(fsyncIsolated.configDir, "ws-root"),
+      WS_CONFIG_DIR: fsyncIsolated.configDir,
+      WORKSPACES_DIR: wsDir,
+      GLOBAL_CONFIG_FILE: join(fsyncIsolated.configDir, "config.yml"),
+      REGISTRY_FILE: join(fsyncIsolated.configDir, "registry.yml"),
+      TEMPLATES_DIR: join(fsyncIsolated.configDir, "templates"),
+      MESSAGES_DIR: join(fsyncIsolated.configDir, "messages"),
+      PORTS_LOCK_FILE: join(fsyncIsolated.configDir, ".ports.lock"),
+      getMainDir: (r: string) => join(r, "main"),
+      getTasksDir: (r: string) => join(r, "tasks"),
+      expandHome: (p: string) => p.startsWith("~/") ? join(fsyncIsolated.configDir, p.slice(2)) : p,
+    }))
+  })
+
+  afterAll(() => fsyncIsolated.cleanup())
+
+  test("writeYaml calls fsyncSync before rename (PORT-WRITE-01)", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "fsync-test-ws",
+      branch: "feature/fsync",
+      created: "2026-01-01",
+    })
+    realWriteWorkspace(ws)
+
+    const loaded = realReadWorkspace("fsync-test-ws")
+    expect(loaded.name).toBe("fsync-test-ws")
+    expect(loaded.branch).toBe("feature/fsync")
+
+    // Verify no .tmp file left behind (atomic rename completed)
+    const wsPath = join(wsDir, "fsync-test-ws.yml")
+    expect(existsSync(`${wsPath}.tmp`)).toBe(false)
+  })
+})
+
+// --- PortsSchema fields (PORT-SCHEMA-01, PORT-SCHEMA-02) ---
+
+describe("PortsSchema fields", () => {
+  test("WorkspaceSchema accepts ports with null values (PORT-SCHEMA-01)", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "port-ws", branch: "b", created: "d",
+      ports: { PORT: null, DEBUG: null },
+    })
+    expect(ws.ports).toEqual({ PORT: null, DEBUG: null })
+  })
+
+  test("WorkspaceSchema accepts ports with number values", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "port-ws", branch: "b", created: "d",
+      ports: { PORT: 3000, DEBUG: null },
+    })
+    expect(ws.ports).toEqual({ PORT: 3000, DEBUG: null })
+  })
+
+  test("WorkspaceSchema accepts missing ports field", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "no-port-ws", branch: "b", created: "d",
+    })
+    expect(ws.ports).toBeUndefined()
+  })
+
+  test("TemplateSchema accepts ports field (PORT-SCHEMA-01)", () => {
+    const tpl = TemplateSchema.parse({
+      name: "port-tpl", schema_version: "1",
+      repos: [],
+      ports: { API: null, WEB: 8080 },
+    })
+    expect(tpl.ports).toEqual({ API: null, WEB: 8080 })
+  })
+
+  test("GlobalConfigSchema has ports.range_start default 10000, range_end default 65000 (PORT-SCHEMA-02)", () => {
+    const cfg = GlobalConfigSchema.parse({})
+    expect(cfg.ports.range_start).toBe(10000)
+    expect(cfg.ports.range_end).toBe(65000)
   })
 })

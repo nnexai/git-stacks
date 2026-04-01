@@ -53,6 +53,7 @@ export const configCommand = new Command("config")
     }
 
     writeGlobalConfig({
+      ...config,
       workspace_root: (wsRootRaw as string).trim() || config.workspace_root,
       integrations: newIntegrations,
     })
