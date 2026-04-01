@@ -20,7 +20,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Sequential processing — iterate workspaces array in order, setup each
 - Release prep (version bump, CHANGELOG, README update for new config format)
 
-## Current State — v0.12.0 shipped (2026-03-29)
+## Current State — Phase 50 complete (2026-04-01)
+
+### What shipped in Phase 50
+
+- **Integration config introspection** — `git-stacks integration list` shows all 10 integrations with enabled/configured status; `config example` prints YAML snippets for aerospace, vscode, niri, tmux; `config show` dumps current global + workspace-level config
+- **AeroSpace focus command** — `git-stacks integration aerospace focus <workspace>` resolves the `focus:true` entry (or falls back to `workspaces[0]`) and switches AeroSpace workspace
+- **VSCode standalone open** — `git-stacks integration vscode open <workspace>` generates `.code-workspace` and opens VSCode without hooks or other integrations
+- **`configExample` interface extension** — `Integration` interface gains optional `configExample?: string` property; populated for 4 integrations with non-trivial config
 
 ### What shipped in v0.12.0
 
@@ -344,4 +351,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-03-29 after v0.12.0 milestone completion*
+*Last updated: 2026-04-01 after Phase 50 completion*
