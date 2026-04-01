@@ -1,5 +1,5 @@
 import { describe, test, expect, mock } from "bun:test"
-import { makeConfigMock, makeForgeUtilsMock, makeIssueUtilsMock, makeTmuxMock } from "../helpers"
+import { makeConfigMock, makeForgeUtilsMock, makeIssueUtilsMock, makeTmuxMock, makePathsMock } from "../helpers"
 
 // Mock issue-utils so jira integration doesn't trigger real config I/O
 mock.module("@/lib/integrations/issue-utils", () => makeIssueUtilsMock({
@@ -78,6 +78,31 @@ mock.module("@/lib/niri", () => ({
   setNiriColumnWidth: mock(async () => {}),
   snapshotWindowIds: mock(async () => []),
   _exec: { run: mock(async () => ({ exitCode: 0, stdout: "" })) },
+}))
+
+// Mock aerospace lib so no real shell commands run during import
+mock.module("@/lib/aerospace", () => ({
+  _exec: { run: mock(async () => ({ exitCode: 0, stdout: "" })) },
+  isAerospaceRunning: mock(async () => false),
+  getVersion: mock(async () => null),
+  listWindows: mock(async () => []),
+  listWorkspaces: mock(async () => []),
+  moveNodeToWorkspace: mock(async () => {}),
+  focusWindow: mock(async () => {}),
+  setLayout: mock(async () => {}),
+  flattenWorkspaceTree: mock(async () => {}),
+  snapshotWindowIds: mock(async () => []),
+}))
+
+// Mock vscode lib so no real workspace generation happens during import
+mock.module("@/lib/vscode", () => ({
+  generateCodeWorkspace: mock(() => "/tmp/test.code-workspace"),
+}))
+
+// Mock paths so getTasksDir doesn't read real filesystem
+mock.module("@/lib/paths", () => ({
+  ...makePathsMock(),
+  getTasksDir: mock(() => "/tmp/tasks"),
 }))
 
 // No @/tui/utils mock needed — tests only exercise command structure, not prompt paths
@@ -184,5 +209,76 @@ describe("integrationCommand structure", () => {
     expect(issueSubNames).toContain("link")
     expect(issueSubNames).toContain("unlink")
     expect(issueSubNames).toContain("open")
+  })
+
+  // --- Phase 50: list subcommand ---
+
+  test("has 'list' subcommand on integrationCommand", () => {
+    const names = integrationCommand.commands.map((c: any) => c.name())
+    expect(names).toContain("list")
+  })
+
+  test("list subcommand has --json option", () => {
+    const list = integrationCommand.commands.find((c: any) => c.name() === "list")
+    expect(list).toBeDefined()
+    const optionFlags = list!.options.map((o: any) => o.long)
+    expect(optionFlags).toContain("--json")
+  })
+
+  // --- Phase 50: config subgroup on all integrations ---
+
+  test("all 10 integration subcommands have 'config' sub-subcommand", () => {
+    const integrationIds = ["vscode", "intellij", "cmux", "tmux", "niri", "aerospace", "github", "gitlab", "gitea", "jira"]
+    for (const id of integrationIds) {
+      const sub = integrationCommand.commands.find((c: any) => c.name() === id)
+      expect(sub).toBeDefined()
+      const subNames = sub!.commands.map((c: any) => c.name())
+      expect(subNames).toContain("config")
+    }
+  })
+
+  test("config subcommand has 'example' and 'show' children", () => {
+    const aerospace = integrationCommand.commands.find((c: any) => c.name() === "aerospace")
+    const config = aerospace!.commands.find((c: any) => c.name() === "config")
+    expect(config).toBeDefined()
+    const configSubNames = config!.commands.map((c: any) => c.name())
+    expect(configSubNames).toContain("example")
+    expect(configSubNames).toContain("show")
+  })
+
+  test("config show has --json option", () => {
+    const aerospace = integrationCommand.commands.find((c: any) => c.name() === "aerospace")
+    const config = aerospace!.commands.find((c: any) => c.name() === "config")
+    const show = config!.commands.find((c: any) => c.name() === "show")
+    expect(show).toBeDefined()
+    const optionFlags = show!.options.map((o: any) => o.long)
+    expect(optionFlags).toContain("--json")
+  })
+
+  // --- Phase 50: aerospace focus subcommand ---
+
+  test("aerospace subcommand has 'focus' sub-subcommand", () => {
+    const aerospace = integrationCommand.commands.find((c: any) => c.name() === "aerospace")
+    expect(aerospace).toBeDefined()
+    const subNames = aerospace!.commands.map((c: any) => c.name())
+    expect(subNames).toContain("focus")
+  })
+
+  // --- Phase 50: vscode open subcommand ---
+
+  test("vscode subcommand has 'open' sub-subcommand", () => {
+    const vscode = integrationCommand.commands.find((c: any) => c.name() === "vscode")
+    expect(vscode).toBeDefined()
+    const subNames = vscode!.commands.map((c: any) => c.name())
+    expect(subNames).toContain("open")
+  })
+
+  // --- Phase 50: integrations without commands still have config ---
+
+  test("intellij (no commands()) still has config subcommand", () => {
+    const intellij = integrationCommand.commands.find((c: any) => c.name() === "intellij")
+    expect(intellij).toBeDefined()
+    const subNames = intellij!.commands.map((c: any) => c.name())
+    expect(subNames).toContain("config")
   })
 })
