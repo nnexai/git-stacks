@@ -131,13 +131,16 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 
 </details>
 
-### 🚧 v0.12.0 Multi-Workspace AeroSpace (In Progress)
+### 🚧 v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation (In Progress)
 
-**Milestone Goal:** Extend AeroSpace integration to support a `workspaces` array — each entry independently configured with layout, normalization, flatten, focus, and commands — replacing the flat single-workspace config from v0.11.0.
+**Milestone Goal:** Extend AeroSpace integration to support multi-workspace configs, add integration utility subcommands (config introspection, standalone open/focus), and introduce collision-free workspace port allocation injected via environment variables.
 
 - [x] **Phase 47: Multi-Workspace Schema** - `workspaces` array schema, per-entry Zod types, focus/duplicate validation, `beforeSet` extension to `SnapshotOpts` (completed 2026-03-29)
 - [x] **Phase 48: Multi-Workspace Loop & Tests** - Rewritten `open()` with `for...of` loop, bag-window routing to index 0, upfront `listWorkspaces()` hoist, post-loop focus, full test coverage (completed 2026-03-29)
 - [x] **Phase 49: Release Prep** - v0.12.0 version bump, CHANGELOG with breaking-change migration example, README multi-workspace config docs (1 plan) (completed 2026-03-29)
+- [ ] **Phase 50: Integration Specific Tools** - Config introspection, integration listing, AeroSpace focus, VSCode standalone open (2 plans)
+- [ ] **Phase 51: Workspace Port Allocation** - Named port declarations, contiguous range allocation on open, atomic writeYaml, race-safe lockfile (4 plans)
+- [ ] **Phase 52: Release Prep** - v0.12.0 CHANGELOG and README updates covering phases 50-51 (1 plan)
 
 ## Phase Details
 
@@ -198,6 +201,9 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 | 47. Multi-Workspace Schema | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 48. Multi-Workspace Loop & Tests | v0.12.0 | 2/2 | Complete    | 2026-03-29 |
 | 49. Release Prep | v0.12.0 | 1/1 | Complete    | 2026-03-29 |
+| 50. Integration Specific Tools | v0.12.0 | 1/2 | In Progress|  |
+| 51. Workspace Port Allocation | v0.12.0 | 0/4 | Planned | — |
+| 52. Release Prep | v0.12.0 | 0/1 | Planned | — |
 
 ### Phase 50: Integration Specific Tools
 
@@ -211,7 +217,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 - `git-stacks integration vscode open <workspace>` — generate `.code-workspace` artifact and open it, without running hooks or other integrations
 
 **Depends on:** Phase 49
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 **Success Criteria** (what must be TRUE):
   1. `git-stacks integration list` prints a table of all 10 integrations with ID, Label, Enabled, Configured columns
   2. `git-stacks integration <id> config example` prints a YAML snippet for integrations with configExample, or a fallback message for others
@@ -220,5 +226,60 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
   5. `git-stacks integration vscode open <workspace>` generates .code-workspace and opens VSCode standalone
 
 Plans:
-- [ ] 50-01-PLAN.md — Interface extension, configExample strings, generic config/list commands
+- [x] 50-01-PLAN.md — Interface extension, configExample strings, generic config/list commands
 - [ ] 50-02-PLAN.md — AeroSpace focus command, VSCode open command, test coverage
+
+### Phase 51: Workspace Port Allocation
+
+**Goal:** Workspaces and templates can declare named ports (env var name → null); `git-stacks open` allocates non-overlapping contiguous port ranges from a global pool and injects them as environment variables. Allocation is collision-free, race-safe, and stable across repeated opens.
+
+**Requirements:**
+- PORT-SCHEMA-01: `WorkspaceSchema` and `StackSchema` gain an optional `ports: Record<string, number | null>` field. Null means "unresolved — allocate on next open." A number means "already allocated."
+- PORT-SCHEMA-02: `GlobalConfigSchema` gains `ports: { range_start: number, range_end: number }` with defaults 10000/65000.
+- PORT-ALLOC-01: On `git-stacks open`, scan all workspace YAMLs to build the set of taken port ranges. For the current workspace, resolve any null ports by finding the first free contiguous block of size N (where N = count of null ports). Already-resolved ports are kept if conflict-free; otherwise reallocated.
+- PORT-ALLOC-02: Allocation is protected by a filesystem lock (`~/.config/git-stacks/.ports.lock`) to prevent race conditions when multiple `open` calls run concurrently. Lock scope is narrow — acquire before scan, release after write.
+- PORT-INJECT-01: Resolved ports are injected into the hook/integration environment via `mergeEnv()`. Port names are used as-is — no prefix, no transformation. `ports: { PORT: 12400 }` → env var `PORT=12400`.
+- PORT-INJECT-02: If a port name collides with a key in `env` or `env_file`, `open` errors with a clear message identifying the conflict. No silent overwriting.
+- PORT-FREE-01: Port allocations are freed when a workspace is removed (`git-stacks remove`). The resolved ports in the workspace YAML are the only source of truth — no separate allocation registry.
+- PORT-WRITE-01: `writeYaml()` is hardened to use atomic writes (write to `.tmp`, fsync, rename) for all config writes — not just port-related ones.
+- PORT-WIZARD-01: The `git-stacks new` wizard offers an optional prompt for port names (comma-separated). Written as `ports: { NAME: ~ }` in workspace YAML.
+- PORT-TEMPLATE-01: Templates can declare ports. Workspaces inherit template ports and can add more. Workspace-level ports merge with (not replace) template ports.
+
+**Depends on:** Phase 49
+**Plans:** 4 plans
+**Success Criteria** (what must be TRUE):
+  1. A workspace with `ports: { PORT: ~, DEBUG_PORT: ~ }` that is opened receives two contiguous port numbers within the global range, and those numbers persist in the workspace YAML after open
+  2. Two workspaces opened concurrently never receive overlapping port ranges
+  3. A workspace with resolved ports that is re-opened keeps the same port numbers (stability)
+  4. `mergeEnv()` includes resolved ports as plain env vars; hooks see `PORT=12400` etc.
+  5. Declaring `ports: { PORT: ~ }` alongside `env: { PORT: "3000" }` produces an error before any allocation occurs
+  6. Removing a workspace frees its port range — a new workspace can receive those ports
+  7. All YAML writes across the codebase use atomic write-tmp-rename
+  8. The `new` wizard allows declaring port names without numbers
+
+Plans:
+- [ ] 51-01-PLAN.md — Atomic writeYaml, schema changes (WorkspaceSchema, StackSchema, GlobalConfigSchema)
+- [ ] 51-02-PLAN.md — Port allocator: scan, lock, allocate, write-back logic in workspace-ops
+- [ ] 51-03-PLAN.md — mergeEnv integration, conflict detection, env injection
+- [ ] 51-04-PLAN.md — Wizard support, template port inheritance, tests
+
+### Phase 52: Release Prep
+
+**Goal:** Finalize v0.12.0 with CHANGELOG and README updates covering integration tools (Phase 50) and workspace port allocation (Phase 51).
+
+**Requirements:**
+- REL-CHANGELOG-01: CHANGELOG entry for v0.12.0 documents integration subcommands (`integration list`, `config example`, `config show`, `aerospace focus`, `vscode open`)
+- REL-CHANGELOG-02: CHANGELOG entry documents workspace port allocation — named port declarations, automatic allocation on open, env injection
+- REL-README-01: README updated with a "Port Allocation" section showing template/workspace port config examples and the env vars they produce
+- REL-README-02: README updated with integration subcommand usage examples
+
+**Depends on:** Phase 51
+**Plans:** 1 plan
+**Success Criteria** (what must be TRUE):
+  1. CHANGELOG v0.12.0 entry covers both integration tools and port allocation features
+  2. README has a port allocation section with config example and env output
+  3. README has integration subcommand documentation
+  4. `package.json` version is `0.12.0` (already set from Phase 49 — verify, don't re-bump)
+
+Plans:
+- [ ] 52-01-PLAN.md — CHANGELOG and README updates for integration tools and port allocation
