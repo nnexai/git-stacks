@@ -153,7 +153,7 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 - [ ] **Phase 53: Shell Completion Fixes** (3/3 plans) - Fix positional arg repeat, add option value enums, eliminate parent flag leakage
 - [ ] **Phase 54: Env Command** (2/2 plans) - `git-stacks env [workspace]` with --format flag
 - [ ] **Phase 55: Copilot Hook Support** (2/2 plans) - Extend `install --hooks` with --copilot flag, --claude explicit flag, interactive chooser, simultaneous install
-- [ ] **Phase 56: Doctor & Config Polish** - Forge CLI binary checks in doctor, tmux pane setup in configExample
+- [ ] **Phase 56: Doctor & Config Polish** (1/1 plan) - Forge CLI binary checks in doctor, tmux pane setup in configExample
 - [ ] **Phase 57: Release Prep** - Audit CHANGELOG/README completeness, remove "unreleased" marker, bump to v0.13.0
 
 </details>
@@ -201,7 +201,8 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 **Success Criteria** (what must be TRUE):
   1. `git-stacks doctor` reports a warning when a forge integration (GitHub, GitLab, Gitea) is configured but the required CLI binary (`gh`, `glab`, `tea`) is not found on PATH
   2. `git-stacks integration tmux config example` prints a YAML snippet showing native `panes` array with direction, surfaces, and commands
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
+  - Plan 01 (Wave 1): Conditional forge CLI checks + tmux configExample enhancement
 
 ### Phase 57: Release Prep
 **Goal**: v0.13.0 is published with complete, accurate release notes and correct version number
@@ -230,5 +231,5 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 | 53. Shell Completion Fixes | v0.13.0 | 0/3 | Planned | - |
 | 54. Env Command | v0.13.0 | 0/2 | Planned | - |
 | 55. Copilot Hook Support | v0.13.0 | 0/2 | Planned | - |
-| 56. Doctor & Config Polish | v0.13.0 | 0/? | Not started | - |
+| 56. Doctor & Config Polish | v0.13.0 | 0/1 | Planned | - |
 | 57. Release Prep | v0.13.0 | 0/1 | Not started | - |
