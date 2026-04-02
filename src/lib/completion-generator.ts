@@ -44,6 +44,7 @@ function resolveFlagCompletion(commandPath: string, flagName: string): DynamicCo
 interface OptionInfo {
   long: string
   description: string
+  enumValues?: string[]
 }
 
 interface ArgCompletion {
@@ -72,7 +73,11 @@ function buildNode(cmd: Command, parentPath: string): CommandNode {
   const path = parentPath ? `${parentPath}.${name}` : name
   const options = cmd.options
     .filter(opt => opt.long !== undefined && opt.long !== "--help" && opt.long !== "--version")
-    .map(opt => ({ long: opt.long!, description: opt.description }))
+    .map(opt => ({
+      long: opt.long!,
+      description: opt.description,
+      ...(opt.argChoices && opt.argChoices.length > 0 ? { enumValues: opt.argChoices as string[] } : {}),
+    }))
   const subcommands = cmd.commands.map(sub => buildNode(sub, path))
 
   const firstArgOverride = DYNAMIC_COMPLETIONS[path]
