@@ -161,8 +161,15 @@ function bashCaseBodyRecursive(node: CommandNode, depth: number, name: string, i
           out += bashCaseBodyRecursive(sub, depth + 1, name, indent + "    ")
           out += `${indent}    ;;\n`
         } else if (subFirstDynamic && subFirstDynamic !== "shells") {
+          const subVariadic = sub.argCompletions.some(a => a.variadic)
           out += `${indent}  ${sub.name})\n`
-          out += bashDynamicLookup(subFirstDynamic, indent + "    ", name, sub.argCompletions[0]?.choices)
+          if (subVariadic) {
+            out += bashDynamicLookup(subFirstDynamic, indent + "    ", name, sub.argCompletions[0]?.choices)
+          } else {
+            out += `${indent}    if [[ \${COMP_CWORD} -eq ${depth + 1} ]]; then\n`
+            out += bashDynamicLookup(subFirstDynamic, indent + "      ", name, sub.argCompletions[0]?.choices)
+            out += `${indent}    fi\n`
+          }
           out += `${indent}    ;;\n`
         }
       }
@@ -255,7 +262,15 @@ function bashCaseBody(node: CommandNode, name: string): string {
       }
       out += `        fi\n`
     } else {
-      out += bashDynamicLookup(dynamic, "        ", name, firstArgChoices)
+      // Single-arg: enforce arity unless variadic
+      const isVariadic = node.argCompletions.some(a => a.variadic)
+      if (isVariadic) {
+        out += bashDynamicLookup(dynamic, "        ", name, firstArgChoices)
+      } else {
+        out += `        if [[ \${COMP_CWORD} -eq 2 ]]; then\n`
+        out += bashDynamicLookup(dynamic, "          ", name, firstArgChoices)
+        out += `        fi\n`
+      }
     }
     out += `      fi\n`
     return out
@@ -274,7 +289,14 @@ function bashCaseBody(node: CommandNode, name: string): string {
       out += `      fi\n`
       return out
     }
-    return bashDynamicLookup(dynamic, "      ", name, firstArgChoices)
+    // Single-arg without options: enforce arity unless variadic
+    const isVariadic = node.argCompletions.some(a => a.variadic)
+    if (isVariadic) {
+      return bashDynamicLookup(dynamic, "      ", name, firstArgChoices)
+    }
+    return `      if [[ \${COMP_CWORD} -eq 2 ]]; then\n` +
+      bashDynamicLookup(dynamic, "        ", name, firstArgChoices) +
+      `      fi\n`
   }
 
   // No positional dynamic, but command has options with enum values (e.g. `list --sort`)
