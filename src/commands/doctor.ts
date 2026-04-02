@@ -13,6 +13,7 @@ import {
   type Workspace,
   type RepoRegistryEntry,
 } from "../lib/config"
+import { resolveEnabledGlobally } from "../lib/integrations/types"
 import { getTasksDir, WORKSPACES_DIR, TEMPLATES_DIR } from "../lib/paths"
 
 // --- Fix operation types ---
@@ -314,38 +315,24 @@ export const doctorCommand = new Command("doctor")
       }
     }
 
-    // Forge CLI availability (warn level — optional, not required for git-stacks core)
-    const ghAvailable = await checkBinary("gh")
-    binaryIssues.push({
-      icon: ghAvailable ? "pass" : "warn",
-      entity: "gh (GitHub CLI)",
-      message: ghAvailable ? "installed" : "not installed — GitHub PR commands unavailable",
-      fix: ghAvailable ? undefined : { action: "info", message: "Install: https://cli.github.com/" },
-    })
+    // Forge CLI availability — only check when the integration is configured (DOC-01)
+    const forgeClis = [
+      { integrationId: "github", binary: "gh", label: "gh (GitHub CLI)", install: "https://cli.github.com/", missingMsg: "not installed — GitHub PR commands unavailable" },
+      { integrationId: "gitlab", binary: "glab", label: "glab (GitLab CLI)", install: "https://gitlab.com/gitlab-org/cli", missingMsg: "not installed — GitLab MR commands unavailable" },
+      { integrationId: "gitea", binary: "tea", label: "tea (Gitea CLI)", install: "https://gitea.com/gitea/tea", missingMsg: "not installed — Gitea PR commands unavailable" },
+      { integrationId: "jira", binary: "jira", label: "jira (Jira CLI)", install: "https://github.com/ankitpokhrel/jira-cli", missingMsg: "not installed — Jira issue commands will use configurable template fallback" },
+    ]
 
-    const glabAvailable = await checkBinary("glab")
-    binaryIssues.push({
-      icon: glabAvailable ? "pass" : "warn",
-      entity: "glab (GitLab CLI)",
-      message: glabAvailable ? "installed" : "not installed — GitLab MR commands unavailable",
-      fix: glabAvailable ? undefined : { action: "info", message: "Install: https://gitlab.com/gitlab-org/cli" },
-    })
-
-    const teaAvailable = await checkBinary("tea")
-    binaryIssues.push({
-      icon: teaAvailable ? "pass" : "warn",
-      entity: "tea (Gitea CLI)",
-      message: teaAvailable ? "installed" : "not installed — Gitea PR commands unavailable",
-      fix: teaAvailable ? undefined : { action: "info", message: "Install: https://gitea.com/gitea/tea" },
-    })
-
-    const jiraAvailable = await checkBinary("jira")
-    binaryIssues.push({
-      icon: jiraAvailable ? "pass" : "warn",
-      entity: "jira (Jira CLI)",
-      message: jiraAvailable ? "installed" : "not installed — Jira issue commands will use configurable template fallback",
-      fix: jiraAvailable ? undefined : { action: "info", message: "Install: https://github.com/ankitpokhrel/jira-cli" },
-    })
+    for (const { integrationId, binary, label, install, missingMsg } of forgeClis) {
+      if (!resolveEnabledGlobally(integrationId, false, config)) continue
+      const available = await checkBinary(binary)
+      binaryIssues.push({
+        icon: available ? "pass" : "warn",
+        entity: label,
+        message: available ? "installed" : missingMsg,
+        fix: available ? undefined : { action: "info", message: `Install: ${install}` },
+      })
+    }
 
     // AeroSpace binary check (macOS only — D-07)
     if (process.platform === "darwin") {
