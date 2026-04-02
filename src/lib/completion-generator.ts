@@ -696,13 +696,18 @@ function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name
       lines.push(`  -a '${sub.name}' -d '${shellEscapeSingleQuote(sub.description)}'\n`)
     }
 
-    // Flags for subcommands
+    // Flags for subcommands (enum values scoped per-subcommand via -ra)
     for (const sub of node.subcommands) {
       if (sub.options.length === 0) continue
       lines.push(`\n# Flags for ${chain.join(" ")} ${sub.name}\n`)
       for (const opt of sub.options) {
         const longName = opt.long.slice(2)
-        lines.push(`complete -c ${name} -f -n '${seenParts}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -d '${shellEscapeSingleQuote(opt.description)}'\n`)
+        const enumValues = opt.enumValues ?? OPTION_ENUMS[opt.long]
+        if (enumValues) {
+          lines.push(`complete -c ${name} -f -n '${seenParts}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -ra '${enumValues.join(" ")}' -d '${shellEscapeSingleQuote(opt.description)}'\n`)
+        } else {
+          lines.push(`complete -c ${name} -f -n '${seenParts}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -d '${shellEscapeSingleQuote(opt.description)}'\n`)
+        }
       }
     }
 
@@ -823,51 +828,17 @@ export function generateFish(program: Command): string {
     }
   }
 
-  // Per-command flags
+  // Per-command flags (enum values scoped per-command via -ra)
   for (const node of nodes) {
     if (node.options.length === 0) continue
     out += `\n# Flags for ${node.name}\n`
     for (const opt of node.options) {
       const longName = opt.long.slice(2)  // strip "--"
-      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName}  -d '${shellEscapeSingleQuote(opt.description)}'\n`
-    }
-  }
-
-  // OPTION_ENUMS: emit complete directives with -ra for fixed-choice flag values
-  const enumFlags = Object.entries(OPTION_ENUMS)
-  if (enumFlags.length > 0) {
-    out += "\n# Fixed-choice flag values\n"
-    for (const [flag, values] of enumFlags) {
-      const longName = flag.slice(2) // strip "--"
-      // Find which top-level commands or subcommands use this flag
-      for (const node of nodes) {
-        if (node.options.some(o => o.long === flag)) {
-          out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName} -ra '${values.join(" ")}'\n`
-        }
-        for (const sub of node.subcommands) {
-          if (sub.options.some(o => o.long === flag)) {
-            out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -ra '${values.join(" ")}'\n`
-          }
-        }
-      }
-    }
-  }
-
-  // Auto-detected enum values from Commander .choices() — emit per-node completions
-  out += "\n# Auto-detected option enum values\n"
-  let emittedEnumHeader = false
-  for (const node of nodes) {
-    for (const opt of node.options) {
-      if (!opt.enumValues) continue
-      if (!emittedEnumHeader) { emittedEnumHeader = true }
-      const longName = opt.long.slice(2)
-      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName} -ra '${opt.enumValues.join(" ")}'\n`
-    }
-    for (const sub of node.subcommands) {
-      for (const opt of sub.options) {
-        if (!opt.enumValues) continue
-        const longName = opt.long.slice(2)
-        out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -ra '${opt.enumValues.join(" ")}'\n`
+      const enumValues = opt.enumValues ?? OPTION_ENUMS[opt.long]
+      if (enumValues) {
+        out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName} -ra '${enumValues.join(" ")}' -d '${shellEscapeSingleQuote(opt.description)}'\n`
+      } else {
+        out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName}  -d '${shellEscapeSingleQuote(opt.description)}'\n`
       }
     }
   }
