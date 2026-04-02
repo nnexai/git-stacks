@@ -3,6 +3,19 @@ import { generateIntellijProject } from "../intellij"
 import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 import type { Workspace } from "../config"
 
+// ─── Injectable executor ──────────────────────────────────────────────────────
+// Tests replace _exec methods to avoid launching real IDE processes.
+export const _exec = {
+  which: async (cmd: string): Promise<boolean> => {
+    const result = await $`which ${cmd}`.quiet().nothrow()
+    return result.exitCode === 0
+  },
+  spawn: (cmd: string[]): { pid: number } => {
+    const proc = Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore", stdin: "ignore" })
+    return { pid: proc.pid }
+  },
+}
+
 export const intellijIntegration: Integration = {
   id: "intellij",
   label: "IntelliJ",
@@ -18,17 +31,10 @@ export const intellijIntegration: Integration = {
 
   async open(_ctx, artifactPath, _bag): Promise<WindowArtifact | null> {
     if (!artifactPath) return null
-    const check = await $`which idea`.quiet().nothrow()
-    if (check.exitCode !== 0) return null
+    if (!await _exec.which("idea")) return null
     try {
-      // Spawn the IDE — window ID detection is handled externally by runner.ts
-      // via WindowDetector instances (e.g. niri's windowDetector on niriIntegration)
-      const proc = Bun.spawn(["idea", artifactPath], {
-        stdout: "ignore",
-        stderr: "ignore",
-        stdin: "ignore",
-      })
-      return { kind: "window", pid: proc.pid, app_id: "idea", title: "" }
+      const { pid } = _exec.spawn(["idea", artifactPath])
+      return { kind: "window", pid, app_id: "idea", title: "" }
     } catch {
       return null
     }

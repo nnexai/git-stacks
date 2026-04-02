@@ -24,6 +24,10 @@ All notable changes to `git-stacks` are documented here.
 
 **Worktree recreation crash with `~` paths** — `git-stacks open` crashed with an uncaught `ShellError` when `workspace_root` was configured as `~/workspaces/`. Node's `existsSync` doesn't expand `~`, so existing worktrees were misdetected as missing, and the re-add failed because the directory already existed. Paths containing `~` are now expanded to absolute paths at config read time via Zod schema transforms. Additionally, `createWorktree` now skips silently when the worktree already exists at the expected location, prunes stale git worktree entries before adding, and reports descriptive errors instead of raw shell exceptions.
 
+**Doctor fix opens IDE windows** — `doctor --fix` spawned `git-stacks open` to recreate missing worktrees, which also launched VS Code and cmux sessions as side effects. Now passes `--no-ide --no-cmux` so the fix only recreates worktrees without triggering integrations.
+
+**Test sandbox leaks** — vscode and intellij integration tests used `spyOn(Bun, "spawn")` which does not reliably intercept Bun's native spawn, causing real IDE windows to open during test runs. Both integrations now use injectable `_exec` objects (matching the established `_exec` pattern in tmux, niri, lifecycle, etc.) for reliable test isolation.
+
 ### Changed
 
 **Conditional forge CLI checks in doctor** — `git-stacks doctor` now only checks for forge CLI binaries (`gh`, `glab`, `tea`) when the respective integration is configured with `enabled: true` in global config. Previously, all forge CLIs were checked unconditionally.

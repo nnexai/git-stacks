@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach, spyOn } from "bun:test"
+import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
 import type { IntegrationContext, ArtifactBag } from "@/lib/integrations/types"
 import { makeTmuxMock, makeConfigMock } from "../../helpers"
 
@@ -73,14 +73,11 @@ mock.module("@/tui/utils", () => ({
   cancel: mock((): never => { throw new Error("cancelled") }),
 }))
 
-// Note: @/lib/niri mock is NOT needed here — vscode and intellij no longer import from niri.ts.
-// Window ID detection is handled externally by runner.ts via WindowDetector instances.
-
 // === Imports after all mocks registered ===
 const { tmuxIntegration } = await import("@/lib/integrations/tmux")
 const { cmuxIntegration } = await import("@/lib/integrations/cmux")
-const { vscodeIntegration } = await import("@/lib/integrations/vscode")
-const { intellijIntegration } = await import("@/lib/integrations/intellij")
+const { vscodeIntegration, _exec: vscodeExec } = await import("@/lib/integrations/vscode")
+const { intellijIntegration, _exec: intellijExec } = await import("@/lib/integrations/intellij")
 
 // === Shared context ===
 const fakeCtx: IntegrationContext = {
@@ -148,14 +145,19 @@ describe("cmux artifact", () => {
 // vscode artifact tests
 // ===================================================================
 describe("vscode artifact", () => {
-  let spawnSpy: ReturnType<typeof spyOn>
+  let origWhich: typeof vscodeExec.which
+  let origSpawn: typeof vscodeExec.spawn
 
   beforeEach(() => {
-    // Restore any previous spy
-    if (spawnSpy) {
-      spawnSpy.mockRestore()
-    }
-    spawnSpy = spyOn(Bun, "spawn").mockImplementation((() => ({ pid: 12345 })) as any)
+    origWhich = vscodeExec.which
+    origSpawn = vscodeExec.spawn
+    vscodeExec.which = mock(async () => true)
+    vscodeExec.spawn = mock(() => ({ pid: 12345 }))
+  })
+
+  afterEach(() => {
+    vscodeExec.which = origWhich
+    vscodeExec.spawn = origSpawn
   })
 
   test("open() returns null when artifactPath is null", async () => {
@@ -164,41 +166,24 @@ describe("vscode artifact", () => {
     expect(result).toBeNull()
   })
 
-  test("open() returns { kind: 'window', pid, app_id: 'code-insiders', title: '' } when which succeeds and Bun.spawn succeeds", async () => {
-    // The vscode integration uses `$ which ${cmd}` — we mock bun's $ shell for the which check
-    // Since the which check uses Bun's $, we need to test when the binary is found.
-    // We can't easily mock $, so we use a real which check that will succeed for a known binary
-    // or we test via the integration logic:
-    // If artifactPath is provided AND which exits 0, it should call Bun.spawn and return artifact.
-    // For a reliable test, let's skip the which check by using a path that exists.
-    // Actually, we test with a fakeCtx where cmd would be an existing binary.
-    // We'll trust that if which returns exitCode 0, spawn is called.
+  test("open() returns WindowArtifact when which succeeds and spawn succeeds", async () => {
+    const result = await vscodeIntegration.open(fakeCtx, "/tmp/test.code-workspace", emptyBag)
 
-    // Use 'sh' as the cmd since it's always available
-    const ctxWithSh: IntegrationContext = {
-      ...fakeCtx,
-      config: { integrations: { vscode: { enabled: true, cmd: "sh" } } } as any,
-    }
-
-    const result = await vscodeIntegration.open(ctxWithSh, "/tmp/test.code-workspace", emptyBag)
-
-    // If which sh succeeds (it will on Linux), we get a WindowArtifact
     expect(result).not.toBeNull()
     expect(result?.kind).toBe("window")
-    expect(typeof (result as any)?.pid).toBe("number")
-    expect((result as any)?.app_id).toBe("sh")
+    expect((result as any)?.pid).toBe(12345)
+    expect((result as any)?.app_id).toBe("code-insiders")
     expect((result as any)?.title).toBe("")
+    expect(vscodeExec.spawn).toHaveBeenCalledWith(["code-insiders", "/tmp/test.code-workspace"])
   })
 
   test("open() returns null when which fails (binary not found)", async () => {
-    const ctxWithFakeBin: IntegrationContext = {
-      ...fakeCtx,
-      config: { integrations: { vscode: { enabled: true, cmd: "definitely-not-a-real-binary-xyz-12345" } } } as any,
-    }
+    vscodeExec.which = mock(async () => false)
 
-    const result = await vscodeIntegration.open(ctxWithFakeBin, "/tmp/test.code-workspace", emptyBag)
+    const result = await vscodeIntegration.open(fakeCtx, "/tmp/test.code-workspace", emptyBag)
 
     expect(result).toBeNull()
+    expect(vscodeExec.spawn).not.toHaveBeenCalled()
   })
 })
 
@@ -206,13 +191,19 @@ describe("vscode artifact", () => {
 // intellij artifact tests
 // ===================================================================
 describe("intellij artifact", () => {
-  let spawnSpy: ReturnType<typeof spyOn>
+  let origWhich: typeof intellijExec.which
+  let origSpawn: typeof intellijExec.spawn
 
   beforeEach(() => {
-    if (spawnSpy) {
-      spawnSpy.mockRestore()
-    }
-    spawnSpy = spyOn(Bun, "spawn").mockImplementation((() => ({ pid: 99999 })) as any)
+    origWhich = intellijExec.which
+    origSpawn = intellijExec.spawn
+    intellijExec.which = mock(async () => true)
+    intellijExec.spawn = mock(() => ({ pid: 99999 }))
+  })
+
+  afterEach(() => {
+    intellijExec.which = origWhich
+    intellijExec.spawn = origSpawn
   })
 
   test("open() returns null when artifactPath is null", async () => {
@@ -221,33 +212,23 @@ describe("intellij artifact", () => {
     expect(result).toBeNull()
   })
 
-  test("open() returns { kind: 'window', pid, app_id: 'idea', title: '' } when which idea succeeds and Bun.spawn succeeds", async () => {
-    // 'idea' is typically not installed in CI — this test expects null when 'idea' is not found
-    // We test the shape when it IS available. Since we can't guarantee 'idea' is installed,
-    // we document expected behavior: if which idea exits 0, returns WindowArtifact.
-    // The error-path test (null when binary not found) is the reliable one.
+  test("open() returns WindowArtifact when which idea succeeds and spawn succeeds", async () => {
     const result = await intellijIntegration.open(fakeCtx, "/tmp/test.iml", emptyBag)
 
-    // Either null (idea not installed) or a WindowArtifact
-    if (result !== null) {
-      expect(result.kind).toBe("window")
-      expect(typeof (result as any).pid).toBe("number")
-      expect((result as any).app_id).toBe("idea")
-      expect((result as any).title).toBe("")
-    }
-    // If null, that's fine — means 'idea' is not installed in this environment
+    expect(result).not.toBeNull()
+    expect(result?.kind).toBe("window")
+    expect((result as any)?.pid).toBe(99999)
+    expect((result as any)?.app_id).toBe("idea")
+    expect((result as any)?.title).toBe("")
+    expect(intellijExec.spawn).toHaveBeenCalledWith(["idea", "/tmp/test.iml"])
   })
 
   test("open() returns null when which fails (binary not found)", async () => {
-    // 'idea' is not a standard binary — this should return null
-    // We use a definitely-absent binary to be sure
-    // Actually intellij checks `which idea` specifically, so if idea is not installed, returns null
+    intellijExec.which = mock(async () => false)
+
     const result = await intellijIntegration.open(fakeCtx, "/tmp/test.iml", emptyBag)
 
-    // On machines without IntelliJ IDEA, returns null — that is the expected null-on-error path
-    // The test verifies it does NOT throw
-    expect(() => result).not.toThrow()
-    // We accept null as a valid result when idea is not installed
-    expect(result === null || (result !== null && result.kind === "window")).toBe(true)
+    expect(result).toBeNull()
+    expect(intellijExec.spawn).not.toHaveBeenCalled()
   })
 })

@@ -36,7 +36,7 @@ interface Issue {
 function formatFix(fix: FixOperation): string {
   switch (fix.action) {
     case "remove-dir": return `rm -rf ${fix.path}`
-    case "open-workspace": return `git-stacks open ${fix.name}`
+    case "open-workspace": return `git-stacks open ${fix.name} --no-ide --no-cmux`
     case "remove-repo": return `git-stacks repo remove ${fix.name}`
     case "rename-workspace": return `git-stacks rename ${fix.name} ${fix.name}`
     case "rename-template": return `git-stacks template rename ${fix.name} ${fix.name}`
@@ -63,7 +63,7 @@ async function executeFix(
       }
     case "open-workspace": {
       const result = Bun.spawnSync(
-        ["bun", "run", join(import.meta.dir, "../index.ts"), "open", fix.name],
+        ["bun", "run", join(import.meta.dir, "../index.ts"), "open", fix.name, "--no-ide", "--no-cmux"],
         { stdio }
       )
       return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }

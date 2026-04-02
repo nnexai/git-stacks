@@ -7,6 +7,19 @@ import { resolveEnabled, type Integration, type IntegrationContext, type WindowA
 import { readGlobalConfig, readWorkspace, workspaceExists } from "../config"
 import { getTasksDir } from "../paths"
 
+// ─── Injectable executor ──────────────────────────────────────────────────────
+// Tests replace _exec methods to avoid launching real IDE processes.
+export const _exec = {
+  which: async (cmd: string): Promise<boolean> => {
+    const result = await $`which ${cmd}`.quiet().nothrow()
+    return result.exitCode === 0
+  },
+  spawn: (cmd: string[]): { pid: number } => {
+    const proc = Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore", stdin: "ignore" })
+    return { pid: proc.pid }
+  },
+}
+
 const configSchema = z.object({
   enabled: z.boolean().default(true),
   cmd: z.string().default("code-insiders"),
@@ -35,21 +48,11 @@ export const vscodeIntegration: Integration = {
   async open(ctx, artifactPath, _bag): Promise<WindowArtifact | null> {
     if (!artifactPath) return null
     const { cmd } = getConfig(ctx)
-    const check = await $`which ${cmd}`.quiet().nothrow()
-    if (check.exitCode !== 0) {
-      // Binary not found -- skip silently (debug-level, not an error)
-      return null
-    }
+    if (!await _exec.which(cmd)) return null
     try {
       const app_id = cmd.split("/").at(-1) ?? cmd
-      // Spawn the editor — window ID detection is handled externally by runner.ts
-      // via WindowDetector instances (e.g. niri's windowDetector on niriIntegration)
-      const proc = Bun.spawn([cmd, artifactPath], {
-        stdout: "ignore",
-        stderr: "ignore",
-        stdin: "ignore",
-      })
-      return { kind: "window", pid: proc.pid, app_id, title: "" }
+      const { pid } = _exec.spawn([cmd, artifactPath])
+      return { kind: "window", pid, app_id, title: "" }
     } catch {
       return null
     }
