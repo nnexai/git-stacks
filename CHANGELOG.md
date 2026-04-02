@@ -4,6 +4,30 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.13.0] — 2026-04-02
+
+### Added
+
+**Env command** — `git-stacks env [workspace]` shows all merged environment variables that would be injected when opening a workspace. Includes GS_* injected vars, user-defined `env:` from workspace YAML, and resolved port vars. Supports `--format table` (default, human-readable columns), `--format shell` (`export KEY=value` lines, sourceable), `--format dotenv` (`KEY=value` lines), and `--format json` (JSON object). Auto-detects workspace from CWD when no argument is given. `--repo <name>` adds per-repo vars (GS_REPO_NAME, GS_REPO_PATH, GS_REPO_CLONE_PATH) to the output.
+
+**Copilot hook support** — `git-stacks install --hooks` now supports GitHub Copilot alongside Claude Code. Use `--copilot` to install Copilot hooks (`.github/hooks/git-stacks.json`), `--claude` to install Claude Code hooks (existing behavior, now under an explicit flag), or both flags together to install both simultaneously. When neither flag is given, an interactive prompt lets you choose which hook set(s) to install. Copilot hooks provide notification parity with Claude Code hooks — session end, user prompt, and tool-use events are all mapped to `git-stacks message send` calls.
+
+**Tmux config example** — `git-stacks integration tmux config example` now prints a practical YAML snippet showing the native `panes` array with direction, surfaces, and commands, replacing the previous minimal `enabled: true` example.
+
+### Fixed
+
+**Shell completion arity enforcement** — after all positional arguments are filled, pressing Tab no longer repeats workspace/template/repo completions. Only remaining unused flags are offered. Variadic args (`[command...]`) remain exempt. Fix applies to bash, zsh, and fish.
+
+**Shell completion enum values** — flags with constrained values (e.g., `--format`, `--sort`, `--strategy`) now offer their valid values as Tab completions. Auto-detected from Commander.js `.choices()` calls; `OPTION_ENUMS` map serves as a fallback. Command definitions updated to use `.choices()` where option values are constrained.
+
+**Shell completion flag leakage** — flags from `git-stacks list` (e.g., `--sort`, `--status`) no longer appear in completions for `git-stacks integration list`. Option enum completions are now scoped to the command path they belong to, not emitted globally.
+
+### Changed
+
+**Conditional forge CLI checks in doctor** — `git-stacks doctor` now only checks for forge CLI binaries (`gh`, `glab`, `tea`) when the respective integration is configured with `enabled: true` in global config. Previously, all forge CLIs were checked unconditionally.
+
+---
+
 ## [0.12.0] — 2026-03-29
 
 ### Changed
