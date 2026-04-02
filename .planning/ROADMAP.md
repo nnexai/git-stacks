@@ -230,7 +230,7 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 | 43-46. AeroSpace Window Management | v0.11.0 | 7/7 | Complete | 2026-03-28 |
 | 47-52. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
 | 53. Shell Completion Fixes | v0.13.0 | 3/3 | Complete    | 2026-04-02 |
-| 54. Env Command | v0.13.0 | 0/2 | Planned | - |
+| 54. Env Command | v0.13.0 | 1/2 | In Progress|  |
 | 55. Copilot Hook Support | v0.13.0 | 0/2 | Planned | - |
 | 56. Doctor & Config Polish | v0.13.0 | 0/1 | Planned | - |
 | 57. Release Prep | v0.13.0 | 0/1 | Planned | - |

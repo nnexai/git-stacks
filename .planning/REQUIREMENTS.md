@@ -15,8 +15,8 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 
 ### CLI Commands
 
-- [ ] **CMD-01**: User can run `git-stacks env [workspace]` to see all merged env vars
-- [ ] **CMD-02**: `git-stacks env` supports `--format shell|dotenv|json` output modes
+- [x] **CMD-01**: User can run `git-stacks env [workspace]` to see all merged env vars
+- [x] **CMD-02**: `git-stacks env` supports `--format shell|dotenv|json` output modes
 
 ### Agent Hooks
 
@@ -58,8 +58,8 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 | COMP-01 | Phase 53 | Complete |
 | COMP-02 | Phase 53 | Pending |
 | COMP-03 | Phase 53 | Complete |
-| CMD-01 | Phase 54 | Pending |
-| CMD-02 | Phase 54 | Pending |
+| CMD-01 | Phase 54 | Complete |
+| CMD-02 | Phase 54 | Complete |
 | HOOK-01 | Phase 55 | Pending |
 | HOOK-02 | Phase 55 | Pending |
 | HOOK-03 | Phase 55 | Pending |
