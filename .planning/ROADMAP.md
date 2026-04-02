@@ -154,7 +154,7 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 - [ ] **Phase 54: Env Command** (2/2 plans) - `git-stacks env [workspace]` with --format flag
 - [ ] **Phase 55: Copilot Hook Support** (2/2 plans) - Extend `install --hooks` with --copilot flag, --claude explicit flag, interactive chooser, simultaneous install
 - [ ] **Phase 56: Doctor & Config Polish** (1/1 plan) - Forge CLI binary checks in doctor, tmux pane setup in configExample
-- [ ] **Phase 57: Release Prep** - Audit CHANGELOG/README completeness, remove "unreleased" marker, bump to v0.13.0
+- [ ] **Phase 57: Release Prep** (1/1 plan) - Audit CHANGELOG/README completeness, remove "unreleased" marker, bump to v0.13.0
 
 </details>
 
@@ -212,7 +212,8 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
   1. CHANGELOG.md has a `## v0.13.0` section (no "unreleased" marker) listing all features delivered in Phases 53-56
   2. README reflects any new user-facing commands (`env`, `install --hooks --copilot`) with usage examples
   3. `package.json` version field reads `0.13.0` and `git-stacks --version` outputs `0.13.0`
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
+  - Plan 01 (Wave 1): Version bump + CHANGELOG v0.13.0 section + README env command & Copilot hooks docs
 
 ## Progress
 
@@ -232,4 +233,4 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 | 54. Env Command | v0.13.0 | 0/2 | Planned | - |
 | 55. Copilot Hook Support | v0.13.0 | 0/2 | Planned | - |
 | 56. Doctor & Config Polish | v0.13.0 | 0/1 | Planned | - |
-| 57. Release Prep | v0.13.0 | 0/1 | Not started | - |
+| 57. Release Prep | v0.13.0 | 0/1 | Planned | - |
