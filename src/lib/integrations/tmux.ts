@@ -36,7 +36,22 @@ export const tmuxIntegration: Integration = {
 
   configExample: `integrations:
   tmux:
-    enabled: true`,
+    enabled: true
+
+# Per-workspace pane layout (in workspace or template YAML):
+settings:
+  integrations:
+    tmux:
+      panes:
+        - surfaces:                    # main pane (no direction = first pane)
+            - command: nvim .
+        - direction: right             # split right for tests
+          surfaces:
+            - command: bun run test --watch
+        - direction: down              # split down for dev server
+          focus: true
+          surfaces:
+            - command: bun run dev`,
 
   isEnabled: (ctx) => resolveEnabled("tmux", false, ctx),
 
