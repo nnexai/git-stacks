@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.12.0
 milestone_name: Multi-Workspace AeroSpace
 status: verifying
-stopped_at: Completed 50.1-02-PLAN.md
-last_updated: "2026-04-01T21:08:55.013Z"
+stopped_at: Completed quick/260402-6c0 (changelog + readme release docs)
+last_updated: "2026-04-02T02:37:58.649Z"
 last_activity: 2026-04-01
 progress:
   total_phases: 7
@@ -83,6 +83,7 @@ Recent decisions affecting current work:
 - [Phase 50.1-argument-based-dynamic-completion]: ArgCompletion array replaces .dynamic + .firstArgRequired — atomic interface migration, no shim
 - [Phase 50.1-argument-based-dynamic-completion]: DYNAMIC_COMPLETIONS shrunk from 50 entries to 4 (issue.link overrides with workspace-or-issue arg name)
 - [Phase 50.1-argument-based-dynamic-completion]: Integration helper emits hardcoded IDs at generation time (not runtime filesystem scan)
+- [Phase quick]: Added Phase 50/50.1/51 changelog entries under existing v0.12.0 header without new version bump
 
 ### Pending Todos
 
@@ -105,6 +106,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-01T21:01:35.594Z
-Stopped at: Completed 50.1-02-PLAN.md
+Last session: 2026-04-02T02:37:54.322Z
+Stopped at: Completed quick/260402-6c0 (changelog + readme release docs)
 Next action: `/gsd:execute-phase 48`
