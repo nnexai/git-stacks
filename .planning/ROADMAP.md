@@ -11,7 +11,8 @@
 - ✅ **v0.9.0 Identity & Completion Integrity** — Phases 33-36 (shipped 2026-03-25) — Name-based identity, completion audit, test isolation, dynamic name completion. See [milestones/v0.9.0-ROADMAP.md](milestones/v0.9.0-ROADMAP.md)
 - ✅ **v0.10.0 Multi-Agent Workspace Tooling** — Phases 37-42 (shipped 2026-03-28) — Agent path discovery, multi-repo pull, TUI staleness, template composition, security hardening. See [milestones/v0.10.0-ROADMAP.md](milestones/v0.10.0-ROADMAP.md)
 - ✅ **v0.11.0 AeroSpace Window Management** — Phases 43-46 (shipped 2026-03-28) — AeroSpace shell wrappers, core integration plugin, layout control, release prep. See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md)
-- ✅ **v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation** — Phases 47-51 (shipped 2026-04-02) — Multi-workspace AeroSpace config, integration CLI tools, convention-based completion, workspace port allocation. See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md)
+- ✅ **v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation** — Phases 47-52 (shipped 2026-04-02) — Multi-workspace AeroSpace config, integration CLI tools, convention-based completion, workspace port allocation. See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md)
+- 🚧 **v0.13.0 CLI Polish & Completions** — Phases 53-57 (active) — Completion fixes, env command, Copilot hooks, doctor/config polish, release prep.
 
 ## Phases
 
@@ -132,7 +133,7 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 </details>
 
 <details>
-<summary>✅ v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation (Phases 47-51) — SHIPPED 2026-04-02</summary>
+<summary>✅ v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation (Phases 47-52) — SHIPPED 2026-04-02</summary>
 
 - [x] Phase 47: Multi-Workspace Schema (2/2 plans) — completed 2026-03-29
 - [x] Phase 48: Multi-Workspace Loop & Tests (2/2 plans) — completed 2026-03-29
@@ -145,6 +146,70 @@ See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md) for full deta
 See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full details.
 
 </details>
+
+<details open>
+<summary>🚧 v0.13.0 CLI Polish & Completions (Phases 53-57) — ACTIVE</summary>
+
+- [ ] **Phase 53: Shell Completion Fixes** - Fix positional arg repeat, add option value enums, eliminate parent flag leakage
+- [ ] **Phase 54: Env Command** - `git-stacks env [workspace]` with --format flag
+- [ ] **Phase 55: Copilot Hook Support** - Extend `install --hooks` with --copilot flag, --claude explicit flag, interactive chooser, simultaneous install
+- [ ] **Phase 56: Doctor & Config Polish** - Forge CLI binary checks in doctor, tmux pane setup in configExample
+- [ ] **Phase 57: Release Prep** - Audit CHANGELOG/README completeness, remove "unreleased" marker, bump to v0.13.0
+
+</details>
+
+## Phase Details
+
+### Phase 53: Shell Completion Fixes
+**Goal**: Shell completions are accurate — no repeated positional args, no parent flag leakage, all enum options offered
+**Depends on**: Phase 52
+**Requirements**: COMP-01, COMP-02, COMP-03
+**Success Criteria** (what must be TRUE):
+  1. After all positional args are filled, pressing Tab offers no additional workspace/repo/template completions
+  2. Flags with enum values (e.g., `--format`, `--sort`, `--strategy`) offer their valid values as Tab completions in bash, zsh, and fish
+  3. Running `git-stacks workspace <TAB>` does not show flags that belong only to the parent `git-stacks` command
+**Plans**: TBD
+
+### Phase 54: Env Command
+**Goal**: Users can inspect all merged env vars that a workspace would inject at open time
+**Depends on**: Phase 53
+**Requirements**: CMD-01, CMD-02
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks env my-workspace` prints all env vars that would be injected when opening that workspace
+  2. `git-stacks env` with no argument auto-detects the workspace from CWD and prints its env vars
+  3. `git-stacks env --format dotenv` outputs `KEY=value` lines; `--format json` outputs a JSON object; `--format shell` outputs `export KEY=value` lines
+**Plans**: TBD
+
+### Phase 55: Copilot Hook Support
+**Goal**: Users can install GitHub Copilot hooks alongside or instead of Claude hooks via `install --hooks`
+**Depends on**: Phase 53
+**Requirements**: HOOK-01, HOOK-02, HOOK-03, HOOK-04
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks install --hooks --copilot` writes `.github/hooks/git-stacks.json` with Copilot hook entries into each repo worktree
+  2. `git-stacks install --hooks --claude` installs Claude Code hooks (existing behavior, now under an explicit flag)
+  3. `git-stacks install --hooks` with neither flag prompts the user to choose which hook set(s) to install
+  4. `git-stacks install --hooks --copilot --claude` installs both Copilot and Claude hooks in the same run without conflict
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 56: Doctor & Config Polish
+**Goal**: Doctor catches missing forge CLIs and the tmux config example shows practical pane setup
+**Depends on**: Phase 53
+**Requirements**: DOC-01, CFG-01
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks doctor` reports a warning when a forge integration (GitHub, GitLab, Gitea) is configured but the required CLI binary (`gh`, `glab`, `tea`) is not found on PATH
+  2. `git-stacks integration tmux config example` prints a YAML snippet showing native `panes` array with direction, surfaces, and commands
+**Plans**: TBD
+
+### Phase 57: Release Prep
+**Goal**: v0.13.0 is published with complete, accurate release notes and correct version number
+**Depends on**: Phase 56
+**Requirements**: REL-01, REL-02, REL-03
+**Success Criteria** (what must be TRUE):
+  1. CHANGELOG.md has a `## v0.13.0` section (no "unreleased" marker) listing all features delivered in Phases 53-56
+  2. README reflects any new user-facing commands (`env`, `install --hooks --copilot`) with usage examples
+  3. `package.json` version field reads `0.13.0` and `git-stacks --version` outputs `0.13.0`
+**Plans**: TBD
 
 ## Progress
 
@@ -159,4 +224,9 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 | 33-36. Identity & Completion | v0.9.0 | 10/10 | Complete | 2026-03-25 |
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
 | 43-46. AeroSpace Window Management | v0.11.0 | 7/7 | Complete | 2026-03-28 |
-| 47-51. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
+| 47-52. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
+| 53. Shell Completion Fixes | v0.13.0 | 0/? | Not started | - |
+| 54. Env Command | v0.13.0 | 0/? | Not started | - |
+| 55. Copilot Hook Support | v0.13.0 | 0/? | Not started | - |
+| 56. Doctor & Config Polish | v0.13.0 | 0/? | Not started | - |
+| 57. Release Prep | v0.13.0 | 0/1 | Not started | - |

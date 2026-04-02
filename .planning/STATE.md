@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v0.13.0
 milestone_name: CLI Polish & Completions
 status: active
-stopped_at: Defining requirements
+stopped_at: Roadmap created — ready to plan Phase 53
 last_updated: "2026-04-02T05:00:00.000Z"
 last_activity: 2026-04-02
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,31 +21,39 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Defining requirements for v0.13.0
+**Current focus:** Phase 53 — Shell Completion Fixes
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 53 (Shell Completion Fixes) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-02 — Milestone v0.13.0 started
+Status: Ready to plan
+Last activity: 2026-04-02 — Roadmap created for v0.13.0
+
+```
+Progress: [----------] 0% (0/5 phases)
+```
 
 ## Accumulated Context
 
 ### Decisions
 
-(none yet)
+- Phase numbering continues from Phase 52 (v0.12.0 ended at 52); v0.13.0 starts at 53
+- REL-01 and REL-02 are incremental per-phase expectations (each phase updates CHANGELOG/README), not separate phases
+- REL-03 is the final Phase 57 release audit
+- Granularity is coarse: 5 phases for 14 requirements
+- Phase 55 (Copilot hooks) depends on research in .planning/research/COPILOT-HOOKS.md
 
 ### Pending Todos
 
-7 pending todos — all included in v0.13.0 scope:
-- Fix git-stacks list unsupported --status flag (cli)
-- Extend install hooks to support Copilot (cli)
-- Tmux integration example should show pane setup (docs)
-- Shell completion generator missing option value enums (cli)
-- Doctor check missing forge CLIs (cli)
-- Add git-stacks env command to show generated env vars (cli)
-- Fix shell completion repeating workspace after optional positional arg (cli)
+7 pending todos — all addressed in v0.13.0 phases:
+- Fix shell completion repeating workspace after optional positional arg → Phase 53 (COMP-01)
+- Shell completion generator missing option value enums → Phase 53 (COMP-02)
+- Doctor check missing forge CLIs → Phase 56 (DOC-01)
+- Extend install hooks to support Copilot → Phase 55 (HOOK-01)
+- Tmux integration example should show pane setup → Phase 56 (CFG-01)
+- Add git-stacks env command to show generated env vars → Phase 54 (CMD-01)
+- Fix git-stacks list unsupported --status flag → out of scope (not in v0.13.0 requirements)
 
 ### Blockers/Concerns
 
@@ -61,5 +69,5 @@ Last activity: 2026-04-02 — Milestone v0.13.0 started
 ## Session Continuity
 
 Last session: 2026-04-02
-Stopped at: Milestone v0.13.0 started — defining requirements
-Next action: Define requirements and create roadmap
+Stopped at: Roadmap created — 5 phases (53-57), 14 requirements mapped
+Next action: `/gsd:plan-phase 53` — Shell Completion Fixes

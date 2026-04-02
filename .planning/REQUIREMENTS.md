@@ -31,7 +31,7 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 
 ### Config Examples
 
-- [ ] **CFG-01**: Tmux integration `configExample` shows pane setup via `post_open` hooks
+- [ ] **CFG-01**: Tmux integration `configExample` shows native pane layout configuration (`panes` array with direction, surfaces, commands)
 
 ### Release
 
@@ -55,26 +55,26 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COMP-01 | — | Pending |
-| COMP-02 | — | Pending |
-| COMP-03 | — | Pending |
-| CMD-01 | — | Pending |
-| CMD-02 | — | Pending |
-| HOOK-01 | — | Pending |
-| HOOK-02 | — | Pending |
-| HOOK-03 | — | Pending |
-| HOOK-04 | — | Pending |
-| DOC-01 | — | Pending |
-| CFG-01 | — | Pending |
-| REL-01 | — | Pending |
-| REL-02 | — | Pending |
-| REL-03 | — | Pending |
+| COMP-01 | Phase 53 | Pending |
+| COMP-02 | Phase 53 | Pending |
+| COMP-03 | Phase 53 | Pending |
+| CMD-01 | Phase 54 | Pending |
+| CMD-02 | Phase 54 | Pending |
+| HOOK-01 | Phase 55 | Pending |
+| HOOK-02 | Phase 55 | Pending |
+| HOOK-03 | Phase 55 | Pending |
+| HOOK-04 | Phase 55 | Pending |
+| DOC-01 | Phase 56 | Pending |
+| CFG-01 | Phase 56 | Pending |
+| REL-01 | Phase 57 | Pending |
+| REL-02 | Phase 57 | Pending |
+| REL-03 | Phase 57 | Pending |
 
 **Coverage:**
 - v0.13.0 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-02*
-*Last updated: 2026-04-02 after initial definition*
+*Last updated: 2026-04-02 — traceability mapped to Phases 53-57*
