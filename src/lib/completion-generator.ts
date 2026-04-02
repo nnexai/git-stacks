@@ -380,7 +380,7 @@ export function generateBash(program: Command): string {
 /** Returns the _arguments spec string for a single option, honoring OPTION_ENUMS, FLAG_COMPLETIONS, and COMMAND_FLAG_COMPLETIONS. */
 function zshOptionSpec(opt: OptionInfo, id: string, commandPath = ""): string {
   const flagName = opt.long  // e.g., "--strategy"
-  const enumValues = OPTION_ENUMS[flagName]
+  const enumValues = opt.enumValues ?? OPTION_ENUMS[flagName]
   const flagDynamic = resolveFlagCompletion(commandPath, flagName)
   if (enumValues) {
     const valName = flagName.slice(2) // "strategy"
@@ -499,7 +499,7 @@ function zshCaseBody(node: CommandNode, id: string): string {
 
   // No positional dynamic, but command has options that are in OPTION_ENUMS or FLAG_COMPLETIONS
   // (e.g. `list --sort`) — emit _arguments with enum-aware specs
-  const enumOpts = options.filter(o => OPTION_ENUMS[o.long] !== undefined || resolveFlagCompletion(node.path, o.long) !== undefined)
+  const enumOpts = options.filter(o => o.enumValues !== undefined || OPTION_ENUMS[o.long] !== undefined || resolveFlagCompletion(node.path, o.long) !== undefined)
   if (enumOpts.length > 0) {
     let out = `        _arguments \\\n`
     for (const opt of options) {
