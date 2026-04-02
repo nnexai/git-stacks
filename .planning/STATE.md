@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-29)
 Phase: 51
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-04-01
+Last activity: 2026-04-02 - Completed quick task 260402-6c0: update changelog and readme to prepare for v0.12.0 release
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -103,6 +103,7 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
 | 260329-9ll | upgrade dependencies | 2026-03-29 | 3c95632 | Verified | [260329-9ll-upgrade-dependencies](./quick/260329-9ll-upgrade-dependencies/) |
+| 260402-6c0 | update changelog and readme to prepare for v0.12.0 release | 2026-04-02 | 8e89328 | | [260402-6c0-update-changelog-and-readme-to-prepare-f](./quick/260402-6c0-update-changelog-and-readme-to-prepare-f/) |
 
 ## Session Continuity
 
