@@ -40,8 +40,9 @@ Decisions archived to PROJECT.md Key Decisions table at milestone completion.
 
 ### Pending Todos
 
-1 pending todo — see .planning/todos/pending/
+2 pending todos — see .planning/todos/pending/
 - Fix git-stacks list unsupported --status flag (cli)
+- Extend install hooks to support Copilot (cli)
 
 ### Blockers/Concerns
 
