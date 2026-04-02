@@ -8,19 +8,18 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.12.0 Multi-Workspace AeroSpace
+## Current State (2026-04-02)
 
-**Goal:** Extend AeroSpace integration to support an array of workspace configurations per git-stacks workspace — each with its own layout, commands, focus, and normalization settings.
+**Last shipped:** v0.12.0 — Multi-Workspace AeroSpace, Integration Tools & Port Allocation
+**Next milestone:** Not yet planned — run `/gsd:new-milestone` to start
 
-**Target features:**
-- `workspaces` array schema replacing flat single-workspace config (breaking change from v0.11.0 format)
-- Per-workspace-entry layout, normalization, flatten_before_open, focus, and commands
-- Focus validation — at most one workspace entry may have `focus: true`
-- Unrouted tier-1 windows (vscode, intellij) default to first workspace in array
-- Sequential processing — iterate workspaces array in order, setup each
-- Release prep (version bump, CHANGELOG, README update for new config format)
+### What shipped in v0.12.0
 
-## Current State — Phase 51 complete (2026-04-01)
+- **Multi-workspace AeroSpace config** (BREAKING) — `workspaces` array replaces flat `workspace:` field; each entry independently configures layout, normalization, flatten, focus, and commands
+- **Integration CLI tools** — `integration list`, `config example`, `config show`, `aerospace focus <workspace>`, `vscode open <workspace>`
+- **Convention-based dynamic completion** — 46-entry `DYNAMIC_COMPLETIONS` replaced with 5-key inference map; integration ID and multi-arg position support across bash/zsh/fish
+- **Workspace port allocation** — named port declarations, contiguous range allocation on open, atomic writeYaml with fsync, race-safe lockfile, env injection via `mergeEnv()`
+- **Argument naming convention** — Commander.js positional args renamed to match completion inference
 
 ### What shipped in Phase 50.1
 
@@ -208,6 +207,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Unrouted tier-1 windows (vscode, intellij) default to first workspace in array — v0.12.0 Phase 48
 - ✓ Cross-entry snapshot isolation via shared `beforeSet` — v0.12.0 Phase 48
 - ✓ `listWorkspaces()` hoisted before loop for upfront validation — v0.12.0 Phase 48
+- ✓ Integration config introspection — `integration list`, `config example`, `config show` commands — v0.12.0 Phase 50
+- ✓ AeroSpace focus command — `integration aerospace focus <workspace>` — v0.12.0 Phase 50
+- ✓ VSCode standalone open — `integration vscode open <workspace>` — v0.12.0 Phase 50
+- ✓ `configExample` property on Integration interface — v0.12.0 Phase 50
+- ✓ Convention-based completion inference from argument names — v0.12.0 Phase 50.1
+- ✓ Integration ID completion type — v0.12.0 Phase 50.1
+- ✓ Multi-position argument dispatch in completions — v0.12.0 Phase 50.1
+- ✓ Workspace port allocation — named ports, contiguous range, env injection — v0.12.0 Phase 51
+- ✓ Atomic writeYaml with fsync — v0.12.0 Phase 51
+- ✓ Race-safe port allocation lockfile — v0.12.0 Phase 51
+- ✓ Port names in new workspace wizard — v0.12.0 Phase 51
+- ✓ Template port inheritance with workspace merge — v0.12.0 Phase 51
 
 ### Active
 
@@ -225,6 +236,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
+
+## Completed Milestone: v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation (2026-04-02)
+
+**Goal:** Extend AeroSpace to multi-workspace configs, add integration CLI tools, and introduce collision-free workspace port allocation.
+
+**Shipped:** All target features delivered across 7 phases (47-51, 50.1, 52). Breaking schema change to `workspaces` array, integration config/list/focus/open subcommands, convention-based completion inference, workspace port allocation with race-safe lockfile and env injection.
 
 ## Completed Milestone: v0.11.0 AeroSpace Window Management (2026-03-29)
 
@@ -253,7 +270,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Versioning
 
-**Current release:** `v0.11.1`
+**Current release:** `v0.12.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -311,6 +328,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Atomic writeYaml via temp-file + rename | Prevents config corruption on interrupted writes | ✓ Good |
 | shellQuote for tmux/niri path interpolation | POSIX single-quote escaping prevents shell injection in path values | ✓ Good |
 | FixOperation discriminated union for doctor --fix | Structured operations via Bun APIs, not shell strings | ✓ Good |
+| `workspaces` array breaking change (v0.12.0) | Array-only schema is cleaner than backward-compat shimming | ✓ Done |
+| Bag windows route to `workspaces[0]` only | Tier-1 windows (vscode, intellij) logically belong to primary workspace; subsequent entries get own commands | ✓ Good |
+| Focus validation as post-parse runtime check | Zod `.superRefine` produces unfriendly path-qualified error strings in CLI context | ✓ Good |
+| Convention-based completion inference | 5-key map replaces 46-entry static table; argument names are the convention | ✓ Good |
+| Integration IDs hardcoded at generation time | Runtime filesystem scan adds complexity; IDs are static, known at build | ✓ Good |
+| Contiguous port allocation with lockfile | First-fit on sorted free ranges; lockfile prevents race conditions between concurrent opens | ✓ Good |
+| Port names as-is for env vars (no prefix) | User controls naming; `ports: { PORT: ~ }` → `PORT=12400` | ✓ Good |
+| Workspace YAML is sole source of truth for ports | No separate allocation registry; remove frees ports implicitly via YAML deletion | ✓ Good |
 
 ## Out of Scope
 
@@ -359,4 +384,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-01 after Phase 51 completion*
+*Last updated: 2026-04-02 after v0.12.0 milestone*

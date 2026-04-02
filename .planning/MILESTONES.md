@@ -1,5 +1,21 @@
 # Milestones
 
+## v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation (Shipped: 2026-04-02)
+
+**Phases completed:** 7 phases (47-51, 50.1, 52), 14 plans, ~52 commits
+**Timeline:** 2026-03-29 → 2026-04-02 (4 days)
+**Stats:** 72 files changed, +10,091 / -465 lines
+
+**Key accomplishments:**
+
+- **Multi-workspace AeroSpace config** (BREAKING) — `workspaces` array replaces flat `workspace:` field; per-entry layout, normalization, flatten, focus, and commands; focus/duplicate validation; cross-entry snapshot isolation via shared `beforeSet`
+- **Integration CLI tools** — `integration list`, `config example`, `config show`, `aerospace focus <workspace>`, `vscode open <workspace>`; `configExample` property on Integration interface
+- **Convention-based dynamic completion** — 46-entry `DYNAMIC_COMPLETIONS` replaced with 5-key `NAME_TO_COMPLETION_TYPE` inference map; integration ID and multi-arg position support across bash/zsh/fish
+- **Workspace port allocation** — named port declarations (`ports: { PORT: ~ }`), contiguous range allocation on open, atomic writeYaml with fsync, race-safe lockfile, env injection via `mergeEnv()`
+- **Argument naming convention** — Commander.js positional args renamed across all command files to match completion inference (`<workspace>`, `<repo>`, `<template>`)
+
+---
+
 ## v0.11.0 AeroSpace Window Management (Shipped: 2026-03-29)
 
 **Phases completed:** 4 phases, 7 plans

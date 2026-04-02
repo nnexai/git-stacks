@@ -344,6 +344,98 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.11.0 — AeroSpace Window Management
+
+**Shipped:** 2026-03-28
+**Phases:** 4 (Phases 43–46) | **Plans:** 7 | **Tasks:** ~12
+
+### What Was Built
+
+- Typed async AeroSpace CLI wrappers with `--format` TSV parsing and injectable `_exec`
+- Tier-3 AeroSpace integration plugin with snapshot-delta window detection and workspace targeting
+- Normalization-aware layout control, flatten_before_open, workspace focus switching
+- App launching via `commands` array with source/app/command entries and snapshot-delta detection
+- Doctor binary check for `aerospace` (macOS-gated)
+
+### What Worked
+
+- **Followed niri pattern exactly**: The AeroSpace integration reused the same `_exec` injectable, tier-3 ordering, and ArtifactBag consumption patterns established in v0.6.0 — near-zero design decisions needed
+- **v0.11.1 patch handled cleanly**: OpenTUI dependency pinning and git credential suppression were quick fixes shipped as a patch release — no milestone disruption
+
+### What Was Inefficient
+
+- **snapshotWindowIds complexity**: The TSV parsing and filtering logic is more complex than needed for the current use cases — simpler PID-based matching would have sufficed for most scenarios
+- **Two-day turnaround**: v0.11.0 and v0.11.1 shipped on the same day (2026-03-28) — the v0.11.1 patch could have been folded into v0.11.0 if OpenTUI pinning had been caught during testing
+
+### Patterns Established
+
+- **Snapshot-delta for window detection**: `snapshotWindowIds()` before/after pattern for detecting newly launched windows — reusable across all tiling WM integrations
+- **`_exec` injectable for CLI wrappers**: Same pattern as niri.ts, tmux.ts, cmux.ts — consistent test isolation across all shell-wrapper modules
+
+### Key Lessons
+
+1. **Platform-gated integrations work well**: `applies()` returning false on non-macOS prevents AeroSpace from interfering on Linux — clean skip without error
+2. **Pin dependencies proactively**: The OpenTUI version drift that required v0.11.1 could have been caught by pinning earlier
+
+### Cost Observations
+
+- Model mix: opus for planning, sonnet for execution (balanced profile)
+- Sessions: 1-2 sessions on 2026-03-28
+- Notable: Fastest 4-phase milestone — leveraged established patterns from niri integration
+
+---
+
+## Milestone: v0.12.0 — Multi-Workspace AeroSpace, Integration Tools & Port Allocation
+
+**Shipped:** 2026-04-02
+**Phases:** 7 (Phases 47–51, 50.1, 52) | **Plans:** 14 | **Tasks:** ~16
+
+### What Was Built
+
+- Multi-workspace AeroSpace config (BREAKING) — `workspaces` array replaces flat `workspace:` field
+- Per-entry layout, normalization, flatten, focus, commands with focus/duplicate validation
+- Cross-entry snapshot isolation via shared `beforeSet`; upfront `listWorkspaces()` validation
+- Integration CLI tools: `integration list`, `config example`, `config show`, `aerospace focus`, `vscode open`
+- Convention-based completion inference — 46-entry `DYNAMIC_COMPLETIONS` → 5-key map
+- Integration ID completion type and multi-position argument dispatch
+- Workspace port allocation with named ports, contiguous range allocation, race-safe lockfile, env injection
+
+### What Worked
+
+- **Breaking change handled cleanly**: Array-only schema with no backward compat was the right call — no shim code, tests updated in batch
+- **Phase 50.1 as inserted phase**: Convention-based completion naturally followed Phase 50's integration commands — inserting it immediately after kept the completion system coherent
+- **Port allocation design**: First-fit on sorted ranges with lockfile was simple and correct — no over-engineering
+- **Quick task for release prep**: Phase 52's work was small enough to handle as a quick task (260402-6c0) — avoided the overhead of full GSD phase machinery for a CHANGELOG/README update
+- **40+ test updates in Phase 48**: Batch-updating all existing AeroSpace tests to the new array format was done in one plan — no incremental migration
+
+### What Was Inefficient
+
+- **Requirements doc scoped too narrowly**: REQUIREMENTS.md only covered Phases 47-49 (original scope). Phases 50, 50.1, and 51 had requirements defined inline in ROADMAP.md but not in REQUIREMENTS.md — the traceability table was incomplete
+- **Phase 52 not formally planned**: Release prep for Phases 50-51 was done as a quick task rather than executing the planned Phase 52 — the ROADMAP shows 0/1 plans for Phase 52 despite the work being done
+- **SUMMARY.md quality for Phase 51**: Some summaries had malformed one-liner fields, causing poor milestone archive extraction
+
+### Patterns Established
+
+- **`configExample` on Integration interface**: Optional property for YAML snippet display — populated only for integrations with non-trivial config
+- **Convention-based completion inference**: `NAME_TO_COMPLETION_TYPE` map derives completion types from Commander.js argument names — argument naming IS the completion spec
+- **Port allocation via workspace YAML**: No separate registry — workspace YAML is sole source of truth; removal implicitly frees ports
+- **Atomic writeYaml with fsync**: Write-to-tmp, fsync, rename — all config writes across the codebase
+
+### Key Lessons
+
+1. **Scope REQUIREMENTS.md for the full milestone, not just initial phases**: When phases are added mid-milestone (50, 50.1, 51), their requirements should be added to REQUIREMENTS.md for traceability
+2. **Quick tasks work well for small release prep**: Phase 52 was overkill for a CHANGELOG/README update — quick task was the right tool
+3. **Convention-over-configuration extends to completions**: Naming arguments `<workspace>` instead of `<name>` is both better UX and auto-generates completions — one change, two benefits
+4. **Port allocation needs no daemon**: Scan-on-open with lockfile is simpler than a persistent allocator service and handles concurrent access correctly
+
+### Cost Observations
+
+- Model mix: opus for planning, sonnet for execution (balanced profile)
+- Sessions: 3-4 sessions across 4 days (2026-03-29 → 2026-04-02)
+- Notable: 72 files changed, +10,091 / -465 lines. Largest feature set in a single milestone (breaking change + 3 independent features).
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -356,5 +448,7 @@ Living document — one section per shipped milestone.
 | v0.8.0 Integration Polish | 4 | 6 | 1 | 0 |
 | v0.9.0 Identity & Completion | 5 | 10 | 1 | 0 |
 | v0.10.0 Multi-Agent Workspace | 6 | 9 | 3 | 0 |
+| v0.11.0 AeroSpace Window Mgmt | 4 | 7 | 1 | 0 |
+| v0.12.0 Multi-WS AeroSpace + Ports | 7 | 14 | 4 | 0 |
 
-**Trend:** v0.10.0 maintains the zero-rework streak (now 6 milestones). Post-release audit phase (42) is a new pattern — shipping first, then addressing findings in a dedicated patch release. 8 milestones shipped in 11 days (2026-03-18 → 2026-03-28). Requirements checkbox maintenance remains a recurring gap (v0.3.0, v0.8.0, v0.10.0).
+**Trend:** Zero-rework streak continues (8 milestones). 10 milestones shipped in 15 days (2026-03-18 → 2026-04-02). v0.12.0 is the largest feature set per milestone (breaking change + 3 independent features). Requirements scoping gap: REQUIREMENTS.md not extended when phases are added mid-milestone (new pattern, v0.12.0). Quick task mechanism validated for small release prep work. Codebase at 14,680 LOC source + 17,445 LOC tests.
