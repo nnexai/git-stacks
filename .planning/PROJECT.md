@@ -8,20 +8,18 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.13.0 CLI Polish & Completions
+## Current State
 
-**Goal:** Fix accumulated bugs, fill completion gaps, add `env` command and Copilot hook support.
-
-**Target features:**
-- Fix `list --status` flag (implement or remove)
-- Fix shell completion repeating workspace after optional positional arg
-- Add missing option value enums to completion generator
-- Add `git-stacks env [workspace]` command
-- Extend `install --hooks` to support Copilot
-- Add forge CLI checks to `git-stacks doctor`
-- Add tmux pane setup to `configExample`
+v0.13.0 milestone complete (2026-04-02). No active milestone.
 
 ## Recent State (2026-04-02)
+
+### What shipped in v0.13.0
+
+- **Shell completion fixes** — no repeated positional args, no parent flag leakage, all enum options offered
+- **Env command** — `git-stacks env [workspace]` inspects all merged env vars that a workspace would inject
+- **Copilot hook support** — `install --hooks --copilot` installs GitHub Copilot hooks alongside or instead of Claude hooks
+- **Doctor & config polish** — forge CLI checks in `git-stacks doctor`, practical tmux pane layout in `configExample`
 
 ### What shipped in v0.12.0
 
@@ -400,4 +398,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-02 after v0.13.0 milestone start*
+*Last updated: 2026-04-02 after v0.13.0 milestone complete*
