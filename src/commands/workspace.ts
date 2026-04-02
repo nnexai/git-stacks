@@ -34,8 +34,11 @@ import {
   editWorkspaceYaml,
   openYamlInEditor,
   detectWorkspaceFromCwd,
+  buildBaseEnv,
+  buildRepoEnv,
 } from "../lib/workspace-ops"
 import type { SyncRow, PullRow } from "../lib/workspace-ops"
+import { formatEnv, detectRepoFromCwd, type EnvFormat } from "../lib/env"
 
 function formatSyncRow(row: SyncRow): string {
   const label = row.status === "synced" ? "synced" : row.status === "skipped" ? "skipped" : "failed"
@@ -911,6 +914,65 @@ export function registerWorkspaceCommands(program: Command) {
       for (const p of result.paths) {
         console.log(p)
       }
+    })
+
+  program
+    .command("env [workspace]")
+    .description("Show environment variables for a workspace")
+    .addOption(new Option("--format <format>", "Output format").choices(["table", "shell", "dotenv", "json"]).default("table"))
+    .option("--repo <name>", "Include repo-specific variables")
+    .action(async (workspace: string | undefined, opts: { format: string; repo?: string }) => {
+      const validFormats = ["table", "shell", "dotenv", "json"]
+      if (!validFormats.includes(opts.format)) {
+        console.error(formatError(`Invalid format '${opts.format}'`, "use: --format table|shell|dotenv|json"))
+        process.exit(1)
+      }
+
+      let ws
+      if (workspace !== undefined) {
+        if (!workspaceExists(workspace)) {
+          console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
+          process.exit(1)
+        }
+        ws = readWorkspace(workspace)
+      } else {
+        const detection = detectWorkspaceFromCwd()
+        if (!detection.ok) {
+          console.error(formatError(
+            "Could not detect workspace from current directory",
+            "run from inside a worktree or specify: git-stacks env <workspace>"
+          ))
+          process.exit(1)
+        }
+        ws = detection.workspace
+      }
+
+      const globalConfig = readGlobalConfig()
+      const tasksDir = join(getTasksDir(globalConfig.workspace_root), ws.name)
+      let env = buildBaseEnv(ws, tasksDir, "env")
+
+      if (opts.repo) {
+        const repo = ws.repos.find(r => r.name === opts.repo)
+        if (!repo) {
+          console.error(formatError(
+            `Repo '${opts.repo}' not found in workspace '${ws.name}'`,
+            "available repos: " + ws.repos.map(r => r.name).join(", ")
+          ))
+          process.exit(1)
+        }
+        env = buildRepoEnv(env, repo)
+      } else if (workspace === undefined) {
+        // CWD detection was used — auto-detect repo too
+        const repoName = detectRepoFromCwd(ws)
+        if (repoName) {
+          const repo = ws.repos.find(r => r.name === repoName)
+          if (repo) {
+            env = buildRepoEnv(env, repo)
+          }
+        }
+      }
+
+      console.log(formatEnv(env, opts.format as EnvFormat))
     })
 
   program
