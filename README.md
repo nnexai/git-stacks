@@ -97,6 +97,7 @@ git-stacks edit <name>             # Edit workspace interactively, or --yaml to 
 git-stacks cd <name> [repo]        # Print path — use via shell function
 git-stacks paths [workspace]       # Output repo paths (one per line) for agent CLI injection
 git-stacks pull [workspace]        # Pull latest for all repos (--ff-only, skips dirty)
+git-stacks env [workspace]         # Show merged env vars that would be injected at open time
 ```
 
 ### Shell `cd` integration
@@ -155,6 +156,36 @@ git-stacks pull
 ```
 
 Worktree repos pull their workspace branch; trunk repos pull their default branch. Uses `--ff-only` for safety — diverged branches produce a clear error identifying the repo and branch. Dirty repos (uncommitted changes) are skipped with a warning. Exit code is non-zero if any repo was skipped or failed.
+
+## Env Inspection
+
+Inspect all environment variables that a workspace would inject when opened:
+
+```bash
+# Show all env vars for a workspace (table format)
+git-stacks env my-feature
+
+# Auto-detect workspace from current directory
+git-stacks env
+
+# Output as sourceable shell exports
+git-stacks env my-feature --format shell
+# Output: export GS_WORKSPACE_NAME=my-feature
+#         export GS_WORKSPACE_BRANCH=my-feature
+#         export API_PORT=10000
+#         ...
+
+# Output as dotenv file (redirectable)
+git-stacks env my-feature --format dotenv > .env
+
+# Output as JSON object
+git-stacks env my-feature --format json
+
+# Include per-repo vars for a specific repo
+git-stacks env my-feature --repo backend-api
+```
+
+Shows GS_* injected vars, user-defined `env:` from workspace YAML, and resolved port vars — the full picture of what hooks and processes see at open time. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
 
 ## Workspace Notifications
 
@@ -220,16 +251,25 @@ Global config lives at `~/.config/git-stacks/config.yml`. Default workspace root
 Install AI agent notification hooks into the current project so the TUI dashboard shows when an agent needs your attention:
 
 ```bash
-# Install Claude Code hooks (interactive workspace + framework selection)
+# Interactive — choose which agent frameworks to install
 git-stacks install --hooks
+
+# Install Claude Code hooks explicitly
+git-stacks install --hooks --claude
+
+# Install GitHub Copilot hooks
+git-stacks install --hooks --copilot
+
+# Install both Claude Code and Copilot hooks simultaneously
+git-stacks install --hooks --copilot --claude
 
 # Remove installed hooks
 git-stacks install --hooks --remove
 ```
 
-This writes lifecycle hooks into `.claude/settings.json` in the current directory. When Claude Code finishes a task or asks a question, a notification appears in the dashboard. When you respond, the notification clears automatically.
+Claude Code hooks are written to `.claude/settings.json`. Copilot hooks are written to `.github/hooks/git-stacks.json`. Both hook sets bridge agent lifecycle events (task completion, user questions, prompt submission) into workspace notifications via `git-stacks message send`.
 
-The plugin system is extensible — new agent frameworks can be added as plugins in `src/lib/agent-hooks/`.
+When neither `--claude` nor `--copilot` is passed, an interactive prompt lets you choose which hook set(s) to install. The plugin system is extensible — new agent frameworks can be added as plugins in `src/lib/agent-hooks/`.
 
 ## Integrations
 
