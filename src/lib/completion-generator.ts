@@ -218,7 +218,7 @@ function bashCaseBody(node: CommandNode, name: string): string {
     .filter(([key]) => key.startsWith(`${node.path}:`))
 
   if (dynamic && options.length > 0) {
-    const enumOptions = options.filter(o => o.enumValues !== undefined)
+    const enumOptions = options.filter(o => o.enumValues !== undefined || OPTION_ENUMS[o.long] !== undefined)
     const flagsStr = options.map(o => o.long).join(" ")
     let out =
       `      if [[ "$cur" == -* ]]; then\n` +
@@ -229,7 +229,7 @@ function bashCaseBody(node: CommandNode, name: string): string {
       out += `        case "$prev" in\n`
       for (const opt of enumOptions) {
         out += `          "${opt.long}")\n`
-        out += `            COMPREPLY=($(compgen -W "${opt.enumValues!.join(" ")}" -- "$cur"))\n`
+        out += `            COMPREPLY=($(compgen -W "${(opt.enumValues ?? OPTION_ENUMS[opt.long])!.join(" ")}" -- "$cur"))\n`
         out += `            return 0\n`
         out += `            ;;\n`
       }
@@ -277,7 +277,7 @@ function bashCaseBody(node: CommandNode, name: string): string {
   }
 
   // No positional dynamic, but command has options with enum values (e.g. `list --sort`)
-  const enumOnlyOptions = options.filter(o => o.enumValues !== undefined)
+  const enumOnlyOptions = options.filter(o => o.enumValues !== undefined || OPTION_ENUMS[o.long] !== undefined)
   if (enumOnlyOptions.length > 0 || cmdFlagEntries.length > 0) {
     const flagsStr = options.map(o => o.long).join(" ")
     let out = ""
@@ -288,7 +288,7 @@ function bashCaseBody(node: CommandNode, name: string): string {
       out += `        case "$prev" in\n`
       for (const opt of enumOnlyOptions) {
         out += `          "${opt.long}")\n`
-        out += `            COMPREPLY=($(compgen -W "${opt.enumValues!.join(" ")}" -- "$cur"))\n`
+        out += `            COMPREPLY=($(compgen -W "${(opt.enumValues ?? OPTION_ENUMS[opt.long])!.join(" ")}" -- "$cur"))\n`
         out += `            return 0\n`
         out += `            ;;\n`
       }
@@ -336,17 +336,11 @@ export function generateBash(program: Command): string {
   out += '  prev="${COMP_WORDS[COMP_CWORD-1]}"\n'
   out += '  words=("${COMP_WORDS[@]}")\n'
   out += "\n"
-  // Emit OPTION_ENUMS and FLAG_COMPLETIONS prev-word detection (before top-level case)
-  const enumEntries = Object.entries(OPTION_ENUMS)
+  // Emit FLAG_COMPLETIONS prev-word detection (before top-level case)
+  // NOTE: OPTION_ENUMS are now scoped per-command inside bashCaseBody()
   const flagEntries = Object.entries(FLAG_COMPLETIONS)
-  if (enumEntries.length > 0 || flagEntries.length > 0) {
+  if (flagEntries.length > 0) {
     out += '  case "$prev" in\n'
-    for (const [flag, values] of enumEntries) {
-      out += `    "${flag}")\n`
-      out += `      COMPREPLY=($(compgen -W "${values.join(" ")}" -- "$cur"))\n`
-      out += `      return 0\n`
-      out += `      ;;\n`
-    }
     for (const [flag, dynType] of flagEntries) {
       out += `    "${flag}")\n`
       out += bashDynamicLookup(dynType, "      ", name)
