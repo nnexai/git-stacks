@@ -503,19 +503,27 @@ function zshCaseBody(node: CommandNode, id: string): string {
       out += `          ;;\n`
       return out
     }
-    return `        _${id}_workspaces ;;\n`
+    // Single-arg: wrap in _arguments for arity enforcement (variadic: bare helper)
+    if (node.argCompletions.some(a => a.variadic)) {
+      return `        _${id}_workspaces ;;\n`
+    }
+    const pos = firstArgRequired ? ":" : "::"
+    return `        _arguments '${pos} :_${id}_workspaces' ;;\n`
   }
 
   if (dynamic === "repo") {
-    return `        _${id}_repos ;;\n`
+    if (node.argCompletions.some(a => a.variadic)) return `        _${id}_repos ;;\n`
+    return `        _arguments ': :_${id}_repos' ;;\n`
   }
 
   if (dynamic === "template") {
-    return `        _${id}_templates ;;\n`
+    if (node.argCompletions.some(a => a.variadic)) return `        _${id}_templates ;;\n`
+    return `        _arguments ': :_${id}_templates' ;;\n`
   }
 
   if (dynamic === "integration") {
-    return `        _${id}_integrations ;;\n`
+    if (node.argCompletions.some(a => a.variadic)) return `        _${id}_integrations ;;\n`
+    return `        _arguments ': :_${id}_integrations' ;;\n`
   }
 
   // No positional dynamic, but command has options that are in OPTION_ENUMS or FLAG_COMPLETIONS
@@ -576,8 +584,14 @@ function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcNam
         : subFirstDynamic === "template" ? `_${id}_templates`
         : subFirstDynamic === "integration" ? `_${id}_integrations`
         : `_${id}_workspaces`
+      const subVariadic = sub.argCompletions.some(a => a.variadic)
       out += `      ${sub.name})\n`
-      out += `        ${helper} ;;\n`
+      if (subVariadic) {
+        out += `        ${helper} ;;\n`
+      } else {
+        const subPos = sub.argCompletions[0]?.required ? ":" : "::"
+        out += `        _arguments '${subPos} :${helper}' ;;\n`
+      }
     }
   }
   // Fallback: byDynamic grouping for subcommands without options (backward compat)
@@ -589,7 +603,8 @@ function generateZshSubcmdHelperRecursive(node: CommandNode, id: string, funcNam
       : dynType === "integration" ? `_${id}_integrations`
       : `_${id}_workspaces`
     out += `      ${unhandled.join("|")})\n`
-    out += `        ${helper} ;;\n`
+    // Use _arguments for arity enforcement (all fallback subs are assumed non-variadic here)
+    out += `        _arguments ': :${helper}' ;;\n`
   }
   out += `    esac\n`
   out += `  fi\n`
