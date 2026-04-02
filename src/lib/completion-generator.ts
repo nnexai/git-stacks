@@ -756,25 +756,48 @@ function emitFishSubcommands(nodes: CommandNode[], ancestorChain: string[], name
         : dynType === "integration" ? `__${id}_integrations`
         : `__${id}_workspaces`
 
-    const repoDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "repo" && s.subcommands.length === 0)
+    const posCount = chain.length + 2  // program + ancestors + this node + 1 = position of next arg
+
+    const repoDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "repo" && s.subcommands.length === 0 && !s.argCompletions.some(a => a.variadic))
     if (repoDynSubs.length > 0) {
       lines.push(`\nfor cmd in ${repoDynSubs.map(s => s.name).join(" ")}\n`)
+      lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd; and test (count (commandline -opc)) -eq ${posCount}" \\\n`)
+      lines.push(`    -a "(${dynHelper("repo")})"\n`)
+      lines.push("end\n")
+    }
+    const variadicRepoDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "repo" && s.subcommands.length === 0 && s.argCompletions.some(a => a.variadic))
+    if (variadicRepoDynSubs.length > 0) {
+      lines.push(`\nfor cmd in ${variadicRepoDynSubs.map(s => s.name).join(" ")}\n`)
       lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
       lines.push(`    -a "(${dynHelper("repo")})"\n`)
       lines.push("end\n")
     }
 
-    const templateDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "template" && s.subcommands.length === 0)
+    const templateDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "template" && s.subcommands.length === 0 && !s.argCompletions.some(a => a.variadic))
     if (templateDynSubs.length > 0) {
       lines.push(`\nfor cmd in ${templateDynSubs.map(s => s.name).join(" ")}\n`)
+      lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd; and test (count (commandline -opc)) -eq ${posCount}" \\\n`)
+      lines.push(`    -a "(${dynHelper("template")})"\n`)
+      lines.push("end\n")
+    }
+    const variadicTemplateDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "template" && s.subcommands.length === 0 && s.argCompletions.some(a => a.variadic))
+    if (variadicTemplateDynSubs.length > 0) {
+      lines.push(`\nfor cmd in ${variadicTemplateDynSubs.map(s => s.name).join(" ")}\n`)
       lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
       lines.push(`    -a "(${dynHelper("template")})"\n`)
       lines.push("end\n")
     }
 
-    const workspaceDynSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "workspace" && s.subcommands.length === 0)
-    if (workspaceDynSubs.length > 0) {
-      lines.push(`\nfor cmd in ${workspaceDynSubs.map(s => s.name).join(" ")}\n`)
+    const nonVariadicWsSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "workspace" && s.subcommands.length === 0 && !s.argCompletions.some(a => a.variadic))
+    if (nonVariadicWsSubs.length > 0) {
+      lines.push(`\nfor cmd in ${nonVariadicWsSubs.map(s => s.name).join(" ")}\n`)
+      lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd; and test (count (commandline -opc)) -eq ${posCount}" \\\n`)
+      lines.push(`    -a "(${dynHelper("workspace")})"\n`)
+      lines.push("end\n")
+    }
+    const variadicWsSubs = node.subcommands.filter(s => s.argCompletions[0]?.type === "workspace" && s.subcommands.length === 0 && s.argCompletions.some(a => a.variadic))
+    if (variadicWsSubs.length > 0) {
+      lines.push(`\nfor cmd in ${variadicWsSubs.map(s => s.name).join(" ")}\n`)
       lines.push(`  complete -c ${name} -f -n "${seenParts}; and __fish_seen_subcommand_from $cmd" \\\n`)
       lines.push(`    -a "(${dynHelper("workspace")})"\n`)
       lines.push("end\n")
@@ -842,10 +865,17 @@ export function generateFish(program: Command): string {
 
   // Workspace dynamic completions — group commands into for loop
   // Exclude multi-arg commands (they get individual position-aware completions below)
-  const workspaceCmds = nodes.filter(n => n.argCompletions[0]?.type === "workspace" && n.argCompletions.length === 1).map(n => n.name)
+  const workspaceCmds = nodes.filter(n => n.argCompletions[0]?.type === "workspace" && n.argCompletions.length === 1 && !n.argCompletions.some(a => a.variadic)).map(n => n.name)
   if (workspaceCmds.length > 0) {
-    out += "\n# Workspace name completions\n"
+    out += "\n# Workspace name completions (position-limited)\n"
     out += `for cmd in ${workspaceCmds.join(" ")}\n`
+    out += `  complete -c ${name} -f -n "__fish_seen_subcommand_from $cmd; and test (count (commandline -opc)) -eq 2" -a "(__${id}_workspaces)"\n`
+    out += "end\n"
+  }
+  const variadicWsCmds = nodes.filter(n => n.argCompletions[0]?.type === "workspace" && n.argCompletions.length === 1 && n.argCompletions.some(a => a.variadic)).map(n => n.name)
+  if (variadicWsCmds.length > 0) {
+    out += "\n# Workspace name completions (variadic)\n"
+    out += `for cmd in ${variadicWsCmds.join(" ")}\n`
     out += `  complete -c ${name} -f -n "__fish_seen_subcommand_from $cmd" -a "(__${id}_workspaces)"\n`
     out += "end\n"
   }
