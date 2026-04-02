@@ -1,5 +1,23 @@
 # Milestones
 
+## v0.13.0 CLI Polish & Completions (Shipped: 2026-04-02)
+
+**Phases completed:** 5 phases, 9 plans, 23 tasks
+
+**Key accomplishments:**
+
+- Auto-detect Commander `.choices()` enum values into OptionInfo and emit per-command bash/zsh/fish completions, replacing manual OPTION_ENUMS entries for `--sort`, `--strategy`, and `--filter`
+- Eliminated cross-command option enum leakage by scoping bash/fish enum completions to per-command dispatch blocks, removing the global OPTION_ENUMS `case "$prev"` pattern
+- Bash/zsh/fish completions now enforce positional arg arity: single-arg commands stop offering workspace/repo/template names once the argument slot is filled, using COMP_CWORD, _arguments positional specs, and commandline -opc count checks respectively
+- Env formatting library with table/shell/dotenv/json output plus CWD-based repo detection for `git-stacks env` command
+- One-liner:
+- One-liner:
+- --copilot/--claude flags on install --hooks bypass interactive multi-select and install named hook sets directly; completion generator fixed to emit boolean flags for commands without dynamic args
+- Forge CLI doctor checks gated by integration config (resolveEnabledGlobally), and tmux configExample updated with 3-pane dev layout showing editor, test runner, and dev server
+- v0.13.0 release: version bump, CHANGELOG with Phases 53-56 features, and README docs for env command and Copilot hooks
+
+---
+
 ## v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation (Shipped: 2026-04-02)
 
 **Phases completed:** 7 phases (47-51, 50.1, 52), 14 plans, ~52 commits
