@@ -436,6 +436,53 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.13.0 — CLI Polish & Completions
+
+**Shipped:** 2026-04-02
+**Phases:** 5 (Phases 53–57) | **Plans:** 9 | **Commits:** ~35
+
+### What Was Built
+
+- Shell completion arity enforcement — bash/zsh/fish stop completing after positional args filled
+- Enum auto-detection from Commander `.choices()` — option values tab-complete without manual tables
+- `git-stacks env [workspace]` — inspect merged env vars in table/shell/dotenv/json formats
+- Copilot hook support — `--copilot`/`--claude` flags on `install --hooks` with interactive chooser
+- Doctor forge CLI checks — config-gated binary availability warnings for gh/glab/tea/jira
+- Tmux configExample updated with practical 3-pane dev layout
+
+### What Worked
+
+- **Requirements scoped upfront**: Unlike v0.12.0, all 14 requirements (COMP/CMD/HOOK/DOC/CFG/REL) were in REQUIREMENTS.md from the start — traceability was complete at audit time
+- **Parallel independent phases**: Phases 54/55/56 all depended on 53 but not each other — clean parallel execution potential
+- **Plugin architecture for agent hooks**: Extending `install --hooks` to support Copilot was a straightforward plugin addition (`AgentHookPlugin` interface) rather than a rewrite
+- **Auto-detection patterns compound**: `OptionInfo.enumValues` from Phase 53 immediately benefited Phase 54's `--format` option — new commands get completions for free
+- **Single-session execution**: Entire milestone (all 5 phases + release prep) executed in one autonomous session with zero rework
+
+### What Was Inefficient
+
+- **SUMMARY frontmatter gaps**: Phase 55 (Copilot hooks) had two SUMMARYs with empty `requirements-completed` frontmatter — caused "partial" status in 3-source cross-reference during audit, requiring manual verification that requirements were actually satisfied
+- **COMP-02 stale in REQUIREMENTS.md**: Checkbox showed "Pending" despite being verified as satisfied — the `phase complete` tooling doesn't always update the REQUIREMENTS.md traceability status
+
+### Patterns Established
+
+- **`resolveEnabledGlobally` for conditional checks**: Doctor uses the integration system's own config resolver to gate checks — no separate "is configured" detection needed
+- **`AgentHookPlugin` interface**: Standardized install/remove/detect pattern for hook-installing plugins — adding a new hook system is a single file + registry addition
+- **Boolean-flag completion fallback**: Commands with no dynamic positional args still get `--flag` completions via the boolean-only case in the completion generator
+
+### Key Lessons
+
+1. **SUMMARY frontmatter must list requirements**: When a plan satisfies requirements, the SUMMARY `requirements-completed` field must list them — otherwise the 3-source audit cross-reference flags false partials
+2. **Release prep as a formal phase works well**: Phase 57 ensured CHANGELOG/README/version were all verified together with the same GSD machinery — no manual steps forgotten
+3. **Small milestones ship fast**: 5 phases / 9 plans is a sweet spot for a polish milestone — one session, zero context rot
+
+### Cost Observations
+
+- Model mix: opus for orchestration, sonnet for execution and verification (balanced profile)
+- Sessions: 1 autonomous session
+- Notable: 14 files changed, +1,181 / -143 lines. Smallest delta in a milestone — polish work is efficient.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -450,5 +497,6 @@ Living document — one section per shipped milestone.
 | v0.10.0 Multi-Agent Workspace | 6 | 9 | 3 | 0 |
 | v0.11.0 AeroSpace Window Mgmt | 4 | 7 | 1 | 0 |
 | v0.12.0 Multi-WS AeroSpace + Ports | 7 | 14 | 4 | 0 |
+| v0.13.0 CLI Polish & Completions | 5 | 9 | 1 | 0 |
 
-**Trend:** Zero-rework streak continues (8 milestones). 10 milestones shipped in 15 days (2026-03-18 → 2026-04-02). v0.12.0 is the largest feature set per milestone (breaking change + 3 independent features). Requirements scoping gap: REQUIREMENTS.md not extended when phases are added mid-milestone (new pattern, v0.12.0). Quick task mechanism validated for small release prep work. Codebase at 14,680 LOC source + 17,445 LOC tests.
+**Trend:** Zero-rework streak continues (9 milestones). 11 milestones shipped in 16 days (2026-03-18 → 2026-04-02). v0.13.0 was a single-session autonomous run — smallest delta (+1,181/-143 lines) reflecting focused polish. REQUIREMENTS.md scoping fixed from v0.12.0 lesson — all 14 requirements tracked upfront. SUMMARY frontmatter completeness remains a minor gap (2 of 9 SUMMARYs missing requirements-completed). Codebase at ~11,700 LOC source + ~12,200 LOC tests.
