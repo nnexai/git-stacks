@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.13.0
 milestone_name: CLI Polish & Completions
-status: executing
-stopped_at: Completed 54-01-PLAN.md
-last_updated: "2026-04-02T05:18:06.762Z"
+status: verifying
+stopped_at: Completed 54-02-PLAN.md
+last_updated: "2026-04-02T05:23:08.297Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-02)
 
 Phase: 54 (env-command) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-02
 
 ```
@@ -47,6 +47,8 @@ Progress: [----------] 0% (0/5 phases)
 - [Phase 53-shell-completion-fixes]: Zsh single-arg commands without options now use _arguments positional spec for arity enforcement instead of bare helper calls
 - [Phase 54]: Shell quoting triggers on more chars than dotenv (adds dollar, backtick, semicolons, etc.)
 - [Phase 54]: detectRepoFromCwd mirrors detectWorkspaceFromCwd longest-match but returns repo name not workspace
+- [Phase 54]: Used Option constructor with .choices() for --format enum tab completion (consistent with list/paths/sync commands)
+- [Phase 54]: CWD auto-detection cascades: no workspace arg also triggers detectRepoFromCwd() for automatic repo vars
 
 ### Pending Todos
 
@@ -73,6 +75,6 @@ Progress: [----------] 0% (0/5 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-02T05:18:06.760Z
-Stopped at: Completed 54-01-PLAN.md
+Last session: 2026-04-02T05:23:08.295Z
+Stopped at: Completed 54-02-PLAN.md
 Next action: `/gsd:execute-phase 53` — Shell Completion Fixes (then 54, 55, 56, 57)
