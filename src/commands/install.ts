@@ -4,6 +4,7 @@ import type { Workspace } from "../lib/config"
 import { listWorkspaces, readWorkspace, readGlobalConfig } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
 import { agentHookPlugins } from "../lib/agent-hooks"
+import type { AgentHookPlugin } from "../lib/agent-hooks"
 import { sep } from "path"
 
 function detectWorkspaceFromCwd(): string | null {
@@ -26,11 +27,37 @@ function detectWorkspaceFromCwd(): string | null {
   return segments[0]
 }
 
+function resolvePlugins(
+  opts: { copilot?: boolean; claude?: boolean },
+  allPlugins: AgentHookPlugin[]
+): AgentHookPlugin[] {
+  const hasCopilot = opts.copilot === true
+  const hasClaude = opts.claude === true
+
+  if (!hasCopilot && !hasClaude) {
+    // No flags — return empty to signal "use interactive prompt"
+    return []
+  }
+
+  const selected: AgentHookPlugin[] = []
+  if (hasClaude) {
+    const claude = allPlugins.find(p => p.id === "claude-code")
+    if (claude) selected.push(claude)
+  }
+  if (hasCopilot) {
+    const copilot = allPlugins.find(p => p.id === "copilot")
+    if (copilot) selected.push(copilot)
+  }
+  return selected
+}
+
 export const installCommand = new Command("install")
   .description("Install agent framework hooks into workspace repos")
   .option("--hooks", "Install agent notification hooks")
   .option("--remove", "Remove installed hooks instead of installing")
-  .action(async (opts: { hooks?: boolean; remove?: boolean }) => {
+  .option("--copilot", "Install GitHub Copilot hooks")
+  .option("--claude", "Install Claude Code hooks")
+  .action(async (opts: { hooks?: boolean; remove?: boolean; copilot?: boolean; claude?: boolean }) => {
     if (!opts.hooks) {
       installCommand.help()
       return
@@ -73,28 +100,39 @@ export const installCommand = new Command("install")
     const targetDir = process.cwd()
 
     if (opts.remove) {
-      for (const plugin of agentHookPlugins) {
+      const pluginsToRemove = resolvePlugins(opts, agentHookPlugins)
+      const targets = pluginsToRemove.length > 0 ? pluginsToRemove : agentHookPlugins
+      for (const plugin of targets) {
         plugin.remove(targetDir)
       }
-      p.log.success(`Removed hooks from ${targetDir}`)
+      p.log.success(`Removed ${targets.map(pl => pl.label).join(", ")} hooks from ${targetDir}`)
     } else {
-      // Multi-select plugins to install
-      const pluginChoices = await p.multiselect({
-        message: "Select agent frameworks to install hooks for",
-        options: agentHookPlugins.map((plugin) => ({
-          value: plugin.id,
-          label: plugin.label,
-        })),
-        required: true,
-      })
+      // Resolve plugins from flags or interactive prompt
+      let selectedPlugins: AgentHookPlugin[]
+      const fromFlags = resolvePlugins(opts, agentHookPlugins)
 
-      if (p.isCancel(pluginChoices)) {
-        p.cancel("Cancelled.")
-        process.exit(0)
+      if (fromFlags.length > 0) {
+        // Flags provided — skip interactive prompt (HOOK-01, HOOK-02, HOOK-04)
+        selectedPlugins = fromFlags
+      } else {
+        // No flags — interactive multi-select (HOOK-03)
+        const pluginChoices = await p.multiselect({
+          message: "Select agent frameworks to install hooks for",
+          options: agentHookPlugins.map((plugin) => ({
+            value: plugin.id,
+            label: plugin.label,
+          })),
+          required: true,
+        })
+
+        if (p.isCancel(pluginChoices)) {
+          p.cancel("Cancelled.")
+          process.exit(0)
+        }
+
+        const selectedIds = pluginChoices as string[]
+        selectedPlugins = agentHookPlugins.filter((p) => selectedIds.includes(p.id))
       }
-
-      const selectedIds = pluginChoices as string[]
-      const selectedPlugins = agentHookPlugins.filter((p) => selectedIds.includes(p.id))
 
       for (const plugin of selectedPlugins) {
         plugin.install(targetDir, workspace.name)
