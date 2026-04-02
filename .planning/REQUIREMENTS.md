@@ -9,7 +9,7 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 
 ### Completions
 
-- [ ] **COMP-01**: Shell completion stops offering values after all positional args are filled
+- [x] **COMP-01**: Shell completion stops offering values after all positional args are filled
 - [ ] **COMP-02**: Completion generator includes option value enums for all enum-style flags
 - [x] **COMP-03**: Parent command flags do not leak into subcommand completions
 
@@ -55,7 +55,7 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| COMP-01 | Phase 53 | Pending |
+| COMP-01 | Phase 53 | Complete |
 | COMP-02 | Phase 53 | Pending |
 | COMP-03 | Phase 53 | Complete |
 | CMD-01 | Phase 54 | Pending |

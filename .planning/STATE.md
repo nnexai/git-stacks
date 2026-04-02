@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.13.0
 milestone_name: CLI Polish & Completions
 status: executing
-stopped_at: Completed 53-02-PLAN.md
-last_updated: "2026-04-02T04:51:17.296Z"
-last_activity: 2026-04-02 — Phase 57 planned (1 plan, 1 wave)
+stopped_at: Completed 53-03-PLAN.md
+last_updated: "2026-04-02T05:09:34.281Z"
+last_activity: 2026-04-02
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 9
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** All phases planned — ready to execute from Phase 53
+**Current focus:** Phase 53 — shell-completion-fixes
 
 ## Current Position
 
-Phase: 57 (Release Prep) — planned (all phases 53-57 now planned)
-Plan: 1 plan in 1 wave
-Status: All phases planned, ready to execute from Phase 53
-Last activity: 2026-04-02 — Phase 57 planned (1 plan, 1 wave)
+Phase: 53 (shell-completion-fixes) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-04-02
 
 ```
 Progress: [----------] 0% (0/5 phases)
@@ -43,6 +43,8 @@ Progress: [----------] 0% (0/5 phases)
 - REL-03 is the final Phase 57 release audit
 - Granularity is coarse: 5 phases for 14 requirements
 - Phase 55 (Copilot hooks) depends on research in .planning/research/COPILOT-HOOKS.md
+- [Phase 53-shell-completion-fixes]: Variadic args detected from Commander's Argument.variadic; arity enforcement skipped for variadic args — they complete indefinitely
+- [Phase 53-shell-completion-fixes]: Zsh single-arg commands without options now use _arguments positional spec for arity enforcement instead of bare helper calls
 
 ### Pending Todos
 
@@ -69,6 +71,6 @@ Progress: [----------] 0% (0/5 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-02T04:51:17.293Z
-Stopped at: Completed 53-02-PLAN.md
+Last session: 2026-04-02T05:09:34.278Z
+Stopped at: Completed 53-03-PLAN.md
 Next action: `/gsd:execute-phase 53` — Shell Completion Fixes (then 54, 55, 56, 57)
