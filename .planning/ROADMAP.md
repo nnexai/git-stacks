@@ -150,7 +150,7 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 <details open>
 <summary>🚧 v0.13.0 CLI Polish & Completions (Phases 53-57) — ACTIVE</summary>
 
-- [ ] **Phase 53: Shell Completion Fixes** (3/3 plans) - Fix positional arg repeat, add option value enums, eliminate parent flag leakage
+- [x] **Phase 53: Shell Completion Fixes** (3/3 plans) - Fix positional arg repeat, add option value enums, eliminate parent flag leakage — completed 2026-04-02
 - [ ] **Phase 54: Env Command** (2/2 plans) - `git-stacks env [workspace]` with --format flag
 - [ ] **Phase 55: Copilot Hook Support** (2/2 plans) - Extend `install --hooks` with --copilot flag, --claude explicit flag, interactive chooser, simultaneous install
 - [ ] **Phase 56: Doctor & Config Polish** (1/1 plan) - Forge CLI binary checks in doctor, tmux pane setup in configExample
