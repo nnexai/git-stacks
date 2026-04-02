@@ -35,9 +35,9 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 
 ### Release
 
-- [ ] **REL-01**: CHANGELOG has v0.13.0 section maintained incrementally as features land
-- [ ] **REL-02**: README updated incrementally as user-facing features land
-- [ ] **REL-03**: Final release audit verifies CHANGELOG/README completeness, removes "unreleased", bumps version
+- [x] **REL-01**: CHANGELOG has v0.13.0 section maintained incrementally as features land
+- [x] **REL-02**: README updated incrementally as user-facing features land
+- [x] **REL-03**: Final release audit verifies CHANGELOG/README completeness, removes "unreleased", bumps version
 
 ## Future Requirements
 
@@ -66,9 +66,9 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 | HOOK-04 | Phase 55 | Complete |
 | DOC-01 | Phase 56 | Complete |
 | CFG-01 | Phase 56 | Complete |
-| REL-01 | Phase 57 | Pending |
-| REL-02 | Phase 57 | Pending |
-| REL-03 | Phase 57 | Pending |
+| REL-01 | Phase 57 | Complete |
+| REL-02 | Phase 57 | Complete |
+| REL-03 | Phase 57 | Complete |
 
 **Coverage:**
 - v0.13.0 requirements: 14 total

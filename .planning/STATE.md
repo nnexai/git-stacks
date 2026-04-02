@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.13.0
 milestone_name: CLI Polish & Completions
 status: verifying
-stopped_at: Completed 56-01-PLAN.md
-last_updated: "2026-04-02T05:58:19.713Z"
+stopped_at: Completed 57-01-PLAN.md
+last_updated: "2026-04-02T06:04:07.066Z"
 last_activity: 2026-04-02
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 56 — Doctor & Config Polish
+**Current focus:** Phase 57 — release-prep
 
 ## Current Position
 
-Phase: 57
-Plan: Not started
+Phase: 57 (release-prep) — EXECUTING
+Plan: 1 of 1
 Status: Phase complete — ready for verification
 Last activity: 2026-04-02
 
@@ -56,6 +56,7 @@ Progress: [----------] 0% (0/5 phases)
 - [Phase 55]: Completion generator bash/zsh needed boolean-flag fallback for commands with no dynamic args or enums
 - [Phase 56]: Forge CLI checks gated by resolveEnabledGlobally with enabledByDefault=false — unconfigured integrations are skipped (DOC-01)
 - [Phase 56]: Data-driven forgeClis array replaces four unconditional checks — DRY and extensible for future forge integrations (CFG-01)
+- [Phase 57-release-prep]: v0.13.0 CHANGELOG entry documents three Added features (env command, Copilot hook support, tmux config example), three Fixed items (shell completion arity/enum/leakage), and one Changed item (conditional forge CLI checks)
 
 ### Pending Todos
 
@@ -82,6 +83,6 @@ Progress: [----------] 0% (0/5 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-02T05:53:14.553Z
-Stopped at: Completed 56-01-PLAN.md
+Last session: 2026-04-02T06:04:07.064Z
+Stopped at: Completed 57-01-PLAN.md
 Next action: `/gsd:execute-phase 53` — Shell Completion Fixes (then 54, 55, 56, 57)
