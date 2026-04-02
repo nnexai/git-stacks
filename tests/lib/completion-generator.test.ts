@@ -191,10 +191,11 @@ describe("generateBash", () => {
     expect(out).toContain('compgen -W "bash zsh fish"')
   })
 
-  test("list has no case branch (no completion needed)", () => {
+  test("list has case branch for --sort enum completion", () => {
     const out = generateBash(buildTestProgram())
-    // list has no flags and no dynamic completion
-    expect(out).not.toContain("    list)")
+    // list has --sort with enum values, so it gets a case branch
+    expect(out).toContain("    list)")
+    expect(out).toContain("date name status")
   })
 
   test("includes shell wrapper for cd", () => {
