@@ -151,6 +151,7 @@ describe("generateBash", () => {
     const out = generateBash(buildTestProgram())
     expect(out).toContain("    clone)")
     expect(out).toContain(".config/git-stacks/workspaces")
+    expect(out).toContain("COMP_CWORD} -eq 2")
   })
 
   test("flag split for open (has flags + workspace)", () => {
@@ -241,9 +242,10 @@ describe("generateZsh", () => {
     expect(out).toContain("': :_git_stacks_workspaces'")
   })
 
-  test("clone delegates to _git_stacks_workspaces directly", () => {
+  test("clone uses _arguments with workspace positional spec", () => {
     const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_git_stacks_workspaces")
+    // clone has optional positional arg → ':: :_git_stacks_workspaces'
+    expect(out).toContain("_arguments ':: :_git_stacks_workspaces'")
   })
 
   test("repo delegates to _git_stacks_repo helper", () => {
@@ -302,10 +304,11 @@ describe("generateFish", () => {
     expect(out).toContain("-a completion")
   })
 
-  test("workspace completions grouped in for loop", () => {
+  test("workspace completions grouped in for loop with position check", () => {
     const out = generateFish(buildTestProgram())
-    expect(out).toContain("for cmd in open clone clean remove merge")
+    expect(out).toMatch(/for cmd in[^\n]*open/)
     expect(out).toContain("(__git_stacks_workspaces)")
+    expect(out).toContain("test (count (commandline -opc)) -eq 2")
   })
 
   test("flag directives for open use long names without --", () => {
@@ -1152,5 +1155,93 @@ describe("option enum auto-detection (COMP-02)", () => {
   test("fish: --level option has enum value completion", () => {
     const out = generateFish(buildEnumTestProgram())
     expect(out).toContain("debug info warn error")
+  })
+})
+
+// ─── COMP-01: positional arg arity enforcement ────────────────────────────────
+
+describe("positional arity (COMP-01)", () => {
+  function buildArityTestProgram(): Command {
+    const program = new Command()
+    program.name("test-cli").description("Test CLI")
+
+    // Single required arg — should complete at position 2 only
+    program
+      .command("open <workspace>")
+      .description("Open a workspace")
+      .option("--no-ide", "Skip IDE")
+
+    // Single optional arg — should complete at position 2 only
+    program
+      .command("clean [workspace]")
+      .description("Clean a workspace")
+
+    // No args, no options — no completions
+    program
+      .command("list")
+      .description("List items")
+
+    // Variadic workspace arg — should complete at every position (no arity limit)
+    program
+      .command("attach [workspace...]")
+      .description("Attach to workspaces")
+
+    return program
+  }
+
+  test("bash: open wraps workspace lookup in COMP_CWORD -eq 2 check", () => {
+    const out = generateBash(buildArityTestProgram())
+    const openStart = out.indexOf("    open)")
+    expect(openStart).toBeGreaterThan(-1)
+    const openSection = out.slice(openStart, openStart + 400)
+    expect(openSection).toContain("COMP_CWORD} -eq 2")
+    expect(openSection).toContain(".config/test-cli/workspaces")
+  })
+
+  test("bash: clean wraps workspace lookup in COMP_CWORD -eq 2 check", () => {
+    const out = generateBash(buildArityTestProgram())
+    const cleanStart = out.indexOf("    clean)")
+    expect(cleanStart).toBeGreaterThan(-1)
+    const cleanSection = out.slice(cleanStart, cleanStart + 400)
+    expect(cleanSection).toContain("COMP_CWORD} -eq 2")
+  })
+
+  test("zsh: clean uses _arguments with optional positional spec (not bare _workspaces)", () => {
+    const out = generateZsh(buildArityTestProgram())
+    expect(out).toContain("_arguments ':: :_test_cli_workspaces'")
+  })
+
+  test("zsh: open uses _arguments with required positional spec and option", () => {
+    const out = generateZsh(buildArityTestProgram())
+    expect(out).toContain("': :_test_cli_workspaces'")
+    expect(out).toContain("--no-ide")
+  })
+
+  test("fish: single-arg commands have position check in for loop", () => {
+    const out = generateFish(buildArityTestProgram())
+    expect(out).toContain("test (count (commandline -opc)) -eq 2")
+    expect(out).toContain("(__test_cli_workspaces)")
+  })
+
+  test("fish: open and clean appear in position-limited workspace loop", () => {
+    const out = generateFish(buildArityTestProgram())
+    const forLoopMatch = out.match(/for cmd in([^\n]*)\n[^\n]*commandline -opc/)
+    expect(forLoopMatch).toBeTruthy()
+    if (forLoopMatch) {
+      expect(forLoopMatch[1]).toContain("open")
+      expect(forLoopMatch[1]).toContain("clean")
+    }
+  })
+
+  test("fish: attach (variadic) is NOT in position-limited loop, but in variadic loop", () => {
+    const out = generateFish(buildArityTestProgram())
+    // attach has [workspace...] — variadic, so it gets an unlimited completion loop
+    const limitedLoopMatch = out.match(/for cmd in([^\n]*)\n[^\n]*commandline -opc/)
+    if (limitedLoopMatch) {
+      expect(limitedLoopMatch[1]).not.toContain("attach")
+    }
+    // attach should appear in a loop WITHOUT position check
+    expect(out).toContain("attach")
+    expect(out).toContain("(__test_cli_workspaces)")
   })
 })
