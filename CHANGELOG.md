@@ -51,6 +51,31 @@ settings:
 
 **Cross-entry snapshot isolation** — a shared `beforeSet` accumulates window IDs across all workspace entries, preventing a slow-launching app from one entry being incorrectly detected as a new window by a subsequent entry. `listWorkspaces()` is called exactly once before the loop to validate all target workspace names upfront.
 
+**Integration config introspection** — `git-stacks integration list` shows a table of all integrations with their enabled state and order (`--json` for scripting). `git-stacks integration <id> config example` prints a YAML config snippet for the integration (available for aerospace, vscode, niri, tmux; others show a fallback message). `git-stacks integration <id> config show [workspace]` displays the resolved config for an integration with global, template, and workspace cascade (`--json` for scripting).
+
+**Integration action commands** — `git-stacks integration aerospace focus <workspace>` focuses the AeroSpace workspace configured for a workspace (resolves `focus: true` entry or falls back to `workspaces[0]`). `git-stacks integration vscode open <workspace>` generates and opens the `.code-workspace` file for a workspace. Integrations can now declare a `commands()` method to register per-integration CLI subcommands.
+
+**Convention-based completion inference** — shell completion generation now infers dynamic completion types from Commander.js argument names (`<workspace>`, `<template>`, `<repo>`, `<integration>`) instead of maintaining a manual 50-entry lookup table (reduced to 4 override entries). Also adds multi-position argument dispatch for commands with 2+ args (e.g., `run <workspace> [repo]`), `argChoices` extraction for `.choices()` arguments, and integration ID completion across bash/zsh/fish.
+
+**Workspace port allocation** — templates and workspaces can declare named port slots (`ports: { PORT: ~, DEBUG_PORT: ~ }`) that are automatically allocated from a contiguous range when `git-stacks open` runs. Allocated port numbers are injected as environment variables into hooks and integration contexts via `mergeEnv`. Ports are freed implicitly when a workspace is removed.
+
+Key details:
+- Global config `ports.range_start` (default 10000) and `ports.range_end` (default 65000) control the allocation range
+- `git-stacks open --reallocate` forces reallocation of conflicting ports
+- Race-safe allocation via O_EXCL filesystem lockfile
+- Atomic YAML writes with fsync-before-rename
+- Port name prompt in workspace creation wizard (after description, before integration overrides)
+- Template composition merges ports with last-wins precedence
+- Conflict detection against env vars and env_file entries
+
+### Changed
+
+**Atomic config writes** — `writeYaml` now uses fsync-before-rename for crash-safe persistence (previously used direct `writeFileSync`).
+
+### Internal
+
+**Completion generator refactor** — `DYNAMIC_COMPLETIONS` lookup table replaced by convention-based inference from Commander.js argument names. `ArgCompletion` interface replaces `CommandNode.dynamic` + `firstArgRequired` fields.
+
 ---
 
 ## [0.11.1] — 2026-03-29
