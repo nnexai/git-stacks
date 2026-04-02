@@ -21,8 +21,8 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 ### Agent Hooks
 
 - [x] **HOOK-01**: `git-stacks install --hooks` supports `--copilot` flag to generate Copilot hooks
-- [ ] **HOOK-02**: `git-stacks install --hooks` supports `--claude` flag (existing behavior, now explicit)
-- [ ] **HOOK-03**: When neither flag is passed, interactive prompt lets user choose which hook sets
+- [x] **HOOK-02**: `git-stacks install --hooks` supports `--claude` flag (existing behavior, now explicit)
+- [x] **HOOK-03**: When neither flag is passed, interactive prompt lets user choose which hook sets
 - [x] **HOOK-04**: Both Claude and Copilot hooks can be installed simultaneously
 
 ### Doctor
@@ -61,8 +61,8 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 | CMD-01 | Phase 54 | Complete |
 | CMD-02 | Phase 54 | Complete |
 | HOOK-01 | Phase 55 | Complete |
-| HOOK-02 | Phase 55 | Pending |
-| HOOK-03 | Phase 55 | Pending |
+| HOOK-02 | Phase 55 | Complete |
+| HOOK-03 | Phase 55 | Complete |
 | HOOK-04 | Phase 55 | Complete |
 | DOC-01 | Phase 56 | Pending |
 | CFG-01 | Phase 56 | Pending |
