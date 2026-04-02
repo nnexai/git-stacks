@@ -1,4 +1,4 @@
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { existsSync } from "fs"
 import { prompts as p } from "../tui/utils"
 import { join } from "path"
@@ -259,7 +259,7 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("list")
     .description("List all workspaces")
-    .option("--sort <key>", "Sort by: date, name, status", "date")
+    .addOption(new Option("--sort <key>", "Sort by: date, name, status").choices(["date", "name", "status"]).default("date"))
     .option("--json", "Output as JSON")
     .option("--status", "Check dirty status (kept for backward compat — dirty checks always run)")
     .action(async (opts: { sort: string; json?: boolean; status?: boolean }) => {
@@ -756,7 +756,7 @@ export function registerWorkspaceCommands(program: Command) {
     .command("sync [workspace]")
     .description("Sync workspace branches with upstream base branches")
     .option("--all", "Sync all workspaces")
-    .option("--strategy <strategy>", "Sync strategy: rebase or merge")
+    .addOption(new Option("--strategy <strategy>", "Sync strategy: rebase or merge").choices(["rebase", "merge"]))
     .option("--best-effort", "Skip conflicting repos instead of aborting")
     .option("--json", "Output results as JSON")
     .action(async (workspace: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean; json?: boolean }) => {
@@ -868,7 +868,7 @@ export function registerWorkspaceCommands(program: Command) {
     .command("paths [workspace]")
     .description("Output repo paths for a workspace (one per line) -- for agent CLI injection")
     .option("--prefix <str>", "Prepend each path with a flag string (e.g., --prefix '--add-dir')")
-    .option("--filter <mode>", "Filter repos by mode: worktree or trunk")
+    .addOption(new Option("--filter <mode>", "Filter repos by mode: worktree or trunk").choices(["worktree", "trunk"]))
     .action(async (name: string | undefined, opts: { prefix?: string; filter?: string }) => {
       let workspaceName: string
 
@@ -890,13 +890,7 @@ export function registerWorkspaceCommands(program: Command) {
         workspaceName = detection.workspace.name
       }
 
-      // Validate filter option
       const filter = opts.filter as "worktree" | "trunk" | undefined
-      if (filter && filter !== "worktree" && filter !== "trunk") {
-        console.error(formatError(`Invalid filter '${filter}'`, "use: --filter worktree or --filter trunk"))
-        process.exit(1)
-      }
-
       const result = getWorkspacePaths(workspaceName, { prefix: opts.prefix, filter })
       if (!result.ok) {
         console.error(formatError(result.error))
