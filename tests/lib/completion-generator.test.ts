@@ -407,6 +407,76 @@ describe("OPTION_ENUMS - fixed-choice flag values", () => {
   })
 })
 
+describe("parent flag leakage (COMP-03)", () => {
+  function buildLeakageTestProgram(): Command {
+    const program = new Command()
+    program.name("test-cli").description("Test CLI")
+
+    // Top-level list with --sort enum
+    program
+      .command("list")
+      .description("List all items")
+      .addOption(new Option("--sort <key>", "Sort order").choices(["date", "name", "status"]))
+
+    // Nested integration list — should NOT inherit --sort from top-level list
+    const integration = new Command("integration").description("Manage integrations")
+    integration.command("list").description("List integrations").option("--json", "Output JSON")
+    integration.command("enable <name>").description("Enable an integration")
+    program.addCommand(integration)
+
+    return program
+  }
+
+  test("bash: --sort enum appears in list command case body", () => {
+    const out = generateBash(buildLeakageTestProgram())
+    // The list command should have --sort with enum values
+    const listStart = out.indexOf("    list)")
+    expect(listStart).toBeGreaterThan(-1)
+    const listSection = out.slice(listStart, listStart + 400)
+    expect(listSection).toContain('"--sort"')
+    expect(listSection).toContain("date name status")
+  })
+
+  test("bash: --sort enum does NOT appear in global prev-word block", () => {
+    const out = generateBash(buildLeakageTestProgram())
+    // There should be no global case "$prev" block with --sort
+    // The first case "$prev" (if any) should be inside a command case body
+    const globalSection = out.slice(0, out.indexOf('case "${words[1]}"'))
+    expect(globalSection).not.toContain('"--sort"')
+  })
+
+  test("bash: integration list case does NOT have --sort", () => {
+    const out = generateBash(buildLeakageTestProgram())
+    const integrationStart = out.indexOf("    integration)")
+    expect(integrationStart).toBeGreaterThan(-1)
+    const integrationSection = out.slice(integrationStart, integrationStart + 600)
+    // integration section should NOT contain --sort or its values
+    expect(integrationSection).not.toContain("date name status")
+  })
+
+  test("zsh: list command _arguments has --sort enum", () => {
+    const out = generateZsh(buildLeakageTestProgram())
+    expect(out).toContain("sort:(date name status)")
+  })
+
+  test("zsh: integration list does NOT have --sort in its _arguments", () => {
+    const out = generateZsh(buildLeakageTestProgram())
+    // Find the integration helper function
+    const integrationHelper = out.slice(out.indexOf("_test_cli_integration()"))
+    // The integration list subcommand should have --json but NOT --sort
+    expect(integrationHelper).toContain("--json")
+    expect(integrationHelper).not.toContain("sort:(date name status)")
+  })
+
+  test("fish: --sort enum values scoped to list command only", () => {
+    const out = generateFish(buildLeakageTestProgram())
+    // --sort with enum values should be scoped to __fish_seen_subcommand_from list
+    expect(out).toMatch(/__fish_seen_subcommand_from list.*-l sort.*-ra.*date name status/)
+    // But NOT for integration list
+    expect(out).not.toMatch(/integration.*list.*sort.*date name status/)
+  })
+})
+
 describe("FLAG_COMPLETIONS - --workspace flag value", () => {
   test("bash: --workspace prev-word triggers workspace lookup", () => {
     const out = generateBash(buildTestProgram())
