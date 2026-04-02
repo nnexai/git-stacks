@@ -150,7 +150,7 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 <details open>
 <summary>🚧 v0.13.0 CLI Polish & Completions (Phases 53-57) — ACTIVE</summary>
 
-- [ ] **Phase 53: Shell Completion Fixes** - Fix positional arg repeat, add option value enums, eliminate parent flag leakage
+- [ ] **Phase 53: Shell Completion Fixes** (3/3 plans) - Fix positional arg repeat, add option value enums, eliminate parent flag leakage
 - [ ] **Phase 54: Env Command** - `git-stacks env [workspace]` with --format flag
 - [ ] **Phase 55: Copilot Hook Support** - Extend `install --hooks` with --copilot flag, --claude explicit flag, interactive chooser, simultaneous install
 - [ ] **Phase 56: Doctor & Config Polish** - Forge CLI binary checks in doctor, tmux pane setup in configExample
@@ -168,7 +168,7 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
   1. After all positional args are filled, pressing Tab offers no additional workspace/repo/template completions
   2. Flags with enum values (e.g., `--format`, `--sort`, `--strategy`) offer their valid values as Tab completions in bash, zsh, and fish
   3. Running `git-stacks workspace <TAB>` does not show flags that belong only to the parent `git-stacks` command
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves — Wave 1: enum auto-detection (01) + flag leakage fix (02); Wave 2: arity enforcement (03)
 
 ### Phase 54: Env Command
 **Goal**: Users can inspect all merged env vars that a workspace would inject at open time
@@ -225,7 +225,7 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
 | 43-46. AeroSpace Window Management | v0.11.0 | 7/7 | Complete | 2026-03-28 |
 | 47-52. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
-| 53. Shell Completion Fixes | v0.13.0 | 0/? | Not started | - |
+| 53. Shell Completion Fixes | v0.13.0 | 0/3 | Planned | - |
 | 54. Env Command | v0.13.0 | 0/? | Not started | - |
 | 55. Copilot Hook Support | v0.13.0 | 0/? | Not started | - |
 | 56. Doctor & Config Polish | v0.13.0 | 0/? | Not started | - |
