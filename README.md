@@ -253,8 +253,13 @@ Integrations are configured per-global, per-template, or per-workspace. Use `git
 **Integration helper commands:**
 
 ```bash
-git-stacks integration tmux attach <workspace>          # Attach to workspace tmux session
+git-stacks integration list                              # List all integrations with status
+git-stacks integration <id> config example               # Show YAML config snippet
+git-stacks integration <id> config show [workspace]      # Show resolved config (--json)
+git-stacks integration tmux attach <workspace>           # Attach to workspace tmux session
 git-stacks integration niri focus-workspace <workspace>  # Focus workspace niri workspace
+git-stacks integration aerospace focus <workspace>       # Focus workspace AeroSpace workspace
+git-stacks integration vscode open <workspace>           # Open workspace in VSCode
 ```
 
 **tmux integration:**
@@ -418,6 +423,41 @@ hooks:
   post_open:
     - git-stacks message send "Opened" --from workspace
 ```
+
+## Port Allocation
+
+Templates and workspaces can declare named port slots that are automatically allocated when `git-stacks open` runs:
+
+```yaml
+# In a template or workspace YAML
+ports:
+  API_PORT: ~
+  DEBUG_PORT: ~
+```
+
+`~` means "allocate on open". After allocation, the values are written back to the workspace YAML:
+
+```yaml
+# After git-stacks open (allocated values written back)
+ports:
+  API_PORT: 10000
+  DEBUG_PORT: 10001
+```
+
+Allocated port numbers are injected as environment variables into hooks, integration contexts, and env_files. Control the allocation range in global config:
+
+```yaml
+# ~/.config/git-stacks/config.yml
+ports:
+  range_start: 10000
+  range_end: 65000
+```
+
+- `git-stacks open --reallocate` forces reallocation of conflicting ports
+- Ports are freed automatically when a workspace is removed
+- The creation wizard prompts for port names (after description, before integration overrides)
+- Race-safe allocation via lockfile — safe for concurrent workspace opens
+- Template composition merges ports with last-wins precedence when multiple templates declare the same port name
 
 ## Shell Completions
 
