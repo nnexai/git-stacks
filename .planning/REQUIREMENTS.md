@@ -27,11 +27,11 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 
 ### Doctor
 
-- [ ] **DOC-01**: `git-stacks doctor` checks for forge CLI binaries when respective integrations are configured
+- [x] **DOC-01**: `git-stacks doctor` checks for forge CLI binaries when respective integrations are configured
 
 ### Config Examples
 
-- [ ] **CFG-01**: Tmux integration `configExample` shows native pane layout configuration (`panes` array with direction, surfaces, commands)
+- [x] **CFG-01**: Tmux integration `configExample` shows native pane layout configuration (`panes` array with direction, surfaces, commands)
 
 ### Release
 
@@ -64,8 +64,8 @@ Requirements for CLI Polish & Completions milestone. Each maps to roadmap phases
 | HOOK-02 | Phase 55 | Complete |
 | HOOK-03 | Phase 55 | Complete |
 | HOOK-04 | Phase 55 | Complete |
-| DOC-01 | Phase 56 | Pending |
-| CFG-01 | Phase 56 | Pending |
+| DOC-01 | Phase 56 | Complete |
+| CFG-01 | Phase 56 | Complete |
 | REL-01 | Phase 57 | Pending |
 | REL-02 | Phase 57 | Pending |
 | REL-03 | Phase 57 | Pending |

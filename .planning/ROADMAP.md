@@ -232,5 +232,5 @@ See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md) for full deta
 | 53. Shell Completion Fixes | v0.13.0 | 3/3 | Complete    | 2026-04-02 |
 | 54. Env Command | v0.13.0 | 2/2 | Complete    | 2026-04-02 |
 | 55. Copilot Hook Support | v0.13.0 | 2/2 | Complete    | 2026-04-02 |
-| 56. Doctor & Config Polish | v0.13.0 | 0/1 | Planned | - |
+| 56. Doctor & Config Polish | v0.13.0 | 1/1 | Complete   | 2026-04-02 |
 | 57. Release Prep | v0.13.0 | 0/1 | Planned | - |
