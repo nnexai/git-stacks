@@ -328,6 +328,15 @@ function bashCaseBody(node: CommandNode, name: string): string {
     return out
   }
 
+  // No dynamic args, no enum options — but command has boolean flags (e.g. install --hooks --copilot)
+  if (options.length > 0) {
+    const flagsStr = options.map(o => o.long).join(" ")
+    return (
+      `      if [[ "$cur" == -* ]]; then\n` +
+      `        COMPREPLY=($(compgen -W "${flagsStr}" -- "$cur"))\n` +
+      `      fi\n`
+    )
+  }
 
   return ""
 }
@@ -530,6 +539,16 @@ function zshCaseBody(node: CommandNode, id: string): string {
   // (e.g. `list --sort`) — emit _arguments with enum-aware specs
   const enumOpts = options.filter(o => o.enumValues !== undefined || OPTION_ENUMS[o.long] !== undefined || resolveFlagCompletion(node.path, o.long) !== undefined)
   if (enumOpts.length > 0) {
+    let out = `        _arguments \\\n`
+    for (const opt of options) {
+      out += `          ${zshOptionSpec(opt, id, node.path)} \\\n`
+    }
+    out += `          ;;\n`
+    return out
+  }
+
+  // No dynamic args, no enum options — but command has boolean flags (e.g. install --hooks --copilot)
+  if (options.length > 0) {
     let out = `        _arguments \\\n`
     for (const opt of options) {
       out += `          ${zshOptionSpec(opt, id, node.path)} \\\n`
