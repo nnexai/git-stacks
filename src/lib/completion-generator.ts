@@ -52,6 +52,7 @@ interface ArgCompletion {
   type: DynamicCompletion
   required: boolean
   choices?: string[]
+  variadic?: boolean
 }
 
 interface CommandNode {
@@ -84,16 +85,16 @@ function buildNode(cmd: Command, parentPath: string): CommandNode {
   const argCompletions: ArgCompletion[] = cmd.registeredArguments.flatMap((arg, index) => {
     // Priority 1: path-based override (first arg only) per D-02
     if (index === 0 && firstArgOverride) {
-      return [{ name: arg.name(), type: firstArgOverride, required: arg.required }]
+      return [{ name: arg.name(), type: firstArgOverride, required: arg.required, ...(arg.variadic ? { variadic: true } : {}) }]
     }
     // Priority 2: convention inference from arg name per D-01
     const inferred = NAME_TO_COMPLETION_TYPE[arg.name()]
     if (inferred) {
-      return [{ name: arg.name(), type: inferred, required: arg.required }]
+      return [{ name: arg.name(), type: inferred, required: arg.required, ...(arg.variadic ? { variadic: true } : {}) }]
     }
     // Priority 3: Commander .argChoices extraction per D-04
     if (arg.argChoices && arg.argChoices.length > 0) {
-      return [{ name: arg.name(), type: "choices" as DynamicCompletion, required: arg.required, choices: arg.argChoices }]
+      return [{ name: arg.name(), type: "choices" as DynamicCompletion, required: arg.required, choices: arg.argChoices, ...(arg.variadic ? { variadic: true } : {}) }]
     }
     // Priority 4: no completion for this position
     return []
