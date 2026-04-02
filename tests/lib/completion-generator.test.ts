@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { Command, Argument } from "commander"
+import { Command, Argument, Option } from "commander"
 import { generateBash, generateZsh, generateFish } from "../../src/lib/completion-generator"
 
 function buildTestProgram(): Command {
@@ -1014,5 +1014,72 @@ describe("multi-arg position dispatch (D-06)", () => {
     const out = generateFish(buildTestProgram())
     expect(out).toContain("__fish_seen_subcommand_from cd")
     expect(out).toContain("commandline -opc")
+  })
+})
+
+// ─── COMP-02: option enum auto-detection ─────────────────────────────────────
+
+describe("option enum auto-detection (COMP-02)", () => {
+  function buildEnumTestProgram(): Command {
+    const program = new Command()
+    program.name("test-cli").description("Test CLI")
+
+    program
+      .command("deploy <workspace>")
+      .description("Deploy a workspace")
+      .addOption(new Option("--env <environment>", "Target environment").choices(["dev", "staging", "prod"]))
+      .addOption(new Option("--region <region>", "Deploy region").choices(["us-east", "eu-west"]))
+
+    program
+      .command("logs")
+      .description("View logs")
+      .addOption(new Option("--level <level>", "Log level").choices(["debug", "info", "warn", "error"]))
+
+    return program
+  }
+
+  test("bash: --env option offers dev staging prod from .choices()", () => {
+    const out = generateBash(buildEnumTestProgram())
+    expect(out).toContain('compgen -W "dev staging prod"')
+  })
+
+  test("bash: --region option offers us-east eu-west from .choices()", () => {
+    const out = generateBash(buildEnumTestProgram())
+    expect(out).toContain('compgen -W "us-east eu-west"')
+  })
+
+  test("bash: --level option offers debug info warn error from .choices()", () => {
+    const out = generateBash(buildEnumTestProgram())
+    expect(out).toContain('compgen -W "debug info warn error"')
+  })
+
+  test("zsh: --env option has enum completion spec", () => {
+    const out = generateZsh(buildEnumTestProgram())
+    expect(out).toContain("env:(dev staging prod)")
+  })
+
+  test("zsh: --region option has enum completion spec", () => {
+    const out = generateZsh(buildEnumTestProgram())
+    expect(out).toContain("region:(us-east eu-west)")
+  })
+
+  test("zsh: --level option has enum completion spec", () => {
+    const out = generateZsh(buildEnumTestProgram())
+    expect(out).toContain("level:(debug info warn error)")
+  })
+
+  test("fish: --env option has enum value completion", () => {
+    const out = generateFish(buildEnumTestProgram())
+    expect(out).toContain("dev staging prod")
+  })
+
+  test("fish: --region option has enum value completion", () => {
+    const out = generateFish(buildEnumTestProgram())
+    expect(out).toContain("us-east eu-west")
+  })
+
+  test("fish: --level option has enum value completion", () => {
+    const out = generateFish(buildEnumTestProgram())
+    expect(out).toContain("debug info warn error")
   })
 })
