@@ -8,10 +8,20 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State (2026-04-02)
+## Current Milestone: v0.13.0 CLI Polish & Completions
 
-**Last shipped:** v0.12.0 — Multi-Workspace AeroSpace, Integration Tools & Port Allocation
-**Next milestone:** Not yet planned — run `/gsd:new-milestone` to start
+**Goal:** Fix accumulated bugs, fill completion gaps, add `env` command and Copilot hook support.
+
+**Target features:**
+- Fix `list --status` flag (implement or remove)
+- Fix shell completion repeating workspace after optional positional arg
+- Add missing option value enums to completion generator
+- Add `git-stacks env [workspace]` command
+- Extend `install --hooks` to support Copilot
+- Add forge CLI checks to `git-stacks doctor`
+- Add tmux pane setup to `configExample`
+
+## Recent State (2026-04-02)
 
 ### What shipped in v0.12.0
 
@@ -222,7 +232,13 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-- [ ] `git-stacks env` — dump merged workspace env vars with `--format shell|dotenv|json`
+- [ ] Fix `list --status` flag — implement status display or remove the unsupported option
+- [ ] Fix shell completion repeating workspace after optional positional arg — enforce argument arity
+- [ ] Add missing option value enums to completion generator — audit all enum-style flags
+- [ ] `git-stacks env [workspace]` — dump merged workspace env vars with `--format shell|dotenv|json`
+- [ ] Extend `install --hooks` to support Copilot — `--claude`/`--copilot` flags
+- [ ] Add forge CLI checks to `git-stacks doctor` — verify `gh`/`glab`/`tea` on PATH
+- [ ] Add tmux pane setup to `configExample` — show hook-based pane configuration
 
 ### Out of Scope
 
@@ -384,4 +400,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-02 after v0.12.0 milestone*
+*Last updated: 2026-04-02 after v0.13.0 milestone start*

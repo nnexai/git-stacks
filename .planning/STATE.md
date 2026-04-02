@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.12.0
-milestone_name: Multi-Workspace AeroSpace, Integration Tools & Port Allocation
-status: completed
-stopped_at: Milestone v0.12.0 archived
-last_updated: "2026-04-02T04:50:00.000Z"
+milestone: v0.13.0
+milestone_name: CLI Polish & Completions
+status: active
+stopped_at: Defining requirements
+last_updated: "2026-04-02T05:00:00.000Z"
 last_activity: 2026-04-02
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,28 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-02)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v0.13.0
 
 ## Current Position
 
-Phase: —
+Phase: Not started (defining requirements)
 Plan: —
-Status: v0.12.0 milestone complete — ready for `/gsd:new-milestone`
-Last activity: 2026-04-02
-
-Progress: [##########] 100%
+Status: Defining requirements
+Last activity: 2026-04-02 — Milestone v0.13.0 started
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions archived to PROJECT.md Key Decisions table at milestone completion.
+(none yet)
 
 ### Pending Todos
 
-2 pending todos — see .planning/todos/pending/
+7 pending todos — all included in v0.13.0 scope:
 - Fix git-stacks list unsupported --status flag (cli)
 - Extend install hooks to support Copilot (cli)
+- Tmux integration example should show pane setup (docs)
+- Shell completion generator missing option value enums (cli)
+- Doctor check missing forge CLIs (cli)
+- Add git-stacks env command to show generated env vars (cli)
+- Fix shell completion repeating workspace after optional positional arg (cli)
 
 ### Blockers/Concerns
 
@@ -58,5 +61,5 @@ Decisions archived to PROJECT.md Key Decisions table at milestone completion.
 ## Session Continuity
 
 Last session: 2026-04-02
-Stopped at: v0.12.0 milestone archived
-Next action: `/gsd:new-milestone`
+Stopped at: Milestone v0.13.0 started — defining requirements
+Next action: Define requirements and create roadmap
