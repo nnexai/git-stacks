@@ -218,14 +218,21 @@ function bashCaseBody(node: CommandNode, name: string): string {
     .filter(([key]) => key.startsWith(`${node.path}:`))
 
   if (dynamic && options.length > 0) {
+    const enumOptions = options.filter(o => o.enumValues !== undefined)
     const flagsStr = options.map(o => o.long).join(" ")
     let out =
       `      if [[ "$cur" == -* ]]; then\n` +
       `        COMPREPLY=($(compgen -W "${flagsStr}" -- "$cur"))\n` +
       `      else\n`
 
-    if (cmdFlagEntries.length > 0) {
+    if (enumOptions.length > 0 || cmdFlagEntries.length > 0) {
       out += `        case "$prev" in\n`
+      for (const opt of enumOptions) {
+        out += `          "${opt.long}")\n`
+        out += `            COMPREPLY=($(compgen -W "${opt.enumValues!.join(" ")}" -- "$cur"))\n`
+        out += `            return 0\n`
+        out += `            ;;\n`
+      }
       for (const [key, dynType] of cmdFlagEntries) {
         const flag = key.split(":")[1]
         out += `          "${flag}")\n`
@@ -269,9 +276,9 @@ function bashCaseBody(node: CommandNode, name: string): string {
     return bashDynamicLookup(dynamic, "      ", name, firstArgChoices)
   }
 
-  // No positional dynamic, but command has COMMAND_FLAG_COMPLETIONS entries
-  // (e.g. `new --from` completes template names but `new` itself has no positional completion)
-  if (cmdFlagEntries.length > 0) {
+  // No positional dynamic, but command has options with enum values (e.g. `list --sort`)
+  const enumOnlyOptions = options.filter(o => o.enumValues !== undefined)
+  if (enumOnlyOptions.length > 0 || cmdFlagEntries.length > 0) {
     const flagsStr = options.map(o => o.long).join(" ")
     let out = ""
     if (options.length > 0) {
@@ -279,6 +286,12 @@ function bashCaseBody(node: CommandNode, name: string): string {
       out += `        COMPREPLY=($(compgen -W "${flagsStr}" -- "$cur"))\n`
       out += `      else\n`
       out += `        case "$prev" in\n`
+      for (const opt of enumOnlyOptions) {
+        out += `          "${opt.long}")\n`
+        out += `            COMPREPLY=($(compgen -W "${opt.enumValues!.join(" ")}" -- "$cur"))\n`
+        out += `            return 0\n`
+        out += `            ;;\n`
+      }
       for (const [key, dynType] of cmdFlagEntries) {
         const flag = key.split(":")[1]
         out += `          "${flag}")\n`
@@ -288,19 +301,10 @@ function bashCaseBody(node: CommandNode, name: string): string {
       }
       out += `        esac\n`
       out += `      fi\n`
-    } else {
-      out += `      case "$prev" in\n`
-      for (const [key, dynType] of cmdFlagEntries) {
-        const flag = key.split(":")[1]
-        out += `        "${flag}")\n`
-        out += bashDynamicLookup(dynType, "          ", name)
-        out += `          return 0\n`
-        out += `          ;;\n`
-      }
-      out += `      esac\n`
     }
     return out
   }
+
 
   return ""
 }
@@ -851,6 +855,25 @@ export function generateFish(program: Command): string {
             out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -ra '${values.join(" ")}'\n`
           }
         }
+      }
+    }
+  }
+
+  // Auto-detected enum values from Commander .choices() — emit per-node completions
+  out += "\n# Auto-detected option enum values\n"
+  let emittedEnumHeader = false
+  for (const node of nodes) {
+    for (const opt of node.options) {
+      if (!opt.enumValues) continue
+      if (!emittedEnumHeader) { emittedEnumHeader = true }
+      const longName = opt.long.slice(2)
+      out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}' -l ${longName} -ra '${opt.enumValues.join(" ")}'\n`
+    }
+    for (const sub of node.subcommands) {
+      for (const opt of sub.options) {
+        if (!opt.enumValues) continue
+        const longName = opt.long.slice(2)
+        out += `complete -c ${name} -f -n '__fish_seen_subcommand_from ${node.name}; and __fish_seen_subcommand_from ${sub.name}' -l ${longName} -ra '${opt.enumValues.join(" ")}'\n`
       }
     }
   }
