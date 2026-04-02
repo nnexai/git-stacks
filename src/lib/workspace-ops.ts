@@ -762,11 +762,17 @@ export async function openWorkspace(
     (r) => r.mode === "worktree" && !existsSync(r.task_path)
   )
   if (missing.length > 0) {
+    let recreated = 0
     for (const repo of missing) {
       onProgress?.(`Recreating worktree: ${repo.name}`)
-      await createWorktree(repo.main_path, repo.task_path, wsWithPorts.branch)
+      try {
+        await createWorktree(repo.main_path, repo.task_path, wsWithPorts.branch)
+        recreated++
+      } catch (err) {
+        onProgress?.(`\u26A0 Failed to recreate worktree for '${repo.name}': ${err instanceof Error ? err.message : String(err)}`)
+      }
     }
-    onProgress?.(`${missing.length} worktree(s) recreated`)
+    if (recreated > 0) onProgress?.(`${recreated} worktree(s) recreated`)
   }
 
   // Ensure upstream tracking for all worktree repos (parallel)

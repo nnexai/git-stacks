@@ -1,4 +1,5 @@
 import { $ } from "bun"
+import { existsSync } from "fs"
 import { join } from "path"
 
 export async function checkBranchExists(repoPath: string, branch: string): Promise<boolean> {
@@ -11,12 +12,29 @@ export async function createWorktree(
   worktreePath: string,
   branch: string
 ): Promise<void> {
-  const exists = await checkBranchExists(repoPath, branch)
-  if (exists) {
-    await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet()
-  } else {
-    // Branch from current HEAD of the main clone, not a fixed base branch
-    await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet()
+  // If directory exists and is already a git worktree, skip
+  if (existsSync(worktreePath) && existsSync(join(worktreePath, ".git"))) {
+    return
+  }
+
+  // Prune stale worktree entries that point to missing directories
+  await $`git -C ${repoPath} worktree prune`.quiet().nothrow()
+
+  const branchExists = await checkBranchExists(repoPath, branch)
+  const result = branchExists
+    ? await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet().nothrow()
+    : await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet().nothrow()
+
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim()
+    if (stderr.includes("already exists")) {
+      // Directory exists but isn't a git worktree — don't clobber it
+      throw new Error(
+        `Cannot create worktree: '${worktreePath}' already exists but is not a git worktree. ` +
+        `Remove the directory manually or check for path conflicts.`
+      )
+    }
+    throw new Error(`Failed to create worktree at '${worktreePath}': ${stderr}`)
   }
 }
 

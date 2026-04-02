@@ -22,6 +22,8 @@ All notable changes to `git-stacks` are documented here.
 
 **Shell completion flag leakage** — flags from `git-stacks list` (e.g., `--sort`, `--status`) no longer appear in completions for `git-stacks integration list`. Option enum completions are now scoped to the command path they belong to, not emitted globally.
 
+**Worktree recreation crash with `~` paths** — `git-stacks open` crashed with an uncaught `ShellError` when `workspace_root` was configured as `~/workspaces/`. Node's `existsSync` doesn't expand `~`, so existing worktrees were misdetected as missing, and the re-add failed because the directory already existed. Paths containing `~` are now expanded to absolute paths at config read time via Zod schema transforms. Additionally, `createWorktree` now skips silently when the worktree already exists at the expected location, prunes stale git worktree entries before adding, and reports descriptive errors instead of raw shell exceptions.
+
 ### Changed
 
 **Conditional forge CLI checks in doctor** — `git-stacks doctor` now only checks for forge CLI binaries (`gh`, `glab`, `tea`) when the respective integration is configured with `enabled: true` in global config. Previously, all forge CLIs were checked unconditionally.

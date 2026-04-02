@@ -111,8 +111,8 @@ export const WorkspaceRepoSchema = z.object({
   repo: z.string(),           // registry name — replaces 'stack'
   type: RepoTypeSchema,
   mode: z.enum(["trunk", "worktree"]),
-  main_path: z.string(),
-  task_path: z.string(),
+  main_path: z.string().transform(expandHome),
+  task_path: z.string().transform(expandHome),
   base_branch: z.string().optional(),  // base branch for merge/sync resolution
   hooks: WorkspaceRepoHooksSchema.optional(),
   files: FilesSchema,
@@ -161,7 +161,7 @@ export const WorkspaceSchema = z.object({
 export type Workspace = z.infer<typeof WorkspaceSchema>
 
 export const GlobalConfigSchema = z.object({
-  workspace_root: z.string().default(DEFAULT_WORKSPACE_ROOT),
+  workspace_root: z.string().default(DEFAULT_WORKSPACE_ROOT).transform(expandHome),
   /** Per-integration config keyed by integration id, e.g. { vscode: { enabled: true, cmd: "code" } } */
   integrations: z.record(z.string(), z.unknown()).default({}),
   ports: z.object({
