@@ -1,5 +1,5 @@
 import { $ } from "bun"
-import { existsSync } from "fs"
+import { existsSync, statSync } from "fs"
 import { join } from "path"
 
 export async function checkBranchExists(repoPath: string, branch: string): Promise<boolean> {
@@ -264,4 +264,37 @@ export async function getCommitsAhead(
   const result = await $`git -C ${repoPath} rev-list --count ${base}..${head}`.quiet().nothrow()
   if (result.exitCode !== 0) return 0
   return parseInt(result.stdout.toString().trim(), 10) || 0
+}
+
+const DEFAULT_STALE_THRESHOLD_MS = 15 * 60 * 1000 // 15 minutes
+
+/**
+ * Check if origin refs are stale by examining FETCH_HEAD mtime.
+ * Uses `git rev-parse --git-common-dir` to resolve the correct .git directory
+ * (works for both regular repos and worktrees where .git is a file).
+ * Returns true if FETCH_HEAD is missing or older than thresholdMs.
+ */
+export async function isFetchStale(
+  repoPath: string,
+  thresholdMs: number = DEFAULT_STALE_THRESHOLD_MS
+): Promise<boolean> {
+  const result = await $`git -C ${repoPath} rev-parse --git-common-dir`.quiet().nothrow()
+  if (result.exitCode !== 0) return true
+
+  const gitCommonDir = result.stdout.toString().trim()
+  // --git-common-dir returns a relative path when inside the repo; resolve against repoPath
+  const resolvedGitDir = gitCommonDir.startsWith("/")
+    ? gitCommonDir
+    : join(repoPath, gitCommonDir)
+  const fetchHeadPath = join(resolvedGitDir, "FETCH_HEAD")
+
+  if (!existsSync(fetchHeadPath)) return true
+
+  try {
+    const stat = statSync(fetchHeadPath)
+    const ageMs = Date.now() - stat.mtimeMs
+    return ageMs > thresholdMs
+  } catch {
+    return true
+  }
 }
