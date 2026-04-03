@@ -118,6 +118,52 @@ describe("TemplateSchema", () => {
   })
 })
 
+describe("labels", () => {
+  test("WorkspaceSchema accepts valid labels", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "ws",
+      branch: "b",
+      created: "d",
+      labels: ["backend", "sprint:14", "client.acme", "type-bugfix", "v1_0"],
+    })
+    expect(ws.labels).toEqual(["backend", "sprint:14", "client.acme", "type-bugfix", "v1_0"])
+  })
+
+  test("WorkspaceSchema labels field is optional", () => {
+    const ws = WorkspaceSchema.parse({ name: "ws", branch: "b", created: "d" })
+    expect(ws.labels).toBeUndefined()
+  })
+
+  test("WorkspaceSchema rejects labels with invalid characters", () => {
+    expect(() => WorkspaceSchema.parse({
+      name: "ws",
+      branch: "b",
+      created: "d",
+      labels: ["has space"],
+    })).toThrow()
+    expect(() => WorkspaceSchema.parse({
+      name: "ws",
+      branch: "b",
+      created: "d",
+      labels: ["path/sep"],
+    })).toThrow()
+  })
+
+  test("TemplateSchema accepts valid labels", () => {
+    const tpl = TemplateSchema.parse({
+      name: "tpl",
+      repos: [],
+      labels: ["backend", "sprint:14"],
+    })
+    expect(tpl.labels).toEqual(["backend", "sprint:14"])
+  })
+
+  test("TemplateSchema labels field is optional", () => {
+    const tpl = TemplateSchema.parse({ name: "tpl", repos: [] })
+    expect(tpl.labels).toBeUndefined()
+  })
+})
+
 // --- expandBranchPattern ---
 
 describe("expandBranchPattern", () => {

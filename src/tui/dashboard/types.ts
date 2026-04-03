@@ -32,7 +32,7 @@ export type UIView =
   | { view: "progress"; message: string }
   | { view: "sync-progress"; message: string }
   | { view: "push-progress"; message: string }
-  | { view: "inline-input"; index: number; purpose: "rename" | "clone-template"; prefill: string }
+  | { view: "inline-input"; index: number; purpose: "rename" | "clone-template" | "add-label"; prefill: string }
   | { view: "messages"; workspaceName: string }
   | { view: "wizard-create"; source: "template"; templateIndex: number }
   | { view: "wizard-create-adhoc"; source: "repos"; repoNames: string[] }

@@ -29,6 +29,18 @@ import { openWorkspace } from "../lib/workspace-ops"
 import { composeTemplates } from "../lib/composition"
 import { mergePorts } from "../lib/ports"
 
+const LABEL_REGEX = /^[A-Za-z0-9._:-]+$/
+
+function normalizeLabels(labels: string[]): string[] {
+  const trimmed = labels.map(label => label.trim()).filter(Boolean)
+  const invalid = trimmed.find(label => !LABEL_REGEX.test(label))
+  if (invalid) {
+    p.cancel(`Invalid label "${invalid}". Labels may only contain letters, digits, dots, colons, hyphens, underscores.`)
+    process.exit(1)
+  }
+  return [...new Set(trimmed)]
+}
+
 async function pickReposFromRegistry(
   registry: RepoRegistryEntry[],
   message: string,
@@ -99,7 +111,12 @@ function buildReposFromTemplate(
   return repos
 }
 
-export async function runWorkspaceNew(nameArg?: string, fromSource?: string, templateNames?: string[]) {
+export async function runWorkspaceNew(
+  nameArg?: string,
+  fromSource?: string,
+  templateNames?: string[],
+  cliLabels?: string[],
+) {
   p.intro("New workspace")
 
   const config = readGlobalConfig()
@@ -125,13 +142,12 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
   let wsFiles: Workspace["files"]
   let wsIntegrationSettings: Record<string, unknown> | undefined
   let wsPorts: Record<string, number | null> | undefined
+  let template: Template | undefined
 
   // Determine creation mode
   if (templateNames && templateNames.length > 0) {
     // CLI --template flag: compose from multiple templates
     const registry = readRegistry()
-    let template: Template
-
     try {
       template = composeTemplates(templateNames)
     } catch (err) {
@@ -139,6 +155,10 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
       process.exit(1)
     }
 
+    if (!template) {
+      p.cancel("Failed to compose template.")
+      process.exit(1)
+    }
     templateName = templateNames[templateNames.length - 1] // top-level template name for metadata
     repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
     wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
@@ -190,7 +210,6 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
       const rawTemplate = readTemplate(fromSource)
       const registry = readRegistry()
 
-      let template: Template
       if (rawTemplate.includes && rawTemplate.includes.length > 0) {
         try {
           template = composeTemplates([...rawTemplate.includes, templateName])
@@ -202,6 +221,10 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
         template = rawTemplate
       }
 
+      if (!template) {
+        p.cancel("Failed to load template.")
+        process.exit(1)
+      }
       repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
 
       // Snapshot template config into workspace
@@ -252,7 +275,6 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
       const rawTemplate = readTemplate(templateName)
 
       // Resolve includes if present
-      let template: Template
       if (rawTemplate.includes && rawTemplate.includes.length > 0) {
         try {
           template = composeTemplates([...rawTemplate.includes, templateName])
@@ -264,6 +286,10 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
         template = rawTemplate
       }
 
+      if (!template) {
+        p.cancel("Failed to load template.")
+        process.exit(1)
+      }
       repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
 
       // Snapshot template config
@@ -314,6 +340,23 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
   if (repos.length === 0) {
     p.cancel("No repos selected.")
     process.exit(0)
+  }
+
+  // Labels
+  let labels = normalizeLabels(cliLabels ?? [])
+  if (labels.length === 0) {
+    const labelsRaw = await safeText({
+      message: "Labels (optional, comma-separated):",
+      placeholder: "e.g. backend, sprint:14",
+    })
+    if (p.isCancel(labelsRaw)) cancel()
+    const labelsStr = (labelsRaw as string).trim()
+    if (labelsStr) {
+      labels = normalizeLabels(labelsStr.split(","))
+    }
+  }
+  if (template?.labels?.length) {
+    labels = [...new Set([...template.labels, ...labels])]
   }
 
   // Branch — expand patterns if template had branch_pattern
@@ -459,6 +502,7 @@ export async function runWorkspaceNew(nameArg?: string, fromSource?: string, tem
     ...(wsFiles ? { files: wsFiles } : {}),
     ...settingsIntegrations,
     ...(wsPorts ? { ports: wsPorts } : {}),
+    ...(labels.length > 0 ? { labels } : {}),
   } as Workspace
 
   // File ops

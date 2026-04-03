@@ -49,6 +49,32 @@ import { runIntegrationGenerate } from "../../lib/integrations/runner"
 import { join } from "path"
 import { unlinkSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
+import type { WorkspaceEntry } from "./types"
+import { matchesLabels } from "../../lib/labels"
+
+type GroupedItem =
+  | { kind: "header"; label: string }
+  | { kind: "entry"; entry: WorkspaceEntry; originalIndex: number }
+
+export function matchesWorkspaceFilter(workspace: Workspace, filter: string): boolean {
+  const rawFilter = filter.trim()
+  const f = rawFilter.toLowerCase()
+  if (!rawFilter) return true
+
+  const name = workspace.name.toLowerCase()
+  const labels = workspace.labels ?? []
+  if (f.startsWith("label:")) {
+    const rawLabelTerm = rawFilter.slice(6).trim()
+    const labelTerm = rawLabelTerm.toLowerCase()
+    if (!labelTerm) return true
+    return matchesLabels(workspace, [rawLabelTerm])
+      || labels.some(label => label.toLowerCase().includes(labelTerm))
+  }
+
+  return name.includes(f)
+    || matchesLabels(workspace, [rawFilter])
+    || labels.some(label => label.toLowerCase().includes(f))
+}
 
 export default function App() {
   const renderer = useRenderer()
@@ -80,6 +106,7 @@ export default function App() {
   const [createDone, setCreateDone] = createSignal(false)
   const [createSummary, setCreateSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
   const [repoRemoveTarget, setRepoRemoveTarget] = createSignal<string | null>(null)
+  const [groupedByLabel, setGroupedByLabel] = createSignal(false)
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -122,10 +149,49 @@ export default function App() {
   })
 
   const filteredEntries = createMemo(() => {
-    const f = tabFilter.workspaces[0]().toLowerCase()
-    if (!f) return entries()
-    return entries().filter((e) => e.workspace.name.toLowerCase().includes(f))
+    const rawFilter = tabFilter.workspaces[0]()
+    if (!rawFilter.trim()) return entries()
+    return entries().filter((entry) => matchesWorkspaceFilter(entry.workspace, rawFilter))
   })
+
+  const groupedEntries = createMemo((): GroupedItem[] => {
+    if (!groupedByLabel() || tab() !== "workspaces") return []
+
+    const labelMap = new Map<string, { entry: WorkspaceEntry; originalIndex: number }[]>()
+    const unlabeled: { entry: WorkspaceEntry; originalIndex: number }[] = []
+
+    filteredEntries().forEach((entry, originalIndex) => {
+      const labels = entry.workspace.labels ?? []
+      if (labels.length === 0) {
+        unlabeled.push({ entry, originalIndex })
+        return
+      }
+      for (const label of labels) {
+        const items = labelMap.get(label) ?? []
+        items.push({ entry, originalIndex })
+        labelMap.set(label, items)
+      }
+    })
+
+    const items: GroupedItem[] = []
+    for (const label of [...labelMap.keys()].sort()) {
+      items.push({ kind: "header", label })
+      for (const item of labelMap.get(label) ?? []) {
+        items.push({ kind: "entry", ...item })
+      }
+    }
+    if (unlabeled.length > 0) {
+      items.push({ kind: "header", label: "[unlabeled]" })
+      for (const item of unlabeled) {
+        items.push({ kind: "entry", ...item })
+      }
+    }
+    return items
+  })
+
+  const groupedNavigableEntries = createMemo(() =>
+    groupedEntries().filter((item): item is Extract<GroupedItem, { kind: "entry" }> => item.kind === "entry")
+  )
 
   const filteredTemplates = createMemo(() => {
     const f = tabFilter.templates[0]().toLowerCase()
@@ -139,7 +205,13 @@ export default function App() {
     return repoEntries().filter(r => r.name.toLowerCase().includes(f) || r.local_path.toLowerCase().includes(f))
   })
 
-  const currentEntry = createMemo(() => filteredEntries()[tabCursor.workspaces[0]()])
+  const currentEntry = createMemo(() => {
+    if (groupedByLabel() && tab() === "workspaces") {
+      const groupedEntry = groupedNavigableEntries()[tabCursor.workspaces[0]()]
+      return groupedEntry ? filteredEntries()[groupedEntry.originalIndex] : undefined
+    }
+    return filteredEntries()[tabCursor.workspaces[0]()]
+  })
   const currentTemplate = createMemo(() => filteredTemplates()[tabCursor.templates[0]()])
   const currentRepo = createMemo(() => filteredRepos()[tabCursor.repos[0]()])
 
@@ -164,7 +236,7 @@ export default function App() {
     const repoTarget = repoRemoveTarget()
     if (repoTarget) return repoTarget
     if (confirmContext() === "template") return filteredTemplates()[(view() as any).index]?.name ?? "Confirm"
-    return filteredEntries()[(view() as any).index]?.workspace.name ?? "Confirm"
+    return currentEntry()?.workspace.name ?? "Confirm"
   })
 
   // Context-sensitive help bar text (width-tiered to fit 80-column terminals)
@@ -178,17 +250,21 @@ export default function App() {
     if (w < 65) return core
     if (w <= 80) return `r Refresh  ${core}`
     if (w < 100) return `1/2/3 Tabs  r Refresh  ${core}`
-    return `\u2191\u2193/jk Navigate  1/2/3 Tabs  r Refresh  ${core}`
+    const groupHint = tab() === "workspaces" ? "  g Group" : ""
+    return `\u2191\u2193/jk Navigate  1/2/3 Tabs  r Refresh  ${core}${groupHint}`
   })
 
   const inlineInputLabel = createMemo(() => {
     const v = view()
-    if (v.view === "inline-input") return v.purpose === "rename" ? "New name" : "Clone as"
-    return ""
+    if (v.view !== "inline-input") return ""
+    if (v.purpose === "rename") return "New name"
+    if (v.purpose === "add-label") return "Add labels (comma-separated)"
+    return "Clone as"
   })
 
   function clampCursor() {
-    const entriesList = tab() === "workspaces" ? filteredEntries()
+    const entriesList = tab() === "workspaces" && groupedByLabel() ? groupedNavigableEntries()
+      : tab() === "workspaces" ? filteredEntries()
       : tab() === "templates" ? filteredTemplates()
       : filteredRepos()
     setCursor(c => Math.min(c, Math.max(0, entriesList.length - 1)))
@@ -472,6 +548,22 @@ export default function App() {
         writeTemplate({ ...src, name: trimmed })
         reloadTemplates()
       } catch {}
+      setView({ view: "list" })
+      return
+    }
+
+    if (v.purpose === "add-label") {
+      const entry = filteredEntries()[v.index]
+      if (!entry) { setView({ view: "list" }); return }
+      const newLabels = trimmed
+        .split(",")
+        .map(label => label.trim())
+        .filter(label => /^[A-Za-z0-9._:-]+$/.test(label))
+      if (newLabels.length > 0) {
+        const merged = [...new Set([...(entry.workspace.labels ?? []), ...newLabels])]
+        writeWorkspace({ ...entry.workspace, labels: merged })
+        reload()
+      }
       setView({ view: "list" })
       return
     }
@@ -985,7 +1077,9 @@ export default function App() {
       const activeEntries = tab() === "workspaces" ? filteredEntries()
         : tab() === "templates" ? filteredTemplates()
         : filteredRepos()
-      const len = activeEntries.length
+      const len = tab() === "workspaces" && groupedByLabel()
+        ? groupedNavigableEntries().length
+        : activeEntries.length
 
       if (key.name === "q") {
         renderer.destroy()
@@ -1017,6 +1111,11 @@ export default function App() {
           if (len > 0) setView({ view: "repo-action-menu", index: cursor() })
           return
         }
+        if (tab() === "workspaces" && groupedByLabel()) {
+          const item = groupedNavigableEntries()[cursor()]
+          if (item) setView({ view: "action-menu", index: item.originalIndex })
+          return
+        }
         if (len > 0) setView({ view: "action-menu", index: cursor() })
         return
       }
@@ -1024,8 +1123,12 @@ export default function App() {
       if (key.name === "space" && tab() === "workspaces") {
         setSelected((prev) => {
           const next = new Set(prev)
-          if (next.has(cursor())) next.delete(cursor())
-          else next.add(cursor())
+          const selectedIndex = groupedByLabel()
+            ? groupedNavigableEntries()[cursor()]?.originalIndex
+            : cursor()
+          if (selectedIndex === undefined) return next
+          if (next.has(selectedIndex)) next.delete(selectedIndex)
+          else next.add(selectedIndex)
           return next
         })
         setCursor((i) => Math.min(len - 1, i + 1))
@@ -1083,6 +1186,12 @@ export default function App() {
         if (!filter()) setFilter("")
         setFilterFocused(false)
         setTimeout(() => setFilterFocused(true), 0)
+        return
+      }
+
+      if (key.name === "g" && tab() === "workspaces") {
+        setGroupedByLabel(prev => !prev)
+        setCursor(0)
         return
       }
 
@@ -1312,6 +1421,8 @@ export default function App() {
             <Match when={tab() === "workspaces"}>
               <WorkspaceList
                 entries={filteredEntries()}
+                grouped={groupedEntries()}
+                isGrouped={groupedByLabel()}
                 cursor={cursor()}
                 selected={selected()}
                 filter={filtering() ? filter() : ""}

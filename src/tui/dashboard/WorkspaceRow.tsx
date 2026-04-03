@@ -12,6 +12,7 @@ type Props = {
   selected: boolean
   messages: MessageRecord[]
   tick: number
+  groupPrefix?: string
 }
 
 export function WorkspaceRow(props: Props) {
@@ -32,6 +33,7 @@ export function WorkspaceRow(props: Props) {
   }
 
   const dims = useTerminalDimensions()
+  const groupPrefixWidth = createMemo(() => props.groupPrefix?.length ?? 0)
 
   // Counts column: " Nwt Mtr" or " Nwt Mtr ~D" — fixed width
   const countsText = createMemo(() => {
@@ -71,7 +73,7 @@ export function WorkspaceRow(props: Props) {
   const nameWidth = createMemo(() => {
     const w = dims().width
     // Fixed: prefix(5) + space(1) + status(2) + space(1) + countsCol + abWidth = 9 + countsWidth + abWidth
-    const fixed = 9 + countsWidth() + abWidth()
+    const fixed = 9 + groupPrefixWidth() + countsWidth() + abWidth()
     const remaining = w - fixed
     const nameMin = 10
     return Math.min(24, Math.max(nameMin, Math.floor(remaining * 0.3)))
@@ -81,8 +83,21 @@ export function WorkspaceRow(props: Props) {
     const nw = nameWidth()
     // branch gets ~30% of remaining after name, capped
     const w = dims().width
-    const fixed = 9 + countsWidth() + abWidth() + nw + 2
+    const fixed = 9 + groupPrefixWidth() + countsWidth() + abWidth() + nw + 2
     return Math.min(30, Math.max(10, Math.floor((w - fixed) * 0.4)))
+  })
+
+  const labelsText = createMemo(() => {
+    const labels = ws().labels ?? []
+    if (labels.length === 0) return ""
+    const shown = labels.slice(0, 2).map(label => `[${label}]`).join(" ")
+    const overflow = labels.length > 2 ? ` +${labels.length - 2}` : ""
+    return shown + overflow
+  })
+
+  const labelsWidth = createMemo(() => {
+    const text = labelsText()
+    return text ? text.length + 2 : 0
   })
 
   const messagePreview = createMemo(() => {
@@ -93,7 +108,7 @@ export function WorkspaceRow(props: Props) {
     const age = formatAge(msg.timestamp)
     const senderPrefix = msg.from ? `${msg.from}: ` : ""
     // Remaining space after all fixed columns
-    const fixedWidth = 9 + nameWidth() + 2 + branchWidth() + countsWidth()
+    const fixedWidth = 9 + groupPrefixWidth() + nameWidth() + 2 + branchWidth() + labelsWidth() + countsWidth()
     const ageWidth = age.length + 2  // "  age" spacing
     const available = Math.max(10, dims().width - fixedWidth - ageWidth - 2) // -2 for "  " before msg
     const text = senderPrefix + msg.text
@@ -107,7 +122,7 @@ export function WorkspaceRow(props: Props) {
       flexDirection="row"
       backgroundColor={props.focused ? "#333333" : undefined}
     >
-      <text fg={props.focused ? "white" : "gray"}>{prefix()} </text>
+      <text fg={props.focused ? "white" : "gray"}>{`${props.groupPrefix ?? ""}${prefix()} `}</text>
       <StatusIndicator status={props.entry.status} />
       <text fg="white"> {(() => {
         const n = ws().name
@@ -127,6 +142,9 @@ export function WorkspaceRow(props: Props) {
       <text fg={behindCount() > 0 ? (isStale() ? "gray" : "yellow") : "gray"}>
         {behindCount() > 0 ? `  ↓${behindCount()}${isStale() ? "?" : ""}` : ""}
       </text>
+      {labelsText() && (
+        <text fg="gray">{`  ${labelsText()}`}</text>
+      )}
       <text fg="gray">{`  ${countsText()}`}</text>
       <text fg={messagePreview() ? "white" : "gray"}>
         {messagePreview() ? `  ${messagePreview()!.truncated}` : `  ${formatAge(ws().created)}`}

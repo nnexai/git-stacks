@@ -47,6 +47,9 @@ name: my-ws
 branch: feat/thing
 created: "2024-01-01"
 last_opened: "${lastOpened}"
+labels:
+  - backend
+  - sprint:14
 repos:
   - name: api
     repo: api
@@ -144,5 +147,17 @@ describe("list default columns", () => {
     // Should not error — same output as without --status
     expect(exitCode).toBe(0)
     expect(stdout).toContain("feat/thing")
+  })
+
+  test("--label filters workspaces with AND logic", () => {
+    const { stdout, exitCode } = runList(cfgDir, ["--label", "backend", "--label", "sprint:14"])
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain("my-ws")
+  })
+
+  test("--label reports no matches cleanly", () => {
+    const { stdout, exitCode } = runList(cfgDir, ["--label", "frontend"])
+    expect(exitCode).toBe(0)
+    expect(stdout).toContain("No workspaces match labels: frontend")
   })
 })

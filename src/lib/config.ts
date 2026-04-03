@@ -42,6 +42,11 @@ export type Files = z.infer<typeof FilesSchema>
 export const PortsSchema = z.record(z.string(), z.number().nullable()).optional()
 export type Ports = z.infer<typeof PortsSchema>
 
+const LabelSchema = z.string().regex(
+  /^[A-Za-z0-9._:-]+$/,
+  "Label may only contain letters, digits, dots, colons, hyphens, underscores"
+)
+
 /** Shared name validation — rejects path separators, traversal, and shell metacharacters. */
 export const NameSchema = z.string()
   .min(1, "Name must not be empty")
@@ -97,6 +102,7 @@ export const TemplateSchema = z.object({
   integrations: z.record(z.string(), z.unknown()).optional(),
   includes: z.array(z.string()).optional(),
   ports: PortsSchema,
+  labels: z.array(LabelSchema).optional(),
 })
 export type Template = z.infer<typeof TemplateSchema>
 
@@ -157,6 +163,7 @@ export const WorkspaceSchema = z.object({
   env_file: z.string().optional(),
   files: FilesSchema,
   ports: PortsSchema,
+  labels: z.array(LabelSchema).optional(),
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 

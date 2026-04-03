@@ -40,6 +40,7 @@ import {
 } from "../lib/workspace-ops"
 import type { SyncRow, PushRow, PullRow } from "../lib/workspace-ops"
 import { formatEnv, detectRepoFromCwd, type EnvFormat } from "../lib/env"
+import { matchesLabels } from "../lib/labels"
 
 function formatSyncRow(row: SyncRow): string {
   const label = row.status === "synced" ? "synced" : row.status === "skipped" ? "skipped" : "failed"
@@ -110,14 +111,15 @@ export function registerWorkspaceCommands(program: Command) {
     .description("Create a new workspace interactively")
     .option("--from <source>", "Create from template name or local repo path")
     .option("--template <name>", "Compose from template(s) — repeatable", (val: string, arr: string[]) => { arr.push(val); return arr }, [] as string[])
-    .action(async (name: string | undefined, opts: { from?: string; template?: string[] }) => {
+    .option("--label <tag>", "Set label on workspace (repeatable)", (val: string, arr: string[]) => { arr.push(val); return arr }, [] as string[])
+    .action(async (name: string | undefined, opts: { from?: string; template?: string[]; label?: string[] }) => {
       if (name !== undefined) validateName(name)
       if (opts.from && opts.template && opts.template.length > 0) {
         console.error("[git-stacks] Error: --from and --template are mutually exclusive")
         process.exit(1)
       }
       const templateNames = opts.template && opts.template.length > 0 ? opts.template : undefined
-      await runWorkspaceNew(name, opts.from, templateNames)
+      await runWorkspaceNew(name, opts.from, templateNames, opts.label)
     })
 
   program
@@ -270,16 +272,25 @@ export function registerWorkspaceCommands(program: Command) {
     .addOption(new Option("--sort <key>", "Sort by: date, name, status").choices(["date", "name", "status"]).default("date"))
     .option("--json", "Output as JSON")
     .option("--status", "Check dirty status (kept for backward compat — dirty checks always run)")
-    .action(async (opts: { sort: string; json?: boolean; status?: boolean }) => {
+    .option("--label <tag>", "Filter by label (repeatable, AND logic)", (val: string, arr: string[]) => { arr.push(val); return arr }, [] as string[])
+    .action(async (opts: { sort: string; json?: boolean; status?: boolean; label: string[] }) => {
       const workspaces = listWorkspaces()
-      if (workspaces.length === 0) {
+      const filtered = opts.label.length > 0
+        ? workspaces.filter(ws => matchesLabels(ws, opts.label))
+        : workspaces
+
+      if (filtered.length === 0) {
+        if (opts.label.length > 0) {
+          console.log(`No workspaces match labels: ${opts.label.join(", ")}`)
+          return
+        }
         console.log("No workspaces. Run `git-stacks new` to create one.")
         return
       }
 
       // Always check dirty status (UX-04); --status flag retained for backward compat
       const infos = await Promise.all(
-        workspaces.map((ws) => getWorkspaceListInfo(ws))
+        filtered.map((ws) => getWorkspaceListInfo(ws))
       )
 
       // Sort

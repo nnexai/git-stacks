@@ -100,6 +100,7 @@ const mockReadTemplate = mock((_name: string) => ({
   repos: [
     { repo: "frontend", mode: "worktree" as const },
   ],
+  labels: ["template:shared"],
   integrations: {
     vscode: { enabled: true, cmd: "code" },
   },
@@ -210,6 +211,7 @@ describe("workspace-wizard integration overrides", () => {
     // safeText returns: name, branch, description, port names
     mockSafeText
       .mockResolvedValueOnce("ws-from-template") // name
+      .mockResolvedValueOnce("") // labels
       .mockResolvedValueOnce("feature/ws-from-template") // branch
       .mockResolvedValueOnce("") // description
       .mockResolvedValueOnce("") // port names (empty = skip)
@@ -234,6 +236,7 @@ describe("workspace-wizard integration overrides", () => {
     // safeText: name, branch, description, port names
     mockSafeText
       .mockResolvedValueOnce("ws-adhoc") // name
+      .mockResolvedValueOnce("") // labels
       .mockResolvedValueOnce("feature/ws-adhoc") // branch
       .mockResolvedValueOnce("") // description
       .mockResolvedValueOnce("") // port names (empty = skip)
@@ -258,6 +261,7 @@ describe("workspace-wizard integration overrides", () => {
 
     mockSafeText
       .mockResolvedValueOnce("ws-with-overrides")
+      .mockResolvedValueOnce("") // labels
       .mockResolvedValueOnce("feature/ws-with-overrides")
       .mockResolvedValueOnce("") // description
       .mockResolvedValueOnce("") // port names (empty = skip)
@@ -279,6 +283,7 @@ describe("workspace-wizard integration overrides", () => {
 
     mockSafeText
       .mockResolvedValueOnce("ws-no-override")
+      .mockResolvedValueOnce("") // labels
       .mockResolvedValueOnce("feature/ws-no-override")
       .mockResolvedValueOnce("") // description
       .mockResolvedValueOnce("") // port names (empty = skip)
@@ -298,5 +303,42 @@ describe("workspace-wizard integration overrides", () => {
     // Template snapshot is still { vscode: { enabled: true, cmd: "code" } }
     expect(savedWs.settings?.integrations).toBeDefined()
     // But it should be the template snapshot, not user overrides (they returned undefined)
+  })
+
+  test("accepts CLI labels and unions template labels at creation time", async () => {
+    mockSafeText
+      .mockResolvedValueOnce("ws-cli-labels")
+      .mockResolvedValueOnce("feature/ws-cli-labels")
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("")
+
+    mockSelect
+      .mockResolvedValueOnce("template")
+      .mockResolvedValueOnce("my-template")
+
+    await runWorkspaceNew(undefined, undefined, undefined, ["backend", "template:shared"])
+
+    expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { labels?: string[] }
+    expect(savedWs.labels).toEqual(["template:shared", "backend"])
+  })
+
+  test("prompts for comma-separated labels when CLI labels are absent", async () => {
+    mockSafeText
+      .mockResolvedValueOnce("ws-prompted")
+      .mockResolvedValueOnce("backend, sprint:14")
+      .mockResolvedValueOnce("feature/ws-prompted")
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("")
+
+    mockSelect
+      .mockResolvedValueOnce("template")
+      .mockResolvedValueOnce("my-template")
+
+    await runWorkspaceNew()
+
+    expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { labels?: string[] }
+    expect(savedWs.labels).toEqual(["template:shared", "backend", "sprint:14"])
   })
 })

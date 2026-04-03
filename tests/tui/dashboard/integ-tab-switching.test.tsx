@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll, afterEach, beforeEach } from "bun:test"
 import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeGitMock } from "../../helpers"
+import type { Workspace } from "../../../src/lib/config"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -10,13 +11,39 @@ const configDir = makeTmpDir("integ-tabs")
 process.env.GIT_STACKS_CONFIG_DIR = configDir
 
 // Inline workspace fixture
-const wsFixture = {
-  name: "test-ws",
-  schema_version: "1" as const,
-  branch: "feature/test",
-  created: "2026-01-15T00:00:00.000Z",
-  repos: [] as any[],
-}
+const wsFixtures = [
+  {
+    name: "test-ws",
+    schema_version: "1" as const,
+    branch: "feature/test",
+    created: "2026-01-15T00:00:00.000Z",
+    repos: [] as any[],
+    labels: ["backend", "sprint:14", "client:acme"],
+  },
+  {
+    name: "billing",
+    schema_version: "1" as const,
+    branch: "feature/billing",
+    created: "2026-01-15T00:00:00.000Z",
+    repos: [] as any[],
+    labels: ["ops"],
+  },
+  {
+    name: "api-fix",
+    schema_version: "1" as const,
+    branch: "feature/api-fix",
+    created: "2026-01-15T00:00:00.000Z",
+    repos: [] as any[],
+    labels: ["backend"],
+  },
+  {
+    name: "plain",
+    schema_version: "1" as const,
+    branch: "feature/plain",
+    created: "2026-01-15T00:00:00.000Z",
+    repos: [] as any[],
+  },
+] as const
 
 // Inline registry fixture
 const registryFixture = [
@@ -37,10 +64,10 @@ const templateFixture = {
 
 // Mock config module with inline fixtures — resilient to module cache ordering
 mock.module("../../../src/lib/config", () => ({
-  listWorkspaces: mock(() => [wsFixture]),
-  readWorkspace: mock((_name: string) => wsFixture),
+  listWorkspaces: mock(() => [...wsFixtures]),
+  readWorkspace: mock((name: string) => wsFixtures.find(ws => ws.name === name) ?? wsFixtures[0]),
   writeWorkspace: mock(() => {}),
-  workspaceExists: mock((name: string) => name === "test-ws"),
+  workspaceExists: mock((name: string) => wsFixtures.some(ws => ws.name === name)),
   workspacePath: mock((name: string) => `${configDir}/workspaces/${name}.yml`),
   readRegistry: mock(() => registryFixture),
   writeRegistry: mock(() => {}),
@@ -85,7 +112,7 @@ mock.module("../../../src/lib/lifecycle", () => ({
 
 // Dynamic import after mocks are set
 const { testRender } = await import("@opentui/solid")
-const { default: App } = await import("../../../src/tui/dashboard/App")
+const { default: App, matchesWorkspaceFilter } = await import("../../../src/tui/dashboard/App")
 
 const renderOpts = { kittyKeyboard: true }
 
@@ -111,6 +138,18 @@ describe("integration: tab switching", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("test-ws")
     expect(frame).toContain("feature/test")
+  })
+
+  test("workspace row renders max two labels with overflow", async () => {
+    const { renderer, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, { kittyKeyboard: true, width: 140, height: 30 }
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("[backend] [sprint:14] +1")
   })
 
   test("pressing 2 switches to Templates tab", async () => {
@@ -180,6 +219,35 @@ describe("integration: tab switching", () => {
     // The list row should show relative age (e.g. "66d"), not raw ISO timestamp
     expect(wsLine).not.toContain("2026-01-15T")
     expect(wsLine).toMatch(/\d+[smhd]/)
+  })
+
+  test("filter matches workspace labels by default", () => {
+    expect(matchesWorkspaceFilter(wsFixtures[1] as unknown as Workspace, "ops")).toBe(true)
+    expect(matchesWorkspaceFilter(wsFixtures[0] as unknown as Workspace, "ops")).toBe(false)
+  })
+
+  test("label: filter restricts matching to labels only", () => {
+    expect(matchesWorkspaceFilter(wsFixtures[0] as unknown as Workspace, "label:backend")).toBe(true)
+    expect(matchesWorkspaceFilter(wsFixtures[1] as unknown as Workspace, "label:backend")).toBe(false)
+    expect(matchesWorkspaceFilter({ ...wsFixtures[1], name: "backend-service" } as Workspace, "label:backend")).toBe(false)
+  })
+
+  test("g toggles grouped-by-label view including unlabeled section", async () => {
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, { kittyKeyboard: true, width: 140, height: 30 }
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressKey("g")
+    await renderOnce()
+
+    const frame = captureCharFrame()
+    expect(frame).toContain("backend")
+    expect(frame).toContain("ops")
+    expect(frame).toContain("[unlabeled]")
+    expect(frame).toContain("├─")
+    expect(frame).toContain("└─")
   })
 })
 
