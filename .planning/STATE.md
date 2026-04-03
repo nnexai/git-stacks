@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.14.0
 milestone_name: Workflow Completion & Workspace UX
 status: executing
-stopped_at: Phase 63 context gathered — all phases discussed
-last_updated: "2026-04-03T13:47:27.993Z"
-last_activity: 2026-04-03 — Phase 61 planned (3 plans, 2 waves)
+stopped_at: Completed 58-02-PLAN.md — ahead/behind data layer extended
+last_updated: "2026-04-03T14:35:00.000Z"
+last_activity: 2026-04-03
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 15
-  completed_plans: 0
+  total_plans: 18
+  completed_plans: 2
   percent: 0
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** v0.14.0 Phase 61 planned — ready to execute Phase 58
+**Current focus:** Phase 58 — Ahead/Behind Tracking
 
 ## Current Position
 
-Phase: 61 of 63 (Secrets) — planned
-Plan: 3 plans in 2 waves (Wave 1: secrets library + config schema; Wave 2: workspace integration + CLI + config wizard)
-Status: Ready to execute Phase 58
-Last activity: 2026-04-03 — Phase 61 planned (3 plans, 2 waves)
+Phase: 58 (Ahead/Behind Tracking) — EXECUTING
+Plan: 3 of 4
+Status: Ready to execute
+Last activity: 2026-04-03
 
 ```
 Progress: [----------] 0% (0/6 phases)
@@ -46,6 +46,10 @@ Progress: [----------] 0% (0/6 phases)
 - Phase 61 (secrets) `cmd:` resolver requires explicit opt-in in config.yml; not enabled by default
 - Phase 62 (stash) double-stash guard: if `git-stacks auto-stash` entry already in `git stash list`, refuse to stash again
 - LBL-01 label filter must use shared `matchesLabels(workspace, terms[])` utility before implementing CLI or TUI surfaces
+- [Phase 58-ahead-behind-tracking]: Use git rev-parse --git-common-dir (not hardcoded .git) so isFetchStale works in worktrees where .git is a file
+- [Phase 58-ahead-behind-tracking]: isFetchStale defaults to 15-minute threshold, returns true (stale) on any error — safe default
+- [58-02]: ahead aggregation is SUM across repos; behind is MAX; staleness is OR (any stale FETCH_HEAD taints workspace)
+- [58-02]: trunk repos always report 0/0 ahead/behind — not meaningful for trunk mode
 
 ### Pending Todos
 
@@ -57,6 +61,6 @@ Progress: [----------] 0% (0/6 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-03T13:47:27.990Z
-Stopped at: Phase 63 context gathered — all phases discussed
-Next action: `/gsd:execute-phase 58` — Ahead/Behind Tracking
+Last session: 2026-04-03T14:35:00.000Z
+Stopped at: Completed 58-02-PLAN.md — ahead/behind data layer extended
+Next action: `/gsd:execute-phase 58` — Ahead/Behind Tracking (plan 3)
