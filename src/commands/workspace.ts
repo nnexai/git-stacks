@@ -301,8 +301,12 @@ export function registerWorkspaceCommands(program: Command) {
       for (const info of infos) {
         const dirtyMark = info.dirty ? "~" : " "
         const repoStr = `${info.repoCount} repos`
+        const staleFlag = info.aheadBehindStale ? "?" : ""
+        const aheadStr = info.ahead > 0 ? `↑${info.ahead}${staleFlag}` : ""
+        const behindStr = info.behind > 0 ? `↓${info.behind}${staleFlag}` : ""
+        const abStr = [aheadStr, behindStr].filter(Boolean).join(" ")
         console.log(
-          `  ${dirtyMark} ${info.name.padEnd(20)} ${info.branch.padEnd(30)} ${repoStr.padEnd(10)} ${info.lastOpened.padEnd(6)}`
+          `  ${dirtyMark} ${info.name.padEnd(20)} ${info.branch.padEnd(30)} ${abStr.padEnd(10)} ${repoStr.padEnd(10)} ${info.lastOpened.padEnd(6)}`
         )
       }
     })
