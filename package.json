@@ -1,6 +1,6 @@
 {
   "name": "git-stacks",
-  "version": "0.13.1-rc.0",
+  "version": "0.13.0-rc.1",
   "description": "Git worktree workspace manager — templates, workspaces, and multi-repo orchestration",
   "license": "MIT",
   "author": "nnexai",
@@ -35,8 +35,8 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
-    "@opentui/core": "0.1.87",
-    "@opentui/solid": "0.1.87",
+    "@opentui/core": "^0.1.96",
+    "@opentui/solid": "^0.1.96",
     "commander": "^14.0.3",
     "opentui-spinner": "^0.0.6",
     "solid-js": "^1.9.12",
