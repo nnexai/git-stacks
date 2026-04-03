@@ -196,7 +196,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
   2. `--force-with-lease`, `--force`, and `--dry-run` flags work as expected; `--json` outputs structured results
   3. Any repo push failure sets overall exit code to non-zero and reports which repos failed
   4. TUI ActionMenu includes a push action with live per-repo progress display
-**Plans**: TBD
+**Plans**: 4 (Wave 1: 01-pushBranch, 02-pushWorkspace; Wave 2: 03-CLI, 04-TUI)
 **UI hint**: yes
 
 ### Phase 60: Labels
@@ -260,7 +260,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 47-52. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
 | 53-57. CLI Polish & Completions | v0.13.0 | 9/9 | Complete | 2026-04-02 |
 | 58. Ahead/Behind Tracking | v0.14.0 | 0/4 | Planned | - |
-| 59. Push | v0.14.0 | 0/TBD | Not started | - |
+| 59. Push | v0.14.0 | 0/4 | Planned | - |
 | 60. Labels | v0.14.0 | 0/TBD | Not started | - |
 | 61. Secrets | v0.14.0 | 0/TBD | Not started | - |
 | 62. Stash on Sync | v0.14.0 | 0/TBD | Not started | - |
