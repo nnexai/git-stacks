@@ -1,9 +1,9 @@
 ---
 phase: 58
 slug: ahead-behind-tracking
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: complete
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-04-03
 ---
 
@@ -38,14 +38,14 @@ created: 2026-04-03
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 58-01-01 | 01 | 1 | AB-01 | unit | `bun test tests/lib/git.test.ts` | Exists | pending |
-| 58-01-02 | 01 | 1 | AB-07 | unit | `bun test tests/lib/git.test.ts` | Exists | pending |
-| 58-02-01 | 02 | 1 | AB-02 | unit | `bun test tests/lib/workspace-ops.test.ts` | Exists | pending |
-| 58-02-02 | 02 | 1 | AB-04 | unit | `bun test tests/lib/workspace-ops.test.ts` | Exists | pending |
-| 58-03-01 | 03 | 2 | AB-03 | manual | Run `bun run src/index.ts list` and verify columns | N/A | pending |
-| 58-03-02 | 03 | 2 | AB-04 | manual | Run `bun run src/index.ts status <ws>` and verify output | N/A | pending |
-| 58-04-01 | 04 | 2 | AB-05 | manual | Run `bun run src/index.ts manage` and verify WorkspaceRow | N/A | pending |
-| 58-04-02 | 04 | 2 | AB-06 | manual | Run `bun run src/index.ts manage` and verify WorkspaceDetail | N/A | pending |
+| 58-01-01 | 01 | 1 | AB-01 | unit | `bun test tests/lib/git.test.ts` | Exists | passed |
+| 58-01-02 | 01 | 1 | AB-07 | unit | `bun test tests/lib/git.test.ts` | Exists | passed |
+| 58-02-01 | 02 | 1 | AB-02 | unit | `bun test tests/lib/workspace-ops.test.ts` | Exists | passed |
+| 58-02-02 | 02 | 1 | AB-04 | unit | `bun test tests/lib/workspace-ops.test.ts` | Exists | passed |
+| 58-03-01 | 03 | 2 | AB-03 | behavioral | temp-config `bun run src/index.ts list --sort name` | N/A | passed |
+| 58-03-02 | 03 | 2 | AB-04 | behavioral | temp-config `bun run src/index.ts status ab-check` | N/A | passed |
+| 58-04-01 | 04 | 2 | AB-05 | render | `bun test tests/tui/dashboard/snapshots/WorkspaceRow.snap.test.tsx` | Exists | passed |
+| 58-04-02 | 04 | 2 | AB-06 | render | `bun test tests/tui/dashboard/WorkspaceDetail.test.tsx` | Exists | passed |
 
 *Status: pending · green · red · flaky*
 
@@ -59,23 +59,17 @@ created: 2026-04-03
 
 ## Manual-Only Verifications
 
-| Behavior | Requirement | Why Manual | Test Instructions |
-|----------|-------------|------------|-------------------|
-| CLI list column format | AB-03 | Visual formatting verification | Run `bun run src/index.ts list` on a workspace with commits ahead/behind; verify `↑N ↓N` columns appear |
-| CLI status per-repo format | AB-04 | Visual formatting verification | Run `bun run src/index.ts status <ws>` and verify per-repo `↑N ↓N` |
-| TUI WorkspaceRow indicators | AB-05 | TUI rendering | Run `bun run src/index.ts manage`; verify `↑N` green, `↓N` yellow after branch name |
-| TUI WorkspaceDetail per-repo | AB-06 | TUI rendering | Navigate to workspace detail; verify per-repo ahead/behind in repo table |
-| Stale indicator visual | AB-07 | Visual formatting | Test with stale FETCH_HEAD (>15min old); verify `?` suffix and dim styling |
+None remaining. CLI output was spot-checked against a temporary real workspace, and both TUI surfaces now have OpenTUI render coverage for stale-aware ahead/behind output.
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have automated verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 15s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have automated verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 15s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved

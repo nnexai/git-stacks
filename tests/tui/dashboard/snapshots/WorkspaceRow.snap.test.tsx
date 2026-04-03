@@ -134,9 +134,10 @@ describe("WorkspaceRow snapshots", () => {
       state: "loaded",
       hasDirty: true,
       hasMissing: false,
+      aheadBehindStale: false,
       repos: [
-        { name: "api", exists: true, dirty: true, branch: "feat/my-feature", mode: "worktree" },
-        { name: "web", exists: true, dirty: false, branch: "main", mode: "trunk" },
+        { name: "api", exists: true, dirty: true, branch: "feat/my-feature", mode: "worktree", ahead: 0, behind: 0 },
+        { name: "web", exists: true, dirty: false, branch: "main", mode: "trunk", ahead: 0, behind: 0 },
       ],
     }
     const { renderOnce, captureCharFrame } = await testRender(
@@ -153,6 +154,37 @@ describe("WorkspaceRow snapshots", () => {
     )
     await renderOnce()
     expect(captureCharFrame()).toMatchSnapshot()
+  })
+
+  test("renders ahead/behind indicators with stale suffix", async () => {
+    const status: WorkspaceEntry["status"] = {
+      state: "loaded",
+      hasDirty: false,
+      hasMissing: false,
+      aheadBehindStale: true,
+      repos: [
+        { name: "api", exists: true, dirty: false, branch: "feat/my-feature", mode: "worktree", ahead: 3, behind: 2 },
+        { name: "web", exists: true, dirty: false, branch: "main", mode: "trunk", ahead: 0, behind: 0 },
+      ],
+    }
+    const { renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <WorkspaceRow
+          entry={makeEntry({}, status)}
+          focused={false}
+          selected={false}
+          messages={[]}
+          tick={0}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("↑3?")
+    expect(frame).toContain("↓2?")
+    expect(frame).not.toContain("↑0")
+    expect(frame).not.toContain("↓0")
   })
 
   test("renders long workspace name truncated", async () => {

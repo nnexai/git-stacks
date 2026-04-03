@@ -227,6 +227,33 @@ describe("WorkspaceDetail integration display", () => {
     expect(frame).toContain("2 cols")
     expect(frame).not.toContain("[object Object]")
   })
+
+  test("Test 8: renders per-repo ahead/behind with stale suffix from workspace status", async () => {
+    const entry = makeEntry({
+      entry: {
+        status: {
+          state: "loaded" as const,
+          hasDirty: false,
+          hasMissing: false,
+          aheadBehindStale: true,
+          repos: [
+            { name: "api", exists: true, dirty: false, branch: "feat/test", mode: "worktree", ahead: 3, behind: 2 },
+            { name: "web", exists: true, dirty: false, branch: "main", mode: "trunk", ahead: 0, behind: 0 },
+          ],
+        },
+      },
+    })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("api")
+    expect(frame).toContain("↑3?")
+    expect(frame).toContain("↓2?")
+    expect(frame).not.toContain("↑0")
+    expect(frame).not.toContain("↓0")
+  })
 })
 
 describe("WorkspaceDetail linked issues display", () => {
