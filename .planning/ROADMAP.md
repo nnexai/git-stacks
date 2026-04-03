@@ -168,7 +168,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 - [ ] **Phase 58: Ahead/Behind Tracking** (4 plans, 2 waves) - Per-repo commit distance from base; AHEAD/BEHIND in list and TUI
 - [ ] **Phase 59: Push** - `git-stacks push` command with parallel multi-repo push and TUI action
 - [ ] **Phase 60: Labels** (4 plans, 2 waves) - Label schema, CRUD subcommand, list filter, TUI tags and group-by
-- [ ] **Phase 61: Secrets** - Pluggable secret resolution for env references in workspace YAML
+- [ ] **Phase 61: Secrets** (3 plans, 2 waves) - Pluggable secret resolution for env references in workspace YAML
 - [ ] **Phase 62: Stash on Sync** - Auto-stash dirty repos before sync, pop in reverse with conflict safety
 - [ ] **Phase 63: Release Prep** - v0.14.0 version bump, CHANGELOG, README updates
 
@@ -222,7 +222,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
   3. `git-stacks open --skip-secrets` bypasses resolution, substitutes empty strings, and logs a warning per unresolved reference
   4. `cmd:` resolver is disabled unless explicitly enabled in `config.yml secrets.resolvers`
   5. External CLI resolvers (keychain, cmd) enforce a 10-second timeout and surface a human-readable error if the subprocess hangs
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves (01-02 parallel, 03 depends on wave 1)
 
 ### Phase 62: Stash on Sync
 **Goal**: Users can sync workspaces with dirty worktrees without losing uncommitted changes by using the `--stash` flag
@@ -262,6 +262,6 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 58. Ahead/Behind Tracking | v0.14.0 | 0/4 | Planned | - |
 | 59. Push | v0.14.0 | 0/4 | Planned | - |
 | 60. Labels | v0.14.0 | 0/4 | Planned | - |
-| 61. Secrets | v0.14.0 | 0/TBD | Not started | - |
+| 61. Secrets | v0.14.0 | 0/3 | Planned | - |
 | 62. Stash on Sync | v0.14.0 | 0/TBD | Not started | - |
 | 63. Release Prep | v0.14.0 | 0/TBD | Not started | - |
