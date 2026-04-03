@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.14.0
 milestone_name: Workflow Completion & Workspace UX
-status: executing
-stopped_at: Completed Phase 61 — Secrets
-last_updated: "2026-04-03T17:05:00.000Z"
+status: ready_for_cleanup
+stopped_at: Completed milestone archival
+last_updated: "2026-04-03T21:03:31Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 6
   total_plans: 18
-  completed_plans: 15
-  percent: 67
+  completed_plans: 18
+  percent: 100
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 62 — Stash on Sync
+**Current focus:** Milestone cleanup
 
 ## Current Position
 
-Phase: 62 (Stash on Sync) — READY
-Plan: 2 of 2
-Status: Ready to execute
+Phase: All implementation phases complete
+Plan: 18 of 18
+Status: Milestone archived; ready for cleanup
 Last activity: 2026-04-03
 
 ```
-Progress: [######----] 67% (4/6 phases)
+Progress: [##########] 100% (6/6 phases)
 ```
 
 ## Accumulated Context
@@ -48,6 +48,11 @@ Progress: [######----] 67% (4/6 phases)
 - Phase 61 (secrets) constraint: `resolveSecrets` signature is `(rawEnv: Record<string, string>, resolvers) => Record<string, string>` — never accepts workspace object; prevents plaintext write to YAML
 - Phase 61 (secrets) `cmd:` resolver requires explicit opt-in in config.yml; not enabled by default
 - Phase 62 (stash) double-stash guard: if `git-stacks auto-stash` entry already in `git stash list`, refuse to stash again
+- Phase 62 (stash) restoration runs even when sync exits early after stashing, so user changes are not stranded in the stash stack
+- Phase 62 (stash) stash-pop failures surface as `stashPopFailures` in JSON and as copy-paste recovery commands in human output
+- Phase 63 (release prep) v0.14.0 release notes document only shipped behavior — `--skip-secrets` is documented on `open`, not on unsupported flows
+- Post-audit fix: `git-stacks env` now resolves secret refs through the same runtime pipeline as `open`, so previews match hook/env-file behavior
+- Post-audit fix: README now documents ahead/behind list/status/dashboard behavior and the env preview secret-resolution semantics
 - LBL-01 label filter must use shared `matchesLabels(workspace, terms[])` utility before implementing CLI or TUI surfaces
 - [Phase 58-ahead-behind-tracking]: Use git rev-parse --git-common-dir (not hardcoded .git) so isFetchStale works in worktrees where .git is a file
 - [Phase 58-ahead-behind-tracking]: isFetchStale defaults to 15-minute threshold, returns true (stale) on any error — safe default
@@ -62,10 +67,10 @@ Progress: [######----] 67% (4/6 phases)
 
 ### Blockers/Concerns
 
-- Phase 61 (secrets): `op` CLI TTY behavior with `OP_BIOMETRIC_UNLOCK_ENABLED=0` is MEDIUM confidence — validate during implementation
+(none)
 
 ## Session Continuity
 
-Last session: 2026-04-03T17:05:00.000Z
-Stopped at: Completed Phase 61 verification and close-out artifacts
-Next action: Execute Phase 62 — Stash on Sync
+Last session: 2026-04-03T21:03:31Z
+Stopped at: Completed milestone archival
+Next action: Run cleanup to archive phase directories

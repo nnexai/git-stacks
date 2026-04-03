@@ -4,6 +4,28 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.14.0] — 2026-04-03
+
+### Added
+
+**Ahead/behind tracking** — `git-stacks list` now shows aggregated `↑N ↓N` indicators after each workspace branch, `git-stacks status` reports per-repo ahead/behind counts, and the dashboard surfaces the same data in workspace rows and details. FETCH_HEAD staleness older than 15 minutes is flagged instead of silently showing fresh-looking zeros, and trunk repos are excluded from branch-distance math.
+
+**Push command** — `git-stacks push [workspace]` pushes all worktree repo branches to `origin` in parallel while skipping trunk repos. It supports `--force-with-lease`, `--force`, `--dry-run`, `--set-upstream`, and `--json`, returns non-zero when any repo fails, and the dashboard now exposes a matching push action with live per-repo progress.
+
+**Labels** — workspaces can now be tagged with labels for filtering and grouping. `git-stacks label add/remove/list/clear <workspace>` manages labels directly, `git-stacks new --label <tag>` sets labels at creation time, `git-stacks list --label <tag>` filters with AND semantics, and the dashboard renders labels, matches them in `/` filtering, and can group workspaces by label.
+
+**Secret references** — workspace and template env maps can now use `${{ resolver:path }}` references that resolve at open time without writing plaintext back to YAML. Built-in resolvers include `keychain`, `env`, and opt-in `cmd`; `git-stacks open --skip-secrets` bypasses resolution with empty-string substitution; and external resolver commands enforce a 10-second timeout.
+
+**Stash on sync** — `git-stacks sync --stash` now auto-stashes dirty worktree repos before sync and restores them in reverse order after. A pre-existing `git-stacks auto-stash` entry blocks another auto-stash, stash-pop failures preserve the stash and surface a recovery command, and the dashboard automatically enables stash mode when syncing dirty worktrees.
+
+**Secrets config wizard** — `git-stacks config` now exposes resolver selection for the secrets subsystem so teams can keep `cmd` disabled by default while enabling only the resolvers they trust.
+
+### Changed
+
+**Label schema** — `WorkspaceSchema` and `TemplateSchema` now support an optional `labels` field using the shared `^[A-Za-z0-9._:-]+$` validation rule, keeping existing YAML files backward compatible while allowing namespaced labels like `sprint:14`.
+
+---
+
 ## [0.13.0] — 2026-04-02
 
 ### Added

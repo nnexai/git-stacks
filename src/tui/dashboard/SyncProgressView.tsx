@@ -5,7 +5,7 @@ import { CenteredDialog } from "./CenteredDialog"
 
 export type SyncRow = {
   repo: string
-  status: "pending" | "fetching" | "rebasing" | "synced" | "skipped" | "failed"
+  status: "pending" | "fetching" | "rebasing" | "synced" | "skipped" | "failed" | "stashing" | "popping"
   detail: string
   conflicts: string[]
 }
@@ -15,7 +15,7 @@ function glyphFor(status: SyncRow["status"]): string {
   if (status === "synced") return "✓"
   if (status === "skipped") return "⚠"
   if (status === "failed") return "✗"
-  return "" // fetching/rebasing use spinner
+  return "" // fetching/rebasing/stashing/popping use spinner
 }
 
 function colorFor(status: SyncRow["status"]): string {
@@ -23,7 +23,7 @@ function colorFor(status: SyncRow["status"]): string {
   if (status === "synced") return "green"
   if (status === "skipped") return "yellow"
   if (status === "failed") return "red"
-  return "cyan" // fetching/rebasing
+  return "cyan" // fetching/rebasing/stashing/popping
 }
 
 type Props = {
@@ -48,7 +48,7 @@ export function SyncProgressView(props: Props) {
           <>
             <box flexDirection="row" height={1} paddingLeft={2}>
               <Show
-                when={row.status === "fetching" || row.status === "rebasing"}
+                when={row.status === "fetching" || row.status === "rebasing" || row.status === "stashing" || row.status === "popping"}
                 fallback={
                   <text fg={colorFor(row.status)}>{glyphFor(row.status)} </text>
                 }

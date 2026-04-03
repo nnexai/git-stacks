@@ -33,8 +33,10 @@ import {
 import {
   writeEnvFiles,
   mergeEnv,
+  buildWorkspaceEnv,
   getWorkspaceListInfo,
   pushWorkspace,
+  syncWorkspace,
   openWorkspace,
 } from "../../src/lib/workspace-ops"
 
@@ -493,6 +495,118 @@ describe("pushWorkspace", () => {
     expect(result.ok).toBe(true)
     expect(statuses).toContain("pushing")
     expect(statuses).toContain("pushed")
+  })
+})
+
+describe("syncWorkspace --stash", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-ops-sync-stash")
+  })
+
+  afterEach(() => {
+    cleanup(tmp)
+  })
+
+  async function setupSyncWorkspace(
+    label: string,
+    advanceMain?: (repoPath: string) => void
+  ): Promise<{
+    wsName: string
+    stackName: string
+    repo: { name: string; repoPath: string; worktreePath: string }
+  }> {
+    const wsName = uniqueWsName(label)
+    const stackName = uniqueRegistryName(`${label}-repo`)
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+    const repo = repos[0]
+    const remotePath = join(tmp, `${label}-remote.git`)
+
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${repo.repoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${repo.repoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${repo.worktreePath} remote set-url origin ${remotePath}`, { stdio: "pipe" })
+
+    const mainOpts = { cwd: repo.repoPath, stdio: "pipe" as const }
+    if (advanceMain) {
+      advanceMain(repo.repoPath)
+    } else {
+      writeFileSync(join(repo.repoPath, "upstream.txt"), "upstream change\n")
+    }
+    execSync("git add .", mainOpts)
+    execSync(`git commit -m "advance ${label}"`, mainOpts)
+    execSync("git push origin main", mainOpts)
+
+    return { wsName, stackName, repo }
+  }
+
+  test("stash + sync + pop restores dirty files", async () => {
+    const { wsName, stackName, repo } = await setupSyncWorkspace("sync-stash-restore")
+    const dirtyPath = join(repo.worktreePath, "dirty.txt")
+    writeFileSync(dirtyPath, "uncommitted changes\n")
+
+    const rows: Array<string> = []
+    const result = await syncWorkspace(wsName, { strategy: "rebase", stash: true }, (row) => {
+      rows.push(`${row.status}:${row.detail}`)
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.stashPopFailures).toBeUndefined()
+    expect(existsSync(dirtyPath)).toBe(true)
+    expect(readFileSync(dirtyPath, "utf-8")).toBe("uncommitted changes\n")
+    expect(rows.some(row => row.startsWith("stashing:"))).toBe(true)
+    expect(rows.some(row => row.includes("stash restored"))).toBe(true)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  test("double-stash guard blocks sync and points to recovery command", async () => {
+    const { wsName, stackName, repo } = await setupSyncWorkspace("sync-stash-guard")
+    writeFileSync(join(repo.worktreePath, "stale.txt"), "stale changes\n")
+    execSync(`git -C ${repo.worktreePath} stash push --include-untracked -m "git-stacks auto-stash (sync)"`, { stdio: "pipe" })
+    writeFileSync(join(repo.worktreePath, "new-dirty.txt"), "new changes\n")
+
+    const result = await syncWorkspace(wsName, { strategy: "rebase", stash: true })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("already has a git-stacks auto-stash entry")
+    expect(result.error).toContain(`git -C ${repo.worktreePath} stash pop`)
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  test("stash pop conflicts fail the sync result and preserve the stash", async () => {
+    const { wsName, stackName, repo } = await setupSyncWorkspace("sync-stash-conflict", (repoPath) => {
+      writeFileSync(join(repoPath, "README.md"), "upstream change\n")
+    })
+    writeFileSync(join(repo.worktreePath, "README.md"), "dirty change\n")
+
+    const result = await syncWorkspace(wsName, { strategy: "rebase", stash: true })
+
+    expect(result.ok).toBe(false)
+    expect(result.stashPopFailures).toHaveLength(1)
+    expect(result.stashPopFailures?.[0].repo).toBe(repo.name)
+    expect(result.stashPopFailures?.[0].repoPath).toBe(repo.worktreePath)
+    const stashList = execSync(`git -C ${repo.worktreePath} stash list`, { stdio: "pipe" }).toString()
+    expect(stashList).toContain("git-stacks auto-stash (sync)")
+
+    cleanupFixture(wsName, stackName, tmp)
+  })
+
+  test("clean repos skip stash and pop phases", async () => {
+    const { wsName, stackName } = await setupSyncWorkspace("sync-stash-clean")
+
+    const statuses: string[] = []
+    const result = await syncWorkspace(wsName, { strategy: "rebase", stash: true }, (row) => {
+      statuses.push(row.status)
+    })
+
+    expect(result.ok).toBe(true)
+    expect(statuses).not.toContain("stashing")
+    expect(statuses).not.toContain("popping")
+
+    cleanupFixture(wsName, stackName, tmp)
   })
 })
 
@@ -1855,6 +1969,67 @@ describe("mergeEnv port injection (PORT-INJECT-01)", () => {
     const result = mergeEnv(ws)
     expect(result.FOO).toBe("bar")
     expect(result.PORT).toBe("12400")
+  })
+})
+
+describe("buildWorkspaceEnv", () => {
+  const config = {
+    workspace_root: "/tmp/workspace-env-root",
+    integrations: {},
+    ports: { range_start: 10000, range_end: 65000 },
+    secrets: { resolvers: ["env"] },
+  }
+
+  afterEach(() => {
+    delete process.env.GS_SECRET_TEST_VALUE
+  })
+
+  test("resolves secrets into the runtime env alongside base vars and ports", async () => {
+    process.env.GS_SECRET_TEST_VALUE = "resolved-token"
+    const ws = WorkspaceSchema.parse({
+      name: "env-ws",
+      branch: "feature/env",
+      created: "2026-04-03T00:00:00.000Z",
+      env: {
+        TOKEN: "${{ env:GS_SECRET_TEST_VALUE }}",
+        PLAIN: "plain-value",
+      },
+      ports: { API_PORT: 12400 },
+    })
+
+    const result = await buildWorkspaceEnv(ws, { config, triggeredBy: "env" })
+
+    expect(result.GS_WORKSPACE_NAME).toBe("env-ws")
+    expect(result.GS_WORKSPACE_BRANCH).toBe("feature/env")
+    expect(result.GS_WORKSPACE_PATH).toBe("/tmp/workspace-env-root/tasks/env-ws")
+    expect(result.GS_TRIGGERED_BY).toBe("env")
+    expect(result.TOKEN).toBe("resolved-token")
+    expect(result.PLAIN).toBe("plain-value")
+    expect(result.API_PORT).toBe("12400")
+  })
+
+  test("skipSecrets blanks secret refs and reports each skipped secret", async () => {
+    const warns: string[] = []
+    const ws = WorkspaceSchema.parse({
+      name: "env-ws",
+      branch: "feature/env",
+      created: "2026-04-03T00:00:00.000Z",
+      env: {
+        TOKEN: "${{ env:MISSING_SECRET }}",
+        PLAIN: "plain-value",
+      },
+    })
+
+    const result = await buildWorkspaceEnv(ws, {
+      config,
+      triggeredBy: "open",
+      skipSecrets: true,
+      onWarn: (message) => warns.push(message),
+    })
+
+    expect(result.TOKEN).toBe("")
+    expect(result.PLAIN).toBe("plain-value")
+    expect(warns).toEqual(["Skipping secret: TOKEN (env:MISSING_SECRET)"])
   })
 })
 

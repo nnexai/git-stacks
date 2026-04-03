@@ -8,18 +8,22 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.14.0 Workflow Completion & Workspace UX
+## Current State
 
-**Goal:** Complete the core workspace workflow (push, ahead/behind tracking) and add organizational features (labels, secrets, stash) that make git-stacks scale to real team/production use.
+**Latest shipped milestone:** v0.14.0 Workflow Completion & Workspace UX (2026-04-03)
 
-**Target features:**
-- Ahead/Behind Tracking — per-repo commit distance from base
-- `git-stacks push` — push workspace branches to remote
-- Labels / Grouping — label-based filtering and organization
-- Secrets / Env Var References — pluggable secret resolution for env values
-- `--stash` on Sync — auto-stash dirty worktrees before sync
+**What shipped in v0.14.0:**
+- Ahead/behind tracking across git primitives, CLI list/status output, and dashboard row/detail views
+- `git-stacks push` with parallel repo execution and dashboard push progress
+- Labels across workspace/template schema, CLI CRUD/filter/create flows, and dashboard grouping
+- Runtime-only secret resolution for `open` and `env`, with plaintext refs preserved in YAML
+- `git-stacks sync --stash` for dirty worktree sync with guarded restore and recovery output
 
-## Recent State (2026-04-02)
+## Next Milestone
+
+No next milestone is defined yet. Start `/gsd-new-milestone` to create fresh requirements and roadmap scope for the next version.
+
+## Recent State (2026-04-03)
 
 ### What shipped in v0.13.0
 
@@ -412,4 +416,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-03 after v0.14.0 milestone started*
+*Last updated: 2026-04-03 after v0.14.0 milestone completion*

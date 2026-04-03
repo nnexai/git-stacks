@@ -84,10 +84,10 @@ Ad-hoc composition on the command line: `git-stacks new my-feature --template ap
 git-stacks new [name]              # Create a workspace interactively
 git-stacks clone <source>          # Clone a workspace with a new name and branch
 git-stacks open <name>             # Open a workspace (VSCode, IntelliJ, cmux, tmux)
-git-stacks list                    # List all workspaces
-git-stacks status [name]           # Show dirty state and worktree health
+git-stacks list                    # List all workspaces with aggregated ahead/behind status
+git-stacks status [name]           # Show per-repo dirty state, ahead/behind, and worktree health
 git-stacks rename <old> <new>      # Rename a workspace
-git-stacks sync [name]             # Sync branches with upstream base branches
+git-stacks sync [name]             # Sync branches with upstream base branches (--stash for dirty repos)
 git-stacks run <name> [repo]       # Run a command or shell inside a workspace
 git-stacks merge <name>            # Merge branches into base branches, then clean
 git-stacks close <name>            # Close integration sessions (tmux, niri) without removing worktrees
@@ -97,6 +97,8 @@ git-stacks edit <name>             # Edit workspace interactively, or --yaml to 
 git-stacks cd <name> [repo]        # Print path — use via shell function
 git-stacks paths [workspace]       # Output repo paths (one per line) for agent CLI injection
 git-stacks pull [workspace]        # Pull latest for all repos (--ff-only, skips dirty)
+git-stacks push [name]             # Push workspace branches to remote (parallel, skips trunk)
+git-stacks label <action> <ws>     # Manage workspace labels (add/remove/list/clear)
 git-stacks env [workspace]         # Show merged env vars that would be injected at open time
 ```
 
@@ -157,6 +159,55 @@ git-stacks pull
 
 Worktree repos pull their workspace branch; trunk repos pull their default branch. Uses `--ff-only` for safety — diverged branches produce a clear error identifying the repo and branch. Dirty repos (uncommitted changes) are skipped with a warning. Exit code is non-zero if any repo was skipped or failed.
 
+## Ahead/Behind Tracking
+
+See how far workspace branches have drifted from their base branch:
+
+```bash
+# Aggregated ahead/behind across worktree repos
+git-stacks list
+
+# Per-repo ahead/behind for one workspace
+git-stacks status my-feature
+
+# Refresh remotes before computing ahead/behind
+git-stacks status my-feature --fetch
+```
+
+`git-stacks list` shows workspace-level `↑N` / `↓N` indicators aggregated across worktree repos. `git-stacks status` shows per-repo ahead/behind counts, and stale fetch data is marked with `?` so outdated values are never mistaken for fresh state. The dashboard surfaces the same data in workspace rows and the workspace detail pane.
+
+## Push
+
+Push workspace branches to remote:
+
+```bash
+# Push all worktree repos in parallel
+git-stacks push my-feature
+
+# Auto-detect workspace from current directory
+git-stacks push
+
+# Safe force-push (fails if remote has new commits)
+git-stacks push my-feature --force-with-lease
+
+# Hard force-push
+git-stacks push my-feature --force
+
+# Preview what would be pushed
+git-stacks push my-feature --dry-run
+
+# Structured output for scripting
+git-stacks push my-feature --json
+```
+
+Worktree repos push their workspace branch to `origin`; trunk repos are skipped. Per-repo progress is reported inline: `pushed api (3 commits)` / `skipped shared (trunk)` / `FAILED frontend: non-fast-forward`. Exit code is non-zero if any repo fails.
+
+The TUI dashboard includes a push action (`p` key in the action menu) with live per-repo progress display.
+
+### Stash on Sync
+
+Use `git-stacks sync --stash` to auto-stash dirty worktree repos before sync and pop stashes in reverse order after. A double-stash guard prevents stashing when a previous `git-stacks auto-stash` entry already exists. Stash pop failures preserve the stash entry and emit recovery commands (`git -C <path> stash pop`). The TUI dashboard auto-stashes dirty repos during sync without prompting.
+
 ## Env Inspection
 
 Inspect all environment variables that a workspace would inject when opened:
@@ -185,7 +236,36 @@ git-stacks env my-feature --format json
 git-stacks env my-feature --repo backend-api
 ```
 
-Shows GS_* injected vars, user-defined `env:` from workspace YAML, and resolved port vars — the full picture of what hooks and processes see at open time. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
+Shows GS_* injected vars, user-defined `env:` from workspace YAML, resolved port vars, and resolved secret refs using the same resolver pipeline as `open`. If a secret cannot be resolved, `env` fails with the same error you would hit during `open`, so the preview stays faithful to runtime behavior. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
+
+## Labels
+
+Tag workspaces for organization and filtering:
+
+```bash
+# Add labels to a workspace
+git-stacks label add my-feature backend sprint:14
+
+# Remove labels
+git-stacks label remove my-feature sprint:14
+
+# List labels on a workspace
+git-stacks label list my-feature
+
+# Clear all labels
+git-stacks label clear my-feature
+
+# Filter workspace list by label (AND logic with multiple flags)
+git-stacks list --label backend
+git-stacks list --label backend --label sprint:14
+
+# Set labels at creation time
+git-stacks new my-feature --label backend --label sprint:14
+```
+
+Labels support namespacing with colons (`sprint:14`, `client:acme`, `type:bugfix`). Template labels are unioned onto workspaces at creation time.
+
+In the TUI dashboard, label tags render after the branch name, the `/` filter matches against labels, and the `g` key toggles a group-by-label view with an `[unlabeled]` section for untagged workspaces.
 
 ## Workspace Notifications
 
@@ -224,7 +304,7 @@ The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs
 - Switch tabs with `1` / `2` / `3` or `[` / `]`
 - Each tab shows a split list + detail pane — detail updates as you move the cursor
 - All dialogs render as centered overlays with dimmed backgrounds
-- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane; per-repo "N behind" staleness badges in detail view
+- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane; aggregated `↑N` / `↓N` badges in list rows plus per-repo ahead/behind badges in detail view, with `?` on stale data
   - `s` — sync workspace (per-repo progress with 30s fetch timeout)
   - `m` — open full-screen message overlay for selected workspace
   - `c` — clear messages from a sender in the detail pane
@@ -463,6 +543,41 @@ hooks:
   post_open:
     - git-stacks message send "Opened" --from workspace
 ```
+
+## Secrets
+
+Reference external secrets in workspace or template env maps without storing plaintext in YAML:
+
+```yaml
+# In a template or workspace YAML
+env:
+  API_KEY: "${{ keychain:my-service/api-key }}"
+  DB_PASSWORD: "${{ env:DB_PASSWORD }}"
+  GIT_TOKEN: "${{ cmd:security find-generic-password -s gh-token -w }}"
+```
+
+Secrets are resolved at open time — resolved values are never written back to workspace YAML. Three built-in resolvers are available:
+
+| Resolver | Source | Notes |
+|----------|--------|-------|
+| `keychain` | macOS `security` / Linux `secret-tool` | Auto-detects platform |
+| `env` | `process.env` | No subprocess, always available |
+| `cmd` | `sh -c <command>` | Requires explicit opt-in in config |
+
+```bash
+# Skip secret resolution (substitutes empty strings)
+git-stacks open my-feature --skip-secrets
+```
+
+Configure available resolvers in global config:
+
+```yaml
+# ~/.config/git-stacks/config.yml
+secrets:
+  resolvers: [keychain, env]  # cmd requires explicit opt-in
+```
+
+External CLI resolvers enforce a 10-second subprocess timeout. Use `git-stacks config` to manage resolver settings interactively.
 
 ## Port Allocation
 

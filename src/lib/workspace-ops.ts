@@ -38,6 +38,9 @@ import {
   getCommitsAhead,
   isFetchStale,
   ensureUpstreamTracking,
+  stashPush,
+  stashPop,
+  hasAutoStash,
 } from "./git"
 import { type IntegrationContext } from "./integrations"
 import { runIntegrations, runIntegrationCleanup } from "./integrations/runner"
@@ -48,6 +51,13 @@ import { allocatePorts } from "./ports"
 import { buildResolvers, parseSecretRef, resolveSecrets } from "./secrets"
 
 export type ProgressCallback = (message: string) => void
+
+export type BuildWorkspaceEnvOptions = {
+  triggeredBy: string
+  config?: GlobalConfig
+  skipSecrets?: boolean
+  onWarn?: (message: string) => void
+}
 
 export type WorkspaceListInfo = {
   name: string
@@ -178,6 +188,43 @@ export function buildRepoEnv(
     GS_REPO_NAME: repo.name,
     GS_REPO_PATH: repo.task_path,
     GS_REPO_CLONE_PATH: repo.main_path,
+  }
+}
+
+async function resolveWorkspaceEnvVars(
+  workspace: Workspace,
+  config: GlobalConfig,
+  opts: { skipSecrets?: boolean; onWarn?: (message: string) => void }
+): Promise<Record<string, string>> {
+  const mergedEnvVars = mergeEnv(workspace)
+
+  if (opts.skipSecrets) {
+    const resolvedEnvVars: Record<string, string> = {}
+    for (const [key, value] of Object.entries(mergedEnvVars)) {
+      const ref = parseSecretRef(value)
+      if (ref) {
+        opts.onWarn?.(`Skipping secret: ${key} (${ref.id}:${ref.path})`)
+        resolvedEnvVars[key] = ""
+      } else {
+        resolvedEnvVars[key] = value
+      }
+    }
+    return resolvedEnvVars
+  }
+
+  return await resolveSecrets(mergedEnvVars, buildResolvers(config))
+}
+
+export async function buildWorkspaceEnv(
+  workspace: Workspace,
+  opts: BuildWorkspaceEnvOptions
+): Promise<Record<string, string>> {
+  const config = opts.config ?? readGlobalConfig()
+  const tasksDir = join(getTasksDir(config.workspace_root), workspace.name)
+  const resolvedEnvVars = await resolveWorkspaceEnvVars(workspace, config, opts)
+  return {
+    ...buildBaseEnv(workspace, tasksDir, opts.triggeredBy),
+    ...resolvedEnvVars,
   }
 }
 
@@ -842,29 +889,20 @@ export async function openWorkspace(
     }
   }
 
-  const mergedEnvVars = mergeEnv(wsWithPorts)
+  let baseEnv: Record<string, string>
   let resolvedEnvVars: Record<string, string>
-
-  if (opts.skipSecrets) {
-    resolvedEnvVars = {}
-    for (const [key, value] of Object.entries(mergedEnvVars)) {
-      const ref = parseSecretRef(value)
-      if (ref) {
-        onProgress?.(`⚠ Skipping secret: ${key} (${ref.id}:${ref.path})`)
-        resolvedEnvVars[key] = ""
-      } else {
-        resolvedEnvVars[key] = value
-      }
+  try {
+    resolvedEnvVars = await resolveWorkspaceEnvVars(wsWithPorts, config, {
+      skipSecrets: opts.skipSecrets,
+      onWarn: (message) => onProgress?.(`⚠ ${message}`),
+    })
+    baseEnv = {
+      ...buildBaseEnv(wsWithPorts, tasksDir, "open"),
+      ...resolvedEnvVars,
     }
-  } else {
-    try {
-      resolvedEnvVars = await resolveSecrets(mergedEnvVars, buildResolvers(config))
-    } catch (err) {
-      return { ok: false, error: `Secret resolution failed: ${err instanceof Error ? err.message : String(err)}` }
-    }
+  } catch (err) {
+    return { ok: false, error: `Secret resolution failed: ${err instanceof Error ? err.message : String(err)}` }
   }
-
-  const baseEnv = { ...buildBaseEnv(wsWithPorts, tasksDir, "open"), ...resolvedEnvVars }
 
   if (wsWithPorts.hooks?.pre_open?.length) {
     for (const cmd of wsWithPorts.hooks.pre_open) {
@@ -1086,12 +1124,13 @@ export type SyncResult = {
   ok: boolean
   synced: Array<{ repo: string; commits: number }>
   skipped: Array<{ repo: string; reason: string }>
+  stashPopFailures?: Array<{ repo: string; error: string; repoPath: string }>
   error?: string
 }
 
 export type SyncRow = {
   repo: string
-  status: "pending" | "fetching" | "rebasing" | "synced" | "skipped" | "failed"
+  status: "pending" | "fetching" | "rebasing" | "synced" | "skipped" | "failed" | "stashing" | "popping"
   detail: string
   conflicts: string[]
 }
@@ -1203,6 +1242,7 @@ export async function syncWorkspace(
   opts: {
     strategy?: "rebase" | "merge"
     bestEffort?: boolean
+    stash?: boolean
   },
   onProgress?: (update: SyncRow) => void
 ): Promise<SyncResult> {
@@ -1217,99 +1257,194 @@ export async function syncWorkspace(
     return { ok: true, synced: [], skipped: [] }
   }
 
+  const settledRows = new Map<string, SyncRow>()
+  const emitSettled = (row: SyncRow) => {
+    settledRows.set(row.repo, row)
+    onProgress?.(row)
+  }
+  const stashedRepos: Array<{ name: string; taskPath: string }> = []
+  let baseResult: SyncResult = { ok: true, synced: [], skipped: [] }
+  let stashPopFailures: SyncResult["stashPopFailures"]
+
   // Resolve base branches from workspace repo data (registry model)
   const repoInfos = worktreeRepos.map((repo) => {
     const baseBranch = repo.base_branch ?? "main"
     return { repo, baseBranch, strategy: opts.strategy ?? "rebase" }
   })
 
-  // Fetch all repos in parallel — track failures instead of swallowing them
-  const fetchFailures = new Map<string, string>()
-  await Promise.all(
-    repoInfos
-      .filter(({ repo }) => existsSync(repo.task_path))
-      .map(async ({ repo }) => {
-        onProgress?.({ repo: repo.name, status: "fetching", detail: "", conflicts: [] })
-        try {
-          await fetchOrigin(repo.task_path)
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "fetch failed"
-          const detail = msg.includes("timeout") ? "fetch failed (timeout)" : "fetch failed"
-          fetchFailures.set(repo.name, detail)
-          onProgress?.({ repo: repo.name, status: "failed", detail, conflicts: [] })
+  const restoreStashes = async (): Promise<SyncResult["stashPopFailures"]> => {
+    if (!opts.stash || stashedRepos.length === 0) return undefined
+
+    const failures: NonNullable<SyncResult["stashPopFailures"]> = []
+    for (const repo of [...stashedRepos].reverse()) {
+      onProgress?.({ repo: repo.name, status: "popping", detail: "", conflicts: [] })
+      const popResult = await stashPop(repo.taskPath)
+      if (!popResult.ok) {
+        failures.push({ repo: repo.name, error: popResult.error, repoPath: repo.taskPath })
+        const prior = settledRows.get(repo.name)
+        emitSettled({
+          repo: repo.name,
+          status: "failed",
+          detail: prior?.detail ? `${prior.detail}; stash pop failed` : "stash pop failed",
+          conflicts: prior?.conflicts ?? [],
+        })
+        continue
+      }
+
+      const prior = settledRows.get(repo.name)
+      emitSettled(
+        prior
+          ? {
+              ...prior,
+              detail: prior.detail ? `${prior.detail}; stash restored` : "stash restored",
+            }
+          : { repo: repo.name, status: "synced", detail: "stash restored", conflicts: [] }
+      )
+    }
+
+    return failures.length > 0 ? failures : undefined
+  }
+
+  try {
+    let shouldContinue = true
+
+    if (opts.stash) {
+      for (const repo of worktreeRepos) {
+        if (!existsSync(repo.task_path)) continue
+        if (await hasAutoStash(repo.task_path)) {
+          baseResult = {
+            ok: false,
+            synced: [],
+            skipped: [],
+            error: `Repo '${repo.name}' already has a git-stacks auto-stash entry. Resolve it first: git -C ${repo.task_path} stash pop`,
+          }
+          shouldContinue = false
+          break
         }
-      })
-  )
+      }
 
-  // Dry-run conflict check in parallel
-  const conflictResults = await Promise.all(
-    repoInfos
-      .filter(({ repo }) => existsSync(repo.task_path))
-      .map(async ({ repo, baseBranch }) => ({
-        repo: repo.name,
-        files: await getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
-      }))
-  )
-  const conflicts = conflictResults.filter((r) => r.files.length > 0)
+      if (shouldContinue) {
+        for (const repo of worktreeRepos) {
+          if (!existsSync(repo.task_path)) continue
+          if (!(await isRepoDirty(repo.task_path))) continue
+          onProgress?.({ repo: repo.name, status: "stashing", detail: "", conflicts: [] })
+          const stashResult = await stashPush(repo.task_path, "git-stacks auto-stash (sync)")
+          if (!stashResult.ok) {
+            baseResult = {
+              ok: false,
+              synced: [],
+              skipped: [],
+              error: `Stash failed for ${repo.name}: ${stashResult.error}`,
+            }
+            shouldContinue = false
+            break
+          }
+          stashedRepos.push({ name: repo.name, taskPath: repo.task_path })
+        }
+      }
+    }
 
-  // In strict mode, abort if any conflicts
-  if (!opts.bestEffort && conflicts.length > 0) {
-    const detail = conflicts
-      .map(c => `  ${c.repo} (${c.files.join(", ")})`)
-      .join("\n")
+    if (shouldContinue) {
+      // Fetch all repos in parallel — track failures instead of swallowing them
+      const fetchFailures = new Map<string, string>()
+      await Promise.all(
+        repoInfos
+          .filter(({ repo }) => existsSync(repo.task_path))
+          .map(async ({ repo }) => {
+            onProgress?.({ repo: repo.name, status: "fetching", detail: "", conflicts: [] })
+            try {
+              await fetchOrigin(repo.task_path)
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : "fetch failed"
+              const detail = msg.includes("timeout") ? "fetch failed (timeout)" : "fetch failed"
+              fetchFailures.set(repo.name, detail)
+              emitSettled({ repo: repo.name, status: "failed", detail, conflicts: [] })
+            }
+          })
+      )
+
+      // Dry-run conflict check in parallel
+      const conflictResults = await Promise.all(
+        repoInfos
+          .filter(({ repo }) => existsSync(repo.task_path))
+          .map(async ({ repo, baseBranch }) => ({
+            repo: repo.name,
+            files: await getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
+          }))
+      )
+      const conflicts = conflictResults.filter((r) => r.files.length > 0)
+
+      // In strict mode, abort if any conflicts
+      if (!opts.bestEffort && conflicts.length > 0) {
+        const detail = conflicts
+          .map(c => `  ${c.repo} (${c.files.join(", ")})`)
+          .join("\n")
+        baseResult = {
+          ok: false,
+          synced: [],
+          skipped: conflicts.map(c => ({ repo: c.repo, reason: `conflict in ${c.files.join(", ")}` })),
+          error: `Conflicts detected:\n${detail}\n\nUse --best-effort to skip conflicting repos.`,
+        }
+      } else {
+        const conflictRepos = new Set(conflicts.map(c => c.repo))
+        const synced: SyncResult["synced"] = []
+        const skipped: SyncResult["skipped"] = []
+
+        for (const { repo, baseBranch, strategy } of repoInfos) {
+          if (!existsSync(repo.task_path)) {
+            skipped.push({ repo: repo.name, reason: "task_path missing" })
+            continue
+          }
+
+          if (fetchFailures.has(repo.name)) {
+            skipped.push({ repo: repo.name, reason: fetchFailures.get(repo.name)! })
+            continue
+          }
+
+          if (conflictRepos.has(repo.name)) {
+            const c = conflicts.find(c => c.repo === repo.name)!
+            skipped.push({ repo: repo.name, reason: `conflict in ${c.files.join(", ")}` })
+            emitSettled({ repo: repo.name, status: "skipped", detail: `conflict: ${c.files[0]}`, conflicts: c.files.slice(1) })
+            continue
+          }
+
+          const commitsBefore = await getCommitsBehind(repo.task_path, `origin/${baseBranch}`, "HEAD")
+
+          onProgress?.({ repo: repo.name, status: "rebasing", detail: "", conflicts: [] })
+
+          let result: { ok: boolean; error?: string }
+          if (strategy === "merge") {
+            result = await mergeBranchFF(repo.task_path, `origin/${baseBranch}`)
+          } else {
+            result = await rebaseBranch(repo.task_path, `origin/${baseBranch}`)
+          }
+
+          if (!result.ok) {
+            skipped.push({ repo: repo.name, reason: result.error ?? "sync failed" })
+            emitSettled({ repo: repo.name, status: "failed", detail: result.error ?? "sync failed", conflicts: [] })
+            continue
+          }
+
+          synced.push({ repo: repo.name, commits: commitsBefore })
+          emitSettled({ repo: repo.name, status: "synced", detail: `+${commitsBefore} commits`, conflicts: [] })
+        }
+
+        baseResult = { ok: skipped.length === 0 || opts.bestEffort === true, synced, skipped }
+      }
+    }
+  } finally {
+    stashPopFailures = await restoreStashes()
+  }
+
+  if ((stashPopFailures?.length ?? 0) > 0) {
     return {
+      ...baseResult,
       ok: false,
-      synced: [],
-      skipped: conflicts.map(c => ({ repo: c.repo, reason: `conflict in ${c.files.join(", ")}` })),
-      error: `Conflicts detected:\n${detail}\n\nUse --best-effort to skip conflicting repos.`,
+      stashPopFailures,
     }
   }
 
-  const conflictRepos = new Set(conflicts.map(c => c.repo))
-  const synced: SyncResult["synced"] = []
-  const skipped: SyncResult["skipped"] = []
-
-  for (const { repo, baseBranch, strategy } of repoInfos) {
-    if (!existsSync(repo.task_path)) {
-      skipped.push({ repo: repo.name, reason: "task_path missing" })
-      continue
-    }
-
-    if (fetchFailures.has(repo.name)) {
-      skipped.push({ repo: repo.name, reason: fetchFailures.get(repo.name)! })
-      onProgress?.({ repo: repo.name, status: "failed", detail: fetchFailures.get(repo.name)!, conflicts: [] })
-      continue
-    }
-
-    if (conflictRepos.has(repo.name)) {
-      const c = conflicts.find(c => c.repo === repo.name)!
-      skipped.push({ repo: repo.name, reason: `conflict in ${c.files.join(", ")}` })
-      onProgress?.({ repo: repo.name, status: "skipped", detail: `conflict: ${c.files[0]}`, conflicts: c.files.slice(1) })
-      continue
-    }
-
-    const commitsBefore = await getCommitsBehind(repo.task_path, `origin/${baseBranch}`, "HEAD")
-
-    onProgress?.({ repo: repo.name, status: "rebasing", detail: "", conflicts: [] })
-
-    let result: { ok: boolean; error?: string }
-    if (strategy === "merge") {
-      result = await mergeBranchFF(repo.task_path, `origin/${baseBranch}`)
-    } else {
-      result = await rebaseBranch(repo.task_path, `origin/${baseBranch}`)
-    }
-
-    if (!result.ok) {
-      skipped.push({ repo: repo.name, reason: result.error ?? "sync failed" })
-      onProgress?.({ repo: repo.name, status: "failed", detail: result.error ?? "sync failed", conflicts: [] })
-      continue
-    }
-
-    synced.push({ repo: repo.name, commits: commitsBefore })
-    onProgress?.({ repo: repo.name, status: "synced", detail: `+${commitsBefore} commits`, conflicts: [] })
-  }
-
-  return { ok: skipped.length === 0 || opts.bestEffort === true, synced, skipped }
+  return baseResult
 }
 
 // --- Pull types ---

@@ -40,14 +40,14 @@ import { SyncProgressView } from "./SyncProgressView"
 import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
 import { CreateProgressView, type CreateRow } from "./CreateProgressView"
-import { createWorktree, removeWorktree, ensureUpstreamTracking } from "../../lib/git"
+import { createWorktree, removeWorktree, ensureUpstreamTracking, isRepoDirty } from "../../lib/git"
 import { getTasksDir } from "../../lib/paths"
 import { runHooksCaptured, type HookOutputLine } from "../../lib/lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../../lib/files"
 import { type IntegrationContext } from "../../lib/integrations"
 import { runIntegrationGenerate } from "../../lib/integrations/runner"
 import { join } from "path"
-import { unlinkSync } from "fs"
+import { existsSync, unlinkSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
 import type { WorkspaceEntry } from "./types"
 import { matchesLabels } from "../../lib/labels"
@@ -274,9 +274,16 @@ export default function App() {
     const ns = result.synced.length
     const nsk = result.skipped.filter(s => s.reason.includes("conflict")).length
     const nf = result.skipped.length - nsk  // non-conflict skips are failures
+    const stashFailures = result.stashPopFailures ?? []
 
-    if (ns === 0 && nsk === 0 && nf === 0) {
+    if (ns === 0 && nsk === 0 && nf === 0 && stashFailures.length === 0) {
       return { text: "Nothing to sync. Press any key to continue.", color: "green" }
+    }
+    if (stashFailures.length > 0) {
+      return {
+        text: `${ns} synced. Stash pop conflict in: ${stashFailures.map(f => f.repo).join(", ")}. Press any key to continue.`,
+        color: "red",
+      }
     }
     if (nf > 0) {
       return { text: `${ns} synced, ${nsk} skipped, ${nf} failed. Press any key to continue.`, color: "red" }
@@ -419,8 +426,8 @@ export default function App() {
 
   async function executeSync(name: string) {
     const ws = readWorkspace(name)
-    const initialRows: SyncRow[] = ws.repos
-      .filter(r => r.mode === "worktree")
+    const worktreeRepos = ws.repos.filter(r => r.mode === "worktree")
+    const initialRows: SyncRow[] = worktreeRepos
       .map(r => ({ repo: r.name, status: "pending" as const, detail: "", conflicts: [] }))
 
     setSyncRows(initialRows)
@@ -428,12 +435,20 @@ export default function App() {
     setSyncSummary({ text: "", color: "green" })
     setView({ view: "sync-progress", message: `Syncing ${name}...` })
 
+    let hasDirty = false
+    for (const repo of worktreeRepos) {
+      if (existsSync(repo.task_path) && await isRepoDirty(repo.task_path)) {
+        hasDirty = true
+        break
+      }
+    }
+
     const onProgress = (update: SyncRow) => {
       setSyncRows(prev => prev.map(r => r.repo === update.repo ? { ...r, ...update } : r))
     }
 
     try {
-      const result = await syncWorkspace(name, { strategy: "rebase", bestEffort: true }, onProgress)
+      const result = await syncWorkspace(name, { strategy: "rebase", bestEffort: true, stash: hasDirty }, onProgress)
       setSyncSummary(buildSummary(result))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)

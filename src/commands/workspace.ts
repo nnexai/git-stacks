@@ -35,7 +35,7 @@ import {
   editWorkspaceYaml,
   openYamlInEditor,
   detectWorkspaceFromCwd,
-  buildBaseEnv,
+  buildWorkspaceEnv,
   buildRepoEnv,
 } from "../lib/workspace-ops"
 import type { SyncRow, PushRow, PullRow } from "../lib/workspace-ops"
@@ -43,8 +43,18 @@ import { formatEnv, detectRepoFromCwd, type EnvFormat } from "../lib/env"
 import { matchesLabels } from "../lib/labels"
 
 function formatSyncRow(row: SyncRow): string {
-  const label = row.status === "synced" ? "synced" : row.status === "skipped" ? "skipped" : "failed"
+  const label = row.status
   return `${label}  ${row.repo}  ${row.detail}`
+}
+
+function reportStashPopFailures(
+  failures: Array<{ repo: string; error: string; repoPath: string }> | undefined,
+  prefix = ""
+): void {
+  if (!failures) return
+  for (const failure of failures) {
+    console.error(`${prefix}⚠ stash pop conflict in ${failure.repo} — stash preserved. Run: git -C ${failure.repoPath} stash pop`)
+  }
 }
 
 function formatPullRow(row: PullRow): string {
@@ -816,8 +826,9 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--all", "Sync all workspaces")
     .addOption(new Option("--strategy <strategy>", "Sync strategy: rebase or merge").choices(["rebase", "merge"]))
     .option("--best-effort", "Skip conflicting repos instead of aborting")
+    .option("--stash", "Auto-stash dirty repos before sync, pop after")
     .option("--json", "Output results as JSON")
-    .action(async (workspace: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean; json?: boolean }) => {
+    .action(async (workspace: string | undefined, opts: { all?: boolean; strategy?: string; bestEffort?: boolean; json?: boolean; stash?: boolean }) => {
       const name = workspace
       const strategy = opts.strategy as "rebase" | "merge" | undefined
 
@@ -827,7 +838,7 @@ export function registerWorkspaceCommands(program: Command) {
           const workspaces = listWorkspaces()
           const allResults = []
           for (const ws of workspaces) {
-            const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort })
+            const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort, stash: opts.stash })
             allResults.push({
               workspace: ws.name,
               repos: [
@@ -846,10 +857,12 @@ export function registerWorkspaceCommands(program: Command) {
                   error: s.reason,
                 })),
               ],
+              stashPopFailures: result.stashPopFailures ?? [],
+              ok: result.ok,
             })
           }
           console.log(JSON.stringify(allResults, null, 2))
-          process.exit(allResults.some(r => r.repos.some(rr => rr.result === "failed")) ? 1 : 0)
+          process.exit(allResults.some(r => r.ok === false) ? 1 : 0)
         }
 
         if (!name) {
@@ -857,7 +870,7 @@ export function registerWorkspaceCommands(program: Command) {
           process.exit(1)
         }
 
-        const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort })
+        const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort, stash: opts.stash })
 
         const output = {
           workspace: name,
@@ -877,6 +890,8 @@ export function registerWorkspaceCommands(program: Command) {
               error: s.reason,
             })),
           ],
+          stashPopFailures: result.stashPopFailures ?? [],
+          ok: result.ok,
         }
 
         console.log(JSON.stringify(output, null, 2))
@@ -893,7 +908,8 @@ export function registerWorkspaceCommands(program: Command) {
         let hasFailures = false
         for (const ws of workspaces) {
           console.log(`\n  ${ws.name}  [${ws.branch}]`)
-          const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort }, (row) => console.log(`    ${formatSyncRow(row)}`))
+          const result = await syncWorkspace(ws.name, { strategy, bestEffort: opts.bestEffort, stash: opts.stash }, (row) => console.log(`    ${formatSyncRow(row)}`))
+          reportStashPopFailures(result.stashPopFailures, "    ")
           if (!result.ok) {
             hasFailures = true
             if (result.error) console.error(`    ${formatError(result.error)}`)
@@ -908,7 +924,8 @@ export function registerWorkspaceCommands(program: Command) {
         process.exit(1)
       }
 
-      const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort }, (row) => console.log(`  ${formatSyncRow(row)}`))
+      const result = await syncWorkspace(name, { strategy, bestEffort: opts.bestEffort, stash: opts.stash }, (row) => console.log(`  ${formatSyncRow(row)}`))
+      reportStashPopFailures(result.stashPopFailures, "  ")
       if (!result.ok) {
         if (result.error) console.error(formatError(result.error))
         if (result.skipped.length > 0) {
@@ -1093,9 +1110,16 @@ export function registerWorkspaceCommands(program: Command) {
         ws = detection.workspace
       }
 
-      const globalConfig = readGlobalConfig()
-      const tasksDir = join(getTasksDir(globalConfig.workspace_root), ws.name)
-      let env = buildBaseEnv(ws, tasksDir, "env")
+      let env: Record<string, string>
+      try {
+        env = await buildWorkspaceEnv(ws, { triggeredBy: "env" })
+      } catch (err) {
+        console.error(formatError(
+          `Secret resolution failed: ${err instanceof Error ? err.message : String(err)}`,
+          "fix the secret source or config.yml secrets.resolvers"
+        ))
+        process.exit(1)
+      }
 
       if (opts.repo) {
         const repo = ws.repos.find(r => r.name === opts.repo)
@@ -1112,9 +1136,7 @@ export function registerWorkspaceCommands(program: Command) {
         const repoName = detectRepoFromCwd(ws)
         if (repoName) {
           const repo = ws.repos.find(r => r.name === repoName)
-          if (repo) {
-            env = buildRepoEnv(env, repo)
-          }
+          if (repo) env = buildRepoEnv(env, repo)
         }
       }
 

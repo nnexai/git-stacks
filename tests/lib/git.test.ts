@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { execSync } from "child_process"
-import { writeFileSync, utimesSync } from "fs"
+import { readFileSync, writeFileSync, utimesSync } from "fs"
 import { makeTmpDir, cleanup, makeGitRepo } from "../helpers"
 import {
   createWorktree,
@@ -18,6 +18,9 @@ import {
   checkBranchExistsOnRemote,
   hasUpstreamTracking,
   ensureUpstreamTracking,
+  stashPush,
+  stashPop,
+  hasAutoStash,
 } from "../../src/lib/git"
 
 // ---------------------------------------------------------------------------
@@ -348,6 +351,105 @@ describe("pushBranch", () => {
 
     const remote = execSync("git -C " + localPath + " config branch.main.remote", { stdio: "pipe" }).toString().trim()
     expect(remote).toBe("origin")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("stash primitives")
+// ---------------------------------------------------------------------------
+
+describe("stash primitives", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-stash")
+    repoPath = makeGitRepo(tmp)
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("stashPush stashes dirty tracked files", async () => {
+    writeFileSync(join(repoPath, "README.md"), "modified content\n")
+
+    const result = await stashPush(repoPath, "git-stacks auto-stash (sync)")
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.stashRef).toBe("stash@{0}")
+    }
+    const status = execSync(`git -C ${repoPath} status --porcelain`, { stdio: "pipe" }).toString().trim()
+    expect(status).toBe("")
+  })
+
+  test("stashPush stashes untracked files", async () => {
+    writeFileSync(join(repoPath, "new-file.txt"), "new content\n")
+
+    const result = await stashPush(repoPath, "git-stacks auto-stash (sync)")
+
+    expect(result.ok).toBe(true)
+    const status = execSync(`git -C ${repoPath} status --porcelain`, { stdio: "pipe" }).toString().trim()
+    expect(status).toBe("")
+  })
+
+  test("stashPush returns an error when nothing needs stashing", async () => {
+    const result = await stashPush(repoPath, "git-stacks auto-stash (sync)")
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toContain("nothing to stash")
+    }
+  })
+
+  test("stashPop restores stashed changes", async () => {
+    writeFileSync(join(repoPath, "README.md"), "modified content\n")
+    const stashResult = await stashPush(repoPath, "git-stacks auto-stash (sync)")
+    expect(stashResult.ok).toBe(true)
+
+    const result = await stashPop(repoPath)
+
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(repoPath, "README.md"), "utf-8")).toBe("modified content\n")
+  })
+
+  test("stashPop reports conflicts and preserves the stash entry", async () => {
+    const opts = { cwd: repoPath, stdio: "pipe" as const }
+
+    writeFileSync(join(repoPath, "README.md"), "stashed change\n")
+    const stashResult = await stashPush(repoPath, "git-stacks auto-stash (sync)")
+    expect(stashResult.ok).toBe(true)
+
+    writeFileSync(join(repoPath, "README.md"), "committed change\n")
+    execSync("git add .", opts)
+    execSync('git commit -m "conflicting change"', opts)
+
+    const result = await stashPop(repoPath)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.conflict).toBe(true)
+      expect(result.error).toContain("CONFLICT")
+    }
+    const stashList = execSync(`git -C ${repoPath} stash list`, { stdio: "pipe" }).toString()
+    expect(stashList).toContain("git-stacks auto-stash (sync)")
+  })
+
+  test("hasAutoStash returns false on a clean repo", async () => {
+    expect(await hasAutoStash(repoPath)).toBe(false)
+  })
+
+  test("hasAutoStash returns true when an auto-stash exists", async () => {
+    writeFileSync(join(repoPath, "README.md"), "dirty\n")
+    const stashResult = await stashPush(repoPath, "git-stacks auto-stash (sync)")
+    expect(stashResult.ok).toBe(true)
+
+    expect(await hasAutoStash(repoPath)).toBe(true)
+  })
+
+  test("hasAutoStash ignores non-matching stash messages", async () => {
+    writeFileSync(join(repoPath, "README.md"), "dirty\n")
+    execSync(`git -C ${repoPath} stash push --include-untracked -m "manual stash"`, { stdio: "pipe" })
+
+    expect(await hasAutoStash(repoPath)).toBe(false)
   })
 })
 

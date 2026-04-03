@@ -1,5 +1,24 @@
 # Milestones
 
+## v0.14.0 Workflow Completion & Workspace UX (Shipped: 2026-04-03)
+
+**Phases completed:** 6 phases, 18 plans, 33 requirements
+**Timeline:** 2026-04-03 → 2026-04-03 (1 day)
+**Stats:** 104 files changed, +14,142 / -1,248 lines, 52 commits since v0.13.0
+
+**Key accomplishments:**
+
+- Ahead/behind tracking now flows from git primitives into workspace status, `list`/`status`, and dashboard row/detail surfaces with stale-awareness
+- `git-stacks push` ships with parallel multi-repo push orchestration, JSON/text output, and matching dashboard push progress
+- Labels now work end-to-end across schemas, CLI CRUD/filter/create flows, and dashboard grouping/filtering
+- Secrets resolve at runtime for `open` and `env` without persisting plaintext to workspace YAML
+- `git-stacks sync --stash` safely handles dirty worktrees with reverse restore and explicit recovery output
+- v0.14.0 docs/version/changelog were closed out and archived with a passing milestone audit
+
+**Archive:** [.planning/milestones/v0.14.0-ROADMAP.md](.planning/milestones/v0.14.0-ROADMAP.md)
+
+---
+
 ## v0.13.0 CLI Polish & Completions (Shipped: 2026-04-02)
 
 **Phases completed:** 5 phases, 9 plans, 23 tasks

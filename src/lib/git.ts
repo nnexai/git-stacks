@@ -326,6 +326,45 @@ export async function getCommitsAhead(
   return parseInt(result.stdout.toString().trim(), 10) || 0
 }
 
+export async function stashPush(
+  repoPath: string,
+  message: string
+): Promise<{ ok: true; stashRef: string } | { ok: false; error: string }> {
+  const result = await $`git -C ${repoPath} stash push --include-untracked -m ${message}`.quiet().nothrow()
+  const stdout = result.stdout.toString().trim()
+  const stderr = result.stderr.toString().trim()
+  const output = [stdout, stderr].filter(Boolean).join("\n")
+
+  if (result.exitCode !== 0) {
+    return { ok: false, error: output || "stash push failed" }
+  }
+  if (output.includes("No local changes to save")) {
+    return { ok: false, error: "nothing to stash" }
+  }
+
+  return { ok: true, stashRef: "stash@{0}" }
+}
+
+export async function stashPop(
+  repoPath: string
+): Promise<{ ok: true } | { ok: false; conflict: boolean; error: string }> {
+  const result = await $`git -C ${repoPath} stash pop`.quiet().nothrow()
+  if (result.exitCode === 0) return { ok: true }
+
+  const stdout = result.stdout.toString().trim()
+  const stderr = result.stderr.toString().trim()
+  const output = [stdout, stderr].filter(Boolean).join("\n")
+  const conflict = output.includes("CONFLICT")
+
+  return { ok: false, conflict, error: output || "stash pop failed" }
+}
+
+export async function hasAutoStash(repoPath: string): Promise<boolean> {
+  const result = await $`git -C ${repoPath} stash list`.quiet().nothrow()
+  if (result.exitCode !== 0) return false
+  return result.stdout.toString().includes("git-stacks auto-stash")
+}
+
 const DEFAULT_STALE_THRESHOLD_MS = 15 * 60 * 1000 // 15 minutes
 
 /**

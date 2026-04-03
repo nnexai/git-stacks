@@ -157,6 +157,7 @@ export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): R
   return {
     getWorkspaceListInfo: mock(async () => []),
     mergeEnv: mock(() => ({})),
+    buildWorkspaceEnv: mock(async () => ({})),
     buildBaseEnv: mock(() => ({})),
     buildRepoEnv: mock(() => ({})),
     writeEnvFiles: mock(async () => {}),
