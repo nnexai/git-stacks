@@ -255,3 +255,13 @@ export async function getCommitsBehind(
   if (result.exitCode !== 0) return 0
   return parseInt(result.stdout.toString().trim(), 10) || 0
 }
+
+export async function getCommitsAhead(
+  repoPath: string,
+  base: string,
+  head: string
+): Promise<number> {
+  const result = await $`git -C ${repoPath} rev-list --count ${base}..${head}`.quiet().nothrow()
+  if (result.exitCode !== 0) return 0
+  return parseInt(result.stdout.toString().trim(), 10) || 0
+}
