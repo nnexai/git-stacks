@@ -4,7 +4,6 @@ import { formatAge, isStale } from "./messageUtils"
 import { formatConfigValue } from "./configUtils"
 import type { WorkspaceEntry } from "./types"
 import type { MessageRecord } from "../../lib/messages"
-import type { StaleInfo } from "./hooks/useStaleness"
 import { readGlobalConfig, readTemplate } from "../../lib/config"
 import { integrations } from "../../lib/integrations"
 import { resolveEnabledGlobally } from "../../lib/integrations/types"
@@ -15,16 +14,6 @@ type Props = {
   entry: WorkspaceEntry | undefined
   messages: MessageRecord[]
   tick: number
-  staleness: Map<string, StaleInfo>
-}
-
-function resolveBadge(info: StaleInfo | undefined): { text: string; fg: string } {
-  if (!info) return { text: "", fg: "gray" }
-  if (info.error) return { text: "?", fg: "red" }
-  if (info.count === null && !info.error && info.fetchedAt === 0) return { text: "...", fg: "gray" }
-  if (info.count === null) return { text: "", fg: "gray" }
-  if (info.count === 0) return { text: "", fg: "gray" }
-  return { text: `${info.count} behind`, fg: "yellow" }
 }
 
 export function WorkspaceDetail(props: Props) {
@@ -45,12 +34,9 @@ export function WorkspaceDetail(props: Props) {
         })
         const totalCount = createMemo(() => (props.messages ?? []).length)
 
-        const repoMainPaths = createMemo(() => {
-          const map = new Map<string, string>()
-          for (const r of ws().repos) {
-            map.set(r.name, r.main_path)
-          }
-          return map
+        const aheadBehindStale = createMemo(() => {
+          const s = status()
+          return s.state === "loaded" && s.aheadBehindStale
         })
 
         const linkedIssues = createMemo(() => {
@@ -78,13 +64,16 @@ export function WorkspaceDetail(props: Props) {
                   const icon = !repo.exists ? "✗" : repo.dirty ? "~" : "✓"
                   const fg = !repo.exists ? "red" : repo.dirty ? "yellow" : "green"
                   const modeLabel = repo.mode === "worktree" ? `[${repo.branch}]` : "[trunk]"
-                  const badge = () => resolveBadge(props.staleness.get(repoMainPaths().get(repo.name) ?? ""))
+                  const stale = aheadBehindStale() ? "?" : ""
                   return (
                     <box flexDirection="row" height={1}>
                       <text fg={fg}>    {icon}  {repo.name.padEnd(28)} {modeLabel}</text>
-                      <Show when={badge().text}>
-                        <text fg={badge().fg}>  {badge().text}</text>
-                      </Show>
+                      {repo.mode === "worktree" && repo.ahead > 0 && (
+                        <text fg={aheadBehindStale() ? "gray" : "green"}>  ↑{repo.ahead}{stale}</text>
+                      )}
+                      {repo.mode === "worktree" && repo.behind > 0 && (
+                        <text fg={aheadBehindStale() ? "gray" : "yellow"}>  ↓{repo.behind}{stale}</text>
+                      )}
                     </box>
                   )
                 }}
