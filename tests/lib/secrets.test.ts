@@ -2,11 +2,14 @@ import { afterEach, describe, expect, test } from "bun:test"
 import {
   REF_PATTERN,
   buildResolvers,
+  buildKeychainCommand,
   cmdResolver,
   envResolver,
   keychainResolver,
+  parseKeychainPath,
   parseSecretRef,
   resolveSecrets,
+  type KeychainAttr,
   type SecretResolver,
 } from "../../src/lib/secrets"
 
@@ -53,6 +56,160 @@ describe("envResolver", () => {
 
   test("throws when the environment variable is missing", async () => {
     await expect(envResolver.resolve("GS_SECRET_TEST_MISSING")).rejects.toThrow("GS_SECRET_TEST_MISSING")
+  })
+})
+
+describe("parseKeychainPath", () => {
+  test("parses new key=value syntax into KeychainAttr array", () => {
+    expect(parseKeychainPath("service=myapp,account=db")).toEqual([
+      { key: "service", value: "myapp" },
+      { key: "account", value: "db" },
+    ])
+  })
+
+  test("parses arbitrary N pairs in new syntax", () => {
+    expect(parseKeychainPath("app=myapp,env=prod,key=db")).toEqual([
+      { key: "app", value: "myapp" },
+      { key: "env", value: "prod" },
+      { key: "key", value: "db" },
+    ])
+  })
+
+  test("parses legacy service/account syntax into KeychainAttr array", () => {
+    expect(parseKeychainPath("myapp/db")).toEqual([
+      { key: "service", value: "myapp" },
+      { key: "account", value: "db" },
+    ])
+  })
+
+  test("detects new syntax by presence of = in path", () => {
+    // path with = triggers new syntax, not legacy
+    const result = parseKeychainPath("service=x,account=y")
+    expect(result[0].key).toBe("service")
+    expect(result[0].value).toBe("x")
+  })
+
+  test("detects legacy syntax by absence of = in path", () => {
+    const result = parseKeychainPath("svc/acct")
+    expect(result).toEqual([
+      { key: "service", value: "svc" },
+      { key: "account", value: "acct" },
+    ])
+  })
+
+  test("throws descriptive error for empty key in new syntax", () => {
+    expect(() => parseKeychainPath("=value,account=db")).toThrow("Invalid keychain attribute")
+  })
+
+  test("throws descriptive error for empty value in new syntax", () => {
+    expect(() => parseKeychainPath("service=,account=db")).toThrow("Invalid keychain attribute")
+  })
+
+  test("throws descriptive error for legacy path without slash", () => {
+    expect(() => parseKeychainPath("missing-slash")).toThrow("expected 'service/account'")
+  })
+})
+
+describe("buildKeychainCommand", () => {
+  test("builds Linux secret-tool command for 2 attributes", () => {
+    const attrs: KeychainAttr[] = [
+      { key: "service", value: "myapp" },
+      { key: "account", value: "db" },
+    ]
+    expect(buildKeychainCommand(attrs, "linux")).toEqual([
+      "secret-tool",
+      "lookup",
+      "service",
+      "myapp",
+      "account",
+      "db",
+    ])
+  })
+
+  test("builds Linux secret-tool command for 3 attributes", () => {
+    const attrs: KeychainAttr[] = [
+      { key: "app", value: "x" },
+      { key: "env", value: "y" },
+      { key: "key", value: "z" },
+    ]
+    expect(buildKeychainCommand(attrs, "linux")).toEqual([
+      "secret-tool",
+      "lookup",
+      "app",
+      "x",
+      "env",
+      "y",
+      "key",
+      "z",
+    ])
+  })
+
+  test("builds macOS security command for 2 attributes", () => {
+    const attrs: KeychainAttr[] = [
+      { key: "service", value: "myapp" },
+      { key: "account", value: "db" },
+    ]
+    expect(buildKeychainCommand(attrs, "darwin")).toEqual([
+      "security",
+      "find-generic-password",
+      "-s",
+      "myapp",
+      "-a",
+      "db",
+      "-w",
+    ])
+  })
+
+  test("macOS maps first attr to -s and second to -a regardless of key names", () => {
+    const attrs: KeychainAttr[] = [
+      { key: "app", value: "myapp" },
+      { key: "env", value: "prod" },
+    ]
+    expect(buildKeychainCommand(attrs, "darwin")).toEqual([
+      "security",
+      "find-generic-password",
+      "-s",
+      "myapp",
+      "-a",
+      "prod",
+      "-w",
+    ])
+  })
+
+  test("macOS throws for more than 2 attributes", () => {
+    const attrs: KeychainAttr[] = [
+      { key: "app", value: "x" },
+      { key: "env", value: "y" },
+      { key: "key", value: "z" },
+    ]
+    expect(() => buildKeychainCommand(attrs, "darwin")).toThrow(
+      "macOS supports at most 2 keychain attributes"
+    )
+  })
+
+  test("legacy format myapp/db produces correct Linux command", () => {
+    const attrs = parseKeychainPath("myapp/db")
+    expect(buildKeychainCommand(attrs, "linux")).toEqual([
+      "secret-tool",
+      "lookup",
+      "service",
+      "myapp",
+      "account",
+      "db",
+    ])
+  })
+
+  test("legacy format myapp/db produces correct macOS command", () => {
+    const attrs = parseKeychainPath("myapp/db")
+    expect(buildKeychainCommand(attrs, "darwin")).toEqual([
+      "security",
+      "find-generic-password",
+      "-s",
+      "myapp",
+      "-a",
+      "db",
+      "-w",
+    ])
   })
 })
 

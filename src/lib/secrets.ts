@@ -20,15 +20,58 @@ export function parseSecretRef(value: string): { id: string; path: string } | nu
   return { id: match[1], path: match[2].trim() }
 }
 
-function parseKeychainPath(path: string): { service: string; account: string } {
+export interface KeychainAttr {
+  key: string
+  value: string
+}
+
+export function parseKeychainPath(path: string): KeychainAttr[] {
+  // New syntax: presence of '=' triggers key=value,key=value parsing
+  if (path.includes("=")) {
+    return path.split(",").map((pair) => {
+      const eqIndex = pair.indexOf("=")
+      if (eqIndex === -1) {
+        throw new Error(`Invalid keychain attribute '${pair}' — expected 'key=value'`)
+      }
+      const key = pair.slice(0, eqIndex)
+      const value = pair.slice(eqIndex + 1)
+      if (!key || !value) {
+        throw new Error(`Invalid keychain attribute '${pair}' — expected 'key=value'`)
+      }
+      return { key, value }
+    })
+  }
+
+  // Legacy syntax: service/account
   const slashIndex = path.indexOf("/")
   if (slashIndex === -1) {
     throw new Error(`Invalid keychain path '${path}' — expected 'service/account'`)
   }
-  return {
-    service: path.slice(0, slashIndex),
-    account: path.slice(slashIndex + 1),
+  return [
+    { key: "service", value: path.slice(0, slashIndex) },
+    { key: "account", value: path.slice(slashIndex + 1) },
+  ]
+}
+
+export function buildKeychainCommand(attrs: KeychainAttr[], platform: NodeJS.Platform): string[] {
+  if (platform === "darwin") {
+    if (attrs.length > 2) {
+      throw new Error(
+        `macOS supports at most 2 keychain attributes (-s service, -a account). Got ${attrs.length}.`
+      )
+    }
+    const cmd = ["security", "find-generic-password"]
+    if (attrs[0]) cmd.push("-s", attrs[0].value)
+    if (attrs[1]) cmd.push("-a", attrs[1].value)
+    cmd.push("-w")
+    return cmd
   }
+
+  if (platform === "linux") {
+    return ["secret-tool", "lookup", ...attrs.flatMap((attr) => [attr.key, attr.value])]
+  }
+
+  throw new Error(`keychain resolver not supported on ${platform}`)
 }
 
 async function execWithTimeout(cmd: string[], timeoutMs: number): Promise<ExecResult> {
@@ -91,17 +134,13 @@ export const envResolver: SecretResolver = {
 export const keychainResolver: SecretResolver = {
   id: "keychain",
   async resolve(path: string): Promise<string> {
-    const { service, account } = parseKeychainPath(path)
-    const cmd = process.platform === "darwin"
-      ? ["security", "find-generic-password", "-s", service, "-a", account, "-w"]
-      : process.platform === "linux"
-        ? ["secret-tool", "lookup", "service", service, "account", account]
-        : null
+    const attrs = parseKeychainPath(path)
 
-    if (!cmd) {
+    if (process.platform !== "darwin" && process.platform !== "linux") {
       throw new Error(`keychain resolver not supported on ${process.platform}`)
     }
 
+    const cmd = buildKeychainCommand(attrs, process.platform)
     const result = await execWithTimeout(cmd, KEYCHAIN_TIMEOUT_MS)
     if (!result.ok) {
       if (process.platform === "linux" && /not found|no such file|enoent/i.test(result.error)) {
