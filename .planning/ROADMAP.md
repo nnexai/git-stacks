@@ -169,7 +169,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 - [ ] **Phase 59: Push** - `git-stacks push` command with parallel multi-repo push and TUI action
 - [ ] **Phase 60: Labels** (4 plans, 2 waves) - Label schema, CRUD subcommand, list filter, TUI tags and group-by
 - [ ] **Phase 61: Secrets** (3 plans, 2 waves) - Pluggable secret resolution for env references in workspace YAML
-- [ ] **Phase 62: Stash on Sync** - Auto-stash dirty repos before sync, pop in reverse with conflict safety
+- [ ] **Phase 62: Stash on Sync** (2 plans, 2 waves) - Auto-stash dirty repos before sync, pop in reverse with conflict safety
 - [ ] **Phase 63: Release Prep** (1 plan) - v0.14.0 version bump, CHANGELOG, README updates
 
 ## Phase Details
@@ -232,7 +232,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
   1. `git-stacks sync --stash` auto-stashes dirty repos before sync and pops in reverse order after
   2. A stash pop conflict sets `SyncResult.ok = false`, preserves the stash entry, and emits the recovery command (`git stash pop`) so the user knows how to resolve manually
   3. Running `--stash` on a workspace that already has a `git-stacks auto-stash` entry in `git stash list` refuses to stash again (no double-stash accumulation)
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves (Wave 1: git stash primitives; Wave 2: sync integration + CLI + TUI)
 
 ### Phase 63: Release Prep
 **Goal**: v0.14.0 is versioned, documented, and ready to publish
@@ -263,5 +263,5 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 59. Push | v0.14.0 | 0/4 | Planned | - |
 | 60. Labels | v0.14.0 | 0/4 | Planned | - |
 | 61. Secrets | v0.14.0 | 0/3 | Planned | - |
-| 62. Stash on Sync | v0.14.0 | 0/TBD | Not started | - |
+| 62. Stash on Sync | v0.14.0 | 0/2 | Planned | - |
 | 63. Release Prep | v0.14.0 | 0/1 | Planned | - |
