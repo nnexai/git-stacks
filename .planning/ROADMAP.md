@@ -167,7 +167,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 
 - [ ] **Phase 58: Ahead/Behind Tracking** (4 plans, 2 waves) - Per-repo commit distance from base; AHEAD/BEHIND in list and TUI
 - [ ] **Phase 59: Push** - `git-stacks push` command with parallel multi-repo push and TUI action
-- [ ] **Phase 60: Labels** - Label schema, CRUD subcommand, list filter, TUI tags and group-by
+- [ ] **Phase 60: Labels** (4 plans, 2 waves) - Label schema, CRUD subcommand, list filter, TUI tags and group-by
 - [ ] **Phase 61: Secrets** - Pluggable secret resolution for env references in workspace YAML
 - [ ] **Phase 62: Stash on Sync** - Auto-stash dirty repos before sync, pop in reverse with conflict safety
 - [ ] **Phase 63: Release Prep** - v0.14.0 version bump, CHANGELOG, README updates
@@ -209,7 +209,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
   3. `git-stacks list --label <tag>` filters the workspace list (AND logic when multiple labels given)
   4. TUI WorkspaceRow renders label tags after the branch name
   5. TUI `/` filter matches against workspace labels in addition to workspace name; `g` key toggles group-by-label view with an [unlabeled] section for untagged workspaces
-**Plans**: TBD
+**Plans**: 4 plans in 2 waves (01-02 parallel, 03-04 depend on wave 1)
 **UI hint**: yes
 
 ### Phase 61: Secrets
@@ -261,7 +261,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 53-57. CLI Polish & Completions | v0.13.0 | 9/9 | Complete | 2026-04-02 |
 | 58. Ahead/Behind Tracking | v0.14.0 | 0/4 | Planned | - |
 | 59. Push | v0.14.0 | 0/4 | Planned | - |
-| 60. Labels | v0.14.0 | 0/TBD | Not started | - |
+| 60. Labels | v0.14.0 | 0/4 | Planned | - |
 | 61. Secrets | v0.14.0 | 0/TBD | Not started | - |
 | 62. Stash on Sync | v0.14.0 | 0/TBD | Not started | - |
 | 63. Release Prep | v0.14.0 | 0/TBD | Not started | - |
