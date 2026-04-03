@@ -7,7 +7,7 @@ stopped_at: ""
 last_updated: "2026-04-03T00:00:00.000Z"
 last_activity: 2026-04-03
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,69 +21,42 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Defining requirements for v0.14.0
+**Current focus:** v0.14.0 roadmap defined — ready to plan Phase 58
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 58 of 63 (Ahead/Behind Tracking) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-04-03 — Milestone v0.14.0 started
+Status: Ready to plan
+Last activity: 2026-04-03 — Roadmap created for v0.14.0 (Phases 58-63)
 
 ```
-Progress: [----------] 0% (0/0 phases)
+Progress: [----------] 0% (0/6 phases)
 ```
 
 ## Accumulated Context
 
 ### Decisions
 
-- Phase numbering continues from Phase 52 (v0.12.0 ended at 52); v0.13.0 starts at 53
-- REL-01 and REL-02 are incremental per-phase expectations (each phase updates CHANGELOG/README), not separate phases
-- REL-03 is the final Phase 57 release audit
-- Granularity is coarse: 5 phases for 14 requirements
-- Phase 55 (Copilot hooks) depends on research in .planning/research/COPILOT-HOOKS.md
-- [Phase 53-shell-completion-fixes]: Variadic args detected from Commander's Argument.variadic; arity enforcement skipped for variadic args — they complete indefinitely
-- [Phase 53-shell-completion-fixes]: Zsh single-arg commands without options now use _arguments positional spec for arity enforcement instead of bare helper calls
-- [Phase 54]: Shell quoting triggers on more chars than dotenv (adds dollar, backtick, semicolons, etc.)
-- [Phase 54]: detectRepoFromCwd mirrors detectWorkspaceFromCwd longest-match but returns repo name not workspace
-- [Phase 54]: Used Option constructor with .choices() for --format enum tab completion (consistent with list/paths/sync commands)
-- [Phase 54]: CWD auto-detection cascades: no workspace arg also triggers detectRepoFromCwd() for automatic repo vars
-- [Phase 55]: Copilot plugin uses inline bash commands (no .sh files) — avoids chmod issues, simpler file management
-- [Phase 55]: preToolUse/postToolUse hooks use stdin grep/cut toolName filter since Copilot lacks per-tool matchers
-- [Phase 55]: Copilot plugin owns git-stacks.json entirely — overwrite on install, delete on remove (simpler than Claude strip-and-replace)
-- [Phase 55]: resolvePlugins returns empty array (not null) to signal interactive fallback in install command
-- [Phase 55]: Completion generator bash/zsh needed boolean-flag fallback for commands with no dynamic args or enums
-- [Phase 56]: Forge CLI checks gated by resolveEnabledGlobally with enabledByDefault=false — unconfigured integrations are skipped (DOC-01)
-- [Phase 56]: Data-driven forgeClis array replaces four unconditional checks — DRY and extensible for future forge integrations (CFG-01)
-- [Phase 57-release-prep]: v0.13.0 CHANGELOG entry documents three Added features (env command, Copilot hook support, tmux config example), three Fixed items (shell completion arity/enum/leakage), and one Changed item (conditional forge CLI checks)
+- Phase numbering continues from 57 (v0.13.0 ended at Phase 57); v0.14.0 starts at Phase 58
+- Granularity is coarse: 6 phases for 33 requirements (5 feature phases + 1 release prep)
+- Phase 58 (ahead/behind) must use `git rev-parse --git-common-dir` for FETCH_HEAD path in worktrees — `.git` is a file not a dir
+- Phase 59 (push) depends on Phase 58 — ahead count feeds dry-run messaging
+- Phase 61 (secrets) constraint: `resolveSecrets` signature is `(rawEnv: Record<string, string>, resolvers) => Record<string, string>` — never accepts workspace object; prevents plaintext write to YAML
+- Phase 61 (secrets) `cmd:` resolver requires explicit opt-in in config.yml; not enabled by default
+- Phase 62 (stash) double-stash guard: if `git-stacks auto-stash` entry already in `git stash list`, refuse to stash again
+- LBL-01 label filter must use shared `matchesLabels(workspace, terms[])` utility before implementing CLI or TUI surfaces
 
 ### Pending Todos
 
-7 pending todos — all addressed in v0.13.0 phases:
-
-- Fix shell completion repeating workspace after optional positional arg → Phase 53 (COMP-01)
-- Shell completion generator missing option value enums → Phase 53 (COMP-02)
-- Doctor check missing forge CLIs → Phase 56 (DOC-01)
-- Extend install hooks to support Copilot → Phase 55 (HOOK-01)
-- Tmux integration example should show pane setup → Phase 56 (CFG-01)
-- Add git-stacks env command to show generated env vars → Phase 54 (CMD-01)
-- Fix git-stacks list unsupported --status flag → out of scope (not in v0.13.0 requirements)
+(none)
 
 ### Blockers/Concerns
 
-(none)
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Status | Directory |
-|---|-------------|------|--------|--------|-----------|
-| 260329-9ll | upgrade dependencies | 2026-03-29 | 3c95632 | Verified | [260329-9ll-upgrade-dependencies](./quick/260329-9ll-upgrade-dependencies/) |
-| 260402-6c0 | update changelog and readme to prepare for v0.12.0 release | 2026-04-02 | 8e89328 | | [260402-6c0-update-changelog-and-readme-to-prepare-f](./quick/260402-6c0-update-changelog-and-readme-to-prepare-f/) |
-| 260403-j1s | Fix useAlternateScreen TS error after OpenTUI update in run.tsx | 2026-04-03 | 27b8cb6 | | [260403-j1s-fix-usealternatescreen-ts-error-after-op](./quick/260403-j1s-fix-usealternatescreen-ts-error-after-op/) |
+- Phase 61 (secrets): `op` CLI TTY behavior with `OP_BIOMETRIC_UNLOCK_ENABLED=0` is MEDIUM confidence — validate during implementation
 
 ## Session Continuity
 
-Last session: 2026-04-02T06:04:07.064Z
-Stopped at: Completed 57-01-PLAN.md
-Next action: `/gsd:execute-phase 53` — Shell Completion Fixes (then 54, 55, 56, 57)
+Last session: 2026-04-03
+Stopped at: Roadmap for v0.14.0 created (ROADMAP.md, STATE.md, REQUIREMENTS.md traceability updated)
+Next action: `/gsd:plan-phase 58` — Ahead/Behind Tracking

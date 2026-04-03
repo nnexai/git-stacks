@@ -89,45 +89,45 @@ Requirements for milestone v0.14.0: Workflow Completion & Workspace UX. Each map
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AB-01 | — | Pending |
-| AB-02 | — | Pending |
-| AB-03 | — | Pending |
-| AB-04 | — | Pending |
-| AB-05 | — | Pending |
-| AB-06 | — | Pending |
-| AB-07 | — | Pending |
-| PUSH-01 | — | Pending |
-| PUSH-02 | — | Pending |
-| PUSH-03 | — | Pending |
-| PUSH-04 | — | Pending |
-| LBL-01 | — | Pending |
-| LBL-02 | — | Pending |
-| LBL-03 | — | Pending |
-| LBL-04 | — | Pending |
-| LBL-05 | — | Pending |
-| LBL-06 | — | Pending |
-| LBL-07 | — | Pending |
-| LBL-08 | — | Pending |
-| SEC-01 | — | Pending |
-| SEC-02 | — | Pending |
-| SEC-03 | — | Pending |
-| SEC-04 | — | Pending |
-| SEC-05 | — | Pending |
-| SEC-06 | — | Pending |
-| SEC-07 | — | Pending |
-| SEC-08 | — | Pending |
-| SEC-09 | — | Pending |
-| SEC-10 | — | Pending |
-| STH-01 | — | Pending |
-| STH-02 | — | Pending |
-| STH-03 | — | Pending |
-| STH-04 | — | Pending |
+| AB-01 | Phase 58 | Pending |
+| AB-02 | Phase 58 | Pending |
+| AB-03 | Phase 58 | Pending |
+| AB-04 | Phase 58 | Pending |
+| AB-05 | Phase 58 | Pending |
+| AB-06 | Phase 58 | Pending |
+| AB-07 | Phase 58 | Pending |
+| PUSH-01 | Phase 59 | Pending |
+| PUSH-02 | Phase 59 | Pending |
+| PUSH-03 | Phase 59 | Pending |
+| PUSH-04 | Phase 59 | Pending |
+| LBL-01 | Phase 60 | Pending |
+| LBL-02 | Phase 60 | Pending |
+| LBL-03 | Phase 60 | Pending |
+| LBL-04 | Phase 60 | Pending |
+| LBL-05 | Phase 60 | Pending |
+| LBL-06 | Phase 60 | Pending |
+| LBL-07 | Phase 60 | Pending |
+| LBL-08 | Phase 60 | Pending |
+| SEC-01 | Phase 61 | Pending |
+| SEC-02 | Phase 61 | Pending |
+| SEC-03 | Phase 61 | Pending |
+| SEC-04 | Phase 61 | Pending |
+| SEC-05 | Phase 61 | Pending |
+| SEC-06 | Phase 61 | Pending |
+| SEC-07 | Phase 61 | Pending |
+| SEC-08 | Phase 61 | Pending |
+| SEC-09 | Phase 61 | Pending |
+| SEC-10 | Phase 61 | Pending |
+| STH-01 | Phase 62 | Pending |
+| STH-02 | Phase 62 | Pending |
+| STH-03 | Phase 62 | Pending |
+| STH-04 | Phase 62 | Pending |
 
 **Coverage:**
 - v0.14.0 requirements: 33 total
-- Mapped to phases: 0
-- Unmapped: 33
+- Mapped to phases: 33
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-03*
-*Last updated: 2026-04-03 after initial definition*
+*Last updated: 2026-04-03 after roadmap creation*

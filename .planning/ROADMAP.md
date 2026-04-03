@@ -13,6 +13,7 @@
 - ✅ **v0.11.0 AeroSpace Window Management** — Phases 43-46 (shipped 2026-03-28) — AeroSpace shell wrappers, core integration plugin, layout control, release prep. See [milestones/v0.11.0-ROADMAP.md](milestones/v0.11.0-ROADMAP.md)
 - ✅ **v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation** — Phases 47-52 (shipped 2026-04-02) — Multi-workspace AeroSpace config, integration CLI tools, convention-based completion, workspace port allocation. See [milestones/v0.12.0-ROADMAP.md](milestones/v0.12.0-ROADMAP.md)
 - ✅ **v0.13.0 CLI Polish & Completions** — Phases 53-57 (shipped 2026-04-02) — Shell completion fixes, env command, Copilot hook support, doctor/config polish. See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md)
+- 🚧 **v0.14.0 Workflow Completion & Workspace UX** — Phases 58-63 (in progress) — Ahead/behind tracking, push command, labels, secrets, stash-on-sync, release prep.
 
 ## Phases
 
@@ -160,6 +161,89 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 
 </details>
 
+### 🚧 v0.14.0 Workflow Completion & Workspace UX (In Progress)
+
+**Milestone Goal:** Complete the core workspace workflow (push, ahead/behind tracking) and add organizational features (labels, secrets, stash) that make git-stacks scale to real team/production use.
+
+- [ ] **Phase 58: Ahead/Behind Tracking** - Per-repo commit distance from base; AHEAD/BEHIND in list and TUI
+- [ ] **Phase 59: Push** - `git-stacks push` command with parallel multi-repo push and TUI action
+- [ ] **Phase 60: Labels** - Label schema, CRUD subcommand, list filter, TUI tags and group-by
+- [ ] **Phase 61: Secrets** - Pluggable secret resolution for env references in workspace YAML
+- [ ] **Phase 62: Stash on Sync** - Auto-stash dirty repos before sync, pop in reverse with conflict safety
+- [ ] **Phase 63: Release Prep** - v0.14.0 version bump, CHANGELOG, README updates
+
+## Phase Details
+
+### Phase 58: Ahead/Behind Tracking
+**Goal**: Users can see how far each workspace's branches are from their base branch, with staleness awareness
+**Depends on**: Phase 57
+**Requirements**: AB-01, AB-02, AB-03, AB-04, AB-05, AB-06, AB-07
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks list` shows AHEAD and BEHIND columns with commit counts per workspace (aggregated across repos)
+  2. `git-stacks status <name>` shows per-repo ahead/behind counts in the repo table
+  3. TUI WorkspaceRow displays `↑N ↓N` indicators after the branch name
+  4. TUI WorkspaceDetail shows per-repo ahead/behind in the repo table
+  5. Stale ahead/behind data (FETCH_HEAD older than 15 minutes) is flagged as `aheadBehindStale` — no silent zeros for unsynced repos
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 59: Push
+**Goal**: Users can push workspace branches to remote from a single command, with parallel execution and TUI support
+**Depends on**: Phase 58
+**Requirements**: PUSH-01, PUSH-02, PUSH-03, PUSH-04
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks push [name]` pushes all worktree repos in parallel, skipping trunk repos, and reports per-repo progress
+  2. `--force-with-lease`, `--force`, and `--dry-run` flags work as expected; `--json` outputs structured results
+  3. Any repo push failure sets overall exit code to non-zero and reports which repos failed
+  4. TUI ActionMenu includes a push action with live per-repo progress display
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 60: Labels
+**Goal**: Users can tag workspaces with labels and filter/group the workspace list by those labels
+**Depends on**: Phase 58
+**Requirements**: LBL-01, LBL-02, LBL-03, LBL-04, LBL-05, LBL-06, LBL-07, LBL-08
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks label add/remove/list/clear <workspace>` manages labels on an existing workspace
+  2. `git-stacks new --label <tag>` sets labels at workspace creation time
+  3. `git-stacks list --label <tag>` filters the workspace list (AND logic when multiple labels given)
+  4. TUI WorkspaceRow renders label tags after the branch name
+  5. TUI `/` filter matches against workspace labels in addition to workspace name; `g` key toggles group-by-label view with an [unlabeled] section for untagged workspaces
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 61: Secrets
+**Goal**: Users can reference secret values (keychain, env, external CLI) in workspace env maps without storing plaintext in YAML
+**Depends on**: Phase 60
+**Requirements**: SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06, SEC-07, SEC-08, SEC-09, SEC-10
+**Success Criteria** (what must be TRUE):
+  1. `${{ keychain:service/account }}`, `${{ env:VAR }}`, and `${{ cmd:command }}` references in workspace env are resolved at open time before env files are written
+  2. Resolved secret values are never written back to workspace YAML — only the original reference syntax persists on disk
+  3. `git-stacks open --skip-secrets` bypasses resolution, substitutes empty strings, and logs a warning per unresolved reference
+  4. `cmd:` resolver is disabled unless explicitly enabled in `config.yml secrets.resolvers`
+  5. External CLI resolvers (keychain, cmd) enforce a 10-second timeout and surface a human-readable error if the subprocess hangs
+**Plans**: TBD
+
+### Phase 62: Stash on Sync
+**Goal**: Users can sync workspaces with dirty worktrees without losing uncommitted changes by using the `--stash` flag
+**Depends on**: Phase 61
+**Requirements**: STH-01, STH-02, STH-03, STH-04
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks sync --stash` auto-stashes dirty repos before sync and pops in reverse order after
+  2. A stash pop conflict sets `SyncResult.ok = false`, preserves the stash entry, and emits the recovery command (`git stash pop`) so the user knows how to resolve manually
+  3. Running `--stash` on a workspace that already has a `git-stacks auto-stash` entry in `git stash list` refuses to stash again (no double-stash accumulation)
+**Plans**: TBD
+
+### Phase 63: Release Prep
+**Goal**: v0.14.0 is versioned, documented, and ready to publish
+**Depends on**: Phase 62
+**Requirements**: (none — project convention)
+**Success Criteria** (what must be TRUE):
+  1. `package.json` version is bumped to 0.14.0
+  2. CHANGELOG has a v0.14.0 entry covering all five feature areas (ahead/behind, push, labels, secrets, stash)
+  3. README documents new commands and flags (`git-stacks push`, `git-stacks label`, `--skip-secrets`, `--stash` on sync)
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -174,8 +258,10 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 37-42. Multi-Agent Workspace Tooling | v0.10.0 | 9/9 | Complete | 2026-03-28 |
 | 43-46. AeroSpace Window Management | v0.11.0 | 7/7 | Complete | 2026-03-28 |
 | 47-52. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
-| 53. Shell Completion Fixes | v0.13.0 | 3/3 | Complete    | 2026-04-02 |
-| 54. Env Command | v0.13.0 | 2/2 | Complete    | 2026-04-02 |
-| 55. Copilot Hook Support | v0.13.0 | 2/2 | Complete    | 2026-04-02 |
-| 56. Doctor & Config Polish | v0.13.0 | 1/1 | Complete    | 2026-04-02 |
-| 57. Release Prep | v0.13.0 | 1/1 | Complete    | 2026-04-02 |
+| 53-57. CLI Polish & Completions | v0.13.0 | 9/9 | Complete | 2026-04-02 |
+| 58. Ahead/Behind Tracking | v0.14.0 | 0/TBD | Not started | - |
+| 59. Push | v0.14.0 | 0/TBD | Not started | - |
+| 60. Labels | v0.14.0 | 0/TBD | Not started | - |
+| 61. Secrets | v0.14.0 | 0/TBD | Not started | - |
+| 62. Stash on Sync | v0.14.0 | 0/TBD | Not started | - |
+| 63. Release Prep | v0.14.0 | 0/TBD | Not started | - |
