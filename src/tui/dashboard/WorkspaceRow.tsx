@@ -40,10 +40,38 @@ export function WorkspaceRow(props: Props) {
   })
   const countsWidth = createMemo(() => countsText().length + 2) // leading "  "
 
+  // Ahead/behind indicators (D-07: after branch, before counts)
+  const aheadCount = createMemo(() => {
+    const s = props.entry.status
+    if (s.state !== "loaded") return 0
+    return s.repos.filter(r => r.mode === "worktree").reduce((sum, r) => sum + r.ahead, 0)
+  })
+
+  const behindCount = createMemo(() => {
+    const s = props.entry.status
+    if (s.state !== "loaded") return 0
+    return Math.max(0, ...s.repos.filter(r => r.mode === "worktree").map(r => r.behind))
+  })
+
+  const isStale = createMemo(() => {
+    const s = props.entry.status
+    return s.state === "loaded" && s.aheadBehindStale
+  })
+
+  const abWidth = createMemo(() => {
+    const ahead = aheadCount()
+    const behind = behindCount()
+    const stale = isStale() ? "?" : ""
+    let len = 0
+    if (ahead > 0) len += 2 + `↑${ahead}${stale}`.length  // "  ↑N" spacing
+    if (behind > 0) len += 2 + `↓${behind}${stale}`.length // "  ↓N" spacing
+    return len
+  })
+
   const nameWidth = createMemo(() => {
     const w = dims().width
-    // Fixed: prefix(5) + space(1) + status(2) + space(1) + countsCol = 9 + countsWidth
-    const fixed = 9 + countsWidth()
+    // Fixed: prefix(5) + space(1) + status(2) + space(1) + countsCol + abWidth = 9 + countsWidth + abWidth
+    const fixed = 9 + countsWidth() + abWidth()
     const remaining = w - fixed
     const nameMin = 10
     return Math.min(24, Math.max(nameMin, Math.floor(remaining * 0.3)))
@@ -53,7 +81,7 @@ export function WorkspaceRow(props: Props) {
     const nw = nameWidth()
     // branch gets ~30% of remaining after name, capped
     const w = dims().width
-    const fixed = 9 + countsWidth() + nw + 2
+    const fixed = 9 + countsWidth() + abWidth() + nw + 2
     return Math.min(30, Math.max(10, Math.floor((w - fixed) * 0.4)))
   })
 
@@ -91,6 +119,14 @@ export function WorkspaceRow(props: Props) {
         const bw = branchWidth()
         return (b.length > bw ? b.slice(0, bw - 1) + "\u2026" : b.padEnd(bw))
       })()}</text>
+      {/* Ahead indicator — green (D-08) */}
+      <text fg={aheadCount() > 0 ? (isStale() ? "gray" : "green") : "gray"}>
+        {aheadCount() > 0 ? `  ↑${aheadCount()}${isStale() ? "?" : ""}` : ""}
+      </text>
+      {/* Behind indicator — yellow (D-08) */}
+      <text fg={behindCount() > 0 ? (isStale() ? "gray" : "yellow") : "gray"}>
+        {behindCount() > 0 ? `  ↓${behindCount()}${isStale() ? "?" : ""}` : ""}
+      </text>
       <text fg="gray">{`  ${countsText()}`}</text>
       <text fg={messagePreview() ? "white" : "gray"}>
         {messagePreview() ? `  ${messagePreview()!.truncated}` : `  ${formatAge(ws().created)}`}
