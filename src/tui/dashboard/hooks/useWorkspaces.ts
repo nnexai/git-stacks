@@ -1,6 +1,7 @@
 import { createSignal, onCleanup } from "solid-js"
 import { listWorkspaces, type Workspace } from "../../../lib/config"
 import { getWorkspaceStatus } from "../../../lib/workspace-ops"
+import { isFetchStale } from "../../../lib/git"
 import type { WorkspaceEntry, WorkspaceStatus } from "../types"
 
 const CONCURRENCY = 5
@@ -70,6 +71,14 @@ async function fetchStatuses(
     const results = await Promise.allSettled(
       batch.map(async (ws) => {
         const repos = await getWorkspaceStatus(ws)
+
+        // Compute staleness: any worktree repo with stale FETCH_HEAD
+        const worktreeRepos = ws.repos.filter(r => r.mode === "worktree" && repos.some(rs => rs.name === r.name && rs.exists))
+        const staleChecks = await Promise.all(
+          worktreeRepos.map(r => isFetchStale(r.task_path))
+        )
+        const aheadBehindStale = staleChecks.some(s => s)
+
         return {
           name: ws.name,
           status: {
@@ -77,6 +86,7 @@ async function fetchStatuses(
             repos,
             hasDirty: repos.some((r) => r.dirty),
             hasMissing: repos.some((r) => !r.exists && r.mode === "worktree"),
+            aheadBehindStale,
           } satisfies WorkspaceStatus,
         }
       })
