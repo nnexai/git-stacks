@@ -68,7 +68,7 @@ export async function runDashboard() {
   await render(() => <App />, {
     targetFps: 30,
     exitOnCtrlC: false,
-    useAlternateScreen: true,
+    screenMode: "alternate-screen",
     onDestroy() {
       if (server) {
         server.stop(true)

@@ -131,8 +131,8 @@ Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE
 - Zod 3.25.76 - Type-safe schema validation for config files (YAML)
 - yaml 2.8.2 - YAML parsing and serialization for config management
 - SolidJS 1.9.11 - Reactive component framework for interactive TUI dashboard
-- @opentui/core 0.1.87 - Core TUI component library (cross-platform terminal UI)
-- @opentui/solid 0.1.87 - SolidJS bindings for OpenTUI components
+- @opentui/core 0.1.96 - Core TUI component library (cross-platform terminal UI)
+- @opentui/solid 0.1.96 - SolidJS bindings for OpenTUI components
 - opentui-spinner 0.0.6 - Animated spinners in CLI output
 - @clack/prompts 0.9.1 - Beautiful CLI interactive prompts and selections
 ## Key Dependencies
