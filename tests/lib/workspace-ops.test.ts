@@ -33,6 +33,7 @@ import {
 import {
   writeEnvFiles,
   mergeEnv,
+  getWorkspaceListInfo,
 } from "../../src/lib/workspace-ops"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
@@ -1695,5 +1696,161 @@ describe("mergeEnv port injection (PORT-INJECT-01)", () => {
     const result = mergeEnv(ws)
     expect(result.FOO).toBe("bar")
     expect(result.PORT).toBe("12400")
+  })
+})
+
+describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-ab")
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("includes ahead/behind/aheadBehindStale fields", async () => {
+    const wsName = uniqueWsName("ab")
+
+    // Create a bare remote, clone it, create a workspace with worktree
+    const barePath = join(tmp, "remote.git")
+    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+
+    const clonePath = join(tmp, "clone")
+    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} config user.email test@example.com`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+
+    // Initial commit and push
+    writeFileSync(join(clonePath, "init.txt"), "init")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+
+    // Create worktree on a feature branch
+    const wtPath = join(tmp, "worktree")
+    execSync(`git -C ${clonePath} worktree add -b feature ${wtPath}`, { stdio: "pipe" })
+
+    // Add 2 commits on the feature branch (ahead of origin/main)
+    writeFileSync(join(wtPath, "a.txt"), "a")
+    execSync(`git -C ${wtPath} add . && git -C ${wtPath} commit -m "feat 1"`, { stdio: "pipe" })
+    writeFileSync(join(wtPath, "b.txt"), "b")
+    execSync(`git -C ${wtPath} add . && git -C ${wtPath} commit -m "feat 2"`, { stdio: "pipe" })
+
+    // Write workspace YAML
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "feature",
+      created: new Date().toISOString(),
+      repos: [{
+        name: "test-repo",
+        repo: "test-repo",
+        type: "other",
+        mode: "worktree",
+        main_path: clonePath,
+        task_path: wtPath,
+        base_branch: "main",
+      }],
+    }))
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    expect(info.ahead).toBe(2)
+    expect(info.behind).toBe(0)
+    expect(typeof info.aheadBehindStale).toBe("boolean")
+  })
+
+  test("aggregation: ahead is sum, behind is max across repos", async () => {
+    const wsName = uniqueWsName("ab-agg")
+
+    // Create two bare remotes and clones
+    const bare1 = join(tmp, "remote1.git")
+    const bare2 = join(tmp, "remote2.git")
+    execSync(`git init --bare ${bare1}`, { stdio: "pipe" })
+    execSync(`git init --bare ${bare2}`, { stdio: "pipe" })
+
+    const clone1 = join(tmp, "clone1")
+    const clone2 = join(tmp, "clone2")
+    execSync(`git clone ${bare1} ${clone1}`, { stdio: "pipe" })
+    execSync(`git clone ${bare2} ${clone2}`, { stdio: "pipe" })
+
+    for (const c of [clone1, clone2]) {
+      execSync(`git -C ${c} config user.email test@example.com && git -C ${c} config user.name Test`, { stdio: "pipe" })
+      writeFileSync(join(c, "init.txt"), "init")
+      execSync(`git -C ${c} add . && git -C ${c} commit -m "init" && git -C ${c} push`, { stdio: "pipe" })
+    }
+
+    const wt1 = join(tmp, "wt1")
+    const wt2 = join(tmp, "wt2")
+    execSync(`git -C ${clone1} worktree add -b feature ${wt1}`, { stdio: "pipe" })
+    execSync(`git -C ${clone2} worktree add -b feature ${wt2}`, { stdio: "pipe" })
+
+    // Repo1: 3 ahead
+    for (let i = 0; i < 3; i++) {
+      writeFileSync(join(wt1, `f${i}.txt`), `${i}`)
+      execSync(`git -C ${wt1} add . && git -C ${wt1} commit -m "feat ${i}"`, { stdio: "pipe" })
+    }
+
+    // Repo2: 1 ahead
+    writeFileSync(join(wt2, "f.txt"), "f")
+    execSync(`git -C ${wt2} add . && git -C ${wt2} commit -m "feat"`, { stdio: "pipe" })
+
+    // Add 2 commits to origin/main of repo2 (behind by 2)
+    const tmpClone2 = join(tmp, "tmp-clone2")
+    execSync(`git clone ${bare2} ${tmpClone2}`, { stdio: "pipe" })
+    execSync(`git -C ${tmpClone2} config user.email test@example.com && git -C ${tmpClone2} config user.name Test`, { stdio: "pipe" })
+    for (let i = 0; i < 2; i++) {
+      writeFileSync(join(tmpClone2, `m${i}.txt`), `${i}`)
+      execSync(`git -C ${tmpClone2} add . && git -C ${tmpClone2} commit -m "main ${i}" && git -C ${tmpClone2} push`, { stdio: "pipe" })
+    }
+    // Fetch in clone2 so origin/main is updated
+    execSync(`git -C ${clone2} fetch origin`, { stdio: "pipe" })
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "feature",
+      created: new Date().toISOString(),
+      repos: [
+        { name: "repo1", repo: "repo1", type: "other", mode: "worktree", main_path: clone1, task_path: wt1, base_branch: "main" },
+        { name: "repo2", repo: "repo2", type: "other", mode: "worktree", main_path: clone2, task_path: wt2, base_branch: "main" },
+      ],
+    }))
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    expect(info.ahead).toBe(4)   // sum: 3 + 1
+    expect(info.behind).toBe(2)  // max: 0 and 2 → 2
+  })
+
+  test("trunk repos are excluded from ahead/behind", async () => {
+    const wsName = uniqueWsName("ab-trunk")
+
+    const barePath = join(tmp, "remote-trunk.git")
+    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    const clonePath = join(tmp, "clone-trunk")
+    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    writeFileSync(join(clonePath, "init.txt"), "init")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "main",
+      created: new Date().toISOString(),
+      repos: [{
+        name: "trunk-repo",
+        repo: "trunk-repo",
+        type: "other",
+        mode: "trunk",
+        main_path: clonePath,
+        task_path: clonePath,
+        base_branch: "main",
+      }],
+    }))
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    // Trunk repos are skipped; should be 0/0
+    expect(info.ahead).toBe(0)
+    expect(info.behind).toBe(0)
   })
 })

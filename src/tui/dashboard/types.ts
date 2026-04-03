@@ -6,12 +6,14 @@ export type RepoStatus = {
   dirty: boolean
   branch: string
   mode: "trunk" | "worktree"
+  ahead: number
+  behind: number
 }
 
 export type WorkspaceStatus =
   | { state: "pending" }
   | { state: "loading" }
-  | { state: "loaded"; repos: RepoStatus[]; hasDirty: boolean; hasMissing: boolean }
+  | { state: "loaded"; repos: RepoStatus[]; hasDirty: boolean; hasMissing: boolean; aheadBehindStale: boolean }
   | { state: "error"; message: string }
 
 export type WorkspaceEntry = {

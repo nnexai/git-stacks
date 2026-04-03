@@ -34,6 +34,8 @@ import {
   rebaseBranch,
   mergeBranchFF,
   getCommitsBehind,
+  getCommitsAhead,
+  isFetchStale,
   ensureUpstreamTracking,
 } from "./git"
 import { type IntegrationContext } from "./integrations"
@@ -57,6 +59,9 @@ export type WorkspaceListInfo = {
   worktreeCount: number
   trunkCount: number
   repoCount: number    // worktreeCount + trunkCount
+  ahead: number              // sum of ahead counts across worktree repos
+  behind: number             // max behind count across worktree repos
+  aheadBehindStale: boolean  // true if ANY worktree repo has stale FETCH_HEAD
 }
 
 function formatAge(created: string): string {
@@ -90,6 +95,32 @@ export async function getWorkspaceListInfo(
   const dirtyRepos: string[] = results.filter((r) => r.dirty).map((r) => r.name)
   const dirty: boolean = dirtyRepos.length > 0
 
+  // Ahead/behind computation (AB-02): parallel per worktree repo
+  let totalAhead = 0
+  let maxBehind = 0
+  let anyStale = false
+
+  const abResults = await Promise.all(
+    worktreeRepos
+      .filter((repo) => existsSync(repo.task_path))
+      .map(async (repo) => {
+        const baseBranch = repo.base_branch ?? "main"
+        const baseRef = `origin/${baseBranch}`
+        const [ahead, behind, stale] = await Promise.all([
+          getCommitsAhead(repo.task_path, baseRef, "HEAD"),
+          getCommitsBehind(repo.task_path, baseRef, "HEAD"),
+          isFetchStale(repo.task_path),
+        ])
+        return { ahead, behind, stale }
+      })
+  )
+
+  for (const r of abResults) {
+    totalAhead += r.ahead
+    if (r.behind > maxBehind) maxBehind = r.behind
+    if (r.stale) anyStale = true
+  }
+
   return {
     name: workspace.name,
     branch: workspace.branch,
@@ -102,6 +133,9 @@ export async function getWorkspaceListInfo(
     worktreeCount: worktreeRepos.length,
     trunkCount: trunkRepos.length,
     repoCount: worktreeRepos.length + trunkRepos.length,
+    ahead: totalAhead,
+    behind: maxBehind,
+    aheadBehindStale: anyStale,
   }
 }
 
@@ -209,6 +243,8 @@ export type RepoStatus = {
   dirty: boolean
   branch: string
   mode: "trunk" | "worktree"
+  ahead: number
+  behind: number
 }
 
 export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
@@ -229,7 +265,20 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
         exists && repo.mode === "worktree"
           ? await Promise.all([isRepoDirty(repo.task_path), getCurrentBranch(repo.task_path)])
           : [false, "—"]
-      return { name: repo.name, exists, dirty, branch, mode: repo.mode }
+
+      // Ahead/behind for worktree repos only (trunk repos report 0/0)
+      let ahead = 0
+      let behind = 0
+      if (exists && repo.mode === "worktree") {
+        const baseBranch = repo.base_branch ?? "main"
+        const baseRef = `origin/${baseBranch}`;
+        [ahead, behind] = await Promise.all([
+          getCommitsAhead(repo.task_path, baseRef, "HEAD"),
+          getCommitsBehind(repo.task_path, baseRef, "HEAD"),
+        ])
+      }
+
+      return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind }
     })
   )
 }
