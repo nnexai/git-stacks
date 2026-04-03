@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { execSync } from "child_process"
-import { writeFileSync } from "fs"
+import { writeFileSync, utimesSync } from "fs"
 import { makeTmpDir, cleanup, makeGitRepo } from "../helpers"
 import {
   createWorktree,
@@ -10,6 +10,8 @@ import {
   mergeNoFF,
   rebaseBranch,
   getCommitsBehind,
+  getCommitsAhead,
+  isFetchStale,
   fetchOrigin,
   checkRemoteTrackingRef,
   checkBranchExistsOnRemote,
@@ -506,5 +508,140 @@ describe("ensureUpstreamTracking", () => {
     // Should not throw — returns tracked:false
     const result = await ensureUpstreamTracking(repoPath, "offline-branch")
     expect(result.tracked).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("getCommitsAhead")
+// ---------------------------------------------------------------------------
+
+describe("getCommitsAhead", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-ahead")
+    repoPath = makeGitRepo(tmp)
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("returns 0 when HEAD matches base", async () => {
+    const count = await getCommitsAhead(repoPath, "main", "HEAD")
+    expect(count).toBe(0)
+  })
+
+  test("returns correct count when branch is ahead", async () => {
+    // Create a branch and add commits
+    execSync("git -C " + repoPath + " checkout -b feature", { stdio: "pipe" })
+    writeFileSync(join(repoPath, "a.txt"), "a")
+    execSync("git -C " + repoPath + " add . && git -C " + repoPath + " commit -m 'commit 1'", { stdio: "pipe" })
+    writeFileSync(join(repoPath, "b.txt"), "b")
+    execSync("git -C " + repoPath + " add . && git -C " + repoPath + " commit -m 'commit 2'", { stdio: "pipe" })
+
+    const count = await getCommitsAhead(repoPath, "main", "HEAD")
+    expect(count).toBe(2)
+  })
+
+  test("returns 0 for non-existent repo path", async () => {
+    const count = await getCommitsAhead("/nonexistent/path", "main", "HEAD")
+    expect(count).toBe(0)
+  })
+
+  test("mirrors getCommitsBehind — ahead and behind are inverse ranges", async () => {
+    // Create a branch, add commits, then go back to main and add different commits
+    execSync("git -C " + repoPath + " checkout -b feature", { stdio: "pipe" })
+    writeFileSync(join(repoPath, "feature.txt"), "feature")
+    execSync("git -C " + repoPath + " add . && git -C " + repoPath + " commit -m 'feature commit'", { stdio: "pipe" })
+
+    execSync("git -C " + repoPath + " checkout main", { stdio: "pipe" })
+    writeFileSync(join(repoPath, "main-new.txt"), "main")
+    execSync("git -C " + repoPath + " add . && git -C " + repoPath + " commit -m 'main commit'", { stdio: "pipe" })
+
+    // From feature's perspective relative to main:
+    const ahead = await getCommitsAhead(repoPath, "main", "feature")
+    const behind = await getCommitsBehind(repoPath, "main", "feature")
+    expect(ahead).toBe(1)   // feature has 1 commit not in main
+    expect(behind).toBe(1)  // main has 1 commit not in feature
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("isFetchStale")
+// ---------------------------------------------------------------------------
+
+describe("isFetchStale", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-stale")
+    repoPath = makeGitRepo(tmp)
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("returns true when FETCH_HEAD does not exist (never fetched)", async () => {
+    // A fresh makeGitRepo has no FETCH_HEAD
+    const stale = await isFetchStale(repoPath)
+    expect(stale).toBe(true)
+  })
+
+  test("returns false when FETCH_HEAD was just written", async () => {
+    // Create FETCH_HEAD with current timestamp
+    const gitDir = join(repoPath, ".git")
+    writeFileSync(join(gitDir, "FETCH_HEAD"), "dummy")
+    const stale = await isFetchStale(repoPath)
+    expect(stale).toBe(false)
+  })
+
+  test("returns true when FETCH_HEAD is older than threshold", async () => {
+    const gitDir = join(repoPath, ".git")
+    const fetchHeadPath = join(gitDir, "FETCH_HEAD")
+    writeFileSync(fetchHeadPath, "dummy")
+    // Set mtime to 20 minutes ago
+    const twentyMinAgo = new Date(Date.now() - 20 * 60 * 1000)
+    utimesSync(fetchHeadPath, twentyMinAgo, twentyMinAgo)
+    const stale = await isFetchStale(repoPath)
+    expect(stale).toBe(true)
+  })
+
+  test("respects custom threshold", async () => {
+    const gitDir = join(repoPath, ".git")
+    const fetchHeadPath = join(gitDir, "FETCH_HEAD")
+    writeFileSync(fetchHeadPath, "dummy")
+    // Set mtime to 2 minutes ago
+    const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000)
+    utimesSync(fetchHeadPath, twoMinAgo, twoMinAgo)
+
+    // With 1 minute threshold: should be stale
+    const staleShort = await isFetchStale(repoPath, 60 * 1000)
+    expect(staleShort).toBe(true)
+
+    // With 5 minute threshold: should not be stale
+    const staleLong = await isFetchStale(repoPath, 5 * 60 * 1000)
+    expect(staleLong).toBe(false)
+  })
+
+  test("returns true for non-existent repo path", async () => {
+    const stale = await isFetchStale("/nonexistent/path")
+    expect(stale).toBe(true)
+  })
+
+  test("works in worktree (uses git-common-dir)", async () => {
+    // Create a worktree — FETCH_HEAD lives in the main repo, not the worktree
+    const wtPath = join(tmp, "worktree")
+    execSync("git -C " + repoPath + " checkout -b wt-branch", { stdio: "pipe" })
+    execSync("git -C " + repoPath + " checkout main", { stdio: "pipe" })
+    execSync("git -C " + repoPath + " worktree add " + wtPath + " wt-branch", { stdio: "pipe" })
+
+    // Write FETCH_HEAD in the main repo's .git dir
+    const mainGitDir = join(repoPath, ".git")
+    writeFileSync(join(mainGitDir, "FETCH_HEAD"), "dummy")
+
+    // isFetchStale on the worktree should find the main repo's FETCH_HEAD via --git-common-dir
+    const stale = await isFetchStale(wtPath)
+    expect(stale).toBe(false)
+
+    // Clean up worktree
+    execSync("git -C " + repoPath + " worktree remove " + wtPath + " --force", { stdio: "pipe" })
   })
 })
