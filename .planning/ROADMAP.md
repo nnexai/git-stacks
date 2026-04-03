@@ -170,7 +170,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 - [ ] **Phase 60: Labels** (4 plans, 2 waves) - Label schema, CRUD subcommand, list filter, TUI tags and group-by
 - [ ] **Phase 61: Secrets** (3 plans, 2 waves) - Pluggable secret resolution for env references in workspace YAML
 - [ ] **Phase 62: Stash on Sync** - Auto-stash dirty repos before sync, pop in reverse with conflict safety
-- [ ] **Phase 63: Release Prep** - v0.14.0 version bump, CHANGELOG, README updates
+- [ ] **Phase 63: Release Prep** (1 plan) - v0.14.0 version bump, CHANGELOG, README updates
 
 ## Phase Details
 
@@ -242,7 +242,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
   1. `package.json` version is bumped to 0.14.0
   2. CHANGELOG has a v0.14.0 entry covering all five feature areas (ahead/behind, push, labels, secrets, stash)
   3. README documents new commands and flags (`git-stacks push`, `git-stacks label`, `--skip-secrets`, `--stash` on sync)
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
 
 ## Progress
 
@@ -264,4 +264,4 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 60. Labels | v0.14.0 | 0/4 | Planned | - |
 | 61. Secrets | v0.14.0 | 0/3 | Planned | - |
 | 62. Stash on Sync | v0.14.0 | 0/TBD | Not started | - |
-| 63. Release Prep | v0.14.0 | 0/TBD | Not started | - |
+| 63. Release Prep | v0.14.0 | 0/1 | Planned | - |

@@ -4,12 +4,12 @@ milestone: v0.14.0
 milestone_name: Workflow Completion & Workspace UX
 status: executing
 stopped_at: Phase 63 context gathered — all phases discussed
-last_updated: "2026-04-03T13:47:27.993Z"
-last_activity: 2026-04-03 — Phase 61 planned (3 plans, 2 waves)
+last_updated: "2026-04-03T13:51:04.336Z"
+last_activity: 2026-04-03 -- Phase 58 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 15
+  total_plans: 17
   completed_plans: 0
   percent: 0
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** v0.14.0 Phase 61 planned — ready to execute Phase 58
+**Current focus:** Phase 58 — Ahead/Behind Tracking
 
 ## Current Position
 
-Phase: 61 of 63 (Secrets) — planned
-Plan: 3 plans in 2 waves (Wave 1: secrets library + config schema; Wave 2: workspace integration + CLI + config wizard)
-Status: Ready to execute Phase 58
-Last activity: 2026-04-03 — Phase 61 planned (3 plans, 2 waves)
+Phase: 58 (Ahead/Behind Tracking) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 58
+Last activity: 2026-04-03 -- Phase 58 execution started
 
 ```
 Progress: [----------] 0% (0/6 phases)
