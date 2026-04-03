@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.14.0
 milestone_name: Workflow Completion & Workspace UX
 status: executing
-stopped_at: Phase 63 planned (1 plan, 1 wave)
-last_updated: "2026-04-03T14:00:00.000Z"
-last_activity: 2026-04-03 -- Phase 63 planned (1 plan, 1 wave)
+stopped_at: Completed 58-01-PLAN.md — getCommitsAhead and isFetchStale primitives added
+last_updated: "2026-04-03T13:57:17.380Z"
+last_activity: 2026-04-03
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 20
-  completed_plans: 0
+  total_plans: 18
+  completed_plans: 1
   percent: 0
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-03)
 ## Current Position
 
 Phase: 58 (Ahead/Behind Tracking) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 58
-Last activity: 2026-04-03 -- Phase 58 execution started
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-04-03
 
 ```
 Progress: [----------] 0% (0/6 phases)
@@ -46,6 +46,8 @@ Progress: [----------] 0% (0/6 phases)
 - Phase 61 (secrets) `cmd:` resolver requires explicit opt-in in config.yml; not enabled by default
 - Phase 62 (stash) double-stash guard: if `git-stacks auto-stash` entry already in `git stash list`, refuse to stash again
 - LBL-01 label filter must use shared `matchesLabels(workspace, terms[])` utility before implementing CLI or TUI surfaces
+- [Phase 58-ahead-behind-tracking]: Use git rev-parse --git-common-dir (not hardcoded .git) so isFetchStale works in worktrees where .git is a file
+- [Phase 58-ahead-behind-tracking]: isFetchStale defaults to 15-minute threshold, returns true (stale) on any error — safe default
 
 ### Pending Todos
 
@@ -57,6 +59,6 @@ Progress: [----------] 0% (0/6 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-03T13:47:27.990Z
-Stopped at: Phase 63 context gathered — all phases discussed
+Last session: 2026-04-03T13:57:17.378Z
+Stopped at: Completed 58-01-PLAN.md — getCommitsAhead and isFetchStale primitives added
 Next action: `/gsd:execute-phase 58` — Ahead/Behind Tracking
