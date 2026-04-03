@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-03)
 Phase: All implementation phases complete
 Plan: 18 of 18
 Status: v0.14.0 lifecycle complete
-Last activity: 2026-04-03
+Last activity: 2026-04-03 - Completed quick task 260403-x04: Make keychain resolver attribute names configurable
 
 ```
 Progress: [##########] 100% (6/6 phases)
@@ -68,6 +68,12 @@ Progress: [##########] 100% (6/6 phases)
 ### Blockers/Concerns
 
 (none)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260403-x04 | Make keychain resolver attribute names configurable instead of hardcoded service/account | 2026-04-03 | 3809b52 | [260403-x04-make-keychain-resolver-attribute-names-c](./quick/260403-x04-make-keychain-resolver-attribute-names-c/) |
 
 ## Session Continuity
 
