@@ -243,6 +243,8 @@ export type RepoStatus = {
   dirty: boolean
   branch: string
   mode: "trunk" | "worktree"
+  ahead: number
+  behind: number
 }
 
 export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
@@ -263,7 +265,20 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
         exists && repo.mode === "worktree"
           ? await Promise.all([isRepoDirty(repo.task_path), getCurrentBranch(repo.task_path)])
           : [false, "—"]
-      return { name: repo.name, exists, dirty, branch, mode: repo.mode }
+
+      // Ahead/behind for worktree repos only (trunk repos report 0/0)
+      let ahead = 0
+      let behind = 0
+      if (exists && repo.mode === "worktree") {
+        const baseBranch = repo.base_branch ?? "main"
+        const baseRef = `origin/${baseBranch}`;
+        [ahead, behind] = await Promise.all([
+          getCommitsAhead(repo.task_path, baseRef, "HEAD"),
+          getCommitsBehind(repo.task_path, baseRef, "HEAD"),
+        ])
+      }
+
+      return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind }
     })
   )
 }
