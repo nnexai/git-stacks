@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.13.0
-milestone_name: CLI Polish & Completions
-status: verifying
-stopped_at: Completed 57-01-PLAN.md
-last_updated: "2026-04-02T06:14:56.887Z"
-last_activity: 2026-04-02
+milestone: v0.14.0
+milestone_name: Workflow Completion & Workspace UX
+status: planning
+stopped_at: ""
+last_updated: "2026-04-03T00:00:00.000Z"
+last_activity: 2026-04-03
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 9
-  completed_plans: 9
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -18,20 +18,20 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-02)
+See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 57 — release-prep
+**Current focus:** Defining requirements for v0.14.0
 
 ## Current Position
 
-Phase: 57
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-04-03 - Completed quick task 260403-j1s: Fix useAlternateScreen TS error after OpenTUI update
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-03 — Milestone v0.14.0 started
 
 ```
-Progress: [----------] 0% (0/5 phases)
+Progress: [----------] 0% (0/0 phases)
 ```
 
 ## Accumulated Context

@@ -8,9 +8,16 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State
+## Current Milestone: v0.14.0 Workflow Completion & Workspace UX
 
-v0.13.0 milestone complete (2026-04-02). No active milestone.
+**Goal:** Complete the core workspace workflow (push, ahead/behind tracking) and add organizational features (labels, secrets, stash) that make git-stacks scale to real team/production use.
+
+**Target features:**
+- Ahead/Behind Tracking — per-repo commit distance from base
+- `git-stacks push` — push workspace branches to remote
+- Labels / Grouping — label-based filtering and organization
+- Secrets / Env Var References — pluggable secret resolution for env values
+- `--stash` on Sync — auto-stash dirty worktrees before sync
 
 ## Recent State (2026-04-02)
 
@@ -228,15 +235,16 @@ v0.13.0 milestone complete (2026-04-02). No active milestone.
 - ✓ Port names in new workspace wizard — v0.12.0 Phase 51
 - ✓ Template port inheritance with workspace merge — v0.12.0 Phase 51
 
+- ✓ Shell completion arity enforcement — variadic-aware positional arg limits across bash/zsh/fish — v0.13.0 Phase 53
+- ✓ Option value enum auto-detection from Commander `.choices()` — v0.13.0 Phase 53
+- ✓ `git-stacks env [workspace]` — merged env var inspection with `--format` output — v0.13.0 Phase 54
+- ✓ `install --hooks --copilot` — Copilot hook support alongside Claude hooks — v0.13.0 Phase 55
+- ✓ Forge CLI checks in `git-stacks doctor` — conditional `gh`/`glab`/`tea` binary checks — v0.13.0 Phase 56
+- ✓ Tmux `configExample` with practical pane layout — v0.13.0 Phase 56
+
 ### Active
 
 - [ ] Fix `list --status` flag — implement status display or remove the unsupported option
-- [ ] Fix shell completion repeating workspace after optional positional arg — enforce argument arity
-- [ ] Add missing option value enums to completion generator — audit all enum-style flags
-- [ ] `git-stacks env [workspace]` — dump merged workspace env vars with `--format shell|dotenv|json`
-- [ ] Extend `install --hooks` to support Copilot — `--claude`/`--copilot` flags
-- [ ] Add forge CLI checks to `git-stacks doctor` — verify `gh`/`glab`/`tea` on PATH
-- [ ] Add tmux pane setup to `configExample` — show hook-based pane configuration
 
 ### Out of Scope
 
@@ -250,6 +258,12 @@ v0.13.0 milestone complete (2026-04-02). No active milestone.
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
+
+## Completed Milestone: v0.13.0 CLI Polish & Completions (2026-04-02)
+
+**Goal:** Fix shell completion edge cases, add env inspection command, extend hook system to Copilot, and polish doctor/config output.
+
+**Shipped:** All target features delivered across 5 phases (53-57). Shell completion arity enforcement with variadic awareness, `git-stacks env` command with multi-format output, Copilot hook plugin with `--copilot`/`--claude` install flags, conditional forge CLI doctor checks, practical tmux config example.
 
 ## Completed Milestone: v0.12.0 Multi-Workspace AeroSpace, Integration Tools & Port Allocation (2026-04-02)
 
@@ -398,4 +412,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-02 after v0.13.0 milestone complete*
+*Last updated: 2026-04-03 after v0.14.0 milestone started*
