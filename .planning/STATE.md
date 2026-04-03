@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.14.0
 milestone_name: Workflow Completion & Workspace UX
-status: ready_for_cleanup
-stopped_at: Completed milestone archival
-last_updated: "2026-04-03T21:03:31Z"
+status: milestone_complete
+stopped_at: Completed milestone cleanup
+last_updated: "2026-04-03T21:28:14Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 6
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Milestone cleanup
+**Current focus:** Next milestone definition
 
 ## Current Position
 
 Phase: All implementation phases complete
 Plan: 18 of 18
-Status: Milestone archived; ready for cleanup
+Status: v0.14.0 lifecycle complete
 Last activity: 2026-04-03
 
 ```
@@ -71,6 +71,6 @@ Progress: [##########] 100% (6/6 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-03T21:03:31Z
-Stopped at: Completed milestone archival
-Next action: Run cleanup to archive phase directories
+Last session: 2026-04-03T21:28:14Z
+Stopped at: Completed milestone cleanup
+Next action: Start `/gsd-new-milestone` when ready
