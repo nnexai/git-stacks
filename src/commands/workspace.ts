@@ -16,7 +16,7 @@ import {
   type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
-import { isBranchGoneOnRemote } from "../lib/git"
+import { isBranchGoneOnRemote, fetchOrigin } from "../lib/git"
 import { runWorkspaceNew, runWorkspaceEdit } from "../tui/workspace-wizard"
 import { runWorkspaceClone } from "../tui/workspace-clone"
 import {
@@ -315,13 +315,33 @@ export function registerWorkspaceCommands(program: Command) {
     .command("status [workspace]")
     .description("Show workspace status — dirty state, worktree health")
     .option("--json", "Output as JSON")
-    .action(async (workspace?: string, opts: { json?: boolean } = {}) => {
+    .option("--fetch", "Fetch origin before computing ahead/behind counts")
+    .action(async (workspace?: string, opts: { json?: boolean; fetch?: boolean } = {}) => {
       const name = workspace
       if (name !== undefined) validateName(name)
       const workspaces = name ? [readWorkspace(name)] : listWorkspaces()
       if (workspaces.length === 0) {
         console.log("No workspaces.")
         return
+      }
+
+      // Fetch origin if --fetch flag (D-03, D-06)
+      if (opts.fetch) {
+        const { mapLimited } = await import("../lib/concurrency")
+        const allRepos = workspaces.flatMap(ws =>
+          ws.repos.filter(r => r.mode === "worktree" && existsSync(r.task_path))
+        )
+        // Deduplicate by main_path
+        const seen = new Set<string>()
+        const unique = allRepos.filter(r => {
+          if (seen.has(r.main_path)) return false
+          seen.add(r.main_path)
+          return true
+        })
+        if (unique.length > 0) {
+          console.log("  Fetching origin...")
+          await mapLimited(unique, (r) => fetchOrigin(r.main_path), 3)
+        }
       }
 
       if (opts.json) {
@@ -339,6 +359,8 @@ export function registerWorkspaceCommands(program: Command) {
                 branch: r.branch,
                 exists: r.exists,
                 dirty: r.dirty,
+                ahead: r.ahead,
+                behind: r.behind,
                 task_path: wsRepo?.task_path ?? null,
               }
             }),
@@ -354,7 +376,15 @@ export function registerWorkspaceCommands(program: Command) {
         for (const repo of repos) {
           const icon = !repo.exists ? "✗" : repo.dirty ? "~" : "✓"
           const modeLabel = repo.mode === "worktree" ? `[${repo.branch}]` : "[trunk]"
-          console.log(`    ${icon}  ${repo.name.padEnd(28)} ${modeLabel}`)
+          const abParts: string[] = []
+          if (repo.mode === "worktree") {
+            if (repo.ahead > 0) abParts.push(`↑${repo.ahead}`)
+            if (repo.behind > 0) abParts.push(`↓${repo.behind}`)
+          } else {
+            abParts.push("—")
+          }
+          const abStr = abParts.length > 0 ? `  ${abParts.join("  ")}` : ""
+          console.log(`    ${icon}  ${repo.name.padEnd(28)} ${modeLabel}${abStr}`)
         }
       }
     })
