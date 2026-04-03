@@ -259,7 +259,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 43-46. AeroSpace Window Management | v0.11.0 | 7/7 | Complete | 2026-03-28 |
 | 47-52. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
 | 53-57. CLI Polish & Completions | v0.13.0 | 9/9 | Complete | 2026-04-02 |
-| 58. Ahead/Behind Tracking | v0.14.0 | 2/4 | In Progress | - |
+| 58. Ahead/Behind Tracking | v0.14.0 | 3/4 | In Progress|  |
 | 59. Push | v0.14.0 | 0/4 | Planned | - |
 | 60. Labels | v0.14.0 | 0/4 | Planned | - |
 | 61. Secrets | v0.14.0 | 0/3 | Planned | - |

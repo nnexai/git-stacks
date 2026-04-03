@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.14.0
 milestone_name: Workflow Completion & Workspace UX
 status: executing
-stopped_at: Completed Wave 1 (58-01 + 58-02) — git primitives and data layer
-last_updated: "2026-04-03T14:35:00.000Z"
+stopped_at: Completed 58-03-PLAN.md — CLI list/status ahead/behind display
+last_updated: "2026-04-03T14:14:32.125Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 18
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-03)
 ## Current Position
 
 Phase: 58 (Ahead/Behind Tracking) — EXECUTING
-Plan: 3 of 4 (Wave 1 complete)
+Plan: 4 of 4 (Wave 1 complete)
 Status: Ready to execute
 Last activity: 2026-04-03
 
@@ -50,6 +50,8 @@ Progress: [----------] 0% (0/6 phases)
 - [Phase 58-ahead-behind-tracking]: isFetchStale defaults to 15-minute threshold, returns true (stale) on any error — safe default
 - [58-02]: ahead aggregation is SUM across repos; behind is MAX; staleness is OR (any stale FETCH_HEAD taints workspace)
 - [58-02]: trunk repos always report 0/0 ahead/behind — not meaningful for trunk mode
+- [Phase 58-ahead-behind-tracking]: Trunk repos show — in status text rather than 0/0 because trunk-mode repos don't track per-branch ahead/behind meaningfully
+- [Phase 58-ahead-behind-tracking]: fetch deduplication keyed on main_path prevents double-fetching when multiple worktrees share the same underlying clone
 
 ### Pending Todos
 
@@ -61,6 +63,6 @@ Progress: [----------] 0% (0/6 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-03T14:35:00.000Z
-Stopped at: Completed Wave 1 (58-01 + 58-02) — git primitives and data layer
+Last session: 2026-04-03T14:14:32.123Z
+Stopped at: Completed 58-03-PLAN.md — CLI list/status ahead/behind display
 Next action: Execute Wave 2 (58-03 + 58-04) — CLI and TUI display

@@ -11,7 +11,7 @@ Requirements for milestone v0.14.0: Workflow Completion & Workspace UX. Each map
 
 - [x] **AB-01**: User can see per-repo commit distance from base branch via `getCommitsAhead` primitive
 - [x] **AB-02**: Workspace list info includes aggregated ahead (sum) and behind (max) across worktree repos
-- [ ] **AB-03**: `git-stacks list` displays AHEAD and BEHIND columns
+- [x] **AB-03**: `git-stacks list` displays AHEAD and BEHIND columns
 - [x] **AB-04**: `git-stacks status <name>` shows per-repo ahead/behind counts
 - [ ] **AB-05**: TUI WorkspaceRow displays `↑N ↓N` indicators after branch name
 - [ ] **AB-06**: TUI WorkspaceDetail shows per-repo ahead/behind in repo table
@@ -91,7 +91,7 @@ Requirements for milestone v0.14.0: Workflow Completion & Workspace UX. Each map
 |-------------|-------|--------|
 | AB-01 | Phase 58 | Complete |
 | AB-02 | Phase 58 | Complete |
-| AB-03 | Phase 58 | Pending |
+| AB-03 | Phase 58 | Complete |
 | AB-04 | Phase 58 | Complete |
 | AB-05 | Phase 58 | Pending |
 | AB-06 | Phase 58 | Pending |
