@@ -34,6 +34,7 @@ import {
   writeEnvFiles,
   mergeEnv,
   getWorkspaceListInfo,
+  pushWorkspace,
 } from "../../src/lib/workspace-ops"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
@@ -334,6 +335,163 @@ describe("mergeWorkspace", () => {
     expect(workspaceExists(wsName)).toBe(true)
 
     cleanupFixture(wsName, stackName, tmp)
+  })
+})
+
+describe("pushWorkspace", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-ops-push")
+  })
+
+  afterEach(() => {
+    cleanup(tmp)
+  })
+
+  test("returns error for non-existent workspace", async () => {
+    const result = await pushWorkspace("nonexistent-workspace", {})
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("not found")
+  })
+
+  test("skips trunk repos", async () => {
+    const wsName = uniqueWsName("push-trunk")
+    const stackName = uniqueRegistryName()
+    const wsRoot = join(tmp, "workspaces")
+    const tasksDir = join(wsRoot, "tasks")
+    const mainDir = join(wsRoot, "main")
+    mkdirSync(tasksDir, { recursive: true })
+    mkdirSync(mainDir, { recursive: true })
+    writeGlobalConfig({ workspace_root: wsRoot, integrations: {} })
+
+    const trunkRepo = makeGitRepo(mainDir, "trunk-repo")
+    const worktreeRepo = makeGitRepo(mainDir, "worktree-repo")
+    const remotePath = join(tmp, "worktree-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${worktreeRepo} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync("git -C " + worktreeRepo + " push -u origin main", { stdio: "pipe" })
+
+    const worktreePath = join(tasksDir, wsName, "worktree-repo")
+    await createWorktree(worktreeRepo, worktreePath, "feature/test")
+    writeFileSync(join(worktreePath, "feature.txt"), "feature\n")
+    execSync("git -C " + worktreePath + " add .", { stdio: "pipe" })
+    execSync('git -C ' + worktreePath + ' commit -m "feature commit"', { stdio: "pipe" })
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "feature/test",
+      created: new Date().toISOString(),
+      repos: [
+        {
+          name: "trunk-repo",
+          repo: stackName,
+          type: "other",
+          mode: "trunk",
+          main_path: trunkRepo,
+          task_path: trunkRepo,
+        },
+        {
+          name: "worktree-repo",
+          repo: stackName,
+          type: "other",
+          mode: "worktree",
+          main_path: worktreeRepo,
+          task_path: worktreePath,
+        },
+      ],
+    }))
+
+    const result = await pushWorkspace(wsName, { setUpstream: true })
+    expect(result.ok).toBe(true)
+    expect(result.skipped).toContainEqual({ repo: "trunk-repo", reason: "trunk" })
+    expect(result.pushed.some(repo => repo.repo === "worktree-repo")).toBe(true)
+  })
+
+  test("pushes worktree repos in parallel", async () => {
+    const wsName = uniqueWsName("push-parallel")
+    const stackName = uniqueRegistryName()
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 2 })
+
+    for (const repo of repos) {
+      const remotePath = join(tmp, `${repo.name}.git`)
+      execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+      execSync(`git -C ${repo.repoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+      execSync("git -C " + repo.repoPath + " push -u origin main", { stdio: "pipe" })
+      execSync(`git -C ${repo.worktreePath} remote set-url origin ${remotePath}`, { stdio: "pipe" })
+      writeFileSync(join(repo.worktreePath, `${repo.name}.txt`), repo.name)
+      execSync("git -C " + repo.worktreePath + " add .", { stdio: "pipe" })
+      execSync(`git -C ${repo.worktreePath} commit -m "commit ${repo.name}"`, { stdio: "pipe" })
+    }
+
+    const result = await pushWorkspace(wsName, { setUpstream: true })
+    expect(result.ok).toBe(true)
+    expect(result.pushed).toHaveLength(2)
+    for (const repo of repos) {
+      const branchRef = execSync(`git --git-dir ${join(tmp, `${repo.name}.git`)} rev-parse --verify refs/heads/feature/test`, { stdio: "pipe" }).toString().trim()
+      expect(branchRef.length).toBeGreaterThan(0)
+    }
+  })
+
+  test("reports failed repos and sets ok to false", async () => {
+    const wsName = uniqueWsName("push-fail")
+    const stackName = uniqueRegistryName()
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+    const repo = repos[0]
+    writeFileSync(join(repo.worktreePath, "broken.txt"), "broken\n")
+    execSync("git -C " + repo.worktreePath + " add .", { stdio: "pipe" })
+    execSync('git -C ' + repo.worktreePath + ' commit -m "broken push"', { stdio: "pipe" })
+
+    const result = await pushWorkspace(wsName, {})
+    expect(result.ok).toBe(false)
+    expect(result.failed).toHaveLength(1)
+  })
+
+  test("dry-run does not execute push", async () => {
+    const wsName = uniqueWsName("push-dry-run")
+    const stackName = uniqueRegistryName()
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+    const repo = repos[0]
+    const remotePath = join(tmp, "dry-run-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${repo.repoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync("git -C " + repo.repoPath + " push -u origin main", { stdio: "pipe" })
+    execSync(`git -C ${repo.worktreePath} remote set-url origin ${remotePath}`, { stdio: "pipe" })
+    writeFileSync(join(repo.worktreePath, "dry-run.txt"), "dry-run\n")
+    execSync("git -C " + repo.worktreePath + " add .", { stdio: "pipe" })
+    execSync('git -C ' + repo.worktreePath + ' commit -m "dry run commit"', { stdio: "pipe" })
+
+    const before = execSync(`git --git-dir ${remotePath} rev-list --count --all`, { stdio: "pipe" }).toString().trim()
+    const result = await pushWorkspace(wsName, { dryRun: true })
+    const after = execSync(`git --git-dir ${remotePath} rev-list --count --all`, { stdio: "pipe" }).toString().trim()
+
+    expect(result.ok).toBe(true)
+    expect(result.pushed).toHaveLength(1)
+    expect(after).toBe(before)
+  })
+
+  test("calls onProgress callback with status transitions", async () => {
+    const wsName = uniqueWsName("push-progress")
+    const stackName = uniqueRegistryName()
+    const { repos } = await setupWorkspaceFixture(tmp, wsName, stackName, { repoCount: 1 })
+    const repo = repos[0]
+    const remotePath = join(tmp, "progress-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${repo.repoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync("git -C " + repo.repoPath + " push -u origin main", { stdio: "pipe" })
+    execSync(`git -C ${repo.worktreePath} remote set-url origin ${remotePath}`, { stdio: "pipe" })
+    writeFileSync(join(repo.worktreePath, "progress.txt"), "progress\n")
+    execSync("git -C " + repo.worktreePath + " add .", { stdio: "pipe" })
+    execSync('git -C ' + repo.worktreePath + ' commit -m "progress commit"', { stdio: "pipe" })
+
+    const statuses: string[] = []
+    const result = await pushWorkspace(wsName, { setUpstream: true }, (row) => {
+      statuses.push(row.status)
+    })
+
+    expect(result.ok).toBe(true)
+    expect(statuses).toContain("pushing")
+    expect(statuses).toContain("pushed")
   })
 })
 

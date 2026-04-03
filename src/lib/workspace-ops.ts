@@ -31,6 +31,7 @@ import {
   deleteLocalBranch,
   fetchOrigin,
   pullFFOnly,
+  pushBranch,
   rebaseBranch,
   mergeBranchFF,
   getCommitsBehind,
@@ -1071,6 +1072,108 @@ export type SyncRow = {
   status: "pending" | "fetching" | "rebasing" | "synced" | "skipped" | "failed"
   detail: string
   conflicts: string[]
+}
+
+export type PushResult = {
+  ok: boolean
+  pushed: Array<{ repo: string; commits: number }>
+  skipped: Array<{ repo: string; reason: string }>
+  failed: Array<{ repo: string; reason: string }>
+  error?: string
+}
+
+export type PushRow = {
+  repo: string
+  status: "pending" | "pushing" | "pushed" | "skipped" | "failed"
+  detail: string
+}
+
+export async function pushWorkspace(
+  name: string,
+  opts: {
+    force?: boolean
+    forceWithLease?: boolean
+    dryRun?: boolean
+    setUpstream?: boolean
+  },
+  onProgress?: (row: PushRow) => void
+): Promise<PushResult> {
+  if (!workspaceExists(name)) {
+    return { ok: false, pushed: [], skipped: [], failed: [], error: `Workspace '${name}' not found.` }
+  }
+
+  const workspace = readWorkspace(name)
+  const worktreeRepos = workspace.repos.filter(r => r.mode === "worktree")
+  const trunkRepos = workspace.repos.filter(r => r.mode === "trunk")
+
+  const pushed: PushResult["pushed"] = []
+  const skipped: PushResult["skipped"] = trunkRepos.map(r => ({ repo: r.name, reason: "trunk" }))
+  const failed: PushResult["failed"] = []
+
+  for (const repo of trunkRepos) {
+    onProgress?.({ repo: repo.name, status: "skipped", detail: "trunk" })
+  }
+
+  if (worktreeRepos.length === 0) {
+    return { ok: true, pushed, skipped, failed }
+  }
+
+  if (opts.dryRun) {
+    await Promise.all(
+      worktreeRepos.map(async (repo) => {
+        if (!existsSync(repo.task_path)) {
+          skipped.push({ repo: repo.name, reason: "task_path missing" })
+          onProgress?.({ repo: repo.name, status: "skipped", detail: "task_path missing" })
+          return
+        }
+
+        const commits = await getCommitsAhead(repo.task_path, `origin/${workspace.branch}`, "HEAD")
+        pushed.push({ repo: repo.name, commits })
+        onProgress?.({
+          repo: repo.name,
+          status: "pushed",
+          detail: commits > 0 ? `would push ${commits} commit${commits === 1 ? "" : "s"}` : "would push 0 commits",
+        })
+      })
+    )
+    return { ok: true, pushed, skipped, failed }
+  }
+
+  await Promise.all(
+    worktreeRepos.map(async (repo) => {
+      if (!existsSync(repo.task_path)) {
+        skipped.push({ repo: repo.name, reason: "task_path missing" })
+        onProgress?.({ repo: repo.name, status: "skipped", detail: "task_path missing" })
+        return
+      }
+
+      onProgress?.({ repo: repo.name, status: "pushing", detail: "" })
+
+      const result = await pushBranch(repo.task_path, workspace.branch, {
+        force: opts.force,
+        forceWithLease: opts.forceWithLease,
+        setUpstream: opts.setUpstream,
+      })
+
+      if (result.ok) {
+        const detail = result.commits > 0 ? `${result.commits} commit${result.commits === 1 ? "" : "s"}` : "up to date"
+        pushed.push({ repo: repo.name, commits: result.commits })
+        onProgress?.({ repo: repo.name, status: "pushed", detail })
+        return
+      }
+
+      failed.push({ repo: repo.name, reason: result.reason })
+      onProgress?.({ repo: repo.name, status: "failed", detail: result.reason })
+    })
+  )
+
+  return {
+    ok: failed.length === 0,
+    pushed,
+    skipped,
+    failed,
+    ...(failed.length > 0 ? { error: "One or more repos failed to push." } : {}),
+  }
 }
 
 export async function syncWorkspace(

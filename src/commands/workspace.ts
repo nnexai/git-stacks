@@ -30,6 +30,7 @@ import {
   getWorkspaceListInfo,
   renameWorkspace,
   syncWorkspace,
+  pushWorkspace,
   pullWorkspace,
   editWorkspaceYaml,
   openYamlInEditor,
@@ -37,7 +38,7 @@ import {
   buildBaseEnv,
   buildRepoEnv,
 } from "../lib/workspace-ops"
-import type { SyncRow, PullRow } from "../lib/workspace-ops"
+import type { SyncRow, PushRow, PullRow } from "../lib/workspace-ops"
 import { formatEnv, detectRepoFromCwd, type EnvFormat } from "../lib/env"
 
 function formatSyncRow(row: SyncRow): string {
@@ -48,6 +49,10 @@ function formatSyncRow(row: SyncRow): string {
 function formatPullRow(row: PullRow): string {
   const label = row.status === "pulled" ? "pulled" : row.status === "skipped" ? "skipped" : "failed"
   return `${label}  ${row.repo}  (${row.detail})`
+}
+
+function formatPushRow(row: PushRow): string {
+  return `${row.status}  ${row.repo}  (${row.detail})`
 }
 
 // --- Name validation ---
@@ -898,6 +903,97 @@ export function registerWorkspaceCommands(program: Command) {
 
       if (result.synced.length === 0 && result.skipped.length === 0) {
         console.log("Nothing to sync.")
+      }
+    })
+
+  program
+    .command("push [workspace]")
+    .description("Push workspace branches to remote")
+    .option("--force-with-lease", "Safe force-push (fails if remote has unseen commits)")
+    .option("--force", "Hard force-push (prefer --force-with-lease)")
+    .option("--dry-run", "Show what would be pushed without executing")
+    .option("--set-upstream", "Set upstream tracking on push (-u)")
+    .option("--json", "Output results as JSON")
+    .action(async (workspace: string | undefined, opts: {
+      forceWithLease?: boolean
+      force?: boolean
+      dryRun?: boolean
+      setUpstream?: boolean
+      json?: boolean
+    }) => {
+      let workspaceName = workspace
+      if (!workspaceName) {
+        const detection = detectWorkspaceFromCwd()
+        if (detection.ok) {
+          workspaceName = detection.workspace.name
+        }
+      }
+
+      if (opts.json) {
+        if (!workspaceName) {
+          console.log(JSON.stringify({ ok: false, error: "No workspace specified and could not detect from CWD" }))
+          process.exit(1)
+        }
+        if (!workspaceExists(workspaceName)) {
+          console.log(JSON.stringify({ ok: false, error: `Workspace '${workspaceName}' not found` }))
+          process.exit(1)
+        }
+
+        const result = await pushWorkspace(workspaceName, {
+          force: opts.force,
+          forceWithLease: opts.forceWithLease,
+          dryRun: opts.dryRun,
+          setUpstream: opts.setUpstream,
+        })
+
+        console.log(JSON.stringify({
+          workspace: workspaceName,
+          repos: [
+            ...result.pushed.map((repo) => ({ name: repo.repo, status: "pushed", commits: repo.commits })),
+            ...result.skipped.map((repo) => ({ name: repo.repo, status: "skipped", reason: repo.reason })),
+            ...result.failed.map((repo) => ({ name: repo.repo, status: "failed", reason: repo.reason })),
+          ],
+          ok: result.ok,
+          ...(result.error ? { error: result.error } : {}),
+        }))
+        if (!result.ok) process.exit(1)
+        return
+      }
+
+      if (!workspaceName) {
+        console.error(formatError(
+          "Missing workspace name",
+          "usage: git-stacks push <name> [--force-with-lease] [--force] [--dry-run] [--set-upstream] [--json]"
+        ))
+        process.exit(1)
+      }
+
+      if (!workspaceExists(workspaceName)) {
+        console.error(formatError(`Workspace '${workspaceName}' not found`, "run: git-stacks list"))
+        process.exit(1)
+      }
+
+      const result = await pushWorkspace(
+        workspaceName,
+        {
+          force: opts.force,
+          forceWithLease: opts.forceWithLease,
+          dryRun: opts.dryRun,
+          setUpstream: opts.setUpstream,
+        },
+        (row) => {
+          if (row.status === "pushing" || row.status === "pending") return
+          console.log(`  ${formatPushRow(row)}`)
+        }
+      )
+
+      if (!result.ok) {
+        if (result.error) console.error(formatError(result.error))
+        process.exit(1)
+      }
+
+      if (result.pushed.length === 0 && result.skipped.length === 0 && result.failed.length === 0) {
+        console.log("Nothing to push.")
       }
     })
 

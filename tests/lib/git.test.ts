@@ -13,6 +13,7 @@ import {
   getCommitsAhead,
   isFetchStale,
   fetchOrigin,
+  pushBranch,
   checkRemoteTrackingRef,
   checkBranchExistsOnRemote,
   hasUpstreamTracking,
@@ -247,6 +248,106 @@ describe("rebaseBranch", () => {
     expect(result.ok).toBe(false)
     expect(typeof result.error).toBe("string")
     expect(result.error!.length).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("pushBranch")
+// ---------------------------------------------------------------------------
+
+describe("pushBranch", () => {
+  let tmp: string
+  let remotePath: string
+  let localPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-push")
+    remotePath = join(tmp, "remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    localPath = join(tmp, "local")
+    execSync(`git clone ${remotePath} ${localPath}`, { stdio: "pipe" })
+    const opts = { cwd: localPath, stdio: "pipe" as const }
+    execSync("git checkout -b main", opts)
+    execSync('git config user.email "test@example.com"', opts)
+    execSync('git config user.name "Test User"', opts)
+    writeFileSync(join(localPath, "README.md"), "init\n")
+    execSync("git add .", opts)
+    execSync('git commit -m "init"', opts)
+  })
+
+  afterEach(() => cleanup(tmp))
+
+  test("pushes branch to origin and returns commit count", async () => {
+    const result = await pushBranch(localPath, "main")
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.commits).toBeGreaterThanOrEqual(0)
+    }
+    const remoteMain = execSync(`git --git-dir ${remotePath} rev-parse --verify refs/heads/main`, { stdio: "pipe" }).toString().trim()
+    expect(remoteMain.length).toBeGreaterThan(0)
+  })
+
+  test("returns ok with 0 commits when nothing to push", async () => {
+    await pushBranch(localPath, "main", { setUpstream: true })
+    const result = await pushBranch(localPath, "main")
+    expect(result).toEqual({ ok: true, commits: 0 })
+  })
+
+  test("returns error for non-fast-forward push", async () => {
+    await pushBranch(localPath, "main", { setUpstream: true })
+
+    const otherClone = join(tmp, "other")
+    execSync(`git clone ${remotePath} ${otherClone}`, { stdio: "pipe" })
+    const otherOpts = { cwd: otherClone, stdio: "pipe" as const }
+    execSync('git config user.email "test@example.com"', otherOpts)
+    execSync('git config user.name "Test User"', otherOpts)
+    writeFileSync(join(otherClone, "remote.txt"), "remote\n")
+    execSync("git add .", otherOpts)
+    execSync('git commit -m "remote advance"', otherOpts)
+    execSync("git push origin main", otherOpts)
+
+    const localOpts = { cwd: localPath, stdio: "pipe" as const }
+    writeFileSync(join(localPath, "local.txt"), "local\n")
+    execSync("git add .", localOpts)
+    execSync('git commit -m "local advance"', localOpts)
+
+    const result = await pushBranch(localPath, "main")
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toContain("non-fast-forward")
+    }
+  })
+
+  test("force-with-lease succeeds on diverged branch", async () => {
+    await pushBranch(localPath, "main", { setUpstream: true })
+
+    const otherClone = join(tmp, "other")
+    execSync(`git clone ${remotePath} ${otherClone}`, { stdio: "pipe" })
+    const otherOpts = { cwd: otherClone, stdio: "pipe" as const }
+    execSync('git config user.email "test@example.com"', otherOpts)
+    execSync('git config user.name "Test User"', otherOpts)
+    writeFileSync(join(otherClone, "remote.txt"), "remote\n")
+    execSync("git add .", otherOpts)
+    execSync('git commit -m "remote advance"', otherOpts)
+    execSync("git push origin main", otherOpts)
+
+    execSync("git -C " + localPath + " fetch origin", { stdio: "pipe" })
+    const localOpts = { cwd: localPath, stdio: "pipe" as const }
+    execSync("git reset --hard HEAD~0", localOpts)
+    writeFileSync(join(localPath, "local-force.txt"), "force\n")
+    execSync("git add .", localOpts)
+    execSync('git commit -m "local force advance"', localOpts)
+
+    const result = await pushBranch(localPath, "main", { forceWithLease: true })
+    expect(result.ok).toBe(true)
+  })
+
+  test("set-upstream passes -u flag", async () => {
+    const result = await pushBranch(localPath, "main", { setUpstream: true })
+    expect(result.ok).toBe(true)
+
+    const remote = execSync("git -C " + localPath + " config branch.main.remote", { stdio: "pipe" }).toString().trim()
+    expect(remote).toBe("origin")
   })
 })
 

@@ -32,10 +32,12 @@ import {
   editWorkspaceYaml,
   renameWorkspace,
   syncWorkspace,
+  pushWorkspace,
 } from "../../lib/workspace-ops"
-import type { SyncRow, SyncResult } from "../../lib/workspace-ops"
+import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-ops"
 import { readTemplate, writeTemplate, templateExists, templatePath, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
 import { SyncProgressView } from "./SyncProgressView"
+import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
 import { CreateProgressView, type CreateRow } from "./CreateProgressView"
 import { createWorktree, removeWorktree, ensureUpstreamTracking } from "../../lib/git"
@@ -71,6 +73,9 @@ export default function App() {
   const [syncRows, setSyncRows] = createSignal<SyncRow[]>([])
   const [syncDone, setSyncDone] = createSignal(false)
   const [syncSummary, setSyncSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
+  const [pushRows, setPushRows] = createSignal<PushRowDisplay[]>([])
+  const [pushDone, setPushDone] = createSignal(false)
+  const [pushSummary, setPushSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
   const [createRows, setCreateRows] = createSignal<CreateRow[]>([])
   const [createDone, setCreateDone] = createSignal(false)
   const [createSummary, setCreateSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
@@ -275,6 +280,11 @@ export default function App() {
       return
     }
 
+    if (action === "push") {
+      await executePush(name)
+      return
+    }
+
     // clean, remove, merge need confirmation
     setView({ view: "confirm", index, action })
   }
@@ -354,6 +364,41 @@ export default function App() {
       setSyncSummary({ text: `Sync failed: ${msg}. Press any key to continue.`, color: "red" })
     }
     setSyncDone(true)
+  }
+
+  async function executePush(name: string) {
+    const ws = readWorkspace(name)
+    const initialRows: PushRowDisplay[] = ws.repos
+      .map((repo) => repo.mode === "trunk"
+        ? { repo: repo.name, status: "skipped" as const, detail: "trunk" }
+        : { repo: repo.name, status: "pending" as const, detail: "" })
+
+    setPushRows(initialRows)
+    setPushDone(false)
+    setPushSummary({ text: "", color: "green" })
+    setView({ view: "push-progress", message: `Pushing ${name}...` })
+
+    const onProgress = (update: PushRow) => {
+      setPushRows((prev) => prev.map((row) => row.repo === update.repo ? { ...row, ...update } : row))
+    }
+
+    try {
+      const result = await pushWorkspace(name, {}, onProgress)
+      const parts: string[] = []
+      if (result.pushed.length > 0) parts.push(`${result.pushed.length} pushed`)
+      if (result.failed.length > 0) parts.push(`${result.failed.length} failed`)
+      if (result.skipped.length > 0) parts.push(`${result.skipped.length} skipped`)
+      setPushSummary({
+        text: parts.length > 0
+          ? `${parts.join(", ")}. Press any key to continue.`
+          : "Nothing to push. Press any key to continue.",
+        color: result.failed.length > 0 ? "red" : result.skipped.length > 0 ? "yellow" : "green",
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setPushSummary({ text: `Push failed: ${msg}. Press any key to continue.`, color: "red" })
+    }
+    setPushDone(true)
   }
 
   async function launchEditor(name: string) {
@@ -884,6 +929,14 @@ export default function App() {
     }
     if (v.view === "sync-progress") return  // block ALL keys during sync (D-11)
 
+    if (v.view === "push-progress" && pushDone()) {
+      reload()
+      setView({ view: "list" })
+      clampCursor()
+      return
+    }
+    if (v.view === "push-progress") return
+
     // Confirm dialog
     if (v.view === "confirm") return // ConfirmDialog has its own keyboard handler
 
@@ -1182,6 +1235,15 @@ export default function App() {
           rows={syncRows()}
           done={syncDone()}
           summary={syncSummary()}
+          title={(view() as any).message}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "push-progress"}>
+        <PushProgressView
+          rows={pushRows()}
+          done={pushDone()}
+          summary={pushSummary()}
           title={(view() as any).message}
         />
       </Show>

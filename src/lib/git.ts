@@ -168,6 +168,66 @@ export async function pullFFOnly(
   return { ok: true, commits }
 }
 
+export async function pushBranch(
+  repoPath: string,
+  branch: string,
+  opts: { force?: boolean; forceWithLease?: boolean; setUpstream?: boolean } = {}
+): Promise<{ ok: true; commits: number } | { ok: false; reason: string }> {
+  const countResult = await $`git -C ${repoPath} rev-list --count ${"origin/" + branch + "..HEAD"}`.quiet().nothrow()
+  const commitsBefore = countResult.exitCode === 0 ? parseInt(countResult.stdout.toString().trim(), 10) || 0 : 0
+
+  let result: Awaited<ReturnType<typeof $>>
+  if (opts.forceWithLease) {
+    result = opts.setUpstream
+      ? await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} push -u --force-with-lease origin ${branch}`.quiet().nothrow()
+      : await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} push --force-with-lease origin ${branch}`.quiet().nothrow()
+  } else if (opts.force) {
+    result = opts.setUpstream
+      ? await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} push -u --force origin ${branch}`.quiet().nothrow()
+      : await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} push --force origin ${branch}`.quiet().nothrow()
+  } else {
+    result = opts.setUpstream
+      ? await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} push -u origin ${branch}`.quiet().nothrow()
+      : await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} push origin ${branch}`.quiet().nothrow()
+  }
+
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString()
+    if (
+      stderr.includes("non-fast-forward")
+      || stderr.includes("[rejected]")
+      || stderr.includes("fetch first")
+      || stderr.includes("Updates were rejected")
+    ) {
+      return { ok: false, reason: "non-fast-forward (use --force-with-lease)" }
+    }
+    if (stderr.includes("has no upstream branch")) {
+      return { ok: false, reason: "no upstream branch (use --set-upstream)" }
+    }
+    if (stderr.includes("does not match any") || stderr.includes("couldn't find remote ref")) {
+      return { ok: false, reason: `no remote branch: ${branch}` }
+    }
+    if (stderr.includes("Authentication failed") || stderr.includes("could not read Username")) {
+      return { ok: false, reason: "authentication failed" }
+    }
+    if (
+      stderr.includes("Could not resolve host")
+      || stderr.includes("unable to access")
+      || stderr.includes("does not appear to be a git repository")
+    ) {
+      return { ok: false, reason: "network error" }
+    }
+    const lastLine = stderr
+      .split("\n")
+      .map(line => line.trim())
+      .filter(Boolean)
+      .pop()
+    return { ok: false, reason: lastLine || "push failed" }
+  }
+
+  return { ok: true, commits: commitsBefore }
+}
+
 // --- Upstream tracking ---
 
 /** Returns true when origin/<branch> remote-tracking ref exists in local refs (e.g. after a fetch). */
