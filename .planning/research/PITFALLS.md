@@ -1,256 +1,323 @@
 # Pitfalls Research
 
-**Domain:** AeroSpace multi-workspace integration — adding `workspaces` array support to the existing single-workspace AeroSpace plugin in git-stacks v0.12.0
-**Researched:** 2026-03-29
-**Confidence:** HIGH — pitfalls grounded in direct reads of `src/lib/integrations/aerospace.ts` (the full `open()` sequence), `src/lib/aerospace.ts` (snapshot-delta with exponential backoff), `tests/lib/integrations/aerospace.test.ts` (test structure), `src/lib/integrations/runner.ts` (WindowDetector lifecycle), and `src/lib/integrations/types.ts` (ArtifactBag shape)
+**Domain:** CLI workspace manager — adding push, ahead/behind tracking, labels, secret resolution, and auto-stash to a git worktree multi-repo manager
+**Researched:** 2026-04-03
+**Confidence:** HIGH — grounded in direct reads of `src/lib/git.ts` (existing primitives), `src/lib/workspace-ops.ts` (syncWorkspace, mergeWorkspace, getWorkspaceListInfo patterns), `FEATURES.md` (full v0.14.0 design specs), `PROJECT.md` (system constraints, existing hook/env pipeline), and verified against git documentation and community sources
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Bag Window Routing — All Bag Windows Move to First Entry When Routing Logic Is Wrong
+### Pitfall 1: `--force-with-lease` Defeated by Background Fetch
 
 **What goes wrong:**
-The current `open()` iterates `Object.values(bag)` and moves every window artifact to a single `targetWorkspace`. When `workspaces` is an array, the most natural refactor loops over `workspaces` entries and moves all bag windows on every iteration — resulting in every window being sent to every AeroSpace workspace entry, not just the intended one.
+`git push --force-with-lease` only protects against overwriting remote commits that the _local remote-tracking ref_ does not show. If anything runs `git fetch` in the background after the local tracking ref was established but before the push fires, `--force-with-lease` uses the newly fetched ref as its expectation, making it functionally equivalent to `--force`. A user on a branch with a CI bot, another developer, or any other fetch-triggering process can have their remote commits silently overwritten.
 
-The opposite failure: if the routing logic is too narrow (only the last entry processes bag windows, or only the first), tier-1 windows from VSCode/IntelliJ land in the wrong AeroSpace workspace.
-
-The requirement is: bag windows from tier-1 integrations default to `workspaces[0]` unless explicitly routed by a `source` command in a specific workspace entry. If routing is not explicitly coded, the default-to-first behavior must be enforced by the schema or by the loop — not by accident.
+In this codebase specifically: `fetchOrigin()` is called during `syncWorkspace` in the same code path. If `pushWorkspace` runs immediately after a sync (the designed workflow: sync → push), the fetch that sync triggered has updated the remote-tracking refs. `--force-with-lease` after that fetch will allow the push to overwrite new remote commits that appeared _after_ the fetch but before the push.
 
 **Why it happens:**
-The v0.11.0 implementation processes bag windows in one step (Step 2) and command-sourced windows in another step (Step 3). In the multi-workspace loop, developers naturally process both steps for each entry without tracking which bag windows have already been routed. There is no "consumed" flag on ArtifactBag entries — an entry can be read any number of times. This makes it easy to write a loop that double-routes.
+Developers believe `--force-with-lease` is always safe. The protection is real but narrowly scoped: it checks the _local tracking ref_, not the current remote state. Any fetch in the pipeline resets the tracking ref, removing the protection window.
 
 **How to avoid:**
-Assign bag window routing to exactly one workspace entry. The simplest safe approach: process bag windows only for `workspaces[0]` unconditionally, then process commands for each entry independently. If a later workspace entry needs a specific bag window, it uses a `source` command entry — which already handles the move-to-workspace step.
+Use `--force-with-lease=<refname>:<expected-sha>` (the explicit form) rather than bare `--force-with-lease`. Capture the SHA of `origin/<branch>` before any fetch, and pass it as the expected value:
 
-Alternatively, add a `bag_windows: true | false` field (default `true` on `workspaces[0]`, `false` on all others) to make routing explicit. This is more configurable but adds schema complexity.
+```ts
+const expectedSha = await $`git -C ${repoPath} rev-parse origin/${branch}`.quiet().nothrow()
+// ... do not fetch between here and the push ...
+await $`git push --force-with-lease=${branch}:${expectedSha} origin ${branch}`
+```
+
+If using bare `--force-with-lease`, document the narrow protection window clearly. For the MVP, bare `--force-with-lease` is acceptable given the single-developer use case, but must not be described as "safe force push" in help text without qualification.
 
 **Warning signs:**
-- The multi-workspace loop calls the bag-iteration block (the `for (const artifact of Object.values(bag))` block) unconditionally for every entry
-- No test that sets up two workspace entries and verifies each bag window is moved to exactly one target
-- A test with two entries and one bag window that passes when the window appears in `movedWindows` twice (one per entry)
+- `pushWorkspace` calls `fetchOrigin` before executing the push (breaks lease protection)
+- `--force-with-lease` described as unconditionally safe in `--help` output
+- No test verifying `--force-with-lease` is rejected when remote has a commit the local ref doesn't know about
 
 **Phase to address:**
-Schema + core loop implementation phase. The routing rule must be in the design spec before code is written, not discovered during test failures.
+Push implementation phase. The git primitive `pushBranch` must either document the limitation or use the explicit SHA form.
 
 ---
 
-### Pitfall 2: `listWorkspaces()` Called Once Per Entry — N Subprocess Calls for N Workspace Entries
+### Pitfall 2: Parallel Push Race on Shared Git Object Database
 
 **What goes wrong:**
-The current `open()` calls `listWorkspaces()` once to validate the target workspace exists. In a multi-workspace loop, naively calling `listWorkspaces()` once per entry spawns one `aerospace list-workspaces` subprocess per entry. With 4 workspace entries, that is 4 process spawns that all return the same data.
+`pushWorkspace` runs `Promise.all` across repos (by design — they are "independent"). In a git worktree setup, all worktrees share the same `.git` object database and reflog. Running concurrent `git push` commands across multiple worktrees of the _same repo_ (if a template has the same repo in two modes, or if two workspace push calls fire simultaneously) can hit lock contention on the shared index and ref files, producing `cannot lock ref` or `fatal: unable to auto-detect email address` errors from the second concurrent push.
 
-More critically: if `flattenWorkspaceTree(targetWorkspace)` is called per entry, and `listWindows()` is called per entry for layout application, the total subprocess count per `git-stacks open` call grows linearly with the number of workspace entries. On a slow machine or with AeroSpace under load, this can add several seconds to workspace open time.
+The more common failure: two `git push` processes against the _same remote_ with different branches (frontend, api, shared — all pushing to the same `origin`) can trigger rate limiting, credential prompts, or SSH multiplexer contention on the remote side.
 
 **Why it happens:**
-The sequential processing requirement ("iterate workspaces array in order") reads naturally as "run the full current `open()` body in a loop." The existing body calls `listWorkspaces()`, `flattenWorkspaceTree()`, and `listWindows()` with no caching. Wrapping in a loop inherits all of them uncached.
+`Promise.all` is natural for independent I/O operations. The repos are independent at the workspace level, but git's underlying transport layer (SSH connection pooling, HTTP credential caching, `.git/config` lock) is shared per repo origin. For worktrees of the _same repo_, the shared object database creates a hard concurrency constraint.
 
 **How to avoid:**
-Hoist `listWorkspaces()` and the initial `isAerospaceRunning()` check out of the loop. Call them once before the loop starts, validate all targets up front, and pass the result into each iteration. Similarly, cache the pre-loop `listWindows()` call if needed for layout — though layout requires a post-move window list, so caching the pre-loop snapshot is only useful for the "does this workspace have any windows" check.
+Keep `Promise.all` for pushes across _different repos_ (different remotes, different `.git` directories). Do not run concurrent pushes for multiple worktrees of the same underlying repo. The current workspace model rarely has two worktrees of the same repo, but the code should guard this:
 
-```typescript
-// Correct pattern:
-const running = await isAerospaceRunning()
-if (!running) return null
-const workspaces = await listWorkspaces()
-
-for (const entry of config.workspaces) {
-  const exists = workspaces.some(ws => ws.workspace === entry.workspace)
-  if (!exists) { warn(…); continue }
-  // ... per-entry logic
+```ts
+// Group repos by main_path (same main_path = same .git object store)
+// Push groups sequentially; push within-group sequentially too
+const groups = groupBy(worktreeRepos, r => r.main_path)
+for (const group of Object.values(groups)) {
+  await Promise.all(group.map(repo => pushBranch(repo.task_path, ...)))
 }
 ```
 
+In practice: `Promise.all` across repos with distinct `main_path` values is safe. Add the guard anyway — defensive coding against future template configurations.
+
 **Warning signs:**
-- `listWorkspaces()` call inside the workspace-entry loop
-- `isAerospaceRunning()` call inside the workspace-entry loop
-- No test counting how many times `mockListWorkspaces` was called for a 3-entry config
+- `Promise.all(worktreeRepos.map(repo => pushBranch(repo.task_path, ...)))` with no deduplication on `main_path`
+- No test for the case where two repos share a `main_path`
 
 **Phase to address:**
-Core loop implementation phase. Structure the loop with hoisted pre-checks before writing any per-entry logic.
+Push implementation phase. The grouping logic goes in `pushWorkspace` in `workspace-ops.ts`.
 
 ---
 
-### Pitfall 3: Focus Stealing — Multiple Workspace Entries With `focus: true`, Last One Wins Silently
+### Pitfall 3: Ahead/Behind Counts Silent Zero When Remote-Tracking Ref Missing
 
 **What goes wrong:**
-The requirement states at most one workspace entry may have `focus: true`. If the schema does not enforce this and the loop processes entries sequentially, each entry with `focus: true` calls `_exec.run(["workspace", targetWorkspace])`, switching AeroSpace focus mid-processing. The result: the last `focus: true` entry wins, overriding all previous focus operations. Earlier focus calls wasted subprocess calls and may have disrupted layout application on subsequent entries (layout requires a window focus call to set context).
+`getCommitsAhead(repoPath, "origin/main", "HEAD")` returns `0` when `rev-list --count` fails with exit code non-zero. `getCommitsBehind` (already in `git.ts`) uses the same pattern. The failure path returns `0` silently. If a worktree's remote-tracking ref for `origin/<baseBranch>` does not exist — because the repo has never been fetched, the remote was renamed, or the base branch was deleted on the remote — the count silently reports `0 ahead, 0 behind`. The TUI and `list` command then show "clean" status for a repo that has never synced with the remote.
 
-A subtler form: a workspace entry has `focus: true` AND a `commands` entry with `focus: true`. Both the workspace-level focus and the window-level focus fire. The window focus runs after the workspace focus (`focusWindow()` after `_exec.run(["workspace", ...])`). This is correct within one entry but if another entry has `focus: true`, the workspace-level focus of the second entry then overrides the window-level focus of the first.
+This is especially common for **newly added repos** or repos where `fetchOrigin` has not run since the worktree was created.
 
 **Why it happens:**
-Focus validation is only needed in the multi-workspace case — single entry has no conflict. When adding multi-workspace support, it is easy to forget to add the validation because the single-entry test suite passes without it. The schema change is mechanical (add `workspaces` array) but the cross-entry constraint is a new concern that the original schema had no concept of.
+`rev-list` with a missing ref exits non-zero. The error-to-zero fallback is a reasonable "don't crash" choice, but it conflates two distinct states: "truly zero distance from remote" and "remote ref unknown." The `aheadBehindStale` flag in the spec is meant to address this, but only for the case of a stale fetch, not a missing ref entirely.
 
 **How to avoid:**
-Add a Zod `.superRefine()` or `.refine()` on the `workspaces` array schema that counts entries with `focus: true` and rejects if count > 1:
+Before calling `rev-list`, verify the remote-tracking ref exists with `checkRemoteTrackingRef` (already in `git.ts`). If it does not exist, return a distinct sentinel rather than `0`:
 
-```typescript
-z.array(aerospaceWorkspaceEntrySchema).refine(
-  (entries) => entries.filter(e => e.focus === true).length <= 1,
-  { message: "At most one workspace entry may have focus: true" }
+```ts
+// In getCommitsAhead / getCommitsBehind, or in the caller:
+const hasRef = await checkRemoteTrackingRef(repoPath, baseBranch)
+if (!hasRef) return null  // null = "unknown", not 0 = "up to date"
+```
+
+Surface `null` in the TUI as `?` or `—` rather than `↑0 ↓0`. The `aheadBehindStale` flag should also be set to `true` when any repo returns `null`.
+
+**Warning signs:**
+- `getCommitsAhead` returns `0` and the caller does not distinguish this from a ref-missing failure
+- `WorkspaceListInfo.aheadBehindStale` is only set based on `FETCH_HEAD` mtime, not on missing ref detection
+- TUI shows `↑0 ↓0` for a freshly cloned worktree that has never fetched
+
+**Phase to address:**
+Ahead/behind implementation phase. The `null` return type must be part of the primitive signature from the start — changing it later requires updating all callers.
+
+---
+
+### Pitfall 4: FETCH_HEAD mtime Staleness Check Unreliable Across Worktrees
+
+**What goes wrong:**
+The spec uses `FETCH_HEAD` mtime (15-minute threshold) to determine `aheadBehindStale`. In a git worktree setup, `FETCH_HEAD` lives in the main `.git` directory (e.g. `{workspace_root}/main/{repo}/.git/FETCH_HEAD`), not in the worktree's `.git` file (which is just a reference to the main `.git` dir). The worktree task path is `{workspace_root}/tasks/{workspace}/{repo}/` — a git worktree, not a clone. Reading `FETCH_HEAD` from the worktree path resolves correctly only if the path resolution follows the `.git` file link to the main `.git` dir.
+
+Additionally, `FETCH_HEAD` is written by `git fetch origin` regardless of which worktree triggered the fetch. If any worktree (or a background IDE process) fetches the same repo, `FETCH_HEAD` mtime resets, making all worktrees appear "fresh" even if the specific workspace branch has not been updated.
+
+**Why it happens:**
+FETCH_HEAD as a staleness proxy is a common shortcut, but in worktree setups the path is non-obvious. Most developers writing `join(repoPath, ".git", "FETCH_HEAD")` will compute the wrong path for a worktree because the worktree's `.git` is a file (not a directory) containing `gitdir: /path/to/main/.git/worktrees/name`.
+
+**How to avoid:**
+Resolve the actual `GIT_DIR` for a worktree using:
+```ts
+const gitDirResult = await $`git -C ${repoPath} rev-parse --git-common-dir`.quiet().nothrow()
+const commonGitDir = gitDirResult.stdout.toString().trim()
+const fetchHeadPath = join(commonGitDir, "FETCH_HEAD")
+```
+
+`--git-common-dir` (not `--git-dir`) returns the shared `.git` directory for all worktrees of a repo. Use this as the base for the FETCH_HEAD mtime check.
+
+**Warning signs:**
+- FETCH_HEAD path constructed as `join(repoPath, ".git", "FETCH_HEAD")` — wrong for worktrees
+- `statSync` throwing ENOENT on a worktree (the `.git` entry is a file, not a dir)
+- `aheadBehindStale` reports true for worktrees even immediately after a fresh fetch
+
+**Phase to address:**
+Ahead/behind implementation phase. Test `checkRemoteTrackingRef` against a worktree path (not a main clone path) to catch the path resolution issue early.
+
+---
+
+### Pitfall 5: Secret Values Written to Workspace YAML on Certain Error Paths
+
+**What goes wrong:**
+The spec states: "resolved values are never written back to the workspace YAML." This is correct for the happy path. The failure mode is in error-recovery paths: if `openWorkspace` catches an error and writes a diagnostic workspace update (e.g., setting a status field, updating a timestamp), and if at that point the in-memory workspace object has been mutated to contain resolved values (because `mergeEnv` was called on the workspace object), those resolved plaintext secrets get written to the YAML file.
+
+A second failure mode: if `resolveSecrets` is called on the raw `workspace.env` object directly (mutating it), subsequent `writeWorkspace(workspace)` calls anywhere in the function (even in cleanup paths) will persist the resolved values.
+
+**Why it happens:**
+`mergeEnv` in the current codebase returns a new `Record<string, string>` — it does not mutate the workspace. If `resolveSecrets` follows this pattern (takes and returns the env map, does not touch the workspace object), the risk is low. But if a developer "simplifies" by resolving in-place on `workspace.env`, the mutation propagates to any subsequent `writeWorkspace` call.
+
+**How to avoid:**
+`resolveSecrets` must accept and return a plain `Record<string, string>` — never a workspace object. Never assign resolved values back to any workspace or template field. In `openWorkspace`, the flow must be:
+
+```ts
+const rawEnv = mergeEnv(workspace)      // returns new Record — workspace untouched
+const resolved = await resolveSecrets(rawEnv, resolvers)  // returns new Record
+writeEnvFiles(workspace, resolved, ...)  // reads workspace for paths, uses resolved values
+const hookEnv = { ...baseEnv, ...resolved }
+// workspace object is never mutated — only rawEnv and resolved are derived copies
+```
+
+Add a test: call `openWorkspace` with a secret reference, then read the workspace YAML from disk and assert no resolved value appears in any env field.
+
+**Warning signs:**
+- `resolveSecrets(workspace.env, ...)` pattern where `workspace.env` is mutated in-place
+- `writeWorkspace` called after `resolveSecrets` in the same function scope with the workspace object
+- No test checking that workspace YAML on disk does not contain resolved secret values after `openWorkspace`
+
+**Phase to address:**
+Secrets implementation phase. The constraint must be in the function signature design — `resolveSecrets` should not accept a workspace object, only a plain record.
+
+---
+
+### Pitfall 6: Secret Resolver Subprocess Hangs Blocking Workspace Open
+
+**What goes wrong:**
+`op read <path>`, `doppler secrets get ...`, and `pass show <path>` are subprocesses. Any of them can hang indefinitely: the 1Password CLI hangs waiting for biometric auth when the system is locked; Doppler CLI hangs waiting for network when the corporate VPN is not connected; `pass` opens a GPG pinentry dialog in some desktop configurations.
+
+Without a timeout, `openWorkspace` stalls forever. The user sees no indication whether it is hung or slow. The TUI's `runHooksCaptured()` workaround does not help here — the hang is in the secret resolution step before hooks run.
+
+**Why it happens:**
+External CLI tools designed for interactive terminal use often block on auth or I/O without a timeout flag. The 1Password CLI specifically is documented to hang on `op read` when the desktop app integration requires a biometric confirmation.
+
+**How to avoid:**
+Wrap every resolver subprocess in a timeout using `Promise.race`:
+
+```ts
+const RESOLVER_TIMEOUT_MS = 10_000
+const resolverPromise = $`op read ${path}`.quiet().nothrow()
+const timeout = new Promise<never>((_, reject) =>
+  setTimeout(() => reject(new Error(`resolver timeout after ${RESOLVER_TIMEOUT_MS}ms`)), RESOLVER_TIMEOUT_MS)
 )
+const result = await Promise.race([resolverPromise, timeout])
 ```
 
-This must trigger at `aerospaceConfigSchema.safeParse()` time in `open()`, so invalid configs are caught before any subprocess calls are made.
+Surface timeout as a clear error: `[git-stacks] Secret resolver 'op' timed out (10s). Is 1Password unlocked?`
 
 **Warning signs:**
-- `workspaces` array schema that validates each entry independently but has no cross-entry constraint
-- `open()` that calls `_exec.run(["workspace", ...])` per-entry without a pre-check that only one entry has `focus: true`
-- No test: two entries with `focus: true` → parse fails with specific message
+- Resolver `resolve()` method calls subprocess with no timeout
+- No test for resolver timeout behavior (mock resolver that delays `> 10s`)
+- No mention of timeout in `--help` output or error messages
 
 **Phase to address:**
-Schema definition phase. The `.refine()` must be on the array schema, not on individual entries.
+Secrets implementation phase. The timeout must be in the base resolver infrastructure, not added later per-resolver.
 
 ---
 
-### Pitfall 4: Snapshot-Delta Interference — Concurrent `snapshotWindowIds` Polls Merge New Windows From Different Entries
+### Pitfall 7: Auto-stash Pop Leaves Repo in Conflict State Silently Across Multiple Repos
 
 **What goes wrong:**
-`snapshotWindowIds` takes a before-snapshot, spawns an app, then polls `listWindows()` until new IDs appear. In a multi-workspace loop, if entry A's `snapshotWindowIds` poll is still running (has not returned because the app is slow) when entry B starts its own `snapshotWindowIds` call, both polls may detect the same new window ID. Entry A returns `[winId]`, entry B also returns `[winId]` (because the window appeared during its polling window). Both entries try to move `winId` to their respective target workspaces. The second `move-node-to-workspace` call wins — the window ends up in entry B's workspace regardless of which entry launched it.
+`stashPop` exits non-zero with `CONFLICT` in stderr. The spec correctly says: leave stash, report clearly, continue to other repos. The failure mode is in the `SyncResult` reporting: if the overall `syncWorkspace` returns `{ ok: true }` (because the rebase itself succeeded) while individual repos have stash pop conflicts, the user's command exits 0 and the failure is only visible in the progress output — which may have scrolled off or been suppressed in non-verbose mode.
 
-In practice the current loop is sequential (not concurrent), so entry B's poll does not start until entry A's commands finish. But if entry A has a slow app (`timeout: 10s`), entry B is blocked for 10 seconds. If someone refactors the loop to `Promise.all` for performance, the race becomes active.
-
-**Why it happens:**
-The snapshot strategy was designed for single-entry use. Each call to `snapshotWindowIds` takes a fresh `before` snapshot that includes all windows visible at that instant — including ones that entry A just launched and moved. If entry A launched a terminal and moved it to workspace "dev", that window is now in the global window list. Entry B's before-snapshot includes it. Entry B's poll will not re-detect it as new. This is actually correct behavior. The real risk is the concurrent case above.
-
-A secondary risk with sequential processing: if entry A's app launch produces 2 windows quickly (e.g., VSCode main window + status bar window), `snapshotWindowIds` returns both. Entry A moves both to its target. Entry B's before-snapshot now includes both. Entry B's subsequent commands launch a different app, and all is correct. This case is safe.
-
-**How to avoid:**
-Keep the loop sequential. Do not introduce `Promise.all` over workspace entries. Document the reason:
-
-```typescript
-// Sequential: snapshotWindowIds polls are not concurrent-safe across entries.
-// Promise.all would cause delta interference for apps that launch slowly.
-for (const entry of config.workspaces) { ... }
-```
-
-If a future performance optimization introduces parallelism, each parallel task must take its own `before` snapshot at the start of its execution (before any other task launches a window), not at a shared pre-loop snapshot point. This is a hard constraint.
-
-**Warning signs:**
-- `await Promise.all(config.workspaces.map(entry => processEntry(entry)))` anywhere in `open()`
-- A performance comment like "parallelize for speed" without acknowledging the snapshot interference risk
-- No test that verifies entry B's `snapshotWindowIds` before-snapshot includes windows launched by entry A
-
-**Phase to address:**
-Core loop implementation phase. The sequential constraint must be called out in a code comment so it is not "optimized away" later.
-
----
-
-### Pitfall 5: Layout Focus Contamination — `focusWindow()` for Layout Context Switches AeroSpace Focus Between Entries
-
-**What goes wrong:**
-The current `open()` Step 4 (layout application) calls `focusWindow(targetWindow.windowId)` to set AeroSpace context before calling `setLayout(layout)`. The `focus` command in AeroSpace moves the user's visible focus to that window — it is not a silent internal context set. In a multi-workspace loop:
-
-- Entry A focuses a window in workspace "dev" to apply its layout → user's AeroSpace focus is now on workspace "dev"
-- Entry B focuses a window in workspace "tools" to apply its layout → user's AeroSpace focus is now on workspace "tools"
-- Entry C has `focus: false` but its layout step focuses a window in workspace "chat" → user ends up on "chat" even though no entry requested focus
-
-If only entry A should be the final focus (it has `focus: true`), the layout focus calls for B and C override it mid-loop, and then entry A's workspace focus call at the end of its processing restores focus correctly. But if entry A is processed before B and C, A's workspace focus fires before B and C's layout focus calls, so the net result is focus on C's workspace, not A's.
+Additionally, after a stash pop conflict, the repo's working tree is in a half-applied state: some hunks applied, conflict markers inserted. The repo appears dirty but `isRepoDirty` returns true, which means any subsequent `git-stacks sync --stash` will try to stash the conflict markers, producing a second stash on top of the conflict state.
 
 **Why it happens:**
-The layout implementation unconditionally calls `focusWindow()` to establish context for `setLayout()`. In the single-workspace case, this is fine — the final focus call immediately follows in Step 5. In multi-workspace, layout focus for each entry interferes with the ordered focus intent.
+`git stash pop` with conflicts does NOT remove the stash from the stash list (confirmed by git documentation). The stash entry remains at `stash@{0}`. The working tree has conflict markers. The developer does not notice because the overall sync command reported success (rebase succeeded). On the next `--stash` invocation, `stashPush` runs again on the dirty (conflicted) working tree, creating `stash@{0}` which pushes the previous stash to `stash@{1}`. The stash list grows; nothing is ever cleanly popped.
 
 **How to avoid:**
-Two options:
-1. Defer all `focus: true` workspace switching to after the loop completes. Process all entries first (flatten, move windows, commands, layout — including the layout-context `focusWindow()` calls), then at the very end switch to the designated workspace if any entry had `focus: true`.
-2. Use `--window-id` variant of `setLayout` (already supported: `setLayout(layout, windowId)`) which does not require a prior `focusWindow()` call. Check if AeroSpace's `layout --window-id` works without focus context (verified: `aerospace layout h_tiles --window-id 123` is supported syntax in `src/lib/aerospace.ts:setLayout()`).
+`SyncResult.ok` must be `false` if any stash pop failed, not just if the rebase failed. The distinction: `syncFailed` (rebase) vs `stashPopFailed` (post-sync cleanup). Both should set `ok: false` to force a non-zero exit code.
 
-Option 2 is cleaner: pass `windowId` to `setLayout` and remove the `focusWindow()` call from the layout step. This eliminates the focus contamination entirely.
+Also check for existing stash entries before pushing a new stash: if `stash@{0}` has the `git-stacks auto-stash` message, warn and refuse to double-stash rather than silently stacking stashes.
 
-**Warning signs:**
-- Layout step calls `focusWindow()` then `setLayout()` without `windowId` inside the per-entry loop
-- No test: two entries both with layouts → verify final focus state matches the entry with `focus: true`, not the entry processed last in the layout step
-
-**Phase to address:**
-Core loop implementation phase. Decide between option 1 (deferred focus) or option 2 (windowId-aware setLayout) before writing the loop.
-
----
-
-### Pitfall 6: Schema Migration — `workspace: "dev"` (v0.11.0 flat) Silently Drops to No-Op When `workspaces` Array Replaces It
-
-**What goes wrong:**
-The v0.11.0 config shape is:
-```yaml
-settings:
-  integrations:
-    aerospace:
-      workspace: "dev"
-      layout: h_tiles
-```
-
-The v0.12.0 shape will be:
-```yaml
-settings:
-  integrations:
-    aerospace:
-      workspaces:
-        - workspace: "dev"
-          layout: h_tiles
-```
-
-If the new schema parses the `workspaces` field and the old flat `workspace` field is gone, existing v0.11.0 YAML files silently parse to a config with no workspace entries. The integration skips entirely with no warning. The user sees no AeroSpace setup on `git-stacks open`, with no explanation.
-
-The milestone context says "breaking change: replacing flat config with workspaces array (no backward compat)." Even with no backward compat, the failure must be loud — not silent.
-
-**Why it happens:**
-Zod's `.optional()` on `workspaces` means an empty or absent array parses successfully. The `open()` method checks `if (!parsedConfig?.workspace)` in v0.11.0 — in v0.12.0, if the check becomes `if (!parsedConfig?.workspaces?.length)`, a user with old-style `workspace: "dev"` config gets a silent no-op.
-
-**How to avoid:**
-Add an explicit detection and error path for the old flat-config shape. In `open()`, after parsing:
-
-```typescript
-// Detect v0.11.0 config shape (flat `workspace` field without `workspaces` array)
-if (!parsedConfig?.workspaces?.length) {
-  const hasLegacyField = 'workspace' in (rawConfig ?? {})
-  if (hasLegacyField) {
-    p.log.warn(`AeroSpace: config uses v0.11.0 format (flat 'workspace' field). Update to 'workspaces' array format.`)
-  } else {
-    spinner?.stop("AeroSpace: no workspaces configured — skipped")
-  }
-  return null
+```ts
+// Before stashPush, check if a git-stacks stash already exists:
+const existing = await $`git -C ${path} stash list --format="%gd %s"`.quiet().nothrow()
+if (existing.stdout.toString().includes("git-stacks auto-stash")) {
+  return { ok: false, error: "unresolved git-stacks stash already exists — pop it first" }
 }
 ```
 
-This way users with old YAML get an actionable migration message instead of a silent skip.
-
 **Warning signs:**
-- `open()` that checks `!parsedConfig?.workspaces?.length` and returns null without checking for legacy `workspace` field
-- No test: v0.11.0-style YAML with flat `workspace: "dev"` → warn is emitted, not silent skip
-- No `bun run test` run against the existing `backward compatibility` test block — the v0.11.0 test at line 721 of `aerospace.test.ts` will fail after the schema migration and must be either updated or removed explicitly
+- `syncWorkspace` returns `{ ok: true }` when `popFailures.length > 0`
+- No test: stash pop conflict → `SyncResult.ok === false` and exit code non-zero
+- No guard against double-stashing when a previous `git-stacks auto-stash` stash exists
 
 **Phase to address:**
-Schema definition phase. The legacy detection path must be part of the schema change, not a follow-up fix.
+Stash implementation phase. The `SyncResult` extension and the double-stash guard are part of the minimum viable implementation.
 
 ---
 
-### Pitfall 7: `snapshotWindowIds` Polling Finds Windows From Previous Entry's App Launch
+### Pitfall 8: `stash push --include-untracked` Stashes Files That Should Not Be Stashed
 
 **What goes wrong:**
-The `snapshotWindowIds` function in `src/lib/aerospace.ts` takes a before-snapshot, calls `spawnFn()`, then polls until `after.filter(id => !before.has(id)).length > 0` returns true. In the multi-workspace loop, if entry A launches an app that is slow to produce a window (> 200ms), entry A's `snapshotWindowIds` call times out and returns `[]`. Entry A proceeds without moving any windows.
+`git stash push --include-untracked` stashes _all_ untracked files, including generated files, build outputs, and IDE files that are not in `.gitignore`. In a worktree with a monorepo or a repo with a large `node_modules` (if `.gitignore` is incomplete), `--include-untracked` can stash thousands of files, making the stash operation take 10–30 seconds and the pop operation even slower.
 
-Entry B then starts. Entry B's `snapshotWindowIds` takes a before-snapshot. The slow app from entry A NOW appears as a new window (it finished launching during entry B's before-snapshot delay). Entry B's poll immediately finds the app from entry A as a "new" window and returns its ID. Entry B moves that window to its workspace target — the wrong target.
-
-This is a cross-entry delta contamination at the timing boundary, distinct from the concurrent-snapshot case in Pitfall 4.
+More critically: files in `.gitignore` paths that happen to contain runtime state (pid files, lock files, database files used by running dev servers) get stashed, breaking the running process. When the stash is popped, the files come back but the running process may have already failed or created new state, leading to file conflicts.
 
 **Why it happens:**
-`snapshotWindowIds` is stateless — it has no memory of what entry A launched. Entry B's before-snapshot includes everything currently visible. When a slow app appears between entry A's timeout and entry B's first poll, it looks exactly like a new window launched by entry B.
+`--include-untracked` is specified in the FEATURES.md design without caveats. It is the right default for "stash everything the user is working on" but has unintended consequences for large repos or repos with running dev servers.
 
 **How to avoid:**
-Track a "globally seen window IDs" set across all entries. Initialize it once before the loop with a `listWindows()` call. Pass it as the baseline for each entry's delta detection instead of taking a fresh `listWindows()` call at the start of each entry's `snapshotWindowIds`. Update the set after each entry completes its commands.
+Use `git stash push --include-untracked` but add `--pathspec-from-file` limited to tracked and staged files if the repo has more than N untracked files. A simpler approach: check the count of untracked files before stashing and warn the user if it is large:
 
-This requires either:
-- A custom snapshot function that accepts an external `before` set (modify `snapshotWindowIds` to accept `beforeSet?: Set<number>` in `SnapshotOpts`), or
-- Inline snapshot logic inside the multi-workspace loop rather than delegating to `snapshotWindowIds`
+```ts
+const untracked = await $`git -C ${path} ls-files --others --exclude-standard`.quiet()
+const lines = untracked.stdout.toString().split("\n").filter(Boolean)
+if (lines.length > 100) {
+  onProgress?.(`⚠ stash in ${repoName}: ${lines.length} untracked files — this may be slow`)
+}
+```
 
-The injectable `_listWindows` in `SnapshotOpts` is already there for test isolation, but `beforeSet` injection would need to be added.
+Alternative: use `git stash push` without `--include-untracked` for the initial MVP and only add the flag when explicitly needed.
 
 **Warning signs:**
-- Multi-workspace loop where each entry calls `snapshotWindowIds` independently with no shared before-set
-- No test: entry A launches slow app that times out, entry B's `snapshotWindowIds` detects it as new
-- The existing `snapshotWindowIds` signature not extended with `beforeSet` option
+- `stashPush` uses `--include-untracked` with no size guard
+- No test measuring stash time on a repo with many untracked files
+- No `--skip-untracked` flag option exposed in the `--stash` implementation
 
 **Phase to address:**
-Core loop implementation phase. The shared before-set pattern must be designed before writing the per-entry command processing.
+Stash implementation phase. Size check or flag exposure before shipping the default `--include-untracked` behavior.
+
+---
+
+### Pitfall 9: Label Filter AND-logic Across CLI and TUI Implemented Inconsistently
+
+**What goes wrong:**
+The spec says `--label sprint:14 --label urgent` is AND (both required). If the CLI filter and the TUI filter (`/backend`) are implemented independently, they are likely to disagree on AND vs OR semantics, especially since the TUI already has a text filter that uses substring matching (OR-like behavior). A user who filters by `sprint:14` in the CLI and sees 3 results, then opens the TUI and filters `/sprint:14`, may see different results if TUI filter treats multiple terms as OR.
+
+Additionally, the TUI filter extension to match labels adds a code path that runs on every keypress during filtering. If label matching runs `workspace.labels?.includes(term)` per keystroke across 50 workspaces, it is negligible. But if it runs `workspace.labels?.some(l => l.includes(term))` (substring search), it produces false positives: filtering for `sprint` matches `sprint:14`, `sprint:15`, and a label named `constraint` (contains `aint`... no, but `type:sprint-task` would match).
+
+**Why it happens:**
+Label filter logic is written separately in `commands/workspace.ts` (CLI filter) and `tui/dashboard/WorkspaceList.tsx` (TUI filter), with no shared utility function. Each implementation makes independent choices about case sensitivity, substring vs exact match, and AND vs OR.
+
+**How to avoid:**
+Extract a shared `matchesLabels(workspace: Workspace, terms: string[]): boolean` utility into `lib/workspace-ops.ts` or `lib/config.ts`. Both CLI and TUI call the same function. Define the semantics once: case-sensitive, AND across terms, exact match per label (no substring on a single label unless `label:` prefix is used as described in the spec).
+
+**Warning signs:**
+- Label filter logic copied separately into `commands/workspace.ts` and `WorkspaceList.tsx` without extracting to a shared function
+- No test: `matchesLabels(ws, ["sprint:14", "backend"])` returns false when ws only has `["sprint:14"]`
+- TUI filter produces different results than CLI `--label` for the same workspace and same label value
+
+**Phase to address:**
+Labels implementation phase. Write the shared filter function before implementing the UI — it becomes the single source of truth for filter semantics.
+
+---
+
+### Pitfall 10: `cmd:` Resolver Is an Arbitrary Shell Injection Vector
+
+**What goes wrong:**
+The `cmd` resolver executes `sh -c <path>` where `<path>` is the content of the YAML env value after the `cmd:` prefix. If a workspace YAML is committed to a shared repo or received from an untrusted source, any `${{ cmd:... }}` value becomes arbitrary code execution during `openWorkspace`.
+
+Unlike the other resolvers (op, doppler, pass) which call a fixed binary with a controlled argument, `cmd:` passes the entire string to `sh -c`. A value like `${{ cmd:rm -rf ~ }}` would execute `rm -rf ~` during workspace open.
+
+**Why it happens:**
+`cmd:` is explicitly positioned as a "last resort escape hatch" in the spec. Escape hatches are frequently underestimated as attack surfaces because they are rarely used, have no formal API contract, and are treated as "the user's problem."
+
+**How to avoid:**
+Add an explicit security warning in the `cmd:` resolver's documentation and in `git-stacks config` wizard output. Do not enable `cmd:` by default in the global config `resolvers` list — require it to be explicitly added:
+
+```yaml
+secrets:
+  resolvers: [op, env, cmd]   # cmd must be explicitly listed to enable
+```
+
+In the config wizard, warn when `cmd:` is added: "The 'cmd' resolver executes arbitrary shell commands from YAML config. Only enable if you fully control workspace YAML files."
+
+Add a log line when `cmd:` resolver fires during workspace open: `[git-stacks] Executing cmd resolver: sh -c "..."` — makes the execution visible rather than silent.
+
+**Warning signs:**
+- `cmd:` resolver in the default resolver list (enabled without explicit config)
+- No security warning in `--help` or config wizard output
+- No log line when `cmd:` resolver executes
+
+**Phase to address:**
+Secrets implementation phase. The default resolver list and the warning must be part of the initial implementation.
 
 ---
 
@@ -258,13 +325,13 @@ Core loop implementation phase. The shared before-set pattern must be designed b
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Process bag windows in every entry's loop iteration | Simple uniform loop body | Every bag window moved to every AeroSpace workspace; wrong UX for 2+ entries | Never — route bag windows to workspaces[0] only (or explicit source commands) |
-| Call `listWorkspaces()` per entry | Simple reads | N subprocess calls for N entries; adds 200-500ms per extra entry | Never — hoist before loop |
-| Allow `focus: true` on multiple entries without validation | No Zod refine needed | Last-processed entry wins focus; user intent violated silently | Never — enforce at schema level |
-| Use `focusWindow()` before `setLayout()` in multi-workspace loop | Matches current single-entry pattern | Focus contamination between entries; final focus lands on last-layout entry | Never — use `setLayout(layout, windowId)` or defer all workspace focus to post-loop |
-| Sequential `snapshotWindowIds` per entry with independent before-sets | Simple — reuses existing function unchanged | Slow-app IDs from entry A detected as new by entry B; wrong workspace routing | Never — pass shared before-set or use global seen-set |
-| Skip legacy `workspace` field detection | Simpler schema change | v0.11.0 users get silent no-op; no migration guidance | Never — explicit warning required |
-| `Promise.all` for parallel entry processing | Faster open for many entries | Snapshot delta interference; order-dependent race for focus | Never — entries must be sequential |
+| Bare `--force-with-lease` without explicit SHA | Simple one-liner | Protection defeated by any background fetch; false sense of safety | Acceptable for MVP with documented limitation in help text |
+| Silent `0` return when remote-tracking ref missing in ahead/behind | No null propagation through callers | "Up to date" shown for repos that have never synced with remote | Never — use `null` or a distinct type from the start |
+| `FETCH_HEAD` staleness from `join(repoPath, ".git", "FETCH_HEAD")` | Simple path construction | Wrong path for worktrees; `statSync` throws ENOENT on worktrees | Never — use `git rev-parse --git-common-dir` |
+| Label filter logic duplicated in CLI and TUI | Faster to write each independently | AND/OR semantics diverge; bug in one doesn't fix the other | Never — shared function from the start |
+| `cmd:` resolver enabled by default | No config required | Arbitrary code execution from shared YAML files | Never — require explicit opt-in |
+| `stashPop` failure leaves `SyncResult.ok = true` | "Sync succeeded" is technically true | User misses stash conflict; next `--stash` double-stacks | Never — any pop failure sets `ok: false` |
+| `resolveSecrets` mutates `workspace.env` in place | Fewer allocations | Resolved plaintext written to YAML on any `writeWorkspace` call | Never — always return a new Record |
 
 ---
 
@@ -272,14 +339,14 @@ Core loop implementation phase. The shared before-set pattern must be designed b
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| AeroSpace `workspaces` loop | Process bag windows per-entry | Route bag windows to `workspaces[0]` only; subsequent entries use `source` commands |
-| AeroSpace multi-entry validation | Validate each entry independently | Add `z.array(...).refine(entries => entries.filter(e => e.focus).length <= 1)` on the array |
-| AeroSpace `listWorkspaces()` | Call inside entry loop | Call once before loop; pass results into loop |
-| AeroSpace `focusWindow()` in layout step | Call per-entry for layout context | Use `setLayout(layout, windowId)` to avoid focus side effects during layout application |
-| AeroSpace `snapshotWindowIds` cross-entry | Fresh before-set per entry | Pass shared global before-set accumulated across entries; update after each entry |
-| AeroSpace legacy config detection | Silent no-op on old `workspace` field | Detect old flat field; warn with migration instructions |
-| AeroSpace workspace focus ordering | Fire `_exec.run(["workspace", ...])` per-entry during loop | Collect the focus target and fire exactly once after all entries complete |
-| Bun `mock.module` test isolation | Existing test file structure unchanged for multi-workspace tests | New `beforeEach` state for `workspaces`-array configs; extend existing mock file, do not create parallel one |
+| 1Password CLI (`op`) | No timeout; hangs when desktop app needs biometric | `Promise.race` with 10s timeout; surface "Is 1Password unlocked?" in error |
+| Doppler CLI | No timeout; hangs when VPN/network unavailable | Same timeout pattern; error: "Is Doppler accessible?" |
+| `pass` (GPG) | Opens pinentry dialog in some desktop configs, freezing TUI | Same timeout; note: `pass` in a TUI context may need `GPG_TTY` set |
+| `env:` resolver | Silently returns empty string for missing env vars | Distinguish missing (`undefined`) from empty string (`""`); warn when missing |
+| `cmd:` resolver | Executes from `sh -c` with full user permissions | Require explicit opt-in in global config; log every execution |
+| git push (SSH) | SSH multiplexer contention when pushing N repos in parallel | Group repos by remote host; push repos with same remote host sequentially |
+| git push (HTTPS) | Credential helper prompts block all parallel pushes | Use `GIT_TERMINAL_PROMPT=0` (already used in `fetchOrigin`, `isBranchGoneOnRemote`) |
+| git stash (GPG-signed commits) | `stash push` fails if `commit.gpgsign=true` and GPG unavailable | Pass `-c commit.gpgsign=false` to `git stash push` subprocess |
 
 ---
 
@@ -287,10 +354,10 @@ Core loop implementation phase. The shared before-set pattern must be designed b
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `listWorkspaces()` inside entry loop | Open time grows linearly with entry count | Hoist `listWorkspaces()` before loop; pass results as argument | With 3+ entries (~600ms overhead) |
-| `isAerospaceRunning()` inside entry loop | Multiple `which aerospace` spawns | Hoist to top of `open()`; existing code already does this for single-entry; ensure refactor keeps it outside loop | With 2+ entries |
-| Snapshot polling timeout per entry (10s each) | `git-stacks open` hangs for up to N×10s when apps are slow | Share global before-set; a window that did not appear for entry A is still detectable by entry B's delta | With N entries where any app is slow |
-| `listWindows()` call for layout per entry | N list-windows calls during layout phase | Call `listWindows()` once after all moves complete; filter per workspace target | With 4+ entries |
+| `getCommitsAhead` + `getCommitsBehind` called in serial per repo in `getWorkspaceListInfo` | `git-stacks list` takes 2–4s for 5-repo workspace | Call both in `Promise.all([ahead, behind])` per repo; all repos in parallel | With 3+ repos in a workspace |
+| `rev-list --count` on missing remote-tracking ref (no fetch yet) | Returns 0 silently; then `rev-list` runs again on next poll | Check ref exists first with `checkRemoteTrackingRef`; skip `rev-list` on miss | Every cold-start or new worktree |
+| Resolver subprocesses called sequentially for each env var | Workspace open takes N × resolver_time for N secrets | Batch all refs for the same resolver (`op batch read`); resolve all `op://` refs in one subprocess call | With 5+ secret references in a workspace |
+| Secret resolution on every `openWorkspace` call | Re-resolves secrets even when values haven't changed | Cache resolved values in memory for the process lifetime (not to disk); only re-resolve on explicit `--refresh-secrets` | Every `git-stacks open` call |
 
 ---
 
@@ -298,8 +365,11 @@ Core loop implementation phase. The shared before-set pattern must be designed b
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Per-entry `workspace` name from `workspaces[i].workspace` passed to shell via string interpolation | Shell injection if name has metacharacters | Already blocked by NameSchema at YAML parse time; pass as positional arg to `_exec.run([..., workspaceName])` — maintain existing pattern |
-| Duplicate workspace names in `workspaces` array | Two entries target the same AeroSpace workspace; second entry's flatten destroys first entry's layout | Add `.refine(entries => new Set(entries.map(e => e.workspace)).size === entries.length)` to workspaces array schema |
+| Resolved secret values written to workspace YAML | Plaintext secrets committed to config repo, leaked in backups | `resolveSecrets` operates only on derived Records; never on workspace object; test: YAML on disk has no resolved values |
+| `cmd:` resolver enabled by default | Arbitrary code execution from shared YAML | Require explicit `resolvers: [..., cmd]` in global config; not in default list |
+| Resolved secrets passed through `process.env` to child hooks | Secrets visible via `/proc/{pid}/environ` on Linux | Inject only into the specific hook subprocess env via `spawn({env: ...})`; do not set on `process.env` globally |
+| `--skip-secrets` substitutes empty string silently | Commands run with empty API keys, potentially writing to wrong environments | Log a visible warning per skipped secret: `[git-stacks] WARNING: secret ${{ op://... }} skipped — using empty string` |
+| Secret references in `env_file` written paths | If env_file path is inside the repo, resolved secrets committed to repo | Validate that `env_file` paths are outside the repo working tree, or are in `.gitignore` |
 
 ---
 
@@ -307,25 +377,29 @@ Core loop implementation phase. The shared before-set pattern must be designed b
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Silent no-op when v0.11.0 `workspace` flat field is present | User loses AeroSpace integration with no explanation after upgrade | Detect legacy field; emit actionable warning with migration example |
-| `flatten_before_open: true` on multiple entries | Second entry's flatten resets layout applied by first entry | Document: `flatten_before_open` should only be on the first entry that targets a given AeroSpace workspace; warn if two entries target same workspace both with `flatten_before_open: true` |
-| Focus switches N times during open (N entries with `focus: true`) | Visible flicker as AeroSpace switches workspaces mid-setup | Schema validates at most 1; focus deferred to post-loop |
-| Spinner message shows only first workspace name | User cannot see progress across entries | Update spinner text per entry: `"AeroSpace: setting up workspace 'dev' (1/3)"` |
+| Push failure output swallowed in parallel execution | User sees "3 repos pushed" but misses one silent failure | Collect all failures; display after parallel push completes; return non-zero exit code if any failed |
+| Ahead/behind shows `0/0` for repos with no remote-tracking ref | User thinks everything is synced; actually state is unknown | Show `?` or `—` for unknown; show tooltip/note "run sync to fetch remote state" |
+| Stash pop conflict message only in progress output | User misses conflict if they run non-verbose or pipe output | Write conflict warning to stderr explicitly; include the exact `git -C <path> stash pop` recovery command |
+| Label regex error produces cryptic Zod message | User tries `sprint 14` (with space) and gets a schema error | Validate label format early with `parseSecretRef`-style helper; return human-readable error: "Labels cannot contain spaces — use 'sprint:14' not 'sprint 14'" |
+| `--dry-run` push shows "would push X commits" but X is ahead count, not commits since last push | User confused when count differs from `git log origin/<branch>..HEAD` count | Use `rev-list --count origin/<branch>..HEAD` (the actual "not yet pushed" count), not the total `ahead` count |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Bag window routing:** Test with two entries and one VSCode artifact — verify the window is moved to exactly one AeroSpace workspace (the first entry's target), not both
-- [ ] **`focus: true` validation:** Parse a `workspaces` array with two `focus: true` entries — verify `.safeParse()` returns `success: false` with a message about at most one focus
-- [ ] **Duplicate workspace names:** Parse a `workspaces` array with two entries targeting `"dev"` — verify `.safeParse()` returns `success: false`
-- [ ] **`listWorkspaces()` call count:** Run `open()` with a 3-entry config — verify `mockListWorkspaces` was called exactly once (not 3 times)
-- [ ] **Legacy config warning:** Parse v0.11.0-style `{ workspace: "dev" }` config in v0.12.0 — verify a warning is logged, not a silent skip
-- [ ] **Sequential entry ordering:** Entries are processed in array order — verify via call-order tracking that entry[0]'s `flattenWorkspaceTree` is called before entry[1]'s
-- [ ] **Focus deferred to post-loop:** Entry[0] has `focus: true`, entry[1] has `layout: h_tiles` — verify `_exec.run(["workspace", ...])` is called AFTER entry[1]'s layout step, not during entry[0]'s processing
-- [ ] **Cross-entry snapshot pollution:** Entry[0] launches a slow app (times out), entry[1] launches a fast app — verify entry[1]'s `snapshotWindowIds` only returns the fast app's window ID, not the slow app's ID that appeared after entry[0]'s timeout
-- [ ] **`setLayout` uses `windowId`:** In layout step, `setLayout` is called with `windowId` argument — no bare `focusWindow()` call in the multi-workspace path
-- [ ] **Existing backward-compat test updated:** The `backward compatibility` describe block in `aerospace.test.ts` is updated to use `workspaces: [{ workspace: "dev" }]` format, and the old flat-field test case is explicitly removed with a comment
+- [ ] **Push: non-zero exit on any failure:** `pushWorkspace` returns `ok: false` and the CLI command exits non-zero if any repo push fails — not just if _all_ repos fail
+- [ ] **Push: trunk repos excluded:** Repos with `mode: "trunk"` are never pushed — verify in test with a mixed-mode workspace
+- [ ] **Push: GIT_TERMINAL_PROMPT=0:** `pushBranch` uses `GIT_TERMINAL_PROMPT=0` to prevent credential prompts blocking the CLI (same pattern as `fetchOrigin`)
+- [ ] **Ahead/behind: null for missing ref:** `getCommitsAhead` returns `null` (not `0`) when `origin/<branch>` tracking ref does not exist
+- [ ] **Ahead/behind: FETCH_HEAD path via --git-common-dir:** Staleness check reads FETCH_HEAD from the common git dir, not from `join(repoPath, ".git", "FETCH_HEAD")`
+- [ ] **Secrets: no mutation of workspace.env:** After `openWorkspace`, read the workspace YAML from disk and confirm no `${{ ... }}` reference has been replaced by a resolved value
+- [ ] **Secrets: `cmd:` requires explicit config:** `cmd` resolver does not fire unless explicitly listed in `config.yml secrets.resolvers` array
+- [ ] **Secrets: timeout on every resolver:** Each resolver subprocess is wrapped in a 10s timeout; hanging resolver surfaces a clear error message
+- [ ] **Labels: shared filter function:** Both `commands/workspace.ts` and `WorkspaceList.tsx` call the same `matchesLabels()` utility — not independent implementations
+- [ ] **Labels: template labels unioned at creation time only:** Modifying template labels after workspace creation does not change the workspace's label list
+- [ ] **Stash: ok=false on pop conflict:** `syncWorkspace` with `--stash` returns `{ ok: false }` when any `stashPop` call reports conflict
+- [ ] **Stash: double-stash guard:** If `stash list` already contains a `git-stacks auto-stash` entry, `stashPush` refuses to add another and returns `{ ok: false, error: ... }`
+- [ ] **Stash: recovery command in output:** Pop conflict message includes the exact `git -C <path> stash pop` command for user recovery
 
 ---
 
@@ -333,13 +407,13 @@ Core loop implementation phase. The shared before-set pattern must be designed b
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Bag windows moved to every entry | LOW | Fix routing logic; no state persisted in YAML; user manually moves windows back |
-| `focus: true` on multiple entries, last wins | LOW | Add schema validation; user updates config; no YAML migration |
-| `listWorkspaces()` called per entry | LOW | Hoist before loop; no behavior change, only performance fix |
-| Focus contamination from layout step | MEDIUM | Switch to `setLayout(layout, windowId)` or post-loop focus; verify with test |
-| Cross-entry snapshot pollution | MEDIUM | Add shared before-set to `SnapshotOpts`; requires `snapshotWindowIds` signature change |
-| v0.11.0 config silently no-ops | HIGH | Users lose integration silently; requires doc + warning message; no automated migration possible |
-| Concurrent loop introduced later | HIGH | Any future `Promise.all` refactor breaks snapshot correctness; sequential constraint must be commented |
+| `--force-with-lease` overwrite remote commits | HIGH | `git push --force-with-lease` does not help; user must `git fetch`, `git log origin/<branch>`, reconcile manually |
+| Secret values written to YAML | HIGH | Rotate all affected secrets immediately; scrub YAML from git history (`git filter-repo`); audit who has access to the repo |
+| Stash pop conflict | LOW | User runs `git -C <path> stash pop` manually; resolves conflicts; drops stash with `git stash drop` |
+| Double-stash accumulation | MEDIUM | User runs `git stash list` to see all stashes; pops/drops in order; no data loss if working tree is clean |
+| Resolver subprocess hang (op/doppler) | LOW | Kill the `git-stacks open` process (Ctrl+C); unlock 1Password/connect VPN; retry |
+| `cmd:` resolver executes malicious command | HIGH | Audit YAML files for `${{ cmd:... }}` references; disable `cmd:` resolver in global config |
+| Missing remote-tracking ref shows `0/0` (old behavior) | LOW | Run `git-stacks sync --fetch` to fetch and refresh tracking refs; recalculate |
 
 ---
 
@@ -347,28 +421,33 @@ Core loop implementation phase. The shared before-set pattern must be designed b
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Bag window double-routing | Schema + loop design phase | Test: 2 entries + 1 VSCode artifact → `movedWindows` length === 1 |
-| `listWorkspaces()` per-entry overhead | Core loop implementation phase | Test: 3-entry config → `mockListWorkspaces.mock.calls.length === 1` |
-| Multiple `focus: true` entries | Schema definition phase | Test: array with 2 focus entries → `safeParse().success === false` |
-| Layout focus contamination across entries | Core loop implementation phase | Test: 2 entries with layouts + 1 with `focus: true` → final focus is on correct workspace |
-| Cross-entry snapshot pollution | Core loop implementation phase | Test: entry[0] times out, entry[1] detects only its own app |
-| Legacy `workspace` flat field | Schema definition phase | Test: old-format config → warn logged, not silent skip |
-| Sequential constraint violated | Code review / documentation | Comment on loop; no `Promise.all` for entry processing |
-| Duplicate workspace names | Schema definition phase | Test: 2 entries with same `workspace` value → `safeParse().success === false` |
+| `--force-with-lease` defeated by background fetch | Push: `pushBranch` implementation | Test: remote has new commits after local fetch → bare `--force-with-lease` still pushes (document this); explicit SHA form blocks it |
+| Parallel push shared .git lock contention | Push: `pushWorkspace` implementation | Test: two repos with same `main_path` → pushes are sequential, not `Promise.all` |
+| Ahead/behind silent zero for missing ref | Ahead/behind: `getCommitsAhead` signature | Test: worktree with no fetch → returns `null`, not `0`; TUI shows `?` |
+| FETCH_HEAD wrong path for worktrees | Ahead/behind: staleness check | Test: check FETCH_HEAD mtime via `--git-common-dir` on an actual worktree path |
+| Secret values written to YAML | Secrets: `resolveSecrets` function design | Test: open workspace with secret refs → read YAML from disk → no resolved values present |
+| Secret resolver subprocess hang | Secrets: resolver infrastructure | Test: mock resolver that hangs → `openWorkspace` returns error after 10s |
+| `cmd:` injection via shared YAML | Secrets: default config | Test: config with no explicit `cmd:` in resolvers list → `cmd:` resolver throws "not enabled" |
+| Auto-stash pop conflict masked as success | Stash: `syncWorkspace` result | Test: stash push succeeds, sync succeeds, stash pop fails → `SyncResult.ok === false` |
+| `--include-untracked` stashes too much | Stash: `stashPush` implementation | Test: repo with 200+ untracked files → warning emitted before stash |
+| Label filter AND/OR inconsistency | Labels: shared utility extraction | Test: `matchesLabels(ws, ["a", "b"])` — same function used in CLI and TUI; ws with only `["a"]` returns false |
+| `cmd:` default-enabled injection | Secrets: default resolver list | Test: workspace with `${{ cmd:echo hello }}` and no explicit `cmd:` in config → resolver returns error |
 
 ---
 
 ## Sources
 
-- `src/lib/integrations/aerospace.ts` lines 98-288 — full `open()` method sequence: gate check, config parse, validation, flatten, bag window move, commands, layout, focus
-- `src/lib/aerospace.ts` lines 214-241 — `snapshotWindowIds()` implementation: before-snapshot, spawnFn, exponential backoff poll
-- `src/lib/aerospace.ts` lines 182-188 — `setLayout(layout, windowId?)` accepts optional `windowId` — enables focus-free layout application
-- `tests/lib/integrations/aerospace.test.ts` lines 112-132 — `beforeEach` reset pattern; test structure to extend for multi-workspace
-- `tests/lib/integrations/aerospace.test.ts` lines 721-740 — existing `backward compatibility` block that will fail after schema migration and must be explicitly updated
-- `src/lib/integrations/runner.ts` lines 21-62 — WindowDetector snapshot lifecycle: `begin()` before each `open()` call, `resolve()` after; relevant because WindowDetector's `begin()` also takes a before-snapshot — a second snapshot source to keep consistent with the shared-before-set strategy
-- `src/lib/integrations/types.ts` lines 17-29 — `ArtifactBag` is `Record<string, IntegrationArtifact | null>` with no "consumed" flag; multiple entries can read the same bag entry freely
-- `.planning/PROJECT.md` lines 185-187 — v0.12.0 active requirements: `workspaces` array, focus validation, tier-1 windows default to `workspaces[0]`, sequential processing
+- `src/lib/git.ts` — `fetchOrigin`, `pullFFOnly`, `rebaseBranch`, `getCommitsBehind`, `checkRemoteTrackingRef` implementations — confirmed patterns and failure-return conventions
+- `src/lib/workspace-ops.ts` — `syncWorkspace` sequential/dirty-check flow; `mergeWorkspace` force-flag behavior; `getWorkspaceListInfo` shape
+- `FEATURES.md` — full design specs for push (PushResult type, parallel execution, trunk-skip), ahead/behind (staleness, FETCH_HEAD threshold, per-repo detail), secrets (`resolveSecrets`, built-in resolvers, `--skip-secrets`), labels (schema, filter AND logic), auto-stash (pop failure handling, double-stash risk)
+- Git official docs — `git push --force-with-lease` explicit vs bare form: https://git-scm.com/docs/git-push
+- Atlassian blog — `--force-with-lease` defeated by background fetch: https://www.atlassian.com/blog/it-teams/force-with-lease
+- Git official docs — `git-worktree`: `.git` file structure in worktrees, shared object database: https://git-scm.com/docs/git-worktree
+- Git official docs — `git stash`: conflicts leave stash in list, stash is not dropped on conflict: https://git-scm.com/docs/git-stash
+- 1Password community — CLI hangs requiring biometric auth: https://www.1password.community/discussions/developers/cli-hangs-when-requesting-items/95850
+- Git worktree lock contention — concurrent operations can corrupt shared `.git` state: https://github.com/kaeawc/auto-worktree/issues/176
+- GitGuardian — secrets in environment variables, subprocess leakage patterns: https://blog.gitguardian.com/secure-your-secrets-with-env/
 
 ---
-*Pitfalls research for: v0.12.0 — multi-workspace AeroSpace support in git-stacks*
-*Researched: 2026-03-29*
+*Pitfalls research for: v0.14.0 — push, ahead/behind, labels, secrets, auto-stash in git-stacks*
+*Researched: 2026-04-03*
