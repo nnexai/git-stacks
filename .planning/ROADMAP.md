@@ -165,7 +165,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 
 **Milestone Goal:** Complete the core workspace workflow (push, ahead/behind tracking) and add organizational features (labels, secrets, stash) that make git-stacks scale to real team/production use.
 
-- [ ] **Phase 58: Ahead/Behind Tracking** - Per-repo commit distance from base; AHEAD/BEHIND in list and TUI
+- [ ] **Phase 58: Ahead/Behind Tracking** (4 plans, 2 waves) - Per-repo commit distance from base; AHEAD/BEHIND in list and TUI
 - [ ] **Phase 59: Push** - `git-stacks push` command with parallel multi-repo push and TUI action
 - [ ] **Phase 60: Labels** - Label schema, CRUD subcommand, list filter, TUI tags and group-by
 - [ ] **Phase 61: Secrets** - Pluggable secret resolution for env references in workspace YAML
@@ -184,7 +184,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
   3. TUI WorkspaceRow displays `↑N ↓N` indicators after the branch name
   4. TUI WorkspaceDetail shows per-repo ahead/behind in the repo table
   5. Stale ahead/behind data (FETCH_HEAD older than 15 minutes) is flagged as `aheadBehindStale` — no silent zeros for unsynced repos
-**Plans**: TBD
+**Plans**: 4 plans in 2 waves (01-02 parallel, 03-04 depend on wave 1)
 **UI hint**: yes
 
 ### Phase 59: Push
@@ -259,7 +259,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 43-46. AeroSpace Window Management | v0.11.0 | 7/7 | Complete | 2026-03-28 |
 | 47-52. Multi-Workspace AeroSpace | v0.12.0 | 14/14 | Complete | 2026-04-02 |
 | 53-57. CLI Polish & Completions | v0.13.0 | 9/9 | Complete | 2026-04-02 |
-| 58. Ahead/Behind Tracking | v0.14.0 | 0/TBD | Not started | - |
+| 58. Ahead/Behind Tracking | v0.14.0 | 0/4 | Planned | - |
 | 59. Push | v0.14.0 | 0/TBD | Not started | - |
 | 60. Labels | v0.14.0 | 0/TBD | Not started | - |
 | 61. Secrets | v0.14.0 | 0/TBD | Not started | - |
