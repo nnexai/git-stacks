@@ -154,7 +154,8 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--recreate", "Re-sync workspace from template")
     .option("--force", "Skip confirmation in --recreate")
     .option("--reallocate", "Reallocate conflicting ports")
-    .action(async (workspace: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean; reallocate?: boolean }) => {
+    .option("--skip-secrets", "Skip secret resolution (substitute empty strings)")
+    .action(async (workspace: string, opts: { ide: boolean; cmux: boolean; recreate?: boolean; force?: boolean; reallocate?: boolean; skipSecrets?: boolean }) => {
       validateName(workspace)
       if (opts.recreate) {
         if (!workspaceExists(workspace)) {
@@ -243,7 +244,11 @@ export function registerWorkspaceCommands(program: Command) {
         }
       }
 
-      const result = await openWorkspace(workspace, { ide: opts.ide, cmux: opts.cmux, reallocate: opts.reallocate }, (msg) => console.log(`  ${msg}`))
+      const result = await openWorkspace(
+        workspace,
+        { ide: opts.ide, cmux: opts.cmux, reallocate: opts.reallocate, skipSecrets: opts.skipSecrets },
+        (msg) => console.log(`  ${msg}`)
+      )
       if (!result.ok) {
         console.error(formatError(result.error!))
         process.exit(1)

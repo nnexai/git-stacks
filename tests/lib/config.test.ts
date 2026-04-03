@@ -164,6 +164,28 @@ describe("labels", () => {
   })
 })
 
+describe("GlobalConfigSchema secrets", () => {
+  test("parses config without secrets field (backward compat)", () => {
+    const config = GlobalConfigSchema.parse({})
+    expect(config.secrets).toBeUndefined()
+  })
+
+  test("parses config with secrets.resolvers", () => {
+    const config = GlobalConfigSchema.parse({ secrets: { resolvers: ["keychain", "env"] } })
+    expect(config.secrets?.resolvers).toEqual(["keychain", "env"])
+  })
+
+  test("parses config with empty secrets object", () => {
+    const config = GlobalConfigSchema.parse({ secrets: {} })
+    expect(config.secrets).toBeDefined()
+    expect(config.secrets?.resolvers).toBeUndefined()
+  })
+
+  test("rejects non-string resolver entries", () => {
+    expect(() => GlobalConfigSchema.parse({ secrets: { resolvers: [123] } })).toThrow()
+  })
+})
+
 // --- expandBranchPattern ---
 
 describe("expandBranchPattern", () => {

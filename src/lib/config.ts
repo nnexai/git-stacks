@@ -175,6 +175,9 @@ export const GlobalConfigSchema = z.object({
     range_start: z.number().int().default(10000),
     range_end: z.number().int().default(65000),
   }).default(() => ({ range_start: 10000, range_end: 65000 })),
+  secrets: z.object({
+    resolvers: z.array(z.string()).optional(),
+  }).optional(),
 })
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>
 

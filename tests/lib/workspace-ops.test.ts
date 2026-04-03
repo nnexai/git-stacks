@@ -35,6 +35,7 @@ import {
   mergeEnv,
   getWorkspaceListInfo,
   pushWorkspace,
+  openWorkspace,
 } from "../../src/lib/workspace-ops"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
@@ -2010,5 +2011,98 @@ describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
     // Trunk repos are skipped; should be 0/0
     expect(info.ahead).toBe(0)
     expect(info.behind).toBe(0)
+  })
+})
+
+describe("openWorkspace secret resolution", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-open-secrets")
+  })
+
+  afterEach(() => {
+    cleanup(tmp)
+    delete process.env.GS_PHASE61_SECRET
+  })
+
+  test("resolves secrets before writing env files and keeps workspace yaml raw", async () => {
+    const wsName = uniqueWsName("secret-open")
+    const registryName = uniqueRegistryName("secret-open")
+    const { repos, wsRoot } = await setupWorkspaceFixture(tmp, wsName, registryName)
+    process.env.GS_PHASE61_SECRET = "super-secret"
+
+    const ws = readWorkspace(wsName)
+    ws.env = {
+      API_KEY: "${{ env:GS_PHASE61_SECRET }}",
+      STATIC_VALUE: "plain",
+    }
+    ws.env_file = ".env"
+    writeWorkspace(ws)
+    writeGlobalConfig({
+      workspace_root: wsRoot,
+      integrations: {},
+      ports: { range_start: 10000, range_end: 65000 },
+      secrets: { resolvers: ["env"] },
+    })
+
+    const result = await openWorkspace(wsName, { ide: false, cmux: false }, () => {})
+
+    expect(result.ok).toBe(true)
+    const envFile = readFileSync(join(repos[0].worktreePath, ".env"), "utf-8")
+    expect(envFile).toContain("API_KEY=super-secret")
+    expect(envFile).toContain("STATIC_VALUE=plain")
+    expect(readFileSync(workspacePath(wsName), "utf-8")).toContain("${{ env:GS_PHASE61_SECRET }}")
+  })
+
+  test("skipSecrets substitutes empty strings and warns", async () => {
+    const wsName = uniqueWsName("secret-skip")
+    const registryName = uniqueRegistryName("secret-skip")
+    const { repos, wsRoot } = await setupWorkspaceFixture(tmp, wsName, registryName)
+
+    const ws = readWorkspace(wsName)
+    ws.env = { API_KEY: "${{ env:GS_PHASE61_SECRET }}" }
+    ws.env_file = ".env"
+    writeWorkspace(ws)
+    writeGlobalConfig({
+      workspace_root: wsRoot,
+      integrations: {},
+      ports: { range_start: 10000, range_end: 65000 },
+      secrets: { resolvers: ["env"] },
+    })
+
+    const messages: string[] = []
+    const result = await openWorkspace(
+      wsName,
+      { ide: false, cmux: false, skipSecrets: true },
+      (msg) => messages.push(msg)
+    )
+
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(repos[0].worktreePath, ".env"), "utf-8")).toContain("API_KEY=")
+    expect(messages.some((msg) => msg.includes("Skipping secret: API_KEY (env:GS_PHASE61_SECRET)"))).toBe(true)
+  })
+
+  test("fails open when secret resolution fails", async () => {
+    const wsName = uniqueWsName("secret-fail")
+    const registryName = uniqueRegistryName("secret-fail")
+    const { wsRoot } = await setupWorkspaceFixture(tmp, wsName, registryName)
+
+    const ws = readWorkspace(wsName)
+    ws.env = { API_KEY: "${{ env:GS_PHASE61_SECRET }}" }
+    ws.env_file = ".env"
+    writeWorkspace(ws)
+    writeGlobalConfig({
+      workspace_root: wsRoot,
+      integrations: {},
+      ports: { range_start: 10000, range_end: 65000 },
+      secrets: { resolvers: ["env"] },
+    })
+
+    const result = await openWorkspace(wsName, { ide: false, cmux: false }, () => {})
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("Secret resolution failed")
+    expect(result.error).toContain("GS_PHASE61_SECRET")
   })
 })

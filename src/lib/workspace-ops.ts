@@ -45,6 +45,7 @@ import { runHooks, runHooksCaptured } from "./lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
 import { $ } from "bun"
 import { allocatePorts } from "./ports"
+import { buildResolvers, parseSecretRef, resolveSecrets } from "./secrets"
 
 export type ProgressCallback = (message: string) => void
 
@@ -768,7 +769,7 @@ export async function mergeWorkspace(
 
 export async function openWorkspace(
   name: string,
-  opts: { ide?: boolean; cmux?: boolean; captured?: boolean; reallocate?: boolean },
+  opts: { ide?: boolean; cmux?: boolean; captured?: boolean; reallocate?: boolean; skipSecrets?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   if (!workspaceExists(name)) {
@@ -841,7 +842,29 @@ export async function openWorkspace(
     }
   }
 
-  const baseEnv = buildBaseEnv(wsWithPorts, tasksDir, "open")
+  const mergedEnvVars = mergeEnv(wsWithPorts)
+  let resolvedEnvVars: Record<string, string>
+
+  if (opts.skipSecrets) {
+    resolvedEnvVars = {}
+    for (const [key, value] of Object.entries(mergedEnvVars)) {
+      const ref = parseSecretRef(value)
+      if (ref) {
+        onProgress?.(`⚠ Skipping secret: ${key} (${ref.id}:${ref.path})`)
+        resolvedEnvVars[key] = ""
+      } else {
+        resolvedEnvVars[key] = value
+      }
+    }
+  } else {
+    try {
+      resolvedEnvVars = await resolveSecrets(mergedEnvVars, buildResolvers(config))
+    } catch (err) {
+      return { ok: false, error: `Secret resolution failed: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  }
+
+  const baseEnv = { ...buildBaseEnv(wsWithPorts, tasksDir, "open"), ...resolvedEnvVars }
 
   if (wsWithPorts.hooks?.pre_open?.length) {
     for (const cmd of wsWithPorts.hooks.pre_open) {
@@ -889,9 +912,8 @@ export async function openWorkspace(
   }
 
   // Write env files — after file ops, before integrations
-  const mergedEnvVars = mergeEnv(wsWithPorts)
-  writeEnvFiles(wsWithPorts, mergedEnvVars, msg => onProgress?.(msg))
-  const hookEnv = { ...baseEnv, ...mergedEnvVars }
+  writeEnvFiles(wsWithPorts, resolvedEnvVars, msg => onProgress?.(msg))
+  const hookEnv = { ...baseEnv, ...resolvedEnvVars }
 
   // TMPL-04: Ensure trunk repos have their expected base branch accessible
   for (const repo of wsWithPorts.repos.filter(r => r.mode === "trunk")) {

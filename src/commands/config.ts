@@ -52,10 +52,25 @@ export const configCommand = new Command("config")
       }
     }
 
+    const currentResolvers = config.secrets?.resolvers ?? ["keychain", "env"]
+    const selectedResolversRaw = await p.multiselect({
+      message: "Enabled secret resolvers",
+      options: [
+        { value: "keychain", label: "keychain", hint: "macOS Keychain / Linux secret-tool" },
+        { value: "env", label: "env", hint: "Read from process environment variables" },
+        { value: "cmd", label: "cmd", hint: "Run arbitrary shell commands (security risk — opt-in)" },
+      ],
+      initialValues: currentResolvers,
+      required: false,
+    })
+    if (p.isCancel(selectedResolversRaw)) cancel()
+    const selectedResolvers = selectedResolversRaw as string[]
+
     writeGlobalConfig({
       ...config,
       workspace_root: (wsRootRaw as string).trim() || config.workspace_root,
       integrations: newIntegrations,
+      secrets: { resolvers: selectedResolvers },
     })
 
     p.outro("Configuration saved.")
@@ -78,6 +93,11 @@ configCommand
             .join(", ")
         : ""
       console.log(`  ${enabled ? "✓" : "✗"}  ${integration.id.padEnd(10)} ${extras}`)
+    }
+    console.log(`\nSecrets:`)
+    const resolverList = config.secrets?.resolvers ?? ["keychain", "env"]
+    for (const id of ["keychain", "env", "cmd"]) {
+      console.log(`  ${resolverList.includes(id) ? "✓" : "✗"}  ${id}`)
     }
     console.log(`\nConfig: ${GLOBAL_CONFIG_FILE.replace(HOME, "~")}`)
     console.log(`Per-workspace overrides: add settings.integrations.<id>.enabled to the workspace YAML.`)

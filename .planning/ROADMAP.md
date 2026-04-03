@@ -168,7 +168,7 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 - [x] **Phase 58: Ahead/Behind Tracking** (4 plans, 2 waves) - Per-repo commit distance from base; AHEAD/BEHIND in list and TUI — completed 2026-04-03
 - [x] **Phase 59: Push** - `git-stacks push` command with parallel multi-repo push and TUI action — completed 2026-04-03
 - [x] **Phase 60: Labels** (4 plans, 2 waves) - Label schema, CRUD subcommand, list filter, TUI tags and group-by — completed 2026-04-03
-- [ ] **Phase 61: Secrets** (3 plans, 2 waves) - Pluggable secret resolution for env references in workspace YAML
+- [x] **Phase 61: Secrets** (3 plans, 2 waves) - Pluggable secret resolution for env references in workspace YAML — completed 2026-04-03
 - [ ] **Phase 62: Stash on Sync** (2 plans, 2 waves) - Auto-stash dirty repos before sync, pop in reverse with conflict safety
 - [ ] **Phase 63: Release Prep** (1 plan) - v0.14.0 version bump, CHANGELOG, README updates
 
@@ -262,6 +262,6 @@ See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md) for full deta
 | 58. Ahead/Behind Tracking | v0.14.0 | 4/4 | Complete | 2026-04-03 |
 | 59. Push | v0.14.0 | 4/4 | Complete | 2026-04-03 |
 | 60. Labels | v0.14.0 | 4/4 | Complete | 2026-04-03 |
-| 61. Secrets | v0.14.0 | 0/3 | Planned | - |
+| 61. Secrets | v0.14.0 | 3/3 | Complete | 2026-04-03 |
 | 62. Stash on Sync | v0.14.0 | 0/2 | Planned | - |
 | 63. Release Prep | v0.14.0 | 0/1 | Planned | - |

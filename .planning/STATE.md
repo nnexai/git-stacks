@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.14.0
 milestone_name: Workflow Completion & Workspace UX
 status: executing
-stopped_at: Completed Phase 60 — Labels
-last_updated: "2026-04-03T16:20:00.000Z"
+stopped_at: Completed Phase 61 — Secrets
+last_updated: "2026-04-03T17:05:00.000Z"
 last_activity: 2026-04-03
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 18
-  completed_plans: 12
-  percent: 50
+  completed_plans: 15
+  percent: 67
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-03)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 61 — Secrets
+**Current focus:** Phase 62 — Stash on Sync
 
 ## Current Position
 
-Phase: 61 (Secrets) — READY
-Plan: 4 of 4 (Wave 1 complete)
+Phase: 62 (Stash on Sync) — READY
+Plan: 2 of 2
 Status: Ready to execute
 Last activity: 2026-04-03
 
 ```
-Progress: [#####-----] 50% (3/6 phases)
+Progress: [######----] 67% (4/6 phases)
 ```
 
 ## Accumulated Context
@@ -44,6 +44,7 @@ Progress: [#####-----] 50% (3/6 phases)
 - Phase 59 (push) depends on Phase 58 — ahead count feeds dry-run messaging
 - Phase 59 (push) first-push dry-run falls back to `0` commits when `origin/<branch>` does not exist yet; actual push behavior is still verified
 - Phase 60 (labels) dashboard grouping uses yellow section headers without bold because current OpenTUI `TextProps` do not accept a `bold` prop
+- Phase 61 (secrets) resolved values are runtime-only but intentionally flow into env-file writes and lifecycle hook env after successful resolution
 - Phase 61 (secrets) constraint: `resolveSecrets` signature is `(rawEnv: Record<string, string>, resolvers) => Record<string, string>` — never accepts workspace object; prevents plaintext write to YAML
 - Phase 61 (secrets) `cmd:` resolver requires explicit opt-in in config.yml; not enabled by default
 - Phase 62 (stash) double-stash guard: if `git-stacks auto-stash` entry already in `git stash list`, refuse to stash again
@@ -65,6 +66,6 @@ Progress: [#####-----] 50% (3/6 phases)
 
 ## Session Continuity
 
-Last session: 2026-04-03T16:20:00.000Z
-Stopped at: Completed Phase 60 verification and close-out artifacts
-Next action: Execute Phase 61 — Secrets
+Last session: 2026-04-03T17:05:00.000Z
+Stopped at: Completed Phase 61 verification and close-out artifacts
+Next action: Execute Phase 62 — Stash on Sync
