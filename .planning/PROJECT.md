@@ -16,7 +16,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - New "dir" repo type — references a plain directory, skipped by all git commands, works like trunk otherwise
 - Fixes and polish as they come up
 
-## Recent State (2026-04-03)
+## Recent State (2026-04-04)
 
 ### What shipped in v0.13.0
 
