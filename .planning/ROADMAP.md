@@ -180,7 +180,7 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
 
 **Milestone Goal:** Add a "dir" repo type for non-git directories that behave like trunk repos but are invisible to all git operations.
 
-- [ ] **Phase 64: Schema & Registry** - Add "dir" type to Zod schemas and wire `repo add`/`repo scan` to accept plain directories
+- [x] **Phase 64: Schema & Registry** - Add "dir" type to Zod schemas and wire `repo add`/`repo scan` to accept plain directories (completed 2026-04-04)
 - [ ] **Phase 65: Workspace Lifecycle** - `new`/`open`/`close`/`clean`/`remove` handle dir repos correctly (reference only, no worktrees)
 - [ ] **Phase 66: Git Operation Guards** - All git commands (push, pull, sync, merge, ahead/behind, dirty) skip dir repos
 - [ ] **Phase 67: Status, Display & Health** - Status, list, TUI dashboard, and doctor surface dir repos correctly
@@ -197,10 +197,10 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
   2. Workspace YAML written for a dir repo contains `mode: dir` and `main_path` only — no `task_path`, no branch
   3. User can run `git-stacks repo add /some/plain/dir` and have the directory registered as type "dir"
   4. User can run `git-stacks repo scan` and see plain directories offered for registration alongside git repos
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 64-01-PLAN.md — Extend Zod schemas for dir repos and update buildReposFromTemplate
-- [ ] 64-02-PLAN.md — Update detect.ts, repo CLI commands, and scan wizard for dir repos
+- [x] 64-01-PLAN.md — Extend Zod schemas for dir repos and update buildReposFromTemplate
+- [x] 64-02-PLAN.md — Update detect.ts, repo CLI commands, and scan wizard for dir repos
 
 ### Phase 65: Workspace Lifecycle
 **Goal**: Creating, opening, and destroying workspaces that include dir repos works without git errors
@@ -256,7 +256,7 @@ Plans:
 | 61. Secrets | v0.14.0 | 3/3 | Complete | 2026-04-03 |
 | 62. Stash on Sync | v0.14.0 | 2/2 | Complete | 2026-04-03 |
 | 63. Release Prep | v0.14.0 | 1/1 | Complete | 2026-04-03 |
-| 64. Schema & Registry | v0.15.0 | 0/2 | Not started | - |
+| 64. Schema & Registry | v0.15.0 | 2/2 | Complete    | 2026-04-04 |
 | 65. Workspace Lifecycle | v0.15.0 | 0/? | Not started | - |
 | 66. Git Operation Guards | v0.15.0 | 0/? | Not started | - |
 | 67. Status, Display & Health | v0.15.0 | 0/? | Not started | - |
