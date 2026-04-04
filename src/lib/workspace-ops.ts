@@ -98,30 +98,45 @@ export async function getWorkspaceListInfo(
   const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
   const trunkRepos = workspace.repos.filter((r) => r.mode === "trunk")
 
-  // Always run dirty checks (dirty check is always on now per UX-04, checkStatus ignored)
+  // Always run dirty checks across ALL repos (worktree and trunk)
   const results = await Promise.all(
-    worktreeRepos
-      .filter((repo) => existsSync(repo.task_path))
-      .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
+    workspace.repos
+      .map((repo) => {
+        const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
+        return { name: repo.name, repoPath, exists: existsSync(repoPath) }
+      })
+      .filter((r) => r.exists)
+      .map(async (r) => ({ name: r.name, dirty: await isRepoDirty(r.repoPath) }))
   )
   const dirtyRepos: string[] = results.filter((r) => r.dirty).map((r) => r.name)
   const dirty: boolean = dirtyRepos.length > 0
 
-  // Ahead/behind computation (AB-02): parallel per worktree repo
+  // Ahead/behind computation (AB-02): parallel per repo (worktree and trunk)
   let totalAhead = 0
   let maxBehind = 0
   let anyStale = false
 
   const abResults = await Promise.all(
-    worktreeRepos
-      .filter((repo) => existsSync(repo.task_path))
-      .map(async (repo) => {
-        const baseBranch = repo.base_branch ?? "main"
-        const baseRef = `origin/${baseBranch}`
+    workspace.repos
+      .map((repo) => {
+        const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
+        return { repo, repoPath, exists: existsSync(repoPath) }
+      })
+      .filter((r) => r.exists)
+      .map(async ({ repo, repoPath }) => {
+        let baseRef: string
+        if (repo.mode === "worktree") {
+          const baseBranch = repo.base_branch ?? "main"
+          baseRef = `origin/${baseBranch}`
+        } else {
+          // Trunk repos compare against origin/<currentBranch>
+          const currentBranch = await getCurrentBranch(repoPath)
+          baseRef = `origin/${currentBranch}`
+        }
         const [ahead, behind, stale] = await Promise.all([
-          getCommitsAhead(repo.task_path, baseRef, "HEAD"),
-          getCommitsBehind(repo.task_path, baseRef, "HEAD"),
-          isFetchStale(repo.task_path),
+          getCommitsAhead(repoPath, baseRef, "HEAD"),
+          getCommitsBehind(repoPath, baseRef, "HEAD"),
+          isFetchStale(repoPath),
         ])
         return { ahead, behind, stale }
       })
@@ -309,21 +324,28 @@ export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]>
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
   return Promise.all(
     workspace.repos.map(async (repo) => {
-      const exists = existsSync(repo.task_path)
-      const [dirty, branch] =
-        exists && repo.mode === "worktree"
-          ? await Promise.all([isRepoDirty(repo.task_path), getCurrentBranch(repo.task_path)])
-          : [false, "—"]
+      const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
+      const exists = existsSync(repoPath)
 
-      // Ahead/behind for worktree repos only (trunk repos report 0/0)
+      let dirty = false
+      let branch = "—"
       let ahead = 0
       let behind = 0
-      if (exists && repo.mode === "worktree") {
-        const baseBranch = repo.base_branch ?? "main"
-        const baseRef = `origin/${baseBranch}`;
+
+      if (exists) {
+        [dirty, branch] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath)])
+
+        let baseRef: string
+        if (repo.mode === "worktree") {
+          const baseBranch = repo.base_branch ?? "main"
+          baseRef = `origin/${baseBranch}`
+        } else {
+          // Trunk repos compare against origin/<currentBranch>
+          baseRef = `origin/${branch}`
+        };
         [ahead, behind] = await Promise.all([
-          getCommitsAhead(repo.task_path, baseRef, "HEAD"),
-          getCommitsBehind(repo.task_path, baseRef, "HEAD"),
+          getCommitsAhead(repoPath, baseRef, "HEAD"),
+          getCommitsBehind(repoPath, baseRef, "HEAD"),
         ])
       }
 
