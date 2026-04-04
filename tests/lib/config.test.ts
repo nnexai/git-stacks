@@ -6,6 +6,7 @@ import {
   WorkspaceRepoSchema,
   RepoRegistryEntrySchema,
   TemplateSchema,
+  TemplateRepoSchema,
   GlobalConfigSchema,
   NameSchema,
   formatZodError,
@@ -793,5 +794,55 @@ describe("PortsSchema fields", () => {
     const cfg = GlobalConfigSchema.parse({})
     expect(cfg.ports.range_start).toBe(10000)
     expect(cfg.ports.range_end).toBe(65000)
+  })
+})
+
+// --- dir repo schema support ---
+
+describe("dir repo schema support", () => {
+  test("RepoRegistryEntrySchema accepts is_dir: true", () => {
+    const entry = RepoRegistryEntrySchema.parse({ name: "notes", local_path: "/home/user/notes", is_dir: true })
+    expect(entry.is_dir).toBe(true)
+  })
+
+  test("RepoRegistryEntrySchema defaults is_dir to false (backward compat)", () => {
+    const entry = RepoRegistryEntrySchema.parse({ name: "api", local_path: "/dev/api" })
+    expect(entry.is_dir).toBe(false)
+  })
+
+  test("TemplateRepoSchema accepts mode: dir", () => {
+    const tpl = TemplateRepoSchema.parse({ repo: "notes", mode: "dir" })
+    expect(tpl.mode).toBe("dir")
+  })
+
+  test("TemplateRepoSchema still defaults mode to worktree", () => {
+    const tpl = TemplateRepoSchema.parse({ repo: "api" })
+    expect(tpl.mode).toBe("worktree")
+  })
+
+  test("WorkspaceRepoSchema accepts mode: dir without task_path", () => {
+    const repo = WorkspaceRepoSchema.parse({
+      name: "notes", repo: "notes-dir", type: "other",
+      mode: "dir", main_path: "/home/user/notes",
+    })
+    expect(repo.mode).toBe("dir")
+    expect(repo.task_path).toBeUndefined()
+  })
+
+  test("WorkspaceRepoSchema still accepts worktree with task_path (backward compat)", () => {
+    const repo = WorkspaceRepoSchema.parse({
+      name: "svc", repo: "platform", type: "java",
+      mode: "worktree", main_path: "/main/svc", task_path: "/tasks/ws/svc",
+    })
+    expect(repo.mode).toBe("worktree")
+    expect(repo.task_path).toBe("/tasks/ws/svc")
+  })
+
+  test("WorkspaceRepoSchema mode: dir with no base_branch", () => {
+    const repo = WorkspaceRepoSchema.parse({
+      name: "notes", repo: "notes-dir", type: "other",
+      mode: "dir", main_path: "/home/user/notes",
+    })
+    expect(repo.base_branch).toBeUndefined()
   })
 })

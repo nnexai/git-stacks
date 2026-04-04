@@ -61,6 +61,7 @@ export const RepoRegistryEntrySchema = z.object({
   default_branch: z.string().default("main"),
   type: RepoTypeSchema.default("other"),
   forge: ForgeTypeSchema,
+  is_dir: z.boolean().default(false),
 })
 export type RepoRegistryEntry = z.infer<typeof RepoRegistryEntrySchema>
 
@@ -71,7 +72,7 @@ export type RepoRegistry = z.infer<typeof RepoRegistrySchema>
 
 export const TemplateRepoSchema = z.object({
   repo: z.string(),                                    // registry name
-  mode: z.enum(["trunk", "worktree"]).default("worktree"),
+  mode: z.enum(["trunk", "worktree", "dir"]).default("worktree"),
   base_branch: z.string().optional(),                  // overrides registry default_branch
   branch_pattern: z.string().optional(),               // e.g. "feature/<workspace-name>"
 })
@@ -116,9 +117,9 @@ export const WorkspaceRepoSchema = z.object({
   name: z.string(),
   repo: z.string(),           // registry name — replaces 'stack'
   type: RepoTypeSchema,
-  mode: z.enum(["trunk", "worktree"]),
+  mode: z.enum(["trunk", "worktree", "dir"]),
   main_path: z.string().transform(expandHome),
-  task_path: z.string().transform(expandHome),
+  task_path: z.string().transform(expandHome).optional(),
   base_branch: z.string().optional(),  // base branch for merge/sync resolution
   hooks: WorkspaceRepoHooksSchema.optional(),
   files: FilesSchema,
