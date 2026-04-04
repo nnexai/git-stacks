@@ -329,17 +329,17 @@ const countsText = createMemo(() => {
 
 **All other claims in this research were verified directly from source files.**
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `hasMissing` in `useWorkspaces.ts` include dir repos?**
    - What we know: Currently `hasMissing: repos.some((r) => !r.exists && r.mode === "worktree")` — only worktree repos contribute to the missing indicator.
    - What's unclear: Whether a dir repo whose path has been deleted should be treated as "missing" in the TUI sense (red indicator).
-   - Recommendation: Yes — extend to `!r.exists && (r.mode === "worktree" || r.mode === "dir")`. A missing directory path is just as broken as a missing worktree. The TUI `StatusIndicator` will then show red for workspaces with missing dir repos. This is consistent with HLTH-02.
+   - RESOLVED: Yes — extend to `!r.exists && (r.mode === "worktree" || r.mode === "dir")`. A missing directory path is just as broken as a missing worktree. The TUI `StatusIndicator` will then show red for workspaces with missing dir repos. This is consistent with HLTH-02. Implemented in Plan 67-02 Task 1.
 
 2. **`list` display: should `dirCount` be shown separately or silently included in `repoCount`?**
    - What we know: `getWorkspaceListInfo` populates `dirCount` and `repoCount` already. The `list` display at workspace.ts:334 shows `${info.repoCount} repos` — dir repos are already counted.
    - What's unclear: Whether showing e.g. "3 repos" (which includes 1 dir) is sufficient for DISP-02, or whether explicit breakdown is needed.
-   - Recommendation: DISP-02 only requires "no git aggregation errors" — the current data layer already satisfies this. The `list` display does not need changes to satisfy DISP-02. If the planner wants to expose dir count visually, that's Claude's discretion territory.
+   - RESOLVED: DISP-02 only requires "no git aggregation errors" — the current data layer already satisfies this. The `list` display does not need changes to satisfy DISP-02. Dir count is exposed visually in TUI via WorkspaceRow (Plan 67-02 Task 1) per D-04.
 
 ## Environment Availability
 
