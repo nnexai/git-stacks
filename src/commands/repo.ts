@@ -24,7 +24,7 @@ export const repoCommand = new Command("repo")
 
 repoCommand
   .command("add <path>")
-  .description("Register a local git repo in the registry")
+  .description("Register a local git repo or directory in the registry")
   .option("--name <name>", "Override the auto-detected repo name")
   .option("--branch <branch>", "Set default branch (auto-detected if not specified)")
   .action(async (rawPath: string, opts: { name?: string; branch?: string }) => {
@@ -33,10 +33,7 @@ repoCommand
       console.error(`Path does not exist: ${localPath}`)
       process.exit(1)
     }
-    if (!existsSync(join(localPath, ".git"))) {
-      console.error(`Not a git repository: ${localPath}`)
-      process.exit(1)
-    }
+    const isDir = !existsSync(join(localPath, ".git"))
     const registry = readRegistry()
     const name = opts.name ?? basename(localPath)
     if (registry.some((r) => r.name === name)) {
@@ -44,36 +41,46 @@ repoCommand
       process.exit(1)
     }
     const type = detectRepoType(localPath)
-    const defaultBranch = opts.branch ?? (await getCurrentBranch(localPath))
 
-    // Detect forge from remote URL and CLI availability (per D-04)
-    const forgeSuggestions = await detectForgeForRepo(localPath)
+    let defaultBranch: string
     let forge: "github" | "gitlab" | "gitea" | undefined
-    if (forgeSuggestions.length === 1) {
-      // Exactly one match — auto-suggest (per D-05)
-      forge = forgeSuggestions[0]
-      console.log(`  Detected forge: ${forge}`)
+
+    if (isDir) {
+      // Dir repos: no git operations, no forge detection
+      defaultBranch = "main"
+      forge = undefined
     } else {
-      // Multiple or no matches — prompt user to choose (per D-05)
-      const allForgeOptions: { value: string; label: string }[] = [
-        { value: "none", label: "None" },
-        ...(forgeSuggestions.length > 1
-          ? forgeSuggestions.map((f) => ({ value: f, label: f }))
-          : [
-              { value: "github", label: "github" },
-              { value: "gitlab", label: "gitlab" },
-              { value: "gitea", label: "gitea" },
-            ]),
-      ]
-      const choice = await p.select({
-        message: forgeSuggestions.length > 1
-          ? "Multiple forges detected — select one"
-          : "No forge detected — select one or skip",
-        options: allForgeOptions,
-        initialValue: forgeSuggestions.length === 0 ? "none" : undefined,
-      })
-      if (p.isCancel(choice)) { console.log("Cancelled."); process.exit(0) }
-      forge = choice === "none" ? undefined : (choice as "github" | "gitlab" | "gitea")
+      // Git repos: existing branch detection and forge logic
+      defaultBranch = opts.branch ?? (await getCurrentBranch(localPath))
+
+      // Detect forge from remote URL and CLI availability (per D-04)
+      const forgeSuggestions = await detectForgeForRepo(localPath)
+      if (forgeSuggestions.length === 1) {
+        // Exactly one match — auto-suggest (per D-05)
+        forge = forgeSuggestions[0]
+        console.log(`  Detected forge: ${forge}`)
+      } else {
+        // Multiple or no matches — prompt user to choose (per D-05)
+        const allForgeOptions: { value: string; label: string }[] = [
+          { value: "none", label: "None" },
+          ...(forgeSuggestions.length > 1
+            ? forgeSuggestions.map((f) => ({ value: f, label: f }))
+            : [
+                { value: "github", label: "github" },
+                { value: "gitlab", label: "gitlab" },
+                { value: "gitea", label: "gitea" },
+              ]),
+        ]
+        const choice = await p.select({
+          message: forgeSuggestions.length > 1
+            ? "Multiple forges detected — select one"
+            : "No forge detected — select one or skip",
+          options: allForgeOptions,
+          initialValue: forgeSuggestions.length === 0 ? "none" : undefined,
+        })
+        if (p.isCancel(choice)) { console.log("Cancelled."); process.exit(0) }
+        forge = choice === "none" ? undefined : (choice as "github" | "gitlab" | "gitea")
+      }
     }
 
     const entry: RepoRegistryEntry = {
@@ -83,17 +90,18 @@ repoCommand
       default_branch: defaultBranch,
       type,
       forge,
-      is_dir: false,
+      is_dir: isDir,
     }
     registry.push(entry)
     writeRegistry(registry)
+    const dirLabel = isDir ? " [dir]" : ""
     const forgeLabel = forge ? ` [forge: ${forge}]` : ""
-    console.log(`Registered '${name}' (${type}) at ${localPath} [${defaultBranch}]${forgeLabel}`)
+    console.log(`Registered '${name}' (${type}) at ${localPath} [${defaultBranch}]${forgeLabel}${dirLabel}`)
   })
 
 repoCommand
   .command("scan <dir>")
-  .description("Scan a directory for git repos and register them")
+  .description("Scan a directory for repos and directories and register them")
   .action(async (rawDir: string) => {
     const dir = resolve(expandHome(rawDir))
     if (!existsSync(dir)) {
@@ -114,8 +122,9 @@ repoCommand
     }
     console.log("")
     for (const entry of registry) {
+      const dirLabel = entry.is_dir ? " [dir]" : ""
       console.log(
-        `  ${entry.name.padEnd(24)} ${entry.type.padEnd(12)} ${entry.default_branch.padEnd(12)} ${entry.local_path}`
+        `  ${entry.name.padEnd(24)} ${entry.type.padEnd(12)} ${entry.default_branch.padEnd(12)} ${entry.local_path}${dirLabel}`
       )
     }
   })
@@ -135,6 +144,9 @@ repoCommand
     console.log(`Type:           ${entry.type}`)
     console.log(`Default branch: ${entry.default_branch}`)
     console.log(`Exists on disk: ${existsSync(entry.local_path) ? "yes" : "NO"}`)
+    if (entry.is_dir) {
+      console.log(`Dir mode:       yes`)
+    }
   })
 
 repoCommand
