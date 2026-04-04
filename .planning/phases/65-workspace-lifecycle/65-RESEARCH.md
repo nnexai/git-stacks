@@ -229,17 +229,17 @@ if (repo.task_path && repo.task_path.includes(join(tasksDir, oldName))) {
 | A1 | Dir repos should be excluded from `getWorkspaceListInfo` ahead/behind computation entirely (not just returning 0) | Detailed Call-Site Inventory | Low — no semantic difference for phase 65; if Phase 67 needs dir repos counted differently the type can be extended |
 | A2 | `GS_REPO_PATH` for dir repos should use `main_path` (same as trunk) | buildRepoEnv Signature Fix | Low — hooks receive the correct path; no git op is implied |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `WorkspaceListInfo.repoCount` include dir repos?**
    - What we know: Currently `repoCount = worktreeCount + trunkCount`. Dir repos are legitimate workspace members.
    - What's unclear: Phase 67 display may want to distinguish dir repos from git repos.
-   - Recommendation: Add `dirCount` field and set `repoCount = worktreeCount + trunkCount + dirCount` for this phase. Phase 67 can render them differently.
+   - RESOLVED: Add `dirCount` field and set `repoCount = worktreeCount + trunkCount + dirCount` for this phase. Phase 67 can render them differently.
 
 2. **Should `RepoStatus.mode` be widened to include `"dir"` now?**
    - What we know: `getWorkspaceStatus` returns `RepoStatus[]`. Phase 67 renders status output.
    - What's unclear: Widening now vs in Phase 67.
-   - Recommendation: Widen now in Phase 65 — cheaper to fix the type here than patch display code that casts it.
+   - RESOLVED: Widen now in Phase 65 — cheaper to fix the type here than patch display code that casts it.
 
 ## Environment Availability
 
