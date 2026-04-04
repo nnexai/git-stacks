@@ -10,11 +10,11 @@ export async function runRepoScan(dir: string) {
   const spinner = p.spinner()
   spinner.start(`Scanning ${dir}`)
 
-  const discovered = scanForRepos(dir)
-  spinner.stop(`Found ${discovered.length} repo(s)`)
+  const discovered = scanForRepos(dir, { includeDirs: true })
+  spinner.stop(`Found ${discovered.length} item(s)`)
 
   if (discovered.length === 0) {
-    p.log.warn("No git repos found in this directory.")
+    p.log.warn("No git repos or directories found.")
     p.outro("Done.")
     return
   }
@@ -34,7 +34,7 @@ export async function runRepoScan(dir: string) {
     options: newRepos.map((r) => ({
       value: r.name,
       label: r.name,
-      hint: `${r.detectedType} \u2014 ${r.path}`,
+      hint: `${r.isDir ? "dir" : r.detectedType} \u2014 ${r.path}`,
     })),
     required: false,
   })
@@ -57,52 +57,66 @@ export async function runRepoScan(dir: string) {
       regName = `${regName}-${Date.now()}`
       p.log.warn(`Name collision: using '${regName}' instead of '${repo.name}'`)
     }
-    const branch = await getCurrentBranch(repo.path).catch(() => "main")
 
-    // Detect forge from remote URL and CLI availability (per D-04)
-    const forgeSuggestions = await detectForgeForRepo(repo.path)
-    let forge: "github" | "gitlab" | "gitea" | undefined
-    if (forgeSuggestions.length === 1) {
-      forge = forgeSuggestions[0]
-      registerSpinner.message(`${regName} (forge: ${forge})`)
-    } else {
-      // Multiple or no matches — prompt user to choose (per D-05)
-      registerSpinner.stop(`Pausing for ${regName}`)
-      const allForgeOptions: { value: string; label: string }[] = [
-        { value: "none", label: "None" },
-        ...(forgeSuggestions.length > 1
-          ? forgeSuggestions.map((f: string) => ({ value: f, label: f }))
-          : [
-              { value: "github", label: "github" },
-              { value: "gitlab", label: "gitlab" },
-              { value: "gitea", label: "gitea" },
-            ]),
-      ]
-      const choice = await p.select({
-        message: forgeSuggestions.length > 1
-          ? `Multiple forges detected for '${regName}' — select one`
-          : `No forge detected for '${regName}' — select one or skip`,
-        options: allForgeOptions,
-        initialValue: forgeSuggestions.length === 0 ? "none" : undefined,
+    if (repo.isDir) {
+      // Dir repos: no git operations, no forge detection
+      registry.push({
+        name: regName,
+        schema_version: "1",
+        local_path: repo.path,
+        default_branch: "main",
+        type: repo.detectedType,
+        is_dir: true,
       })
-      if (p.isCancel(choice)) {
-        forge = undefined
-      } else {
-        forge = choice === "none" ? undefined : (choice as "github" | "gitlab" | "gitea")
-      }
-      registerSpinner.start("Registering repos")
-    }
+      registerSpinner.message(`${regName} [dir]`)
+    } else {
+      // Git repos: existing branch + forge detection logic
+      const branch = await getCurrentBranch(repo.path).catch(() => "main")
 
-    registry.push({
-      name: regName,
-      schema_version: "1",
-      local_path: repo.path,
-      default_branch: branch,
-      type: repo.detectedType,
-      forge,
-      is_dir: false,
-    })
-    registerSpinner.message(`${regName}`)
+      // Detect forge from remote URL and CLI availability (per D-04)
+      const forgeSuggestions = await detectForgeForRepo(repo.path)
+      let forge: "github" | "gitlab" | "gitea" | undefined
+      if (forgeSuggestions.length === 1) {
+        forge = forgeSuggestions[0]
+        registerSpinner.message(`${regName} (forge: ${forge})`)
+      } else {
+        // Multiple or no matches — prompt user to choose (per D-05)
+        registerSpinner.stop(`Pausing for ${regName}`)
+        const allForgeOptions: { value: string; label: string }[] = [
+          { value: "none", label: "None" },
+          ...(forgeSuggestions.length > 1
+            ? forgeSuggestions.map((f: string) => ({ value: f, label: f }))
+            : [
+                { value: "github", label: "github" },
+                { value: "gitlab", label: "gitlab" },
+                { value: "gitea", label: "gitea" },
+              ]),
+        ]
+        const choice = await p.select({
+          message: forgeSuggestions.length > 1
+            ? `Multiple forges detected for '${regName}' — select one`
+            : `No forge detected for '${regName}' — select one or skip`,
+          options: allForgeOptions,
+          initialValue: forgeSuggestions.length === 0 ? "none" : undefined,
+        })
+        if (p.isCancel(choice)) {
+          forge = undefined
+        } else {
+          forge = choice === "none" ? undefined : (choice as "github" | "gitlab" | "gitea")
+        }
+        registerSpinner.start("Registering repos")
+      }
+
+      registry.push({
+        name: regName,
+        schema_version: "1",
+        local_path: repo.path,
+        default_branch: branch,
+        type: repo.detectedType,
+        forge,
+      })
+      registerSpinner.message(`${regName}`)
+    }
   }
 
   writeRegistry(registry)
