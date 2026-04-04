@@ -8,20 +8,13 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current State
+## Current Milestone: v0.15.0 Dir Mode & Polish
 
-**Latest shipped milestone:** v0.14.0 Workflow Completion & Workspace UX (2026-04-03)
+**Goal:** Add a "dir" repo type for non-git directories that behave like trunk repos but are invisible to git operations, plus small fixes and polish.
 
-**What shipped in v0.14.0:**
-- Ahead/behind tracking across git primitives, CLI list/status output, and dashboard row/detail views
-- `git-stacks push` with parallel repo execution and dashboard push progress
-- Labels across workspace/template schema, CLI CRUD/filter/create flows, and dashboard grouping
-- Runtime-only secret resolution for `open` and `env`, with plaintext refs preserved in YAML
-- `git-stacks sync --stash` for dirty worktree sync with guarded restore and recovery output
-
-## Next Milestone
-
-No next milestone is defined yet. Start `/gsd-new-milestone` to create fresh requirements and roadmap scope for the next version.
+**Target features:**
+- New "dir" repo type — references a plain directory, skipped by all git commands, works like trunk otherwise
+- Fixes and polish as they come up
 
 ## Recent State (2026-04-03)
 
@@ -248,7 +241,7 @@ No next milestone is defined yet. Start `/gsd-new-milestone` to create fresh req
 
 ### Active
 
-- [ ] Fix `list --status` flag — implement status display or remove the unsupported option
+(Current milestone scope — see requirements)
 
 ### Out of Scope
 
@@ -416,4 +409,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-03 after v0.14.0 milestone completion*
+*Last updated: 2026-04-04 after v0.15.0 milestone start*

@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.2.0
-milestone_name: milestone
-status: completed
-stopped_at: Completed quick/260404-atz fix dirty/ahead-behind trunk repo inclusion
+milestone: v0.15.0
+milestone_name: Dir Mode & Polish
+status: active
+stopped_at: ""
 last_updated: "2026-04-04T00:00:00.000Z"
 last_activity: 2026-04-04
 progress:
@@ -11,27 +11,27 @@ progress:
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 100
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-03)
+See: .planning/PROJECT.md (updated 2026-04-04)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Next milestone definition
+**Current focus:** v0.15.0 Dir Mode & Polish
 
 ## Current Position
 
-Phase: All implementation phases complete
-Plan: 18 of 18
-Status: v0.14.0 lifecycle complete
-Last activity: 2026-04-04 - Completed quick task 260404-atz: Fix dirty/ahead-behind checks to include trunk repos
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-04 — Milestone v0.15.0 started
 
 ```
-Progress: [##########] 100% (6/6 phases)
+Progress: [░░░░░░░░░░] 0%
 ```
 
 ## Accumulated Context
@@ -80,4 +80,4 @@ Progress: [##########] 100% (6/6 phases)
 
 Last session: 2026-04-04T00:00:00.000Z
 Stopped at: Completed quick/260404-atz fix dirty/ahead-behind trunk repo inclusion
-Next action: Start `/gsd-new-milestone` when ready
+Next action: Define requirements and create roadmap for v0.15.0
