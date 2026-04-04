@@ -2587,7 +2587,7 @@ describe("dir repo lifecycle", () => {
 
   test("getWorkspaceStatus with dir repo returns mode 'dir', no git calls needed", async () => {
     const wsName = uniqueWsName("status-dir")
-    const { dirPath } = setupDirOnlyFixture(wsName)
+    setupDirOnlyFixture(wsName)
 
     const ws = readWorkspace(wsName)
     const statuses = await getWorkspaceStatus(ws)
