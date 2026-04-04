@@ -176,7 +176,7 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
 
 </details>
 
-### 🚧 v0.15.0 Dir Mode & Polish (In Progress)
+### v0.15.0 Dir Mode & Polish (In Progress)
 
 **Milestone Goal:** Add a "dir" repo type for non-git directories that behave like trunk repos but are invisible to all git operations.
 
@@ -210,7 +210,9 @@ Plans:
   1. `git-stacks new` with a template containing a dir repo includes the dir in the workspace — main_path referenced, no worktree created, no branch set
   2. `git-stacks open` injects dir repo path into hook/env context but does not run any git operations against it
   3. `git-stacks close`, `clean`, and `remove` complete successfully for workspaces with dir repos — no worktree deletion attempted, no git errors logged
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 65-01-PLAN.md — Dir-mode guards for all workspace lifecycle functions + tests
 
 ### Phase 66: Git Operation Guards
 **Goal**: All git-aware commands silently skip dir repos so mixed workspaces produce no git errors
@@ -257,7 +259,7 @@ Plans:
 | 62. Stash on Sync | v0.14.0 | 2/2 | Complete | 2026-04-03 |
 | 63. Release Prep | v0.14.0 | 1/1 | Complete | 2026-04-03 |
 | 64. Schema & Registry | v0.15.0 | 2/2 | Complete    | 2026-04-04 |
-| 65. Workspace Lifecycle | v0.15.0 | 0/? | Not started | - |
+| 65. Workspace Lifecycle | v0.15.0 | 0/1 | Not started | - |
 | 66. Git Operation Guards | v0.15.0 | 0/? | Not started | - |
 | 67. Status, Display & Health | v0.15.0 | 0/? | Not started | - |
 | 68. Release Prep | v0.15.0 | 0/? | Not started | - |
