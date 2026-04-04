@@ -57,8 +57,8 @@ Progress: [##########] 100% (6/6 phases)
 - [Phase 58-ahead-behind-tracking]: Use git rev-parse --git-common-dir (not hardcoded .git) so isFetchStale works in worktrees where .git is a file
 - [Phase 58-ahead-behind-tracking]: isFetchStale defaults to 15-minute threshold, returns true (stale) on any error — safe default
 - [58-02]: ahead aggregation is SUM across repos; behind is MAX; staleness is OR (any stale FETCH_HEAD taints workspace)
-- [58-02]: trunk repos always report 0/0 ahead/behind — not meaningful for trunk mode
-- [Phase 58-ahead-behind-tracking]: Trunk repos show — in status text rather than 0/0 because trunk-mode repos don't track per-branch ahead/behind meaningfully
+- [quick-260404-atz]: trunk repos now report dirty/ahead/behind using main_path and origin/<currentBranch> as tracking ref (overrides previous 58-02 decision)
+- [quick-260404-atz]: trunk repos show unified ↑/↓ display same as worktree repos (no more "—" suppression)
 - [Phase 58-ahead-behind-tracking]: fetch deduplication keyed on main_path prevents double-fetching when multiple worktrees share the same underlying clone
 
 ### Pending Todos
@@ -74,7 +74,7 @@ Progress: [##########] 100% (6/6 phases)
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260403-x04 | Make keychain resolver attribute names configurable instead of hardcoded service/account | 2026-04-03 | 3809b52 | [260403-x04-make-keychain-resolver-attribute-names-c](./quick/260403-x04-make-keychain-resolver-attribute-names-c/) |
-| 260404-atz | Fix dirty/ahead-behind checks to include trunk repos in list and status commands | 2026-04-04 | 53b325e | [260404-atz-fix-dirty-ahead-behind-checks-to-include](./quick/260404-atz-fix-dirty-ahead-behind-checks-to-include/) |
+| 260404-atz | Fix dirty/ahead-behind checks to include trunk repos in list and status commands | 2026-04-04 | 50e3424 | [260404-atz-fix-dirty-ahead-behind-checks-to-include](./quick/260404-atz-fix-dirty-ahead-behind-checks-to-include/) |
 
 ## Session Continuity
 

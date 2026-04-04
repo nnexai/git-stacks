@@ -34,7 +34,7 @@ function setupFixture(tmpDir: string): string {
   // Create real git repos so dirty checks work without errors
   makeGitRepo(taskPath1)
   makeGitRepo(taskPath2)
-  mkdirSync(trunkPath, { recursive: true })
+  makeGitRepo(trunkPath)
 
   writeFileSync(join(cfgDir, "config.yml"), `workspace_root: ${wsRoot}\n`)
   writeFileSync(join(cfgDir, "registry.yml"), "[]\n")
