@@ -197,7 +197,10 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
   2. Workspace YAML written for a dir repo contains `mode: dir` and `main_path` only — no `task_path`, no branch
   3. User can run `git-stacks repo add /some/plain/dir` and have the directory registered as type "dir"
   4. User can run `git-stacks repo scan` and see plain directories offered for registration alongside git repos
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 64-01-PLAN.md — Extend Zod schemas for dir repos and update buildReposFromTemplate
+- [ ] 64-02-PLAN.md — Update detect.ts, repo CLI commands, and scan wizard for dir repos
 
 ### Phase 65: Workspace Lifecycle
 **Goal**: Creating, opening, and destroying workspaces that include dir repos works without git errors
@@ -253,7 +256,7 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
 | 61. Secrets | v0.14.0 | 3/3 | Complete | 2026-04-03 |
 | 62. Stash on Sync | v0.14.0 | 2/2 | Complete | 2026-04-03 |
 | 63. Release Prep | v0.14.0 | 1/1 | Complete | 2026-04-03 |
-| 64. Schema & Registry | v0.15.0 | 0/? | Not started | - |
+| 64. Schema & Registry | v0.15.0 | 0/2 | Not started | - |
 | 65. Workspace Lifecycle | v0.15.0 | 0/? | Not started | - |
 | 66. Git Operation Guards | v0.15.0 | 0/? | Not started | - |
 | 67. Status, Display & Health | v0.15.0 | 0/? | Not started | - |
