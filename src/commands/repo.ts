@@ -83,6 +83,7 @@ repoCommand
       default_branch: defaultBranch,
       type,
       forge,
+      is_dir: false,
     }
     registry.push(entry)
     writeRegistry(registry)

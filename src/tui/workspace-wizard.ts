@@ -201,6 +201,7 @@ export async function runWorkspaceNew(
           local_path: resolved,
           default_branch: branch,
           type,
+          is_dir: false,
         })
         writeRegistry(registry)
         p.log.success(`Auto-registered '${regName}' at ${resolved}`)
