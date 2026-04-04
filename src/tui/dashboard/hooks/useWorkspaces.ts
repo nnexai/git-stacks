@@ -75,7 +75,7 @@ async function fetchStatuses(
         // Compute staleness: any worktree repo with stale FETCH_HEAD
         const worktreeRepos = ws.repos.filter(r => r.mode === "worktree" && repos.some(rs => rs.name === r.name && rs.exists))
         const staleChecks = await Promise.all(
-          worktreeRepos.map(r => isFetchStale(r.task_path))
+          worktreeRepos.map(r => isFetchStale(r.task_path!))
         )
         const aheadBehindStale = staleChecks.some(s => s)
 
@@ -85,7 +85,7 @@ async function fetchStatuses(
             state: "loaded" as const,
             repos,
             hasDirty: repos.some((r) => r.dirty),
-            hasMissing: repos.some((r) => !r.exists && r.mode === "worktree"),
+            hasMissing: repos.some((r) => !r.exists && (r.mode === "worktree" || r.mode === "dir")),
             aheadBehindStale,
           } satisfies WorkspaceStatus,
         }
