@@ -15,7 +15,8 @@
     "text_mode": false,
     "research_before_questions": false,
     "skip_discuss": false,
-    "_auto_chain_active": false
+    "_auto_chain_active": false,
+    "discuss_mode": "assumptions"
   },
   "git": {
     "branching_strategy": "none",
