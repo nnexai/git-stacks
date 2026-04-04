@@ -360,7 +360,7 @@ export function registerWorkspaceCommands(program: Command) {
       if (opts.fetch) {
         const { mapLimited } = await import("../lib/concurrency")
         const allRepos = workspaces.flatMap(ws =>
-          ws.repos.filter(r => r.mode === "worktree" && existsSync(r.task_path))
+          ws.repos.filter(r => existsSync(r.mode === "worktree" ? r.task_path : r.main_path))
         )
         // Deduplicate by main_path
         const seen = new Set<string>()
@@ -408,12 +408,8 @@ export function registerWorkspaceCommands(program: Command) {
           const icon = !repo.exists ? "✗" : repo.dirty ? "~" : "✓"
           const modeLabel = repo.mode === "worktree" ? `[${repo.branch}]` : "[trunk]"
           const abParts: string[] = []
-          if (repo.mode === "worktree") {
-            if (repo.ahead > 0) abParts.push(`↑${repo.ahead}`)
-            if (repo.behind > 0) abParts.push(`↓${repo.behind}`)
-          } else {
-            abParts.push("—")
-          }
+          if (repo.ahead > 0) abParts.push(`↑${repo.ahead}`)
+          if (repo.behind > 0) abParts.push(`↓${repo.behind}`)
           const abStr = abParts.length > 0 ? `  ${abParts.join("  ")}` : ""
           console.log(`    ${icon}  ${repo.name.padEnd(28)} ${modeLabel}${abStr}`)
         }
