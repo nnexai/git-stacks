@@ -35,6 +35,7 @@ import {
   mergeEnv,
   buildWorkspaceEnv,
   getWorkspaceListInfo,
+  getWorkspaceStatus,
   pushWorkspace,
   syncWorkspace,
   openWorkspace,
@@ -2154,12 +2155,133 @@ describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
     expect(info.behind).toBe(2)  // max: 0 and 2 → 2
   })
 
-  test("trunk repos are excluded from ahead/behind", async () => {
+  test("trunk repos included in ahead/behind via tracking branch", async () => {
     const wsName = uniqueWsName("ab-trunk")
 
     const barePath = join(tmp, "remote-trunk.git")
     execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
     const clonePath = join(tmp, "clone-trunk")
+    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    writeFileSync(join(clonePath, "init.txt"), "init")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+
+    // Make 1 local commit without pushing (trunk is 1 ahead of origin/main)
+    writeFileSync(join(clonePath, "local.txt"), "local")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local commit"`, { stdio: "pipe" })
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "main",
+      created: new Date().toISOString(),
+      repos: [{
+        name: "trunk-repo",
+        repo: "trunk-repo",
+        type: "other",
+        mode: "trunk",
+        main_path: clonePath,
+        task_path: clonePath,
+        base_branch: "main",
+      }],
+    }))
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    // Trunk repo is 1 ahead of origin/main (its current tracking branch)
+    expect(info.ahead).toBe(1)
+    expect(info.behind).toBe(0)
+  })
+
+  test("trunk repo dirty state included in dirtyRepos", async () => {
+    const wsName = uniqueWsName("ab-trunk-dirty")
+
+    const barePath = join(tmp, "remote-dirty-trunk.git")
+    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    const clonePath = join(tmp, "clone-dirty-trunk")
+    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    writeFileSync(join(clonePath, "init.txt"), "init")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+
+    // Make an uncommitted change to trunk repo
+    writeFileSync(join(clonePath, "dirty.txt"), "dirty")
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "main",
+      created: new Date().toISOString(),
+      repos: [{
+        name: "trunk-repo",
+        repo: "trunk-repo",
+        type: "other",
+        mode: "trunk",
+        main_path: clonePath,
+        task_path: clonePath,
+        base_branch: "main",
+      }],
+    }))
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    expect(info.dirty).toBe(true)
+    expect(info.dirtyRepos).toContain("trunk-repo")
+  })
+})
+
+describe("getWorkspaceStatus — trunk repos", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-status-trunk")
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("trunk repo dirty=true when has uncommitted changes", async () => {
+    const wsName = uniqueWsName("status-trunk-dirty")
+
+    const barePath = join(tmp, "remote.git")
+    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    const clonePath = join(tmp, "clone")
+    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    writeFileSync(join(clonePath, "init.txt"), "init")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+
+    // Make an uncommitted change
+    writeFileSync(join(clonePath, "dirty.txt"), "dirty")
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "main",
+      created: new Date().toISOString(),
+      repos: [{
+        name: "trunk-repo",
+        repo: "trunk-repo",
+        type: "other",
+        mode: "trunk",
+        main_path: clonePath,
+        task_path: clonePath,
+        base_branch: "main",
+      }],
+    }))
+
+    const ws = readWorkspace(wsName)
+    const statuses = await getWorkspaceStatus(ws)
+    const trunkStatus = statuses.find(s => s.name === "trunk-repo")!
+
+    expect(trunkStatus.dirty).toBe(true)
+    expect(trunkStatus.branch).toBe("main")
+    expect(trunkStatus.exists).toBe(true)
+  })
+
+  test("trunk repo shows real branch name (not ---)", async () => {
+    const wsName = uniqueWsName("status-trunk-branch")
+
+    const barePath = join(tmp, "remote-br.git")
+    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    const clonePath = join(tmp, "clone-br")
     execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
     execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
     writeFileSync(join(clonePath, "init.txt"), "init")
@@ -2181,11 +2303,51 @@ describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
     }))
 
     const ws = readWorkspace(wsName)
-    const info = await getWorkspaceListInfo(ws)
+    const statuses = await getWorkspaceStatus(ws)
+    const trunkStatus = statuses.find(s => s.name === "trunk-repo")!
 
-    // Trunk repos are skipped; should be 0/0
-    expect(info.ahead).toBe(0)
-    expect(info.behind).toBe(0)
+    expect(trunkStatus.branch).toBe("main")
+    expect(trunkStatus.branch).not.toBe("—")
+  })
+
+  test("trunk repo ahead/behind computed against origin/<currentBranch>", async () => {
+    const wsName = uniqueWsName("status-trunk-ab")
+
+    const barePath = join(tmp, "remote-ab.git")
+    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    const clonePath = join(tmp, "clone-ab")
+    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    writeFileSync(join(clonePath, "init.txt"), "init")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+
+    // Add 2 local commits without pushing
+    writeFileSync(join(clonePath, "a.txt"), "a")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local 1"`, { stdio: "pipe" })
+    writeFileSync(join(clonePath, "b.txt"), "b")
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local 2"`, { stdio: "pipe" })
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "main",
+      created: new Date().toISOString(),
+      repos: [{
+        name: "trunk-repo",
+        repo: "trunk-repo",
+        type: "other",
+        mode: "trunk",
+        main_path: clonePath,
+        task_path: clonePath,
+        base_branch: "main",
+      }],
+    }))
+
+    const ws = readWorkspace(wsName)
+    const statuses = await getWorkspaceStatus(ws)
+    const trunkStatus = statuses.find(s => s.name === "trunk-repo")!
+
+    expect(trunkStatus.ahead).toBe(2)
+    expect(trunkStatus.behind).toBe(0)
   })
 })
 
