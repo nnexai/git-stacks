@@ -2889,7 +2889,7 @@ describe("dir repo lifecycle", () => {
 
     // Make the dir repo "dirty" by adding a file (should be irrelevant)
     const ws = readWorkspace(wsName)
-    const dirRepo = ws.repos.find(r => r.mode === "dir")!
+    const dirRepo = ws.repos.find((r: { mode: string }) => r.mode === "dir")!
     writeFileSync(join(dirRepo.main_path, "extra.txt"), "new file")
 
     const dirtyList = await getDirtyWorktrees(ws)
