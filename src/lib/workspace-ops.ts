@@ -1514,8 +1514,10 @@ export async function pullWorkspace(
   }
 
   // Phase 1: Parallel fetch, deduplicated by main_path
-  const fetchGroups = new Map<string, typeof repos>()
-  for (const repo of repos) {
+  // Dir repos are not git repos — exclude before building fetch groups (D-04)
+  const gitRepos = repos.filter(r => r.mode !== "dir")
+  const fetchGroups = new Map<string, typeof gitRepos>()
+  for (const repo of gitRepos) {
     const key = repo.main_path
     if (!fetchGroups.has(key)) fetchGroups.set(key, [])
     fetchGroups.get(key)!.push(repo)

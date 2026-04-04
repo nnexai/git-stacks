@@ -5,7 +5,7 @@ export type RepoStatus = {
   exists: boolean
   dirty: boolean
   branch: string
-  mode: "trunk" | "worktree" | "dir"
+  mode: "trunk" | "worktree"
   ahead: number
   behind: number
 }

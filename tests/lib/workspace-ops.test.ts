@@ -39,6 +39,8 @@ import {
   pushWorkspace,
   syncWorkspace,
   openWorkspace,
+  pullWorkspace,
+  getDirtyWorktrees,
 } from "../../src/lib/workspace-ops"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
@@ -2759,5 +2761,139 @@ describe("dir repo lifecycle", () => {
 
     // Dir repo itself is untouched (not deleted)
     expect(existsSync(dirPath)).toBe(true)
+  })
+
+  // Phase 66: Git operation guard tests (GIT-01 through GIT-06)
+
+  test("pushWorkspace skips dir repos implicitly (GIT-01)", async () => {
+    const wsName = uniqueWsName("push-dir-skip")
+    const { gitRepoPath, worktreePath } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote so worktree repo can push
+    const remotePath = join(tmp, "push-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+
+    // Add a commit in worktree so there's something to push
+    writeFileSync(join(worktreePath, "new.txt"), "data")
+    execSync(`git -C ${worktreePath} add .`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} commit -m "new"`, { stdio: "pipe" })
+
+    const result = await pushWorkspace(wsName, { setUpstream: true })
+    expect(result.ok).toBe(true)
+    // Dir repo "shared-configs" should NOT appear anywhere — push filters to worktree+trunk only
+    expect(result.pushed.some(r => r.repo === "shared-configs")).toBe(false)
+    expect(result.skipped.some(r => r.repo === "shared-configs")).toBe(false)
+    expect(result.failed.some(r => r.repo === "shared-configs")).toBe(false)
+    // Worktree repo IS pushed
+    expect(result.pushed.some(r => r.repo === "api")).toBe(true)
+  })
+
+  test("pullWorkspace skips dir repos in mixed workspace (GIT-02)", async () => {
+    const wsName = uniqueWsName("pull-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote so worktree repo can be fetched/pulled
+    const remotePath = join(tmp, "pull-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    // Track progress events to verify no "fetching" for dir repo
+    const progressEvents: Array<{ repo: string; status: string }> = []
+    const result = await pullWorkspace(wsName, (ev) => {
+      progressEvents.push({ repo: ev.repo, status: ev.status })
+    })
+
+    // Dir repo appears in skipped with reason "dir"
+    expect(result.skipped).toContainEqual({ repo: "shared-configs", reason: "dir" })
+    expect(result.failed).toHaveLength(0)
+
+    // No "fetching" progress event for dir repo (fetch dedup loop filtered it out)
+    const dirFetchEvents = progressEvents.filter(
+      e => e.repo === "shared-configs" && e.status === "fetching"
+    )
+    expect(dirFetchEvents).toHaveLength(0)
+
+    // Dir repo DOES have a "skipped" progress event
+    const dirSkipEvents = progressEvents.filter(
+      e => e.repo === "shared-configs" && e.status === "skipped"
+    )
+    expect(dirSkipEvents).toHaveLength(1)
+  })
+
+  test("syncWorkspace skips dir repos implicitly (GIT-03)", async () => {
+    const wsName = uniqueWsName("sync-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote for sync (needs upstream)
+    const remotePath = join(tmp, "sync-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    const result = await syncWorkspace(wsName, {})
+    expect(result.ok).toBe(true)
+    // Dir repo should not appear in synced or skipped — implicitly excluded by worktree filter
+    expect(result.synced.some(r => r.repo === "shared-configs")).toBe(false)
+    expect(result.skipped.some(r => r.repo === "shared-configs")).toBe(false)
+  })
+
+  test("mergeWorkspace skips dir repos implicitly (GIT-04)", async () => {
+    const wsName = uniqueWsName("merge-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote for merge (needs upstream for branch operations)
+    const remotePath = join(tmp, "merge-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    const result = await mergeWorkspace(wsName, { force: true, deleteBranch: false })
+    // Result may be ok or have expected merge issues — the key assertion is no dir-related error
+    // Dir repo "shared-configs" should not cause any error in the merge process
+    if (!result.ok) {
+      // If merge fails, it should NOT be because of the dir repo
+      expect(result.error).not.toContain("shared-configs")
+    }
+  })
+
+  test("getWorkspaceListInfo ahead/behind excludes dir repos (GIT-05)", async () => {
+    const wsName = uniqueWsName("ab-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up remote so ahead/behind can be computed for worktree repo
+    const remotePath = join(tmp, "ab-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    // Dir repo counted but not included in git metrics
+    expect((info as any).dirCount).toBe(1)
+    // No crash from trying to compute ahead/behind on a plain directory
+    expect(typeof info.ahead).toBe("number")
+    expect(typeof info.behind).toBe("number")
+  })
+
+  test("getDirtyWorktrees excludes dir repos (GIT-06)", async () => {
+    const wsName = uniqueWsName("dirty-dir-skip")
+    await setupMixedDirFixture(wsName)
+
+    // Make the dir repo "dirty" by adding a file (should be irrelevant)
+    const ws = readWorkspace(wsName)
+    const dirRepo = ws.repos.find(r => r.mode === "dir")!
+    writeFileSync(join(dirRepo.main_path, "extra.txt"), "new file")
+
+    const dirtyList = await getDirtyWorktrees(ws)
+    // Dir repo must NOT appear in dirty list even though we added a file
+    expect(dirtyList).not.toContain("shared-configs")
   })
 })

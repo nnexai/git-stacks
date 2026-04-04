@@ -223,9 +223,8 @@ Plans:
   2. `git-stacks pull` and `git-stacks sync` skip dir repos and report only non-dir repo results
   3. `git-stacks merge` skips dir repos without error or warning noise
   4. Ahead/behind counts and dirty-file detection treat dir repos as if they have no git state — no errors, no false values
-**Plans:** 1 plan
-Plans:
-- [ ] 66-01-PLAN.md — Fix pullWorkspace fetch dedup loop + six GIT-0x guard tests
+**Plans**: TBD
+**UI hint**: yes
 
 ### Phase 67: Status, Display & Health
 **Goal**: Users can see dir repos represented correctly in CLI output and TUI — labeled as "dir" with no git metrics
