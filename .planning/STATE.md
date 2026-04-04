@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.2.0
 milestone_name: milestone
 status: completed
-stopped_at: Completed quick/260403-x04 keychain resolver attribute names
-last_updated: "2026-04-03T21:55:00.788Z"
-last_activity: 2026-04-03
+stopped_at: Completed quick/260404-atz fix dirty/ahead-behind trunk repo inclusion
+last_updated: "2026-04-04T00:00:00.000Z"
+last_activity: 2026-04-04
 progress:
   total_phases: 0
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-03)
 Phase: All implementation phases complete
 Plan: 18 of 18
 Status: v0.14.0 lifecycle complete
-Last activity: 2026-04-03 - Completed quick task 260403-x04: Make keychain resolver attribute names configurable
+Last activity: 2026-04-04 - Completed quick task 260404-atz: Fix dirty/ahead-behind checks to include trunk repos
 
 ```
 Progress: [##########] 100% (6/6 phases)
@@ -74,9 +74,10 @@ Progress: [##########] 100% (6/6 phases)
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260403-x04 | Make keychain resolver attribute names configurable instead of hardcoded service/account | 2026-04-03 | 3809b52 | [260403-x04-make-keychain-resolver-attribute-names-c](./quick/260403-x04-make-keychain-resolver-attribute-names-c/) |
+| 260404-atz | Fix dirty/ahead-behind checks to include trunk repos in list and status commands | 2026-04-04 | 53b325e | [260404-atz-fix-dirty-ahead-behind-checks-to-include](./quick/260404-atz-fix-dirty-ahead-behind-checks-to-include/) |
 
 ## Session Continuity
 
-Last session: 2026-04-03T21:55:00.786Z
-Stopped at: Completed quick/260403-x04 keychain resolver attribute names
+Last session: 2026-04-04T00:00:00.000Z
+Stopped at: Completed quick/260404-atz fix dirty/ahead-behind trunk repo inclusion
 Next action: Start `/gsd-new-milestone` when ready
