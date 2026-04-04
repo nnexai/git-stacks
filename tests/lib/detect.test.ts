@@ -65,12 +65,13 @@ describe("scanForRepos", () => {
     expect(names).toEqual(["alpha", "mango", "zebra"])
   })
 
-  test("includes path and detectedType", () => {
+  test("includes path, detectedType, and isDir", () => {
     mkdir(tmp, "my-repo/.git")
     touch(tmp, "my-repo/pom.xml")
     const [repo] = scanForRepos(tmp)
     expect(repo.path).toBe(join(tmp, "my-repo"))
     expect(repo.detectedType).toBe("java")
+    expect(repo.isDir).toBe(false)
   })
 
   test("returns empty array for non-existent directory", () => {
@@ -79,5 +80,50 @@ describe("scanForRepos", () => {
 
   test("returns empty array for empty directory", () => {
     expect(scanForRepos(tmp)).toEqual([])
+  })
+})
+
+describe("scanForRepos includeDirs", () => {
+  test("returns plain directories with isDir: true when includeDirs is true", () => {
+    mkdir(tmp, "plain-dir")
+    const found = scanForRepos(tmp, { includeDirs: true })
+    expect(found).toHaveLength(1)
+    expect(found[0].name).toBe("plain-dir")
+    expect(found[0].isDir).toBe(true)
+  })
+
+  test("returns git repos with isDir: false when includeDirs is true", () => {
+    mkdir(tmp, "git-repo/.git")
+    const found = scanForRepos(tmp, { includeDirs: true })
+    expect(found).toHaveLength(1)
+    expect(found[0].isDir).toBe(false)
+  })
+
+  test("returns both git repos and plain dirs sorted by name", () => {
+    mkdir(tmp, "beta/.git")
+    mkdir(tmp, "alpha-dir")
+    const found = scanForRepos(tmp, { includeDirs: true })
+    expect(found.map(r => r.name)).toEqual(["alpha-dir", "beta"])
+    expect(found[0].isDir).toBe(true)
+    expect(found[1].isDir).toBe(false)
+  })
+
+  test("plain dirs without options are still ignored (backward compat)", () => {
+    mkdir(tmp, "git-repo/.git")
+    mkdir(tmp, "plain-dir")
+    const found = scanForRepos(tmp)
+    expect(found).toHaveLength(1)
+    expect(found[0].name).toBe("git-repo")
+  })
+
+  test("plain dir gets detectedType from file presence", () => {
+    mkdir(tmp, "ts-dir")
+    touch(tmp, "ts-dir/package.json")
+    const found = scanForRepos(tmp, { includeDirs: true })
+    expect(found[0].detectedType).toBe("typescript")
+  })
+
+  test("empty directory returns empty array with includeDirs", () => {
+    expect(scanForRepos(tmp, { includeDirs: true })).toEqual([])
   })
 })
