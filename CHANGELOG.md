@@ -8,7 +8,7 @@ All notable changes to `git-stacks` are documented here.
 
 ### Added
 
-**Ahead/behind tracking** — `git-stacks list` now shows aggregated `↑N ↓N` indicators after each workspace branch, `git-stacks status` reports per-repo ahead/behind counts, and the dashboard surfaces the same data in workspace rows and details. FETCH_HEAD staleness older than 15 minutes is flagged instead of silently showing fresh-looking zeros, and trunk repos are excluded from branch-distance math.
+**Ahead/behind tracking** — `git-stacks list` now shows aggregated `↑N ↓N` indicators after each workspace branch, `git-stacks status` reports per-repo ahead/behind counts, and the dashboard surfaces the same data in workspace rows and details. FETCH_HEAD staleness older than 15 minutes is flagged instead of silently showing fresh-looking zeros.
 
 **Push command** — `git-stacks push [workspace]` pushes all worktree repo branches to `origin` in parallel while skipping trunk repos. It supports `--force-with-lease`, `--force`, `--dry-run`, `--set-upstream`, and `--json`, returns non-zero when any repo fails, and the dashboard now exposes a matching push action with live per-repo progress.
 
@@ -19,6 +19,10 @@ All notable changes to `git-stacks` are documented here.
 **Stash on sync** — `git-stacks sync --stash` now auto-stashes dirty worktree repos before sync and restores them in reverse order after. A pre-existing `git-stacks auto-stash` entry blocks another auto-stash, stash-pop failures preserve the stash and surface a recovery command, and the dashboard automatically enables stash mode when syncing dirty worktrees.
 
 **Secrets config wizard** — `git-stacks config` now exposes resolver selection for the secrets subsystem so teams can keep `cmd` disabled by default while enabling only the resolvers they trust.
+
+### Fixed
+
+**Trunk repo status blind spot** — `git-stacks list` and `git-stacks status` now report dirty state, ahead/behind counts, and current branch for trunk-mode repos. Previously trunk repos were completely skipped — dirty changes went undetected, ahead/behind always showed `—`, and `--fetch` did not fetch their origins. Trunk repos compare `HEAD` against `origin/<current_branch>` (their tracking branch) and display unified `↑`/`↓` indicators identical to worktree repos.
 
 ### Changed
 
