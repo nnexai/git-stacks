@@ -39,6 +39,8 @@ import {
   pushWorkspace,
   syncWorkspace,
   openWorkspace,
+  pullWorkspace,
+  getDirtyWorktrees,
 } from "../../src/lib/workspace-ops"
 
 // Set up isolated config dir once for this file — all tests in this file share it.
@@ -2441,5 +2443,457 @@ describe("openWorkspace secret resolution", () => {
     expect(result.ok).toBe(false)
     expect(result.error).toContain("Secret resolution failed")
     expect(result.error).toContain("GS_PHASE61_SECRET")
+  })
+})
+
+// ============================================================================
+// describe("dir repo lifecycle") — Phase 65 dir-mode guards
+// ============================================================================
+
+describe("dir repo lifecycle", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("ws-ops-dir")
+  })
+
+  afterEach(() => {
+    cleanup(tmp)
+  })
+
+  /**
+   * Create a mixed workspace fixture: one worktree repo + one dir repo.
+   * The worktree repo has a real git worktree. The dir repo is just a plain directory.
+   */
+  async function setupMixedDirFixture(wsName: string, branch = "feature/dir-test") {
+    const wsRoot = join(tmp, "workspaces")
+    const tasksDir = join(wsRoot, "tasks")
+    const mainDir = join(wsRoot, "main")
+    mkdirSync(tasksDir, { recursive: true })
+    mkdirSync(mainDir, { recursive: true })
+
+    const gitRepoPath = makeGitRepo(mainDir, "api")
+    const worktreePath = join(tasksDir, wsName, "api")
+    const dirPath = join(mainDir, "shared-configs")
+    mkdirSync(dirPath, { recursive: true })
+    writeFileSync(join(dirPath, "config.json"), '{"key": "value"}')
+
+    // Create worktree for git repo
+    await createWorktree(gitRepoPath, worktreePath, branch)
+
+    writeGlobalConfig({ workspace_root: wsRoot, integrations: {} })
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch,
+      created: new Date().toISOString(),
+      repos: [
+        {
+          name: "api",
+          repo: "api",
+          type: "other",
+          mode: "worktree",
+          main_path: gitRepoPath,
+          task_path: worktreePath,
+          base_branch: "main",
+        },
+        {
+          name: "shared-configs",
+          repo: "shared-configs",
+          type: "other",
+          mode: "dir",
+          main_path: dirPath,
+        },
+      ],
+    }))
+
+    return { wsRoot, tasksDir, gitRepoPath, worktreePath, dirPath, branch }
+  }
+
+  /**
+   * Create a dir-only workspace fixture.
+   */
+  function setupDirOnlyFixture(wsName: string) {
+    const wsRoot = join(tmp, "workspaces")
+    const mainDir = join(wsRoot, "main")
+    mkdirSync(mainDir, { recursive: true })
+
+    const dirPath = join(mainDir, "shared-configs")
+    mkdirSync(dirPath, { recursive: true })
+    writeFileSync(join(dirPath, "config.json"), '{"key": "value"}')
+
+    writeGlobalConfig({ workspace_root: wsRoot, integrations: {} })
+
+    writeWorkspace(WorkspaceSchema.parse({
+      name: wsName,
+      branch: "feature/dir-only",
+      created: new Date().toISOString(),
+      repos: [
+        {
+          name: "shared-configs",
+          repo: "shared-configs",
+          type: "other",
+          mode: "dir",
+          main_path: dirPath,
+        },
+      ],
+    }))
+
+    return { wsRoot, dirPath }
+  }
+
+  // -------------------------------------------------------------------------
+  // buildRepoEnv tests
+  // -------------------------------------------------------------------------
+
+  test("buildRepoEnv with dir repo (no task_path) uses main_path as GS_REPO_PATH", () => {
+    const { buildRepoEnv } = require("../../src/lib/workspace-ops")
+    const base = { GS_WORKSPACE_NAME: "test-ws", GS_WORKSPACE_BRANCH: "main" }
+    const repo = { name: "shared-configs", main_path: "/some/dir/path" }
+    const env = buildRepoEnv(base, repo)
+    expect(env.GS_REPO_PATH).toBe("/some/dir/path")
+    expect(env.GS_REPO_CLONE_PATH).toBe("/some/dir/path")
+    expect(env.GS_REPO_NAME).toBe("shared-configs")
+  })
+
+  test("buildRepoEnv with worktree repo (task_path set) uses task_path as GS_REPO_PATH", () => {
+    const { buildRepoEnv } = require("../../src/lib/workspace-ops")
+    const base = { GS_WORKSPACE_NAME: "test-ws", GS_WORKSPACE_BRANCH: "main" }
+    const repo = { name: "api", main_path: "/main/api", task_path: "/tasks/ws/api" }
+    const env = buildRepoEnv(base, repo)
+    expect(env.GS_REPO_PATH).toBe("/tasks/ws/api")
+    expect(env.GS_REPO_CLONE_PATH).toBe("/main/api")
+    expect(env.GS_REPO_NAME).toBe("api")
+  })
+
+  // -------------------------------------------------------------------------
+  // getWorkspaceListInfo tests
+  // -------------------------------------------------------------------------
+
+  test("getWorkspaceListInfo with mixed workspace includes dirCount and does not crash", async () => {
+    const wsName = uniqueWsName("list-mixed")
+    await setupMixedDirFixture(wsName)
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    expect(info.worktreeCount).toBe(1)
+    expect(info.trunkCount).toBe(0)
+    expect((info as any).dirCount).toBe(1)
+    expect(info.repoCount).toBe(2)
+  })
+
+  // -------------------------------------------------------------------------
+  // getWorkspaceStatus tests
+  // -------------------------------------------------------------------------
+
+  test("getWorkspaceStatus with dir repo returns mode 'dir', no git calls needed", async () => {
+    const wsName = uniqueWsName("status-dir")
+    setupDirOnlyFixture(wsName)
+
+    const ws = readWorkspace(wsName)
+    const statuses = await getWorkspaceStatus(ws)
+
+    expect(statuses).toHaveLength(1)
+    const dirStatus = statuses[0]
+    expect(dirStatus.mode).toBe("dir")
+    expect(dirStatus.name).toBe("shared-configs")
+    expect(dirStatus.exists).toBe(true)
+    expect(dirStatus.dirty).toBe(false)
+    expect(dirStatus.branch).toBe("—")
+    expect(dirStatus.ahead).toBe(0)
+    expect(dirStatus.behind).toBe(0)
+  })
+
+  test("getWorkspaceStatus with missing dir repo returns exists=false", async () => {
+    const wsName = uniqueWsName("status-dir-missing")
+    setupDirOnlyFixture(wsName)
+
+    const ws = readWorkspace(wsName)
+    // Mangle the path to simulate missing dir
+    ws.repos[0].main_path = "/nonexistent/path/that/does/not/exist"
+    const statuses = await getWorkspaceStatus(ws)
+
+    expect(statuses[0].exists).toBe(false)
+    expect(statuses[0].mode).toBe("dir")
+  })
+
+  test("getWorkspaceStatus mixed workspace returns dir status alongside worktree status", async () => {
+    const wsName = uniqueWsName("status-mixed")
+    await setupMixedDirFixture(wsName)
+
+    const ws = readWorkspace(wsName)
+    const statuses = await getWorkspaceStatus(ws)
+
+    expect(statuses).toHaveLength(2)
+    const dirStatus = statuses.find(s => s.name === "shared-configs")!
+    const worktreeStatus = statuses.find(s => s.name === "api")!
+
+    expect(dirStatus.mode).toBe("dir")
+    expect(dirStatus.dirty).toBe(false)
+    expect(worktreeStatus.mode).toBe("worktree")
+  })
+
+  // -------------------------------------------------------------------------
+  // writeEnvFiles tests
+  // -------------------------------------------------------------------------
+
+  test("writeEnvFiles skips dir repos (only worktree repos get env files)", async () => {
+    const wsName = uniqueWsName("env-dir")
+    const { dirPath, worktreePath } = await setupMixedDirFixture(wsName)
+
+    const ws = readWorkspace(wsName)
+    ws.env_file = ".env"
+    ws.env = { MY_VAR: "hello" }
+    writeWorkspace(ws)
+
+    const { writeEnvFiles: wef } = require("../../src/lib/workspace-ops")
+    const updatedWs = readWorkspace(wsName)
+    wef(updatedWs, { MY_VAR: "hello" })
+
+    // Worktree repo gets the env file
+    expect(existsSync(join(worktreePath, ".env"))).toBe(true)
+    // Dir repo does NOT get an env file (no task_path)
+    expect(existsSync(join(dirPath, ".env"))).toBe(false)
+  })
+
+  // -------------------------------------------------------------------------
+  // renameWorkspace tests
+  // -------------------------------------------------------------------------
+
+  test("renameWorkspace with dir repo does not crash on missing task_path", async () => {
+    const wsName = uniqueWsName("rename-dir")
+    const newName = uniqueWsName("rename-dir-new")
+    await setupMixedDirFixture(wsName)
+
+    const result = await renameWorkspace(wsName, newName)
+    expect(result.ok).toBe(true)
+    expect(workspaceExists(newName)).toBe(true)
+    expect(workspaceExists(wsName)).toBe(false)
+
+    // Cleanup
+    try { await removeWorkspace(newName, { force: true }) } catch { /* ignore */ }
+  })
+
+  // -------------------------------------------------------------------------
+  // closeWorkspace tests
+  // -------------------------------------------------------------------------
+
+  test("closeWorkspace with dir-only workspace succeeds", async () => {
+    const wsName = uniqueWsName("close-dir-only")
+    setupDirOnlyFixture(wsName)
+
+    const result = await closeWorkspace(wsName, {})
+    expect(result.ok).toBe(true)
+
+    // Cleanup
+    try { await removeWorkspace(wsName, { force: true }) } catch { /* ignore */ }
+  })
+
+  // -------------------------------------------------------------------------
+  // cleanWorkspace tests
+  // -------------------------------------------------------------------------
+
+  test("cleanWorkspace with mixed workspace removes worktree but preserves dir", async () => {
+    const wsName = uniqueWsName("clean-mixed")
+    const { worktreePath, dirPath } = await setupMixedDirFixture(wsName)
+
+    // Verify worktree exists before clean
+    expect(existsSync(worktreePath)).toBe(true)
+    expect(existsSync(dirPath)).toBe(true)
+
+    const result = await cleanWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+
+    // Worktree removed
+    expect(existsSync(worktreePath)).toBe(false)
+    // Dir repo untouched
+    expect(existsSync(dirPath)).toBe(true)
+
+    // Cleanup
+    const wsYamlPath = workspacePath(wsName)
+    if (existsSync(wsYamlPath)) {
+      try { unlinkSync(wsYamlPath) } catch { /* ignore */ }
+    }
+  })
+
+  // -------------------------------------------------------------------------
+  // openWorkspace tests
+  // -------------------------------------------------------------------------
+
+  test("openWorkspace with mixed workspace succeeds and updates last_opened", async () => {
+    const wsName = uniqueWsName("open-mixed")
+    const { dirPath } = await setupMixedDirFixture(wsName)
+
+    const result = await openWorkspace(wsName, { ide: false, cmux: false })
+    expect(result.ok).toBe(true)
+
+    // last_opened updated
+    const ws = readWorkspace(wsName)
+    expect(ws.last_opened).toBeDefined()
+
+    // Dir repo still exists at main_path (no worktree created for it)
+    expect(existsSync(dirPath)).toBe(true)
+    // Dir repo directory has no .git file/dir (it's not a git worktree)
+    expect(existsSync(join(dirPath, ".git"))).toBe(false)
+
+    // Cleanup
+    try { await cleanWorkspace(wsName, { force: true }) } catch { /* ignore */ }
+    const wsYamlPath = workspacePath(wsName)
+    if (existsSync(wsYamlPath)) {
+      try { unlinkSync(wsYamlPath) } catch { /* ignore */ }
+    }
+  })
+
+  // -------------------------------------------------------------------------
+  // removeWorkspace tests
+  // -------------------------------------------------------------------------
+
+  test("removeWorkspace with mixed workspace succeeds (cascades clean/close)", async () => {
+    const wsName = uniqueWsName("remove-mixed")
+    const { dirPath } = await setupMixedDirFixture(wsName)
+
+    const result = await removeWorkspace(wsName, { force: true })
+    expect(result.ok).toBe(true)
+
+    // Workspace YAML deleted
+    expect(workspaceExists(wsName)).toBe(false)
+
+    // Dir repo itself is untouched (not deleted)
+    expect(existsSync(dirPath)).toBe(true)
+  })
+
+  // Phase 66: Git operation guard tests (GIT-01 through GIT-06)
+
+  test("pushWorkspace skips dir repos implicitly (GIT-01)", async () => {
+    const wsName = uniqueWsName("push-dir-skip")
+    const { gitRepoPath, worktreePath } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote so worktree repo can push
+    const remotePath = join(tmp, "push-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+
+    // Add a commit in worktree so there's something to push
+    writeFileSync(join(worktreePath, "new.txt"), "data")
+    execSync(`git -C ${worktreePath} add .`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} commit -m "new"`, { stdio: "pipe" })
+
+    const result = await pushWorkspace(wsName, { setUpstream: true })
+    expect(result.ok).toBe(true)
+    // Dir repo "shared-configs" should NOT appear anywhere — push filters to worktree+trunk only
+    expect(result.pushed.some(r => r.repo === "shared-configs")).toBe(false)
+    expect(result.skipped.some(r => r.repo === "shared-configs")).toBe(false)
+    expect(result.failed.some(r => r.repo === "shared-configs")).toBe(false)
+    // Worktree repo IS pushed
+    expect(result.pushed.some(r => r.repo === "api")).toBe(true)
+  })
+
+  test("pullWorkspace skips dir repos in mixed workspace (GIT-02)", async () => {
+    const wsName = uniqueWsName("pull-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote so worktree repo can be fetched/pulled
+    const remotePath = join(tmp, "pull-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    // Track progress events to verify no "fetching" for dir repo
+    const progressEvents: Array<{ repo: string; status: string }> = []
+    const result = await pullWorkspace(wsName, (ev) => {
+      progressEvents.push({ repo: ev.repo, status: ev.status })
+    })
+
+    // Dir repo appears in skipped with reason "dir"
+    expect(result.skipped).toContainEqual({ repo: "shared-configs", reason: "dir" })
+    expect(result.failed).toHaveLength(0)
+
+    // No "fetching" progress event for dir repo (fetch dedup loop filtered it out)
+    const dirFetchEvents = progressEvents.filter(
+      e => e.repo === "shared-configs" && e.status === "fetching"
+    )
+    expect(dirFetchEvents).toHaveLength(0)
+
+    // Dir repo DOES have a "skipped" progress event
+    const dirSkipEvents = progressEvents.filter(
+      e => e.repo === "shared-configs" && e.status === "skipped"
+    )
+    expect(dirSkipEvents).toHaveLength(1)
+  })
+
+  test("syncWorkspace skips dir repos implicitly (GIT-03)", async () => {
+    const wsName = uniqueWsName("sync-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote for sync (needs upstream)
+    const remotePath = join(tmp, "sync-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    const result = await syncWorkspace(wsName, {})
+    expect(result.ok).toBe(true)
+    // Dir repo should not appear in synced or skipped — implicitly excluded by worktree filter
+    expect(result.synced.some(r => r.repo === "shared-configs")).toBe(false)
+    expect(result.skipped.some(r => r.repo === "shared-configs")).toBe(false)
+  })
+
+  test("mergeWorkspace skips dir repos implicitly (GIT-04)", async () => {
+    const wsName = uniqueWsName("merge-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up bare remote for merge (needs upstream for branch operations)
+    const remotePath = join(tmp, "merge-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    const result = await mergeWorkspace(wsName, { force: true, deleteBranch: false })
+    // Result may be ok or have expected merge issues — the key assertion is no dir-related error
+    // Dir repo "shared-configs" should not cause any error in the merge process
+    if (!result.ok) {
+      // If merge fails, it should NOT be because of the dir repo
+      expect(result.error).not.toContain("shared-configs")
+    }
+  })
+
+  test("getWorkspaceListInfo ahead/behind excludes dir repos (GIT-05)", async () => {
+    const wsName = uniqueWsName("ab-dir-skip")
+    const { gitRepoPath, worktreePath, branch } = await setupMixedDirFixture(wsName)
+
+    // Set up remote so ahead/behind can be computed for worktree repo
+    const remotePath = join(tmp, "ab-dir-remote.git")
+    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} remote add origin ${remotePath}`, { stdio: "pipe" })
+    execSync(`git -C ${gitRepoPath} push -u origin main`, { stdio: "pipe" })
+    execSync(`git -C ${worktreePath} push -u origin ${branch}`, { stdio: "pipe" })
+
+    const ws = readWorkspace(wsName)
+    const info = await getWorkspaceListInfo(ws)
+
+    // Dir repo counted but not included in git metrics
+    expect((info as any).dirCount).toBe(1)
+    // No crash from trying to compute ahead/behind on a plain directory
+    expect(typeof info.ahead).toBe("number")
+    expect(typeof info.behind).toBe("number")
+  })
+
+  test("getDirtyWorktrees excludes dir repos (GIT-06)", async () => {
+    const wsName = uniqueWsName("dirty-dir-skip")
+    await setupMixedDirFixture(wsName)
+
+    // Make the dir repo "dirty" by adding a file (should be irrelevant)
+    const ws = readWorkspace(wsName)
+    const dirRepo = ws.repos.find(r => r.mode === "dir")!
+    writeFileSync(join(dirRepo.main_path, "extra.txt"), "new file")
+
+    const dirtyList = await getDirtyWorktrees(ws)
+    // Dir repo must NOT appear in dirty list even though we added a file
+    expect(dirtyList).not.toContain("shared-configs")
   })
 })
