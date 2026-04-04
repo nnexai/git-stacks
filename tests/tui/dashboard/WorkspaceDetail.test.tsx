@@ -256,6 +256,80 @@ describe("WorkspaceDetail integration display", () => {
   })
 })
 
+describe("WorkspaceDetail dir repo rendering", () => {
+  function makeDirEntry(existsOverride = true) {
+    return {
+      workspace: {
+        name: "dir-test-ws",
+        branch: "feat/dir-test",
+        schema_version: "1" as const,
+        created: "2024-01-01T00:00:00.000Z",
+        repos: [],
+      },
+      status: {
+        state: "loaded" as const,
+        hasDirty: false,
+        hasMissing: !existsOverride,
+        aheadBehindStale: false,
+        repos: [
+          {
+            name: "shared-config",
+            exists: existsOverride,
+            dirty: false,
+            branch: "—",
+            mode: "dir" as const,
+            ahead: 0,
+            behind: 0,
+          },
+        ],
+      },
+    }
+  }
+
+  test("Test D1: renders [dir] label for dir-mode repo", async () => {
+    const entry = makeDirEntry()
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("[dir]")
+  })
+
+  test("Test D2: does not render ahead/behind badges for dir repo", async () => {
+    const entry = makeDirEntry()
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).not.toContain("↑")
+    expect(frame).not.toContain("↓")
+  })
+
+  test("Test D3: renders green checkmark icon for existing dir repo", async () => {
+    const entry = makeDirEntry(true)
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("✓")
+    expect(frame).toContain("shared-config")
+  })
+
+  test("Test D4: renders red cross icon for missing dir repo", async () => {
+    const entry = makeDirEntry(false)
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("✗")
+    expect(frame).toContain("shared-config")
+  })
+})
+
 describe("WorkspaceDetail linked issues display", () => {
   test("Test A: workspace with linked jira issue shows Linked Issues section", async () => {
     const entry = makeEntry({
