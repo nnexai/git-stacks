@@ -61,30 +61,30 @@ Deferred to later in v0.15.0 or beyond — will be added after initial dir mode 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHM-01 | — | Pending |
-| SCHM-02 | — | Pending |
-| REG-01 | — | Pending |
-| REG-02 | — | Pending |
-| LIFE-01 | — | Pending |
-| LIFE-02 | — | Pending |
-| LIFE-03 | — | Pending |
-| GIT-01 | — | Pending |
-| GIT-02 | — | Pending |
-| GIT-03 | — | Pending |
-| GIT-04 | — | Pending |
-| GIT-05 | — | Pending |
-| GIT-06 | — | Pending |
-| DISP-01 | — | Pending |
-| DISP-02 | — | Pending |
-| DISP-03 | — | Pending |
-| HLTH-01 | — | Pending |
-| HLTH-02 | — | Pending |
+| SCHM-01 | Phase 64 | Pending |
+| SCHM-02 | Phase 64 | Pending |
+| REG-01 | Phase 64 | Pending |
+| REG-02 | Phase 64 | Pending |
+| LIFE-01 | Phase 65 | Pending |
+| LIFE-02 | Phase 65 | Pending |
+| LIFE-03 | Phase 65 | Pending |
+| GIT-01 | Phase 66 | Pending |
+| GIT-02 | Phase 66 | Pending |
+| GIT-03 | Phase 66 | Pending |
+| GIT-04 | Phase 66 | Pending |
+| GIT-05 | Phase 66 | Pending |
+| GIT-06 | Phase 66 | Pending |
+| DISP-01 | Phase 67 | Pending |
+| DISP-02 | Phase 67 | Pending |
+| DISP-03 | Phase 67 | Pending |
+| HLTH-01 | Phase 67 | Pending |
+| HLTH-02 | Phase 67 | Pending |
 
 **Coverage:**
 - v0.15.0 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-04*
-*Last updated: 2026-04-04 after initial definition*
+*Last updated: 2026-04-04 — phase assignments added*
