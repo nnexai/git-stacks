@@ -384,7 +384,7 @@ const plainDirs = all.filter(r => r.isDir)   // new plain dirs
 | A1 | `z.string().transform(expandHome).optional()` is valid in Zod 4 and returns `string \| undefined` correctly | Code Examples | If wrong, need alternate pattern — verify with typecheck during implementation |
 | A2 | `default_branch` on dir repos can safely hold the dummy value `"main"` without breaking existing downstream reads | Common Pitfalls | Phase 65 will expose if any code reads `default_branch` from a dir registry entry and acts on it |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `TemplateRepoSchema.mode` also gain `"dir"`?**
    - What we know: Template mode drives workspace construction in `buildReposFromTemplate`. If a user hand-edits a template to set `mode: "dir"`, the wizard should respect it. Alternatively, `is_dir` on the registry entry can override/coerce the mode at construction time.
