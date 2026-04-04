@@ -1,16 +1,20 @@
 # Architecture
 
-**Analysis Date:** 2026-03-17
+**Analysis Date:** 2026-04-04
 
 ## Pattern Overview
 
-**Overall:** Layered CLI application with pluggable integration system. The architecture separates concerns into configuration management, business logic, user interface, and extensible integrations.
+**Overall:** Layered CLI application with pluggable integration system, YAML-based declarative configuration, and a reactive TUI dashboard.
 
 **Key Characteristics:**
-- YAML-based declarative configuration with Zod validation
-- Multi-layer abstraction: config → workspace ops → commands → CLI
-- Integration plugin architecture for IDE/terminal spawning
-- Hook system for extensible lifecycle events
+- YAML-based declarative configuration with Zod validation at read-time
+- Multi-layer abstraction: config -> workspace-ops -> commands -> CLI
+- Integration plugin architecture for IDE/terminal/window-manager/forge/issue-tracker launching
+- Hook system for extensible lifecycle events with cascading close -> clean -> remove ordering
+- Pluggable secret resolution system (`${{ resolver:path }}` syntax in env vars)
+- Notification/messaging system with IPC socket push to running TUI dashboard
+- Port allocation system with file-based locking and contiguous-block allocation
+- Workspace labels for filtering and categorization
 - Bun runtime with native shell scripting via `$` API
 
 ## Layers
@@ -19,179 +23,342 @@
 - Purpose: Parse user input, dispatch to business logic, format output
 - Location: `src/commands/` and `src/index.ts`
 - Contains: Commander.js command definitions, option parsing, user-facing output
+- Key files:
+  - `src/commands/workspace.ts` (44KB) -- new, clone, open, list, status, clean, close, remove, merge, sync, push, pull, cd, rename, run, env, edit, paths
+  - `src/commands/template.ts` -- template new, init, edit, list, remove, rename, clone
+  - `src/commands/repo.ts` -- repo add, scan, list, remove
+  - `src/commands/doctor.ts` -- health check and drift detection with --fix support
+  - `src/commands/config.ts` -- interactive config wizard
+  - `src/commands/message.ts` -- notification send, list, clear
+  - `src/commands/install.ts` -- agent framework hook installation (Copilot, Claude Code)
+  - `src/commands/integration.ts` -- per-integration config introspection and subcommands
+  - `src/commands/label.ts` -- workspace label add, remove, list, clear
+  - `src/commands/completion.ts` -- shell completion output (bash, zsh, fish)
 - Depends on: Workspace ops, config I/O, TUI components
-- Used by: User shell invocations (git-stacks CLI)
+- Used by: User shell invocations (`git-stacks` CLI binary)
 
 **Business Logic Layer:**
-- Purpose: Core domain operations (workspace lifecycle, sync, merge, status checks)
-- Location: `src/lib/workspace-ops.ts`, `src/lib/git.ts`
-- Contains: Open, clean, remove, merge, rename, sync functions; git worktree management
-- Depends on: Git shell operations, config I/O, lifecycle hooks, integrations
+- Purpose: Core domain operations (workspace lifecycle, sync, merge, push, pull, status)
+- Location: `src/lib/workspace-ops.ts` (1699 lines), `src/lib/git.ts`
+- Contains: open, close, clean, remove, merge, rename, sync, push, pull functions; git worktree management; env file writing; port allocation dispatch; secret resolution dispatch
+- Key functions in `src/lib/workspace-ops.ts`:
+  - `openWorkspace()` -- recreate worktrees, resolve secrets, run hooks, launch integrations
+  - `closeWorkspace()` -> `_executeClose()` -- pre_close hooks, integration cleanup, post_close hooks
+  - `cleanWorkspace()` -> `_executeClean()` -- cascades through close, then removes worktrees
+  - `removeWorkspace()` -- cascades through clean, then deletes YAML
+  - `mergeWorkspace()` -- cascades through clean, then merges branches and deletes YAML
+  - `syncWorkspace()` -- fetch, conflict check, rebase/merge with optional auto-stash
+  - `pushWorkspace()` -- parallel push across worktree repos
+  - `pullWorkspace()` -- parallel pull --ff-only across worktree repos
+  - `renameWorkspace()` / `renameTemplate()` -- re-register worktrees, update cascade references
+  - `buildWorkspaceEnv()` -- resolve secrets and merge env vars for hook execution
+  - `detectWorkspaceFromCwd()` -- CWD-based workspace auto-detection
+- Depends on: git.ts, config.ts, lifecycle.ts, integrations/runner.ts, files.ts, ports.ts, secrets.ts
 - Used by: Command layer, TUI layer
 
 **Configuration Layer:**
-- Purpose: Validate, read, write YAML configs (stacks, workspaces, global settings)
+- Purpose: Validate, read, write YAML configs (templates, workspaces, registry, global settings)
 - Location: `src/lib/config.ts`
-- Contains: Zod schemas for Stack, Workspace, GlobalConfig; YAML read/write functions
+- Contains: Zod schemas for Template, Workspace, GlobalConfig, RepoRegistryEntry; YAML read/write with atomic write (write-to-tmp + fsync + rename); scan-based lookup by name
+- Key schemas:
+  - `TemplateSchema` -- repos, hooks (12 lifecycle events), env, env_file, files, includes, ports, labels
+  - `WorkspaceSchema` -- name, branch, repos, hooks, settings, env, ports, labels, last_opened
+  - `GlobalConfigSchema` -- workspace_root, integrations, ports (range_start/range_end), secrets (resolvers)
+  - `RepoRegistryEntrySchema` -- name, local_path, default_branch, type, forge
 - Depends on: Zod, yaml library, file system
 - Used by: All layers (schema source of truth)
 
+**Git Operations Layer:**
+- Purpose: All git CLI interactions wrapped as typed async functions
+- Location: `src/lib/git.ts` (400 lines)
+- Contains: worktree CRUD, branch checks, dirty detection, merge/rebase, fetch/pull/push, ahead/behind counting, upstream tracking, stash push/pop, fetch staleness detection
+- Pattern: Every git command uses Bun's `$` shell with `.quiet().nothrow()`, checks exit codes, returns typed result objects
+- Key functions: `createWorktree()`, `removeWorktree()`, `mergeNoFF()`, `pushBranch()`, `pullFFOnly()`, `rebaseBranch()`, `stashPush()`, `stashPop()`, `ensureUpstreamTracking()`, `isFetchStale()`, `getCommitsAhead()`, `getCommitsBehind()`
+
 **Integration Plugin Layer:**
-- Purpose: Pluggable generation and launching of IDE/terminal artifacts
+- Purpose: Pluggable generation and launching of IDE/terminal/window-manager/forge/issue artifacts
 - Location: `src/lib/integrations/`
-- Contains: Integration interface, plugin registry, plugin implementations (vscode, intellij, cmux, tmux)
-- Depends on: Config, workspace data, file system
-- Used by: Workspace ops during `open` operation
+- Contains: Integration interface, plugin registry, runner, 10 plugin implementations
+- Plugins (sorted by execution order):
+  - Tier 1 (10-19): `vscode.ts`, `intellij.ts`, `tmux.ts` -- independent setup
+  - Tier 2 (20-29): `cmux.ts` -- partial side-effects (depends on tmux artifact)
+  - Tier 3 (30-39): `niri.ts`, `aerospace.ts` -- window management (reads window artifacts from bag)
+  - Forge integrations: `github.ts`, `gitlab.ts`, `gitea.ts` -- PR/issue linking
+  - Issue tracking: `jira.ts` -- issue linking
+- Supporting files: `forge-utils.ts` (shared forge API helpers), `issue-utils.ts` (shared issue linking), `wizard-helpers.ts` (shared config prompts)
+- Runner: `runner.ts` -- orchestrates generate -> open -> window detection across all enabled integrations
+- Depends on: Config, workspace data, file system, Bun.spawn for external tool launches
+- Used by: Workspace ops during `open` and `cleanup` operations
+
+**Secret Resolution Layer:**
+- Purpose: Resolve `${{ resolver:path }}` references in workspace env vars to actual secrets
+- Location: `src/lib/secrets.ts`
+- Contains: `SecretResolver` interface, three built-in resolvers, `resolveSecrets()` orchestrator
+- Built-in resolvers:
+  - `keychain` -- macOS Keychain / Linux secret-tool; supports legacy `service/account` and new `key=value,key=value` attribute syntax
+  - `env` -- reads from process environment variables
+  - `cmd` -- executes arbitrary shell commands
+- Pattern: Resolvers are registered in `RESOLVER_REGISTRY`, enabled via `config.secrets.resolvers` list. Default: `["keychain", "env"]`
+- Called by: `openWorkspace()` via `resolveWorkspaceEnvVars()` before hook execution
+
+**Port Allocation Layer:**
+- Purpose: Allocate non-conflicting port numbers across workspaces
+- Location: `src/lib/ports.ts`
+- Contains: File-based locking, contiguous block allocation, conflict detection, template port merging
+- Pattern: `allocatePorts()` acquires lock -> scans all workspaces for taken ports -> finds first-fit contiguous block -> assigns sequentially. Ports injected as env vars via `mergeEnv()`.
+
+**Messaging / Notification Layer:**
+- Purpose: Workspace-scoped notifications from hooks/agents to TUI dashboard
+- Location: `src/lib/messages.ts`
+- Contains: JSONL-based per-workspace message files, Unix socket IPC for real-time push to running TUI
+- Pattern: `appendMessage()` writes to `~/.config/git-stacks/messages/{workspace}.jsonl`, then `pushToSocket()` sends to `/tmp/git-stacks.sock` (best-effort, never throws)
+- Dashboard IPC: `src/tui/dashboard/run.tsx` opens a Unix socket server; incoming messages pushed into SolidJS reactive store via `setIpcCallback()`
+
+**Template Composition Layer:**
+- Purpose: Merge multiple templates via `includes` directive
+- Location: `src/lib/composition.ts`
+- Contains: Recursive template resolution with circular dependency detection, repo merging (worktree wins), hook concatenation, env merging, label union
+- Pattern: Topological merge -- included templates processed first (lower precedence), including template applied last (higher precedence)
+
+**Lifecycle / Hook Execution Layer:**
+- Purpose: Execute arrays of shell commands sequentially with environment injection
+- Location: `src/lib/lifecycle.ts`
+- Contains: `runHooks()` (inherits stdio) and `runHooksCaptured()` (pipes and streams line-by-line via callback)
+- Pattern: Injectable executor via `_exec.spawn` mutable object -- tests replace it without mock.module
+- Used by: All workspace lifecycle operations (open, close, clean, remove, merge)
+
+**Agent Hook Layer:**
+- Purpose: Generate and install CI-agent-style hooks into workspace repo directories
+- Location: `src/lib/agent-hooks/`
+- Contains: `AgentHookPlugin` interface, `claudeCodePlugin`, `copilotPlugin`
+- Pattern: Plugins generate hook entries (event + matcher + command) and write them to agent-specific config files (`.claude/settings.json`, `.github/copilot-hooks.yml`)
 
 **TUI Layer (Terminal User Interface):**
 - Purpose: Interactive prompts and dashboard for user-guided workflows
 - Location: `src/tui/` and `src/tui/dashboard/`
-- Contains: Stack/workspace wizards, SolidJS dashboard, prompt utilities
-- Depends on: Clack prompts, config I/O, lifecycle, file operations, integration registry
-- Used by: Commands (`new`, `clone`, `manage`, `config`)
+- Wizards (Clack prompts):
+  - `src/tui/workspace-wizard.ts` -- `git-stacks new` and `git-stacks edit` flows
+  - `src/tui/workspace-clone.ts` -- `git-stacks clone` flow
+  - `src/tui/template-wizard.ts` -- `git-stacks template new|edit` flows
+  - `src/tui/repo-wizard.ts` -- `git-stacks repo scan` flow
+  - `src/tui/utils.ts` -- `safeText()` wrapper, mutable `prompts` object for test replacement
+- Dashboard (SolidJS + OpenTUI):
+  - `src/tui/dashboard/App.tsx` (58KB) -- root component, all keyboard handling, state management
+  - `src/tui/dashboard/run.tsx` -- entry point, IPC socket server, SolidJS render call
+  - Components: `WorkspaceList.tsx`, `WorkspaceRow.tsx`, `WorkspaceDetail.tsx`, `TemplateList.tsx`, `TemplateDetail.tsx`, `RepoList.tsx`, `RepoDetail.tsx`, `ActionMenu.tsx`, `RepoActionMenu.tsx`, `TemplateActionMenu.tsx`, `SyncProgressView.tsx`, `PushProgressView.tsx`, `CreateProgressView.tsx`, `ProgressView.tsx`, `ConfirmDialog.tsx`, `CenteredDialog.tsx`, `InlineInput.tsx`, `FilterIndicator.tsx`, `HelpOverlay.tsx`, `MessageOverlay.tsx`, `BatchBar.tsx`, `RemoveBlockedView.tsx`, `WizardView.tsx`, `StatusIndicator.tsx`
+  - Hooks: `hooks/useWorkspaces.ts`, `hooks/useTemplates.ts`, `hooks/useRepos.ts`, `hooks/useMessages.ts`
+  - Types: `types.ts` -- Tab, Action, UIView discriminated union, WorkspaceEntry, RepoStatus
+- Depends on: Clack prompts, OpenTUI/SolidJS, config I/O, lifecycle, file operations, integration registry
 
 **Path Management Layer:**
-- Purpose: Single source of truth for all filesystem paths
+- Purpose: Single source of truth for all filesystem paths and path helpers
 - Location: `src/lib/paths.ts`
-- Contains: Path constants and helper functions
+- Contains: `WS_CONFIG_DIR` (overridable via `GIT_STACKS_CONFIG_DIR` env), `WORKSPACES_DIR`, `TEMPLATES_DIR`, `GLOBAL_CONFIG_FILE`, `REGISTRY_FILE`, `MESSAGES_DIR`, `PORTS_LOCK_FILE`, `getMainDir()`, `getTasksDir()`, `expandHome()`
 - Depends on: Nothing (pure path computation)
 - Used by: All layers requiring filesystem locations
+
+**Utility Layers:**
+- `src/lib/labels.ts` -- `matchesLabels()` for workspace label filtering
+- `src/lib/env.ts` -- env var formatting (table, shell, dotenv, json) and CWD-based repo detection
+- `src/lib/errors.ts` -- `formatError()` helper
+- `src/lib/concurrency.ts` -- `mapLimited()` async concurrency limiter
+- `src/lib/detect.ts` -- repo type detection (java/typescript/other) by file presence
+- `src/lib/version.ts` -- version string from package.json + git hash
+- `src/lib/files.ts` -- file copy/symlink with glob support, three-case logic (skip/error/apply)
 
 ## Data Flow
 
 **Workspace Creation Flow:**
 
-1. User runs `git-stacks new [name]`
-2. `workspace.ts` command dispatches to `runWorkspaceNew()` (TUI layer)
-3. TUI prompts user for: name, branch, description, stacks, per-stack repos
-4. For each selected stack, TUI reads stack YAML from disk via `readStack()`
-5. User confirms selections; `Workspace` object created with repos list
-6. `writeWorkspace()` persists YAML to `~/.config/git-stacks/workspaces/{name}.yml`
+1. User runs `git-stacks new [name]` or `git-stacks clone [source]`
+2. Command dispatches to `runWorkspaceNew()` or `runWorkspaceClone()` (TUI wizards)
+3. TUI prompts for: name, branch, description, template selection, per-repo config
+4. Template composition resolves `includes` chains via `src/lib/composition.ts`
+5. Port allocation via `allocatePorts()` with file-based locking
+6. `Workspace` object created and persisted via `writeWorkspace()`
 7. For each `worktree` mode repo, `createWorktree()` invokes `git worktree add`
-8. `runHooks()` executes stack/workspace/repo hooks with injected env vars
-9. Integrations registry loops: `integration.generate()` (e.g., .vscode/settings.json) → `integration.open()` (e.g., `code` CLI)
-10. `applyFileOperations()` copies/symlinks files from stack template to task path
+8. `runHooks()` executes pre_create/post_create hooks with injected env vars
+9. Integration runner loops: `generate()` -> `open()` with window detection
+10. `applyFileOpsForRepo()` / `applyFileOpsForWorkspace()` handles copy/symlink operations
 
 **Workspace Open Flow:**
 
-1. User runs `git-stacks open {name}`
-2. `openWorkspace()` reads workspace YAML via `readWorkspace()`
-3. For missing worktrees, `createWorktree()` recreates them
-4. Workspace-level `pre_open` hooks run
-5. Per-repo `pre_open` hooks run in their respective paths
-6. For each enabled integration:
-   - `integration.isEnabled()` checks global config + workspace override
-   - `integration.applies()` filters (e.g., IntelliJ only for Java repos)
-   - `integration.generate()` writes artifacts to disk
-   - `integration.open()` launches the tool
-7. Stack-level environment variables merged into `mergedEnvVars`
-8. `writeEnvFiles()` writes `.env` to each worktree if configured
-9. Workspace and stack-level `post_open` hooks run
+1. `openWorkspace()` reads workspace YAML, allocates ports if needed
+2. Recreates any missing worktrees via `createWorktree()`
+3. Ensures upstream tracking for all worktree repos (parallel)
+4. Resolves secrets in env vars via `resolveWorkspaceEnvVars()` -> `resolveSecrets()`
+5. Runs workspace-level `pre_open` hooks, then per-repo `pre_open` hooks
+6. Applies per-repo and workspace-level file operations (copy/symlink)
+7. Writes `.env` files to each worktree if `env_file` configured
+8. Ensures trunk repos are on expected base branch
+9. Runs integration runner: generate -> open -> window detection for all enabled integrations
+10. Runs workspace-level `post_open` hooks
+11. Updates `last_opened` timestamp in workspace YAML
 
-**Workspace Merge & Cleanup Flow:**
+**Lifecycle Cascade (close -> clean -> remove/merge):**
 
-1. User runs `git-stacks merge {name}`
-2. `mergeWorkspace()` reads workspace, loads all associated stacks
-3. Resolve base branches from stack definitions (default: `main`)
-4. Dry-run conflict check via `getMergeConflicts()` on all repos
-5. If conflicts and not forced, return error
-6. Run `pre_remove` hooks (same env enrichment as open)
-7. For each worktree repo: `mergeNoFF()` (no fast-forward merge to base branch)
-8. Remove worktree directories via `removeWorktree()`
-9. Delete local branches
-10. Run `post_merge` hooks with `WS_MERGED_BRANCH` env var
-11. Delete workspace YAML file
-12. Return success
+The lifecycle operations cascade in a strict order:
+- `remove` calls `_executeClean()` which calls `_executeClose()` internally
+- `merge` calls `_executeClean()` which calls `_executeClose()` internally
+- `clean` calls `_executeClose()` internally
+
+Hook execution order for `remove`:
+1. `pre_close` hooks -> integration cleanup -> `post_close` hooks
+2. `pre_clean` hooks -> per-repo `pre_clean` + worktree removal -> `post_clean` hooks -> folder deletion
+3. `pre_remove` hooks -> YAML deletion -> `post_remove` hooks
+
+Hook execution order for `merge` adds steps after clean cascade:
+4. `pre_merge` hooks -> git merge + branch delete
+5. `pre_remove` hooks -> YAML deletion -> `post_remove` hooks -> `post_merge` hooks
 
 **Sync Flow:**
 
-1. User runs `git-stacks sync {name} [--strategy rebase|merge] [--best-effort]`
-2. `syncWorkspace()` reads workspace, loads stacks
-3. Parallel `fetchOrigin()` on all worktree repos
-4. Parallel dry-run conflict check against `origin/{baseBranch}`
-5. If strict mode and conflicts: return detailed error
-6. If best-effort mode: skip conflicting repos
-7. For each non-conflicting repo:
-   - Get commits behind via `getCommitsBehind()`
-   - Apply strategy: `rebaseBranch()` or `mergeBranchFF()`
-   - Record results (synced/skipped with reasons)
-8. Return sync result with detailed status
+1. `syncWorkspace()` optionally auto-stashes dirty repos (with `--stash` flag)
+2. Parallel `fetchOrigin()` on all worktree repos
+3. Parallel dry-run conflict check via `getMergeConflicts()` against `origin/{baseBranch}`
+4. In strict mode: abort on conflicts. In best-effort mode: skip conflicting repos.
+5. For each non-conflicting repo: `rebaseBranch()` or `mergeBranchFF()` per strategy
+6. Finally: restore stashes in reverse order (stash pop), report pop failures
+
+**Push Flow:**
+
+1. `pushWorkspace()` pushes all worktree repos in parallel
+2. Supports `--force`, `--force-with-lease`, `--set-upstream` flags
+3. Reports per-repo status: pushed (commit count), skipped (trunk), failed (with reason)
+
+**Pull Flow:**
+
+1. `pullWorkspace()` pulls all worktree repos in parallel via `pullFFOnly()`
+2. Reports per-repo: pulled (commit count), skipped, failed (diverged/no remote/etc.)
+
+**Notification Flow:**
+
+1. Hook or agent runs `git-stacks message send "text" --workspace ws`
+2. `appendMessage()` writes JSONL to `~/.config/git-stacks/messages/{ws}.jsonl`
+3. `pushToSocket()` connects to `/tmp/git-stacks.sock` (best-effort, 500ms timeout)
+4. If TUI dashboard is running: `onIpcMessage` callback pushes into SolidJS store
+5. Dashboard reactive update displays new notification badge/overlay
 
 **State Management:**
-
-- Workspace state: Persisted as YAML files at `~/.config/git-stacks/workspaces/{name}.yml`
-- Stack definitions: Stored as YAML at `~/.config/git-stacks/stacks/{name}.yml`
-- Global config: Stored at `~/.config/git-stacks/config.yml` (workspace_root, integration settings)
-- Worktree state: Managed by git itself; directories tracked at `{workspace_root}/tasks/{workspace_name}/{repo_name}`
+- Workspace state: YAML files at `~/.config/git-stacks/workspaces/{name}.yml`
+- Template definitions: YAML at `~/.config/git-stacks/templates/{name}.yml`
+- Repo registry: YAML at `~/.config/git-stacks/registry.yml`
+- Global config: YAML at `~/.config/git-stacks/config.yml`
+- Messages: JSONL at `~/.config/git-stacks/messages/{workspace}.jsonl`
+- Port lock: `~/.config/git-stacks/.ports.lock`
+- Worktree state: Managed by git; directories at `{workspace_root}/tasks/{workspace_name}/{repo_name}`
 - No runtime-only state; all critical state is persisted to disk
 
 ## Key Abstractions
 
-**Stack (Configuration Template):**
-- Purpose: Reusable template describing a set of git repos with metadata
-- Examples: `src/lib/config.ts` lines 42-50 define `StackSchema`
-- Pattern: Declarative YAML with optional hooks, environment variables, file operations per repo
+**Template (Configuration Blueprint):**
+- Purpose: Reusable blueprint describing repos, hooks, env, files, ports, labels
+- Definition: `TemplateSchema` in `src/lib/config.ts`
+- Supports `includes` for composition (resolved by `src/lib/composition.ts`)
+- Pattern: Declarative YAML with 12 lifecycle hook events, env vars, file operations, port declarations, label inheritance
 
 **Workspace (Task Instance):**
-- Purpose: A task/ticket-scoped snapshot created from one or more stacks
-- Examples: `src/lib/config.ts` lines 80-92 define `WorkspaceSchema`
-- Pattern: Contains refs to stacks, repo clones/worktrees, branch name, hooks, per-repo hooks
+- Purpose: A task/ticket-scoped instance created from a template
+- Definition: `WorkspaceSchema` in `src/lib/config.ts`
+- Contains: branch name, repos list (each with mode/paths/hooks/files), hooks, settings, env, ports, labels, metadata (created, last_opened, description)
+- Pattern: Immutable once created except for: port allocation, last_opened, rename, label changes
 
 **Integration (Plugin Interface):**
-- Purpose: Pluggable artifact generator + launcher for IDE/terminals
-- Examples: `src/lib/integrations/vscode.ts`, `src/lib/integrations/intellij.ts`
-- Pattern: Implements `Integration` interface; registry pattern in `src/lib/integrations/index.ts`
+- Purpose: Pluggable artifact generator + launcher for IDE/terminal/window-manager/forge/issue tools
+- Definition: `Integration` interface in `src/lib/integrations/types.ts`
+- Key methods: `isEnabled()`, `applies?()`, `generate?()`, `open()`, `cleanup?()`, `commands?()`, `configurePrompt()`
+- Execution: Sorted by `order` field; runner passes `ArtifactBag` between integrations for cross-integration communication (e.g., niri reads vscode WindowArtifact)
+- Window detection: `WindowDetector` interface for post-open window ID resolution
+
+**SecretResolver (Pluggable Secret Backend):**
+- Purpose: Resolve secret references in env vars at workspace open time
+- Definition: `SecretResolver` interface in `src/lib/secrets.ts`
+- Pattern: `${{ resolver_id:path }}` syntax in env var values; resolvers registered in `RESOLVER_REGISTRY`; enabled list configured in `config.secrets.resolvers`
 
 **WorkspaceRepo (Repo Reference):**
 - Purpose: Represents a single repo within a workspace instance
-- Pattern: Tracks both main clone path and task worktree path; carries mode (trunk/worktree)
+- Definition: `WorkspaceRepoSchema` in `src/lib/config.ts`
+- Key fields: `repo` (registry name), `mode` (trunk/worktree), `main_path`, `task_path`, `base_branch`, `hooks`, `files`
+
+**ProgressCallback / Row-based Progress:**
+- Purpose: Streaming status updates from business logic to command layer or TUI
+- Pattern: `(message: string) => void` for simple operations; `(row: SyncRow | PushRow | PullRow) => void` for tabular progress displays
 
 ## Entry Points
 
 **CLI Entry:**
 - Location: `src/index.ts`
-- Triggers: Direct invocation via `bun run src/index.ts` or installed binary `git-stacks`
-- Responsibilities: Register all commands, parse argv, default to `manage` if no subcommand
+- Triggers: `bun run src/index.ts` or installed `git-stacks` binary
+- Responsibilities: Check git version, register all commands, default to `manage` if no subcommand
 
 **Main Commands:**
-- `git-stacks new [name]` — `src/commands/workspace.ts`, dispatches to `runWorkspaceNew()`
-- `git-stacks clone [source]` — dispatches to `runWorkspaceClone()`
-- `git-stacks open <name>` — calls `openWorkspace()` from `src/lib/workspace-ops.ts`
-- `git-stacks list` — lists all workspaces with optional status checks
-- `git-stacks manage` — SolidJS interactive dashboard (`src/tui/dashboard/App.tsx`)
-- `git-stacks stack new|init|edit|list` — stack management via `runStackNew()`, `runStackInit()`, `runStackEdit()`
-- `git-stacks config` — global config wizard
-- `git-stacks completion [bash|zsh|fish]` — shell completion generation
-- `git-stacks doctor` — health check and drift detection
+- `git-stacks new [name]` -- `src/commands/workspace.ts` -> `src/tui/workspace-wizard.ts`
+- `git-stacks clone [source]` -- `src/commands/workspace.ts` -> `src/tui/workspace-clone.ts`
+- `git-stacks open <name>` -- `src/commands/workspace.ts` -> `src/lib/workspace-ops.ts:openWorkspace()`
+- `git-stacks list` -- workspace listing with dirty/ahead/behind status, label filtering
+- `git-stacks status [name]` -- per-repo status with ahead/behind counts
+- `git-stacks sync <name>` -- fetch + rebase/merge with optional auto-stash
+- `git-stacks push <name>` -- parallel push across worktree repos
+- `git-stacks pull <name>` -- parallel pull --ff-only
+- `git-stacks close <name>` -- integration cleanup, close hooks
+- `git-stacks clean <name>` -- cascades through close, removes worktrees
+- `git-stacks remove <name>` -- cascades through clean, deletes YAML
+- `git-stacks merge <name>` -- cascades through clean, merges branches, deletes YAML
+- `git-stacks rename <old> <new>` -- re-register worktrees at new paths
+- `git-stacks manage` -- SolidJS interactive TUI dashboard
+- `git-stacks template new|init|edit|list|remove|rename|clone` -- template management
+- `git-stacks repo add|scan|list|remove` -- repo registry management
+- `git-stacks config [show]` -- global config wizard
+- `git-stacks doctor [--fix] [--json]` -- health check and drift detection
+- `git-stacks message send|list|clear` -- workspace notifications
+- `git-stacks install --hooks` -- agent framework hook installation
+- `git-stacks integration list|<id> config show|example` -- integration introspection
+- `git-stacks label add|remove|list|clear` -- workspace label management
+- `git-stacks completion [bash|zsh|fish]` -- shell completion generation
+- `git-stacks env <workspace>` -- print resolved env vars in multiple formats
+- `git-stacks edit <workspace>` -- open workspace YAML in editor
+- `git-stacks cd <workspace>` -- print workspace path for shell eval
+- `git-stacks paths <workspace>` -- print repo paths
+- `git-stacks run <workspace> <command>` -- run command in each repo
 
 **Interactive Dashboard Entry:**
 - Location: `src/tui/dashboard/run.tsx`
-- Triggers: `git-stacks manage` command
-- Responsibilities: Render TUI, dispatch workspace actions, show status
+- Triggers: `git-stacks manage` command (also default when no subcommand)
+- Responsibilities: Open IPC socket, render SolidJS TUI at 30fps on alternate screen
 
 ## Error Handling
 
-**Strategy:** Graceful degradation with informative error messages; failed hooks abort by default; integrations silently degrade if disabled or inapplicable.
+**Strategy:** Graceful degradation with informative errors. Failed hooks abort by default. Integrations silently degrade. All fallible operations return `{ ok: boolean; error?: string }` result objects.
 
 **Patterns:**
-
-- **Hook failures:** `runHooks()` in `src/lib/lifecycle.ts` aborts on non-zero exit (configurable via `abortOnFailure` param). Callers wrap in try/catch and return `{ ok: false, error: string }`.
-- **Git command failures:** `src/lib/git.ts` uses Bun's `.quiet().nothrow()` to suppress stderr/exit code, then manually check exit code. Rebase/merge failures trigger `.abort()` to clean up.
-- **Integration failures:** Integrations that fail to generate or open log errors but don't block workflow; workspace operations continue.
-- **Config validation:** Zod schema parsing in `readYaml()` throws on invalid YAML; callers handle with try/catch.
-- **File operations:** `applyFileOperations()` silently skips missing source files or symlink conflicts (see `src/lib/files.ts`).
-- **Missing repos:** Commands check for dirty worktrees and missing task_paths before operations; return user-friendly errors.
+- **Hook failures:** `runHooks()` in `src/lib/lifecycle.ts` throws on non-zero exit (configurable `abortOnFailure`). Callers wrap in try/catch, return `{ ok: false, error }`.
+- **Git command failures:** `src/lib/git.ts` uses `.quiet().nothrow()`, checks exit codes. Rebase/merge failures trigger `.abort()`. Push failures return categorized reasons (non-fast-forward, auth failed, network error, etc.).
+- **Secret resolution failures:** `resolveSecrets()` throws if resolver not found or resolution fails. `openWorkspace()` catches and returns `{ ok: false, error: "Secret resolution failed: ..." }`.
+- **Port allocation failures:** Returns `{ ok: false, error }` on conflict or exhaustion; lock timeout throws.
+- **Integration failures:** `runner.ts` cleanup errors are non-fatal (logged via `console.warn`, execution continues).
+- **Config validation:** Zod `.parse()` throws on invalid YAML; `.safeParse()` used for list operations (skip corrupt files with warning).
+- **File operations:** `applyEntry()` returns `ApplyResult` -- three-case logic: destination exists (skip), source missing (error), both valid (apply). Glob zero-matches emit warnings, not errors.
+- **Workspace not found:** All operations check existence first and return `{ ok: false, error }` rather than throwing.
 
 ## Cross-Cutting Concerns
 
-**Logging:** Console output via standard `console.log()` / `console.error()`. Commands and workspace-ops functions accept optional `onProgress` callback for streaming status messages. Dashboard uses SolidJS reactivity.
+**Logging:** Console output via `console.log()` / `console.error()`. Business logic accepts `onProgress` callbacks (simple string or typed row objects). Dashboard uses SolidJS reactivity. No logging framework.
 
-**Validation:** All YAML inputs validated at read time via Zod schemas (`src/lib/config.ts`). User inputs from TUI validated by prompt functions. Git commands validated by exit code checks.
+**Validation:** All YAML inputs validated at read time via Zod schemas. User CLI inputs validated with `NameSchema` regex (letters, digits, dots, hyphens, underscores). Label inputs validated with `LabelSchema`. Template names, workspace names both use `NameSchema`.
 
-**Authentication:** None — tools used (git, code, idea, etc.) handle their own auth. Global config and workspace YAML may store integration-specific settings (e.g., VS Code launch flags), stored in `globalConfig.integrations[id]`.
+**Environment Variables:**
+- Hooks receive: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_TRIGGERED_BY`, `GS_REPO_NAME`, `GS_REPO_PATH`, `GS_REPO_CLONE_PATH`
+- Plus: merged workspace `env` dict, resolved port values, resolved secrets
+- Special: `GS_MERGED_BRANCH` in post_merge hooks
 
-**Environment Variables:** Hooks receive injected env vars (`WS_WORKSPACE`, `WS_BRANCH`, `WS_TASKS_DIR`, `WS_REPO_NAME`, etc.) plus merged stack + workspace `env` dicts. Per-workspace env files written to `.env` at task_path if configured.
+**Secret Resolution:** Env var values matching `${{ resolver:path }}` are resolved via pluggable `SecretResolver` instances at workspace open time. Resolution is skipped with `--skip-secrets` flag.
+
+**Port Injection:** Workspace port declarations (from template or workspace YAML) are allocated at open time and injected into the hook environment as env vars.
+
+**Config Directory Override:** `GIT_STACKS_CONFIG_DIR` env var overrides `~/.config/git-stacks/` for test isolation.
+
+**Atomic Writes:** All YAML writes go through `writeYaml()` which writes to `.tmp` file, fsyncs, then renames (atomic on POSIX).
 
 ---
 
-*Architecture analysis: 2026-03-17*
+*Architecture analysis: 2026-04-04*

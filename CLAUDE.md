@@ -33,25 +33,40 @@ The global config is at `~/.config/git-stacks/config.yml`. The default `workspac
 src/
   index.ts              — commander entrypoint, registers all commands
   commands/
-    workspace.ts        — git-stacks new|clone|open|list|status|clean|remove|cd|merge|run|rename|sync commands
-    template.ts         — git-stacks template * subcommands (thin wrappers over tui/)
-    repo.ts             — git-stacks repo add|scan|list|remove — manage the repo registry
-    doctor.ts           — git-stacks doctor — health check and drift detection
-    config.ts           — git-stacks config [show] interactive config wizard
-    completion.ts       — git-stacks completion [bash|zsh|fish] shell completion output
+    workspace.ts        — new|clone|open|list|status|clean|close|remove|cd|merge|run|rename|sync|push|pull
+    template.ts         — template * subcommands (thin wrappers over tui/)
+    repo.ts             — repo add|scan|list|remove
+    doctor.ts           — health check and drift detection
+    config.ts           — config [show] interactive config wizard
+    completion.ts       — completion [bash|zsh|fish] shell completion output
+    install.ts          — install --hooks agent framework hook installation
+    integration.ts      — integration list|<id> config show|example
+    label.ts            — label add|remove|list|clear
+    message.ts          — message send|list|clear
   lib/
-    config.ts           — Zod schemas + YAML read/write for stacks, workspaces, global config
+    config.ts           — Zod schemas + YAML read/write for templates, workspaces, global config
     paths.ts            — all path constants and helpers (single source of truth)
-    git.ts              — git worktree operations via Bun's `$` shell
-    workspace-ops.ts    — core business logic: open, clean, remove, merge, rename, sync
-    lifecycle.ts        — runHooks() — executes hook arrays via Bun.spawn with inherited stdio
+    git.ts              — git worktree/branch/merge/push/pull/ahead-behind via Bun `$` shell
+    workspace-ops.ts    — core business logic: open, close, clean, remove, merge, rename, sync, push, pull
+    lifecycle.ts        — runHooks() / runHooksCaptured() — shell hook execution
+    composition.ts      — template includes: recursive merge with circular dependency detection
     files.ts            — file copy/symlink operations from templates
     detect.ts           — repo type detection and directory scanning
+    secrets.ts          — pluggable secret resolution (${{ resolver:path }} syntax)
+    ports.ts            — file-locked port allocation across workspaces
+    messages.ts         — JSONL notifications + Unix socket IPC to TUI dashboard
+    labels.ts           — workspace label matching
+    env.ts              — env var formatting (table, shell, dotenv, json)
+    concurrency.ts      — mapLimited() async concurrency limiter
     completion-generator.ts — auto-generates bash/zsh/fish completions from commander.js tree
-    vscode.ts / intellij.ts / cmux.ts / tmux.ts — IDE/terminal artifact generators
+    agent-hooks/        — CI-agent hook generators (Claude Code, Copilot)
     integrations/
       types.ts          — Integration interface, IntegrationContext, resolveEnabled helpers
-      vscode.ts / intellij.ts / cmux.ts / tmux.ts — integration plugins
+      runner.ts         — orchestrates generate -> open -> window detection across integrations
+      vscode.ts / intellij.ts / cmux.ts / tmux.ts / niri.ts / aerospace.ts — IDE/terminal/WM plugins
+      github.ts / gitlab.ts / gitea.ts — forge plugins
+      jira.ts           — issue tracker plugin
+      forge-utils.ts / issue-utils.ts / wizard-helpers.ts — shared helpers
       index.ts          — registry: `export const integrations = [...]`
   tui/
     template-wizard.ts  — interactive prompts for `template new` and `template edit`
@@ -59,7 +74,7 @@ src/
     workspace-wizard.ts — interactive prompts for `git-stacks new`
     workspace-clone.ts  — interactive prompts for `git-stacks clone`
     utils.ts            — safeText() wrapper normalising @clack/prompts empty-string quirk
-    dashboard/          — interactive TUI for `git-stacks manage` (SolidJS-based)
+    dashboard/          — interactive TUI for `git-stacks manage` (SolidJS + OpenTUI)
 tests/
   helpers.ts            — makeTmpDir/cleanup/touch/write filesystem helpers
   lib/                  — unit tests (bun:test, Jest-compatible API)
@@ -67,14 +82,18 @@ tests/
 
 ### Key patterns
 
-- All YAML I/O goes through `src/lib/config.ts`; schemas are Zod-validated on read.
+- All YAML I/O goes through `src/lib/config.ts`; schemas are Zod-validated on read. Atomic writes via tmp+fsync+rename.
+- Workspace/template lookups scan all YAML files and match by `name` field, not filename (handles filename drift).
 - I/O tests redirect `process.env.HOME` before dynamically importing config to isolate the config directory.
 - `src/tui/utils.ts:safeText` must be used instead of `p.text` directly because `@clack/prompts` returns `undefined` (not `""`) on empty input.
 - **Repo registry is the source of truth for repo paths**: Templates reference repos by `name` (registry key), not by path. `WorkspaceRepo.repo` stores the registry name; `main_path` and `task_path` are resolved at workspace creation time.
-- **Integration plugin system**: `git-stacks open` and `git-stacks new` loop over `integrations` from `src/lib/integrations/index.ts`. To add a new integration: create `src/lib/integrations/my-tool.ts` implementing `Integration`, register it in `index.ts`. No other files need to change.
+- **Integration plugin system**: `src/lib/integrations/runner.ts` sorts by `order`, checks `applies()` and `isEnabled()`, then calls `generate()` then `open()`. Passes `ArtifactBag` between integrations for cross-integration communication. To add a new integration: create the plugin implementing `Integration`, register it in `index.ts`.
 - Each integration stores its config under `globalConfig.integrations[id]` (a `Record<string, unknown>`) and parses it internally with its own Zod schema.
 - Per-workspace overrides: add `settings.integrations.<id>.enabled: false` to the workspace YAML.
-- IntelliJ integration's `applies()` returns false when no Java repos are present — it is skipped entirely rather than generating empty artifacts.
+- **Subprocess testing**: Modules that spawn subprocesses export a mutable `_exec` object. Tests replace `_exec.spawn` with a mock to verify call shapes without executing real processes. Object property is mutable even in ESM (unlike named exports).
+- **Workspace lifecycle cascading**: `remove` calls `clean` which calls `close` internally. `merge` also cascades through `clean` then `close`.
+- **Secret resolution**: `${{ resolver_id:path }}` syntax in env var values. Three built-in resolvers: keychain (macOS/Linux), env, cmd. Resolvers registered in `RESOLVER_REGISTRY`; enabled list in `config.secrets.resolvers`.
+- **Error handling**: Git ops use `.quiet().nothrow()` + exit code checks, returning discriminated unions `{ ok: true } | { ok: false; error: string }`. Never throw for expected failures. `runHooks()` throws on non-zero exit when `abortOnFailure=true`.
 
 ### Dashboard TUI input rules
 
@@ -87,15 +106,11 @@ tests/
 
 Templates and workspaces define hook arrays (shell commands executed in order by `runHooks()` in `lifecycle.ts`):
 
-- Template hooks: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_remove`, `post_merge`
-- Workspace hooks: `pre_create`, `post_create`, `pre_open`, `post_open`, `post_merge`, `pre_remove`
+- Template hooks: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_close`, `post_close`, `pre_remove`, `post_merge`
+- Workspace hooks: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_close`, `post_close`, `post_merge`, `pre_remove`
 - Per-repo hooks (within workspace YAML): `pre_open`
 
 Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path; `workspace-ops.ts` calls `mergeEnv()` to combine them and `writeEnvFiles()` to write merged env to each repo at the configured path.
-
-### Shell completion auto-generation
-
-`completion-generator.ts` walks the commander.js program tree and generates shell-specific completion functions (bash case statements, zsh `_arguments`, fish `complete`). Dynamic completions (workspace/template names) are resolved from the filesystem at completion time.
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
@@ -117,233 +132,46 @@ Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE
 <!-- GSD:stack-start source:codebase/STACK.md -->
 ## Technology Stack
 
-## Languages
-- TypeScript 5.9.3 - Used throughout codebase (CLI, TUI, libraries)
-- JSX/TSX - React-like syntax for SolidJS components in TUI dashboard
-- Bash/Shell - Used in hooks system and git operations via `$` shell
-## Runtime
-- Bun (latest) - JavaScript runtime and package manager
-- Node.js ES modules - via Bun's native ESM support
-- Bun - Provides `bun` CLI and acts as package manager
-- Lockfile: `bun.lock` (generated from package.json)
-## Frameworks
-- Commander.js 12.1.0 - CLI command framework and argument parsing
-- Zod 3.25.76 - Type-safe schema validation for config files (YAML)
-- yaml 2.8.2 - YAML parsing and serialization for config management
-- SolidJS 1.9.11 - Reactive component framework for interactive TUI dashboard
-- @opentui/core 0.1.96 - Core TUI component library (cross-platform terminal UI)
-- @opentui/solid 0.1.96 - SolidJS bindings for OpenTUI components
-- opentui-spinner 0.0.6 - Animated spinners in CLI output
-- @clack/prompts 0.9.1 - Beautiful CLI interactive prompts and selections
-## Key Dependencies
-- Zod - Runtime schema validation; all YAML config (stacks, workspaces, global config) is validated against Zod schemas on read
-- Commander.js - Entire CLI command tree structure; dynamically introspected for shell completion generation
-- yaml - Reads/writes YAML config files stored at `~/.config/git-stacks/`
-- SolidJS + OpenTUI - Interactive dashboard (`git-stacks manage`) for workspace management
-- @types/bun - Type definitions for Bun APIs (fs, spawn, $)
-- Bun's native `$` shell - All git operations and hook execution via shell subprocess
-- Bun's `spawn()` API - Hook execution with inherited stdio and environment
-## Configuration
-- No .env files used
-- Configuration sourced from YAML files in `~/.config/git-stacks/`:
-- `tsconfig.json`:
-- `bunfig.toml`:
-## Platform Requirements
-- Bun (latest) - Required for running source directly, testing, and publishing
-- TypeScript 5.9.3 - Dev dependency for type checking (`bun run typecheck`)
-- Git 2.24+ (for worktree support)
-- Bun runtime - Binary distribution via npm (`git-stacks` command)
-- Git 2.24+ - For `git worktree` operations
-- Supported shells: bash, zsh, fish (completion output)
-- IDE/terminal integrations:
-## Entry Points
-- `src/index.ts` - Bun shebang entrypoint; registers all commands with Commander.js
-- Published as `git-stacks` bin in package.json
-- `src/tui/dashboard/run.tsx` - SolidJS app entry; renders via @opentui/solid
-- Invoked by `git-stacks manage` command
+- **Runtime**: Bun (latest) — executes TypeScript directly, no build step
+- **CLI**: Commander.js ^14.0.3 — command tree + shell completion introspection
+- **Validation**: Zod ^4.3.6 — all YAML config validated on read
+- **YAML**: yaml ^2.8.3 — all config I/O
+- **TUI**: SolidJS ^1.9.12 + @opentui/core ^0.1.96 + @opentui/solid ^0.1.96
+- **Prompts**: @clack/prompts ^1.2.0 (use `safeText()` wrapper)
+- **TypeScript**: ^6.0.2 (type-check only via `tsc --noEmit`)
+- **Test**: bun:test + custom runner (`scripts/test-runner.ts`) for mock isolation
+- **Shell tools**: git >=2.24, plus optional: code, idea, tmux, cmux, niri, aerospace, gh, glab, tea, jira, secret-tool/security
 <!-- GSD:stack-end -->
 
 <!-- GSD:conventions-start source:CONVENTIONS.md -->
 ## Conventions
 
-## Naming Patterns
-- Kebab-case for all files (e.g., `workspace-ops.ts`, `stack-wizard.ts`, `completion-generator.ts`)
-- Test files follow pattern: `{name}.test.ts` (e.g., `detect.test.ts`, `config.test.ts`)
-- Helper/utility files: `utils.ts` (e.g., `src/tui/utils.ts`, `tests/helpers.ts`)
-- No `.d.ts` files — types are colocated with implementation
-- Camel case for all function names
-- Prefix with verb for clarity:
-- Camel case (e.g., `dirtyRepos`, `repoPath`, `taskPath`)
-- Descriptive names with context:
-- Destructure when unpacking YAML objects: `const { name, path, type } = repo`
-- Plural for arrays: `workspaces`, `repos`, `commands`, `dirtyRepos`, `issues`
-- PascalCase for all type/interface names: `Workspace`, `Stack`, `RepoType`, `Integration`, `WorkspaceListInfo`
-- Schema types use suffix `Schema`: `StackSchema`, `WorkspaceSchema`, `StackRepoSchema`
-- Infer types from schemas: `export type Stack = z.infer<typeof StackSchema>`
-- Use `type` not `interface` for simple data structures, `interface` for contracts (e.g., `Integration`)
-- Prefix optional fields with descriptive names: `cmux_workspace_id`, `env_file`, `task_path` (never just `id`)
-- UPPER_SNAKE_CASE for paths and configuration constants:
-- Located in `src/lib/paths.ts` as single source of truth
-## Code Style
-- No explicit formatter configured (Bun runs TypeScript directly)
-- Implicit style observed:
-- No ESLint/Biome config present
-- TypeScript strict mode enforced:
-- Always export types alongside implementations: `export type Workspace = z.infer<typeof WorkspaceSchema>`
-- Zod schemas are single source of truth for YAML shape
-- No `any` — use type parameters or explicit unions instead
-- Structural typing used in config I/O: `schema.parse(data)` pattern
-## Import Organization
-- `@/*` resolves to `./src/*` (configured in `tsconfig.json`) — **test-only**; do NOT use in `src/` production code (the alias is not available in the published npm package since Bun does not resolve tsconfig paths from within `node_modules`)
-- Used in tests only: `import type { X } from "@/tui/utils"` (type imports are erased at compile time)
-- Import named exports: `import { readStack, writeStack } from "./config"`
-- Never use wildcard imports: no `import * as config from "./config"`
-- Group by functionality: all git functions together, all config functions together
-## Error Handling
-- Bun shell (`$`) operations use `.quiet().nothrow()` to suppress stderr and return exit codes:
-- Zod parsing with `.parse()` throws on invalid schema — only used for trusted YAML files
-- Try-catch in narrow scopes, not around entire functions:
-- Catch errors silently when expected (e.g., file operations on potentially missing files)
-- Throw with descriptive messages including context: `throw new Error(\`Hook failed (exit ${exitCode}): ${cmd}\`)`
-- Use discriminated unions for fallible operations:
-- Never return `null` for operations that may fail — use union with error info
-- Use `.nothrow()` and check `.exitCode` rather than catching shell errors
-- Long-running operations (rebase, merge) auto-abort on failure: `git rebase --abort`, `git merge --abort`
-- Return error in result object rather than throwing
-## Logging
-- `console.log()` for normal output
-- `console.error()` for errors and warnings
-- Prefix output with indentation for nested context: `console.log(\`  ${msg}\`)`
-- Pass callback for progress: `openWorkspace(name, opts, (msg) => console.log(\`  ${msg}\`))`
-- Format tables manually with `.padEnd()` for alignment
-- Shell output inherited directly from spawned processes in lifecycle.ts
-## Comments
-- Section dividers using visual markers: `// --- Schemas ---`, `// --- Helpers ---`
-- Edge cases and workarounds: "Use structural typing to avoid Zod's internal generic complexity"
-- Why something non-obvious: "Branch from current HEAD of the main clone, not a fixed base branch"
-- Known limitations: `@clack/prompts p.text returns undefined (not "") on empty input`
-- Sparse — only on public interfaces and complex types
-- Used in integration system: `/** Unique key — used as the key in config.integrations */`
-- Document callback and return types for integration hooks
-- No auto-generated docs
-- Single `//` on same line explaining non-obvious parameters
-- No block comments (`/* */`) except JSDoc
-## Function Design
-- Max 3-4 positional params; use destructuring for objects with >2 fields
-- Options objects for CLI: `{ force: boolean; gone: boolean }`
-- Callbacks for progress: `ProgressCallback = (message: string) => void`
-- Explicit return type annotations always present on exported functions
-- Use union types for fallible: `{ ok: true } | { ok: false; error: string }`
-- Return null only when "not found" is expected, never for errors
-- Async functions always return `Promise<T>`
-## Module Design
-- Separate `lib/` (reusable) from `commands/` (CLI) from `tui/` (interaction)
-- Export all public functions and types
-- Export types alongside: `export type Stack = z.infer<typeof StackSchema>`
-- All paths: `src/lib/paths.ts`
-- All schemas: `src/lib/config.ts`
-- All integrations: `src/lib/integrations/index.ts`
-- All git ops: `src/lib/git.ts`
-- `src/lib/integrations/index.ts` exports all integrations and types
-- `src/index.ts` is CLI entry point, not a barrel
-## Structural Patterns
-- `readYaml(path, schema)` — parses with Zod
-- `writeYaml(path, data)` — stringifies
-- Create `read*` and `write*` functions for each entity
-- Ensure directory exists before writing
-- `id` — unique config key
-- `applies?(workspace)` — optional filter
-- `isEnabled(ctx)` — resolve config
-- `generate?(ctx)` — return path or null
-- `open(ctx, path)` — launch tool
-- Register only in `src/lib/integrations/index.ts`
-- Shell operations: `.catch()`, map to error result
-- YAML parsing: let Zod throw (data trusted)
-- File I/O: try-catch around copy/symlink (expected to fail sometimes)
+- Kebab-case files, camelCase functions (verb-prefixed), PascalCase types, UPPER_SNAKE_CASE path constants
+- Schema types use `Schema` suffix; infer types via `z.infer<typeof Schema>`
+- `type` for data structures, `interface` for contracts (e.g., `Integration`, `WindowDetector`, `SecretResolver`)
+- Named exports only (no wildcards); `@/*` alias is test-only, production uses relative imports
+- Discriminated unions `{ ok: true } | { ok: false; error: string }` for fallible ops; `null` only for "not found"
+- Paired `read*`/`write*` functions for each entity; atomic writes (tmp+fsync+rename)
+- Modules with subprocesses export mutable `_exec` object for test injection
+- `@clack/prompts` wrapped in mutable `prompts` object in `src/tui/utils.ts` for testability
+- No barrel files except `src/lib/integrations/index.ts`
 <!-- GSD:conventions-end -->
 
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
-## Pattern Overview
-- YAML-based declarative configuration with Zod validation
-- Multi-layer abstraction: config → workspace ops → commands → CLI
-- Integration plugin architecture for IDE/terminal spawning
-- Hook system for extensible lifecycle events
-- Bun runtime with native shell scripting via `$` API
-## Layers
-- Purpose: Parse user input, dispatch to business logic, format output
-- Location: `src/commands/` and `src/index.ts`
-- Contains: Commander.js command definitions, option parsing, user-facing output
-- Depends on: Workspace ops, config I/O, TUI components
-- Used by: User shell invocations (git-stacks CLI)
-- Purpose: Core domain operations (workspace lifecycle, sync, merge, status checks)
-- Location: `src/lib/workspace-ops.ts`, `src/lib/git.ts`
-- Contains: Open, clean, remove, merge, rename, sync functions; git worktree management
-- Depends on: Git shell operations, config I/O, lifecycle hooks, integrations
-- Used by: Command layer, TUI layer
-- Purpose: Validate, read, write YAML configs (stacks, workspaces, global settings)
-- Location: `src/lib/config.ts`
-- Contains: Zod schemas for Stack, Workspace, GlobalConfig; YAML read/write functions
-- Depends on: Zod, yaml library, file system
-- Used by: All layers (schema source of truth)
-- Purpose: Pluggable generation and launching of IDE/terminal artifacts
-- Location: `src/lib/integrations/`
-- Contains: Integration interface, plugin registry, plugin implementations (vscode, intellij, cmux, tmux)
-- Depends on: Config, workspace data, file system
-- Used by: Workspace ops during `open` operation
-- Purpose: Interactive prompts and dashboard for user-guided workflows
-- Location: `src/tui/` and `src/tui/dashboard/`
-- Contains: Stack/workspace wizards, SolidJS dashboard, prompt utilities
-- Depends on: Clack prompts, config I/O, lifecycle, file operations, integration registry
-- Used by: Commands (`new`, `clone`, `manage`, `config`)
-- Purpose: Single source of truth for all filesystem paths
-- Location: `src/lib/paths.ts`
-- Contains: Path constants and helper functions
-- Depends on: Nothing (pure path computation)
-- Used by: All layers requiring filesystem locations
-## Data Flow
-- Workspace state: Persisted as YAML files at `~/.config/git-stacks/workspaces/{name}.yml`
-- Stack definitions: Stored as YAML at `~/.config/git-stacks/stacks/{name}.yml`
-- Global config: Stored at `~/.config/git-stacks/config.yml` (workspace_root, integration settings)
-- Worktree state: Managed by git itself; directories tracked at `{workspace_root}/tasks/{workspace_name}/{repo_name}`
-- No runtime-only state; all critical state is persisted to disk
-## Key Abstractions
-- Purpose: Reusable template describing a set of git repos with metadata
-- Examples: `src/lib/config.ts` lines 42-50 define `StackSchema`
-- Pattern: Declarative YAML with optional hooks, environment variables, file operations per repo
-- Purpose: A task/ticket-scoped snapshot created from one or more stacks
-- Examples: `src/lib/config.ts` lines 80-92 define `WorkspaceSchema`
-- Pattern: Contains refs to stacks, repo clones/worktrees, branch name, hooks, per-repo hooks
-- Purpose: Pluggable artifact generator + launcher for IDE/terminals
-- Examples: `src/lib/integrations/vscode.ts`, `src/lib/integrations/intellij.ts`
-- Pattern: Implements `Integration` interface; registry pattern in `src/lib/integrations/index.ts`
-- Purpose: Represents a single repo within a workspace instance
-- Pattern: Tracks both main clone path and task worktree path; carries mode (trunk/worktree)
-## Entry Points
-- Location: `src/index.ts`
-- Triggers: Direct invocation via `bun run src/index.ts` or installed binary `git-stacks`
-- Responsibilities: Register all commands, parse argv, default to `manage` if no subcommand
-- `git-stacks new [name]` — `src/commands/workspace.ts`, dispatches to `runWorkspaceNew()`
-- `git-stacks clone [source]` — dispatches to `runWorkspaceClone()`
-- `git-stacks open <name>` — calls `openWorkspace()` from `src/lib/workspace-ops.ts`
-- `git-stacks list` — lists all workspaces with optional status checks
-- `git-stacks manage` — SolidJS interactive dashboard (`src/tui/dashboard/App.tsx`)
-- `git-stacks stack new|init|edit|list` — stack management via `runStackNew()`, `runStackInit()`, `runStackEdit()`
-- `git-stacks config` — global config wizard
-- `git-stacks completion [bash|zsh|fish]` — shell completion generation
-- `git-stacks doctor` — health check and drift detection
-- Location: `src/tui/dashboard/run.tsx`
-- Triggers: `git-stacks manage` command
-- Responsibilities: Render TUI, dispatch workspace actions, show status
-## Error Handling
-- **Hook failures:** `runHooks()` in `src/lib/lifecycle.ts` aborts on non-zero exit (configurable via `abortOnFailure` param). Callers wrap in try/catch and return `{ ok: false, error: string }`.
-- **Git command failures:** `src/lib/git.ts` uses Bun's `.quiet().nothrow()` to suppress stderr/exit code, then manually check exit code. Rebase/merge failures trigger `.abort()` to clean up.
-- **Integration failures:** Integrations that fail to generate or open log errors but don't block workflow; workspace operations continue.
-- **Config validation:** Zod schema parsing in `readYaml()` throws on invalid YAML; callers handle with try/catch.
-- **File operations:** `applyFileOperations()` silently skips missing source files or symlink conflicts (see `src/lib/files.ts`).
-- **Missing repos:** Commands check for dirty worktrees and missing task_paths before operations; return user-friendly errors.
-## Cross-Cutting Concerns
+Layers: `commands/` (CLI parsing) -> `lib/workspace-ops.ts` (business logic) -> `lib/config.ts` (YAML I/O) + `lib/git.ts` (git ops). TUI in `tui/` (wizards + SolidJS dashboard). All paths from `lib/paths.ts`.
+
+Key subsystems beyond core workspace lifecycle:
+- **Integrations** (`lib/integrations/`): 10 plugins (vscode, intellij, cmux, tmux, niri, aerospace, github, gitlab, gitea, jira) orchestrated by `runner.ts`
+- **Composition** (`lib/composition.ts`): Template `includes` with recursive merge, circular dependency detection
+- **Secrets** (`lib/secrets.ts`): `${{ resolver:path }}` env var resolution via pluggable resolvers (keychain, env, cmd)
+- **Ports** (`lib/ports.ts`): File-locked contiguous port allocation across workspaces
+- **Messages** (`lib/messages.ts`): JSONL per-workspace notifications + Unix socket IPC to running TUI
+- **Agent hooks** (`lib/agent-hooks/`): Generate CI-style hooks for Claude Code and Copilot into workspace repos
+- **Labels** (`lib/labels.ts`): Workspace categorization and filtering
+
+All state persisted to disk as YAML/JSONL at `~/.config/git-stacks/`. No runtime-only state.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->

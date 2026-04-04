@@ -1,228 +1,475 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-03-17
+**Analysis Date:** 2026-04-04
 
 ## Test Framework
 
 **Runner:**
-- Bun's built-in `bun:test`
-- Config: None — uses defaults
-- Jest-compatible API
+- bun:test (Bun's built-in test runner, Jest-compatible API)
+- Config: `bunfig.toml` -- preloads `@opentui/solid/preload` for JSX support
+- TypeScript executed directly by Bun (no compilation step)
 
 **Assertion Library:**
-- Bun's built-in assertions (Jest-like)
-- Methods: `expect().toBe()`, `expect().toEqual()`, `expect().toContain()`, `expect().toHaveLength()`, etc.
+- bun:test built-in `expect()` (Jest-compatible matchers)
+- `expect(x).toBe(y)`, `expect(x).toEqual(y)`, `expect(x).toThrow()`, `expect(x).toContain(y)`
+- `expect(x).toMatch(/regex/)` for pattern matching
+- `expect(frame).toMatchSnapshot()` for TUI snapshot tests
+- `expect(fn).toHaveBeenCalled()`, `expect(fn).not.toHaveBeenCalled()` for mock assertions
 
 **Run Commands:**
 ```bash
-bun test tests/                         # Run all tests
-bun test tests/lib/detect.test.ts       # Run single file
+bun run test              # Run all tests (custom runner, isolated processes)
+bun run test:unit         # Run unit tests only (shared process)
+bun run test:integ        # Run integration tests only (per-file isolation)
+bun test tests/lib/detect.test.ts   # Run a single test file directly
+bun run typecheck         # Type-check without emitting (tsc --noEmit)
 ```
 
-No watch mode or coverage tool configured.
+## Test Runner
 
-## Test File Organization
+**Custom Runner: `scripts/test-runner.ts`**
 
-**Location:**
-- Tests in `tests/lib/` mirror source structure: `src/lib/X.ts` → `tests/lib/X.test.ts`
-- Helper utilities in `tests/helpers.ts` — filesystem helpers for all tests
-- Test fixtures defined inline in test files or via factory functions
+The project uses a custom test runner because `bun:test`'s `mock.module()` is process-global -- mocks from one test file contaminate other files in the same process. The runner solves this by classifying tests into two groups:
 
-**Naming:**
-- Suffix: `.test.ts` (e.g., `detect.test.ts`, `config.test.ts`, `completion-generator.test.ts`)
-- Test count: ~81 test cases across 5 test files (mainly unit tests for lib/)
-- No E2E or integration tests
+**Unit tests** (shared Bun process, run in parallel):
+- `tests/lib/*.test.ts` -- only files that do NOT use `mock.module()`
+- `tests/tui/dashboard/*.test.tsx` -- only non-`integ-` files without `mock.module()`
 
-**File Structure:**
+**Integration tests** (each file gets its own Bun process):
+- `tests/commands/*.test.ts` -- always isolated
+- `tests/tui/*.test.ts` (direct children of tui/, not subdirs) -- always isolated
+- `tests/tui/dashboard/integ-*.test.tsx` -- always isolated
+- `tests/lib/*.test.ts` files that contain `mock.module(` -- automatically detected and isolated
+
+**Classification Logic (in `scripts/test-runner.ts`):**
+```typescript
+function fileUsesMockModule(filePath: string): boolean {
+  const content = require("fs").readFileSync(filePath, "utf8") as string
+  return content.includes("mock.module(")
+}
+```
+Files in `tests/lib/` are scanned for `mock.module(` -- if present, they run in isolation. This is detected at runtime, not configured manually.
+
+**CRITICAL: Never run `bun test tests/` directly** -- it runs all test files in a shared process where `mock.module()` calls pollute each other, producing false failures.
+
+## Test Organization
+
+**File Layout:**
 ```
 tests/
-├── helpers.ts                 # makeTmpDir, cleanup, mkdir, touch, write
-└── lib/
-    ├── detect.test.ts         # detectRepoType, scanForRepos
-    ├── config.test.ts         # Schema parsing + I/O round-trip
-    ├── vscode.test.ts         # generateCodeWorkspace
-    ├── intellij.test.ts        # generateIntellijProject
-    └── completion-generator.test.ts  # Shell completion generation
+  helpers.ts                         # Shared test utilities and mock factories
+  lib/                               # Unit tests for src/lib/
+    config.test.ts
+    git.test.ts
+    lifecycle.test.ts
+    workspace-ops.test.ts
+    secrets.test.ts
+    composition.test.ts
+    concurrency-limiter.test.ts
+    ports.test.ts
+    env.test.ts
+    labels.test.ts
+    detect.test.ts
+    files.test.ts
+    version.test.ts
+    ...
+    integrations/                    # Unit tests for integration plugins
+      runner.test.ts
+      forge-utils.test.ts
+      github.test.ts
+      gitlab.test.ts
+      gitea.test.ts
+      jira.test.ts
+      tmux.test.ts
+      niri.test.ts
+      ...
+  commands/                          # Integration tests for CLI commands
+    doctor-fix.test.ts
+    doctor-json.test.ts
+    label.test.ts
+    list-columns.test.ts
+    run-parallel.test.ts
+    status-json.test.ts
+    sync-json.test.ts
+    workspace-edit.test.ts
+    env.test.ts
+  tui/
+    workspace-wizard.test.ts         # Integration test for wizard prompts
+    messageUtils.test.ts             # Integration test for message utilities
+    dashboard/
+      ActionMenu.test.tsx            # Unit test for TUI components
+      FilterIndicator.test.tsx
+      InlineInput.test.tsx
+      WorkspaceDetail.test.tsx
+      WizardView.test.tsx
+      ...
+      integ-action-menu.test.tsx     # Integration tests (isolated process)
+      integ-tab-switching.test.tsx
+      integ-sync-progress.test.tsx
+      integ-wizard.test.tsx
+      snapshots/                     # Snapshot tests for TUI components
+        BatchBar.snap.test.tsx
+        CenteredDialog.snap.test.tsx
+        StatusIndicator.snap.test.tsx
+        WorkspaceRow.snap.test.tsx
+        __snapshots__/               # Auto-generated snapshot files
 ```
+
+**Naming:**
+- Test files mirror source file names: `src/lib/detect.ts` -> `tests/lib/detect.test.ts`
+- Integration test prefix: `integ-*.test.tsx` for dashboard tests needing process isolation
+- Snapshot test suffix: `*.snap.test.tsx`
 
 ## Test Structure
 
 **Suite Organization:**
 ```typescript
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, afterAll, mock } from "bun:test"
+import { makeTmpDir, cleanup, useIsolatedConfig } from "../helpers"
 
-describe("detectRepoType", () => {
-  test("detects java from pom.xml", () => {
-    touch(tmp, "repo/pom.xml")
-    expect(detectRepoType(join(tmp, "repo"))).toBe("java")
-  })
-})
-```
+const isolated = useIsolatedConfig("my-test")
 
-**Patterns:**
-- `describe()` groups related tests by function/feature
-- `test()` for individual assertions
-- `beforeEach()` / `afterEach()` for setup/cleanup
-- Each test is self-contained; state not shared between tests
+describe("ComponentName", () => {
+  let tmp: string
 
-**Lifecycle:**
-- `beforeEach`: `tmp = makeTmpDir("prefix")` — isolate each test with unique temp dir
-- Test body: Create fixtures, run function under test, assert result
-- `afterEach`: `cleanup(tmp)` — recursive delete temp directory
-
-## Mocking
-
-**Framework:** No mocking library (Bun doesn't require one for file I/O)
-
-**Patterns:**
-- Redirect `process.env.HOME` to temp directory for config tests:
-  ```typescript
-  beforeEach(() => { tmp = makeTmpDir("config") })
+  beforeEach(() => { tmp = makeTmpDir("my-test") })
   afterEach(() => cleanup(tmp))
 
-  test("writeStack + readStack round-trips correctly", async () => {
-    process.env.HOME = tmp
-    const { writeStack, readStack } = await import("../../src/lib/config")
-    // ... test code ...
+  test("does something specific", () => {
+    // arrange
+    const data = SomeSchema.parse({ name: "test", ... })
+    // act
+    const result = someFunction(data)
+    // assert
+    expect(result).toBe(expected)
   })
-  ```
-- This works because config path constants are evaluated at import time
+})
 
-**What to Mock:**
-- File system (via makeTmpDir) — tests create real temp files/dirs
-- `process.env.HOME` — redirect config directory
-- Shell commands not mocked — full Bun `$` integration tested
+afterAll(() => isolated.cleanup())
+```
 
-**What NOT to Mock:**
-- Git operations — tests assume `git` available in environment
-- File I/O — tests use real temporary directories
-- External APIs — none called in lib code (integrations configure them but don't call at test time)
+**Patterns:**
+- `describe` blocks group related tests by feature or function
+- Nested `describe` for sub-categories
+- `test()` (not `it()`) is the primary test function -- though `it()` also appears in `concurrency-limiter.test.ts`
+- `beforeEach` / `afterEach` for per-test setup/teardown (temp dirs, mock resets)
+- `afterAll` for cleanup of shared resources (isolated config dirs)
 
-## Fixtures and Factories
+## Mocking Patterns
 
-**Test Data:**
-Factory functions create test objects:
+**`mock.module()` for Module-Level Mocking:**
 ```typescript
-// In detect.test.ts
-function makeTmpDir(prefix = "ws-test"): string {
-  const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-  mkdirSync(dir, { recursive: true })
-  return dir
-}
+import { mock } from "bun:test"
 
-// In vscode.test.ts
-function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
+// Mock BEFORE importing the module under test
+mock.module("@/lib/config", () => makeConfigMock({
+  listWorkspaces: mock(() => myWorkspaces),
+}))
+
+// Dynamic import AFTER mock is set up
+const { someFunction } = await import("@/lib/some-module")
+```
+- Process-global scope -- persists for the entire test file
+- Files using `mock.module()` automatically run in isolated processes (detected by the custom runner)
+- Must be called before importing the module that consumes the mocked dependency
+- Use dynamic `await import()` after `mock.module()` to get the patched version
+
+**`useIsolatedConfig()` for Config Isolation (`tests/helpers.ts`):**
+```typescript
+const isolated = useIsolatedConfig("my-test-prefix")
+
+// All config reads/writes now go to /tmp/my-test-prefix-{random}/
+// Sets up: workspaces/, templates/, messages/ directories
+// Mocks @/lib/paths with temp paths
+
+afterAll(() => isolated.cleanup())
+```
+- Creates a temp directory structure mirroring `~/.config/git-stacks/`
+- Calls `mock.module("@/lib/paths", ...)` internally to redirect all path constants
+- Returns `{ configDir, cleanup }` -- caller must call `cleanup()` in `afterAll`
+- Because `paths.ts` constants are evaluated at import time, modules that import paths must be dynamically imported after calling `useIsolatedConfig()`
+
+**`_exec` Injectable Replacement (lifecycle, tmux, niri, etc.):**
+```typescript
+let originalSpawn: typeof _exec.spawn
+
+beforeEach(() => {
+  originalSpawn = _exec.spawn
+  _exec.spawn = mockSpawn as any
+})
+
+afterEach(() => {
+  _exec.spawn = originalSpawn
+})
+```
+- Replace the mutable `_exec.spawn` property to intercept subprocess calls
+- Always restore original in `afterEach` to avoid test pollution
+- Verify call shapes (cmd, cwd, env, stdio mode) without executing real processes
+
+**Real Module Captures (`tests/helpers.ts`):**
+```typescript
+// Captured at helpers.ts load time, BEFORE any mock.module calls
+export const {
+  runHooks: realRunHooks,
+  runHooksCaptured: realRunHooksCaptured,
+  _exec: lifecycleRealExec,
+} = await import("@/lib/lifecycle") as any
+
+export const {
+  writeWorkspace: realWriteWorkspace,
+  readWorkspace: realReadWorkspace,
+  // ...
+} = await import("@/lib/config") as any
+```
+- Destructured named exports are STABLE references -- not updated when `mock.module` replaces the module later
+- Allows test files that need real implementations to use `realWriteWorkspace` etc. even after other test files have mocked those modules
+- Import with renaming convention: `real{FunctionName}`
+
+**Mock Factory Helpers (`tests/helpers.ts`):**
+- `makeConfigMock(overrides)` -- Complete mock of `src/lib/config.ts` with all schemas and functions
+- `makeWorkspaceOpsMock(overrides)` -- Complete mock of `src/lib/workspace-ops.ts`
+- `makeGitMock(overrides)` -- Complete mock of `src/lib/git.ts`
+- `makePathsMock(overrides)` -- Complete mock of `src/lib/paths.ts`
+- `makeLifecycleMock(overrides)` -- Complete mock of `src/lib/lifecycle.ts`
+- `makeTmuxMock(overrides)` -- Complete mock of `src/lib/tmux.ts`
+- `makeForgeUtilsMock(overrides)` -- Complete mock of `src/lib/integrations/forge-utils.ts`
+- `makeIssueUtilsMock(overrides)` -- Complete mock of `src/lib/integrations/issue-utils.ts`
+
+Each factory returns ALL exports of the target module with sensible stubs. Override specific functions:
+```typescript
+mock.module("@/lib/config", () => makeConfigMock({
+  listWorkspaces: mock(() => [myWorkspace]),
+  readWorkspace: mock(() => myWorkspace),
+}))
+```
+
+**IMPORTANT: When adding a new export to a source module, add a corresponding stub to its mock factory in `tests/helpers.ts`.** Missing exports cause runtime errors in test files that use `mock.module()` with the factory.
+
+## Test Helpers (`tests/helpers.ts`)
+
+**Filesystem Utilities:**
+```typescript
+makeTmpDir(prefix)      // Create unique /tmp/{prefix}-{timestamp}-{random}/
+cleanup(dir)            // rmSync recursive
+mkdir(base, ...parts)   // mkdirSync recursive
+touch(base, ...parts)   // Create empty file (with parent dirs)
+write(base, rel, content) // Write content to file (with parent dirs)
+makeFileTree(base, entries) // Create directory tree from flat map
+makeGitRepo(base, name)    // Init a real git repo with initial commit
+```
+
+**Config Isolation:**
+```typescript
+useIsolatedConfig(prefix)   // Mock paths to temp dir, create structure
+// Returns { configDir: string, cleanup: () => void }
+```
+
+**Mock Factories:**
+```typescript
+makeConfigMock(overrides)
+makeWorkspaceOpsMock(overrides)
+makeGitMock(overrides)
+makePathsMock(overrides)
+makeLifecycleMock(overrides)
+makeTmuxMock(overrides)
+makeForgeUtilsMock(overrides)
+makeIssueUtilsMock(overrides)
+```
+
+## Command-Level Integration Tests
+
+**Pattern: Subprocess Execution via `Bun.spawnSync()`**
+
+Tests in `tests/commands/` run the CLI as a subprocess with controlled environment:
+```typescript
+const PROJECT_ROOT = join(import.meta.dir, "../..")
+
+function runCommand(cfgDir: string, args: string[], stdinInput = "") {
+  const result = Bun.spawnSync(
+    ["bun", "run", "src/index.ts", "doctor", ...args],
+    {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
+      cwd: PROJECT_ROOT,
+      stdin: stdinInput ? Buffer.from(stdinInput) : "pipe",
+      stdio: ["pipe", "pipe", "pipe"],
+    }
+  )
   return {
-    name: "WEB-1234",
-    branch: "feature/WEB-1234",
-    created: "2026-01-01",
-    repos: [...],
-    ...overrides,
+    stdout: new TextDecoder().decode(result.stdout),
+    stderr: new TextDecoder().decode(result.stderr),
+    exitCode: result.exitCode ?? 0,
   }
 }
+```
+- Use `GIT_STACKS_CONFIG_DIR` env var to redirect config dir (supported by `src/lib/paths.ts`)
+- Write fixture YAML files to temp config dir before running
+- Assert on stdout content, stderr content, and exit code
+- Pipe controlled input to stdin for interactive prompts
 
-// In intellij.test.ts
-const javaRepo = (name: string, taskPath: string) => ({
-  name,
-  stack: "platform",
-  type: "java" as const,
-  mode: "worktree" as const,
-  main_path: `/main/${name}`,
-  task_path: taskPath,
+## TUI Component Tests
+
+**OpenTUI `testRender()` Pattern:**
+```typescript
+/** @jsxImportSource @opentui/solid */
+import { testRender } from "@opentui/solid"
+
+const renderOpts = { kittyKeyboard: true }
+
+test("renders correctly", async () => {
+  const { renderOnce, captureCharFrame } = await testRender(
+    () => <MyComponent prop="value" />,
+    renderOpts
+  )
+  await renderOnce()
+  const frame = captureCharFrame()
+  expect(frame).toContain("Expected text")
+})
+```
+- Use `kittyKeyboard: true` to avoid flaky escape key timing
+- `renderOnce()` advances the render cycle
+- `captureCharFrame()` returns the terminal frame as a string for text assertions
+- `mockInput.pressArrow("down")`, `mockInput.pressEnter()` for simulating keyboard input
+
+**Snapshot Tests (`tests/tui/dashboard/snapshots/`):**
+```typescript
+test("renders with default props", async () => {
+  const { renderOnce, captureCharFrame } = await testRender(
+    () => <Component prop="value" />,
+    { kittyKeyboard: true, width: 80, height: 24 }
+  )
+  await renderOnce()
+  const frame = captureCharFrame()
+  expect(frame).toMatchSnapshot()
+})
+```
+- Snapshots stored in `__snapshots__/{file}.snap`
+- Fixed `width`/`height` for deterministic rendering
+
+## Fixture Patterns
+
+**Workspace Fixtures (inline):**
+```typescript
+const wsFixtures = [
+  {
+    name: "test-ws",
+    schema_version: "1" as const,
+    branch: "feature/test",
+    created: "2026-01-15T00:00:00.000Z",
+    repos: [] as any[],
+    labels: ["backend"],
+  },
+]
+```
+
+**Workspace Fixtures (schema-parsed):**
+```typescript
+const ws = WorkspaceSchema.parse({
+  name: "test-workspace",
+  branch: "feature/test",
+  created: "2026-01-01",
+  template: "my-app",
 })
 ```
 
-**Location:**
-- Shared helpers: `tests/helpers.ts` (`makeTmpDir`, `cleanup`, `mkdir`, `touch`, `write`)
-- Test-specific factories: inline in each test file (e.g., `makeWorkspace()`, `javaRepo()`)
-
-**Filesystem Helpers:**
+**Unique Names per Test (collision avoidance):**
 ```typescript
-export function makeTmpDir(prefix = "ws-test"): string  // Unique timestamped dir
-export function cleanup(dir: string)                     // Recursive delete
-export function mkdir(base: string, ...parts: string[])  // Create nested dirs
-export function touch(base: string, ...parts: string[])  // Create empty file
-export function write(base: string, rel: string, content: string)  // Write content
+const FILE_RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+let _testCounter = 0
+function uniqueWsName(prefix = "test-ws"): string {
+  _testCounter++
+  return `_wsops-${prefix}-${FILE_RUN_ID}-${_testCounter}`
+}
+```
+
+**Real Git Repos for Integration Tests:**
+```typescript
+const repoPath = makeGitRepo(tmp, "repo-name")
+// Creates a real git repo with initial commit
+// Can create worktrees from it for workspace ops tests
 ```
 
 ## Coverage
 
-**Requirements:** None enforced
+**Requirements:** No formal coverage target enforced
 
-**Current gaps:**
-- `src/commands/*` — No tests for CLI command handlers
-- `src/tui/*` — No tests for interactive prompts
-- `src/lib/workspace-ops.ts` — Core orchestration logic untested
-- `src/lib/git.ts` — Git operations not tested (would require git repo)
-- `src/lib/lifecycle.ts` — Hook execution not tested
-- All integration plugins (`src/lib/integrations/*`) — Artifact generation has tests, plugin interface untested
+**What is well-tested:**
+- Zod schema validation (`tests/lib/config.test.ts`) -- comprehensive edge cases, backward compat, name validation
+- YAML config I/O round-trips
+- Git operations (`tests/lib/git.test.ts`)
+- Lifecycle hooks: both real-shell and injected-mock tests (`tests/lib/lifecycle.test.ts`)
+- Workspace operations: merge, remove, clean, rename, sync (`tests/lib/workspace-ops.test.ts`)
+- Integration runner: ordering, enable/disable, artifact accumulation (`tests/lib/integrations/runner.test.ts`)
+- Forge utilities: GitHub, GitLab, Gitea (`tests/lib/integrations/forge-utils.test.ts`, `github.test.ts`, etc.)
+- Template composition: includes, repo merging, hooks, circular detection (`tests/lib/composition.test.ts`)
+- Port allocation and concurrency limiter (`tests/lib/ports.test.ts`, `tests/lib/concurrency-limiter.test.ts`)
+- Secrets resolver system (`tests/lib/secrets.test.ts`)
+- Env formatting (`tests/lib/env.test.ts`)
+- Labels matching (`tests/lib/labels.test.ts`)
+- TUI dashboard components: action menus, progress views, filter indicators
+- TUI snapshot tests for visual regression
+- CLI commands via subprocess: doctor, label, list, status, sync, env, run, workspace edit
 
-**What IS tested:**
-- Schema parsing and validation (Zod): `config.test.ts`
-- File I/O round-trip: `config.test.ts` (stack and workspace read/write)
-- Repository detection: `detect.test.ts` (repo type, scanning)
-- Artifact generation: `vscode.test.ts`, `intellij.test.ts` (folder config, module files)
-- Shell completion generation: `completion-generator.test.ts` (bash, zsh, fish)
+**Test isolation safety nets:**
+- `GIT_STACKS_CONFIG_DIR` env var for subprocess tests
+- `useIsolatedConfig()` for in-process config isolation
+- `_exec` injectable for subprocess mocking
+- Real module captures (`real*` exports) for tests that need real behavior despite other files mocking
 
 ## Test Types
 
 **Unit Tests:**
-- Most tests: Pure functions with I/O via filesystem helpers
-- Scope: Single function or closely related functionality
-- Approach: Create fixtures, call function, assert return value or file state
-- Example: `detectRepoType(path)` returns correct `RepoType`; `readStack(name)` loads and parses YAML
+- Pure function testing (schemas, formatters, matchers, path helpers)
+- Mock-heavy module testing with `mock.module()` and factory helpers
+- `_exec` injection for subprocess testing without real execution
 
 **Integration Tests:**
-- `config.test.ts` YAML round-trip: Tests read + write + parse in sequence
-- `vscode.test.ts`, `intellij.test.ts`: Generate artifacts then verify file contents
-- Approach: Set up realistic data, call multiple functions in sequence, verify end state
+- Real git repo creation and worktree operations (`tests/lib/workspace-ops.test.ts`)
+- Real shell execution for lifecycle hooks (`tests/lib/lifecycle.test.ts`)
+- CLI subprocess tests via `Bun.spawnSync()` (`tests/commands/`)
+- TUI integration tests with mocked data flows (`tests/tui/dashboard/integ-*.test.tsx`)
+
+**Snapshot Tests:**
+- TUI component visual regression via `@opentui/solid`'s `testRender` + `captureCharFrame`
+- Stored in `tests/tui/dashboard/snapshots/__snapshots__/`
 
 **E2E Tests:**
-- None present
-- Would require: full worktree setup, git operations, multi-repo scenarios
-- Current focus: Unit tests for pure logic, integration tests for I/O
+- Not present as a separate category -- command-level subprocess tests serve this role
 
 ## Common Patterns
 
 **Async Testing:**
-Tests use `async` / `await`:
 ```typescript
-test("writeStack + readStack round-trips correctly", async () => {
-  process.env.HOME = tmp
-  const { writeStack, readStack } = await import("../../src/lib/config")
-  writeStack(stack)
-  const loaded = readStack("test-stack")
-  expect(loaded.name).toBe("test-stack")
+test("resolves with correct value", async () => {
+  await expect(someAsyncFn("arg")).resolves.toBe("expected")
+})
+
+test("rejects with error", async () => {
+  await expect(someAsyncFn("bad")).rejects.toThrow("expected error")
 })
 ```
 
 **Error Testing:**
-Schema validation errors caught with `.toThrow()`:
 ```typescript
-test("rejects invalid repo type", () => {
-  expect(() =>
-    StackSchema.parse({ name: "x", repos: [{ name: "r", path: "/p", type: "python" }] })
-  ).toThrow()
+test("rejects invalid input", () => {
+  expect(() => SomeSchema.parse({ invalid: true })).toThrow()
+})
+
+test("throws with specific message", () => {
+  expect(() => readWorkspace("ghost")).toThrow(/not found/)
 })
 ```
 
-**File State Assertions:**
-Verify files created with correct content:
+**Isolation Strategy Comments:**
+- Test files that have complex mock ordering include an `Isolation strategy` comment block at the top explaining why specific mocking is needed:
 ```typescript
-test("creates .code-workspace file", () => {
-  const outPath = generateCodeWorkspace(makeWorkspace(), tmp)
-  expect(outPath).toEndWith("WEB-1234.code-workspace")
-  const content = JSON.parse(readFileSync(outPath, "utf-8"))
-  expect(content.folders).toHaveLength(2)
-})
+// --- Isolation strategy ---
+// integration-commands.test.ts mocks @/lib/lifecycle (as a consumer test).
+// Because of Bun's live binding patching, the realRunHooksCaptured capture
+// in helpers.ts ends up using the mock's _exec after integration-commands runs.
+//
+// Fix: re-apply mock.module("@/lib/lifecycle", ...) at the start of this file
 ```
 
-**Isolation via Direct Import:**
-Tests that need to modify `process.env.HOME` dynamically import modules:
-```typescript
-beforeEach(() => { process.env.HOME = tmp })
-afterEach(() => { delete process.env.HOME })
-const { readStack, writeStack } = await import("../../src/lib/config")
-```
+---
 
-This ensures path constants are re-evaluated with the modified HOME directory.
+*Testing analysis: 2026-04-04*
