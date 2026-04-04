@@ -4,6 +4,10 @@
   "description": "Git worktree workspace manager — templates, workspaces, and multi-repo orchestration",
   "license": "MIT",
   "author": "nnexai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nnexai/git-stacks.git"
+  },
   "keywords": [
     "git",
     "worktree",
