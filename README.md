@@ -551,8 +551,9 @@ Reference external secrets in workspace or template env maps without storing pla
 ```yaml
 # In a template or workspace YAML
 env:
-  API_KEY: "${{ keychain:my-service/api-key }}"
-  DB_PASSWORD: "${{ env:DB_PASSWORD }}"
+  API_KEY: "${{ keychain:service=myapp,account=api-key }}"
+  DB_PASSWORD: "${{ keychain:app=myapp,env=prod,key=db-pass }}"
+  HOME_DIR: "${{ env:HOME }}"
   GIT_TOKEN: "${{ cmd:security find-generic-password -s gh-token -w }}"
 ```
 
@@ -560,9 +561,11 @@ Secrets are resolved at open time — resolved values are never written back to 
 
 | Resolver | Source | Notes |
 |----------|--------|-------|
-| `keychain` | macOS `security` / Linux `secret-tool` | Auto-detects platform |
+| `keychain` | macOS `security` / Linux `secret-tool` | `key=value` pairs; Linux supports unlimited attributes, macOS max 2 |
 | `env` | `process.env` | No subprocess, always available |
 | `cmd` | `sh -c <command>` | Requires explicit opt-in in config |
+
+The `keychain` resolver uses `key=value,key=value` syntax — each pair becomes an attribute for the platform's secret store. On Linux, pairs are passed directly to `secret-tool lookup` as positional key-value arguments. On macOS, the first two values map to the `-s` (service) and `-a` (account) flags of `security find-generic-password`; more than 2 attributes is an error.
 
 ```bash
 # Skip secret resolution (substitutes empty strings)

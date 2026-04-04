@@ -14,7 +14,7 @@ All notable changes to `git-stacks` are documented here.
 
 **Labels** — workspaces can now be tagged with labels for filtering and grouping. `git-stacks label add/remove/list/clear <workspace>` manages labels directly, `git-stacks new --label <tag>` sets labels at creation time, `git-stacks list --label <tag>` filters with AND semantics, and the dashboard renders labels, matches them in `/` filtering, and can group workspaces by label.
 
-**Secret references** — workspace and template env maps can now use `${{ resolver:path }}` references that resolve at open time without writing plaintext back to YAML. Built-in resolvers include `keychain`, `env`, and opt-in `cmd`; `git-stacks open --skip-secrets` bypasses resolution with empty-string substitution; and external resolver commands enforce a 10-second timeout.
+**Secret references** — workspace and template env maps can now use `${{ resolver:path }}` references that resolve at open time without writing plaintext back to YAML. Built-in resolvers include `keychain`, `env`, and opt-in `cmd`; `git-stacks open --skip-secrets` bypasses resolution with empty-string substitution; and external resolver commands enforce a 10-second timeout. The `keychain` resolver uses `key=value` syntax for flexible attribute lookup (`${{ keychain:service=myapp,account=api-key }}`), supporting arbitrary attributes on Linux and up to 2 on macOS.
 
 **Stash on sync** — `git-stacks sync --stash` now auto-stashes dirty worktree repos before sync and restores them in reverse order after. A pre-existing `git-stacks auto-stash` entry blocks another auto-stash, stash-pop failures preserve the stash and surface a recovery command, and the dashboard automatically enables stash mode when syncing dirty worktrees.
 
