@@ -133,3 +133,98 @@ describe("status --json", () => {
     expect(trimmed.endsWith("]")).toBe(true)
   })
 })
+
+function setupDirFixture(tmpDir: string): { cfgDir: string; dirPath: string } {
+  const cfgDir = join(tmpDir, "config")
+  const wsRoot = join(tmpDir, "workspaces")
+  const dirPath = join(tmpDir, "shared-config-dir")
+
+  mkdirSync(join(cfgDir, "workspaces"), { recursive: true })
+  // Create a plain directory (not a git repo) for the dir-mode repo
+  mkdirSync(dirPath, { recursive: true })
+
+  writeFileSync(join(cfgDir, "config.yml"), `workspace_root: ${wsRoot}\n`)
+  writeFileSync(join(cfgDir, "registry.yml"), "[]\n")
+
+  const wsYaml = `schema_version: "1"
+name: dir-ws
+branch: feat/dir-test
+template: my-tmpl
+created: "2024-01-01"
+repos:
+  - name: shared-config
+    repo: shared-config
+    type: other
+    mode: dir
+    main_path: ${dirPath}
+`
+  writeFileSync(join(cfgDir, "workspaces", "dir-ws.yml"), wsYaml)
+
+  return { cfgDir, dirPath }
+}
+
+function runList(cfgDir: string, args: string[]): { stdout: string; stderr: string; exitCode: number } {
+  const result = Bun.spawnSync(
+    ["bun", "run", "src/index.ts", "list", ...args],
+    {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
+      cwd: PROJECT_ROOT,
+      stdio: ["pipe", "pipe", "pipe"],
+    }
+  )
+  return {
+    stdout: new TextDecoder().decode(result.stdout),
+    stderr: new TextDecoder().decode(result.stderr),
+    exitCode: result.exitCode ?? 0,
+  }
+}
+
+describe("dir repo display", () => {
+  let tmpDir: string
+  let cfgDir: string
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir("dir-status-test")
+    ;({ cfgDir } = setupDirFixture(tmpDir))
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  test("status --json shows dir repo with mode dir and zeroed git metrics", () => {
+    const { stdout } = runStatus(cfgDir, ["--json"])
+    const parsed = JSON.parse(stdout.trim())
+    expect(Array.isArray(parsed)).toBe(true)
+    const ws = parsed.find((w: { name: string }) => w.name === "dir-ws")
+    expect(ws).toBeDefined()
+    const repo = ws.repos.find((r: { name: string }) => r.name === "shared-config")
+    expect(repo).toBeDefined()
+    expect(repo.mode).toBe("dir")
+    expect(repo.ahead).toBe(0)
+    expect(repo.behind).toBe(0)
+    expect(repo.dirty).toBe(false)
+  })
+
+  test("status human-readable shows [dir] label", () => {
+    const { stdout } = runStatus(cfgDir, [])
+    expect(stdout).toContain("[dir]")
+  })
+
+  test("status human-readable does not show ahead/behind arrows for dir repos", () => {
+    const { stdout } = runStatus(cfgDir, [])
+    const lines = stdout.split("\n")
+    const repoLine = lines.find(l => l.includes("shared-config"))
+    expect(repoLine).toBeDefined()
+    expect(repoLine).not.toMatch(/[↑↓]/)
+  })
+
+  test("list --json includes dirCount for workspace with dir repos", () => {
+    const { stdout } = runList(cfgDir, ["--json"])
+    const parsed = JSON.parse(stdout.trim())
+    expect(Array.isArray(parsed)).toBe(true)
+    const ws = parsed.find((w: { name: string }) => w.name === "dir-ws")
+    expect(ws).toBeDefined()
+    expect(ws).toHaveProperty("dirCount", 1)
+  })
+})

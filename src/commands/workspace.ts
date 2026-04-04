@@ -360,7 +360,7 @@ export function registerWorkspaceCommands(program: Command) {
       if (opts.fetch) {
         const { mapLimited } = await import("../lib/concurrency")
         const allRepos = workspaces.flatMap(ws =>
-          ws.repos.filter(r => existsSync(r.mode === "worktree" ? r.task_path : r.main_path))
+          ws.repos.filter(r => r.mode !== "dir" && existsSync(r.mode === "worktree" ? r.task_path! : r.main_path))
         )
         // Deduplicate by main_path
         const seen = new Set<string>()
@@ -406,7 +406,7 @@ export function registerWorkspaceCommands(program: Command) {
         console.log(`\n  ${ws.name}  [${ws.branch}]  ${ws.created}`)
         for (const repo of repos) {
           const icon = !repo.exists ? "✗" : repo.dirty ? "~" : "✓"
-          const modeLabel = repo.mode === "worktree" ? `[${repo.branch}]` : "[trunk]"
+          const modeLabel = repo.mode === "worktree" ? `[${repo.branch}]` : repo.mode === "dir" ? "[dir]" : "[trunk]"
           const abParts: string[] = []
           if (repo.ahead > 0) abParts.push(`↑${repo.ahead}`)
           if (repo.behind > 0) abParts.push(`↓${repo.behind}`)
