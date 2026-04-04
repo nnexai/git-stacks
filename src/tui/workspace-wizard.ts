@@ -92,6 +92,18 @@ function buildReposFromTemplate(
       continue
     }
 
+    // Dir repos: reference main_path only, no worktree, no branch
+    if (regEntry.is_dir) {
+      repos.push({
+        name: regEntry.name,
+        repo: tplRepo.repo,
+        type: regEntry.type,
+        mode: "dir" as const,
+        main_path: regEntry.local_path,
+      })
+      continue
+    }
+
     const mode = tplRepo.mode ?? "worktree"
     const taskPath = mode === "worktree"
       ? join(tasksDir, wsName, regEntry.name)
