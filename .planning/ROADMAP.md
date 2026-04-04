@@ -262,7 +262,7 @@ Plans:
 | 62. Stash on Sync | v0.14.0 | 2/2 | Complete | 2026-04-03 |
 | 63. Release Prep | v0.14.0 | 1/1 | Complete | 2026-04-03 |
 | 64. Schema & Registry | v0.15.0 | 2/2 | Complete    | 2026-04-04 |
-| 65. Workspace Lifecycle | v0.15.0 | 1/1 | Complete   | 2026-04-04 |
+| 65. Workspace Lifecycle | v0.15.0 | 1/1 | Complete    | 2026-04-04 |
 | 66. Git Operation Guards | v0.15.0 | 0/1 | Not started | - |
 | 67. Status, Display & Health | v0.15.0 | 0/2 | Not started | - |
 | 68. Release Prep | v0.15.0 | 0/? | Not started | - |
