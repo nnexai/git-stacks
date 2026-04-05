@@ -3,7 +3,7 @@ import { join } from "path"
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync } from "fs"
 import { execSync } from "child_process"
 import {
-  makeTmpDir, cleanup, makeGitRepo, useIsolatedConfig,
+  makeTmpDir, cleanup, makeGitRepo, useIsolatedConfig, applyTestGitEnv, gitExecOptions,
   realWriteWorkspace as writeWorkspace,
   realWorkspaceExists as workspaceExists,
   realWorkspacePath as workspacePath,
@@ -40,6 +40,19 @@ import {
   syncWorkspace,
   openWorkspace,
 } from "../../src/lib/workspace-ops"
+
+let gitEnvDir: string
+let restoreGitEnv: (() => void) | undefined
+
+beforeEach(() => {
+  gitEnvDir = makeTmpDir("ws-ops-git-env")
+  restoreGitEnv = applyTestGitEnv(gitEnvDir)
+})
+
+afterEach(() => {
+  restoreGitEnv?.()
+  cleanup(gitEnvDir)
+})
 
 // Set up isolated config dir once for this file — all tests in this file share it.
 const isolated = useIsolatedConfig("ws-ops")
@@ -2047,26 +2060,27 @@ describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
 
     // Create a bare remote, clone it, create a workspace with worktree
     const barePath = join(tmp, "remote.git")
-    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${barePath}`, gitExecOptions(tmp, tmp))
 
     const clonePath = join(tmp, "clone")
-    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
-    execSync(`git -C ${clonePath} config user.email test@example.com`, { stdio: "pipe" })
-    execSync(`git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    execSync(`git clone ${barePath} ${clonePath}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config user.email test@example.com`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config user.name Test`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
 
     // Initial commit and push
     writeFileSync(join(clonePath, "init.txt"), "init")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, gitExecOptions(tmp, tmp))
 
     // Create worktree on a feature branch
     const wtPath = join(tmp, "worktree")
-    execSync(`git -C ${clonePath} worktree add -b feature ${wtPath}`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} worktree add -b feature ${wtPath}`, gitExecOptions(tmp, tmp))
 
     // Add 2 commits on the feature branch (ahead of origin/main)
     writeFileSync(join(wtPath, "a.txt"), "a")
-    execSync(`git -C ${wtPath} add . && git -C ${wtPath} commit -m "feat 1"`, { stdio: "pipe" })
+    execSync(`git -C ${wtPath} add . && git -C ${wtPath} commit -m "feat 1"`, gitExecOptions(tmp, tmp))
     writeFileSync(join(wtPath, "b.txt"), "b")
-    execSync(`git -C ${wtPath} add . && git -C ${wtPath} commit -m "feat 2"`, { stdio: "pipe" })
+    execSync(`git -C ${wtPath} add . && git -C ${wtPath} commit -m "feat 2"`, gitExecOptions(tmp, tmp))
 
     // Write workspace YAML
     writeWorkspace(WorkspaceSchema.parse({
@@ -2098,45 +2112,45 @@ describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
     // Create two bare remotes and clones
     const bare1 = join(tmp, "remote1.git")
     const bare2 = join(tmp, "remote2.git")
-    execSync(`git init --bare ${bare1}`, { stdio: "pipe" })
-    execSync(`git init --bare ${bare2}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${bare1}`, gitExecOptions(tmp, tmp))
+    execSync(`git init --bare -b main ${bare2}`, gitExecOptions(tmp, tmp))
 
     const clone1 = join(tmp, "clone1")
     const clone2 = join(tmp, "clone2")
-    execSync(`git clone ${bare1} ${clone1}`, { stdio: "pipe" })
-    execSync(`git clone ${bare2} ${clone2}`, { stdio: "pipe" })
+    execSync(`git clone ${bare1} ${clone1}`, gitExecOptions(tmp, tmp))
+    execSync(`git clone ${bare2} ${clone2}`, gitExecOptions(tmp, tmp))
 
     for (const c of [clone1, clone2]) {
-      execSync(`git -C ${c} config user.email test@example.com && git -C ${c} config user.name Test`, { stdio: "pipe" })
+      execSync(`git -C ${c} config user.email test@example.com && git -C ${c} config user.name Test && git -C ${c} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
       writeFileSync(join(c, "init.txt"), "init")
-      execSync(`git -C ${c} add . && git -C ${c} commit -m "init" && git -C ${c} push`, { stdio: "pipe" })
+      execSync(`git -C ${c} add . && git -C ${c} commit -m "init" && git -C ${c} push`, gitExecOptions(tmp, tmp))
     }
 
     const wt1 = join(tmp, "wt1")
     const wt2 = join(tmp, "wt2")
-    execSync(`git -C ${clone1} worktree add -b feature ${wt1}`, { stdio: "pipe" })
-    execSync(`git -C ${clone2} worktree add -b feature ${wt2}`, { stdio: "pipe" })
+    execSync(`git -C ${clone1} worktree add -b feature ${wt1}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clone2} worktree add -b feature ${wt2}`, gitExecOptions(tmp, tmp))
 
     // Repo1: 3 ahead
     for (let i = 0; i < 3; i++) {
       writeFileSync(join(wt1, `f${i}.txt`), `${i}`)
-      execSync(`git -C ${wt1} add . && git -C ${wt1} commit -m "feat ${i}"`, { stdio: "pipe" })
+      execSync(`git -C ${wt1} add . && git -C ${wt1} commit -m "feat ${i}"`, gitExecOptions(tmp, tmp))
     }
 
     // Repo2: 1 ahead
     writeFileSync(join(wt2, "f.txt"), "f")
-    execSync(`git -C ${wt2} add . && git -C ${wt2} commit -m "feat"`, { stdio: "pipe" })
+    execSync(`git -C ${wt2} add . && git -C ${wt2} commit -m "feat"`, gitExecOptions(tmp, tmp))
 
     // Add 2 commits to origin/main of repo2 (behind by 2)
     const tmpClone2 = join(tmp, "tmp-clone2")
-    execSync(`git clone ${bare2} ${tmpClone2}`, { stdio: "pipe" })
-    execSync(`git -C ${tmpClone2} config user.email test@example.com && git -C ${tmpClone2} config user.name Test`, { stdio: "pipe" })
+    execSync(`git clone ${bare2} ${tmpClone2}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${tmpClone2} config user.email test@example.com && git -C ${tmpClone2} config user.name Test && git -C ${tmpClone2} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
     for (let i = 0; i < 2; i++) {
       writeFileSync(join(tmpClone2, `m${i}.txt`), `${i}`)
-      execSync(`git -C ${tmpClone2} add . && git -C ${tmpClone2} commit -m "main ${i}" && git -C ${tmpClone2} push`, { stdio: "pipe" })
+      execSync(`git -C ${tmpClone2} add . && git -C ${tmpClone2} commit -m "main ${i}" && git -C ${tmpClone2} push`, gitExecOptions(tmp, tmp))
     }
     // Fetch in clone2 so origin/main is updated
-    execSync(`git -C ${clone2} fetch origin`, { stdio: "pipe" })
+    execSync(`git -C ${clone2} fetch origin`, gitExecOptions(tmp, tmp))
 
     writeWorkspace(WorkspaceSchema.parse({
       name: wsName,
@@ -2159,16 +2173,16 @@ describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
     const wsName = uniqueWsName("ab-trunk")
 
     const barePath = join(tmp, "remote-trunk.git")
-    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${barePath}`, gitExecOptions(tmp, tmp))
     const clonePath = join(tmp, "clone-trunk")
-    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
-    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    execSync(`git clone ${barePath} ${clonePath}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test && git -C ${clonePath} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
     writeFileSync(join(clonePath, "init.txt"), "init")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, gitExecOptions(tmp, tmp))
 
     // Make 1 local commit without pushing (trunk is 1 ahead of origin/main)
     writeFileSync(join(clonePath, "local.txt"), "local")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local commit"`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local commit"`, gitExecOptions(tmp, tmp))
 
     writeWorkspace(WorkspaceSchema.parse({
       name: wsName,
@@ -2197,12 +2211,12 @@ describe("getWorkspaceListInfo — ahead/behind (AB-02)", () => {
     const wsName = uniqueWsName("ab-trunk-dirty")
 
     const barePath = join(tmp, "remote-dirty-trunk.git")
-    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${barePath}`, gitExecOptions(tmp, tmp))
     const clonePath = join(tmp, "clone-dirty-trunk")
-    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
-    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    execSync(`git clone ${barePath} ${clonePath}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test && git -C ${clonePath} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
     writeFileSync(join(clonePath, "init.txt"), "init")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, gitExecOptions(tmp, tmp))
 
     // Make an uncommitted change to trunk repo
     writeFileSync(join(clonePath, "dirty.txt"), "dirty")
@@ -2242,12 +2256,12 @@ describe("getWorkspaceStatus — trunk repos", () => {
     const wsName = uniqueWsName("status-trunk-dirty")
 
     const barePath = join(tmp, "remote.git")
-    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${barePath}`, gitExecOptions(tmp, tmp))
     const clonePath = join(tmp, "clone")
-    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
-    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    execSync(`git clone ${barePath} ${clonePath}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test && git -C ${clonePath} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
     writeFileSync(join(clonePath, "init.txt"), "init")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, gitExecOptions(tmp, tmp))
 
     // Make an uncommitted change
     writeFileSync(join(clonePath, "dirty.txt"), "dirty")
@@ -2280,12 +2294,12 @@ describe("getWorkspaceStatus — trunk repos", () => {
     const wsName = uniqueWsName("status-trunk-branch")
 
     const barePath = join(tmp, "remote-br.git")
-    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${barePath}`, gitExecOptions(tmp, tmp))
     const clonePath = join(tmp, "clone-br")
-    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
-    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    execSync(`git clone ${barePath} ${clonePath}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test && git -C ${clonePath} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
     writeFileSync(join(clonePath, "init.txt"), "init")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, gitExecOptions(tmp, tmp))
 
     writeWorkspace(WorkspaceSchema.parse({
       name: wsName,
@@ -2314,18 +2328,18 @@ describe("getWorkspaceStatus — trunk repos", () => {
     const wsName = uniqueWsName("status-trunk-ab")
 
     const barePath = join(tmp, "remote-ab.git")
-    execSync(`git init --bare ${barePath}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${barePath}`, gitExecOptions(tmp, tmp))
     const clonePath = join(tmp, "clone-ab")
-    execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
-    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test`, { stdio: "pipe" })
+    execSync(`git clone ${barePath} ${clonePath}`, gitExecOptions(tmp, tmp))
+    execSync(`git -C ${clonePath} config user.email test@example.com && git -C ${clonePath} config user.name Test && git -C ${clonePath} config commit.gpgsign false`, gitExecOptions(tmp, tmp))
     writeFileSync(join(clonePath, "init.txt"), "init")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "init" && git -C ${clonePath} push`, gitExecOptions(tmp, tmp))
 
     // Add 2 local commits without pushing
     writeFileSync(join(clonePath, "a.txt"), "a")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local 1"`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local 1"`, gitExecOptions(tmp, tmp))
     writeFileSync(join(clonePath, "b.txt"), "b")
-    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local 2"`, { stdio: "pipe" })
+    execSync(`git -C ${clonePath} add . && git -C ${clonePath} commit -m "local 2"`, gitExecOptions(tmp, tmp))
 
     writeWorkspace(WorkspaceSchema.parse({
       name: wsName,

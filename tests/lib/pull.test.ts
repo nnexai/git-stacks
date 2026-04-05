@@ -1,14 +1,27 @@
-import { describe, test, expect, afterAll } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test"
 import { join } from "path"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { execSync } from "child_process"
 import type { Workspace } from "@/lib/config"
+import { applyTestGitEnv, cleanup, makeTmpDir, gitExecOptions } from "../helpers"
 
 // Import real functions from git.ts (no config dependency, safe to import directly)
 import { pullFFOnly } from "../../src/lib/git"
 import { pullWorkspace } from "../../src/lib/workspace-ops"
 
 const tmpDirs: string[] = []
+let gitEnvDir: string
+let restoreGitEnv: (() => void) | undefined
+
+beforeEach(() => {
+  gitEnvDir = makeTmpDir("pull-git-env")
+  restoreGitEnv = applyTestGitEnv(gitEnvDir)
+})
+
+afterEach(() => {
+  restoreGitEnv?.()
+  cleanup(gitEnvDir)
+})
 
 afterAll(() => {
   for (const d of tmpDirs) rmSync(d, { recursive: true, force: true })
@@ -17,23 +30,18 @@ afterAll(() => {
 // --- Helpers ---
 
 function git(cwd: string, cmd: string): string {
-  return execSync(`git ${cmd}`, { cwd, stdio: "pipe" }).toString().trim()
-}
-
-function makeTmpDir(prefix: string): string {
-  const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-  mkdirSync(dir, { recursive: true })
-  return dir
+  return execSync(`git ${cmd}`, gitExecOptions(cwd)).toString().trim()
 }
 
 function createBareAndClone(tmp: string, name: string, branch = "main"): { barePath: string; clonePath: string } {
   const barePath = join(tmp, `${name}-bare`)
   const clonePath = join(tmp, `${name}-clone`)
   mkdirSync(barePath, { recursive: true })
-  execSync(`git init --bare -b ${branch}`, { cwd: barePath, stdio: "pipe" })
-  execSync(`git clone ${barePath} ${clonePath}`, { stdio: "pipe" })
+  execSync(`git init --bare -b ${branch}`, gitExecOptions(barePath, tmp))
+  execSync(`git clone ${barePath} ${clonePath}`, gitExecOptions(tmp, tmp))
   git(clonePath, 'config user.email "test@test.com"')
   git(clonePath, 'config user.name "Test"')
+  git(clonePath, "config commit.gpgsign false")
   writeFileSync(join(clonePath, "README.md"), "init")
   git(clonePath, "add .")
   git(clonePath, 'commit -m "initial"')
@@ -43,9 +51,10 @@ function createBareAndClone(tmp: string, name: string, branch = "main"): { bareP
 
 function pushUpstreamCommit(barePath: string, tmp: string, filename: string, branch = "main"): void {
   const pushClone = join(tmp, `push-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-  execSync(`git clone -b ${branch} ${barePath} ${pushClone}`, { stdio: "pipe" })
+  execSync(`git clone -b ${branch} ${barePath} ${pushClone}`, gitExecOptions(tmp, tmp))
   git(pushClone, 'config user.email "test@test.com"')
   git(pushClone, 'config user.name "Test"')
+  git(pushClone, "config commit.gpgsign false")
   writeFileSync(join(pushClone, filename), `content-${Date.now()}`)
   git(pushClone, "add .")
   git(pushClone, 'commit -m "upstream commit"')

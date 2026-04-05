@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { execSync } from "child_process"
 import { readFileSync, writeFileSync, utimesSync } from "fs"
-import { makeTmpDir, cleanup, makeGitRepo } from "../helpers"
+import { makeTmpDir, cleanup, makeGitRepo, applyTestGitEnv, gitExecOptions } from "../helpers"
 import {
   createWorktree,
   removeWorktree,
@@ -22,6 +22,19 @@ import {
   stashPop,
   hasAutoStash,
 } from "../../src/lib/git"
+
+let gitEnvDir: string
+let restoreGitEnv: (() => void) | undefined
+
+beforeEach(() => {
+  gitEnvDir = makeTmpDir("git-test-env")
+  restoreGitEnv = applyTestGitEnv(gitEnvDir)
+})
+
+afterEach(() => {
+  restoreGitEnv?.()
+  cleanup(gitEnvDir)
+})
 
 // ---------------------------------------------------------------------------
 // describe("makeGitRepo") — TEST-01
@@ -266,13 +279,14 @@ describe("pushBranch", () => {
   beforeEach(() => {
     tmp = makeTmpDir("git-push")
     remotePath = join(tmp, "remote.git")
-    execSync(`git init --bare ${remotePath}`, { stdio: "pipe" })
+    execSync(`git init --bare -b main ${remotePath}`, gitExecOptions(tmp, tmp))
     localPath = join(tmp, "local")
-    execSync(`git clone ${remotePath} ${localPath}`, { stdio: "pipe" })
-    const opts = { cwd: localPath, stdio: "pipe" as const }
+    execSync(`git clone ${remotePath} ${localPath}`, gitExecOptions(tmp, tmp))
+    const opts = gitExecOptions(localPath, tmp)
     execSync("git checkout -b main", opts)
     execSync('git config user.email "test@example.com"', opts)
     execSync('git config user.name "Test User"', opts)
+    execSync("git config commit.gpgsign false", opts)
     writeFileSync(join(localPath, "README.md"), "init\n")
     execSync("git add .", opts)
     execSync('git commit -m "init"', opts)
@@ -300,16 +314,17 @@ describe("pushBranch", () => {
     await pushBranch(localPath, "main", { setUpstream: true })
 
     const otherClone = join(tmp, "other")
-    execSync(`git clone ${remotePath} ${otherClone}`, { stdio: "pipe" })
-    const otherOpts = { cwd: otherClone, stdio: "pipe" as const }
+    execSync(`git clone ${remotePath} ${otherClone}`, gitExecOptions(tmp, tmp))
+    const otherOpts = gitExecOptions(otherClone, tmp)
     execSync('git config user.email "test@example.com"', otherOpts)
     execSync('git config user.name "Test User"', otherOpts)
+    execSync("git config commit.gpgsign false", otherOpts)
     writeFileSync(join(otherClone, "remote.txt"), "remote\n")
     execSync("git add .", otherOpts)
     execSync('git commit -m "remote advance"', otherOpts)
     execSync("git push origin main", otherOpts)
 
-    const localOpts = { cwd: localPath, stdio: "pipe" as const }
+    const localOpts = gitExecOptions(localPath, tmp)
     writeFileSync(join(localPath, "local.txt"), "local\n")
     execSync("git add .", localOpts)
     execSync('git commit -m "local advance"', localOpts)
@@ -325,17 +340,18 @@ describe("pushBranch", () => {
     await pushBranch(localPath, "main", { setUpstream: true })
 
     const otherClone = join(tmp, "other")
-    execSync(`git clone ${remotePath} ${otherClone}`, { stdio: "pipe" })
-    const otherOpts = { cwd: otherClone, stdio: "pipe" as const }
+    execSync(`git clone ${remotePath} ${otherClone}`, gitExecOptions(tmp, tmp))
+    const otherOpts = gitExecOptions(otherClone, tmp)
     execSync('git config user.email "test@example.com"', otherOpts)
     execSync('git config user.name "Test User"', otherOpts)
+    execSync("git config commit.gpgsign false", otherOpts)
     writeFileSync(join(otherClone, "remote.txt"), "remote\n")
     execSync("git add .", otherOpts)
     execSync('git commit -m "remote advance"', otherOpts)
     execSync("git push origin main", otherOpts)
 
-    execSync("git -C " + localPath + " fetch origin", { stdio: "pipe" })
-    const localOpts = { cwd: localPath, stdio: "pipe" as const }
+    execSync("git -C " + localPath + " fetch origin", gitExecOptions(tmp, tmp))
+    const localOpts = gitExecOptions(localPath, tmp)
     execSync("git reset --hard HEAD~0", localOpts)
     writeFileSync(join(localPath, "local-force.txt"), "force\n")
     execSync("git add .", localOpts)
