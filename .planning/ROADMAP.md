@@ -243,7 +243,11 @@ Plans:
   3. Running `GS_DEBUG=1 git-stacks open <ws>` emits lines with structured fields `{ op, module, repo?, ms?, msg }` on stderr
   4. Running `GS_DEBUG=lifecycle git-stacks open <ws>` emits debug lines only from the `lifecycle` module; git module lines are suppressed
   5. Running `GS_DEBUG=true` shows all module output (backward-compatible with existing behavior)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] `75-01-PLAN.md` — Add real mutable `_exec` seams to `workspace-lifecycle.ts` and `workspace-git.ts` with focused module tests
+- [ ] `75-02-PLAN.md` — Extend `src/lib/observability.ts` and `src/index.ts` for `GS_DEBUG`, structured stderr fields, selector filtering, and CLI regression coverage
 
 ### Phase 76: Integration Plugin Capability Contracts
 **Goal**: Every integration plugin declares its capabilities explicitly, the runner uses those declarations instead of duck-typing, and `integration list` exposes them
