@@ -441,17 +441,15 @@ The mock factory at lines 236-263 stubs all the symbols currently on workspace-o
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **renameTemplate placement**
+1. **renameTemplate placement** — RESOLVED: stays in workspace-ops.ts for this phase per D-09/D-10. A future phase can extract `template-ops.ts` if needed.
    - What we know: D-09/D-10 say it stays as orchestration; D-02 says workspace-ops keeps only lifecycle ops (open/close/clean/remove/merge/rename*Workspace*)
-   - What's unclear: Does `renameTemplate` (which is template-not-workspace management) belong in workspace-ops.ts post-phase or should it move to a separate module?
-   - Recommendation: Planner has discretion. Simplest safe choice for this phase: leave it in workspace-ops.ts. A future phase can extract a `template-ops.ts` if needed.
+   - Recommendation: Leave in workspace-ops.ts — simplest safe choice.
 
-2. **makeGitMock completeness gap**
-   - What we know: `makeGitMock` in helpers.ts stubs git functions but is missing `getCommitsAhead`, `pushBranch`, `stashPush`, `stashPop`, `hasAutoStash` — functions that workspace-git.ts will need to mock in unit tests
-   - What's unclear: Whether existing tests rely on this mock being incomplete
-   - Recommendation: When adding `makeWorkspaceGitMock()`, include all git.ts functions used by the three git workspace functions. Do not modify `makeGitMock` unless a test gap is found.
+2. **makeGitMock completeness gap** — RESOLVED: Plan 70-03 adds `makeWorkspaceGitMock()` with all git.ts functions used by workspace-git.ts. Existing `makeGitMock` unchanged.
+   - What we know: `makeGitMock` in helpers.ts is missing `getCommitsAhead`, `pushBranch`, `stashPush`, `stashPop`, `hasAutoStash`
+   - Recommendation: Include all needed functions in new factory. Do not modify `makeGitMock`.
 
 ---
 
