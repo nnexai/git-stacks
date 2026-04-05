@@ -274,7 +274,7 @@ Plans:
 | 67. Status, Display & Health | v0.15.0 | 2/2 | Complete | 2026-04-05 |
 | 68. Release Prep | v0.15.0 | 1/1 | Complete | 2026-04-05 |
 | 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 1/1 | Complete    | 2026-04-05 |
-| 70. Extract remaining modules + facade | v0.16.0 | 3/3 | Complete   | 2026-04-05 |
+| 70. Extract remaining modules + facade | v0.16.0 | 3/3 | Complete    | 2026-04-05 |
 | 71. Observability | v0.16.0 | 0/TBD | Not started | - |
 | 72. Extraction tests | v0.16.0 | 0/TBD | Not started | - |
 | 73. Release Prep | v0.16.0 | 0/TBD | Not started | - |
