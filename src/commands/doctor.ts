@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from "fs"
+import { existsSync, readdirSync, readFileSync, rmSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
 import { parse } from "yaml"
@@ -144,46 +144,18 @@ function findMissingWorktrees(workspaces: Workspace[]): Issue[] {
   return issues
 }
 
-/** Workspace repos whose main_path doesn't exist (excludes dir-mode repos — handled by findInvalidDirRepos). */
+/** Workspace repos whose main_path doesn't exist. */
 function findMissingMainClones(workspaces: Workspace[]): Issue[] {
   const issues: Issue[] = []
   for (const ws of workspaces) {
     for (const repo of ws.repos) {
-      if (repo.mode !== "dir" && !existsSync(repo.main_path)) {
+      if (!existsSync(repo.main_path)) {
         issues.push({
           icon: "fail",
           entity: ws.name,
           message: `main_path missing: ${repo.main_path}`,
           fix: { action: "info", message: `Run: git-stacks repo show ${repo.repo}` },
         })
-      }
-    }
-  }
-  return issues
-}
-
-/** Dir-mode repos whose main_path is missing or not actually a directory. */
-function findInvalidDirRepos(workspaces: Workspace[]): Issue[] {
-  const issues: Issue[] = []
-  for (const ws of workspaces) {
-    for (const repo of ws.repos) {
-      if (repo.mode !== "dir") continue
-      if (!existsSync(repo.main_path)) {
-        issues.push({
-          icon: "fail",
-          entity: ws.name,
-          message: `dir repo '${repo.name}' path missing: ${repo.main_path}`,
-          fix: { action: "info", message: `Check that the directory exists: ${repo.main_path}` },
-        })
-      } else {
-        const stat = statSync(repo.main_path)
-        if (!stat.isDirectory()) {
-          issues.push({
-            icon: "fail",
-            entity: ws.name,
-            message: `dir repo '${repo.name}' path is not a directory: ${repo.main_path}`,
-          })
-        }
       }
     }
   }
@@ -312,7 +284,6 @@ export const doctorCommand = new Command("doctor")
     const missingMains = findMissingMainClones(workspaces)
     const staleCmux = await findStaleCmuxRefs(workspaces)
     const deadRepoRefs = findDeadRepoRefs(workspaces)
-    const invalidDirRepos = findInvalidDirRepos(workspaces)
 
     // --- Registry checks ---
     const deadRegistryPaths = findDeadRegistryPaths(registry)
@@ -381,7 +352,6 @@ export const doctorCommand = new Command("doctor")
       ...missingMains,
       ...staleCmux,
       ...deadRepoRefs,
-      ...invalidDirRepos,
       ...deadRegistryPaths,
       ...workspaceNameDrift,
       ...templateNameDrift,

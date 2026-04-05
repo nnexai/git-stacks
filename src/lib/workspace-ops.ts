@@ -70,8 +70,7 @@ export type WorkspaceListInfo = {
   dirtyRepos: string[] // names of dirty repos (empty if not checked)
   worktreeCount: number
   trunkCount: number
-  dirCount: number      // number of dir-mode repos
-  repoCount: number    // worktreeCount + trunkCount + dirCount
+  repoCount: number    // worktreeCount + trunkCount
   ahead: number              // sum of ahead counts across worktree repos
   behind: number             // max behind count across worktree repos
   aheadBehindStale: boolean  // true if ANY worktree repo has stale FETCH_HEAD
@@ -98,14 +97,12 @@ export async function getWorkspaceListInfo(
 ): Promise<WorkspaceListInfo> {
   const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
   const trunkRepos = workspace.repos.filter((r) => r.mode === "trunk")
-  const dirRepos = workspace.repos.filter((r) => r.mode === "dir")
 
-  // Always run dirty checks across worktree and trunk repos only (dir repos are not git repos)
+  // Always run dirty checks across ALL repos (worktree and trunk)
   const results = await Promise.all(
     workspace.repos
-      .filter((repo) => repo.mode !== "dir")
       .map((repo) => {
-        const repoPath = repo.mode === "worktree" ? repo.task_path! : repo.main_path
+        const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
         return { name: repo.name, repoPath, exists: existsSync(repoPath) }
       })
       .filter((r) => r.exists)
@@ -114,16 +111,15 @@ export async function getWorkspaceListInfo(
   const dirtyRepos: string[] = results.filter((r) => r.dirty).map((r) => r.name)
   const dirty: boolean = dirtyRepos.length > 0
 
-  // Ahead/behind computation (AB-02): parallel per repo (worktree and trunk, not dir)
+  // Ahead/behind computation (AB-02): parallel per repo (worktree and trunk)
   let totalAhead = 0
   let maxBehind = 0
   let anyStale = false
 
   const abResults = await Promise.all(
     workspace.repos
-      .filter((repo) => repo.mode !== "dir")
       .map((repo) => {
-        const repoPath = repo.mode === "worktree" ? repo.task_path! : repo.main_path
+        const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
         return { repo, repoPath, exists: existsSync(repoPath) }
       })
       .filter((r) => r.exists)
@@ -163,8 +159,7 @@ export async function getWorkspaceListInfo(
     dirtyRepos,
     worktreeCount: worktreeRepos.length,
     trunkCount: trunkRepos.length,
-    dirCount: dirRepos.length,
-    repoCount: worktreeRepos.length + trunkRepos.length + dirRepos.length,
+    repoCount: worktreeRepos.length + trunkRepos.length,
     ahead: totalAhead,
     behind: maxBehind,
     aheadBehindStale: anyStale,
@@ -201,12 +196,12 @@ export function buildBaseEnv(
 
 export function buildRepoEnv(
   baseEnv: Record<string, string>,
-  repo: { name: string; task_path?: string; main_path: string }
+  repo: { name: string; task_path: string; main_path: string }
 ): Record<string, string> {
   return {
     ...baseEnv,
     GS_REPO_NAME: repo.name,
-    GS_REPO_PATH: repo.task_path ?? repo.main_path,
+    GS_REPO_PATH: repo.task_path,
     GS_REPO_CLONE_PATH: repo.main_path,
   }
 }
@@ -257,13 +252,13 @@ export function writeEnvFiles(
   if (!envFileName) return
 
   for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
-    if (!existsSync(repo.task_path!)) continue
+    if (!existsSync(repo.task_path)) continue
 
     // Per D-08/D-09: reject env_file paths that escape repo root
-    const resolvedTarget = resolve(repo.task_path!, envFileName)
-    const resolvedRoot = resolve(repo.task_path!)
+    const resolvedTarget = resolve(repo.task_path, envFileName)
+    const resolvedRoot = resolve(repo.task_path)
     if (!resolvedTarget.startsWith(resolvedRoot + "/") && resolvedTarget !== resolvedRoot) {
-      onWarn?.(`skipping env file write: '${envFileName}' resolves outside repo root '${repo.task_path!}'`)
+      onWarn?.(`skipping env file write: '${envFileName}' resolves outside repo root '${repo.task_path}'`)
       continue
     }
 
@@ -311,7 +306,7 @@ export type RepoStatus = {
   exists: boolean
   dirty: boolean
   branch: string
-  mode: "trunk" | "worktree" | "dir"
+  mode: "trunk" | "worktree"
   ahead: number
   behind: number
 }
@@ -319,8 +314,8 @@ export type RepoStatus = {
 export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
   const results = await Promise.all(
     workspace.repos
-      .filter((r) => r.mode === "worktree" && existsSync(r.task_path!))
-      .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path!) }))
+      .filter((r) => r.mode === "worktree" && existsSync(r.task_path))
+      .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
   )
   return results.filter((r) => r.dirty).map((r) => r.name)
 }
@@ -329,10 +324,7 @@ export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]>
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
   return Promise.all(
     workspace.repos.map(async (repo) => {
-      if (repo.mode === "dir") {
-        return { name: repo.name, exists: existsSync(repo.main_path), dirty: false, branch: "—", mode: "dir" as const, ahead: 0, behind: 0 }
-      }
-      const repoPath = repo.mode === "worktree" ? repo.task_path! : repo.main_path
+      const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
       const exists = existsSync(repoPath)
 
       let dirty = false
@@ -397,7 +389,7 @@ async function _executeClean(
   // Step 3: Per-repo pre_clean + worktree removal (interleaved, D-08)
   const failures: string[] = []
   for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
-    if (!existsSync(repo.task_path!)) {
+    if (!existsSync(repo.task_path)) {
       onProgress?.(`skip  ${repo.name} (already removed)`)
       continue
     }
@@ -406,17 +398,17 @@ async function _executeClean(
       const repoEnv = buildRepoEnv(baseEnv, repo)
       try {
         if (opts.captured) {
-          await runHooksCaptured(repo.hooks.pre_clean, repo.task_path!, repoEnv,
+          await runHooksCaptured(repo.hooks.pre_clean, repo.task_path, repoEnv,
             (output) => onProgress?.(output.line))
         } else {
-          await runHooks(repo.hooks.pre_clean, repo.task_path!, repoEnv)
+          await runHooks(repo.hooks.pre_clean, repo.task_path, repoEnv)
         }
       } catch (err) {
         return { ok: false, error: `pre_clean[${repo.name}] hook failed (${err})` }  // D-03: abort
       }
     }
     try {
-      await removeWorktree(repo.main_path, repo.task_path!)
+      await removeWorktree(repo.main_path, repo.task_path)
       onProgress?.(`removed  ${repo.name}`)
     } catch (err) {
       failures.push(`${repo.name} (${err})`)
@@ -484,8 +476,8 @@ export async function cleanWorkspace(
   if (opts.dryRun) {
     onProgress?.("[dry-run] would close workspace (run pre_close, integration cleanup, post_close)")
     for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
-      if (!existsSync(repo.task_path!)) continue
-      onProgress?.(`[dry-run] would remove worktree: ${repo.task_path!}`)
+      if (!existsSync(repo.task_path)) continue
+      onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
     }
     if (opts.deleteFolder) {
       onProgress?.(`[dry-run] would delete folder: tasks/${name}/`)
@@ -620,8 +612,8 @@ export async function removeWorkspace(
   if (opts.dryRun) {
     onProgress?.("[dry-run] would close workspace (run pre_close, integration cleanup, post_close)")
     for (const repo of workspace.repos.filter(r => r.mode === "worktree")) {
-      if (!existsSync(repo.task_path!)) continue
-      onProgress?.(`[dry-run] would remove worktree: ${repo.task_path!}`)
+      if (!existsSync(repo.task_path)) continue
+      onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
     }
     onProgress?.(`[dry-run] would delete config: workspaces/${name}.yml`)
     onProgress?.("Dry run complete. No changes made.")
@@ -731,8 +723,8 @@ export async function mergeWorkspace(
       onProgress?.(`[dry-run] would merge ${workspace.branch} into ${baseBranch} (${repo.name})`)
     }
     for (const repo of worktreeRepos) {
-      if (existsSync(repo.task_path!)) {
-        onProgress?.(`[dry-run] would remove worktree: ${repo.task_path!}`)
+      if (existsSync(repo.task_path)) {
+        onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
       }
       onProgress?.(`[dry-run] would delete branch: ${workspace.branch} (${repo.name})`)
     }
@@ -887,14 +879,14 @@ export async function openWorkspace(
 
   // Recreate missing worktrees
   const missing = wsWithPorts.repos.filter(
-    (r) => r.mode === "worktree" && !existsSync(r.task_path!)
+    (r) => r.mode === "worktree" && !existsSync(r.task_path)
   )
   if (missing.length > 0) {
     let recreated = 0
     for (const repo of missing) {
       onProgress?.(`Recreating worktree: ${repo.name}`)
       try {
-        await createWorktree(repo.main_path, repo.task_path!, wsWithPorts.branch)
+        await createWorktree(repo.main_path, repo.task_path, wsWithPorts.branch)
         recreated++
       } catch (err) {
         onProgress?.(`\u26A0 Failed to recreate worktree for '${repo.name}': ${err instanceof Error ? err.message : String(err)}`)
@@ -905,7 +897,7 @@ export async function openWorkspace(
 
   // Ensure upstream tracking for all worktree repos (parallel)
   const worktreeReposForTracking = wsWithPorts.repos.filter(
-    (r) => r.mode === "worktree" && existsSync(r.task_path!)
+    (r) => r.mode === "worktree" && existsSync(r.task_path)
   )
   if (worktreeReposForTracking.length > 0) {
     const trackingResults = await Promise.all(
@@ -946,7 +938,7 @@ export async function openWorkspace(
     const repoEnv = buildRepoEnv(baseEnv, repo)
     for (const cmd of repo.hooks!.pre_open!) {
       onProgress?.(`pre_open [${repo.name}]: ${cmd}`)
-      await execHooks([cmd], repo.task_path ?? repo.main_path, repoEnv)
+      await execHooks([cmd], repo.task_path, repoEnv)
     }
   }
 
@@ -985,7 +977,7 @@ export async function openWorkspace(
 
   // TMPL-04: Ensure trunk repos have their expected base branch accessible
   for (const repo of wsWithPorts.repos.filter(r => r.mode === "trunk")) {
-    if (!repo.task_path || !existsSync(repo.task_path)) continue
+    if (!existsSync(repo.task_path)) continue
     const currentBranch = await getCurrentBranch(repo.task_path)
     const expectedBranch = repo.base_branch ?? "main"
     if (currentBranch !== expectedBranch) {
@@ -1053,7 +1045,7 @@ export async function renameWorkspace(
   // Dry-run short-circuit — just describe what would happen
   if (opts.dryRun) {
     for (const repo of worktreeRepos) {
-      const oldPath = repo.task_path!
+      const oldPath = repo.task_path
       const newPath = oldPath.replace(join(tasksDir, oldName), join(tasksDir, newName))
       if (existsSync(oldPath)) {
         onProgress?.(`[dry-run] would re-register worktree: ${oldPath} -> ${newPath} (${repo.name})`)
@@ -1065,7 +1057,7 @@ export async function renameWorkspace(
   }
 
   for (const repo of worktreeRepos) {
-    const oldWorktreePath = repo.task_path!
+    const oldWorktreePath = repo.task_path
     const newWorktreePath = oldWorktreePath.replace(
       join(tasksDir, oldName),
       join(tasksDir, newName)
@@ -1081,7 +1073,7 @@ export async function renameWorkspace(
   // Update workspace metadata
   workspace.name = newName
   for (const repo of workspace.repos) {
-    if (repo.task_path && repo.task_path.includes(join(tasksDir, oldName))) {
+    if (repo.task_path.includes(join(tasksDir, oldName))) {
       repo.task_path = repo.task_path.replace(
         join(tasksDir, oldName),
         join(tasksDir, newName)
@@ -1212,13 +1204,13 @@ export async function pushWorkspace(
   if (opts.dryRun) {
     await Promise.all(
       worktreeRepos.map(async (repo) => {
-        if (!existsSync(repo.task_path!)) {
+        if (!existsSync(repo.task_path)) {
           skipped.push({ repo: repo.name, reason: "task_path missing" })
           onProgress?.({ repo: repo.name, status: "skipped", detail: "task_path missing" })
           return
         }
 
-        const commits = await getCommitsAhead(repo.task_path!, `origin/${workspace.branch}`, "HEAD")
+        const commits = await getCommitsAhead(repo.task_path, `origin/${workspace.branch}`, "HEAD")
         pushed.push({ repo: repo.name, commits })
         onProgress?.({
           repo: repo.name,
@@ -1232,7 +1224,7 @@ export async function pushWorkspace(
 
   await Promise.all(
     worktreeRepos.map(async (repo) => {
-      if (!existsSync(repo.task_path!)) {
+      if (!existsSync(repo.task_path)) {
         skipped.push({ repo: repo.name, reason: "task_path missing" })
         onProgress?.({ repo: repo.name, status: "skipped", detail: "task_path missing" })
         return
@@ -1240,7 +1232,7 @@ export async function pushWorkspace(
 
       onProgress?.({ repo: repo.name, status: "pushing", detail: "" })
 
-      const result = await pushBranch(repo.task_path!, workspace.branch, {
+      const result = await pushBranch(repo.task_path, workspace.branch, {
         force: opts.force,
         forceWithLease: opts.forceWithLease,
         setUpstream: opts.setUpstream,
@@ -1340,13 +1332,13 @@ export async function syncWorkspace(
 
     if (opts.stash) {
       for (const repo of worktreeRepos) {
-        if (!existsSync(repo.task_path!)) continue
-        if (await hasAutoStash(repo.task_path!)) {
+        if (!existsSync(repo.task_path)) continue
+        if (await hasAutoStash(repo.task_path)) {
           baseResult = {
             ok: false,
             synced: [],
             skipped: [],
-            error: `Repo '${repo.name}' already has a git-stacks auto-stash entry. Resolve it first: git -C ${repo.task_path!} stash pop`,
+            error: `Repo '${repo.name}' already has a git-stacks auto-stash entry. Resolve it first: git -C ${repo.task_path} stash pop`,
           }
           shouldContinue = false
           break
@@ -1355,10 +1347,10 @@ export async function syncWorkspace(
 
       if (shouldContinue) {
         for (const repo of worktreeRepos) {
-          if (!existsSync(repo.task_path!)) continue
-          if (!(await isRepoDirty(repo.task_path!))) continue
+          if (!existsSync(repo.task_path)) continue
+          if (!(await isRepoDirty(repo.task_path))) continue
           onProgress?.({ repo: repo.name, status: "stashing", detail: "", conflicts: [] })
-          const stashResult = await stashPush(repo.task_path!, "git-stacks auto-stash (sync)")
+          const stashResult = await stashPush(repo.task_path, "git-stacks auto-stash (sync)")
           if (!stashResult.ok) {
             baseResult = {
               ok: false,
@@ -1369,7 +1361,7 @@ export async function syncWorkspace(
             shouldContinue = false
             break
           }
-          stashedRepos.push({ name: repo.name, taskPath: repo.task_path! })
+          stashedRepos.push({ name: repo.name, taskPath: repo.task_path })
         }
       }
     }
@@ -1379,11 +1371,11 @@ export async function syncWorkspace(
       const fetchFailures = new Map<string, string>()
       await Promise.all(
         repoInfos
-          .filter(({ repo }) => existsSync(repo.task_path!))
+          .filter(({ repo }) => existsSync(repo.task_path))
           .map(async ({ repo }) => {
             onProgress?.({ repo: repo.name, status: "fetching", detail: "", conflicts: [] })
             try {
-              await fetchOrigin(repo.task_path!)
+              await fetchOrigin(repo.task_path)
             } catch (e) {
               const msg = e instanceof Error ? e.message : "fetch failed"
               const detail = msg.includes("timeout") ? "fetch failed (timeout)" : "fetch failed"
@@ -1396,10 +1388,10 @@ export async function syncWorkspace(
       // Dry-run conflict check in parallel
       const conflictResults = await Promise.all(
         repoInfos
-          .filter(({ repo }) => existsSync(repo.task_path!))
+          .filter(({ repo }) => existsSync(repo.task_path))
           .map(async ({ repo, baseBranch }) => ({
             repo: repo.name,
-            files: await getMergeConflicts(repo.task_path!, `origin/${baseBranch}`, workspace.branch),
+            files: await getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
           }))
       )
       const conflicts = conflictResults.filter((r) => r.files.length > 0)
@@ -1421,7 +1413,7 @@ export async function syncWorkspace(
         const skipped: SyncResult["skipped"] = []
 
         for (const { repo, baseBranch, strategy } of repoInfos) {
-          if (!existsSync(repo.task_path!)) {
+          if (!existsSync(repo.task_path)) {
             skipped.push({ repo: repo.name, reason: "task_path missing" })
             continue
           }
@@ -1438,15 +1430,15 @@ export async function syncWorkspace(
             continue
           }
 
-          const commitsBefore = await getCommitsBehind(repo.task_path!, `origin/${baseBranch}`, "HEAD")
+          const commitsBefore = await getCommitsBehind(repo.task_path, `origin/${baseBranch}`, "HEAD")
 
           onProgress?.({ repo: repo.name, status: "rebasing", detail: "", conflicts: [] })
 
           let result: { ok: boolean; error?: string }
           if (strategy === "merge") {
-            result = await mergeBranchFF(repo.task_path!, `origin/${baseBranch}`)
+            result = await mergeBranchFF(repo.task_path, `origin/${baseBranch}`)
           } else {
-            result = await rebaseBranch(repo.task_path!, `origin/${baseBranch}`)
+            result = await rebaseBranch(repo.task_path, `origin/${baseBranch}`)
           }
 
           if (!result.ok) {
@@ -1514,10 +1506,8 @@ export async function pullWorkspace(
   }
 
   // Phase 1: Parallel fetch, deduplicated by main_path
-  // Dir repos are not git repos — exclude before building fetch groups (D-04)
-  const gitRepos = repos.filter(r => r.mode !== "dir")
-  const fetchGroups = new Map<string, typeof gitRepos>()
-  for (const repo of gitRepos) {
+  const fetchGroups = new Map<string, typeof repos>()
+  for (const repo of repos) {
     const key = repo.main_path
     if (!fetchGroups.has(key)) fetchGroups.set(key, [])
     fetchGroups.get(key)!.push(repo)
@@ -1548,12 +1538,7 @@ export async function pullWorkspace(
   const failed: PullResult["failed"] = []
 
   for (const repo of repos) {
-    if (repo.mode === "dir") {
-      skipped.push({ repo: repo.name, reason: "dir" })
-      onProgress?.({ repo: repo.name, status: "skipped", detail: "dir" })
-      continue
-    }
-    const repoPath = repo.mode === "worktree" ? repo.task_path! : repo.main_path
+    const repoPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
     const pullBranch = repo.mode === "worktree"
       ? workspace.branch
       : (repo.base_branch ?? "main")
@@ -1717,7 +1702,7 @@ export function detectWorkspaceFromCwd(cwd?: string): CwdDetectionResult {
   for (const ws of workspaces) {
     for (const repo of ws.repos) {
       if (repo.mode !== "worktree") continue
-      const resolvedTaskPath = resolve(expandHome(repo.task_path!))
+      const resolvedTaskPath = resolve(expandHome(repo.task_path))
       // Match CWD exactly OR as a subdirectory (trailing separator prevents prefix collisions)
       if (
         currentDir === resolvedTaskPath ||

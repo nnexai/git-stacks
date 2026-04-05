@@ -19,7 +19,6 @@ export function WorkspaceRow(props: Props) {
   const ws = () => props.entry.workspace
   const wtCount = () => ws().repos.filter((r) => r.mode === "worktree").length
   const trCount = () => ws().repos.filter((r) => r.mode === "trunk").length
-  const drCount = () => ws().repos.filter((r) => r.mode === "dir").length
 
   const dirtyCount = () => {
     const s = props.entry.status
@@ -39,8 +38,7 @@ export function WorkspaceRow(props: Props) {
   // Counts column: " Nwt Mtr" or " Nwt Mtr ~D" — fixed width
   const countsText = createMemo(() => {
     const dirty = dirtyCount()
-    const dir = drCount()
-    return `${wtCount()}wt ${trCount()}tr${dir > 0 ? ` ${dir}dir` : ""}${dirty > 0 ? ` ~${dirty}` : ""}`
+    return `${wtCount()}wt ${trCount()}tr${dirty > 0 ? ` ~${dirty}` : ""}`
   })
   const countsWidth = createMemo(() => countsText().length + 2) // leading "  "
 
