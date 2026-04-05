@@ -1,7 +1,7 @@
-import type { Workspace } from "./config"
+export type LabeledEntity = { labels?: string[] }
 
-export function matchesLabels(workspace: Workspace, terms: string[]): boolean {
+export function matchesLabels(entity: LabeledEntity, terms: string[]): boolean {
   if (terms.length === 0) return true
-  const wsLabels = workspace.labels ?? []
-  return terms.every(term => wsLabels.includes(term))
+  const labels = entity.labels ?? []
+  return terms.every(term => labels.includes(term))
 }
