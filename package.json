@@ -39,6 +39,7 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
+    "@logtape/logtape": "^2.0.5",
     "@opentui/core": "^0.1.96",
     "@opentui/solid": "^0.1.96",
     "commander": "^14.0.3",
