@@ -181,9 +181,9 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
 **Milestone Goal:** Add a "dir" repo type for non-git directories that behave like trunk repos but are invisible to all git operations.
 
 - [x] **Phase 64: Schema & Registry** - Add "dir" type to Zod schemas and wire `repo add`/`repo scan` to accept plain directories (completed 2026-04-04)
-- [ ] **Phase 65: Workspace Lifecycle** - `new`/`open`/`close`/`clean`/`remove` handle dir repos correctly (reference only, no worktrees)
-- [ ] **Phase 66: Git Operation Guards** - All git commands (push, pull, sync, merge, ahead/behind, dirty) skip dir repos
-- [ ] **Phase 67: Status, Display & Health** - Status, list, TUI dashboard, and doctor surface dir repos correctly
+- [x] **Phase 65: Workspace Lifecycle** - `new`/`open`/`close`/`clean`/`remove` handle dir repos correctly (reference only, no worktrees) (completed 2026-04-04)
+- [x] **Phase 66: Git Operation Guards** - All git commands (push, pull, sync, merge, ahead/behind, dirty) skip dir repos (completed 2026-04-04)
+- [x] **Phase 67: Status, Display & Health** - Status, list, TUI dashboard, and doctor surface dir repos correctly (completed 2026-04-05)
 - [x] **Phase 68: Release Prep** - v0.15.0 version bump, CHANGELOG, README documentation (completed 2026-04-05)
 
 ## Phase Details
@@ -210,9 +210,9 @@ Plans:
   1. `git-stacks new` with a template containing a dir repo includes the dir in the workspace — main_path referenced, no worktree created, no branch set
   2. `git-stacks open` injects dir repo path into hook/env context but does not run any git operations against it
   3. `git-stacks close`, `clean`, and `remove` complete successfully for workspaces with dir repos — no worktree deletion attempted, no git errors logged
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
-- [ ] 65-01-PLAN.md — Dir-mode guards for all workspace lifecycle functions + tests
+- [x] 65-01-PLAN.md — Dir-mode guards for all workspace lifecycle functions + tests
 
 ### Phase 66: Git Operation Guards
 **Goal**: All git-aware commands silently skip dir repos so mixed workspaces produce no git errors
@@ -223,8 +223,9 @@ Plans:
   2. `git-stacks pull` and `git-stacks sync` skip dir repos and report only non-dir repo results
   3. `git-stacks merge` skips dir repos without error or warning noise
   4. Ahead/behind counts and dirty-file detection treat dir repos as if they have no git state — no errors, no false values
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 1/1 plans complete
+Plans:
+- [x] 66-01-PLAN.md — Git operation guards for dir repos (push, pull, sync, merge, ahead/behind, dirty)
 
 ### Phase 67: Status, Display & Health
 **Goal**: Users can see dir repos represented correctly in CLI output and TUI — labeled as "dir" with no git metrics
@@ -235,8 +236,10 @@ Plans:
   2. `git-stacks list` includes workspaces containing only dir repos without git aggregation errors
   3. TUI dashboard workspace detail shows dir repos with a "dir" indicator and no git badges
   4. `git-stacks doctor` skips git health checks for dir repos and instead validates that the directory exists and is accessible
-**Plans**: TBD
-**UI hint**: yes
+**Plans:** 2/2 plans complete
+Plans:
+- [x] 67-01-PLAN.md — Dir repo display in CLI status and doctor health checks
+- [x] 67-02-PLAN.md — Dir mode TUI dashboard rendering
 
 ### Phase 68: Release Prep
 **Goal**: v0.15.0 ships with updated version, changelog, and README documentation for dir mode
@@ -246,7 +249,9 @@ Plans:
   1. `git-stacks --version` reports v0.15.0
   2. CHANGELOG documents all dir mode behaviors shipped in Phases 64-67
   3. README explains how to add a dir repo and what behavior to expect
-**Plans**: TBD
+**Plans:** 1/1 plans complete
+Plans:
+- [x] 68-01-PLAN.md — Version bump, CHANGELOG, README documentation
 
 ## Progress
 
@@ -258,8 +263,8 @@ Plans:
 | 61. Secrets | v0.14.0 | 3/3 | Complete | 2026-04-03 |
 | 62. Stash on Sync | v0.14.0 | 2/2 | Complete | 2026-04-03 |
 | 63. Release Prep | v0.14.0 | 1/1 | Complete | 2026-04-03 |
-| 64. Schema & Registry | v0.15.0 | 2/2 | Complete    | 2026-04-04 |
-| 65. Workspace Lifecycle | v0.15.0 | 0/1 | Not started | - |
-| 66. Git Operation Guards | v0.15.0 | 0/? | Not started | - |
-| 67. Status, Display & Health | v0.15.0 | 0/? | Not started | - |
-| 68. Release Prep | v0.15.0 | 1/0 | Complete    | 2026-04-05 |
+| 64. Schema & Registry | v0.15.0 | 2/2 | Complete | 2026-04-04 |
+| 65. Workspace Lifecycle | v0.15.0 | 1/1 | Complete | 2026-04-04 |
+| 66. Git Operation Guards | v0.15.0 | 1/1 | Complete | 2026-04-04 |
+| 67. Status, Display & Health | v0.15.0 | 2/2 | Complete | 2026-04-05 |
+| 68. Release Prep | v0.15.0 | 1/1 | Complete | 2026-04-05 |
