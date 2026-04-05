@@ -9,13 +9,14 @@
     "plan_check": true,
     "verifier": true,
     "auto_advance": false,
+    "use_worktrees": false,
     "nyquist_validation": true,
     "ui_phase": true,
     "ui_safety_gate": true,
     "text_mode": false,
     "research_before_questions": false,
     "skip_discuss": false,
-    "_auto_chain_active": true,
+    "_auto_chain_active": false,
     "discuss_mode": "assumptions"
   },
   "git": {
