@@ -208,7 +208,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 
 **Milestone Goal:** Extend template labels to parity with workspace labels, add structured debug logging with module filtering, introduce typed integration capability contracts, speed up config lookups with an in-memory index, and make multi-step workspace operations safe to fail via a compensation-stack rollback.
 
-- [ ] **Phase 74: Template Label CLI & Propagation** - Template label CRUD commands, `--label` filter on `template list`, label snapshot into workspace at create/clone time
+- [x] **Phase 74: Template Label CLI & Propagation** - Template label CRUD commands, `--label` filter on `template list`, label snapshot into workspace at create/clone time (completed 2026-04-05)
 - [ ] **Phase 75: DI Seams & Structured Logging** - Injectable `_exec` seams in lifecycle modules, structured debug fields, `GS_DEBUG` module filter
 - [ ] **Phase 76: Integration Plugin Capability Contracts** - `capabilities` field on Integration interface, capability-driven runner guards, `integration list` displays capabilities
 - [ ] **Phase 77: Indexed Config Store** - In-memory index for workspace/template lookups, write-triggered invalidation, scan fallback
@@ -230,8 +230,8 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 **Plans**: 2 plans
 
 Plans:
-- [ ] `74-01-PLAN.md` — Nested `template label` CRUD plus `template list --label` exact-match AND filtering
-- [ ] `74-02-PLAN.md` — Label propagation through template composition, workspace creation snapshot, and workspace clone preservation
+- [x] `74-01-PLAN.md` — Nested `template label` CRUD plus `template list --label` exact-match AND filtering
+- [x] `74-02-PLAN.md` — Label propagation through template composition, workspace creation snapshot, and workspace clone preservation
 
 ### Phase 75: DI Seams & Structured Logging
 **Goal**: `workspace-lifecycle.ts` and `workspace-git.ts` have injectable subprocess seams, and debug output carries structured fields filterable by module name
@@ -289,7 +289,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 74. Template Label CLI & Propagation | v0.17.0 | 1/2 | In Progress|  |
+| 74. Template Label CLI & Propagation | v0.17.0 | 2/2 | Complete   | 2026-04-05 |
 | 75. DI Seams & Structured Logging | v0.17.0 | 0/TBD | Not started | - |
 | 76. Integration Plugin Capability Contracts | v0.17.0 | 0/TBD | Not started | - |
 | 77. Indexed Config Store | v0.17.0 | 0/TBD | Not started | - |

@@ -14,8 +14,8 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 - [x] **TLBL-03**: User can list labels on a template via `git-stacks template label list <template>`
 - [x] **TLBL-04**: User can clear all labels from a template via `git-stacks template label clear <template>`
 - [x] **TLBL-05**: User can filter templates by label via `git-stacks template list --label <label>`
-- [ ] **TLBL-06**: Template labels propagate to workspace on creation (union merge with user-provided labels)
-- [ ] **TLBL-07**: Workspace clone copies labels from source workspace
+- [x] **TLBL-06**: Template labels propagate to workspace on creation (union merge with user-provided labels)
+- [x] **TLBL-07**: Workspace clone copies labels from source workspace
 
 ### Engine Hardening
 
@@ -74,8 +74,8 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 | TLBL-03 | Phase 74 | Complete |
 | TLBL-04 | Phase 74 | Complete |
 | TLBL-05 | Phase 74 | Complete |
-| TLBL-06 | Phase 74 | Pending |
-| TLBL-07 | Phase 74 | Pending |
+| TLBL-06 | Phase 74 | Complete |
+| TLBL-07 | Phase 74 | Complete |
 | ENGN-01 | Phase 78 | Pending |
 | ENGN-02 | Phase 78 | Pending |
 | ENGN-03 | Phase 78 | Pending |
