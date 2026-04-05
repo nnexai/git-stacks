@@ -289,7 +289,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 74. Template Label CLI & Propagation | v0.17.0 | 2/2 | Complete   | 2026-04-05 |
+| 74. Template Label CLI & Propagation | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
 | 75. DI Seams & Structured Logging | v0.17.0 | 0/TBD | Not started | - |
 | 76. Integration Plugin Capability Contracts | v0.17.0 | 0/TBD | Not started | - |
 | 77. Indexed Config Store | v0.17.0 | 0/TBD | Not started | - |
