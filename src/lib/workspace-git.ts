@@ -26,10 +26,22 @@ import { logDebug, timeOperation } from "./observability"
 const OBS_CATEGORY = "workspace-git"
 
 // ─── Injectable executor ──────────────────────────────────────────────────────
-// Forward-compatible seam — git ops currently route through git.ts.
-// Present per EXTR-07 convention for future direct-spawn needs.
+// All git helper calls in this module route through _exec properties so tests
+// can replace individual helpers without mocking the entire git.ts module.
+// Object property mutation is stable in ESM (unlike named export re-binding).
 export const _exec = {
-  // No direct spawn in this phase; git operations go through git.ts helpers.
+  fetchOrigin,
+  pushBranch,
+  getCommitsAhead,
+  rebaseBranch,
+  mergeBranchFF,
+  getCommitsBehind,
+  getMergeConflicts,
+  isRepoDirty,
+  stashPush,
+  stashPop,
+  hasAutoStash,
+  pullFFOnly,
 }
 
 // ─── Sync types ───────────────────────────────────────────────────────────────
@@ -130,7 +142,7 @@ export async function pushWorkspace(
             return
           }
 
-          const commits = await getCommitsAhead(repo.task_path, `origin/${workspace.branch}`, "HEAD")
+          const commits = await _exec.getCommitsAhead(repo.task_path, `origin/${workspace.branch}`, "HEAD")
           pushed.push({ repo: repo.name, commits })
           onProgress?.({
             repo: repo.name,
@@ -152,7 +164,7 @@ export async function pushWorkspace(
 
         onProgress?.({ repo: repo.name, status: "pushing", detail: "" })
 
-        const result = await pushBranch(repo.task_path, workspace.branch, {
+        const result = await _exec.pushBranch(repo.task_path, workspace.branch, {
           force: opts.force,
           forceWithLease: opts.forceWithLease,
           setUpstream: opts.setUpstream,
@@ -224,7 +236,7 @@ export async function syncWorkspace(
       const failures: NonNullable<SyncResult["stashPopFailures"]> = []
       for (const repo of [...stashedRepos].reverse()) {
         onProgress?.({ repo: repo.name, status: "popping", detail: "", conflicts: [] })
-        const popResult = await stashPop(repo.taskPath)
+        const popResult = await _exec.stashPop(repo.taskPath)
         if (!popResult.ok) {
           failures.push({ repo: repo.name, error: popResult.error, repoPath: repo.taskPath })
           const prior = settledRows.get(repo.name)
@@ -257,7 +269,7 @@ export async function syncWorkspace(
       if (opts.stash) {
         for (const repo of worktreeRepos) {
           if (!existsSync(repo.task_path)) continue
-          if (await hasAutoStash(repo.task_path)) {
+          if (await _exec.hasAutoStash(repo.task_path)) {
             baseResult = {
               ok: false,
               synced: [],
@@ -272,9 +284,9 @@ export async function syncWorkspace(
         if (shouldContinue) {
           for (const repo of worktreeRepos) {
             if (!existsSync(repo.task_path)) continue
-            if (!(await isRepoDirty(repo.task_path))) continue
+            if (!(await _exec.isRepoDirty(repo.task_path))) continue
             onProgress?.({ repo: repo.name, status: "stashing", detail: "", conflicts: [] })
-            const stashResult = await stashPush(repo.task_path, "git-stacks auto-stash (sync)")
+            const stashResult = await _exec.stashPush(repo.task_path, "git-stacks auto-stash (sync)")
             if (!stashResult.ok) {
               baseResult = {
                 ok: false,
@@ -300,7 +312,7 @@ export async function syncWorkspace(
               .map(async ({ repo }) => {
                 onProgress?.({ repo: repo.name, status: "fetching", detail: "", conflicts: [] })
                 try {
-                  await fetchOrigin(repo.task_path)
+                  await _exec.fetchOrigin(repo.task_path)
                 } catch (e) {
                   const msg = e instanceof Error ? e.message : "fetch failed"
                   const detail = msg.includes("timeout") ? "fetch failed (timeout)" : "fetch failed"
@@ -321,7 +333,7 @@ export async function syncWorkspace(
                 .filter(({ repo }) => existsSync(repo.task_path))
                 .map(async ({ repo, baseBranch }) => ({
                   repo: repo.name,
-                  files: await getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
+                  files: await _exec.getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
                 }))
             )
         )
@@ -360,15 +372,15 @@ export async function syncWorkspace(
               continue
             }
 
-            const commitsBefore = await getCommitsBehind(repo.task_path, `origin/${baseBranch}`, "HEAD")
+            const commitsBefore = await _exec.getCommitsBehind(repo.task_path, `origin/${baseBranch}`, "HEAD")
 
             onProgress?.({ repo: repo.name, status: "rebasing", detail: "", conflicts: [] })
             logDebug(OBS_CATEGORY, `syncWorkspace.applyStrategy: ${repo.name} (${strategy})`)
             const result = await timeOperation(OBS_CATEGORY, "syncWorkspace.applyStrategy", async () => {
               if (strategy === "merge") {
-                return mergeBranchFF(repo.task_path, `origin/${baseBranch}`)
+                return _exec.mergeBranchFF(repo.task_path, `origin/${baseBranch}`)
               }
-              return rebaseBranch(repo.task_path, `origin/${baseBranch}`)
+              return _exec.rebaseBranch(repo.task_path, `origin/${baseBranch}`)
             })
 
             if (!result.ok) {
@@ -441,7 +453,7 @@ export async function pullWorkspace(
           onProgress?.({ repo: r.name, status: "fetching", detail: "" })
         }
         try {
-          await fetchOrigin(mainPath)
+          await _exec.fetchOrigin(mainPath)
         } catch (e) {
           const msg = e instanceof Error ? e.message : "fetch failed"
           const detail = msg.includes("timeout") ? "fetch failed (timeout)" : "fetch failed"
@@ -476,14 +488,14 @@ export async function pullWorkspace(
         continue
       }
 
-      if (await isRepoDirty(repoPath)) {
+      if (await _exec.isRepoDirty(repoPath)) {
         skipped.push({ repo: repo.name, reason: "dirty" })
         onProgress?.({ repo: repo.name, status: "skipped", detail: "dirty" })
         continue
       }
 
       onProgress?.({ repo: repo.name, status: "pulling", detail: "" })
-      const pullResult = await pullFFOnly(repoPath, pullBranch)
+      const pullResult = await _exec.pullFFOnly(repoPath, pullBranch)
 
       if (!pullResult.ok) {
         failed.push({ repo: repo.name, reason: pullResult.reason })

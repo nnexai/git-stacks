@@ -12,7 +12,7 @@ import {
 import { removeWorktree, checkBranchExists, getMergeConflicts, mergeNoFF, deleteLocalBranch } from "./git"
 import { type IntegrationContext } from "./integrations"
 import { runIntegrationCleanup } from "./integrations/runner"
-import { runHooks, runHooksCaptured } from "./lifecycle"
+import { _exec as lifecycleExec, type SpawnHandle } from "./lifecycle"
 import { warnExternalFiles } from "./files"
 import { timeOperation } from "./observability"
 import { getTasksDir } from "./paths"
@@ -20,6 +20,95 @@ import { buildBaseEnv, buildRepoEnv } from "./workspace-env"
 import { getDirtyWorktrees } from "./workspace-status"
 
 const OBS_CATEGORY = "workspace-lifecycle"
+
+// ─── Injectable executor ──────────────────────────────────────────────────────
+// Reuses the SpawnHandle contract from lifecycle.ts. Tests can replace _exec.spawn
+// to intercept hook subprocess launches without starting real processes.
+export const _exec: { spawn: typeof lifecycleExec.spawn } = {
+  spawn: lifecycleExec.spawn,
+}
+
+// ─── Module-local hook runners ────────────────────────────────────────────────
+// Mirror the behavior of runHooks/runHooksCaptured from lifecycle.ts but route
+// spawn through the module-local _exec seam so tests can intercept at this boundary.
+
+async function runWorkspaceHooks(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  abortOnFailure = true
+): Promise<void> {
+  if (!commands || commands.length === 0) return
+
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+
+  for (const cmd of commands) {
+    const handle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "inherit",
+      stderr: "inherit",
+    })
+    const exitCode = await handle.exited
+    if (abortOnFailure && exitCode !== 0) {
+      throw new Error(`Hook failed (exit ${exitCode}): ${cmd}`)
+    }
+  }
+}
+
+async function runWorkspaceHooksCaptured(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  onOutput: (output: { line: string; stream: "stdout" | "stderr" }) => void,
+  abortOnFailure = true
+): Promise<void> {
+  if (!commands || commands.length === 0) return
+
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+
+  for (const cmd of commands) {
+    const handle: SpawnHandle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+
+    const readStream = async (
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      stream: "stdout" | "stderr"
+    ) => {
+      const decoder = new TextDecoder()
+      let buf = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          if (buf) { onOutput({ line: buf, stream }); buf = "" }
+          break
+        }
+        buf += decoder.decode(value)
+        const lines = buf.split("\n")
+        buf = lines.pop() ?? ""
+        for (const line of lines) {
+          if (line) onOutput({ line, stream })
+        }
+      }
+    }
+
+    await Promise.all([
+      readStream(handle.stdout!.getReader(), "stdout"),
+      readStream(handle.stderr!.getReader(), "stderr"),
+    ])
+
+    const exitCode = await handle.exited
+    if (abortOnFailure && exitCode !== 0) {
+      throw new Error(`Hook failed (exit ${exitCode}): ${cmd}`)
+    }
+  }
+}
 
 type ProgressCallback = (message: string) => void
 
@@ -43,10 +132,10 @@ async function _executeClean(
   if (workspace.hooks?.pre_clean?.length) {
     try {
       if (opts.captured) {
-        await runHooksCaptured(workspace.hooks.pre_clean, hookCwd, baseEnv,
+        await runWorkspaceHooksCaptured(workspace.hooks.pre_clean, hookCwd, baseEnv,
           (output) => onProgress?.(output.line))
       } else {
-        await runHooks(workspace.hooks.pre_clean, hookCwd, baseEnv)
+        await runWorkspaceHooks(workspace.hooks.pre_clean, hookCwd, baseEnv)
       }
     } catch (err) {
       return { ok: false, error: `pre_clean hook failed (${err})` }
@@ -63,10 +152,10 @@ async function _executeClean(
       const repoEnv = buildRepoEnv(baseEnv, repo)
       try {
         if (opts.captured) {
-          await runHooksCaptured(repo.hooks.pre_clean, repo.task_path, repoEnv,
+          await runWorkspaceHooksCaptured(repo.hooks.pre_clean, repo.task_path, repoEnv,
             (output) => onProgress?.(output.line))
         } else {
-          await runHooks(repo.hooks.pre_clean, repo.task_path, repoEnv)
+          await runWorkspaceHooks(repo.hooks.pre_clean, repo.task_path, repoEnv)
         }
       } catch (err) {
         return { ok: false, error: `pre_clean[${repo.name}] hook failed (${err})` }
@@ -87,10 +176,10 @@ async function _executeClean(
   if (workspace.hooks?.post_clean?.length) {
     try {
       if (opts.captured) {
-        await runHooksCaptured(workspace.hooks.post_clean, hookCwd, baseEnv,
+        await runWorkspaceHooksCaptured(workspace.hooks.post_clean, hookCwd, baseEnv,
           (output) => onProgress?.(output.line))
       } else {
-        await runHooks(workspace.hooks.post_clean, hookCwd, baseEnv)
+        await runWorkspaceHooks(workspace.hooks.post_clean, hookCwd, baseEnv)
       }
     } catch (err) {
       return { ok: false, error: `post_clean hook failed (${err})` }
@@ -171,10 +260,10 @@ async function _executeClose(
   if (workspace.hooks?.pre_close?.length) {
     try {
       if (opts.captured) {
-        await runHooksCaptured(workspace.hooks.pre_close, hookCwd, env,
+        await runWorkspaceHooksCaptured(workspace.hooks.pre_close, hookCwd, env,
           (output) => onProgress?.(output.line))
       } else {
-        await runHooks(workspace.hooks.pre_close, hookCwd, env)
+        await runWorkspaceHooks(workspace.hooks.pre_close, hookCwd, env)
       }
     } catch (err) {
       return { ok: false, error: `pre_close hook failed (${err})` }
@@ -187,10 +276,10 @@ async function _executeClose(
   if (workspace.hooks?.post_close?.length) {
     try {
       if (opts.captured) {
-        await runHooksCaptured(workspace.hooks.post_close, hookCwd, env,
+        await runWorkspaceHooksCaptured(workspace.hooks.post_close, hookCwd, env,
           (output) => onProgress?.(output.line))
       } else {
-        await runHooks(workspace.hooks.post_close, hookCwd, env)
+        await runWorkspaceHooks(workspace.hooks.post_close, hookCwd, env)
       }
     } catch (err) {
       return { ok: false, error: `post_close hook failed (${err})` }
@@ -293,10 +382,10 @@ export async function removeWorkspace(
     if (workspace.hooks?.pre_remove?.length) {
       try {
         if (opts.captured) {
-          await runHooksCaptured(workspace.hooks.pre_remove, hookCwd, baseEnv,
+          await runWorkspaceHooksCaptured(workspace.hooks.pre_remove, hookCwd, baseEnv,
             (output) => onProgress?.(output.line))
         } else {
-          await runHooks(workspace.hooks.pre_remove, hookCwd, baseEnv)
+          await runWorkspaceHooks(workspace.hooks.pre_remove, hookCwd, baseEnv)
         }
       } catch (err) {
         return { ok: false, error: `pre_remove hook failed (${err})` }
@@ -308,10 +397,10 @@ export async function removeWorkspace(
     if (workspace.hooks?.post_remove?.length) {
       try {
         if (opts.captured) {
-          await runHooksCaptured(workspace.hooks.post_remove, hookCwd, baseEnv,
+          await runWorkspaceHooksCaptured(workspace.hooks.post_remove, hookCwd, baseEnv,
             (output) => onProgress?.(output.line))
         } else {
-          await runHooks(workspace.hooks.post_remove, hookCwd, baseEnv)
+          await runWorkspaceHooks(workspace.hooks.post_remove, hookCwd, baseEnv)
         }
       } catch (err) {
         onProgress?.(`post_remove hook error: ${err}`)
@@ -399,10 +488,10 @@ export async function mergeWorkspace(
     if (workspace.hooks?.pre_merge?.length) {
       try {
         if (opts.captured) {
-          await runHooksCaptured(workspace.hooks.pre_merge, hookCwd, baseEnv,
+          await runWorkspaceHooksCaptured(workspace.hooks.pre_merge, hookCwd, baseEnv,
             (output) => onProgress?.(output.line))
         } else {
-          await runHooks(workspace.hooks.pre_merge, hookCwd, baseEnv)
+          await runWorkspaceHooks(workspace.hooks.pre_merge, hookCwd, baseEnv)
         }
       } catch (err) {
         return { ok: false, error: `pre_merge hook failed (${err})` }
@@ -429,10 +518,10 @@ export async function mergeWorkspace(
     if (workspace.hooks?.pre_remove?.length) {
       try {
         if (opts.captured) {
-          await runHooksCaptured(workspace.hooks.pre_remove, hookCwd, baseEnv,
+          await runWorkspaceHooksCaptured(workspace.hooks.pre_remove, hookCwd, baseEnv,
             (output) => onProgress?.(output.line))
         } else {
-          await runHooks(workspace.hooks.pre_remove, hookCwd, baseEnv)
+          await runWorkspaceHooks(workspace.hooks.pre_remove, hookCwd, baseEnv)
         }
       } catch (err) {
         return { ok: false, error: `pre_remove hook failed (${err})` }
@@ -444,10 +533,10 @@ export async function mergeWorkspace(
     if (workspace.hooks?.post_remove?.length) {
       try {
         if (opts.captured) {
-          await runHooksCaptured(workspace.hooks.post_remove, hookCwd, baseEnv,
+          await runWorkspaceHooksCaptured(workspace.hooks.post_remove, hookCwd, baseEnv,
             (output) => onProgress?.(output.line))
         } else {
-          await runHooks(workspace.hooks.post_remove, hookCwd, baseEnv)
+          await runWorkspaceHooks(workspace.hooks.post_remove, hookCwd, baseEnv)
         }
       } catch (err) {
         onProgress?.(`post_remove hook error: ${err}`)
@@ -463,10 +552,10 @@ export async function mergeWorkspace(
         onProgress?.(`post_merge: ${cmd}`)
         try {
           if (opts.captured) {
-            await runHooksCaptured([cmd], hookCwd, mergeBaseEnv,
+            await runWorkspaceHooksCaptured([cmd], hookCwd, mergeBaseEnv,
               (output) => onProgress?.(output.line))
           } else {
-            await runHooks([cmd], hookCwd, mergeBaseEnv)
+            await runWorkspaceHooks([cmd], hookCwd, mergeBaseEnv)
           }
         } catch (err) {
           onProgress?.(`post_merge hook error: ${err}`)
