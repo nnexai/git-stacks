@@ -57,7 +57,7 @@ describe("observability", () => {
     await configureObservability(true)
 
     const result = timeOperation("workspace-status", "getWorkspaceListInfo", () => "ok")
-    await Bun.sleep(0)
+    await Bun.sleep(10)
 
     expect(result).toBe("ok")
     expect(getOutput()).toContain("[workspace-status] getWorkspaceListInfo:")
