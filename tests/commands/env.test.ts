@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
+import { applyTestGitEnv, gitExecOptions } from "../helpers"
 
 const PROJECT_ROOT = join(import.meta.dir, "../..")
 
@@ -13,10 +14,11 @@ function makeTmpDir(prefix = "env-test"): string {
 
 function makeGitRepo(path: string): void {
   mkdirSync(path, { recursive: true })
-  const opts = { cwd: path, stdio: "pipe" as const }
+  const opts = gitExecOptions(path, path)
   execSync("git init -b main", opts)
   execSync('git config user.email "test@example.com"', opts)
   execSync('git config user.name "Test"', opts)
+  execSync("git config commit.gpgsign false", opts)
   writeFileSync(join(path, "README.md"), "init")
   execSync("git add .", opts)
   execSync('git commit -m "init"', opts)
@@ -92,13 +94,19 @@ describe("env command", () => {
   let tmpDir: string
   let cfgDir: string
   let taskPath: string
+  let gitEnvDir: string
+  let restoreGitEnv: (() => void) | undefined
 
   beforeEach(() => {
+    gitEnvDir = makeTmpDir("env-git-env")
+    restoreGitEnv = applyTestGitEnv(gitEnvDir)
     tmpDir = makeTmpDir()
     ;({ cfgDir, taskPath } = setupFixture(tmpDir))
   })
 
   afterEach(() => {
+    restoreGitEnv?.()
+    rmSync(gitEnvDir, { recursive: true, force: true })
     rmSync(tmpDir, { recursive: true, force: true })
   })
 

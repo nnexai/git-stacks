@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync, rmSync } from "fs"
+import { existsSync, mkdirSync, writeFileSync, rmSync } from "fs"
 import { join, dirname } from "path"
-import { execSync } from "child_process"
+import { execSync, type ExecSyncOptions } from "child_process"
 import { mock } from "bun:test"
 
 // --- Schema stub helper ---
@@ -16,6 +16,85 @@ export function makeTmpDir(prefix = "ws-test"): string {
   const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+function ensureGitTestHome(baseDir: string): string {
+  const gitHome = join(baseDir, ".git-test-home")
+  const gitConfig = join(gitHome, "gitconfig")
+
+  mkdirSync(gitHome, { recursive: true })
+  mkdirSync(join(gitHome, ".config"), { recursive: true })
+  mkdirSync(join(gitHome, ".gnupg"), { recursive: true })
+
+  if (!existsSync(gitConfig)) {
+    writeFileSync(
+      gitConfig,
+      [
+        "[user]",
+        "\tname = Test User",
+        "\temail = test@example.com",
+        "[commit]",
+        "\tgpgsign = false",
+        "[tag]",
+        "\tgpgSign = false",
+        "",
+      ].join("\n")
+    )
+  }
+
+  return gitHome
+}
+
+export function getTestGitEnv(baseDir: string): NodeJS.ProcessEnv {
+  const gitHome = ensureGitTestHome(baseDir)
+  return {
+    ...process.env,
+    HOME: gitHome,
+    XDG_CONFIG_HOME: join(gitHome, ".config"),
+    GNUPGHOME: join(gitHome, ".gnupg"),
+    GIT_CONFIG_GLOBAL: join(gitHome, "gitconfig"),
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_TERMINAL_PROMPT: "0",
+  }
+}
+
+export function gitExecOptions(cwd: string, baseDir = cwd): ExecSyncOptions {
+  return {
+    cwd,
+    stdio: "pipe",
+    env: getTestGitEnv(baseDir),
+  }
+}
+
+export function applyTestGitEnv(baseDir: string): () => void {
+  const nextEnv = getTestGitEnv(baseDir)
+  const managedKeys = [
+    "HOME",
+    "XDG_CONFIG_HOME",
+    "GNUPGHOME",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_NOSYSTEM",
+    "GIT_TERMINAL_PROMPT",
+  ] as const
+
+  const previous = Object.fromEntries(
+    managedKeys.map((key) => [key, process.env[key]])
+  ) as Record<(typeof managedKeys)[number], string | undefined>
+
+  for (const key of managedKeys) {
+    process.env[key] = nextEnv[key]
+  }
+
+  return () => {
+    for (const key of managedKeys) {
+      const value = previous[key]
+      if (value === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = value
+      }
+    }
+  }
 }
 
 export function cleanup(dir: string) {
@@ -58,10 +137,11 @@ export function makeFileTree(base: string, entries: Record<string, string>) {
 export function makeGitRepo(base: string, name = "repo"): string {
   const repoPath = join(base, name)
   mkdirSync(repoPath, { recursive: true })
-  const opts = { cwd: repoPath, stdio: "pipe" as const }
+  const opts = gitExecOptions(repoPath, base)
   execSync("git init -b main", opts)
   execSync('git config user.email "test@example.com"', opts)
   execSync('git config user.name "Test User"', opts)
+  execSync("git config commit.gpgsign false", opts)
   writeFileSync(join(repoPath, "README.md"), "init\n")
   execSync("git add .", opts)
   execSync('git commit -m "init"', opts)

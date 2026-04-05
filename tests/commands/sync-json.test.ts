@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
+import { applyTestGitEnv, gitExecOptions } from "../helpers"
 
 const PROJECT_ROOT = join(import.meta.dir, "../..")
 
@@ -26,13 +27,14 @@ function makeRepoWithWorktree(
 
   // Create bare origin
   mkdirSync(originDir, { recursive: true })
-  execSync("git init --bare -b main", { cwd: originDir, stdio: "pipe" })
+  execSync("git init --bare -b main", gitExecOptions(originDir, baseDir))
 
   // Clone origin to mainPath
-  execSync(`git clone ${originDir} ${mainPath}`, { stdio: "pipe" })
-  const opts = { cwd: mainPath, stdio: "pipe" as const }
+  execSync(`git clone ${originDir} ${mainPath}`, gitExecOptions(baseDir, baseDir))
+  const opts = gitExecOptions(mainPath, baseDir)
   execSync('git config user.email "test@example.com"', opts)
   execSync('git config user.name "Test"', opts)
+  execSync("git config commit.gpgsign false", opts)
   writeFileSync(join(mainPath, "README.md"), "init")
   execSync("git add .", opts)
   execSync('git commit -m "init"', opts)
@@ -40,9 +42,10 @@ function makeRepoWithWorktree(
 
   // Create worktree for the workspace branch
   execSync(`git worktree add ${taskPath} -b ${wsBranch}`, opts)
-  const taskOpts = { cwd: taskPath, stdio: "pipe" as const }
+  const taskOpts = gitExecOptions(taskPath, baseDir)
   execSync('git config user.email "test@example.com"', taskOpts)
   execSync('git config user.name "Test"', taskOpts)
+  execSync("git config commit.gpgsign false", taskOpts)
 
   return { mainPath, taskPath }
 }
@@ -97,13 +100,19 @@ function runSync(cfgDir: string, args: string[]): { stdout: string; stderr: stri
 describe("sync --json", () => {
   let tmpDir: string
   let cfgDir: string
+  let gitEnvDir: string
+  let restoreGitEnv: (() => void) | undefined
 
   beforeEach(() => {
+    gitEnvDir = makeTmpDir("sync-git-env")
+    restoreGitEnv = applyTestGitEnv(gitEnvDir)
     tmpDir = makeTmpDir()
     ;({ cfgDir } = setupFixture(tmpDir, "test-ws"))
   })
 
   afterEach(() => {
+    restoreGitEnv?.()
+    rmSync(gitEnvDir, { recursive: true, force: true })
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
