@@ -255,7 +255,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-(No active milestone — run `/gsd-new-milestone` to start next)
+#### v0.16.0 — Core Engine & Observability
+
+- [ ] Split `workspace-ops.ts` into domain modules: workspace-state, git-ops, env/secrets, hooks, execution
+- [ ] CLI and TUI become thin adapters over the same typed operations
+- [ ] Dependency injection at all shell/process/filesystem boundaries
+- [ ] Structured logging for every external command (git, IDE spawns, hook execution)
 
 ### Out of Scope
 
@@ -269,6 +274,20 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
+| Operation runner with rollback | v0.16.0 deferred — build on clean domain module seams first |
+| Indexed config store | v0.16.0 deferred — foundation refactor first, then layer caching |
+| Integration plugin contracts | v0.16.0 deferred — extract core engine before formalizing plugin boundary |
+| Opinionated onboarding (init/task) | Deferred until author has more hands-on usage experience |
+
+## Current Milestone: v0.16.0 Core Engine & Observability
+
+**Goal:** Extract `workspace-ops.ts` into domain modules with clean boundaries, then layer DI and structured logging across all external-command surfaces.
+
+**Target features:**
+- Split `workspace-ops.ts` into domain modules (workspace-state, git-ops, env/secrets, hooks, execution)
+- CLI and TUI become thin adapters over the same typed operations
+- Dependency injection at all shell/process/filesystem boundaries
+- Structured logging for every external command (git, IDE spawns, hook execution)
 
 ## Completed Milestone: v0.15.0 Dir Mode & Polish (2026-04-05)
 
@@ -439,4 +458,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-05 after v0.15.0 milestone*
+*Last updated: 2026-04-05 after v0.16.0 milestone start*
