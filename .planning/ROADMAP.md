@@ -248,7 +248,9 @@ Plans:
   1. `git-stacks --version` reports v0.15.0
   2. CHANGELOG documents all dir mode behaviors shipped in Phases 64-67
   3. README explains how to add a dir repo and what behavior to expect
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 68-01-PLAN.md — Version bump, CHANGELOG entry, README dir repos documentation
 
 ## Progress
 
@@ -264,4 +266,4 @@ Plans:
 | 65. Workspace Lifecycle | v0.15.0 | 1/1 | Complete    | 2026-04-04 |
 | 66. Git Operation Guards | v0.15.0 | 1/1 | Complete    | 2026-04-04 |
 | 67. Status, Display & Health | v0.15.0 | 2/2 | Complete    | 2026-04-05 |
-| 68. Release Prep | v0.15.0 | 0/? | Not started | - |
+| 68. Release Prep | v0.15.0 | 0/1 | Not started | - |
