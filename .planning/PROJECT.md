@@ -150,6 +150,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Validated
 
+- ✓ Template labels on templates, exact-match `template list --label`, and snapshot propagation into workspace create/clone flows — v0.17.0 Phase 74
 - ✓ Workspace engine decomposition — `workspace-env`, `workspace-lifecycle`, `workspace-status`, `workspace-git`, and `workspace-yaml` extracted behind a stable facade — v0.16.0 Phases 69-70
 - ✓ Stderr-only debug observability — `GIT_STACKS_DEBUG=1` labeled timings/logs with JSON-safe stdout and pre-TUI silencing for `manage` — v0.16.0 Phase 71
 - ✓ Extracted-module regression gate — direct env/status/git tests plus `bun run test:deps` circular-dependency enforcement — v0.16.0 Phase 72
@@ -270,7 +271,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 **Goal:** Harden the core engine with rollback semantics, config indexing, and plugin contracts — plus ship template-level labels that cascade to workspaces on creation.
 
 **Target features:**
-- Template labels that propagate to workspace creation
+- Template labels that propagate to workspace creation and clone preservation (completed in Phase 74)
 - Operation runner with structured rollback/cleanup on partial failures
 - Indexed config store replacing scan-based YAML lookups
 - First-class integration plugin boundary with capability contracts
@@ -294,12 +295,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Latest release:** v0.16.0 Core Engine & Observability (2026-04-05)
 
-**Shipped:** The core workspace engine is now split into focused env/lifecycle/status/git/YAML modules, debug observability is available through `GIT_STACKS_DEBUG=1`, and the extracted boundaries are enforced by direct module tests plus a repo-native circular-dependency gate.
+**Shipped:** Phase 74 of v0.17.0 is complete. Templates now support nested `template label add|remove|list|clear`, `template list --label` uses exact-match AND semantics with a label-specific empty-state message, and template labels snapshot into new and cloned workspace YAML through composition/create/clone flows.
 
-**Status:** Milestone v0.17.0 in progress — Engine Hardening & Template Labels.
+**Status:** Milestone v0.17.0 in progress — Phase 74 complete, Phase 75 next.
 
 ## Next Milestone Goals
-- Ship template labels that cascade to workspaces on creation
 - Operation runner with rollback semantics for multi-step commands
 - Indexed config store to replace scan-based YAML lookups
 - First-class integration plugin boundary with capability contracts
@@ -474,4 +474,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-05 after milestone v0.17.0 started*
+*Last updated: 2026-04-05 after Phase 74 completion*
