@@ -350,4 +350,23 @@ describe("workspace-wizard integration overrides", () => {
     const savedWs = mockWriteWorkspace.mock.calls[0][0] as { labels?: string[] }
     expect(savedWs.labels).toEqual(["template:shared", "backend", "sprint:14"])
   })
+
+  test("writes template labels and CLI labels into the saved workspace", async () => {
+    mockSafeText
+      .mockResolvedValueOnce("ws-template-cli-labels")
+      .mockResolvedValueOnce("cli:one, cli:two")
+      .mockResolvedValueOnce("feature/ws-template-cli-labels")
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("")
+
+    mockSelect
+      .mockResolvedValueOnce("template")
+      .mockResolvedValueOnce("my-template")
+
+    await runWorkspaceNew()
+
+    expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { labels?: string[] }
+    expect(savedWs.labels).toEqual(["template:shared", "cli:one", "cli:two"])
+  })
 })

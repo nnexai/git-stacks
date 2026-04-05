@@ -479,3 +479,36 @@ describe("CLI multi-template integration", () => {
     expect(mod.runWorkspaceNew.length).toBeGreaterThanOrEqual(0) // async functions report 0 length
   })
 })
+
+describe("labels merge", () => {
+  test("merges labels from includes without duplicates in merge order", () => {
+    writeTestTemplate(isolated.configDir, "base", {
+      repos: [],
+      labels: ["shared", "ops"],
+    })
+    writeTestTemplate(isolated.configDir, "feature", {
+      repos: [],
+      includes: ["base"],
+      labels: ["backend", "shared"],
+    })
+
+    const result = composeTemplates(["feature"])
+
+    expect(result.labels).toEqual(["shared", "ops", "backend"])
+  })
+
+  test("merges labels across multi-template composition without duplicates", () => {
+    writeTestTemplate(isolated.configDir, "alpha", {
+      repos: [],
+      labels: ["backend", "sprint:14"],
+    })
+    writeTestTemplate(isolated.configDir, "beta", {
+      repos: [],
+      labels: ["backend", "cli"],
+    })
+
+    const result = composeTemplates(["alpha", "beta"])
+
+    expect(result.labels).toEqual(["backend", "sprint:14", "cli"])
+  })
+})
