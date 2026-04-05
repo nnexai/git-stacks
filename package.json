@@ -34,6 +34,7 @@
     "test": "bun run scripts/test-runner.ts",
     "test:unit": "bun run scripts/test-runner.ts --unit",
     "test:integ": "bun run scripts/test-runner.ts --integ",
+    "test:deps": "madge --circular --extensions ts src/",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run typecheck && bun run test"
   },
@@ -50,6 +51,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "madge": "8.0.0",
     "typescript": "^6.0.2"
   }
 }
