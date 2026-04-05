@@ -9,6 +9,9 @@ import {
   RepoRegistrySchema,
 } from "./config"
 import { GLOBAL_CONFIG_FILE, REGISTRY_FILE } from "./paths"
+import { timeOperation } from "./observability"
+
+const OBS_CATEGORY = "workspace-yaml"
 
 // ─── Injectable executor ──────────────────────────────────────────────────────
 // Wraps the Bun.spawn call in openYamlInEditor for test injection.
@@ -28,19 +31,21 @@ export function editWorkspaceYaml(name: string): {
   path: string
   validate: () => { ok: boolean; error?: string }
 } {
-  const path = workspacePath(name)
-  return {
-    path,
-    validate: () => {
-      try {
-        const raw = readFileSync(path, "utf-8")
-        WorkspaceSchema.parse(parse(raw))
-        return { ok: true }
-      } catch (err) {
-        return { ok: false, error: String(err) }
-      }
-    },
-  }
+  return timeOperation(OBS_CATEGORY, "editWorkspaceYaml", () => {
+    const path = workspacePath(name)
+    return {
+      path,
+      validate: () => {
+        try {
+          const raw = readFileSync(path, "utf-8")
+          WorkspaceSchema.parse(parse(raw))
+          return { ok: true }
+        } catch (err) {
+          return { ok: false, error: String(err) }
+        }
+      },
+    }
+  })
 }
 
 // ─── openYamlInEditor ─────────────────────────────────────────────────────────
@@ -49,13 +54,15 @@ export async function openYamlInEditor(
   path: string,
   validate: () => { ok: boolean; error?: string }
 ): Promise<void> {
-  const editor = process.env.VISUAL || process.env.EDITOR || "vi"
-  const proc = _exec.spawnEditor(editor, path)
-  await proc.exited
-  const result = validate()
-  if (!result.ok) {
-    console.error(`\nWarning: file has validation errors:\n${result.error}`)
-  }
+  return timeOperation(OBS_CATEGORY, "openYamlInEditor", async () => {
+    const editor = process.env.VISUAL || process.env.EDITOR || "vi"
+    const proc = _exec.spawnEditor(editor, path)
+    await proc.exited
+    const result = validate()
+    if (!result.ok) {
+      console.error(`\nWarning: file has validation errors:\n${result.error}`)
+    }
+  })
 }
 
 // ─── editTemplateYaml ─────────────────────────────────────────────────────────
@@ -64,19 +71,21 @@ export function editTemplateYaml(name: string): {
   path: string
   validate: () => { ok: boolean; error?: string }
 } {
-  const path = templatePath(name)
-  return {
-    path,
-    validate: () => {
-      try {
-        const raw = readFileSync(path, "utf-8")
-        TemplateSchema.parse(parse(raw))
-        return { ok: true }
-      } catch (err) {
-        return { ok: false, error: String(err) }
-      }
-    },
-  }
+  return timeOperation(OBS_CATEGORY, "editTemplateYaml", () => {
+    const path = templatePath(name)
+    return {
+      path,
+      validate: () => {
+        try {
+          const raw = readFileSync(path, "utf-8")
+          TemplateSchema.parse(parse(raw))
+          return { ok: true }
+        } catch (err) {
+          return { ok: false, error: String(err) }
+        }
+      },
+    }
+  })
 }
 
 // ─── editGlobalConfigYaml ────────────────────────────────────────────────────
@@ -85,19 +94,21 @@ export function editGlobalConfigYaml(): {
   path: string
   validate: () => { ok: boolean; error?: string }
 } {
-  const path = GLOBAL_CONFIG_FILE
-  return {
-    path,
-    validate: () => {
-      try {
-        const raw = readFileSync(path, "utf-8")
-        GlobalConfigSchema.parse(parse(raw))
-        return { ok: true }
-      } catch (err) {
-        return { ok: false, error: String(err) }
-      }
-    },
-  }
+  return timeOperation(OBS_CATEGORY, "editGlobalConfigYaml", () => {
+    const path = GLOBAL_CONFIG_FILE
+    return {
+      path,
+      validate: () => {
+        try {
+          const raw = readFileSync(path, "utf-8")
+          GlobalConfigSchema.parse(parse(raw))
+          return { ok: true }
+        } catch (err) {
+          return { ok: false, error: String(err) }
+        }
+      },
+    }
+  })
 }
 
 // ─── editRegistryYaml ────────────────────────────────────────────────────────
@@ -106,17 +117,19 @@ export function editRegistryYaml(): {
   path: string
   validate: () => { ok: boolean; error?: string }
 } {
-  const path = REGISTRY_FILE
-  return {
-    path,
-    validate: () => {
-      try {
-        const raw = readFileSync(path, "utf-8")
-        RepoRegistrySchema.parse(parse(raw))
-        return { ok: true }
-      } catch (err) {
-        return { ok: false, error: String(err) }
-      }
-    },
-  }
+  return timeOperation(OBS_CATEGORY, "editRegistryYaml", () => {
+    const path = REGISTRY_FILE
+    return {
+      path,
+      validate: () => {
+        try {
+          const raw = readFileSync(path, "utf-8")
+          RepoRegistrySchema.parse(parse(raw))
+          return { ok: true }
+        } catch (err) {
+          return { ok: false, error: String(err) }
+        }
+      },
+    }
+  })
 }

@@ -2,7 +2,10 @@ import { existsSync } from "fs"
 import { resolve } from "path"
 import { isRepoDirty, getCurrentBranch, getCommitsAhead, getCommitsBehind, isFetchStale } from "./git"
 import { listWorkspaces, getRepoPath, isGitRepo, isWorktreeRepo, type Workspace } from "./config"
+import { logDebug, timeOperation } from "./observability"
 import { expandHome } from "./paths"
+
+const OBS_CATEGORY = "workspace-status"
 
 export type WorkspaceListInfo = {
   name: string
@@ -40,76 +43,85 @@ export async function getWorkspaceListInfo(
   workspace: Workspace,
   _checkStatus = true   // kept for backward compat; dirty checks always run now
 ): Promise<WorkspaceListInfo> {
-  const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
-  const trunkRepos = workspace.repos.filter((r) => r.mode === "trunk")
-  const gitRepos = workspace.repos.filter(isGitRepo)
-
-  // Always run dirty checks across ALL repos (worktree and trunk)
-  const results = await Promise.all(
-    gitRepos
-      .map((repo) => {
-        const repoPath = getRepoPath(repo)
-        return { name: repo.name, repoPath, exists: existsSync(repoPath) }
-      })
-      .filter((r) => r.exists)
-      .map(async (r) => ({ name: r.name, dirty: await isRepoDirty(r.repoPath) }))
-  )
-  const dirtyRepos: string[] = results.filter((r) => r.dirty).map((r) => r.name)
-  const dirty: boolean = dirtyRepos.length > 0
-
-  // Ahead/behind computation (AB-02): parallel per repo (worktree and trunk)
-  let totalAhead = 0
-  let maxBehind = 0
-  let anyStale = false
-
-  const abResults = await Promise.all(
-    gitRepos
+  return timeOperation(OBS_CATEGORY, "getWorkspaceListInfo", async () => {
+    const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+    const trunkRepos = workspace.repos.filter((r) => r.mode === "trunk")
+    const gitRepos = workspace.repos.filter(isGitRepo)
+    const existingGitRepos = gitRepos
       .map((repo) => {
         const repoPath = getRepoPath(repo)
         return { repo, repoPath, exists: existsSync(repoPath) }
       })
-      .filter((r) => r.exists)
-      .map(async ({ repo, repoPath }) => {
-        let baseRef: string
-        if (repo.mode === "worktree") {
-          const baseBranch = repo.base_branch ?? "main"
-          baseRef = `origin/${baseBranch}`
-        } else {
-          // Trunk repos compare against origin/<currentBranch>
-          const currentBranch = await getCurrentBranch(repoPath)
-          baseRef = `origin/${currentBranch}`
-        }
-        const [ahead, behind, stale] = await Promise.all([
-          getCommitsAhead(repoPath, baseRef, "HEAD"),
-          getCommitsBehind(repoPath, baseRef, "HEAD"),
-          isFetchStale(repoPath),
-        ])
-        return { ahead, behind, stale }
-      })
-  )
+      .filter((entry) => entry.exists)
 
-  for (const r of abResults) {
-    totalAhead += r.ahead
-    if (r.behind > maxBehind) maxBehind = r.behind
-    if (r.stale) anyStale = true
-  }
+    logDebug(OBS_CATEGORY, `getWorkspaceListInfo.dirtyScan: ${existingGitRepos.length} repos`)
+    const results = await timeOperation(
+      OBS_CATEGORY,
+      "getWorkspaceListInfo.dirtyScan",
+      async () =>
+        Promise.all(
+          existingGitRepos.map(async ({ repo, repoPath }) => ({
+            name: repo.name,
+            dirty: await isRepoDirty(repoPath),
+          }))
+        )
+    )
+    const dirtyRepos: string[] = results.filter((r) => r.dirty).map((r) => r.name)
+    const dirty: boolean = dirtyRepos.length > 0
 
-  return {
-    name: workspace.name,
-    branch: workspace.branch,
-    description: workspace.description ?? "",
-    created: workspace.created,
-    age: formatAge(workspace.created),
-    lastOpened: formatAge(workspace.last_opened ?? workspace.created),
-    dirty,
-    dirtyRepos,
-    worktreeCount: worktreeRepos.length,
-    trunkCount: trunkRepos.length,
-    repoCount: workspace.repos.length,
-    ahead: totalAhead,
-    behind: maxBehind,
-    aheadBehindStale: anyStale,
-  }
+    logDebug(OBS_CATEGORY, `getWorkspaceListInfo.aheadBehindAggregation: ${existingGitRepos.length} repos`)
+    const abResults = await timeOperation(
+      OBS_CATEGORY,
+      "getWorkspaceListInfo.aheadBehindAggregation",
+      async () =>
+        Promise.all(
+          existingGitRepos.map(async ({ repo, repoPath }) => {
+            let baseRef: string
+            if (repo.mode === "worktree") {
+              const baseBranch = repo.base_branch ?? "main"
+              baseRef = `origin/${baseBranch}`
+            } else {
+              // Trunk repos compare against origin/<currentBranch>
+              const currentBranch = await getCurrentBranch(repoPath)
+              baseRef = `origin/${currentBranch}`
+            }
+            const [ahead, behind, stale] = await Promise.all([
+              getCommitsAhead(repoPath, baseRef, "HEAD"),
+              getCommitsBehind(repoPath, baseRef, "HEAD"),
+              isFetchStale(repoPath),
+            ])
+            return { ahead, behind, stale }
+          })
+        )
+    )
+
+    let totalAhead = 0
+    let maxBehind = 0
+    let anyStale = false
+
+    for (const r of abResults) {
+      totalAhead += r.ahead
+      if (r.behind > maxBehind) maxBehind = r.behind
+      if (r.stale) anyStale = true
+    }
+
+    return {
+      name: workspace.name,
+      branch: workspace.branch,
+      description: workspace.description ?? "",
+      created: workspace.created,
+      age: formatAge(workspace.created),
+      lastOpened: formatAge(workspace.last_opened ?? workspace.created),
+      dirty,
+      dirtyRepos,
+      worktreeCount: worktreeRepos.length,
+      trunkCount: trunkRepos.length,
+      repoCount: workspace.repos.length,
+      ahead: totalAhead,
+      behind: maxBehind,
+      aheadBehindStale: anyStale,
+    }
+  })
 }
 
 export type RepoStatus = {
@@ -123,46 +135,53 @@ export type RepoStatus = {
 }
 
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
-  return Promise.all(
-    workspace.repos.map(async (repo) => {
-      const repoPath = getRepoPath(repo)
-      const exists = existsSync(repoPath)
+  return timeOperation(
+    OBS_CATEGORY,
+    "getWorkspaceStatus",
+    async () =>
+      Promise.all(
+        workspace.repos.map(async (repo) => {
+          const repoPath = getRepoPath(repo)
+          const exists = existsSync(repoPath)
 
-      let dirty = false
-      let branch = "—"
-      let ahead = 0
-      let behind = 0
+          let dirty = false
+          let branch = "—"
+          let ahead = 0
+          let behind = 0
 
-      if (exists && isGitRepo(repo)) {
-        [dirty, branch] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath)])
+          if (exists && isGitRepo(repo)) {
+            [dirty, branch] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath)])
 
-        let baseRef: string
-        if (repo.mode === "worktree") {
-          const baseBranch = repo.base_branch ?? "main"
-          baseRef = `origin/${baseBranch}`
-        } else {
-          // Trunk repos compare against origin/<currentBranch>
-          baseRef = `origin/${branch}`
-        };
-        [ahead, behind] = await Promise.all([
-          getCommitsAhead(repoPath, baseRef, "HEAD"),
-          getCommitsBehind(repoPath, baseRef, "HEAD"),
-        ])
-      }
+            let baseRef: string
+            if (repo.mode === "worktree") {
+              const baseBranch = repo.base_branch ?? "main"
+              baseRef = `origin/${baseBranch}`
+            } else {
+              // Trunk repos compare against origin/<currentBranch>
+              baseRef = `origin/${branch}`
+            };
+            [ahead, behind] = await Promise.all([
+              getCommitsAhead(repoPath, baseRef, "HEAD"),
+              getCommitsBehind(repoPath, baseRef, "HEAD"),
+            ])
+          }
 
-      return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind }
-    })
+          return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind }
+        })
+      )
   )
 }
 
 export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
-  const results = await Promise.all(
-    workspace.repos
-      .filter(isWorktreeRepo)
-      .filter((r) => existsSync(r.task_path))
-      .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
-  )
-  return results.filter((r) => r.dirty).map((r) => r.name)
+  return timeOperation(OBS_CATEGORY, "getDirtyWorktrees", async () => {
+    const results = await Promise.all(
+      workspace.repos
+        .filter(isWorktreeRepo)
+        .filter((r) => existsSync(r.task_path))
+        .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
+    )
+    return results.filter((r) => r.dirty).map((r) => r.name)
+  })
 }
 
 export type CwdDetectionResult =
@@ -178,29 +197,31 @@ export type CwdDetectionResult =
  * @returns The workspace whose worktree task_path contains cwd, or no_match
  */
 export function detectWorkspaceFromCwd(cwd?: string): CwdDetectionResult {
-  const currentDir = cwd ?? process.cwd()
-  const workspaces = listWorkspaces()
+  return timeOperation<CwdDetectionResult>(OBS_CATEGORY, "detectWorkspaceFromCwd", () => {
+    const currentDir = cwd ?? process.cwd()
+    const workspaces = listWorkspaces()
 
-  let bestMatch: Workspace | null = null
-  let bestPathLen = 0
+    let bestMatch: Workspace | null = null
+    let bestPathLen = 0
 
-  for (const ws of workspaces) {
-    for (const repo of ws.repos) {
-      if (!isWorktreeRepo(repo)) continue
-      const resolvedTaskPath = resolve(expandHome(repo.task_path))
-      // Match CWD exactly OR as a subdirectory (trailing separator prevents prefix collisions)
-      if (
-        currentDir === resolvedTaskPath ||
-        currentDir.startsWith(resolvedTaskPath + "/")
-      ) {
-        if (resolvedTaskPath.length > bestPathLen) {
-          bestMatch = ws
-          bestPathLen = resolvedTaskPath.length
+    for (const ws of workspaces) {
+      for (const repo of ws.repos) {
+        if (!isWorktreeRepo(repo)) continue
+        const resolvedTaskPath = resolve(expandHome(repo.task_path))
+        // Match CWD exactly OR as a subdirectory (trailing separator prevents prefix collisions)
+        if (
+          currentDir === resolvedTaskPath ||
+          currentDir.startsWith(resolvedTaskPath + "/")
+        ) {
+          if (resolvedTaskPath.length > bestPathLen) {
+            bestMatch = ws
+            bestPathLen = resolvedTaskPath.length
+          }
         }
       }
     }
-  }
 
-  if (!bestMatch) return { ok: false, error: "no_match" }
-  return { ok: true, workspace: bestMatch }
+    if (!bestMatch) return { ok: false as const, error: "no_match" as const }
+    return { ok: true as const, workspace: bestMatch }
+  })
 }

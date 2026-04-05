@@ -115,6 +115,16 @@ export function logDebug(category: string, detail: string): void {
 export function timeOperation<T>(
   category: string,
   operation: string,
+  run: () => Promise<T>
+): Promise<T>
+export function timeOperation<T>(
+  category: string,
+  operation: string,
+  run: () => T
+): T
+export function timeOperation<T>(
+  category: string,
+  operation: string,
   run: () => T | Promise<T>
 ): T | Promise<T> {
   if (!enabled) {

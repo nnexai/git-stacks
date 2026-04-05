@@ -1,8 +1,11 @@
 import { existsSync, lstatSync, readFileSync, writeFileSync } from "fs"
 import { join, resolve } from "path"
 import { getRepoPath, isWorktreeRepo, readGlobalConfig, type GlobalConfig, type Workspace, type WorkspaceRepo } from "./config"
+import { logDebug, timeOperation } from "./observability"
 import { getTasksDir } from "./paths"
 import { buildResolvers, parseSecretRef, resolveSecrets } from "./secrets"
+
+const OBS_CATEGORY = "workspace-env"
 
 export type BuildWorkspaceEnvOptions = {
   triggeredBy: string
@@ -79,13 +82,20 @@ export async function buildWorkspaceEnv(
   workspace: Workspace,
   opts: BuildWorkspaceEnvOptions
 ): Promise<Record<string, string>> {
-  const config = opts.config ?? readGlobalConfig()
-  const tasksDir = join(getTasksDir(config.workspace_root), workspace.name)
-  const resolvedEnvVars = await resolveWorkspaceEnvVars(workspace, config, opts)
-  return {
-    ...buildBaseEnv(workspace, tasksDir, opts.triggeredBy),
-    ...resolvedEnvVars,
-  }
+  return timeOperation(OBS_CATEGORY, "buildWorkspaceEnv", async () => {
+    const config = opts.config ?? readGlobalConfig()
+    const tasksDir = join(getTasksDir(config.workspace_root), workspace.name)
+    logDebug(OBS_CATEGORY, "buildWorkspaceEnv.resolveSecrets: start")
+    const resolvedEnvVars = await timeOperation(
+      OBS_CATEGORY,
+      "buildWorkspaceEnv.resolveSecrets",
+      () => resolveWorkspaceEnvVars(workspace, config, opts)
+    )
+    return {
+      ...buildBaseEnv(workspace, tasksDir, opts.triggeredBy),
+      ...resolvedEnvVars,
+    }
+  })
 }
 
 export function writeEnvFiles(
@@ -93,55 +103,57 @@ export function writeEnvFiles(
   mergedEnv: Record<string, string>,
   onWarn?: (msg: string) => void
 ): void {
-  const envFileName = workspace.env_file
-  if (!envFileName) return
+  return timeOperation(OBS_CATEGORY, "writeEnvFiles", () => {
+    const envFileName = workspace.env_file
+    if (!envFileName) return
 
-  for (const repo of workspace.repos.filter(isWorktreeRepo)) {
-    if (!existsSync(repo.task_path)) continue
+    for (const repo of workspace.repos.filter(isWorktreeRepo)) {
+      if (!existsSync(repo.task_path)) continue
 
-    // Per D-08/D-09: reject env_file paths that escape repo root
-    const resolvedTarget = resolve(repo.task_path, envFileName)
-    const resolvedRoot = resolve(repo.task_path)
-    if (!resolvedTarget.startsWith(resolvedRoot + "/") && resolvedTarget !== resolvedRoot) {
-      onWarn?.(`skipping env file write: '${envFileName}' resolves outside repo root '${repo.task_path}'`)
-      continue
-    }
-
-    const targetPath = resolvedTarget
-
-    // Guard: if the env file is a symlink, skip and warn — never write through a symlink
-    try {
-      const stat = lstatSync(targetPath)
-      if (stat.isSymbolicLink()) {
-        onWarn?.(`skipping env file write: ${targetPath} is a symlink`)
+      // Per D-08/D-09: reject env_file paths that escape repo root
+      const resolvedTarget = resolve(repo.task_path, envFileName)
+      const resolvedRoot = resolve(repo.task_path)
+      if (!resolvedTarget.startsWith(resolvedRoot + "/") && resolvedTarget !== resolvedRoot) {
+        onWarn?.(`skipping env file write: '${envFileName}' resolves outside repo root '${repo.task_path}'`)
         continue
       }
-    } catch {
-      // targetPath does not exist yet — fall through to create it
-    }
 
-    let content: string
-    if (existsSync(targetPath)) {
-      // Merge: walk existing lines, update matching config keys in-place, preserve rest
-      const existing = readFileSync(targetPath, "utf-8")
-      const written = new Set<string>()
-      const lines = existing.replace(/\n$/, "").split("\n").map((line) => {
-        const m = line.match(/^([^=\s#][^=]*)=(.*)$/)
-        if (m && m[1] in mergedEnv) {
-          written.add(m[1])
-          return `${m[1]}=${mergedEnv[m[1]]}`
+      const targetPath = resolvedTarget
+
+      // Guard: if the env file is a symlink, skip and warn — never write through a symlink
+      try {
+        const stat = lstatSync(targetPath)
+        if (stat.isSymbolicLink()) {
+          onWarn?.(`skipping env file write: ${targetPath} is a symlink`)
+          continue
         }
-        return line
-      })
-      // Append config keys not already in the file
-      for (const [k, v] of Object.entries(mergedEnv)) {
-        if (!written.has(k)) lines.push(`${k}=${v}`)
+      } catch {
+        // targetPath does not exist yet — fall through to create it
       }
-      content = lines.join("\n") + "\n"
-    } else {
-      content = Object.entries(mergedEnv).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
-    }
 
-    writeFileSync(targetPath, content, "utf-8")
-  }
+      let content: string
+      if (existsSync(targetPath)) {
+        // Merge: walk existing lines, update matching config keys in-place, preserve rest
+        const existing = readFileSync(targetPath, "utf-8")
+        const written = new Set<string>()
+        const lines = existing.replace(/\n$/, "").split("\n").map((line) => {
+          const m = line.match(/^([^=\s#][^=]*)=(.*)$/)
+          if (m && m[1] in mergedEnv) {
+            written.add(m[1])
+            return `${m[1]}=${mergedEnv[m[1]]}`
+          }
+          return line
+        })
+        // Append config keys not already in the file
+        for (const [k, v] of Object.entries(mergedEnv)) {
+          if (!written.has(k)) lines.push(`${k}=${v}`)
+        }
+        content = lines.join("\n") + "\n"
+      } else {
+        content = Object.entries(mergedEnv).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
+      }
+
+      writeFileSync(targetPath, content, "utf-8")
+    }
+  })
 }
