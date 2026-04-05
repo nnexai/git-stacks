@@ -4,7 +4,7 @@ import {
   writeWorkspace,
   type Workspace,
 } from "../config"
-import { detectWorkspaceFromCwd } from "../workspace-ops"
+import { detectWorkspaceFromCwd } from "../workspace-status"
 
 // --- Types ---
 

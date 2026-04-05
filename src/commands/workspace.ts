@@ -22,25 +22,22 @@ import { isBranchGoneOnRemote, fetchOrigin } from "../lib/git"
 import { runWorkspaceNew, runWorkspaceEdit } from "../tui/workspace-wizard"
 import { runWorkspaceClone } from "../tui/workspace-clone"
 import {
-  getDirtyWorktrees,
-  getWorkspaceStatus,
   cleanWorkspace,
   closeWorkspace,
   removeWorkspace,
   mergeWorkspace,
   openWorkspace,
-  getWorkspaceListInfo,
   renameWorkspace,
   syncWorkspace,
   pushWorkspace,
   pullWorkspace,
   editWorkspaceYaml,
   openYamlInEditor,
-  detectWorkspaceFromCwd,
   buildWorkspaceEnv,
   buildRepoEnv,
 } from "../lib/workspace-ops"
 import type { SyncRow, PushRow, PullRow } from "../lib/workspace-ops"
+import { getDirtyWorktrees, getWorkspaceStatus, getWorkspaceListInfo, detectWorkspaceFromCwd } from "../lib/workspace-status"
 import { formatEnv, detectRepoFromCwd, type EnvFormat } from "../lib/env"
 import { matchesLabels } from "../lib/labels"
 
