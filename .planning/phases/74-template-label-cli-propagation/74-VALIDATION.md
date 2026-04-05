@@ -19,7 +19,7 @@ created: 2026-04-05
 |----------|-------|
 | **Framework** | `bun:test` plus the repo-local isolated runner in `scripts/test-runner.ts` |
 | **Config file** | `bunfig.toml` |
-| **Quick run command** | `bun test tests/lib/composition.test.ts tests/tui/workspace-wizard.test.ts tests/commands/template-label.test.ts tests/commands/template-list.test.ts tests/tui/workspace-clone.test.ts` |
+| **Quick run command** | `bun test tests/lib/composition.test.ts && bun test tests/tui/workspace-wizard.test.ts && bun test tests/commands/template-label.test.ts && bun test tests/commands/template-list.test.ts && bun test tests/tui/workspace-clone.test.ts` |
 | **Full suite command** | `bun run test` |
 | **Estimated runtime** | ~15 seconds (targeted), ~30 seconds (full suite) |
 
@@ -27,7 +27,7 @@ created: 2026-04-05
 
 ## Sampling Rate
 
-- **After every task commit:** Run `bun test tests/lib/composition.test.ts tests/tui/workspace-wizard.test.ts tests/commands/template-label.test.ts tests/commands/template-list.test.ts tests/tui/workspace-clone.test.ts`
+- **After every task commit:** Run `bun test tests/lib/composition.test.ts && bun test tests/tui/workspace-wizard.test.ts && bun test tests/commands/template-label.test.ts && bun test tests/commands/template-list.test.ts && bun test tests/tui/workspace-clone.test.ts`
 - **After every plan wave:** Run `bun run test`
 - **Before `/gsd:verify-work`:** Full suite must be green
 - **Max feedback latency:** 15 seconds

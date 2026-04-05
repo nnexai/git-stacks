@@ -276,17 +276,15 @@ Source: [`src/tui/workspace-clone.ts`](/home/nnex/dev/prj/git-stacks/src/tui/wor
 | A3 | Manual YAML string mutation is what an implementer might otherwise hand-roll here. | Don't Hand-Roll | Low — only used to explain what not to do. |
 | A4 | Retroactive inheritance is a tempting but possible alternative architecture. | State of the Art | Low — included as contrast, not recommendation. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should template list output display labels when filters are applied, or only use labels as a hidden filter?**
-   - What we know: exact row formatting after filtering is explicitly left to agent discretion. [VERIFIED: phase context]
-   - What's unclear: whether surfacing labels in `template list` materially improves UX enough to justify output changes in this phase. [VERIFIED: phase context]
-   - Recommendation: keep the current row layout unless tests or manual UX review show filtered results are ambiguous; filtering correctness matters more than label rendering here. [ASSUMED]
+   - Resolution: keep the current `template list` row formatting in Phase 74; filtering correctness matters, and labels do not need to be rendered in list output. [RESOLVED: checker guidance]
+   - Why: exact row formatting is discretionary, and this preserves existing readability while satisfying D-03 and D-04 without expanding output scope. [VERIFIED: phase context]
 
 2. **Should template label CRUD share extracted helper functions with workspace label CRUD?**
-   - What we know: behavior parity is mandatory, but helper extraction is discretionary. [VERIFIED: phase context]
-   - What's unclear: whether the repo prefers less duplication or a smaller patch localized to `src/commands/template.ts`. [VERIFIED: phase context]
-   - Recommendation: choose the smallest implementation that still keeps validation/error strings identical, and let tests enforce parity. [ASSUMED]
+   - Resolution: generalize `matchesLabels()` as the shared label-filter helper, but keep template label CRUD implementation local to `src/commands/template.ts` as long as validation and error strings stay identical to workspace behavior. [RESOLVED: checker guidance]
+   - Why: this keeps the filter contract centralized while minimizing command-surface churn and preserving D-02 parity requirements. [VERIFIED: phase context]
 
 ## Environment Availability
 
@@ -309,7 +307,7 @@ Source: [`src/tui/workspace-clone.ts`](/home/nnex/dev/prj/git-stacks/src/tui/wor
 |----------|-------|
 | Framework | `bun:test` plus repo-local isolated runner in `scripts/test-runner.ts`. [VERIFIED: codebase grep] |
 | Config file | `bunfig.toml`. [VERIFIED: codebase grep] |
-| Quick run command | `bun test tests/lib/labels.test.ts tests/lib/composition.test.ts tests/tui/workspace-wizard.test.ts tests/commands/label.test.ts tests/commands/list-columns.test.ts` [VERIFIED: local env] |
+| Quick run command | `bun test tests/lib/labels.test.ts && bun test tests/lib/composition.test.ts && bun test tests/tui/workspace-wizard.test.ts && bun test tests/commands/label.test.ts && bun test tests/commands/list-columns.test.ts` [VERIFIED: local env] |
 | Full suite command | `bun run test` [VERIFIED: CLAUDE.md] |
 
 ### Phase Requirements → Test Map
@@ -324,7 +322,7 @@ Source: [`src/tui/workspace-clone.ts`](/home/nnex/dev/prj/git-stacks/src/tui/wor
 | TLBL-07 | Cloning a workspace preserves source labels in the new workspace YAML. [VERIFIED: phase context] | integration | `bun test tests/tui/workspace-clone.test.ts` | ❌ Wave 0 |
 
 ### Sampling Rate
-- **Per task commit:** `bun test tests/lib/composition.test.ts tests/tui/workspace-wizard.test.ts tests/commands/template-label.test.ts tests/commands/template-list.test.ts tests/tui/workspace-clone.test.ts`
+- **Per task commit:** `bun test tests/lib/composition.test.ts && bun test tests/tui/workspace-wizard.test.ts && bun test tests/commands/template-label.test.ts && bun test tests/commands/template-list.test.ts && bun test tests/tui/workspace-clone.test.ts`
 - **Per wave merge:** `bun run test`
 - **Phase gate:** `bun run test && bun run typecheck`
 
