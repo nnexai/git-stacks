@@ -1,5 +1,24 @@
 # Milestones
 
+## v0.15.0 Dir Mode & Polish (Shipped: 2026-04-05)
+
+**Phases completed:** 5 phases (64-68), 7 plans
+**Timeline:** 2026-04-04 → 2026-04-05 (2 days)
+**Stats:** 7 files changed, +236 / -86 lines (source only), 16,445 LOC total
+
+**Key accomplishments:**
+
+- **Dir repo type** — `type: "dir"` in Zod schemas with `is_dir` boolean defaulting to false for backward compatibility; `mode: "dir"` in workspace repos with `main_path` only (no `task_path`, no branch)
+- **Registry CLI support** — `repo add` and `repo scan` detect and register non-git directories; `repo list`/`show` display dir repos correctly
+- **Workspace lifecycle guards** — dir repos skip worktree creation/removal; open/close/clean/remove handle dir repos without git errors
+- **Git operation guards** — push/pull/sync/merge/ahead-behind/dirty silently skip dir repos in mixed workspaces
+- **CLI status & doctor** — [dir] label in status output, `--fetch` skips dir repos, `findInvalidDirRepos` validates directory existence and type
+- **TUI dashboard** — [dir] label in WorkspaceDetail, dir count in WorkspaceRow, missing-dir detection in hasMissing
+
+**Archive:** [.planning/milestones/v0.15.0-ROADMAP.md](.planning/milestones/v0.15.0-ROADMAP.md)
+
+---
+
 ## v0.14.0 Workflow Completion & Workspace UX (Shipped: 2026-04-03)
 
 **Phases completed:** 6 phases, 18 plans, 33 requirements

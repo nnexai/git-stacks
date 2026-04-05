@@ -8,14 +8,6 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.15.0 Dir Mode & Polish
-
-**Goal:** Add a "dir" repo type for non-git directories that behave like trunk repos but are invisible to git operations, plus small fixes and polish.
-
-**Target features:**
-- New "dir" repo type — references a plain directory, skipped by all git commands, works like trunk otherwise
-- Fixes and polish as they come up
-
 ## Recent State (2026-04-05)
 
 ### What shipped in v0.15.0
@@ -142,7 +134,8 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Templates** (`~/.config/git-stacks/templates/{name}.yml`) — reusable workspace recipes with per-repo mode, branch patterns, hooks, env, file ops
 - **Workspaces** (`~/.config/git-stacks/workspaces/{name}.yml`) — task-scoped instances; self-contained snapshots at creation time
 - **Messages** (`~/.config/git-stacks/messages/{workspace}.jsonl`) — workspace-scoped notification store; IPC-delivered to running TUI via `/tmp/git-stacks.sock`
-- **Integrations** — VSCode, IntelliJ, tmux, cmux, niri plugin system; extensible via `src/lib/integrations/`
+- **Dir Repos** — non-git directories registered with `type: dir`; referenced by `main_path` only, skipped by all git operations, shown with [dir] label in CLI and TUI
+- **Integrations** — VSCode, IntelliJ, tmux, cmux, niri, AeroSpace plugin system; extensible via `src/lib/integrations/`
 - **Issue Tracking** — `issue link/unlink/open` commands on GitHub, GitLab, Gitea, and Jira integration plugins; shared `issue-utils.ts` for resolution/persistence
 - **Hooks** — full lifecycle hook pairs (`pre_close`/`post_close`, `pre_clean`/`post_clean`, `pre_merge`/`post_merge`, `pre_remove`/`post_remove`, plus `pre_create`/`post_create`, `pre_open`/`post_open`) at template and workspace levels; per-repo `pre_open` and `pre_clean`; cascade design (remove → clean → close); hooks receive `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`
 
@@ -246,9 +239,23 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Forge CLI checks in `git-stacks doctor` — conditional `gh`/`glab`/`tea` binary checks — v0.13.0 Phase 56
 - ✓ Tmux `configExample` with practical pane layout — v0.13.0 Phase 56
 
+- ✓ Ahead/behind tracking — per-repo commit distance display in status and TUI with fetch dedup — v0.14.0 Phase 58
+- ✓ `git-stacks push` — multi-repo push with upstream setup, dirty skip, CWD detection — v0.14.0 Phase 59
+- ✓ Workspace labels — `label add/remove/list/clear` with `--label` filter on `list`/`status` — v0.14.0 Phase 60
+- ✓ Secret resolution — `${{ resolver:path }}` syntax with keychain/env/cmd resolvers — v0.14.0 Phase 61
+- ✓ Stash-on-sync — automatic stash/pop around sync fetch+merge for dirty repos — v0.14.0 Phase 62
+
+- ✓ Dir repo type in Zod schemas — `type: "dir"` and `is_dir` field with backward-compatible defaults — v0.15.0 Phase 64
+- ✓ Dir repo registry support — `repo add` and `repo scan` detect and register non-git directories — v0.15.0 Phase 64
+- ✓ Dir repo workspace lifecycle — new/open/close/clean/remove handle dir repos (no worktrees, no git errors) — v0.15.0 Phase 65
+- ✓ Git operation guards for dir repos — push/pull/sync/merge/ahead-behind/dirty silently skip dir repos — v0.15.0 Phase 66
+- ✓ Dir repo CLI display — `status` shows [dir] label, `--fetch` skips dir repos, `list` handles dir-only workspaces — v0.15.0 Phase 67
+- ✓ Dir repo doctor health checks — `findInvalidDirRepos` validates directory existence and accessibility — v0.15.0 Phase 67
+- ✓ Dir repo TUI rendering — [dir] label in WorkspaceDetail, dir count in WorkspaceRow, missing-dir detection — v0.15.0 Phase 67
+
 ### Active
 
-(Current milestone scope — see requirements)
+(No active milestone — run `/gsd-new-milestone` to start next)
 
 ### Out of Scope
 
@@ -262,6 +269,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
+
+## Completed Milestone: v0.15.0 Dir Mode & Polish (2026-04-05)
+
+**Goal:** Add a "dir" repo type for non-git directories that behave like trunk repos but are invisible to all git operations.
+
+**Shipped:** All target features delivered across 5 phases (64-68). Dir repo type in Zod schemas with backward-compatible defaults, registry CLI support for non-git directories, workspace lifecycle guards, git operation guards silently skipping dir repos, CLI status/doctor display, TUI dashboard rendering with [dir] labels and dir count.
+
+## Completed Milestone: v0.14.0 Workflow Completion & Workspace UX (2026-04-03)
+
+**Goal:** Ship remaining workspace workflow commands (ahead/behind, push, labels, secrets, stash-on-sync) to complete the core workspace lifecycle.
+
+**Shipped:** All target features delivered across 6 phases (58-63). Per-repo ahead/behind tracking with fetch dedup, multi-repo push with upstream setup, workspace label system, pluggable secret resolution with keychain/env/cmd resolvers, automatic stash/pop around sync operations.
 
 ## Completed Milestone: v0.13.0 CLI Polish & Completions (2026-04-02)
 
@@ -302,7 +321,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Versioning
 
-**Current release:** `v0.12.0`
+**Current release:** `v0.15.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -368,6 +387,10 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Contiguous port allocation with lockfile | First-fit on sorted free ranges; lockfile prevents race conditions between concurrent opens | ✓ Good |
 | Port names as-is for env vars (no prefix) | User controls naming; `ports: { PORT: ~ }` → `PORT=12400` | ✓ Good |
 | Workspace YAML is sole source of truth for ports | No separate allocation registry; remove frees ports implicitly via YAML deletion | ✓ Good |
+| `is_dir` boolean with `z.boolean().default(false)` | Backward-compatible — existing registry YAML without the field works unchanged | ✓ Good |
+| Dir guards in workspace-ops.ts, not git.ts | Git layer stays clean; mode-aware filtering belongs in business logic | ✓ Good |
+| Dir repos added to `skipped` array (not silently ignored) | Consistent with trunk skip pattern; visible in status output | ✓ Good |
+| `findInvalidDirRepos` separate from git health checks | Dir-specific validation (path exists, is directory) has different semantics than git checks | ✓ Good |
 
 ## Out of Scope
 
@@ -416,4 +439,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-05 after v0.15.0 Phase 68 (Release Prep) complete*
+*Last updated: 2026-04-05 after v0.15.0 milestone*

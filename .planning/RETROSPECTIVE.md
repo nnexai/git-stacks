@@ -483,6 +483,92 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.14.0 — Workflow Completion & Workspace UX
+
+**Shipped:** 2026-04-03
+**Phases:** 6 (Phases 58–63) | **Plans:** 18
+
+### What Was Built
+
+- Ahead/behind tracking flowing from git primitives through status, list, and TUI dashboard
+- Multi-repo push with upstream setup, JSON/text output, and dashboard progress
+- Workspace label system with CLI CRUD, filtering, and dashboard grouping
+- Pluggable secret resolution (`${{ resolver:path }}`) with keychain/env/cmd resolvers
+- Stash-on-sync for dirty worktrees with reverse restore and explicit recovery output
+- v0.14.0 release prep with passing milestone audit
+
+### What Worked
+
+- **Six feature phases in one day** — coarse granularity (3-4 plans per phase) kept context switching minimal
+- **Milestone audit before release** — caught requirement coverage gaps early
+- **Secret resolution design** — pluggable resolver pattern kept the core simple while supporting three backends
+
+### What Was Inefficient
+
+- **Release prep phase executed before code phases settled** — Phase 68 (release prep) for v0.15.0 ran and accidentally deleted planning artifacts from completed phases 65-67 in a combined commit
+
+### Patterns Established
+
+- **Resolver registry pattern** — `RESOLVER_REGISTRY` with `resolve(path)` interface for extensible secret backends
+- **Stash/pop lifecycle** — automatic stash before sync with reverse-order pop and explicit recovery path on failure
+
+### Key Lessons
+
+1. **Release prep commits must not mix code and planning cleanup** — the version bump commit should be code-only; planning artifact cleanup is a separate concern
+2. **Worktree executor merges need artifact verification** — after merging executor worktrees, verify planning artifacts survived the merge
+
+### Cost Observations
+
+- Model mix: opus for orchestration, sonnet/haiku for execution (balanced profile)
+- Sessions: 1 primary session
+- Notable: 104 files changed, +14,142 / -1,248 lines. Largest feature delta since v0.7.0.
+
+---
+
+## Milestone: v0.15.0 — Dir Mode & Polish
+
+**Shipped:** 2026-04-05
+**Phases:** 5 (Phases 64–68) | **Plans:** 7
+
+### What Was Built
+
+- Dir repo type (`type: "dir"`) in Zod schemas with backward-compatible `is_dir` boolean default
+- Registry CLI support — `repo add`/`repo scan` detect and register non-git directories
+- Workspace lifecycle guards — dir repos skip worktree creation/removal, no git errors
+- Git operation guards — push/pull/sync/merge/ahead-behind/dirty silently skip dir repos
+- CLI status [dir] label, `--fetch` guard, doctor `findInvalidDirRepos` health checks
+- TUI dashboard [dir] label, dir count, missing-dir detection
+
+### What Worked
+
+- **Minimal code surface** — 236 insertions, 86 deletions across 7 source files. The dir mode feature was cleanly isolated to mode-filtering guards
+- **Phase 64 as single dependency** — schema foundation enabled parallel work on lifecycle (65) and git guards (66)
+- **Test-driven approach** — six dedicated GIT-0x guard tests and TUI component tests caught edge cases early
+
+### What Was Inefficient
+
+- **Planning artifact loss** — Phase 68 (release prep) executor accidentally deleted all phase 65-67 directories in the version bump commit, requiring git-history restoration during milestone completion
+- **ROADMAP/REQUIREMENTS staleness** — neither file was updated after phase execution, requiring bulk correction at milestone time
+
+### Patterns Established
+
+- **Mode-filter guards** — `repos.filter(r => r.mode !== 'dir')` before git operations, with dir repos added to `skipped` result array
+- **Separate health check functions** — `findInvalidDirRepos` validates dir-specific concerns (path exists, is directory) independently from git health checks
+
+### Key Lessons
+
+1. **Executor worktree merges must preserve planning artifacts** — the combined code+cleanup commit pattern is dangerous; keep them separate
+2. **ROADMAP completion status must be updated per-phase, not deferred to milestone** — stale status creates confusion during milestone completion
+3. **Dir mode was well-scoped** — 18 requirements across 5 phases with clear dependency structure shipped cleanly in 2 days
+
+### Cost Observations
+
+- Model mix: opus for orchestration, sonnet for execution (balanced profile)
+- Sessions: 2 sessions across 2 days
+- Notable: 7 source files changed, +236/-86 lines. Smallest feature delta — the dir mode concept maps cleanly to filtering guards.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |
@@ -498,5 +584,7 @@ Living document — one section per shipped milestone.
 | v0.11.0 AeroSpace Window Mgmt | 4 | 7 | 1 | 0 |
 | v0.12.0 Multi-WS AeroSpace + Ports | 7 | 14 | 4 | 0 |
 | v0.13.0 CLI Polish & Completions | 5 | 9 | 1 | 0 |
+| v0.14.0 Workflow Completion | 6 | 18 | 1 | 0 |
+| v0.15.0 Dir Mode & Polish | 5 | 7 | 2 | 0 |
 
-**Trend:** Zero-rework streak continues (9 milestones). 11 milestones shipped in 16 days (2026-03-18 → 2026-04-02). v0.13.0 was a single-session autonomous run — smallest delta (+1,181/-143 lines) reflecting focused polish. REQUIREMENTS.md scoping fixed from v0.12.0 lesson — all 14 requirements tracked upfront. SUMMARY frontmatter completeness remains a minor gap (2 of 9 SUMMARYs missing requirements-completed). Codebase at ~11,700 LOC source + ~12,200 LOC tests.
+**Trend:** Zero-rework streak continues (11 milestones). 13 milestones shipped in 19 days (2026-03-18 → 2026-04-05). v0.15.0 had the smallest source delta (+236/-86 lines) — dir mode maps cleanly to mode-filtering guards. Planning artifact loss from executor worktree merges is a new operational risk (hit in v0.15.0, diagnosed and restored). Codebase at ~16,445 LOC TypeScript.
