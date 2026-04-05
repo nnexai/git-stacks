@@ -33,8 +33,6 @@ import { buildRepoEnv, buildWorkspaceEnv, mergeEnv, writeEnvFiles } from "./work
 export { buildBaseEnv, buildRepoEnv, buildWorkspaceEnv, mergeEnv, writeEnvFiles } from "./workspace-env"
 export type { BuildWorkspaceEnvOptions } from "./workspace-env"
 export { cleanWorkspace, closeWorkspace, mergeWorkspace, removeWorkspace } from "./workspace-lifecycle"
-export { getWorkspaceListInfo, getWorkspaceStatus, getDirtyWorktrees, detectWorkspaceFromCwd } from "./workspace-status"
-export type { WorkspaceListInfo, RepoStatus, CwdDetectionResult } from "./workspace-status"
 
 export type ProgressCallback = (message: string) => void
 
@@ -346,7 +344,3 @@ export async function renameTemplate(
   return { ok: true }
 }
 
-export { syncWorkspace, pushWorkspace, pullWorkspace } from "./workspace-git"
-export type { SyncResult, SyncRow, PushResult, PushRow, PullRow, PullResult } from "./workspace-git"
-
-export { editWorkspaceYaml, openYamlInEditor, editTemplateYaml, editGlobalConfigYaml, editRegistryYaml } from "./workspace-yaml"

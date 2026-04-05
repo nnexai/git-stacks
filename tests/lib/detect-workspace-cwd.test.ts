@@ -62,7 +62,7 @@ applyPathsMock()
 // reads from that directory.
 const { detectWorkspaceFromCwd }: {
   detectWorkspaceFromCwd: (cwd?: string) => { ok: true; workspace: Workspace } | { ok: false; error: "no_match" }
-} = await import("@/lib/workspace-ops")
+} = await import("@/lib/workspace-status")
 
 // Import issue-utils as a module namespace object (not destructured).
 // Other unit test files mock @/lib/integrations/issue-utils, so by the time this

@@ -34,12 +34,16 @@ import {
   writeEnvFiles,
   mergeEnv,
   buildWorkspaceEnv,
-  getWorkspaceListInfo,
-  getWorkspaceStatus,
-  pushWorkspace,
-  syncWorkspace,
   openWorkspace,
 } from "../../src/lib/workspace-ops"
+import {
+  getWorkspaceListInfo,
+  getWorkspaceStatus,
+} from "../../src/lib/workspace-status"
+import {
+  pushWorkspace,
+  syncWorkspace,
+} from "../../src/lib/workspace-git"
 
 let gitEnvDir: string
 let restoreGitEnv: (() => void) | undefined
