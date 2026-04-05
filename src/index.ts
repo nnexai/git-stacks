@@ -79,5 +79,5 @@ const subcommand = process.argv[2]
 if (subcommand !== "completion") {
   await checkGitVersion()
 }
-await configureObservability(process.env.GIT_STACKS_DEBUG === "1")
+await configureObservability(process.env.GS_DEBUG ?? (process.env.GIT_STACKS_DEBUG === "1" ? "1" : undefined))
 program.parse()

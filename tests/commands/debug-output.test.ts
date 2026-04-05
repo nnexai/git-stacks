@@ -119,7 +119,7 @@ describe("status debug output", () => {
     expect(exitCode).toBe(0)
     expect(stderr).toContain("[workspace-status]")
     expect(
-      stderr.includes("getWorkspaceStatus:") || stderr.includes("getWorkspaceListInfo:")
+      stderr.includes("op=getWorkspaceStatus") || stderr.includes("op=getWorkspaceListInfo")
     ).toBe(true)
     expect(stdout).toContain("test-ws")
   })
