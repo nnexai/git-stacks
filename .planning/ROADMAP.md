@@ -194,7 +194,7 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 
 **Milestone Goal:** Break workspace-ops.ts (1,735 lines) into domain-cohesive modules without breaking the public API, add GIT_STACKS_DEBUG trace output, and verify extracted modules with focused unit tests.
 
-- [ ] **Phase 69: Extract workspace-env.ts and workspace-lifecycle.ts** - Extract env assembly and lifecycle cascade as two sequential domain modules; workspace-ops.ts re-exports both
+- [x] **Phase 69: Extract workspace-env.ts and workspace-lifecycle.ts** - Extract env assembly and lifecycle cascade as two sequential domain modules; workspace-ops.ts re-exports both (completed 2026-04-05)
 - [ ] **Phase 70: Extract remaining domain modules and workspace-ops facade** - Extract workspace-git, workspace-status, workspace-yaml; finalize workspace-ops as thin lifecycle orchestrator; verify all 800+ tests pass
 - [ ] **Phase 71: Observability** - Install LogTape, wire GIT_STACKS_DEBUG env var, add labeled debug output and timing to domain modules
 - [ ] **Phase 72: Extraction tests** - Focused unit tests for extracted module helpers without real git repos; circular import detection verified
@@ -269,7 +269,7 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 | 66. Git Operation Guards | v0.15.0 | 1/1 | Complete | 2026-04-04 |
 | 67. Status, Display & Health | v0.15.0 | 2/2 | Complete | 2026-04-05 |
 | 68. Release Prep | v0.15.0 | 1/1 | Complete | 2026-04-05 |
-| 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 0/TBD | Not started | - |
+| 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 1/1 | Complete    | 2026-04-05 |
 | 70. Extract remaining modules + facade | v0.16.0 | 0/TBD | Not started | - |
 | 71. Observability | v0.16.0 | 0/TBD | Not started | - |
 | 72. Extraction tests | v0.16.0 | 0/TBD | Not started | - |

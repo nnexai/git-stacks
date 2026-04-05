@@ -257,7 +257,8 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 #### v0.16.0 — Core Engine & Observability
 
-- [ ] Split `workspace-ops.ts` into domain modules: workspace-state, git-ops, env/secrets, hooks, execution
+- [x] Extract env/secrets and lifecycle boundaries from `workspace-ops.ts` into `workspace-env.ts` and `workspace-lifecycle.ts` while keeping a stable facade
+- [ ] Extract the remaining `workspace-ops.ts` responsibilities into focused git/status/yaml modules and remove temporary facade shims
 - [ ] CLI and TUI become thin adapters over the same typed operations
 - [ ] Dependency injection at all shell/process/filesystem boundaries
 - [ ] Structured logging for every external command (git, IDE spawns, hook execution)
@@ -458,4 +459,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-05 after v0.16.0 milestone start*
+*Last updated: 2026-04-05 after Phase 69 completion*

@@ -10,14 +10,14 @@ Requirements for v0.16.0 Core Engine & Observability. Each maps to roadmap phase
 ### Module Extraction
 
 - [ ] **EXTR-01**: workspace-ops.ts is split into domain modules with workspace-ops.ts as a re-export facade
-- [ ] **EXTR-02**: workspace-env.ts extracted — mergeEnv, buildBaseEnv, buildRepoEnv, buildWorkspaceEnv, writeEnvFiles, resolveWorkspaceEnvVars
-- [ ] **EXTR-03**: workspace-lifecycle.ts extracted — close/clean/remove/merge with cascade helpers (_executeClose, _executeClean) co-located
+- [x] **EXTR-02**: workspace-env.ts extracted — mergeEnv, buildBaseEnv, buildRepoEnv, buildWorkspaceEnv, writeEnvFiles, resolveWorkspaceEnvVars
+- [x] **EXTR-03**: workspace-lifecycle.ts extracted — close/clean/remove/merge with cascade helpers (_executeClose, _executeClean) co-located
 - [ ] **EXTR-04**: workspace-git.ts extracted — sync/push/pull operations
 - [ ] **EXTR-05**: workspace-status.ts extracted — getWorkspaceStatus, getDirtyWorktrees, getWorkspaceListInfo
 - [ ] **EXTR-06**: workspace-yaml.ts extracted — YAML editors, rename ops, detectWorkspaceFromCwd
 - [ ] **EXTR-07**: Each extracted module exports `_exec` object following lifecycle.ts pattern where it spawns processes
 - [ ] **EXTR-08**: All existing tests pass after each extraction step (800+ tests, zero regressions)
-- [ ] **EXTR-09**: Cascade ordering (remove → clean → close) preserved with D-02/D-10 lifecycle references
+- [x] **EXTR-09**: Cascade ordering (remove → clean → close) preserved with D-02/D-10 lifecycle references
 
 ### Observability
 
@@ -63,9 +63,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXTR-02 | Phase 69 | Pending |
-| EXTR-03 | Phase 69 | Pending |
-| EXTR-09 | Phase 69 | Pending |
+| EXTR-02 | Phase 69 | Complete |
+| EXTR-03 | Phase 69 | Complete |
+| EXTR-09 | Phase 69 | Complete |
 | EXTR-01 | Phase 70 | Pending |
 | EXTR-04 | Phase 70 | Pending |
 | EXTR-05 | Phase 70 | Pending |
