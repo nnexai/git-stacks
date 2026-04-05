@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from "solid-js"
-import { listWorkspaces, type Workspace } from "../../../lib/config"
+import { listWorkspaces, isWorktreeRepo, type Workspace } from "../../../lib/config"
 import { getWorkspaceStatus } from "../../../lib/workspace-ops"
 import { isFetchStale } from "../../../lib/git"
 import type { WorkspaceEntry, WorkspaceStatus } from "../types"
@@ -73,7 +73,9 @@ async function fetchStatuses(
         const repos = await getWorkspaceStatus(ws)
 
         // Compute staleness: any worktree repo with stale FETCH_HEAD
-        const worktreeRepos = ws.repos.filter(r => r.mode === "worktree" && repos.some(rs => rs.name === r.name && rs.exists))
+        const worktreeRepos = ws.repos
+          .filter(isWorktreeRepo)
+          .filter(r => repos.some(rs => rs.name === r.name && rs.exists))
         const staleChecks = await Promise.all(
           worktreeRepos.map(r => isFetchStale(r.task_path))
         )

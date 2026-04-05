@@ -1,6 +1,7 @@
 import { join } from "path"
 import { writeFileSync, mkdirSync, existsSync } from "fs"
 import type { Workspace } from "./config"
+import { getRepoPath } from "./config"
 
 interface CodeWorkspaceFolder {
   path: string
@@ -14,8 +15,12 @@ interface CodeWorkspace {
 
 export function generateCodeWorkspace(workspace: Workspace, tasksDir: string): string {
   const folders: CodeWorkspaceFolder[] = workspace.repos.map((repo) => ({
-    path: repo.task_path,
-    name: repo.mode === "worktree" ? `${repo.name} [${workspace.name}]` : `${repo.name} [trunk]`,
+    path: getRepoPath(repo),
+    name: repo.mode === "worktree"
+      ? `${repo.name} [${workspace.name}]`
+      : repo.mode === "dir"
+        ? `${repo.name} [dir]`
+        : `${repo.name} [trunk]`,
   }))
 
   const codeWorkspace: CodeWorkspace = { folders, settings: {} }

@@ -60,6 +60,13 @@ function classifyFiles(): { unit: string[]; integ: string[] } {
       continue
     }
 
+    // files.test.ts depends on the real paths/home resolution and is sensitive
+    // to mock.module pollution from other lib tests that replace @/lib/paths.
+    if (rel === "lib/files.test.ts") {
+      integ.push(file)
+      continue
+    }
+
     // Any test file using mock.module runs in isolation — mock.module is
     // process-global and contaminates other files in the shared process.
     // Only files with no mock.module calls are safe to share a process.

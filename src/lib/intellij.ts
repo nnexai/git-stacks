@@ -1,6 +1,7 @@
 import { join } from "path"
 import { writeFileSync, mkdirSync, existsSync } from "fs"
-import type { Workspace, WorkspaceRepo } from "./config"
+import { isWorktreeRepo, type Workspace, type WorkspaceRepo } from "./config"
+import { getRepoPath } from "./config"
 
 function modulesXml(repos: WorkspaceRepo[]): string {
   const entries = repos
@@ -34,18 +35,19 @@ function minimalIml(): string {
 }
 
 export function generateIntellijProject(workspace: Workspace, tasksDir: string): string | null {
-  const javaRepos = workspace.repos.filter((r) => r.type === "java")
-  if (javaRepos.length === 0) return null
+  const javaRepos = workspace.repos.filter((r): r is WorkspaceRepo => r.type === "java")
+  const worktreeJavaRepos = javaRepos.filter(isWorktreeRepo)
+  if (worktreeJavaRepos.length === 0) return null
 
   const projectDir = join(tasksDir, workspace.name)
   const ideaDir = join(projectDir, ".idea")
   if (!existsSync(ideaDir)) mkdirSync(ideaDir, { recursive: true })
 
-  writeFileSync(join(ideaDir, "modules.xml"), modulesXml(javaRepos), "utf-8")
+  writeFileSync(join(ideaDir, "modules.xml"), modulesXml(worktreeJavaRepos), "utf-8")
 
   // Write stub .iml files only if they don't already exist (IntelliJ may have generated them)
-  for (const repo of javaRepos) {
-    const imlPath = join(repo.task_path, `${repo.name}.iml`)
+  for (const repo of worktreeJavaRepos) {
+    const imlPath = join(getRepoPath(repo), `${repo.name}.iml`)
     if (!existsSync(imlPath)) {
       writeFileSync(imlPath, minimalIml(), "utf-8")
     }

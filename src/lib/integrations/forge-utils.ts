@@ -3,6 +3,9 @@ import {
   workspaceExists,
   readWorkspace,
   readRegistry,
+  getRepoPath,
+  isWorktreeRepo,
+  type WorktreeRepo,
   type WorkspaceRepo,
   type Workspace,
   type ForgeType,
@@ -37,16 +40,16 @@ export function resolveForgeRepo(
   }
 
   const workspace = readWorkspace(workspaceName)
-  const worktreeRepos = workspace.repos.filter((r) => r.mode === "worktree")
+  const worktreeRepos = workspace.repos.filter(isWorktreeRepo)
 
-  let repo: WorkspaceRepo
+  let repo: WorktreeRepo
   if (repoArg !== undefined) {
     // Check if repo exists at all first (for better error messages)
     const allMatch = workspace.repos.find((r) => r.name === repoArg)
     if (!allMatch) {
       return { ok: false, error: "repo_not_found", name: repoArg }
     }
-    if (allMatch.mode !== "worktree") {
+    if (!isWorktreeRepo(allMatch)) {
       return { ok: false, error: "not_worktree_mode", repo: repoArg }
     }
     repo = allMatch
@@ -73,7 +76,7 @@ export function resolveForgeRepo(
 
   const baseBranch = repo.base_branch ?? registryEntry?.default_branch ?? "main"
 
-  return { ok: true, workspace, repo, repoPath: repo.task_path, baseBranch }
+  return { ok: true, workspace, repo, repoPath: getRepoPath(repo), baseBranch }
 }
 
 export function resolveForgeRepoAnyMode(

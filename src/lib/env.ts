@@ -1,5 +1,6 @@
 import { resolve } from "path"
 import type { Workspace } from "./config"
+import { isWorktreeRepo } from "./config"
 import { expandHome } from "./paths"
 
 // --- Types ---
@@ -79,7 +80,7 @@ export function detectRepoFromCwd(workspace: Workspace, cwd?: string): string | 
   let bestPathLen = 0
 
   for (const repo of workspace.repos) {
-    if (repo.mode !== "worktree") continue
+    if (!isWorktreeRepo(repo)) continue
     const resolvedTaskPath = resolve(expandHome(repo.task_path))
     if (
       currentDir === resolvedTaskPath ||

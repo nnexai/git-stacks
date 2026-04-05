@@ -1,7 +1,7 @@
 import { openSync, closeSync, unlinkSync, constants, existsSync, readFileSync } from "node:fs"
 import { join } from "path"
 import { PORTS_LOCK_FILE } from "./paths"
-import { listWorkspaces, type Workspace, type GlobalConfig } from "./config"
+import { listWorkspaces, getRepoPath, type Workspace, type GlobalConfig } from "./config"
 
 // --- Types ---
 
@@ -145,7 +145,7 @@ export function checkConflicts(
   // 2. Check env_file keys
   if (workspace.env_file) {
     for (const repo of workspace.repos) {
-      const envFilePath = join(repo.task_path, workspace.env_file)
+      const envFilePath = join(getRepoPath(repo), workspace.env_file)
       if (!existsSync(envFilePath)) continue
       try {
         const content = readFileSync(envFilePath, "utf-8")

@@ -8,6 +8,8 @@ import {
   writeWorkspace,
   readGlobalConfig,
   readTemplate,
+  isWorktreeRepo,
+  type WorkspaceRepo,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
 import { createWorktree, ensureUpstreamTracking } from "../lib/git"
@@ -115,13 +117,16 @@ export async function runWorkspaceClone(sourceArg?: string) {
   const userIntegrationOverrides = await promptIntegrationOverrides(initialEnabledIds, currentConfigs)
 
   // Recompute task_paths for worktree repos
-  const newRepos = source.repos.map((repo) => ({
-    ...repo,
-    task_path: repo.mode === "worktree" ? join(tasksDir, newName, repo.name) : repo.task_path,
-  }))
+  const newRepos: WorkspaceRepo[] = source.repos.map((repo) => {
+    if (repo.mode === "worktree") {
+      // Cast: spreading a WorkspaceRepo with an updated task_path is always a valid WorkspaceRepo
+      return { ...repo, task_path: join(tasksDir, newName, repo.name) } as WorkspaceRepo
+    }
+    return repo
+  })
 
   // Create worktrees
-  const worktreeRepos = newRepos.filter((r) => r.mode === "worktree")
+  const worktreeRepos = newRepos.filter(isWorktreeRepo)
   if (worktreeRepos.length > 0) {
     const spinner = p.spinner()
     spinner.start("Creating worktrees")

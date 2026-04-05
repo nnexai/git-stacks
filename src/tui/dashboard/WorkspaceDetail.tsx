@@ -63,7 +63,11 @@ export function WorkspaceDetail(props: Props) {
                 {(repo: any) => {
                   const icon = !repo.exists ? "✗" : repo.dirty ? "~" : "✓"
                   const fg = !repo.exists ? "red" : repo.dirty ? "yellow" : "green"
-                  const modeLabel = repo.mode === "worktree" ? `[${repo.branch}]` : "[trunk]"
+                  const modeLabel = repo.mode === "worktree"
+                    ? `[${repo.branch}]`
+                    : repo.mode === "dir"
+                      ? "[dir]"
+                      : "[trunk]"
                   const stale = aheadBehindStale() ? "?" : ""
                   return (
                     <box flexDirection="row" height={1}>

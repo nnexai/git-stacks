@@ -10,6 +10,7 @@ import {
   readGlobalConfig,
   WorkspaceSchema,
   TemplateSchema,
+  isWorktreeRepo,
   type Workspace,
   type RepoRegistryEntry,
 } from "../lib/config"
@@ -131,7 +132,7 @@ function findMissingWorktrees(workspaces: Workspace[]): Issue[] {
   const issues: Issue[] = []
   for (const ws of workspaces) {
     for (const repo of ws.repos) {
-      if (repo.mode === "worktree" && !existsSync(repo.task_path)) {
+      if (isWorktreeRepo(repo) && !existsSync(repo.task_path)) {
         issues.push({
           icon: "fail",
           entity: ws.name,

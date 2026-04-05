@@ -141,7 +141,7 @@ export function processFileList(
 export function applyFileOpsForRepo(source: FileOpsRepoSource, wsRepo: WorkspaceRepo): ApplyResult {
   const merged = mergeFiles(source.files, wsRepo.files)
   const sourceBase = wsRepo.main_path
-  const destDir = wsRepo.task_path
+  const destDir = wsRepo.task_path ?? wsRepo.main_path
 
   const copyResult = processFileList("copy", merged.copy, sourceBase, destDir)
   if (!copyResult.ok) return copyResult

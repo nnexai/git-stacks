@@ -35,7 +35,7 @@ import {
   pushWorkspace,
 } from "../../lib/workspace-ops"
 import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-ops"
-import { readTemplate, writeTemplate, templateExists, templatePath, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
+import { readTemplate, writeTemplate, templateExists, templatePath, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, isWorktreeRepo, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
 import { SyncProgressView } from "./SyncProgressView"
 import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
@@ -426,7 +426,7 @@ export default function App() {
 
   async function executeSync(name: string) {
     const ws = readWorkspace(name)
-    const worktreeRepos = ws.repos.filter(r => r.mode === "worktree")
+    const worktreeRepos = ws.repos.filter(isWorktreeRepo)
     const initialRows: SyncRow[] = worktreeRepos
       .map(r => ({ repo: r.name, status: "pending" as const, detail: "", conflicts: [] }))
 
@@ -460,9 +460,9 @@ export default function App() {
   async function executePush(name: string) {
     const ws = readWorkspace(name)
     const initialRows: PushRowDisplay[] = ws.repos
-      .map((repo) => repo.mode === "trunk"
-        ? { repo: repo.name, status: "skipped" as const, detail: "trunk" }
-        : { repo: repo.name, status: "pending" as const, detail: "" })
+      .map((repo) => repo.mode === "worktree"
+        ? { repo: repo.name, status: "pending" as const, detail: "" }
+        : { repo: repo.name, status: "skipped" as const, detail: repo.mode })
 
     setPushRows(initialRows)
     setPushDone(false)
@@ -808,14 +808,26 @@ export default function App() {
           const regEntry = registryMap.get(tplRepo.repo)
           if (!regEntry) continue  // skip missing registry entries silently
           const mode = tplRepo.mode ?? "worktree"
-          const taskPath = mode === "worktree"
-            ? join(tasksDir, wsName, regEntry.name)
-            : regEntry.local_path
-          repos.push({
-            name: regEntry.name, repo: tplRepo.repo, type: regEntry.type, mode,
-            main_path: regEntry.local_path, task_path: taskPath,
-            base_branch: tplRepo.base_branch ?? regEntry.default_branch,
-          })
+          if (mode === "worktree") {
+            repos.push({
+              name: regEntry.name,
+              repo: tplRepo.repo,
+              type: regEntry.type,
+              mode,
+              main_path: regEntry.local_path,
+              task_path: join(tasksDir, wsName, regEntry.name),
+              base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+            })
+          } else {
+            repos.push({
+              name: regEntry.name,
+              repo: tplRepo.repo,
+              type: regEntry.type,
+              mode,
+              main_path: regEntry.local_path,
+              base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+            })
+          }
         }
         wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
         wsEnv = template.env ? { ...template.env } : undefined
@@ -841,8 +853,8 @@ export default function App() {
       // Initialize progress rows
       const initialRows: CreateRow[] = repos.map(r => ({
         repo: r.name,
-        status: r.mode === "trunk" ? "skipped" as const : "pending" as const,
-        detail: r.mode === "trunk" ? "trunk mode" : "",
+        status: r.mode === "worktree" ? "pending" as const : "skipped" as const,
+        detail: r.mode === "worktree" ? "" : `${r.mode} mode`,
       }))
       setCreateRows(initialRows)
 
@@ -852,7 +864,7 @@ export default function App() {
         GS_WORKSPACE_PATH: tasksDir,
         GS_TRIGGERED_BY: "create",
       }
-      const worktreeRepos = repos.filter(r => r.mode === "worktree")
+      const worktreeRepos = repos.filter(isWorktreeRepo)
 
       // Pre-create hooks (D-17: abortOnFailure=false)
       if (wsHooks?.pre_create?.length) {
@@ -905,7 +917,7 @@ export default function App() {
       )
 
       // File ops (per-repo)
-      for (const wsRepo of repos.filter(r => r.mode === "worktree")) {
+      for (const wsRepo of repos.filter(isWorktreeRepo)) {
         if (!(wsRepo as any).files) continue
         const repoLike = { name: wsRepo.name, path: wsRepo.main_path, files: (wsRepo as any).files }
         applyFileOpsForRepo(repoLike, wsRepo)
@@ -967,7 +979,7 @@ export default function App() {
 
       // Summary
       const nCreated = worktreeRepos.length
-      const nSkipped = repos.filter(r => r.mode === "trunk").length
+      const nSkipped = repos.filter(r => r.mode !== "worktree").length
       const parts: string[] = []
       if (nCreated > 0) parts.push(`${nCreated} created`)
       if (nSkipped > 0) parts.push(`${nSkipped} trunk`)

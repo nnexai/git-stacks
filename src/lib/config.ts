@@ -113,18 +113,37 @@ const WorkspaceRepoHooksSchema = z.object({
   pre_clean: z.array(z.string()).optional(),
 })
 
-export const WorkspaceRepoSchema = z.object({
+const WorkspaceRepoBaseSchema = z.object({
   name: z.string(),
   repo: z.string(),           // registry name — replaces 'stack'
   type: RepoTypeSchema,
-  mode: z.enum(["trunk", "worktree", "dir"]),
   main_path: z.string().transform(expandHome),
-  task_path: z.string().transform(expandHome).optional(),
   base_branch: z.string().optional(),  // base branch for merge/sync resolution
   hooks: WorkspaceRepoHooksSchema.optional(),
   files: FilesSchema,
 })
+export const WorktreeRepoSchema = WorkspaceRepoBaseSchema.extend({
+  mode: z.literal("worktree"),
+  task_path: z.string().transform(expandHome),
+})
+export const TrunkRepoSchema = WorkspaceRepoBaseSchema.extend({
+  mode: z.literal("trunk"),
+  task_path: z.string().transform(expandHome).optional(),
+})
+export const DirRepoSchema = WorkspaceRepoBaseSchema.extend({
+  mode: z.literal("dir"),
+  task_path: z.string().transform(expandHome).optional(),
+})
+export const WorkspaceRepoSchema = z.discriminatedUnion("mode", [
+  WorktreeRepoSchema,
+  TrunkRepoSchema,
+  DirRepoSchema,
+])
 export type WorkspaceRepo = z.infer<typeof WorkspaceRepoSchema>
+export type WorktreeRepo = z.infer<typeof WorktreeRepoSchema>
+export type TrunkRepo = z.infer<typeof TrunkRepoSchema>
+export type DirRepo = z.infer<typeof DirRepoSchema>
+export type GitWorkspaceRepo = WorktreeRepo | TrunkRepo
 
 export const WorkspaceSettingsSchema = z.object({
   /** Per-integration overrides keyed by integration id, e.g. { cmux: { enabled: false } } */
@@ -388,3 +407,29 @@ export function expandBranchPattern(pattern: string, workspaceName: string): str
 }
 
 export { expandHome }
+
+// --- Repo-mode helpers ---
+
+/**
+ * Returns the active working-directory path for a workspace repo:
+ * - worktree: task_path (the checked-out worktree)
+ * - trunk / dir: main_path (the shared clone / bare directory)
+ *
+ * Use this everywhere you need "the path you work in for this repo" without
+ * caring whether git operations are involved.
+ */
+export function getRepoPath(repo: WorkspaceRepo): string {
+  return repo.mode === "worktree" ? repo.task_path : repo.main_path
+}
+
+/**
+ * Type guard: narrows a WorkspaceRepo to one whose task_path is a string.
+ * Only worktree-mode repos carry a task_path; trunk and dir repos do not.
+ */
+export function isWorktreeRepo(repo: WorkspaceRepo): repo is WorktreeRepo {
+  return repo.mode === "worktree"
+}
+
+export function isGitRepo(repo: WorkspaceRepo): repo is GitWorkspaceRepo {
+  return repo.mode !== "dir"
+}

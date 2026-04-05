@@ -13,6 +13,8 @@ import {
   templateExists,
   writeWorkspace,
   NameSchema,
+  getRepoPath,
+  isGitRepo,
   type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
@@ -99,7 +101,7 @@ export function getWorkspacePaths(
     if (opts.filter && repo.mode !== opts.filter) continue
 
     // Resolve path based on mode
-    const resolvedPath = repo.mode === "worktree" ? repo.task_path : repo.main_path
+    const resolvedPath = getRepoPath(repo)
 
     // Check if path exists on disk
     if (!existsSync(resolvedPath)) {
@@ -360,7 +362,7 @@ export function registerWorkspaceCommands(program: Command) {
       if (opts.fetch) {
         const { mapLimited } = await import("../lib/concurrency")
         const allRepos = workspaces.flatMap(ws =>
-          ws.repos.filter(r => existsSync(r.mode === "worktree" ? r.task_path : r.main_path))
+          ws.repos.filter(r => isGitRepo(r) && existsSync(getRepoPath(r)))
         )
         // Deduplicate by main_path
         const seen = new Set<string>()
@@ -763,7 +765,7 @@ export function registerWorkspaceCommands(program: Command) {
           console.error(formatError(`Repo '${repo}' not found in workspace '${workspace}'`, `available repos: ${ws.repos.map(r => r.name).join(", ")}`))
           process.exit(1)
         }
-        cwd = found.task_path
+        cwd = getRepoPath(found)
       } else {
         cwd = join(tasksDir, workspace)
       }

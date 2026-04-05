@@ -113,6 +113,7 @@ export async function runRepoScan(dir: string) {
         local_path: repo.path,
         default_branch: branch,
         type: repo.detectedType,
+        is_dir: false,
         forge,
       })
       registerSpinner.message(`${regName}`)

@@ -12,6 +12,7 @@ import {
   workspaceExists,
   readGlobalConfig,
   expandBranchPattern,
+  isWorktreeRepo,
   type WorkspaceRepo,
   type Workspace,
   type Template,
@@ -105,19 +106,26 @@ function buildReposFromTemplate(
     }
 
     const mode = tplRepo.mode ?? "worktree"
-    const taskPath = mode === "worktree"
-      ? join(tasksDir, wsName, regEntry.name)
-      : regEntry.local_path
-
-    repos.push({
-      name: regEntry.name,
-      repo: tplRepo.repo,
-      type: regEntry.type,
-      mode,
-      main_path: regEntry.local_path,
-      task_path: taskPath,
-      base_branch: tplRepo.base_branch ?? regEntry.default_branch,
-    })
+    if (mode === "worktree") {
+      repos.push({
+        name: regEntry.name,
+        repo: tplRepo.repo,
+        type: regEntry.type,
+        mode,
+        main_path: regEntry.local_path,
+        task_path: join(tasksDir, wsName, regEntry.name),
+        base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+      })
+    } else {
+      repos.push({
+        name: regEntry.name,
+        repo: tplRepo.repo,
+        type: regEntry.type,
+        mode,
+        main_path: regEntry.local_path,
+        base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+      })
+    }
   }
 
   return repos
@@ -337,15 +345,26 @@ export async function runWorkspaceNew(
         if (p.isCancel(modeRaw)) cancel()
         const mode = modeRaw as "trunk" | "worktree"
 
-        repos.push({
-          name: regEntry.name,
-          repo: regEntry.name,
-          type: regEntry.type,
-          mode,
-          main_path: regEntry.local_path,
-          task_path: mode === "worktree" ? join(tasksDir, wsName, regEntry.name) : regEntry.local_path,
-          base_branch: regEntry.default_branch,
-        })
+        if (mode === "worktree") {
+          repos.push({
+            name: regEntry.name,
+            repo: regEntry.name,
+            type: regEntry.type,
+            mode,
+            main_path: regEntry.local_path,
+            task_path: join(tasksDir, wsName, regEntry.name),
+            base_branch: regEntry.default_branch,
+          })
+        } else {
+          repos.push({
+            name: regEntry.name,
+            repo: regEntry.name,
+            type: regEntry.type,
+            mode,
+            main_path: regEntry.local_path,
+            base_branch: regEntry.default_branch,
+          })
+        }
       }
     }
   }
@@ -460,7 +479,7 @@ export async function runWorkspaceNew(
   }
 
   // Create worktrees
-  const worktreeRepos = repos.filter((r) => r.mode === "worktree")
+  const worktreeRepos = repos.filter(isWorktreeRepo)
   if (worktreeRepos.length > 0) {
     const spinner = p.spinner()
     spinner.start("Creating worktrees")
@@ -523,7 +542,7 @@ export async function runWorkspaceNew(
   opsSpinner.start("Applying file ops")
 
   // Per-repo file ops
-  for (const wsRepo of repos.filter(r => r.mode === "worktree")) {
+  for (const wsRepo of repos.filter(isWorktreeRepo)) {
     if (!wsRepo.files) continue
     opsSpinner.message(`files: ${wsRepo.name}`)
     const repoLike = {
