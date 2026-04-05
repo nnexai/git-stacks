@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.16.0
 milestone_name: Core Engine & Observability
-status: active
-stopped_at: Roadmap created
-last_updated: "2026-04-05"
-last_activity: 2026-04-05
+status: planning
+stopped_at: Phase 69 context gathered (assumptions mode)
+last_updated: "2026-04-05T10:26:15.685Z"
+last_activity: 2026-04-05 — Roadmap created for v0.16.0
 progress:
   total_phases: 5
   completed_phases: 0
@@ -35,6 +35,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: —
 - Total execution time: —
@@ -68,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05
-Stopped at: Roadmap written — ready to plan Phase 69
-Resume file: None
+Last session: 2026-04-05T10:26:15.682Z
+Stopped at: Phase 69 context gathered (assumptions mode)
+Resume file: .planning/phases/69-extract-workspace-env-ts-and-workspace-lifecycle-ts/69-CONTEXT.md
