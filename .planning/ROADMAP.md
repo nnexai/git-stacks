@@ -225,7 +225,11 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
   4. workspace-ops.ts contains only lifecycle operations (open/close/clean/remove/merge/rename) and no dangling re-export shims
   5. `madge --circular src/` returns zero cycles
   6. `bun run test` returns 800+ passing, 0 failing
-**Plans**: TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 70-01-PLAN.md — Extract workspace-status.ts and update status callers
+- [ ] 70-02-PLAN.md — Extract workspace-git.ts and workspace-yaml.ts with _exec seams
+- [ ] 70-03-PLAN.md — Remove re-export shims, update test mocks and imports
 
 ### Phase 71: Observability
 **Goal**: GIT_STACKS_DEBUG=1 activates labeled debug output to stderr across all domain modules; normal CLI invocations see zero overhead
@@ -270,7 +274,7 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 | 67. Status, Display & Health | v0.15.0 | 2/2 | Complete | 2026-04-05 |
 | 68. Release Prep | v0.15.0 | 1/1 | Complete | 2026-04-05 |
 | 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 1/1 | Complete    | 2026-04-05 |
-| 70. Extract remaining modules + facade | v0.16.0 | 0/TBD | Not started | - |
+| 70. Extract remaining modules + facade | v0.16.0 | 0/3 | Not started | - |
 | 71. Observability | v0.16.0 | 0/TBD | Not started | - |
 | 72. Extraction tests | v0.16.0 | 0/TBD | Not started | - |
 | 73. Release Prep | v0.16.0 | 0/TBD | Not started | - |
