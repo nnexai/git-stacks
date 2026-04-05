@@ -12,6 +12,7 @@ import { messageCommand } from "./commands/message"
 import { installCommand } from "./commands/install"
 import { integrationCommand } from "./commands/integration"
 import { labelCommand } from "./commands/label"
+import { configureObservability, silenceObservability } from "./lib/observability"
 import { getVersionString } from "./lib/version"
 
 async function checkGitVersion(): Promise<void> {
@@ -46,6 +47,8 @@ program
   .command("manage")
   .description("Interactive workspace dashboard")
   .action(async () => {
+    await silenceObservability()
+
     // Register the Bun solid plugin programmatically so the dashboard works
     // when running via `bunx` or global install (where bunfig.toml preload is absent).
     const { plugin } = await import("bun")
@@ -76,4 +79,5 @@ const subcommand = process.argv[2]
 if (subcommand !== "completion") {
   await checkGitVersion()
 }
+await configureObservability(process.env.GIT_STACKS_DEBUG === "1")
 program.parse()
