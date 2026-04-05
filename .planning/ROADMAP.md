@@ -183,7 +183,7 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
 - [x] **Phase 64: Schema & Registry** - Add "dir" type to Zod schemas and wire `repo add`/`repo scan` to accept plain directories (completed 2026-04-04)
 - [x] **Phase 65: Workspace Lifecycle** - `new`/`open`/`close`/`clean`/`remove` handle dir repos correctly (reference only, no worktrees) (completed 2026-04-04)
 - [x] **Phase 66: Git Operation Guards** - All git commands (push, pull, sync, merge, ahead/behind, dirty) skip dir repos (completed 2026-04-04)
-- [ ] **Phase 67: Status, Display & Health** - Status, list, TUI dashboard, and doctor surface dir repos correctly
+- [x] **Phase 67: Status, Display & Health** - Status, list, TUI dashboard, and doctor surface dir repos correctly (completed 2026-04-05)
 - [ ] **Phase 68: Release Prep** - v0.15.0 version bump, CHANGELOG, README documentation
 
 ## Phase Details
@@ -235,10 +235,10 @@ Plans:
   2. `git-stacks list` includes workspaces containing only dir repos without git aggregation errors
   3. TUI dashboard workspace detail shows dir repos with a "dir" indicator and no git badges
   4. `git-stacks doctor` skips git health checks for dir repos and instead validates that the directory exists and is accessible
-**Plans:** 1/1 plans complete
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 67-01-PLAN.md — CLI status/list display changes and doctor dir health checks
-- [ ] 67-02-PLAN.md — TUI dashboard types, WorkspaceDetail, WorkspaceRow, and useWorkspaces dir support
+- [x] 67-01-PLAN.md — CLI status/list display changes and doctor dir health checks
+- [x] 67-02-PLAN.md — TUI dashboard types, WorkspaceDetail, WorkspaceRow, and useWorkspaces dir support
 
 ### Phase 68: Release Prep
 **Goal**: v0.15.0 ships with updated version, changelog, and README documentation for dir mode
@@ -263,5 +263,5 @@ Plans:
 | 64. Schema & Registry | v0.15.0 | 2/2 | Complete    | 2026-04-04 |
 | 65. Workspace Lifecycle | v0.15.0 | 1/1 | Complete    | 2026-04-04 |
 | 66. Git Operation Guards | v0.15.0 | 1/1 | Complete    | 2026-04-04 |
-| 67. Status, Display & Health | v0.15.0 | 0/2 | Not started | - |
+| 67. Status, Display & Health | v0.15.0 | 2/2 | Complete    | 2026-04-05 |
 | 68. Release Prep | v0.15.0 | 0/? | Not started | - |
