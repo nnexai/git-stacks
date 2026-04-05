@@ -336,17 +336,13 @@ This command currently reports two dashboard cycles in the repo. [CITED: https:/
 
 No assumption-tagged claims were recorded during this research write-up. [VERIFIED: RESEARCH.md self-audit]
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should Phase 72 own the existing dashboard cycle fix, or should a follow-up decimal phase be inserted?**
-   - What we know: The success criterion is codebase-wide zero cycles, and the current gate fails in dashboard files unrelated to the new workspace-module tests. [VERIFIED: .planning/ROADMAP.md] [VERIFIED: bunx madge --circular --extensions ts src/]
-   - What's unclear: Whether the planner should treat that cleanup as part of Phase 72 execution scope or pause for roadmap clarification. [VERIFIED: .planning/ROADMAP.md] [VERIFIED: .planning/phases/72-extraction-tests/72-CONTEXT.md]
-   - Recommendation: Keep it in Phase 72 unless the user explicitly narrows `TEST-04`, because otherwise the phase cannot reach its success criteria. [VERIFIED: .planning/ROADMAP.md] [VERIFIED: bunx madge --circular --extensions ts src/]
+   - Resolution: Phase 72 owns the dashboard cycle fix because `TEST-04` requires codebase-wide zero cycles and the current failing cycles block the phase from meeting its success criteria. The generated execution split reflects this by dedicating `72-02-PLAN.md` to the repo-native Madge gate and the dashboard IPC-state extraction. [VERIFIED: .planning/ROADMAP.md] [VERIFIED: bunx madge --circular --extensions ts src/] [VERIFIED: .planning/phases/72-extraction-tests/72-02-PLAN.md]
 
 2. **Should `writeEnvFiles` and `buildWorkspaceEnv` stay in `workspace-ops.test.ts`, or also get moved into `workspace-env.test.ts`?**
-   - What we know: The locked context requires pure tests for `mergeEnv`, `buildBaseEnv`, and `buildRepoEnv`, and permits `buildWorkspaceEnv` / `writeEnvFiles` coverage using mocks or temp dirs. [VERIFIED: .planning/phases/72-extraction-tests/72-CONTEXT.md]
-   - What's unclear: Whether the planner wants only the required helper coverage or a fuller consolidation of env-module tests into one file. [VERIFIED: .planning/phases/72-extraction-tests/72-CONTEXT.md]
-   - Recommendation: Treat consolidation as optional after the required helper cases and cycle gate are secured. [VERIFIED: .planning/phases/72-extraction-tests/72-CONTEXT.md]
+   - Resolution: `workspace-env.test.ts` will include `buildWorkspaceEnv` and `writeEnvFiles` coverage in addition to the pure helper cases so the extracted module has one focused home for env-specific tests, while the existing broader integration coverage in `workspace-ops.test.ts` remains as regression protection. This is now explicitly required in `72-01-PLAN.md`. [VERIFIED: .planning/phases/72-extraction-tests/72-CONTEXT.md] [VERIFIED: tests/lib/workspace-ops.test.ts] [VERIFIED: .planning/phases/72-extraction-tests/72-01-PLAN.md]
 
 ## Environment Availability
 
