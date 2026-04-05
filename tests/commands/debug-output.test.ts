@@ -74,6 +74,26 @@ function runStatus(
   }
 }
 
+function runClose(
+  cfgDir: string,
+  extraEnv: Record<string, string> = {}
+): { stdout: string; stderr: string; exitCode: number } {
+  const result = Bun.spawnSync(
+    ["bun", "run", "src/index.ts", "close", "test-ws"],
+    {
+      env: { ...process.env, ...extraEnv, GIT_STACKS_CONFIG_DIR: cfgDir },
+      cwd: PROJECT_ROOT,
+      stdio: ["pipe", "pipe", "pipe"],
+    }
+  )
+
+  return {
+    stdout: new TextDecoder().decode(result.stdout),
+    stderr: new TextDecoder().decode(result.stderr),
+    exitCode: result.exitCode ?? 0,
+  }
+}
+
 describe("status debug output", () => {
   let tmpDir: string
   let cfgDir: string
@@ -118,5 +138,66 @@ describe("status debug output", () => {
     expect(stdout).toContain("test-ws")
     expect(stdout).toContain("[feat/test]")
     expect(stdout).toContain("api")
+  })
+
+  test("GS_DEBUG=1 emits structured debug fields on stderr", () => {
+    const { stdout, stderr, exitCode } = runStatus(cfgDir, { GS_DEBUG: "1" })
+
+    expect(exitCode).toBe(0)
+    expect(stderr).toContain("op=")
+    expect(stderr).toContain("module=")
+    expect(stderr).toContain("msg=")
+    expect(stdout).toContain("test-ws")
+  })
+
+  test("GS_DEBUG=true emits structured debug fields on stderr", () => {
+    const { stdout, stderr, exitCode } = runStatus(cfgDir, { GS_DEBUG: "true" })
+
+    expect(exitCode).toBe(0)
+    expect(stderr).toContain("op=")
+    expect(stderr).toContain("module=")
+    expect(stderr).toContain("msg=")
+    expect(stdout).toContain("test-ws")
+  })
+
+  test("GIT_STACKS_DEBUG=1 is a compatibility alias that emits debug output", () => {
+    const { stdout, stderr, exitCode } = runStatus(cfgDir, { GIT_STACKS_DEBUG: "1" })
+
+    expect(exitCode).toBe(0)
+    expect(stderr.length).toBeGreaterThan(0)
+    expect(stdout).toContain("test-ws")
+  })
+})
+
+describe("close debug output with selectors", () => {
+  let tmpDir: string
+  let cfgDir: string
+  let gitEnvDir: string
+  let restoreGitEnv: (() => void) | undefined
+
+  beforeEach(() => {
+    gitEnvDir = makeTmpDir("debug-close-git-env")
+    restoreGitEnv = applyTestGitEnv(gitEnvDir)
+    tmpDir = makeTmpDir()
+    ;({ cfgDir } = setupFixture(tmpDir))
+  })
+
+  afterEach(() => {
+    restoreGitEnv?.()
+    rmSync(gitEnvDir, { recursive: true, force: true })
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  test("GS_DEBUG=lifecycle emits module=lifecycle and op=closeWorkspace on stderr for close command", () => {
+    const { stderr } = runClose(cfgDir, { GS_DEBUG: "lifecycle" })
+
+    expect(stderr).toContain("module=lifecycle")
+    expect(stderr).toContain("op=closeWorkspace")
+  })
+
+  test("GS_DEBUG=git emits no debug output for close command (lifecycle not in git selector)", () => {
+    const { stderr } = runClose(cfgDir, { GS_DEBUG: "git" })
+
+    expect(stderr).toBe("")
   })
 })

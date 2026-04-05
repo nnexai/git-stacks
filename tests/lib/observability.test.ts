@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 import {
   configureObservability,
   debugEnabled,
+  logDebug,
   silenceObservability,
   timeOperation,
 } from "../../src/lib/observability"
@@ -54,21 +55,143 @@ describe("observability", () => {
   test("emits formatted timing output when enabled", async () => {
     const getOutput = installStderrCapture()
 
-    await configureObservability(true)
+    await configureObservability("1")
 
     const result = timeOperation("workspace-status", "getWorkspaceListInfo", () => "ok")
     await Bun.sleep(10)
 
     expect(result).toBe("ok")
-    expect(getOutput()).toContain("[workspace-status] getWorkspaceListInfo:")
+    expect(getOutput()).toContain("[workspace-status]")
   })
 
   test("silenceObservability disables debug mode after it was enabled", async () => {
-    await configureObservability(true)
+    await configureObservability("1")
     expect(debugEnabled()).toBe(true)
 
     await silenceObservability()
 
+    expect(debugEnabled()).toBe(false)
+  })
+})
+
+describe("observability selectors", () => {
+  beforeEach(async () => {
+    Bun.stderr.writer = originalWriter
+    await silenceObservability()
+  })
+
+  afterEach(async () => {
+    Bun.stderr.writer = originalWriter
+    await silenceObservability()
+  })
+
+  test("configureObservability('1') emits structured fields: op=, module=, msg=, ms=", async () => {
+    const getOutput = installStderrCapture()
+
+    await configureObservability("1")
+
+    const result = timeOperation("workspace-status", "getWorkspaceListInfo", () => "ok")
+    await Bun.sleep(10)
+
+    expect(result).toBe("ok")
+    const output = getOutput()
+    expect(output).toContain("op=getWorkspaceListInfo")
+    expect(output).toContain("module=status")
+    expect(output).toContain("msg=completed")
+    expect(output).toMatch(/ms=\d+/)
+  })
+
+  test("configureObservability('true') emits structured fields", async () => {
+    const getOutput = installStderrCapture()
+
+    await configureObservability("true")
+
+    const result = timeOperation("workspace-status", "getWorkspaceListInfo", () => "ok")
+    await Bun.sleep(10)
+
+    expect(result).toBe("ok")
+    const output = getOutput()
+    expect(output).toContain("op=getWorkspaceListInfo")
+    expect(output).toContain("module=status")
+    expect(output).toContain("msg=completed")
+    expect(output).toMatch(/ms=\d+/)
+  })
+
+  test("configureObservability('git') emits module=git for workspace-git logs", async () => {
+    const getOutput = installStderrCapture()
+
+    await configureObservability("git")
+
+    logDebug("workspace-git", "syncWorkspace.fetch: 2 repos")
+    await Bun.sleep(10)
+
+    const output = getOutput()
+    expect(output).toContain("module=git")
+  })
+
+  test("configureObservability('git') suppresses workspace-lifecycle logs", async () => {
+    const getOutput = installStderrCapture()
+
+    await configureObservability("git")
+
+    logDebug("workspace-lifecycle", "closeWorkspace: starting")
+    await Bun.sleep(10)
+
+    const output = getOutput()
+    expect(output).toBe("")
+  })
+
+  test("configureObservability('lifecycle') emits for workspace-lifecycle and suppresses workspace-git", async () => {
+    const getOutputLifecycle = installStderrCapture()
+
+    await configureObservability("lifecycle")
+
+    logDebug("workspace-lifecycle", "closeWorkspace: starting")
+    logDebug("workspace-git", "syncWorkspace.fetch: 2 repos")
+    await Bun.sleep(10)
+
+    const lifecycleOutput = getOutputLifecycle()
+    expect(lifecycleOutput).toContain("module=lifecycle")
+    expect(lifecycleOutput).not.toContain("module=git")
+  })
+
+  test("configureObservability(undefined) disables all debug output", async () => {
+    const getOutput = installStderrCapture()
+
+    await configureObservability(undefined)
+
+    logDebug("workspace-git", "some debug message")
+    await Bun.sleep(10)
+
+    expect(getOutput()).toBe("")
+    expect(debugEnabled()).toBe(false)
+  })
+
+  test("configureObservability('0') disables all debug output", async () => {
+    await configureObservability("1")
+    expect(debugEnabled()).toBe(true)
+
+    const getOutput = installStderrCapture()
+    await configureObservability("0")
+
+    logDebug("workspace-git", "some debug message")
+    await Bun.sleep(10)
+
+    expect(getOutput()).toBe("")
+    expect(debugEnabled()).toBe(false)
+  })
+
+  test("configureObservability('false') disables all debug output", async () => {
+    await configureObservability("1")
+    expect(debugEnabled()).toBe(true)
+
+    const getOutput = installStderrCapture()
+    await configureObservability("false")
+
+    logDebug("workspace-git", "some debug message")
+    await Bun.sleep(10)
+
+    expect(getOutput()).toBe("")
     expect(debugEnabled()).toBe(false)
   })
 })

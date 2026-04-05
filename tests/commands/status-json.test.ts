@@ -145,8 +145,8 @@ describe("status --json", () => {
     expect(trimmed.endsWith("]")).toBe(true)
   })
 
-  test("keeps JSON stdout parseable when debug is enabled", () => {
-    const { stdout, stderr, exitCode } = runStatus(cfgDir, ["--json"], { GIT_STACKS_DEBUG: "1" })
+  test("keeps JSON stdout parseable when GS_DEBUG=1 is enabled", () => {
+    const { stdout, stderr, exitCode } = runStatus(cfgDir, ["--json"], { GS_DEBUG: "1" })
     const trimmed = stdout.trim()
 
     expect(exitCode).toBe(0)
@@ -154,5 +154,16 @@ describe("status --json", () => {
     expect(trimmed.startsWith("[")).toBe(true)
     expect(trimmed.endsWith("]")).toBe(true)
     expect(stderr).toContain("[workspace-status]")
+  })
+
+  test("keeps JSON stdout parseable when GIT_STACKS_DEBUG=1 alias is enabled", () => {
+    const { stdout, stderr, exitCode } = runStatus(cfgDir, ["--json"], { GIT_STACKS_DEBUG: "1" })
+    const trimmed = stdout.trim()
+
+    expect(exitCode).toBe(0)
+    expect(() => JSON.parse(trimmed)).not.toThrow()
+    expect(trimmed.startsWith("[")).toBe(true)
+    expect(trimmed.endsWith("]")).toBe(true)
+    expect(stderr.length).toBeGreaterThan(0)
   })
 })
