@@ -4,21 +4,9 @@ import { existsSync, unlinkSync } from "node:fs"
 import type { UnixSocketListener } from "bun"
 import App from "./App"
 import type { MessageRecord } from "../../lib/messages"
+import { dispatchIpcMessage, setSocketStatus } from "./ipc-state"
 
 const SOCKET_PATH = "/tmp/git-stacks.sock"
-
-/**
- * Mutable callback set by Phase 9 to push incoming IPC messages into the
- * SolidJS reactive store. Null until Phase 9 wires it up.
- */
-export let onIpcMessage: ((record: MessageRecord) => void) | null = null
-
-/** Socket server status — readable by App.tsx for diagnostics */
-export let socketStatus: "off" | "bound" | "error" = "off"
-
-export function setIpcCallback(fn: ((record: MessageRecord) => void) | null) {
-  onIpcMessage = fn
-}
 
 /**
  * Start the Unix socket server for real-time IPC from `git-stacks message send`.
@@ -46,7 +34,7 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
           if (!line) return
           try {
             const record = JSON.parse(line) as MessageRecord
-            onIpcMessage?.(record)
+            dispatchIpcMessage(record)
           } catch {
             // ignore malformed JSON lines
           }
@@ -54,10 +42,10 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
       },
     })
     server.unref()
-    socketStatus = "bound"
+    setSocketStatus("bound")
     return server
   } catch (e) {
-    socketStatus = "error"
+    setSocketStatus("error")
     return null
   }
 }

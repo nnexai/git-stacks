@@ -1,7 +1,7 @@
 import { createSignal, onCleanup } from "solid-js"
 import { listWorkspaces } from "../../../lib/config"
 import { listMessages, listMessagesSync, clearMessages, type MessageRecord } from "../../../lib/messages"
-import { setIpcCallback } from "../run"
+import { setIpcCallback } from "../ipc-state"
 
 export function useMessages() {
   const [msgMap, setMsgMap] = createSignal<Map<string, MessageRecord[]>>(new Map())
