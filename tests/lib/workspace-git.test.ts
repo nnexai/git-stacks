@@ -54,7 +54,7 @@ mock.module("@/lib/git", () =>
   })
 )
 
-const { pushWorkspace, syncWorkspace } = await import("../../src/lib/workspace-git")
+const { pushWorkspace, syncWorkspace, _exec } = await import("../../src/lib/workspace-git")
 
 let tempRoot = ""
 
@@ -131,6 +131,85 @@ function makeWorkspace(repos: WorkspaceRepo[]): Workspace {
 function worktreePath(repo: WorkspaceRepo): string {
   return repo.task_path!
 }
+
+describe("workspace-git _exec seam", () => {
+  test("_exec exports pushBranch and fetchOrigin seam properties", () => {
+    expect(typeof _exec.pushBranch).toBe("function")
+    expect(typeof _exec.fetchOrigin).toBe("function")
+  })
+
+  test("pushWorkspace uses _exec.pushBranch and passes correct repoPath, branch, and options", async () => {
+    const worktreeRepo = makeRepo("api", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "api"),
+    })
+    mkdirSync(worktreePath(worktreeRepo), { recursive: true })
+    readWorkspaceMock.mockImplementation(() => makeWorkspace([worktreeRepo]))
+
+    const originalPushBranch = _exec.pushBranch
+    const calls: any[] = []
+    _exec.pushBranch = async (repoPath: any, branch: any, opts: any) => {
+      calls.push({ repoPath, branch, opts })
+      return { ok: true, commits: 1 }
+    }
+
+    try {
+      const result = await pushWorkspace("feature-ws", {
+        force: true,
+        forceWithLease: true,
+        setUpstream: true,
+      })
+      expect(result.ok).toBe(true)
+      expect(calls.length).toBe(1)
+      expect(calls[0].repoPath).toBe(worktreePath(worktreeRepo))
+      expect(calls[0].branch).toBe("feature/test")
+      expect(calls[0].opts).toMatchObject({ force: true, forceWithLease: true, setUpstream: true })
+    } finally {
+      _exec.pushBranch = originalPushBranch
+    }
+  })
+
+  test("syncWorkspace uses _exec.fetchOrigin, _exec.getMergeConflicts, and _exec.rebaseBranch", async () => {
+    const worktreeRepo = makeRepo("api", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "api"),
+      base_branch: "main",
+    })
+    mkdirSync(worktreePath(worktreeRepo), { recursive: true })
+    readWorkspaceMock.mockImplementation(() => makeWorkspace([worktreeRepo]))
+    getCommitsBehindMock.mockImplementation(async () => 2)
+
+    const originalFetchOrigin = _exec.fetchOrigin
+    const originalGetMergeConflicts = _exec.getMergeConflicts
+    const originalRebaseBranch = _exec.rebaseBranch
+
+    const fetchCalls: any[] = []
+    const conflictCalls: any[] = []
+    const rebaseCalls: any[] = []
+
+    _exec.fetchOrigin = async (repoPath: any) => {
+      fetchCalls.push(repoPath)
+    }
+    _exec.getMergeConflicts = async (repoPath: any, baseRef: any, branch: any) => {
+      conflictCalls.push({ repoPath, baseRef, branch })
+      return []
+    }
+    _exec.rebaseBranch = async (repoPath: any, baseRef: any) => {
+      rebaseCalls.push({ repoPath, baseRef })
+      return { ok: true }
+    }
+
+    try {
+      const result = await syncWorkspace("feature-ws", { strategy: "rebase" })
+      expect(result.ok).toBe(true)
+      expect(fetchCalls).toContain(worktreePath(worktreeRepo))
+      expect(conflictCalls.some(c => c.repoPath === worktreePath(worktreeRepo) && c.baseRef === "origin/main" && c.branch === "feature/test")).toBe(true)
+      expect(rebaseCalls.some(c => c.repoPath === worktreePath(worktreeRepo) && c.baseRef === "origin/main")).toBe(true)
+    } finally {
+      _exec.fetchOrigin = originalFetchOrigin
+      _exec.getMergeConflicts = originalGetMergeConflicts
+      _exec.rebaseBranch = originalRebaseBranch
+    }
+  })
+})
 
 describe("workspace-git", () => {
   test("pushWorkspace dry-run reports ahead commits and skips trunk and dir repos", async () => {
