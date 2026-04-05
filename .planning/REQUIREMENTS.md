@@ -9,7 +9,7 @@ Requirements for v0.16.0 Core Engine & Observability. Each maps to roadmap phase
 
 ### Module Extraction
 
-- [ ] **EXTR-01**: workspace-ops.ts is split into domain modules with workspace-ops.ts as a re-export facade
+- [x] **EXTR-01**: workspace-ops.ts is split into domain modules with workspace-ops.ts as a re-export facade
 - [x] **EXTR-02**: workspace-env.ts extracted — mergeEnv, buildBaseEnv, buildRepoEnv, buildWorkspaceEnv, writeEnvFiles, resolveWorkspaceEnvVars
 - [x] **EXTR-03**: workspace-lifecycle.ts extracted — close/clean/remove/merge with cascade helpers (_executeClose, _executeClean) co-located
 - [x] **EXTR-04**: workspace-git.ts extracted — sync/push/pull operations
@@ -66,7 +66,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | EXTR-02 | Phase 69 | Complete |
 | EXTR-03 | Phase 69 | Complete |
 | EXTR-09 | Phase 69 | Complete |
-| EXTR-01 | Phase 70 | Pending |
+| EXTR-01 | Phase 70 | Complete |
 | EXTR-04 | Phase 70 | Complete |
 | EXTR-05 | Phase 70 | Pending |
 | EXTR-06 | Phase 70 | Complete |

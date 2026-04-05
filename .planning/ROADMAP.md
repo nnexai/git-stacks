@@ -195,7 +195,7 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 **Milestone Goal:** Break workspace-ops.ts (1,735 lines) into domain-cohesive modules without breaking the public API, add GIT_STACKS_DEBUG trace output, and verify extracted modules with focused unit tests.
 
 - [x] **Phase 69: Extract workspace-env.ts and workspace-lifecycle.ts** - Extract env assembly and lifecycle cascade as two sequential domain modules; workspace-ops.ts re-exports both (completed 2026-04-05)
-- [ ] **Phase 70: Extract remaining domain modules and workspace-ops facade** - Extract workspace-git, workspace-status, workspace-yaml; finalize workspace-ops as thin lifecycle orchestrator; verify all 800+ tests pass
+- [x] **Phase 70: Extract remaining domain modules and workspace-ops facade** - Extract workspace-git, workspace-status, workspace-yaml; finalize workspace-ops as thin lifecycle orchestrator; verify all 800+ tests pass (completed 2026-04-05)
 - [ ] **Phase 71: Observability** - Install LogTape, wire GIT_STACKS_DEBUG env var, add labeled debug output and timing to domain modules
 - [ ] **Phase 72: Extraction tests** - Focused unit tests for extracted module helpers without real git repos; circular import detection verified
 - [ ] **Phase 73: Release Prep** - v0.16.0 version bump, CHANGELOG entry, README observability section
@@ -225,11 +225,11 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
   4. workspace-ops.ts contains only lifecycle operations (open/close/clean/remove/merge/rename) and no dangling re-export shims
   5. `madge --circular src/` returns zero cycles
   6. `bun run test` returns 800+ passing, 0 failing
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 70-01-PLAN.md — Extract workspace-status.ts and update status callers
 - [x] 70-02-PLAN.md — Extract workspace-git.ts and workspace-yaml.ts with _exec seams
-- [ ] 70-03-PLAN.md — Remove re-export shims, update test mocks and imports
+- [x] 70-03-PLAN.md — Remove re-export shims, update test mocks and imports
 
 ### Phase 71: Observability
 **Goal**: GIT_STACKS_DEBUG=1 activates labeled debug output to stderr across all domain modules; normal CLI invocations see zero overhead
@@ -274,7 +274,7 @@ Plans:
 | 67. Status, Display & Health | v0.15.0 | 2/2 | Complete | 2026-04-05 |
 | 68. Release Prep | v0.15.0 | 1/1 | Complete | 2026-04-05 |
 | 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 1/1 | Complete    | 2026-04-05 |
-| 70. Extract remaining modules + facade | v0.16.0 | 2/3 | In Progress|  |
+| 70. Extract remaining modules + facade | v0.16.0 | 3/3 | Complete   | 2026-04-05 |
 | 71. Observability | v0.16.0 | 0/TBD | Not started | - |
 | 72. Extraction tests | v0.16.0 | 0/TBD | Not started | - |
 | 73. Release Prep | v0.16.0 | 0/TBD | Not started | - |

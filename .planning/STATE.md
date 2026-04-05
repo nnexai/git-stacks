@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.16.0
 milestone_name: Core Engine & Observability
 status: executing
-stopped_at: Completed 70-02-PLAN.md
-last_updated: "2026-04-05T17:50:54.144Z"
+stopped_at: Completed 70-03-PLAN.md
+last_updated: "2026-04-05T18:02:22.607Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 ## Current Position
 
 Phase: 70 (extract-remaining-domain-modules-and-workspace-ops-facade) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-05
 
@@ -46,6 +46,7 @@ Progress: [██░░░░░░░░] 20%
 |-------|-------|-------|----------|
 | 69 | 1 | 17 min | 17 min |
 | Phase 70 P02 | 10 | 2 tasks | 8 files |
+| Phase 70 P03 | 20 | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,7 @@ Progress: [██░░░░░░░░] 20%
 - Phase 69 completed with `workspace-env.ts` and `workspace-lifecycle.ts` extracted behind the existing `workspace-ops.ts` facade
 - [Phase 70]: _exec in workspace-git.ts is a minimal stub; git ops route through git.ts helpers (forward-compatible seam per EXTR-07)
 - [Phase 70]: _exec.spawnEditor in workspace-yaml.ts wraps Bun.spawn in openYamlInEditor for test injection
+- [Phase 70]: workspace-ops.ts facade is 346 lines with zero re-export shims; domain module mocks have dedicated factory functions in helpers.ts
 
 ### Pending Todos
 
@@ -73,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05T17:50:54.140Z
-Stopped at: Completed 70-02-PLAN.md
+Last session: 2026-04-05T18:02:22.601Z
+Stopped at: Completed 70-03-PLAN.md
 Resume file: None
