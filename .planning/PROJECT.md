@@ -265,9 +265,16 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-- No active milestone is currently open.
-- Start the next cycle with `/gsd-new-milestone` so fresh requirements can be defined before roadmap execution resumes.
-- Deferred from v0.16.0: broader dependency injection, richer structured logging beyond stderr debug traces, and plugin-boundary formalization.
+## Current Milestone: v0.17.0 Engine Hardening & Template Labels
+
+**Goal:** Harden the core engine with rollback semantics, config indexing, and plugin contracts — plus ship template-level labels that cascade to workspaces on creation.
+
+**Target features:**
+- Template labels that propagate to workspace creation
+- Operation runner with structured rollback/cleanup on partial failures
+- Indexed config store replacing scan-based YAML lookups
+- First-class integration plugin boundary with capability contracts
+- Broader dependency injection and structured logging
 
 ### Out of Scope
 
@@ -281,9 +288,6 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
-| Operation runner with rollback | v0.16.0 deferred — build on clean domain module seams first |
-| Indexed config store | v0.16.0 deferred — foundation refactor first, then layer caching |
-| Integration plugin contracts | v0.16.0 deferred — extract core engine before formalizing plugin boundary |
 | Opinionated onboarding (init/task) | Deferred until author has more hands-on usage experience |
 
 ## Current State
@@ -292,13 +296,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Shipped:** The core workspace engine is now split into focused env/lifecycle/status/git/YAML modules, debug observability is available through `GIT_STACKS_DEBUG=1`, and the extracted boundaries are enforced by direct module tests plus a repo-native circular-dependency gate.
 
-**Status:** No active milestone is open. The next milestone should start from fresh requirements rather than carrying forward the just-shipped v0.16.0 planning state.
+**Status:** Milestone v0.17.0 in progress — Engine Hardening & Template Labels.
 
 ## Next Milestone Goals
-
-- Decide which deferred engine work matters next: broader DI seams, structured logging, rollback/orchestration primitives, or plugin-boundary formalization.
-- Keep the extracted domain modules stable and avoid re-growing `workspace-ops.ts` into a cross-cutting facade.
-- Define the next milestone explicitly before resuming roadmap execution.
+- Ship template labels that cascade to workspaces on creation
+- Operation runner with rollback semantics for multi-step commands
+- Indexed config store to replace scan-based YAML lookups
+- First-class integration plugin boundary with capability contracts
+- Broader DI seams and structured logging beyond stderr debug traces
 
 ## Completed Milestone: v0.15.0 Dir Mode & Polish (2026-04-05)
 
@@ -469,4 +474,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-05 after Phase 70 completion*
+*Last updated: 2026-04-05 after milestone v0.17.0 started*
