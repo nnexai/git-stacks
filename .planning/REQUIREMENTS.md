@@ -9,11 +9,11 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 
 ### Template Labels
 
-- [ ] **TLBL-01**: User can add labels to a template via `git-stacks template label add <template> <label...>`
-- [ ] **TLBL-02**: User can remove labels from a template via `git-stacks template label remove <template> <label...>`
-- [ ] **TLBL-03**: User can list labels on a template via `git-stacks template label list <template>`
-- [ ] **TLBL-04**: User can clear all labels from a template via `git-stacks template label clear <template>`
-- [ ] **TLBL-05**: User can filter templates by label via `git-stacks template list --label <label>`
+- [x] **TLBL-01**: User can add labels to a template via `git-stacks template label add <template> <label...>`
+- [x] **TLBL-02**: User can remove labels from a template via `git-stacks template label remove <template> <label...>`
+- [x] **TLBL-03**: User can list labels on a template via `git-stacks template label list <template>`
+- [x] **TLBL-04**: User can clear all labels from a template via `git-stacks template label clear <template>`
+- [x] **TLBL-05**: User can filter templates by label via `git-stacks template list --label <label>`
 - [ ] **TLBL-06**: Template labels propagate to workspace on creation (union merge with user-provided labels)
 - [ ] **TLBL-07**: Workspace clone copies labels from source workspace
 
@@ -69,11 +69,11 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TLBL-01 | Phase 74 | Pending |
-| TLBL-02 | Phase 74 | Pending |
-| TLBL-03 | Phase 74 | Pending |
-| TLBL-04 | Phase 74 | Pending |
-| TLBL-05 | Phase 74 | Pending |
+| TLBL-01 | Phase 74 | Complete |
+| TLBL-02 | Phase 74 | Complete |
+| TLBL-03 | Phase 74 | Complete |
+| TLBL-04 | Phase 74 | Complete |
+| TLBL-05 | Phase 74 | Complete |
 | TLBL-06 | Phase 74 | Pending |
 | TLBL-07 | Phase 74 | Pending |
 | ENGN-01 | Phase 78 | Pending |
