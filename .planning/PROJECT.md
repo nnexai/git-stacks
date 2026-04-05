@@ -10,6 +10,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Recent State (2026-04-05)
 
+### What shipped in v0.17.0 (in progress)
+
+- **DI seams** — `workspace-lifecycle.ts` exports mutable `_exec.spawn` seam routing all hook execution through a replaceable boundary; `workspace-git.ts` exports mutable `_exec` wrapping 12 git helpers — tests can intercept subprocess launches without starting real processes (Phase 75, OBSV-01/OBSV-02)
+- **Structured debug output** — `GS_DEBUG=1` / `GS_DEBUG=true` enables structured single-line stderr (`op=`, `module=`, `msg=`, `ms=`); `GS_DEBUG=lifecycle` / `GS_DEBUG=git` filters to specific modules via `MODULE_ALIASES`; `GIT_STACKS_DEBUG=1` preserved as compatibility alias (Phase 75, OBSV-03/OBSV-04/OBSV-05)
+
 ### What shipped in v0.16.0
 
 - **Workspace engine split** — `workspace-ops.ts` was decomposed into `workspace-env.ts`, `workspace-lifecycle.ts`, `workspace-status.ts`, `workspace-git.ts`, and `workspace-yaml.ts` while preserving the public CLI surface
