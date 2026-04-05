@@ -12,11 +12,11 @@ Requirements for v0.16.0 Core Engine & Observability. Each maps to roadmap phase
 - [ ] **EXTR-01**: workspace-ops.ts is split into domain modules with workspace-ops.ts as a re-export facade
 - [x] **EXTR-02**: workspace-env.ts extracted — mergeEnv, buildBaseEnv, buildRepoEnv, buildWorkspaceEnv, writeEnvFiles, resolveWorkspaceEnvVars
 - [x] **EXTR-03**: workspace-lifecycle.ts extracted — close/clean/remove/merge with cascade helpers (_executeClose, _executeClean) co-located
-- [ ] **EXTR-04**: workspace-git.ts extracted — sync/push/pull operations
+- [x] **EXTR-04**: workspace-git.ts extracted — sync/push/pull operations
 - [ ] **EXTR-05**: workspace-status.ts extracted — getWorkspaceStatus, getDirtyWorktrees, getWorkspaceListInfo
-- [ ] **EXTR-06**: workspace-yaml.ts extracted — YAML editors, rename ops, detectWorkspaceFromCwd
-- [ ] **EXTR-07**: Each extracted module exports `_exec` object following lifecycle.ts pattern where it spawns processes
-- [ ] **EXTR-08**: All existing tests pass after each extraction step (800+ tests, zero regressions)
+- [x] **EXTR-06**: workspace-yaml.ts extracted — YAML editors, rename ops, detectWorkspaceFromCwd
+- [x] **EXTR-07**: Each extracted module exports `_exec` object following lifecycle.ts pattern where it spawns processes
+- [x] **EXTR-08**: All existing tests pass after each extraction step (800+ tests, zero regressions)
 - [x] **EXTR-09**: Cascade ordering (remove → clean → close) preserved with D-02/D-10 lifecycle references
 
 ### Observability
@@ -67,11 +67,11 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | EXTR-03 | Phase 69 | Complete |
 | EXTR-09 | Phase 69 | Complete |
 | EXTR-01 | Phase 70 | Pending |
-| EXTR-04 | Phase 70 | Pending |
+| EXTR-04 | Phase 70 | Complete |
 | EXTR-05 | Phase 70 | Pending |
-| EXTR-06 | Phase 70 | Pending |
-| EXTR-07 | Phase 70 | Pending |
-| EXTR-08 | Phase 70 | Pending |
+| EXTR-06 | Phase 70 | Complete |
+| EXTR-07 | Phase 70 | Complete |
+| EXTR-08 | Phase 70 | Complete |
 | OBSV-01 | Phase 71 | Pending |
 | OBSV-02 | Phase 71 | Pending |
 | OBSV-03 | Phase 71 | Pending |

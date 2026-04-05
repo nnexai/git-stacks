@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.16.0
 milestone_name: Core Engine & Observability
 status: executing
-stopped_at: Phase 71 context updated (assumptions mode)
-last_updated: "2026-04-05T17:22:37.569Z"
-last_activity: 2026-04-05 -- Phase 70 execution started
+stopped_at: Completed 70-02-PLAN.md
+last_updated: "2026-04-05T17:50:54.144Z"
+last_activity: 2026-04-05
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 ## Current Position
 
 Phase: 70 (extract-remaining-domain-modules-and-workspace-ops-facade) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 70
-Last activity: 2026-04-05 -- Phase 70 execution started
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-04-05
 
 Progress: [██░░░░░░░░] 20%
 
@@ -45,6 +45,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 69 | 1 | 17 min | 17 min |
+| Phase 70 P02 | 10 | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -58,6 +59,8 @@ Progress: [██░░░░░░░░] 20%
 - openWorkspace (~186 lines) stays in workspace-ops.ts as cross-cutting orchestrator
 - All debug output to stderr only; logger.level = "silent" before TUI starts; lazy configureLogger() from index.ts
 - Phase 69 completed with `workspace-env.ts` and `workspace-lifecycle.ts` extracted behind the existing `workspace-ops.ts` facade
+- [Phase 70]: _exec in workspace-git.ts is a minimal stub; git ops route through git.ts helpers (forward-compatible seam per EXTR-07)
+- [Phase 70]: _exec.spawnEditor in workspace-yaml.ts wraps Bun.spawn in openYamlInEditor for test injection
 
 ### Pending Todos
 
@@ -70,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05T17:22:37.567Z
-Stopped at: Phase 71 context updated (assumptions mode)
-Resume file: .planning/phases/71-observability/71-CONTEXT.md
+Last session: 2026-04-05T17:50:54.140Z
+Stopped at: Completed 70-02-PLAN.md
+Resume file: None
