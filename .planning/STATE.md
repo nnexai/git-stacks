@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.16.0
 milestone_name: Core Engine & Observability
-status: executing
-stopped_at: Phase 72 completed; Phase 73 ready to execute
-last_updated: "2026-04-05T18:54:23.765Z"
-last_activity: 2026-04-05 -- Phase 72 completed; Phase 73 ready
+status: shipped
+stopped_at: Milestone v0.16.0 shipped and archived
+last_updated: "2026-04-05T19:01:05.570Z"
+last_activity: 2026-04-05 -- v0.16.0 shipped, audited, and archived
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  completed_phases: 5
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 73 — release-prep
+**Current focus:** No active milestone — v0.16.0 shipped
 
 ## Current Position
 
-Phase: 73 (release-prep) — READY
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-04-05 -- Phase 72 completed; Phase 73 ready
+Phase: none
+Plan: none
+Status: Milestone complete
+Last activity: 2026-04-05 -- v0.16.0 shipped, audited, and archived
 
 Progress: [██████████] 100%
 
@@ -36,21 +36,19 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 6
-- Average duration: 17 min
-- Total execution time: 17 min
+- Total plans completed: 9
+- Milestone duration: 1 day
+- Verification status: full suite + dependency gate + manage smoke passed
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 69 | 1 | 17 min | 17 min |
-| Phase 70 P02 | 10 | 2 tasks | 8 files |
-| Phase 70 P03 | 20 | 2 tasks | 11 files |
 | 70 | 3 | - | - |
-| Phase 72 P1 | 9 min | 3 tasks | 3 files |
-| Phase 72 P2 | 3 min | 2 tasks | 6 files |
+| 71 | 2 | - | - |
 | 72 | 2 | - | - |
+| 73 | 1 | - | - |
 
 ## Accumulated Context
 
@@ -67,6 +65,9 @@ Progress: [██████████] 100%
 - [Phase 70]: _exec in workspace-git.ts is a minimal stub; git ops route through git.ts helpers (forward-compatible seam per EXTR-07)
 - [Phase 70]: _exec.spawnEditor in workspace-yaml.ts wraps Bun.spawn in openYamlInEditor for test injection
 - [Phase 70]: workspace-ops.ts facade is 346 lines with zero re-export shims; domain module mocks have dedicated factory functions in helpers.ts
+- [Phase 71]: observability is stderr-only and explicitly silenced before `manage` starts the alternate-screen TUI
+- [Phase 72]: `bun run test:deps` is now the repo-native circular-dependency gate backed by `madge`
+- [Phase 73]: version, changelog, and README debug docs were aligned for the v0.16.0 release
 
 ### Pending Todos
 
@@ -74,11 +75,10 @@ None.
 
 ### Blockers/Concerns
 
-- mock.module() paths in tests must be updated in lockstep with each extraction (silent failure risk)
-- madge --circular src/ must return zero after each Phase 70 extraction commit
+None — milestone shipped.
 
 ## Session Continuity
 
-Last session: 2026-04-05T18:36:51Z
-Stopped at: Phase 71 automated verification complete; manual manage check pending
-Resume file: .planning/phases/71-observability/71-VERIFICATION.md
+Last session: 2026-04-05T19:01:05Z
+Stopped at: Milestone completion
+Resume file: .planning/v0.16.0-MILESTONE-AUDIT.md

@@ -1,5 +1,24 @@
 # Milestones
 
+## v0.16.0 Core Engine & Observability (Shipped: 2026-04-05)
+
+**Phases completed:** 5 phases (69-73), 9 plans
+**Timeline:** 2026-04-05 → 2026-04-05 (1 day)
+**Stats:** 56 files changed, +3,391 / -1,626 lines (source only), 53 commits since v0.15.0
+
+**Key accomplishments:**
+
+- **Stable core-engine split** — `workspace-ops.ts` was decomposed into `workspace-env.ts`, `workspace-lifecycle.ts`, `workspace-status.ts`, `workspace-git.ts`, and `workspace-yaml.ts` without breaking the public CLI surface
+- **Status and git boundaries** — status queries, CWD detection, sync/push/pull flows, and YAML editing now live in focused modules with direct runtime imports instead of monolithic facades
+- **Stderr-only observability** — `GIT_STACKS_DEBUG=1` emits labeled timing/debug lines like `[workspace-status] getWorkspaceListInfo: 12ms` without polluting human-readable stdout or `--json` output
+- **TUI-safe debug behavior** — `git-stacks manage` explicitly silences debug output before the alternate-screen dashboard starts; smoke run confirmed zero stderr bytes under debug mode
+- **Focused extraction verification** — direct `workspace-env`, `workspace-status`, and `workspace-git` tests now cover the extracted seams without real repo fixtures
+- **Dependency gate** — `bun run test:deps` uses `madge` to enforce a cycle-free import graph, and the dashboard IPC state was split out to remove live cycles
+
+**Archive:** [.planning/milestones/v0.16.0-ROADMAP.md](.planning/milestones/v0.16.0-ROADMAP.md)
+
+---
+
 ## v0.15.0 Dir Mode & Polish (Shipped: 2026-04-05)
 
 **Phases completed:** 5 phases (64-68), 7 plans

@@ -10,6 +10,13 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Recent State (2026-04-05)
 
+### What shipped in v0.16.0
+
+- **Workspace engine split** — `workspace-ops.ts` was decomposed into `workspace-env.ts`, `workspace-lifecycle.ts`, `workspace-status.ts`, `workspace-git.ts`, and `workspace-yaml.ts` while preserving the public CLI surface
+- **Observability** — `GIT_STACKS_DEBUG=1` emits labeled timing/debug lines to `stderr` for status/env/git/lifecycle/YAML flows; normal stdout and `--json` output remain unchanged
+- **TUI-safe debug behavior** — `git-stacks manage` silences observability before the alternate-screen dashboard starts; smoke verification confirms zero stderr bytes under debug mode
+- **Boundary verification** — extracted-module unit tests now cover env/status/git seams directly, and `bun run test:deps` enforces a cycle-free import graph with `madge`
+
 ### What shipped in v0.15.0
 
 - **Dir repo type** — new `type: "dir"` for non-git directories in registry and templates; `repo add --type dir`, `repo scan` detects non-git dirs; `mode: "dir"` in workspace repos
@@ -143,6 +150,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Validated
 
+- ✓ Workspace engine decomposition — `workspace-env`, `workspace-lifecycle`, `workspace-status`, `workspace-git`, and `workspace-yaml` extracted behind a stable facade — v0.16.0 Phases 69-70
+- ✓ Stderr-only debug observability — `GIT_STACKS_DEBUG=1` labeled timings/logs with JSON-safe stdout and pre-TUI silencing for `manage` — v0.16.0 Phase 71
+- ✓ Extracted-module regression gate — direct env/status/git tests plus `bun run test:deps` circular-dependency enforcement — v0.16.0 Phase 72
 - ✓ Headless TUI component test infrastructure (`testRender` + `mockInput` + `captureCharFrame`) — v0.4.0 Phase 10
 - ✓ Config directory isolation via `GIT_STACKS_CONFIG_DIR` env var — v0.4.0 Phase 10
 - ✓ ActionMenu arrow-key cursor navigation — v0.4.0 Phase 10
@@ -255,13 +265,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-#### v0.16.0 — Core Engine & Observability
-
-- [x] Extract env/secrets and lifecycle boundaries from `workspace-ops.ts` into `workspace-env.ts` and `workspace-lifecycle.ts` while keeping a stable facade
-- [ ] Extract the remaining `workspace-ops.ts` responsibilities into focused git/status/yaml modules and remove temporary facade shims
-- [ ] CLI and TUI become thin adapters over the same typed operations
-- [ ] Dependency injection at all shell/process/filesystem boundaries
-- [ ] Structured logging for every external command (git, IDE spawns, hook execution)
+- No active milestone is currently open.
+- Start the next cycle with `/gsd-new-milestone` so fresh requirements can be defined before roadmap execution resumes.
+- Deferred from v0.16.0: broader dependency injection, richer structured logging beyond stderr debug traces, and plugin-boundary formalization.
 
 ### Out of Scope
 
@@ -280,15 +286,19 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Integration plugin contracts | v0.16.0 deferred — extract core engine before formalizing plugin boundary |
 | Opinionated onboarding (init/task) | Deferred until author has more hands-on usage experience |
 
-## Current Milestone: v0.16.0 Core Engine & Observability
+## Current State
 
-**Goal:** Extract `workspace-ops.ts` into domain modules with clean boundaries, then layer DI and structured logging across all external-command surfaces.
+**Latest release:** v0.16.0 Core Engine & Observability (2026-04-05)
 
-**Target features:**
-- Split `workspace-ops.ts` into domain modules (workspace-state, git-ops, env/secrets, hooks, execution)
-- CLI and TUI become thin adapters over the same typed operations
-- Dependency injection at all shell/process/filesystem boundaries
-- Structured logging for every external command (git, IDE spawns, hook execution)
+**Shipped:** The core workspace engine is now split into focused env/lifecycle/status/git/YAML modules, debug observability is available through `GIT_STACKS_DEBUG=1`, and the extracted boundaries are enforced by direct module tests plus a repo-native circular-dependency gate.
+
+**Status:** No active milestone is open. The next milestone should start from fresh requirements rather than carrying forward the just-shipped v0.16.0 planning state.
+
+## Next Milestone Goals
+
+- Decide which deferred engine work matters next: broader DI seams, structured logging, rollback/orchestration primitives, or plugin-boundary formalization.
+- Keep the extracted domain modules stable and avoid re-growing `workspace-ops.ts` into a cross-cutting facade.
+- Define the next milestone explicitly before resuming roadmap execution.
 
 ## Completed Milestone: v0.15.0 Dir Mode & Polish (2026-04-05)
 
@@ -341,7 +351,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Versioning
 
-**Current release:** `v0.15.0`
+**Current release:** `v0.16.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 

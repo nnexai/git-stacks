@@ -262,6 +262,22 @@ git-stacks env my-feature --repo backend-api
 
 Shows GS_* injected vars, user-defined `env:` from workspace YAML, resolved port vars, and resolved secret refs using the same resolver pipeline as `open`. If a secret cannot be resolved, `env` fails with the same error you would hit during `open`, so the preview stays faithful to runtime behavior. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
 
+## Debug Output
+
+Use `GIT_STACKS_DEBUG=1` when you need low-level timing and flow information without changing normal command output:
+
+```bash
+# Human-readable command output stays on stdout; debug goes to stderr
+GIT_STACKS_DEBUG=1 git-stacks status my-feature
+
+# Machine-readable stdout remains valid JSON
+GIT_STACKS_DEBUG=1 git-stacks status my-feature --json 2>debug.log
+```
+
+Debug lines use stable logical labels such as `[workspace-status]`, `[workspace-env]`, `[workspace-git]`, `[workspace-yaml]`, and `[workspace-lifecycle]`. Timings use the form `[workspace-status] getWorkspaceListInfo: 12ms`.
+
+The debug channel is `stderr` only, so you can redirect or discard it without affecting normal output. `git-stacks manage` explicitly silences debug logging before the alternate-screen dashboard starts, preventing trace output from corrupting the TUI surface.
+
 ## Labels
 
 Tag workspaces for organization and filtering:

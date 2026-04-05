@@ -4,6 +4,18 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.16.0] — 2026-04-05
+
+### Added
+
+**Debug output** — set `GIT_STACKS_DEBUG=1` to emit labeled timing and trace lines to `stderr` for workspace domain operations such as status collection, env assembly, lifecycle commands, git sync/push/pull flows, and YAML editing. Output uses stable labels like `[workspace-status] getWorkspaceListInfo: 12ms`, normal `stdout` remains unchanged, `--json` modes stay parseable, and `git-stacks manage` re-silences debug before the alternate-screen TUI starts.
+
+### Changed
+
+**Core workspace engine split** — the former `workspace-ops.ts` monolith is now decomposed into focused `workspace-env.ts`, `workspace-lifecycle.ts`, `workspace-status.ts`, `workspace-git.ts`, and `workspace-yaml.ts` modules with targeted unit coverage and a repo-native `madge` dependency gate (`bun run test:deps`). Public CLI behavior stays stable while the core engine becomes easier to test, reason about, and extend.
+
+---
+
 ## [0.15.0] — 2026-04-05
 
 ### Added
