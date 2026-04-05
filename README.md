@@ -18,11 +18,11 @@ bun add -g git-stacks
 
 ## Concepts
 
-**Repo Registry** — a flat list of local git repos with names, paths, types, and default branches. Stored at `~/.config/git-stacks/registry.yml`. Managed via `git-stacks repo add|scan|list|show|remove|rename`.
+**Repo Registry** — a flat list of local git repos and directories with names, paths, types, and default branches. Stored at `~/.config/git-stacks/registry.yml`. Managed via `git-stacks repo add|scan|list|show|remove|rename`.
 
 **Template** — a named set of repos (by registry name) with modes and branch patterns, used to stamp out workspaces. Stored at `~/.config/git-stacks/templates/{name}.yml`. Looked up by the name field inside the YAML, not by filename. Managed via `git-stacks template new|list|show|edit|clone|rename|remove`.
 
-**Workspace** — a task/ticket-scoped instance created from a template. Each workspace has a branch; repos can be in `worktree` mode (isolated git worktree at `{workspace_root}/tasks/{workspace_name}/{repo_name}`) or `trunk` mode (references the main clone directly). Stored at `~/.config/git-stacks/workspaces/{name}.yml`. Looked up by the name field inside the YAML, not by filename.
+**Workspace** — a task/ticket-scoped instance created from a template. Each workspace has a branch; repos can be in `worktree` mode (isolated git worktree at `{workspace_root}/tasks/{workspace_name}/{repo_name}`), `trunk` mode (references the main clone directly), or `dir` mode (references a non-git directory — no branches, no worktrees, no git operations). Stored at `~/.config/git-stacks/workspaces/{name}.yml`. Looked up by the name field inside the YAML, not by filename.
 
 ## Quick Start
 
@@ -53,6 +53,30 @@ git-stacks repo show <name>          # Show repo details
 git-stacks repo remove <name>        # Remove a repo from registry
 git-stacks repo rename <old> <new>   # Rename a registered repo
 git-stacks repo --yaml               # Open registry.yml in $EDITOR
+```
+
+## Dir Repos
+
+Non-git directories can be registered and included in workspaces alongside regular git repos. Use this for shared config directories, documentation folders, or any path you want available in your workspace without git operations.
+
+```bash
+# Register a plain directory
+git-stacks repo add ~/shared/config
+
+# Scan also discovers non-git directories
+git-stacks repo scan ~/dev/myproject
+```
+
+In templates, dir repos behave like any other repo entry. In workspaces, they use `mode: "dir"` with `main_path` only — no worktree is created and no branch is set. All git-aware commands (`push`, `pull`, `sync`, `merge`, status tracking) silently skip dir repos. `git-stacks open` still injects dir repo paths into hook and env context, so hooks can reference them. `git-stacks doctor` validates that dir repo directories exist and are accessible instead of running git health checks.
+
+```bash
+# Status shows dir repos with a [dir] label and no git metrics
+git-stacks status my-workspace
+#   shared-config  [dir]  ~/shared/config
+
+# Doctor validates directory existence
+git-stacks doctor
+#   ✓ shared-config: directory exists
 ```
 
 ## Templates
