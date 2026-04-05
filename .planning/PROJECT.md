@@ -16,7 +16,13 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - New "dir" repo type — references a plain directory, skipped by all git commands, works like trunk otherwise
 - Fixes and polish as they come up
 
-## Recent State (2026-04-04)
+## Recent State (2026-04-05)
+
+### What shipped in Phase 67
+
+- **Dir repo display** — CLI `status` shows `[dir]` label with no ahead/behind metrics; `--fetch` skips dir repos; `list` handles dir-only workspaces without git aggregation errors
+- **TUI dashboard dir support** — WorkspaceDetail shows `[dir]` label, WorkspaceRow includes dir count, missing dir paths trigger red status indicator
+- **Doctor dir health checks** — new `findInvalidDirRepos` validates directory existence and type; `findMissingMainClones` skips dir repos to prevent double-reporting
 
 ### What shipped in v0.13.0
 
@@ -409,4 +415,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-04 after v0.15.0 milestone start*
+*Last updated: 2026-04-05 after Phase 67 completion*
