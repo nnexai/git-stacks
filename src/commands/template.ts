@@ -3,7 +3,8 @@ import { prompts as p } from "../tui/utils"
 import { readTemplate, writeTemplate, listTemplates, templateExists, templatePath } from "../lib/config"
 import { runTemplateNew, runTemplateEdit } from "../tui/template-wizard"
 import { unlinkSync } from "fs"
-import { editTemplateYaml, openYamlInEditor, renameTemplate } from "../lib/workspace-ops"
+import { editTemplateYaml, openYamlInEditor } from "../lib/workspace-yaml"
+import { renameTemplate } from "../lib/workspace-ops"
 
 export const templateCommand = new Command("template").description("Manage workspace templates")
 

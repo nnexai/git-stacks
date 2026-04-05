@@ -7,7 +7,7 @@ import { detectRepoType } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
 import { runRepoScan } from "../tui/repo-wizard"
 import { prompts as p } from "../tui/utils"
-import { editRegistryYaml, openYamlInEditor } from "../lib/workspace-ops"
+import { editRegistryYaml, openYamlInEditor } from "../lib/workspace-yaml"
 import { detectForgeForRepo } from "../lib/integrations/forge-utils"
 
 export const repoCommand = new Command("repo")
