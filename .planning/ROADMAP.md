@@ -197,7 +197,7 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 - [x] **Phase 69: Extract workspace-env.ts and workspace-lifecycle.ts** - Extract env assembly and lifecycle cascade as two sequential domain modules; workspace-ops.ts re-exports both (completed 2026-04-05)
 - [x] **Phase 70: Extract remaining domain modules and workspace-ops facade** - Extract workspace-git, workspace-status, workspace-yaml; finalize workspace-ops as thin lifecycle orchestrator; verify all 800+ tests pass (completed 2026-04-05)
 - [ ] **Phase 71: Observability** - Install LogTape, wire GIT_STACKS_DEBUG env var, add labeled debug output and timing to domain modules
-- [ ] **Phase 72: Extraction tests** - Focused unit tests for extracted module helpers without real git repos; circular import detection verified
+- [x] **Phase 72: Extraction tests** - Focused unit tests for extracted module helpers without real git repos; circular import detection verified (completed 2026-04-05)
 - [ ] **Phase 73: Release Prep** - v0.16.0 version bump, CHANGELOG entry, README observability section
 
 ## Phase Details
@@ -255,7 +255,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 72-01-PLAN.md — Add focused workspace-env/status/git module tests and extend `makeGitMock()` for the live extracted seams
-- [ ] 72-02-PLAN.md — Install repo-native Madge gate and remove the live dashboard IPC cycles so `test:deps` passes
+- [x] 72-02-PLAN.md — Install repo-native Madge gate and remove the live dashboard IPC cycles so `test:deps` passes
 
 ### Phase 73: Release Prep
 **Goal**: v0.16.0 is tagged and documented; version, changelog, and README are consistent
@@ -279,5 +279,5 @@ Plans:
 | 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 1/1 | Complete    | 2026-04-05 |
 | 70. Extract remaining modules + facade | v0.16.0 | 3/3 | Complete    | 2026-04-05 |
 | 71. Observability | v0.16.0 | 0/TBD | Not started | - |
-| 72. Extraction tests | v0.16.0 | 1/2 | In Progress|  |
+| 72. Extraction tests | v0.16.0 | 2/2 | Complete    | 2026-04-05 |
 | 73. Release Prep | v0.16.0 | 0/TBD | Not started | - |

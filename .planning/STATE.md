@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.16.0
 milestone_name: Core Engine & Observability
 status: executing
-stopped_at: Phase 71 automated verification complete; manual manage check pending
-last_updated: "2026-04-05T18:50:48.920Z"
-last_activity: 2026-04-05
+stopped_at: Phase 72 completed; Phase 73 ready to execute
+last_updated: "2026-04-05T18:54:23.765Z"
+last_activity: 2026-04-05 -- Phase 72 completed; Phase 73 ready
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -21,22 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 72 — extraction-tests
+**Current focus:** Phase 73 — release-prep
 
 ## Current Position
 
-Phase: 72 (extraction-tests) — EXECUTING
-Plan: 2 of 2
+Phase: 73 (release-prep) — READY
+Plan: Not started
 Status: Ready to execute
-Last activity: 2026-04-05
+Last activity: 2026-04-05 -- Phase 72 completed; Phase 73 ready
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 6
 - Average duration: 17 min
 - Total execution time: 17 min
 
@@ -49,6 +49,8 @@ Progress: [████████░░] 75%
 | Phase 70 P03 | 20 | 2 tasks | 11 files |
 | 70 | 3 | - | - |
 | Phase 72 P1 | 9 min | 3 tasks | 3 files |
+| Phase 72 P2 | 3 min | 2 tasks | 6 files |
+| 72 | 2 | - | - |
 
 ## Accumulated Context
 
