@@ -1,7 +1,6 @@
 import { existsSync, rmSync, unlinkSync } from "fs"
 import { join } from "path"
 import {
-  getRepoPath,
   isWorktreeRepo,
   readGlobalConfig,
   readWorkspace,
@@ -10,25 +9,16 @@ import {
   type GlobalConfig,
   type Workspace,
 } from "./config"
-import { removeWorktree, checkBranchExists, getMergeConflicts, mergeNoFF, deleteLocalBranch, isRepoDirty } from "./git"
+import { removeWorktree, checkBranchExists, getMergeConflicts, mergeNoFF, deleteLocalBranch } from "./git"
 import { type IntegrationContext } from "./integrations"
 import { runIntegrationCleanup } from "./integrations/runner"
 import { runHooks, runHooksCaptured } from "./lifecycle"
 import { warnExternalFiles } from "./files"
 import { getTasksDir } from "./paths"
 import { buildBaseEnv, buildRepoEnv } from "./workspace-env"
+import { getDirtyWorktrees } from "./workspace-status"
 
 type ProgressCallback = (message: string) => void
-
-export async function getDirtyWorktrees(workspace: Workspace): Promise<string[]> {
-  const results = await Promise.all(
-    workspace.repos
-      .filter(isWorktreeRepo)
-      .filter((r) => existsSync(r.task_path))
-      .map(async (repo) => ({ name: repo.name, dirty: await isRepoDirty(repo.task_path) }))
-  )
-  return results.filter((r) => r.dirty).map((r) => r.name)
-}
 
 async function _executeClean(
   workspace: Workspace,
