@@ -16,7 +16,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - New "dir" repo type — references a plain directory, skipped by all git commands, works like trunk otherwise
 - Fixes and polish as they come up
 
-## Recent State (2026-04-03)
+## Recent State (2026-04-05)
+
+### What shipped in v0.15.0
+
+- **Dir repo type** — new `type: "dir"` for non-git directories in registry and templates; `repo add --type dir`, `repo scan` detects non-git dirs; `mode: "dir"` in workspace repos
+- **Workspace lifecycle guards** — dir repos skip worktree creation/removal; open/close/clean/remove handle dir repos without git errors
+- **Git operation guards** — push/pull/sync/merge/ahead-behind/dirty silently skip dir repos in mixed workspaces
+- **Status & display** — CLI status/list show dir repos labeled as "dir" with no git metrics; TUI dashboard displays dir repos correctly; doctor reports dir repos health
 
 ### What shipped in v0.13.0
 
@@ -409,4 +416,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-04 after v0.15.0 milestone start*
+*Last updated: 2026-04-05 after v0.15.0 Phase 68 (Release Prep) complete*
