@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
-import { makeWorkspaceOpsMock, makeConfigMock } from "../helpers"
+import { makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeConfigMock } from "../helpers"
 
 // Shared mock instances used by @/tui/utils mock below
 const mockIntro = mock(() => {})
@@ -155,17 +155,18 @@ mock.module("@/lib/files", () => ({
 
 mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => ({ ok: true })),
-  getWorkspaceStatus: mock(async () => []),
-  editWorkspaceYaml: mock(() => ({ path: "/tmp/test.yml", validate: () => ({ ok: true }) })),
   mergeEnv: mock(() => ({})),
   writeEnvFiles: mock(() => {}),
-  getDirtyWorktrees: mock(async () => []),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
   removeWorkspace: mock(async () => ({ ok: true })),
   mergeWorkspace: mock(async () => ({ ok: true })),
   renameWorkspace: mock(async () => ({ ok: true })),
-  syncWorkspace: mock(async () => ({ ok: true, synced: [], skipped: [] })),
+}))
+
+mock.module("@/lib/workspace-status", () => makeWorkspaceStatusMock({
+  getWorkspaceStatus: mock(async () => []),
+  getDirtyWorktrees: mock(async () => []),
   getWorkspaceListInfo: mock(async () => ({
     name: "ws",
     branch: "main",
@@ -174,6 +175,14 @@ mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
     repoCount: 0,
     lastOpened: "0d",
   })),
+}))
+
+mock.module("@/lib/workspace-yaml", () => makeWorkspaceYamlMock({
+  editWorkspaceYaml: mock(() => ({ path: "/tmp/test.yml", validate: () => ({ ok: true }) })),
+}))
+
+mock.module("@/lib/workspace-git", () => makeWorkspaceGitMock({
+  syncWorkspace: mock(async () => ({ ok: true, synced: [], skipped: [] })),
 }))
 
 // Import after all mocks

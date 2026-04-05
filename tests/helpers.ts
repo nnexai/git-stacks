@@ -231,33 +231,66 @@ export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<
 
 /**
  * Returns a complete mock of src/lib/workspace-ops.ts exports.
- * Includes all function stubs.
+ * Only covers what workspace-ops.ts still exports: env re-exports, lifecycle re-exports, native functions.
  */
 export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    getWorkspaceListInfo: mock(async () => []),
+    // Env re-exports
     mergeEnv: mock(() => ({})),
     buildWorkspaceEnv: mock(async () => ({})),
     buildBaseEnv: mock(() => ({})),
     buildRepoEnv: mock(() => ({})),
     writeEnvFiles: mock(async () => {}),
-    getDirtyWorktrees: mock(async () => []),
-    getWorkspaceStatus: mock(async () => []),
+    // Lifecycle re-exports
     cleanWorkspace: mock(async () => ({ ok: true })),
     closeWorkspace: mock(async () => ({ ok: true })),
     removeWorkspace: mock(async () => ({ ok: true })),
     mergeWorkspace: mock(async () => ({ ok: true })),
+    // Native functions
     openWorkspace: mock(async () => ({ ok: true })),
     renameWorkspace: mock(async () => ({ ok: true })),
     renameTemplate: mock(async () => ({ ok: true })),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a mock of src/lib/workspace-git.ts exports.
+ */
+export function makeWorkspaceGitMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
     syncWorkspace: mock(async () => ({ ok: true, rows: [] })),
+    pushWorkspace: mock(async () => ({ ok: true, rows: [] })),
     pullWorkspace: mock(async () => ({ ok: true, pulled: [], skipped: [], failed: [] })),
+    _exec: {},
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a mock of src/lib/workspace-status.ts exports.
+ */
+export function makeWorkspaceStatusMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    getWorkspaceListInfo: mock(async () => []),
+    getWorkspaceStatus: mock(async () => []),
+    getDirtyWorktrees: mock(async () => []),
+    detectWorkspaceFromCwd: mock(() => ({ ok: false, error: "no_match" })),
+    ...overrides,
+  }
+}
+
+/**
+ * Returns a mock of src/lib/workspace-yaml.ts exports.
+ */
+export function makeWorkspaceYamlMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
     editWorkspaceYaml: mock(() => ({ path: "/tmp/ws.yml", validate: mock(() => true) })),
     openYamlInEditor: mock(async () => {}),
     editTemplateYaml: mock(() => ({ path: "/tmp/template.yml", validate: mock(() => true) })),
     editGlobalConfigYaml: mock(() => ({ path: "/tmp/config.yml", validate: mock(() => true) })),
     editRegistryYaml: mock(() => ({ path: "/tmp/registry.yml", validate: mock(() => true) })),
-    detectWorkspaceFromCwd: mock(() => ({ ok: false, error: "no_match" })),
+    _exec: { spawnEditor: mock(() => ({ exited: Promise.resolve(0) })) },
     ...overrides,
   }
 }
@@ -472,10 +505,13 @@ export const {
   renameWorkspace: realRenameWorkspace,
   closeWorkspace: realCloseWorkspace,
   renameTemplate: realRenameTemplate,
+} = await import("@/lib/workspace-ops") as any
+
+export const {
   editTemplateYaml: realEditTemplateYaml,
   editGlobalConfigYaml: realEditGlobalConfigYaml,
   editRegistryYaml: realEditRegistryYaml,
-} = await import("@/lib/workspace-ops") as any
+} = await import("@/lib/workspace-yaml") as any
 
 export const {
   appendMessage: realAppendMessage,

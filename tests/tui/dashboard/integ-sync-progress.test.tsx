@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeGitMock } from "../../helpers"
+import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — MUST be set before any import that touches paths.ts
 // Each test file has its own Bun module scope, so this env override takes effect
@@ -98,7 +98,7 @@ mock.module("../../../src/lib/config", () => ({
 // Mock git operations to prevent real filesystem git work
 mock.module("../../../src/lib/git", () => makeGitMock())
 
-// Mock workspace-ops: syncWorkspace with controllable progress callback
+// Mock workspace-ops: core lifecycle functions only
 mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
@@ -106,6 +106,10 @@ mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   removeWorkspace: mock(async () => ({ ok: true })),
   mergeWorkspace: mock(async () => ({ ok: true })),
   renameWorkspace: mock(async () => {}),
+}))
+
+// Mock workspace-git: syncWorkspace with controllable progress callback
+mock.module("../../../src/lib/workspace-git", () => makeWorkspaceGitMock({
   syncWorkspace: mock(async (_name: string, _opts: any, onProgress?: (update: any) => void) => {
     // Call progress callback with status updates to simulate sync progress
     if (onProgress) {
@@ -119,11 +123,15 @@ mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
       skipped: [],
     }
   }),
+}))
+
+mock.module("../../../src/lib/workspace-status", () => makeWorkspaceStatusMock({
   getWorkspaceStatus: mock(async () => []),
   getWorkspaceListInfo: mock(async () => []),
   getDirtyWorktrees: mock(async () => []),
-  mergeEnv: mock(() => ({})),
-  writeEnvFiles: mock(() => {}),
+}))
+
+mock.module("../../../src/lib/workspace-yaml", () => makeWorkspaceYamlMock({
   editWorkspaceYaml: mock(() => ({ path: "/tmp/fake.yml", validate: () => ({ ok: true }) })),
 }))
 

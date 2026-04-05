@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup, makeWorkspaceOpsMock, makeGitMock } from "../../helpers"
+import { makeTmpDir, cleanup, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -57,16 +57,23 @@ mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   removeWorkspace: mock(async () => ({ ok: true })),
   mergeWorkspace: mock(async () => ({ ok: true })),
   renameWorkspace: mock(async () => {}),
+}))
+
+mock.module("../../../src/lib/workspace-git", () => makeWorkspaceGitMock({
   syncWorkspace: mock(async (_name: string, _opts: any, _onProgress?: any) => ({
     ok: true,
     synced: [],
     skipped: [],
   })),
+}))
+
+mock.module("../../../src/lib/workspace-status", () => makeWorkspaceStatusMock({
   getWorkspaceStatus: mock(async () => []),
   getWorkspaceListInfo: mock(async () => []),
   getDirtyWorktrees: mock(async () => []),
-  mergeEnv: mock(() => ({})),
-  writeEnvFiles: mock(() => {}),
+}))
+
+mock.module("../../../src/lib/workspace-yaml", () => makeWorkspaceYamlMock({
   editWorkspaceYaml: mock(() => ({ path: "/tmp/fake.yml", validate: () => ({ ok: true }) })),
 }))
 
