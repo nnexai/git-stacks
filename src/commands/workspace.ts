@@ -28,15 +28,12 @@ import {
   mergeWorkspace,
   openWorkspace,
   renameWorkspace,
-  syncWorkspace,
-  pushWorkspace,
-  pullWorkspace,
-  editWorkspaceYaml,
-  openYamlInEditor,
   buildWorkspaceEnv,
   buildRepoEnv,
 } from "../lib/workspace-ops"
-import type { SyncRow, PushRow, PullRow } from "../lib/workspace-ops"
+import { syncWorkspace, pushWorkspace, pullWorkspace } from "../lib/workspace-git"
+import type { SyncRow, PushRow, PullRow } from "../lib/workspace-git"
+import { editWorkspaceYaml, openYamlInEditor } from "../lib/workspace-yaml"
 import { getDirtyWorktrees, getWorkspaceStatus, getWorkspaceListInfo, detectWorkspaceFromCwd } from "../lib/workspace-status"
 import { formatEnv, detectRepoFromCwd, type EnvFormat } from "../lib/env"
 import { matchesLabels } from "../lib/labels"

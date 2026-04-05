@@ -29,12 +29,11 @@ import {
   removeWorkspace,
   mergeWorkspace,
   openWorkspace,
-  editWorkspaceYaml,
   renameWorkspace,
-  syncWorkspace,
-  pushWorkspace,
 } from "../../lib/workspace-ops"
-import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-ops"
+import { syncWorkspace, pushWorkspace } from "../../lib/workspace-git"
+import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-git"
+import { editWorkspaceYaml } from "../../lib/workspace-yaml"
 import { readTemplate, writeTemplate, templateExists, templatePath, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, isWorktreeRepo, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
 import { SyncProgressView } from "./SyncProgressView"
 import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
