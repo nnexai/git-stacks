@@ -63,30 +63,30 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EXTR-01 | — | Pending |
-| EXTR-02 | — | Pending |
-| EXTR-03 | — | Pending |
-| EXTR-04 | — | Pending |
-| EXTR-05 | — | Pending |
-| EXTR-06 | — | Pending |
-| EXTR-07 | — | Pending |
-| EXTR-08 | — | Pending |
-| EXTR-09 | — | Pending |
-| OBSV-01 | — | Pending |
-| OBSV-02 | — | Pending |
-| OBSV-03 | — | Pending |
-| OBSV-04 | — | Pending |
-| OBSV-05 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| TEST-04 | — | Pending |
+| EXTR-02 | Phase 69 | Pending |
+| EXTR-03 | Phase 69 | Pending |
+| EXTR-09 | Phase 69 | Pending |
+| EXTR-01 | Phase 70 | Pending |
+| EXTR-04 | Phase 70 | Pending |
+| EXTR-05 | Phase 70 | Pending |
+| EXTR-06 | Phase 70 | Pending |
+| EXTR-07 | Phase 70 | Pending |
+| EXTR-08 | Phase 70 | Pending |
+| OBSV-01 | Phase 71 | Pending |
+| OBSV-02 | Phase 71 | Pending |
+| OBSV-03 | Phase 71 | Pending |
+| OBSV-04 | Phase 71 | Pending |
+| OBSV-05 | Phase 71 | Pending |
+| TEST-01 | Phase 72 | Pending |
+| TEST-02 | Phase 72 | Pending |
+| TEST-03 | Phase 72 | Pending |
+| TEST-04 | Phase 72 | Pending |
 
 **Coverage:**
 - v0.16.0 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 — traceability mapped to phases 69-72*

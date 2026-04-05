@@ -15,6 +15,7 @@
 - ✅ **v0.13.0 CLI Polish & Completions** — Phases 53-57 (shipped 2026-04-02) — Shell completion fixes, env command, Copilot hook support, doctor/config polish. See [milestones/v0.13.0-ROADMAP.md](milestones/v0.13.0-ROADMAP.md)
 - ✅ **v0.14.0 Workflow Completion & Workspace UX** — Phases 58-63 (shipped 2026-04-03) — Ahead/behind tracking, push command, labels, secrets, stash-on-sync, release prep. See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md)
 - ✅ **v0.15.0 Dir Mode & Polish** — Phases 64-68 (shipped 2026-04-05) — Dir repo type, registry CLI, lifecycle guards, git operation guards, CLI/TUI display. See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md)
+- 🚧 **v0.16.0 Core Engine & Observability** — Phases 69-73 (in progress)
 
 ## Phases
 
@@ -189,6 +190,76 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 
 </details>
 
+### 🚧 v0.16.0 Core Engine & Observability (In Progress)
+
+**Milestone Goal:** Break workspace-ops.ts (1,735 lines) into domain-cohesive modules without breaking the public API, add GIT_STACKS_DEBUG trace output, and verify extracted modules with focused unit tests.
+
+- [ ] **Phase 69: Extract workspace-env.ts and workspace-lifecycle.ts** - Extract env assembly and lifecycle cascade as two sequential domain modules; workspace-ops.ts re-exports both
+- [ ] **Phase 70: Extract remaining domain modules and workspace-ops facade** - Extract workspace-git, workspace-status, workspace-yaml; finalize workspace-ops as thin lifecycle orchestrator; verify all 800+ tests pass
+- [ ] **Phase 71: Observability** - Install LogTape, wire GIT_STACKS_DEBUG env var, add labeled debug output and timing to domain modules
+- [ ] **Phase 72: Extraction tests** - Focused unit tests for extracted module helpers without real git repos; circular import detection verified
+- [ ] **Phase 73: Release Prep** - v0.16.0 version bump, CHANGELOG entry, README observability section
+
+## Phase Details
+
+### Phase 69: Extract workspace-env.ts and workspace-lifecycle.ts
+**Goal**: The two most-depended-on domain modules exist as isolated files; workspace-ops.ts re-exports them; all existing tests pass
+**Depends on**: Phase 68
+**Requirements**: EXTR-02, EXTR-03, EXTR-09
+**Success Criteria** (what must be TRUE):
+  1. `src/lib/workspace-env.ts` exists and exports mergeEnv, buildBaseEnv, buildRepoEnv, buildWorkspaceEnv, writeEnvFiles
+  2. `src/lib/workspace-lifecycle.ts` exists and exports closeWorkspace, cleanWorkspace, removeWorkspace, mergeWorkspace with _executeClose and _executeClean co-located as private helpers
+  3. workspace-ops.ts re-exports all moved symbols so no import path in commands/ or tui/ breaks
+  4. remove → clean → close cascade order is preserved end-to-end (removeWorkspace calls cleanWorkspace which calls closeWorkspace)
+  5. `bun run test` returns 800+ passing, 0 failing after each extraction commit
+**Plans**: TBD
+
+### Phase 70: Extract remaining domain modules and workspace-ops facade
+**Goal**: workspace-git, workspace-status, and workspace-yaml exist as domain modules; workspace-ops.ts is a thin lifecycle orchestrator with no leftover re-export shims
+**Depends on**: Phase 69
+**Requirements**: EXTR-01, EXTR-04, EXTR-05, EXTR-06, EXTR-07, EXTR-08
+**Success Criteria** (what must be TRUE):
+  1. `src/lib/workspace-git.ts` exports syncWorkspace, pushWorkspace, pullWorkspace with _exec injectable; SyncRow/PushRow/PullRow types re-exported from workspace-ops.ts facade until callers are updated
+  2. `src/lib/workspace-status.ts` exports getWorkspaceStatus, getDirtyWorktrees, getWorkspaceListInfo, detectWorkspaceFromCwd
+  3. `src/lib/workspace-yaml.ts` exports editWorkspaceYaml, editTemplateYaml, editGlobalConfigYaml, editRegistryYaml with _exec injectable for editor spawn
+  4. workspace-ops.ts contains only lifecycle operations (open/close/clean/remove/merge/rename) and no dangling re-export shims
+  5. `madge --circular src/` returns zero cycles
+  6. `bun run test` returns 800+ passing, 0 failing
+**Plans**: TBD
+
+### Phase 71: Observability
+**Goal**: GIT_STACKS_DEBUG=1 activates labeled debug output to stderr across all domain modules; normal CLI invocations see zero overhead
+**Depends on**: Phase 70
+**Requirements**: OBSV-01, OBSV-02, OBSV-03, OBSV-04, OBSV-05
+**Success Criteria** (what must be TRUE):
+  1. `GIT_STACKS_DEBUG=1 git-stacks status` emits lines like `[workspace-status] getWorkspaceListInfo: 12ms` to stderr and nothing to stdout
+  2. `git-stacks status` without GIT_STACKS_DEBUG produces identical stdout output to before this phase (zero debug lines)
+  3. `git-stacks status --json 2>/dev/null` output parses as valid JSON (debug output does not corrupt the JSON stream)
+  4. `git-stacks manage` (TUI) starts without debug output on screen when GIT_STACKS_DEBUG=1 (stderr-only confirmed by visual check)
+  5. Each domain module emits its own label in debug output (e.g., `[workspace-env]`, `[workspace-git]`, `[workspace-lifecycle]`)
+**Plans**: TBD
+
+### Phase 72: Extraction tests
+**Goal**: Each extracted domain module has focused unit tests that run without real git repos; no circular imports exist in the codebase
+**Depends on**: Phase 71
+**Requirements**: TEST-01, TEST-02, TEST-03, TEST-04
+**Success Criteria** (what must be TRUE):
+  1. `tests/lib/workspace-env.test.ts` exists with tests for mergeEnv, buildBaseEnv, buildRepoEnv that use no real filesystem paths
+  2. `tests/lib/workspace-status.test.ts` exists with tests for getWorkspaceListInfo and getWorkspaceStatus using mocked config reads
+  3. `tests/lib/workspace-git.test.ts` exists with tests for syncWorkspace/pushWorkspace that mock _exec.spawn and verify call shapes without real git
+  4. `madge --circular src/` returns zero cycles (confirmed in CI output, not just asserted)
+**Plans**: TBD
+
+### Phase 73: Release Prep
+**Goal**: v0.16.0 is tagged and documented; version, changelog, and README are consistent
+**Depends on**: Phase 72
+**Requirements**: (release conventions — no explicit v0.16.0 requirements; standard milestone close-out)
+**Success Criteria** (what must be TRUE):
+  1. package.json version field reads 0.16.0
+  2. CHANGELOG.md has a v0.16.0 entry documenting the module extraction and GIT_STACKS_DEBUG feature
+  3. README.md documents GIT_STACKS_DEBUG usage with an example invocation
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -198,3 +269,8 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 | 66. Git Operation Guards | v0.15.0 | 1/1 | Complete | 2026-04-04 |
 | 67. Status, Display & Health | v0.15.0 | 2/2 | Complete | 2026-04-05 |
 | 68. Release Prep | v0.15.0 | 1/1 | Complete | 2026-04-05 |
+| 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 0/TBD | Not started | - |
+| 70. Extract remaining modules + facade | v0.16.0 | 0/TBD | Not started | - |
+| 71. Observability | v0.16.0 | 0/TBD | Not started | - |
+| 72. Extraction tests | v0.16.0 | 0/TBD | Not started | - |
+| 73. Release Prep | v0.16.0 | 0/TBD | Not started | - |
