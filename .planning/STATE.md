@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
-status: executing
-stopped_at: Completed 75-01-PLAN.md
-last_updated: "2026-04-05T21:44:29.745Z"
+status: verifying
+stopped_at: Completed 75-02-PLAN.md
+last_updated: "2026-04-05T21:53:37.436Z"
 last_activity: 2026-04-05
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 
 Phase: 75 (di-seams-structured-logging) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-05
 
 Progress: [██████████] 100% (2/2 plans)
@@ -50,6 +50,9 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 74]: Clone snapshots now copy source.labels explicitly while workspace creation keeps the existing wizard union boundary.
 - [Phase 75]: workspace-lifecycle._exec.spawn delegates to lifecycleExec.spawn — seam reuses lifecycle's SpawnHandle contract exactly
 - [Phase 75]: workspace-git._exec initialized with all 12 git.ts helpers so any helper call is interceptable without mocking the full git module
+- [Phase 75]: GS_DEBUG is the canonical env var; GIT_STACKS_DEBUG=1 resolved to '1' once in src/index.ts bootstrap — no distributed env parsing elsewhere
+- [Phase 75]: Structured log fields rendered as preformatted string in logtape message so existing Bun.stderr.writer sink is reused without a new sink layer
+- [Phase 75]: MODULE_ALIASES map normalizes short selector tokens (lifecycle, git, status) to workspace-* category names; stored as Set for O(1) per-category gate
 
 ### Pending Todos
 
@@ -66,9 +69,10 @@ None.
 | 74 | 01 | 5m | 2 | 4 | Template label CLI + list filtering |
 | 74 | 02 | 6m | 2 | 5 | Label propagation through composition, creation, and clone |
 | Phase 75 P01 | 5m | 2 tasks | 4 files |
+| Phase 75 P02 | 5m | 2 tasks | 5 files |
 
 ## Session Continuity
 
-Last session: 2026-04-05T21:44:29.739Z
-Stopped at: Completed 75-01-PLAN.md
+Last session: 2026-04-05T21:53:37.430Z
+Stopped at: Completed 75-02-PLAN.md
 Resume file: None

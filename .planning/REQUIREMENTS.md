@@ -33,9 +33,9 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 
 - [x] **OBSV-01**: `workspace-lifecycle.ts` has injectable `_exec` seam for subprocess testing
 - [x] **OBSV-02**: `workspace-git.ts` has injectable `_exec` seam for subprocess testing
-- [ ] **OBSV-03**: Debug output uses structured fields `{ op, module, repo?, ms?, msg }` on stderr
-- [ ] **OBSV-04**: `GS_DEBUG=lifecycle,git` filters debug output to named modules only
-- [ ] **OBSV-05**: `GS_DEBUG=1` or `GS_DEBUG=true` continues to show all module output
+- [x] **OBSV-03**: Debug output uses structured fields `{ op, module, repo?, ms?, msg }` on stderr
+- [x] **OBSV-04**: `GS_DEBUG=lifecycle,git` filters debug output to named modules only
+- [x] **OBSV-05**: `GS_DEBUG=1` or `GS_DEBUG=true` continues to show all module output
 
 ## Future Requirements
 
@@ -87,9 +87,9 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 | ENGN-09 | Phase 76 | Pending |
 | OBSV-01 | Phase 75 | Complete |
 | OBSV-02 | Phase 75 | Complete |
-| OBSV-03 | Phase 75 | Pending |
-| OBSV-04 | Phase 75 | Pending |
-| OBSV-05 | Phase 75 | Pending |
+| OBSV-03 | Phase 75 | Complete |
+| OBSV-04 | Phase 75 | Complete |
+| OBSV-05 | Phase 75 | Complete |
 
 **Coverage:**
 - v0.17.0 requirements: 21 total
