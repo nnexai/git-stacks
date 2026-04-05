@@ -4,14 +4,14 @@ milestone: v0.16.0
 milestone_name: Core Engine & Observability
 status: executing
 stopped_at: Phase 71 automated verification complete; manual manage check pending
-last_updated: "2026-04-05T18:36:51Z"
-last_activity: 2026-04-05 -- Phase 71 automated verification complete; manual manage check pending
+last_updated: "2026-04-05T18:50:48.920Z"
+last_activity: 2026-04-05
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 6
-  percent: 75
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 71 — observability
+**Current focus:** Phase 72 — extraction-tests
 
 ## Current Position
 
-Phase: 71 (observability) — VERIFY
-Plan: 2 of 2 complete
-Status: Automated verification complete; manual manage check pending
-Last activity: 2026-04-05 -- Phase 71 automated verification complete; manual manage check pending
+Phase: 72 (extraction-tests) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-04-05
 
 Progress: [████████░░] 75%
 
@@ -48,6 +48,7 @@ Progress: [████████░░] 75%
 | Phase 70 P02 | 10 | 2 tasks | 8 files |
 | Phase 70 P03 | 20 | 2 tasks | 11 files |
 | 70 | 3 | - | - |
+| Phase 72 P1 | 9 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 

@@ -254,7 +254,7 @@ Plans:
   4. `madge --circular src/` returns zero cycles (confirmed in CI output, not just asserted)
 **Plans**: 2 plans
 Plans:
-- [ ] 72-01-PLAN.md — Add focused workspace-env/status/git module tests and extend `makeGitMock()` for the live extracted seams
+- [x] 72-01-PLAN.md — Add focused workspace-env/status/git module tests and extend `makeGitMock()` for the live extracted seams
 - [ ] 72-02-PLAN.md — Install repo-native Madge gate and remove the live dashboard IPC cycles so `test:deps` passes
 
 ### Phase 73: Release Prep
@@ -279,5 +279,5 @@ Plans:
 | 69. Extract workspace-env + workspace-lifecycle | v0.16.0 | 1/1 | Complete    | 2026-04-05 |
 | 70. Extract remaining modules + facade | v0.16.0 | 3/3 | Complete    | 2026-04-05 |
 | 71. Observability | v0.16.0 | 0/TBD | Not started | - |
-| 72. Extraction tests | v0.16.0 | 0/TBD | Not started | - |
+| 72. Extraction tests | v0.16.0 | 1/2 | In Progress|  |
 | 73. Release Prep | v0.16.0 | 0/TBD | Not started | - |

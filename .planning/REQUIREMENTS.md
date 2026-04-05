@@ -29,9 +29,9 @@ Requirements for v0.16.0 Core Engine & Observability. Each maps to roadmap phase
 
 ### Testing
 
-- [ ] **TEST-01**: Unit tests for extracted workspace-env helpers without real git repos
-- [ ] **TEST-02**: Unit tests for extracted workspace-status query functions
-- [ ] **TEST-03**: Unit tests for extracted workspace-git operations using _exec mocks
+- [x] **TEST-01**: Unit tests for extracted workspace-env helpers without real git repos
+- [x] **TEST-02**: Unit tests for extracted workspace-status query functions
+- [x] **TEST-03**: Unit tests for extracted workspace-git operations using _exec mocks
 - [ ] **TEST-04**: Circular import detection verified (no circular deps between new modules)
 
 ## Future Requirements
@@ -77,9 +77,9 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | OBSV-03 | Phase 71 | Pending |
 | OBSV-04 | Phase 71 | Pending |
 | OBSV-05 | Phase 71 | Pending |
-| TEST-01 | Phase 72 | Pending |
-| TEST-02 | Phase 72 | Pending |
-| TEST-03 | Phase 72 | Pending |
+| TEST-01 | Phase 72 | Complete |
+| TEST-02 | Phase 72 | Complete |
+| TEST-03 | Phase 72 | Complete |
 | TEST-04 | Phase 72 | Pending |
 
 **Coverage:**
