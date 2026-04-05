@@ -184,7 +184,7 @@ See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md) for full deta
 - [ ] **Phase 65: Workspace Lifecycle** - `new`/`open`/`close`/`clean`/`remove` handle dir repos correctly (reference only, no worktrees)
 - [ ] **Phase 66: Git Operation Guards** - All git commands (push, pull, sync, merge, ahead/behind, dirty) skip dir repos
 - [ ] **Phase 67: Status, Display & Health** - Status, list, TUI dashboard, and doctor surface dir repos correctly
-- [ ] **Phase 68: Release Prep** - v0.15.0 version bump, CHANGELOG, README documentation
+- [x] **Phase 68: Release Prep** - v0.15.0 version bump, CHANGELOG, README documentation (completed 2026-04-05)
 
 ## Phase Details
 
@@ -262,4 +262,4 @@ Plans:
 | 65. Workspace Lifecycle | v0.15.0 | 0/1 | Not started | - |
 | 66. Git Operation Guards | v0.15.0 | 0/? | Not started | - |
 | 67. Status, Display & Health | v0.15.0 | 0/? | Not started | - |
-| 68. Release Prep | v0.15.0 | 0/? | Not started | - |
+| 68. Release Prep | v0.15.0 | 1/0 | Complete    | 2026-04-05 |
