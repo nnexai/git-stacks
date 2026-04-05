@@ -357,7 +357,13 @@ export function makeGitMock(overrides: Record<string, unknown> = {}): Record<str
     ensureUpstreamTracking: mock(async () => ({ tracked: false })),
     rebaseBranch: mock(async () => ({ ok: true })),
     mergeBranchFF: mock(async () => ({ ok: true })),
+    pushBranch: mock(async () => ({ ok: true, commits: 0 })),
+    getCommitsAhead: mock(async () => 0),
     getCommitsBehind: mock(async () => 0),
+    stashPush: mock(async () => ({ ok: true })),
+    stashPop: mock(async () => ({ ok: true })),
+    hasAutoStash: mock(async () => false),
+    isFetchStale: mock(async () => false),
     getWorktreeStatus: mock(async () => ({ dirty: false, ahead: 0, behind: 0 })),
     ...overrides,
   }
