@@ -1,420 +1,449 @@
 # Architecture Research
 
-**Domain:** CLI workspace manager — workspace-ops.ts decomposition and observability
+**Domain:** CLI workspace manager — engine hardening & plugin contracts
 **Researched:** 2026-04-05
-**Confidence:** HIGH (based on direct code reading of the actual codebase)
+**Confidence:** HIGH (primary sources: full codebase read)
 
 ---
 
-## Current Architecture
-
-### System Overview
+## Current Architecture (Baseline)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     CLI Layer (commands/)                        │
-│  workspace.ts  template.ts  repo.ts  doctor.ts  config.ts  ...  │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │  calls (name-based, 35 exports)
-┌──────────────────────────▼──────────────────────────────────────┐
-│              workspace-ops.ts  (1,735 lines — monolith)          │
-│  openWorkspace  closeWorkspace  cleanWorkspace  removeWorkspace  │
-│  mergeWorkspace  renameWorkspace  syncWorkspace  pushWorkspace   │
-│  pullWorkspace  getWorkspaceListInfo  getWorkspaceStatus         │
-│  buildWorkspaceEnv  buildBaseEnv  buildRepoEnv  mergeEnv         │
-│  writeEnvFiles  getDirtyWorktrees  detectWorkspaceFromCwd        │
-│  editWorkspaceYaml  editTemplateYaml  editGlobalConfigYaml       │
-└──┬──────────┬──────────┬─────────┬───────────┬──────────────────┘
-   │          │          │         │           │
-   ▼          ▼          ▼         ▼           ▼
-git.ts    config.ts  lifecycle.ts  integrations/  ports.ts
-(399L)    (435L)     (139L)        runner.ts      (300L)
-                                                 secrets.ts
-                                                 (209L)
-                                                 files.ts
-                                                 env.ts
-                                                 messages.ts
+commands/ (CLI parsing + Commander.js routing)
+    ↓ calls
+workspace-ops.ts (facade / re-export hub)
+    ↓ delegates to
+workspace-lifecycle.ts  workspace-env.ts  workspace-status.ts
+workspace-git.ts        workspace-yaml.ts
+    ↓ both use
+config.ts (Zod schemas + scan-based YAML I/O)  git.ts (Bun shell ops)
+    ↓ persistence
+~/.config/git-stacks/{workspaces,templates,registry}.yml  (flat YAML files)
 
-┌─────────────────────────────────────────────────────────────────┐
-│              TUI Layer (tui/ + tui/dashboard/)                   │
-│  App.tsx imports: openWorkspace closeWorkspace cleanWorkspace    │
-│  removeWorkspace mergeWorkspace editWorkspaceYaml renameWorkspace│
-│  syncWorkspace pushWorkspace  + SyncRow SyncResult PushRow types │
-│  workspace-wizard.ts + workspace-clone.ts: openWorkspace only    │
-└─────────────────────────────────────────────────────────────────┘
+tui/ (wizards + SolidJS dashboard — parallel adapter, not layered above commands/)
+integrations/ (runner.ts orchestrates 10 plugins via Integration interface)
 ```
-
-### What workspace-ops.ts Actually Contains
-
-Direct analysis of exports reveals five coherent groupings currently co-mingled:
-
-**Group 1 — Workspace State Queries** (~250 lines)
-- `getWorkspaceListInfo` — dirty + ahead/behind aggregate across all repos
-- `getWorkspaceStatus` — per-repo status array
-- `getDirtyWorktrees` — list of dirty worktree names
-- `detectWorkspaceFromCwd` — CWD to workspace lookup
-
-**Group 2 — Env/Secrets Construction** (~160 lines)
-- `mergeEnv` — workspace.env + ports as Record
-- `buildBaseEnv` — GS_WORKSPACE_* vars
-- `buildRepoEnv` — GS_REPO_* vars layered on base
-- `buildWorkspaceEnv` — full env with secret resolution
-- `resolveWorkspaceEnvVars` (private) — calls secrets.ts
-- `writeEnvFiles` — env merge+write to task_path/.env
-
-**Group 3 — Lifecycle Operations** (~1,100 lines, the bulk)
-- `openWorkspace` — ports, worktree recreation, upstream tracking, env, file-ops, integrations, hooks, last_opened
-- `closeWorkspace` / `_executeClose` — pre_close hooks, integration cleanup, post_close hooks
-- `cleanWorkspace` / `_executeClean` — cascades close, per-repo pre_clean, worktree removal, post_clean
-- `removeWorkspace` — cascades clean, pre_remove, YAML delete, post_remove
-- `mergeWorkspace` — conflict check, cascades clean, git merge, branch delete, pre/post_merge + pre/post_remove
-- `renameWorkspace` — worktree re-registration, YAML rename
-
-**Group 4 — Git Sync Operations** (~400 lines)
-- `syncWorkspace` — fetch, conflict check, rebase/merge, stash management
-- `pushWorkspace` — parallel push across worktree repos
-- `pullWorkspace` — dedup fetch by main_path, sequential pull
-
-**Group 5 — YAML Editor Utilities** (~130 lines)
-- `editWorkspaceYaml` — returns path + validate()
-- `editTemplateYaml` — returns path + validate()
-- `editGlobalConfigYaml` — returns path + validate()
-- `editRegistryYaml` — returns path + validate()
-- `openYamlInEditor` — spawns $VISUAL/$EDITOR
-- `renameTemplate` — template rename + workspace cascade
 
 ---
 
-## Recommended Decomposition
+## Features and Their Integration Points
 
-### Target Module Structure
+### 1. Template Labels to Workspace Propagation
+
+**Current state:** Partially done.
+
+The TUI wizard (`src/tui/workspace-wizard.ts:390-391`) already merges `template.labels` into workspace labels at creation time. The schema supports `labels` on both `TemplateSchema` and `WorkspaceSchema` (`src/lib/config.ts:106,186`). The `label add/remove/list/clear` CLI commands (`src/commands/label.ts`) work only on workspaces.
+
+**What is missing:**
+
+- The `workspace-clone` path (`src/tui/workspace-clone.ts`) does not propagate labels from the source workspace or its originating template.
+- No CLI surface for managing template labels (only workspace labels exist via `label` command).
+- `listTemplates()` and `readTemplate()` already return labels from YAML, but no command exposes them.
+
+**New vs modified:**
+
+| Target | New/Modified | Work |
+|--------|-------------|------|
+| `src/commands/label.ts` | Modified | Add `label add/remove/list/clear <template>` subcommands via `--template` flag or separate subcommand tree |
+| `src/tui/workspace-clone.ts` | Modified | Propagate source workspace labels into clone |
+| `src/tui/workspace-wizard.ts` | No change needed | Already propagates template labels |
+| `src/lib/labels.ts` | Modified | Add `matchesLabels` variant for templates if filter parity needed |
+
+**Data flow for propagation (creation path):**
 
 ```
-src/lib/
-  workspace-ops.ts         KEEP — re-exports from below; thin orchestration for
-                           operations that span multiple domain modules
-                           (open, close, clean, remove, merge)
-  workspace-state.ts       NEW — Group 1: queries, list info, status, CWD detection
-  workspace-env.ts         NEW — Group 2: env construction, secret resolution, env file writes
-  workspace-git.ts         NEW — Group 4: sync, push, pull operations
-  workspace-yaml.ts        NEW — Group 5: YAML editor utilities (rename, edit, validate)
-  lifecycle.ts             UNCHANGED — runHooks/runHooksCaptured (already clean)
-  git.ts                   UNCHANGED — worktree primitives (already clean)
-  config.ts                UNCHANGED — YAML I/O schemas (already clean)
-  secrets.ts               UNCHANGED — secret resolver (already clean)
-  ports.ts                 UNCHANGED — port allocation (already clean)
-  files.ts                 UNCHANGED — file ops (already clean)
+git-stacks new --template <name>
+    → workspace-wizard.ts reads template.labels
+    → merges into workspace.labels at line 390-391
+    → writeWorkspace() persists
+
+git-stacks clone <source>
+    → workspace-clone.ts reads source.labels (currently ignored)
+    → should copy source.labels into clone YAML  ← gap
 ```
 
-The key architectural principle: `workspace-ops.ts` becomes a **thin orchestrator** — it remains as the public API surface for the five lifecycle operations (open/close/clean/remove/merge) that require cross-cutting coordination, but it delegates to domain modules for all pure logic. All 35 current exports remain importable from `workspace-ops.ts` via re-export, so no call sites change.
+**Build order:** Label CLI for templates first (schema already supports it). Clone propagation second. No new modules needed.
 
-### Component Responsibilities After Decomposition
+---
 
-| Module | Responsibility | Imports |
-|--------|----------------|---------|
-| `workspace-state.ts` | Read workspace status, list info, dirty checks, CWD detection | config.ts, git.ts, paths.ts |
-| `workspace-env.ts` | Build GS_* env vars, resolve secrets, write .env files | config.ts, secrets.ts, ports.ts, paths.ts |
-| `workspace-git.ts` | Multi-repo sync/push/pull operations | config.ts, git.ts |
-| `workspace-yaml.ts` | Edit YAML files in $EDITOR, validate schemas, rename template | config.ts, paths.ts |
-| `workspace-ops.ts` | Lifecycle orchestration: open/close/clean/remove/merge | all of the above, lifecycle.ts, integrations/runner.ts, files.ts, git.ts |
+### 2. Operation Runner With Rollback
+
+**Current state:** None. Failures in `openWorkspace`, `cleanWorkspace`, `mergeWorkspace` are best-effort via discriminated unions. Partial state (e.g. some worktrees created, integration not opened) is left on disk with no cleanup plan.
+
+**Proposed module:** `src/lib/operation-runner.ts`
+
+**Responsibilities:**
+- Execute a sequence of named steps, each returning `{ ok: true } | { ok: false; error: string }`
+- On step failure: run registered rollback/undo actions in reverse order
+- Emit structured progress events via callback (compatible with existing `ProgressCallback` signature)
+- Optionally persist an operation log to JSONL for post-mortem visibility
+
+**Interface shape:**
+
+```typescript
+type Step<T = void> = {
+  name: string
+  run: () => Promise<{ ok: true; result?: T } | { ok: false; error: string }>
+  rollback?: () => Promise<void>   // Called in reverse order on failure
+}
+
+type OperationResult =
+  | { ok: true }
+  | { ok: false; failedAt: string; error: string; rolledBack: boolean }
+
+async function runOperation(
+  name: string,
+  steps: Step[],
+  onProgress?: ProgressCallback
+): Promise<OperationResult>
+```
+
+**Integration with existing lifecycle modules:**
+
+Each `workspace-lifecycle.ts` function currently composes steps inline with manual if/return error chains. The operation runner replaces that composition pattern.
+
+```
+workspace-lifecycle.ts (modified)
+    → builds Step[] array (worktree creation, hook execution, integration open, etc.)
+    → calls runOperation(steps, onProgress)
+    → returns OperationResult
+
+workspace-ops.ts (facade — minimal change)
+    → still exports openWorkspace/cleanWorkspace/etc with same signatures
+    → delegates to updated lifecycle functions
+```
+
+**Rollback scope per operation:**
+
+| Operation | Rollback if step N fails |
+|-----------|--------------------------|
+| openWorkspace | kill integration sessions created so far via cleanup(), undo port allocation |
+| cleanWorkspace | no rollback (destructive by intent), but log partial state |
+| mergeWorkspace | abort git merge if started, re-open worktrees on failure |
+
+**New file:** `src/lib/operation-runner.ts` — new module
+
+**Modified files:** `src/lib/workspace-lifecycle.ts` — refactor internal step composition to use operation runner
+
+**Operation log path (optional):** `~/.config/git-stacks/ops/{workspace}.jsonl` parallel to `messages/`
+
+---
+
+### 3. Indexed Config Store
+
+**Current state:** `config.ts` has `findWorkspaceFile()` and `findTemplateFile()` that scan all `.yml` files in the directory on every lookup. `readWorkspace(name)` is O(n) filesystem reads. `listWorkspaces()` reads and parses every file every call.
+
+**Proposed module:** `src/lib/config-index.ts`
+
+**Strategy:** Keep YAML files as source of truth (human-editable). Add an in-process cache layer populated lazily on first access and invalidated on write. File-modification-time (`mtime`) comparison handles external edits.
+
+```typescript
+// In-memory index built from YAML directory scans
+type IndexEntry<T> = { filePath: string; mtime: number; data: T }
+
+type ConfigIndex = {
+  workspaces: Map<string, IndexEntry<Workspace>>
+  templates:  Map<string, IndexEntry<Template>>
+}
+
+// Drop-in cached equivalents — same return types as config.ts functions
+export function readWorkspaceCached(name: string): Workspace | null
+export function listWorkspacesCached(): Workspace[]
+export function invalidateWorkspace(name: string): void   // Called by writeWorkspace()
+```
+
+**Integration points:**
+
+`config.ts` `writeWorkspace()` and `writeTemplate()` call `invalidateWorkspace()`/`invalidateTemplate()` from the index module after writing. No callers need to change — the cache is internal to config.ts.
+
+The TUI dashboard calls `listWorkspaces()` and `listTemplates()` in reactive SolidJS accessors. These benefit most from caching because the dashboard polls on keypress events.
+
+**Alternative considered:** SQLite index file at `~/.config/git-stacks/index.db`. Rejected for this milestone: adds a binary dependency and complicates the human-editable config story. YAML-with-mtime-cache is lower risk and reversible.
+
+**New file:** `src/lib/config-index.ts` — new module
+**Modified file:** `src/lib/config.ts` — `writeWorkspace()` and `writeTemplate()` call invalidation; `listWorkspaces()` and `readWorkspace()` delegate to cache
+
+---
+
+### 4. Integration Plugin Capability Contracts
+
+**Current state:** The `Integration` interface (`src/lib/integrations/types.ts`) is already solid — id, label, order, isEnabled(), applies(), generate(), open(), cleanup(), commands(), configExample, windowDetector. The runner orchestrates correctly.
+
+**Gaps identified from `PROJECT-DIRECTION.md`:**
+
+1. **Capability declaration:** Plugins do not declare what they require (e.g. "needs tmux binary", "only macOS", "requires forge CLI"). Doctor checks are ad-hoc per plugin rather than driven by declared capabilities.
+
+2. **Isolated failure handling:** `runIntegrationCleanup()` already catches and logs, but `runIntegrations()` propagates throws from `open()`. A plugin crash stops the entire integration chain.
+
+3. **Third-party plugin path:** No external plugin registration mechanism. This milestone can lay the contract foundation without implementing dynamic loading.
+
+**Proposed additions to `Integration` interface:**
+
+```typescript
+// Add to src/lib/integrations/types.ts
+
+export type Capability =
+  | { kind: "binary"; name: string; hint: string }
+  | { kind: "platform"; os: "darwin" | "linux" | "win32" }
+  | { kind: "forge"; type: "github" | "gitlab" | "gitea" }
+
+// On the Integration interface:
+capabilities?: Capability[]       // Declared requirements — checked by doctor
+isolatedFailure?: boolean         // If true, open() failure is non-fatal
+```
+
+**Runner changes (`runner.ts`):**
+
+```typescript
+// Wrap open() for isolated plugins
+const artifact = await (async () => {
+  try {
+    return await integration.open(ctx, artifactPath, bag)
+  } catch (err) {
+    if (integration.isolatedFailure) {
+      console.warn(`[${integration.id}] open failed (non-fatal): ${err}`)
+      return null
+    }
+    throw err
+  }
+})()
+```
+
+**Doctor integration:** A new `checkCapabilities(integration)` helper in `doctor.ts` reads `integration.capabilities` and runs binary/platform/forge checks — replacing current per-plugin ad-hoc checks scattered across individual plugin files.
+
+**Modified files:**
+- `src/lib/integrations/types.ts` — add `Capability` type and new fields on `Integration`
+- `src/lib/integrations/runner.ts` — isolated failure handling in `runIntegrations()`
+- `src/commands/doctor.ts` — capability-driven checks
+- Individual plugin files (10 plugins) — add `capabilities` and `isolatedFailure` declarations
+
+**No new module needed.** Interface extensions and runner behavior changes only.
+
+---
+
+### 5. Broader DI and Structured Logging
+
+**Current state:** `src/lib/observability.ts` uses logtape with `timeOperation()` wrapper. DI for subprocess execution uses the `_exec` mutable object pattern (one per module). Structured logging produces only timing/debug lines.
+
+**DI status by module:**
+
+| Module | Has `_exec` injectable | Test coverage via mock |
+|--------|----------------------|----------------------|
+| `workspace-yaml.ts` | Yes (`spawnEditor`) | Yes |
+| All 10 integration plugins | Yes (`_exec` per plugin) | Yes |
+| `git.ts` | No (uses `$` shell directly) | Tests use real git in tmp dirs |
+| `lifecycle.ts` | No (`runHooks` calls `Bun.spawn` directly) | Mock via `mock.module()` |
+| `workspace-lifecycle.ts` | No | Relies on git.ts mocks |
+
+**Gaps to close:**
+
+- `lifecycle.ts` (`runHooks`) uses `Bun.spawn` with no injectable seam. Adding `_exec.spawn` here allows lifecycle unit tests to avoid `mock.module()` entirely.
+- `observability.ts` logs timing but not structured operation context (which workspace, which step). Adding optional key-value context to `logDebug` enables richer tracing without breaking callers.
+
+**Proposed additions:**
+
+```typescript
+// src/lib/lifecycle.ts — add injectable seam
+export const _exec = {
+  spawn: (cmd: string[], opts: SpawnOptions) => Bun.spawn(cmd, opts)
+}
+```
+
+```typescript
+// src/lib/observability.ts — extend logDebug for structured context
+export function logDebug(
+  category: string,
+  detail: string,
+  context?: Record<string, string | number | boolean>
+): void
+```
+
+**No new modules.** Additions to two existing files.
+
+---
+
+## System Overview After v0.17.0
+
+```
+commands/ (CLI — unchanged structure)
+    ↓
+workspace-ops.ts (facade — unchanged surface)
+    ↓
+workspace-lifecycle.ts  (modified: uses operation-runner.ts internally)
+workspace-env.ts        workspace-status.ts
+workspace-git.ts        workspace-yaml.ts
+
+lib/
+  operation-runner.ts  ← NEW: step sequencing + rollback
+  config-index.ts      ← NEW: in-memory YAML cache with mtime invalidation
+  config.ts            (modified: delegates reads to config-index, calls invalidation on writes)
+  observability.ts     (modified: optional context param on logDebug)
+  lifecycle.ts         (modified: injectable _exec.spawn seam)
+
+integrations/
+  types.ts             (modified: Capability type + capabilities/isolatedFailure fields)
+  runner.ts            (modified: isolated failure handling)
+  *.ts (10 plugins)    (modified: add capabilities/isolatedFailure declarations)
+
+commands/
+  label.ts             (modified: add template label subcommands)
+  doctor.ts            (modified: capability-driven checks)
+
+tui/
+  workspace-clone.ts   (modified: propagate labels from source workspace)
+```
+
+---
+
+## Component Responsibilities
+
+| Component | Responsibility | Changes in v0.17.0 |
+|-----------|---------------|-------------------|
+| `operation-runner.ts` | Step sequencing, rollback orchestration, op log | NEW |
+| `config-index.ts` | In-memory YAML cache, mtime-based invalidation | NEW |
+| `workspace-lifecycle.ts` | Business logic for open/clean/close/merge/remove | Modified: delegates step composition to operation-runner |
+| `config.ts` | Zod schemas, atomic YAML reads/writes | Modified: write functions call invalidation |
+| `integrations/types.ts` | Plugin contracts (Integration interface) | Modified: Capability type added |
+| `integrations/runner.ts` | Orchestration across 10 plugins | Modified: isolated failure handling |
+| `observability.ts` | Structured debug logging and timing | Modified: context parameter on logDebug |
+| `lifecycle.ts` | Hook execution (runHooks/runHooksCaptured) | Modified: injectable _exec.spawn |
 
 ---
 
 ## Data Flow Changes
 
-### Current Flow (everything through workspace-ops.ts)
+### Workspace Open (current)
 
 ```
-CLI command
-    |
-workspace.ts (commands/) imports openWorkspace, syncWorkspace, buildWorkspaceEnv, etc.
-    |
-workspace-ops.ts dispatches everything inline
+openWorkspace(name)
+    → allocatePorts()
+    → buildWorkspaceEnv()
+    → runHooks(pre_open)
+    → createWorktree() per repo
+    → runIntegrations()
+    → runHooks(post_open)
+    → return { ok }
 ```
 
-### Target Flow (domain modules, orchestrated re-exports)
+### Workspace Open (after operation-runner)
 
 ```
-CLI command
-    |
-commands/workspace.ts
-    |-- openWorkspace        --> workspace-ops.ts (lifecycle orchestrator)
-    |-- syncWorkspace        --> workspace-git.ts (direct import or re-export)
-    |-- buildWorkspaceEnv    --> workspace-env.ts (direct import or re-export)
-    |-- getWorkspaceListInfo --> workspace-state.ts (direct import or re-export)
-    +-- editWorkspaceYaml   --> workspace-yaml.ts (direct import or re-export)
-
-tui/dashboard/App.tsx
-    |-- openWorkspace, closeWorkspace, etc. --> workspace-ops.ts (unchanged import path)
-    +-- SyncRow, SyncResult, PushRow types  --> workspace-git.ts (re-exported from workspace-ops.ts)
+openWorkspace(name)
+    → runOperation("open", [
+        { name: "allocate-ports",    run: allocatePorts,   rollback: releasePorts },
+        { name: "resolve-env",       run: buildWorkspaceEnv, rollback: noop },
+        { name: "pre-open-hooks",    run: runPreOpenHooks, rollback: noop },
+        { name: "create-worktrees",  run: createWorktrees, rollback: removeCreatedWorktrees },
+        { name: "run-integrations",  run: runIntegrations, rollback: runIntegrationCleanup },
+        { name: "post-open-hooks",   run: runPostOpenHooks, rollback: noop },
+      ], onProgress)
+    → OperationResult
 ```
 
-The re-export strategy means zero call-site changes in phase 1. Commands and TUI keep importing from `workspace-ops.ts`. The refactor is internal.
+Callers (`workspace.ts`, TUI dashboard) receive the same `{ ok: boolean; error?: string }` shape — the facade signature is unchanged.
 
-### openWorkspace Internal Flow (post-decomposition)
+### Config Read (after config-index)
 
 ```
-openWorkspace(name, opts, onProgress)
-    |-- readWorkspace() + readGlobalConfig()        [config.ts]
-    |-- allocatePorts()                             [ports.ts]
-    |-- recreateMissingWorktrees()                  [git.ts]
-    |-- ensureUpstreamTracking()                    [git.ts]
-    |-- buildWorkspaceEnv()                         [workspace-env.ts]
-    |-- runHooks(pre_open)                          [lifecycle.ts]
-    |-- applyFileOps()                              [files.ts]
-    |-- writeEnvFiles()                             [workspace-env.ts]
-    |-- runIntegrations()                           [integrations/runner.ts]
-    |-- runHooks(post_open)                         [lifecycle.ts]
-    +-- writeWorkspace(last_opened)                 [config.ts]
-```
-
-This is already the correct structure — the code just needs to be physically split to make the layers visible.
-
----
-
-## Architectural Patterns
-
-### Pattern 1: Re-export Facade
-
-**What:** `workspace-ops.ts` re-exports everything from domain modules. Existing call sites don't change import paths in phase 1.
-
-**When to use:** When refactoring a module that has many call sites and backward compatibility matters. Extract domain modules first, then optionally move call sites to direct imports in later phases.
-
-**Trade-offs:** Slightly more indirection. The facade becomes a change magnet for anyone wanting to know "what is the public API?" — which is actually desirable here.
-
-**Example:**
-```typescript
-// workspace-ops.ts after decomposition
-export { getWorkspaceListInfo, getWorkspaceStatus, getDirtyWorktrees, detectWorkspaceFromCwd } from "./workspace-state"
-export { mergeEnv, buildBaseEnv, buildRepoEnv, buildWorkspaceEnv, writeEnvFiles } from "./workspace-env"
-export { syncWorkspace, pushWorkspace, pullWorkspace } from "./workspace-git"
-export { editWorkspaceYaml, editTemplateYaml, editGlobalConfigYaml, editRegistryYaml, openYamlInEditor, renameTemplate } from "./workspace-yaml"
-export type { SyncResult, SyncRow, PushResult, PushRow, PullResult, PullRow } from "./workspace-git"
-export type { WorkspaceListInfo, RepoStatus, CwdDetectionResult } from "./workspace-state"
-export type { BuildWorkspaceEnvOptions } from "./workspace-env"
-// Only openWorkspace, closeWorkspace, cleanWorkspace, removeWorkspace, mergeWorkspace,
-// renameWorkspace, ProgressCallback stay implemented here
-```
-
-### Pattern 2: Incremental Extraction
-
-**What:** Extract one domain module at a time, running full test suite after each. Never extract mid-function — only at function boundaries.
-
-**When to use:** Any refactor where the existing test suite is the safety net.
-
-**Trade-offs:** Slower than big-bang but much lower risk. Each step is independently reviewable.
-
-**Build order rationale:**
-1. `workspace-state.ts` first — no dependencies on other domain modules, pure queries over config.ts + git.ts
-2. `workspace-env.ts` second — depends on secrets.ts, ports.ts but not on any new domain module
-3. `workspace-git.ts` third — depends on git.ts, config.ts; no cross-domain deps
-4. `workspace-yaml.ts` fourth — depends on config.ts only; rename-template logic touches listWorkspaces
-5. `workspace-ops.ts` cleanup last — remove extracted code, add re-exports, verify nothing broke
-
-### Pattern 3: Structured ProgressEvents for Observability
-
-**What:** Extend `ProgressCallback` to accept structured events for observability. Existing string calls are left unchanged, new structured events added alongside.
-
-**When to use:** When you want to add tracing/logging without changing the operation's return type and without breaking existing consumers.
-
-**Trade-offs:** Union type requires consumers to check for string vs. object. Use `typeof event === "string"` guard to keep existing display code working.
-
-**Example:**
-```typescript
-// Current: flat string
-export type ProgressCallback = (message: string) => void
-
-// Proposed: structured event, string still accepted for backward compat
-export type ProgressEvent =
-  | { kind: "step"; phase: "pre_hook" | "git" | "integration" | "post_hook"; message: string }
-  | { kind: "warn"; message: string }
-  | { kind: "error"; message: string }
-
-export type ProgressCallback = (event: ProgressEvent | string) => void
-
-// Existing call sites unchanged:
-onProgress?.(`removed  ${repo.name}`)
-
-// New structured events added alongside:
-onProgress?.({ kind: "step", phase: "git", message: `removed  ${repo.name}` })
+readWorkspace(name)              listWorkspaces()
+    → config-index.ts                → config-index.ts
+    → stat() each file for mtime     → stat() scan (no full parse)
+    → parse only stale entries        → return cached Map values
+    → return cached entry
 ```
 
 ---
 
-## Integration Points
+## Build Order (Dependency-Aware)
 
-### CLI commands/ → workspace-ops.ts (and domain modules)
+| Step | Feature | Depends On | Risk |
+|------|---------|-----------|------|
+| 1 | Template label CLI (`label add/remove/list/clear <template>`) | Schema already supports it | Low |
+| 2 | Clone label propagation | Step 1 for consistency | Low |
+| 3 | `_exec.spawn` in `lifecycle.ts` | None | Low |
+| 4 | `logDebug` context parameter in `observability.ts` | None | Low |
+| 5 | `Capability` type + `capabilities`/`isolatedFailure` on `Integration` | None | Low |
+| 6 | Isolated failure handling in `runner.ts` | Step 5 | Low |
+| 7 | Plugin `capabilities` declarations (all 10 plugins) | Step 5 | Medium (touches 10 files) |
+| 8 | Doctor capability-driven checks | Step 7 | Medium |
+| 9 | `config-index.ts` module | None | Medium |
+| 10 | Wire index into `config.ts` | Step 9, tests passing | Medium |
+| 11 | `operation-runner.ts` module | None | Medium |
+| 12 | Wire operation-runner into `workspace-lifecycle.ts` | Step 11 | High (core logic change) |
 
-| Command | Currently Uses | After Decomposition |
-|---------|---------------|---------------------|
-| `workspace open` | `openWorkspace` | unchanged (re-export) |
-| `workspace sync` | `syncWorkspace` | unchanged (re-export) or direct to workspace-git.ts |
-| `workspace env` | `buildWorkspaceEnv`, `buildRepoEnv` | unchanged (re-export) or direct to workspace-env.ts |
-| `workspace status` | `getWorkspaceStatus`, `getWorkspaceListInfo` | unchanged (re-export) or direct to workspace-state.ts |
-| `workspace rename` | `renameWorkspace` | unchanged — stays in workspace-ops.ts (lifecycle op) |
-| `template rename` | `renameTemplate` | unchanged (re-export) or direct to workspace-yaml.ts |
-
-No command-layer changes are required in phase 1. The re-export facade means commands/workspace.ts continues importing from `"../lib/workspace-ops"` without any modifications.
-
-### TUI (dashboard/App.tsx) → workspace-ops.ts
-
-App.tsx currently imports 9 functions and 3 types from workspace-ops. After decomposition, all remain importable from workspace-ops via re-export with no import path changes required.
-
-One pre-existing divergence to note: App.tsx reimplements parts of openWorkspace inline — it directly imports `createWorktree`, `runHooksCaptured`, `applyFileOpsForRepo`, `runIntegrationGenerate` for finer-grained TUI progress updates. This is intentional (the TUI needs step-level progress) and should not be changed during decomposition.
-
-### workspace-ops.ts → lifecycle.ts
-
-The `_executeClose`, `_executeClean`, `openWorkspace`, `mergeWorkspace`, `removeWorkspace` functions all repeat the same captured/non-captured hook dispatch pattern approximately 15 times:
-
-```typescript
-if (opts.captured) {
-  await runHooksCaptured(hooks, cwd, env, (output) => onProgress?.(output.line))
-} else {
-  await runHooks(hooks, cwd, env)
-}
-```
-
-A helper `execHooks` already exists locally inside `openWorkspace` but is not shared. Phase 5 cleanup extracts this into a shared utility within workspace-ops.ts, eliminating the duplication.
-
-### workspace-ops.ts → integrations/runner.ts
-
-`IntegrationContext` is constructed inline in `openWorkspace` and `_executeClose`. No changes to the integration boundary are needed — the context construction just moves with the lifecycle functions when workspace-ops.ts is cleaned up.
+Steps 1-4 are pure additions with no cross-dependencies. Steps 5-8 are interface additions with low blast radius. Steps 9-10 and 11-12 are higher-risk pairs — each should ship as a separate phase with regression tests before moving on.
 
 ---
 
-## Build Order
+## Anti-Patterns to Avoid
 
-### Phase 1: Extract workspace-state.ts (lowest risk)
+### Anti-Pattern 1: Operation Runner as God Object
 
-**Scope:** Move to `src/lib/workspace-state.ts`:
-- `getWorkspaceListInfo` (includes private `formatAge`)
-- `getWorkspaceStatus`
-- `getDirtyWorktrees`
-- `detectWorkspaceFromCwd`
-- Types: `WorkspaceListInfo`, `RepoStatus`, `CwdDetectionResult`
+**What people do:** Pass the full `Workspace`, `GlobalConfig`, `tasksDir`, and every helper function into the runner core.
 
-**Dependencies acquired:** config.ts, git.ts, paths.ts (all stable)
-**Dependencies on new modules:** none
-**Test risk:** LOW — pure query functions with no side effects
+**Why it's wrong:** The runner's job is step sequencing and rollback bookkeeping. Domain knowledge (what to rollback for a worktree) belongs in the step definitions, not the runner.
 
-Add re-exports to workspace-ops.ts. Run `bun run test`. Commit.
-
-### Phase 2: Extract workspace-env.ts
-
-**Scope:** Move to `src/lib/workspace-env.ts`:
-- `mergeEnv`
-- `buildBaseEnv`
-- `buildRepoEnv`
-- `buildWorkspaceEnv`
-- `resolveWorkspaceEnvVars` (private, keep unexported)
-- `writeEnvFiles`
-- Type: `BuildWorkspaceEnvOptions`
-
-**Dependencies acquired:** config.ts, secrets.ts, ports.ts, paths.ts
-**Dependencies on new modules:** none
-**Coordination:** `openWorkspace` in workspace-ops.ts imports `buildWorkspaceEnv` and `writeEnvFiles` from workspace-env.ts
-
-Add re-exports. Run `bun run test`. Commit.
-
-### Phase 3: Extract workspace-git.ts
-
-**Scope:** Move to `src/lib/workspace-git.ts`:
-- `syncWorkspace` (with private `restoreStashes` closure kept inside)
-- `pushWorkspace`
-- `pullWorkspace`
-- Types: `SyncResult`, `SyncRow`, `PushResult`, `PushRow`, `PullRow`, `PullResult`
-
-**Dependencies acquired:** config.ts, git.ts
-**Dependencies on new modules:** none
-**Test risk:** MEDIUM — sync has complex stash restore logic; verify tests pass before and after
-
-Critical: re-export types from workspace-ops.ts, since App.tsx imports `SyncRow`, `SyncResult`, `PushRow` by name from workspace-ops. Run `bun run test`. Commit.
-
-### Phase 4: Extract workspace-yaml.ts
-
-**Scope:** Move to `src/lib/workspace-yaml.ts`:
-- `editWorkspaceYaml`
-- `editTemplateYaml`
-- `editGlobalConfigYaml`
-- `editRegistryYaml`
-- `openYamlInEditor`
-- `renameTemplate` (touches listWorkspaces — belongs here, not in lifecycle)
-
-**Dependencies acquired:** config.ts, paths.ts, fs (readFileSync), Bun.spawn
-**Dependencies on new modules:** none
-**Test risk:** LOW — thin utilities with straightforward behavior
-
-Add re-exports. Run `bun run test`. Commit.
-
-### Phase 5: Clean up workspace-ops.ts
-
-After phases 1-4, workspace-ops.ts contains only:
-- `openWorkspace`
-- `_executeClose` / `closeWorkspace`
-- `_executeClean` / `cleanWorkspace`
-- `removeWorkspace`
-- `mergeWorkspace`
-- `renameWorkspace`
-- `ProgressCallback` type
-- Re-export block for domain modules
-
-Apply the shared `execHooks` helper across all five lifecycle functions to eliminate the 15 repetitions of the captured/non-captured dispatch pattern.
-
-Run `bun run test`. Commit.
-
-**Resulting size:** workspace-ops.ts shrinks from 1,735 lines to approximately 700 lines.
-
-### Phase 6 (optional): Structured ProgressEvents
-
-Extend `ProgressCallback` to accept `ProgressEvent | string`. Implement additively — existing string calls are left as-is, structured events added where observability is needed. Update 3-4 formatter functions in commands/workspace.ts to handle both forms.
+**Do this instead:** Steps are closures. Each step captures its own context. The runner only knows `{ name, run, rollback }`.
 
 ---
 
-## Anti-Patterns
+### Anti-Pattern 2: Config Index as Write-Through Cache
 
-### Anti-Pattern 1: Moving `_executeClose` / `_executeClean` to Domain Modules
+**What people do:** Write to the index first, then flush to disk asynchronously.
 
-**What people do:** Extract the private cascade functions along with the public APIs.
+**Why it's wrong:** git-stacks writes YAML atomically (tmp+fsync+rename) to avoid corruption. Async flush breaks that guarantee. If the process dies between index write and YAML flush, the index diverges from disk.
 
-**Why it's wrong:** `_executeClose` and `_executeClean` accept pre-loaded `workspace` and `config` objects to avoid re-reading disk inside a cascade. They are not independently callable and moving them creates false re-use affordance and extra YAML reads mid-cascade.
+**Do this instead:** Write to YAML first (atomic, as today). Then invalidate the index entry. The next read re-parses from disk. The cache is read-only.
 
-**Do this instead:** Keep `_executeClose` and `_executeClean` private in workspace-ops.ts. Their public wrappers stay there too.
+---
 
-### Anti-Pattern 2: Breaking the Re-export Facade Before Tests Are Updated
+### Anti-Pattern 3: Capability Checks Inside Plugin `open()`
 
-**What people do:** Move a function to a domain module AND update all call sites in the same commit.
+**What people do:** `if (!which("tmux")) return null` inside the plugin's open() method.
 
-**Why it's wrong:** If a test fails after a big-bang move, the diff is large and the bug is hard to locate.
+**Why it's wrong:** Doctor cannot report missing capabilities until the user actually tries to open a workspace. Errors surface at the wrong time with no guidance.
 
-**Do this instead:** Phases 1-4 are pure moves with re-exports. Only update call sites after all domain modules are stable.
+**Do this instead:** Declare capabilities on the plugin. Doctor checks them upfront on `git-stacks doctor`. `open()` can assume capabilities are met.
 
-### Anti-Pattern 3: Exposing `resolveWorkspaceEnvVars` as Public API
+---
 
-**What people do:** Make the private `resolveWorkspaceEnvVars` public when moving it to workspace-env.ts.
+### Anti-Pattern 4: Rollbacks Bypassing the `_exec` Injectable Pattern
 
-**Why it's wrong:** Its skip-secrets and warn behavior is an implementation detail of `buildWorkspaceEnv`. Callers misusing it will bypass port injection and base env construction.
+**What people do:** Rollback closures call real side effects directly with production imports rather than through the injectable `_exec` object.
 
-**Do this instead:** Keep `resolveWorkspaceEnvVars` unexported in workspace-env.ts. The public API is `buildWorkspaceEnv`.
+**Why it's wrong:** Rollback steps become impossible to test in isolation without real filesystem/git state.
 
-### Anti-Pattern 4: Adding a Second Output Channel Alongside ProgressCallback
+**Do this instead:** Rollback closures capture the same `_exec` object the forward step used. They are testable by the same mock substitution as the forward step.
 
-**What people do:** Add a `logger?: Logger` parameter to workspace operation functions for observability, alongside `onProgress`.
+---
 
-**Why it's wrong:** Two output channels means code has to decide which to call for each event, and consumers get duplicate output.
+## Integration Points Summary
 
-**Do this instead:** Extend `ProgressCallback` to accept structured events. One output channel, consumers choose how to render it.
+| Boundary | Direction | Notes |
+|----------|-----------|-------|
+| `operation-runner.ts` ← `workspace-lifecycle.ts` | lifecycle calls runner | Runner is a pure utility with no domain imports |
+| `config-index.ts` ← `config.ts` | config.ts delegates | Index has no knowledge of Zod schemas; config.ts owns parsing |
+| `integrations/types.ts` ← all 10 plugins | plugins implement interface | Additive — existing plugins need capabilities and isolatedFailure added |
+| `integrations/runner.ts` uses `isolatedFailure` | runner reads plugin property | No new dependency; runner already imports Integration interface |
+| `doctor.ts` ← `integrations/types.ts` | doctor reads `capabilities` | Reduces ad-hoc binary checks to a loop over declared capabilities |
+| `label.ts` ← `config.ts` | label command reads/writes templates | `readTemplate()`/`writeTemplate()` already exist; label command needs template-path variant |
+| `workspace-clone.ts` ← `config.ts` | clone reads source labels | `source.labels` is already present in parsed Workspace; one-line addition |
 
 ---
 
 ## Sources
 
-- Direct code analysis: `/home/nnex/dev/prj/git-stacks/src/lib/workspace-ops.ts` (1,735 lines, all sections read)
-- Direct code analysis: `/home/nnex/dev/prj/git-stacks/src/commands/workspace.ts` (imports section)
-- Direct code analysis: `/home/nnex/dev/prj/git-stacks/src/tui/dashboard/App.tsx` (imports, lines 26-53)
-- Direct code analysis: `/home/nnex/dev/prj/git-stacks/src/lib/lifecycle.ts` (full file, 139 lines)
-- Project state: `/home/nnex/dev/prj/git-stacks/.planning/PROJECT.md`
-- CLAUDE.md architecture documentation
+- `/home/nnex/dev/prj/git-stacks/src/lib/config.ts` — Zod schemas and scan-based I/O (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/types.ts` — Integration interface (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/runner.ts` — orchestration logic (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/workspace-lifecycle.ts` — lifecycle step composition (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/observability.ts` — logtape wrapper (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/tui/workspace-wizard.ts` — existing label propagation at lines 390-391 (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/commands/label.ts` — current workspace-only label commands (direct read)
+- `/home/nnex/dev/prj/git-stacks/PROJECT-DIRECTION.md` — author architectural intent (direct read)
+- `/home/nnex/dev/prj/git-stacks/.planning/PROJECT.md` — v0.17.0 milestone requirements (direct read)
 
 ---
-*Architecture research for: git-stacks workspace-ops decomposition*
+
+*Architecture research for: git-stacks v0.17.0 Engine Hardening & Template Labels*
 *Researched: 2026-04-05*

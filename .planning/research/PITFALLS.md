@@ -1,316 +1,180 @@
 # Pitfalls Research
 
-**Domain:** TypeScript CLI refactoring — extracting a 1735-line monolithic module, adding DI, and structured logging to a working Bun CLI with 800+ tests and existing npm users
+**Domain:** CLI workspace manager — adding operation runner/rollback, config indexing, plugin contracts, template labels
 **Researched:** 2026-04-05
-**Confidence:** HIGH — grounded in direct reads of `src/lib/workspace-ops.ts` (1735 lines, imports from config/git/lifecycle/integrations/files/ports/secrets), `tests/lib/workspace-ops.test.ts` (mock.module patterns, _exec injection, useIsolatedConfig), `CLAUDE.md` (conventions, test isolation architecture), and cross-referenced with TypeScript module system behavior and structured logging ecosystem patterns
+**Confidence:** HIGH (based on direct codebase analysis + known patterns in this domain)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Circular Imports Created During Module Split
+### Pitfall 1: Rollback That Only Half-Undoes
 
 **What goes wrong:**
-`workspace-ops.ts` currently imports from `config.ts`, `git.ts`, `lifecycle.ts`, `integrations/runner.ts`, `files.ts`, `ports.ts`, and `secrets.ts`. When splitting workspace-ops into domain modules (e.g., `workspace-lifecycle.ts`, `workspace-sync.ts`, `workspace-env.ts`), the new modules typically need shared types from each other and from config.ts. This creates circular import chains: `workspace-lifecycle.ts` → `workspace-env.ts` → `workspace-lifecycle.ts`. TypeScript compiles circular imports silently. Bun executes them with undefined values for the circular dependency at startup, causing runtime errors that are not caught by `tsc --noEmit`.
-
-The specific risk here: `openWorkspace` calls `buildWorkspaceEnv`, which calls `mergeEnv`, and `mergeEnv` needs `Workspace` type from config. If `buildWorkspaceEnv` is extracted to `workspace-env.ts` and `openWorkspace` stays in `workspace-lifecycle.ts`, then any shared type from `workspace-env.ts` imported by `workspace-lifecycle.ts` creates a cycle if `workspace-env.ts` imports `workspace-lifecycle.ts` types.
+An operation runner records compensating actions but applies them out of order, or applies them against state that was already mutated by later steps. Example: a workspace creation that creates a worktree, writes a YAML, and calls `post_create` hooks — if the rollback fires after hook failure, it deletes the YAML but leaves the worktree on disk. Or if rollback order is `[step1_undo, step2_undo, step3_undo]` instead of the required `[step3_undo, step2_undo, step1_undo]`, earlier undos depend on side effects that later undos already destroyed.
 
 **Why it happens:**
-The original monolith has no import cycles because everything is in one file. When splitting, developers extract the functions they want and then add the imports they need. The imports form a web that was previously invisible because it was all in one module scope.
+Developers push compensating actions into a list in forward order, then iterate it forward instead of reversed. Git worktree creation, YAML writes, hook execution, and IDE session spawning all have different failure surfaces and must be undone in strict LIFO order.
 
 **How to avoid:**
-Before splitting, draw the dependency graph: for each function in workspace-ops.ts, list what it imports from _other functions in workspace-ops.ts_ (not external modules). Extract shared types and pure utilities to a separate `workspace-types.ts` or keep them in `config.ts`. The rule: domain modules import from config/git/lifecycle (the stable leaves), not from each other. If two new modules need each other, the shared part belongs in a third module or back in config.ts.
-
-```
-Allowed: workspace-lifecycle.ts → config.ts, git.ts, lifecycle.ts
-Allowed: workspace-sync.ts → config.ts, git.ts, workspace-env.ts
-NOT ALLOWED: workspace-lifecycle.ts → workspace-sync.ts → workspace-lifecycle.ts
-```
+- Use a typed `CompensationStack` (not an array of plain strings): each entry is `{ label: string; undo: () => Promise<void> }`.
+- Push entries with `stack.push()` immediately after each successful step, and always pop with `while (stack.length) await stack.pop()!.undo()`.
+- Never register an undo that assumes a later step succeeded.
+- Run undo steps in reverse (pop from end, not shift from front).
+- Wrap each undo in a try/catch that logs but does not abort — a failing undo must not prevent subsequent undos from running.
 
 **Warning signs:**
-- A new module imports from another new module that imports back from the first
-- `tsc --noEmit` passes but runtime throws "Cannot read property X of undefined" on a well-tested code path
-- `bun run test` shows a test file importing two new modules where one worked before and both work in isolation but fail together
+- Rollback function takes the `steps` array as a parameter and iterates with `for (const step of steps)`.
+- Undo functions share mutable state (e.g., a `createdPaths` object mutated by multiple steps).
+- Tests for rollback only cover the "last step fails" case, not "middle step fails".
 
 **Phase to address:**
-Phase 1 of extraction — before writing any code, produce the intra-module dependency graph of workspace-ops.ts. This is the architectural decision that determines all splitting boundaries.
+Operation runner phase (first phase of v0.17.0).
 
 ---
 
-### Pitfall 2: Tests Break Because Import Paths Changed but mock.module() Calls Did Not
+### Pitfall 2: Template Labels Not Copied at Creation Time
 
 **What goes wrong:**
-The test suite uses `mock.module("@/lib/workspace-ops", ...)` and `mock.module("@/lib/lifecycle", ...)` to inject test doubles. When workspace-ops is split into `workspace-lifecycle.ts`, `workspace-sync.ts`, etc., any test that imports a specific function from the old path will fail with "module not found." But more insidiously: tests that mock the OLD path will silently stop applying their mocks. The production code now imports from the new path. The mock targets the old path. The mock does nothing. Tests that relied on mock isolation will now call real git operations and fail unpredictably — or worse, silently call real git operations in CI and pass because the git environment happens to be in the right state.
-
-This codebase has approximately 30 test files with `mock.module()` calls. At least workspace-ops.test.ts explicitly restores lifecycle via `mock.module("@/lib/lifecycle")`. If `workspace-lifecycle.ts` imports lifecycle directly (not via workspace-ops), then the workspace-ops mock.module call no longer intercepts lifecycle calls.
+Template labels are stored on `Template.labels` but not snapshotted into the workspace YAML at creation time. The workspace inherits labels lazily by looking them up via its `template` field at runtime. When the template is later edited (labels added or removed), all historical workspaces retroactively gain or lose labels — violating the "workspace YAML is self-contained at creation" invariant that the entire system relies on.
 
 **Why it happens:**
-`mock.module()` in Bun intercepts the module at the path given. It does not follow re-exports. If the production code moves and the mock stays on the old path, the mock is a no-op. The test does not error — it silently runs without the mock.
+Template-to-workspace propagation feels "obvious" when the template field already links to the template. Developers reach for runtime resolution instead of copying, reasoning that it's DRY. The existing system already has this invariant for env, hooks, and repos — but labels are a new field, and the invariant must be explicitly applied to it.
 
 **How to avoid:**
-Migrate mock.module() calls in lockstep with each module split. After each split, run the full test suite with `bun run test` (not `bun test` directly — per CLAUDE.md). Any test that calls real git operations where it previously used mocks will either (a) fail with a git error if no git repo is present, or (b) silently pass with real git state. Detect case (b) by adding an assertion that verifies the mock was called when expected.
-
-For each moved function: update every test file that mocks it, not just the primary test for that function.
+- In the workspace creation path, copy `template.labels ?? []` into `workspace.labels` before writing the YAML.
+- Merge: if the user also specified labels at creation time, union them with the template labels.
+- Treat label propagation identically to how `env` propagation is handled: deep-copy, not reference.
+- Add a test that creates a workspace from a labeled template, then mutates the template's labels, and asserts that the workspace labels are unchanged.
 
 **Warning signs:**
-- A test passes but the mock assertion (`expect(mockFn).toHaveBeenCalled()`) is absent — the test can't tell if mock was applied
-- `mock.module("@/lib/workspace-ops")` in a test file after workspace-ops is split — the old path no longer exists or no longer has the target function
-- A test that previously ran in <100ms now takes 2–5s — it is calling real git operations
+- Labels are resolved at read time via `readTemplate(ws.template)?.labels`.
+- No label fields appear in the workspace YAML written during `git-stacks new`.
+- The `WorkspaceSchema` has `labels` optional but nothing in the creation flow sets it from the template.
 
 **Phase to address:**
-Every extraction phase. Each split must include a "verify mock coverage" step: grep for `mock.module` references to the moved module path, update all hits.
+Template labels phase (likely first or second phase of v0.17.0).
 
 ---
 
-### Pitfall 3: DI Container Fights the Existing `_exec` Injection Pattern
+### Pitfall 3: Index Divergence from Disk Truth
 
 **What goes wrong:**
-The codebase already has a working, battle-tested DI pattern: modules export a mutable `_exec` object that tests replace directly. This pattern works because Bun ESM modules expose objects (not primitives), and object property mutation is visible across all importers of the same module instance.
-
-Adding a DI container (constructor injection, service locator, or factory pattern) alongside this existing pattern creates two competing systems. The new container requires tests to be written differently from the ~30 existing test files that use `_exec` property replacement. During migration, some modules use one system and some use the other. Test authors are unsure which pattern to use for new tests. Code reviewers cannot easily verify that a new module is properly testable.
-
-The deeper problem: if DI is introduced via function parameter injection (e.g., `openWorkspace(workspace, { exec, logger })`), the function signature changes. All 30+ callers in `commands/workspace.ts` and `tui/` must be updated. The TUI calls workspace-ops functions directly — changing signatures there is non-trivial because TUI components have their own calling conventions.
+An in-memory or on-disk index is populated by scanning YAML files, but the index is not updated on every write. A workspace is created (YAML written, index not updated), then an immediate `list` command reads from the stale index and omits the new workspace. Or conversely, a workspace is deleted (YAML removed) but the index still contains its entry — causing "workspace not found" errors when the index entry is acted upon.
 
 **Why it happens:**
-DI is introduced to improve testability and configurability, but the project already has testability via `_exec`. The new system is often introduced as "better" without a migration plan, leaving an inconsistent codebase where the old pattern and new pattern coexist indefinitely.
+Index updates are added at the "obvious" write sites (create, remove) but missed at rename, update (YAML patch), and clone paths. The scan-based approach is self-healing (always reads current disk state); an index trades accuracy for speed and breaks in partial-update scenarios.
 
 **How to avoid:**
-Decide on one approach before starting. Two valid options:
-
-Option A: Keep `_exec` property injection for subprocess mocking. Add a `Logger` object to modules using the same pattern:
-```ts
-export const _logger = { log: defaultLogger }  // tests replace _logger.log
-```
-This is consistent with existing patterns, requires zero changes to callers, and keeps all 800+ tests valid.
-
-Option B: Introduce parameter injection only in newly extracted modules (not in existing workspace-ops functions). New code uses the new pattern; existing code keeps `_exec`. Document the boundary clearly.
-
-Do NOT introduce a DI framework. The `_exec` pattern is already "DI" — it is constructor-free property injection. The goal is consistency, not architectural purity.
+- Make every `write*` function in `config.ts` the single update point — index write is part of the same atomic operation as the YAML write. Never update the index outside of the paired `read*/write*` functions.
+- On index read, add a staleness check: compare the workspace YAML `mtime` against the index entry's recorded `mtime`. On mismatch, fall back to direct YAML parse and repair the index.
+- Provide an explicit `rebuildIndex()` operation that `doctor --fix` can invoke.
+- Design the index as an acceleration structure, not the source of truth: every index miss falls back to a YAML scan and backfills the index.
 
 **Warning signs:**
-- A PR introduces `class WorkspaceService { constructor(exec, logger) {...} }` — class-based DI in a codebase with no existing classes
-- Function signatures for existing exported functions (openWorkspace, syncWorkspace, mergeWorkspace) change to accept a deps/context object — all callers must change
-- Two test files for the same module use different injection approaches
+- Index update logic appears in command handlers instead of in `config.ts` write functions.
+- No `mtime` or content hash stored in index entries.
+- Tests only cover the "index is warm" path; no tests for "index is empty, YAML exists".
+- `doctor` has no index integrity check.
 
 **Phase to address:**
-DI design phase — before any code is written. The decision must be documented in CLAUDE.md so all future contributors use the same pattern.
+Indexed config store phase. Needs a test proving index + scan produce identical results for all CRUD operations.
 
 ---
 
-### Pitfall 4: Structured Logging Corrupts CLI stdout and TUI Screen
+### Pitfall 4: Breaking the Integration Interface Without a Deprecation Path
 
 **What goes wrong:**
-`git-stacks` is a CLI tool. Callers pipe its output (`git-stacks list --json | jq`), script it (`if git-stacks status --json | jq '.dirty'`), and use `--json` flags for machine-readable output. Structured log output written to stdout (even in development mode) breaks these patterns. Pino and Winston default to stdout. Winston specifically defaults to `console.log` in some transports.
-
-The TUI problem is more acute: `git-stacks manage` renders an OpenTUI screen using ANSI escape sequences. Any log output written to stdout or stderr during TUI operation corrupts the terminal. The existing codebase handles this with `runHooksCaptured()` — hook output is captured, not written to the terminal. Structured logging that bypasses this mechanism (e.g., a logger that writes directly to `process.stderr`) will corrupt the screen.
-
-The `--json` flag scenario: a user runs `git-stacks status --json`. The command calls `openWorkspace` internally. If the logging library writes a JSON log line to stdout before the status output, the caller's JSON parser fails on the log line. Debug logs written to stdout in development can silently break scripted users who upgrade to a version with logging enabled.
+A "plugin contract" phase adds required fields or renames methods on the `Integration` interface — `applies()` becomes required, `configurePrompt()` gets a new required parameter, a new `capabilities` field is added. All 10 existing plugins immediately fail to compile. The fix is a grep-and-add across 10 files. If done carelessly, plugins get stub implementations that silently misbehave rather than type errors that force correctness.
 
 **Why it happens:**
-Structured logging is designed for server applications where stdout is the log stream. CLI tools have a different contract: stdout is program output, stderr is diagnostics. Logging libraries often default to stdout. Developers test with `console.log` and assume the transport is irrelevant — it is not.
+TypeScript structural typing means adding required interface members breaks all implementations immediately. Developers underestimate how many plugins implement the interface and add required fields without checking each implementation.
 
 **How to avoid:**
-All log output goes to stderr, never stdout. Use a logger that defaults to stderr or is explicitly configured to stderr:
-```ts
-const logger = pino({ level: "warn" }, pino.destination(2))  // fd 2 = stderr
-```
-
-Default log level is `warn` in production (not `info` or `debug`). Log level is controlled by `GIT_STACKS_LOG_LEVEL` env var or `--log-level` flag, defaulting to `warn`. In TUI mode (`git-stacks manage`), log level is forced to `silent` or log output is captured to a buffer — not written to stderr.
-
-The `--json` flag commands must be audited: every code path that a `--json` command calls must be verified to produce no stdout output other than the JSON payload.
+- Use optional fields with defaults in the runner. If a new field is required for correctness, add it as optional to the interface and enforce the invariant in `runner.ts` with an explicit `if (!integration.capabilities) throw ...` check on registration.
+- When a method signature changes (e.g., new required parameter), prefer adding a new optional parameter over changing the existing signature. `open(ctx, artifact, bag, opts?: RunnerOpts)` instead of changing the third parameter.
+- After adding any interface change, run `bun run typecheck` before committing. Add a "does every plugin still satisfy the interface" check.
+- For genuine breaking changes, add a migration comment in the runner: `// TODO remove in v1.0: legacy plugins may omit X`.
 
 **Warning signs:**
-- Logger transport not explicitly set to stderr — uses default (often stdout or console.log)
-- Log level defaults to `info` or `debug` in production builds
-- No test verifying that `--json` output is valid JSON (log lines would break JSON.parse)
-- TUI tests that check screen output start failing with unexpected characters after logging is added
-- Pino/Winston configured without explicit stream/transport in the logger constructor
+- `Integration` interface changes are in the same commit as plugin usage changes (masking the breakage surface).
+- New required field added to `Integration` without checking all 10 plugin files compile.
+- `configurePrompt` or `open` parameter count changes.
 
 **Phase to address:**
-Logging infrastructure phase — before any log calls are added. The transport and default level must be established once; retrofitting is error-prone.
+Plugin contract / capability phase of v0.17.0.
 
 ---
 
-### Pitfall 5: Log Volume Makes CLI Output Noisy for End Users
+### Pitfall 5: DI Container That Adds More Complexity Than It Removes
 
 **What goes wrong:**
-Structured logging is a backend pattern. Applied naively to a CLI tool, it produces output that end users see as noise. A user running `git-stacks open my-feature` does not want to see:
-```
-{"level":30,"time":1234567890,"msg":"reading workspace","name":"my-feature"}
-{"level":30,"time":1234567890,"msg":"found 3 repos","count":3}
-{"level":30,"time":1234567890,"msg":"creating worktree","path":"/workspaces/tasks/..."}
-```
-
-But log verbosity that is invisible at `warn` level is not useful for debugging. The failure mode is that developers add `logger.info(...)` at every significant step (which is correct for server apps) and then suppress all of them with a `warn` default level, making the logging investment useless for debugging actual user issues.
+A dependency injection container is introduced to wire up `logger`, `git`, `config`, and `secrets` — but it requires all callers to import a container instance, wrap every function call in a `container.get(...)`, and add new types for each service. The refactor touches 30+ files for a benefit that existing patterns (mutable `_exec` objects, `useIsolatedConfig` helper) already achieve for testing. End result: more abstraction, same testability, harder to grep call sites.
 
 **Why it happens:**
-The logging patterns from server development (log every significant state transition at `info`) are carried over without adapting to the CLI contract. The result is either: (a) a noisy tool that logs everything by default, or (b) a tool with logging infrastructure that is always silent and therefore useless.
+DI frameworks are familiar from server-side TypeScript. Developers apply them to CLI tools without accounting for the fact that CLI processes are short-lived and stateless — the "constructor injection" problem that DI solves (long-lived object graphs) does not exist in a CLI context.
 
 **How to avoid:**
-Use a tiered approach for CLI logging:
-- `error`: Failures that cause the command to fail. Always surface to stderr with user-friendly messaging (the existing discriminated union return pattern already does this).
-- `warn`: Unexpected conditions that don't fail the command but indicate something is wrong. Currently handled with `onWarn` callbacks — structured logging can replace these.
-- `debug`: Internal state transitions. Only useful with `GIT_STACKS_LOG_LEVEL=debug`. Log these liberally — they are invisible at default level.
-- No `info` level log calls in production paths — the tool already uses `onProgress` callbacks for user-facing progress output.
-
-The `onWarn` and `onProgress` callback pattern already in workspace-ops.ts is the correct user-facing output mechanism. Structured logging complements it for machine-readable debugging, not replaces it.
+- Keep the existing `_exec` injectable pattern for subprocesses. Extend it only where a new subprocess-spawning module is added.
+- For structured logging, use a simple module-level `logger` object with a replaceable `sink` function — not a DI container. `logger.sink = process.stderr.write.bind(process.stderr)` is enough; tests replace `logger.sink`.
+- DI is acceptable at the `IntegrationContext` level (already exists) where the context is passed explicitly. Do not introduce a global container.
+- If a function needs a new collaborator (e.g., a port allocator), pass it as a parameter with a sensible default: `function openWorkspace(ws, opts = { ports: defaultPortAllocator })`.
 
 **Warning signs:**
-- `logger.info(...)` calls in functions that also have `onProgress` callbacks — double-reporting the same event
-- Log messages that contain the same text as user-facing output — the logger is being used as a substitute for onProgress
-- No `GIT_STACKS_LOG_LEVEL` env var or `--log-level` flag — log level is compile-time constant
-- Default log level set to `info` — users see structured output without opting in
+- A `container.ts` or `di.ts` file is created.
+- Existing `_exec` patterns are replaced with injected service objects across the codebase.
+- `IntegrationContext` grows more than 2 new fields in a single phase.
 
 **Phase to address:**
-Logging design phase — establish the log level taxonomy before any calls are added. The `onWarn` callback pattern should be evaluated for replacement or coexistence with structured logging.
+DI / structured logging phase. Scope to "add a `logger` object and wire it to the decomposed workspace modules" — not a full DI refactor.
 
 ---
 
-### Pitfall 6: Module Split Breaks `commands/` and `tui/` Import Paths, Causing Undiscovered Failures in TUI Code Paths
+### Pitfall 6: Rollback Triggering Hooks After Partial Failure
 
 **What goes wrong:**
-`commands/workspace.ts` imports directly from `workspace-ops.ts` (openWorkspace, syncWorkspace, etc.). `tui/workspace-wizard.ts` and `tui/dashboard/` also import workspace-ops functions. When workspace-ops is split, these import paths need updating. The `commands/` updates are obvious — TypeScript will error. But the TUI code is less likely to have comprehensive test coverage for every code path (TUI tests use `testRender` + `mockInput` which covers UI flows, not necessarily every imported function from workspace-ops).
-
-The specific risk: a TUI code path imports a function that is moved to a new module. TypeScript errors on the import. The developer fixes the import path. But the moved function now has a different signature or different behavior because it was refactored during extraction. The TUI component compiles but behaves incorrectly at runtime.
+A workspace creation fails midway. The operation runner's rollback fires and removes the worktrees and YAML. However, `pre_create` hooks already ran (they ran before the git operations). The rollback does not know that hooks ran, so it does not run `pre_remove` hooks. The user's project is left in whatever state the `pre_create` hooks put it in (e.g., a database schema migration, a DNS entry, a Slack channel created). Alternatively, rollback tries to run `post_remove` hooks — but the workspace YAML no longer exists, so the hooks cannot resolve the workspace context.
 
 **Why it happens:**
-The TUI dashboard (`src/tui/dashboard/`) is a SolidJS reactive application. Reactive components are harder to test exhaustively than pure functions. The TUI test suite covers major flows but cannot cover every edge case in every reactive effect. Import updates that also include behavioral changes go unnoticed.
+Hooks and git/YAML operations are treated as equivalent steps in the rollback ledger, but hooks are opaque shell commands that may have arbitrary external side effects. Rollback cannot undo what it cannot model.
 
 **How to avoid:**
-Separate import path updates from behavioral changes. The first commit for any module split should: (1) create the new module by copy-paste from workspace-ops, (2) re-export from workspace-ops for backward compatibility, (3) update no behavior. Only after all tests pass does the second commit remove the re-export and update callers. This means the test suite validates each step independently.
-
-```ts
-// workspace-ops.ts — step 1 (still works for all callers)
-export { openWorkspace } from "./workspace-lifecycle"
-export { syncWorkspace } from "./workspace-sync"
-// ... old implementations remain as re-exports until all callers are updated
-```
+- Do not run `pre_create` hooks until after all git/YAML operations succeed. Then if git/YAML fails, hooks never ran and there is nothing to undo on the hooks side.
+- If hooks must run early (e.g., to provision external resources), document clearly that the operation is not fully atomic past the hook boundary and provide user-facing warnings.
+- The rollback runner should log "WARNING: pre_create hooks ran but cannot be automatically reversed. Manual cleanup may be required." rather than silently leaving the system in a partial state.
+- Add `GS_ROLLBACK=1` env var to any compensating hooks that do run, so hook authors can detect the rollback scenario.
 
 **Warning signs:**
-- A module split PR changes function signatures AND updates import paths in the same commit
-- TUI test coverage for the affected workspace-ops functions is below 60% — indicates missing coverage
-- No integration test that calls a workspace-ops function through the TUI code path (only unit tests of workspace-ops directly)
+- `runHooks("pre_create")` is called before `createWorktrees()` in the operation plan.
+- Rollback function has a `runHooks("post_remove")` call.
+- No test covers "pre_create hooks ran, then git op failed".
 
 **Phase to address:**
-Every extraction phase. The re-export intermediary pattern must be the standard approach for all splits.
+Operation runner phase — define a clear hook/git ordering contract before writing any rollback code.
 
 ---
 
-### Pitfall 7: DI Makes `_exec` Tests Non-Obvious — New Test Authors Use the Wrong Pattern
+### Pitfall 7: Scan-to-Index Migration Silently Dropping Entries
 
 **What goes wrong:**
-The `_exec` injectable object pattern works because it is simple: every module that spawns subprocesses exports `_exec`, and tests replace `_exec.spawn` or `_exec.run`. When DI is added (even via the consistent `_exec`-style pattern), new modules may be added over time with inconsistent injection approaches. A new contributor writing a test for `workspace-lifecycle.ts` will look at the nearest test file (possibly one that uses `mock.module()` for a different module) and use that pattern instead of `_exec` replacement. The two patterns are not mutually exclusive, but a module that can be tested via either approach will be tested via the wrong one depending on which test the author happened to look at.
-
-The deeper issue: if some module tests use `_exec` replacement and others use `mock.module()`, the test runner's mock isolation (the custom `scripts/test-runner.ts`) may not handle the combination correctly. The custom runner isolates `mock.module()`-heavy files in separate processes. If a test uses both patterns in one file, the isolation boundary becomes unclear.
+The indexed config store writes an index file to `~/.config/git-stacks/index.json`. On first run after upgrade, the index is absent and the tool tries to build it by scanning. The scan uses the current `WorkspaceSchema` which has evolved since some users' YAML files were written. Old YAML files fail Zod validation (e.g., missing new required fields) and are silently excluded from the index. Those workspaces become invisible to the indexed path but visible to the scan path — so `git-stacks list` (indexed) shows fewer workspaces than `git-stacks status` (still scan-based). User data appears lost.
 
 **Why it happens:**
-The existing codebase documents the `_exec` pattern in CLAUDE.md but does not document when to use `_exec` vs `mock.module`. New contributors use whatever pattern they see first in a nearby test file.
+Schema evolution without forward migration. The `schema_version` field exists in all workspace YAMLs but no migration functions are implemented — the comment in `config.ts` says "keyed by version" but the implementation is empty.
 
 **How to avoid:**
-Add an explicit decision rule to CLAUDE.md:
-- Use `_exec` property replacement for modules that export `_exec` (git.ts, lifecycle.ts, integration plugins)
-- Use `mock.module()` only for modules that do not export `_exec` and cannot be refactored to do so (external npm packages, config.ts I/O paths)
-- Never mix both approaches for the same module in the same test file
+- Build the index using `safeParse` with fallback: if strict parse fails, attempt a lenient parse with `.passthrough()` and include the entry with a `schema_version_mismatch: true` flag. The `doctor` command can then surface these entries.
+- Never let an index build silently drop entries — always emit a warning to stderr for each parse failure.
+- Test: corrupt one YAML in the test fixture, build the index, assert the other workspaces are still present and the corrupted one appears in a warnings list.
+- Before switching any command from scan to index, confirm that `safeParse` failures are logged and handled gracefully.
 
 **Warning signs:**
-- A test for a new workspace domain module uses `mock.module("@/lib/workspace-lifecycle")` when the module exports `_exec` — the property replacement approach would be cleaner
-- Two test files for related modules use different injection approaches with no comment explaining why
-- `scripts/test-runner.ts` isolation logic starts failing for test files that combine both patterns
+- Index build iterates YAML files and calls `WorkspaceSchema.parse()` (throwing) instead of `safeParse()`.
+- No test exercises the "one bad YAML in a directory of good ones" scenario.
+- `git-stacks doctor` has no index integrity section.
 
 **Phase to address:**
-DI design phase — document the decision rule before implementation so test authors have clear guidance.
-
----
-
-### Pitfall 8: Structured Logging Adds Latency to `getWorkspaceListInfo` (the Hot Path)
-
-**What goes wrong:**
-`getWorkspaceListInfo` is called for every workspace in `git-stacks list` and in the TUI dashboard's workspace list render. It runs `Promise.all` across repos doing dirty checks and ahead/behind computations. Adding structured log calls inside this function (even at `debug` level) adds overhead: log serialization, string formatting, and potentially I/O if the logger is not buffered. At `warn` default level this is filtered before serialization in well-implemented loggers (Pino filters before format). But if the logger is Pino with a slow transport (file, network), even `warn`-level overhead can impact the 5-minute TUI poll cycle.
-
-The more concrete risk: adding `logger.debug({ workspace, repos }, "computing ahead/behind")` inside `getWorkspaceListInfo` serializes the entire `workspace` object on every call. The workspace object includes all repo metadata. For a workspace with 5 repos, this serializes ~5KB of data per call at debug level. In the TUI, `getWorkspaceListInfo` is called on cursor movement to refresh the detail pane — user-visible latency on every arrow keypress.
-
-**Why it happens:**
-Developers add detailed debug logs inside hot loops without measuring the serialization cost. "It's only at debug level" assumes the logger filters before serialization — not all loggers do.
-
-**How to avoid:**
-Use lazy log evaluation where possible:
-```ts
-if (logger.isLevelEnabled("debug")) {
-  logger.debug({ workspaceName: workspace.name, repoCount: repos.length }, "computing ahead/behind")
-}
-```
-Or use Pino's approach where object serialization is deferred. Never log the full workspace or repo object — log only scalar identifiers. Add a performance test: `getWorkspaceListInfo` with 5 repos must complete in under 500ms with logging enabled at `debug` level.
-
-**Warning signs:**
-- `logger.debug(workspace, "...")` with the full workspace object as the first argument
-- No performance test for `getWorkspaceListInfo` latency before and after logging is added
-- TUI arrow key navigation feels sluggish after logging is introduced (noticeable in interactive testing)
-
-**Phase to address:**
-Logging implementation phase — add a performance regression test for `getWorkspaceListInfo` before adding any log calls to it.
-
----
-
-### Pitfall 9: Re-export Intermediaries Left in Place Indefinitely, Creating Import Path Confusion
-
-**What goes wrong:**
-The safe extraction pattern (see Pitfall 6) uses re-exports from `workspace-ops.ts` as an intermediary: split the module, re-export for backward compatibility, then update callers. But the "then update callers" step is often deferred because tests pass and there is no forcing function. The re-exports persist indefinitely. Three months later, `workspace-ops.ts` is a file full of re-exports that developers import from (because it still works), while the actual implementations live in `workspace-lifecycle.ts` and `workspace-sync.ts`. New functions get added to workspace-ops.ts directly (because that's where everything is imported from). The split never fully happens.
-
-The specific risk for the npm package: the published package includes all source files. Users who deep-import (`import { openWorkspace } from 'git-stacks/lib/workspace-ops'`) — unlikely but possible — will get re-exported functions. If workspace-ops.ts is eventually removed, it is a breaking change for those users.
-
-**Why it happens:**
-Re-exports are "just a one-liner" and removing them requires updating callers, which touches many files. The re-export is the path of least resistance. Without a deadline or enforcement mechanism, it stays.
-
-**How to avoid:**
-Set a maximum lifetime for re-export intermediaries: they must be removed within the same milestone that introduces them. The extraction phase and the caller-update phase are the same phase (or consecutive phases in the same PR). Use `@deprecated` JSDoc comments on re-exported functions to cause IDE warnings on the old import path:
-```ts
-/** @deprecated Import from './workspace-lifecycle' directly */
-export { openWorkspace } from "./workspace-lifecycle"
-```
-
-**Warning signs:**
-- `workspace-ops.ts` exists only as re-exports after the extraction milestone — the file was not removed or repurposed
-- New functions added to the re-export file rather than the domain module it should belong to
-- `grep "from.*workspace-ops" src/` still shows hits in commands/ and tui/ after the migration phase
-
-**Phase to address:**
-Extraction completion phase — the PR that splits the module must include the caller updates, not a separate follow-up.
-
----
-
-### Pitfall 10: Logger Instance Creation Pattern Incompatible with Bun ESM Module Caching
-
-**What goes wrong:**
-In Node.js/Bun ESM, a module is evaluated once and the result is cached. If `logger.ts` creates and exports a singleton logger instance:
-```ts
-export const logger = pino({ level: process.env.GIT_STACKS_LOG_LEVEL ?? "warn" })
-```
-The log level is set at module evaluation time, not at call time. If a test sets `process.env.GIT_STACKS_LOG_LEVEL = "debug"` after the module is imported, the logger ignores it — the level was already read. Tests that verify log output by setting an env var before a function call will fail silently (logger still at `warn`, no debug output captured).
-
-The TUI context makes this worse: the TUI imports workspace-ops which imports the logger. The logger is created with whatever log level `process.env` has at startup. There is no mechanism to change the log level once the TUI is running — a user cannot enable debug logging mid-session.
-
-**Why it happens:**
-Singleton module-level logger instances are the standard pattern in Node.js applications. They work correctly when the process starts with all configuration in place. They fail when log level needs to change dynamically (test setup, `--log-level` flag on a specific command).
-
-**How to avoid:**
-Separate logger creation from logger configuration. Create the singleton, but set the level lazily:
-```ts
-// logger.ts
-export const logger = pino()  // created at module load with default level
-
-export function configureLogger(level: string): void {
-  logger.level = level  // Pino supports dynamic level changes
-}
-```
-Call `configureLogger(process.env.GIT_STACKS_LOG_LEVEL ?? "warn")` in `src/index.ts` (the Commander entrypoint) after all environment is established. Tests call `configureLogger("debug")` before the function under test.
-
-**Warning signs:**
-- Logger level read from `process.env` at module evaluation time (top-level `const`)
-- No `configureLogger` or equivalent function in the logger module
-- Tests that set `process.env.GIT_STACKS_LOG_LEVEL` and then import the module under test — the env var change arrives too late
-
-**Phase to address:**
-Logging infrastructure phase — the lazy configuration pattern must be in the initial implementation.
+Indexed config store phase. Migration safety must be validated before the index is used in any non-read-only path.
 
 ---
 
@@ -318,13 +182,12 @@ Logging infrastructure phase — the lazy configuration pattern must be in the i
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Re-export intermediaries left indefinitely | No callers need updating immediately | workspace-ops.ts never fully decomposed; new code added to the wrong file | Never — set a removal deadline in the same milestone |
-| Mixed `_exec` and `mock.module` patterns for the same module | Test passes quickly | Test authors unsure which approach to use; isolation edge cases | Never — pick one pattern per module |
-| Logger level hardcoded at module load time | Simple singleton | Tests cannot change log level without re-importing module; `--log-level` flag ignored | Never — use lazy configuration |
-| `logger.info()` calls on the hot path (`getWorkspaceListInfo`) | Detailed observability | User-visible latency in TUI on every arrow keypress at debug level | Acceptable at debug level only if serialization is deferred/lazy |
-| Class-based DI alongside `_exec` pattern | "Modern" architecture | Two competing test patterns; callers must change signatures; TUI components affected | Never — keep property injection pattern for consistency |
-| Default log level `info` in production | More log output without configuration | Pipe-based users (`--json \| jq`) get corrupted output; TUI screen corruption | Never — default must be `warn` or `silent` |
-| Split modules with behavioral changes in same commit | Fewer commits | Cannot bisect whether breakage is from split or from behavior change | Never — separate structural changes from behavioral changes |
+| Skip rollback for read-only steps | Simpler ledger | No harm | Always — only track write steps |
+| Use `any` in CompensationStack undo closures | Less boilerplate | Closures capture mutable vars, undo acts on wrong state | Never — capture immutable values at push time |
+| Index-only mode (no fallback scan) | Faster reads | Data loss risk on partial write | Never in v0.x |
+| Add optional interface fields for plugins | No immediate breakage | Stale defaults accumulate | Acceptable with explicit TODO to make required in v1.0 |
+| Single global logger sink | Simple | Not TUI-safe if sink is stdout | Only if TUI silencing is applied before dashboard starts |
+| Propagate labels by reference to template at runtime | DRY | Violates workspace self-containment invariant | Never |
 
 ---
 
@@ -332,13 +195,12 @@ Logging infrastructure phase — the lazy configuration pattern must be in the i
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| `mock.module()` after module split | Mocking the old `workspace-ops` path when the function has moved | Update every `mock.module` path in lockstep with every function move |
-| Pino logger + TUI (OpenTUI) | Pino writes to stderr even in TUI mode; ANSI escape sequences are corrupted | Force `logger.level = "silent"` before launching the TUI renderer in `git-stacks manage` |
-| Pino logger + `--json` flag | `pino` default pretty-print transport writes to stdout | Always use `pino.destination(2)` (stderr) or explicit `stream: process.stderr` |
-| Pino with Bun | Pino's `pino/file` transport uses Node.js `worker_threads` — not available in Bun without polyfill | Use `pino({ transport: undefined })` with a custom Bun-compatible stream; avoid worker-based transports |
-| `_exec` pattern on new domain modules | New module calls `$` shell directly without exporting `_exec` | Every module that calls `$` or `Bun.spawn` must export `_exec`; tests must inject before calling any function |
-| `useIsolatedConfig` + logger | Logger singleton initialized before `useIsolatedConfig` redirects `HOME` | Create logger after config isolation is set up; or use lazy logger initialization |
-| TUI `runHooksCaptured` + logger | Logger writes to stderr during captured hooks; output mixed with capture | Logger must be silent or redirected during `runHooksCaptured` calls |
+| Git worktree rollback | Call `git worktree remove` without `--force` — fails if worktree has untracked files | Always use `--force` in rollback context; workspace creation failed, data loss is acceptable |
+| tmux session rollback | Kill a non-existent session causes error that aborts the rollback chain | Check `tmux has-session -t name` before `kill-session`; swallow "not found" errors in undo |
+| IDE artifact rollback | Delete `.code-workspace` but leave VSCode window open — next open creates a duplicate session | Log "cannot close VSCode window automatically" rather than silently deleting the artifact |
+| YAML atomic write rollback | `renameSync(tmp, dst)` already ran — rollback must delete `dst`, not `tmp` | Track the final path at push-to-ledger time, not the tmp path |
+| Plugin `commands()` registration | Registering commands inside `commands()` assumes Commander parent is set up — called before `program.parse()` | Always call `commands()` during command tree setup, not lazily |
+| Index + scan race | Index is built, then a new workspace is created by a parallel process before index is written | Index file write must be atomic (tmp+rename), same as YAML writes |
 
 ---
 
@@ -346,10 +208,11 @@ Logging infrastructure phase — the lazy configuration pattern must be in the i
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Full workspace object serialized in debug log inside `getWorkspaceListInfo` | TUI arrow-key navigation takes 200–500ms | Log only scalar identifiers; use `isLevelEnabled` guard | With logging enabled at debug level, 3+ repos |
-| Synchronous log writes on the critical path (git-stacks list) | `git-stacks list` slower than pre-logging baseline | Use async/buffered log transport; measure before/after baseline | At `info` level; any workspace with 5+ repos |
-| Multiple small modules all importing the logger singleton causes import chain delay | Cold-start latency increases by 50–100ms | Keep logger module minimal; no side effects at import time | After 10+ domain modules all import logger at startup |
-| Circular import detection at runtime (undefined values) | Random `TypeError: X is not a function` on first call | Run `madge --circular src/` before and after each split | Immediately on first test run after introducing a cycle |
+| Rebuilding index on every command | Startup latency grows linearly with workspace count | Build index once; invalidate only on writes; never scan in hot path | ~50 workspaces |
+| Running `safeParse` on every YAML for every command | `list` takes 200ms with 30 workspaces | Index stores name → filepath + mtime; full parse done on demand | ~20 workspaces |
+| Holding full `Workspace` objects in index | Index file as large as individual YAMLs combined | Index stores only name + filepath + mtime | ~100 workspaces |
+| Running integration `applies()` during index build | Imports all 10 integration modules at startup | `applies()` is workspace-context check — never call at config-scan time | Immediate |
+| Structured logger formatting every git op | Adds string overhead to every git call | Gate logging behind `GIT_STACKS_DEBUG` check before constructing log message | Imperceptible until git ops in a hot loop |
 
 ---
 
@@ -357,9 +220,10 @@ Logging infrastructure phase — the lazy configuration pattern must be in the i
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Structured log output includes workspace env vars | Secret values from `${{ op://... }}` references appear in log output | Never log `workspace.env` values; log only key names, not values |
-| Logger writes to a file in the workspace directory | Log file committed to a git repo if inside a tracked path | Default log destination is stderr; file logging requires explicit opt-in with a path outside any workspace |
-| Debug logs expose resolved secret values | Resolved plaintext secrets in log output captured by log aggregation systems | `resolveSecrets` result must never be passed to any log call; mask values in log output |
+| Labels copied from template without schema re-validation | Injected label bypasses `LabelSchema` regex if copied as raw string | Apply `LabelSchema.parse()` to each copied label at workspace creation time |
+| Rollback log written to workspace YAML | Log may contain partial git output with credentials | Rollback log goes to stderr only, never persisted to YAML |
+| Index file world-readable | Index exposes all workspace names and paths | Index written with same permissions as existing config files (user-only via umask) |
+| Plugin `configurePrompt` persists raw user input | Plugin stores uncleaned input (e.g., API tokens) in `globalConfig.integrations[id]` | Plugin must apply its own Zod schema before persisting; runner does not sanitize plugin config |
 
 ---
 
@@ -367,25 +231,23 @@ Logging infrastructure phase — the lazy configuration pattern must be in the i
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Default log level `info` — users see JSON lines in terminal | Every command outputs structured JSON to stderr; users confused | Default `warn`; users must explicitly set `GIT_STACKS_LOG_LEVEL=debug` to see internal logs |
-| Log output intermixed with `onProgress` callback output | User sees both human-readable progress AND structured log lines for the same event | Log events and progress events are distinct concerns; do not duplicate them |
-| `--log-level` flag on every subcommand vs. global flag | Users must remember to add `--log-level debug` to each specific command | Single global `--log-level` flag on the root Commander command; inherited by all subcommands |
-| Log output visible during `git-stacks manage` TUI | Screen corruption: ANSI frames mixed with JSON log lines | Detect TUI mode and force `logger.level = "silent"` before rendering starts |
+| Rollback silently succeeds with no output | User does not know if workspace was partially created or fully cleaned up | Print explicit "Creation failed — all changes rolled back." or "Creation failed — partial cleanup, manual action required." |
+| Template labels silently discarded on conflict with workspace labels | User adds labels at creation time, template labels disappear | Always union template labels + user labels; deduplicate silently |
+| Index rebuild on `doctor --fix` takes 5 seconds | User thinks the tool hung | Print "Rebuilding config index..." before starting, "Done." when finished |
+| Plugin capability contract error printed as raw TypeScript | `TypeError: integration.capabilities is undefined` in production | Validate plugin registration at startup with plain-English error: "Integration 'X' is missing required capability declaration" |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Module split: no circular imports:** Run `madge --circular src/` (or equivalent) after each split — zero cycles before merge
-- [ ] **Module split: re-exports removed:** After caller updates, workspace-ops.ts has no re-exports of moved functions — verified by grep
-- [ ] **Mock coverage: all mock.module paths updated:** After each split, `grep -r "mock.module" tests/` shows no references to moved function paths
-- [ ] **Logger: stderr transport:** Verify with a test that `git-stacks list --json 2>/dev/null` produces valid JSON — no log lines in stdout
-- [ ] **Logger: default level warn:** Run `git-stacks open <workspace>` without env vars — no log output emitted to stderr
-- [ ] **Logger: TUI silent mode:** Run `git-stacks manage` and verify no log output corrupts the screen — checked with a TUI headless test
-- [ ] **Logger: dynamic level change:** Test sets `GIT_STACKS_LOG_LEVEL=debug` then calls a function — debug log is captured
-- [ ] **DI consistency: all new modules export `_exec`:** Every new domain module that spawns subprocesses has `export const _exec = { ... }` — verified by grep
-- [ ] **`_exec` tests for new modules:** New domain modules have tests that inject `_exec` mocks — not just `mock.module` — matching existing patterns in git.test.ts and lifecycle.test.ts
-- [ ] **Hot path performance:** `getWorkspaceListInfo` benchmark (5 repos) does not regress by more than 10% after logging is added
+- [ ] **Template label propagation:** Labels appear in workspace YAML at creation — verify by reading the written YAML file, not just the in-memory struct.
+- [ ] **Rollback completeness:** Every step that writes to disk or spawns a process has a corresponding undo entry — verify by counting compensation entries against operation steps.
+- [ ] **Rollback reversal order:** Undos run in reverse of registration — verify with a test that mocks each step and asserts undo call order is reversed.
+- [ ] **Index fallback:** Deleting the index file and running `git-stacks list` produces identical output to the scan-based path — verify with a diff test.
+- [ ] **Plugin compilation:** All 10 integration plugins compile after any `Integration` interface change — verify with `bun run typecheck` in CI.
+- [ ] **Label schema enforcement:** Labels copied from templates are re-validated through `LabelSchema` — verify by placing an invalid label in a template fixture and asserting workspace creation fails with a clear error.
+- [ ] **Rollback no-throw:** Each undo step is wrapped in try/catch — verify that if the second undo throws, the third undo still runs.
+- [ ] **Index mtime check:** An index entry whose mtime differs from the current file mtime is not used — verify by writing a workspace YAML after the index is built and asserting the index re-reads the file.
 
 ---
 
@@ -393,13 +255,12 @@ Logging infrastructure phase — the lazy configuration pattern must be in the i
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Circular import introduced during split | LOW | Identify cycle with `madge --circular src/`; extract shared types to a new `workspace-types.ts`; remove cycle |
-| Mock paths not updated after split — tests pass incorrectly | MEDIUM | Add mock assertion (`toHaveBeenCalled`) to all tests that rely on mock isolation; re-run with assertions; fix paths |
-| Logger writing to stdout corrupts `--json` output | MEDIUM | Change transport to `pino.destination(2)` (stderr); re-run `--json` integration tests |
-| TUI screen corruption from logger | LOW | Add `logger.level = "silent"` guard before TUI renderer; existing TUI test suite will catch regression |
-| Re-exports left indefinitely — new code added to wrong module | MEDIUM | Identify all re-exports in workspace-ops.ts; add `@deprecated` JSDoc; enforce removal in next milestone |
-| DI and `_exec` patterns mixed — test authors confused | MEDIUM | Document decision rule in CLAUDE.md; add a lint rule or test helper that enforces pattern per module |
-| Logger level set at module load time — tests cannot control it | LOW | Add `configureLogger(level)` function; call in index.ts; update tests to call `configureLogger` instead of setting env var |
+| Partial-order rollback left orphaned worktrees | MEDIUM | `git worktree list` in each registered repo, manually prune with `git worktree remove --force <path>` |
+| Index diverged from disk | LOW | `git-stacks doctor --fix` triggers `rebuildIndex()` |
+| Labels not propagated to existing workspaces | LOW | `git-stacks label add <workspace> <label>` per workspace; no batch command needed if labels are new |
+| Plugin interface change broke a custom third-party plugin | MEDIUM | Plugin author must add the new field; document the change in CHANGELOG with before/after example |
+| Template label with illegal characters in user's YAML | LOW | Schema validation on read will error; user edits the YAML directly |
+| Rollback left YAML written but worktree absent | MEDIUM | `git-stacks doctor` detects missing worktrees; `doctor --fix` removes the orphaned YAML |
 
 ---
 
@@ -407,29 +268,25 @@ Logging infrastructure phase — the lazy configuration pattern must be in the i
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Circular imports from module split | Phase 1: intra-module dependency graph before any splitting | `madge --circular src/` returns zero cycles after each split commit |
-| Mock paths not updated after split | Every extraction phase — lockstep with each function move | grep for mock.module references to moved paths returns zero hits |
-| DI fights `_exec` pattern | DI design phase — decision documented in CLAUDE.md before code written | All new modules follow same injection pattern as git.ts and lifecycle.ts |
-| Logger corrupts stdout / TUI | Logging infrastructure phase — transport and default level fixed before any log calls | `--json` output parses as valid JSON; TUI headless tests pass |
-| Log verbosity noise for users | Logging design phase — taxonomy established before calls added | Default `warn` level: no output on a clean `git-stacks list` run |
-| Logger level baked at module load | Logging infrastructure phase — lazy configuration from the start | Test: set env var after import → `configureLogger` still changes the level |
-| Re-exports left indefinitely | Extraction completion phase — callers updated in same PR | `grep "from.*workspace-ops" src/` returns only legitimate imports, not re-exported moved functions |
-| Module split with behavioral changes | Every extraction phase — structural change and behavior change in separate commits | Each split commit: only file moves + re-exports; behavioral changes in subsequent commits |
-| Full workspace object in debug log | Logging implementation phase — performance test for `getWorkspaceListInfo` before adding log calls | Benchmark: `getWorkspaceListInfo(workspace, 5 repos)` < 500ms at debug level |
-| Logger incompatible with Bun ESM | Logging infrastructure phase — test with Bun specifically (not Node.js) | Pino logger works in Bun without worker_threads; `bun run test` passes with logger imported |
+| Rollback out-of-order | Operation runner (define CompensationStack type first) | Unit test: 3-step op, middle fails, assert undo call order is [3, 2, 1] |
+| Labels not copied at creation | Template labels propagation | Integration test: create workspace from labeled template, mutate template, assert workspace labels unchanged |
+| Index divergence | Indexed config store | Diff test: `listWorkspaces()` via index === `listWorkspaces()` via scan for all CRUD ops |
+| Breaking plugin interface | Plugin contracts / capability phase | `bun run typecheck` passes with all 10 plugins after interface change |
+| Over-engineered DI | DI + logging (scope-gate: only logger + 5 modules) | No `container.ts` file exists; `_exec` pattern unchanged |
+| Hooks running before git ops | Operation runner | Test: pre_create mock hook ran, git op fails, assert post_remove hook NOT called |
+| Index dropping Zod-invalid entries | Indexed config store (migration safety) | Test: one bad YAML in fixture, index build completes, warning emitted, other workspaces present |
+| Label schema bypass | Template labels | Test: invalid label in template YAML, workspace creation returns Zod error |
 
 ---
 
 ## Sources
 
-- `src/lib/workspace-ops.ts` — 1735 lines; imports from config, git, lifecycle, integrations/runner, files, ports, secrets — full import graph analyzed
-- `tests/lib/workspace-ops.test.ts` — `mock.module("@/lib/lifecycle")`, `_exec` injection, `useIsolatedConfig` patterns — test architecture confirmed
-- `CLAUDE.md` — `_exec` injection pattern documentation; `mock.module` vs `_exec` usage notes; TUI `runHooksCaptured` requirement; Bun APIs (no Node.js compat required)
-- Bun ESM module caching behavior — module evaluated once; singleton values set at evaluation time; dynamic `process.env` changes after import do not affect existing module-level constants
-- Pino documentation — `logger.level` is dynamically settable post-creation; `pino.destination(fd)` for file descriptor targeting; `pino/file` transport uses worker_threads (incompatible with Bun without polyfill)
-- TypeScript circular import behavior — `tsc --noEmit` does not error on circular imports; runtime undefined values are the symptom; `madge` is the detection tool
-- Commander.js global flag inheritance — root-level `.option()` is inherited by all subcommands; subcommand-level options are not available on the root command
+- Direct codebase analysis: `src/lib/config.ts`, `src/lib/integrations/types.ts`, `src/lib/labels.ts`, `.planning/PROJECT.md`
+- Established invariants from CLAUDE.md: workspace YAML self-containment, atomic writes, `_exec` injectable pattern, scan-based lookup behavior
+- Pattern: LIFO compensation stacks — standard in saga/transaction patterns for distributed systems, applicable to multi-step CLI ops
+- Pattern: index-as-cache (not source of truth) — mtime-based invalidation is the simplest correct approach for a single-user CLI
+- Known anti-pattern: DI containers in short-lived CLI processes (documented in many Go/Rust CLI codebases)
 
 ---
-*Pitfalls research for: core engine extraction (workspace-ops.ts split), DI pattern consistency, structured logging for Bun CLI*
+*Pitfalls research for: git-stacks v0.17.0 Engine Hardening & Template Labels*
 *Researched: 2026-04-05*

@@ -1,174 +1,177 @@
 # Project Research Summary
 
-**Project:** git-stacks — core engine extraction + observability
-**Domain:** TypeScript CLI refactoring: module decomposition, dependency injection, structured logging
+**Project:** git-stacks v0.17.0 — Engine Hardening & Template Labels
+**Domain:** CLI workspace manager — structural hardening of an existing Bun/TypeScript CLI tool
 **Researched:** 2026-04-05
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This milestone is a pure refactoring engagement on a stable, shipping CLI tool. The primary objective is breaking `workspace-ops.ts` (1,735 lines, 35 exports) into domain-cohesive modules without regressing any of the 800+ existing tests and without changing the public API seen by `commands/` and `tui/` consumers. Research confirms the decomposition is low-risk when done incrementally using the re-export facade pattern: each domain module is extracted one at a time with a `workspace-ops.ts` re-export shim maintaining backward compatibility, the full test suite runs after every step, and callers are updated only after all modules are stable. The natural boundary analysis produces four domain modules (`workspace-state`, `workspace-env`, `workspace-git`, `workspace-yaml`) with `workspace-ops.ts` retained as a thin orchestrator for the five lifecycle operations (open/close/clean/remove/merge) that require cross-cutting coordination.
+git-stacks v0.17.0 is a hardening milestone on a stable, shipping CLI tool. Research confirms that all four capability areas — template label propagation, operation runner with rollback, indexed config store, and integration plugin contracts — are implementable entirely with existing dependencies. No new packages are needed. The additions are structural TypeScript patterns: a LIFO compensation stack for rollback, a module-level `Map` for config caching, a `capabilities` field on the `Integration` interface, and a label merge in the workspace creation path.
 
-Observability is added via LogTape (`@logtape/logtape@^2.0.5`), the only net-new dependency this milestone introduces. It is the correct choice over pino and winston: zero dependencies, Bun-native, library-first design means log calls are no-ops when `configure()` is never called, and activation is gated on a `GIT_STACKS_DEBUG` environment variable. This prevents any output pollution of the CLI's stdout contract (`--json` piping) and avoids TUI screen corruption. The existing `_exec` mutable object pattern for subprocess injection is extended to new modules unchanged — no DI framework, no decorator requirement, no signature changes to existing exported functions.
+The recommended approach is incremental delivery ordered by dependency and blast radius. Template labels and DI/logging additions are pure additions with zero risk to existing behavior. Plugin contracts require touching 10 files but are mechanical and additive. Config indexing and operation-runner wiring into `workspace-lifecycle.ts` are the highest-risk changes and must ship as discrete phases with regression coverage before combining. The facade signature of `workspace-ops.ts` must remain unchanged throughout — callers (command handlers, TUI dashboard) should see no API changes.
 
-The single greatest risk is correctness of the `mock.module()` paths in the test suite during extraction. When functions move files, test mocks targeting the old module path silently stop applying — tests can pass while calling real git operations. Prevention is mechanical: every extraction commit must include a grep-and-update pass on all `mock.module` references to the moved path. A secondary risk is circular imports during splitting; the dependency graph must be mapped before any code moves, and domain modules must import only from the stable leaf modules (`config.ts`, `git.ts`, `lifecycle.ts`) — never from each other.
+The dominant risks are correctness details, not technical complexity: rollback undo order must be strictly LIFO; the config index must be read-only with YAML as source of truth; labels must be snapshot-copied at creation time (not resolved at runtime via the template reference); and interface additions must remain optional until all 10 plugins are updated. Each risk has a specific test that proves prevention — those tests are the acceptance criteria.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The base stack (Bun, TypeScript ^6.0.2, Commander.js ^14.0.3, Zod ^4.3.4, yaml ^2.8.3, SolidJS + OpenTUI, @clack/prompts ^1.2.0) is unchanged. The only addition is `@logtape/logtape@^2.0.5`. No DI framework additions; the established `_exec` mutable object export pattern handles all subprocess injection needs. No barrel files for new domain modules (per existing CLAUDE.md convention).
+The stack is unchanged. All v0.17.0 work ships in existing packages: Bun (runtime), TypeScript ^6.0.2 (strict mode), Zod ^4.3.6 (schema validation; already used for all config; v4 metadata API available for plugin contract schemas), yaml ^2.8.3 (config I/O), and @logtape/logtape ^2.0.5 (structured logging; `withContext()` via AsyncLocalStorage is available in the installed version for per-operation log correlation). Avoiding new dependencies is a deliberate constraint — sub-100ms CLI startup and zero-build Bun execution are incompatible with saga engines, DI containers, or embedded databases.
 
-**Core technologies:**
-- `@logtape/logtape@^2.0.5`: structured debug logging — zero-dep, Bun-native, no-op when unconfigured; library-first design fits CLI tools exactly
-- `_exec` mutable object pattern (no new dep): subprocess injection for new domain modules — already battle-tested in `lifecycle.ts`, `niri.ts`, `tmux.ts`, `cmux.ts`, `aerospace.ts`
-- `performance.now()` (Bun built-in): operation timing in debug output — zero-cost, no dependency
+**Core technologies (v0.17.0 relevant):**
+- Zod ^4.3.6: plugin contract schema validation via `parseConfig()` per integration; already installed; v4 discriminated unions used for operation result types
+- @logtape/logtape ^2.0.5: extend `timeOperation()` from `observability.ts` to cover operation runner steps; `withContext()` available for per-operation correlation at no extra cost
+- Bun `$` shell: unchanged for git operations; `_exec` injectable pattern extended to `lifecycle.ts` to close a DI gap
 
 **Explicitly rejected:**
-- pino: worker thread transport incompatible with Bun; maintainers explicitly scope to Node.js only (confirmed issue #2060)
-- winston: heavy, server-oriented, no Bun support
-- tsyringe/InversifyJS: requires `experimentalDecorators` + `emitDecoratorMetadata`, incompatible with TypeScript ^6.x and Bun's zero-build execution
+- Temporal / NestJS sagas: durable execution requires external server; wrong abstraction layer for a CLI process that lives under one second
+- xstate: state machine overhead for a linear step sequence; adds heavy dependency for zero benefit
+- better-sqlite3 / LevelDB: schema migrations, binary dependency, startup cost for a dataset of dozens of YAML records
+- tsyringe / InversifyJS: requires `experimentalDecorators`; conflicts with Bun's zero-build TS execution and TypeScript ^6.x
 
 ### Expected Features
 
 **Must have (table stakes):**
-- Domain module split — `workspace-ops.ts` split into 4 focused modules; `workspace-ops.ts` re-exports all 35 public symbols; zero caller changes in phase 1
-- Stable public API facade — all existing command and TUI import paths continue working without modification
-- `_exec` pattern on all new subprocess-spawning modules — every new domain module that calls `$` or `Bun.spawn` exports `_exec`
-- Cascade ordering preserved — `remove → clean → close` chain keeps `_executeClose`/`_executeClean` private in `workspace-ops.ts`, not in extracted domain modules
-- All 800+ existing tests pass — the test suite is the sole acceptance criterion
-- `GS_DEBUG=1` trace output — stderr-only, zero stdout pollution, zero output when env var absent
+- Template label CLI (`template label add/remove/list/clear`) — symmetry with existing workspace label commands; users expect parity
+- Template labels propagate to workspace at `new` and `clone` time — workspace YAML must be self-contained at creation; runtime template lookup violates the existing invariant
+- `--label` filter on `template list` — `matchesLabels()` already exists; wire it up
+- Rollback on partial workspace creation failure — orphan worktrees on failed `new` are a known correctness bug; multi-step ops need a compensation ledger
+- Indexed workspace/template lookups — repeated `readdirSync` + full parse on every call is measurable at 50+ workspaces; TUI dashboard polls on keypress
+- Integration plugin capability declarations — runner uses duck-typing today; explicit `capabilities` field enables doctor checks and removes optional-chain guards from the runner
 
 **Should have (differentiators):**
-- Operation timing in debug output — `performance.now()` before/after major steps; `[domain] step: Xms` format to stderr
-- Unit tests for extracted module helpers — `workspace-env`, `workspace-state` etc. as separate files enable focused unit tests without real git repos
+- Rollback progress visible to user — "Rolling back: removed worktree for api" on stderr; reuses existing `onProgress` callback channel, no new plumbing
+- `GS_DEBUG` module filter (`GS_DEBUG=lifecycle,git`) — targeted debug without noise from all modules
+- Plugin capability introspection via `integration list` — useful for plugin authors and `doctor` output
 
 **Defer (v2+):**
-- Structured `ProgressCallback` type (`{ phase, repo?, message }`) — breaking change to all TUI consumers; deserves its own milestone
-- `GS_DEBUG=open,sync` namespace filtering — only needed once `GS_DEBUG=1` proves its value
+- TUI label management panel — depends on OpenTUI input components; add-on after core is solid
+- On-disk index file persistence — only needed at 50+ workspaces; in-memory index sufficient for v0.17.0
+- Shell completion for label values — requires reading all labels at completion time; low priority until label adoption grows
 
 ### Architecture Approach
 
-`workspace-ops.ts` becomes a thin lifecycle orchestrator retaining only the five operations requiring cross-cutting coordination (open/close/clean/remove/merge) plus `renameWorkspace`. Everything else is extracted to domain modules that `workspace-ops.ts` re-exports during transition, then callers are updated and re-exports removed within the same milestone. Domain modules import only from stable leaf modules; no cross-domain imports between new modules.
+The architecture is layered and stable. v0.17.0 adds two new modules (`src/lib/operation-runner.ts`, `src/lib/config-index.ts`) and modifies eight existing files (`workspace-lifecycle.ts`, `config.ts`, `observability.ts`, `lifecycle.ts`, `integrations/types.ts`, `integrations/runner.ts`, `commands/label.ts`, `commands/doctor.ts`) plus the 10 plugin files and `tui/workspace-clone.ts`. The facade layer (`workspace-ops.ts`) is intentionally unchanged — same exported function signatures, same return types throughout.
 
-**Major components after decomposition:**
-1. `workspace-state.ts` — read-only queries: list info, status, dirty checks, CWD detection; imports only config.ts + git.ts
-2. `workspace-env.ts` — GS_* env var assembly, secret resolution, .env file writes; `resolveWorkspaceEnvVars` stays private (not exported)
-3. `workspace-git.ts` — multi-repo sync/push/pull; exports `_exec` for test injection; SyncRow/PushRow types must be re-exported from workspace-ops.ts facade (App.tsx imports them by that path)
-4. `workspace-yaml.ts` — YAML editor utilities, rename-template, validate schemas; spawns `$EDITOR` via `_exec`
-5. `workspace-ops.ts` (retained) — lifecycle orchestrator: open/close/clean/remove/merge/rename; imports all four domain modules; `_executeClose`/`_executeClean` stay private here
+**New modules:**
+1. `src/lib/operation-runner.ts` — step sequencing with LIFO compensation stack; domain-agnostic (steps are closures; runner knows only `{name, run, rollback}`); emits progress via callback; exports `_exec` for test injection
+2. `src/lib/config-index.ts` — in-memory `Map<name, {filePath, mtime, data}>` for workspaces and templates; read-only cache with mtime-based staleness detection; invalidated via write functions in `config.ts`
+
+**Modified components:**
+3. `workspace-lifecycle.ts` — internal step composition replaced by `runOperation()` calls; public API and return types unchanged
+4. `config.ts` — write functions call `invalidateWorkspace()`/`invalidateTemplate()` after atomic YAML write; read functions delegate to `config-index.ts` with scan fallback
+5. `integrations/types.ts` — `Capability` type added; `capabilities?: Capability[]` and `isolatedFailure?: boolean` on `Integration` interface (additive, optional)
+6. `integrations/runner.ts` — isolated failure wrapping in `open()` call; capability-based guard logic
+7. `label.ts` — template label subcommands added in parallel to existing workspace label structure
+8. `tui/workspace-clone.ts` — copy `source.labels` into clone YAML (one-line addition; already partially handled in `workspace-wizard.ts` for new path)
 
 ### Critical Pitfalls
 
-1. **Circular imports created during split** — map intra-module dependency graph before writing any code; domain modules import from stable leaves only (`config.ts`, `git.ts`, `lifecycle.ts`); run `madge --circular src/` after each split commit; symptom is silent TypeScript compilation but runtime `TypeError: X is not a function`
+1. **Rollback out of order** — push compensation entries with `stack.push()` immediately after each successful forward step; drain with `while (stack.length) stack.pop().undo()` (LIFO, not FIFO). Each undo must be wrapped in try/catch so a failing undo does not abort subsequent undos. Proven by: 3-step test where middle step fails and undo call order is asserted as `[step3, step2]` not `[step1, step2]`.
 
-2. **Mock paths not updated in lockstep** — when a function moves files, `mock.module("@/lib/workspace-ops")` calls in tests silently stop intercepting it; grep for mock.module references to every moved path after every extraction commit; tests passing while calling real git are the hardest failure mode to detect
+2. **Labels resolved at runtime instead of copied at creation** — `workspace.labels` must contain the merged label array in the written YAML, not a reference to the template. Template mutation must not retroactively change existing workspace labels. Proven by: create workspace from labeled template, mutate template labels, read workspace YAML, assert workspace labels unchanged.
 
-3. **Structured logging corrupts stdout/TUI** — all log output to stderr only, never stdout; default level `warn`; force `logger.level = "silent"` before TUI renderer starts; `--json` output must parse as valid JSON with `2>/dev/null` suppressing stderr
+3. **Index divergence from disk** — index is read-only; YAML is the source of truth. Every `write*` function in `config.ts` calls `invalidate*()` after the atomic rename. Index entries include `mtime`; stale entries trigger a re-parse. Failing YAML parses during index build use `safeParse` with a fallback entry and a stderr warning — no silent drops. Proven by a diff test: `listWorkspaces()` via index must equal `listWorkspaces()` via scan for all CRUD operations.
 
-4. **Re-export intermediaries left indefinitely** — re-exports accumulate and workspace-ops.ts never fully decomposes; the extraction phase and caller-update phase must be in the same milestone, not deferred
+4. **Breaking the Integration interface** — new fields must be optional on the interface; enforcement goes in the runner (`if (!integration.capabilities) throw new Error(...)`). Run `bun run typecheck` after any interface change with all 10 plugin files in scope. Signature changes to `open()`, `generate()`, or `commands()` are forbidden in this milestone.
 
-5. **Logger level baked at module evaluation time** — ESM caches the module; `process.env` changes after import are invisible to a singleton created at top-level; use lazy `configureLogger()` called from `src/index.ts` after environment is established
+5. **Hooks running before git ops creating unrollback-able state** — `pre_create` hooks must run after worktree creation, not before. If git ops fail before hooks run, rollback has nothing to undo on the hooks side. The hook/git ordering contract must be documented before writing any rollback code. Add `GS_ROLLBACK=1` env var to any compensating context so hook authors can detect rollback scenarios.
 
 ## Implications for Roadmap
 
-The extraction order is determined by which domain modules have the fewest dependencies on other new modules. State queries have none; env has none but is depended on by lifecycle; git and yaml are independent of each other. Logging infrastructure must be established before any log calls are added. Re-export shims must be removed within the same milestone.
+Architecture research provides an explicit build order with risk ratings (LOW/MEDIUM/HIGH per step). The suggested phase structure follows that dependency order, grouping zero-risk additions early and deferring the highest-risk lifecycle rewrite until prior phases provide coverage and infrastructure.
 
-### Phase 1: Extract workspace-state.ts
-**Rationale:** Lowest-risk entry point — pure read-only query functions, no side effects, no subprocess spawning, no dependencies on other new domain modules. A problem here is immediately visible in tests with no confounding factors.
-**Delivers:** `getWorkspaceListInfo`, `getWorkspaceStatus`, `getDirtyWorktrees`, `detectWorkspaceFromCwd`, and associated types moved to `workspace-state.ts`; re-exported from `workspace-ops.ts`; full test suite passes
-**Addresses:** Domain module split (table stakes), stable public API facade
-**Avoids:** Circular imports (no cross-domain deps possible at this stage)
+### Phase 1: Template Label CLI and Propagation
+**Rationale:** Zero-risk additions; schema already supports labels on both `TemplateSchema` and `WorkspaceSchema`; `matchesLabels()` already exists. Highest user-visible feature per unit of implementation risk. Unblocks every downstream feature that references template labels, and creates regression coverage for the creation path that Phase 5 will later refactor.
+**Delivers:** `template label add/remove/list/clear` commands; `--label` filter on `template list`; labels snapshot-copied into workspace YAML at `new` time; labels copied at `clone` time
+**Addresses:** All P1 label features from FEATURES.md; symmetry expectation from users
+**Avoids:** Labels-as-runtime-reference pitfall (Pitfall 2); label schema bypass (re-validate via `LabelSchema.parse()` on each copied value)
+**Research flag:** None — direct extension of existing pattern with no unknowns
 
-### Phase 2: Extract workspace-env.ts
-**Rationale:** The env module is consumed by all lifecycle operations but has no dependency on other new domain modules. Extracting it second means the most-depended-upon shared utility is isolated early, enabling remaining splits to import from it cleanly.
-**Delivers:** `mergeEnv`, `buildBaseEnv`, `buildRepoEnv`, `buildWorkspaceEnv`, `writeEnvFiles` in `workspace-env.ts`; `resolveWorkspaceEnvVars` stays private; `openWorkspace` in workspace-ops.ts imports from the new module
-**Uses:** secrets.ts, ports.ts (stable leaves — no new cross-domain deps)
-**Avoids:** Exposing `resolveWorkspaceEnvVars` as public API (implementation detail of `buildWorkspaceEnv`)
+### Phase 2: DI Seams and Structured Logging
+**Rationale:** Pure additions to two files (`lifecycle.ts` and `observability.ts`); no behavior change; creates test infrastructure that Phase 5 (operation runner) depends on. Doing this before the operation runner ensures rollback closures are written with proper `_exec` injection from the start rather than retrofitted.
+**Delivers:** `_exec.spawn` injectable seam in `lifecycle.ts`; optional `context?: Record<string, string | number | boolean>` parameter on `logDebug()` in `observability.ts`
+**Addresses:** DI and structured logging features from FEATURES.md (P2 priority)
+**Avoids:** DI container pitfall (Pitfall 5); rollback closures bypassing `_exec` (ARCHITECTURE.md Anti-Pattern 4)
+**Research flag:** None — established codebase pattern; two-file addition
 
-### Phase 3: Extract workspace-git.ts
-**Rationale:** sync/push/pull are independent of lifecycle operations and share no code with env or state. Medium risk due to stash restore logic in syncWorkspace — extract after env module is stable since sync uses env utilities.
-**Delivers:** `syncWorkspace`, `pushWorkspace`, `pullWorkspace`, SyncRow/PushRow/PullRow types in `workspace-git.ts`; `_exec` exported for test injection; types re-exported from workspace-ops.ts facade
-**Implements:** `_exec` pattern on new module (App.tsx imports SyncRow/PushRow by name from `workspace-ops` — must re-export)
-**Avoids:** Pitfall 2 (update mock.module paths for syncWorkspace/pushWorkspace tests)
+### Phase 3: Integration Plugin Capability Contracts
+**Rationale:** Interface change touches 10 plugin files but is purely additive (optional fields with runner-side enforcement). Must be done before Phase 5 (operation runner) because the runner's isolated failure handling reads `integration.isolatedFailure`. Also enables `doctor.ts` capability-driven checks.
+**Delivers:** `Capability` type in `types.ts`; `capabilities` and `isolatedFailure` fields on `Integration`; isolated failure wrapping in `runner.ts`; capability-driven checks in `doctor.ts` replacing ad-hoc per-plugin binary checks
+**Addresses:** Integration plugin contract features from FEATURES.md
+**Avoids:** Breaking interface pitfall (Pitfall 4); duck-typing fragility in runner
+**Research flag:** None — additive interface extension enforced at compile time with `bun run typecheck`
 
-### Phase 4: Extract workspace-yaml.ts
-**Rationale:** YAML editor utilities and rename-template have no dependencies on other new modules. Low risk. `renameTemplate` touches `listWorkspaces` from config.ts — must verify this does not create a cycle (it won't; config.ts is a stable leaf).
-**Delivers:** `editWorkspaceYaml`, `editTemplateYaml`, `editGlobalConfigYaml`, `editRegistryYaml`, `openYamlInEditor`, `renameTemplate` in `workspace-yaml.ts`; `_exec` exported for editor spawn
-**Avoids:** Moving `_executeClose`/`_executeClean` out of workspace-ops.ts (they are not independently callable)
+### Phase 4: Indexed Config Store
+**Rationale:** Self-contained new module with clear fallback semantics. Must be validated in isolation before Phase 5 (operation runner) depends on fast lookups during rollback execution. Migration safety (Pitfall 7: schema-invalid YAML silently dropped from index) requires specific test coverage before any command switches to the indexed path.
+**Delivers:** `src/lib/config-index.ts` with mtime-based cache; `config.ts` write functions call invalidation; `listWorkspaces()` and `readWorkspace()` delegate to cache with scan fallback; `doctor --fix` triggers `rebuildIndex()`
+**Addresses:** Indexed lookup features from FEATURES.md; TUI dashboard polling performance
+**Avoids:** Index divergence pitfall (Pitfall 3); silent entry dropping on Zod parse failure (Pitfall 7); write-through cache anti-pattern (ARCHITECTURE.md Anti-Pattern 2)
+**Research flag:** None for the pattern; implementation requires a diff-test proving index === scan for all CRUD operations before Phase 5 starts. TUI long-lived process cache invalidation is an acknowledged gap (see Gaps section).
 
-### Phase 5: Clean up workspace-ops.ts + update callers
-**Rationale:** After phases 1-4, workspace-ops.ts retains only lifecycle operations and re-export shims. This phase removes shims, updates all call sites in `commands/` and `tui/`, and extracts the shared `execHooks` helper that is currently copy-pasted ~15 times across lifecycle functions.
-**Delivers:** workspace-ops.ts at ~700 lines (down from 1,735); re-export shims removed; all callers import from correct module paths; grep `from.*workspace-ops` in `src/` returns only legitimate lifecycle imports; `execHooks` shared helper eliminates 15x duplication
-**Avoids:** Pitfall 9 (re-exports left indefinitely)
-
-### Phase 6: Logging infrastructure
-**Rationale:** Logging infrastructure must be established before any log calls are added — transport, default level, lazy configuration, and TUI silent mode must all be wired upfront. Adding calls before this is in place causes immediate stdout corruption or TUI breakage.
-**Delivers:** `src/lib/logger.ts` with `setupLogging()` / `configureLogger(level)`; `@logtape/logtape` installed; `GIT_STACKS_DEBUG` env var activates debug output to stderr; TUI mode forces silent level; `--json` output verified clean (parses as valid JSON with `2>/dev/null`)
-**Uses:** @logtape/logtape@^2.0.5
-**Avoids:** Pitfall 4 (stdout/TUI corruption), Pitfall 10 (level baked at module load time)
-
-### Phase 7: Add debug instrumentation to domain modules
-**Rationale:** With infrastructure in place, add `logger.debug()` calls to domain modules for operation tracing and per-step timing. All log calls are additive with zero impact at the default `warn` level.
-**Delivers:** `[lifecycle]`, `[git]`, `[env]`, `[state]` labeled debug output; `performance.now()` timing per major step; zero observable change for users without `GIT_STACKS_DEBUG=1`
-**Avoids:** Pitfall 5 (log verbosity noise — no `logger.info()` on production paths); Pitfall 8 (hot path serialization — log only scalar identifiers in `getWorkspaceListInfo`, never full workspace objects)
+### Phase 5: Operation Runner with Rollback
+**Rationale:** Highest-risk change — modifies the core workspace creation path in `workspace-lifecycle.ts`. Placed last because it depends on DI seams (Phase 2), integration contracts (Phase 3 provides `isolatedFailure`), and benefits from the indexed config (Phase 4). Requires the most test coverage before shipping.
+**Delivers:** `src/lib/operation-runner.ts` with LIFO compensation stack; `workspace-lifecycle.ts` refactored to use `runOperation()`; user-visible rollback progress messages via existing `onProgress` channel; `workspace-ops.ts` facade signature unchanged
+**Addresses:** Rollback on partial failure (P1 table stakes from FEATURES.md); structured progress visibility
+**Avoids:** Rollback out-of-order pitfall (Pitfall 1); hooks-before-git-ops ordering pitfall (Pitfall 6); god-object runner anti-pattern (steps are closures, runner knows only `{name, run, rollback}`); rollback closures bypassing `_exec` (Anti-Pattern 4)
+**Research flag:** Consider `/gsd-research-phase` during planning for integration-specific rollback edge cases: git worktree `--force` semantics, tmux `has-session` guard before `kill-session`, VSCode artifact vs window state mismatch, YAML atomic write rollback path (Pitfall noted in PITFALLS.md Integration Gotchas section).
 
 ### Phase Ordering Rationale
 
-- Phases 1-4 are ordered by dependency depth: state (no deps on new modules) → env (depended-on by lifecycle) → git (independent) → yaml (independent). Each phase is independently reviewable and reverts cleanly.
-- Phase 5 completes the extraction before logging is added — callers must use correct import paths before log labels reference module identity.
-- Phase 6 (logging infra) always precedes Phase 7 (log calls). Transport, default level, and TUI-silent configuration must exist before any call sites are added.
-- The re-export facade approach means phases 1-4 carry zero risk to `commands/` or `tui/` — they are not touched until phase 5.
+- Labels first: independent, high-value, low-risk, exercises the creation path that Phase 5 later refactors — tests become regression coverage.
+- DI seams before operation runner: rollback closures must use `_exec` from the start, not retrofitted after the fact.
+- Plugin contracts before operation runner: runner's isolated failure path reads `integration.isolatedFailure`; capability checks in `doctor.ts` are coherent before rollback adds another failure surface.
+- Config index before operation runner: multi-step ops and rollback must not trigger repeated directory scans; the index fallback semantics must be proven stable before being used under rollback conditions.
+- Operation runner last: widest blast radius; all prior phases provide infrastructure, test coverage, and reduced unknowns.
 
 ### Research Flags
 
-Standard patterns (skip research phase for all phases):
-- **Phases 1-4:** Module extraction; patterns fully documented in ARCHITECTURE.md with explicit build order and code examples derived from direct codebase analysis
-- **Phase 5:** Caller update pass; mechanical grep-and-replace with full test suite as safety net
-- **Phase 6:** LogTape configuration fully documented in STACK.md with exact code snippets; official docs verified at HIGH confidence
-- **Phase 7:** Instrumentation follows from Phase 6 infrastructure; no unknowns
+Phases likely needing deeper research during planning:
+- **Phase 5 (Operation Runner):** Integration-specific rollback closures (tmux, VSCode, niri/aerospace, YAML atomic write path) have documented edge cases in PITFALLS.md but exact guard conditions are not yet enumerated. Recommend a planning research pass enumerating rollback closures for each of the 10 integrations before implementation begins.
 
-No phases require `/gsd-research-phase`. All implementation patterns are resolved. The only validation needed is runtime: `madge --circular src/` returns zero cycles after each extraction commit, and `--json` output parses cleanly after Phase 6.
+Phases with standard patterns (skip research phase):
+- **Phase 1 (Template Labels):** Purely extends existing pattern; `matchesLabels()`, `LabelSchema`, and both Zod schemas are in place. Wizard propagation already works at line 390-391 of `workspace-wizard.ts` for the `new` path.
+- **Phase 2 (DI/Logging):** Documented codebase pattern; two-file addition; zero behavior change.
+- **Phase 3 (Plugin Contracts):** TypeScript interface extension; additive with compile-time enforcement.
+- **Phase 4 (Config Index):** Standard mtime-based read cache; pattern is well-understood and fully reversible by disabling delegation in `config.ts`.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | LogTape verified against official docs + GitHub; pino Bun incompatibility confirmed in upstream issue tracker; `_exec` DI pattern verified against existing production code in lifecycle.ts, niri.ts |
-| Features | HIGH | Based on direct codebase analysis of workspace-ops.ts (1,735 lines) and all 6+ import sites; no speculation or inference |
-| Architecture | HIGH | Based on direct code reading of workspace-ops.ts, commands/workspace.ts, tui/dashboard/App.tsx, lifecycle.ts; dependency graph confirmed by inspection |
-| Pitfalls | HIGH | Grounded in direct reads of workspace-ops.test.ts mock patterns, CLAUDE.md conventions, Bun ESM module caching behavior, and TypeScript circular import behavior |
+| Stack | HIGH | Verified against `bun.lock`, official LogTape and Zod v4 docs, and existing source files; all alternatives explicitly rejected with sourced rationale |
+| Features | HIGH | Derived from direct codebase analysis; existing Zod schemas confirm the implementation gap is narrow; `matchesLabels()` and label commands are already in place |
+| Architecture | HIGH | Primary sources are the actual source files; build order verified against real import dependencies with risk ratings from the architecture researcher |
+| Pitfalls | HIGH | Grounded in direct codebase invariants from CLAUDE.md and concrete test prescriptions; each pitfall includes a specific test that proves prevention |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **`openWorkspace` internal complexity (~186 lines):** App.tsx reimplements parts of openWorkspace inline for step-level TUI progress, directly importing `createWorktree`, `runHooksCaptured`, `applyFileOpsForRepo`, `runIntegrationGenerate`. The boundary between what stays in workspace-ops.ts vs. what App.tsx calls directly must be validated during Phase 5 cleanup — not a decomposition blocker but needs explicit attention.
+- **Hook ordering contract for operation runner:** PITFALLS.md identifies that `pre_create` hooks must run after git ops, not before, but the current `workspace-lifecycle.ts` interleaves hooks and git operations. The exact ordering contract must be decided and documented before Phase 5 implementation begins. The planning phase for Phase 5 should produce a step-order diagram mapping the current lifecycle flow to the new operation runner step array.
 
-- **`renameTemplate` dependency chain:** ARCHITECTURE.md notes `renameTemplate` touches `listWorkspaces`. Verify during Phase 4 that this resolves to config.ts (a stable leaf), not to any new domain module, before coding. Should be clean but confirm.
+- **Integration-specific rollback semantics:** PITFALLS.md notes that tmux session kill, VSCode window artifact deletion, and git worktree force-remove each have edge cases (non-existent session check, open window state, untracked files). These are identified but the exact guard conditions are not enumerated per integration. Phase 5 planning should enumerate rollback closures for each of the 10 integrations before implementation.
 
-- **Performance baseline for `getWorkspaceListInfo`:** No existing benchmark. Establish baseline before adding any log calls. PITFALLS.md warns that serializing the full workspace object on TUI arrow-key navigation causes visible latency — log only scalar identifiers there (workspace.name, repo count, not the full objects).
+- **TUI dashboard cache invalidation for external edits:** The dashboard runs as a long-lived process and polls `listWorkspaces()` via SolidJS reactive accessors. Once `config-index.ts` is in place, external YAML edits (user directly editing `~/.config/git-stacks/workspaces/*.yml`) will not invalidate the in-process cache. This is acceptable for the CLI (short-lived) but the dashboard is long-lived. Phase 4 planning should decide whether to add a polling invalidation strategy or document this as a known limitation.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `src/lib/workspace-ops.ts` — full 1,735-line analysis; domain boundary identification; import graph
-- `src/commands/workspace.ts` — all import sites confirmed
-- `src/tui/dashboard/App.tsx` — 9 function + 3 type imports from workspace-ops; inline reimplementation of openWorkspace noted (lines 26-53)
-- `src/lib/lifecycle.ts` — `_exec` pattern canonical reference (139 lines, full read)
-- https://logtape.org/manual/config — configureSync(), sink setup
-- https://logtape.org/manual/struct — getLogger(), structured logging API
-- https://github.com/dahlia/logtape — v2.0.5 confirmed latest stable
-- https://github.com/pinojs/pino/issues/2060 — pino maintainer closes Bun/Deno issues as out of scope
+- `/home/nnex/dev/prj/git-stacks/src/lib/config.ts` — Zod schemas, scan-based lookup, write paths (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/types.ts` — Integration interface structure (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/runner.ts` — orchestration logic (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/workspace-lifecycle.ts` — lifecycle step composition (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/lib/observability.ts` — LogTape wrapper API (direct read)
+- `/home/nnex/dev/prj/git-stacks/src/tui/workspace-wizard.ts` — existing label propagation at lines 390-391 (direct read)
+- `/home/nnex/dev/prj/git-stacks/bun.lock` — confirms `@logtape/logtape@2.0.5` and `zod@4.3.6` (direct read)
+- `https://logtape.org/manual/contexts` — `withContext()` API for AsyncLocalStorage-based log correlation
+- `https://zod.dev/v4` — Zod 4 discriminated unions and metadata registry
 
 ### Secondary (MEDIUM confidence)
-- https://logtape.org/comparison — LogTape vs pino/winston comparison; library-first philosophy rationale
-- https://github.com/vktrl/bun-plugin-pino — existence confirms pino Bun incompatibility is real
-- https://github.com/lirantal/nodejs-cli-apps-best-practices — stderr for debug, env var debug convention
-- https://dev.to/saber-amani/how-to-break-up-god-objects-strategies-for-clean-backend-architecture-5ala — extract by domain not layer
-
-### Tertiary (LOW confidence)
-- TypeScript/Bun ESM circular import runtime behavior (undefined values at startup) — documented in TypeScript and Bun specs; validate with `madge --circular` during implementation rather than relying solely on documentation
+- `.planning/PROJECT.md` — v0.17.0 milestone goals (project planning document)
+- `PROJECT-DIRECTION.md` — author architectural intent for plugin contracts and capability declarations
+- `CLAUDE.md` — established invariants: atomic writes, `_exec` injectable pattern, workspace YAML self-containment
 
 ---
 *Research completed: 2026-04-05*
