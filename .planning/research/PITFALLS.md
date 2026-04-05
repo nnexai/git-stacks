@@ -1,323 +1,316 @@
 # Pitfalls Research
 
-**Domain:** CLI workspace manager — adding push, ahead/behind tracking, labels, secret resolution, and auto-stash to a git worktree multi-repo manager
-**Researched:** 2026-04-03
-**Confidence:** HIGH — grounded in direct reads of `src/lib/git.ts` (existing primitives), `src/lib/workspace-ops.ts` (syncWorkspace, mergeWorkspace, getWorkspaceListInfo patterns), `FEATURES.md` (full v0.14.0 design specs), `PROJECT.md` (system constraints, existing hook/env pipeline), and verified against git documentation and community sources
+**Domain:** TypeScript CLI refactoring — extracting a 1735-line monolithic module, adding DI, and structured logging to a working Bun CLI with 800+ tests and existing npm users
+**Researched:** 2026-04-05
+**Confidence:** HIGH — grounded in direct reads of `src/lib/workspace-ops.ts` (1735 lines, imports from config/git/lifecycle/integrations/files/ports/secrets), `tests/lib/workspace-ops.test.ts` (mock.module patterns, _exec injection, useIsolatedConfig), `CLAUDE.md` (conventions, test isolation architecture), and cross-referenced with TypeScript module system behavior and structured logging ecosystem patterns
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: `--force-with-lease` Defeated by Background Fetch
+### Pitfall 1: Circular Imports Created During Module Split
 
 **What goes wrong:**
-`git push --force-with-lease` only protects against overwriting remote commits that the _local remote-tracking ref_ does not show. If anything runs `git fetch` in the background after the local tracking ref was established but before the push fires, `--force-with-lease` uses the newly fetched ref as its expectation, making it functionally equivalent to `--force`. A user on a branch with a CI bot, another developer, or any other fetch-triggering process can have their remote commits silently overwritten.
+`workspace-ops.ts` currently imports from `config.ts`, `git.ts`, `lifecycle.ts`, `integrations/runner.ts`, `files.ts`, `ports.ts`, and `secrets.ts`. When splitting workspace-ops into domain modules (e.g., `workspace-lifecycle.ts`, `workspace-sync.ts`, `workspace-env.ts`), the new modules typically need shared types from each other and from config.ts. This creates circular import chains: `workspace-lifecycle.ts` → `workspace-env.ts` → `workspace-lifecycle.ts`. TypeScript compiles circular imports silently. Bun executes them with undefined values for the circular dependency at startup, causing runtime errors that are not caught by `tsc --noEmit`.
 
-In this codebase specifically: `fetchOrigin()` is called during `syncWorkspace` in the same code path. If `pushWorkspace` runs immediately after a sync (the designed workflow: sync → push), the fetch that sync triggered has updated the remote-tracking refs. `--force-with-lease` after that fetch will allow the push to overwrite new remote commits that appeared _after_ the fetch but before the push.
+The specific risk here: `openWorkspace` calls `buildWorkspaceEnv`, which calls `mergeEnv`, and `mergeEnv` needs `Workspace` type from config. If `buildWorkspaceEnv` is extracted to `workspace-env.ts` and `openWorkspace` stays in `workspace-lifecycle.ts`, then any shared type from `workspace-env.ts` imported by `workspace-lifecycle.ts` creates a cycle if `workspace-env.ts` imports `workspace-lifecycle.ts` types.
 
 **Why it happens:**
-Developers believe `--force-with-lease` is always safe. The protection is real but narrowly scoped: it checks the _local tracking ref_, not the current remote state. Any fetch in the pipeline resets the tracking ref, removing the protection window.
+The original monolith has no import cycles because everything is in one file. When splitting, developers extract the functions they want and then add the imports they need. The imports form a web that was previously invisible because it was all in one module scope.
 
 **How to avoid:**
-Use `--force-with-lease=<refname>:<expected-sha>` (the explicit form) rather than bare `--force-with-lease`. Capture the SHA of `origin/<branch>` before any fetch, and pass it as the expected value:
+Before splitting, draw the dependency graph: for each function in workspace-ops.ts, list what it imports from _other functions in workspace-ops.ts_ (not external modules). Extract shared types and pure utilities to a separate `workspace-types.ts` or keep them in `config.ts`. The rule: domain modules import from config/git/lifecycle (the stable leaves), not from each other. If two new modules need each other, the shared part belongs in a third module or back in config.ts.
 
-```ts
-const expectedSha = await $`git -C ${repoPath} rev-parse origin/${branch}`.quiet().nothrow()
-// ... do not fetch between here and the push ...
-await $`git push --force-with-lease=${branch}:${expectedSha} origin ${branch}`
+```
+Allowed: workspace-lifecycle.ts → config.ts, git.ts, lifecycle.ts
+Allowed: workspace-sync.ts → config.ts, git.ts, workspace-env.ts
+NOT ALLOWED: workspace-lifecycle.ts → workspace-sync.ts → workspace-lifecycle.ts
 ```
 
-If using bare `--force-with-lease`, document the narrow protection window clearly. For the MVP, bare `--force-with-lease` is acceptable given the single-developer use case, but must not be described as "safe force push" in help text without qualification.
-
 **Warning signs:**
-- `pushWorkspace` calls `fetchOrigin` before executing the push (breaks lease protection)
-- `--force-with-lease` described as unconditionally safe in `--help` output
-- No test verifying `--force-with-lease` is rejected when remote has a commit the local ref doesn't know about
+- A new module imports from another new module that imports back from the first
+- `tsc --noEmit` passes but runtime throws "Cannot read property X of undefined" on a well-tested code path
+- `bun run test` shows a test file importing two new modules where one worked before and both work in isolation but fail together
 
 **Phase to address:**
-Push implementation phase. The git primitive `pushBranch` must either document the limitation or use the explicit SHA form.
+Phase 1 of extraction — before writing any code, produce the intra-module dependency graph of workspace-ops.ts. This is the architectural decision that determines all splitting boundaries.
 
 ---
 
-### Pitfall 2: Parallel Push Race on Shared Git Object Database
+### Pitfall 2: Tests Break Because Import Paths Changed but mock.module() Calls Did Not
 
 **What goes wrong:**
-`pushWorkspace` runs `Promise.all` across repos (by design — they are "independent"). In a git worktree setup, all worktrees share the same `.git` object database and reflog. Running concurrent `git push` commands across multiple worktrees of the _same repo_ (if a template has the same repo in two modes, or if two workspace push calls fire simultaneously) can hit lock contention on the shared index and ref files, producing `cannot lock ref` or `fatal: unable to auto-detect email address` errors from the second concurrent push.
+The test suite uses `mock.module("@/lib/workspace-ops", ...)` and `mock.module("@/lib/lifecycle", ...)` to inject test doubles. When workspace-ops is split into `workspace-lifecycle.ts`, `workspace-sync.ts`, etc., any test that imports a specific function from the old path will fail with "module not found." But more insidiously: tests that mock the OLD path will silently stop applying their mocks. The production code now imports from the new path. The mock targets the old path. The mock does nothing. Tests that relied on mock isolation will now call real git operations and fail unpredictably — or worse, silently call real git operations in CI and pass because the git environment happens to be in the right state.
 
-The more common failure: two `git push` processes against the _same remote_ with different branches (frontend, api, shared — all pushing to the same `origin`) can trigger rate limiting, credential prompts, or SSH multiplexer contention on the remote side.
+This codebase has approximately 30 test files with `mock.module()` calls. At least workspace-ops.test.ts explicitly restores lifecycle via `mock.module("@/lib/lifecycle")`. If `workspace-lifecycle.ts` imports lifecycle directly (not via workspace-ops), then the workspace-ops mock.module call no longer intercepts lifecycle calls.
 
 **Why it happens:**
-`Promise.all` is natural for independent I/O operations. The repos are independent at the workspace level, but git's underlying transport layer (SSH connection pooling, HTTP credential caching, `.git/config` lock) is shared per repo origin. For worktrees of the _same repo_, the shared object database creates a hard concurrency constraint.
+`mock.module()` in Bun intercepts the module at the path given. It does not follow re-exports. If the production code moves and the mock stays on the old path, the mock is a no-op. The test does not error — it silently runs without the mock.
 
 **How to avoid:**
-Keep `Promise.all` for pushes across _different repos_ (different remotes, different `.git` directories). Do not run concurrent pushes for multiple worktrees of the same underlying repo. The current workspace model rarely has two worktrees of the same repo, but the code should guard this:
+Migrate mock.module() calls in lockstep with each module split. After each split, run the full test suite with `bun run test` (not `bun test` directly — per CLAUDE.md). Any test that calls real git operations where it previously used mocks will either (a) fail with a git error if no git repo is present, or (b) silently pass with real git state. Detect case (b) by adding an assertion that verifies the mock was called when expected.
+
+For each moved function: update every test file that mocks it, not just the primary test for that function.
+
+**Warning signs:**
+- A test passes but the mock assertion (`expect(mockFn).toHaveBeenCalled()`) is absent — the test can't tell if mock was applied
+- `mock.module("@/lib/workspace-ops")` in a test file after workspace-ops is split — the old path no longer exists or no longer has the target function
+- A test that previously ran in <100ms now takes 2–5s — it is calling real git operations
+
+**Phase to address:**
+Every extraction phase. Each split must include a "verify mock coverage" step: grep for `mock.module` references to the moved module path, update all hits.
+
+---
+
+### Pitfall 3: DI Container Fights the Existing `_exec` Injection Pattern
+
+**What goes wrong:**
+The codebase already has a working, battle-tested DI pattern: modules export a mutable `_exec` object that tests replace directly. This pattern works because Bun ESM modules expose objects (not primitives), and object property mutation is visible across all importers of the same module instance.
+
+Adding a DI container (constructor injection, service locator, or factory pattern) alongside this existing pattern creates two competing systems. The new container requires tests to be written differently from the ~30 existing test files that use `_exec` property replacement. During migration, some modules use one system and some use the other. Test authors are unsure which pattern to use for new tests. Code reviewers cannot easily verify that a new module is properly testable.
+
+The deeper problem: if DI is introduced via function parameter injection (e.g., `openWorkspace(workspace, { exec, logger })`), the function signature changes. All 30+ callers in `commands/workspace.ts` and `tui/` must be updated. The TUI calls workspace-ops functions directly — changing signatures there is non-trivial because TUI components have their own calling conventions.
+
+**Why it happens:**
+DI is introduced to improve testability and configurability, but the project already has testability via `_exec`. The new system is often introduced as "better" without a migration plan, leaving an inconsistent codebase where the old pattern and new pattern coexist indefinitely.
+
+**How to avoid:**
+Decide on one approach before starting. Two valid options:
+
+Option A: Keep `_exec` property injection for subprocess mocking. Add a `Logger` object to modules using the same pattern:
+```ts
+export const _logger = { log: defaultLogger }  // tests replace _logger.log
+```
+This is consistent with existing patterns, requires zero changes to callers, and keeps all 800+ tests valid.
+
+Option B: Introduce parameter injection only in newly extracted modules (not in existing workspace-ops functions). New code uses the new pattern; existing code keeps `_exec`. Document the boundary clearly.
+
+Do NOT introduce a DI framework. The `_exec` pattern is already "DI" — it is constructor-free property injection. The goal is consistency, not architectural purity.
+
+**Warning signs:**
+- A PR introduces `class WorkspaceService { constructor(exec, logger) {...} }` — class-based DI in a codebase with no existing classes
+- Function signatures for existing exported functions (openWorkspace, syncWorkspace, mergeWorkspace) change to accept a deps/context object — all callers must change
+- Two test files for the same module use different injection approaches
+
+**Phase to address:**
+DI design phase — before any code is written. The decision must be documented in CLAUDE.md so all future contributors use the same pattern.
+
+---
+
+### Pitfall 4: Structured Logging Corrupts CLI stdout and TUI Screen
+
+**What goes wrong:**
+`git-stacks` is a CLI tool. Callers pipe its output (`git-stacks list --json | jq`), script it (`if git-stacks status --json | jq '.dirty'`), and use `--json` flags for machine-readable output. Structured log output written to stdout (even in development mode) breaks these patterns. Pino and Winston default to stdout. Winston specifically defaults to `console.log` in some transports.
+
+The TUI problem is more acute: `git-stacks manage` renders an OpenTUI screen using ANSI escape sequences. Any log output written to stdout or stderr during TUI operation corrupts the terminal. The existing codebase handles this with `runHooksCaptured()` — hook output is captured, not written to the terminal. Structured logging that bypasses this mechanism (e.g., a logger that writes directly to `process.stderr`) will corrupt the screen.
+
+The `--json` flag scenario: a user runs `git-stacks status --json`. The command calls `openWorkspace` internally. If the logging library writes a JSON log line to stdout before the status output, the caller's JSON parser fails on the log line. Debug logs written to stdout in development can silently break scripted users who upgrade to a version with logging enabled.
+
+**Why it happens:**
+Structured logging is designed for server applications where stdout is the log stream. CLI tools have a different contract: stdout is program output, stderr is diagnostics. Logging libraries often default to stdout. Developers test with `console.log` and assume the transport is irrelevant — it is not.
+
+**How to avoid:**
+All log output goes to stderr, never stdout. Use a logger that defaults to stderr or is explicitly configured to stderr:
+```ts
+const logger = pino({ level: "warn" }, pino.destination(2))  // fd 2 = stderr
+```
+
+Default log level is `warn` in production (not `info` or `debug`). Log level is controlled by `GIT_STACKS_LOG_LEVEL` env var or `--log-level` flag, defaulting to `warn`. In TUI mode (`git-stacks manage`), log level is forced to `silent` or log output is captured to a buffer — not written to stderr.
+
+The `--json` flag commands must be audited: every code path that a `--json` command calls must be verified to produce no stdout output other than the JSON payload.
+
+**Warning signs:**
+- Logger transport not explicitly set to stderr — uses default (often stdout or console.log)
+- Log level defaults to `info` or `debug` in production builds
+- No test verifying that `--json` output is valid JSON (log lines would break JSON.parse)
+- TUI tests that check screen output start failing with unexpected characters after logging is added
+- Pino/Winston configured without explicit stream/transport in the logger constructor
+
+**Phase to address:**
+Logging infrastructure phase — before any log calls are added. The transport and default level must be established once; retrofitting is error-prone.
+
+---
+
+### Pitfall 5: Log Volume Makes CLI Output Noisy for End Users
+
+**What goes wrong:**
+Structured logging is a backend pattern. Applied naively to a CLI tool, it produces output that end users see as noise. A user running `git-stacks open my-feature` does not want to see:
+```
+{"level":30,"time":1234567890,"msg":"reading workspace","name":"my-feature"}
+{"level":30,"time":1234567890,"msg":"found 3 repos","count":3}
+{"level":30,"time":1234567890,"msg":"creating worktree","path":"/workspaces/tasks/..."}
+```
+
+But log verbosity that is invisible at `warn` level is not useful for debugging. The failure mode is that developers add `logger.info(...)` at every significant step (which is correct for server apps) and then suppress all of them with a `warn` default level, making the logging investment useless for debugging actual user issues.
+
+**Why it happens:**
+The logging patterns from server development (log every significant state transition at `info`) are carried over without adapting to the CLI contract. The result is either: (a) a noisy tool that logs everything by default, or (b) a tool with logging infrastructure that is always silent and therefore useless.
+
+**How to avoid:**
+Use a tiered approach for CLI logging:
+- `error`: Failures that cause the command to fail. Always surface to stderr with user-friendly messaging (the existing discriminated union return pattern already does this).
+- `warn`: Unexpected conditions that don't fail the command but indicate something is wrong. Currently handled with `onWarn` callbacks — structured logging can replace these.
+- `debug`: Internal state transitions. Only useful with `GIT_STACKS_LOG_LEVEL=debug`. Log these liberally — they are invisible at default level.
+- No `info` level log calls in production paths — the tool already uses `onProgress` callbacks for user-facing progress output.
+
+The `onWarn` and `onProgress` callback pattern already in workspace-ops.ts is the correct user-facing output mechanism. Structured logging complements it for machine-readable debugging, not replaces it.
+
+**Warning signs:**
+- `logger.info(...)` calls in functions that also have `onProgress` callbacks — double-reporting the same event
+- Log messages that contain the same text as user-facing output — the logger is being used as a substitute for onProgress
+- No `GIT_STACKS_LOG_LEVEL` env var or `--log-level` flag — log level is compile-time constant
+- Default log level set to `info` — users see structured output without opting in
+
+**Phase to address:**
+Logging design phase — establish the log level taxonomy before any calls are added. The `onWarn` callback pattern should be evaluated for replacement or coexistence with structured logging.
+
+---
+
+### Pitfall 6: Module Split Breaks `commands/` and `tui/` Import Paths, Causing Undiscovered Failures in TUI Code Paths
+
+**What goes wrong:**
+`commands/workspace.ts` imports directly from `workspace-ops.ts` (openWorkspace, syncWorkspace, etc.). `tui/workspace-wizard.ts` and `tui/dashboard/` also import workspace-ops functions. When workspace-ops is split, these import paths need updating. The `commands/` updates are obvious — TypeScript will error. But the TUI code is less likely to have comprehensive test coverage for every code path (TUI tests use `testRender` + `mockInput` which covers UI flows, not necessarily every imported function from workspace-ops).
+
+The specific risk: a TUI code path imports a function that is moved to a new module. TypeScript errors on the import. The developer fixes the import path. But the moved function now has a different signature or different behavior because it was refactored during extraction. The TUI component compiles but behaves incorrectly at runtime.
+
+**Why it happens:**
+The TUI dashboard (`src/tui/dashboard/`) is a SolidJS reactive application. Reactive components are harder to test exhaustively than pure functions. The TUI test suite covers major flows but cannot cover every edge case in every reactive effect. Import updates that also include behavioral changes go unnoticed.
+
+**How to avoid:**
+Separate import path updates from behavioral changes. The first commit for any module split should: (1) create the new module by copy-paste from workspace-ops, (2) re-export from workspace-ops for backward compatibility, (3) update no behavior. Only after all tests pass does the second commit remove the re-export and update callers. This means the test suite validates each step independently.
 
 ```ts
-// Group repos by main_path (same main_path = same .git object store)
-// Push groups sequentially; push within-group sequentially too
-const groups = groupBy(worktreeRepos, r => r.main_path)
-for (const group of Object.values(groups)) {
-  await Promise.all(group.map(repo => pushBranch(repo.task_path, ...)))
+// workspace-ops.ts — step 1 (still works for all callers)
+export { openWorkspace } from "./workspace-lifecycle"
+export { syncWorkspace } from "./workspace-sync"
+// ... old implementations remain as re-exports until all callers are updated
+```
+
+**Warning signs:**
+- A module split PR changes function signatures AND updates import paths in the same commit
+- TUI test coverage for the affected workspace-ops functions is below 60% — indicates missing coverage
+- No integration test that calls a workspace-ops function through the TUI code path (only unit tests of workspace-ops directly)
+
+**Phase to address:**
+Every extraction phase. The re-export intermediary pattern must be the standard approach for all splits.
+
+---
+
+### Pitfall 7: DI Makes `_exec` Tests Non-Obvious — New Test Authors Use the Wrong Pattern
+
+**What goes wrong:**
+The `_exec` injectable object pattern works because it is simple: every module that spawns subprocesses exports `_exec`, and tests replace `_exec.spawn` or `_exec.run`. When DI is added (even via the consistent `_exec`-style pattern), new modules may be added over time with inconsistent injection approaches. A new contributor writing a test for `workspace-lifecycle.ts` will look at the nearest test file (possibly one that uses `mock.module()` for a different module) and use that pattern instead of `_exec` replacement. The two patterns are not mutually exclusive, but a module that can be tested via either approach will be tested via the wrong one depending on which test the author happened to look at.
+
+The deeper issue: if some module tests use `_exec` replacement and others use `mock.module()`, the test runner's mock isolation (the custom `scripts/test-runner.ts`) may not handle the combination correctly. The custom runner isolates `mock.module()`-heavy files in separate processes. If a test uses both patterns in one file, the isolation boundary becomes unclear.
+
+**Why it happens:**
+The existing codebase documents the `_exec` pattern in CLAUDE.md but does not document when to use `_exec` vs `mock.module`. New contributors use whatever pattern they see first in a nearby test file.
+
+**How to avoid:**
+Add an explicit decision rule to CLAUDE.md:
+- Use `_exec` property replacement for modules that export `_exec` (git.ts, lifecycle.ts, integration plugins)
+- Use `mock.module()` only for modules that do not export `_exec` and cannot be refactored to do so (external npm packages, config.ts I/O paths)
+- Never mix both approaches for the same module in the same test file
+
+**Warning signs:**
+- A test for a new workspace domain module uses `mock.module("@/lib/workspace-lifecycle")` when the module exports `_exec` — the property replacement approach would be cleaner
+- Two test files for related modules use different injection approaches with no comment explaining why
+- `scripts/test-runner.ts` isolation logic starts failing for test files that combine both patterns
+
+**Phase to address:**
+DI design phase — document the decision rule before implementation so test authors have clear guidance.
+
+---
+
+### Pitfall 8: Structured Logging Adds Latency to `getWorkspaceListInfo` (the Hot Path)
+
+**What goes wrong:**
+`getWorkspaceListInfo` is called for every workspace in `git-stacks list` and in the TUI dashboard's workspace list render. It runs `Promise.all` across repos doing dirty checks and ahead/behind computations. Adding structured log calls inside this function (even at `debug` level) adds overhead: log serialization, string formatting, and potentially I/O if the logger is not buffered. At `warn` default level this is filtered before serialization in well-implemented loggers (Pino filters before format). But if the logger is Pino with a slow transport (file, network), even `warn`-level overhead can impact the 5-minute TUI poll cycle.
+
+The more concrete risk: adding `logger.debug({ workspace, repos }, "computing ahead/behind")` inside `getWorkspaceListInfo` serializes the entire `workspace` object on every call. The workspace object includes all repo metadata. For a workspace with 5 repos, this serializes ~5KB of data per call at debug level. In the TUI, `getWorkspaceListInfo` is called on cursor movement to refresh the detail pane — user-visible latency on every arrow keypress.
+
+**Why it happens:**
+Developers add detailed debug logs inside hot loops without measuring the serialization cost. "It's only at debug level" assumes the logger filters before serialization — not all loggers do.
+
+**How to avoid:**
+Use lazy log evaluation where possible:
+```ts
+if (logger.isLevelEnabled("debug")) {
+  logger.debug({ workspaceName: workspace.name, repoCount: repos.length }, "computing ahead/behind")
 }
 ```
-
-In practice: `Promise.all` across repos with distinct `main_path` values is safe. Add the guard anyway — defensive coding against future template configurations.
+Or use Pino's approach where object serialization is deferred. Never log the full workspace or repo object — log only scalar identifiers. Add a performance test: `getWorkspaceListInfo` with 5 repos must complete in under 500ms with logging enabled at `debug` level.
 
 **Warning signs:**
-- `Promise.all(worktreeRepos.map(repo => pushBranch(repo.task_path, ...)))` with no deduplication on `main_path`
-- No test for the case where two repos share a `main_path`
+- `logger.debug(workspace, "...")` with the full workspace object as the first argument
+- No performance test for `getWorkspaceListInfo` latency before and after logging is added
+- TUI arrow key navigation feels sluggish after logging is introduced (noticeable in interactive testing)
 
 **Phase to address:**
-Push implementation phase. The grouping logic goes in `pushWorkspace` in `workspace-ops.ts`.
+Logging implementation phase — add a performance regression test for `getWorkspaceListInfo` before adding any log calls to it.
 
 ---
 
-### Pitfall 3: Ahead/Behind Counts Silent Zero When Remote-Tracking Ref Missing
+### Pitfall 9: Re-export Intermediaries Left in Place Indefinitely, Creating Import Path Confusion
 
 **What goes wrong:**
-`getCommitsAhead(repoPath, "origin/main", "HEAD")` returns `0` when `rev-list --count` fails with exit code non-zero. `getCommitsBehind` (already in `git.ts`) uses the same pattern. The failure path returns `0` silently. If a worktree's remote-tracking ref for `origin/<baseBranch>` does not exist — because the repo has never been fetched, the remote was renamed, or the base branch was deleted on the remote — the count silently reports `0 ahead, 0 behind`. The TUI and `list` command then show "clean" status for a repo that has never synced with the remote.
+The safe extraction pattern (see Pitfall 6) uses re-exports from `workspace-ops.ts` as an intermediary: split the module, re-export for backward compatibility, then update callers. But the "then update callers" step is often deferred because tests pass and there is no forcing function. The re-exports persist indefinitely. Three months later, `workspace-ops.ts` is a file full of re-exports that developers import from (because it still works), while the actual implementations live in `workspace-lifecycle.ts` and `workspace-sync.ts`. New functions get added to workspace-ops.ts directly (because that's where everything is imported from). The split never fully happens.
 
-This is especially common for **newly added repos** or repos where `fetchOrigin` has not run since the worktree was created.
+The specific risk for the npm package: the published package includes all source files. Users who deep-import (`import { openWorkspace } from 'git-stacks/lib/workspace-ops'`) — unlikely but possible — will get re-exported functions. If workspace-ops.ts is eventually removed, it is a breaking change for those users.
 
 **Why it happens:**
-`rev-list` with a missing ref exits non-zero. The error-to-zero fallback is a reasonable "don't crash" choice, but it conflates two distinct states: "truly zero distance from remote" and "remote ref unknown." The `aheadBehindStale` flag in the spec is meant to address this, but only for the case of a stale fetch, not a missing ref entirely.
+Re-exports are "just a one-liner" and removing them requires updating callers, which touches many files. The re-export is the path of least resistance. Without a deadline or enforcement mechanism, it stays.
 
 **How to avoid:**
-Before calling `rev-list`, verify the remote-tracking ref exists with `checkRemoteTrackingRef` (already in `git.ts`). If it does not exist, return a distinct sentinel rather than `0`:
-
+Set a maximum lifetime for re-export intermediaries: they must be removed within the same milestone that introduces them. The extraction phase and the caller-update phase are the same phase (or consecutive phases in the same PR). Use `@deprecated` JSDoc comments on re-exported functions to cause IDE warnings on the old import path:
 ```ts
-// In getCommitsAhead / getCommitsBehind, or in the caller:
-const hasRef = await checkRemoteTrackingRef(repoPath, baseBranch)
-if (!hasRef) return null  // null = "unknown", not 0 = "up to date"
+/** @deprecated Import from './workspace-lifecycle' directly */
+export { openWorkspace } from "./workspace-lifecycle"
 ```
 
-Surface `null` in the TUI as `?` or `—` rather than `↑0 ↓0`. The `aheadBehindStale` flag should also be set to `true` when any repo returns `null`.
-
 **Warning signs:**
-- `getCommitsAhead` returns `0` and the caller does not distinguish this from a ref-missing failure
-- `WorkspaceListInfo.aheadBehindStale` is only set based on `FETCH_HEAD` mtime, not on missing ref detection
-- TUI shows `↑0 ↓0` for a freshly cloned worktree that has never fetched
+- `workspace-ops.ts` exists only as re-exports after the extraction milestone — the file was not removed or repurposed
+- New functions added to the re-export file rather than the domain module it should belong to
+- `grep "from.*workspace-ops" src/` still shows hits in commands/ and tui/ after the migration phase
 
 **Phase to address:**
-Ahead/behind implementation phase. The `null` return type must be part of the primitive signature from the start — changing it later requires updating all callers.
+Extraction completion phase — the PR that splits the module must include the caller updates, not a separate follow-up.
 
 ---
 
-### Pitfall 4: FETCH_HEAD mtime Staleness Check Unreliable Across Worktrees
+### Pitfall 10: Logger Instance Creation Pattern Incompatible with Bun ESM Module Caching
 
 **What goes wrong:**
-The spec uses `FETCH_HEAD` mtime (15-minute threshold) to determine `aheadBehindStale`. In a git worktree setup, `FETCH_HEAD` lives in the main `.git` directory (e.g. `{workspace_root}/main/{repo}/.git/FETCH_HEAD`), not in the worktree's `.git` file (which is just a reference to the main `.git` dir). The worktree task path is `{workspace_root}/tasks/{workspace}/{repo}/` — a git worktree, not a clone. Reading `FETCH_HEAD` from the worktree path resolves correctly only if the path resolution follows the `.git` file link to the main `.git` dir.
-
-Additionally, `FETCH_HEAD` is written by `git fetch origin` regardless of which worktree triggered the fetch. If any worktree (or a background IDE process) fetches the same repo, `FETCH_HEAD` mtime resets, making all worktrees appear "fresh" even if the specific workspace branch has not been updated.
-
-**Why it happens:**
-FETCH_HEAD as a staleness proxy is a common shortcut, but in worktree setups the path is non-obvious. Most developers writing `join(repoPath, ".git", "FETCH_HEAD")` will compute the wrong path for a worktree because the worktree's `.git` is a file (not a directory) containing `gitdir: /path/to/main/.git/worktrees/name`.
-
-**How to avoid:**
-Resolve the actual `GIT_DIR` for a worktree using:
+In Node.js/Bun ESM, a module is evaluated once and the result is cached. If `logger.ts` creates and exports a singleton logger instance:
 ```ts
-const gitDirResult = await $`git -C ${repoPath} rev-parse --git-common-dir`.quiet().nothrow()
-const commonGitDir = gitDirResult.stdout.toString().trim()
-const fetchHeadPath = join(commonGitDir, "FETCH_HEAD")
+export const logger = pino({ level: process.env.GIT_STACKS_LOG_LEVEL ?? "warn" })
 ```
+The log level is set at module evaluation time, not at call time. If a test sets `process.env.GIT_STACKS_LOG_LEVEL = "debug"` after the module is imported, the logger ignores it — the level was already read. Tests that verify log output by setting an env var before a function call will fail silently (logger still at `warn`, no debug output captured).
 
-`--git-common-dir` (not `--git-dir`) returns the shared `.git` directory for all worktrees of a repo. Use this as the base for the FETCH_HEAD mtime check.
-
-**Warning signs:**
-- FETCH_HEAD path constructed as `join(repoPath, ".git", "FETCH_HEAD")` — wrong for worktrees
-- `statSync` throwing ENOENT on a worktree (the `.git` entry is a file, not a dir)
-- `aheadBehindStale` reports true for worktrees even immediately after a fresh fetch
-
-**Phase to address:**
-Ahead/behind implementation phase. Test `checkRemoteTrackingRef` against a worktree path (not a main clone path) to catch the path resolution issue early.
-
----
-
-### Pitfall 5: Secret Values Written to Workspace YAML on Certain Error Paths
-
-**What goes wrong:**
-The spec states: "resolved values are never written back to the workspace YAML." This is correct for the happy path. The failure mode is in error-recovery paths: if `openWorkspace` catches an error and writes a diagnostic workspace update (e.g., setting a status field, updating a timestamp), and if at that point the in-memory workspace object has been mutated to contain resolved values (because `mergeEnv` was called on the workspace object), those resolved plaintext secrets get written to the YAML file.
-
-A second failure mode: if `resolveSecrets` is called on the raw `workspace.env` object directly (mutating it), subsequent `writeWorkspace(workspace)` calls anywhere in the function (even in cleanup paths) will persist the resolved values.
+The TUI context makes this worse: the TUI imports workspace-ops which imports the logger. The logger is created with whatever log level `process.env` has at startup. There is no mechanism to change the log level once the TUI is running — a user cannot enable debug logging mid-session.
 
 **Why it happens:**
-`mergeEnv` in the current codebase returns a new `Record<string, string>` — it does not mutate the workspace. If `resolveSecrets` follows this pattern (takes and returns the env map, does not touch the workspace object), the risk is low. But if a developer "simplifies" by resolving in-place on `workspace.env`, the mutation propagates to any subsequent `writeWorkspace` call.
+Singleton module-level logger instances are the standard pattern in Node.js applications. They work correctly when the process starts with all configuration in place. They fail when log level needs to change dynamically (test setup, `--log-level` flag on a specific command).
 
 **How to avoid:**
-`resolveSecrets` must accept and return a plain `Record<string, string>` — never a workspace object. Never assign resolved values back to any workspace or template field. In `openWorkspace`, the flow must be:
-
+Separate logger creation from logger configuration. Create the singleton, but set the level lazily:
 ```ts
-const rawEnv = mergeEnv(workspace)      // returns new Record — workspace untouched
-const resolved = await resolveSecrets(rawEnv, resolvers)  // returns new Record
-writeEnvFiles(workspace, resolved, ...)  // reads workspace for paths, uses resolved values
-const hookEnv = { ...baseEnv, ...resolved }
-// workspace object is never mutated — only rawEnv and resolved are derived copies
-```
+// logger.ts
+export const logger = pino()  // created at module load with default level
 
-Add a test: call `openWorkspace` with a secret reference, then read the workspace YAML from disk and assert no resolved value appears in any env field.
-
-**Warning signs:**
-- `resolveSecrets(workspace.env, ...)` pattern where `workspace.env` is mutated in-place
-- `writeWorkspace` called after `resolveSecrets` in the same function scope with the workspace object
-- No test checking that workspace YAML on disk does not contain resolved secret values after `openWorkspace`
-
-**Phase to address:**
-Secrets implementation phase. The constraint must be in the function signature design — `resolveSecrets` should not accept a workspace object, only a plain record.
-
----
-
-### Pitfall 6: Secret Resolver Subprocess Hangs Blocking Workspace Open
-
-**What goes wrong:**
-`op read <path>`, `doppler secrets get ...`, and `pass show <path>` are subprocesses. Any of them can hang indefinitely: the 1Password CLI hangs waiting for biometric auth when the system is locked; Doppler CLI hangs waiting for network when the corporate VPN is not connected; `pass` opens a GPG pinentry dialog in some desktop configurations.
-
-Without a timeout, `openWorkspace` stalls forever. The user sees no indication whether it is hung or slow. The TUI's `runHooksCaptured()` workaround does not help here — the hang is in the secret resolution step before hooks run.
-
-**Why it happens:**
-External CLI tools designed for interactive terminal use often block on auth or I/O without a timeout flag. The 1Password CLI specifically is documented to hang on `op read` when the desktop app integration requires a biometric confirmation.
-
-**How to avoid:**
-Wrap every resolver subprocess in a timeout using `Promise.race`:
-
-```ts
-const RESOLVER_TIMEOUT_MS = 10_000
-const resolverPromise = $`op read ${path}`.quiet().nothrow()
-const timeout = new Promise<never>((_, reject) =>
-  setTimeout(() => reject(new Error(`resolver timeout after ${RESOLVER_TIMEOUT_MS}ms`)), RESOLVER_TIMEOUT_MS)
-)
-const result = await Promise.race([resolverPromise, timeout])
-```
-
-Surface timeout as a clear error: `[git-stacks] Secret resolver 'op' timed out (10s). Is 1Password unlocked?`
-
-**Warning signs:**
-- Resolver `resolve()` method calls subprocess with no timeout
-- No test for resolver timeout behavior (mock resolver that delays `> 10s`)
-- No mention of timeout in `--help` output or error messages
-
-**Phase to address:**
-Secrets implementation phase. The timeout must be in the base resolver infrastructure, not added later per-resolver.
-
----
-
-### Pitfall 7: Auto-stash Pop Leaves Repo in Conflict State Silently Across Multiple Repos
-
-**What goes wrong:**
-`stashPop` exits non-zero with `CONFLICT` in stderr. The spec correctly says: leave stash, report clearly, continue to other repos. The failure mode is in the `SyncResult` reporting: if the overall `syncWorkspace` returns `{ ok: true }` (because the rebase itself succeeded) while individual repos have stash pop conflicts, the user's command exits 0 and the failure is only visible in the progress output — which may have scrolled off or been suppressed in non-verbose mode.
-
-Additionally, after a stash pop conflict, the repo's working tree is in a half-applied state: some hunks applied, conflict markers inserted. The repo appears dirty but `isRepoDirty` returns true, which means any subsequent `git-stacks sync --stash` will try to stash the conflict markers, producing a second stash on top of the conflict state.
-
-**Why it happens:**
-`git stash pop` with conflicts does NOT remove the stash from the stash list (confirmed by git documentation). The stash entry remains at `stash@{0}`. The working tree has conflict markers. The developer does not notice because the overall sync command reported success (rebase succeeded). On the next `--stash` invocation, `stashPush` runs again on the dirty (conflicted) working tree, creating `stash@{0}` which pushes the previous stash to `stash@{1}`. The stash list grows; nothing is ever cleanly popped.
-
-**How to avoid:**
-`SyncResult.ok` must be `false` if any stash pop failed, not just if the rebase failed. The distinction: `syncFailed` (rebase) vs `stashPopFailed` (post-sync cleanup). Both should set `ok: false` to force a non-zero exit code.
-
-Also check for existing stash entries before pushing a new stash: if `stash@{0}` has the `git-stacks auto-stash` message, warn and refuse to double-stash rather than silently stacking stashes.
-
-```ts
-// Before stashPush, check if a git-stacks stash already exists:
-const existing = await $`git -C ${path} stash list --format="%gd %s"`.quiet().nothrow()
-if (existing.stdout.toString().includes("git-stacks auto-stash")) {
-  return { ok: false, error: "unresolved git-stacks stash already exists — pop it first" }
+export function configureLogger(level: string): void {
+  logger.level = level  // Pino supports dynamic level changes
 }
 ```
+Call `configureLogger(process.env.GIT_STACKS_LOG_LEVEL ?? "warn")` in `src/index.ts` (the Commander entrypoint) after all environment is established. Tests call `configureLogger("debug")` before the function under test.
 
 **Warning signs:**
-- `syncWorkspace` returns `{ ok: true }` when `popFailures.length > 0`
-- No test: stash pop conflict → `SyncResult.ok === false` and exit code non-zero
-- No guard against double-stashing when a previous `git-stacks auto-stash` stash exists
+- Logger level read from `process.env` at module evaluation time (top-level `const`)
+- No `configureLogger` or equivalent function in the logger module
+- Tests that set `process.env.GIT_STACKS_LOG_LEVEL` and then import the module under test — the env var change arrives too late
 
 **Phase to address:**
-Stash implementation phase. The `SyncResult` extension and the double-stash guard are part of the minimum viable implementation.
-
----
-
-### Pitfall 8: `stash push --include-untracked` Stashes Files That Should Not Be Stashed
-
-**What goes wrong:**
-`git stash push --include-untracked` stashes _all_ untracked files, including generated files, build outputs, and IDE files that are not in `.gitignore`. In a worktree with a monorepo or a repo with a large `node_modules` (if `.gitignore` is incomplete), `--include-untracked` can stash thousands of files, making the stash operation take 10–30 seconds and the pop operation even slower.
-
-More critically: files in `.gitignore` paths that happen to contain runtime state (pid files, lock files, database files used by running dev servers) get stashed, breaking the running process. When the stash is popped, the files come back but the running process may have already failed or created new state, leading to file conflicts.
-
-**Why it happens:**
-`--include-untracked` is specified in the FEATURES.md design without caveats. It is the right default for "stash everything the user is working on" but has unintended consequences for large repos or repos with running dev servers.
-
-**How to avoid:**
-Use `git stash push --include-untracked` but add `--pathspec-from-file` limited to tracked and staged files if the repo has more than N untracked files. A simpler approach: check the count of untracked files before stashing and warn the user if it is large:
-
-```ts
-const untracked = await $`git -C ${path} ls-files --others --exclude-standard`.quiet()
-const lines = untracked.stdout.toString().split("\n").filter(Boolean)
-if (lines.length > 100) {
-  onProgress?.(`⚠ stash in ${repoName}: ${lines.length} untracked files — this may be slow`)
-}
-```
-
-Alternative: use `git stash push` without `--include-untracked` for the initial MVP and only add the flag when explicitly needed.
-
-**Warning signs:**
-- `stashPush` uses `--include-untracked` with no size guard
-- No test measuring stash time on a repo with many untracked files
-- No `--skip-untracked` flag option exposed in the `--stash` implementation
-
-**Phase to address:**
-Stash implementation phase. Size check or flag exposure before shipping the default `--include-untracked` behavior.
-
----
-
-### Pitfall 9: Label Filter AND-logic Across CLI and TUI Implemented Inconsistently
-
-**What goes wrong:**
-The spec says `--label sprint:14 --label urgent` is AND (both required). If the CLI filter and the TUI filter (`/backend`) are implemented independently, they are likely to disagree on AND vs OR semantics, especially since the TUI already has a text filter that uses substring matching (OR-like behavior). A user who filters by `sprint:14` in the CLI and sees 3 results, then opens the TUI and filters `/sprint:14`, may see different results if TUI filter treats multiple terms as OR.
-
-Additionally, the TUI filter extension to match labels adds a code path that runs on every keypress during filtering. If label matching runs `workspace.labels?.includes(term)` per keystroke across 50 workspaces, it is negligible. But if it runs `workspace.labels?.some(l => l.includes(term))` (substring search), it produces false positives: filtering for `sprint` matches `sprint:14`, `sprint:15`, and a label named `constraint` (contains `aint`... no, but `type:sprint-task` would match).
-
-**Why it happens:**
-Label filter logic is written separately in `commands/workspace.ts` (CLI filter) and `tui/dashboard/WorkspaceList.tsx` (TUI filter), with no shared utility function. Each implementation makes independent choices about case sensitivity, substring vs exact match, and AND vs OR.
-
-**How to avoid:**
-Extract a shared `matchesLabels(workspace: Workspace, terms: string[]): boolean` utility into `lib/workspace-ops.ts` or `lib/config.ts`. Both CLI and TUI call the same function. Define the semantics once: case-sensitive, AND across terms, exact match per label (no substring on a single label unless `label:` prefix is used as described in the spec).
-
-**Warning signs:**
-- Label filter logic copied separately into `commands/workspace.ts` and `WorkspaceList.tsx` without extracting to a shared function
-- No test: `matchesLabels(ws, ["sprint:14", "backend"])` returns false when ws only has `["sprint:14"]`
-- TUI filter produces different results than CLI `--label` for the same workspace and same label value
-
-**Phase to address:**
-Labels implementation phase. Write the shared filter function before implementing the UI — it becomes the single source of truth for filter semantics.
-
----
-
-### Pitfall 10: `cmd:` Resolver Is an Arbitrary Shell Injection Vector
-
-**What goes wrong:**
-The `cmd` resolver executes `sh -c <path>` where `<path>` is the content of the YAML env value after the `cmd:` prefix. If a workspace YAML is committed to a shared repo or received from an untrusted source, any `${{ cmd:... }}` value becomes arbitrary code execution during `openWorkspace`.
-
-Unlike the other resolvers (op, doppler, pass) which call a fixed binary with a controlled argument, `cmd:` passes the entire string to `sh -c`. A value like `${{ cmd:rm -rf ~ }}` would execute `rm -rf ~` during workspace open.
-
-**Why it happens:**
-`cmd:` is explicitly positioned as a "last resort escape hatch" in the spec. Escape hatches are frequently underestimated as attack surfaces because they are rarely used, have no formal API contract, and are treated as "the user's problem."
-
-**How to avoid:**
-Add an explicit security warning in the `cmd:` resolver's documentation and in `git-stacks config` wizard output. Do not enable `cmd:` by default in the global config `resolvers` list — require it to be explicitly added:
-
-```yaml
-secrets:
-  resolvers: [op, env, cmd]   # cmd must be explicitly listed to enable
-```
-
-In the config wizard, warn when `cmd:` is added: "The 'cmd' resolver executes arbitrary shell commands from YAML config. Only enable if you fully control workspace YAML files."
-
-Add a log line when `cmd:` resolver fires during workspace open: `[git-stacks] Executing cmd resolver: sh -c "..."` — makes the execution visible rather than silent.
-
-**Warning signs:**
-- `cmd:` resolver in the default resolver list (enabled without explicit config)
-- No security warning in `--help` or config wizard output
-- No log line when `cmd:` resolver executes
-
-**Phase to address:**
-Secrets implementation phase. The default resolver list and the warning must be part of the initial implementation.
+Logging infrastructure phase — the lazy configuration pattern must be in the initial implementation.
 
 ---
 
@@ -325,13 +318,13 @@ Secrets implementation phase. The default resolver list and the warning must be 
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Bare `--force-with-lease` without explicit SHA | Simple one-liner | Protection defeated by any background fetch; false sense of safety | Acceptable for MVP with documented limitation in help text |
-| Silent `0` return when remote-tracking ref missing in ahead/behind | No null propagation through callers | "Up to date" shown for repos that have never synced with remote | Never — use `null` or a distinct type from the start |
-| `FETCH_HEAD` staleness from `join(repoPath, ".git", "FETCH_HEAD")` | Simple path construction | Wrong path for worktrees; `statSync` throws ENOENT on worktrees | Never — use `git rev-parse --git-common-dir` |
-| Label filter logic duplicated in CLI and TUI | Faster to write each independently | AND/OR semantics diverge; bug in one doesn't fix the other | Never — shared function from the start |
-| `cmd:` resolver enabled by default | No config required | Arbitrary code execution from shared YAML files | Never — require explicit opt-in |
-| `stashPop` failure leaves `SyncResult.ok = true` | "Sync succeeded" is technically true | User misses stash conflict; next `--stash` double-stacks | Never — any pop failure sets `ok: false` |
-| `resolveSecrets` mutates `workspace.env` in place | Fewer allocations | Resolved plaintext written to YAML on any `writeWorkspace` call | Never — always return a new Record |
+| Re-export intermediaries left indefinitely | No callers need updating immediately | workspace-ops.ts never fully decomposed; new code added to the wrong file | Never — set a removal deadline in the same milestone |
+| Mixed `_exec` and `mock.module` patterns for the same module | Test passes quickly | Test authors unsure which approach to use; isolation edge cases | Never — pick one pattern per module |
+| Logger level hardcoded at module load time | Simple singleton | Tests cannot change log level without re-importing module; `--log-level` flag ignored | Never — use lazy configuration |
+| `logger.info()` calls on the hot path (`getWorkspaceListInfo`) | Detailed observability | User-visible latency in TUI on every arrow keypress at debug level | Acceptable at debug level only if serialization is deferred/lazy |
+| Class-based DI alongside `_exec` pattern | "Modern" architecture | Two competing test patterns; callers must change signatures; TUI components affected | Never — keep property injection pattern for consistency |
+| Default log level `info` in production | More log output without configuration | Pipe-based users (`--json \| jq`) get corrupted output; TUI screen corruption | Never — default must be `warn` or `silent` |
+| Split modules with behavioral changes in same commit | Fewer commits | Cannot bisect whether breakage is from split or from behavior change | Never — separate structural changes from behavioral changes |
 
 ---
 
@@ -339,14 +332,13 @@ Secrets implementation phase. The default resolver list and the warning must be 
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| 1Password CLI (`op`) | No timeout; hangs when desktop app needs biometric | `Promise.race` with 10s timeout; surface "Is 1Password unlocked?" in error |
-| Doppler CLI | No timeout; hangs when VPN/network unavailable | Same timeout pattern; error: "Is Doppler accessible?" |
-| `pass` (GPG) | Opens pinentry dialog in some desktop configs, freezing TUI | Same timeout; note: `pass` in a TUI context may need `GPG_TTY` set |
-| `env:` resolver | Silently returns empty string for missing env vars | Distinguish missing (`undefined`) from empty string (`""`); warn when missing |
-| `cmd:` resolver | Executes from `sh -c` with full user permissions | Require explicit opt-in in global config; log every execution |
-| git push (SSH) | SSH multiplexer contention when pushing N repos in parallel | Group repos by remote host; push repos with same remote host sequentially |
-| git push (HTTPS) | Credential helper prompts block all parallel pushes | Use `GIT_TERMINAL_PROMPT=0` (already used in `fetchOrigin`, `isBranchGoneOnRemote`) |
-| git stash (GPG-signed commits) | `stash push` fails if `commit.gpgsign=true` and GPG unavailable | Pass `-c commit.gpgsign=false` to `git stash push` subprocess |
+| `mock.module()` after module split | Mocking the old `workspace-ops` path when the function has moved | Update every `mock.module` path in lockstep with every function move |
+| Pino logger + TUI (OpenTUI) | Pino writes to stderr even in TUI mode; ANSI escape sequences are corrupted | Force `logger.level = "silent"` before launching the TUI renderer in `git-stacks manage` |
+| Pino logger + `--json` flag | `pino` default pretty-print transport writes to stdout | Always use `pino.destination(2)` (stderr) or explicit `stream: process.stderr` |
+| Pino with Bun | Pino's `pino/file` transport uses Node.js `worker_threads` — not available in Bun without polyfill | Use `pino({ transport: undefined })` with a custom Bun-compatible stream; avoid worker-based transports |
+| `_exec` pattern on new domain modules | New module calls `$` shell directly without exporting `_exec` | Every module that calls `$` or `Bun.spawn` must export `_exec`; tests must inject before calling any function |
+| `useIsolatedConfig` + logger | Logger singleton initialized before `useIsolatedConfig` redirects `HOME` | Create logger after config isolation is set up; or use lazy logger initialization |
+| TUI `runHooksCaptured` + logger | Logger writes to stderr during captured hooks; output mixed with capture | Logger must be silent or redirected during `runHooksCaptured` calls |
 
 ---
 
@@ -354,10 +346,10 @@ Secrets implementation phase. The default resolver list and the warning must be 
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `getCommitsAhead` + `getCommitsBehind` called in serial per repo in `getWorkspaceListInfo` | `git-stacks list` takes 2–4s for 5-repo workspace | Call both in `Promise.all([ahead, behind])` per repo; all repos in parallel | With 3+ repos in a workspace |
-| `rev-list --count` on missing remote-tracking ref (no fetch yet) | Returns 0 silently; then `rev-list` runs again on next poll | Check ref exists first with `checkRemoteTrackingRef`; skip `rev-list` on miss | Every cold-start or new worktree |
-| Resolver subprocesses called sequentially for each env var | Workspace open takes N × resolver_time for N secrets | Batch all refs for the same resolver (`op batch read`); resolve all `op://` refs in one subprocess call | With 5+ secret references in a workspace |
-| Secret resolution on every `openWorkspace` call | Re-resolves secrets even when values haven't changed | Cache resolved values in memory for the process lifetime (not to disk); only re-resolve on explicit `--refresh-secrets` | Every `git-stacks open` call |
+| Full workspace object serialized in debug log inside `getWorkspaceListInfo` | TUI arrow-key navigation takes 200–500ms | Log only scalar identifiers; use `isLevelEnabled` guard | With logging enabled at debug level, 3+ repos |
+| Synchronous log writes on the critical path (git-stacks list) | `git-stacks list` slower than pre-logging baseline | Use async/buffered log transport; measure before/after baseline | At `info` level; any workspace with 5+ repos |
+| Multiple small modules all importing the logger singleton causes import chain delay | Cold-start latency increases by 50–100ms | Keep logger module minimal; no side effects at import time | After 10+ domain modules all import logger at startup |
+| Circular import detection at runtime (undefined values) | Random `TypeError: X is not a function` on first call | Run `madge --circular src/` before and after each split | Immediately on first test run after introducing a cycle |
 
 ---
 
@@ -365,11 +357,9 @@ Secrets implementation phase. The default resolver list and the warning must be 
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Resolved secret values written to workspace YAML | Plaintext secrets committed to config repo, leaked in backups | `resolveSecrets` operates only on derived Records; never on workspace object; test: YAML on disk has no resolved values |
-| `cmd:` resolver enabled by default | Arbitrary code execution from shared YAML | Require explicit `resolvers: [..., cmd]` in global config; not in default list |
-| Resolved secrets passed through `process.env` to child hooks | Secrets visible via `/proc/{pid}/environ` on Linux | Inject only into the specific hook subprocess env via `spawn({env: ...})`; do not set on `process.env` globally |
-| `--skip-secrets` substitutes empty string silently | Commands run with empty API keys, potentially writing to wrong environments | Log a visible warning per skipped secret: `[git-stacks] WARNING: secret ${{ op://... }} skipped — using empty string` |
-| Secret references in `env_file` written paths | If env_file path is inside the repo, resolved secrets committed to repo | Validate that `env_file` paths are outside the repo working tree, or are in `.gitignore` |
+| Structured log output includes workspace env vars | Secret values from `${{ op://... }}` references appear in log output | Never log `workspace.env` values; log only key names, not values |
+| Logger writes to a file in the workspace directory | Log file committed to a git repo if inside a tracked path | Default log destination is stderr; file logging requires explicit opt-in with a path outside any workspace |
+| Debug logs expose resolved secret values | Resolved plaintext secrets in log output captured by log aggregation systems | `resolveSecrets` result must never be passed to any log call; mask values in log output |
 
 ---
 
@@ -377,29 +367,25 @@ Secrets implementation phase. The default resolver list and the warning must be 
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Push failure output swallowed in parallel execution | User sees "3 repos pushed" but misses one silent failure | Collect all failures; display after parallel push completes; return non-zero exit code if any failed |
-| Ahead/behind shows `0/0` for repos with no remote-tracking ref | User thinks everything is synced; actually state is unknown | Show `?` or `—` for unknown; show tooltip/note "run sync to fetch remote state" |
-| Stash pop conflict message only in progress output | User misses conflict if they run non-verbose or pipe output | Write conflict warning to stderr explicitly; include the exact `git -C <path> stash pop` recovery command |
-| Label regex error produces cryptic Zod message | User tries `sprint 14` (with space) and gets a schema error | Validate label format early with `parseSecretRef`-style helper; return human-readable error: "Labels cannot contain spaces — use 'sprint:14' not 'sprint 14'" |
-| `--dry-run` push shows "would push X commits" but X is ahead count, not commits since last push | User confused when count differs from `git log origin/<branch>..HEAD` count | Use `rev-list --count origin/<branch>..HEAD` (the actual "not yet pushed" count), not the total `ahead` count |
+| Default log level `info` — users see JSON lines in terminal | Every command outputs structured JSON to stderr; users confused | Default `warn`; users must explicitly set `GIT_STACKS_LOG_LEVEL=debug` to see internal logs |
+| Log output intermixed with `onProgress` callback output | User sees both human-readable progress AND structured log lines for the same event | Log events and progress events are distinct concerns; do not duplicate them |
+| `--log-level` flag on every subcommand vs. global flag | Users must remember to add `--log-level debug` to each specific command | Single global `--log-level` flag on the root Commander command; inherited by all subcommands |
+| Log output visible during `git-stacks manage` TUI | Screen corruption: ANSI frames mixed with JSON log lines | Detect TUI mode and force `logger.level = "silent"` before rendering starts |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Push: non-zero exit on any failure:** `pushWorkspace` returns `ok: false` and the CLI command exits non-zero if any repo push fails — not just if _all_ repos fail
-- [ ] **Push: trunk repos excluded:** Repos with `mode: "trunk"` are never pushed — verify in test with a mixed-mode workspace
-- [ ] **Push: GIT_TERMINAL_PROMPT=0:** `pushBranch` uses `GIT_TERMINAL_PROMPT=0` to prevent credential prompts blocking the CLI (same pattern as `fetchOrigin`)
-- [ ] **Ahead/behind: null for missing ref:** `getCommitsAhead` returns `null` (not `0`) when `origin/<branch>` tracking ref does not exist
-- [ ] **Ahead/behind: FETCH_HEAD path via --git-common-dir:** Staleness check reads FETCH_HEAD from the common git dir, not from `join(repoPath, ".git", "FETCH_HEAD")`
-- [ ] **Secrets: no mutation of workspace.env:** After `openWorkspace`, read the workspace YAML from disk and confirm no `${{ ... }}` reference has been replaced by a resolved value
-- [ ] **Secrets: `cmd:` requires explicit config:** `cmd` resolver does not fire unless explicitly listed in `config.yml secrets.resolvers` array
-- [ ] **Secrets: timeout on every resolver:** Each resolver subprocess is wrapped in a 10s timeout; hanging resolver surfaces a clear error message
-- [ ] **Labels: shared filter function:** Both `commands/workspace.ts` and `WorkspaceList.tsx` call the same `matchesLabels()` utility — not independent implementations
-- [ ] **Labels: template labels unioned at creation time only:** Modifying template labels after workspace creation does not change the workspace's label list
-- [ ] **Stash: ok=false on pop conflict:** `syncWorkspace` with `--stash` returns `{ ok: false }` when any `stashPop` call reports conflict
-- [ ] **Stash: double-stash guard:** If `stash list` already contains a `git-stacks auto-stash` entry, `stashPush` refuses to add another and returns `{ ok: false, error: ... }`
-- [ ] **Stash: recovery command in output:** Pop conflict message includes the exact `git -C <path> stash pop` command for user recovery
+- [ ] **Module split: no circular imports:** Run `madge --circular src/` (or equivalent) after each split — zero cycles before merge
+- [ ] **Module split: re-exports removed:** After caller updates, workspace-ops.ts has no re-exports of moved functions — verified by grep
+- [ ] **Mock coverage: all mock.module paths updated:** After each split, `grep -r "mock.module" tests/` shows no references to moved function paths
+- [ ] **Logger: stderr transport:** Verify with a test that `git-stacks list --json 2>/dev/null` produces valid JSON — no log lines in stdout
+- [ ] **Logger: default level warn:** Run `git-stacks open <workspace>` without env vars — no log output emitted to stderr
+- [ ] **Logger: TUI silent mode:** Run `git-stacks manage` and verify no log output corrupts the screen — checked with a TUI headless test
+- [ ] **Logger: dynamic level change:** Test sets `GIT_STACKS_LOG_LEVEL=debug` then calls a function — debug log is captured
+- [ ] **DI consistency: all new modules export `_exec`:** Every new domain module that spawns subprocesses has `export const _exec = { ... }` — verified by grep
+- [ ] **`_exec` tests for new modules:** New domain modules have tests that inject `_exec` mocks — not just `mock.module` — matching existing patterns in git.test.ts and lifecycle.test.ts
+- [ ] **Hot path performance:** `getWorkspaceListInfo` benchmark (5 repos) does not regress by more than 10% after logging is added
 
 ---
 
@@ -407,13 +393,13 @@ Secrets implementation phase. The default resolver list and the warning must be 
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| `--force-with-lease` overwrite remote commits | HIGH | `git push --force-with-lease` does not help; user must `git fetch`, `git log origin/<branch>`, reconcile manually |
-| Secret values written to YAML | HIGH | Rotate all affected secrets immediately; scrub YAML from git history (`git filter-repo`); audit who has access to the repo |
-| Stash pop conflict | LOW | User runs `git -C <path> stash pop` manually; resolves conflicts; drops stash with `git stash drop` |
-| Double-stash accumulation | MEDIUM | User runs `git stash list` to see all stashes; pops/drops in order; no data loss if working tree is clean |
-| Resolver subprocess hang (op/doppler) | LOW | Kill the `git-stacks open` process (Ctrl+C); unlock 1Password/connect VPN; retry |
-| `cmd:` resolver executes malicious command | HIGH | Audit YAML files for `${{ cmd:... }}` references; disable `cmd:` resolver in global config |
-| Missing remote-tracking ref shows `0/0` (old behavior) | LOW | Run `git-stacks sync --fetch` to fetch and refresh tracking refs; recalculate |
+| Circular import introduced during split | LOW | Identify cycle with `madge --circular src/`; extract shared types to a new `workspace-types.ts`; remove cycle |
+| Mock paths not updated after split — tests pass incorrectly | MEDIUM | Add mock assertion (`toHaveBeenCalled`) to all tests that rely on mock isolation; re-run with assertions; fix paths |
+| Logger writing to stdout corrupts `--json` output | MEDIUM | Change transport to `pino.destination(2)` (stderr); re-run `--json` integration tests |
+| TUI screen corruption from logger | LOW | Add `logger.level = "silent"` guard before TUI renderer; existing TUI test suite will catch regression |
+| Re-exports left indefinitely — new code added to wrong module | MEDIUM | Identify all re-exports in workspace-ops.ts; add `@deprecated` JSDoc; enforce removal in next milestone |
+| DI and `_exec` patterns mixed — test authors confused | MEDIUM | Document decision rule in CLAUDE.md; add a lint rule or test helper that enforces pattern per module |
+| Logger level set at module load time — tests cannot control it | LOW | Add `configureLogger(level)` function; call in index.ts; update tests to call `configureLogger` instead of setting env var |
 
 ---
 
@@ -421,33 +407,29 @@ Secrets implementation phase. The default resolver list and the warning must be 
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| `--force-with-lease` defeated by background fetch | Push: `pushBranch` implementation | Test: remote has new commits after local fetch → bare `--force-with-lease` still pushes (document this); explicit SHA form blocks it |
-| Parallel push shared .git lock contention | Push: `pushWorkspace` implementation | Test: two repos with same `main_path` → pushes are sequential, not `Promise.all` |
-| Ahead/behind silent zero for missing ref | Ahead/behind: `getCommitsAhead` signature | Test: worktree with no fetch → returns `null`, not `0`; TUI shows `?` |
-| FETCH_HEAD wrong path for worktrees | Ahead/behind: staleness check | Test: check FETCH_HEAD mtime via `--git-common-dir` on an actual worktree path |
-| Secret values written to YAML | Secrets: `resolveSecrets` function design | Test: open workspace with secret refs → read YAML from disk → no resolved values present |
-| Secret resolver subprocess hang | Secrets: resolver infrastructure | Test: mock resolver that hangs → `openWorkspace` returns error after 10s |
-| `cmd:` injection via shared YAML | Secrets: default config | Test: config with no explicit `cmd:` in resolvers list → `cmd:` resolver throws "not enabled" |
-| Auto-stash pop conflict masked as success | Stash: `syncWorkspace` result | Test: stash push succeeds, sync succeeds, stash pop fails → `SyncResult.ok === false` |
-| `--include-untracked` stashes too much | Stash: `stashPush` implementation | Test: repo with 200+ untracked files → warning emitted before stash |
-| Label filter AND/OR inconsistency | Labels: shared utility extraction | Test: `matchesLabels(ws, ["a", "b"])` — same function used in CLI and TUI; ws with only `["a"]` returns false |
-| `cmd:` default-enabled injection | Secrets: default resolver list | Test: workspace with `${{ cmd:echo hello }}` and no explicit `cmd:` in config → resolver returns error |
+| Circular imports from module split | Phase 1: intra-module dependency graph before any splitting | `madge --circular src/` returns zero cycles after each split commit |
+| Mock paths not updated after split | Every extraction phase — lockstep with each function move | grep for mock.module references to moved paths returns zero hits |
+| DI fights `_exec` pattern | DI design phase — decision documented in CLAUDE.md before code written | All new modules follow same injection pattern as git.ts and lifecycle.ts |
+| Logger corrupts stdout / TUI | Logging infrastructure phase — transport and default level fixed before any log calls | `--json` output parses as valid JSON; TUI headless tests pass |
+| Log verbosity noise for users | Logging design phase — taxonomy established before calls added | Default `warn` level: no output on a clean `git-stacks list` run |
+| Logger level baked at module load | Logging infrastructure phase — lazy configuration from the start | Test: set env var after import → `configureLogger` still changes the level |
+| Re-exports left indefinitely | Extraction completion phase — callers updated in same PR | `grep "from.*workspace-ops" src/` returns only legitimate imports, not re-exported moved functions |
+| Module split with behavioral changes | Every extraction phase — structural change and behavior change in separate commits | Each split commit: only file moves + re-exports; behavioral changes in subsequent commits |
+| Full workspace object in debug log | Logging implementation phase — performance test for `getWorkspaceListInfo` before adding log calls | Benchmark: `getWorkspaceListInfo(workspace, 5 repos)` < 500ms at debug level |
+| Logger incompatible with Bun ESM | Logging infrastructure phase — test with Bun specifically (not Node.js) | Pino logger works in Bun without worker_threads; `bun run test` passes with logger imported |
 
 ---
 
 ## Sources
 
-- `src/lib/git.ts` — `fetchOrigin`, `pullFFOnly`, `rebaseBranch`, `getCommitsBehind`, `checkRemoteTrackingRef` implementations — confirmed patterns and failure-return conventions
-- `src/lib/workspace-ops.ts` — `syncWorkspace` sequential/dirty-check flow; `mergeWorkspace` force-flag behavior; `getWorkspaceListInfo` shape
-- `FEATURES.md` — full design specs for push (PushResult type, parallel execution, trunk-skip), ahead/behind (staleness, FETCH_HEAD threshold, per-repo detail), secrets (`resolveSecrets`, built-in resolvers, `--skip-secrets`), labels (schema, filter AND logic), auto-stash (pop failure handling, double-stash risk)
-- Git official docs — `git push --force-with-lease` explicit vs bare form: https://git-scm.com/docs/git-push
-- Atlassian blog — `--force-with-lease` defeated by background fetch: https://www.atlassian.com/blog/it-teams/force-with-lease
-- Git official docs — `git-worktree`: `.git` file structure in worktrees, shared object database: https://git-scm.com/docs/git-worktree
-- Git official docs — `git stash`: conflicts leave stash in list, stash is not dropped on conflict: https://git-scm.com/docs/git-stash
-- 1Password community — CLI hangs requiring biometric auth: https://www.1password.community/discussions/developers/cli-hangs-when-requesting-items/95850
-- Git worktree lock contention — concurrent operations can corrupt shared `.git` state: https://github.com/kaeawc/auto-worktree/issues/176
-- GitGuardian — secrets in environment variables, subprocess leakage patterns: https://blog.gitguardian.com/secure-your-secrets-with-env/
+- `src/lib/workspace-ops.ts` — 1735 lines; imports from config, git, lifecycle, integrations/runner, files, ports, secrets — full import graph analyzed
+- `tests/lib/workspace-ops.test.ts` — `mock.module("@/lib/lifecycle")`, `_exec` injection, `useIsolatedConfig` patterns — test architecture confirmed
+- `CLAUDE.md` — `_exec` injection pattern documentation; `mock.module` vs `_exec` usage notes; TUI `runHooksCaptured` requirement; Bun APIs (no Node.js compat required)
+- Bun ESM module caching behavior — module evaluated once; singleton values set at evaluation time; dynamic `process.env` changes after import do not affect existing module-level constants
+- Pino documentation — `logger.level` is dynamically settable post-creation; `pino.destination(fd)` for file descriptor targeting; `pino/file` transport uses worker_threads (incompatible with Bun without polyfill)
+- TypeScript circular import behavior — `tsc --noEmit` does not error on circular imports; runtime undefined values are the symptom; `madge` is the detection tool
+- Commander.js global flag inheritance — root-level `.option()` is inherited by all subcommands; subcommand-level options are not available on the root command
 
 ---
-*Pitfalls research for: v0.14.0 — push, ahead/behind, labels, secrets, auto-stash in git-stacks*
-*Researched: 2026-04-03*
+*Pitfalls research for: core engine extraction (workspace-ops.ts split), DI pattern consistency, structured logging for Bun CLI*
+*Researched: 2026-04-05*
