@@ -252,7 +252,10 @@ Plans:
   2. `tests/lib/workspace-status.test.ts` exists with tests for getWorkspaceListInfo and getWorkspaceStatus using mocked config reads
   3. `tests/lib/workspace-git.test.ts` exists with tests for syncWorkspace/pushWorkspace that mock _exec.spawn and verify call shapes without real git
   4. `madge --circular src/` returns zero cycles (confirmed in CI output, not just asserted)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 72-01-PLAN.md — Add focused workspace-env/status/git module tests and extend `makeGitMock()` for the live extracted seams
+- [ ] 72-02-PLAN.md — Install repo-native Madge gate and remove the live dashboard IPC cycles so `test:deps` passes
 
 ### Phase 73: Release Prep
 **Goal**: v0.16.0 is tagged and documented; version, changelog, and README are consistent
