@@ -4,6 +4,16 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.15.0] — 2026-04-05
+
+### Added
+
+**Dir repos** — non-git directories can now be registered and included in workspaces alongside regular git repos. `git-stacks repo add /some/plain/dir` registers a plain directory as a "dir" type repo, and `git-stacks repo scan` offers non-git directories for registration alongside detected git repos. Templates reference dir repos like any other repo; workspaces store them with `mode: "dir"` and `main_path` only — no worktree is created, no branch is set, and no git operations are attempted.
+
+Dir repos are included in workspace lifecycle: `open` injects their paths into hook and env context, while `close`, `clean`, and `remove` complete without errors (nothing to delete). All git-aware commands — `push`, `pull`, `sync`, `merge`, ahead/behind tracking, and dirty-file detection — silently skip dir repos. `git-stacks status` shows dir repos with a `[dir]` label and no git metrics, `git-stacks list` handles workspaces containing only dir repos without aggregation errors, and the TUI dashboard renders a `[dir]` indicator with no git badges. `git-stacks doctor` skips git health checks for dir repos and instead validates that the referenced directory exists and is accessible.
+
+---
+
 ## [0.14.0] — 2026-04-03
 
 ### Added
