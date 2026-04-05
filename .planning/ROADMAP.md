@@ -16,6 +16,7 @@
 - ✅ **v0.14.0 Workflow Completion & Workspace UX** — Phases 58-63 (shipped 2026-04-03) — Ahead/behind tracking, push command, labels, secrets, stash-on-sync, release prep. See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md)
 - ✅ **v0.15.0 Dir Mode & Polish** — Phases 64-68 (shipped 2026-04-05) — Dir repo type, registry CLI, lifecycle guards, git operation guards, CLI/TUI display. See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md)
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
+- 🚧 **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (in progress) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
 
 ## Phases
 
@@ -202,3 +203,91 @@ See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md) for full deta
 See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full details.
 
 </details>
+
+### 🚧 v0.17.0 Engine Hardening & Template Labels (In Progress)
+
+**Milestone Goal:** Extend template labels to parity with workspace labels, add structured debug logging with module filtering, introduce typed integration capability contracts, speed up config lookups with an in-memory index, and make multi-step workspace operations safe to fail via a compensation-stack rollback.
+
+- [ ] **Phase 74: Template Label CLI & Propagation** - Template label CRUD commands, `--label` filter on `template list`, label snapshot into workspace at create/clone time
+- [ ] **Phase 75: DI Seams & Structured Logging** - Injectable `_exec` seams in lifecycle modules, structured debug fields, `GS_DEBUG` module filter
+- [ ] **Phase 76: Integration Plugin Capability Contracts** - `capabilities` field on Integration interface, capability-driven runner guards, `integration list` displays capabilities
+- [ ] **Phase 77: Indexed Config Store** - In-memory index for workspace/template lookups, write-triggered invalidation, scan fallback
+- [ ] **Phase 78: Operation Runner with Rollback** - LIFO compensation stack in `operation-runner.ts`, `workspace-lifecycle.ts` wired to runner, rollback progress via `onProgress`
+- [ ] **Phase 79: Release Prep** - v0.17.0 version bump, CHANGELOG, README updates
+
+## Phase Details
+
+### Phase 74: Template Label CLI & Propagation
+**Goal**: Users can manage labels on templates via CLI, filter templates by label, and labels automatically flow into workspaces at creation time
+**Depends on**: Phase 73 (v0.16.0 complete)
+**Requirements**: TLBL-01, TLBL-02, TLBL-03, TLBL-04, TLBL-05, TLBL-06, TLBL-07
+**Success Criteria** (what must be TRUE):
+  1. User can run `git-stacks template label add <template> <label...>` and the label persists to the template YAML
+  2. User can run `git-stacks template label remove/list/clear` symmetrically with the existing workspace label commands
+  3. `git-stacks template list --label <label>` returns only templates matching that label
+  4. Workspace created from a labeled template has those labels snapshot-copied into the workspace YAML (not a live reference)
+  5. `git-stacks clone <workspace>` copies labels from the source workspace into the new workspace YAML
+**Plans**: TBD
+
+### Phase 75: DI Seams & Structured Logging
+**Goal**: `workspace-lifecycle.ts` and `workspace-git.ts` have injectable subprocess seams, and debug output carries structured fields filterable by module name
+**Depends on**: Phase 74
+**Requirements**: OBSV-01, OBSV-02, OBSV-03, OBSV-04, OBSV-05
+**Success Criteria** (what must be TRUE):
+  1. `workspace-lifecycle.ts` exports a mutable `_exec` object; tests can replace `_exec.spawn` without spawning real processes
+  2. `workspace-git.ts` exports a mutable `_exec` object with the same injection pattern
+  3. Running `GS_DEBUG=1 git-stacks open <ws>` emits lines with structured fields `{ op, module, repo?, ms?, msg }` on stderr
+  4. Running `GS_DEBUG=lifecycle git-stacks open <ws>` emits debug lines only from the `lifecycle` module; git module lines are suppressed
+  5. Running `GS_DEBUG=true` shows all module output (backward-compatible with existing behavior)
+**Plans**: TBD
+
+### Phase 76: Integration Plugin Capability Contracts
+**Goal**: Every integration plugin declares its capabilities explicitly, the runner uses those declarations instead of duck-typing, and `integration list` exposes them
+**Depends on**: Phase 75
+**Requirements**: ENGN-07, ENGN-08, ENGN-09
+**Success Criteria** (what must be TRUE):
+  1. `Integration` interface has a typed `capabilities` field; `bun run typecheck` passes with all 10 plugin files updated
+  2. Integration runner gates `generate()` and `open()` calls on capability declarations, not optional chaining
+  3. `git-stacks integration list` output includes a capabilities column for each plugin
+**Plans**: TBD
+
+### Phase 77: Indexed Config Store
+**Goal**: Workspace and template lookups use an in-memory index instead of re-scanning and re-parsing all YAML files on every call
+**Depends on**: Phase 76
+**Requirements**: ENGN-04, ENGN-05, ENGN-06
+**Success Criteria** (what must be TRUE):
+  1. `listWorkspaces()` and `readWorkspace()` return results sourced from the in-memory index without triggering a full directory scan on repeated calls
+  2. Any write operation (create, rename, remove) invalidates the affected index entry so the next read reflects the change
+  3. If a requested name is not in the index, the code falls back to a YAML scan and populates the index entry (cache, not source of truth)
+**Plans**: TBD
+
+### Phase 78: Operation Runner with Rollback
+**Goal**: Multi-step workspace operations (create, remove) execute via a LIFO compensation stack so partial failures clean up completed steps automatically
+**Depends on**: Phase 77
+**Requirements**: ENGN-01, ENGN-02, ENGN-03
+**Success Criteria** (what must be TRUE):
+  1. When workspace creation fails mid-way (e.g., second worktree fails), already-created worktrees are removed and the workspace YAML is not written
+  2. Rollback steps emit progress messages through the existing `onProgress` callback so the user sees "Rolling back: removed worktree for <repo>"
+  3. If an individual rollback step fails, the error is logged to stderr and remaining rollback steps continue (best-effort, no abort)
+**Plans**: TBD
+
+### Phase 79: Release Prep
+**Goal**: v0.17.0 is version-bumped, documented, and ready to ship
+**Depends on**: Phase 78
+**Requirements**: (release prep — no REQUIREMENTS.md entry)
+**Success Criteria** (what must be TRUE):
+  1. `package.json` version is `0.17.0` and `bun run dev --version` reports it
+  2. CHANGELOG has an entry for v0.17.0 listing all milestone features
+  3. README documents `template label` commands and `GS_DEBUG` module filter syntax
+**Plans**: TBD
+
+## Progress
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 74. Template Label CLI & Propagation | v0.17.0 | 0/TBD | Not started | - |
+| 75. DI Seams & Structured Logging | v0.17.0 | 0/TBD | Not started | - |
+| 76. Integration Plugin Capability Contracts | v0.17.0 | 0/TBD | Not started | - |
+| 77. Indexed Config Store | v0.17.0 | 0/TBD | Not started | - |
+| 78. Operation Runner with Rollback | v0.17.0 | 0/TBD | Not started | - |
+| 79. Release Prep | v0.17.0 | 0/TBD | Not started | - |

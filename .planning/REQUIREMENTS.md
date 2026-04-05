@@ -69,33 +69,33 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TLBL-01 | — | Pending |
-| TLBL-02 | — | Pending |
-| TLBL-03 | — | Pending |
-| TLBL-04 | — | Pending |
-| TLBL-05 | — | Pending |
-| TLBL-06 | — | Pending |
-| TLBL-07 | — | Pending |
-| ENGN-01 | — | Pending |
-| ENGN-02 | — | Pending |
-| ENGN-03 | — | Pending |
-| ENGN-04 | — | Pending |
-| ENGN-05 | — | Pending |
-| ENGN-06 | — | Pending |
-| ENGN-07 | — | Pending |
-| ENGN-08 | — | Pending |
-| ENGN-09 | — | Pending |
-| OBSV-01 | — | Pending |
-| OBSV-02 | — | Pending |
-| OBSV-03 | — | Pending |
-| OBSV-04 | — | Pending |
-| OBSV-05 | — | Pending |
+| TLBL-01 | Phase 74 | Pending |
+| TLBL-02 | Phase 74 | Pending |
+| TLBL-03 | Phase 74 | Pending |
+| TLBL-04 | Phase 74 | Pending |
+| TLBL-05 | Phase 74 | Pending |
+| TLBL-06 | Phase 74 | Pending |
+| TLBL-07 | Phase 74 | Pending |
+| ENGN-01 | Phase 78 | Pending |
+| ENGN-02 | Phase 78 | Pending |
+| ENGN-03 | Phase 78 | Pending |
+| ENGN-04 | Phase 77 | Pending |
+| ENGN-05 | Phase 77 | Pending |
+| ENGN-06 | Phase 77 | Pending |
+| ENGN-07 | Phase 76 | Pending |
+| ENGN-08 | Phase 76 | Pending |
+| ENGN-09 | Phase 76 | Pending |
+| OBSV-01 | Phase 75 | Pending |
+| OBSV-02 | Phase 75 | Pending |
+| OBSV-03 | Phase 75 | Pending |
+| OBSV-04 | Phase 75 | Pending |
+| OBSV-05 | Phase 75 | Pending |
 
 **Coverage:**
 - v0.17.0 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21 ⚠️
+- Mapped to phases: 21
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 after roadmap creation*
