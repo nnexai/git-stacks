@@ -170,6 +170,7 @@ export async function runWorkspaceClone(sourceArg?: string) {
     branch: newBranch,
     created: new Date().toISOString().split("T")[0],
     repos: newRepos,
+    labels: source.labels,
     ...(Object.keys(mergedSettings).length > 0 ? { settings: mergedSettings } : {}),
   }
   writeWorkspace(newWorkspace)

@@ -142,6 +142,11 @@ function mergeIntegrations(templates: Template[]): Record<string, unknown> | und
   return result
 }
 
+function mergeLabels(templates: Template[]): string[] | undefined {
+  const merged = [...new Set(templates.flatMap(tpl => tpl.labels ?? []))]
+  return merged.length > 0 ? merged : undefined
+}
+
 // --- Main composition function ---
 
 /**
@@ -240,6 +245,7 @@ export function composeTemplates(templateNames: string[]): Template {
     env_file: envFile,
     files: mergeFiles(orderedTemplates),
     integrations: mergeIntegrations(orderedTemplates),
+    labels: mergeLabels(orderedTemplates),
     ports: mergeTemplatePorts(orderedTemplates),
     // includes is not carried forward — the result is a fully resolved template
   }
