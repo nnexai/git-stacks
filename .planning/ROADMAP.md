@@ -227,7 +227,11 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
   3. `git-stacks template list --label <label>` returns only templates matching that label
   4. Workspace created from a labeled template has those labels snapshot-copied into the workspace YAML (not a live reference)
   5. `git-stacks clone <workspace>` copies labels from the source workspace into the new workspace YAML
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] `74-01-PLAN.md` — Nested `template label` CRUD plus `template list --label` exact-match AND filtering
+- [ ] `74-02-PLAN.md` — Label propagation through template composition, workspace creation snapshot, and workspace clone preservation
 
 ### Phase 75: DI Seams & Structured Logging
 **Goal**: `workspace-lifecycle.ts` and `workspace-git.ts` have injectable subprocess seams, and debug output carries structured fields filterable by module name
