@@ -299,7 +299,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 74. Template Label CLI & Propagation | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
 | 75. DI Seams & Structured Logging | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
-| 76. Integration Plugin Capability Contracts | v0.17.0 | 2/2 | Complete   | 2026-04-06 |
+| 76. Integration Plugin Capability Contracts | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 77. Indexed Config Store | v0.17.0 | 0/TBD | Not started | - |
 | 78. Operation Runner with Rollback | v0.17.0 | 0/TBD | Not started | - |
 | 79. Release Prep | v0.17.0 | 0/TBD | Not started | - |
