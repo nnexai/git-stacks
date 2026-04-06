@@ -12,6 +12,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### What shipped in v0.17.0 (in progress)
 
+- **Operation runner with rollback** — new pure `src/lib/operation-runner.ts` LIFO compensation-stack primitive: takes `(name, forwardFn, undoFn)` triples, executes forwards immediately, and on any forward throw rewinds the stack in reverse order with each undo wrapped in its own try/catch (best-effort); returns a discriminated-union result with `rollbackErrors[]`. New `createWorkspace()` exported from `workspace-lifecycle.ts` wires the runner into workspace creation with strict D-12 ordering (worktrees → upstream tracking → per-repo file ops → workspace file ops → env files → hooks → `writeWorkspace()` commit point → post-commit `runIntegrationGenerate`); hooks run outside the runner via Approach A synthetic-do() folding so D-17 (original forward error preserved) holds; `writeWorkspace()` is structurally unreachable on failure (D-10) and `runIntegrationGenerate` is never rolled back (D-11). Both call sites — `src/tui/workspace-wizard.ts:runWorkspaceNew` and `src/tui/dashboard/App.tsx:executeCreateWorkspace` — collapsed onto the shared primitive (−177 LOC); the dashboard's hand-rolled `createdWorktrees[]` proto-rollback and silent half-built-workspace commits are gone (Phase 78, ENGN-01/ENGN-02/ENGN-03)
 - **Indexed config store** — `src/lib/config.ts` now caches parsed `Workspace` and `Template` objects in name-keyed `Map`s; all six public read/write/list functions and the exists helpers gate through the index; new `deleteWorkspace`/`deleteTemplate` helpers consolidate file deletion + cache eviction; `_cache` seam exported for test isolation; all raw `unlinkSync(workspacePath/templatePath(...))` call sites in `workspace-lifecycle.ts`, `workspace-ops.ts`, `commands/template.ts`, and `tui/dashboard/App.tsx` migrated to the new helpers (Phase 77, ENGN-04/ENGN-05/ENGN-06)
 - **Integration capability contracts** — `Capability` type and required `capabilities: ReadonlySet<Capability>` on `Integration` interface; all 10 plugins declare capability sets; runner uses `capabilities.has()` instead of duck-typed optional chaining; `integration list` shows abbreviated capability tags (gen/clean/cmd/cfg/win/apl) in table output, full names in `--json` (Phase 76, ENGN-07/ENGN-08/ENGN-09)
 - **DI seams** — `workspace-lifecycle.ts` exports mutable `_exec.spawn` seam routing all hook execution through a replaceable boundary; `workspace-git.ts` exports mutable `_exec` wrapping 12 git helpers — tests can intercept subprocess launches without starting real processes (Phase 75, OBSV-01/OBSV-02)
@@ -302,9 +303,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Latest release:** v0.16.0 Core Engine & Observability (2026-04-05)
 
-**Shipped:** Phase 74 of v0.17.0 is complete. Templates now support nested `template label add|remove|list|clear`, `template list --label` uses exact-match AND semantics with a label-specific empty-state message, and template labels snapshot into new and cloned workspace YAML through composition/create/clone flows.
+**Shipped:** Phases 74-78 of v0.17.0 are complete. Template labels propagate through composition/create/clone (74); `_exec` DI seams + structured `GS_DEBUG` logging (75); integration `Capability` contracts with abbreviated tag rendering (76); indexed config store with `_cache` seam (77); operation runner with LIFO rollback wiring `createWorkspace()` and migrating both call sites to the shared primitive (78).
 
-**Status:** Milestone v0.17.0 in progress — Phase 74 complete, Phase 75 next.
+**Status:** Milestone v0.17.0 in progress — Phase 78 complete, Phase 78.1 (turn capability enums into actual TypeScript interface) next.
 
 ## Next Milestone Goals
 - Operation runner with rollback semantics for multi-step commands
@@ -481,4 +482,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-05 after Phase 74 completion*
+*Last updated: 2026-04-06 after Phase 78 completion*
