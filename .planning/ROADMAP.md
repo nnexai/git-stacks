@@ -257,7 +257,11 @@ Plans:
   1. `Integration` interface has a typed `capabilities` field; `bun run typecheck` passes with all 10 plugin files updated
   2. Integration runner gates `generate()` and `open()` calls on capability declarations, not optional chaining
   3. `git-stacks integration list` output includes a capabilities column for each plugin
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] `76-01-PLAN.md` — Capability type, Integration interface field, all 10 plugins updated, runner capability-gated calls
+- [ ] `76-02-PLAN.md` — integration list capabilities column (table + JSON output)
 
 ### Phase 77: Indexed Config Store
 **Goal**: Workspace and template lookups use an in-memory index instead of re-scanning and re-parsing all YAML files on every call
@@ -295,7 +299,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 74. Template Label CLI & Propagation | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
 | 75. DI Seams & Structured Logging | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
-| 76. Integration Plugin Capability Contracts | v0.17.0 | 0/TBD | Not started | - |
+| 76. Integration Plugin Capability Contracts | v0.17.0 | 0/2 | Planned | - |
 | 77. Indexed Config Store | v0.17.0 | 0/TBD | Not started | - |
 | 78. Operation Runner with Rollback | v0.17.0 | 0/TBD | Not started | - |
 | 79. Release Prep | v0.17.0 | 0/TBD | Not started | - |
