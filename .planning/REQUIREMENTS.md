@@ -19,9 +19,9 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 
 ### Engine Hardening
 
-- [ ] **ENGN-01**: Multi-step workspace operations use a compensation stack that rolls back completed steps on failure
-- [ ] **ENGN-02**: Rollback progress is visible to user via the existing onProgress callback
-- [ ] **ENGN-03**: Rollback is best-effort — individual undo failures are logged but do not abort remaining undo steps
+- [x] **ENGN-01**: Multi-step workspace operations use a compensation stack that rolls back completed steps on failure
+- [x] **ENGN-02**: Rollback progress is visible to user via the existing onProgress callback
+- [x] **ENGN-03**: Rollback is best-effort — individual undo failures are logged but do not abort remaining undo steps
 - [x] **ENGN-04**: Workspace/template lookups use an in-memory index instead of scanning all YAML files
 - [x] **ENGN-05**: Index is invalidated automatically on every write operation
 - [x] **ENGN-06**: Index miss falls back to YAML scan (cache, not source of truth)
@@ -76,9 +76,9 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 | TLBL-05 | Phase 74 | Complete |
 | TLBL-06 | Phase 74 | Complete |
 | TLBL-07 | Phase 74 | Complete |
-| ENGN-01 | Phase 78 | Pending |
-| ENGN-02 | Phase 78 | Pending |
-| ENGN-03 | Phase 78 | Pending |
+| ENGN-01 | Phase 78 | Complete |
+| ENGN-02 | Phase 78 | Complete |
+| ENGN-03 | Phase 78 | Complete |
 | ENGN-04 | Phase 77 | Complete |
 | ENGN-05 | Phase 77 | Complete |
 | ENGN-06 | Phase 77 | Complete |

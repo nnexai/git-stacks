@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
-status: verifying
-stopped_at: Phase 78 context gathered
-last_updated: "2026-04-06T10:11:19.919Z"
+status: executing
+stopped_at: Completed 78-01-PLAN.md
+last_updated: "2026-04-06T17:42:56.815Z"
 last_activity: 2026-04-06
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
-  percent: 100
+  total_plans: 11
+  completed_plans: 9
+  percent: 82
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 77 — indexed-config-store
+**Current focus:** Phase 78 — operation-runner-with-rollback
 
 ## Current Position
 
-Phase: 78
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 78 (operation-runner-with-rollback) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-04-06
 
 Progress: [██████████] 100% (2/2 plans)
@@ -62,6 +62,13 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 77]: Phase 77-01: removeWorkspace evicts cache before parse-attempt so externally-corrupted YAML is detected (preserves D-12 behavior)
 - [Phase 77]: templatePath retained in App.tsx import — still used at line 645 for YAML editor path, only deletion call replaced with deleteTemplate
 - [Phase 77]: Task 1 of 77-02 was no-op — Wave 1 (77-01) already replaced all workspace unlinkSync call sites in workspace-lifecycle.ts and workspace-ops.ts
+- [Phase 78-operation-runner-with-rollback]: [Plan 78-01]: createRunner uses split do/result API — do() manages stack and rolls back on throw, result() is single source of truth for the discriminated union
+- [Phase 78-operation-runner-with-rollback]: [Plan 78-01]: rollbackErrors[] entries duplicate the strings sent through onProgress (D-16) so programmatic callers do not have to re-parse stdout
+- [Phase 78-operation-runner-with-rollback]: [Plan 78-01]: runner reuses ProgressCallback from workspace-ops; introduces no new _exec seam — pure control-flow over caller-supplied closures
+
+### Roadmap Evolution
+
+- Phase 78.1 inserted after Phase 78: turn capability enums into actual typescript interface instead of capability return function. also remove it from the integration list and documentation (URGENT)
 
 ### Pending Todos
 
@@ -83,9 +90,10 @@ None.
 | Phase 76 P02 | 2m | 1 tasks | 2 files |
 | Phase 77 P01 | 20m | 1 tasks | 7 files |
 | Phase 77 P02 | 8min | 2 tasks | 2 files |
+| Phase 78-operation-runner-with-rollback P01 | 4min | 2 tasks | 2 files |
 
 ## Session Continuity
 
-Last session: 2026-04-06T10:11:19.917Z
-Stopped at: Phase 78 context gathered
-Resume file: .planning/phases/78-operation-runner-with-rollback/78-CONTEXT.md
+Last session: 2026-04-06T17:42:56.812Z
+Stopped at: Completed 78-01-PLAN.md
+Resume file: None

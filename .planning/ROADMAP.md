@@ -292,6 +292,16 @@ Plans:
 - [ ] `78-02-PLAN.md` — `createWorkspace()` on `workspace-lifecycle.ts` wiring runner into D-12 creation ordering with integration tests forcing failures via Phase 75 _exec seams
 - [ ] `78-03-PLAN.md` — Wizard and dashboard migration to shared `createWorkspace()`; delete hand-rolled rollback at App.tsx:883-911; CONCERNS.md:51-55 resolved
 
+### Phase 78.1: turn capability enums into actual typescript interface instead of capability return function. also remove it from the integration list and documentation (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 78
+**Plans:** 1/3 plans executed
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 78.1 to break down)
+
 ### Phase 79: Release Prep
 **Goal**: v0.17.0 is version-bumped, documented, and ready to ship
 **Depends on**: Phase 78
@@ -310,5 +320,5 @@ Plans:
 | 75. DI Seams & Structured Logging | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
 | 76. Integration Plugin Capability Contracts | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 77. Indexed Config Store | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
-| 78. Operation Runner with Rollback | v0.17.0 | 0/3 | Not started | - |
+| 78. Operation Runner with Rollback | v0.17.0 | 1/3 | In Progress|  |
 | 79. Release Prep | v0.17.0 | 0/TBD | Not started | - |
