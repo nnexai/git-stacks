@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
-status: executing
-stopped_at: Completed 77-01-PLAN.md
-last_updated: "2026-04-06T09:29:25.989Z"
+status: verifying
+stopped_at: Completed 77-02-PLAN.md
+last_updated: "2026-04-06T09:38:31.331Z"
 last_activity: 2026-04-06
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 8
-  completed_plans: 7
-  percent: 88
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 
 Phase: 77 (indexed-config-store) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-06
 
 Progress: [██████████] 100% (2/2 plans)
@@ -60,6 +60,8 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 77]: Phase 77-01: Option A (workspaceListPopulated flag + Map rebuild) chosen for list caching over separate list array
 - [Phase 77]: Phase 77-01: deleteWorkspace/deleteTemplate added to config.ts consolidating unlinkSync + cache eviction in one module
 - [Phase 77]: Phase 77-01: removeWorkspace evicts cache before parse-attempt so externally-corrupted YAML is detected (preserves D-12 behavior)
+- [Phase 77]: templatePath retained in App.tsx import — still used at line 645 for YAML editor path, only deletion call replaced with deleteTemplate
+- [Phase 77]: Task 1 of 77-02 was no-op — Wave 1 (77-01) already replaced all workspace unlinkSync call sites in workspace-lifecycle.ts and workspace-ops.ts
 
 ### Pending Todos
 
@@ -80,9 +82,10 @@ None.
 | Phase 76 P01 | 14m | 2 tasks | 15 files |
 | Phase 76 P02 | 2m | 1 tasks | 2 files |
 | Phase 77 P01 | 20m | 1 tasks | 7 files |
+| Phase 77 P02 | 8min | 2 tasks | 2 files |
 
 ## Session Continuity
 
-Last session: 2026-04-06T09:29:25.984Z
-Stopped at: Completed 77-01-PLAN.md
+Last session: 2026-04-06T09:38:31.327Z
+Stopped at: Completed 77-02-PLAN.md
 Resume file: None
