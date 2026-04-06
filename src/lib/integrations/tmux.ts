@@ -3,7 +3,7 @@ import { z } from "zod"
 import { join } from "path"
 import type { Command } from "commander"
 import { openTmuxSession, addTmuxPane, sendToTmuxPane, getTmuxMainPane, focusTmuxPane, killTmuxSession, tmuxSessionExists, focusTmuxSession } from "../tmux"
-import { resolveEnabled, type Integration, type IntegrationContext, type TmuxArtifact } from "./types"
+import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type TmuxArtifact } from "./types"
 
 /** Wrap a string in single quotes, escaping any embedded single quotes. */
 function shellQuote(s: string): string {
@@ -33,6 +33,7 @@ export const tmuxIntegration: Integration = {
   hint: "creates/focuses a tmux session",
   enabledByDefault: false,
   order: 12,
+  capabilities: new Set<Capability>(['cleanup', 'commands', 'configExample']),
 
   configExample: `integrations:
   tmux:

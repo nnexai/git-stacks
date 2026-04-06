@@ -1,6 +1,6 @@
 import { z } from "zod"
 import type { Command } from "commander"
-import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
+import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError, resolveWorkspaceArg } from "./issue-utils"
 import { workspaceExists, readGlobalConfig } from "../config"
 import { prompts as p } from "../../tui/utils"
@@ -35,6 +35,7 @@ export const jiraIntegration: Integration = {
   hint: "link and open Jira issues via jira-cli or configurable command",
   enabledByDefault: false,
   order: 53, // tier 5 — after gitea (52). Avoids collision with gitlab (51).
+  capabilities: new Set<Capability>(['commands']),
 
   isEnabled: (ctx) => resolveEnabled("jira", false, ctx),
 

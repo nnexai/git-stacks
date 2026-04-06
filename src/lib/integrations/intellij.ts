@@ -1,6 +1,6 @@
 import { $ } from "bun"
 import { generateIntellijProject } from "../intellij"
-import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
+import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 import type { Workspace } from "../config"
 
 // ─── Injectable executor ──────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ export const intellijIntegration: Integration = {
   hint: "opens .idea project for Java repos",
   enabledByDefault: true,
   order: 11,
+  capabilities: new Set<Capability>(['generate', 'applies']),
 
   applies: (workspace: Workspace) => workspace.repos.some((r) => r.type === "java"),
 

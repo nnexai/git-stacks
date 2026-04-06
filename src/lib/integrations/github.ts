@@ -1,5 +1,5 @@
 import type { Command } from "commander"
-import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
+import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
 import { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError, resolveWorkspaceArg } from "./issue-utils"
@@ -27,6 +27,7 @@ export const githubIntegration: Integration = {
   hint: "create and manage GitHub PRs and issues via gh CLI",
   enabledByDefault: false,
   order: 50,
+  capabilities: new Set<Capability>(['commands']),
 
   isEnabled: (ctx) => resolveEnabled("github", false, ctx),
 

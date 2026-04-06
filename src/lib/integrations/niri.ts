@@ -9,6 +9,7 @@ function shellQuote(s: string): string {
 
 import {
   resolveEnabled,
+  type Capability,
   type Integration,
   type IntegrationContext,
   type ArtifactBag,
@@ -64,6 +65,7 @@ export const niriIntegration: Integration = {
   hint: "arranges workspace windows onto a named niri workspace",
   enabledByDefault: false,
   order: 30,
+  capabilities: new Set<Capability>(['cleanup', 'commands', 'configExample', 'windowDetection']),
 
   configExample: `integrations:
   niri:

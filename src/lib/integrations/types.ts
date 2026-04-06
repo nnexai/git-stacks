@@ -39,6 +39,14 @@ export interface IntegrationContext {
   silent?: boolean
 }
 
+export type Capability =
+  | 'generate'
+  | 'cleanup'
+  | 'commands'
+  | 'configExample'
+  | 'windowDetection'
+  | 'applies'
+
 export interface Integration {
   /** Unique key — used as the key in config.integrations */
   id: string
@@ -54,6 +62,9 @@ export interface Integration {
    *   tier 3 (30-39): window management (niri, future)
    */
   order: number
+
+  /** Declares which optional behaviors this plugin provides. */
+  capabilities: ReadonlySet<Capability>
 
   /** Return false to skip this integration for a given workspace (e.g. IntelliJ on non-Java repos) */
   applies?(workspace: Workspace): boolean

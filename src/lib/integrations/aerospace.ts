@@ -3,6 +3,7 @@ import { prompts as p } from "../../tui/utils"
 import type { Command } from "commander"
 import {
   resolveEnabled,
+  type Capability,
   type Integration,
   type IntegrationContext,
   type ArtifactBag,
@@ -95,6 +96,7 @@ export const aerospaceIntegration: Integration = {
   hint: "moves workspace windows to an AeroSpace workspace",
   enabledByDefault: false,
   order: 31,
+  capabilities: new Set<Capability>(['cleanup', 'commands', 'configExample', 'windowDetection']),
 
   configExample: `integrations:
   aerospace:

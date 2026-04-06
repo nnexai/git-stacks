@@ -3,7 +3,7 @@ import { z } from "zod"
 import { $ } from "bun"
 import type { Command } from "commander"
 import { generateCodeWorkspace } from "../vscode"
-import { resolveEnabled, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
+import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 import { readGlobalConfig, readWorkspace, workspaceExists } from "../config"
 import { getTasksDir } from "../paths"
 
@@ -35,6 +35,7 @@ export const vscodeIntegration: Integration = {
   hint: "opens .code-workspace on git-stacks open",
   enabledByDefault: true,
   order: 10,
+  capabilities: new Set<Capability>(['generate', 'commands', 'configExample']),
 
   configExample: `integrations:
   vscode:

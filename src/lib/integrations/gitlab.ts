@@ -1,5 +1,5 @@
 import type { Command } from "commander"
-import { resolveEnabled, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
+import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
 import { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError, resolveWorkspaceArg } from "./issue-utils"
@@ -27,6 +27,7 @@ export const gitlabIntegration: Integration = {
   hint: "create and manage GitLab MRs and issues via glab CLI",
   enabledByDefault: false,
   order: 51,
+  capabilities: new Set<Capability>(['commands']),
 
   isEnabled: (ctx) => resolveEnabled("gitlab", false, ctx),
 
