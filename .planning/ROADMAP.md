@@ -271,7 +271,11 @@ Plans:
   1. `listWorkspaces()` and `readWorkspace()` return results sourced from the in-memory index without triggering a full directory scan on repeated calls
   2. Any write operation (create, rename, remove) invalidates the affected index entry so the next read reflects the change
   3. If a requested name is not in the index, the code falls back to a YAML scan and populates the index entry (cache, not source of truth)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] `77-01-PLAN.md` — In-memory index Maps with _cache seam, cache-gated read/write/list/exists, deleteWorkspace/deleteTemplate, tests
+- [ ] `77-02-PLAN.md` — Migrate all unlinkSync(workspacePath/templatePath) call sites to deleteWorkspace/deleteTemplate
 
 ### Phase 78: Operation Runner with Rollback
 **Goal**: Multi-step workspace operations (create, remove) execute via a LIFO compensation stack so partial failures clean up completed steps automatically
@@ -300,6 +304,6 @@ Plans:
 | 74. Template Label CLI & Propagation | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
 | 75. DI Seams & Structured Logging | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
 | 76. Integration Plugin Capability Contracts | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
-| 77. Indexed Config Store | v0.17.0 | 0/TBD | Not started | - |
+| 77. Indexed Config Store | v0.17.0 | 0/2 | Not started | - |
 | 78. Operation Runner with Rollback | v0.17.0 | 0/TBD | Not started | - |
 | 79. Release Prep | v0.17.0 | 0/TBD | Not started | - |
