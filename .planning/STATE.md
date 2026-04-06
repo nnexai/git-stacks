@@ -4,14 +4,14 @@ milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
 status: verifying
 stopped_at: Completed 78-03-PLAN.md
-last_updated: "2026-04-06T18:12:56.568Z"
+last_updated: "2026-04-06T18:20:12.658Z"
 last_activity: 2026-04-06
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 13
+  total_plans: 14
   completed_plans: 11
-  percent: 85
+  percent: 79
 ---
 
 # Project State
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 
 ## Current Position
 
-Phase: 78 (operation-runner-with-rollback) — EXECUTING
-Plan: 3 of 3
+Phase: 78.1
+Plan: Not started
 Status: Phase complete — ready for verification
 Last activity: 2026-04-06
 
