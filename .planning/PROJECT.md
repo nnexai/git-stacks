@@ -8,10 +8,11 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Recent State (2026-04-05)
+## Recent State (2026-04-06)
 
 ### What shipped in v0.17.0 (in progress)
 
+- **Indexed config store** — `src/lib/config.ts` now caches parsed `Workspace` and `Template` objects in name-keyed `Map`s; all six public read/write/list functions and the exists helpers gate through the index; new `deleteWorkspace`/`deleteTemplate` helpers consolidate file deletion + cache eviction; `_cache` seam exported for test isolation; all raw `unlinkSync(workspacePath/templatePath(...))` call sites in `workspace-lifecycle.ts`, `workspace-ops.ts`, `commands/template.ts`, and `tui/dashboard/App.tsx` migrated to the new helpers (Phase 77, ENGN-04/ENGN-05/ENGN-06)
 - **Integration capability contracts** — `Capability` type and required `capabilities: ReadonlySet<Capability>` on `Integration` interface; all 10 plugins declare capability sets; runner uses `capabilities.has()` instead of duck-typed optional chaining; `integration list` shows abbreviated capability tags (gen/clean/cmd/cfg/win/apl) in table output, full names in `--json` (Phase 76, ENGN-07/ENGN-08/ENGN-09)
 - **DI seams** — `workspace-lifecycle.ts` exports mutable `_exec.spawn` seam routing all hook execution through a replaceable boundary; `workspace-git.ts` exports mutable `_exec` wrapping 12 git helpers — tests can intercept subprocess launches without starting real processes (Phase 75, OBSV-01/OBSV-02)
 - **Structured debug output** — `GS_DEBUG=1` / `GS_DEBUG=true` enables structured single-line stderr (`op=`, `module=`, `msg=`, `ms=`); `GS_DEBUG=lifecycle` / `GS_DEBUG=git` filters to specific modules via `MODULE_ALIASES`; `GIT_STACKS_DEBUG=1` preserved as compatibility alias (Phase 75, OBSV-03/OBSV-04/OBSV-05)
