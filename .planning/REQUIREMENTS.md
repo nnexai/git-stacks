@@ -25,8 +25,8 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 - [ ] **ENGN-04**: Workspace/template lookups use an in-memory index instead of scanning all YAML files
 - [ ] **ENGN-05**: Index is invalidated automatically on every write operation
 - [ ] **ENGN-06**: Index miss falls back to YAML scan (cache, not source of truth)
-- [ ] **ENGN-07**: Each integration plugin declares its capabilities via a typed `capabilities` field
-- [ ] **ENGN-08**: Integration runner uses capability declarations instead of optional chaining to gate calls
+- [x] **ENGN-07**: Each integration plugin declares its capabilities via a typed `capabilities` field
+- [x] **ENGN-08**: Integration runner uses capability declarations instead of optional chaining to gate calls
 - [ ] **ENGN-09**: `integration list` displays plugin capabilities
 
 ### Observability
@@ -82,8 +82,8 @@ Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadma
 | ENGN-04 | Phase 77 | Pending |
 | ENGN-05 | Phase 77 | Pending |
 | ENGN-06 | Phase 77 | Pending |
-| ENGN-07 | Phase 76 | Pending |
-| ENGN-08 | Phase 76 | Pending |
+| ENGN-07 | Phase 76 | Complete |
+| ENGN-08 | Phase 76 | Complete |
 | ENGN-09 | Phase 76 | Pending |
 | OBSV-01 | Phase 75 | Complete |
 | OBSV-02 | Phase 75 | Complete |
