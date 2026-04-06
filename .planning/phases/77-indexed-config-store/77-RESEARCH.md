@@ -372,7 +372,7 @@ This is standard in-process memoization. No ecosystem shifts apply. [ASSUMED]
 | A4 | `workspaceExists` needs the same cache-first guard as `readWorkspace` | Common Pitfalls | Without it, `workspaceExists` always scans even when cache is warm |
 | A5 | Line numbers cited for `unlinkSync` call sites are approximate (verified by grep pattern, not exact offset) | Call Sites to Update | Off-by-one — does not affect correctness of the fix |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`_cache` seam vs. `workspaceListPopulated` flag exposure**
    - What we know: `_cache` exposes the Maps; but `workspaceListPopulated` is a separate scalar
