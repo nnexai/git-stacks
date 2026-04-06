@@ -29,6 +29,7 @@ const windowIntegration = {
   hint: "produces windows",
   enabledByDefault: true,
   order: 10,
+  capabilities: new Set(["windowDetection"]),
   isEnabled: () => true,
   open: windowOpenMock,
   windowDetector: windowDetectorMock,
@@ -43,6 +44,7 @@ const nonWindowIntegration = {
   hint: "does not produce windows",
   enabledByDefault: true,
   order: 20,
+  capabilities: new Set([]),
   isEnabled: () => true,
   open: nonWindowOpenMock,
 }
@@ -55,6 +57,7 @@ const consumerIntegration = {
   hint: "tier-3 consumer",
   enabledByDefault: true,
   order: 30,
+  capabilities: new Set([]),
   isEnabled: () => true,
   open: consumerOpenMock,
 }

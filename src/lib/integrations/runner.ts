@@ -11,8 +11,8 @@ export async function runIntegrationGenerate(ctx: IntegrationContext): Promise<R
   const results: RunGenerateResult[] = []
   for (const integration of sorted) {
     if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(ctx.workspace)) continue
-    const path = integration.generate?.(ctx) ?? null
+    if (integration.capabilities.has('applies') && !integration.applies!(ctx.workspace)) continue
+    const path = integration.capabilities.has('generate') ? integration.generate!(ctx) : null
     results.push({ integration, path })
   }
   return results
@@ -24,14 +24,14 @@ export async function runIntegrations(ctx: IntegrationContext, skip?: Set<string
 
   // Collect all enabled WindowDetectors from integrations that provide one
   const detectors: WindowDetector[] = sorted
-    .filter((i) => i.windowDetector && i.isEnabled(ctx) && (!i.applies || i.applies(ctx.workspace)))
+    .filter((i) => i.capabilities.has('windowDetection') && i.isEnabled(ctx) && (!i.capabilities.has('applies') || i.applies!(ctx.workspace)))
     .map((i) => i.windowDetector!)
 
   for (const integration of sorted) {
     if (skip?.has(integration.id)) continue
     if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(ctx.workspace)) continue
-    const artifactPath = integration.generate?.(ctx) ?? null
+    if (integration.capabilities.has('applies') && !integration.applies!(ctx.workspace)) continue
+    const artifactPath = integration.capabilities.has('generate') ? integration.generate!(ctx) : null
 
     // Before spawning, capture pre-spawn snapshots from all detectors
     const snapshots = new Map<WindowDetector, DetectorSnapshot>()
@@ -65,10 +65,10 @@ export async function runIntegrationCleanup(ctx: IntegrationContext): Promise<vo
   const sorted = [...integrations].sort((a, b) => a.order - b.order)
   for (const integration of sorted) {
     if (!integration.isEnabled(ctx)) continue
-    if (integration.applies && !integration.applies(ctx.workspace)) continue
-    if (!integration.cleanup) continue
+    if (integration.capabilities.has('applies') && !integration.applies!(ctx.workspace)) continue
+    if (!integration.capabilities.has('cleanup')) continue
     try {
-      await integration.cleanup(ctx)
+      await integration.cleanup!(ctx)
     } catch (err) {
       // Cleanup failures are non-fatal — log and continue
       console.warn(`${integration.id} cleanup: ${String(err)}`)
