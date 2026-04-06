@@ -1,5 +1,5 @@
 import { prompts as p, safeText, cancel } from "./utils"
-import { mkdirSync, existsSync } from "fs"
+import { existsSync } from "fs"
 import { join, resolve, basename } from "path"
 import {
   readRegistry,
@@ -12,21 +12,18 @@ import {
   workspaceExists,
   readGlobalConfig,
   expandBranchPattern,
-  isWorktreeRepo,
   type WorkspaceRepo,
   type Workspace,
   type Template,
   type RepoRegistryEntry,
 } from "../lib/config"
 import { getTasksDir, expandHome } from "../lib/paths"
-import { createWorktree, getCurrentBranch, ensureUpstreamTracking } from "../lib/git"
+import { getCurrentBranch } from "../lib/git"
 import { detectRepoType } from "../lib/detect"
-import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
+import { integrations, resolveEnabledGlobally } from "../lib/integrations"
 import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
-import { runIntegrationGenerate } from "../lib/integrations/runner"
-import { runHooks } from "../lib/lifecycle"
-import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../lib/files"
 import { openWorkspace } from "../lib/workspace-ops"
+import { createWorkspace } from "../lib/workspace-lifecycle"
 import { composeTemplates } from "../lib/composition"
 import { mergePorts } from "../lib/ports"
 
@@ -461,168 +458,44 @@ export async function runWorkspaceNew(
     wsIntegrationSettings = userIntegrationOverrides
   }
 
-  const baseEnv: Record<string, string> = {
-    GS_WORKSPACE_NAME: wsName,
-    GS_WORKSPACE_BRANCH: branch,
-    GS_WORKSPACE_PATH: tasksDir,
-    GS_TRIGGERED_BY: "create",
-  }
+  // Delegate the entire creation side-effect block to the shared createWorkspace() function.
+  // All rollback, hook execution, file ops, env files, post_create, writeWorkspace commit, and
+  // runIntegrationGenerate are handled inside that function (D-01, D-02, D-12).
+  const result = await createWorkspace(
+    {
+      wsName,
+      branch,
+      ...(description ? { description } : {}),
+      ...(templateName ? { templateName } : {}),
+      repos,
+      ...(wsHooks ? { wsHooks } : {}),
+      ...(wsEnv ? { wsEnv } : {}),
+      ...(wsEnvFile ? { wsEnvFile } : {}),
+      ...(wsFiles ? { wsFiles } : {}),
+      ...(wsIntegrationSettings ? { wsIntegrationSettings } : {}),
+      ...(wsPorts ? { wsPorts } : {}),
+      ...(labels.length > 0 ? { labels } : {}),
+    },
+    (msg) => p.log.info(msg),
+  )
 
-  // Run pre_create hooks (from snapshot or workspace config)
-  if (wsHooks?.pre_create?.length) {
-    try {
-      await runHooks(wsHooks.pre_create, tasksDir, baseEnv)
-    } catch (err) {
-      p.cancel(`pre_create hook failed: ${err}`)
-      process.exit(1)
-    }
-  }
-
-  // Create worktrees
-  const worktreeRepos = repos.filter(isWorktreeRepo)
-  if (worktreeRepos.length > 0) {
-    const spinner = p.spinner()
-    spinner.start("Creating worktrees")
-    const wsDir = join(tasksDir, wsName)
-    if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
-
-    for (const repo of worktreeRepos) {
-      spinner.message(`${repo.name}\u2026`)
-      try {
-        await createWorktree(repo.main_path, repo.task_path, branch)
-      } catch (err) {
-        spinner.stop(`Failed on ${repo.name}`)
-        p.log.error(String(err))
-        process.exit(1)
+  if (!result.ok) {
+    // Surface any rollback errors so the user knows cleanup was partial
+    if (result.rollbackErrors.length > 0) {
+      for (const rbErr of result.rollbackErrors) {
+        p.log.warn(rbErr)
       }
     }
-    spinner.stop(`${worktreeRepos.length} worktree(s) created`)
-
-    // Set upstream tracking for branches that exist on origin
-    const trackingResults = await Promise.all(
-      worktreeRepos.map(repo => ensureUpstreamTracking(repo.main_path, branch))
-    )
-    const tracked = trackingResults.filter(r => r.tracked)
-    if (tracked.length > 0) {
-      p.log.info(`Upstream tracking set for ${tracked.length} repo(s)`)
-    }
+    p.cancel(`Failed to create workspace: ${result.error}`)
+    process.exit(1)
   }
 
-  // Merge env (workspace-level)
-  const envVars: Record<string, string> = wsEnv ? { ...wsEnv } : {}
-  const enrichedBaseEnv = { ...baseEnv, ...envVars }
-
-  const wsDir = join(tasksDir, wsName)
-
-  // Build integration settings from template snapshot
-  const settingsIntegrations = wsIntegrationSettings && Object.keys(wsIntegrationSettings).length > 0
-    ? { settings: { integrations: wsIntegrationSettings } }
-    : {}
-
-  // Build workspace object before file ops so we can pass a real Workspace to applyFileOpsForWorkspace
-  const workspaceObj: Workspace = {
-    name: wsName,
-    schema_version: "1",
-    description: description || undefined,
-    branch,
-    created: new Date().toISOString().split("T")[0],
-    ...(templateName ? { template: templateName } : {}),
-    ...(wsHooks ? { hooks: wsHooks } : {}),
-    repos,
-    ...(wsEnv ? { env: wsEnv } : {}),
-    ...(wsEnvFile ? { env_file: wsEnvFile } : {}),
-    ...(wsFiles ? { files: wsFiles } : {}),
-    ...settingsIntegrations,
-    ...(wsPorts ? { ports: wsPorts } : {}),
-    ...(labels.length > 0 ? { labels } : {}),
-  } as Workspace
-
-  // File ops
-  const opsSpinner = p.spinner()
-  opsSpinner.start("Applying file ops")
-
-  // Per-repo file ops
-  for (const wsRepo of repos.filter(isWorktreeRepo)) {
-    if (!wsRepo.files) continue
-    opsSpinner.message(`files: ${wsRepo.name}`)
-    const repoLike = {
-      name: wsRepo.name,
-      path: wsRepo.main_path,
-      files: wsRepo.files,
-    }
-    const fileResult = applyFileOpsForRepo(repoLike, wsRepo)
-    if (!fileResult.ok) {
-      opsSpinner.stop(`File operation failed for ${wsRepo.name}`)
-      p.log.error(fileResult.error)
-      process.exit(1)
-    }
-    if (fileResult.warnings) {
-      for (const w of fileResult.warnings) p.log.warn(w)
-    }
-  }
-
-  // Workspace-instance file ops
-  if (wsFiles) {
-    const sourceLike = { files: wsFiles }
-    const wsFileResult = applyFileOpsForWorkspace(sourceLike, workspaceObj, wsDir)
-    if (!wsFileResult.ok) {
-      opsSpinner.stop("Workspace file operation failed")
-      p.log.error(wsFileResult.error)
-      process.exit(1)
-    }
-    if (wsFileResult.warnings) {
-      for (const w of wsFileResult.warnings) p.log.warn(w)
-    }
-  }
-  opsSpinner.stop("File ops done")
-
-  // Env files
-  if (wsEnvFile && Object.keys(envVars).length > 0) {
-    const { writeFileSync, lstatSync } = await import("fs")
-    const content = Object.entries(envVars).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
-    for (const repo of worktreeRepos) {
-      if (!existsSync(repo.task_path)) continue
-      const targetPath = join(repo.task_path, wsEnvFile)
-      try {
-        if (lstatSync(targetPath).isSymbolicLink()) {
-          p.log.warn(`skipping env file write: ${targetPath} is a symlink`)
-          continue
-        }
-      } catch { /* file doesn't exist yet */ }
-      writeFileSync(targetPath, content, "utf-8")
-    }
-  }
-
-  // post_create hooks
-  if (wsHooks?.post_create?.length) {
-    const hooksSpinner = p.spinner()
-    hooksSpinner.start("Running post_create hooks")
-    try {
-      await runHooks(wsHooks.post_create, wsDir, enrichedBaseEnv)
-      hooksSpinner.stop("post_create hooks done")
-    } catch (err) {
-      hooksSpinner.stop("Hook failed")
-      p.log.error(String(err))
-      process.exit(1)
-    }
-  }
-
-  // Save workspace config
-  writeWorkspace(workspaceObj)
-
-  // Generate integration artifacts
-  const ctx: IntegrationContext = { workspace: workspaceObj, tasksDir, config }
-  const results = await runIntegrationGenerate(ctx)
-  for (const { integration, path } of results) {
-    if (path) p.log.success(`${integration.label}: ${path}`)
-  }
-
-  // Offer to open
+  // Offer to open the newly-created workspace
   const openNow = await p.confirm({ message: "Open workspace now?", initialValue: true })
   if (!p.isCancel(openNow) && openNow) {
-    const result = await openWorkspace(wsName, {}, (msg) => p.log.info(msg))
-    if (!result.ok) {
-      p.log.warn(`Open failed: ${result.error}`)
+    const openResult = await openWorkspace(wsName, {}, (msg) => p.log.info(msg))
+    if (!openResult.ok) {
+      p.log.warn(`Open failed: ${openResult.error}`)
     }
   }
 
