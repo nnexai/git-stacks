@@ -16,6 +16,8 @@ import {
   makeTmpDir, cleanup, useIsolatedConfig,
   realWriteWorkspace, realReadWorkspace, realListWorkspaces,
   realWorkspaceExists, realTemplateExists, realReadTemplate,
+  realWriteTemplate, realListTemplates,
+  realCache, realDeleteWorkspace, realDeleteTemplate,
 } from "../helpers"
 
 const isolated = useIsolatedConfig("config-test")
@@ -340,6 +342,10 @@ describe("corrupt YAML handling", () => {
       getTasksDir: (r: string) => join(r, "tasks"),
       expandHome: (p: string) => p.startsWith("~/") ? join(isolated.configDir, p.slice(2)) : p,
     }))
+    // Reset in-memory index so list scans fresh files each test
+    realCache.workspaces.clear()
+    realCache.templates.clear()
+    realCache.resetList()
   })
 
   function writeWorkspaceFile(name: string, content: string): string {
@@ -389,6 +395,10 @@ describe("scan-based lookup", () => {
       getTasksDir: (r: string) => join(r, "tasks"),
       expandHome: (p: string) => p.startsWith("~/") ? join(scanIsolated.configDir, p.slice(2)) : p,
     }))
+    // Reset in-memory index so each test starts with a clean scan
+    realCache.workspaces.clear()
+    realCache.templates.clear()
+    realCache.resetList()
   })
 
   afterAll(() => scanIsolated.cleanup())
@@ -610,6 +620,9 @@ describe("atomic writeYaml", () => {
       getTasksDir: (r: string) => join(r, "tasks"),
       expandHome: (p: string) => p.startsWith("~/") ? join(atomicIsolated.configDir, p.slice(2)) : p,
     }))
+    realCache.workspaces.clear()
+    realCache.templates.clear()
+    realCache.resetList()
   })
 
   afterAll(() => atomicIsolated.cleanup())
@@ -733,6 +746,9 @@ describe("writeYaml fsync (PORT-WRITE-01)", () => {
       getTasksDir: (r: string) => join(r, "tasks"),
       expandHome: (p: string) => p.startsWith("~/") ? join(fsyncIsolated.configDir, p.slice(2)) : p,
     }))
+    realCache.workspaces.clear()
+    realCache.templates.clear()
+    realCache.resetList()
   })
 
   afterAll(() => fsyncIsolated.cleanup())
@@ -844,5 +860,261 @@ describe("dir repo schema support", () => {
       mode: "dir", main_path: "/home/user/notes",
     })
     expect(repo.base_branch).toBeUndefined()
+  })
+})
+
+// --- in-memory index (ENGN-04/05/06) ---
+
+describe("in-memory index", () => {
+  const indexIsolated = useIsolatedConfig("config-index-test")
+  const wsDir = () => join(indexIsolated.configDir, "workspaces")
+  const tplDir = () => join(indexIsolated.configDir, "templates")
+
+  function resetCache() {
+    realCache.workspaces.clear()
+    realCache.templates.clear()
+    realCache.resetList()
+  }
+
+  function makeWsYaml(name: string): string {
+    return `name: "${name}"\nbranch: main\ncreated: "2026-01-01"\n`
+  }
+
+  function makeTplYaml(name: string): string {
+    return `name: "${name}"\n`
+  }
+
+  beforeEach(() => {
+    mkdirSync(wsDir(), { recursive: true })
+    mkdirSync(tplDir(), { recursive: true })
+    mock.module("@/lib/paths", () => ({
+      HOME: indexIsolated.configDir,
+      DEFAULT_WORKSPACE_ROOT: join(indexIsolated.configDir, "ws-root"),
+      WS_CONFIG_DIR: indexIsolated.configDir,
+      WORKSPACES_DIR: wsDir(),
+      GLOBAL_CONFIG_FILE: join(indexIsolated.configDir, "config.yml"),
+      REGISTRY_FILE: join(indexIsolated.configDir, "registry.yml"),
+      TEMPLATES_DIR: tplDir(),
+      MESSAGES_DIR: join(indexIsolated.configDir, "messages"),
+      PORTS_LOCK_FILE: join(indexIsolated.configDir, ".ports.lock"),
+      getMainDir: (r: string) => join(r, "main"),
+      getTasksDir: (r: string) => join(r, "tasks"),
+      expandHome: (p: string) => p.startsWith("~/") ? join(indexIsolated.configDir, p.slice(2)) : p,
+    }))
+    resetCache()
+  })
+
+  afterAll(() => indexIsolated.cleanup())
+
+  // ENGN-04: readWorkspace returns cached result on second call
+  test("readWorkspace returns from cache on second call (no FS scan)", () => {
+    const wsFile = join(wsDir(), "cache-ws.yml")
+    writeFileSync(wsFile, makeWsYaml("cache-ws"))
+
+    // First call — populates cache from disk
+    const first = realReadWorkspace("cache-ws")
+    expect(first.name).toBe("cache-ws")
+
+    // Delete the file from disk — next call must use cache
+    const { unlinkSync } = require("fs")
+    unlinkSync(wsFile)
+
+    // Second call — must return from cache, not throw
+    const second = realReadWorkspace("cache-ws")
+    expect(second.name).toBe("cache-ws")
+  })
+
+  // ENGN-04: listWorkspaces returns cached results on second call
+  test("listWorkspaces returns from cache on second call (list flag)", () => {
+    writeFileSync(join(wsDir(), "ws-a.yml"), makeWsYaml("ws-a"))
+    writeFileSync(join(wsDir(), "ws-b.yml"), makeWsYaml("ws-b"))
+
+    // First call — populates list cache
+    const first = realListWorkspaces()
+    const firstNames = first.map((w: { name: string }) => w.name)
+    expect(firstNames).toContain("ws-a")
+    expect(firstNames).toContain("ws-b")
+
+    // Delete one file — second call must use cache (still sees both)
+    const { unlinkSync } = require("fs")
+    unlinkSync(join(wsDir(), "ws-b.yml"))
+
+    const second = realListWorkspaces()
+    const secondNames = second.map((w: { name: string }) => w.name)
+    expect(secondNames).toContain("ws-a")
+    expect(secondNames).toContain("ws-b")
+  })
+
+  // ENGN-04: readTemplate returns cached result on second call
+  test("readTemplate returns from cache on second call (no FS scan)", () => {
+    const tplFile = join(tplDir(), "cache-tpl.yml")
+    writeFileSync(tplFile, makeTplYaml("cache-tpl"))
+
+    const first = realReadTemplate("cache-tpl")
+    expect(first.name).toBe("cache-tpl")
+
+    const { unlinkSync } = require("fs")
+    unlinkSync(tplFile)
+
+    const second = realReadTemplate("cache-tpl")
+    expect(second.name).toBe("cache-tpl")
+  })
+
+  // ENGN-04: listTemplates returns cached results on second call
+  test("listTemplates returns from cache on second call (list flag)", () => {
+    writeFileSync(join(tplDir(), "tpl-a.yml"), makeTplYaml("tpl-a"))
+    writeFileSync(join(tplDir(), "tpl-b.yml"), makeTplYaml("tpl-b"))
+
+    const first = realListTemplates()
+    const firstNames = first.map((t: { name: string }) => t.name)
+    expect(firstNames).toContain("tpl-a")
+    expect(firstNames).toContain("tpl-b")
+
+    const { unlinkSync } = require("fs")
+    unlinkSync(join(tplDir(), "tpl-b.yml"))
+
+    const second = realListTemplates()
+    const secondNames = second.map((t: { name: string }) => t.name)
+    expect(secondNames).toContain("tpl-a")
+    expect(secondNames).toContain("tpl-b")
+  })
+
+  // ENGN-04: workspaceExists returns true from cache
+  test("workspaceExists returns true from cache after file deleted", () => {
+    const wsFile = join(wsDir(), "exists-ws.yml")
+    writeFileSync(wsFile, makeWsYaml("exists-ws"))
+
+    // Populate cache via readWorkspace
+    realReadWorkspace("exists-ws")
+
+    // Delete the file
+    const { unlinkSync } = require("fs")
+    unlinkSync(wsFile)
+
+    // Cache still knows it exists
+    expect(realWorkspaceExists("exists-ws")).toBe(true)
+  })
+
+  // ENGN-04: templateExists returns true from cache
+  test("templateExists returns true from cache after file deleted", () => {
+    const tplFile = join(tplDir(), "exists-tpl.yml")
+    writeFileSync(tplFile, makeTplYaml("exists-tpl"))
+
+    realReadTemplate("exists-tpl")
+
+    const { unlinkSync } = require("fs")
+    unlinkSync(tplFile)
+
+    expect(realTemplateExists("exists-tpl")).toBe(true)
+  })
+
+  // ENGN-05: writeWorkspace upserts cache
+  test("writeWorkspace upserts cache — updated data visible without FS re-read", () => {
+    const ws = WorkspaceSchema.parse({ name: "upsert-ws", branch: "main", created: "2026-01-01" })
+    realWriteWorkspace(ws)
+
+    // First read — populates cache
+    const first = realReadWorkspace("upsert-ws")
+    expect(first.branch).toBe("main")
+
+    // Write updated version
+    const updated = WorkspaceSchema.parse({ name: "upsert-ws", branch: "feature/x", created: "2026-01-01" })
+    realWriteWorkspace(updated)
+
+    // Cache must reflect the update
+    const second = realReadWorkspace("upsert-ws")
+    expect(second.branch).toBe("feature/x")
+  })
+
+  // ENGN-05: writeTemplate upserts cache
+  test("writeTemplate upserts cache — updated data visible without FS re-read", () => {
+    const tpl = TemplateSchema.parse({ name: "upsert-tpl", description: "v1" })
+    realWriteTemplate(tpl)
+
+    const first = realReadTemplate("upsert-tpl")
+    expect(first.description).toBe("v1")
+
+    const updated = TemplateSchema.parse({ name: "upsert-tpl", description: "v2" })
+    realWriteTemplate(updated)
+
+    const second = realReadTemplate("upsert-tpl")
+    expect(second.description).toBe("v2")
+  })
+
+  // ENGN-05: deleteWorkspace evicts cache — workspaceExists returns false
+  test("deleteWorkspace evicts cache entry — workspaceExists returns false", () => {
+    writeFileSync(join(wsDir(), "evict-ws.yml"), makeWsYaml("evict-ws"))
+
+    // Populate cache
+    realReadWorkspace("evict-ws")
+    expect(realWorkspaceExists("evict-ws")).toBe(true)
+
+    // Delete (evicts cache and removes file)
+    realDeleteWorkspace("evict-ws")
+
+    expect(realWorkspaceExists("evict-ws")).toBe(false)
+  })
+
+  // ENGN-05: deleteTemplate evicts cache
+  test("deleteTemplate evicts cache entry — templateExists returns false", () => {
+    writeFileSync(join(tplDir(), "evict-tpl.yml"), makeTplYaml("evict-tpl"))
+
+    realReadTemplate("evict-tpl")
+    expect(realTemplateExists("evict-tpl")).toBe(true)
+
+    realDeleteTemplate("evict-tpl")
+
+    expect(realTemplateExists("evict-tpl")).toBe(false)
+  })
+
+  // ENGN-05: deleteWorkspace resets list flag — deleted entry gone from next list
+  test("deleteWorkspace resets list flag — deleted entry absent from next listWorkspaces", () => {
+    writeFileSync(join(wsDir(), "list-a.yml"), makeWsYaml("list-a"))
+    writeFileSync(join(wsDir(), "list-b.yml"), makeWsYaml("list-b"))
+
+    // Populate list cache
+    const first = realListWorkspaces()
+    expect(first.map((w: { name: string }) => w.name)).toContain("list-b")
+
+    // Delete one entry
+    realDeleteWorkspace("list-b")
+
+    // Next list must re-scan (flag reset) and not include deleted entry
+    const second = realListWorkspaces()
+    const names = second.map((w: { name: string }) => w.name)
+    expect(names).toContain("list-a")
+    expect(names).not.toContain("list-b")
+  })
+
+  // ENGN-06: cache miss falls back to scan and populates cache
+  test("cache miss falls back to YAML scan and populates cache", () => {
+    // Cache is empty (reset in beforeEach)
+    writeFileSync(join(wsDir(), "fallback-ws.yml"), makeWsYaml("fallback-ws"))
+
+    // No cache entry — must scan and find
+    const ws = realReadWorkspace("fallback-ws")
+    expect(ws.name).toBe("fallback-ws")
+
+    // Now it must be in cache (second call skips FS even if file removed)
+    const { unlinkSync } = require("fs")
+    unlinkSync(join(wsDir(), "fallback-ws.yml"))
+    const ws2 = realReadWorkspace("fallback-ws")
+    expect(ws2.name).toBe("fallback-ws")
+  })
+
+  // _cache seam: clearing cache forces re-scan
+  test("_cache.workspaces.clear() forces re-scan on next readWorkspace", () => {
+    writeFileSync(join(wsDir(), "seam-ws.yml"), makeWsYaml("seam-ws"))
+
+    // Populate cache
+    realReadWorkspace("seam-ws")
+
+    // Clear cache manually
+    realCache.workspaces.clear()
+    realCache.resetList()
+
+    // File still exists — scan fallback should succeed
+    const ws = realReadWorkspace("seam-ws")
+    expect(ws.name).toBe("seam-ws")
   })
 })

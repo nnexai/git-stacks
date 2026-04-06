@@ -1,16 +1,17 @@
-import { existsSync, unlinkSync } from "fs"
+import { existsSync } from "fs"
 import { join } from "path"
 import {
   readWorkspace,
   writeWorkspace,
   workspaceExists,
-  workspacePath,
   listWorkspaces,
   readGlobalConfig,
   templatePath,
   templateExists,
   readTemplate,
   writeTemplate,
+  deleteWorkspace,
+  deleteTemplate,
   getRepoPath,
   isWorktreeRepo,
   type WorkspaceRepo,
@@ -286,7 +287,7 @@ export async function renameWorkspace(
   writeWorkspace(workspace)
   onProgress?.(`wrote  ${newName}.yml`)
 
-  unlinkSync(workspacePath(oldName))
+  deleteWorkspace(oldName)
   onProgress?.(`deleted  ${oldName}.yml`)
 
   if (workspace.cmux_workspace_id) {
@@ -337,7 +338,7 @@ export async function renameTemplate(
 
   // Step 3: Delete old template file
   if (existsSync(templatePath(oldName))) {
-    unlinkSync(templatePath(oldName))
+    deleteTemplate(oldName)
   }
   onProgress?.(`deleted  ${oldName}.yml`)
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll } from "bun:test"
+import { describe, test, expect, afterAll, beforeEach } from "bun:test"
 import { useIsolatedConfig, write } from "../helpers"
 import { stringify } from "yaml"
 
@@ -8,11 +8,19 @@ const isolated = useIsolatedConfig("composition-test")
 const comp = await import("@/lib/composition")
 const { composeTemplates, CircularIncludesError, MissingTemplateError } = comp
 const cfg = await import("@/lib/config")
-const { TemplateSchema } = cfg
+const { TemplateSchema, _cache } = cfg as any
 
 type TemplateRepo = { repo: string; mode: string; base_branch?: string; branch_pattern?: string }
 
 afterAll(() => isolated.cleanup())
+
+// Reset in-memory index before each test — writeTestTemplate writes directly to disk
+// (not via writeTemplate), so the cache would otherwise serve stale data across tests.
+beforeEach(() => {
+  _cache.templates.clear()
+  _cache.workspaces.clear()
+  _cache.resetList()
+})
 
 function writeTestTemplate(dir: string, name: string, data: Record<string, unknown>) {
   const content = stringify({ name, schema_version: "1", ...data })

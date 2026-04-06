@@ -1,7 +1,7 @@
 import { z } from "zod"
 import type { ZodError } from "zod"
 import { parse, stringify } from "yaml"
-import { readFileSync, existsSync, mkdirSync, readdirSync, renameSync, openSync, writeSync, fsyncSync, closeSync } from "fs"
+import { readFileSync, existsSync, mkdirSync, readdirSync, renameSync, openSync, writeSync, fsyncSync, closeSync, unlinkSync } from "fs"
 import { join, dirname } from "path"
 import {
   WORKSPACES_DIR,
@@ -11,6 +11,23 @@ import {
   TEMPLATES_DIR,
   expandHome,
 } from "./paths"
+
+// --- In-memory index (ENGN-04/05/06) ---
+
+const workspaceIndex = new Map<string, Workspace>()
+const templateIndex = new Map<string, Template>()
+let workspaceListPopulated = false
+let templateListPopulated = false
+
+/** Mutable seam for test isolation — tests call _cache.workspaces.clear() in beforeEach. */
+export const _cache = {
+  workspaces: workspaceIndex,
+  templates: templateIndex,
+  resetList() {
+    workspaceListPopulated = false
+    templateListPopulated = false
+  },
+}
 
 // --- Error formatting ---
 
@@ -300,30 +317,42 @@ export function workspacePath(name: string): string {
 }
 
 export function workspaceExists(name: string): boolean {
+  if (workspaceIndex.has(name)) return true
   return findWorkspaceFile(name) !== null
 }
 
 export function readWorkspace(name: string): Workspace {
+  const cached = workspaceIndex.get(name)
+  if (cached) return cached
   const found = findWorkspaceFile(name)
   if (!found) throw new Error(`Workspace '${name}' not found.`)
+  workspaceIndex.set(name, found.data)
   return found.data
 }
 
 export function writeWorkspace(workspace: Workspace) {
   ensureDir(WORKSPACES_DIR)
   writeYaml(workspacePath(workspace.name), workspace)
+  workspaceIndex.set(workspace.name, workspace)
+  workspaceListPopulated = false
+}
+
+export function deleteWorkspace(name: string): void {
+  unlinkSync(workspacePath(name))
+  workspaceIndex.delete(name)
+  workspaceListPopulated = false
 }
 
 export function listWorkspaces(): Workspace[] {
+  if (workspaceListPopulated) return Array.from(workspaceIndex.values())
   if (!existsSync(WORKSPACES_DIR)) return []
-  const results: Workspace[] = []
   for (const f of readdirSync(WORKSPACES_DIR).filter((f) => f.endsWith(".yml"))) {
     const filePath = join(WORKSPACES_DIR, f)
     try {
       const raw = readFileSync(filePath, "utf-8")
       const parsed = WorkspaceSchema.safeParse(parse(raw))
       if (parsed.success) {
-        results.push(parsed.data)
+        workspaceIndex.set(parsed.data.name, parsed.data)
       } else {
         console.error(`[git-stacks] Skipping corrupt workspace '${f}': ${formatZodError(parsed.error)}`)
       }
@@ -331,7 +360,8 @@ export function listWorkspaces(): Workspace[] {
       console.error(`[git-stacks] Skipping unreadable workspace '${f}': ${err}`)
     }
   }
-  return results
+  workspaceListPopulated = true
+  return Array.from(workspaceIndex.values())
 }
 
 // --- Registry ---
@@ -366,30 +396,42 @@ export function templatePath(name: string): string {
 }
 
 export function templateExists(name: string): boolean {
+  if (templateIndex.has(name)) return true
   return findTemplateFile(name) !== null
 }
 
 export function readTemplate(name: string): Template {
+  const cached = templateIndex.get(name)
+  if (cached) return cached
   const found = findTemplateFile(name)
   if (!found) throw new Error(`Template '${name}' not found.`)
+  templateIndex.set(name, found.data)
   return found.data
 }
 
 export function writeTemplate(template: Template) {
   ensureDir(TEMPLATES_DIR)
   writeYaml(templatePath(template.name), template)
+  templateIndex.set(template.name, template)
+  templateListPopulated = false
+}
+
+export function deleteTemplate(name: string): void {
+  unlinkSync(templatePath(name))
+  templateIndex.delete(name)
+  templateListPopulated = false
 }
 
 export function listTemplates(): Template[] {
+  if (templateListPopulated) return Array.from(templateIndex.values())
   if (!existsSync(TEMPLATES_DIR)) return []
-  const results: Template[] = []
   for (const f of readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith(".yml"))) {
     const filePath = join(TEMPLATES_DIR, f)
     try {
       const raw = readFileSync(filePath, "utf-8")
       const parsed = TemplateSchema.safeParse(parse(raw))
       if (parsed.success) {
-        results.push(parsed.data)
+        templateIndex.set(parsed.data.name, parsed.data)
       } else {
         console.error(`[git-stacks] Skipping corrupt template '${f}': ${formatZodError(parsed.error)}`)
       }
@@ -397,7 +439,8 @@ export function listTemplates(): Template[] {
       console.error(`[git-stacks] Skipping unreadable template '${f}': ${err}`)
     }
   }
-  return results
+  templateListPopulated = true
+  return Array.from(templateIndex.values())
 }
 
 // --- Branch pattern expansion ---

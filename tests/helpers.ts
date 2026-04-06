@@ -225,6 +225,9 @@ export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<
     listTemplates: mock(() => []),
     expandBranchPattern: mock((pattern: string) => pattern),
     expandHome: mock((p: string) => p),
+    deleteWorkspace: mock(() => {}),
+    deleteTemplate: mock(() => {}),
+    _cache: { workspaces: new Map(), templates: new Map(), resetList: mock(() => {}) },
     ...overrides,
   }
 }
@@ -497,6 +500,9 @@ export const {
   writeRegistry: realWriteRegistry,
   listRegistryEntries: realListRegistryEntries,
   expandBranchPattern: realExpandBranchPattern,
+  _cache: realCache,
+  deleteWorkspace: realDeleteWorkspace,
+  deleteTemplate: realDeleteTemplate,
 } = await import("@/lib/config") as any
 
 export const {

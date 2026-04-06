@@ -1,11 +1,13 @@
-import { existsSync, rmSync, unlinkSync } from "fs"
+import { existsSync, rmSync } from "fs"
 import { join } from "path"
 import {
+  _cache,
   isWorktreeRepo,
   readGlobalConfig,
   readWorkspace,
   workspaceExists,
   workspacePath,
+  deleteWorkspace,
   type GlobalConfig,
   type Workspace,
 } from "./config"
@@ -316,6 +318,10 @@ export async function removeWorkspace(
       return { ok: false, error: `Workspace '${name}' not found.` }
     }
 
+    // Evict cache before reading so any externally-corrupted YAML is detected here
+    // (the remove path is the one place where a stale cache entry must not mask errors).
+    _cache.workspaces.delete(name)
+
     let workspace: ReturnType<typeof readWorkspace> | null = null
     try {
       workspace = readWorkspace(name)
@@ -336,7 +342,7 @@ export async function removeWorkspace(
         rmSync(wsDir, { recursive: true, force: true })
         onProgress?.(`deleted  tasks/${name}/ (force)`)
       }
-      unlinkSync(workspacePath(name))
+      deleteWorkspace(name)
       onProgress?.(`Workspace '${name}' force-removed (YAML was unparseable).`)
       return { ok: true }
     }
@@ -392,7 +398,7 @@ export async function removeWorkspace(
       }
     }
 
-    unlinkSync(workspacePath(name))
+    deleteWorkspace(name)
 
     if (workspace.hooks?.post_remove?.length) {
       try {
@@ -528,7 +534,7 @@ export async function mergeWorkspace(
       }
     }
 
-    unlinkSync(workspacePath(name))
+    deleteWorkspace(name)
 
     if (workspace.hooks?.post_remove?.length) {
       try {

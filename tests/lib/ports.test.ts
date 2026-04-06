@@ -1,10 +1,19 @@
-import { describe, test, expect, afterEach } from "bun:test"
+import { describe, test, expect, afterEach, beforeEach } from "bun:test"
 import { join } from "path"
 import { existsSync, writeFileSync } from "fs"
 import { useIsolatedConfig, makeTmpDir, cleanup } from "../helpers"
 
 // --- Isolated config (for lock and allocatePorts integration tests) ---
 const isolated = useIsolatedConfig("ports-test")
+
+// Reset in-memory cache before each test — some tests write workspace YAMLs directly
+// to disk (not via writeWorkspace), so listWorkspaces() must re-scan each time.
+const { _cache } = await import("@/lib/config") as any
+beforeEach(() => {
+  _cache.workspaces.clear()
+  _cache.templates.clear()
+  _cache.resetList()
+})
 
 // --- Pure function imports (no filesystem) ---
 import {
