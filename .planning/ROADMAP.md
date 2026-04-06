@@ -278,14 +278,19 @@ Plans:
 - [ ] `77-02-PLAN.md` — Migrate all unlinkSync(workspacePath/templatePath) call sites to deleteWorkspace/deleteTemplate
 
 ### Phase 78: Operation Runner with Rollback
-**Goal**: Multi-step workspace operations (create, remove) execute via a LIFO compensation stack so partial failures clean up completed steps automatically
+**Goal**: Multi-step workspace creation executes via a LIFO compensation stack so partial failures clean up completed steps automatically. Both the wizard and dashboard creation call sites migrate to a shared `createWorkspace()` that uses the runner (resolves CONCERNS.md:51-55 dashboard duplication).
 **Depends on**: Phase 77
 **Requirements**: ENGN-01, ENGN-02, ENGN-03
 **Success Criteria** (what must be TRUE):
   1. When workspace creation fails mid-way (e.g., second worktree fails), already-created worktrees are removed and the workspace YAML is not written
-  2. Rollback steps emit progress messages through the existing `onProgress` callback so the user sees "Rolling back: removed worktree for <repo>"
-  3. If an individual rollback step fails, the error is logged to stderr and remaining rollback steps continue (best-effort, no abort)
-**Plans**: TBD
+  2. Rollback steps emit progress messages through the existing `onProgress` callback so the user sees "Rollback: create worktree <repo>" (D-14/D-15: routed through onProgress, not stderr — OpenTUI safety)
+  3. If an individual rollback step fails, the error is captured in `rollbackErrors[]` and surfaced via `onProgress`; remaining rollback steps continue (best-effort, no abort)
+**Plans**: 3 plans
+
+Plans:
+- [ ] `78-01-PLAN.md` — Pure operation-runner primitive (`src/lib/operation-runner.ts`) with LIFO compensation stack, discriminated-union return, and eight unit tests
+- [ ] `78-02-PLAN.md` — `createWorkspace()` on `workspace-lifecycle.ts` wiring runner into D-12 creation ordering with integration tests forcing failures via Phase 75 _exec seams
+- [ ] `78-03-PLAN.md` — Wizard and dashboard migration to shared `createWorkspace()`; delete hand-rolled rollback at App.tsx:883-911; CONCERNS.md:51-55 resolved
 
 ### Phase 79: Release Prep
 **Goal**: v0.17.0 is version-bumped, documented, and ready to ship
@@ -305,5 +310,5 @@ Plans:
 | 75. DI Seams & Structured Logging | v0.17.0 | 2/2 | Complete    | 2026-04-05 |
 | 76. Integration Plugin Capability Contracts | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 77. Indexed Config Store | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
-| 78. Operation Runner with Rollback | v0.17.0 | 0/TBD | Not started | - |
+| 78. Operation Runner with Rollback | v0.17.0 | 0/3 | Not started | - |
 | 79. Release Prep | v0.17.0 | 0/TBD | Not started | - |
