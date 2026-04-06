@@ -12,6 +12,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### What shipped in v0.17.0 (in progress)
 
+- **Integration capability contracts** — `Capability` type and required `capabilities: ReadonlySet<Capability>` on `Integration` interface; all 10 plugins declare capability sets; runner uses `capabilities.has()` instead of duck-typed optional chaining; `integration list` shows abbreviated capability tags (gen/clean/cmd/cfg/win/apl) in table output, full names in `--json` (Phase 76, ENGN-07/ENGN-08/ENGN-09)
 - **DI seams** — `workspace-lifecycle.ts` exports mutable `_exec.spawn` seam routing all hook execution through a replaceable boundary; `workspace-git.ts` exports mutable `_exec` wrapping 12 git helpers — tests can intercept subprocess launches without starting real processes (Phase 75, OBSV-01/OBSV-02)
 - **Structured debug output** — `GS_DEBUG=1` / `GS_DEBUG=true` enables structured single-line stderr (`op=`, `module=`, `msg=`, `ms=`); `GS_DEBUG=lifecycle` / `GS_DEBUG=git` filters to specific modules via `MODULE_ALIASES`; `GIT_STACKS_DEBUG=1` preserved as compatibility alias (Phase 75, OBSV-03/OBSV-04/OBSV-05)
 
