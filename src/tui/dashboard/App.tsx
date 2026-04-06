@@ -35,16 +35,13 @@ import { syncWorkspace, pushWorkspace } from "../../lib/workspace-git"
 import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-git"
 import { editWorkspaceYaml } from "../../lib/workspace-yaml"
 import { readTemplate, writeTemplate, templateExists, templatePath, deleteTemplate, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, isWorktreeRepo, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
+import { createWorkspace } from "../../lib/workspace-lifecycle"
 import { SyncProgressView } from "./SyncProgressView"
 import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
 import { CreateProgressView, type CreateRow } from "./CreateProgressView"
-import { createWorktree, removeWorktree, ensureUpstreamTracking, isRepoDirty } from "../../lib/git"
+import { isRepoDirty } from "../../lib/git"
 import { getTasksDir } from "../../lib/paths"
-import { runHooksCaptured, type HookOutputLine } from "../../lib/lifecycle"
-import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../../lib/files"
-import { type IntegrationContext } from "../../lib/integrations"
-import { runIntegrationGenerate } from "../../lib/integrations/runner"
 import { join } from "path"
 import { existsSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
@@ -857,127 +854,81 @@ export default function App() {
       }))
       setCreateRows(initialRows)
 
-      const baseEnv: Record<string, string> = {
-        GS_WORKSPACE_NAME: wsName,
-        GS_WORKSPACE_BRANCH: branch,
-        GS_WORKSPACE_PATH: tasksDir,
-        GS_TRIGGERED_BY: "create",
-      }
-      const worktreeRepos = repos.filter(isWorktreeRepo)
+      // ─── Delegate all side-effects to createWorkspace() per D-02 ─────────────
+      // The hand-rolled per-repo worktree-cleanup rollback that used to live here
+      // is now provided by the operation-runner inside workspace-lifecycle.ts.
+      //
+      // We drive the per-repo CreateRow state machine by parsing onProgress string messages.
+      // Parsing contract (from Plan 02's createWorkspace):
+      //   "Creating worktree for <repo>"   → set repo.status = "creating-worktree"
+      //   "created worktree for <repo>"    → set repo.status = "done"
+      //   "Rollback: create worktree <repo>" → set repo.status = "failed", detail = "rolling back..."
+      //   "Rollback error: create worktree <repo> failed (<err>)" → append to detail
+      // Other messages (file-ops warnings, integration paths, env warnings) are not parsed.
 
-      // Pre-create hooks (D-17: abortOnFailure=false)
-      if (wsHooks?.pre_create?.length) {
-        for (const r of worktreeRepos) {
-          setCreateRows(prev => prev.map(row => row.repo === r.name ? { ...row, status: "running-hooks", detail: "pre_create" } : row))
+      const updateRowByRepo = (repoName: string, patch: Partial<CreateRow>) => {
+        setCreateRows(prev => prev.map(r => r.repo === repoName ? { ...r, ...patch } : r))
+      }
+
+      const CREATING_RE = /^Creating worktree for (.+)$/
+      const CREATED_RE = /^created worktree for (.+)$/
+      const ROLLBACK_RE = /^Rollback: create worktree (.+)$/
+      const ROLLBACK_ERROR_RE = /^Rollback error: create worktree (.+?) failed \((.+)\)$/
+
+      const handleProgress = (msg: string) => {
+        let m: RegExpMatchArray | null
+        if ((m = msg.match(CREATING_RE))) {
+          updateRowByRepo(m[1]!, { status: "creating-worktree", detail: "creating worktree..." })
+          return
         }
-        await runHooksCaptured(
-          wsHooks.pre_create, tasksDir,
-          { ...baseEnv },
-          (_output: HookOutputLine) => {},
-          false  // D-17: don't abort on hook failure
-        )
-        // Reset status to pending after pre_create hooks
-        setCreateRows(prev => prev.map(row => row.status === "running-hooks" ? { ...row, status: "pending", detail: "" } : row))
-      }
-
-      // Create worktrees — track created for cleanup on failure (D-19)
-      const createdWorktrees: { main_path: string; task_path: string }[] = []
-      const wsDir = join(tasksDir, wsName)
-      const { mkdirSync, existsSync } = await import("fs")
-      if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
-
-      for (const repo of worktreeRepos) {
-        setCreateRows(prev => prev.map(r => r.repo === repo.name ? { ...r, status: "creating-worktree", detail: "creating worktree..." } : r))
-        try {
-          await createWorktree(repo.main_path, repo.task_path, branch)
-          createdWorktrees.push({ main_path: repo.main_path, task_path: repo.task_path })
-          setCreateRows(prev => prev.map(r => r.repo === repo.name ? { ...r, status: "done", detail: "worktree created" } : r))
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          setCreateRows(prev => prev.map(r => r.repo === repo.name ? { ...r, status: "failed", detail: msg } : r))
-
-          // D-19: cleanup already-created worktrees
-          for (const created of createdWorktrees) {
-            try { await removeWorktree(created.main_path, created.task_path) } catch {}
-          }
-          // Mark remaining as failed
-          setCreateRows(prev => prev.map(r => r.status === "pending" ? { ...r, status: "failed", detail: "aborted" } : r))
-
-          const nCreated = createdWorktrees.length
-          setCreateSummary({ text: `Failed on ${repo.name}. ${nCreated} worktree(s) cleaned up. Press any key to continue.`, color: "red" })
-          setCreateDone(true)
-          return  // abort — don't write workspace YAML
+        if ((m = msg.match(CREATED_RE))) {
+          updateRowByRepo(m[1]!, { status: "done", detail: "worktree created" })
+          return
         }
+        if ((m = msg.match(ROLLBACK_RE))) {
+          updateRowByRepo(m[1]!, { status: "failed", detail: "rolling back..." })
+          return
+        }
+        if ((m = msg.match(ROLLBACK_ERROR_RE))) {
+          updateRowByRepo(m[1]!, { status: "failed", detail: `rollback failed: ${m[2]!}` })
+          return
+        }
+        // Unparsed messages are silently ignored by the per-repo parser. If a future plan
+        // wants to surface them, add a separate output box to CreateProgressView.
       }
 
-      // Set upstream tracking for branches that exist on origin (parallel)
-      await Promise.all(
-        createdWorktrees.map(({ main_path }) => ensureUpstreamTracking(main_path, branch))
+      const result = await createWorkspace(
+        {
+          wsName,
+          branch,
+          ...(templateName ? { templateName } : {}),
+          repos,
+          ...(wsHooks ? { wsHooks } : {}),
+          ...(wsEnv ? { wsEnv } : {}),
+          ...(wsEnvFile ? { wsEnvFile } : {}),
+          ...(wsFiles ? { wsFiles } : {}),
+          ...(wsIntegrationSettings ? { wsIntegrationSettings } : {}),
+        },
+        handleProgress,
       )
 
-      // File ops (per-repo)
-      for (const wsRepo of repos.filter(isWorktreeRepo)) {
-        if (!(wsRepo as any).files) continue
-        const repoLike = { name: wsRepo.name, path: wsRepo.main_path, files: (wsRepo as any).files }
-        applyFileOpsForRepo(repoLike, wsRepo)
+      if (!result.ok) {
+        // Mark any still-pending rows as failed (matches pre-migration behavior at line 904)
+        setCreateRows(prev => prev.map(r => r.status === "pending" ? { ...r, status: "failed", detail: "aborted" } : r))
+
+        const rollbackNote = result.rollbackErrors.length > 0
+          ? ` (${result.rollbackErrors.length} rollback error${result.rollbackErrors.length === 1 ? "" : "s"})`
+          : ""
+        setCreateSummary({
+          text: `Failed: ${result.error}${rollbackNote}. Press any key to continue.`,
+          color: "red",
+        })
+        setCreateDone(true)
+        return
       }
 
-      // Workspace-instance file ops
-      if (wsFiles) {
-        const workspaceObj = { name: wsName, repos } as any
-        applyFileOpsForWorkspace({ files: wsFiles }, workspaceObj, wsDir)
-      }
-
-      // Env files
-      const envVars: Record<string, string> = wsEnv ? { ...wsEnv } : {}
-      if (wsEnvFile && Object.keys(envVars).length > 0) {
-        const { writeFileSync, lstatSync } = await import("fs")
-        const content = Object.entries(envVars).map(([k, v]) => `${k}=${v}`).join("\n") + "\n"
-        for (const repo of worktreeRepos) {
-          if (!existsSync(repo.task_path)) continue
-          const targetPath = join(repo.task_path, wsEnvFile)
-          try { if (lstatSync(targetPath).isSymbolicLink()) continue } catch {}
-          writeFileSync(targetPath, content, "utf-8")
-        }
-      }
-
-      // Post-create hooks (D-17: abortOnFailure=false)
-      if (wsHooks?.post_create?.length) {
-        await runHooksCaptured(
-          wsHooks.post_create, wsDir,
-          { ...baseEnv, ...envVars },
-          (_output: HookOutputLine) => {},
-          false
-        )
-      }
-
-      // Build settings object
-      const settingsIntegrations = wsIntegrationSettings && Object.keys(wsIntegrationSettings).length > 0
-        ? { settings: { integrations: wsIntegrationSettings } }
-        : {}
-
-      // Save workspace YAML
-      const workspaceObj: Workspace = {
-        name: wsName,
-        schema_version: "1",
-        branch,
-        created: new Date().toISOString().split("T")[0],
-        ...(templateName ? { template: templateName } : {}),
-        ...(wsHooks ? { hooks: wsHooks } : {}),
-        repos,
-        ...(wsEnv ? { env: wsEnv } : {}),
-        ...(wsEnvFile ? { env_file: wsEnvFile } : {}),
-        ...(wsFiles ? { files: wsFiles } : {}),
-        ...settingsIntegrations,
-      } as Workspace
-      writeWorkspace(workspaceObj)
-
-      // Generate integration artifacts
-      const ctx: IntegrationContext = { workspace: workspaceObj, tasksDir, config }
-      await runIntegrationGenerate(ctx)
-
-      // Summary
-      const nCreated = worktreeRepos.length
+      // Success summary
+      const nCreated = repos.filter(r => r.mode === "worktree").length
       const nSkipped = repos.filter(r => r.mode !== "worktree").length
       const parts: string[] = []
       if (nCreated > 0) parts.push(`${nCreated} created`)

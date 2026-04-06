@@ -48,11 +48,12 @@
 - **Impact:** Fragile test isolation. The custom test runner (`scripts/test-runner.ts`) exists partly to work around mock pollution between files.
 - **Fix approach:** Make path resolution injectable (accept a config dir parameter) rather than reading env at module load time.
 
-### Dashboard Duplicates Workspace Creation Logic
+### Dashboard Duplicates Workspace Creation Logic — RESOLVED (Phase 78)
 - **Issue:** `src/tui/dashboard/App.tsx` (lines 760-962) contains inline workspace creation that duplicates logic from `src/tui/workspace-wizard.ts`. The dashboard version handles worktree creation, file ops, env file writing, and hook execution independently, without calling the shared `openWorkspace()` or the wizard's creation flow. This means bug fixes to the wizard don't propagate to the dashboard and vice versa.
 - **Files:** `src/tui/dashboard/App.tsx` (lines 760-962), `src/tui/workspace-wizard.ts` (lines 150-250)
 - **Impact:** Two code paths for workspace creation that must be kept in sync manually. The dashboard version notably skips secret resolution during creation.
 - **Fix approach:** Extract a shared `createWorkspace()` function in `workspace-ops.ts` that both the wizard and dashboard call.
+- **Resolution:** Phase 78 introduced `createWorkspace()` in `src/lib/workspace-lifecycle.ts` wired to the new `operation-runner.ts` compensation stack. Both the wizard (`src/tui/workspace-wizard.ts:runWorkspaceNew`) and dashboard (`src/tui/dashboard/App.tsx:executeCreateWorkspace`) now delegate to this shared function. The hand-rolled per-repo worktree-cleanup rollback in the dashboard was replaced by runner-backed LIFO unwind. See `.planning/phases/78-operation-runner-with-rollback/`.
 
 ## Low Priority
 
