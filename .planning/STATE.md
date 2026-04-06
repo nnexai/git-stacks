@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
 status: executing
-stopped_at: Completed 78-01-PLAN.md
-last_updated: "2026-04-06T17:42:56.815Z"
+stopped_at: Completed 78-02-PLAN.md
+last_updated: "2026-04-06T17:57:48.731Z"
 last_activity: 2026-04-06
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 11
-  completed_plans: 9
-  percent: 82
+  completed_plans: 10
+  percent: 91
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 ## Current Position
 
 Phase: 78 (operation-runner-with-rollback) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-06
 
@@ -65,6 +65,10 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 78-operation-runner-with-rollback]: [Plan 78-01]: createRunner uses split do/result API — do() manages stack and rolls back on throw, result() is single source of truth for the discriminated union
 - [Phase 78-operation-runner-with-rollback]: [Plan 78-01]: rollbackErrors[] entries duplicate the strings sent through onProgress (D-16) so programmatic callers do not have to re-parse stdout
 - [Phase 78-operation-runner-with-rollback]: [Plan 78-01]: runner reuses ProgressCallback from workspace-ops; introduces no new _exec seam — pure control-flow over caller-supplied closures
+- [Phase 78-operation-runner-with-rollback]: Plan 78-02: createWorkspace lives only on workspace-lifecycle.ts; D-03 lock holds and workspace-ops.ts is unchanged
+- [Phase 78-operation-runner-with-rollback]: Plan 78-02: hook failures use Approach A (synthetic runner.do() in catch + inHookPhase flag) instead of adding runner.fail() — preserves Plan 01 runner contract and keeps result() called exactly once
+- [Phase 78-operation-runner-with-rollback]: Plan 78-02: writeWorkspace is structurally unreachable on failure — placed AFTER an early-return on runner.result() ok:false, satisfying success criterion 1 by code structure not assertion
+- [Phase 78-operation-runner-with-rollback]: Plan 78-02: Strategy A for file-op undos (no-op because files live inside the worktree the runner already removes) keeps files.ts out of phase scope
 
 ### Roadmap Evolution
 
@@ -91,9 +95,10 @@ None.
 | Phase 77 P01 | 20m | 1 tasks | 7 files |
 | Phase 77 P02 | 8min | 2 tasks | 2 files |
 | Phase 78-operation-runner-with-rollback P01 | 4min | 2 tasks | 2 files |
+| Phase 78-operation-runner-with-rollback P02 | 7min | 2 tasks | 2 files |
 
 ## Session Continuity
 
-Last session: 2026-04-06T17:42:56.812Z
-Stopped at: Completed 78-01-PLAN.md
+Last session: 2026-04-06T17:57:48.728Z
+Stopped at: Completed 78-02-PLAN.md
 Resume file: None
