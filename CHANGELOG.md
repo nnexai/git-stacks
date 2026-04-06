@@ -4,6 +4,24 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.17.0] — 2026-04-06
+
+### Added
+
+**Template labels** — templates now have a full label workflow: `git-stacks template label add|remove|list|clear` manages labels directly on templates, `git-stacks template list --label <tag>` filters templates with the same exact-match AND semantics used for workspace labels, and template labels snapshot-forward into created workspaces so template defaults travel with the workspace from day one.
+
+### Changed
+
+**Workspace creation is more failure-safe** — multi-step workspace creation now rolls back already-completed work when a later step fails, reports rollback progress through the existing progress channel, and avoids leaving behind half-created workspace records after partial failures.
+
+**Debug output is more targeted** — `GS_DEBUG=1` / `GS_DEBUG=true` enables structured stderr debug output across modules, while `GS_DEBUG=<module[,module]>` filters logs to specific areas such as `lifecycle`, `git`, `status`, `env`, or `yaml`. The legacy `GIT_STACKS_DEBUG=1` compatibility path still enables full debug output.
+
+### Internal
+
+**Core engine hardening for scale and maintainability** — template/workspace lookups now use an indexed config cache instead of repeated full scans, subprocess-heavy modules expose injectable seams for tighter tests, and integration optional behavior is enforced through narrow TypeScript interfaces and predicates without surfacing the reverted Phase 78.1 capability-list churn as a release-facing feature.
+
+---
+
 ## [0.16.0] — 2026-04-05
 
 ### Added

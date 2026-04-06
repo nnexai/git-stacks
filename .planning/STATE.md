@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
-status: executing
-stopped_at: Completed Phase 78.1
-last_updated: "2026-04-06T18:50:08.246Z"
-last_activity: 2026-04-06 - Completed quick task 260406-tis: labels on templates are not propagated to workspaces created from it
+status: completed
+stopped_at: Completed Phase 79
+last_updated: "2026-04-06T19:37:18Z"
+last_activity: 2026-04-06 - Completed Phase 79 release prep for v0.17.0
 progress:
   total_phases: 7
-  completed_phases: 6
-  total_plans: 14
-  completed_plans: 14
+  completed_phases: 7
+  total_plans: 15
+  completed_plans: 15
   percent: 100
 ---
 
@@ -18,19 +18,19 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-05)
+See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 79 — release-prep
+**Current focus:** Milestone v0.17.0 shipped; next milestone planning not started
 
 ## Current Position
 
 Phase: 79
-Plan: Not started
-Status: Ready to execute Phase 79
-Last activity: 2026-04-06 - Completed quick task 260406-tis: labels on templates are not propagated to workspaces created from it
+Plan: 01 complete
+Status: Phase 79 complete
+Last activity: 2026-04-06 - Completed Phase 79 release prep for v0.17.0
 
-Progress: [██████████] 100% (2/2 plans)
+Progress: [██████████] 100% (1/1 plans)
 
 ## Accumulated Context
 
@@ -77,6 +77,7 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 78.1]: Phase 76 D-01 through D-07 are superseded — optional integration behavior now lives in narrow structural interfaces composed at each plugin export site rather than a required `capabilities` Set on the base Integration interface
 - [Phase 78.1]: Runner gating now uses `isGenerator`, `isCleaner`, `isConditional`, and `isWindowDetecting` predicates from `src/lib/integrations/types.ts`, eliminating non-null assertions on integration dispatch
 - [Phase 78.1]: `git-stacks integration list` no longer exposes capabilities in table or JSON output; capability contracts are compile-time-only and stay out of the changelog-facing surface
+- [Phase 79]: v0.17.0 release notes stay user-facing first: template labels are documented as one cohesive feature, GS_DEBUG module filters are documented alongside the legacy GIT_STACKS_DEBUG=1 alias, and the reverted Phase 78.1 capability-list surface stays out of release-facing messaging
 
 ### Roadmap Evolution
 
@@ -111,9 +112,10 @@ None.
 | Phase 78-operation-runner-with-rollback P01 | 4min | 2 tasks | 2 files |
 | Phase 78-operation-runner-with-rollback P02 | 7min | 2 tasks | 2 files |
 | Phase 78-operation-runner-with-rollback P03 | 7min | 2 tasks | 3 files |
+| Phase 79 P01 | 4min | 1 task | 8 files |
 
 ## Session Continuity
 
-Last session: 2026-04-06T18:12:56.565Z
-Stopped at: Completed 78-03-PLAN.md
+Last session: 2026-04-06T19:37:18Z
+Stopped at: Completed 79-01-PLAN.md
 Resume file: None

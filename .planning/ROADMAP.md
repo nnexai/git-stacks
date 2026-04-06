@@ -306,13 +306,16 @@ Plans:
 
 ### Phase 79: Release Prep
 **Goal**: v0.17.0 is version-bumped, documented, and ready to ship
-**Depends on**: Phase 78
+**Depends on**: Phase 78.1
 **Requirements**: (release prep — no REQUIREMENTS.md entry)
 **Success Criteria** (what must be TRUE):
   1. `package.json` version is `0.17.0` and `bun run dev --version` reports it
   2. CHANGELOG has an entry for v0.17.0 listing all milestone features
   3. README documents `template label` commands and `GS_DEBUG` module filter syntax
-**Plans**: TBD
+**Plans**: 1/1 plans complete
+
+Plans:
+- [x] `79-01-PLAN.md` — Bump the published version to `0.17.0`, add a user-facing v0.17.0 changelog entry (Added / Changed / Internal), document template-label commands/filtering/propagation plus `GS_DEBUG=<module[,module]>` in README, run release validations, and write Phase 79 closeout artifacts
 
 ## Progress
 
@@ -323,4 +326,4 @@ Plans:
 | 76. Integration Plugin Capability Contracts | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 77. Indexed Config Store | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 78. Operation Runner with Rollback | v0.17.0 | 3/3 | Complete    | 2026-04-06 |
-| 79. Release Prep | v0.17.0 | 0/TBD | Not started | - |
+| 79. Release Prep | v0.17.0 | 1/1 | Complete | 2026-04-06 |

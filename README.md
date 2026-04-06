@@ -264,17 +264,23 @@ Shows GS_* injected vars, user-defined `env:` from workspace YAML, resolved port
 
 ## Debug Output
 
-Use `GIT_STACKS_DEBUG=1` when you need low-level timing and flow information without changing normal command output:
+Use `GIT_STACKS_DEBUG=1` for the legacy "show me everything" behavior, or use the canonical `GS_DEBUG` selector when you want full debug output or module-specific filtering without changing normal command output:
 
 ```bash
-# Human-readable command output stays on stdout; debug goes to stderr
+# Backward-compatible all-module debug output
 GIT_STACKS_DEBUG=1 git-stacks status my-feature
 
+# Canonical all-module debug output
+GS_DEBUG=1 git-stacks status my-feature
+
+# Filter to specific modules (comma-separated)
+GS_DEBUG=lifecycle,git git-stacks status my-feature
+
 # Machine-readable stdout remains valid JSON
-GIT_STACKS_DEBUG=1 git-stacks status my-feature --json 2>debug.log
+GS_DEBUG=status git-stacks status my-feature --json 2>debug.log
 ```
 
-Debug lines use stable logical labels such as `[workspace-status]`, `[workspace-env]`, `[workspace-git]`, `[workspace-yaml]`, and `[workspace-lifecycle]`. Timings use the form `[workspace-status] getWorkspaceListInfo: 12ms`.
+`GS_DEBUG` accepts `1`, `true`, or a comma-separated module list. Short names such as `lifecycle`, `git`, `status`, `env`, and `yaml` map to the corresponding internal modules (`workspace-lifecycle`, `workspace-git`, `workspace-status`, `workspace-env`, and `workspace-yaml`). Debug lines use stable logical labels such as `[workspace-status]`, `[workspace-env]`, `[workspace-git]`, `[workspace-yaml]`, and `[workspace-lifecycle]`. Timings use the form `[workspace-status] getWorkspaceListInfo: 12ms`.
 
 The debug channel is `stderr` only, so you can redirect or discard it without affecting normal output. `git-stacks manage` explicitly silences debug logging before the alternate-screen dashboard starts, preventing trace output from corrupting the TUI surface.
 
@@ -299,11 +305,27 @@ git-stacks label clear my-feature
 git-stacks list --label backend
 git-stacks list --label backend --label sprint:14
 
+# Add labels to a template
+git-stacks template label add starter backend docs
+
+# Remove labels from a template
+git-stacks template label remove starter docs
+
+# List or clear template labels
+git-stacks template label list starter
+git-stacks template label clear starter
+
+# Filter templates by label (AND logic with multiple flags)
+git-stacks template list --label backend
+git-stacks template list --label backend --label starter
+
 # Set labels at creation time
 git-stacks new my-feature --label backend --label sprint:14
 ```
 
-Labels support namespacing with colons (`sprint:14`, `client:acme`, `type:bugfix`). Template labels are unioned onto workspaces at creation time.
+Labels support namespacing with colons (`sprint:14`, `client:acme`, `type:bugfix`). Template labels use the same syntax as workspace labels, can be managed through the `template label` subcommands shown above, and can be used to narrow `git-stacks template list` results with `--label`.
+
+When you create a workspace from a template, the template's labels are snapshot-copied onto the new workspace and unioned with any `git-stacks new --label ...` values you pass at creation time. Workspace clones keep the copied label set as part of that snapshot.
 
 In the TUI dashboard, label tags render after the branch name, the `/` filter matches against labels, and the `g` key toggles a group-by-label view with an `[unlabeled]` section for untagged workspaces.
 

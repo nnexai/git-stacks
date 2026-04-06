@@ -10,13 +10,13 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Recent State (2026-04-06)
 
-### What shipped in v0.17.0 (in progress)
+### What shipped in v0.17.0
 
-- **Operation runner with rollback** — new pure `src/lib/operation-runner.ts` LIFO compensation-stack primitive: takes `(name, forwardFn, undoFn)` triples, executes forwards immediately, and on any forward throw rewinds the stack in reverse order with each undo wrapped in its own try/catch (best-effort); returns a discriminated-union result with `rollbackErrors[]`. New `createWorkspace()` exported from `workspace-lifecycle.ts` wires the runner into workspace creation with strict D-12 ordering (worktrees → upstream tracking → per-repo file ops → workspace file ops → env files → hooks → `writeWorkspace()` commit point → post-commit `runIntegrationGenerate`); hooks run outside the runner via Approach A synthetic-do() folding so D-17 (original forward error preserved) holds; `writeWorkspace()` is structurally unreachable on failure (D-10) and `runIntegrationGenerate` is never rolled back (D-11). Both call sites — `src/tui/workspace-wizard.ts:runWorkspaceNew` and `src/tui/dashboard/App.tsx:executeCreateWorkspace` — collapsed onto the shared primitive (−177 LOC); the dashboard's hand-rolled `createdWorktrees[]` proto-rollback and silent half-built-workspace commits are gone (Phase 78, ENGN-01/ENGN-02/ENGN-03)
-- **Indexed config store** — `src/lib/config.ts` now caches parsed `Workspace` and `Template` objects in name-keyed `Map`s; all six public read/write/list functions and the exists helpers gate through the index; new `deleteWorkspace`/`deleteTemplate` helpers consolidate file deletion + cache eviction; `_cache` seam exported for test isolation; all raw `unlinkSync(workspacePath/templatePath(...))` call sites in `workspace-lifecycle.ts`, `workspace-ops.ts`, `commands/template.ts`, and `tui/dashboard/App.tsx` migrated to the new helpers (Phase 77, ENGN-04/ENGN-05/ENGN-06)
-- **Integration capability contracts** — `Capability` type and required `capabilities: ReadonlySet<Capability>` on `Integration` interface; all 10 plugins declare capability sets; runner uses `capabilities.has()` instead of duck-typed optional chaining; `integration list` shows abbreviated capability tags (gen/clean/cmd/cfg/win/apl) in table output, full names in `--json` (Phase 76, ENGN-07/ENGN-08/ENGN-09)
-- **DI seams** — `workspace-lifecycle.ts` exports mutable `_exec.spawn` seam routing all hook execution through a replaceable boundary; `workspace-git.ts` exports mutable `_exec` wrapping 12 git helpers — tests can intercept subprocess launches without starting real processes (Phase 75, OBSV-01/OBSV-02)
-- **Structured debug output** — `GS_DEBUG=1` / `GS_DEBUG=true` enables structured single-line stderr (`op=`, `module=`, `msg=`, `ms=`); `GS_DEBUG=lifecycle` / `GS_DEBUG=git` filters to specific modules via `MODULE_ALIASES`; `GIT_STACKS_DEBUG=1` preserved as compatibility alias (Phase 75, OBSV-03/OBSV-04/OBSV-05)
+- **Template labels** — templates now support `template label add|remove|list|clear`, exact-match `template list --label`, and snapshot propagation into workspaces created or cloned from those templates (Phase 74, TLBL-01..07)
+- **Workspace creation rollback** — the shared operation runner now rewinds partial workspace-creation work in strict LIFO order, reports rollback progress, and keeps failed creates from leaving half-written workspace state behind (Phase 78, ENGN-01..03)
+- **Indexed config lookups** — template/workspace reads now hit an in-memory name index with automatic invalidation on writes and delete helpers that keep cache and filesystem state aligned (Phase 77, ENGN-04..06)
+- **Integration plugin hardening** — optional plugin behavior now lives behind narrow TypeScript interfaces and runtime predicates, keeping the capability system compile-time only and out of the user-facing integration list surface (Phases 76 + 78.1, ENGN-07..09)
+- **Observability and test seams** — lifecycle/git subprocess paths expose injectable `_exec` seams, `GS_DEBUG=<module[,module]>` filters structured stderr logs by module, and `GIT_STACKS_DEBUG=1` remains a compatibility alias for all-module debug output (Phase 75, OBSV-01..05)
 
 ### What shipped in v0.16.0
 
@@ -301,17 +301,14 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Current State
 
-**Latest release:** v0.16.0 Core Engine & Observability (2026-04-05)
+**Latest release:** v0.17.0 Engine Hardening & Template Labels (2026-04-06)
 
-**Shipped:** Phases 74-78 of v0.17.0 are complete. Template labels propagate through composition/create/clone (74); `_exec` DI seams + structured `GS_DEBUG` logging (75); integration `Capability` contracts with abbreviated tag rendering (76); indexed config store with `_cache` seam (77); operation runner with LIFO rollback wiring `createWorkspace()` and migrating both call sites to the shared primitive (78).
+**Shipped:** Phases 74-79 are complete. Template labels now cover template CRUD/filtering plus propagation into created/cloned workspaces (74); lifecycle/git `_exec` seams and structured `GS_DEBUG` logging landed with `GIT_STACKS_DEBUG=1` compatibility preserved (75); integration optional behavior moved to compile-time-only narrow interfaces and predicates with no revived capability-list release surface (76 + 78.1); template/workspace reads moved onto an indexed config cache (77); workspace creation now uses a shared operation runner with LIFO rollback across both CLI/TUI creation paths (78); and release-prep polished the package version, changelog, README, and closeout artifacts for shipping (79).
 
-**Status:** Milestone v0.17.0 in progress — Phase 78 complete, Phase 78.1 (turn capability enums into actual TypeScript interface) next.
+**Status:** Milestone v0.17.0 shipped — release-prep complete.
 
 ## Next Milestone Goals
-- Operation runner with rollback semantics for multi-step commands
-- Indexed config store to replace scan-based YAML lookups
-- First-class integration plugin boundary with capability contracts
-- Broader DI seams and structured logging beyond stderr debug traces
+- TBD — next milestone not planned yet
 
 ## Completed Milestone: v0.15.0 Dir Mode & Polish (2026-04-05)
 
