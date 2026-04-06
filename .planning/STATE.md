@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
-status: executing
-stopped_at: Completed 78-02-PLAN.md
-last_updated: "2026-04-06T17:57:48.731Z"
+status: verifying
+stopped_at: Completed 78-03-PLAN.md
+last_updated: "2026-04-06T18:12:56.568Z"
 last_activity: 2026-04-06
 progress:
   total_phases: 7
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 10
-  percent: 91
+  completed_phases: 5
+  total_plans: 13
+  completed_plans: 11
+  percent: 85
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 
 Phase: 78 (operation-runner-with-rollback) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-06
 
 Progress: [██████████] 100% (2/2 plans)
@@ -69,6 +69,11 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 78-operation-runner-with-rollback]: Plan 78-02: hook failures use Approach A (synthetic runner.do() in catch + inHookPhase flag) instead of adding runner.fail() — preserves Plan 01 runner contract and keeps result() called exactly once
 - [Phase 78-operation-runner-with-rollback]: Plan 78-02: writeWorkspace is structurally unreachable on failure — placed AFTER an early-return on runner.result() ok:false, satisfying success criterion 1 by code structure not assertion
 - [Phase 78-operation-runner-with-rollback]: Plan 78-02: Strategy A for file-op undos (no-op because files live inside the worktree the runner already removes) keeps files.ts out of phase scope
+- [Phase 78-operation-runner-with-rollback]: Plan 78-03: Both wizard and dashboard now delegate workspace creation to createWorkspace() in workspace-lifecycle.ts (D-03 lock holds — imported direct, not via workspace-ops facade)
+- [Phase 78-operation-runner-with-rollback]: Plan 78-03: Dashboard CreateRow state machine driven from four documented onProgress regex constants (CREATING_RE, CREATED_RE, ROLLBACK_RE, ROLLBACK_ERROR_RE) — string parsing approach chosen over extending Plan 02's createWorkspace API
+- [Phase 78-operation-runner-with-rollback]: Plan 78-03: Dashboard now adopts wizard's strict-abort semantics — hook failures and file-op failures abort creation and trigger LIFO rollback (previously dashboard silently committed half-built workspaces on hook failure)
+- [Phase 78-operation-runner-with-rollback]: Plan 78-03: 'running-hooks' per-repo status during pre_create dropped in dashboard — accepted minor UX regression because pre_create runs inside createWorkspace before any onProgress is emitted, and pre_create hooks are typically rare and quick
+- [Phase 78-operation-runner-with-rollback]: Plan 78-03: CONCERNS.md item 'Dashboard Duplicates Workspace Creation Logic' (lines 51-55) marked RESOLVED with pointer to Phase 78 — verified by negative-grep of createdWorktrees in App.tsx
 
 ### Roadmap Evolution
 
@@ -96,9 +101,10 @@ None.
 | Phase 77 P02 | 8min | 2 tasks | 2 files |
 | Phase 78-operation-runner-with-rollback P01 | 4min | 2 tasks | 2 files |
 | Phase 78-operation-runner-with-rollback P02 | 7min | 2 tasks | 2 files |
+| Phase 78-operation-runner-with-rollback P03 | 7min | 2 tasks | 3 files |
 
 ## Session Continuity
 
-Last session: 2026-04-06T17:57:48.728Z
-Stopped at: Completed 78-02-PLAN.md
+Last session: 2026-04-06T18:12:56.565Z
+Stopped at: Completed 78-03-PLAN.md
 Resume file: None
