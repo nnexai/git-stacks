@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
-status: verifying
-stopped_at: Phase 77 context gathered
-last_updated: "2026-04-06T04:06:34.228Z"
+status: executing
+stopped_at: Completed 77-01-PLAN.md
+last_updated: "2026-04-06T09:29:25.989Z"
 last_activity: 2026-04-06
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
+  total_plans: 8
+  completed_plans: 7
+  percent: 88
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 76 — integration-plugin-capability-contracts
+**Current focus:** Phase 77 — indexed-config-store
 
 ## Current Position
 
-Phase: 77
-Plan: Not started
-Status: Phase complete — ready for verification
+Phase: 77 (indexed-config-store) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-04-06
 
 Progress: [██████████] 100% (2/2 plans)
@@ -57,6 +57,9 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 76]: Runner uses capabilities.has() gates with non-null assertion (!) instead of optional chaining — makes gating contract explicit and eliminates silent fallthrough
 - [Phase 76]: [Phase 76-02]: TAG_MAP placed at module top in integration.ts — abbreviations close to use, avoids closure capture
 - [Phase 76]: [Phase 76-02]: JSON branch runs before table rendering in integration list action — skips caps computation for JSON callers
+- [Phase 77]: Phase 77-01: Option A (workspaceListPopulated flag + Map rebuild) chosen for list caching over separate list array
+- [Phase 77]: Phase 77-01: deleteWorkspace/deleteTemplate added to config.ts consolidating unlinkSync + cache eviction in one module
+- [Phase 77]: Phase 77-01: removeWorkspace evicts cache before parse-attempt so externally-corrupted YAML is detected (preserves D-12 behavior)
 
 ### Pending Todos
 
@@ -76,9 +79,10 @@ None.
 | Phase 75 P02 | 5m | 2 tasks | 5 files |
 | Phase 76 P01 | 14m | 2 tasks | 15 files |
 | Phase 76 P02 | 2m | 1 tasks | 2 files |
+| Phase 77 P01 | 20m | 1 tasks | 7 files |
 
 ## Session Continuity
 
-Last session: 2026-04-06T04:06:34.222Z
-Stopped at: Phase 77 context gathered
-Resume file: .planning/phases/77-indexed-config-store/77-CONTEXT.md
+Last session: 2026-04-06T09:29:25.984Z
+Stopped at: Completed 77-01-PLAN.md
+Resume file: None
