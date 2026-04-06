@@ -4,6 +4,15 @@ import { integrations } from "../lib/integrations/index"
 import { resolveEnabled, resolveEnabledGlobally } from "../lib/integrations/types"
 import { readGlobalConfig, readWorkspace, workspaceExists } from "../lib/config"
 
+const TAG_MAP: Record<string, string> = {
+  generate: 'gen',
+  cleanup: 'clean',
+  commands: 'cmd',
+  configExample: 'cfg',
+  windowDetection: 'win',
+  applies: 'apl',
+}
+
 export const integrationCommand = new Command("integration")
   .description("Integration helper commands")
 
@@ -19,23 +28,31 @@ integrationCommand
       console.error(`Workspace '${workspace}' not found.`)
       process.exit(1)
     }
+    if (opts?.json) {
+      const jsonRows = integrations.map((i) => {
+        const enabled = ws
+          ? resolveEnabled(i.id, i.enabledByDefault, { workspace: ws, config: globalConfig, tasksDir: "" })
+          : resolveEnabledGlobally(i.id, i.enabledByDefault, globalConfig)
+        const configured = Object.keys(globalConfig.integrations[i.id] ?? {}).length > 0
+        return { id: i.id, label: i.label, enabled, configured, capabilities: [...i.capabilities] }
+      })
+      console.log(JSON.stringify(jsonRows, null, 2))
+      return
+    }
     const rows = integrations.map((i) => {
       const enabled = ws
         ? resolveEnabled(i.id, i.enabledByDefault, { workspace: ws, config: globalConfig, tasksDir: "" })
         : resolveEnabledGlobally(i.id, i.enabledByDefault, globalConfig)
       const configured = Object.keys(globalConfig.integrations[i.id] ?? {}).length > 0
-      return { id: i.id, label: i.label, enabled, configured }
+      const caps = [...i.capabilities].map((c) => TAG_MAP[c] ?? c).sort().join(' ')
+      return { id: i.id, label: i.label, enabled, configured, caps }
     })
-    if (opts?.json) {
-      console.log(JSON.stringify(rows, null, 2))
-      return
-    }
-    console.log(`${"ID".padEnd(14)} ${"Label".padEnd(18)} ${"Enabled".padEnd(9)} Configured`)
-    console.log(`${"─".repeat(14)} ${"─".repeat(18)} ${"─".repeat(9)} ${"─".repeat(10)}`)
+    console.log(`${"ID".padEnd(14)} ${"Label".padEnd(18)} ${"Enabled".padEnd(9)} ${"Configured".padEnd(12)} Capabilities`)
+    console.log(`${"─".repeat(14)} ${"─".repeat(18)} ${"─".repeat(9)} ${"─".repeat(12)} ${"─".repeat(20)}`)
     for (const row of rows) {
       const enabledStr = row.enabled ? "yes" : "no"
       const configuredStr = row.configured ? "yes" : "no"
-      console.log(`${row.id.padEnd(14)} ${row.label.padEnd(18)} ${enabledStr.padEnd(9)} ${configuredStr}`)
+      console.log(`${row.id.padEnd(14)} ${row.label.padEnd(18)} ${enabledStr.padEnd(9)} ${configuredStr.padEnd(12)} ${row.caps}`)
     }
   })
 
