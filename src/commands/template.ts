@@ -1,8 +1,7 @@
 import { Command } from "commander"
 import { prompts as p } from "../tui/utils"
-import { readTemplate, writeTemplate, listTemplates, templateExists, templatePath } from "../lib/config"
+import { readTemplate, writeTemplate, listTemplates, templateExists, deleteTemplate } from "../lib/config"
 import { runTemplateNew, runTemplateEdit } from "../tui/template-wizard"
-import { unlinkSync } from "fs"
 import { editTemplateYaml, openYamlInEditor } from "../lib/workspace-yaml"
 import { renameTemplate } from "../lib/workspace-ops"
 import { matchesLabels } from "../lib/labels"
@@ -164,7 +163,7 @@ templateCommand
       }
     }
 
-    unlinkSync(templatePath(template))
+    deleteTemplate(template)
     console.log(`Removed template '${template}'.`)
   })
 

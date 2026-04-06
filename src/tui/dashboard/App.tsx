@@ -34,7 +34,7 @@ import {
 import { syncWorkspace, pushWorkspace } from "../../lib/workspace-git"
 import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-git"
 import { editWorkspaceYaml } from "../../lib/workspace-yaml"
-import { readTemplate, writeTemplate, templateExists, templatePath, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, isWorktreeRepo, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
+import { readTemplate, writeTemplate, templateExists, templatePath, deleteTemplate, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, isWorktreeRepo, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
 import { SyncProgressView } from "./SyncProgressView"
 import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
@@ -46,7 +46,7 @@ import { applyFileOpsForRepo, applyFileOpsForWorkspace } from "../../lib/files"
 import { type IntegrationContext } from "../../lib/integrations"
 import { runIntegrationGenerate } from "../../lib/integrations/runner"
 import { join } from "path"
-import { existsSync, unlinkSync } from "fs"
+import { existsSync } from "fs"
 import type { UIView, Action, Tab } from "./types"
 import type { WorkspaceEntry } from "./types"
 import { matchesLabels } from "../../lib/labels"
@@ -375,7 +375,7 @@ export default function App() {
     if (confirmContext() === "template") {
       const tmpl = filteredTemplates()[index]
       if (tmpl) {
-        try { unlinkSync(templatePath(tmpl.name)) } catch {}
+        try { deleteTemplate(tmpl.name) } catch {}
         reloadTemplates()
       }
       setConfirmContext("workspace")
