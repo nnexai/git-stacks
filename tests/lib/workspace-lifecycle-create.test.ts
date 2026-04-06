@@ -25,6 +25,12 @@ const writeEnvFilesMock = mock(() => {})
 
 // ─── Integration runner mocks ─────────────────────────────────────────────────
 const runIntegrationGenerateMock = mock(async () => [] as any[])
+const composeTemplatesMock = mock((_names: string[]) => ({
+  name: "my-template",
+  schema_version: "1" as const,
+  repos: [],
+  labels: ["template:shared", "included:ops"],
+}))
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 mock.module("@/lib/config", () =>
@@ -65,6 +71,10 @@ mock.module("@/lib/workspace-env", () => ({
 mock.module("@/lib/integrations/runner", () => ({
   runIntegrationGenerate: runIntegrationGenerateMock,
   runIntegrationCleanup: mock(async () => {}),
+}))
+
+mock.module("@/lib/composition", () => ({
+  composeTemplates: composeTemplatesMock,
 }))
 
 mock.module("@/lib/integrations", () => ({
@@ -139,6 +149,7 @@ beforeEach(() => {
   applyFileOpsForWorkspaceMock.mockClear()
   writeEnvFilesMock.mockClear()
   runIntegrationGenerateMock.mockClear()
+  composeTemplatesMock.mockClear()
 
   // Reset default behaviors
   createWorktreeMock.mockImplementation(async () => {})
@@ -147,6 +158,12 @@ beforeEach(() => {
   applyFileOpsForRepoMock.mockImplementation(() => ({ ok: true as const }))
   applyFileOpsForWorkspaceMock.mockImplementation(() => ({ ok: true as const }))
   runIntegrationGenerateMock.mockImplementation(async () => [])
+  composeTemplatesMock.mockImplementation((_names: string[]) => ({
+    name: "my-template",
+    schema_version: "1" as const,
+    repos: [],
+    labels: ["template:shared", "included:ops"],
+  }))
 
   // Reset spawn seam to a passing default
   _exec.spawn = defaultSpawn as any
@@ -174,6 +191,40 @@ describe("createWorkspace", () => {
       expect(removeWorktreeMock).not.toHaveBeenCalled()
       // No "Rollback:" messages on the happy path
       expect(messages.some((m) => m.startsWith("Rollback:"))).toBe(false)
+    })
+
+    test("copies composed template labels when the caller passes no explicit labels", async () => {
+      const result = await createWorkspace({
+        wsName: "test-ws",
+        branch: "feature/test",
+        templateName: "my-template",
+        repos: makeRepos(["a"]),
+      })
+
+      expect(result.ok).toBe(true)
+      expect(composeTemplatesMock).toHaveBeenCalledWith(["my-template"])
+      expect(writeWorkspaceMock).toHaveBeenCalledTimes(1)
+      expect(writeWorkspaceMock.mock.calls[0]?.[0]).toMatchObject({
+        labels: ["template:shared", "included:ops"],
+      })
+    })
+
+    test("prefers caller-supplied composed template labels and deduplicates user labels", async () => {
+      const result = await createWorkspace({
+        wsName: "test-ws",
+        branch: "feature/test",
+        templateName: "my-template",
+        templateLabels: ["template:shared", "team:platform"],
+        labels: ["team:platform", "cli:one"],
+        repos: makeRepos(["a"]),
+      })
+
+      expect(result.ok).toBe(true)
+      expect(composeTemplatesMock).not.toHaveBeenCalled()
+      expect(writeWorkspaceMock).toHaveBeenCalledTimes(1)
+      expect(writeWorkspaceMock.mock.calls[0]?.[0]).toMatchObject({
+        labels: ["template:shared", "team:platform", "cli:one"],
+      })
     })
   })
 

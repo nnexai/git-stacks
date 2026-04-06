@@ -1,6 +1,6 @@
 import { $ } from "bun"
 import { generateIntellijProject } from "../intellij"
-import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
+import { resolveEnabled, type Conditional, type Generates, type Integration, type IntegrationContext, type WindowArtifact } from "./types"
 import type { Workspace } from "../config"
 
 // ─── Injectable executor ──────────────────────────────────────────────────────
@@ -16,13 +16,12 @@ export const _exec = {
   },
 }
 
-export const intellijIntegration: Integration = {
+export const intellijIntegration: Integration & Generates & Conditional = {
   id: "intellij",
   label: "IntelliJ",
   hint: "opens .idea project for Java repos",
   enabledByDefault: true,
   order: 11,
-  capabilities: new Set<Capability>(['generate', 'applies']),
 
   applies: (workspace: Workspace) => workspace.repos.some((r) => r.type === "java"),
 

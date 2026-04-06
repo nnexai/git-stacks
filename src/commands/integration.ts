@@ -1,16 +1,17 @@
 import { Command } from "commander"
 import { stringify } from "yaml"
 import { integrations } from "../lib/integrations/index"
-import { resolveEnabled, resolveEnabledGlobally } from "../lib/integrations/types"
+import { resolveEnabled, resolveEnabledGlobally, type HasCommands, type HasConfigExample } from "../lib/integrations/types"
 import { readGlobalConfig, readWorkspace, workspaceExists } from "../lib/config"
 
-const TAG_MAP: Record<string, string> = {
-  generate: 'gen',
-  cleanup: 'clean',
-  commands: 'cmd',
-  configExample: 'cfg',
-  windowDetection: 'win',
-  applies: 'apl',
+type RegisteredIntegration = (typeof integrations)[number]
+
+function hasCommands(integration: RegisteredIntegration): integration is RegisteredIntegration & HasCommands {
+  return typeof (integration as Partial<HasCommands>).commands === "function"
+}
+
+function hasConfigExample(integration: RegisteredIntegration): integration is RegisteredIntegration & HasConfigExample {
+  return typeof (integration as Partial<HasConfigExample>).configExample === "string"
 }
 
 export const integrationCommand = new Command("integration")
@@ -34,7 +35,7 @@ integrationCommand
           ? resolveEnabled(i.id, i.enabledByDefault, { workspace: ws, config: globalConfig, tasksDir: "" })
           : resolveEnabledGlobally(i.id, i.enabledByDefault, globalConfig)
         const configured = Object.keys(globalConfig.integrations[i.id] ?? {}).length > 0
-        return { id: i.id, label: i.label, enabled, configured, capabilities: [...i.capabilities] }
+        return { id: i.id, label: i.label, enabled, configured }
       })
       console.log(JSON.stringify(jsonRows, null, 2))
       return
@@ -44,15 +45,14 @@ integrationCommand
         ? resolveEnabled(i.id, i.enabledByDefault, { workspace: ws, config: globalConfig, tasksDir: "" })
         : resolveEnabledGlobally(i.id, i.enabledByDefault, globalConfig)
       const configured = Object.keys(globalConfig.integrations[i.id] ?? {}).length > 0
-      const caps = [...i.capabilities].map((c) => TAG_MAP[c] ?? c).sort().join(' ')
-      return { id: i.id, label: i.label, enabled, configured, caps }
+      return { id: i.id, label: i.label, enabled, configured }
     })
-    console.log(`${"ID".padEnd(14)} ${"Label".padEnd(18)} ${"Enabled".padEnd(9)} ${"Configured".padEnd(12)} Capabilities`)
-    console.log(`${"─".repeat(14)} ${"─".repeat(18)} ${"─".repeat(9)} ${"─".repeat(12)} ${"─".repeat(20)}`)
+    console.log(`${"ID".padEnd(14)} ${"Label".padEnd(18)} ${"Enabled".padEnd(9)} ${"Configured".padEnd(12)}`)
+    console.log(`${"─".repeat(14)} ${"─".repeat(18)} ${"─".repeat(9)} ${"─".repeat(12)}`)
     for (const row of rows) {
       const enabledStr = row.enabled ? "yes" : "no"
       const configuredStr = row.configured ? "yes" : "no"
-      console.log(`${row.id.padEnd(14)} ${row.label.padEnd(18)} ${enabledStr.padEnd(9)} ${configuredStr.padEnd(12)} ${row.caps}`)
+      console.log(`${row.id.padEnd(14)} ${row.label.padEnd(18)} ${enabledStr.padEnd(9)} ${configuredStr.padEnd(12)}`)
     }
   })
 
@@ -66,7 +66,7 @@ for (const integration of integrations) {
     .command("example")
     .description("Print a YAML configuration example")
     .action(() => {
-      if (integration.configExample) {
+      if (hasConfigExample(integration)) {
         console.log(integration.configExample)
       } else {
         // Fallback for integrations without configExample
@@ -118,7 +118,7 @@ for (const integration of integrations) {
     })
 
   // Per-integration commands (e.g., niri focus-workspace, tmux attach)
-  if (integration.commands) {
+  if (hasCommands(integration)) {
     integration.commands(sub)
   }
 

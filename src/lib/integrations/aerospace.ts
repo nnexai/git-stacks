@@ -3,12 +3,15 @@ import { prompts as p } from "../../tui/utils"
 import type { Command } from "commander"
 import {
   resolveEnabled,
-  type Capability,
+  type Cleans,
+  type HasCommands,
+  type HasConfigExample,
   type Integration,
   type IntegrationContext,
   type ArtifactBag,
   type WindowDetector,
   type DetectorSnapshot,
+  type WindowDetecting,
 } from "./types"
 import {
   isAerospaceRunning,
@@ -90,13 +93,12 @@ export function validateAerospaceConfig(
 
 // ─── Integration ─────────────────────────────────────────────────────────────
 
-export const aerospaceIntegration: Integration = {
+export const aerospaceIntegration: Integration & Cleans & HasCommands & HasConfigExample & WindowDetecting = {
   id: "aerospace",
   label: "AeroSpace",
   hint: "moves workspace windows to an AeroSpace workspace",
   enabledByDefault: false,
   order: 31,
-  capabilities: new Set<Capability>(['cleanup', 'commands', 'configExample', 'windowDetection']),
 
   configExample: `integrations:
   aerospace:

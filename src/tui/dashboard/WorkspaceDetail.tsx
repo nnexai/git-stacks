@@ -6,7 +6,7 @@ import type { WorkspaceEntry } from "./types"
 import type { MessageRecord } from "../../lib/messages"
 import { readGlobalConfig, readTemplate } from "../../lib/config"
 import { integrations } from "../../lib/integrations"
-import { resolveEnabledGlobally } from "../../lib/integrations/types"
+import { isConditional, resolveEnabledGlobally } from "../../lib/integrations/types"
 
 const TRACKER_IDS = ["github", "gitlab", "gitea", "jira"] as const
 
@@ -116,14 +116,14 @@ export function WorkspaceDetail(props: Props) {
               </For>
             </Show>
             <text>{""}</text>
-            <text fg="white">  Integrations:</text>
-            <For each={integrations}>
-              {(integration) => {
-                // applies() check — takes precedence (skipped rows)
-                if (integration.applies && !integration.applies(ws())) {
-                  return (
-                    <text fg="gray">    -  {integration.id.padEnd(10)}  [skipped: no matching repos]</text>
-                  )
+              <text fg="white">  Integrations:</text>
+              <For each={integrations}>
+                {(integration) => {
+                  // applies() check — takes precedence (skipped rows)
+                  if (isConditional(integration) && !integration.applies(ws())) {
+                    return (
+                      <text fg="gray">    -  {integration.id.padEnd(10)}  [skipped: no matching repos]</text>
+                    )
                 }
 
                 // Determine enabled state and source annotation (D-10)

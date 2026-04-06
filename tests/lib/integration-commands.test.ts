@@ -282,35 +282,4 @@ describe("integrationCommand structure", () => {
     expect(subNames).toContain("config")
   })
 
-  // --- Phase 76-02: capabilities column ---
-
-  test("all integrations have capabilities field (Set instance)", async () => {
-    const { integrations } = await import("@/lib/integrations/index")
-    for (const i of integrations) {
-      expect(i.capabilities).toBeDefined()
-      expect(i.capabilities instanceof Set).toBe(true)
-    }
-  })
-
-  test("list subcommand output includes Capabilities column header", () => {
-    // The TAG_MAP constant should be defined in integration.ts
-    const src = require("fs").readFileSync(
-      require("path").join(process.cwd(), "src/commands/integration.ts"),
-      "utf8"
-    )
-    expect(src).toContain("TAG_MAP")
-    expect(src).toContain("Capabilities")
-    expect(src).toContain("generate: 'gen'")
-    expect(src).toContain("cleanup: 'clean'")
-    expect(src).toContain("windowDetection: 'win'")
-  })
-
-  test("list subcommand --json output includes capabilities array", () => {
-    const src = require("fs").readFileSync(
-      require("path").join(process.cwd(), "src/commands/integration.ts"),
-      "utf8"
-    )
-    expect(src).toContain("[...i.capabilities]")
-    expect(src).toContain("capabilities:")
-  })
 })

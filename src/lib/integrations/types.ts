@@ -39,14 +39,6 @@ export interface IntegrationContext {
   silent?: boolean
 }
 
-export type Capability =
-  | 'generate'
-  | 'cleanup'
-  | 'commands'
-  | 'configExample'
-  | 'windowDetection'
-  | 'applies'
-
 export interface Integration {
   /** Unique key — used as the key in config.integrations */
   id: string
@@ -63,12 +55,6 @@ export interface Integration {
    */
   order: number
 
-  /** Declares which optional behaviors this plugin provides. */
-  capabilities: ReadonlySet<Capability>
-
-  /** Return false to skip this integration for a given workspace (e.g. IntelliJ on non-Java repos) */
-  applies?(workspace: Workspace): boolean
-
   /** Resolves enabled state from global config + workspace-level override */
   isEnabled(ctx: IntegrationContext): boolean
 
@@ -79,31 +65,70 @@ export interface Integration {
    */
   configurePrompt(current: Record<string, unknown>): Promise<Record<string, unknown> | null>
 
-  /**
-   * Write artifact files to disk (e.g. .code-workspace, .idea/).
-   * Returns the path to the primary artifact, or null if nothing was produced.
-   */
-  generate?(ctx: IntegrationContext): string | null
-
   /** Launch / activate the integration (open IDE, create terminal session, …) */
   open(ctx: IntegrationContext, artifactPath: string | null, bag: ArtifactBag): Promise<IntegrationArtifact | null>
+}
 
-  /** Clean up integration resources (e.g., unname niri workspace). Called on workspace clean/remove. */
-  cleanup?(ctx: IntegrationContext): Promise<void>
+/**
+ * Narrow capability interfaces. Plugins compose them at the export site
+ * via intersection types: `Integration & Generates & HasCommands`.
+ *
+ * The presence of an interface's method/property ON the plugin object IS
+ * the capability declaration — there is no parallel registry. The runner
+ * uses the `is*` predicates below to gate dispatch.
+ */
 
-  /** Register helper subcommands under `git-stacks integration <id>`. */
-  commands?(parent: Command): void
+/** Plugin produces an artifact file before `open()` runs. */
+export interface Generates {
+  generate(ctx: IntegrationContext): string | null
+}
 
-  /** Static YAML snippet showing how to configure this integration. Printed by `config example`. */
-  configExample?: string
+/** Plugin has resources that must be torn down on workspace clean/remove. */
+export interface Cleans {
+  cleanup(ctx: IntegrationContext): Promise<void>
+}
 
-  /**
-   * Optional window ID detector. When present, runner.ts calls begin() before open()
-   * and resolve() after open() for any integration that returns a WindowArtifact.
-   * Results are merged into artifact.windowIds keyed by this detector's id.
-   * Tier-1 integrations (vscode, intellij) no longer handle detection themselves.
-   */
-  windowDetector?: WindowDetector
+/** Plugin contributes subcommands under `git-stacks integration <id>`. */
+export interface HasCommands {
+  commands(parent: Command): void
+}
+
+/** Plugin provides a YAML configuration example for `config example`. */
+export interface HasConfigExample {
+  configExample: string
+}
+
+/** Plugin attaches a WindowDetector consulted by the runner around open(). */
+export interface WindowDetecting {
+  windowDetector: WindowDetector
+}
+
+/** Plugin opts out of certain workspaces (e.g., IntelliJ on non-Java repos). */
+export interface Conditional {
+  applies(workspace: Workspace): boolean
+}
+
+/**
+ * Type predicates for runner gating. Each narrows `Integration` to
+ * `Integration & X` so the caller can invoke the gated method without
+ * a non-null assertion or optional chaining. Method/property presence
+ * is the single source of truth.
+ */
+
+export function isGenerator(i: Integration): i is Integration & Generates {
+  return typeof (i as Partial<Generates>).generate === "function"
+}
+
+export function isCleaner(i: Integration): i is Integration & Cleans {
+  return typeof (i as Partial<Cleans>).cleanup === "function"
+}
+
+export function isConditional(i: Integration): i is Integration & Conditional {
+  return typeof (i as Partial<Conditional>).applies === "function"
+}
+
+export function isWindowDetecting(i: Integration): i is Integration & WindowDetecting {
+  return (i as Partial<WindowDetecting>).windowDetector !== undefined
 }
 
 const enabledSchema = z.object({ enabled: z.boolean() })

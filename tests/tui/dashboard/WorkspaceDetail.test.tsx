@@ -58,6 +58,7 @@ mock.module("../../../src/lib/integrations/types", () => ({
     return id !== "intellij"
   }),
   resolveEnabled: mock(() => true),
+  isConditional: mock((integration: { applies?: unknown }) => typeof integration.applies === "function"),
 }))
 
 // Mock config module

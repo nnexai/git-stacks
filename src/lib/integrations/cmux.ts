@@ -3,7 +3,7 @@ import { z } from "zod"
 import { join } from "path"
 import { openCmuxWorkspace, addCmuxPane, addCmuxSurface, sendToCmuxSurface, getCmuxMainPane, focusCmuxSurface } from "../cmux"
 import { writeWorkspace, workspaceExists, readWorkspace } from "../config"
-import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type CmuxArtifact } from "./types"
+import { resolveEnabled, type Integration, type IntegrationContext, type CmuxArtifact } from "./types"
 
 const surfaceSchema = z.object({
   repo: z.string().optional(),
@@ -29,7 +29,6 @@ export const cmuxIntegration: Integration = {
   hint: "creates/focuses a cmux workspace",
   enabledByDefault: true,
   order: 20,
-  capabilities: new Set<Capability>([]),
 
   isEnabled: (ctx) => resolveEnabled("cmux", true, ctx),
 

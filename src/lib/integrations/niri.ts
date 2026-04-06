@@ -9,12 +9,15 @@ function shellQuote(s: string): string {
 
 import {
   resolveEnabled,
-  type Capability,
+  type Cleans,
+  type HasCommands,
+  type HasConfigExample,
   type Integration,
   type IntegrationContext,
   type ArtifactBag,
   type WindowDetector,
   type DetectorSnapshot,
+  type WindowDetecting,
 } from "./types"
 import {
   isNiriRunning,
@@ -59,13 +62,12 @@ const niriConfigSchema = z.object({
 
 // ─── Integration ─────────────────────────────────────────────────────────────
 
-export const niriIntegration: Integration = {
+export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExample & WindowDetecting = {
   id: "niri",
   label: "niri",
   hint: "arranges workspace windows onto a named niri workspace",
   enabledByDefault: false,
   order: 30,
-  capabilities: new Set<Capability>(['cleanup', 'commands', 'configExample', 'windowDetection']),
 
   configExample: `integrations:
   niri:

@@ -29,7 +29,6 @@ const fakeIntegrations = [
     hint: "tier 2",
     enabledByDefault: true,
     order: 20,
-    capabilities: new Set(["generate"]),
     isEnabled: () => true,
     generate: (ctx: unknown) => {
       callOrder.push("high-generate")
@@ -46,7 +45,6 @@ const fakeIntegrations = [
     hint: "tier 1",
     enabledByDefault: true,
     order: 10,
-    capabilities: new Set(["generate"]),
     isEnabled: () => true,
     generate: (ctx: unknown) => {
       callOrder.push("low-generate")
@@ -63,7 +61,6 @@ const fakeIntegrations = [
     hint: "tier 1b",
     enabledByDefault: true,
     order: 12,
-    capabilities: new Set(["generate"]),
     isEnabled: () => true,
     generate: (ctx: unknown) => {
       callOrder.push("mid-generate")
@@ -80,7 +77,6 @@ const fakeIntegrations = [
     hint: "always disabled",
     enabledByDefault: false,
     order: 15,
-    capabilities: new Set(["generate"]),
     isEnabled: () => false,
     generate: disabledGenerateMock,
     open: disabledOpenMock,
@@ -91,7 +87,6 @@ const fakeIntegrations = [
     hint: "applies returns false",
     enabledByDefault: true,
     order: 16,
-    capabilities: new Set(["generate", "applies"]),
     isEnabled: () => true,
     applies: () => false,
     generate: noAppliesGenerateMock,
@@ -103,10 +98,9 @@ const fakeIntegrations = [
     hint: "no generate capability",
     enabledByDefault: true,
     order: 17,
-    capabilities: new Set([]),
     isEnabled: () => true,
     open: noGenerateOpenMock,
-    // generate is intentionally undefined (no capability declared)
+    // generate is intentionally undefined so method presence gating returns path=null
   },
   {
     id: "skip-me",
@@ -114,7 +108,6 @@ const fakeIntegrations = [
     hint: "will be skipped via skip set",
     enabledByDefault: true,
     order: 18,
-    capabilities: new Set(["generate"]),
     isEnabled: () => true,
     generate: skipGenerateMock,
     open: skipOpenMock,
@@ -187,7 +180,7 @@ describe("runIntegrationGenerate", () => {
     expect(noAppliesGenerateMock).not.toHaveBeenCalled()
   })
 
-  test("integration without generate capability does not throw and has path=null", async () => {
+  test("integration without generate method does not throw and has path=null", async () => {
     const results = await runIntegrationGenerate(fakeCtx)
 
     const noGenResult = results.find((r: { integration: { id: string } }) => r.integration.id === "no-generate")
@@ -204,9 +197,7 @@ describe("runIntegrationGenerate", () => {
     expect(lowResult!.path).toBe("/tmp/low-artifact")
   })
 
-  test("skips generate when capability not declared even if method exists", async () => {
-    // Use the existing "no-generate" fake which has capabilities: new Set([])
-    // and no generate method — confirming path=null is returned via capability gating
+  test("skips generate when the integration has no generate method", async () => {
     const results = await runIntegrationGenerate(fakeCtx)
     const noGenResult = results.find((r: { integration: { id: string } }) => r.integration.id === "no-generate")
     expect(noGenResult).toBeDefined()
@@ -291,7 +282,7 @@ describe("runIntegrations", () => {
     expect(noAppliesOpenMock).not.toHaveBeenCalled()
   })
 
-  test("integration without generate capability does not throw and open receives path=null", async () => {
+  test("integration without generate method does not throw and open receives path=null", async () => {
     let pathSeenByNoGen: string | null | undefined = undefined
     noGenerateOpenMock.mockImplementation(async (_ctx: unknown, path: string | null, _bag: ArtifactBag) => {
       pathSeenByNoGen = path
@@ -312,9 +303,7 @@ describe("runIntegrations", () => {
     expect("high" in bag).toBe(true)
   })
 
-  test("skips generate in runIntegrations when capability not declared", async () => {
-    // The "no-generate" fake has capabilities: new Set([]) and no generate method
-    // It should receive path=null in open()
+  test("skips generate in runIntegrations when the integration has no generate method", async () => {
     let pathSeenByNoGen: string | null | undefined = undefined
     noGenerateOpenMock.mockImplementation(async (_ctx: unknown, path: string | null, _bag: ArtifactBag) => {
       pathSeenByNoGen = path
@@ -327,16 +316,15 @@ describe("runIntegrations", () => {
 })
 
 describe("runIntegrationCleanup", () => {
-  test("calls cleanup on integrations with cleanup capability", async () => {
-    // None of the fakeIntegrations have 'cleanup' capability.
+  test("calls cleanup on integrations with cleanup method", async () => {
+    // None of the fakeIntegrations have a cleanup method.
     // runIntegrationCleanup should complete without error and call no cleanup.
-    // Capability gating is verified by absence of errors on integrations with no cleanup method.
     await runIntegrationCleanup(fakeCtx)
     expect(true).toBe(true)
   })
 
-  test("skips cleanup on integrations without cleanup capability", async () => {
-    // All fakeIntegrations have no 'cleanup' capability.
+  test("skips cleanup on integrations without cleanup method", async () => {
+    // All fakeIntegrations have no cleanup method.
     // runIntegrationCleanup should complete without error and skip all.
     await expect(runIntegrationCleanup(fakeCtx)).resolves.toBeUndefined()
   })

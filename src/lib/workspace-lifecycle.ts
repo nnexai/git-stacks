@@ -31,6 +31,7 @@ import { getTasksDir } from "./paths"
 import { buildBaseEnv, buildRepoEnv, writeEnvFiles } from "./workspace-env"
 import { getDirtyWorktrees } from "./workspace-status"
 import { createRunner, type RunnerResult } from "./operation-runner"
+import { composeTemplates } from "./composition"
 
 const OBS_CATEGORY = "workspace-lifecycle"
 
@@ -596,6 +597,8 @@ export type CreateWorkspaceInputs = {
   branch: string
   description?: string
   templateName?: string
+  /** Template labels already resolved by the caller (supports composed templates). */
+  templateLabels?: string[]
   /** Already-resolved workspace repos (registry lookup, mode, paths done by caller). */
   repos: WorkspaceRepo[]
   /** Snapshot of merged template+workspace hooks; copied by the caller. */
@@ -633,6 +636,10 @@ export async function createWorkspace(
       ...(inputs.wsEnv ?? {}),
     }
 
+    const templateLabels = inputs.templateLabels
+      ?? (inputs.templateName ? (composeTemplates([inputs.templateName]).labels ?? []) : [])
+    const resolvedLabels = [...new Set([...(templateLabels ?? []), ...(inputs.labels ?? [])])]
+
     // ─── Build the in-memory Workspace object ──────────────────────────────────
     // Held in memory until the commit point (D-10). NEVER written to disk if any
     // tracked step fails — writeWorkspace is reached only after the runner reports ok.
@@ -654,7 +661,7 @@ export async function createWorkspace(
       ...(inputs.wsFiles ? { files: inputs.wsFiles } : {}),
       ...settingsIntegrations,
       ...(inputs.wsPorts ? { ports: inputs.wsPorts } : {}),
-      ...((inputs.labels?.length ?? 0) > 0 ? { labels: inputs.labels } : {}),
+      ...(resolvedLabels.length > 0 ? { labels: resolvedLabels } : {}),
     } as Workspace
 
     const runner = createRunner(onProgress)

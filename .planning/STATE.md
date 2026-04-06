@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.0
 milestone_name: Engine Hardening & Template Labels
-status: verifying
-stopped_at: Completed 78-03-PLAN.md
-last_updated: "2026-04-06T18:20:12.658Z"
-last_activity: 2026-04-06
+status: executing
+stopped_at: Completed Phase 78.1
+last_updated: "2026-04-06T18:50:08.246Z"
+last_activity: 2026-04-06 - Completed quick task 260406-tis: labels on templates are not propagated to workspaces created from it
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 14
-  completed_plans: 11
-  percent: 79
+  completed_plans: 14
+  percent: 100
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 78 — operation-runner-with-rollback
+**Current focus:** Phase 79 — release-prep
 
 ## Current Position
 
-Phase: 78.1
+Phase: 79
 Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-04-06
+Status: Ready to execute Phase 79
+Last activity: 2026-04-06 - Completed quick task 260406-tis: labels on templates are not propagated to workspaces created from it
 
 Progress: [██████████] 100% (2/2 plans)
 
@@ -74,6 +74,9 @@ Progress: [██████████] 100% (2/2 plans)
 - [Phase 78-operation-runner-with-rollback]: Plan 78-03: Dashboard now adopts wizard's strict-abort semantics — hook failures and file-op failures abort creation and trigger LIFO rollback (previously dashboard silently committed half-built workspaces on hook failure)
 - [Phase 78-operation-runner-with-rollback]: Plan 78-03: 'running-hooks' per-repo status during pre_create dropped in dashboard — accepted minor UX regression because pre_create runs inside createWorkspace before any onProgress is emitted, and pre_create hooks are typically rare and quick
 - [Phase 78-operation-runner-with-rollback]: Plan 78-03: CONCERNS.md item 'Dashboard Duplicates Workspace Creation Logic' (lines 51-55) marked RESOLVED with pointer to Phase 78 — verified by negative-grep of createdWorktrees in App.tsx
+- [Phase 78.1]: Phase 76 D-01 through D-07 are superseded — optional integration behavior now lives in narrow structural interfaces composed at each plugin export site rather than a required `capabilities` Set on the base Integration interface
+- [Phase 78.1]: Runner gating now uses `isGenerator`, `isCleaner`, `isConditional`, and `isWindowDetecting` predicates from `src/lib/integrations/types.ts`, eliminating non-null assertions on integration dispatch
+- [Phase 78.1]: `git-stacks integration list` no longer exposes capabilities in table or JSON output; capability contracts are compile-time-only and stay out of the changelog-facing surface
 
 ### Roadmap Evolution
 
@@ -86,6 +89,12 @@ None.
 ### Blockers/Concerns
 
 None.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260406-tis | labels on templates are not propagated to workspaces created from it | 2026-04-06 | uncommitted | [260406-tis-labels-on-templates-are-not-propagated-t](./quick/260406-tis-labels-on-templates-are-not-propagated-t/) |
 
 ## Performance Metrics
 

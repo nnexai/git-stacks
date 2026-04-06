@@ -384,10 +384,6 @@ export async function runWorkspaceNew(
       labels = normalizeLabels(labelsStr.split(","))
     }
   }
-  if (template?.labels?.length) {
-    labels = [...new Set([...template.labels, ...labels])]
-  }
-
   // Branch — expand patterns if template had branch_pattern
   const defaultBranch = templateName
     ? (() => {
@@ -467,6 +463,7 @@ export async function runWorkspaceNew(
       branch,
       ...(description ? { description } : {}),
       ...(templateName ? { templateName } : {}),
+      ...(template?.labels?.length ? { templateLabels: template.labels } : {}),
       repos,
       ...(wsHooks ? { wsHooks } : {}),
       ...(wsEnv ? { wsEnv } : {}),

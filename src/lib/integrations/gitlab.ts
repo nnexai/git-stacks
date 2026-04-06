@@ -1,5 +1,5 @@
 import type { Command } from "commander"
-import { resolveEnabled, type Capability, type Integration, type IntegrationContext, type ArtifactBag } from "./types"
+import { resolveEnabled, type ArtifactBag, type HasCommands, type Integration, type IntegrationContext } from "./types"
 import { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, formatForgeError } from "./forge-utils"
 import { workspaceExists } from "../config"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError, resolveWorkspaceArg } from "./issue-utils"
@@ -20,14 +20,13 @@ export const _exec = {
 
 // --- Integration ---
 
-export const gitlabIntegration: Integration = {
+export const gitlabIntegration: Integration & HasCommands = {
   /** Unique key — used as the key in config.integrations */
   id: "gitlab",
   label: "GitLab",
   hint: "create and manage GitLab MRs and issues via glab CLI",
   enabledByDefault: false,
   order: 51,
-  capabilities: new Set<Capability>(['commands']),
 
   isEnabled: (ctx) => resolveEnabled("gitlab", false, ctx),
 
