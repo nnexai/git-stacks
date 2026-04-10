@@ -354,7 +354,23 @@ Plans:
   4. Workspace clean/remove/rename E2E tests prove filesystem and YAML side effects, missing/dirty repo behavior, and safe failure messages
   5. Workspace merge, pull, sync, and push E2E tests run against disposable local git repositories/remotes and prove guard behavior for dir repos, dirty repos, missing remotes, and branch/upstream assumptions
   6. Command-execution E2E tests prove run/hooks/git operations use explicit cwd/path handling and do not depend on shell `cd` state
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 81-01-PLAN.md — Shared E2E helpers + create/clone side-effect tests
+- [ ] 81-02-PLAN.md — Execution context probes + JSON/text output contracts
+- [ ] 81-03-PLAN.md — Lifecycle cascading + guard behavior tests
+- [ ] 81-04-PLAN.md — Git operations against bare remotes + status --fetch
+
+### Phase 81.1: Repo add honors enabled forge integrations (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 81
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 81.1 to break down)
 
 ### Phase 82: Template, Repo, Label, and Message E2E Coverage
 **Goal**: Users can trust non-workspace command families because template, registry, label, and message behavior is covered through real CLI processes
