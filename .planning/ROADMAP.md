@@ -364,13 +364,19 @@ Plans:
 
 ### Phase 81.1: Repo add honors enabled forge integrations (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Make `repo add` honor globally enabled forge integrations so forge detection and prompts only consider forges the user has explicitly enabled, eliminating incorrect prompting when all forges are disabled (the default)
+**Requirements**: D-01, D-02, D-03, D-04 (from 81.1-CONTEXT.md)
 **Depends on:** Phase 81
-**Plans:** 0 plans
+**Plans:** 1 plan
+**Success Criteria** (what must be TRUE):
+  1. `repo add` only runs forge detectors for globally enabled forge integrations (D-01)
+  2. Disabled forges are invisible to both auto-detection and prompt options (D-02)
+  3. Zero enabled forge matches → forge unset, no prompt (D-03)
+  4. Multiple enabled forge matches → prompt only among enabled matches plus None (D-04)
+  5. All tests pass including new forge-utils and repo-add coverage
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 81.1 to break down)
+- [ ] 81.1-01-PLAN.md — Enabled-aware forge detection + repo add behavioral fix + tests
 
 ### Phase 82: Template, Repo, Label, and Message E2E Coverage
 **Goal**: Users can trust non-workspace command families because template, registry, label, and message behavior is covered through real CLI processes
