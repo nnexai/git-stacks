@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: planning
-stopped_at: Phase 81 context gathered
-last_updated: "2026-04-10T20:07:17.674Z"
+stopped_at: Phase 81.1 context gathered
+last_updated: "2026-04-10T20:29:55.738Z"
 last_activity: 2026-04-10 — Phase 80 context captured and roadmap/requirements refined so the inventory requirement is machine-parseable only, with no separate human-readable surface.
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 7
-  total_plans: 15
+  total_plans: 19
   completed_plans: 15
-  percent: 100
+  percent: 79
 ---
 
 # Project State
@@ -60,6 +60,10 @@ Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
 - `cd`, `edit --yaml`, `integration list`, and `integration <id> config show/example` were missing from phase success criteria and have been added.
 - **Coverage spike findings (2026-04-10):** (1) Bun ignores `NODE_V8_COVERAGE` — no V8 coverage JSON produced from Bun subprocesses. (2) `bun test --coverage` works for in-process imports only; subprocess code is invisible. (3) `c8 --all` sees the source tree but reports 0% because Bun subprocesses don't emit V8 artifacts. (4) Istanbul source instrumentation (`istanbul-lib-instrument` with `parserPlugins: ["typescript"]`) works end-to-end under Bun: instrument TS → run instrumented code in subprocess → collect `globalThis.__coverage__` → get per-function/statement/branch hit counts. (5) Phase 83 approach confirmed: Istanbul source instrumentation + `__coverage__` collection + artifact merge. Phase 82.1 SC 6 requires a minimal proof-of-concept before Phase 83 planning begins.
 
+### Roadmap Evolution
+
+- Phase 81.1 inserted after Phase 81: Repo add honors enabled forge integrations (URGENT)
+
 ### Pending Todos
 
 None.
@@ -70,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-10T20:07:17.670Z
-Stopped at: Phase 81 context gathered
-Resume file: .planning/phases/81-workspace-and-git-operation-e2e-coverage/81-CONTEXT.md
+Last session: 2026-04-10T20:29:55.735Z
+Stopped at: Phase 81.1 context gathered
+Resume file: .planning/phases/81.1-repo-add-honors-enabled-forge-integrations/81.1-CONTEXT.md
