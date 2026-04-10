@@ -398,3 +398,35 @@ Plans:
 | 82. Non-TUI/Non-Integration CLI E2E Expansion | v0.17.1 | 0/TBD | Not started | - |
 | 83. Coverage Reporting for Split Runners | v0.17.1 | 0/TBD | Not started | - |
 | 84. Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |
+
+## Backlog
+
+### Phase 999.1: Dashboard Rollback Progress Visibility (BACKLOG)
+
+**Goal:** Surface every rollback progress event emitted by `createWorkspace()` in the dashboard create flow, including non-worktree tracked steps such as file ops, workspace file ops, and env-file writes.
+**Source:** `.planning/v0.17.0-MILESTONE-AUDIT.md` ENGN-02 gap.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+### Phase 999.2: README Structured Debug Logging Format (BACKLOG)
+
+**Goal:** Update release-facing docs so debug logging examples match the shipped structured key/value format instead of the old bracketed timing format.
+**Source:** `.planning/v0.17.0-MILESTONE-AUDIT.md` Phase 79 tech-debt item.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
+### Phase 999.3: v0.17.0 Nyquist Validation Gaps (BACKLOG)
+
+**Goal:** Run or fill validation for the v0.17.0 phases whose audit status is partial or missing: 74, 75, 76, 77, 78, 78.1, and 79.
+**Source:** `.planning/v0.17.0-MILESTONE-AUDIT.md` Nyquist coverage section.
+**Requirements:** TBD
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
