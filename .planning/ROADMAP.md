@@ -393,12 +393,17 @@ Plans:
 **Depends on**: Phase 81
 **Requirements**: E2E-09, E2E-10, E2E-11
 **Success Criteria** (what must be TRUE):
-  1. Template flows have E2E coverage for create, list, show, clone, rename, remove, template composition, template labels, and label propagation into created/cloned workspaces
-  2. Repo registry flows have E2E coverage for add, scan, list, show, rename, and remove across git repos and dir repos
-  3. Workspace label flows have E2E coverage for add, remove, list, clear, duplicate handling, missing workspaces, and output contracts
-  4. Message flows have E2E coverage for send, list, clear, workspace scoping, sender metadata, persisted JSONL output, and missing workspace behavior
-  5. The Phase 80 inventory source is updated with mapped test files for each covered item in this phase
-**Plans**: TBD
+  1. Template flows have E2E coverage for `template list/show/clone/rename/remove`, template label behavior, and template-backed `new --non-interactive` / composition / clone propagation; `template new` and other wizard-driven template flows remain excluded
+  2. Repo registry flows have E2E coverage for `repo add/list/show/rename/remove --force` across separate git-repo and dir-repo scenarios, using only no-enabled-forge and exact-one-enabled-match success paths; `repo scan` remains excluded
+  3. Workspace label flows extend the existing subprocess coverage to close add/remove/list/clear and output-contract gaps without adding the deferred failure matrix
+  4. Message flows have E2E coverage for send/list/clear, workspace resolution, sender metadata, newest-first JSONL persistence, missing-workspace behavior, and an automation-safe socket opt-out; live dashboard delivery remains excluded
+  5. The Phase 80 inventory source is updated inline with flow-level mappings and exclusions as each Phase 82 suite lands
+**Plans**: 3 plans
+
+Plans:
+- [ ] 82-01-PLAN.md — Block on missing prerequisites, then add the split template command and template-consumption suites with inline inventory updates
+- [ ] 82-02-PLAN.md — Add repo registry git-vs-dir success-path coverage and extend workspace label subprocess coverage with inline inventory updates
+- [ ] 82-03-PLAN.md — Add the explicit message socket opt-out plus the focused message CLI/file contract suite with inline inventory updates
 
 ### Phase 82.1: Support Commands and Error-Path E2E Coverage
 **Goal**: Users can trust support commands and representative failures because command behavior is exercised outside narrow unit mocks
