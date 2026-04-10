@@ -8,7 +8,7 @@
 
 Build the Phase 80 foundation for v0.17.1 E2E coverage: a real-process CLI harness that runs `git-stacks` inside isolated test homes/config directories, plus a machine-parseable inventory of the in-scope non-TUI, non-integration command and user-flow surface that later phases will map to concrete E2E coverage.
 
-This phase is about harness and inventory foundations only. It does not add the later command-family coverage itself, does not cover TUI or external integrations, and does not turn Phase 80 into a documentation-heavy effort. If the roadmap still requires a documented inventory view, keep it minimal and generated from the machine-readable source.
+This phase is about harness and inventory foundations only. It does not add the later command-family coverage itself, does not cover TUI or external integrations, and does not turn Phase 80 into a documentation-heavy effort. The canonical inventory artifact is the machine-parseable source itself.
 
 </domain>
 
@@ -23,8 +23,8 @@ This phase is about harness and inventory foundations only. It does not add the 
 ### Inventory source and scope
 - **D-04:** The canonical inventory source is a typed TypeScript module checked into the repo.
 - **D-05:** Inventory entries use stable flow-level IDs. A raw command/subcommand gets its own item only when it truly matches a standalone user flow.
-- **D-06:** If a human-readable inventory surface is still required after roadmap refinement, it must be generated from the TypeScript source and kept minimal.
-- **D-07:** Do not invest in hand-maintained prose for the inventory. The TypeScript source is the real product; any readable output is secondary and derived.
+- **D-06:** The inventory does not require a separate human-readable surface. The TypeScript source itself is the canonical artifact.
+- **D-07:** Do not invest in hand-maintained prose or a parallel documentation layer for the inventory.
 
 ### Failure diagnostics
 - **D-08:** Passing E2E scenarios stay quiet by default.
@@ -33,7 +33,7 @@ This phase is about harness and inventory foundations only. It does not add the 
 
 ### Claude's Discretion
 - Exact helper names and the precise split between `tests/helpers.ts` and nearby test-support files, as long as the shared harness remains an extension of the existing helper layer rather than a separate subsystem.
-- Exact inventory type shapes and any code-generation/rendering mechanism used for a minimal derived inventory view.
+- Exact inventory type shapes and any optional convenience rendering around the canonical TypeScript source.
 - Exact formatting of the failure bundle and the helper boundaries for env redaction.
 
 </decisions>
@@ -88,8 +88,8 @@ This phase is about harness and inventory foundations only. It does not add the 
 <specifics>
 ## Specific Ideas
 
-- The TypeScript inventory is the primary artifact; any readable view should stay minimal and derived.
-- The human-readable inventory requirement is expected to be refined in `ROADMAP.md`; until then, planning should avoid spending effort on curated docs.
+- The TypeScript inventory is the primary artifact and the canonical surface for later planning, mapping, and gates.
+- Phase 80 should spend effort on the inventory data model and mapping workflow, not on a parallel documentation layer.
 - The harness should feel like a thin standardization of the existing command-test pattern, not a parallel testing framework.
 
 </specifics>
@@ -97,8 +97,7 @@ This phase is about harness and inventory foundations only. It does not add the 
 <deferred>
 ## Deferred Ideas
 
-- Removing the human-readable/documented inventory surface entirely — the user plans to refine the roadmap separately; keep this out of the current Phase 80 implementation scope until the roadmap is updated.
-- Any hand-authored prose/reporting layer for the inventory beyond a minimal generated view.
+- Any optional report/export layer built on top of the canonical TypeScript inventory source.
 
 </deferred>
 

@@ -17,7 +17,7 @@
 - ✅ **v0.15.0 Dir Mode & Polish** — Phases 64-68 (shipped 2026-04-05) — Dir repo type, registry CLI, lifecycle guards, git operation guards, CLI/TUI display. See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md)
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
-- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84 with 82.x splits (in progress) — E2E CLI harness plus living inventory, workspace/git behavior coverage, command-surface expansion, subprocess-aware coverage reports, local gates and release prep.
+- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84 with 82.x splits (in progress) — E2E CLI harness plus machine-parseable inventory, workspace/git behavior coverage, command-surface expansion, subprocess-aware coverage reports, local gates and release prep.
 
 ## Phases
 
@@ -258,8 +258,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] `75-01-PLAN.md` — Add real mutable `_exec` seams to `workspace-lifecycle.ts` and `workspace-git.ts` with focused module tests
-- [ ] `75-02-PLAN.md` — Extend `src/lib/observability.ts` and `src/index.ts` for `GS_DEBUG`, structured stderr fields, selector filtering, and CLI regression coverage
+- [x] `75-01-PLAN.md` — Add real mutable `_exec` seams to `workspace-lifecycle.ts` and `workspace-git.ts` with focused module tests
+- [x] `75-02-PLAN.md` — Extend `src/lib/observability.ts` and `src/index.ts` for `GS_DEBUG`, structured stderr fields, selector filtering, and CLI regression coverage
 
 ### Phase 76: Integration Plugin Capability Contracts
 **Goal**: Every integration plugin declares its capabilities explicitly, the runner uses those declarations instead of duck-typing, and `integration list` exposes them
@@ -272,8 +272,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] `76-01-PLAN.md` — Capability type, Integration interface field, all 10 plugins updated, runner capability-gated calls
-- [ ] `76-02-PLAN.md` — integration list capabilities column (table + JSON output)
+- [x] `76-01-PLAN.md` — Capability type, Integration interface field, all 10 plugins updated, runner capability-gated calls
+- [x] `76-02-PLAN.md` — integration list capabilities column (table + JSON output)
 
 ### Phase 77: Indexed Config Store
 **Goal**: Workspace and template lookups use an in-memory index instead of re-scanning and re-parsing all YAML files on every call
@@ -286,8 +286,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] `77-01-PLAN.md` — In-memory index Maps with _cache seam, cache-gated read/write/list/exists, deleteWorkspace/deleteTemplate, tests
-- [ ] `77-02-PLAN.md` — Migrate all unlinkSync(workspacePath/templatePath) call sites to deleteWorkspace/deleteTemplate
+- [x] `77-01-PLAN.md` — In-memory index Maps with _cache seam, cache-gated read/write/list/exists, deleteWorkspace/deleteTemplate, tests
+- [x] `77-02-PLAN.md` — Migrate all unlinkSync(workspacePath/templatePath) call sites to deleteWorkspace/deleteTemplate
 
 ### Phase 78: Operation Runner with Rollback
 **Goal**: Multi-step workspace creation executes via a LIFO compensation stack so partial failures clean up completed steps automatically. Both the wizard and dashboard creation call sites migrate to a shared `createWorkspace()` that uses the runner (resolves CONCERNS.md:51-55 dashboard duplication).
@@ -300,9 +300,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] `78-01-PLAN.md` — Pure operation-runner primitive (`src/lib/operation-runner.ts`) with LIFO compensation stack, discriminated-union return, and eight unit tests
-- [ ] `78-02-PLAN.md` — `createWorkspace()` on `workspace-lifecycle.ts` wiring runner into D-12 creation ordering with integration tests forcing failures via Phase 75 _exec seams
-- [ ] `78-03-PLAN.md` — Wizard and dashboard migration to shared `createWorkspace()`; delete hand-rolled rollback at App.tsx:883-911; CONCERNS.md:51-55 resolved
+- [x] `78-01-PLAN.md` — Pure operation-runner primitive (`src/lib/operation-runner.ts`) with LIFO compensation stack, discriminated-union return, and eight unit tests
+- [x] `78-02-PLAN.md` — `createWorkspace()` on `workspace-lifecycle.ts` wiring runner into D-12 creation ordering with integration tests forcing failures via Phase 75 _exec seams
+- [x] `78-03-PLAN.md` — Wizard and dashboard migration to shared `createWorkspace()`; delete hand-rolled rollback at App.tsx:883-911; CONCERNS.md:51-55 resolved
 
 ### Phase 78.1: turn capability enums into actual typescript interface instead of capability return function. also remove it from the integration list and documentation (INSERTED)
 
@@ -330,14 +330,14 @@ Plans:
 - [x] `79-01-PLAN.md` — Bump the published version to `0.17.0`, add a user-facing v0.17.0 changelog entry (Added / Changed / Internal), document template-label commands/filtering/propagation plus `GS_DEBUG=<module[,module]>` in README, run release validations, and write Phase 79 closeout artifacts
 
 ### Phase 80: E2E CLI Harness and Living Inventory
-**Goal**: Test authors can run isolated real-process CLI scenarios, and maintainers can see the exact non-TUI, non-integration surface as a living inventory tied to the harness
+**Goal**: Test authors can run isolated real-process CLI scenarios, and maintainers have an exact machine-parseable inventory source for the non-TUI, non-integration surface tied to the harness
 **Depends on**: Phase 79 (v0.17.0 complete)
 **Requirements**: E2E-01, E2E-02, E2E-03, E2E-04, E2E-05, E2E-06, E2E-07
 **Success Criteria** (what must be TRUE):
   1. Test author can run `git-stacks` as a real CLI process inside an isolated config home without touching developer config
   2. Test author can create disposable git repo, template, workspace, and config fixtures by extending existing `tests/helpers.ts` helpers (`makeTmpDir`, `cleanup`, `touch`, `write`, `makeGitRepo`, git env helpers)
   3. Test author can assert exit code, stdout, stderr, generated files, persisted YAML, and failure diagnostics for each E2E command invocation
-  4. Maintainer can open a documented living inventory of every non-TUI, non-integration command and library-backed user flow that requires E2E coverage
+  4. Maintainer can inspect the canonical machine-parseable inventory source for every non-TUI, non-integration command and library-backed user flow that requires E2E coverage
   5. Maintainer can see explicit exclusions for terminal UI behavior, external integration behavior, editor-launching edit commands, and the v0.17.0 rollback-visibility audit gap
   6. The inventory has a machine-parseable source of truth, with stable IDs, command/user-flow names, scope status, mapped test file(s), and rationale fields
   7. Maintainer can compare every in-scope inventory item with the implemented E2E suite and identify unmapped coverage gaps while later phases add tests
@@ -350,7 +350,7 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. Workspace create and clone E2E tests prove correct source branch selection, task path/main path persistence, generated YAML, and created worktree layout
   2. Workspace env and hook E2E tests prove injected environment values, hook execution cwd, command cwd/path selection, and generated env files
-  3. Workspace list/status/status --fetch/open-safe/close-safe/path/env/run E2E tests prove stdout, stderr, JSON/text contracts, and no accidental external integration launch
+  3. Workspace list/status/status --fetch/open (`--no-ide`)/close/cd/paths/env/run E2E tests prove stdout, stderr, JSON/text contracts, and no accidental external integration launch
   4. Workspace clean/remove/rename E2E tests prove filesystem and YAML side effects, missing/dirty repo behavior, and safe failure messages
   5. Workspace merge, pull, sync, and push E2E tests run against disposable local git repositories/remotes and prove guard behavior for dir repos, dirty repos, missing remotes, and branch/upstream assumptions
   6. Command-execution E2E tests prove run/hooks/git operations use explicit cwd/path handling and do not depend on shell `cd` state
@@ -365,7 +365,7 @@ Plans:
   2. Repo registry flows have E2E coverage for add, scan, list, show, rename, and remove across git repos and dir repos
   3. Workspace label flows have E2E coverage for add, remove, list, clear, duplicate handling, missing workspaces, and output contracts
   4. Message flows have E2E coverage for send, list, clear, workspace scoping, sender metadata, persisted JSONL output, and missing workspace behavior
-  5. The living inventory from Phase 80 is updated with mapped test files for each covered item in this phase
+  5. The Phase 80 inventory source is updated with mapped test files for each covered item in this phase
 **Plans**: TBD
 
 ### Phase 82.1: Support Commands and Error-Path E2E Coverage
@@ -373,11 +373,11 @@ Plans:
 **Depends on**: Phase 82
 **Requirements**: E2E-12, E2E-13
 **Success Criteria** (what must be TRUE):
-  1. Config, doctor, completion, version, install hook, env, and paths support flows have E2E coverage for success cases and output contracts
+  1. Config show, doctor, completion, version, install hook, env, paths, `edit --yaml` (workspace/template/config/registry), `integration list`, and `integration <id> config show/example` support flows have E2E coverage for success cases and output contracts
   2. Representative malformed input, missing entity, missing path, validation-failure, dirty repo, and permission/error cases are covered for in-scope command families
   3. Doctor tests verify local-only checks without depending on unavailable external integration CLIs unless those integrations are explicitly configured in fixtures
   4. Completion tests verify generated shell completions for current command tree shape without invoking TUI or external integrations
-  5. The living inventory has no unmapped in-scope item except consciously deferred exclusions documented with rationale
+  5. The Phase 80 inventory source has no unmapped in-scope item except consciously deferred exclusions documented with rationale
   6. A minimal pre-Phase-83 proof confirms the chosen Istanbul instrumentation approach can produce mergeable coverage artifacts from at least one isolated subprocess E2E invocation
 **Plans**: TBD
 
@@ -403,6 +403,7 @@ Plans:
   3. Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling
   4. Maintainer can run the documented v0.17.1 verification path and see the inventory gates, coverage command, and existing quality commands represented
   5. Release prep updates version/changelog/README as needed for the new E2E and coverage commands
+  6. README structured debug logging examples updated to match the shipped key/value format (promotes backlog 999.2)
 **Plans**: TBD
 
 ## Progress
@@ -434,15 +435,10 @@ Plans:
 Plans:
 - [ ] TBD (promote with /gsd-review-backlog when ready)
 
-### Phase 999.2: README Structured Debug Logging Format (BACKLOG)
+### ~~Phase 999.2: README Structured Debug Logging Format~~ (PROMOTED → Phase 84 SC 6)
 
-**Goal:** Update release-facing docs so debug logging examples match the shipped structured key/value format instead of the old bracketed timing format.
+**Promoted:** Folded into Phase 84 release prep as success criterion 6.
 **Source:** `.planning/v0.17.0-MILESTONE-AUDIT.md` Phase 79 tech-debt item.
-**Requirements:** TBD
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (promote with /gsd-review-backlog when ready)
 
 ### Phase 999.3: v0.17.0 Nyquist Validation Gaps (BACKLOG)
 
