@@ -276,14 +276,15 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Current Milestone: v0.17.1 E2E Test Coverage
 
-**Goal:** Extend end-to-end test coverage across all non-TUI, non-integration user-facing functionality and produce usable code coverage reports across the split test runners.
+**Goal:** Extend end-to-end test coverage across all non-TUI, non-integration user-facing functionality, prove currently assumed CLI behavior in real repos, and produce subprocess-aware code coverage reports across the split test runners.
 
 **Target features:**
-- A documented command-surface coverage inventory that separates in-scope non-TUI/non-integration commands from excluded TUI and external integration behavior
-- Shared E2E test harness primitives for isolated `git-stacks` CLI execution, config homes, repo fixtures, stdout/stderr assertions, and failure diagnostics
-- End-to-end coverage for workspace/template/repo/config/message/label/doctor/completion/env/path/version flows that currently rely mainly on unit or narrow command tests
-- Code coverage report generation that works with the existing split unit and isolated E2E runner architecture
-- Regression gates that keep the E2E coverage inventory and the executable test suite aligned as commands evolve
+- Shared E2E test harness primitives, built by extending `tests/helpers.ts`, for isolated `git-stacks` CLI execution, config homes, repo fixtures, stdout/stderr assertions, and failure diagnostics
+- A living, machine-parseable command-surface coverage inventory that separates in-scope non-TUI/non-integration commands from excluded TUI and external integration behavior, and stays mapped as tests are added
+- End-to-end coverage for workspace/template/repo/config/message/label/doctor/completion/install-hook/env/path/version flows that currently rely mainly on unit or narrow command tests
+- Deep workspace/git-operation coverage for env injection, hook execution, path/cwd selection, branch starting points, merge/pull/sync/push behavior, and command execution that uses explicit cwd/path handling instead of shell `cd` state
+- Istanbul-based code coverage report generation that includes subprocess-based E2E source coverage across the existing split unit and isolated runner architecture
+- Local regression gates that keep the E2E coverage inventory and the executable test suite aligned as commands evolve
 
 ### Out of Scope
 
@@ -305,11 +306,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Shipped:** Phases 74-79 are complete. Template labels now cover template CRUD/filtering plus propagation into created/cloned workspaces (74); lifecycle/git `_exec` seams and structured `GS_DEBUG` logging landed with `GIT_STACKS_DEBUG=1` compatibility preserved (75); integration optional behavior moved to compile-time-only narrow interfaces and predicates with no revived capability-list release surface (76 + 78.1); template/workspace reads moved onto an indexed config cache (77); workspace creation now uses a shared operation runner with LIFO rollback across both CLI/TUI creation paths (78); and release-prep polished the package version, changelog, README, and closeout artifacts for shipping (79).
 
-**Status:** Milestone v0.17.1 is being planned to broaden E2E coverage for existing non-TUI, non-integration CLI behavior and add coverage reporting across split test runners.
+**Status:** Milestone v0.17.1 is being planned to broaden E2E coverage for existing non-TUI, non-integration CLI behavior, prove high-risk workspace assumptions in real repos, and add subprocess-aware coverage reporting across split test runners.
 
 ## Next Milestone Goals
-- Extend E2E tests for full coverage of non-TUI, non-integration functionality
-- Generate reliable code coverage reports despite the split unit/E2E runner model
+- Extend E2E tests for full coverage of non-TUI, non-integration functionality, with workspace/git behavior split into its own focused wave
+- Generate reliable Istanbul-format code coverage reports that include source exercised by subprocess E2E tests despite the split unit/E2E runner model
+- Use local verification gates only; this project does not currently have CI
 - Keep TUI behavior and external integration CLI behavior out of this milestone except where needed to prove they remain excluded from the coverage contract
 
 ## Completed Milestone: v0.17.0 Engine Hardening & Template Labels (2026-04-06)

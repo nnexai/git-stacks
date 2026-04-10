@@ -17,7 +17,7 @@
 - ✅ **v0.15.0 Dir Mode & Polish** — Phases 64-68 (shipped 2026-04-05) — Dir repo type, registry CLI, lifecycle guards, git operation guards, CLI/TUI display. See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md)
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
-- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84 (in progress) — Coverage inventory, E2E CLI harness, non-TUI/non-integration CLI coverage expansion, split-runner coverage reports, gates and release prep.
+- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84 with 82.x splits (in progress) — E2E CLI harness plus living inventory, workspace/git behavior coverage, command-surface expansion, subprocess-aware coverage reports, local gates and release prep.
 
 ## Phases
 
@@ -218,13 +218,14 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 
 ### 🚧 v0.17.1 E2E Test Coverage (In Progress)
 
-**Milestone Goal:** Extend E2E tests for full coverage of non-TUI, non-integration functionality and generate usable code coverage reports despite the existing split test runner architecture.
+**Milestone Goal:** Extend E2E tests for full coverage of non-TUI, non-integration functionality, prove high-risk workspace/git assumptions in real repos, and generate subprocess-aware code coverage reports despite the existing split test runner architecture.
 
-- [ ] **Phase 80: Coverage Inventory and Scope Contract** - Document the in-scope command/user-flow surface, explicit exclusions, and E2E mapping gaps
-- [ ] **Phase 81: E2E CLI Harness and Fixtures** - Provide isolated real-process CLI execution, disposable fixtures, assertions, and failure diagnostics
-- [ ] **Phase 82: Non-TUI/Non-Integration CLI E2E Expansion** - Add E2E coverage for workspace, template, repo, label, message, config, doctor, completion, version, env, paths, and representative error flows
-- [ ] **Phase 83: Coverage Reporting for Split Runners** - Generate usable coverage reports across shared-process unit tests and isolated subprocess test files
-- [ ] **Phase 84: Coverage Gates, Docs, and Release Prep** - Add inventory/test mapping gates and verify the expanded suite with existing quality commands
+- [ ] **Phase 80: E2E CLI Harness and Living Inventory** - Extend existing test helpers with isolated real-process CLI execution and maintain the in-scope inventory as tests are planned
+- [ ] **Phase 81: Workspace and Git Operation E2E Coverage** - Prove high-risk workspace behavior including branch start points, env/hooks, explicit cwd/path handling, run/open safety, merge, and pull/sync/push
+- [ ] **Phase 82: Template, Repo, Label, and Message E2E Coverage** - Add focused E2E coverage for template, registry, label, and message command families
+- [ ] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios
+- [ ] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files
+- [ ] **Phase 84: Local Coverage Gates, Docs, and Release Prep** - Add local inventory/test mapping gates and verify the expanded suite with existing quality commands
 
 ## Phase Details
 
@@ -328,59 +329,80 @@ Plans:
 Plans:
 - [x] `79-01-PLAN.md` — Bump the published version to `0.17.0`, add a user-facing v0.17.0 changelog entry (Added / Changed / Internal), document template-label commands/filtering/propagation plus `GS_DEBUG=<module[,module]>` in README, run release validations, and write Phase 79 closeout artifacts
 
-### Phase 80: Coverage Inventory and Scope Contract
-**Goal**: Maintainers can see the exact non-TUI, non-integration surface that v0.17.1 must cover before test expansion starts
+### Phase 80: E2E CLI Harness and Living Inventory
+**Goal**: Test authors can run isolated real-process CLI scenarios, and maintainers can see the exact non-TUI, non-integration surface as a living inventory tied to the harness
 **Depends on**: Phase 79 (v0.17.0 complete)
-**Requirements**: E2E-01, E2E-02, E2E-03
-**Success Criteria** (what must be TRUE):
-  1. Maintainer can open a documented inventory of every non-TUI, non-integration command and library-backed user flow that requires E2E coverage
-  2. Maintainer can see explicit exclusions for terminal UI behavior, external integration behavior, and the v0.17.0 rollback-visibility audit gap
-  3. Maintainer can compare every in-scope inventory item with the implemented E2E suite and identify unmapped coverage gaps
-**Plans**: TBD
-
-### Phase 81: E2E CLI Harness and Fixtures
-**Goal**: Test authors can write isolated real-process E2E scenarios with reusable fixtures and useful failure output
-**Depends on**: Phase 80
-**Requirements**: E2E-04, E2E-05, E2E-06, E2E-07
+**Requirements**: E2E-01, E2E-02, E2E-03, E2E-04, E2E-05, E2E-06, E2E-07
 **Success Criteria** (what must be TRUE):
   1. Test author can run `git-stacks` as a real CLI process inside an isolated config home without touching developer config
-  2. Test author can create disposable git repo, template, workspace, and config fixtures for end-to-end scenarios
-  3. Test author can assert exit code, stdout, stderr, generated files, and persisted YAML for each command invocation
-  4. Failed E2E assertions include enough command, environment, stdout, and stderr context to debug the scenario quickly
+  2. Test author can create disposable git repo, template, workspace, and config fixtures by extending existing `tests/helpers.ts` helpers (`makeTmpDir`, `cleanup`, `touch`, `write`, `makeGitRepo`, git env helpers)
+  3. Test author can assert exit code, stdout, stderr, generated files, persisted YAML, and failure diagnostics for each E2E command invocation
+  4. Maintainer can open a documented living inventory of every non-TUI, non-integration command and library-backed user flow that requires E2E coverage
+  5. Maintainer can see explicit exclusions for terminal UI behavior, external integration behavior, editor-launching edit commands, and the v0.17.0 rollback-visibility audit gap
+  6. The inventory has a machine-parseable source of truth, with stable IDs, command/user-flow names, scope status, mapped test file(s), and rationale fields
+  7. Maintainer can compare every in-scope inventory item with the implemented E2E suite and identify unmapped coverage gaps while later phases add tests
 **Plans**: TBD
 
-### Phase 82: Non-TUI/Non-Integration CLI E2E Expansion
-**Goal**: Users can trust the existing non-TUI, non-integration CLI behavior because major success and representative failure flows are covered end to end
-**Depends on**: Phase 81
-**Requirements**: E2E-08, E2E-09, E2E-10, E2E-11, E2E-12, E2E-13
+### Phase 81: Workspace and Git Operation E2E Coverage
+**Goal**: Users can trust workspace lifecycle and git-operation behavior because the highest-risk CLI assumptions are proven in real repos and isolated config homes
+**Depends on**: Phase 80
+**Requirements**: E2E-08, E2E-14
 **Success Criteria** (what must be TRUE):
-  1. Workspace flows have E2E coverage for create, clone, list, status, open-safe behavior, clean, remove, rename, run, paths, env, pull/sync/push guards, and applicable JSON/text output contracts
-  2. Template flows have E2E coverage for create, list, show, edit-safe paths, clone, rename, remove, template composition, and template labels
-  3. Repo registry, workspace label, and message flows have E2E coverage for their add/remove/list/clear, send/list/clear, git repo, and dir repo behavior
-  4. Config, doctor, completion, version, env, and paths support flows have E2E coverage for success and representative error cases
-  5. In-scope commands have representative malformed input, missing entity, dirty repo, missing path, and validation-failure E2E cases
+  1. Workspace create and clone E2E tests prove correct source branch selection, task path/main path persistence, generated YAML, and created worktree layout
+  2. Workspace env and hook E2E tests prove injected environment values, hook execution cwd, command cwd/path selection, and generated env files
+  3. Workspace list/status/status --fetch/open-safe/close-safe/path/env/run E2E tests prove stdout, stderr, JSON/text contracts, and no accidental external integration launch
+  4. Workspace clean/remove/rename E2E tests prove filesystem and YAML side effects, missing/dirty repo behavior, and safe failure messages
+  5. Workspace merge, pull, sync, and push E2E tests run against disposable local git repositories/remotes and prove guard behavior for dir repos, dirty repos, missing remotes, and branch/upstream assumptions
+  6. Command-execution E2E tests prove run/hooks/git operations use explicit cwd/path handling and do not depend on shell `cd` state
 **Plans**: TBD
 
-### Phase 83: Coverage Reporting for Split Runners
-**Goal**: Developers can generate useful code coverage reports even though unit files run in a shared process and E2E/integration files run in isolated processes
+### Phase 82: Template, Repo, Label, and Message E2E Coverage
+**Goal**: Users can trust non-workspace command families because template, registry, label, and message behavior is covered through real CLI processes
+**Depends on**: Phase 81
+**Requirements**: E2E-09, E2E-10, E2E-11
+**Success Criteria** (what must be TRUE):
+  1. Template flows have E2E coverage for create, list, show, clone, rename, remove, template composition, template labels, and label propagation into created/cloned workspaces
+  2. Repo registry flows have E2E coverage for add, scan, list, show, rename, and remove across git repos and dir repos
+  3. Workspace label flows have E2E coverage for add, remove, list, clear, duplicate handling, missing workspaces, and output contracts
+  4. Message flows have E2E coverage for send, list, clear, workspace scoping, sender metadata, persisted JSONL output, and missing workspace behavior
+  5. The living inventory from Phase 80 is updated with mapped test files for each covered item in this phase
+**Plans**: TBD
+
+### Phase 82.1: Support Commands and Error-Path E2E Coverage
+**Goal**: Users can trust support commands and representative failures because command behavior is exercised outside narrow unit mocks
 **Depends on**: Phase 82
+**Requirements**: E2E-12, E2E-13
+**Success Criteria** (what must be TRUE):
+  1. Config, doctor, completion, version, install hook, env, and paths support flows have E2E coverage for success cases and output contracts
+  2. Representative malformed input, missing entity, missing path, validation-failure, dirty repo, and permission/error cases are covered for in-scope command families
+  3. Doctor tests verify local-only checks without depending on unavailable external integration CLIs unless those integrations are explicitly configured in fixtures
+  4. Completion tests verify generated shell completions for current command tree shape without invoking TUI or external integrations
+  5. The living inventory has no unmapped in-scope item except consciously deferred exclusions documented with rationale
+  6. A minimal pre-Phase-83 proof confirms the chosen Istanbul instrumentation approach can produce mergeable coverage artifacts from at least one isolated subprocess E2E invocation
+**Plans**: TBD
+
+### Phase 83: Istanbul-Based Subprocess Coverage Reporting
+**Goal**: Developers can generate useful Istanbul-format code coverage reports that include both shared-process unit tests and isolated subprocess E2E files
+**Depends on**: Phase 82.1
 **Requirements**: COVR-01, COVR-02, COVR-03, COVR-04
 **Success Criteria** (what must be TRUE):
   1. Developer can run one command that generates coverage for the full test suite across shared-process unit tests and isolated runner files
-  2. Coverage reports include source files exercised by subprocess E2E tests, or clearly document the technical limitation and enforce the closest reliable measurable proxy
-  3. Coverage output is written to a stable ignored directory with human-readable summary output and machine-readable artifacts for CI
+  2. Coverage reports include source files exercised by subprocess E2E tests through Istanbul-compatible source instrumentation and per-process JSON artifact merging
+  3. Coverage output is written to a stable ignored directory with human-readable summary output and machine-readable Istanbul artifacts usable by local verification gates
   4. Normal `bun run test`, `bun run test:unit`, and `bun run test:integ` runs are not materially slower unless coverage is explicitly requested
+  5. Coverage implementation documents any tool-specific caveats without using those caveats as a substitute for subprocess source coverage
 **Plans**: TBD
 
-### Phase 84: Coverage Gates, Docs, and Release Prep
-**Goal**: Maintainers can keep the E2E inventory, mapped tests, and existing verification commands aligned as the CLI evolves
+### Phase 84: Local Coverage Gates, Docs, and Release Prep
+**Goal**: Maintainers can keep the E2E inventory, mapped tests, coverage reports, and existing verification commands aligned without assuming CI exists
 **Depends on**: Phase 83
 **Requirements**: GATE-01, GATE-02, GATE-03
 **Success Criteria** (what must be TRUE):
-  1. CI or local verification fails when a new in-scope command is added without updating the E2E coverage inventory
-  2. CI or local verification fails when an in-scope inventory item has no mapped E2E test
+  1. Local verification fails when a new in-scope command is added without updating the E2E coverage inventory
+  2. Local verification fails when an in-scope inventory item has no mapped E2E test
   3. Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling
-  4. Maintainer can run the documented v0.17.1 verification path and see the inventory gates and existing quality commands represented
+  4. Maintainer can run the documented v0.17.1 verification path and see the inventory gates, coverage command, and existing quality commands represented
+  5. Release prep updates version/changelog/README as needed for the new E2E and coverage commands
 **Plans**: TBD
 
 ## Progress
@@ -393,11 +415,12 @@ Plans:
 | 77. Indexed Config Store | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 78. Operation Runner with Rollback | v0.17.0 | 3/3 | Complete    | 2026-04-06 |
 | 79. Release Prep | v0.17.0 | 1/1 | Complete | 2026-04-06 |
-| 80. Coverage Inventory and Scope Contract | v0.17.1 | 0/TBD | Not started | - |
-| 81. E2E CLI Harness and Fixtures | v0.17.1 | 0/TBD | Not started | - |
-| 82. Non-TUI/Non-Integration CLI E2E Expansion | v0.17.1 | 0/TBD | Not started | - |
-| 83. Coverage Reporting for Split Runners | v0.17.1 | 0/TBD | Not started | - |
-| 84. Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |
+| 80. E2E CLI Harness and Living Inventory | v0.17.1 | 0/TBD | Not started | - |
+| 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
+| 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
+| 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
+| 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
+| 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |
 
 ## Backlog
 
