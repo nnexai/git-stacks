@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: executing
-stopped_at: Phase 81.1 context gathered
-last_updated: "2026-04-10T20:34:44.702Z"
-last_activity: 2026-04-10 -- Phase 81 planning complete
+stopped_at: Phase 81.1.1 context gathered
+last_updated: "2026-04-10T21:14:42.065Z"
+last_activity: 2026-04-10 -- Phase 81.1 planning complete
 progress:
-  total_phases: 15
+  total_phases: 16
   completed_phases: 7
-  total_plans: 19
+  total_plans: 20
   completed_plans: 15
-  percent: 79
+  percent: 75
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 Phase: 80 of 84 (E2E CLI Harness and Living Inventory)
 Plan: Not planned yet
 Status: Ready to execute
-Last activity: 2026-04-10 -- Phase 81 planning complete
+Last activity: 2026-04-10 -- Phase 81.1 planning complete
 
 Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
 ### Roadmap Evolution
 
 - Phase 81.1 inserted after Phase 81: Repo add honors enabled forge integrations (URGENT)
+- Phase 81.1.1 inserted after Phase 81.1: Minimal non-interactive workspace create and clone variants (URGENT)
 
 ### Pending Todos
 
@@ -74,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-10T20:29:55.735Z
-Stopped at: Phase 81.1 context gathered
-Resume file: .planning/phases/81.1-repo-add-honors-enabled-forge-integrations/81.1-CONTEXT.md
+Last session: 2026-04-10T21:14:42.062Z
+Stopped at: Phase 81.1.1 context gathered
+Resume file: .planning/phases/81.1.1-minimal-non-interactive-workspace-create-and-clone-variants/81.1.1-CONTEXT.md
