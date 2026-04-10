@@ -39,7 +39,9 @@ created: 2026-04-10
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 80-01-01 | 01 | 1 | E2E-04, E2E-05, E2E-06, E2E-07 | T-80-01 / V5-ISOLATION | Shared CLI harness forces isolated config and git-home env, returns decoded stdout/stderr and exit code, and emits only redacted failure diagnostics with artifact paths. | integration | `bun test tests/commands/e2e-harness.test.ts -x` | ❌ W0 | ⬜ pending |
-| 80-01-02 | 01 | 1 | E2E-01, E2E-02, E2E-03 | T-80-02 / V5-SCOPE | Canonical inventory data is typed, machine-parseable, includes explicit exclusions and rationales, and exposes detection of unmapped in-scope flows. | unit | `bun test tests/lib/e2e-inventory.test.ts -x` | ❌ W0 | ⬜ pending |
+| 80-01-02 | 01 | 1 | E2E-05, E2E-06, E2E-07 | T-80-01 / V5-ISOLATION | Small fixture builders create isolated config/template/workspace state and keep YAML/file assertions local to the harness proof tests. | integration | `bun test tests/commands/e2e-harness.test.ts -x && bun run typecheck` | ❌ W0 | ⬜ pending |
+| 80-02-01 | 02 | 1 | E2E-01, E2E-02 | T-80-02 / V5-SCOPE | Canonical inventory data is typed, machine-parseable, and encodes explicit exclusions and rationale as first-class data. | unit | `bun run typecheck` | ❌ W0 | ⬜ pending |
+| 80-02-02 | 02 | 1 | E2E-03 | T-80-02 / V5-SCOPE | Inventory validators detect duplicate IDs and unmapped in-scope flows in a reusable form for later phases and gates. | unit | `bun test tests/lib/e2e-inventory.test.ts -x && bun run typecheck` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

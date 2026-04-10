@@ -326,22 +326,22 @@ export function getTestGitEnv(baseDir: string): NodeJS.ProcessEnv { /* ... */ }
 
 All claims in this research were verified in this session from repo code, local runtime checks, roadmap/requirements artifacts, or npm registry metadata. [VERIFIED: repo code] [VERIFIED: local runtime] [VERIFIED: npm registry]
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What exact file path should own the canonical inventory module?**
    - What we know: It should be typed TypeScript, repo-owned, and test-only. [VERIFIED: phase context] [VERIFIED: repo code]
    - What's unclear: `tests/e2e-inventory.ts` versus a nearby support path such as `tests/commands/e2e-inventory.ts`.
-   - Recommendation: Prefer `tests/e2e-inventory.ts` unless the planner wants tighter co-location with `tests/commands/`. The important constraint is that the public artifact lives under `tests/` and remains outside the published package. [VERIFIED: repo code]
+   - RESOLVED: Use `tests/e2e-inventory.ts`. It keeps the inventory under `tests/`, outside the published package, and accessible to both `tests/commands/*` and `tests/lib/*` without creating a nested support subsystem. [VERIFIED: repo code]
 
 2. **Should Phase 80 add a validator helper, a validator test, or both?**
    - What we know: Later phases and local gates must detect duplicate IDs and unmapped in-scope items reliably. [VERIFIED: requirements]
    - What's unclear: Whether validation should happen at module import time, in a dedicated unit test, or both.
-   - Recommendation: Add both a pure validator function and a small unit test that exercises it. The function is reusable by later gates; the test catches regressions early. [VERIFIED: requirements]
+   - RESOLVED: Add both. Export pure validator/selectors from `tests/e2e-inventory.ts` for reuse, and add `tests/lib/e2e-inventory.test.ts` so regressions are caught in normal test runs. [VERIFIED: requirements]
 
 3. **What env keys belong in the curated failure bundle allowlist?**
    - What we know: The bundle must include relevant env context but not the full environment. [VERIFIED: phase context]
    - What's unclear: The exact allowlist.
-   - Recommendation: Lock an explicit allowlist in the plan and keep it narrow: config-path variables, git-isolation variables, PATH, and any scenario-specific vars the test deliberately injects.
+   - RESOLVED: Lock the allowlist to `HOME`, `XDG_CONFIG_HOME`, `GNUPGHOME`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`, `GIT_TERMINAL_PROMPT`, `GIT_STACKS_CONFIG_DIR`, and `PATH`, plus explicitly opted-in scenario extras. This preserves isolation/debug usefulness without leaking the broader shell environment. [VERIFIED: phase context] [VERIFIED: repo code]
 
 ## Environment Availability
 
