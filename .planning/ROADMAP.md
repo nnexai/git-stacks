@@ -16,7 +16,8 @@
 - ✅ **v0.14.0 Workflow Completion & Workspace UX** — Phases 58-63 (shipped 2026-04-03) — Ahead/behind tracking, push command, labels, secrets, stash-on-sync, release prep. See [milestones/v0.14.0-ROADMAP.md](milestones/v0.14.0-ROADMAP.md)
 - ✅ **v0.15.0 Dir Mode & Polish** — Phases 64-68 (shipped 2026-04-05) — Dir repo type, registry CLI, lifecycle guards, git operation guards, CLI/TUI display. See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md)
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
-- 🚧 **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (in progress) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
+- ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
+- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84 (in progress) — Coverage inventory, E2E CLI harness, non-TUI/non-integration CLI coverage expansion, split-runner coverage reports, gates and release prep.
 
 ## Phases
 
@@ -204,7 +205,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 
 </details>
 
-### 🚧 v0.17.0 Engine Hardening & Template Labels (In Progress)
+### ✅ v0.17.0 Engine Hardening & Template Labels (Complete)
 
 **Milestone Goal:** Extend template labels to parity with workspace labels, add structured debug logging with module filtering, introduce typed integration capability contracts, speed up config lookups with an in-memory index, and make multi-step workspace operations safe to fail via a compensation-stack rollback.
 
@@ -213,7 +214,17 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 76: Integration Plugin Capability Contracts** - `capabilities` field on Integration interface, capability-driven runner guards, `integration list` displays capabilities (completed 2026-04-06)
 - [x] **Phase 77: Indexed Config Store** - In-memory index for workspace/template lookups, write-triggered invalidation, scan fallback (completed 2026-04-06)
 - [x] **Phase 78: Operation Runner with Rollback** - LIFO compensation stack in `operation-runner.ts`, `workspace-lifecycle.ts` wired to runner, rollback progress via `onProgress` (completed 2026-04-06)
-- [ ] **Phase 79: Release Prep** - v0.17.0 version bump, CHANGELOG, README updates
+- [x] **Phase 79: Release Prep** - v0.17.0 version bump, CHANGELOG, README updates (completed 2026-04-06)
+
+### 🚧 v0.17.1 E2E Test Coverage (In Progress)
+
+**Milestone Goal:** Extend E2E tests for full coverage of non-TUI, non-integration functionality and generate usable code coverage reports despite the existing split test runner architecture.
+
+- [ ] **Phase 80: Coverage Inventory and Scope Contract** - Document the in-scope command/user-flow surface, explicit exclusions, and E2E mapping gaps
+- [ ] **Phase 81: E2E CLI Harness and Fixtures** - Provide isolated real-process CLI execution, disposable fixtures, assertions, and failure diagnostics
+- [ ] **Phase 82: Non-TUI/Non-Integration CLI E2E Expansion** - Add E2E coverage for workspace, template, repo, label, message, config, doctor, completion, version, env, paths, and representative error flows
+- [ ] **Phase 83: Coverage Reporting for Split Runners** - Generate usable coverage reports across shared-process unit tests and isolated subprocess test files
+- [ ] **Phase 84: Coverage Gates, Docs, and Release Prep** - Add inventory/test mapping gates and verify the expanded suite with existing quality commands
 
 ## Phase Details
 
@@ -317,6 +328,61 @@ Plans:
 Plans:
 - [x] `79-01-PLAN.md` — Bump the published version to `0.17.0`, add a user-facing v0.17.0 changelog entry (Added / Changed / Internal), document template-label commands/filtering/propagation plus `GS_DEBUG=<module[,module]>` in README, run release validations, and write Phase 79 closeout artifacts
 
+### Phase 80: Coverage Inventory and Scope Contract
+**Goal**: Maintainers can see the exact non-TUI, non-integration surface that v0.17.1 must cover before test expansion starts
+**Depends on**: Phase 79 (v0.17.0 complete)
+**Requirements**: E2E-01, E2E-02, E2E-03
+**Success Criteria** (what must be TRUE):
+  1. Maintainer can open a documented inventory of every non-TUI, non-integration command and library-backed user flow that requires E2E coverage
+  2. Maintainer can see explicit exclusions for terminal UI behavior, external integration behavior, and the v0.17.0 rollback-visibility audit gap
+  3. Maintainer can compare every in-scope inventory item with the implemented E2E suite and identify unmapped coverage gaps
+**Plans**: TBD
+
+### Phase 81: E2E CLI Harness and Fixtures
+**Goal**: Test authors can write isolated real-process E2E scenarios with reusable fixtures and useful failure output
+**Depends on**: Phase 80
+**Requirements**: E2E-04, E2E-05, E2E-06, E2E-07
+**Success Criteria** (what must be TRUE):
+  1. Test author can run `git-stacks` as a real CLI process inside an isolated config home without touching developer config
+  2. Test author can create disposable git repo, template, workspace, and config fixtures for end-to-end scenarios
+  3. Test author can assert exit code, stdout, stderr, generated files, and persisted YAML for each command invocation
+  4. Failed E2E assertions include enough command, environment, stdout, and stderr context to debug the scenario quickly
+**Plans**: TBD
+
+### Phase 82: Non-TUI/Non-Integration CLI E2E Expansion
+**Goal**: Users can trust the existing non-TUI, non-integration CLI behavior because major success and representative failure flows are covered end to end
+**Depends on**: Phase 81
+**Requirements**: E2E-08, E2E-09, E2E-10, E2E-11, E2E-12, E2E-13
+**Success Criteria** (what must be TRUE):
+  1. Workspace flows have E2E coverage for create, clone, list, status, open-safe behavior, clean, remove, rename, run, paths, env, pull/sync/push guards, and applicable JSON/text output contracts
+  2. Template flows have E2E coverage for create, list, show, edit-safe paths, clone, rename, remove, template composition, and template labels
+  3. Repo registry, workspace label, and message flows have E2E coverage for their add/remove/list/clear, send/list/clear, git repo, and dir repo behavior
+  4. Config, doctor, completion, version, env, and paths support flows have E2E coverage for success and representative error cases
+  5. In-scope commands have representative malformed input, missing entity, dirty repo, missing path, and validation-failure E2E cases
+**Plans**: TBD
+
+### Phase 83: Coverage Reporting for Split Runners
+**Goal**: Developers can generate useful code coverage reports even though unit files run in a shared process and E2E/integration files run in isolated processes
+**Depends on**: Phase 82
+**Requirements**: COVR-01, COVR-02, COVR-03, COVR-04
+**Success Criteria** (what must be TRUE):
+  1. Developer can run one command that generates coverage for the full test suite across shared-process unit tests and isolated runner files
+  2. Coverage reports include source files exercised by subprocess E2E tests, or clearly document the technical limitation and enforce the closest reliable measurable proxy
+  3. Coverage output is written to a stable ignored directory with human-readable summary output and machine-readable artifacts for CI
+  4. Normal `bun run test`, `bun run test:unit`, and `bun run test:integ` runs are not materially slower unless coverage is explicitly requested
+**Plans**: TBD
+
+### Phase 84: Coverage Gates, Docs, and Release Prep
+**Goal**: Maintainers can keep the E2E inventory, mapped tests, and existing verification commands aligned as the CLI evolves
+**Depends on**: Phase 83
+**Requirements**: GATE-01, GATE-02, GATE-03
+**Success Criteria** (what must be TRUE):
+  1. CI or local verification fails when a new in-scope command is added without updating the E2E coverage inventory
+  2. CI or local verification fails when an in-scope inventory item has no mapped E2E test
+  3. Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling
+  4. Maintainer can run the documented v0.17.1 verification path and see the inventory gates and existing quality commands represented
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -327,3 +393,8 @@ Plans:
 | 77. Indexed Config Store | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 78. Operation Runner with Rollback | v0.17.0 | 3/3 | Complete    | 2026-04-06 |
 | 79. Release Prep | v0.17.0 | 1/1 | Complete | 2026-04-06 |
+| 80. Coverage Inventory and Scope Contract | v0.17.1 | 0/TBD | Not started | - |
+| 81. E2E CLI Harness and Fixtures | v0.17.1 | 0/TBD | Not started | - |
+| 82. Non-TUI/Non-Integration CLI E2E Expansion | v0.17.1 | 0/TBD | Not started | - |
+| 83. Coverage Reporting for Split Runners | v0.17.1 | 0/TBD | Not started | - |
+| 84. Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |

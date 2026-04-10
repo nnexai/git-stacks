@@ -75,12 +75,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| E2E-01 | Phase 80 | Pending |
+| E2E-02 | Phase 80 | Pending |
+| E2E-03 | Phase 80 | Pending |
+| E2E-04 | Phase 81 | Pending |
+| E2E-05 | Phase 81 | Pending |
+| E2E-06 | Phase 81 | Pending |
+| E2E-07 | Phase 81 | Pending |
+| E2E-08 | Phase 82 | Pending |
+| E2E-09 | Phase 82 | Pending |
+| E2E-10 | Phase 82 | Pending |
+| E2E-11 | Phase 82 | Pending |
+| E2E-12 | Phase 82 | Pending |
+| E2E-13 | Phase 82 | Pending |
+| COVR-01 | Phase 83 | Pending |
+| COVR-02 | Phase 83 | Pending |
+| COVR-03 | Phase 83 | Pending |
+| COVR-04 | Phase 83 | Pending |
+| GATE-01 | Phase 84 | Pending |
+| GATE-02 | Phase 84 | Pending |
+| GATE-03 | Phase 84 | Pending |
 
 **Coverage:**
 - v0.17.1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20
+- Mapped to phases: 20
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-10*
-*Last updated: 2026-04-10 after initial definition*
+*Last updated: 2026-04-10 after roadmap creation*
