@@ -19,9 +19,9 @@ created: 2026-04-10
 |----------|-------|
 | **Framework** | `bun:test` on Bun 1.3.10 |
 | **Config file** | `bunfig.toml` + custom runner (`scripts/test-runner.ts`) |
-| **Quick run command** | `bun run test:integ` or targeted `bun test tests/commands/<file>.test.ts -x` |
+| **Quick run command** | `bun test tests/commands/<touched-file>.test.ts -x` |
 | **Full suite command** | `bun run test && bun run typecheck` |
-| **Estimated runtime** | ~35 seconds |
+| **Estimated runtime** | ~25 seconds |
 
 ---
 
@@ -30,7 +30,7 @@ created: 2026-04-10
 - **After every task commit:** Run `bun test tests/commands/<touched-file>.test.ts -x`
 - **After every plan wave:** Run `bun run test:integ && bun run typecheck`
 - **Before `/gsd-verify-work`:** Full suite must be green
-- **Max feedback latency:** 35 seconds
+- **Max feedback latency:** 25 seconds
 
 ---
 
@@ -76,7 +76,7 @@ created: 2026-04-10
 - [ ] Sampling continuity: no 3 consecutive tasks without automated verify
 - [ ] Wave 0 covers all MISSING references
 - [ ] No watch-mode flags
-- [ ] Feedback latency < 35s
+- [ ] Feedback latency < 30s
 - [x] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
