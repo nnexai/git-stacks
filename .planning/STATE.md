@@ -1,36 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.17.0
-milestone_name: Engine Hardening & Template Labels
-status: completed
-stopped_at: Completed Phase 79
-last_updated: "2026-04-06T19:37:18Z"
-last_activity: 2026-04-06 - Completed Phase 79 release prep for v0.17.0
+milestone: v0.17.1
+milestone_name: E2E Test Coverage
+status: defining_requirements
+stopped_at: New milestone initialization
+last_updated: "2026-04-10T18:59:07Z"
+last_activity: 2026-04-10 - Milestone v0.17.1 started
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 15
-  completed_plans: 15
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-06)
+See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Milestone v0.17.0 shipped; next milestone planning not started
+**Current focus:** Milestone v0.17.1 will extend E2E coverage for non-TUI, non-integration CLI behavior and add code coverage reporting across split test runners
 
 ## Current Position
 
-Phase: 79
-Plan: 01 complete
-Status: Phase 79 complete
-Last activity: 2026-04-06 - Completed Phase 79 release prep for v0.17.0
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-10 - Milestone v0.17.1 started
 
-Progress: [██████████] 100% (1/1 plans)
+Progress: [░░░░░░░░░░] 0% (0/0 plans)
 
 ## Accumulated Context
 
@@ -82,6 +82,8 @@ Progress: [██████████] 100% (1/1 plans)
 ### Roadmap Evolution
 
 - Phase 78.1 inserted after Phase 78: turn capability enums into actual typescript interface instead of capability return function. also remove it from the integration list and documentation (URGENT)
+- v0.17.1 scope explicitly excludes TUI behavior and external integration functionality; coverage work should target non-TUI, non-integration CLI and library paths.
+- v0.17.1 includes code coverage report generation as part of the milestone, with attention to the existing split runner architecture where unit files run in a shared process and integration/E2E files run in isolated processes.
 
 ### Pending Todos
 

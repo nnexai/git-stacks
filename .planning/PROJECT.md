@@ -274,16 +274,16 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-## Current Milestone: v0.17.0 Engine Hardening & Template Labels
+## Current Milestone: v0.17.1 E2E Test Coverage
 
-**Goal:** Harden the core engine with rollback semantics, config indexing, and plugin contracts — plus ship template-level labels that cascade to workspaces on creation.
+**Goal:** Extend end-to-end test coverage across all non-TUI, non-integration user-facing functionality and produce usable code coverage reports across the split test runners.
 
 **Target features:**
-- Template labels that propagate to workspace creation and clone preservation (completed in Phase 74)
-- Operation runner with structured rollback/cleanup on partial failures
-- Indexed config store replacing scan-based YAML lookups
-- First-class integration plugin boundary with capability contracts
-- Broader dependency injection and structured logging
+- A documented command-surface coverage inventory that separates in-scope non-TUI/non-integration commands from excluded TUI and external integration behavior
+- Shared E2E test harness primitives for isolated `git-stacks` CLI execution, config homes, repo fixtures, stdout/stderr assertions, and failure diagnostics
+- End-to-end coverage for workspace/template/repo/config/message/label/doctor/completion/env/path/version flows that currently rely mainly on unit or narrow command tests
+- Code coverage report generation that works with the existing split unit and isolated E2E runner architecture
+- Regression gates that keep the E2E coverage inventory and the executable test suite aligned as commands evolve
 
 ### Out of Scope
 
@@ -305,10 +305,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Shipped:** Phases 74-79 are complete. Template labels now cover template CRUD/filtering plus propagation into created/cloned workspaces (74); lifecycle/git `_exec` seams and structured `GS_DEBUG` logging landed with `GIT_STACKS_DEBUG=1` compatibility preserved (75); integration optional behavior moved to compile-time-only narrow interfaces and predicates with no revived capability-list release surface (76 + 78.1); template/workspace reads moved onto an indexed config cache (77); workspace creation now uses a shared operation runner with LIFO rollback across both CLI/TUI creation paths (78); and release-prep polished the package version, changelog, README, and closeout artifacts for shipping (79).
 
-**Status:** Milestone v0.17.0 shipped — release-prep complete.
+**Status:** Milestone v0.17.1 is being planned to broaden E2E coverage for existing non-TUI, non-integration CLI behavior and add coverage reporting across split test runners.
 
 ## Next Milestone Goals
-- TBD — next milestone not planned yet
+- Extend E2E tests for full coverage of non-TUI, non-integration functionality
+- Generate reliable code coverage reports despite the split unit/E2E runner model
+- Keep TUI behavior and external integration CLI behavior out of this milestone except where needed to prove they remain excluded from the coverage contract
+
+## Completed Milestone: v0.17.0 Engine Hardening & Template Labels (2026-04-06)
+
+**Goal:** Harden the core engine with rollback semantics, config indexing, and plugin contracts — plus ship template-level labels that cascade to workspaces on creation.
+
+**Shipped:** All target features delivered across Phases 74-79. Template labels now propagate through creation and clone flows; lifecycle/git seams and structured debug logging landed; optional integration behavior moved behind compile-time-only structural interfaces; workspace/template lookup indexing and invalidation shipped; workspace creation rollback now protects both CLI and TUI create paths; release-prep closed the package, changelog, README, and closeout artifacts.
 
 ## Completed Milestone: v0.15.0 Dir Mode & Polish (2026-04-05)
 
@@ -361,7 +369,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Versioning
 
-**Current release:** `v0.16.0`
+**Current release:** `v0.17.0`
 **Scheme:** Zerover (`0.x`) until programmatic API is stabilized and declared stable.
 **Version gate for 1.0:** Programmatic API (`Result<T>`, typed exports), core primitives battle-tested.
 
@@ -479,4 +487,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-06 after Phase 78 completion*
+*Last updated: 2026-04-10 after milestone v0.17.1 initialization*
