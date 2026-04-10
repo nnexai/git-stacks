@@ -416,7 +416,12 @@ Plans:
   4. Completion tests verify generated shell completions for current command tree shape without invoking TUI or external integrations
   5. The Phase 80 inventory source has no unmapped in-scope item except consciously deferred exclusions documented with rationale
   6. A minimal pre-Phase-83 proof confirms the chosen Istanbul instrumentation approach can produce mergeable coverage artifacts from at least one isolated subprocess E2E invocation
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] `82.1-01-PLAN.md` — Verify Phase 80/81.1/81.1.1/82 prerequisite surfaces first, then add readonly plus workspace-adjacent support-command suites
+- [ ] `82.1-02-PLAN.md` — Add doctor/install and integration-config success-path support-command coverage
+- [ ] `82.1-03-PLAN.md` — Add representative failure coverage, update the canonical E2E inventory, and commit the Phase 83 Istanbul smoke handoff
 
 ### Phase 83: Istanbul-Based Subprocess Coverage Reporting
 **Goal**: Developers can generate useful Istanbul-format code coverage reports that include both shared-process unit tests and isolated subprocess E2E files
