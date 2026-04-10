@@ -1,101 +1,86 @@
 # Requirements: git-stacks
 
-**Defined:** 2026-04-05
+**Defined:** 2026-04-10
 **Core Value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
 
-## v0.17.0 Requirements
+## v0.17.1 Requirements
 
-Requirements for v0.17.0 Engine Hardening & Template Labels. Each maps to roadmap phases.
+Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
 
-### Template Labels
+### Coverage Inventory
 
-- [x] **TLBL-01**: User can add labels to a template via `git-stacks template label add <template> <label...>`
-- [x] **TLBL-02**: User can remove labels from a template via `git-stacks template label remove <template> <label...>`
-- [x] **TLBL-03**: User can list labels on a template via `git-stacks template label list <template>`
-- [x] **TLBL-04**: User can clear all labels from a template via `git-stacks template label clear <template>`
-- [x] **TLBL-05**: User can filter templates by label via `git-stacks template list --label <label>`
-- [x] **TLBL-06**: Template labels propagate to workspace on creation (union merge with user-provided labels)
-- [x] **TLBL-07**: Workspace clone copies labels from source workspace
+- [ ] **E2E-01**: Maintainer can see a documented inventory of every non-TUI, non-integration command and library-backed user flow that must have E2E coverage.
+- [ ] **E2E-02**: Maintainer can see explicit exclusions for TUI behavior and external integration functionality so the milestone scope cannot drift.
+- [ ] **E2E-03**: Maintainer can compare the command inventory with the implemented E2E suite and identify any unmapped in-scope surface.
 
-### Engine Hardening
+### E2E Harness
 
-- [x] **ENGN-01**: Multi-step workspace operations use a compensation stack that rolls back completed steps on failure
-- [x] **ENGN-02**: Rollback progress is visible to user via the existing onProgress callback
-- [x] **ENGN-03**: Rollback is best-effort — individual undo failures are logged but do not abort remaining undo steps
-- [x] **ENGN-04**: Workspace/template lookups use an in-memory index instead of scanning all YAML files
-- [x] **ENGN-05**: Index is invalidated automatically on every write operation
-- [x] **ENGN-06**: Index miss falls back to YAML scan (cache, not source of truth)
-- [x] **ENGN-07**: Each integration plugin declares optional behaviors via narrow TypeScript interfaces composed at the export site
-- [x] **ENGN-08**: Integration runner uses type predicates over method/property presence to gate optional integration behavior
-- [x] **ENGN-09**: `integration list` omits compile-time-only capability details from both table and JSON output
+- [ ] **E2E-04**: Test author can run `git-stacks` as a real CLI process inside an isolated config home without touching the developer's real config.
+- [ ] **E2E-05**: Test author can create disposable git repo, template, workspace, and config fixtures for end-to-end scenarios.
+- [ ] **E2E-06**: Test author can assert exit code, stdout, stderr, generated files, and persisted YAML for each E2E command invocation.
+- [ ] **E2E-07**: Failed E2E assertions provide enough command, environment, stdout, and stderr context to debug the failing scenario quickly.
 
-### Observability
+### CLI E2E Coverage
 
-- [x] **OBSV-01**: `workspace-lifecycle.ts` has injectable `_exec` seam for subprocess testing
-- [x] **OBSV-02**: `workspace-git.ts` has injectable `_exec` seam for subprocess testing
-- [x] **OBSV-03**: Debug output uses structured fields `{ op, module, repo?, ms?, msg }` on stderr
-- [x] **OBSV-04**: `GS_DEBUG=lifecycle,git` filters debug output to named modules only
-- [x] **OBSV-05**: `GS_DEBUG=1` or `GS_DEBUG=true` continues to show all module output
+- [ ] **E2E-08**: User-facing workspace flows have E2E coverage for create/clone/list/status/open-safe behavior, clean/remove/rename, run, paths, env, pull/sync/push guard behavior, and JSON/text output contracts where applicable.
+- [ ] **E2E-09**: User-facing template flows have E2E coverage for create/list/show/edit-safe paths, clone/rename/remove, template composition, and template label behavior.
+- [ ] **E2E-10**: User-facing repo registry flows have E2E coverage for add/scan/list/show/rename/remove across git and dir repos.
+- [ ] **E2E-11**: User-facing workspace label and message flows have E2E coverage for add/remove/list/clear and send/list/clear behavior.
+- [ ] **E2E-12**: User-facing config, doctor, completion, version, env, and paths support flows have E2E coverage for success and representative error cases.
+- [ ] **E2E-13**: E2E coverage includes representative malformed input, missing entity, dirty repo, missing path, and validation-failure cases for in-scope commands.
+
+### Coverage Reporting
+
+- [ ] **COVR-01**: Developer can run one command that generates a coverage report for the full test suite, including the existing shared-process unit runner and isolated E2E runner files.
+- [ ] **COVR-02**: Coverage reports include source files exercised by subprocess-based E2E tests, or clearly document any technical limitation and enforce coverage through the closest reliable measurable proxy.
+- [ ] **COVR-03**: Coverage output is written to a stable ignored directory and supports both human-readable summary output and machine-readable artifacts for CI.
+- [ ] **COVR-04**: Coverage reporting does not make normal `bun run test`, `bun run test:unit`, or `bun run test:integ` materially slower unless coverage is explicitly requested.
+
+### Regression Gates
+
+- [ ] **GATE-01**: CI or local verification can fail when a new in-scope command is added without updating the E2E coverage inventory.
+- [ ] **GATE-02**: CI or local verification can fail when an in-scope inventory item has no mapped E2E test.
+- [ ] **GATE-03**: Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling.
 
 ## Future Requirements
 
-### TUI Label Management
+### TUI Coverage
 
-- **TLBL-08**: User can add/remove labels from workspace detail pane in TUI dashboard
-- **TLBL-09**: User can add/remove labels from template detail pane in TUI dashboard
+- **TUI-01**: TUI dashboard flows have full E2E coverage beyond existing headless component/integration tests.
+- **TUI-02**: Dashboard rollback progress from the v0.17.0 audit is rendered for every tracked create step, not only worktree rollback steps.
 
-### Advanced Index
+### External Integration Coverage
 
-- **ENGN-10**: On-disk index file at `~/.config/git-stacks/index.yml` for startup speed
-- **ENGN-11**: Index stores metadata (name, labels, branch) for fast filtering without YAML parse
+- **INTG-01**: GitHub/GitLab/Gitea/Jira/tmux/cmux/niri/AeroSpace/IDE integration behaviors have full E2E coverage against mocked or containerized external dependencies.
 
-### Label Completion
+### Coverage Policy
 
-- **TLBL-10**: Shell completions offer existing label values for `--label` and `label add/remove` arguments
+- **COVR-05**: CI enforces minimum line/function/branch coverage thresholds after the report source and subprocess limitations are stable.
 
 ## Out of Scope
 
+Explicitly excluded. Documented to prevent scope creep.
+
 | Feature | Reason |
 |---------|--------|
-| Label inheritance via template `includes` | Label provenance becomes opaque; labels should be explicit per template |
-| On-disk index as primary config store | YAML-per-entity is user-editable; index is cache only |
-| Rollback via snapshot + restore | Snapshots don't cover filesystem state; compensation stack is correct approach |
-| Plugin versioning / semver contracts | Single-process tool; TypeScript compile-time enforcement is sufficient |
-| Global label taxonomy / registry | Kills low-friction labeling; freeform strings with format validation is correct |
-| Async saga engine for rollback | CLI ops are synchronous and short-lived; saga adds framework dependency with zero benefit |
-| Third-party plugin loading | Just the interface contracts this milestone; dynamic loading deferred |
+| TUI dashboard behavior | User requested non-TUI coverage; TUI work has different rendering/test harness risks |
+| External integration behavior | User requested non-integration coverage; external CLIs and window managers need separate fixtures |
+| Fixing v0.17.0 dashboard rollback visibility audit gap | TUI behavior is excluded from this milestone even though the audit is now committed |
+| Raising mandatory coverage thresholds immediately | First milestone should produce trustworthy reports before enforcing numeric gates |
+| Rewriting the whole test runner architecture | Scope is coverage and E2E coverage extension, not a runner replacement unless required by reports |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TLBL-01 | Phase 74 | Complete |
-| TLBL-02 | Phase 74 | Complete |
-| TLBL-03 | Phase 74 | Complete |
-| TLBL-04 | Phase 74 | Complete |
-| TLBL-05 | Phase 74 | Complete |
-| TLBL-06 | Phase 74 | Complete |
-| TLBL-07 | Phase 74 | Complete |
-| ENGN-01 | Phase 78 | Complete |
-| ENGN-02 | Phase 78 | Complete |
-| ENGN-03 | Phase 78 | Complete |
-| ENGN-04 | Phase 77 | Complete |
-| ENGN-05 | Phase 77 | Complete |
-| ENGN-06 | Phase 77 | Complete |
-| ENGN-07 | Phase 78.1 | Complete |
-| ENGN-08 | Phase 78.1 | Complete |
-| ENGN-09 | Phase 78.1 | Complete |
-| OBSV-01 | Phase 75 | Complete |
-| OBSV-02 | Phase 75 | Complete |
-| OBSV-03 | Phase 75 | Complete |
-| OBSV-04 | Phase 75 | Complete |
-| OBSV-05 | Phase 75 | Complete |
 
 **Coverage:**
-- v0.17.0 requirements: 21 total
-- Mapped to phases: 21
-- Unmapped: 0 ✓
+- v0.17.1 requirements: 20 total
+- Mapped to phases: 0
+- Unmapped: 20
 
 ---
-*Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after roadmap creation*
+*Requirements defined: 2026-04-10*
+*Last updated: 2026-04-10 after initial definition*
