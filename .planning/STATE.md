@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: roadmap_created
-stopped_at: Phase 80 ready to plan
-last_updated: "2026-04-10T19:02:34Z"
-last_activity: 2026-04-10 - Roadmap refined for v0.17.1 E2E Test Coverage after planning feedback
+status: planning
+stopped_at: Phase 80 context gathered
+last_updated: "2026-04-10T19:57:58.282Z"
+last_activity: 2026-04-10 — Coverage spike completed; stale checkboxes fixed; 999.2 promoted into Phase 84; wizard exclusions, missing commands, and Istanbul findings applied to ROADMAP + REQUIREMENTS.
 progress:
-  total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 14
+  completed_phases: 7
+  total_plans: 15
+  completed_plans: 15
+  percent: 100
 ---
 
 # Project State
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 Phase: 80 of 84 (E2E CLI Harness and Living Inventory)
 Plan: Not planned yet
 Status: Ready to plan
-Last activity: 2026-04-10 — v0.17.1 roadmap refined from coworker/user feedback; REQUIREMENTS.md traceability mapped 21/21 requirements.
+Last activity: 2026-04-10 — Coverage spike completed; stale checkboxes fixed; 999.2 promoted into Phase 84; wizard exclusions, missing commands, and Istanbul findings applied to ROADMAP + REQUIREMENTS.
 
 Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
 
@@ -54,7 +54,10 @@ Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
 - Phase 80 should extend existing helpers in `tests/helpers.ts` rather than replacing them.
 - The Phase 80 inventory must have a machine-parseable source of truth so Phase 84 local gates can detect unmapped commands and missing test mappings.
 - The milestone's core testing intent is to falsify assumptions around env injection, hooks, cwd/path selection, branch starting points, merge/pull/sync/push behavior, and command execution that uses explicit cwd/path handling instead of shell `cd` state.
-- Existing v0.17.0 backlog items remain backlog for now; they are not promoted into v0.17.1 unless explicitly requested later.
+- Backlog 999.2 (README debug format) promoted into Phase 84 SC 6; 999.1 and 999.3 remain backlog.
+- Wizard-driven commands (new, clone, config wizard, repo scan, template new, template edit, install prompts) are excluded from E2E scope; tested indirectly via pre-built fixtures where applicable.
+- `cd`, `edit --yaml`, `integration list`, and `integration <id> config show/example` were missing from phase success criteria and have been added.
+- **Coverage spike findings (2026-04-10):** (1) Bun ignores `NODE_V8_COVERAGE` — no V8 coverage JSON produced from Bun subprocesses. (2) `bun test --coverage` works for in-process imports only; subprocess code is invisible. (3) `c8 --all` sees the source tree but reports 0% because Bun subprocesses don't emit V8 artifacts. (4) Istanbul source instrumentation (`istanbul-lib-instrument` with `parserPlugins: ["typescript"]`) works end-to-end under Bun: instrument TS → run instrumented code in subprocess → collect `globalThis.__coverage__` → get per-function/statement/branch hit counts. (5) Phase 83 approach confirmed: Istanbul source instrumentation + `__coverage__` collection + artifact merge. Phase 82.1 SC 6 requires a minimal proof-of-concept before Phase 83 planning begins.
 
 ### Pending Todos
 
@@ -66,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-10 19:02 UTC
-Stopped at: Roadmap refined; next action is `/gsd-plan-phase 80`
-Resume file: None
+Last session: 2026-04-10T19:57:58.279Z
+Stopped at: Phase 80 context gathered
+Resume file: .planning/phases/80-e2e-cli-harness-and-living-inventory/80-CONTEXT.md
