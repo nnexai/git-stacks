@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: planning
-stopped_at: Phase 80 context gathered
-last_updated: "2026-04-10T19:58:30Z"
+stopped_at: Phase 81 context gathered
+last_updated: "2026-04-10T20:07:17.674Z"
 last_activity: 2026-04-10 — Phase 80 context captured and roadmap/requirements refined so the inventory requirement is machine-parseable only, with no separate human-readable surface.
 progress:
   total_phases: 14
@@ -70,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-10T19:57:58.279Z
-Stopped at: Phase 80 context gathered
-Resume file: .planning/phases/80-e2e-cli-harness-and-living-inventory/80-CONTEXT.md
+Last session: 2026-04-10T20:07:17.670Z
+Stopped at: Phase 81 context gathered
+Resume file: .planning/phases/81-workspace-and-git-operation-e2e-coverage/81-CONTEXT.md
