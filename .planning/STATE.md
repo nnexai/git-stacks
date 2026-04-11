@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: executing
-stopped_at: Phase 83 context gathered
-last_updated: "2026-04-11T12:06:44.538Z"
+stopped_at: Phase 84 context gathered
+last_updated: "2026-04-11T12:12:12.245Z"
 last_activity: 2026-04-10 -- Phase 82 planning complete
 progress:
   total_phases: 16
@@ -75,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T12:06:44.535Z
-Stopped at: Phase 83 context gathered
-Resume file: .planning/phases/83-istanbul-based-subprocess-coverage-reporting/83-CONTEXT.md
+Last session: 2026-04-11T12:12:12.242Z
+Stopped at: Phase 84 context gathered
+Resume file: .planning/phases/84-local-coverage-gates-docs-and-release-prep/84-CONTEXT.md
