@@ -433,7 +433,12 @@ Plans:
   3. Coverage output is written to a stable ignored directory with human-readable summary output and machine-readable Istanbul artifacts usable by local verification gates
   4. Normal `bun run test`, `bun run test:unit`, and `bun run test:integ` runs are not materially slower unless coverage is explicitly requested
   5. Coverage implementation documents any tool-specific caveats without using those caveats as a substitute for subprocess source coverage
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] `83-01-PLAN.md` — Prerequisites, dependency installation, coverage script surface, and runner/preload scaffold
+- [ ] `83-02-PLAN.md` — Instrumentation engine, subprocess delegation shim, preload plugin, and test execution wiring
+- [ ] `83-03-PLAN.md` — Coverage merge, zero-baseline, report generation (text/HTML/JSON/LCOV), and regression verification
 
 ### Phase 84: Local Coverage Gates, Docs, and Release Prep
 **Goal**: Maintainers can keep the E2E inventory, mapped tests, coverage reports, and existing verification commands aligned without assuming CI exists
@@ -446,7 +451,12 @@ Plans:
   4. Maintainer can run the documented v0.17.1 verification path and see the inventory gates, coverage command, and existing quality commands represented
   5. Release prep updates version/changelog/README as needed for the new E2E and coverage commands
   6. README structured debug logging examples updated to match the shipped key/value format (promotes backlog 999.2)
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] `84-01-PLAN.md` — Verify Phase 80 inventory and Phase 83 coverage prerequisite surfaces before any Phase 84 implementation work
+- [ ] `84-02-PLAN.md` — Add local `bun run verify` orchestration plus aggregated inventory, mapping, and coverage gates
+- [ ] `84-03-PLAN.md` — Apply focused README, CHANGELOG, and version release-prep updates for verify and debug docs
 
 ## Progress
 
