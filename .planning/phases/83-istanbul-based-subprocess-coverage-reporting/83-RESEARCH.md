@@ -572,22 +572,16 @@ This phase is tooling/scripts only. No user-facing authentication, session manag
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Unit test coverage: plugin approach vs subprocess approach**
-   - What we know: Bun plugins can intercept imports; subprocess approach (treat unit tests like integration tests) is proven by spike
-   - What's unclear: Whether Bun 1.3.10's plugin API properly intercepts path-alias resolution during a `bun test` invocation; how `mock.module()` interacts with plugin-redirected imports
-   - Recommendation: Start with the subprocess approach for unit tests (simpler, proven pattern) and optimize to plugin approach in a follow-up if needed; this gives a working baseline sooner
+1. **Unit test coverage: plugin approach vs subprocess approach** — **RESOLVED: Use per-file subprocess approach.**
+   - The Bun 1.3.10 plugin API behavior in `bun test` context is unverified (Assumption A1). Rather than risk the shared-process plugin approach with unknown `mock.module()` interactions (Pitfall 2), Plan 02 runs each unit test file as an isolated subprocess — the same proven pattern used for integration tests. The preload plugin still handles `@/*` import redirect within each subprocess, and also registers a `process.on('exit')` shard writer (since unit tests don't go through `src/index.ts` and thus don't hit the shard writer appended there). This eliminates A1 and A3 risk entirely. If shared-process plugin proves viable later, it can be optimized as a follow-up.
 
-2. **Source map output**
-   - What we know: `istanbul-lib-source-maps` is available; `istanbul-lib-instrument` can produce inline source maps or external maps
-   - What's unclear: Whether HTML report line-level accuracy requires source maps to be threaded through, or whether the direct-instrumented `.ts` paths (already human-readable TypeScript) are sufficient for this milestone
-   - Recommendation: Skip source map remapping initially; if HTML report shows instrumented-file paths instead of original TypeScript lines, add `istanbul-lib-source-maps` remap step before generating reports
+2. **Source map output** — **RESOLVED: Skip source map remapping for this phase.**
+   - Since `instrumentSync()` is called with original `src/...` paths as the filename argument (Research §Pitfall 3), the coverage map keys already reference the original TypeScript source. The HTML report will show coverage against the original paths. Source map remapping via `istanbul-lib-source-maps` is unnecessary unless line-level accuracy issues surface during execution, in which case it can be added to Plan 03's merge step.
 
-3. **Coverage for TUI and dashboard files in `src/tui/`**
-   - What we know: `src/**/*.ts` is the locked scope; `src/tui/` files are TypeScript
-   - What's unclear: Whether instrumented TUI source (SolidJS JSX via `.tsx`) requires additional parser plugins
-   - Recommendation: Include `.tsx` files in the `src/**/*.ts` glob with `parserPlugins: ["typescript", "jsx"]`; verify the instrumented dashboard files don't break the existing dashboard test files
+3. **Coverage for TUI `.tsx` files** — **RESOLVED: Use `parserPlugins: ["typescript", "jsx"]` for `.tsx` files.**
+   - Plan 02 Task 1 already specifies creating a second instrumenter (or per-file options) with `parserPlugins: ["typescript", "jsx"]` for `.tsx` files. This is the standard Istanbul approach for JSX-containing TypeScript. If dashboard test failures occur during coverage runs, the fix is to exclude specific `.tsx` files from instrumentation rather than dropping JSX parser support.
 
 ---
 
