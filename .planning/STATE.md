@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: ready_to_plan
-stopped_at: Completed phase 82.1; ready to plan Phase 83
-last_updated: "2026-05-14T18:38:25.510Z"
+status: blocked
+stopped_at: "Phase 84 blocked at 84-01 Task 2: missing Phase 83 coverage surface"
+last_updated: "2026-05-14T18:44:42.338Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
@@ -92,10 +92,10 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- Phase 84 blocked at 84-01 Task 2: Phase 83 coverage surface is missing. package.json lacks coverage, coverage:unit, and coverage:integ scripts; .gitignore lacks .coverage/; .coverage/coverage-final.json, .coverage/coverage-summary.json, .coverage/lcov.info, and .coverage/index.html could not be produced because bun run coverage is unavailable. Do not execute Phase 84 implementation plans until Phase 83 coverage reporting is completed.
 
 ## Session Continuity
 
-Last session: 2026-05-14T18:38:25.503Z
-Stopped at: Completed phase 82.1; ready to plan Phase 83
+Last session: 2026-05-14T18:44:31.700Z
+Stopped at: Phase 84 blocked at 84-01 Task 2: missing Phase 83 coverage surface
 Resume file: None
