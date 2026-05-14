@@ -101,6 +101,124 @@ export function cleanup(dir: string) {
   rmSync(dir, { recursive: true, force: true })
 }
 
+export const TEST_CLI_ENV_ALLOWLIST = [
+  "HOME",
+  "XDG_CONFIG_HOME",
+  "GNUPGHOME",
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_NOSYSTEM",
+  "GIT_TERMINAL_PROMPT",
+  "GIT_STACKS_CONFIG_DIR",
+  "PATH",
+] as const
+
+export type RunCliOptions = {
+  baseDir: string
+  cwd?: string
+  configDir?: string
+  env?: Record<string, string>
+  artifactPaths?: string[]
+  envAllowlistExtras?: string[]
+}
+
+export type RunCliResult = {
+  argv: string[]
+  cwd: string
+  exitCode: number
+  stdout: string
+  stderr: string
+  envPreview: Record<string, string>
+  artifactPaths: string[]
+}
+
+function buildEnvPreview(env: NodeJS.ProcessEnv, extras: readonly string[]): Record<string, string> {
+  const allowed = new Set<string>([...TEST_CLI_ENV_ALLOWLIST, ...extras])
+  const preview: Record<string, string> = {}
+
+  for (const key of allowed) {
+    const value = env[key]
+    if (value !== undefined) {
+      preview[key] = value
+    }
+  }
+
+  return preview
+}
+
+export function runCli(argv: string[], opts: RunCliOptions): RunCliResult {
+  const cwd = opts.cwd ?? join(import.meta.dir, "..")
+  const env = {
+    ...getTestGitEnv(opts.baseDir),
+    GIT_STACKS_CONFIG_DIR: opts.configDir ?? join(opts.baseDir, "config"),
+    ...opts.env,
+  }
+
+  const result = Bun.spawnSync(["bun", "run", "src/index.ts", ...argv], {
+    cwd,
+    env,
+    stdio: ["pipe", "pipe", "pipe"],
+  })
+
+  return {
+    argv,
+    cwd,
+    exitCode: result.exitCode ?? 0,
+    stdout: new TextDecoder().decode(result.stdout),
+    stderr: new TextDecoder().decode(result.stderr),
+    envPreview: buildEnvPreview(env, opts.envAllowlistExtras ?? []),
+    artifactPaths: opts.artifactPaths ?? [],
+  }
+}
+
+export function formatCliFailure(result: RunCliResult): string {
+  return [
+    "CLI command failed",
+    `argv: ${JSON.stringify(result.argv)}`,
+    `cwd: ${result.cwd}`,
+    `exitCode: ${result.exitCode}`,
+    "env:",
+    JSON.stringify(result.envPreview, null, 2),
+    "artifactPaths:",
+    JSON.stringify(result.artifactPaths, null, 2),
+    "stdout:",
+    result.stdout,
+    "stderr:",
+    result.stderr,
+  ].join("\n")
+}
+
+export function createConfigFixture(baseDir: string, workspaceRoot = join(baseDir, "ws-root")): string {
+  const configDir = join(baseDir, "config")
+  mkdirSync(join(configDir, "workspaces"), { recursive: true })
+  mkdirSync(join(configDir, "templates"), { recursive: true })
+  mkdirSync(join(configDir, "messages"), { recursive: true })
+  mkdirSync(workspaceRoot, { recursive: true })
+  writeFileSync(join(configDir, "config.yml"), `workspace_root: ${workspaceRoot}\n`)
+  writeRegistryFixture(configDir)
+  return configDir
+}
+
+export function writeRegistryFixture(configDir: string, yaml = "[]\n"): string {
+  const path = join(configDir, "registry.yml")
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, yaml)
+  return path
+}
+
+export function writeTemplateFixture(configDir: string, fileName: string, yaml: string): string {
+  const path = join(configDir, "templates", fileName)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, yaml)
+  return path
+}
+
+export function writeWorkspaceFixture(configDir: string, fileName: string, yaml: string): string {
+  const path = join(configDir, "workspaces", fileName)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, yaml)
+  return path
+}
+
 export function mkdir(base: string, ...parts: string[]) {
   mkdirSync(join(base, ...parts), { recursive: true })
 }
