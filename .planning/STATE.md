@@ -4,14 +4,14 @@ milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: executing
 stopped_at: Completed 80-02-PLAN.md
-last_updated: "2026-05-14T17:11:15.652Z"
-last_activity: 2026-05-14 -- Phase 80 execution complete
+last_updated: "2026-05-14T17:23:12.587Z"
+last_activity: 2026-05-14 -- Phase 81 execution started
 progress:
   total_phases: 17
   completed_phases: 8
   total_plans: 35
-  completed_plans: 17
-  percent: 49
+  completed_plans: 18
+  percent: 51
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** v0.17.1 E2E Test Coverage — continue with Phase 81 workspace and git-operation E2E coverage on top of the Phase 80 harness and inventory.
+**Current focus:** Phase 81 — Workspace and Git Operation E2E Coverage
 
 ## Current Position
 
-Phase: 81 of 84 (Workspace and Git Operation E2E Coverage)
-Plan: 0 of 4 complete
-Status: Ready to execute
-Last activity: 2026-05-14 -- Phase 80 execution complete
+Phase: 81 (Workspace and Git Operation E2E Coverage) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 81
+Last activity: 2026-05-14 -- Phase 81 execution started
 
 Progress: [█████░░░░░] 49%
 

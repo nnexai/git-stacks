@@ -354,10 +354,10 @@ Plans:
   4. Workspace clean/remove/rename E2E tests prove filesystem and YAML side effects, missing/dirty repo behavior, and safe failure messages
   5. Workspace merge, pull, sync, and push E2E tests run against disposable local git repositories/remotes and prove guard behavior for dir repos, dirty repos, missing remotes, and branch/upstream assumptions
   6. Command-execution E2E tests prove run/hooks/git operations use explicit cwd/path handling and do not depend on shell `cd` state
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
-- [ ] 81-01-PLAN.md — Shared E2E helpers + create/clone side-effect tests
+- [x] 81-01-PLAN.md — Shared E2E helpers + create/clone side-effect tests
 - [ ] 81-02-PLAN.md — Execution context probes + JSON/text output contracts
 - [ ] 81-03-PLAN.md — Lifecycle cascading + guard behavior tests
 - [ ] 81-04-PLAN.md — Git operations against bare remotes + status --fetch
@@ -469,7 +469,7 @@ Plans:
 | 78. Operation Runner with Rollback | v0.17.0 | 3/3 | Complete    | 2026-04-06 |
 | 79. Release Prep | v0.17.0 | 1/1 | Complete | 2026-04-06 |
 | 80. E2E CLI Harness and Living Inventory | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
-| 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
+| 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 1/4 | In Progress|  |
 | 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
