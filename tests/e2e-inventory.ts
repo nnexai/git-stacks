@@ -26,8 +26,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Workspace create side effects",
     commands: ["new", "clone"],
     scopeStatus: "in-scope",
-    mappedTests: [],
-    rationale: "Later E2E phases must prove template-backed workspace creation and clone side effects through non-interactive fixtures.",
+    mappedTests: ["tests/commands/template-consumption.test.ts"],
+    rationale: "Template-backed workspace creation and clone side effects are covered through non-interactive fixtures.",
   },
   {
     id: "workspace.clone.side-effects",
@@ -36,8 +36,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Workspace clone side effects",
     commands: ["clone"],
     scopeStatus: "in-scope",
-    mappedTests: [],
-    rationale: "Clone behavior is a high-risk workspace lifecycle flow that needs real filesystem and git assertions.",
+    mappedTests: ["tests/commands/template-consumption.test.ts"],
+    rationale: "Template-derived labels/config persistence through clone is covered by non-interactive subprocess fixtures.",
   },
   {
     id: "workspace.list",
