@@ -133,11 +133,125 @@ export async function runWorkspaceNew(
   fromSource?: string,
   templateNames?: string[],
   cliLabels?: string[],
+  opts?: { nonInteractive?: boolean; branch?: string; open?: boolean },
 ) {
   p.intro("New workspace")
 
   const config = readGlobalConfig()
   const tasksDir = getTasksDir(config.workspace_root)
+
+  if (opts?.nonInteractive) {
+    const missing: string[] = []
+    if (!nameArg?.trim()) missing.push("<name> (positional argument)")
+    if (!fromSource && (!templateNames || templateNames.length === 0)) {
+      missing.push("--from <template> or --template <name>")
+    }
+    if (missing.length > 0) {
+      console.error(`[git-stacks] --non-interactive requires: ${missing.join(", ")}`)
+      process.exit(1)
+    }
+
+    const wsName = nameArg!.trim()
+    if (workspaceExists(wsName)) {
+      console.error(`[git-stacks] Workspace '${wsName}' already exists.`)
+      process.exit(1)
+    }
+
+    const registry = readRegistry()
+    let repos: WorkspaceRepo[] = []
+    let templateName: string | undefined
+    let template: Template | undefined
+    let wsHooks: Workspace["hooks"] | undefined
+    let wsEnv: Record<string, string> | undefined
+    let wsEnvFile: string | undefined
+    let wsFiles: Workspace["files"]
+    let wsIntegrationSettings: Record<string, unknown> | undefined
+    let wsPorts: Record<string, number | null> | undefined
+
+    if (templateNames && templateNames.length > 0) {
+      try {
+        template = composeTemplates(templateNames)
+      } catch (err) {
+        console.error(`[git-stacks] ${err instanceof Error ? err.message : String(err)}`)
+        process.exit(1)
+      }
+      templateName = templateNames[templateNames.length - 1]
+    } else if (fromSource) {
+      if (!templateExists(fromSource)) {
+        console.error(`[git-stacks] Template '${fromSource}' not found. Note: --non-interactive only supports template names, not local paths.`)
+        process.exit(1)
+      }
+      templateName = fromSource
+      const rawTemplate = readTemplate(fromSource)
+      if (rawTemplate.includes && rawTemplate.includes.length > 0) {
+        try {
+          template = composeTemplates([...rawTemplate.includes, templateName])
+        } catch (err) {
+          console.error(`[git-stacks] ${err instanceof Error ? err.message : String(err)}`)
+          process.exit(1)
+        }
+      } else {
+        template = rawTemplate
+      }
+    }
+
+    if (!template) {
+      console.error("[git-stacks] Failed to load template.")
+      process.exit(1)
+    }
+
+    repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
+    if (repos.length === 0) {
+      console.error("[git-stacks] Template did not resolve any repos.")
+      process.exit(1)
+    }
+
+    wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+    wsEnv = template.env ? { ...template.env } : undefined
+    wsEnvFile = template.env_file
+    wsFiles = template.files
+    wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
+    wsPorts = template.ports ? { ...template.ports } : undefined
+
+    const firstPattern = template.repos.find(r => r.branch_pattern)?.branch_pattern
+    const branch = opts.branch?.trim() || (firstPattern ? expandBranchPattern(firstPattern, wsName) : `feature/${wsName}`)
+    const labels = normalizeLabels(cliLabels ?? [])
+    const result = await createWorkspace(
+      {
+        wsName,
+        branch,
+        ...(templateName ? { templateName } : {}),
+        ...(template.labels?.length ? { templateLabels: template.labels } : {}),
+        repos,
+        ...(wsHooks ? { wsHooks } : {}),
+        ...(wsEnv ? { wsEnv } : {}),
+        ...(wsEnvFile ? { wsEnvFile } : {}),
+        ...(wsFiles ? { wsFiles } : {}),
+        ...(wsIntegrationSettings ? { wsIntegrationSettings } : {}),
+        ...(wsPorts ? { wsPorts } : {}),
+        ...(labels.length > 0 ? { labels } : {}),
+      },
+      (msg) => p.log.info(msg),
+    )
+
+    if (!result.ok) {
+      if (result.rollbackErrors.length > 0) {
+        for (const rbErr of result.rollbackErrors) p.log.warn(rbErr)
+      }
+      console.error(`[git-stacks] Failed to create workspace: ${result.error}`)
+      process.exit(1)
+    }
+
+    if (opts.open) {
+      const openResult = await openWorkspace(wsName, {}, (msg) => p.log.info(msg))
+      if (!openResult.ok) {
+        p.log.warn(`Open failed: ${openResult.error}`)
+      }
+    }
+
+    p.outro(`Workspace '${wsName}' ready.  Run \`git-stacks open ${wsName}\` to re-open.`)
+    return
+  }
 
   // Name
   const nameRaw = await safeText({
