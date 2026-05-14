@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { makeConfigMock, makeWorkspaceOpsMock } from "../helpers"
 
 const mockIntro = mock(() => {})
@@ -15,6 +15,9 @@ const mockSelect = mock(async () => "source" as string | symbol)
 const mockConfirm = mock(async () => false as boolean | symbol)
 const mockIsCancel = mock((value: unknown) => typeof value === "symbol")
 const mockCancel = mock(() => {})
+const originalExit = process.exit
+const exitMock = mock((code?: number) => { throw new Error(`process.exit(${code})`) })
+const consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
 
 mock.module("@/tui/utils", () => ({
   safeText: mockSafeText,
@@ -103,8 +106,9 @@ mock.module("@/lib/git", () => ({
   ensureUpstreamTracking: mockEnsureUpstreamTracking,
 }))
 
+const mockOpenWorkspace = mock(async () => ({ ok: true }))
 mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
-  openWorkspace: mock(async () => ({ ok: true })),
+  openWorkspace: mockOpenWorkspace,
 }))
 
 const { runWorkspaceClone } = await import("@/tui/workspace-clone")
@@ -149,5 +153,112 @@ describe("workspace-clone label propagation", () => {
       ],
       labels: ["backend", "sprint:14"],
     }))
+  })
+})
+
+describe("clone --non-interactive", () => {
+  beforeEach(() => {
+    process.exit = exitMock as any
+    mockSafeText.mockReset()
+    mockSelect.mockReset()
+    mockConfirm.mockReset()
+    mockWriteWorkspace.mockReset()
+    mockCreateWorktree.mockReset()
+    mockEnsureUpstreamTracking.mockReset()
+    mockPromptIntegrationOverrides.mockReset()
+    mockRunIntegrationGenerate.mockReset()
+    mockWorkspaceExists.mockReset()
+    mockOpenWorkspace.mockReset()
+    consoleErrorSpy.mockReset()
+    exitMock.mockReset()
+
+    mockWorkspaceExists.mockImplementation((name: string) => name === "source")
+    mockCreateWorktree.mockResolvedValue(undefined)
+    mockEnsureUpstreamTracking.mockResolvedValue({ tracked: false })
+    mockPromptIntegrationOverrides.mockResolvedValue(undefined)
+    mockRunIntegrationGenerate.mockResolvedValue([])
+    mockOpenWorkspace.mockResolvedValue({ ok: true })
+    consoleErrorSpy.mockImplementation(() => {})
+    exitMock.mockImplementation((code?: number) => { throw new Error(`process.exit(${code})`) })
+  })
+
+  afterEach(() => {
+    process.exit = originalExit
+  })
+
+  test("clone --non-interactive clones workspace without prompts", async () => {
+    await runWorkspaceClone("source", { nonInteractive: true, name: "dest" })
+
+    expect(mockSafeText.mock.calls.length).toBe(0)
+    expect(mockSelect.mock.calls.length).toBe(0)
+    expect(mockConfirm.mock.calls.length).toBe(0)
+    expect(mockPromptIntegrationOverrides.mock.calls.length).toBe(0)
+    expect(mockCreateWorktree).toHaveBeenCalledWith(
+      "/repos/frontend",
+      "/tmp/test-workspaces/tasks/dest/frontend",
+      "feature/dest",
+    )
+    expect(mockWriteWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      name: "dest",
+      branch: "feature/dest",
+      labels: ["backend", "sprint:14"],
+    }))
+  })
+
+  test("clone --non-interactive fails when --name is missing", async () => {
+    await expect(runWorkspaceClone("source", { nonInteractive: true }))
+      .rejects.toThrow("process.exit(1)")
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("--name"))
+  })
+
+  test("clone --non-interactive fails when source arg is missing", async () => {
+    await expect(runWorkspaceClone(undefined, { nonInteractive: true, name: "dest" }))
+      .rejects.toThrow("process.exit(1)")
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("<workspace>"))
+  })
+
+  test("clone --non-interactive fails when source workspace is not found", async () => {
+    mockWorkspaceExists.mockReturnValue(false)
+
+    await expect(runWorkspaceClone("source", { nonInteractive: true, name: "dest" }))
+      .rejects.toThrow("process.exit(1)")
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("source"))
+  })
+
+  test("clone --non-interactive branch defaults to feature destination name", async () => {
+    await runWorkspaceClone("source", { nonInteractive: true, name: "dest" })
+
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { branch: string }
+    expect(savedWs.branch).toBe("feature/dest")
+  })
+
+  test("clone --non-interactive uses explicit branch", async () => {
+    await runWorkspaceClone("source", { nonInteractive: true, name: "dest", branch: "ticket/99" })
+
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { branch: string }
+    expect(savedWs.branch).toBe("ticket/99")
+    expect(mockCreateWorktree).toHaveBeenCalledWith(
+      "/repos/frontend",
+      "/tmp/test-workspaces/tasks/dest/frontend",
+      "ticket/99",
+    )
+  })
+
+  test("clone --non-interactive opens only when --open is set", async () => {
+    await runWorkspaceClone("source", { nonInteractive: true, name: "closed" })
+    expect(mockOpenWorkspace).not.toHaveBeenCalled()
+
+    await runWorkspaceClone("source", { nonInteractive: true, name: "opened", open: true })
+    expect(mockOpenWorkspace).toHaveBeenCalledWith("opened", {}, expect.any(Function))
+  })
+
+  test("clone --non-interactive fails when destination already exists", async () => {
+    mockWorkspaceExists.mockImplementation((name: string) => name === "source" || name === "dest")
+
+    await expect(runWorkspaceClone("source", { nonInteractive: true, name: "dest" }))
+      .rejects.toThrow("process.exit(1)")
   })
 })
