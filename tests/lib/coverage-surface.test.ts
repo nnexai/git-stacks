@@ -40,4 +40,12 @@ describe("Phase 83 coverage command surface", () => {
     expect(runner).toContain("GS_COVERAGE_ROOT: RUNTIME_ROOT")
     expect(preload).toContain("afterAll(writeCoverageShard)")
   })
+
+  test("coverage runner filters merged shards to the instrumented source tree", () => {
+    const runner = readFileSync(join(root, "scripts", "coverage-runner.ts"), "utf8")
+
+    expect(runner).toContain("const allowedFiles = new Set(Object.keys(blankTemplates))")
+    expect(runner).toContain("if (allowedFiles.has(filePath))")
+    expect(runner).toContain("map.merge(filteredShard)")
+  })
 })

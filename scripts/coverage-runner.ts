@@ -259,14 +259,23 @@ function readShardData(): unknown[] {
 
 function mergeAndReport(): void {
   const map = libCoverage.createCoverageMap({})
-  for (const shard of readShardData()) {
-    map.merge(shard)
-  }
-
   const blankTemplates = JSON.parse(readFileSync(BLANK_TEMPLATES_PATH, "utf8")) as Record<
     string,
     unknown
   >
+  const allowedFiles = new Set(Object.keys(blankTemplates))
+
+  for (const shard of readShardData()) {
+    const shardMap = libCoverage.createCoverageMap(shard)
+    const filteredShard: Record<string, unknown> = {}
+    for (const filePath of shardMap.files()) {
+      if (allowedFiles.has(filePath)) {
+        filteredShard[filePath] = shardMap.fileCoverageFor(filePath).toJSON()
+      }
+    }
+    map.merge(filteredShard)
+  }
+
   for (const [filePath, template] of Object.entries(blankTemplates)) {
     if (!map.data[filePath]) {
       map.addFileCoverage(template)

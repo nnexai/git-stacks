@@ -26,7 +26,7 @@ export type CoverageArtifactProblem = {
 
 export type CoverageSentinelProblem = {
   path: string
-  problem: "missing" | "zero hits"
+  problem: "missing" | "zero hits" | "outside source tree"
 }
 
 export type VerifyGateReport = {
@@ -240,6 +240,11 @@ function collectCoverageSentinelProblems(root: string): CoverageSentinelProblem[
   if (!coverage) return []
 
   const problems: CoverageSentinelProblem[] = []
+  for (const path of Object.keys(coverage)) {
+    if (!path.startsWith("src/")) {
+      problems.push({ path, problem: "outside source tree" })
+    }
+  }
   for (const path of COVERAGE_SENTINELS) {
     const entry = coverage[path]
     if (!entry) {
@@ -248,7 +253,7 @@ function collectCoverageSentinelProblems(root: string): CoverageSentinelProblem[
       problems.push({ path, problem: "zero hits" })
     }
   }
-  return problems
+  return problems.sort((a, b) => a.path.localeCompare(b.path))
 }
 
 export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGateReport {

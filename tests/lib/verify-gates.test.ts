@@ -216,4 +216,31 @@ describe("verify gate collector", () => {
       { path: "src/tui/dashboard/ActionMenu.tsx", problem: "missing" },
     ])
   })
+
+  test("reports coverage entries outside the canonical source tree", () => {
+    const root = makeRoot()
+    writeCoverageArtifacts(root, {
+      "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts": coverageEntry(
+        "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts"
+      ),
+      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
+    })
+    writeTest(root, "tests/commands/new.test.ts")
+
+    const report = collectVerifyGateReport({
+      root,
+      liveCommands: ["new"],
+      inventory: [item()],
+    })
+
+    expect(report.ok).toBe(false)
+    expect(report.coverageSentinels).toEqual([
+      {
+        path: "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts",
+        problem: "outside source tree",
+      },
+    ])
+    expect(formatVerifyGateReport(report)).toContain("outside source tree")
+  })
 })
