@@ -126,8 +126,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Git repo registry entries",
     commands: ["repo add", "repo list", "repo show", "repo remove", "repo rename"],
     scopeStatus: "in-scope",
-    mappedTests: [],
-    rationale: "Git-backed registry behavior needs real repo fixtures and forge-prompt guard coverage in later phases.",
+    mappedTests: ["tests/commands/repo.test.ts"],
+    rationale: "Git-backed registry behavior is covered with real repo fixtures and enabled-forge guard coverage.",
   },
   {
     id: "repo.dir-registry",
@@ -136,8 +136,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Directory registry entries",
     commands: ["repo add", "repo list", "repo show", "repo remove", "repo rename"],
     scopeStatus: "in-scope",
-    mappedTests: [],
-    rationale: "Directory registry mode avoids git operations and needs separate E2E assertions from git-backed repos.",
+    mappedTests: ["tests/commands/repo.test.ts"],
+    rationale: "Directory registry mode is covered separately from git-backed repos in the repo subprocess suite.",
   },
   {
     id: "label.workspace-crud",

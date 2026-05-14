@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync, rmSync } from "fs"
+import { chmodSync, existsSync, mkdirSync, writeFileSync, rmSync } from "fs"
 import { join, dirname } from "path"
 import { execSync, type ExecSyncOptions } from "child_process"
 import { mock } from "bun:test"
@@ -234,6 +234,20 @@ export function write(base: string, rel: string, content: string) {
   const p = join(base, rel)
   mkdirSync(join(p, ".."), { recursive: true })
   writeFileSync(p, content)
+}
+
+export function writeExecutable(base: string, rel: string, content: string): string {
+  const p = join(base, rel)
+  mkdirSync(dirname(p), { recursive: true })
+  writeFileSync(p, content)
+  chmodSync(p, 0o755)
+  return p
+}
+
+export function childPathWithPrependedBin(binDir: string): Record<string, string> {
+  return {
+    PATH: `${binDir}:${process.env.PATH ?? ""}`,
+  }
 }
 
 /**
