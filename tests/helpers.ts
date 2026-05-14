@@ -250,6 +250,18 @@ export function childPathWithPrependedBin(binDir: string): Record<string, string
   }
 }
 
+export function fakeEditorPath(): string {
+  return join(import.meta.dir, "support", "fake-editor.ts")
+}
+
+export function fakeEditorEnv(capturePath: string, mode = "mutate-valid"): Record<string, string> {
+  return {
+    EDITOR: fakeEditorPath(),
+    FAKE_EDITOR_CAPTURE: capturePath,
+    FAKE_EDITOR_MODE: mode,
+  }
+}
+
 /**
  * Create a directory tree from a flat map of relative paths to contents.
  * Paths ending with "/" create directories. Others create files with the given content.
