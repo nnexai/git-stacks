@@ -18,10 +18,94 @@ import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
 import { runIntegrationGenerate } from "../lib/integrations/runner"
 import { openWorkspace } from "../lib/workspace-ops"
 
-export async function runWorkspaceClone(sourceArg?: string) {
+export async function runWorkspaceClone(
+  sourceArg?: string,
+  opts?: { nonInteractive?: boolean; name?: string; branch?: string; open?: boolean },
+) {
   p.intro("Clone workspace")
   const config = readGlobalConfig()
   const tasksDir = getTasksDir(config.workspace_root)
+
+  if (opts?.nonInteractive) {
+    const missing: string[] = []
+    if (!sourceArg?.trim()) missing.push("<workspace> (positional argument)")
+    if (!opts.name?.trim()) missing.push("--name <new-name>")
+    if (missing.length > 0) {
+      console.error(`[git-stacks] --non-interactive requires: ${missing.join(", ")}`)
+      process.exit(1)
+    }
+
+    const sourceName = sourceArg!.trim()
+    if (!workspaceExists(sourceName)) {
+      console.error(`[git-stacks] Workspace '${sourceName}' not found.`)
+      process.exit(1)
+    }
+
+    const newName = opts.name!.trim()
+    if (workspaceExists(newName)) {
+      console.error(`[git-stacks] Workspace '${newName}' already exists.`)
+      process.exit(1)
+    }
+    const newBranch = opts.branch?.trim() || `feature/${newName}`
+    const source = readWorkspace(sourceName)
+
+    const newRepos: WorkspaceRepo[] = source.repos.map((repo) => {
+      if (repo.mode === "worktree") {
+        return { ...repo, task_path: join(tasksDir, newName, repo.name) } as WorkspaceRepo
+      }
+      return repo
+    })
+
+    const worktreeRepos = newRepos.filter(isWorktreeRepo)
+    if (worktreeRepos.length > 0) {
+      const wsDir = join(tasksDir, newName)
+      if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
+      for (const repo of worktreeRepos) {
+        p.log.info(`Creating worktree for ${repo.name}`)
+        try {
+          await createWorktree(repo.main_path, repo.task_path, newBranch)
+        } catch (err) {
+          console.error(`[git-stacks] Failed to create worktree for ${repo.name}: ${err instanceof Error ? err.message : String(err)}`)
+          process.exit(1)
+        }
+      }
+
+      const trackingResults = await Promise.all(
+        worktreeRepos.map(repo => ensureUpstreamTracking(repo.main_path, newBranch))
+      )
+      const tracked = trackingResults.filter(r => r.tracked)
+      if (tracked.length > 0) {
+        p.log.info(`Upstream tracking set for ${tracked.length} repo(s)`)
+      }
+    }
+
+    const { cmux_workspace_id: _, ...restSource } = source
+    const newWorkspace = {
+      ...restSource,
+      name: newName,
+      branch: newBranch,
+      created: new Date().toISOString().split("T")[0],
+      repos: newRepos,
+      labels: source.labels,
+    }
+    writeWorkspace(newWorkspace)
+
+    const ctx: IntegrationContext = { workspace: newWorkspace, tasksDir, config }
+    const results = await runIntegrationGenerate(ctx)
+    for (const { integration, path } of results) {
+      if (path) p.log.success(`${integration.label}: ${path}`)
+    }
+
+    if (opts.open) {
+      const result = await openWorkspace(newName, {}, (msg) => p.log.info(msg))
+      if (!result.ok) {
+        p.log.warn(`Open failed: ${result.error}`)
+      }
+    }
+
+    p.outro(`Workspace '${newName}' ready.  Run \`git-stacks open ${newName}\` to re-open.`)
+    return
+  }
 
   const workspaces = listWorkspaces()
   if (workspaces.length === 0) {

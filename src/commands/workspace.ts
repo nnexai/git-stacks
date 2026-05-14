@@ -138,8 +138,13 @@ export function registerWorkspaceCommands(program: Command) {
   program
     .command("clone [workspace]")
     .description("Clone a workspace with a new name and branch")
-    .action(async (workspace?: string) => {
-      await runWorkspaceClone(workspace)
+    .option("--name <new-name>", "New workspace name (required in --non-interactive)")
+    .option("--branch <branch>", "Branch name (defaults to feature/<new-name>)")
+    .option("--non-interactive", "Skip all prompts; fail if required inputs are missing")
+    .option("--open", "Open workspace after cloning (non-interactive only)")
+    .action(async (workspace: string | undefined, opts: { name?: string; nonInteractive?: boolean; branch?: string; open?: boolean }) => {
+      if (opts.name) validateName(opts.name)
+      await runWorkspaceClone(workspace, opts)
     })
 
   program
