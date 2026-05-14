@@ -24,6 +24,11 @@ export type CoverageArtifactProblem = {
   problem: "missing" | "invalid JSON" | "empty"
 }
 
+export type CoverageSentinelProblem = {
+  path: string
+  problem: "missing" | "zero hits"
+}
+
 export type VerifyGateReport = {
   ok: boolean
   inventoryDrift: {
@@ -32,6 +37,7 @@ export type VerifyGateReport = {
   unmappedInScopeItems: string[]
   missingMappedTests: MissingMappedTest[]
   coverageArtifacts: CoverageArtifactProblem[]
+  coverageSentinels: CoverageSentinelProblem[]
 }
 
 type CollectOptions = {
@@ -44,6 +50,10 @@ const ROOT = join(import.meta.dir, "..")
 const JSON_COVERAGE_ARTIFACTS = [
   ".coverage/coverage-final.json",
   ".coverage/coverage-summary.json",
+] as const
+const COVERAGE_SENTINELS = [
+  "src/lib/messages.ts",
+  "src/tui/dashboard/ActionMenu.tsx",
 ] as const
 
 function buildProgram(): Command {
@@ -207,6 +217,40 @@ function collectCoverageArtifactProblems(root: string): CoverageArtifactProblem[
   return problems
 }
 
+function readCoverageFinal(root: string): Record<string, { s?: Record<string, number>; f?: Record<string, number> }> | null {
+  const fullPath = join(root, ".coverage/coverage-final.json")
+  if (!existsSync(fullPath)) return null
+  const content = readFileSync(fullPath, "utf8")
+  if (content.trim().length === 0) return null
+  try {
+    return JSON.parse(content)
+  } catch {
+    return null
+  }
+}
+
+function hasStatementOrFunctionHit(entry: { s?: Record<string, number>; f?: Record<string, number> }): boolean {
+  const statementHits = Object.values(entry.s ?? {}).reduce((sum, count) => sum + count, 0)
+  const functionHits = Object.values(entry.f ?? {}).reduce((sum, count) => sum + count, 0)
+  return statementHits > 0 || functionHits > 0
+}
+
+function collectCoverageSentinelProblems(root: string): CoverageSentinelProblem[] {
+  const coverage = readCoverageFinal(root)
+  if (!coverage) return []
+
+  const problems: CoverageSentinelProblem[] = []
+  for (const path of COVERAGE_SENTINELS) {
+    const entry = coverage[path]
+    if (!entry) {
+      problems.push({ path, problem: "missing" })
+    } else if (!hasStatementOrFunctionHit(entry)) {
+      problems.push({ path, problem: "zero hits" })
+    }
+  }
+  return problems
+}
+
 export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGateReport {
   const root = options.root ?? ROOT
   const inventory = options.inventory ?? E2E_INVENTORY
@@ -216,19 +260,22 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
   const unmappedInScopeItems = collectUnmappedInScopeItems(inventory)
   const missingMappedTests = collectMissingMappedTests(root, inventory)
   const coverageArtifacts = collectCoverageArtifactProblems(root)
+  const coverageSentinels = collectCoverageSentinelProblems(root)
 
   return {
     ok:
       missingFromInventory.length === 0 &&
       unmappedInScopeItems.length === 0 &&
       missingMappedTests.length === 0 &&
-      coverageArtifacts.length === 0,
+      coverageArtifacts.length === 0 &&
+      coverageSentinels.length === 0,
     inventoryDrift: {
       missingFromInventory,
     },
     unmappedInScopeItems,
     missingMappedTests,
     coverageArtifacts,
+    coverageSentinels,
   }
 }
 
@@ -264,6 +311,13 @@ export function formatVerifyGateReport(report: VerifyGateReport): string {
     lines.push("", "Coverage artifact problems:")
     for (const artifact of report.coverageArtifacts) {
       lines.push(`  - ${artifact.path}: ${artifact.problem}`)
+    }
+  }
+
+  if (report.coverageSentinels.length > 0) {
+    lines.push("", "Coverage sentinel problems:")
+    for (const sentinel of report.coverageSentinels) {
+      lines.push(`  - ${sentinel.path}: ${sentinel.problem}`)
     }
   }
 
