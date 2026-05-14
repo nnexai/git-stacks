@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: executing
-stopped_at: Completed 82.1-02-PLAN.md
-last_updated: "2026-05-14T18:26:19.100Z"
+status: verifying
+stopped_at: Completed 82.1-03-PLAN.md
+last_updated: "2026-05-14T18:36:14.379Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 35
-  completed_plans: 28
-  percent: 80
+  completed_plans: 29
+  percent: 83
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 
 Phase: 82.1 (Support Commands and Error-Path E2E Coverage) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-14
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -45,6 +45,7 @@ Progress: [████████░░] 80%
 | Phase 81.1.1 P01 | 5 min | 2 tasks | 5 files |
 | Phase 82.1 P01 | 7 min | 3 tasks | 4 files |
 | Phase 82.1 P02 | 6 min | 2 tasks | 2 files |
+| Phase 82.1 P03 | 16 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ Progress: [████████░░] 80%
 - [Phase 81.1.1]: 81.1.1 workspace opening remains opt-in through --open for new and clone non-interactive paths. — Prevents unintended side effects in subprocess E2E setup.
 - [Phase 82.1]: Readonly support completion checks assert shell-specific invariants instead of snapshots. — Avoids brittle completion goldens while proving the generated command tree includes support surfaces.
 - [Phase 82.1]: The fake editor records exact target paths and appends a YAML comment for valid mutations so schema validation remains authoritative. — Provides a deterministic external-editor subprocess proof without weakening YAML schema validation.
+- [Phase 82.1]: Failure coverage stays representative, not a cross-product matrix. — Plan 03 intentionally satisfied E2E-13 with one case per required failure class.
+- [Phase 82.1]: Manual editor UX remains excluded, while fake-editor --yaml subprocess contracts are in scope. — The inventory now separates automation-safe editor subprocess behavior from manual editor interaction.
+- [Phase 82.1]: Istanbul proof is isolated from full coverage tooling so Phase 83 can build on a verified handoff. — Plan 03 proves source instrumentation and mergeability without adding reports or suite-wide tooling.
 
 ### Roadmap Evolution
 
@@ -91,6 +95,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-14T18:26:19.093Z
-Stopped at: Completed 82.1-02-PLAN.md
+Last session: 2026-05-14T18:35:50.992Z
+Stopped at: Completed 82.1-03-PLAN.md
 Resume file: None

@@ -223,7 +223,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 80: E2E CLI Harness and Living Inventory** - Extend existing test helpers with isolated real-process CLI execution and maintain the in-scope inventory as tests are planned (completed 2026-05-14)
 - [x] **Phase 81: Workspace and Git Operation E2E Coverage** - Prove high-risk workspace behavior including branch start points, env/hooks, explicit cwd/path handling, run/open safety, merge, and pull/sync/push (completed 2026-05-14)
 - [x] **Phase 82: Template, Repo, Label, and Message E2E Coverage** - Add focused E2E coverage for template, registry, label, and message command families (completed 2026-05-14)
-- [ ] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios
+- [x] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios (completed 2026-05-14)
 - [ ] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files
 - [ ] **Phase 84: Local Coverage Gates, Docs, and Release Prep** - Add local inventory/test mapping gates and verify the expanded suite with existing quality commands
 
@@ -471,7 +471,7 @@ Plans:
 | 80. E2E CLI Harness and Living Inventory | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 4/4 | Complete    | 2026-05-14 |
 | 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
-| 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 2/3 | In Progress|  |
+| 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |
 
