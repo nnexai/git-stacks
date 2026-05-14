@@ -221,7 +221,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 **Milestone Goal:** Extend E2E tests for full coverage of non-TUI, non-integration functionality, prove high-risk workspace/git assumptions in real repos, and generate subprocess-aware code coverage reports despite the existing split test runner architecture.
 
 - [x] **Phase 80: E2E CLI Harness and Living Inventory** - Extend existing test helpers with isolated real-process CLI execution and maintain the in-scope inventory as tests are planned (completed 2026-05-14)
-- [ ] **Phase 81: Workspace and Git Operation E2E Coverage** - Prove high-risk workspace behavior including branch start points, env/hooks, explicit cwd/path handling, run/open safety, merge, and pull/sync/push
+- [x] **Phase 81: Workspace and Git Operation E2E Coverage** - Prove high-risk workspace behavior including branch start points, env/hooks, explicit cwd/path handling, run/open safety, merge, and pull/sync/push (completed 2026-05-14)
 - [ ] **Phase 82: Template, Repo, Label, and Message E2E Coverage** - Add focused E2E coverage for template, registry, label, and message command families
 - [ ] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios
 - [ ] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files
@@ -354,13 +354,13 @@ Plans:
   4. Workspace clean/remove/rename E2E tests prove filesystem and YAML side effects, missing/dirty repo behavior, and safe failure messages
   5. Workspace merge, pull, sync, and push E2E tests run against disposable local git repositories/remotes and prove guard behavior for dir repos, dirty repos, missing remotes, and branch/upstream assumptions
   6. Command-execution E2E tests prove run/hooks/git operations use explicit cwd/path handling and do not depend on shell `cd` state
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 81-01-PLAN.md — Shared E2E helpers + create/clone side-effect tests
 - [x] 81-02-PLAN.md — Execution context probes + JSON/text output contracts
 - [x] 81-03-PLAN.md — Lifecycle cascading + guard behavior tests
-- [ ] 81-04-PLAN.md — Git operations against bare remotes + status --fetch
+- [x] 81-04-PLAN.md — Git operations against bare remotes + status --fetch
 
 ### Phase 81.1: Repo add honors enabled forge integrations (INSERTED)
 
@@ -469,7 +469,7 @@ Plans:
 | 78. Operation Runner with Rollback | v0.17.0 | 3/3 | Complete    | 2026-04-06 |
 | 79. Release Prep | v0.17.0 | 1/1 | Complete | 2026-04-06 |
 | 80. E2E CLI Harness and Living Inventory | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
-| 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 3/4 | In Progress|  |
+| 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 4/4 | Complete   | 2026-05-14 |
 | 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
