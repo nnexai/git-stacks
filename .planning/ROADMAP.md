@@ -471,7 +471,7 @@ Plans:
 | 80. E2E CLI Harness and Living Inventory | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 4/4 | Complete    | 2026-05-14 |
 | 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
-| 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
+| 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 1/3 | In Progress|  |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |
 

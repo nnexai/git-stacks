@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: planning
-stopped_at: Completed 82-03-PLAN.md
-last_updated: "2026-05-14T18:12:51.964Z"
+status: executing
+stopped_at: Completed 82.1-01-PLAN.md
+last_updated: "2026-05-14T18:21:08.851Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
   completed_phases: 12
   total_plans: 35
-  completed_plans: 26
-  percent: 74
+  completed_plans: 27
+  percent: 77
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 82 — Template, Repo, Label, and Message E2E Coverage
+**Current focus:** Phase 82.1 — Support Commands and Error-Path E2E Coverage
 
 ## Current Position
 
-Phase: 82
-Plan: Complete
-Status: Phase 82 complete
+Phase: 82.1 (Support Commands and Error-Path E2E Coverage) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-05-14
 
-Progress: [███████░░░] 74%
+Progress: [████████░░] 77%
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Progress: [███████░░░] 74%
 | 81-84 plus splits | 0 | 18 | - |
 | 81 | 4 | - | - |
 | Phase 81.1.1 P01 | 5 min | 2 tasks | 5 files |
+| Phase 82.1 P01 | 7 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,8 @@ Progress: [███████░░░] 74%
 - [Phase 81.1.1]: 81.1.1 non-interactive new resolves template names and repeatable --template composition only; local-path --from remains interactive-only. — Keeps the urgent prerequisite narrow and avoids local-path automation scope creep.
 - [Phase 81.1.1]: 81.1.1 non-interactive clone preserves source workspace settings while skipping integration override prompts. — Matches the inherited/default cascade requirement without introducing a prompt in automation mode.
 - [Phase 81.1.1]: 81.1.1 workspace opening remains opt-in through --open for new and clone non-interactive paths. — Prevents unintended side effects in subprocess E2E setup.
+- [Phase 82.1]: Readonly support completion checks assert shell-specific invariants instead of snapshots. — Avoids brittle completion goldens while proving the generated command tree includes support surfaces.
+- [Phase 82.1]: The fake editor records exact target paths and appends a YAML comment for valid mutations so schema validation remains authoritative. — Provides a deterministic external-editor subprocess proof without weakening YAML schema validation.
 
 ### Roadmap Evolution
 
@@ -87,6 +90,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-14T18:12:51.964Z
-Stopped at: Completed 82-03-PLAN.md
+Last session: 2026-05-14T18:20:35.371Z
+Stopped at: Completed 82.1-01-PLAN.md
 Resume file: None
