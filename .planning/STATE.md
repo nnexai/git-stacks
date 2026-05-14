@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: planning
-stopped_at: Completed 81.1.1-01-PLAN.md
-last_updated: "2026-05-14T18:12:16.628Z"
+stopped_at: Completed 82-03-PLAN.md
+last_updated: "2026-05-14T18:12:51.964Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 ## Current Position
 
 Phase: 82
-Plan: Not started
-Status: Ready to plan (Phase 81.1.1 complete)
+Plan: Complete
+Status: Phase 82 complete
 Last activity: 2026-05-14
 
 Progress: [███████░░░] 74%
@@ -75,6 +75,7 @@ Progress: [███████░░░] 74%
 - Phase 81.1.1 completed on 2026-05-14: `new` and `clone` now expose prompt-free `--non-interactive` paths for template-backed create and workspace clone E2E setup.
 - Phase 81.1 completed on 2026-05-14: `repo add` now honors globally enabled forge integrations before detection and prompting.
 - Phase 80 completed on 2026-05-14: shared E2E CLI harness and canonical machine-parseable inventory are now available.
+- Phase 82 completed on 2026-05-14: template, repo, label, and message command families now have isolated real-CLI E2E coverage and inventory mappings.
 
 ### Pending Todos
 
@@ -86,6 +87,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-14T18:12:16.622Z
-Stopped at: Completed 81.1.1-01-PLAN.md
+Last session: 2026-05-14T18:12:51.964Z
+Stopped at: Completed 82-03-PLAN.md
 Resume file: None
