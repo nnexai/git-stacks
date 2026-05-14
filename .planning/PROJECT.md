@@ -271,6 +271,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - ✓ Dir repo CLI display — `status` shows [dir] label, `--fetch` skips dir repos, `list` handles dir-only workspaces — v0.15.0 Phase 67
 - ✓ Dir repo doctor health checks — `findInvalidDirRepos` validates directory existence and accessibility — v0.15.0 Phase 67
 - ✓ Dir repo TUI rendering — [dir] label in WorkspaceDetail, dir count in WorkspaceRow, missing-dir detection — v0.15.0 Phase 67
+- ✓ Workspace/git E2E coverage — real-process CLI tests now prove workspace create/clone fixtures, env/hooks, cwd/path handling, lifecycle guards, merge/pull/sync/push behavior against local bare remotes, and `status --fetch` ahead/behind refresh — v0.17.1 Phase 81
 
 ### Active
 
@@ -306,7 +307,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Shipped:** Phases 74-79 are complete. Template labels now cover template CRUD/filtering plus propagation into created/cloned workspaces (74); lifecycle/git `_exec` seams and structured `GS_DEBUG` logging landed with `GIT_STACKS_DEBUG=1` compatibility preserved (75); integration optional behavior moved to compile-time-only narrow interfaces and predicates with no revived capability-list release surface (76 + 78.1); template/workspace reads moved onto an indexed config cache (77); workspace creation now uses a shared operation runner with LIFO rollback across both CLI/TUI creation paths (78); and release-prep polished the package version, changelog, README, and closeout artifacts for shipping (79).
 
-**Status:** Milestone v0.17.1 is being planned to broaden E2E coverage for existing non-TUI, non-integration CLI behavior, prove high-risk workspace assumptions in real repos, and add subprocess-aware coverage reporting across split test runners.
+**Status:** Milestone v0.17.1 is in progress. Phase 80 established the shared E2E harness and inventory; Phase 81 completed workspace/git-operation E2E coverage for E2E-08 and E2E-14. Next up is Phase 81.1 planning.
 
 ## Next Milestone Goals
 - Extend E2E tests for full coverage of non-TUI, non-integration functionality, with workspace/git behavior split into its own focused wave
@@ -489,4 +490,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-04-10 after milestone v0.17.1 initialization*
+*Last updated: 2026-05-14 after Phase 81 completion*
