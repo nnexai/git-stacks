@@ -9,13 +9,13 @@ Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
 
 ### Coverage Inventory and Harness
 
-- [ ] **E2E-01**: Maintainer can inspect a living, machine-parseable inventory source of every non-TUI, non-integration command and library-backed user flow that must have E2E coverage.
-- [ ] **E2E-02**: Maintainer can see explicit exclusions for TUI behavior and external integration functionality so the milestone scope cannot drift.
-- [ ] **E2E-03**: Maintainer can compare the command inventory with the implemented E2E suite and identify any unmapped in-scope surface as tests are added.
-- [ ] **E2E-04**: Test author can run `git-stacks` as a real CLI process inside an isolated config home without touching the developer's real config.
-- [ ] **E2E-05**: Test author can create disposable git repo, template, workspace, and config fixtures for end-to-end scenarios by extending the existing `tests/helpers.ts` primitives.
-- [ ] **E2E-06**: Test author can assert exit code, stdout, stderr, generated files, and persisted YAML for each E2E command invocation.
-- [ ] **E2E-07**: Failed E2E assertions provide enough command, environment, stdout, and stderr context to debug the failing scenario quickly.
+- [x] **E2E-01**: Maintainer can inspect a living, machine-parseable inventory source of every non-TUI, non-integration command and library-backed user flow that must have E2E coverage.
+- [x] **E2E-02**: Maintainer can see explicit exclusions for TUI behavior and external integration functionality so the milestone scope cannot drift.
+- [x] **E2E-03**: Maintainer can compare the command inventory with the implemented E2E suite and identify any unmapped in-scope surface as tests are added.
+- [x] **E2E-04**: Test author can run `git-stacks` as a real CLI process inside an isolated config home without touching the developer's real config.
+- [x] **E2E-05**: Test author can create disposable git repo, template, workspace, and config fixtures for end-to-end scenarios by extending the existing `tests/helpers.ts` primitives.
+- [x] **E2E-06**: Test author can assert exit code, stdout, stderr, generated files, and persisted YAML for each E2E command invocation.
+- [x] **E2E-07**: Failed E2E assertions provide enough command, environment, stdout, and stderr context to debug the failing scenario quickly.
 
 ### CLI E2E Coverage
 
@@ -75,13 +75,13 @@ Which phases cover which requirements. Updated during roadmap refinement.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| E2E-01 | Phase 80 | Pending |
-| E2E-02 | Phase 80 | Pending |
-| E2E-03 | Phase 80 | Pending |
-| E2E-04 | Phase 80 | Pending |
-| E2E-05 | Phase 80 | Pending |
-| E2E-06 | Phase 80 | Pending |
-| E2E-07 | Phase 80 | Pending |
+| E2E-01 | Phase 80 | Complete |
+| E2E-02 | Phase 80 | Complete |
+| E2E-03 | Phase 80 | Complete |
+| E2E-04 | Phase 80 | Complete |
+| E2E-05 | Phase 80 | Complete |
+| E2E-06 | Phase 80 | Complete |
+| E2E-07 | Phase 80 | Complete |
 | E2E-08 | Phase 81 | Pending |
 | E2E-14 | Phase 81 | Pending |
 | E2E-09 | Phase 82 | Pending |

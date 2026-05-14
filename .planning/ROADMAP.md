@@ -220,7 +220,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 
 **Milestone Goal:** Extend E2E tests for full coverage of non-TUI, non-integration functionality, prove high-risk workspace/git assumptions in real repos, and generate subprocess-aware code coverage reports despite the existing split test runner architecture.
 
-- [ ] **Phase 80: E2E CLI Harness and Living Inventory** - Extend existing test helpers with isolated real-process CLI execution and maintain the in-scope inventory as tests are planned
+- [x] **Phase 80: E2E CLI Harness and Living Inventory** - Extend existing test helpers with isolated real-process CLI execution and maintain the in-scope inventory as tests are planned (completed 2026-05-14)
 - [ ] **Phase 81: Workspace and Git Operation E2E Coverage** - Prove high-risk workspace behavior including branch start points, env/hooks, explicit cwd/path handling, run/open safety, merge, and pull/sync/push
 - [ ] **Phase 82: Template, Repo, Label, and Message E2E Coverage** - Add focused E2E coverage for template, registry, label, and message command families
 - [ ] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios
@@ -468,7 +468,7 @@ Plans:
 | 77. Indexed Config Store | v0.17.0 | 2/2 | Complete    | 2026-04-06 |
 | 78. Operation Runner with Rollback | v0.17.0 | 3/3 | Complete    | 2026-04-06 |
 | 79. Release Prep | v0.17.0 | 1/1 | Complete | 2026-04-06 |
-| 80. E2E CLI Harness and Living Inventory | v0.17.1 | 0/TBD | Not started | - |
+| 80. E2E CLI Harness and Living Inventory | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
 | 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 0/TBD | Not started | - |

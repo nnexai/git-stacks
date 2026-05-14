@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: executing
-stopped_at: Phase 84 context gathered
-last_updated: "2026-04-11T12:47:34.623Z"
-last_activity: 2026-04-11 -- Phase 83 planning complete
+stopped_at: Completed 80-02-PLAN.md
+last_updated: "2026-05-14T17:11:15.652Z"
+last_activity: 2026-05-14 -- Phase 80 execution complete
 progress:
-  total_phases: 16
-  completed_phases: 7
+  total_phases: 17
+  completed_phases: 8
   total_plans: 35
-  completed_plans: 15
-  percent: 43
+  completed_plans: 17
+  percent: 49
 ---
 
 # Project State
@@ -21,24 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** v0.17.1 E2E Test Coverage — start with Phase 80 E2E harness and machine-parseable inventory.
+**Current focus:** v0.17.1 E2E Test Coverage — continue with Phase 81 workspace and git-operation E2E coverage on top of the Phase 80 harness and inventory.
 
 ## Current Position
 
-Phase: 80 of 84 (E2E CLI Harness and Living Inventory)
-Plan: Not planned yet
+Phase: 81 of 84 (Workspace and Git Operation E2E Coverage)
+Plan: 0 of 4 complete
 Status: Ready to execute
-Last activity: 2026-04-11 -- Phase 83 planning complete
+Last activity: 2026-05-14 -- Phase 80 execution complete
 
-Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
+Progress: [█████░░░░░] 49%
 
 ## Performance Metrics
 
-**Velocity:** New milestone; no v0.17.1 plans completed yet.
+**Velocity:** Phase 80 completed 2 plans in the current execution session.
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 80-84 plus 82.1 | TBD | - | - |
+| 80 | 2 | 2 | ~40 min |
+| 81-84 plus splits | 0 | 18 | - |
 
 ## Accumulated Context
 
@@ -64,6 +65,7 @@ Progress: [░░░░░░░░░░] 0% (0/6 phases complete)
 
 - Phase 81.1 inserted after Phase 81: Repo add honors enabled forge integrations (URGENT)
 - Phase 81.1.1 inserted after Phase 81.1: Minimal non-interactive workspace create and clone variants (URGENT)
+- Phase 80 completed on 2026-05-14: shared E2E CLI harness and canonical machine-parseable inventory are now available.
 
 ### Pending Todos
 
@@ -75,6 +77,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-11T12:12:12.242Z
-Stopped at: Phase 84 context gathered
-Resume file: .planning/phases/84-local-coverage-gates-docs-and-release-prep/84-CONTEXT.md
+Last session: 2026-05-14T17:11:15.087Z
+Stopped at: Completed 80-02-PLAN.md
+Resume file: None
