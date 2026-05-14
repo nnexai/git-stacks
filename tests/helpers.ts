@@ -252,6 +252,131 @@ export function makeFileTree(base: string, entries: Record<string, string>) {
   }
 }
 
+export function makeBareRemote(baseDir: string, name = "origin"): string {
+  const originDir = join(baseDir, `${name}-bare`)
+  mkdirSync(originDir, { recursive: true })
+  execSync("git init --bare -b main", gitExecOptions(originDir, baseDir))
+  return originDir
+}
+
+export function makeRepoWithRemote(
+  baseDir: string,
+  repoName: string,
+  wsBranch: string
+): { originDir: string; mainPath: string; taskPath: string } {
+  const originDir = makeBareRemote(baseDir, `${repoName}-origin`)
+  const mainPath = join(baseDir, `main-${repoName}`)
+  const taskPath = join(baseDir, `task-${repoName}`)
+
+  execSync(`git clone ${originDir} ${mainPath}`, gitExecOptions(baseDir, baseDir))
+  const opts = gitExecOptions(mainPath, baseDir)
+  execSync('git config user.email "test@example.com"', opts)
+  execSync('git config user.name "Test User"', opts)
+  execSync("git config commit.gpgsign false", opts)
+  writeFileSync(join(mainPath, "README.md"), "init\n")
+  execSync("git add .", opts)
+  execSync('git commit -m "init"', opts)
+  execSync("git push origin main", opts)
+
+  execSync(`git worktree add ${taskPath} -b ${wsBranch}`, opts)
+  const taskOpts = gitExecOptions(taskPath, baseDir)
+  execSync('git config user.email "test@example.com"', taskOpts)
+  execSync('git config user.name "Test User"', taskOpts)
+  execSync("git config commit.gpgsign false", taskOpts)
+
+  return { originDir, mainPath, taskPath }
+}
+
+export function makeWorkspaceFixture(
+  cfgDir: string,
+  wsName: string,
+  repos: Array<{
+    name: string
+    repo?: string
+    mode?: "worktree" | "trunk" | "dir"
+    mainPath: string
+    taskPath?: string
+    baseBranch?: string
+    type?: string
+  }>,
+  opts: {
+    wsRoot?: string
+    branch?: string
+    template?: string
+    env?: Record<string, string>
+    hooks?: Record<string, string[]>
+    envFile?: string
+  } = {}
+): string {
+  mkdirSync(join(cfgDir, "workspaces"), { recursive: true })
+  mkdirSync(join(cfgDir, "templates"), { recursive: true })
+
+  const wsRoot = opts.wsRoot ?? join(cfgDir, "..", "workspaces")
+  if (!existsSync(join(cfgDir, "config.yml"))) {
+    writeFileSync(join(cfgDir, "config.yml"), `workspace_root: ${wsRoot}\n`)
+  }
+  if (!existsSync(join(cfgDir, "registry.yml"))) {
+    writeFileSync(join(cfgDir, "registry.yml"), "[]\n")
+  }
+
+  const repoLines = repos.map((repo) => {
+    const lines = [
+      `  - name: ${repo.name}`,
+      `    repo: ${repo.repo ?? repo.name}`,
+      `    type: ${repo.type ?? "other"}`,
+      `    mode: ${repo.mode ?? "worktree"}`,
+      `    main_path: ${repo.mainPath}`,
+      `    base_branch: ${repo.baseBranch ?? "main"}`,
+    ]
+    if (repo.taskPath !== undefined) {
+      lines.push(`    task_path: ${repo.taskPath}`)
+    }
+    return lines.join("\n")
+  }).join("\n")
+
+  let yaml = `schema_version: "1"\nname: ${wsName}\nbranch: ${opts.branch ?? `feat/${wsName}`}\ncreated: "2024-01-01"\n`
+  if (opts.template) yaml += `template: ${opts.template}\n`
+  if (opts.env) {
+    yaml += "env:\n"
+    for (const [key, value] of Object.entries(opts.env)) {
+      yaml += `  ${key}: ${value}\n`
+    }
+  }
+  if (opts.envFile) yaml += `env_file: ${opts.envFile}\n`
+  if (opts.hooks) {
+    yaml += "hooks:\n"
+    for (const [hook, commands] of Object.entries(opts.hooks)) {
+      yaml += `  ${hook}:\n`
+      for (const command of commands) yaml += `    - "${command}"\n`
+    }
+  }
+  yaml += `repos:\n${repoLines}\n`
+
+  writeFileSync(join(cfgDir, "workspaces", `${wsName}.yml`), yaml)
+  return cfgDir
+}
+
+export function makeProbeHook(artifactPath: string, envVars: string[]): string {
+  const lines = [
+    "#!/bin/sh",
+    `echo "PROBE_PWD=$(pwd)" >> "${artifactPath}"`,
+    ...envVars.map((name) => `echo "${name}=\${${name}}" >> "${artifactPath}"`),
+  ]
+  return lines.join("\n")
+}
+
+export function writeProbeScript(
+  dir: string,
+  name: string,
+  artifactPath: string,
+  envVars: string[]
+): string {
+  const scriptPath = join(dir, name)
+  writeFileSync(scriptPath, makeProbeHook(artifactPath, envVars))
+  execSync(`chmod +x "${scriptPath}"`)
+  return scriptPath
+}
+
 export function makeGitRepo(base: string, name = "repo"): string {
   const repoPath = join(base, name)
   mkdirSync(repoPath, { recursive: true })
