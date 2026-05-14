@@ -4,7 +4,7 @@ milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: planning
 stopped_at: Completed 80-02-PLAN.md
-last_updated: "2026-05-14T17:39:26.445Z"
+last_updated: "2026-05-14T17:44:47.057Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
@@ -74,7 +74,7 @@ None.
 
 ### Blockers/Concerns
 
-None.
+- Phase 82 execution blocked at 82-01 Task 1 prerequisite preflight: src/commands/workspace.ts does not expose --non-interactive, so Phase 81.1.1 prerequisite is absent. Per 82-01-PLAN.md, template Phase 82 file changes were not created.
 
 ## Session Continuity
 
