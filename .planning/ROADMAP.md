@@ -383,10 +383,10 @@ Plans:
 **Goal:** Add `--non-interactive` mode to `git-stacks new` and `git-stacks clone` so later E2E phases can create template-backed workspaces and clone existing workspaces without driving TUI prompts
 **Requirements**: D-01, D-02, D-03, D-04, D-05, D-06, D-07, D-08, D-09, D-10, D-11
 **Depends on:** Phase 81.1
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 81.1.1-01-PLAN.md — Non-interactive new and clone: Commander flags, TUI guards, unit tests
+- [x] 81.1.1-01-PLAN.md — Non-interactive new and clone: Commander flags, TUI guards, unit tests
 
 ### Phase 82: Template, Repo, Label, and Message E2E Coverage
 **Goal**: Users can trust non-workspace command families because template, registry, label, and message behavior is covered through real CLI processes

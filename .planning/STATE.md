@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: planning
-stopped_at: Completed 81.1-01-PLAN.md
-last_updated: "2026-05-14T17:50:07.183Z"
+stopped_at: Completed 81.1.1-01-PLAN.md
+last_updated: "2026-05-14T18:00:06.276Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 35
-  completed_plans: 22
-  percent: 63
+  completed_plans: 23
+  percent: 66
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 81 — Workspace and Git Operation E2E Coverage
+**Current focus:** Phase 82 — Template, Repo, Label, and Message E2E Coverage
 
 ## Current Position
 
-Phase: 81.1.1
+Phase: 82
 Plan: Not started
-Status: Ready to plan (Phase 81.1 complete)
+Status: Ready to plan (Phase 81.1.1 complete)
 Last activity: 2026-05-14
 
-Progress: [██████░░░░] 63%
+Progress: [███████░░░] 66%
 
 ## Performance Metrics
 
@@ -42,6 +42,7 @@ Progress: [██████░░░░] 63%
 | 81.1 | 1 | 1 | ~5 min |
 | 81-84 plus splits | 0 | 18 | - |
 | 81 | 4 | - | - |
+| Phase 81.1.1 P01 | 5 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -63,11 +64,15 @@ Progress: [██████░░░░] 63%
 - Wizard-driven commands (new, clone, config wizard, repo scan, template new, template edit, install prompts) are excluded from E2E scope; tested indirectly via pre-built fixtures where applicable.
 - `cd`, `edit --yaml`, `integration list`, and `integration <id> config show/example` were missing from phase success criteria and have been added.
 - **Coverage spike findings (2026-04-10):** (1) Bun ignores `NODE_V8_COVERAGE` — no V8 coverage JSON produced from Bun subprocesses. (2) `bun test --coverage` works for in-process imports only; subprocess code is invisible. (3) `c8 --all` sees the source tree but reports 0% because Bun subprocesses don't emit V8 artifacts. (4) Istanbul source instrumentation (`istanbul-lib-instrument` with `parserPlugins: ["typescript"]`) works end-to-end under Bun: instrument TS → run instrumented code in subprocess → collect `globalThis.__coverage__` → get per-function/statement/branch hit counts. (5) Phase 83 approach confirmed: Istanbul source instrumentation + `__coverage__` collection + artifact merge. Phase 82.1 SC 6 requires a minimal proof-of-concept before Phase 83 planning begins.
+- [Phase 81.1.1]: 81.1.1 non-interactive new resolves template names and repeatable --template composition only; local-path --from remains interactive-only. — Keeps the urgent prerequisite narrow and avoids local-path automation scope creep.
+- [Phase 81.1.1]: 81.1.1 non-interactive clone preserves source workspace settings while skipping integration override prompts. — Matches the inherited/default cascade requirement without introducing a prompt in automation mode.
+- [Phase 81.1.1]: 81.1.1 workspace opening remains opt-in through --open for new and clone non-interactive paths. — Prevents unintended side effects in subprocess E2E setup.
 
 ### Roadmap Evolution
 
 - Phase 81.1 inserted after Phase 81: Repo add honors enabled forge integrations (URGENT)
 - Phase 81.1.1 inserted after Phase 81.1: Minimal non-interactive workspace create and clone variants (URGENT)
+- Phase 81.1.1 completed on 2026-05-14: `new` and `clone` now expose prompt-free `--non-interactive` paths for template-backed create and workspace clone E2E setup.
 - Phase 81.1 completed on 2026-05-14: `repo add` now honors globally enabled forge integrations before detection and prompting.
 - Phase 80 completed on 2026-05-14: shared E2E CLI harness and canonical machine-parseable inventory are now available.
 
@@ -77,10 +82,10 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 82 execution blocked at 82-01 Task 1 prerequisite preflight: src/commands/workspace.ts does not expose --non-interactive, so Phase 81.1.1 prerequisite is absent. Per 82-01-PLAN.md, template Phase 82 file changes were not created.
+None.
 
 ## Session Continuity
 
-Last session: 2026-05-14T17:50:07.176Z
-Stopped at: Completed 81.1-01-PLAN.md
+Last session: 2026-05-14T17:59:25.590Z
+Stopped at: Completed 81.1.1-01-PLAN.md
 Resume file: None
