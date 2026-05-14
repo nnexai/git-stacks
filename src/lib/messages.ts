@@ -66,6 +66,8 @@ export async function clearMessages(workspace: string, fromSender?: string): Pro
 }
 
 export async function pushToSocket(record: MessageRecord): Promise<void> {
+  if (process.env.GIT_STACKS_DISABLE_MESSAGE_SOCKET === "1") return
+
   try {
     await Promise.race([
       new Promise<void>((resolve) => {
