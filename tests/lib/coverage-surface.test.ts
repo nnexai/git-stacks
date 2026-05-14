@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "fs"
 import { join } from "path"
+import { parseArgs } from "../../scripts/coverage-runner"
 
 const root = join(import.meta.dir, "..", "..")
 
@@ -47,5 +48,25 @@ describe("Phase 83 coverage command surface", () => {
     expect(runner).toContain("const allowedFiles = new Set(Object.keys(blankTemplates))")
     expect(runner).toContain("if (allowedFiles.has(filePath))")
     expect(runner).toContain("map.merge(filteredShard)")
+  })
+
+  test("coverage runner keeps default modes when positional filters are supplied", () => {
+    expect(parseArgs(["tests/lib/messages.test.ts"])).toMatchObject({
+      runUnitMode: true,
+      runIntegMode: true,
+      filters: ["tests/lib/messages.test.ts"],
+    })
+
+    expect(parseArgs(["--unit", "tests/lib/messages.test.ts"])).toMatchObject({
+      runUnitMode: true,
+      runIntegMode: false,
+      filters: ["tests/lib/messages.test.ts"],
+    })
+
+    expect(parseArgs(["--integ", "tests/commands/message.test.ts"])).toMatchObject({
+      runUnitMode: false,
+      runIntegMode: true,
+      filters: ["tests/commands/message.test.ts"],
+    })
   })
 })

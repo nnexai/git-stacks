@@ -85,9 +85,10 @@ function classifyFiles(): { unit: string[]; integ: string[] } {
   return { unit, integ }
 }
 
-function parseArgs(args: string[]): CoverageOptions {
-  const runUnitMode = args.includes("--unit") || args.length === 0
-  const runIntegMode = args.includes("--integ") || args.length === 0
+export function parseArgs(args: string[]): CoverageOptions {
+  const modeSpecified = args.includes("--unit") || args.includes("--integ")
+  const runUnitMode = args.includes("--unit") || !modeSpecified
+  const runIntegMode = args.includes("--integ") || !modeSpecified
   const timeoutArg = args.find((arg) => arg.startsWith("--timeout-ms="))
   const timeoutMs = timeoutArg ? Number(timeoutArg.split("=")[1]) : 60_000
   const filters = args.filter((arg) => !arg.startsWith("--"))
@@ -351,7 +352,9 @@ async function main() {
   process.exit(allPassed ? 0 : 1)
 }
 
-main().catch((err) => {
-  console.error("Coverage runner error:", err)
-  process.exit(1)
-})
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error("Coverage runner error:", err)
+    process.exit(1)
+  })
+}
