@@ -17,7 +17,7 @@
 - ✅ **v0.15.0 Dir Mode & Polish** — Phases 64-68 (shipped 2026-04-05) — Dir repo type, registry CLI, lifecycle guards, git operation guards, CLI/TUI display. See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md)
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
-- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84 with 82.x splits (in progress) — E2E CLI harness plus machine-parseable inventory, workspace/git behavior coverage, command-surface expansion, subprocess-aware coverage reports, local gates and release prep.
+- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84.1 with 82.x/84.x splits (in progress) — E2E CLI harness plus machine-parseable inventory, workspace/git behavior coverage, command-surface expansion, subprocess-aware coverage reports, local gates, release prep, and coverage report accuracy follow-up.
 
 ## Phases
 
@@ -226,6 +226,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios (completed 2026-05-14)
 - [ ] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files
 - [x] **Phase 84: Local Coverage Gates, Docs, and Release Prep** - Add local inventory/test mapping gates and verify the expanded suite with existing quality commands (completed 2026-05-14)
+- [ ] **Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up** - Fix coverage report undercounting so existing TUI/source test execution is instrumented and guarded before release closeout
 
 ## Phase Details
 
@@ -458,6 +459,16 @@ Plans:
 - [x] `84-02-PLAN.md` — Add local `bun run verify` orchestration plus aggregated inventory, mapping, and coverage gates
 - [x] `84-03-PLAN.md` — Apply focused README, CHANGELOG, and version release-prep updates for verify and debug docs
 
+### Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up (INSERTED)
+
+**Goal:** Coverage reports are trustworthy enough to close v0.17.1: existing tests that import source through relative paths, especially TUI/TSX tests, are captured by the Istanbul instrumentation path instead of appearing as near-zero coverage.
+**Requirements**: TBD
+**Depends on:** Phase 84
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-discuss-phase 84.1, then /gsd-plan-phase 84.1 to break down)
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -474,6 +485,7 @@ Plans:
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 3/3 | Complete    | 2026-05-14 |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
+| 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 0/TBD | Not started | - |
 
 ## Backlog
 

@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: phase_complete
-stopped_at: Completed 84-03-PLAN.md
-last_updated: "2026-05-14T19:55:11.778Z"
+status: ready_to_discuss
+stopped_at: Inserted Phase 84.1 coverage report accuracy follow-up
+last_updated: "2026-05-14T20:00:25.356Z"
 last_activity: 2026-05-14
 progress:
-  total_phases: 17
+  total_phases: 18
   completed_phases: 14
   total_plans: 35
   completed_plans: 32
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 84 — Local Coverage Gates, Docs, and Release Prep
+**Current focus:** Phase 84.1 — Coverage Report Accuracy and TUI Instrumentation Follow-up
 
 ## Current Position
 
-Phase: 84
-Plan: complete
-Status: Phase 84 complete
+Phase: 84.1
+Plan: Not started
+Status: Ready to discuss
 Last activity: 2026-05-14
 
 Progress: [█████████░] 91%
@@ -79,6 +79,7 @@ Progress: [█████████░] 91%
 - [Phase 82.1]: Istanbul proof is isolated from full coverage tooling so Phase 83 can build on a verified handoff. — Plan 03 proves source instrumentation and mergeability without adding reports or suite-wide tooling.
 - [Phase 84]: `bun run verify` is the stable local release-prep gate, with `verify:prereqs` and `verify:gates` available for step-level debugging.
 - [Phase 84]: Coverage gates validate artifact existence and parseability only; no CI workflow or numeric coverage threshold was introduced.
+- [Phase 84.1]: Coverage report accuracy is a milestone gate; coverage reports that undercount existing TUI/source test execution must be fixed before closing v0.17.1.
 
 ### Roadmap Evolution
 
@@ -90,6 +91,7 @@ Progress: [█████████░] 91%
 - Phase 82 completed on 2026-05-14: template, repo, label, and message command families now have isolated real-CLI E2E coverage and inventory mappings.
 - Phase 83 coverage surface remediated on 2026-05-14: `coverage`, `coverage:unit`, and `coverage:integ` scripts now generate stable `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html` artifacts for Phase 84 gates.
 - Phase 84 completed on 2026-05-14: local `bun run verify` orchestration now checks prerequisite surfaces, refreshes coverage, aggregates inventory/mapping/coverage gate findings, runs existing quality commands, and documents the v0.17.1 release-prep path.
+- Phase 84.1 inserted after Phase 84: Coverage Report Accuracy and TUI Instrumentation Follow-up (URGENT)
 
 ### Pending Todos
 
@@ -97,10 +99,10 @@ None.
 
 ### Blockers/Concerns
 
-None active. Phase 84 completed after the Phase 83 coverage command surface was restored and `bun run verify` passed.
+Phase 84 completed, but post-run coverage report review found likely instrumentation undercounting for TUI/source files imported through relative `tests/** -> src/**` paths. Phase 84.1 is inserted to make the coverage report trustworthy before v0.17.1 closes.
 
 ## Session Continuity
 
-Last session: 2026-05-14T19:55:11.769Z
-Stopped at: Completed 84-03-PLAN.md
+Last session: 2026-05-14T20:00:25.356Z
+Stopped at: Inserted Phase 84.1 coverage report accuracy follow-up; next recommended run is `$gsd-discuss-phase 84.1`
 Resume file: None
