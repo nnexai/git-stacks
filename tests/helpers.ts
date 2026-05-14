@@ -146,14 +146,15 @@ function buildEnvPreview(env: NodeJS.ProcessEnv, extras: readonly string[]): Rec
 }
 
 export function runCli(argv: string[], opts: RunCliOptions): RunCliResult {
-  const cwd = opts.cwd ?? join(import.meta.dir, "..")
+  const projectRoot = join(import.meta.dir, "..")
+  const cwd = opts.cwd ?? projectRoot
   const env = {
     ...getTestGitEnv(opts.baseDir),
     GIT_STACKS_CONFIG_DIR: opts.configDir ?? join(opts.baseDir, "config"),
     ...opts.env,
   }
 
-  const result = Bun.spawnSync(["bun", "run", "src/index.ts", ...argv], {
+  const result = Bun.spawnSync(["bun", "run", join(projectRoot, "src/index.ts"), ...argv], {
     cwd,
     env,
     stdio: ["pipe", "pipe", "pipe"],
@@ -298,6 +299,7 @@ export function makeWorkspaceFixture(
     taskPath?: string
     baseBranch?: string
     type?: string
+    hooks?: Record<string, string[]>
   }>,
   opts: {
     wsRoot?: string
@@ -330,6 +332,13 @@ export function makeWorkspaceFixture(
     ]
     if (repo.taskPath !== undefined) {
       lines.push(`    task_path: ${repo.taskPath}`)
+    }
+    if (repo.hooks) {
+      lines.push("    hooks:")
+      for (const [hook, commands] of Object.entries(repo.hooks)) {
+        lines.push(`      ${hook}:`)
+        for (const command of commands) lines.push(`        - "${command}"`)
+      }
     }
     return lines.join("\n")
   }).join("\n")
