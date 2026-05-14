@@ -367,7 +367,7 @@ Plans:
 **Goal:** Make `repo add` honor globally enabled forge integrations so forge detection and prompts only consider forges the user has explicitly enabled, eliminating incorrect prompting when all forges are disabled (the default)
 **Requirements**: D-01, D-02, D-03, D-04 (from 81.1-CONTEXT.md)
 **Depends on:** Phase 81
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 **Success Criteria** (what must be TRUE):
   1. `repo add` only runs forge detectors for globally enabled forge integrations (D-01)
   2. Disabled forges are invisible to both auto-detection and prompt options (D-02)
@@ -376,7 +376,7 @@ Plans:
   5. All tests pass including new forge-utils and repo-add coverage
 
 Plans:
-- [ ] 81.1-01-PLAN.md — Enabled-aware forge detection + repo add behavioral fix + tests
+- [x] 81.1-01-PLAN.md — Enabled-aware forge detection + repo add behavioral fix + tests
 
 ### Phase 81.1.1: Minimal non-interactive workspace create and clone variants (INSERTED)
 

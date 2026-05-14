@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
 status: planning
-stopped_at: Completed 80-02-PLAN.md
-last_updated: "2026-05-14T17:44:47.057Z"
+stopped_at: Completed 81.1-01-PLAN.md
+last_updated: "2026-05-14T17:50:07.183Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 35
-  completed_plans: 21
-  percent: 60
+  completed_plans: 22
+  percent: 63
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 
 ## Current Position
 
-Phase: 81.1
+Phase: 81.1.1
 Plan: Not started
-Status: Ready to plan
+Status: Ready to plan (Phase 81.1 complete)
 Last activity: 2026-05-14
 
-Progress: [██████░░░░] 60%
+Progress: [██████░░░░] 63%
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Progress: [██████░░░░] 60%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 80 | 2 | 2 | ~40 min |
+| 81.1 | 1 | 1 | ~5 min |
 | 81-84 plus splits | 0 | 18 | - |
 | 81 | 4 | - | - |
 
@@ -57,6 +58,7 @@ Progress: [██████░░░░] 60%
 - The Phase 80 inventory must have a machine-parseable source of truth so Phase 84 local gates can detect unmapped commands and missing test mappings.
 - Phase 80 no longer requires a separate human-readable inventory surface; the canonical artifact is the machine-parseable source itself.
 - The milestone's core testing intent is to falsify assumptions around env injection, hooks, cwd/path selection, branch starting points, merge/pull/sync/push behavior, and command execution that uses explicit cwd/path handling instead of shell `cd` state.
+- Phase 81.1 repo add forge eligibility uses global integration config only; zero enabled forge matches register with forge unset and no prompt; ambiguous prompts include only enabled matching forges plus None.
 - Backlog 999.2 (README debug format) promoted into Phase 84 SC 6; 999.1 and 999.3 remain backlog.
 - Wizard-driven commands (new, clone, config wizard, repo scan, template new, template edit, install prompts) are excluded from E2E scope; tested indirectly via pre-built fixtures where applicable.
 - `cd`, `edit --yaml`, `integration list`, and `integration <id> config show/example` were missing from phase success criteria and have been added.
@@ -66,6 +68,7 @@ Progress: [██████░░░░] 60%
 
 - Phase 81.1 inserted after Phase 81: Repo add honors enabled forge integrations (URGENT)
 - Phase 81.1.1 inserted after Phase 81.1: Minimal non-interactive workspace create and clone variants (URGENT)
+- Phase 81.1 completed on 2026-05-14: `repo add` now honors globally enabled forge integrations before detection and prompting.
 - Phase 80 completed on 2026-05-14: shared E2E CLI harness and canonical machine-parseable inventory are now available.
 
 ### Pending Todos
@@ -78,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-14T17:11:15.087Z
-Stopped at: Completed 80-02-PLAN.md
+Last session: 2026-05-14T17:50:07.176Z
+Stopped at: Completed 81.1-01-PLAN.md
 Resume file: None
