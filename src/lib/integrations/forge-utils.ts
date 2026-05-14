@@ -10,6 +10,8 @@ import {
   type Workspace,
   type ForgeType,
 } from "../config"
+import type { GlobalConfig } from "../config"
+import { resolveEnabledGlobally } from "./types"
 
 // --- Types ---
 
@@ -27,6 +29,17 @@ export type ForgeRepoResolutionError =
   | { ok: false; error: "repo_not_found"; name: string }
   | { ok: false; error: "not_worktree_mode"; repo: string }
   | { ok: false; error: "forge_not_configured"; repo: string; expected: string; actual: ForgeType }
+
+/**
+ * Forge ID -> enabledByDefault pairs.
+ * Hardcoded to avoid circular import through index.ts.
+ * All three forge integrations have enabledByDefault: false.
+ */
+const FORGE_DEFAULTS: Array<{ id: NonNullable<ForgeType>; enabledByDefault: boolean }> = [
+  { id: "github", enabledByDefault: false },
+  { id: "gitlab", enabledByDefault: false },
+  { id: "gitea", enabledByDefault: false },
+]
 
 // --- Resolution ---
 
@@ -198,6 +211,25 @@ export async function detectForgeForRepo(repoPath: string): Promise<NonNullable<
   if (await detectGitHubForge(repoPath)) results.push("github")
   if (await detectGitLabForge(repoPath)) results.push("gitlab")
   if (await detectGiteaForge(repoPath)) results.push("gitea")
+  return results
+}
+
+/**
+ * Run forge detection only for globally enabled forges.
+ * detectForgeForRepoEnabled is the repo-add allowlist-aware detection entrypoint.
+ * Returns matched forge IDs - only for forges the user has explicitly enabled.
+ */
+export async function detectForgeForRepoEnabled(
+  repoPath: string,
+  config: GlobalConfig
+): Promise<NonNullable<ForgeType>[]> {
+  const results: NonNullable<ForgeType>[] = []
+  for (const { id, enabledByDefault } of FORGE_DEFAULTS) {
+    if (!resolveEnabledGlobally(id, enabledByDefault, config)) continue
+    if (id === "github" && await detectGitHubForge(repoPath)) results.push("github")
+    if (id === "gitlab" && await detectGitLabForge(repoPath)) results.push("gitlab")
+    if (id === "gitea" && await detectGiteaForge(repoPath)) results.push("gitea")
+  }
   return results
 }
 

@@ -129,6 +129,27 @@ mock.module("@/lib/integrations/forge-utils", () => {
     return results
   }
 
+  const FORGE_DEFAULTS_TEST: Array<{ id: "github" | "gitlab" | "gitea"; enabledByDefault: boolean }> = [
+    { id: "github", enabledByDefault: false },
+    { id: "gitlab", enabledByDefault: false },
+    { id: "gitea", enabledByDefault: false },
+  ]
+
+  async function detectForgeForRepoEnabled(
+    repoPath: string,
+    config: { integrations: Record<string, unknown> }
+  ): Promise<NonNullable<ForgeType>[]> {
+    const { resolveEnabledGlobally } = require("@/lib/integrations/types")
+    const results: NonNullable<ForgeType>[] = []
+    for (const { id, enabledByDefault } of FORGE_DEFAULTS_TEST) {
+      if (!resolveEnabledGlobally(id, enabledByDefault, config)) continue
+      if (id === "github" && await detectGitHubForge(repoPath)) results.push("github")
+      if (id === "gitlab" && await detectGitLabForge(repoPath)) results.push("gitlab")
+      if (id === "gitea" && await detectGiteaForge(repoPath)) results.push("gitea")
+    }
+    return results
+  }
+
   function formatForgeError(err: { ok: false; error: string; name?: string; worktreeRepos?: string[]; repo?: string; expected?: string; actual?: string }): string {
     switch (err.error) {
       case "workspace_not_found": return `Workspace '${err.name}' not found.`
@@ -146,7 +167,7 @@ mock.module("@/lib/integrations/forge-utils", () => {
     }
   }
 
-  return { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, _detect, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo, formatForgeError }
+  return { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, _detect, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo, detectForgeForRepoEnabled, formatForgeError }
 })
 
 const { resolveForgeRepo, formatForgeError, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo, detectForgeForRepoEnabled } = await import("@/lib/integrations/forge-utils")
