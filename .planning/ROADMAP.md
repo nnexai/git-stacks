@@ -401,7 +401,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 82-01-PLAN.md — Block on missing prerequisites, then add the split template command and template-consumption suites with inline inventory updates
+- [x] 82-01-PLAN.md — Block on missing prerequisites, then add the split template command and template-consumption suites with inline inventory updates
 - [ ] 82-02-PLAN.md — Add repo registry git-vs-dir success-path coverage and extend workspace label subprocess coverage with inline inventory updates
 - [ ] 82-03-PLAN.md — Add the explicit message socket opt-out plus the focused message CLI/file contract suite with inline inventory updates
 
@@ -470,7 +470,7 @@ Plans:
 | 79. Release Prep | v0.17.0 | 1/1 | Complete | 2026-04-06 |
 | 80. E2E CLI Harness and Living Inventory | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 4/4 | Complete    | 2026-05-14 |
-| 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
+| 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 1/3 | In Progress|  |
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 0/TBD | Not started | - |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |
