@@ -262,14 +262,32 @@ git-stacks env my-feature --repo backend-api
 
 Shows GS_* injected vars, user-defined `env:` from workspace YAML, resolved port vars, and resolved secret refs using the same resolver pipeline as `open`. If a secret cannot be resolved, `env` fails with the same error you would hit during `open`, so the preview stays faithful to runtime behavior. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
 
-## Debug Output
+## Local Verification
 
-Use `GIT_STACKS_DEBUG=1` for the legacy "show me everything" behavior, or use the canonical `GS_DEBUG` selector when you want full debug output or module-specific filtering without changing normal command output:
+Run the full local maintainer gate before release prep:
 
 ```bash
-# Backward-compatible all-module debug output
-GIT_STACKS_DEBUG=1 git-stacks status my-feature
+bun run verify
+```
 
+`bun run verify` refreshes coverage artifacts, checks the E2E inventory and mapped test files, then runs the existing test, dependency, and typecheck commands. To debug an individual step, run the underlying commands directly:
+
+```bash
+bun run verify:prereqs
+bun run verify:gates
+bun run coverage
+bun run test
+bun run test:deps
+bun run typecheck
+```
+
+The gate is local-only. Coverage validation checks that `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, and `.coverage/lcov.info` exist and parse; it does not enforce numeric coverage thresholds.
+
+## Debug Output
+
+Use the canonical `GS_DEBUG` selector when you want full debug output or module-specific filtering without changing normal command output. `GIT_STACKS_DEBUG=1` remains available as a legacy all-module compatibility alias:
+
+```bash
 # Canonical all-module debug output
 GS_DEBUG=1 git-stacks status my-feature
 
@@ -278,9 +296,19 @@ GS_DEBUG=lifecycle,git git-stacks status my-feature
 
 # Machine-readable stdout remains valid JSON
 GS_DEBUG=status git-stacks status my-feature --json 2>debug.log
+
+# Legacy all-module debug output
+GIT_STACKS_DEBUG=1 git-stacks status my-feature
 ```
 
-`GS_DEBUG` accepts `1`, `true`, or a comma-separated module list. Short names such as `lifecycle`, `git`, `status`, `env`, and `yaml` map to the corresponding internal modules (`workspace-lifecycle`, `workspace-git`, `workspace-status`, `workspace-env`, and `workspace-yaml`). Debug lines use stable logical labels such as `[workspace-status]`, `[workspace-env]`, `[workspace-git]`, `[workspace-yaml]`, and `[workspace-lifecycle]`. Timings use the form `[workspace-status] getWorkspaceListInfo: 12ms`.
+`GS_DEBUG` accepts `1`, `true`, or a comma-separated module list. Short names such as `lifecycle`, `git`, `status`, `env`, and `yaml` map to the corresponding internal modules (`workspace-lifecycle`, `workspace-git`, `workspace-status`, `workspace-env`, and `workspace-yaml`). Debug lines are emitted to `stderr` with the logical category plus key/value fields, for example:
+
+```text
+[workspace-status] op=getWorkspaceListInfo module=status msg=completed ms=12
+[workspace-git] op=debug module=git msg=checking branch state
+```
+
+Timing lines use `op=... module=... msg=... ms=...`; trace-only lines use `op=debug module=... msg=...`.
 
 The debug channel is `stderr` only, so you can redirect or discard it without affecting normal output. `git-stacks manage` explicitly silences debug logging before the alternate-screen dashboard starts, preventing trace output from corrupting the TUI surface.
 
