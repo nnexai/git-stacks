@@ -29,10 +29,10 @@ Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
 
 ### Coverage Reporting
 
-- [ ] **COVR-01**: Developer can run one command that generates a coverage report for the full test suite, including the existing shared-process unit runner and isolated E2E runner files.
-- [ ] **COVR-02**: Coverage reports include source files exercised by subprocess-based E2E tests through Istanbul-compatible instrumentation and merged per-process artifacts.
-- [ ] **COVR-03**: Coverage output is written to a stable ignored directory and supports both human-readable summary output and machine-readable Istanbul artifacts usable by local verification gates.
-- [ ] **COVR-04**: Coverage reporting does not make normal `bun run test`, `bun run test:unit`, or `bun run test:integ` materially slower unless coverage is explicitly requested.
+- [x] **COVR-01**: Developer can run one command that generates a coverage report for the full test suite, including the existing shared-process unit runner and isolated E2E runner files.
+- [x] **COVR-02**: Coverage reports include source files exercised by subprocess-based E2E tests through Istanbul-compatible instrumentation and merged per-process artifacts.
+- [x] **COVR-03**: Coverage output is written to a stable ignored directory and supports both human-readable summary output and machine-readable Istanbul artifacts usable by local verification gates.
+- [x] **COVR-04**: Coverage reporting does not make normal `bun run test`, `bun run test:unit`, or `bun run test:integ` materially slower unless coverage is explicitly requested.
 
 ### Local Regression Gates
 
@@ -89,10 +89,10 @@ Which phases cover which requirements. Updated during roadmap refinement.
 | E2E-11 | Phase 82 | Complete |
 | E2E-12 | Phase 82.1 | Complete |
 | E2E-13 | Phase 82.1 | Complete |
-| COVR-01 | Phase 83 | Pending |
-| COVR-02 | Phase 83 | Pending |
-| COVR-03 | Phase 83 | Pending |
-| COVR-04 | Phase 83 | Pending |
+| COVR-01 | Phase 83 | Complete |
+| COVR-02 | Phase 83 | Complete |
+| COVR-03 | Phase 83 | Complete |
+| COVR-04 | Phase 83 | Complete |
 | GATE-01 | Phase 84 | Complete |
 | GATE-02 | Phase 84 | Complete |
 | GATE-03 | Phase 84 | Complete |

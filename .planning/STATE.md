@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: executing
-stopped_at: Phase 84.1 plan 01 complete
-last_updated: "2026-05-14T20:39:48.248Z"
-last_activity: "2026-05-14 -- Phase 84.1 plan 01 coverage instrumentation repair complete; ready for plan 02 verification"
+status: verifying
+stopped_at: Completed 84.1-02-PLAN.md
+last_updated: "2026-05-14T20:53:17.896Z"
+last_activity: "2026-05-14 -- Phase 84.1 plan 02 verification complete; coverage sentinels and local release-prep gates passed"
 progress:
   total_phases: 18
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 37
-  completed_plans: 33
-  percent: 89
+  completed_plans: 34
+  percent: 92
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 
 Phase: 84.1 (coverage-report-accuracy-and-tui-instrumentation-follow-up)
 Plan: 2 of 2
-Status: Ready for plan 02 verification
-Last activity: 2026-05-14 -- Phase 84.1 plan 01 coverage instrumentation repair complete; ready for plan 02 verification
+Status: Phase complete — ready for verification
+Last activity: 2026-05-14 -- Phase 84.1 plan 02 verification complete; coverage sentinels and local release-prep gates passed
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -48,6 +48,7 @@ Progress: [█████████░] 91%
 | Phase 82.1 P03 | 16 min | 3 tasks | 7 files |
 | 82.1 | 3 | - | - |
 | 84 | 3 | ~2h | ~40 min |
+| Phase 84.1 P02 | 9min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,7 @@ Progress: [█████████░] 91%
 - [Phase 84]: Coverage gates validate artifact existence and parseability only; no CI workflow or numeric coverage threshold was introduced.
 - [Phase 84.1]: Coverage report accuracy is a milestone gate; coverage reports that undercount existing TUI/source test execution must be fixed before closing v0.17.1.
 - [Phase 84.1]: Plan 01 selected an instrumented `.coverage/runtime-root` execution path after preload-only redirect/load-time instrumentation failed; focused coverage now records nonzero hits for `src/lib/messages.ts` and `src/tui/dashboard/ActionMenu.tsx`.
+- [Phase 84.1]: Canonical full-suite coverage and local release-prep verification passed with nonzero sentinel hits for src/lib/messages.ts and src/tui/dashboard/ActionMenu.tsx.
 
 ### Roadmap Evolution
 
@@ -100,10 +102,10 @@ None.
 
 ### Blockers/Concerns
 
-Phase 84.1 plan 01 is complete. Plan 02 should verify canonical full-suite coverage and the local release-prep gate path.
+None. Phase 84.1 plan 02 verified canonical full-suite coverage and the local release-prep gate path.
 
 ## Session Continuity
 
-Last session: 2026-05-14T20:32:00Z
-Stopped at: Phase 84.1 plan 01 complete
-Resume file: .planning/phases/84.1-coverage-report-accuracy-and-tui-instrumentation-follow-up/84.1-02-PLAN.md
+Last session: 2026-05-14T20:53:13.587Z
+Stopped at: Completed 84.1-02-PLAN.md
+Resume file: None
