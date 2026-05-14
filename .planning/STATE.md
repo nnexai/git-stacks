@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: verifying
-stopped_at: Completed 82.1-03-PLAN.md
-last_updated: "2026-05-14T18:36:14.379Z"
+status: ready_to_plan
+stopped_at: Completed phase 82.1; ready to plan Phase 83
+last_updated: "2026-05-14T18:38:25.510Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 35
   completed_plans: 29
   percent: 83
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 82.1 — Support Commands and Error-Path E2E Coverage
+**Current focus:** Phase 83 — Istanbul-Based Subprocess Coverage Reporting
 
 ## Current Position
 
-Phase: 82.1 (Support Commands and Error-Path E2E Coverage) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 83
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-14
 
 Progress: [████████░░] 83%
@@ -46,6 +46,7 @@ Progress: [████████░░] 83%
 | Phase 82.1 P01 | 7 min | 3 tasks | 4 files |
 | Phase 82.1 P02 | 6 min | 2 tasks | 2 files |
 | Phase 82.1 P03 | 16 min | 3 tasks | 7 files |
+| 82.1 | 3 | - | - |
 
 ## Accumulated Context
 
@@ -95,6 +96,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-05-14T18:35:50.992Z
-Stopped at: Completed 82.1-03-PLAN.md
+Last session: 2026-05-14T18:38:25.503Z
+Stopped at: Completed phase 82.1; ready to plan Phase 83
 Resume file: None

@@ -419,9 +419,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] `82.1-01-PLAN.md` — Verify Phase 80/81.1/81.1.1/82 prerequisite surfaces first, then add readonly plus workspace-adjacent support-command suites
-- [ ] `82.1-02-PLAN.md` — Add doctor/install and integration-config success-path support-command coverage
-- [ ] `82.1-03-PLAN.md` — Add representative failure coverage, update the canonical E2E inventory, and commit the Phase 83 Istanbul smoke handoff
+- [x] `82.1-01-PLAN.md` — Verify Phase 80/81.1/81.1.1/82 prerequisite surfaces first, then add readonly plus workspace-adjacent support-command suites
+- [x] `82.1-02-PLAN.md` — Add doctor/install and integration-config success-path support-command coverage
+- [x] `82.1-03-PLAN.md` — Add representative failure coverage, update the canonical E2E inventory, and commit the Phase 83 Istanbul smoke handoff
 
 ### Phase 83: Istanbul-Based Subprocess Coverage Reporting
 **Goal**: Developers can generate useful Istanbul-format code coverage reports that include both shared-process unit tests and isolated subprocess E2E files
@@ -471,7 +471,7 @@ Plans:
 | 80. E2E CLI Harness and Living Inventory | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 4/4 | Complete    | 2026-05-14 |
 | 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
-| 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
+| 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 3/3 | Complete    | 2026-05-14 |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 0/TBD | Not started | - |
 
