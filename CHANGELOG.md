@@ -4,6 +4,24 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.17.1] — 2026-05-14
+
+### Added
+
+**Local verification gate** — maintainers can now run `bun run verify` as the stable local release-prep path. The umbrella command refreshes coverage with `bun run coverage`, runs `verify:prereqs` and `verify:gates`, then executes the existing test, dependency, and typecheck commands.
+
+### Changed
+
+**Inventory and coverage gate diagnostics are aggregated** — `verify:gates` reports live CLI inventory drift, unmapped in-scope inventory entries, missing mapped test files, and missing or invalid coverage artifacts together so local fixes do not require repeated fail-fast reruns.
+
+**Debug documentation matches shipped stderr** — README examples now describe `GS_DEBUG` as the primary selector, keep `GIT_STACKS_DEBUG=1` as the legacy alias, and show the current key/value stderr shape with `op=... module=... msg=...`.
+
+### Internal
+
+**Verification remains local-only** — the new gate surface is implemented as repo scripts and validates stable `.coverage/` artifacts without adding CI requirements or numeric coverage-threshold policy.
+
+---
+
 ## [0.17.0] — 2026-04-06
 
 ### Added
