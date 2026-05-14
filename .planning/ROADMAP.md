@@ -462,12 +462,13 @@ Plans:
 ### Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up (INSERTED)
 
 **Goal:** Coverage reports are trustworthy enough to close v0.17.1: existing tests that import source through relative paths, especially TUI/TSX tests, are captured by the Istanbul instrumentation path instead of appearing as near-zero coverage.
-**Requirements**: TBD
+**Requirements**: COVR-01, COVR-02, COVR-03, COVR-04, GATE-03
 **Depends on:** Phase 84
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
-- [ ] TBD (run /gsd-discuss-phase 84.1, then /gsd-plan-phase 84.1 to break down)
+- [ ] `84.1-01-PLAN.md` — Spike and repair coverage instrumentation accuracy, then add sentinel hit gates for regular TS and TUI TSX source files
+- [ ] `84.1-02-PLAN.md` — Verify canonical full-suite coverage and local release-prep gates after the instrumentation repair
 
 ## Progress
 
@@ -485,7 +486,7 @@ Plans:
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 3/3 | Complete    | 2026-05-14 |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
-| 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 0/TBD | Not started | - |
+| 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 0/2 | Planned | - |
 
 ## Backlog
 

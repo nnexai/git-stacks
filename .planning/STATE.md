@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: Ready to discuss
-stopped_at: Phase 84.1 context gathered
-last_updated: "2026-05-14T20:10:53.680Z"
-last_activity: 2026-05-14
+status: executing
+stopped_at: Phase 84.1 planned
+last_updated: "2026-05-14T20:26:19.550Z"
+last_activity: 2026-05-14 -- Phase 84.1 planning complete
 progress:
   total_phases: 18
   completed_phases: 14
-  total_plans: 35
+  total_plans: 37
   completed_plans: 32
-  percent: 91
+  percent: 78
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 
 Phase: 84.1
 Plan: Not started
-Status: Ready to discuss
-Last activity: 2026-05-14
+Status: Ready to execute
+Last activity: 2026-05-14 -- Phase 84.1 planning complete
 
 Progress: [█████████░] 91%
 
@@ -104,5 +104,5 @@ Phase 84 completed, but post-run coverage report review found likely instrumenta
 ## Session Continuity
 
 Last session: 2026-05-14T20:10:53.665Z
-Stopped at: Phase 84.1 context gathered
+Stopped at: Phase 84.1 planned
 Resume file: .planning/phases/84.1-coverage-report-accuracy-and-tui-instrumentation-follow-up/84.1-CONTEXT.md
