@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: blocked
-stopped_at: "Phase 84 blocked at 84-01 Task 2: missing Phase 83 coverage surface"
-last_updated: "2026-05-14T18:44:42.338Z"
+status: ready_to_execute
+stopped_at: "Phase 83 coverage surface remediated; ready to resume Phase 84"
+last_updated: "2026-05-14T19:18:00.000Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 83 — Istanbul-Based Subprocess Coverage Reporting
+**Current focus:** Phase 84 — Local Coverage Gates, Docs, and Release Prep
 
 ## Current Position
 
-Phase: 83
-Plan: Not started
-Status: Ready to plan
+Phase: 84
+Plan: 84-01
+Status: Ready to execute
 Last activity: 2026-05-14
 
 Progress: [████████░░] 83%
@@ -85,6 +85,7 @@ Progress: [████████░░] 83%
 - Phase 81.1 completed on 2026-05-14: `repo add` now honors globally enabled forge integrations before detection and prompting.
 - Phase 80 completed on 2026-05-14: shared E2E CLI harness and canonical machine-parseable inventory are now available.
 - Phase 82 completed on 2026-05-14: template, repo, label, and message command families now have isolated real-CLI E2E coverage and inventory mappings.
+- Phase 83 coverage surface remediated on 2026-05-14: `coverage`, `coverage:unit`, and `coverage:integ` scripts now generate stable `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html` artifacts for Phase 84 gates.
 
 ### Pending Todos
 
@@ -92,10 +93,10 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 84 blocked at 84-01 Task 2: Phase 83 coverage surface is missing. package.json lacks coverage, coverage:unit, and coverage:integ scripts; .gitignore lacks .coverage/; .coverage/coverage-final.json, .coverage/coverage-summary.json, .coverage/lcov.info, and .coverage/index.html could not be produced because bun run coverage is unavailable. Do not execute Phase 84 implementation plans until Phase 83 coverage reporting is completed.
+None active. The Phase 84 prerequisite blocker from 84-01 Task 2 was cleared by restoring the Phase 83 coverage command surface and verifying `bun run coverage`.
 
 ## Session Continuity
 
-Last session: 2026-05-14T18:44:31.700Z
-Stopped at: Phase 84 blocked at 84-01 Task 2: missing Phase 83 coverage surface
+Last session: 2026-05-14T19:18:00.000Z
+Stopped at: Phase 83 coverage surface remediated; ready to resume Phase 84
 Resume file: None
