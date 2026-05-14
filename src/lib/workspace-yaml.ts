@@ -57,7 +57,10 @@ export async function openYamlInEditor(
   return timeOperation(OBS_CATEGORY, "openYamlInEditor", async () => {
     const editor = process.env.VISUAL || process.env.EDITOR || "vi"
     const proc = _exec.spawnEditor(editor, path)
-    await proc.exited
+    const exitCode = await proc.exited
+    if (exitCode !== 0) {
+      throw new Error(`Editor exited with code ${exitCode}`)
+    }
     const result = validate()
     if (!result.ok) {
       console.error(`\nWarning: file has validation errors:\n${result.error}`)
