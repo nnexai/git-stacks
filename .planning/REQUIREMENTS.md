@@ -36,9 +36,9 @@ Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
 
 ### Local Regression Gates
 
-- [ ] **GATE-01**: Local verification can fail when a new in-scope command is added without updating the E2E coverage inventory.
-- [ ] **GATE-02**: Local verification can fail when an in-scope inventory item has no mapped E2E test.
-- [ ] **GATE-03**: Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling.
+- [x] **GATE-01**: Local verification can fail when a new in-scope command is added without updating the E2E coverage inventory.
+- [x] **GATE-02**: Local verification can fail when an in-scope inventory item has no mapped E2E test.
+- [x] **GATE-03**: Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling.
 
 ## Future Requirements
 
@@ -93,9 +93,9 @@ Which phases cover which requirements. Updated during roadmap refinement.
 | COVR-02 | Phase 83 | Pending |
 | COVR-03 | Phase 83 | Pending |
 | COVR-04 | Phase 83 | Pending |
-| GATE-01 | Phase 84 | Pending |
-| GATE-02 | Phase 84 | Pending |
-| GATE-03 | Phase 84 | Pending |
+| GATE-01 | Phase 84 | Complete |
+| GATE-02 | Phase 84 | Complete |
+| GATE-03 | Phase 84 | Complete |
 
 **Coverage:**
 - v0.17.1 requirements: 21 total

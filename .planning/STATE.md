@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: ready_to_execute
-stopped_at: "Phase 83 coverage surface remediated; ready to resume Phase 84"
-last_updated: "2026-05-14T19:18:00.000Z"
+status: phase_complete
+stopped_at: Completed 84-03-PLAN.md
+last_updated: "2026-05-14T19:55:11.778Z"
 last_activity: 2026-05-14
 progress:
   total_phases: 17
   completed_phases: 14
   total_plans: 35
-  completed_plans: 29
-  percent: 83
+  completed_plans: 32
+  percent: 91
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 ## Current Position
 
 Phase: 84
-Plan: 84-01
-Status: Ready to execute
+Plan: complete
+Status: Phase 84 complete
 Last activity: 2026-05-14
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Progress: [████████░░] 83%
 | Phase 82.1 P02 | 6 min | 2 tasks | 2 files |
 | Phase 82.1 P03 | 16 min | 3 tasks | 7 files |
 | 82.1 | 3 | - | - |
+| 84 | 3 | ~2h | ~40 min |
 
 ## Accumulated Context
 
@@ -76,6 +77,8 @@ Progress: [████████░░] 83%
 - [Phase 82.1]: Failure coverage stays representative, not a cross-product matrix. — Plan 03 intentionally satisfied E2E-13 with one case per required failure class.
 - [Phase 82.1]: Manual editor UX remains excluded, while fake-editor --yaml subprocess contracts are in scope. — The inventory now separates automation-safe editor subprocess behavior from manual editor interaction.
 - [Phase 82.1]: Istanbul proof is isolated from full coverage tooling so Phase 83 can build on a verified handoff. — Plan 03 proves source instrumentation and mergeability without adding reports or suite-wide tooling.
+- [Phase 84]: `bun run verify` is the stable local release-prep gate, with `verify:prereqs` and `verify:gates` available for step-level debugging.
+- [Phase 84]: Coverage gates validate artifact existence and parseability only; no CI workflow or numeric coverage threshold was introduced.
 
 ### Roadmap Evolution
 
@@ -86,6 +89,7 @@ Progress: [████████░░] 83%
 - Phase 80 completed on 2026-05-14: shared E2E CLI harness and canonical machine-parseable inventory are now available.
 - Phase 82 completed on 2026-05-14: template, repo, label, and message command families now have isolated real-CLI E2E coverage and inventory mappings.
 - Phase 83 coverage surface remediated on 2026-05-14: `coverage`, `coverage:unit`, and `coverage:integ` scripts now generate stable `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html` artifacts for Phase 84 gates.
+- Phase 84 completed on 2026-05-14: local `bun run verify` orchestration now checks prerequisite surfaces, refreshes coverage, aggregates inventory/mapping/coverage gate findings, runs existing quality commands, and documents the v0.17.1 release-prep path.
 
 ### Pending Todos
 
@@ -93,10 +97,10 @@ None.
 
 ### Blockers/Concerns
 
-None active. The Phase 84 prerequisite blocker from 84-01 Task 2 was cleared by restoring the Phase 83 coverage command surface and verifying `bun run coverage`.
+None active. Phase 84 completed after the Phase 83 coverage command surface was restored and `bun run verify` passed.
 
 ## Session Continuity
 
-Last session: 2026-05-14T19:18:00.000Z
-Stopped at: Phase 83 coverage surface remediated; ready to resume Phase 84
+Last session: 2026-05-14T19:55:11.769Z
+Stopped at: Completed 84-03-PLAN.md
 Resume file: None
