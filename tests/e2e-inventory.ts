@@ -156,8 +156,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Durable message CLI",
     commands: ["message send", "message list", "message clear"],
     scopeStatus: "in-scope",
-    mappedTests: [],
-    rationale: "Message files are durable command-side effects and socket delivery remains best-effort.",
+    mappedTests: ["tests/commands/message.test.ts"],
+    rationale: "Message files are durable command-side effects covered through subprocess tests; live socket delivery remains best-effort and out of scope.",
   },
   {
     id: "support.config-show",
