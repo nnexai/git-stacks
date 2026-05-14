@@ -2,11 +2,14 @@ import { createRequire } from "module"
 import {
   appendFileSync,
   copyFileSync,
+  cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "fs"
 import { basename, dirname, join, relative } from "path"
@@ -20,9 +23,12 @@ const reports = require("istanbul-reports")
 const ROOT = join(import.meta.dir, "..")
 const TESTS_DIR = join(ROOT, "tests")
 const COVERAGE_DIR = join(ROOT, ".coverage")
-const SRC_INST_DIR = join(COVERAGE_DIR, "src-inst")
+const RUNTIME_ROOT = join(COVERAGE_DIR, "runtime-root")
+const RUNTIME_TESTS_DIR = join(RUNTIME_ROOT, "tests")
+const SRC_INST_DIR = join(RUNTIME_ROOT, "src")
 const SHARDS_DIR = join(COVERAGE_DIR, "shards")
 const BLANK_TEMPLATES_PATH = join(COVERAGE_DIR, "blank-templates.json")
+const KEEP_WORKDIR = process.env.GS_COVERAGE_KEEP_WORKDIR === "1"
 
 type TestResult = { passed: number; failed: number }
 type CoverageOptions = {
@@ -125,7 +131,7 @@ function instrumentSourceTree(): number {
     count++
   }
 
-  copyFileSync(join(ROOT, "package.json"), join(COVERAGE_DIR, "package.json"))
+  copyFileSync(join(ROOT, "package.json"), join(RUNTIME_ROOT, "package.json"))
 
   appendFileSync(
     join(SRC_INST_DIR, "index.ts"),
@@ -151,6 +157,32 @@ if (_gsShardDir) {
   return count
 }
 
+function copyIfExists(path: string): void {
+  const from = join(ROOT, path)
+  if (!existsSync(from)) return
+  const to = join(RUNTIME_ROOT, path)
+  mkdirSync(dirname(to), { recursive: true })
+  copyFileSync(from, to)
+}
+
+function symlinkIfExists(path: string): void {
+  const from = join(ROOT, path)
+  if (!existsSync(from)) return
+  const to = join(RUNTIME_ROOT, path)
+  rmSync(to, { recursive: true, force: true })
+  symlinkSync(from, to, lstatSync(from).isDirectory() ? "dir" : "file")
+}
+
+function prepareRuntimeRoot(): void {
+  mkdirSync(RUNTIME_ROOT, { recursive: true })
+  cpSync(TESTS_DIR, RUNTIME_TESTS_DIR, { recursive: true })
+  for (const path of ["package.json", "tsconfig.json", "bunfig.toml", "bun.lock", ".gitignore"]) {
+    copyIfExists(path)
+  }
+  symlinkIfExists("node_modules")
+  symlinkIfExists("scripts")
+}
+
 async function runTests(
   label: "unit" | "integ",
   files: string[],
@@ -168,7 +200,7 @@ async function runTests(
   const preload = join(ROOT, "scripts", "coverage-preload.ts")
   const env = {
     ...process.env,
-    GS_COVERAGE_ROOT: ROOT,
+    GS_COVERAGE_ROOT: RUNTIME_ROOT,
     GS_COVERAGE_SRC_INST: SRC_INST_DIR,
     GS_COVERAGE_SHARD_DIR: SHARDS_DIR,
     GS_COVERAGE_CLI_ENTRY: join(SRC_INST_DIR, "index.ts"),
@@ -176,12 +208,13 @@ async function runTests(
 
   for (const file of files) {
     const relPath = relative(ROOT, file)
+    const runtimeFile = join(RUNTIME_ROOT, relPath)
     console.log(`\n--- [coverage:${label}] ${relPath} ---`)
 
     const proc = Bun.spawn(
-      ["bun", "test", "--preload", "@opentui/solid/preload", "--preload", preload, file],
+      ["bun", "test", "--preload", "@opentui/solid/preload", "--preload", preload, runtimeFile],
       {
-        cwd: ROOT,
+        cwd: RUNTIME_ROOT,
         stdio: ["inherit", "inherit", "inherit"],
         env,
       }
@@ -260,9 +293,11 @@ function mergeAndReport(): void {
 }
 
 function cleanWorkingDirs() {
+  rmSync(RUNTIME_ROOT, { recursive: true, force: true })
   rmSync(SRC_INST_DIR, { recursive: true, force: true })
   rmSync(SHARDS_DIR, { recursive: true, force: true })
   rmSync(BLANK_TEMPLATES_PATH, { force: true })
+  mkdirSync(RUNTIME_ROOT, { recursive: true })
   mkdirSync(SRC_INST_DIR, { recursive: true })
   mkdirSync(SHARDS_DIR, { recursive: true })
 }
@@ -274,6 +309,7 @@ async function main() {
 
   console.log("Phase 1: Instrumenting source...")
   const instrumentedCount = instrumentSourceTree()
+  prepareRuntimeRoot()
   console.log(`Instrumented ${instrumentedCount} source files.`)
 
   console.log("\nPhase 2: Running tests...")
@@ -286,9 +322,12 @@ async function main() {
   console.log("\nPhase 3: Generating reports...")
   mergeAndReport()
 
-  rmSync(SRC_INST_DIR, { recursive: true, force: true })
-  rmSync(SHARDS_DIR, { recursive: true, force: true })
-  rmSync(BLANK_TEMPLATES_PATH, { force: true })
+  if (!KEEP_WORKDIR) {
+    rmSync(SRC_INST_DIR, { recursive: true, force: true })
+    rmSync(RUNTIME_ROOT, { recursive: true, force: true })
+    rmSync(SHARDS_DIR, { recursive: true, force: true })
+    rmSync(BLANK_TEMPLATES_PATH, { force: true })
+  }
 
   console.log("\n=== Coverage Test Results ===")
   if (unitResult) {

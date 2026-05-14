@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "fs"
 import { dirname, join, relative, resolve } from "path"
 import { plugin } from "bun"
+import { afterAll } from "bun:test"
 
 const root = process.env.GS_COVERAGE_ROOT
 const instSrc = process.env.GS_COVERAGE_SRC_INST
@@ -21,6 +22,7 @@ function writeCoverageShard() {
   writeFileSync(shardPath, JSON.stringify(coverage), { flush: true })
 }
 
+afterAll(writeCoverageShard)
 process.on("exit", writeCoverageShard)
 
 function toInstrumentedPath(importPath: string, importer?: string): string | undefined {

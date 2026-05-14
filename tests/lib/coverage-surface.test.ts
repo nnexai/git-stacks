@@ -29,4 +29,15 @@ describe("Phase 83 coverage command surface", () => {
     expect(runner).toContain("index.html")
     expect(runner).toContain("istanbul-lib-instrument")
   })
+
+  test("coverage runner executes tests from an instrumented runtime root", () => {
+    const runner = readFileSync(join(root, "scripts", "coverage-runner.ts"), "utf8")
+    const preload = readFileSync(join(root, "scripts", "coverage-preload.ts"), "utf8")
+
+    expect(runner).toContain("runtime-root")
+    expect(runner).toContain("cpSync(TESTS_DIR, RUNTIME_TESTS_DIR")
+    expect(runner).toContain("cwd: RUNTIME_ROOT")
+    expect(runner).toContain("GS_COVERAGE_ROOT: RUNTIME_ROOT")
+    expect(preload).toContain("afterAll(writeCoverageShard)")
+  })
 })
