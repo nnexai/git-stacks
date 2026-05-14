@@ -21,8 +21,8 @@ Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
 
 - [x] **E2E-08**: User-facing workspace flows have E2E coverage for create (via pre-built fixtures)/clone (via pre-built fixtures)/list/status/open (`--no-ide`)/close/cd/clean/remove/rename, run, paths, env, merge, pull/sync/push guards, `status --fetch` (against local bare remote), and JSON/text output contracts where applicable.
 - [x] **E2E-09**: User-facing template flows have E2E coverage for create (via pre-built fixtures)/list/show, clone/rename/remove, template composition, and template label behavior. Wizard-driven `template new` and `template edit` are excluded; `template edit --yaml` is tested via Phase 82.1.
-- [ ] **E2E-10**: User-facing repo registry flows have E2E coverage for add (`--name`/`--branch` to bypass forge prompts)/list/show/rename/remove across git and dir repos. Wizard-driven `repo scan` is excluded.
-- [ ] **E2E-11**: User-facing workspace label and message flows have E2E coverage for add/remove/list/clear and send/list/clear behavior.
+- [x] **E2E-10**: User-facing repo registry flows have E2E coverage for add (`--name`/`--branch` to bypass forge prompts)/list/show/rename/remove across git and dir repos. Wizard-driven `repo scan` is excluded.
+- [x] **E2E-11**: User-facing workspace label and message flows have E2E coverage for add/remove/list/clear and send/list/clear behavior.
 - [ ] **E2E-12**: User-facing config show, doctor, completion, version, install hooks, env, paths, `edit --yaml` (workspace/template/config/registry), `integration list`, and `integration <id> config show/example` support flows have E2E coverage for success and representative error cases.
 - [ ] **E2E-13**: E2E coverage includes representative malformed input, missing entity, dirty repo, missing path, validation-failure, and environment-sensitive cases for in-scope commands.
 - [x] **E2E-14**: E2E coverage proves high-risk assumptions around env injection, hook execution, command cwd/path selection, workspace branch starting points, task path persistence, and command execution that uses explicit cwd/path handling instead of relying on shell `cd` state.
@@ -85,8 +85,8 @@ Which phases cover which requirements. Updated during roadmap refinement.
 | E2E-08 | Phase 81 | Complete |
 | E2E-14 | Phase 81 | Complete |
 | E2E-09 | Phase 82 | Complete |
-| E2E-10 | Phase 82 | Pending |
-| E2E-11 | Phase 82 | Pending |
+| E2E-10 | Phase 82 | Complete |
+| E2E-11 | Phase 82 | Complete |
 | E2E-12 | Phase 82.1 | Pending |
 | E2E-13 | Phase 82.1 | Pending |
 | COVR-01 | Phase 83 | Pending |
