@@ -149,7 +149,7 @@ mock.module("@/lib/integrations/forge-utils", () => {
   return { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, _detect, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo, formatForgeError }
 })
 
-const { resolveForgeRepo, formatForgeError, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo } = await import("@/lib/integrations/forge-utils")
+const { resolveForgeRepo, formatForgeError, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo, detectForgeForRepoEnabled } = await import("@/lib/integrations/forge-utils")
 // Note: _detect is already declared above and passed into the mock.module factory — it's the same object.
 
 // --- Factory helpers ---
@@ -470,5 +470,47 @@ describe("forge detection", () => {
     _detect.teaPullsLs = mock(async () => false)
     const result = await detectForgeForRepo("/tmp/repo")
     expect(result).toEqual([])
+  })
+})
+
+describe("detectForgeForRepoEnabled", () => {
+  beforeEach(() => {
+    _detect.which = mock(async (_cmd: string) => false)
+    _detect.gitRemoteUrl = mock(async (_repoPath: string) => null)
+    _detect.teaPullsLs = mock(async (_repoPath: string) => false)
+  })
+
+  test("returns [] when no forges are enabled (empty integrations config)", async () => {
+    _detect.which = mock(async () => true)
+    _detect.gitRemoteUrl = mock(async () => "git@github.com:org/repo.git")
+    _detect.teaPullsLs = mock(async () => true)
+    const config = { integrations: {}, workspace_root: "/tmp", ports: { range_start: 10000, range_end: 65000 } }
+    const result = await detectForgeForRepoEnabled("/tmp/repo", config)
+    expect(result).toEqual([])
+  })
+
+  test("returns ['github'] when only github is enabled and detection matches", async () => {
+    _detect.which = mock(async (cmd: string) => cmd === "gh")
+    _detect.gitRemoteUrl = mock(async () => "git@github.com:org/repo.git")
+    const config = { integrations: { github: { enabled: true } }, workspace_root: "/tmp", ports: { range_start: 10000, range_end: 65000 } }
+    const result = await detectForgeForRepoEnabled("/tmp/repo", config)
+    expect(result).toEqual(["github"])
+  })
+
+  test("skips disabled forge - gitlab not in results even if CLI installed", async () => {
+    _detect.which = mock(async () => true)
+    _detect.gitRemoteUrl = mock(async () => "git@github.com:org/repo.git")
+    const config = { integrations: { github: { enabled: true } }, workspace_root: "/tmp", ports: { range_start: 10000, range_end: 65000 } }
+    const result = await detectForgeForRepoEnabled("/tmp/repo", config)
+    expect(result).toEqual(["github"])
+  })
+
+  test("returns multiple enabled matching forges", async () => {
+    _detect.which = mock(async (cmd: string) => cmd === "gh" || cmd === "tea")
+    _detect.gitRemoteUrl = mock(async () => "git@github.com:org/repo.git")
+    _detect.teaPullsLs = mock(async () => true)
+    const config = { integrations: { github: { enabled: true }, gitea: { enabled: true } }, workspace_root: "/tmp", ports: { range_start: 10000, range_end: 65000 } }
+    const result = await detectForgeForRepoEnabled("/tmp/repo", config)
+    expect(result).toEqual(["github", "gitea"])
   })
 })
