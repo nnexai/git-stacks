@@ -106,8 +106,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Template command family",
     commands: ["template list", "template show", "template clone", "template rename", "template remove"],
     scopeStatus: "in-scope",
-    mappedTests: ["tests/commands/template-list.test.ts"],
-    rationale: "Non-wizard template management is in scope and has an existing list baseline.",
+    mappedTests: ["tests/commands/template-list.test.ts", "tests/commands/template-commands.test.ts"],
+    rationale: "Non-wizard template management is covered by the existing list baseline and the focused Phase 82 command suite.",
   },
   {
     id: "template.label.crud",
@@ -116,8 +116,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Template label CRUD",
     commands: ["template label add", "template label remove", "template label list", "template label clear"],
     scopeStatus: "in-scope",
-    mappedTests: ["tests/commands/template-label.test.ts"],
-    rationale: "Template label behavior shipped in v0.17.0 and is directly testable without TUI prompts.",
+    mappedTests: ["tests/commands/template-label.test.ts", "tests/commands/template-commands.test.ts"],
+    rationale: "Template label behavior is directly testable without TUI prompts and is asserted in both the baseline and command-family suites.",
   },
   {
     id: "repo.git-registry",
