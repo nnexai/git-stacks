@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: E2E Test Coverage
-status: blocked
-stopped_at: Phase 84.1 plan 01 spike blocked
-last_updated: "2026-05-14T20:32:00Z"
-last_activity: 2026-05-14 -- Phase 84.1 plan 01 spike blocked: redirect onLoad repair and load-time instrumentation both left sentinels at zero hits
+status: executing
+stopped_at: Phase 84.1 plan 01 complete
+last_updated: "2026-05-14T20:39:48.248Z"
+last_activity: "2026-05-14 -- Phase 84.1 plan 01 coverage instrumentation repair complete; ready for plan 02 verification"
 progress:
   total_phases: 18
   completed_phases: 14
   total_plans: 37
-  completed_plans: 32
-  percent: 86
+  completed_plans: 33
+  percent: 89
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 
 ## Current Position
 
-Phase: 84.1 (coverage-report-accuracy-and-tui-instrumentation-follow-up) — BLOCKED
-Plan: 1 of 2
-Status: Blocked at Plan 01 spike
-Last activity: 2026-05-14 -- Phase 84.1 plan 01 spike blocked: both tested repair paths left sentinels at zero hits
+Phase: 84.1 (coverage-report-accuracy-and-tui-instrumentation-follow-up)
+Plan: 2 of 2
+Status: Ready for plan 02 verification
+Last activity: 2026-05-14 -- Phase 84.1 plan 01 coverage instrumentation repair complete; ready for plan 02 verification
 
 Progress: [█████████░] 91%
 
@@ -80,7 +80,7 @@ Progress: [█████████░] 91%
 - [Phase 84]: `bun run verify` is the stable local release-prep gate, with `verify:prereqs` and `verify:gates` available for step-level debugging.
 - [Phase 84]: Coverage gates validate artifact existence and parseability only; no CI workflow or numeric coverage threshold was introduced.
 - [Phase 84.1]: Coverage report accuracy is a milestone gate; coverage reports that undercount existing TUI/source test execution must be fixed before closing v0.17.1.
-- [Phase 84.1]: Plan 01 spike is blocked: baseline, redirect onLoad repair, and load-time instrumentation all left `src/lib/messages.ts` and `src/tui/dashboard/ActionMenu.tsx` at zero statement/function hits in `.coverage/coverage-final.json`.
+- [Phase 84.1]: Plan 01 selected an instrumented `.coverage/runtime-root` execution path after preload-only redirect/load-time instrumentation failed; focused coverage now records nonzero hits for `src/lib/messages.ts` and `src/tui/dashboard/ActionMenu.tsx`.
 
 ### Roadmap Evolution
 
@@ -100,10 +100,10 @@ None.
 
 ### Blockers/Concerns
 
-Phase 84.1 plan 01 spike is blocked: both approved repair paths were tested serially and neither produced nonzero statement/function hits for `src/lib/messages.ts` and `src/tui/dashboard/ActionMenu.tsx`. Do not start plan 02 until a coverage repair path proves both sentinels.
+Phase 84.1 plan 01 is complete. Plan 02 should verify canonical full-suite coverage and the local release-prep gate path.
 
 ## Session Continuity
 
 Last session: 2026-05-14T20:32:00Z
-Stopped at: Phase 84.1 plan 01 spike blocked
-Resume file: .planning/phases/84.1-coverage-report-accuracy-and-tui-instrumentation-follow-up/84.1-01-SUMMARY.md
+Stopped at: Phase 84.1 plan 01 complete
+Resume file: .planning/phases/84.1-coverage-report-accuracy-and-tui-instrumentation-follow-up/84.1-02-PLAN.md

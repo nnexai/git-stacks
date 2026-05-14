@@ -226,7 +226,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios (completed 2026-05-14)
 - [ ] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files
 - [x] **Phase 84: Local Coverage Gates, Docs, and Release Prep** - Add local inventory/test mapping gates and verify the expanded suite with existing quality commands (completed 2026-05-14)
-- [ ] **Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up** - BLOCKED in plan 01 spike: redirect onLoad repair and load-time instrumentation both left TS/TUI sentinels at zero hits
+- [ ] **Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up** - Plan 01 complete; plan 02 verification remains
 
 ## Phase Details
 
@@ -464,10 +464,10 @@ Plans:
 **Goal:** Coverage reports are trustworthy enough to close v0.17.1: existing tests that import source through relative paths, especially TUI/TSX tests, are captured by the Istanbul instrumentation path instead of appearing as near-zero coverage.
 **Requirements**: COVR-01, COVR-02, COVR-03, COVR-04, GATE-03
 **Depends on:** Phase 84
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] `84.1-01-PLAN.md` — BLOCKED: spike compared redirect onLoad repair and load-time instrumentation; neither produced nonzero hits for both sentinels
+- [x] `84.1-01-PLAN.md` — Instrumented runtime-root coverage repair plus sentinel verify-gate checks
 - [ ] `84.1-02-PLAN.md` — Verify canonical full-suite coverage and local release-prep gates after the instrumentation repair
 
 ## Progress
@@ -486,7 +486,7 @@ Plans:
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 3/3 | Complete    | 2026-05-14 |
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
-| 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 0/2 | Blocked | - |
+| 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 1/2 | In Progress|  |
 
 ## Backlog
 
