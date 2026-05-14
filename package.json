@@ -51,6 +51,10 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/istanbul-lib-coverage": "^2.0.6",
+    "@types/istanbul-lib-instrument": "^1.7.8",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-instrument": "^6.0.3",
     "madge": "8.0.0",
     "typescript": "^6.0.2"
   }
