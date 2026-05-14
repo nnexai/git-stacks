@@ -73,7 +73,7 @@ const sourceWorkspace = {
 
 const mockListWorkspaces = mock(() => [sourceWorkspace])
 const mockReadWorkspace = mock((_name: string) => sourceWorkspace)
-const mockWorkspaceExists = mock((name: string) => name === "source")
+const mockWorkspaceExists = mock((name: string): boolean => name === "source")
 const mockWriteWorkspace = mock((_ws: unknown) => {})
 const mockReadGlobalConfig = mock(() => ({
   workspace_root: "/tmp/test-workspaces",

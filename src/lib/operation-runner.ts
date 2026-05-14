@@ -29,11 +29,11 @@
  * tests that wire the runner into `createWorkspace()`.
  */
 
-import type { ProgressCallback } from "./workspace-ops"
-
 export type RunnerResult =
   | { ok: true }
   | { ok: false; error: string; rollbackErrors: string[] }
+
+export type ProgressCallback = (message: string) => void
 
 export type Runner = {
   /**

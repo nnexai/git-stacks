@@ -16,9 +16,9 @@ const readRegistryMock = mock(() => [])
 const writeRegistryMock = mock((entries: unknown[]) => {
   lastWritten = entries
 })
-const detectForgeForRepoMock = mock(async () => [])
-const detectForgeForRepoEnabledMock = mock(async () => [])
-const selectMock = mock(async () => "none")
+const detectForgeForRepoMock = mock(async (): Promise<string[]> => [])
+const detectForgeForRepoEnabledMock = mock(async (): Promise<string[]> => [])
+const selectMock = mock(async (_opts?: unknown): Promise<string> => "none")
 const detectRepoTypeMock = mock(() => "other")
 const getCurrentBranchMock = mock(async () => "main")
 
@@ -121,7 +121,7 @@ describe("repo add forge enablement", () => {
     await repoCommand.parseAsync(["add", repoDir, "--name", "d04-repo", "--branch", "main"], { from: "user" })
 
     expect(selectMock).toHaveBeenCalledTimes(1)
-    const promptArgs = selectMock.mock.calls[0]?.[0] as { options: Array<{ value: string }> }
+    const promptArgs = selectMock.mock.calls[0]?.[0] as unknown as { options: Array<{ value: string }> }
     expect(promptArgs.options.map((option) => option.value)).toEqual(["none", "github", "gitlab"])
     expect(latestEntry().forge).toBe("github")
   })

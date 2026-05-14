@@ -38,6 +38,9 @@
     "coverage": "bun run scripts/coverage-runner.ts",
     "coverage:unit": "bun run scripts/coverage-runner.ts --unit",
     "coverage:integ": "bun run scripts/coverage-runner.ts --integ",
+    "verify": "bun run scripts/verify.ts",
+    "verify:prereqs": "bun run scripts/verify-prereqs.ts",
+    "verify:gates": "bun run scripts/verify-gates.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run typecheck && bun run test"
   },
