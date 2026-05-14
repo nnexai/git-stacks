@@ -1,8 +1,8 @@
 ---
 name: "gsd-discuss-phase"
-description: "Gather phase context through adaptive questioning before planning. Use --auto to skip interactive questions (the agent picks recommended defaults). Use --chain for interactive discuss followed by automatic plan+execute. Use --power for bulk question generation into a file-based UI (answer at your own pace)."
+description: "Gather phase context through adaptive questioning before planning."
 metadata:
-  short-description: "Gather phase context through adaptive questioning before planning. Use --auto to skip interactive questions (the agent picks recommended defaults). Use --chain for interactive d..."
+  short-description: "Gather phase context through adaptive questioning before planning."
 ---
 
 <codex_skill_adapter>
@@ -27,15 +27,32 @@ Multi-select workaround:
 - Codex has no `multiSelect`. Use sequential single-selects, or present a numbered freeform list asking the user to enter comma-separated numbers.
 
 Execute mode fallback:
-- When `request_user_input` is rejected (Execute mode), present a plain-text numbered list and pick a reasonable default.
+- When `request_user_input` is rejected or unavailable, you MUST stop and present the questions as a plain-text numbered list, then wait for the user's reply. Do NOT pick a default and continue (#3018).
+- You may only proceed without a user answer when one of these is true:
+  (a) the invocation included an explicit non-interactive flag (`--auto` or `--all`),
+  (b) the user has explicitly approved a specific default for this question, or
+  (c) the workflow's documented contract says defaults are safe (e.g. autonomous lifecycle paths).
+- Do NOT write workflow artifacts (CONTEXT.md, DISCUSSION-LOG.md, PLAN.md, checkpoint files) until the user has answered the plain-text questions or one of (a)-(c) above applies. Surfacing the questions and waiting is the correct response — silently defaulting and writing artifacts is the #3018 failure mode.
 
 ## C. Task() → spawn_agent Mapping
 GSD workflows use `Task(...)` (Claude Code syntax). Translate to Codex collaboration tools:
 
 Direct mapping:
 - `Task(subagent_type="X", prompt="Y")` → `spawn_agent(agent_type="X", message="Y")`
-- `Task(model="...")` → omit (Codex uses per-role config, not inline model selection)
+- `Task(model="...")` → omit. `spawn_agent` has no inline `model` parameter;
+  GSD embeds the resolved per-agent model directly into each agent's `.toml`
+  at install time so `model_overrides` from `.planning/config.json` and
+  `~/.gsd/defaults.json` are honored automatically by Codex's agent router.
 - `fork_context: false` by default — GSD agents load their own context via `<files_to_read>` blocks
+- `Task(isolation="worktree")` / `Agent(isolation="worktree")` → no direct Codex mapping.
+  Codex `spawn_agent` does not create or bind a git worktree automatically.
+  Workflows that require this isolation must fail closed or use an explicit
+  manual worktree protocol before spawning (#3360).
+
+Spawn restriction:
+- Codex restricts `spawn_agent` to cases where the user has explicitly
+  requested sub-agents. When automatic spawning is not permitted, do the
+  work inline in the current agent rather than attempting to force a spawn.
 
 Parallel fan-out:
 - Spawn multiple agents → collect agent IDs → `wait(ids)` for all to complete
@@ -60,10 +77,8 @@ Extract implementation decisions that downstream agents need — researcher and 
 </objective>
 
 <execution_context>
-@/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/discuss-phase.md
-@/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/discuss-phase-assumptions.md
-@/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/discuss-phase-power.md
-@/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/templates/context.md
+Workflow files are loaded on-demand in the <process> section below — not upfront.
+Do not pre-load any workflow files before reading the mode routing instructions.
 </execution_context>
 
 <runtime_note>
@@ -79,14 +94,22 @@ Context files are resolved in-workflow using `init phase-op` and roadmap/state t
 <process>
 **Mode routing:**
 ```bash
-DISCUSS_MODE=$(node "/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/bin/gsd-tools.cjs" config-get workflow.discuss_mode 2>/dev/null || echo "discuss")
+DISCUSS_MODE=$(gsd-sdk query config-get workflow.discuss_mode 2>/dev/null || echo "discuss")
 ```
 
-If `DISCUSS_MODE` is `"assumptions"`: Read and execute @/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/discuss-phase-assumptions.md end-to-end.
+If `--assumptions` is in {{GSD_ARGS}}:
+Read and execute `/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/list-phase-assumptions.md` end-to-end.
+Stop here.
 
-If `DISCUSS_MODE` is `"discuss"` (or unset, or any other value): Read and execute @/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/discuss-phase.md end-to-end.
+Otherwise, if `DISCUSS_MODE` is `"assumptions"`:
+Read and execute `/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/discuss-phase-assumptions.md` end-to-end.
 
-**MANDATORY:** The execution_context files listed above ARE the instructions. Read the workflow file BEFORE taking any action. The objective and success_criteria sections in this command file are summaries — the workflow file contains the complete step-by-step process with all required behaviors, config checks, and interaction patterns. Do not improvise from the summary.
+Otherwise (`"discuss"` / unset / any other value):
+Read and execute `/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/discuss-phase.md` end-to-end.
+
+**MANDATORY:** Read the appropriate workflow file BEFORE taking any action. The objective and success_criteria sections in this command file are summaries — the workflow file contains the complete step-by-step process with all required behaviors, config checks, and interaction patterns. Do not improvise from the summary.
+
+**Lazy loading:** `templates/context.md` is loaded inside the `write_context` step of the active workflow. `discuss-phase-power.md` is loaded inside `discuss-phase.md` when `--power` is detected. Do not load either here.
 </process>
 
 <success_criteria>

@@ -27,15 +27,32 @@ Multi-select workaround:
 - Codex has no `multiSelect`. Use sequential single-selects, or present a numbered freeform list asking the user to enter comma-separated numbers.
 
 Execute mode fallback:
-- When `request_user_input` is rejected (Execute mode), present a plain-text numbered list and pick a reasonable default.
+- When `request_user_input` is rejected or unavailable, you MUST stop and present the questions as a plain-text numbered list, then wait for the user's reply. Do NOT pick a default and continue (#3018).
+- You may only proceed without a user answer when one of these is true:
+  (a) the invocation included an explicit non-interactive flag (`--auto` or `--all`),
+  (b) the user has explicitly approved a specific default for this question, or
+  (c) the workflow's documented contract says defaults are safe (e.g. autonomous lifecycle paths).
+- Do NOT write workflow artifacts (CONTEXT.md, DISCUSSION-LOG.md, PLAN.md, checkpoint files) until the user has answered the plain-text questions or one of (a)-(c) above applies. Surfacing the questions and waiting is the correct response — silently defaulting and writing artifacts is the #3018 failure mode.
 
 ## C. Task() → spawn_agent Mapping
 GSD workflows use `Task(...)` (Claude Code syntax). Translate to Codex collaboration tools:
 
 Direct mapping:
 - `Task(subagent_type="X", prompt="Y")` → `spawn_agent(agent_type="X", message="Y")`
-- `Task(model="...")` → omit (Codex uses per-role config, not inline model selection)
+- `Task(model="...")` → omit. `spawn_agent` has no inline `model` parameter;
+  GSD embeds the resolved per-agent model directly into each agent's `.toml`
+  at install time so `model_overrides` from `.planning/config.json` and
+  `~/.gsd/defaults.json` are honored automatically by Codex's agent router.
 - `fork_context: false` by default — GSD agents load their own context via `<files_to_read>` blocks
+- `Task(isolation="worktree")` / `Agent(isolation="worktree")` → no direct Codex mapping.
+  Codex `spawn_agent` does not create or bind a git worktree automatically.
+  Workflows that require this isolation must fail closed or use an explicit
+  manual worktree protocol before spawning (#3360).
+
+Spawn restriction:
+- Codex restricts `spawn_agent` to cases where the user has explicitly
+  requested sub-agents. When automatic spawning is not permitted, do the
+  work inline in the current agent rather than attempting to force a spawn.
 
 Parallel fan-out:
 - Spawn multiple agents → collect agent IDs → `wait(ids)` for all to complete
@@ -78,20 +95,26 @@ Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tag
 0. **Check for audit:**
 
    - Look for `.planning/v{{version}}-MILESTONE-AUDIT.md`
-   - If missing or stale: recommend `/gsd-audit-milestone` first
-   - If audit status is `gaps_found`: recommend `/gsd-plan-milestone-gaps` first
+   - If missing or stale: recommend `$gsd-audit-milestone` first
+   - If audit status is `gaps_found`: recommend closing the gaps inline
+     (the audit output already enumerates them — insert closure phases
+     via `$gsd-phase --insert <N>` plus the standard
+     discuss/plan/execute chain) before proceeding.
    - If audit status is `passed`: proceed to step 1
 
    ```markdown
    ## Pre-flight Check
 
    {If no v{{version}}-MILESTONE-AUDIT.md:}
-   ⚠ No milestone audit found. Run `/gsd-audit-milestone` first to verify
+   ⚠ No milestone audit found. Run `$gsd-audit-milestone` first to verify
    requirements coverage, cross-phase integration, and E2E flows.
 
    {If audit has gaps:}
-   ⚠ Milestone audit found gaps. Run `/gsd-plan-milestone-gaps` to create
-   phases that close the gaps, or proceed anyway to accept as tech debt.
+   ⚠ Milestone audit found gaps. The audit output already enumerates the
+   unsatisfied requirements, cross-phase issues, and broken flows — insert
+   a closure phase per gap with `$gsd-phase --insert <N>` and run the
+   standard `$gsd-discuss-phase` → `$gsd-plan-phase` → `$gsd-execute-phase`
+   chain. Or proceed anyway to accept the gaps as tech debt.
 
    {If audit passed:}
    ✓ Milestone audit passed. Proceeding with completion.
@@ -144,7 +167,7 @@ Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tag
    - Ask about pushing tag
 
 8. **Offer next steps:**
-   - `/gsd-new-milestone` — start next milestone (questioning → research → requirements → roadmap)
+   - `$gsd-new-milestone` — start next milestone (questioning → research → requirements → roadmap)
 
 </process>
 
@@ -168,5 +191,5 @@ Output: Milestone archived (roadmap + requirements), PROJECT.md evolved, git tag
 - **Archive before deleting:** Always create archive files before updating/deleting originals
 - **One-line summary:** Collapsed milestone in ROADMAP.md should be single line with link
 - **Context efficiency:** Archive keeps ROADMAP.md and REQUIREMENTS.md constant size per milestone
-- **Fresh requirements:** Next milestone starts with `/gsd-new-milestone` which includes requirements definition
+- **Fresh requirements:** Next milestone starts with `$gsd-new-milestone` which includes requirements definition
   </critical_rules>

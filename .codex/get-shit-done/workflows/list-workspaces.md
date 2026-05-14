@@ -1,5 +1,5 @@
 <purpose>
-List all GSD workspaces found in ~/gsd-workspaces/ with their status.
+List all GSD workspaces found in ~$gsd-workspaces/ with their status.
 </purpose>
 
 <required_reading>
@@ -11,7 +11,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 ## 1. Setup
 
 ```bash
-INIT=$(node "/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/bin/gsd-tools.cjs" init list-workspaces)
+INIT=$(gsd-sdk query init.list-workspaces)
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
@@ -22,10 +22,10 @@ Parse JSON for: `workspace_base`, `workspaces`, `workspace_count`.
 **If `workspace_count` is 0:**
 
 ```
-No workspaces found in ~/gsd-workspaces/
+No workspaces found in ~$gsd-workspaces/
 
 Create one with:
-  /gsd-new-workspace --name my-workspace --repos repo1,repo2
+  $gsd-workspace --new --name my-workspace --repos repo1,repo2
 ```
 
 Done.
@@ -35,7 +35,7 @@ Done.
 Display a table:
 
 ```
-GSD Workspaces (~/gsd-workspaces/)
+GSD Workspaces (~$gsd-workspaces/)
 
 | Name | Repos | Strategy | GSD Project |
 |------|-------|----------|-------------|
@@ -43,8 +43,8 @@ GSD Workspaces (~/gsd-workspaces/)
 | feature-b | 2 | clone | No |
 
 Manage:
-  cd ~/gsd-workspaces/<name>     # Enter a workspace
-  /gsd-remove-workspace <name>   # Remove a workspace
+  cd ~$gsd-workspaces/<name>     # Enter a workspace
+  $gsd-remove-workspace <name>   # Remove a workspace
 ```
 
 For each workspace, show:

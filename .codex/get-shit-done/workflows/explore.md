@@ -60,11 +60,13 @@ This would take ~30 seconds and might surface useful context.
 
 If yes, spawn a research agent:
 ```
-Task(
+Agent(
   prompt="Quick research: {specific_question}. Return 3-5 key findings, no more than 200 words.",
   subagent_type="gsd-phase-researcher"
 )
 ```
+
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
 Share findings and continue the conversation.
 
@@ -82,6 +84,8 @@ When the conversation reaches natural conclusions or the developer signals readi
 | Research question | `.planning/research/questions.md` (append) | Open questions that need deeper investigation |
 | Requirement | `REQUIREMENTS.md` (append) | Clear requirements that emerged from discussion |
 | New phase | `ROADMAP.md` (append) | Scope large enough to warrant its own phase |
+| Spike | `$gsd-spike` (invoke) | Feasibility uncertainty surfaced — "will this API work?", "can we do X?" |
+| Sketch | `$gsd-sketch` (invoke) | Design direction unclear — "what should this look like?", "how should this feel?" |
 
 Present suggestions:
 ```
@@ -107,11 +111,11 @@ For each selected output, write the file:
 - **Seeds:** Create `.planning/seeds/{slug}.md` with frontmatter (title, trigger_condition, planted_date)
 - **Research questions:** Append to `.planning/research/questions.md`
 - **Requirements:** Append to `.planning/REQUIREMENTS.md` with next available REQ ID
-- **Phases:** Use existing `/gsd-add-phase` command via SlashCommand
+- **Phases:** Use existing `$gsd-add-phase` command via SlashCommand
 
 Commit if `commit_docs` is enabled:
 ```bash
-node "/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/bin/gsd-tools.cjs" commit "docs: capture exploration — {topic_slug}" --files {file_list}
+gsd-sdk query commit "docs: capture exploration — {topic_slug}" --files {file_list}
 ```
 
 ## Step 6: Close
@@ -123,7 +127,7 @@ node "/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/bin/gsd-tools.cjs" comm
 **Outputs:** {count} artifact(s) created
 {list of created files}
 
-Continue exploring with `/gsd-explore` or start working with `/gsd-next`.
+Continue exploring with `$gsd-explore` or start working with `$gsd-progress --next`.
 ```
 
 </process>

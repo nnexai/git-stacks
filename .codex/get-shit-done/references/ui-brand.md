@@ -108,15 +108,13 @@ Always at end of major completions.
 
 **{Identifier}: {Name}** — {one-line description}
 
-`/clear` then:
-
 `{copy-paste command}`
 
 ───────────────────────────────────────────────────────────────
 
 **Also available:**
-- `/gsd-alternative-1` — description
-- `/gsd-alternative-2` — description
+- `$gsd-alternative-1` — description
+- `$gsd-alternative-2` — description
 
 ───────────────────────────────────────────────────────────────
 ```
