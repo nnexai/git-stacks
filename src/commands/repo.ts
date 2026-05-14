@@ -1,14 +1,14 @@
 import { Command } from "commander"
 import { existsSync } from "fs"
 import { resolve, basename, join } from "path"
-import { readRegistry, writeRegistry, type RepoRegistryEntry } from "../lib/config"
+import { readRegistry, writeRegistry, readGlobalConfig, type RepoRegistryEntry } from "../lib/config"
 import { expandHome } from "../lib/paths"
 import { detectRepoType } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
 import { runRepoScan } from "../tui/repo-wizard"
 import { prompts as p } from "../tui/utils"
 import { editRegistryYaml, openYamlInEditor } from "../lib/workspace-yaml"
-import { detectForgeForRepo } from "../lib/integrations/forge-utils"
+import { detectForgeForRepoEnabled } from "../lib/integrations/forge-utils"
 
 export const repoCommand = new Command("repo")
   .description("Manage repo registry")
@@ -53,33 +53,27 @@ repoCommand
       // Git repos: existing branch detection and forge logic
       defaultBranch = opts.branch ?? (await getCurrentBranch(localPath))
 
-      // Detect forge from remote URL and CLI availability (per D-04)
-      const forgeSuggestions = await detectForgeForRepo(localPath)
+      // Detect forge from remote URL and CLI availability - only for globally enabled forges.
+      const globalConfig = readGlobalConfig()
+      const forgeSuggestions = await detectForgeForRepoEnabled(localPath, globalConfig)
       if (forgeSuggestions.length === 1) {
-        // Exactly one match — auto-suggest (per D-05)
+        // Exactly one enabled forge matched - auto-select.
         forge = forgeSuggestions[0]
         console.log(`  Detected forge: ${forge}`)
-      } else {
-        // Multiple or no matches — prompt user to choose (per D-05)
-        const allForgeOptions: { value: string; label: string }[] = [
-          { value: "none", label: "None" },
-          ...(forgeSuggestions.length > 1
-            ? forgeSuggestions.map((f) => ({ value: f, label: f }))
-            : [
-                { value: "github", label: "github" },
-                { value: "gitlab", label: "gitlab" },
-                { value: "gitea", label: "gitea" },
-              ]),
-        ]
+      } else if (forgeSuggestions.length > 1) {
+        // Multiple enabled forges matched - prompt only among those matches plus None.
         const choice = await p.select({
-          message: forgeSuggestions.length > 1
-            ? "Multiple forges detected — select one"
-            : "No forge detected — select one or skip",
-          options: allForgeOptions,
-          initialValue: forgeSuggestions.length === 0 ? "none" : undefined,
+          message: "Multiple forges detected — select one",
+          options: [
+            { value: "none", label: "None" },
+            ...forgeSuggestions.map((f) => ({ value: f, label: f })),
+          ],
         })
         if (p.isCancel(choice)) { console.log("Cancelled."); process.exit(0) }
         forge = choice === "none" ? undefined : (choice as "github" | "gitlab" | "gitea")
+      } else {
+        // No enabled forge matched - register without forge metadata and do not prompt.
+        forge = undefined
       }
     }
 
