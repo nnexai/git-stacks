@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach, afterEach, spyOn } from "bun:test"
 import { makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeConfigMock } from "../helpers"
 
 // Shared mock instances used by @/tui/utils mock below
@@ -21,6 +21,9 @@ const mockCancel = mock(() => {})
 // Mock tui/utils
 const mockSafeText = mock(async () => "mock-value")
 const mockCancelUtil = mock((): never => { throw new Error("cancelled") })
+const originalExit = process.exit
+const exitMock = mock((code?: number) => { throw new Error(`process.exit(${code})`) })
+const consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
 
 mock.module("@/tui/utils", () => ({
   safeText: mockSafeText,
@@ -85,6 +88,22 @@ const mockPromptIntegrationOverrides = mock(async (_ids: string[], _configs: unk
 
 mock.module("@/lib/integrations/wizard-helpers", () => ({
   promptIntegrationOverrides: mockPromptIntegrationOverrides,
+}))
+
+const mockComposeTemplates = mock((_templateNames: string[]) => ({
+  name: "overlay",
+  schema_version: "1" as const,
+  repos: [
+    { repo: "frontend", mode: "worktree" as const },
+  ],
+  labels: ["template:shared"],
+  integrations: {
+    vscode: { enabled: true, cmd: "code" },
+  },
+}))
+
+mock.module("@/lib/composition", () => ({
+  composeTemplates: mockComposeTemplates,
 }))
 
 // Mock config module
@@ -167,9 +186,11 @@ mock.module("@/lib/files", () => ({
   applyFileOpsForWorkspace: mock(() => ({ ok: true })),
 }))
 
+const mockOpenWorkspace = mock(async () => ({ ok: true }))
+
 // Mock lib/workspace-ops
 mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
-  openWorkspace: mock(async () => ({ ok: true })),
+  openWorkspace: mockOpenWorkspace,
   mergeEnv: mock(() => ({})),
   writeEnvFiles: mock(() => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
@@ -370,5 +391,137 @@ describe("workspace-wizard integration overrides", () => {
     expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
     const savedWs = mockWriteWorkspace.mock.calls[0][0] as { labels?: string[] }
     expect(savedWs.labels).toEqual(["template:shared", "cli:one", "cli:two"])
+  })
+})
+
+describe("new --non-interactive", () => {
+  beforeEach(() => {
+    process.exit = exitMock as any
+    mockSafeText.mockReset()
+    mockSelect.mockReset()
+    mockConfirm.mockReset()
+    mockPromptIntegrationOverrides.mockReset()
+    mockComposeTemplates.mockReset()
+    mockWriteWorkspace.mockReset()
+    mockWorkspaceExists.mockReset()
+    mockTemplateExists.mockReset()
+    mockReadTemplate.mockReset()
+    mockOpenWorkspace.mockReset()
+    consoleErrorSpy.mockReset()
+    exitMock.mockReset()
+
+    mockWorkspaceExists.mockImplementation((_name: string) => false)
+    mockTemplateExists.mockImplementation((_name: string) => true)
+    mockReadTemplate.mockImplementation((_name: string) => ({
+      name: "my-template",
+      schema_version: "1" as const,
+      repos: [
+        { repo: "frontend", mode: "worktree" as const },
+      ],
+      labels: ["template:shared"],
+      integrations: {
+        vscode: { enabled: true, cmd: "code" },
+      },
+    }))
+    mockComposeTemplates.mockImplementation((_templateNames: string[]) => ({
+      name: "overlay",
+      schema_version: "1" as const,
+      repos: [
+        { repo: "frontend", mode: "worktree" as const },
+      ],
+      labels: ["template:shared"],
+      integrations: {
+        vscode: { enabled: true, cmd: "code" },
+      },
+    }))
+    mockOpenWorkspace.mockResolvedValue({ ok: true })
+    consoleErrorSpy.mockImplementation(() => {})
+    exitMock.mockImplementation((code?: number) => { throw new Error(`process.exit(${code})`) })
+  })
+
+  afterEach(() => {
+    process.exit = originalExit
+  })
+
+  test("new --non-interactive creates workspace from --from template without prompts", async () => {
+    await runWorkspaceNew("myws", "my-template", undefined, undefined, { nonInteractive: true })
+
+    expect(mockSafeText.mock.calls.length).toBe(0)
+    expect(mockSelect.mock.calls.length).toBe(0)
+    expect(mockConfirm.mock.calls.length).toBe(0)
+    expect(mockPromptIntegrationOverrides.mock.calls.length).toBe(0)
+    expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { name: string; branch: string; template?: string }
+    expect(savedWs.name).toBe("myws")
+    expect(savedWs.branch).toBe("feature/myws")
+    expect(savedWs.template).toBe("my-template")
+  })
+
+  test("new --non-interactive creates workspace via --template composition", async () => {
+    await runWorkspaceNew("myws", undefined, ["base", "overlay"], undefined, { nonInteractive: true })
+
+    expect(mockComposeTemplates).toHaveBeenCalledWith(["base", "overlay"])
+    expect(mockSafeText.mock.calls.length).toBe(0)
+    expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { template?: string; repos: Array<{ name: string }> }
+    expect(savedWs.template).toBe("overlay")
+    expect(savedWs.repos[0]?.name).toBe("frontend")
+  })
+
+  test("new --non-interactive fails when name is missing", async () => {
+    await expect(runWorkspaceNew(undefined, "my-template", undefined, undefined, { nonInteractive: true }))
+      .rejects.toThrow("process.exit(1)")
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("<name>"))
+  })
+
+  test("new --non-interactive fails when template source is missing", async () => {
+    await expect(runWorkspaceNew("myws", undefined, undefined, undefined, { nonInteractive: true }))
+      .rejects.toThrow("process.exit(1)")
+
+    const errorText = String(consoleErrorSpy.mock.calls[0]?.[0] ?? "")
+    expect(errorText).toContain("--from")
+    expect(errorText).toContain("--template")
+  })
+
+  test("new --non-interactive branch defaults to feature name", async () => {
+    await runWorkspaceNew("myws", "my-template", undefined, undefined, { nonInteractive: true })
+
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { branch: string }
+    expect(savedWs.branch).toBe("feature/myws")
+  })
+
+  test("new --non-interactive uses explicit branch", async () => {
+    await runWorkspaceNew("myws", "my-template", undefined, undefined, {
+      nonInteractive: true,
+      branch: "ticket/PROJ-42",
+    })
+
+    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { branch: string }
+    expect(savedWs.branch).toBe("ticket/PROJ-42")
+  })
+
+  test("new --non-interactive opens only when --open is set", async () => {
+    await runWorkspaceNew("closed", "my-template", undefined, undefined, { nonInteractive: true })
+    expect(mockOpenWorkspace).not.toHaveBeenCalled()
+
+    await runWorkspaceNew("opened", "my-template", undefined, undefined, { nonInteractive: true, open: true })
+    expect(mockOpenWorkspace).toHaveBeenCalledWith("opened", {}, expect.any(Function))
+  })
+
+  test("new --non-interactive fails when template is not found", async () => {
+    mockTemplateExists.mockReturnValue(false)
+
+    await expect(runWorkspaceNew("myws", "missing-template", undefined, undefined, { nonInteractive: true }))
+      .rejects.toThrow("process.exit(1)")
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("missing-template"))
+  })
+
+  test("new --non-interactive fails when workspace already exists", async () => {
+    mockWorkspaceExists.mockReturnValue(true)
+
+    await expect(runWorkspaceNew("myws", "my-template", undefined, undefined, { nonInteractive: true }))
+      .rejects.toThrow("process.exit(1)")
   })
 })
