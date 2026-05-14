@@ -147,7 +147,7 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     commands: ["label add", "label remove", "label list", "label clear"],
     scopeStatus: "in-scope",
     mappedTests: ["tests/commands/label.test.ts", "tests/commands/e2e-harness.test.ts"],
-    rationale: "Workspace labels are a shipped non-TUI command surface with persisted YAML side effects.",
+    rationale: "Workspace labels are a shipped non-TUI command surface with persisted YAML side effects and explicit add/remove/list/clear coverage.",
   },
   {
     id: "message.durable-cli",

@@ -76,6 +76,31 @@ describe("label command", () => {
     expect(saved).not.toContain("labels:")
   })
 
+  test("remove reports remaining labels and clear removes the labels field", () => {
+    const addResult = runLabel(cfgDir, ["add", "alpha", "sprint:82", "urgent"])
+    expect(addResult.exitCode).toBe(0)
+    expect(addResult.stdout).toContain("Labels: backend, sprint:82, urgent")
+
+    const removeResult = runLabel(cfgDir, ["remove", "alpha", "backend"])
+    expect(removeResult.exitCode).toBe(0)
+    expect(removeResult.stdout).toContain("Labels: sprint:82, urgent")
+
+    const listResult = runLabel(cfgDir, ["list", "alpha"])
+    expect(listResult.exitCode).toBe(0)
+    expect(listResult.stdout.trim().split("\n")).toEqual(["sprint:82", "urgent"])
+
+    const clearResult = runLabel(cfgDir, ["clear", "alpha"])
+    expect(clearResult.exitCode).toBe(0)
+    expect(clearResult.stdout).toContain("Labels cleared.")
+
+    const saved = readFileSync(join(cfgDir, "workspaces", "alpha.yml"), "utf8")
+    expect(saved).not.toContain("labels:")
+
+    const emptyList = runLabel(cfgDir, ["list", "alpha"])
+    expect(emptyList.exitCode).toBe(0)
+    expect(emptyList.stdout).toContain("No labels.")
+  })
+
   test("rejects invalid labels", () => {
     const result = runLabel(cfgDir, ["add", "alpha", "bad label"])
     expect(result.exitCode).toBe(1)
