@@ -128,7 +128,7 @@ Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree c
 
 ### Pending Todos
 
-None.
+- Add manual workspace commands — captured 2026-05-15. Explore named, manually triggered template/workspace command recipes that reuse hook/env/cwd execution machinery without being bound to lifecycle events. See `.planning/todos/pending/2026-05-15-add-manual-workspace-commands.md`.
 
 ### Blockers/Concerns
 
