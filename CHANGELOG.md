@@ -4,6 +4,16 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.17.2] — 2026-05-15
+
+### Fixed
+
+**Workspace creation now honors existing branch state** — creating a workspace for a branch that already exists locally now reuses that branch instead of trying to recreate it from the current checkout. If `origin/<branch>` exists, `git-stacks` also configures upstream tracking during worktree creation, matching the behavior developers expect from checking out an existing remote branch directly.
+
+**Remote-backed workspace branches start from the right history** — when the requested workspace branch exists on `origin` but is not fetched locally yet, `git-stacks` fetches that branch-specific ref and creates the worktree from `origin/<branch>` instead of silently starting from the wrong base commit. Brand-new branches with no remote counterpart continue to create from the current repository `HEAD`.
+
+---
+
 ## [0.17.1] — 2026-05-15
 
 ### Fixed
