@@ -1,0 +1,203 @@
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { join } from "path"
+import { execSync } from "child_process"
+import {
+  applyTestGitEnv,
+  cleanup,
+  gitExecOptions,
+  makeRealWorkspaceFixture,
+  makeTmpDir,
+  useIsolatedConfig,
+  writeProbeScript,
+  realCleanWorkspace as cleanWorkspace,
+  realCache,
+  realCloseWorkspace as closeWorkspace,
+  realIsWorktreeRegistered as isWorktreeRegistered,
+  realMergeWorkspace as mergeWorkspace,
+  realReadWorkspace as readWorkspace,
+  realRemoveWorkspace as removeWorkspace,
+  realRenameWorkspace as renameWorkspace,
+  realWorkspaceExists as workspaceExists,
+  realWorkspacePath as workspacePath,
+  realRunHooks,
+  realRunHooksCaptured,
+  lifecycleRealExec,
+} from "../helpers"
+
+const isolated = useIsolatedConfig("workspace-ops-real-fixture")
+
+mock.module("@/lib/lifecycle", () => ({
+  runHooks: realRunHooks,
+  runHooksCaptured: realRunHooksCaptured,
+  _exec: lifecycleRealExec,
+}))
+
+afterAll(() => isolated.cleanup())
+
+let tmpDir: string
+let gitEnvDir: string
+let restoreGitEnv: (() => void) | undefined
+
+beforeEach(() => {
+  realCache.workspaces.clear()
+  realCache.resetList()
+  gitEnvDir = makeTmpDir("workspace-ops-real-git-env")
+  restoreGitEnv = applyTestGitEnv(gitEnvDir)
+  tmpDir = makeTmpDir("workspace-ops-real")
+})
+
+afterEach(() => {
+  realCache.workspaces.clear()
+  realCache.resetList()
+  restoreGitEnv?.()
+  cleanup(gitEnvDir)
+  cleanup(tmpDir)
+})
+
+function workspaceFile(name: string): string {
+  return workspacePath(name)
+}
+
+function commitIn(path: string, file: string, content: string, message: string) {
+  writeFileSync(join(path, file), content)
+  execSync("git add .", gitExecOptions(path, tmpDir))
+  execSync(`git commit -m ${JSON.stringify(message)}`, gitExecOptions(path, tmpDir))
+}
+
+describe("workspace lifecycle real fixtures", () => {
+  test("clean dry-run preserves worktree, workspace YAML, and local branch", async () => {
+    const { repo, branch, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "clean-dry")
+
+    const result = await cleanWorkspace(wsName, { dryRun: true, force: true })
+
+    expect(result.ok).toBe(true)
+    expect(existsSync(repo.taskPath)).toBe(true)
+    expect(workspaceExists(wsName)).toBe(true)
+    expect(execSync(`git -C ${repo.mainPath} rev-parse --verify ${branch}`, gitExecOptions(repo.mainPath, tmpDir)).toString().trim().length).toBeGreaterThan(0)
+  })
+
+  test("clean force removes a registered worktree but keeps workspace YAML", async () => {
+    const { repo, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "clean-force")
+
+    const result = await cleanWorkspace(wsName, { force: true })
+
+    expect(result.ok).toBe(true)
+    expect(await isWorktreeRegistered(repo.mainPath, repo.taskPath)).toBe(false)
+    expect(await isWorktreeRegistered(repo.mainPath, repo.taskPath)).toBe(false)
+    expect(workspaceExists(wsName)).toBe(true)
+  })
+
+  test("remove dry-run preserves worktree and workspace YAML", async () => {
+    const { repo, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "remove-dry")
+
+    const result = await removeWorkspace(wsName, { dryRun: true, force: true })
+
+    expect(result.ok).toBe(true)
+    expect(existsSync(repo.taskPath)).toBe(true)
+    expect(existsSync(workspaceFile(wsName))).toBe(true)
+  })
+
+  test("remove force deletes the task folder and workspace YAML", async () => {
+    const { repo, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "remove-force")
+
+    const result = await removeWorkspace(wsName, { force: true })
+
+    expect(result.ok).toBe(true)
+    expect(await isWorktreeRegistered(repo.mainPath, repo.taskPath)).toBe(false)
+    expect(existsSync(workspaceFile(wsName))).toBe(false)
+    expect(workspaceExists(wsName)).toBe(false)
+  })
+
+  test("merge dry-run leaves branch, worktree, and workspace YAML intact", async () => {
+    const { repo, branch, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "merge-dry")
+    commitIn(repo.taskPath, "feature.txt", "feature\n", "feature commit")
+
+    const result = await mergeWorkspace(wsName, { dryRun: true, force: true })
+
+    expect(result.ok).toBe(true)
+    expect(existsSync(repo.taskPath)).toBe(true)
+    expect(workspaceExists(wsName)).toBe(true)
+    expect(execSync(`git -C ${repo.mainPath} rev-parse --verify ${branch}`, gitExecOptions(repo.mainPath, tmpDir)).toString().trim().length).toBeGreaterThan(0)
+  })
+
+  test("merge force merges the feature branch, removes worktree and YAML, and deletes local branch", async () => {
+    const { repo, branch, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "merge-force")
+    commitIn(repo.taskPath, "feature.txt", "feature\n", "feature commit")
+
+    const result = await mergeWorkspace(wsName, { force: true })
+
+    expect(result.ok).toBe(true)
+    expect(await isWorktreeRegistered(repo.mainPath, repo.taskPath)).toBe(false)
+    expect(workspaceExists(wsName)).toBe(false)
+    expect(execSync(`git -C ${repo.mainPath} log --oneline main`, gitExecOptions(repo.mainPath, tmpDir)).toString()).toContain("feature commit")
+    const branchLookup = Bun.spawnSync(["git", "-C", repo.mainPath, "rev-parse", "--verify", branch], {
+      env: gitExecOptions(repo.mainPath, tmpDir).env,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    expect(branchLookup.exitCode).not.toBe(0)
+  })
+
+  test("rename re-registers worktrees and updates workspace identity", async () => {
+    const { repo, wsName, wsRoot } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "rename-old")
+    const nextName = "rename-new"
+    const nextPath = join(wsRoot, "tasks", nextName, "api")
+
+    const result = await renameWorkspace(wsName, nextName, { force: true })
+
+    expect(result.ok).toBe(true)
+    expect(workspaceExists(wsName)).toBe(false)
+    expect(workspaceExists(nextName)).toBe(true)
+    expect(await isWorktreeRegistered(repo.mainPath, repo.taskPath)).toBe(false)
+    expect(existsSync(nextPath)).toBe(true)
+    expect(await isWorktreeRegistered(repo.mainPath, nextPath)).toBe(true)
+    const ws = readWorkspace(nextName)
+    expect(ws.name).toBe(nextName)
+    expect(ws.repos[0]?.task_path).toBe(nextPath)
+  })
+
+  test("missing task_path clean skips safely without deleting unrelated files", async () => {
+    const { repo, wsName, wsRoot } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "missing-task")
+    cleanup(repo.taskPath)
+    const unrelated = join(wsRoot, "tasks", "unrelated", "keep.txt")
+    mkdirSync(join(wsRoot, "tasks", "unrelated"), { recursive: true })
+    writeFileSync(unrelated, "keep\n")
+
+    const result = await cleanWorkspace(wsName, { force: true })
+
+    expect(result.ok).toBe(true)
+    expect(existsSync(unrelated)).toBe(true)
+    expect(workspaceExists(wsName)).toBe(true)
+  })
+
+  test("pre-clean hook failure preserves prior probe output and the worktree", async () => {
+    const probeFile = join(tmpDir, "hook-probe.txt")
+    const okScript = writeProbeScript(tmpDir, "ok.sh", probeFile, ["GS_WORKSPACE_NAME", "GS_TRIGGERED_BY"])
+    const failScript = join(tmpDir, "fail.sh")
+    writeFileSync(failScript, "#!/bin/sh\necho FAIL >&2\nexit 7\n")
+    execSync(`chmod +x ${failScript}`)
+    const { repo, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "hook-rollback", {
+      hooks: { pre_clean: [okScript, failScript] },
+    })
+
+    const result = await cleanWorkspace(wsName, { force: true, captured: true })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("pre_clean hook failed")
+    expect(existsSync(repo.taskPath)).toBe(true)
+    expect(existsSync(probeFile), result.error).toBe(true)
+    const probe = readFileSync(probeFile, "utf8")
+    expect(probe).toContain(`GS_WORKSPACE_NAME=${wsName}`)
+    expect(probe).toContain("GS_TRIGGERED_BY=clean")
+  })
+
+  test("close succeeds when the workspace task folder is already missing", async () => {
+    const { wsName, wsRoot } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "close-missing")
+    cleanup(join(wsRoot, "tasks", wsName))
+
+    const result = await closeWorkspace(wsName, { captured: true })
+
+    expect(result.ok).toBe(true)
+  })
+})

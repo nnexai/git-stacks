@@ -58,7 +58,7 @@ async function runWorkspaceHooks(
 
   for (const cmd of commands) {
     const handle = _exec.spawn({
-      cmd: ["sh", "-c", cmd],
+      cmd: ["/bin/sh", "-c", cmd],
       cwd,
       env: mergedEnv,
       stdout: "inherit",
@@ -84,7 +84,7 @@ async function runWorkspaceHooksCaptured(
 
   for (const cmd of commands) {
     const handle: SpawnHandle = _exec.spawn({
-      cmd: ["sh", "-c", cmd],
+      cmd: ["/bin/sh", "-c", cmd],
       cwd,
       env: mergedEnv,
       stdout: "pipe",

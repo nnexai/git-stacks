@@ -64,7 +64,7 @@ export async function runHooks(
 
   for (const cmd of commands) {
     const handle = _exec.spawn({
-      cmd: ["sh", "-c", cmd],
+      cmd: ["/bin/sh", "-c", cmd],
       cwd,
       env: mergedEnv,
       stdout: "inherit",
@@ -95,7 +95,7 @@ export async function runHooksCaptured(
 
   for (const cmd of commands) {
     const handle = _exec.spawn({
-      cmd: ["sh", "-c", cmd],
+      cmd: ["/bin/sh", "-c", cmd],
       cwd,
       env: mergedEnv,
       stdout: "pipe",
