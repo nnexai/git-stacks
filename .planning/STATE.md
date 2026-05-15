@@ -134,6 +134,7 @@ Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree c
 - Add workspace stale view — captured 2026-05-15. Explore a `git-stacks stale` advisory command that classifies old workspaces as active, idle, ready-to-clean, needs-attention, or orphaned. See `.planning/todos/pending/2026-05-15-add-workspace-stale-view.md`.
 - Improve TUI dashboard experience — captured 2026-05-15. Future reminder to make `git-stacks manage` a richer workspace control center, especially after notes/stale/files/manual-command surfaces are chosen. See `.planning/todos/pending/2026-05-15-improve-tui-dashboard-experience.md`.
 - Improve template composition understanding — captured 2026-05-15. Weak idea to make composed/baseline templates easier to preview and explain instead of adding a separate profiles concept. See `.planning/todos/pending/2026-05-15-improve-template-composition-understanding.md`.
+- Create workspace from forge source — captured 2026-05-15. Explore `git-stacks new --source <forge-url>` for creating normal template-backed workspaces from GitLab MR, Gitea PR, then GitHub PR sources. See `.planning/todos/pending/2026-05-15-create-workspace-from-forge-source.md`.
 
 ### Blockers/Concerns
 
