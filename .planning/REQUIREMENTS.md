@@ -112,20 +112,20 @@ Which phases cover which requirements. Updated during roadmap refinement.
 | GATE-01 | Phase 84 | Complete |
 | GATE-02 | Phase 84 | Complete |
 | GATE-03 | Phase 84 | Complete |
-| CORE-01 | Phase 85 | Planned |
-| CORE-02 | Phase 85 | Planned |
-| CORE-03 | Phase 85 | Planned |
-| CORE-04 | Phase 85 | Planned |
-| CORE-05 | Phase 85 | Planned |
-| CMD-01 | Phase 86 | Planned |
-| CMD-02 | Phase 86 | Planned |
-| CMD-03 | Phase 86 | Planned |
-| CMD-04 | Phase 86 | Planned |
-| INTG-02 | Phase 87 | Planned |
-| INTG-03 | Phase 87 | Planned |
-| INTG-04 | Phase 87 | Planned |
-| GATE-04 | Phase 88 | Planned |
-| COVR-05 | Phase 88 | Planned |
+| CORE-01 | Phase 85 | Complete |
+| CORE-02 | Phase 85 | Complete |
+| CORE-03 | Phase 85 | Complete |
+| CORE-04 | Phase 85 | Complete |
+| CORE-05 | Phase 85 | Complete |
+| CMD-01 | Phase 86 | Complete |
+| CMD-02 | Phase 86 | Complete |
+| CMD-03 | Phase 86 | Complete |
+| CMD-04 | Phase 86 | Complete |
+| INTG-02 | Phase 87 | Complete |
+| INTG-03 | Phase 87 | Complete |
+| INTG-04 | Phase 87 | Complete |
+| GATE-04 | Phase 88 | Complete |
+| COVR-05 | Phase 88 | Complete |
 
 **Coverage:**
 - v0.17.1 requirements: 35 total
