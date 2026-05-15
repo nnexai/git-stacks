@@ -4,8 +4,8 @@ milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
 status: Awaiting next milestone
 stopped_at: Completed 88-02-PLAN.md
-last_updated: "2026-05-15T06:35:12.082Z"
-last_activity: 2026-05-15 — Milestone v0.17.1 completed and archived
+last_updated: "2026-05-15T19:45:33.000Z"
+last_activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree creation so an existing local workspace branch is reused, and if origin/<branch> exists it is configured as upstream like git checkout would do
 progress:
   total_phases: 13
   completed_phases: 13
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 Phase: Milestone v0.17.1 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-05-15 — Milestone v0.17.1 completed and archived
+Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree creation so an existing local workspace branch is reused, and if origin/<branch> exists it is configured as upstream like git checkout would do
 
 ## Performance Metrics
 
@@ -133,6 +133,12 @@ None.
 ### Blockers/Concerns
 
 None blocking. Concern: functional-only coverage is not yet sufficient for release confidence; new phases 85-88 are intended to close or explicitly classify those gaps.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260515-u0q | Update worktree creation so an existing local workspace branch is reused, and if origin/<branch> exists it is configured as upstream like git checkout would do | 2026-05-15 | 2533bba | Verified | [260515-u0q-update-worktree-creation-so-an-existing-](./quick/260515-u0q-update-worktree-creation-so-an-existing-/) |
 
 ## Session Continuity
 
