@@ -133,6 +133,7 @@ Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree c
 - Add workspace notes — captured 2026-05-15. Explore lightweight operator notes for workspaces, stored outside project repos and surfaced later in dashboard/stale views. See `.planning/todos/pending/2026-05-15-add-workspace-notes.md`.
 - Add workspace stale view — captured 2026-05-15. Explore a `git-stacks stale` advisory command that classifies old workspaces as active, idle, ready-to-clean, needs-attention, or orphaned. See `.planning/todos/pending/2026-05-15-add-workspace-stale-view.md`.
 - Improve TUI dashboard experience — captured 2026-05-15. Future reminder to make `git-stacks manage` a richer workspace control center, especially after notes/stale/files/manual-command surfaces are chosen. See `.planning/todos/pending/2026-05-15-improve-tui-dashboard-experience.md`.
+- Improve template composition understanding — captured 2026-05-15. Weak idea to make composed/baseline templates easier to preview and explain instead of adding a separate profiles concept. See `.planning/todos/pending/2026-05-15-improve-template-composition-understanding.md`.
 
 ### Blockers/Concerns
 
