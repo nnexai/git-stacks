@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
 status: Milestone extended — ready for Phase 85 execution after plan generation
-stopped_at: Completed 85-03-PLAN.md
-last_updated: "2026-05-15T04:42:57.317Z"
+stopped_at: Completed 85-04-PLAN.md
+last_updated: "2026-05-15T05:07:40.220Z"
 last_activity: 2026-05-15 -- Phase 83 was already implemented and consumed by Phases 84/84.1; stale summaries and roadmap checkboxes were reconciled
 progress:
   total_phases: 22
-  completed_phases: 16
+  completed_phases: 17
   total_plans: 50
-  completed_plans: 40
-  percent: 80
+  completed_plans: 41
+  percent: 82
 ---
 
 # Project State
@@ -30,7 +30,7 @@ Plan: context gathered; planning in progress
 Status: Milestone extended — ready for Phase 85 execution after plan generation
 Last activity: 2026-05-15 -- Phase 83 was already implemented and consumed by Phases 84/84.1; stale summaries and roadmap checkboxes were reconciled
 
-Progress: [████████░░] 80%
+Progress: [████████░░] 82%
 
 ## Performance Metrics
 
@@ -52,6 +52,7 @@ Progress: [████████░░] 80%
 | Phase 85 P01 | 24min | 2 tasks | 4 files |
 | Phase 85 P02 | 3min | 2 tasks | 1 files |
 | Phase 85 P03 | 5min | 2 tasks | 1 files |
+| Phase 85-core-real-fixture-functional-hardening P04 | 20min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,8 @@ Progress: [████████░░] 80%
 - [Phase 85-88]: The milestone is not ready to close just because tests are green. The coverage report shows functional confidence gaps in command workflows, real-source integration utilities, and stable non-TUI core behaviors.
 - [Phase 85-88]: New coverage work should prioritize real temp directories, local git/bare remotes, isolated config homes, and injected executor contracts. Avoid brittle prompt/spinner assertions, TUI rendering, and real desktop/plugin environments.
 - [Phase 85-88]: Tests must execute real source modules. Existing patterns that inline implementation copies in mocks, especially around issue/forge utilities, should be replaced or supplemented so coverage means source behavior was exercised.
+- [Phase 85-core-real-fixture-functional-hardening]: Phase 85 coverage validation stays local-only without numeric thresholds or CI requirements.
+- [Phase 85-core-real-fixture-functional-hardening]: Phase 85 focused gap closure is limited to core source modules already inside the phase boundary.
 
 ### Roadmap Evolution
 
@@ -117,6 +120,6 @@ None blocking. Concern: functional-only coverage is not yet sufficient for relea
 
 ## Session Continuity
 
-Last session: 2026-05-15T04:42:57.310Z
-Stopped at: Completed 85-03-PLAN.md
+Last session: 2026-05-15T05:07:40.214Z
+Stopped at: Completed 85-04-PLAN.md
 Resume file: None
