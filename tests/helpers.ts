@@ -391,6 +391,46 @@ export function makeWorkspaceFixture(
   return cfgDir
 }
 
+export function makeRealWorkspaceFixture(
+  baseDir: string,
+  cfgDir: string,
+  wsName: string,
+  opts: {
+    repoName?: string
+    branch?: string
+    hooks?: Record<string, string[]>
+    repoHooks?: Record<string, string[]>
+  } = {}
+): {
+  repo: ReturnType<typeof makeRepoWithRemote>
+  wsRoot: string
+  wsName: string
+  branch: string
+} {
+  const branch = opts.branch ?? `feat/${wsName}`
+  const repoName = opts.repoName ?? "api"
+  const repo = makeRepoWithRemote(baseDir, repoName, branch)
+  const wsRoot = join(baseDir, "workspaces")
+  const taskPath = join(wsRoot, "tasks", wsName, repoName)
+  mkdirSync(dirname(taskPath), { recursive: true })
+  execSync(`git worktree remove ${repo.taskPath} --force`, gitExecOptions(repo.mainPath, baseDir))
+  execSync(`git worktree add ${taskPath} ${branch}`, gitExecOptions(repo.mainPath, baseDir))
+  mkdirSync(cfgDir, { recursive: true })
+  writeFileSync(join(cfgDir, "config.yml"), `workspace_root: ${wsRoot}\n`)
+  const workspaceRepo = { ...repo, taskPath }
+
+  makeWorkspaceFixture(cfgDir, wsName, [
+    {
+      name: repoName,
+      mainPath: workspaceRepo.mainPath,
+      taskPath: workspaceRepo.taskPath,
+      hooks: opts.repoHooks,
+    },
+  ], { wsRoot, branch, hooks: opts.hooks })
+
+  return { repo: workspaceRepo, wsRoot, wsName, branch }
+}
+
 export function makeProbeHook(artifactPath: string, envVars: string[]): string {
   const lines = [
     "#!/bin/sh",
