@@ -129,6 +129,7 @@ Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree c
 ### Pending Todos
 
 - Add manual workspace commands — captured 2026-05-15. Explore named, manually triggered template/workspace command recipes that reuse hook/env/cwd execution machinery without being bound to lifecycle events. See `.planning/todos/pending/2026-05-15-add-manual-workspace-commands.md`.
+- Add bidirectional files sync — captured 2026-05-15. Explore `files.sync` for real-file two-way sync of uncommitted planning/agent config directories, with a `git-stacks files ...` command family and lightweight drift detection instead of large hash manifests. See `.planning/todos/pending/2026-05-15-add-bidirectional-files-sync.md`.
 
 ### Blockers/Concerns
 
