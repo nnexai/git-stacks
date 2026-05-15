@@ -229,7 +229,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up** - Coverage report accuracy verified through canonical full-suite coverage and local release-prep gates (completed 2026-05-14)
 - [x] **Phase 85: Core Real-Fixture Functional Hardening** - Add high-value tests for core workspace/git/hooks/files/env behavior using real temp directories and local git repositories instead of mocks (completed 2026-05-15)
 - [x] **Phase 86: Workspace Command Workflow Edge Coverage** - Cover stable command workflows and destructive/safety edge cases that are testable through the real CLI without driving prompt UIs or external desktop integrations (completed 2026-05-15)
-- [ ] **Phase 87: Integration Contract and Source-Module Coverage** - Replace brittle or source-bypassing integration tests with injected-executor contract tests that exercise the real forge/issue/session modules without launching external tools
+- [x] **Phase 87: Integration Contract and Source-Module Coverage** - Replace brittle or source-bypassing integration tests with injected-executor contract tests that exercise the real forge/issue/session modules without launching external tools (completed 2026-05-15)
 - [ ] **Phase 88: Functional Coverage Readiness Gate** - Reassess functional-only coverage, document remaining accepted gaps, and add local gates or inventories that prevent regression in the newly covered core areas
 
 ## Phase Details
@@ -563,7 +563,7 @@ Plans:
 | 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 85. Core Real-Fixture Functional Hardening | v0.17.1 | 4/4 | Complete   | 2026-05-15 |
 | 86. Workspace Command Workflow Edge Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-15 |
-| 87. Integration Contract and Source-Module Coverage | v0.17.1 | 3/4 | In Progress|  |
+| 87. Integration Contract and Source-Module Coverage | v0.17.1 | 4/4 | Complete   | 2026-05-15 |
 | 88. Functional Coverage Readiness Gate | v0.17.1 | 0/2 | Not started | - |
 
 ## Backlog

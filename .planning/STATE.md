@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
-status: executing
-stopped_at: Completed 87-03-PLAN.md
-last_updated: "2026-05-15T05:48:07.406Z"
+status: verifying
+stopped_at: Completed 87-04-PLAN.md
+last_updated: "2026-05-15T05:54:06.981Z"
 last_activity: 2026-05-15
 progress:
   total_phases: 22
-  completed_phases: 18
+  completed_phases: 19
   total_plans: 50
-  completed_plans: 47
-  percent: 94
+  completed_plans: 48
+  percent: 96
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 
 ## Current Position
 
-Phase: 87 (integration-contract-and-source-module-coverage) — EXECUTING
+Phase: 87 (integration-contract-and-source-module-coverage) — VERIFYING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-15
 
-Progress: [█████████░] 94%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [█████████░] 94%
 | Phase 87 P01 | 18 min | 2 tasks | 3 files |
 | Phase 87 P02 | 12 min | 2 tasks | 5 files |
 | Phase 87 P03 | 25 min | 3 tasks | 7 files |
+| Phase 87 P04 | 12 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,8 @@ Progress: [█████████░] 94%
 - [Phase 85-core-real-fixture-functional-hardening]: Phase 85 focused gap closure is limited to core source modules already inside the phase boundary.
 - [Phase 87]: Utility tests now import real issue-utils and forge-utils source modules while mocking only config, workspace detection, and forge environment boundaries.
 - [Phase 87]: Forge utility tests use the exported `_detect` seam and real `resolveForgeRepoAnyMode()` instead of source-copying mocks.
+- [Phase 87]: Local tests/lib/integrations contract tests belong in coverage:unit because they exercise source modules through injected executors and mocks, not real external environments. — Needed for Phase 87 coverage artifacts to reflect real integration source modules.
+- [Phase 87]: Phase 87 coverage notes hand final readiness classification to Phase 88 and do not claim live forge, browser, editor, IDE, or window-manager readiness. — Preserves the Phase 87 scope boundary.
 
 ### Roadmap Evolution
 
@@ -129,6 +132,6 @@ None blocking. Concern: functional-only coverage is not yet sufficient for relea
 
 ## Session Continuity
 
-Last session: 2026-05-15T05:48:07.399Z
-Stopped at: Completed 87-03-PLAN.md
+Last session: 2026-05-15T05:53:45.913Z
+Stopped at: Completed 87-04-PLAN.md
 Resume file: None
