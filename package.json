@@ -41,6 +41,7 @@
     "verify": "bun run scripts/verify.ts",
     "verify:prereqs": "bun run scripts/verify-prereqs.ts",
     "verify:gates": "bun run scripts/verify-gates.ts",
+    "verify:functional": "bun run scripts/functional-coverage-readiness.ts",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run typecheck && bun run test"
   },

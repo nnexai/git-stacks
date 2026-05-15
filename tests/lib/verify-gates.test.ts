@@ -4,6 +4,7 @@ import { join } from "path"
 import { tmpdir } from "os"
 import { collectVerifyGateReport, formatVerifyGateReport } from "../../scripts/verify-gates"
 import type { E2EInventoryItem } from "../e2e-inventory"
+import { FUNCTIONAL_READINESS_AREAS } from "../functional-readiness-inventory"
 
 const tempRoots: string[] = []
 
@@ -35,6 +36,12 @@ function writeCoverageArtifacts(
     "src/index.ts": coverageEntry("src/index.ts"),
     "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
     "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
+    ...Object.fromEntries(
+      FUNCTIONAL_READINESS_AREAS.flatMap((area) => area.sourceTargets).map((path) => [
+        path,
+        coverageEntry(path),
+      ])
+    ),
   }
 ): void {
   const coverageDir = join(root, ".coverage")

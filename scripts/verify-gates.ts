@@ -13,6 +13,11 @@ import { messageCommand } from "../src/commands/message"
 import { installCommand } from "../src/commands/install"
 import { integrationCommand } from "../src/commands/integration"
 import { labelCommand } from "../src/commands/label"
+import {
+  collectFunctionalCoverageReadiness,
+  type FunctionalCoverageReadinessReport,
+} from "./functional-coverage-readiness"
+import type { FunctionalReadinessArea } from "../tests/functional-readiness-inventory"
 
 export type MissingMappedTest = {
   id: string
@@ -38,12 +43,14 @@ export type VerifyGateReport = {
   missingMappedTests: MissingMappedTest[]
   coverageArtifacts: CoverageArtifactProblem[]
   coverageSentinels: CoverageSentinelProblem[]
+  functionalReadiness: FunctionalCoverageReadinessReport
 }
 
 type CollectOptions = {
   root?: string
   inventory?: readonly E2EInventoryItem[]
   liveCommands?: readonly string[]
+  functionalReadinessAreas?: readonly FunctionalReadinessArea[]
 }
 
 const ROOT = join(import.meta.dir, "..")
@@ -266,6 +273,10 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
   const missingMappedTests = collectMissingMappedTests(root, inventory)
   const coverageArtifacts = collectCoverageArtifactProblems(root)
   const coverageSentinels = collectCoverageSentinelProblems(root)
+  const functionalReadiness = collectFunctionalCoverageReadiness({
+    root,
+    areas: options.functionalReadinessAreas,
+  })
 
   return {
     ok:
@@ -273,7 +284,8 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
       unmappedInScopeItems.length === 0 &&
       missingMappedTests.length === 0 &&
       coverageArtifacts.length === 0 &&
-      coverageSentinels.length === 0,
+      coverageSentinels.length === 0 &&
+      functionalReadiness.ok,
     inventoryDrift: {
       missingFromInventory,
     },
@@ -281,6 +293,7 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
     missingMappedTests,
     coverageArtifacts,
     coverageSentinels,
+    functionalReadiness,
   }
 }
 
@@ -323,6 +336,22 @@ export function formatVerifyGateReport(report: VerifyGateReport): string {
     lines.push("", "Coverage sentinel problems:")
     for (const sentinel of report.coverageSentinels) {
       lines.push(`  - ${sentinel.path}: ${sentinel.problem}`)
+    }
+  }
+
+  if (report.functionalReadiness.problems.length > 0 || report.functionalReadiness.mustFix.length > 0) {
+    lines.push("", "Functional readiness problems:")
+    for (const problem of report.functionalReadiness.problems) {
+      lines.push(`  - ${problem.path}: ${problem.problem}`)
+    }
+    for (const item of report.functionalReadiness.mustFix) {
+      lines.push(`  - ${item.id}: ${item.title}`)
+      for (const target of item.missingTargets) {
+        lines.push(`    - missing: ${target}`)
+      }
+      for (const target of item.zeroHitTargets) {
+        lines.push(`    - zero hits: ${target}`)
+      }
     }
   }
 
