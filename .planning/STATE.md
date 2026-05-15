@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
 status: verifying
-stopped_at: Completed 87-04-PLAN.md
-last_updated: "2026-05-15T05:54:06.981Z"
+stopped_at: Completed 88-01-PLAN.md
+last_updated: "2026-05-15T06:00:12.614Z"
 last_activity: 2026-05-15
 progress:
   total_phases: 22
   completed_phases: 19
   total_plans: 50
-  completed_plans: 48
-  percent: 96
+  completed_plans: 49
+  percent: 98
 ---
 
 # Project State
@@ -30,7 +30,7 @@ Plan: 4 of 4
 Status: Phase complete — ready for verification
 Last activity: 2026-05-15
 
-Progress: [██████████] 96%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [██████████] 96%
 | Phase 87 P02 | 12 min | 2 tasks | 5 files |
 | Phase 87 P03 | 25 min | 3 tasks | 7 files |
 | Phase 87 P04 | 12 min | 2 tasks | 3 files |
+| Phase 88 P01 | 4 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ Progress: [██████████] 96%
 - [Phase 87]: Forge utility tests use the exported `_detect` seam and real `resolveForgeRepoAnyMode()` instead of source-copying mocks.
 - [Phase 87]: Local tests/lib/integrations contract tests belong in coverage:unit because they exercise source modules through injected executors and mocks, not real external environments. — Needed for Phase 87 coverage artifacts to reflect real integration source modules.
 - [Phase 87]: Phase 87 coverage notes hand final readiness classification to Phase 88 and do not claim live forge, browser, editor, IDE, or window-manager readiness. — Preserves the Phase 87 scope boundary.
+- [Phase 88]: Functional readiness uses targeted source sentinels from Phases 85-87 instead of numeric coverage thresholds.
+- [Phase 88]: Readiness evidence remains pre-finalization only; archive, tag, publish, cleanup, and $gsd-complete-milestone stay outside Phase 88.
 
 ### Roadmap Evolution
 
@@ -132,6 +135,6 @@ None blocking. Concern: functional-only coverage is not yet sufficient for relea
 
 ## Session Continuity
 
-Last session: 2026-05-15T05:53:45.913Z
-Stopped at: Completed 87-04-PLAN.md
+Last session: 2026-05-15T06:00:05.896Z
+Stopped at: Completed 88-01-PLAN.md
 Resume file: None

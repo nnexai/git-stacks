@@ -564,7 +564,7 @@ Plans:
 | 85. Core Real-Fixture Functional Hardening | v0.17.1 | 4/4 | Complete   | 2026-05-15 |
 | 86. Workspace Command Workflow Edge Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-15 |
 | 87. Integration Contract and Source-Module Coverage | v0.17.1 | 4/4 | Complete   | 2026-05-15 |
-| 88. Functional Coverage Readiness Gate | v0.17.1 | 0/2 | Not started | - |
+| 88. Functional Coverage Readiness Gate | v0.17.1 | 1/2 | In Progress|  |
 
 ## Backlog
 
