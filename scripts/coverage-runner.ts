@@ -69,6 +69,8 @@ function classifyFiles(): { unit: string[]; integ: string[] } {
       integ.push(file)
     } else if (rel === "lib/files.test.ts") {
       integ.push(file)
+    } else if (rel.startsWith("lib/integrations/")) {
+      unit.push(file)
     } else if (rel.startsWith("lib/") && fileUsesMockModule(file)) {
       integ.push(file)
     } else if (rel.startsWith("lib/")) {

@@ -51,3 +51,32 @@ This matches the Phase 87 boundary: local source-module and injected-executor co
 ## Phase 88 Handoff
 
 Phase 88 owns final readiness classification and release evidence. Phase 87 hands off local coverage artifacts and audit notes only; it does not claim that the integrations are ready against real forge auth, browsers, editors, IDEs, desktop window managers, or hosted services.
+
+## Verification Results
+
+Commands run on 2026-05-15:
+
+| Command | Result | Notes |
+|---------|--------|-------|
+| `bun run coverage:unit` | pass | Ran 62 isolated unit-coverage files after including local `tests/lib/integrations/**` contract tests in unit coverage. |
+| `bun run verify:gates` | pass | Inventory, mapped tests, and coverage artifacts are aligned. |
+| `bun run typecheck` | pass | TypeScript completed with `tsc --noEmit`. |
+
+Coverage hit inspection from `.coverage/coverage-final.json`:
+
+| Source module | Statement hits | Function hits | Status |
+|---------------|----------------|---------------|--------|
+| `src/lib/integrations/issue-utils.ts` | 94 | 17 | hit |
+| `src/lib/integrations/forge-utils.ts` | 357 | 70 | hit |
+| `src/lib/integrations/github.ts` | 489 | 56 | hit |
+| `src/lib/integrations/gitlab.ts` | 488 | 56 | hit |
+| `src/lib/integrations/gitea.ts` | 688 | 80 | hit |
+| `src/lib/integrations/jira.ts` | 266 | 34 | hit |
+| `src/lib/integrations/tmux.ts` | 265 | 26 | hit |
+| `src/lib/integrations/cmux.ts` | 260 | 11 | hit |
+| `src/lib/integrations/niri.ts` | 1931 | 96 | hit |
+| `src/lib/integrations/aerospace.ts` | 4438 | 432 | hit |
+| `src/lib/integrations/vscode.ts` | 153 | 24 | hit |
+| `src/lib/integrations/intellij.ts` | 94 | 12 | hit |
+
+No Phase 87 source module named above remains zero-hit in the refreshed coverage artifact. Deferred external environments remain Phase 88 or later scope; this verification proves local source-module coverage only.
