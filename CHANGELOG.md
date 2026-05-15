@@ -10,6 +10,8 @@ All notable changes to `git-stacks` are documented here.
 
 **Local verification gate** — maintainers can now run `bun run verify` as the stable local release-prep path. The umbrella command refreshes coverage with `bun run coverage`, runs `verify:prereqs` and `verify:gates`, then executes the existing test, dependency, and typecheck commands.
 
+**Functional readiness gate** — `verify:gates` now includes functional readiness findings that separate covered source from functional confidence, with accepted gaps, deferred external-environment coverage, and must-fix-before-release gaps reported before v0.17.1 finalization.
+
 ### Changed
 
 **Inventory and coverage gate diagnostics are aggregated** — `verify:gates` reports live CLI inventory drift, unmapped in-scope inventory entries, missing mapped test files, and missing or invalid coverage artifacts together so local fixes do not require repeated fail-fast reruns.

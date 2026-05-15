@@ -270,18 +270,21 @@ Run the full local maintainer gate before release prep:
 bun run verify
 ```
 
-`bun run verify` refreshes coverage artifacts, checks the E2E inventory and mapped test files, then runs the existing test, dependency, and typecheck commands. To debug an individual step, run the underlying commands directly:
+`bun run verify` refreshes canonical coverage with `bun run coverage`, runs `bun run verify:gates`, then runs the existing test, dependency, and typecheck commands. The local gate separates a **green suite** from **covered source** and **functional confidence**: passing tests are not treated as release confidence unless the covered source maps to the functional readiness areas for the milestone.
+
+To debug an individual step, run the underlying commands directly:
 
 ```bash
 bun run verify:prereqs
 bun run verify:gates
+bun run verify:functional
 bun run coverage
 bun run test
 bun run test:deps
 bun run typecheck
 ```
 
-The gate is local-only. Coverage validation checks that `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, and `.coverage/lcov.info` exist and parse; it does not enforce numeric coverage thresholds.
+The gate is local-only. Coverage validation checks that `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, and `.coverage/lcov.info` exist and parse. Phase 88 uses targeted functional readiness sentinels rather than numeric coverage thresholds; it does not add a percentage threshold policy.
 
 ## Debug Output
 
