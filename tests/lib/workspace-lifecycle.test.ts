@@ -162,7 +162,7 @@ describe("workspace-lifecycle exec seam", () => {
     }
   })
 
-  test("closeWorkspace calls _exec.spawn with cmd=['sh', '-c', hook] stdout=inherit stderr=inherit and GS_TRIGGERED_BY=close", async () => {
+  test("closeWorkspace calls _exec.spawn with cmd=['/bin/sh', '-c', hook] stdout=inherit stderr=inherit and GS_TRIGGERED_BY=close", async () => {
     const workspace = makeTestWorkspace({ pre_close: ["echo PRE_CLOSE"] })
     readWorkspaceMock.mockImplementation(() => workspace)
 
@@ -182,7 +182,7 @@ describe("workspace-lifecycle exec seam", () => {
     expect(spawnCalls.length).toBeGreaterThanOrEqual(1)
     const hookCall = spawnCalls.find((c) => c.cmd[2] === "echo PRE_CLOSE")
     expect(hookCall).toBeDefined()
-    expect(hookCall.cmd).toEqual(["sh", "-c", "echo PRE_CLOSE"])
+    expect(hookCall.cmd).toEqual(["/bin/sh", "-c", "echo PRE_CLOSE"])
     expect(hookCall.stdout).toBe("inherit")
     expect(hookCall.stderr).toBe("inherit")
     expect(hookCall.env.GS_TRIGGERED_BY).toBe("close")
