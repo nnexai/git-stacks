@@ -133,6 +133,48 @@ describe("gitlab pr create", () => {
       parent.parseAsync(["node", "x", "pr", "create", "bad-ws"])
     ).rejects.toThrow("process.exit")
   })
+
+  test("does not run glab when resolveForgeRepo returns error", async () => {
+    ;(resolveForgeRepoMock as any).mockImplementation(() => ({
+      ok: false,
+      error: "workspace_not_found",
+      name: "bad-ws",
+    }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "pr", "create", "bad-ws"])
+    ).rejects.toThrow("process.exit")
+    expect(_exec.run).not.toHaveBeenCalled()
+  })
+
+  test("propagates nonzero glab exit code", async () => {
+    _exec.run = mock(async () => ({ exitCode: 8 }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "pr", "create", "my-workspace"])
+    ).rejects.toThrow("process.exit(8)")
+    expect(exitMock).toHaveBeenCalledWith(8)
+  })
+})
+
+describe("gitlab open", () => {
+  test("calls _exec.run with repo view --output json and cwd for non-web repository open", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "open", "my-workspace"])
+    expect(_exec.run).toHaveBeenCalledWith(
+      ["repo", "view", "--output", "json"],
+      "/tmp/task/repo-a"
+    )
+  })
+
+  test("calls _exec.run with repo view --web for web repository open", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "open", "my-workspace", "--web"])
+    expect(_exec.run).toHaveBeenCalledWith(
+      ["repo", "view", "--web"],
+      "/tmp/task/repo-a"
+    )
+  })
 })
 
 describe("gitlab pr open --web", () => {
@@ -266,6 +308,7 @@ describe("gitlab issue commands", () => {
     await expect(
       parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
     ).rejects.toThrow("process.exit")
+    expect(_exec.run).not.toHaveBeenCalled()
   })
 
   test("issue open uses resolveForgeRepo for CWD", async () => {

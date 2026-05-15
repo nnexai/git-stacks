@@ -133,6 +133,48 @@ describe("github pr create", () => {
       parent.parseAsync(["node", "x", "pr", "create", "bad-ws"])
     ).rejects.toThrow("process.exit")
   })
+
+  test("does not run gh when resolveForgeRepo returns error", async () => {
+    ;(resolveForgeRepoMock as any).mockImplementation(() => ({
+      ok: false,
+      error: "workspace_not_found",
+      name: "bad-ws",
+    }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "pr", "create", "bad-ws"])
+    ).rejects.toThrow("process.exit")
+    expect(_exec.run).not.toHaveBeenCalled()
+  })
+
+  test("propagates nonzero gh exit code", async () => {
+    _exec.run = mock(async () => ({ exitCode: 7 }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "pr", "create", "my-workspace"])
+    ).rejects.toThrow("process.exit(7)")
+    expect(exitMock).toHaveBeenCalledWith(7)
+  })
+})
+
+describe("github open", () => {
+  test("calls _exec.run with browse --no-browser and cwd for non-web repository open", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "open", "my-workspace"])
+    expect(_exec.run).toHaveBeenCalledWith(
+      ["browse", "--no-browser"],
+      "/tmp/task/repo-a"
+    )
+  })
+
+  test("calls _exec.run with browse for web repository open", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "open", "my-workspace", "--web"])
+    expect(_exec.run).toHaveBeenCalledWith(
+      ["browse"],
+      "/tmp/task/repo-a"
+    )
+  })
 })
 
 describe("github pr open --web", () => {
@@ -267,6 +309,7 @@ describe("github issue commands", () => {
     await expect(
       parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
     ).rejects.toThrow("process.exit")
+    expect(_exec.run).not.toHaveBeenCalled()
   })
 
   test("issue open uses resolveForgeRepo for CWD", async () => {
