@@ -95,18 +95,35 @@ describe("createWorktree", () => {
 
   test("creates worktree for new branch", async () => {
     const wtPath = join(tmp, "wt", "feat")
+    const mainHead = execSync("git rev-parse HEAD", gitExecOptions(repoPath, tmp)).toString().trim()
+
     await createWorktree(repoPath, wtPath, "feature/x")
+
     const registered = await isWorktreeRegistered(repoPath, wtPath)
+    const wtHead = execSync("git rev-parse HEAD", gitExecOptions(wtPath, tmp)).toString().trim()
     expect(registered).toBe(true)
+    expect(wtHead).toBe(mainHead)
   })
 
-  test("creates worktree for existing branch", async () => {
-    const opts = { cwd: repoPath, stdio: "pipe" as const }
+  test("creates worktree for existing local branch at that branch history", async () => {
+    const opts = gitExecOptions(repoPath, tmp)
     execSync("git branch existing-branch", opts)
+    const seedPath = join(tmp, "seed-existing")
+    execSync(`git worktree add ${seedPath} existing-branch`, opts)
+    writeFileSync(join(seedPath, "existing.txt"), "existing branch\n")
+    execSync("git add .", gitExecOptions(seedPath, tmp))
+    execSync('git commit -m "existing branch commit"', gitExecOptions(seedPath, tmp))
+    const branchHead = execSync("git rev-parse HEAD", gitExecOptions(seedPath, tmp)).toString().trim()
+    execSync(`git worktree remove ${seedPath} --force`, opts)
+
     const wtPath = join(tmp, "wt", "existing")
     await createWorktree(repoPath, wtPath, "existing-branch")
+
     const registered = await isWorktreeRegistered(repoPath, wtPath)
+    const wtHead = execSync("git rev-parse HEAD", gitExecOptions(wtPath, tmp)).toString().trim()
     expect(registered).toBe(true)
+    expect(wtHead).toBe(branchHead)
+    expect(readFileSync(join(wtPath, "existing.txt"), "utf8")).toBe("existing branch\n")
   })
 })
 

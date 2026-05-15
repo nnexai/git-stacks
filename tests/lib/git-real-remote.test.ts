@@ -11,6 +11,7 @@ import {
 } from "../helpers"
 import {
   checkRemoteTrackingRef,
+  createWorktree,
   ensureUpstreamTracking,
   fetchOrigin,
   getCommitsAhead,
@@ -57,6 +58,32 @@ function checkout(repoPath: string, branch: string, args = "") {
 }
 
 describe("git real remote branch state", () => {
+  test("createWorktree creates remote-only branches from origin and configures upstream", async () => {
+    const { originDir, mainPath } = makeRepoWithRemote(tmpDir, "api", "feat/bootstrap")
+    const peer = clonePeer(originDir, "peer-worktree")
+    const branch = "feat/remote-worktree"
+    const worktreePath = join(tmpDir, "remote-worktree")
+
+    checkout(peer, branch, "-b")
+    commitFile(peer, "remote-worktree.txt", "remote branch\n", "remote worktree branch")
+    execSync(`git push origin ${branch}`, gitExecOptions(peer, tmpDir))
+    const remoteHead = execSync("git rev-parse HEAD", gitExecOptions(peer, tmpDir)).toString().trim()
+
+    execSync(`git branch -D ${branch} || true`, gitExecOptions(mainPath, tmpDir))
+    execSync(`git update-ref -d refs/remotes/origin/${branch} || true`, gitExecOptions(mainPath, tmpDir))
+
+    await createWorktree(mainPath, worktreePath, branch)
+
+    const worktreeHead = execSync("git rev-parse HEAD", gitExecOptions(worktreePath, tmpDir)).toString().trim()
+    const upstreamRemote = execSync(`git config branch.${branch}.remote`, gitExecOptions(worktreePath, tmpDir)).toString().trim()
+    const upstreamMerge = execSync(`git config branch.${branch}.merge`, gitExecOptions(worktreePath, tmpDir)).toString().trim()
+
+    expect(worktreeHead).toBe(remoteHead)
+    expect(existsSync(join(worktreePath, "remote-worktree.txt"))).toBe(true)
+    expect(upstreamRemote).toBe("origin")
+    expect(upstreamMerge).toBe(`refs/heads/${branch}`)
+  })
+
   test("getCommitsAhead and getCommitsBehind report divergence after peer pushes", async () => {
     const { originDir, mainPath } = makeRepoWithRemote(tmpDir, "api", "feat/counts")
     const peer = clonePeer(originDir, "peer")
