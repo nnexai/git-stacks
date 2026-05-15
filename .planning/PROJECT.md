@@ -8,7 +8,15 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Recent State (2026-04-06)
+## Recent State (2026-05-15)
+
+### What shipped in v0.17.1
+
+- **Safer cleanup and command contracts** — `clean --gone --dry-run` stays preview-only, destructive workspace commands have stronger dry-run/force coverage, and `run --json` now rejects unsupported non-parallel usage instead of silently ignoring the JSON expectation.
+- **Verified workspace workflows** — workspace create, clone, list, status, open, close, clean, remove, rename, merge, pull, sync, push, run, paths, env, labels, messages, templates, and repo registry flows are covered through local automation with isolated config and disposable repos.
+- **More reliable lifecycle behavior** — hooks, env injection, cwd/path handling, branch starts, generated files, dirty-worktree guards, missing paths, and rollback boundaries were verified against real local fixtures.
+- **Integration contract confidence** — forge, issue, session, IDE, and window-manager integrations now have command-construction and safe-failure coverage without requiring live external services or desktop environments.
+- **Explicit coverage boundary** — broad TUI rendering, dashboard rollback visibility, live forge services, and real browser/window-manager/IDE launches remain deferred to future dedicated work.
 
 ### What shipped in v0.17.0
 

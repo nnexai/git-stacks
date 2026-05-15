@@ -1,5 +1,27 @@
 # Milestones
 
+## v0.17.1 Functional Confidence Coverage (Shipped: 2026-05-15)
+
+**Phases completed:** 13 phases, 35 plans, 35 requirements
+
+**Key accomplishments:**
+
+- Common workspace flows are now verified through local end-to-end automation: create, clone, list, status, open, close, clean, remove, rename, merge, pull, sync, push, run, paths, env, labels, messages, templates, and repo registry commands.
+- Safety-sensitive paths were hardened, including `clean --gone --dry-run`, destructive workspace command dry-runs, dirty-worktree guards, missing-path handling, and non-interactive prompt boundaries.
+- `run --json` now has a clear contract: JSON output is supported with `--parallel --json`, while the unsupported non-parallel form is rejected instead of ignored.
+- Workspace lifecycle hooks, env injection, cwd/path handling, branch starts, and generated workspace files are now covered against disposable local repositories and isolated config homes.
+- Forge, issue, session, IDE, and window-manager integrations have contract coverage for command construction and safe failures without requiring live external services or desktop environments.
+- The milestone audit passed with 35/35 requirements complete and no open debug, quick-task, todo, UAT, verification, or context-question artifacts.
+
+**Accepted gaps:**
+
+- Broad TUI rendering, dashboard rollback visibility, live forge services, and real browser/window-manager/IDE launches remain deferred to later dedicated work.
+- Completion and command error coverage uses stable representative checks rather than brittle full-output or every-combination snapshots.
+
+**Archive:** [.planning/milestones/v0.17.1-ROADMAP.md](.planning/milestones/v0.17.1-ROADMAP.md)
+
+---
+
 ## v0.16.0 Core Engine & Observability (Shipped: 2026-04-05)
 
 **Phases completed:** 5 phases (69-73), 9 plans

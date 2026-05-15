@@ -4,23 +4,23 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
-## [0.17.1] — 2026-05-14
+## [0.17.1] — 2026-05-15
 
-### Added
+### Fixed
 
-**Local verification gate** — maintainers can now run `bun run verify` as the stable local release-prep path. The umbrella command refreshes coverage with `bun run coverage`, runs `verify:prereqs` and `verify:gates`, then executes the existing test, dependency, and typecheck commands.
+**Safer gone-branch cleanup** — `git-stacks clean --gone --dry-run` now stays preview-only. It reports workspaces whose upstream branch disappeared without entering the confirmation or removal path.
 
-**Functional readiness gate** — `verify:gates` now includes functional readiness findings that separate covered source from functional confidence, with accepted gaps, deferred external-environment coverage, and must-fix-before-release gaps reported before v0.17.1 finalization.
+**Clearer JSON contract for workspace commands** — `git-stacks run --json` now rejects the unsupported non-parallel form instead of silently ignoring JSON output expectations. Use `git-stacks run --parallel --json` for machine-readable per-repo results.
+
+**More reliable hook execution** — workspace lifecycle hooks now run through the explicit shell used by the execution environment, reducing surprises on systems where `sh` lookup behaves differently.
+
+**Workspace and integration behavior got a broader regression pass** — create, clone, open, close, clean, remove, rename, merge, pull, sync, push, env, paths, labels, messages, repo/template flows, and integration command contracts were exercised against disposable local repos and isolated config. The shipped behavior is unchanged where it was already correct; the release is mostly about making those workflows safer to rely on.
 
 ### Changed
 
-**Inventory and coverage gate diagnostics are aggregated** — `verify:gates` reports live CLI inventory drift, unmapped in-scope inventory entries, missing mapped test files, and missing or invalid coverage artifacts together so local fixes do not require repeated fail-fast reruns.
+**Debug documentation now matches the shipped output** — README examples describe `GS_DEBUG` as the primary selector, keep `GIT_STACKS_DEBUG=1` as the legacy alias, and show the current key/value stderr shape with `op=... module=... msg=...`.
 
-**Debug documentation matches shipped stderr** — README examples now describe `GS_DEBUG` as the primary selector, keep `GIT_STACKS_DEBUG=1` as the legacy alias, and show the current key/value stderr shape with `op=... module=... msg=...`.
-
-### Internal
-
-**Verification remains local-only** — the new gate surface is implemented as repo scripts and validates stable `.coverage/` artifacts without adding CI requirements or numeric coverage-threshold policy.
+**Release confidence is higher without changing normal usage** — the verification and coverage work behind this release stays local to the repository. It does not add a hosted service, require CI, or change day-to-day `git-stacks` commands.
 
 ---
 
