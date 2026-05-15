@@ -552,6 +552,21 @@ describe("column config — no-op", () => {
     expect(mockNiriSpawn.mock.calls.length).toBe(0)
     expect(mockNiriSpawnSh.mock.calls.length).toBe(0)
   })
+
+  test("no-op when column config is invalid", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: { niri: { enabled: true, columns: [{ windows: [] }] } },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockNiriSpawn.mock.calls.length).toBe(0)
+    expect(mockNiriSpawnSh.mock.calls.length).toBe(0)
+    expect(mockMoveColumnToIndex.mock.calls.length).toBe(0)
+  })
 })
 
 // ===================================================================

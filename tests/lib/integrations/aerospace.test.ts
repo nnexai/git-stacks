@@ -640,6 +640,32 @@ describe("commands array", () => {
     expect(movedWindows.some(m => m.windowId === 42 && m.workspace === "dev")).toBe(true)
   })
 
+  test("source command reuses artifact bag without spawning new windows", async () => {
+    mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
+    const bag: ArtifactBag = {
+      vscode: {
+        kind: "window", pid: 1234, app_id: "vscode", title: "project",
+        windowIds: { aerospace: [42] },
+      } as WindowArtifact,
+    }
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ source: "vscode" }],
+          }],
+        },
+      },
+    })
+    mockSnapshotWindowIds.mockClear()
+
+    await aerospaceIntegration.open(ctx, null, bag)
+
+    expect(mockSnapshotWindowIds).not.toHaveBeenCalled()
+    expect(movedWindows).toContainEqual({ windowId: 42, workspace: "dev" })
+  })
+
   test("warns when source not found in bag (no throw)", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     const ctx = makeCtx({
