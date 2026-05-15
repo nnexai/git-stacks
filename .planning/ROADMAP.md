@@ -561,7 +561,7 @@ Plans:
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 3/3 | Complete | 2026-05-14 |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
 | 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
-| 85. Core Real-Fixture Functional Hardening | v0.17.1 | 0/4 | Not started | - |
+| 85. Core Real-Fixture Functional Hardening | v0.17.1 | 1/4 | In Progress|  |
 | 86. Workspace Command Workflow Edge Coverage | v0.17.1 | 0/3 | Not started | - |
 | 87. Integration Contract and Source-Module Coverage | v0.17.1 | 0/4 | Not started | - |
 | 88. Functional Coverage Readiness Gate | v0.17.1 | 0/2 | Not started | - |
