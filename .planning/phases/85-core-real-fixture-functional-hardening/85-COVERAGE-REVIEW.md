@@ -45,7 +45,7 @@ All targeted files have nonzero source execution in the canonical coverage artif
    - Cover resolver list construction when config repeats resolver IDs or includes unknown IDs.
 
 2. `src/lib/ports.ts`
-   - Cover port allocation failure when no contiguous block exists.
+   - Cover bounded port block selection failure when no contiguous block exists.
    - Cover env-file conflict handling for comments, malformed lines, and conflicting keys read from a real repo path.
 
 3. `src/lib/git.ts`
