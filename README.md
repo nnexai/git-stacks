@@ -262,30 +262,6 @@ git-stacks env my-feature --repo backend-api
 
 Shows GS_* injected vars, user-defined `env:` from workspace YAML, resolved port vars, and resolved secret refs using the same resolver pipeline as `open`. If a secret cannot be resolved, `env` fails with the same error you would hit during `open`, so the preview stays faithful to runtime behavior. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
 
-## Local Verification
-
-Run the full local maintainer gate before release prep:
-
-```bash
-bun run verify
-```
-
-`bun run verify` refreshes canonical coverage with `bun run coverage`, runs `bun run verify:gates`, then runs the existing test, dependency, and typecheck commands. The local gate separates a **green suite** from **covered source** and **functional confidence**: passing tests are not treated as release confidence unless the covered source maps to the functional readiness areas for the milestone.
-
-To debug an individual step, run the underlying commands directly:
-
-```bash
-bun run verify:prereqs
-bun run verify:gates
-bun run verify:functional
-bun run coverage
-bun run test
-bun run test:deps
-bun run typecheck
-```
-
-The gate is local-only. Coverage validation checks that `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, and `.coverage/lcov.info` exist and parse. Phase 88 uses targeted functional readiness sentinels rather than numeric coverage thresholds; it does not add a percentage threshold policy.
-
 ## Debug Output
 
 Use the canonical `GS_DEBUG` selector when you want full debug output or module-specific filtering without changing normal command output. `GIT_STACKS_DEBUG=1` remains available as a legacy all-module compatibility alias:
