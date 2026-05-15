@@ -474,6 +474,13 @@ export function registerWorkspaceCommands(program: Command) {
           console.log(`  ${ws.name.padEnd(24)} ${ws.branch}`)
         }
 
+        if (opts.dryRun) {
+          for (const ws of goneWorkspaces) {
+            console.log(`  [dry-run] would remove ${ws.name}`)
+          }
+          return
+        }
+
         if (!opts.force) {
           const ok = await p.confirm({
             message: `Remove ${goneWorkspaces.length} gone workspace(s)? (worktrees + config)`,
