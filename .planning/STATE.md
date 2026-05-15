@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
 status: executing
-stopped_at: Completed 87-02-PLAN.md
-last_updated: "2026-05-15T05:42:38.922Z"
+stopped_at: Completed 87-03-PLAN.md
+last_updated: "2026-05-15T05:48:07.406Z"
 last_activity: 2026-05-15
 progress:
   total_phases: 22
   completed_phases: 18
   total_plans: 50
-  completed_plans: 46
-  percent: 92
+  completed_plans: 47
+  percent: 94
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 ## Current Position
 
 Phase: 87 (integration-contract-and-source-module-coverage) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-05-15
 
-Progress: [█████████░] 92%
+Progress: [█████████░] 94%
 
 ## Performance Metrics
 
@@ -55,10 +55,13 @@ Progress: [█████████░] 92%
 | Phase 85-core-real-fixture-functional-hardening P04 | 20min | 2 tasks | 3 files |
 | Phase 87 P01 | 18 min | 2 tasks | 3 files |
 | Phase 87 P02 | 12 min | 2 tasks | 5 files |
+| Phase 87 P03 | 25 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
 ### Decisions
+
+- [Phase 87]: Session, IDE, and window-manager integration tests use mocked helpers and executor seams only; no real desktop, editor, tmux, cmux, niri, or AeroSpace processes are launched.
 
 - [Phase 87]: Forge command tests exercise GitHub, GitLab, Gitea, and Jira command modules through injected executor seams without launching real external tools.
 
@@ -126,6 +129,6 @@ None blocking. Concern: functional-only coverage is not yet sufficient for relea
 
 ## Session Continuity
 
-Last session: 2026-05-15T05:42:38.915Z
-Stopped at: Completed 87-02-PLAN.md
+Last session: 2026-05-15T05:48:07.399Z
+Stopped at: Completed 87-03-PLAN.md
 Resume file: None

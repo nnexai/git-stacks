@@ -53,7 +53,7 @@ Requirements for v0.17.1 Functional Confidence Coverage. Each maps to roadmap ph
 - [x] **CMD-04**: Stable command wrappers for `run`, `paths`, `env`, `status`, `sync`, `push`, and `pull` are covered for meaningful option interactions, JSON contracts, cwd detection, and no-op/error branches without brittle prompt/spinner assertions.
 - [x] **INTG-02**: Issue and forge utility modules are tested through their real source exports for workspace/repo resolution, linked issue persistence, error formatting, enabled-forge detection, base branch selection, and missing-tool/no-remote cases.
 - [x] **INTG-03**: Forge command integrations are covered with injected executors for argument construction, JSON parse failures, missing PR/issue/repo cases, exit-code propagation, and safe browser-open behavior without requiring real forge CLIs.
-- [ ] **INTG-04**: Session and IDE integrations are covered with injected executors for config parsing, command construction, artifact-bag routing, skip behavior, and safe failure handling without requiring real desktop/window-manager environments.
+- [x] **INTG-04**: Session and IDE integrations are covered with injected executors for config parsing, command construction, artifact-bag routing, skip behavior, and safe failure handling without requiring real desktop/window-manager environments.
 - [ ] **GATE-04**: Maintainer can run a functional coverage readiness gate that distinguishes green tests, covered source, accepted gaps, deferred external-environment coverage, and must-fix-before-release gaps.
 
 ## Future Requirements

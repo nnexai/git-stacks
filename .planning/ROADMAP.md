@@ -563,7 +563,7 @@ Plans:
 | 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 85. Core Real-Fixture Functional Hardening | v0.17.1 | 4/4 | Complete   | 2026-05-15 |
 | 86. Workspace Command Workflow Edge Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-15 |
-| 87. Integration Contract and Source-Module Coverage | v0.17.1 | 2/4 | In Progress|  |
+| 87. Integration Contract and Source-Module Coverage | v0.17.1 | 3/4 | In Progress|  |
 | 88. Functional Coverage Readiness Gate | v0.17.1 | 0/2 | Not started | - |
 
 ## Backlog
