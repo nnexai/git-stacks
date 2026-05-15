@@ -50,7 +50,9 @@ const { tmuxIntegration } = await import("@/lib/integrations/tmux")
 const fakeCtx: IntegrationContext = {
   workspace: {
     name: "my-workspace",
-    repos: [],
+    repos: [
+      { name: "api", task_path: "/tmp/tasks/my-workspace/api" },
+    ],
     settings: {},
   } as any,
   tasksDir: "/tmp/tasks",
@@ -63,7 +65,14 @@ describe("tmux open()", () => {
     focusTmuxSessionMock.mockReset()
     killTmuxSessionMock.mockReset()
     tmuxSessionExistsMock.mockReset()
+    addTmuxPaneMock.mockReset()
+    sendToTmuxPaneMock.mockReset()
+    getTmuxMainPaneMock.mockReset()
+    focusTmuxPaneMock.mockReset()
     openTmuxSessionMock.mockImplementation(async () => ({ created: true }))
+    addTmuxPaneMock.mockImplementation(async () => "%1")
+    getTmuxMainPaneMock.mockImplementation(async () => "%0")
+    focusTmuxPaneMock.mockImplementation(async () => true)
   })
 
   test("calls openTmuxSession with workspace name and tasksDir", async () => {
@@ -79,6 +88,63 @@ describe("tmux open()", () => {
   test("returns TmuxArtifact with sessionName matching workspace name", async () => {
     const result = await tmuxIntegration.open(fakeCtx, null, {})
     expect(result).toEqual({ kind: "tmux", sessionName: "my-workspace" })
+  })
+
+  test("applies pane layout commands and focus through mocked helpers", async () => {
+    const ctx = {
+      ...fakeCtx,
+      workspace: {
+        ...fakeCtx.workspace,
+        settings: {
+          integrations: {
+            tmux: {
+              panes: [
+                { surfaces: [{ command: "nvim ." }] },
+                {
+                  direction: "right",
+                  focus: true,
+                  surfaces: [{ repo: "api", command: "bun test" }],
+                },
+              ],
+            },
+          },
+        },
+      },
+    } as IntegrationContext
+
+    await tmuxIntegration.open(ctx, null, {})
+
+    expect(getTmuxMainPaneMock).toHaveBeenCalledWith("my-workspace")
+    expect(addTmuxPaneMock).toHaveBeenCalledWith("my-workspace", "right")
+    expect(sendToTmuxPaneMock).toHaveBeenCalledWith("%0", "cd '/tmp/tasks/my-workspace'")
+    expect(sendToTmuxPaneMock).toHaveBeenCalledWith("%0", "nvim .")
+    expect(sendToTmuxPaneMock).toHaveBeenCalledWith("%1", "cd '/tmp/tasks/my-workspace/api'")
+    expect(sendToTmuxPaneMock).toHaveBeenCalledWith("%1", "bun test")
+    expect(focusTmuxPaneMock).toHaveBeenCalledWith("%1")
+  })
+
+  test("skips invalid pane config without layout helper calls", async () => {
+    const ctx = {
+      ...fakeCtx,
+      workspace: {
+        ...fakeCtx.workspace,
+        settings: { integrations: { tmux: { panes: [{ direction: "sideways" }] } } },
+      },
+    } as IntegrationContext
+
+    await tmuxIntegration.open(ctx, null, {})
+
+    expect(getTmuxMainPaneMock).not.toHaveBeenCalled()
+    expect(addTmuxPaneMock).not.toHaveBeenCalled()
+    expect(sendToTmuxPaneMock).not.toHaveBeenCalled()
+  })
+
+  test("returns null when opening the tmux session fails", async () => {
+    openTmuxSessionMock.mockImplementation(async () => {
+      throw new Error("tmux unavailable")
+    })
+
+    await expect(tmuxIntegration.open({ ...fakeCtx, silent: true } as IntegrationContext, null, {})).resolves.toBeNull()
   })
 })
 
