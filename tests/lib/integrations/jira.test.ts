@@ -197,6 +197,20 @@ describe("issue open", () => {
     )
   })
 
+  test("propagates nonzero open command exit code", async () => {
+    _exec.runShell = mock(async () => ({ exitCode: 11 }))
+    resolveIssueRefMock.mockImplementation(() => ({
+      ok: true, issueId: "PROJ-789", workspace: { name: "my-ws", branch: "feat/my-ws", repos: [] },
+    }))
+    const parent = new Command()
+    parent.exitOverride()
+    jiraIntegration.commands!(parent)
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
+    ).rejects.toThrow("process.exit(11)")
+    expect(exitMock).toHaveBeenCalledWith(11)
+  })
+
   test("exits with error when no issue linked", async () => {
     resolveIssueRefMock.mockImplementation(() => ({
       ok: false, error: "no_issue_linked", tracker: "jira", workspace: "my-ws",

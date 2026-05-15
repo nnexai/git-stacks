@@ -62,6 +62,7 @@ beforeEach(() => {
   _exec.run = mock(async () => ({ exitCode: 0 }))
   _exec.runCapture = mock(async () => ({ exitCode: 0, stdout: "[]" }))
   _exec.openUrl = mock(async () => ({ exitCode: 0 }))
+  _exec.gitRemoteUrl = mock(async () => "git@gitea.example.com:org/repo.git")
   resolveForgeRepoMock.mockReset()
   resolveForgeRepoMock.mockImplementation(() => ({
     ok: true,
@@ -208,6 +209,56 @@ describe("gitea pr open", () => {
       parent.parseAsync(["node", "x", "pr", "open", "my-workspace"])
     ).rejects.toThrow("process.exit")
   })
+
+  test("exits with capture exit code when PR list command fails", async () => {
+    _exec.runCapture = mock(async () => ({ exitCode: 9, stdout: "" }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "pr", "open", "my-workspace"])
+    ).rejects.toThrow("process.exit(9)")
+    expect(exitMock).toHaveBeenCalledWith(9)
+  })
+
+  test("exits safely when PR JSON is malformed", async () => {
+    _exec.runCapture = mock(async () => ({ exitCode: 0, stdout: "not-json" }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "pr", "open", "my-workspace"])
+    ).rejects.toThrow("process.exit(1)")
+    expect(_exec.openUrl).not.toHaveBeenCalled()
+  })
+})
+
+describe("gitea open", () => {
+  test("web repository open uses tea open through injected executor", async () => {
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "open", "my-workspace", "--web"])
+    expect(_exec.run).toHaveBeenCalledWith(["open"], "/tmp/task/repo-a")
+  })
+
+  test("non-web repository open matches remote against captured repo list", async () => {
+    _exec.runCapture = mock(async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify([
+        { url: "https://gitea.example.com/org/repo", ssh: "git@gitea.example.com:org/repo.git" },
+      ]),
+    }))
+    const parent = buildParent()
+    await parent.parseAsync(["node", "x", "open", "my-workspace"])
+    expect(_exec.gitRemoteUrl).toHaveBeenCalledWith("/tmp/task/repo-a")
+    expect(_exec.runCapture).toHaveBeenCalledWith(
+      ["repos", "s", "-f", "url,ssh", "-o", "json"],
+      "/tmp/task/repo-a"
+    )
+  })
+
+  test("non-web repository open exits safely on malformed repo JSON", async () => {
+    _exec.runCapture = mock(async () => ({ exitCode: 0, stdout: "not-json" }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "open", "my-workspace"])
+    ).rejects.toThrow("process.exit(1)")
+  })
 })
 
 describe("gitea pr status", () => {
@@ -335,6 +386,24 @@ describe("gitea issue commands", () => {
     await expect(
       parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
     ).rejects.toThrow("process.exit")
+  })
+
+  test("issue open exits with capture exit code when issue list command fails", async () => {
+    _exec.runCapture = mock(async () => ({ exitCode: 10, stdout: "" }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
+    ).rejects.toThrow("process.exit(10)")
+    expect(exitMock).toHaveBeenCalledWith(10)
+  })
+
+  test("issue open exits safely when issue JSON is malformed", async () => {
+    _exec.runCapture = mock(async () => ({ exitCode: 0, stdout: "not-json" }))
+    const parent = buildParent()
+    await expect(
+      parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
+    ).rejects.toThrow("process.exit(1)")
+    expect(_exec.openUrl).not.toHaveBeenCalled()
   })
 
   test("issue open uses resolveForgeRepo for CWD", async () => {
