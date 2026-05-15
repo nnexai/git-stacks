@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
 status: executing
-stopped_at: Completed 87-01-PLAN.md
-last_updated: "2026-05-15T05:39:36.085Z"
+stopped_at: Completed 87-02-PLAN.md
+last_updated: "2026-05-15T05:42:38.922Z"
 last_activity: 2026-05-15
 progress:
   total_phases: 22
   completed_phases: 18
   total_plans: 50
-  completed_plans: 45
-  percent: 90
+  completed_plans: 46
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 ## Current Position
 
 Phase: 87 (integration-contract-and-source-module-coverage) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-05-15
 
-Progress: [█████████░] 90%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -54,10 +54,13 @@ Progress: [█████████░] 90%
 | Phase 85 P03 | 5min | 2 tasks | 1 files |
 | Phase 85-core-real-fixture-functional-hardening P04 | 20min | 2 tasks | 3 files |
 | Phase 87 P01 | 18 min | 2 tasks | 3 files |
+| Phase 87 P02 | 12 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
 ### Decisions
+
+- [Phase 87]: Forge command tests exercise GitHub, GitLab, Gitea, and Jira command modules through injected executor seams without launching real external tools.
 
 - Treat v0.17.0 as the completed baseline even though MILESTONES.md is stale; phases 74-79 are complete and v0.17.1 starts at Phase 80.
 - v0.17.1 scope is non-TUI, non-integration E2E coverage plus usable coverage reports across the split test runner architecture.
@@ -123,6 +126,6 @@ None blocking. Concern: functional-only coverage is not yet sufficient for relea
 
 ## Session Continuity
 
-Last session: 2026-05-15T05:39:36.079Z
-Stopped at: Completed 87-01-PLAN.md
+Last session: 2026-05-15T05:42:38.915Z
+Stopped at: Completed 87-02-PLAN.md
 Resume file: None
