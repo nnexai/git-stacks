@@ -1,34 +1,33 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.17.1
-milestone_name: Functional Confidence Coverage
-status: Awaiting next milestone
-stopped_at: Completed 88-02-PLAN.md
-last_updated: "2026-05-15T19:45:33.000Z"
-last_activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree creation so an existing local workspace branch is reused, and if origin/<branch> exists it is configured as upstream like git checkout would do
+milestone: v0.18.0
+milestone_name: Workspace File Sync and Forge Sources
+status: planned
+last_updated: "2026-05-15T21:27:21.796Z"
+last_activity: 2026-05-15
 progress:
-  total_phases: 13
-  completed_phases: 13
-  total_plans: 35
-  completed_plans: 35
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-10)
+See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Awaiting next milestone after v0.17.1 archive
+**Current focus:** v0.18.0 Workspace File Sync and Forge Sources
 
 ## Current Position
 
-Phase: Milestone v0.17.1 complete
+Phase: 89 - Files Sync Schema and Materialization
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree creation so an existing local workspace branch is reused, and if origin/<branch> exists it is configured as upstream like git checkout would do
+Status: Ready for discussion/planning
+Last activity: 2026-05-15 — Milestone v0.18.0 roadmap created
 
 ## Performance Metrics
 
@@ -125,6 +124,9 @@ Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree c
 - Phase 86 inserted after Phase 85: Workspace Command Workflow Edge Coverage
 - Phase 87 inserted after Phase 86: Integration Contract and Source-Module Coverage
 - Phase 88 inserted after Phase 87: Functional Coverage Readiness Gate
+- v0.18.0 milestone initialized on 2026-05-15: Phase 89-94 cover `files.sync`, `git-stacks files status|pull|push`, GitLab-first forge source research, `git-stacks new --source <forge-url>`, and release docs.
+- Pending todo "Add bidirectional files sync" tagged to Phase 89.
+- Pending todo "Create workspace from forge source" tagged to Phase 92.
 
 ### Pending Todos
 
@@ -138,7 +140,7 @@ Last activity: 2026-05-15 — Completed quick task 260515-u0q: Update worktree c
 
 ### Blockers/Concerns
 
-None blocking. Concern: functional-only coverage is not yet sufficient for release confidence; new phases 85-88 are intended to close or explicitly classify those gaps.
+None blocking. Concern: forge source creation requires GitLab-first research because live `glab` integration cannot be fully validated locally by the user.
 
 ### Quick Tasks Completed
 
@@ -154,4 +156,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 89 with `$gsd-discuss-phase 89` to lock the `files.sync` schema, materialization rules, and local exclude behavior.

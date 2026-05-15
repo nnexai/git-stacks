@@ -283,17 +283,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-## Current Milestone: v0.17.1 E2E Test Coverage
+## Current Milestone: v0.18.0 Workspace File Sync and Forge Sources
 
-**Goal:** Extend end-to-end test coverage across all non-TUI, non-integration user-facing functionality, prove currently assumed CLI behavior in real repos, and produce subprocess-aware code coverage reports across the split test runners.
+**Goal:** Make workspace file materialization useful for private planning/agent configuration through bidirectional real-file sync, then add a GitLab-first forge source path for creating normal template-backed workspaces from merge requests.
 
 **Target features:**
-- Shared E2E test harness primitives, built by extending `tests/helpers.ts`, for isolated `git-stacks` CLI execution, config homes, repo fixtures, stdout/stderr assertions, and failure diagnostics
-- A living, machine-parseable command-surface coverage inventory that separates in-scope non-TUI/non-integration commands from excluded TUI and external integration behavior, and stays mapped as tests are added
-- End-to-end coverage for workspace/template/repo/config/message/label/doctor/completion/install-hook/env/path/version flows that currently rely mainly on unit or narrow command tests
-- Deep workspace/git-operation coverage for env injection, hook execution, path/cwd selection, branch starting points, merge/pull/sync/push behavior, and command execution that uses explicit cwd/path handling instead of shell `cd` state
-- Istanbul-based code coverage report generation that includes subprocess-based E2E source coverage across the existing split unit and isolated runner architecture
-- Local regression gates that keep the E2E coverage inventory and the executable test suite aligned as commands evolve
+- `files.sync` entries under the existing `files` model for real-file materialization of directories such as `.planning/` and `.codex/`, avoiding external symlink targets that agents may refuse to follow.
+- `git-stacks files status|pull|push` as the user-facing command family for file materialization and bidirectional sync, keeping this separate from existing branch-level `git-stacks sync`.
+- Local `.git/info/exclude` support for synced targets so private planning/agent files can exist inside worktrees without becoming project repo commits.
+- Lightweight drift/conflict detection for sync targets without storing a full per-file hash manifest, because large `.planning` trees would make exhaustive manifests noisy and expensive.
+- Manual sync-back only by default: `files push` is explicit, not tied to close/clean/remove/open lifecycle hooks.
+- Forge source workspace creation through `git-stacks new --source <forge-url> --template <template>`, with GitLab merge requests first, then Gitea pull requests, then GitHub pull requests.
+- Forge source resolution should run through enabled forge integrations and existing forge/upstream autodetection where possible; live `glab` coverage is research-heavy and may be limited to contract/local proof unless the user can validate against a real GitLab environment.
 
 ### Out of Scope
 
@@ -311,17 +312,18 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Current State
 
-**Latest release:** v0.17.0 Engine Hardening & Template Labels (2026-04-06)
+**Latest milestone release:** v0.17.1 Functional Confidence Coverage (2026-05-15)
 
-**Shipped:** Phases 74-79 are complete. Template labels now cover template CRUD/filtering plus propagation into created/cloned workspaces (74); lifecycle/git `_exec` seams and structured `GS_DEBUG` logging landed with `GIT_STACKS_DEBUG=1` compatibility preserved (75); integration optional behavior moved to compile-time-only narrow interfaces and predicates with no revived capability-list release surface (76 + 78.1); template/workspace reads moved onto an indexed config cache (77); workspace creation now uses a shared operation runner with LIFO rollback across both CLI/TUI creation paths (78); and release-prep polished the package version, changelog, README, and closeout artifacts for shipping (79).
+**Shipped:** v0.17.1 closed the broad local confidence pass for workspace, template, repo, label, message, support, and integration-contract surfaces. Common workspace flows are now covered with local automation, command contracts were tightened, and the release audit passed with all v0.17.1 requirements complete.
 
-**Status:** Milestone v0.17.1 is in progress. Phase 80 established the shared E2E harness and inventory; Phase 81 completed workspace/git-operation E2E coverage for E2E-08 and E2E-14. Next up is Phase 81.1 planning.
+**Status:** Milestone v0.18.0 is defining and planning bidirectional workspace file sync plus forge-source workspace creation. The first priority is `files.sync`; forge source work is included as a GitLab-first track with explicit research and validation constraints.
 
 ## Next Milestone Goals
-- Extend E2E tests for full coverage of non-TUI, non-integration functionality, with workspace/git behavior split into its own focused wave
-- Generate reliable Istanbul-format code coverage reports that include source exercised by subprocess E2E tests despite the split unit/E2E runner model
-- Use local verification gates only; this project does not currently have CI
-- Keep TUI behavior and external integration CLI behavior out of this milestone except where needed to prove they remain excluded from the coverage contract
+- Add bidirectional real-file sync under `files.sync` for private planning and agent config directories that must appear as normal files inside a workspace.
+- Expose `git-stacks files status|pull|push` for inspecting, pulling, and pushing synced file targets without overloading git branch `sync`.
+- Keep sync-back explicit and operator-controlled; no automatic lifecycle push by default.
+- Avoid full file-hash manifests for large sync trees; choose a lighter status/conflict model that scales to `.planning/`.
+- Add forge-source workspace creation with GitLab merge requests first, then Gitea and GitHub, using enabled forge integrations and normal template-backed workspace creation.
 
 ## Completed Milestone: v0.17.0 Engine Hardening & Template Labels (2026-04-06)
 
@@ -498,4 +500,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-05-14 after Phase 81 completion*
+*Last updated: 2026-05-15 for v0.18.0 milestone initialization*

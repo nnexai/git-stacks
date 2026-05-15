@@ -18,6 +18,7 @@
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
 - ✅ **v0.17.1 Functional Confidence Coverage** — Phases 80-88 with 81.x/82.x/84.x splits (shipped 2026-05-15) — User-facing workspace, template, repo, label, message, support, and integration-contract behavior covered through local automation; safety fixes for gone-branch cleanup, JSON command contracts, and hook execution. See [milestones/v0.17.1-ROADMAP.md](milestones/v0.17.1-ROADMAP.md)
+- 🟡 **v0.18.0 Workspace File Sync and Forge Sources** — Phases 89-94 (planning) — Bidirectional real-file sync under `files.sync` with `git-stacks files status|pull|push`, plus GitLab-first forge `--source` workspace creation research and implementation.
 
 ## Phases
 
@@ -232,7 +233,86 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 87: Integration Contract and Source-Module Coverage** - Replace brittle or source-bypassing integration tests with injected-executor contract tests that exercise the real forge/issue/session modules without launching external tools (completed 2026-05-15)
 - [x] **Phase 88: Functional Coverage Readiness Gate** - Reassess functional-only coverage, document remaining accepted gaps, and add local gates or inventories that prevent regression in the newly covered core areas (completed 2026-05-15)
 
+### 🟡 v0.18.0 Workspace File Sync and Forge Sources (Active)
+
+**Milestone Goal:** Make workspace file materialization useful for private planning/agent configuration through bidirectional real-file sync, then add a GitLab-first forge source path for creating normal template-backed workspaces from merge requests.
+
+- [ ] **Phase 89: Files Sync Schema and Materialization** - Add `files.sync` to template/workspace schemas and materialize sync sources into workspace targets as real files with optional local git excludes.
+- [ ] **Phase 90: Files Command Surface and Conflict Policy** - Add `git-stacks files status|pull|push`, lightweight drift detection, conservative overwrite/delete behavior, and explicit sync-back semantics.
+- [ ] **Phase 91: Files Sync Integration and Machine Output** - Integrate sync behavior with create/open/recreate flows where appropriate, expose stable JSON/status output, and keep future TUI hooks available without building broad TUI changes.
+- [ ] **Phase 92: Forge Source Research and Resolver Design** - Research GitLab MR, Gitea PR, and GitHub PR source resolution with GitLab first; design enabled-forge resolver contracts, repo matching, and validation boundaries.
+- [ ] **Phase 93: Forge Source Workspace Creation** - Add `git-stacks new --source <forge-url> --template <template>` for GitLab-first forge changes, including repo matching, source checkout/fetch, workspace metadata, labels, and clear failures.
+- [ ] **Phase 94: v0.18.0 Docs and Release Prep** - Document `files.sync`, `git-stacks files status|pull|push`, forge-source workspace creation, validation limits, and prepare the user-facing v0.18.0 release artifacts.
+
 ## Phase Details
+
+### Phase 89: Files Sync Schema and Materialization
+**Goal**: Users can define `files.sync` entries and pull source directories/files into workspace targets as real files, with optional worktree-local git excludes.
+**Depends on**: Phase 88
+**Requirements**: FSYNC-01, FSYNC-02, FSYNC-03
+**Success Criteria** (what must be TRUE):
+  1. `TemplateSchema` and `WorkspaceSchema` accept `files.sync` entries with `source`, `target`, and optional `git_exclude` fields while preserving existing `copy` and `symlink` behavior.
+  2. Sync materialization copies source content into the workspace target as real files/directories, not symlinks.
+  3. `git_exclude: true` writes target paths to the local worktree `.git/info/exclude` file without modifying project `.gitignore`.
+  4. Sync materialization refuses obvious unsafe target paths and tracked-file collisions unless an explicit later policy allows them.
+**Plans**: TBD
+
+### Phase 90: Files Command Surface and Conflict Policy
+**Goal**: Users can inspect, pull, and push synced workspace files through `git-stacks files status|pull|push` with conservative conflict and delete behavior.
+**Depends on**: Phase 89
+**Requirements**: FSYNC-04, FSYNC-05, FSYNC-06, FSYNC-07, FSYNC-08
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks files status [workspace]` shows file materialization state for copy/symlink/sync entries, with sync drift visible at a useful summary level.
+  2. `git-stacks files pull [workspace]` refreshes sync targets from their configured sources.
+  3. `git-stacks files push [workspace]` explicitly syncs workspace target changes back to source paths.
+  4. Push refuses obvious conflicts and unsafe deletes/overwrites by default.
+  5. The implementation avoids a mandatory full per-file hash manifest for large sync trees such as `.planning/`.
+**Plans**: TBD
+
+### Phase 91: Files Sync Integration and Machine Output
+**Goal**: File sync behavior is integrated with existing workspace lifecycle entrypoints where appropriate and exposes stable machine-readable output for future TUI/automation.
+**Depends on**: Phase 90
+**Requirements**: FSYNC-09
+**Success Criteria** (what must be TRUE):
+  1. Workspace create/open/recreate behavior has a clear and documented relationship to `files.sync` pull behavior.
+  2. `git-stacks files status|pull|push --json` or equivalent machine output is stable enough for future dashboard use.
+  3. Existing file copy/symlink behavior remains backward-compatible.
+  4. The README examples cover the GSD planning/agent config use case without requiring symlinks.
+**Plans**: TBD
+
+### Phase 92: Forge Source Research and Resolver Design
+**Goal**: GitLab-first forge source creation is researched and designed before implementation, with clear limits for live `glab` validation and a reusable resolver contract for Gitea/GitHub follow-up.
+**Depends on**: Phase 91
+**Requirements**: FSRC-02, FSRC-03, FSRC-08
+**Success Criteria** (what must be TRUE):
+  1. GitLab MR URL formats, `glab` capabilities, fetch strategies, and local validation constraints are documented.
+  2. Gitea and GitHub PR URL parsing and resolver differences are documented enough to avoid painting the implementation into a GitLab-only corner.
+  3. A forge source resolver contract describes the normalized source metadata needed by workspace creation.
+  4. Repo matching uses existing registry/forge/upstream metadata where possible, with ambiguity and missing-template-repo cases specified.
+**Plans**: TBD
+
+### Phase 93: Forge Source Workspace Creation
+**Goal**: Users can create a normal template-backed workspace from a forge change source URL, with GitLab merge requests implemented first and Gitea/GitHub prepared by the shared resolver shape.
+**Depends on**: Phase 92
+**Requirements**: FSRC-01, FSRC-04, FSRC-05, FSRC-06, FSRC-07
+**Success Criteria** (what must be TRUE):
+  1. `git-stacks new <name> --template <template> --source <forge-url>` routes the source through enabled forge integrations.
+  2. The matched worktree repo is checked out or fetched to the forge change branch/ref while other worktree repos use normal workspace branch creation.
+  3. Missing, ambiguous, trunk-mode, or dir-mode repo matches produce clear failures and explicit override guidance where appropriate.
+  4. Created workspaces record source metadata in workspace YAML.
+  5. Created workspaces receive useful review/source labels such as `review`, forge id, and change number.
+**Plans**: TBD
+
+### Phase 94: v0.18.0 Docs and Release Prep
+**Goal**: v0.18.0 is documented and packaged with user-facing release notes that accurately describe file sync behavior and forge source validation limits.
+**Depends on**: Phase 93
+**Requirements**: DOCS-01, DOCS-02, REL-01
+**Success Criteria** (what must be TRUE):
+  1. README documents `files.sync`, `git-stacks files status|pull|push`, local exclude behavior, and manual push-back.
+  2. README documents forge `--source` workspace creation with GitLab-first examples and validation caveats.
+  3. CHANGELOG describes user-visible v0.18.0 behavior without overstating live forge coverage.
+  4. Local release verification passes before closeout.
+**Plans**: TBD
 
 ### Phase 74: Template Label CLI & Propagation
 **Goal**: Users can manage labels on templates via CLI, filter templates by label, and labels automatically flow into workspaces at creation time

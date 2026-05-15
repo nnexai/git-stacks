@@ -2,6 +2,7 @@
 created: 2026-05-15T20:59:35.735Z
 title: Create workspace from forge source
 area: tooling
+resolves_phase: 92
 files:
   - src/commands/workspace.ts
   - src/lib/integrations/gitlab.ts

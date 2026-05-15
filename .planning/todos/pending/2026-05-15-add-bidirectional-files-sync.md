@@ -2,6 +2,7 @@
 created: 2026-05-15T20:36:03.620Z
 title: Add bidirectional files sync
 area: tooling
+resolves_phase: 89
 files:
   - src/lib/config.ts
   - src/lib/files.ts
