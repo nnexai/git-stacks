@@ -67,6 +67,7 @@ mock.module("@/tui/utils", () => ({
 mock.module("@/lib/lifecycle", () => ({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => []),
+  _exec: { run: mock(async () => ({ exitCode: 0 })) },
 }))
 
 // Cache-busted import after all mocks registered
