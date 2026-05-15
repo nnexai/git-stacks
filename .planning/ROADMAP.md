@@ -17,7 +17,7 @@
 - ✅ **v0.15.0 Dir Mode & Polish** — Phases 64-68 (shipped 2026-04-05) — Dir repo type, registry CLI, lifecycle guards, git operation guards, CLI/TUI display. See [milestones/v0.15.0-ROADMAP.md](milestones/v0.15.0-ROADMAP.md)
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
-- 🚧 **v0.17.1 E2E Test Coverage** — Phases 80-84.1 with 82.x/84.x splits (in progress) — E2E CLI harness plus machine-parseable inventory, workspace/git behavior coverage, command-surface expansion, subprocess-aware coverage reports, local gates, release prep, and coverage report accuracy follow-up.
+- 🚧 **v0.17.1 Functional Confidence Coverage** — Phases 80-88 with 82.x/84.x splits (in progress) — E2E CLI harness plus machine-parseable inventory, workspace/git behavior coverage, command-surface expansion, subprocess-aware coverage reports, local gates, coverage report accuracy follow-up, and a second hardening pass focused on real-fixture core behavior and stable integration contracts.
 
 ## Phases
 
@@ -216,9 +216,9 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 78: Operation Runner with Rollback** - LIFO compensation stack in `operation-runner.ts`, `workspace-lifecycle.ts` wired to runner, rollback progress via `onProgress` (completed 2026-04-06)
 - [x] **Phase 79: Release Prep** - v0.17.0 version bump, CHANGELOG, README updates (completed 2026-04-06)
 
-### 🚧 v0.17.1 E2E Test Coverage (In Progress)
+### 🚧 v0.17.1 Functional Confidence Coverage (In Progress)
 
-**Milestone Goal:** Extend E2E tests for full coverage of non-TUI, non-integration functionality, prove high-risk workspace/git assumptions in real repos, and generate subprocess-aware code coverage reports despite the existing split test runner architecture.
+**Milestone Goal:** Extend automated coverage until the project has meaningful functional confidence, not just green commands: prove high-risk workspace/git assumptions in real temp repos, generate trustworthy subprocess-aware coverage reports, and fill the stable non-TUI/non-environment-dependent gaps that the coverage report exposed.
 
 - [x] **Phase 80: E2E CLI Harness and Living Inventory** - Extend existing test helpers with isolated real-process CLI execution and maintain the in-scope inventory as tests are planned (completed 2026-05-14)
 - [x] **Phase 81: Workspace and Git Operation E2E Coverage** - Prove high-risk workspace behavior including branch start points, env/hooks, explicit cwd/path handling, run/open safety, merge, and pull/sync/push (completed 2026-05-14)
@@ -227,6 +227,10 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [ ] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files
 - [x] **Phase 84: Local Coverage Gates, Docs, and Release Prep** - Add local inventory/test mapping gates and verify the expanded suite with existing quality commands (completed 2026-05-14)
 - [x] **Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up** - Coverage report accuracy verified through canonical full-suite coverage and local release-prep gates (completed 2026-05-14)
+- [ ] **Phase 85: Core Real-Fixture Functional Hardening** - Add high-value tests for core workspace/git/hooks/files/env behavior using real temp directories and local git repositories instead of mocks
+- [ ] **Phase 86: Workspace Command Workflow Edge Coverage** - Cover stable command workflows and destructive/safety edge cases that are testable through the real CLI without driving prompt UIs or external desktop integrations
+- [ ] **Phase 87: Integration Contract and Source-Module Coverage** - Replace brittle or source-bypassing integration tests with injected-executor contract tests that exercise the real forge/issue/session modules without launching external tools
+- [ ] **Phase 88: Functional Coverage Readiness Gate** - Reassess functional-only coverage, document remaining accepted gaps, and add local gates or inventories that prevent regression in the newly covered core areas
 
 ## Phase Details
 
@@ -470,6 +474,76 @@ Plans:
 - [x] `84.1-01-PLAN.md` — Instrumented runtime-root coverage repair plus sentinel verify-gate checks
 - [x] `84.1-02-PLAN.md` — Verify canonical full-suite coverage and local release-prep gates after the instrumentation repair
 
+### Phase 85: Core Real-Fixture Functional Hardening
+**Goal**: Core workspace, git, file, hook, env, config, and rollback behavior is covered through real temp directories and local git repositories rather than fragile mocks or command-wrapper-only assertions
+**Depends on**: Phase 84.1
+**Requirements**: CORE-01, CORE-02, CORE-03, CORE-04, CORE-05, GATE-03
+**Success Criteria** (what must be TRUE):
+  1. Workspace lifecycle operations have additional real-fixture coverage for rollback, cleanup, rename, merge, missing path, and destructive safety boundaries
+  2. Git operations have real local bare-remote coverage for sync/pull/push edge behavior not already covered by the first E2E pass, including failure and no-op cases
+  3. Hook execution coverage proves ordering, cwd, env injection, failure propagation, captured output, and rollback interaction using real temp workspaces
+  4. File operation coverage proves copy/symlink/glob/external warning/idempotency behavior where it affects workspace setup and cleanup
+  5. Env/secrets/ports/config coverage proves resolver order, repo overlay, collision handling, backward-compatible YAML reads, and atomic write behavior with isolated config homes
+  6. Coverage improvements come from real source execution; tests must not inline copies of implementation logic to satisfy coverage
+**Plans**: 4 plans
+
+Plans:
+- [ ] `85-01-PLAN.md` — Workspace lifecycle and rollback real-fixture coverage
+- [ ] `85-02-PLAN.md` — Git operation and branch-state real-fixture coverage
+- [ ] `85-03-PLAN.md` — Hook, file, env, secrets, ports, and config hardening coverage
+- [ ] `85-04-PLAN.md` — Coverage report review and focused gap closure for core source modules
+
+### Phase 86: Workspace Command Workflow Edge Coverage
+**Goal**: Stable user-facing workspace command workflows have behavior coverage where CLI wiring matters, without chasing every prompt branch or brittle text formatting detail
+**Depends on**: Phase 85
+**Requirements**: CMD-01, CMD-02, CMD-03, CMD-04, GATE-03
+**Success Criteria** (what must be TRUE):
+  1. `open --recreate` is covered with template-backed fixtures for no-change, added/removed repos, hook/env/file/integration changes, missing template, workspace-without-template, and force/cancel-safe behavior where automation-safe
+  2. `clean --gone` is covered with local bare remotes for gone-branch detection, dirty-worktree refusal, dry-run/force behavior, multi-workspace handling, and removal failure reporting
+  3. Destructive workspace commands (`clean`, `remove`, `merge`, `rename`) have CLI-level smoke for dry-run/force/error behavior that is not already proven by core libraries
+  4. `run`, `paths`, `env`, `status`, `sync`, `push`, and `pull` command wrappers have focused coverage for meaningful option interactions, JSON contracts, cwd detection, and "nothing to do" branches
+  5. Tests avoid brittle assertions on spinner wording or prompt rendering unless the text is part of a machine-readable or safety-critical contract
+**Plans**: 3 plans
+
+Plans:
+- [ ] `86-01-PLAN.md` — `open --recreate` and template/workspace update workflows
+- [ ] `86-02-PLAN.md` — `clean --gone` and destructive command safety workflows
+- [ ] `86-03-PLAN.md` — Command wrapper JSON/cwd/no-op/error contracts for run/status/env/paths/sync/push/pull
+
+### Phase 87: Integration Contract and Source-Module Coverage
+**Goal**: Integration-related functionality is covered through real source modules and injected executors without requiring local Niri, AeroSpace, cmux, VSCode, browser, or forge CLI environments
+**Depends on**: Phase 86
+**Requirements**: INTG-02, INTG-03, INTG-04, GATE-03
+**Success Criteria** (what must be TRUE):
+  1. `issue-utils` tests exercise the real source module and cover linked issue resolution, link/unlink persistence, error formatting, and CWD workspace resolution without inlining implementation copies
+  2. `forge-utils` tests exercise the real source module and cover worktree/trunk selection, any-mode repo selection, forge mismatch errors, base branch selection, enabled-forge detection, and no-tool/no-remote cases
+  3. Forge integration command modules (GitHub/GitLab/Gitea/Jira where applicable) have injected-executor contract tests for argument construction, JSON parse failures, missing PR/issue/repo cases, and safe browser-open behavior
+  4. Session/IDE integrations (tmux/cmux/niri/AeroSpace/VSCode/IntelliJ where applicable) have contract tests for config parsing, command construction, artifact-bag use, skip behavior, and safe failure handling without launching real external tools
+  5. Existing integration tests that currently mock by reimplementing source logic are replaced or supplemented so coverage reports reflect the real implementation
+**Plans**: 4 plans
+
+Plans:
+- [ ] `87-01-PLAN.md` — Real-source issue-utils and forge-utils coverage repair
+- [ ] `87-02-PLAN.md` — Forge command contract tests with injected executors
+- [ ] `87-03-PLAN.md` — Session and IDE integration contract tests without external environments
+- [ ] `87-04-PLAN.md` — Remove source-bypassing mock patterns and verify integration coverage deltas
+
+### Phase 88: Functional Coverage Readiness Gate
+**Goal**: Maintainers can decide whether v0.17.1 is ready using functional coverage evidence, explicit accepted gaps, and local gates that protect the newly covered core areas
+**Depends on**: Phase 87
+**Requirements**: GATE-04, COVR-05
+**Success Criteria** (what must be TRUE):
+  1. A functional-only coverage report is produced and documented, excluding TUI rendering surfaces and real external-environment plugins while keeping core integration contracts in scope
+  2. Remaining uncovered functional areas are classified as accepted gap, deferred external-environment coverage, or must-fix-before-release
+  3. Local verification includes either numeric thresholds or targeted sentinel gates for the functional core areas covered in phases 85-87
+  4. The milestone inventory and requirements clearly distinguish "green suite", "covered source", and "functional confidence" so future agents do not equate passing tests with complete behavior
+  5. Final release-readiness docs summarize what is covered, what is intentionally not covered, and what manual verification remains
+**Plans**: 2 plans
+
+Plans:
+- [ ] `88-01-PLAN.md` — Functional coverage report, accepted-gap classification, and gate design
+- [ ] `88-02-PLAN.md` — Implement readiness gates and final v0.17.1 release evidence update
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -487,6 +561,10 @@ Plans:
 | 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
 | 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
+| 85. Core Real-Fixture Functional Hardening | v0.17.1 | 0/4 | Not started | - |
+| 86. Workspace Command Workflow Edge Coverage | v0.17.1 | 0/3 | Not started | - |
+| 87. Integration Contract and Source-Module Coverage | v0.17.1 | 0/4 | Not started | - |
+| 88. Functional Coverage Readiness Gate | v0.17.1 | 0/2 | Not started | - |
 
 ## Backlog
 

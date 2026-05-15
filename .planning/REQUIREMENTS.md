@@ -5,7 +5,7 @@
 
 ## v0.17.1 Requirements
 
-Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
+Requirements for v0.17.1 Functional Confidence Coverage. Each maps to roadmap phases.
 
 ### Coverage Inventory and Harness
 
@@ -40,6 +40,22 @@ Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
 - [x] **GATE-02**: Local verification can fail when an in-scope inventory item has no mapped E2E test.
 - [x] **GATE-03**: Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling.
 
+### Functional Confidence Extension
+
+- [ ] **CORE-01**: Core workspace lifecycle behavior is covered with real temp directories and local git repositories for rollback, cleanup, rename, merge, missing-path, and destructive safety boundaries.
+- [ ] **CORE-02**: Core git operations are covered with local bare remotes for sync, pull, push, no-op, failure, branch-state, and dirty-worktree behavior that impacts real users.
+- [ ] **CORE-03**: Hook execution is covered for ordering, cwd, env injection, captured output, failure propagation, and rollback interaction using automation-safe fixtures.
+- [ ] **CORE-04**: File operations, env/secrets/ports, and config persistence are covered where they affect workspace setup, cleanup, idempotency, external-file safety, resolver order, repo overlay, collision handling, and atomic YAML writes.
+- [ ] **CORE-05**: Coverage-improving tests execute real source modules and do not satisfy coverage by inlining copies of implementation logic inside test mocks.
+- [ ] **CMD-01**: `open --recreate` is covered for template-backed workspace update behavior, including no-change, added/removed repos, hook/env/file/integration changes, missing-template errors, workspace-without-template errors, and automation-safe force/cancel behavior.
+- [ ] **CMD-02**: `clean --gone` is covered with local bare remotes for deleted-upstream detection, dirty-worktree refusal, dry-run/force behavior, multi-workspace handling, and removal failure reporting.
+- [ ] **CMD-03**: Destructive workspace commands have CLI-level coverage for safety-critical dry-run, force, missing entity, and error behavior that is not already fully proven by core library tests.
+- [ ] **CMD-04**: Stable command wrappers for `run`, `paths`, `env`, `status`, `sync`, `push`, and `pull` are covered for meaningful option interactions, JSON contracts, cwd detection, and no-op/error branches without brittle prompt/spinner assertions.
+- [ ] **INTG-02**: Issue and forge utility modules are tested through their real source exports for workspace/repo resolution, linked issue persistence, error formatting, enabled-forge detection, base branch selection, and missing-tool/no-remote cases.
+- [ ] **INTG-03**: Forge command integrations are covered with injected executors for argument construction, JSON parse failures, missing PR/issue/repo cases, exit-code propagation, and safe browser-open behavior without requiring real forge CLIs.
+- [ ] **INTG-04**: Session and IDE integrations are covered with injected executors for config parsing, command construction, artifact-bag routing, skip behavior, and safe failure handling without requiring real desktop/window-manager environments.
+- [ ] **GATE-04**: Maintainer can run a functional coverage readiness gate that distinguishes green tests, covered source, accepted gaps, deferred external-environment coverage, and must-fix-before-release gaps.
+
 ## Future Requirements
 
 ### TUI Coverage
@@ -53,7 +69,7 @@ Requirements for v0.17.1 E2E Test Coverage. Each maps to roadmap phases.
 
 ### Coverage Policy
 
-- **COVR-05**: Future automation may enforce minimum line/function/branch coverage thresholds after the coverage source is stable.
+- [ ] **COVR-05**: Future automation may enforce minimum line/function/branch coverage thresholds after the coverage source is stable.
 
 ## Out of Scope
 
@@ -62,11 +78,11 @@ Explicitly excluded. Documented to prevent scope creep.
 | Feature | Reason |
 |---------|--------|
 | TUI dashboard behavior | User requested non-TUI coverage; TUI work has different rendering/test harness risks |
-| External integration behavior | User requested non-integration coverage; external CLIs and window managers need separate fixtures |
+| Real external integration environments | External CLIs and window managers are not launched in this milestone; integration logic may still be covered through injected executors and contract tests |
 | Editor-launching edit commands (`git-stacks edit`, `git-stacks template edit`) | They invoke the user's editor and need a separate non-interactive editor harness decision |
 | Wizard-driven commands (`new`, `clone`, `config` wizard, `repo scan`, `template new`, `template edit`, `install` prompts) | Interactive TUI prompts cannot be driven by subprocess E2E tests; tested indirectly via pre-built fixtures |
 | Fixing v0.17.0 dashboard rollback visibility audit gap | TUI behavior is excluded from this milestone even though the audit is now committed |
-| Raising mandatory coverage thresholds immediately | First milestone should produce trustworthy reports before enforcing numeric gates |
+| Brittle command-wrapper branch chasing | The extension prioritizes real-fixture core behavior and stable contracts over prompt/spinner/text branches that do not improve functional confidence |
 | Rewriting the whole test runner architecture | Scope is coverage and E2E coverage extension, not a runner replacement unless required by reports |
 
 ## Traceability
@@ -96,12 +112,26 @@ Which phases cover which requirements. Updated during roadmap refinement.
 | GATE-01 | Phase 84 | Complete |
 | GATE-02 | Phase 84 | Complete |
 | GATE-03 | Phase 84 | Complete |
+| CORE-01 | Phase 85 | Planned |
+| CORE-02 | Phase 85 | Planned |
+| CORE-03 | Phase 85 | Planned |
+| CORE-04 | Phase 85 | Planned |
+| CORE-05 | Phase 85 | Planned |
+| CMD-01 | Phase 86 | Planned |
+| CMD-02 | Phase 86 | Planned |
+| CMD-03 | Phase 86 | Planned |
+| CMD-04 | Phase 86 | Planned |
+| INTG-02 | Phase 87 | Planned |
+| INTG-03 | Phase 87 | Planned |
+| INTG-04 | Phase 87 | Planned |
+| GATE-04 | Phase 88 | Planned |
+| COVR-05 | Phase 88 | Planned |
 
 **Coverage:**
-- v0.17.1 requirements: 21 total
-- Mapped to phases: 21
+- v0.17.1 requirements: 35 total
+- Mapped to phases: 35
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-10*
-*Last updated: 2026-04-10 after roadmap refinement*
+*Last updated: 2026-05-15 after functional confidence coverage extension*

@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.17.1
-milestone_name: E2E Test Coverage
-status: verifying
-stopped_at: Completed 84.1-02-PLAN.md
-last_updated: "2026-05-14T20:53:17.896Z"
-last_activity: "2026-05-14 -- Phase 84.1 plan 02 verification complete; coverage sentinels and local release-prep gates passed"
+milestone_name: Functional Confidence Coverage
+status: planning
+stopped_at: Extended v0.17.1 with Phase 85-88 functional confidence coverage
+last_updated: "2026-05-15T00:00:00.000Z"
+last_activity: "2026-05-15 -- Extended v0.17.1 after coverage review: add core real-fixture, workspace workflow, integration contract, and functional readiness phases"
 progress:
-  total_phases: 18
-  completed_phases: 15
-  total_plans: 37
-  completed_plans: 34
-  percent: 92
+  total_phases: 22
+  completed_phases: 16
+  total_plans: 50
+  completed_plans: 36
+  percent: 72
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 84.1 — coverage-report-accuracy-and-tui-instrumentation-follow-up
+**Current focus:** Phase 85 — Core Real-Fixture Functional Hardening
 
 ## Current Position
 
-Phase: 84.1 (coverage-report-accuracy-and-tui-instrumentation-follow-up)
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-05-14 -- Phase 84.1 plan 02 verification complete; coverage sentinels and local release-prep gates passed
+Phase: 85 (Core Real-Fixture Functional Hardening)
+Plan: not planned
+Status: Milestone extended — ready for discuss/plan
+Last activity: 2026-05-15 -- Coverage report review showed functional gaps remain despite green tests; roadmap now adds Phases 85-88 to improve functional confidence without brittle TUI/plugin environment testing
 
-Progress: [█████████░] 92%
+Progress: [███████░░░] 72%
 
 ## Performance Metrics
 
@@ -83,6 +83,9 @@ Progress: [█████████░] 92%
 - [Phase 84.1]: Coverage report accuracy is a milestone gate; coverage reports that undercount existing TUI/source test execution must be fixed before closing v0.17.1.
 - [Phase 84.1]: Plan 01 selected an instrumented `.coverage/runtime-root` execution path after preload-only redirect/load-time instrumentation failed; focused coverage now records nonzero hits for `src/lib/messages.ts` and `src/tui/dashboard/ActionMenu.tsx`.
 - [Phase 84.1]: Canonical full-suite coverage and local release-prep verification passed with nonzero sentinel hits for src/lib/messages.ts and src/tui/dashboard/ActionMenu.tsx.
+- [Phase 85-88]: The milestone is not ready to close just because tests are green. The coverage report shows functional confidence gaps in command workflows, real-source integration utilities, and stable non-TUI core behaviors.
+- [Phase 85-88]: New coverage work should prioritize real temp directories, local git/bare remotes, isolated config homes, and injected executor contracts. Avoid brittle prompt/spinner assertions, TUI rendering, and real desktop/plugin environments.
+- [Phase 85-88]: Tests must execute real source modules. Existing patterns that inline implementation copies in mocks, especially around issue/forge utilities, should be replaced or supplemented so coverage means source behavior was exercised.
 
 ### Roadmap Evolution
 
@@ -95,6 +98,10 @@ Progress: [█████████░] 92%
 - Phase 83 coverage surface remediated on 2026-05-14: `coverage`, `coverage:unit`, and `coverage:integ` scripts now generate stable `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html` artifacts for Phase 84 gates.
 - Phase 84 completed on 2026-05-14: local `bun run verify` orchestration now checks prerequisite surfaces, refreshes coverage, aggregates inventory/mapping/coverage gate findings, runs existing quality commands, and documents the v0.17.1 release-prep path.
 - Phase 84.1 inserted after Phase 84: Coverage Report Accuracy and TUI Instrumentation Follow-up (URGENT)
+- Phase 85 inserted after Phase 84.1: Core Real-Fixture Functional Hardening
+- Phase 86 inserted after Phase 85: Workspace Command Workflow Edge Coverage
+- Phase 87 inserted after Phase 86: Integration Contract and Source-Module Coverage
+- Phase 88 inserted after Phase 87: Functional Coverage Readiness Gate
 
 ### Pending Todos
 
@@ -102,10 +109,10 @@ None.
 
 ### Blockers/Concerns
 
-None. Phase 84.1 plan 02 verified canonical full-suite coverage and the local release-prep gate path.
+None blocking. Concern: functional-only coverage is not yet sufficient for release confidence; new phases 85-88 are intended to close or explicitly classify those gaps.
 
 ## Session Continuity
 
-Last session: 2026-05-14T20:53:13.587Z
-Stopped at: Completed 84.1-02-PLAN.md
+Last session: 2026-05-15T00:00:00.000Z
+Stopped at: Extended v0.17.1 with Phase 85-88 functional confidence coverage
 Resume file: None
