@@ -21,9 +21,25 @@ export async function createWorktree(
   await $`git -C ${repoPath} worktree prune`.quiet().nothrow()
 
   const branchExists = await checkBranchExists(repoPath, branch)
-  const result = branchExists
-    ? await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet().nothrow()
-    : await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet().nothrow()
+  const remoteRef = "origin/" + branch
+  let result: Awaited<ReturnType<typeof $>>
+
+  if (branchExists) {
+    result = await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet().nothrow()
+  } else {
+    let hasRemoteRef = await checkRemoteTrackingRef(repoPath, branch)
+    if (!hasRemoteRef && await checkBranchExistsOnRemote(repoPath, branch)) {
+      const fetchRefspec = `refs/heads/${branch}:refs/remotes/origin/${branch}`
+      const fetchResult = await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} -c fetch.timeout=30 fetch origin ${fetchRefspec}`
+        .quiet()
+        .nothrow()
+      hasRemoteRef = fetchResult.exitCode === 0 && await checkRemoteTrackingRef(repoPath, branch)
+    }
+
+    result = hasRemoteRef
+      ? await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath} ${remoteRef}`.quiet().nothrow()
+      : await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath}`.quiet().nothrow()
+  }
 
   if (result.exitCode !== 0) {
     const stderr = result.stderr.toString().trim()
@@ -36,6 +52,8 @@ export async function createWorktree(
     }
     throw new Error(`Failed to create worktree at '${worktreePath}': ${stderr}`)
   }
+
+  await ensureUpstreamTracking(worktreePath, branch)
 }
 
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
