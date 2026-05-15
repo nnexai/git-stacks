@@ -243,4 +243,80 @@ describe("verify gate collector", () => {
     ])
     expect(formatVerifyGateReport(report)).toContain("outside source tree")
   })
+
+  test("aggregates functional readiness must-fix findings with existing gate findings", () => {
+    const root = makeRoot()
+    writeCoverageArtifacts(root, {
+      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
+      "src/lib/git.ts": coverageEntry("src/lib/git.ts", 0),
+    })
+
+    const report = collectVerifyGateReport({
+      root,
+      liveCommands: ["new", "unmapped"],
+      inventory: [item()],
+    })
+
+    expect(report.ok).toBe(false)
+    expect(report.inventoryDrift.missingFromInventory).toEqual(["unmapped"])
+    expect(report.functionalReadiness.mustFix).toContainEqual({
+      id: "phase85.core-real-fixtures",
+      title: "Core real-fixture workspace, git, lifecycle, files, env, secrets, ports, and config coverage",
+      missingTargets: [
+        "src/lib/workspace-lifecycle.ts",
+        "src/lib/workspace-git.ts",
+        "src/lib/lifecycle.ts",
+        "src/lib/files.ts",
+        "src/lib/env.ts",
+        "src/lib/secrets.ts",
+        "src/lib/ports.ts",
+        "src/lib/config.ts",
+      ],
+      zeroHitTargets: ["src/lib/git.ts"],
+    })
+    expect(formatVerifyGateReport(report)).toContain("Functional readiness problems:")
+  })
+
+  test("keeps accepted and deferred functional readiness items visible without failing gates", () => {
+    const root = makeRoot()
+    writeCoverageArtifacts(root, {
+      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
+      "src/lib/git.ts": coverageEntry("src/lib/git.ts"),
+    })
+    writeTest(root, "tests/commands/new.test.ts")
+
+    const report = collectVerifyGateReport({
+      root,
+      liveCommands: ["new"],
+      inventory: [item()],
+      functionalReadinessAreas: [
+        {
+          id: "accepted.failure-matrix",
+          phase: "88",
+          title: "Representative failure matrix",
+          category: "accepted-gap",
+          sourceTargets: [],
+          rationale: "Synthetic accepted gap.",
+        },
+        {
+          id: "deferred.live-forge",
+          phase: "88",
+          title: "Live forge auth",
+          category: "deferred-external-environment",
+          sourceTargets: [],
+          rationale: "Synthetic deferred gap.",
+        },
+      ],
+    })
+
+    expect(report.ok).toBe(true)
+    expect(report.functionalReadiness.groups["accepted-gap"].map((area) => area.id)).toEqual([
+      "accepted.failure-matrix",
+    ])
+    expect(report.functionalReadiness.groups["deferred-external-environment"].map((area) => area.id)).toEqual([
+      "deferred.live-forge",
+    ])
+  })
 })
