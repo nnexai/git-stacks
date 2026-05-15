@@ -674,6 +674,11 @@ export function registerWorkspaceCommands(program: Command) {
       const extraArgs = dashDashIdx >= 0 ? process.argv.slice(dashDashIdx + 1) : []
       const shellCmd = extraArgs.join(" ")
 
+      if (opts.json && !opts.parallel) {
+        console.error(formatError("Cannot use --json without --parallel", "usage: git-stacks run --parallel --json <workspace> -- <command>"))
+        process.exit(1)
+      }
+
       if (opts.parallel) {
         if (!shellCmd) {
           console.error(formatError("Cannot open interactive shell with --parallel", "provide a command after --"))
