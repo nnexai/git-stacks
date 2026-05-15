@@ -233,7 +233,7 @@ describe("resolveWorkspaceArg", () => {
     const exitMock = mock(((_code?: string | number | null) => {
       throw new Error("process.exit")
     }) as typeof process.exit)
-    const errorMock = mock(() => {})
+    const errorMock = mock((_message: string) => {})
     const previousExit = process.exit
     const previousError = console.error
     process.exit = exitMock
@@ -242,7 +242,7 @@ describe("resolveWorkspaceArg", () => {
     try {
       expect(() => resolveWorkspaceArg("missing", "github", "link")).toThrow("process.exit")
       expect(exitMock).toHaveBeenCalledWith(1)
-      expect(errorMock.mock.calls[0][0]).toContain("missing")
+      expect(errorMock.mock.calls[0]?.[0]).toContain("missing")
     } finally {
       process.exit = previousExit
       console.error = previousError
@@ -253,7 +253,7 @@ describe("resolveWorkspaceArg", () => {
     const exitMock = mock(((_code?: string | number | null) => {
       throw new Error("process.exit")
     }) as typeof process.exit)
-    const errorMock = mock(() => {})
+    const errorMock = mock((_message: string) => {})
     const previousExit = process.exit
     const previousError = console.error
     process.exit = exitMock
@@ -262,7 +262,7 @@ describe("resolveWorkspaceArg", () => {
     try {
       expect(() => resolveWorkspaceArg(undefined, "github", "link")).toThrow("process.exit")
       expect(exitMock).toHaveBeenCalledWith(1)
-      expect(errorMock.mock.calls[0][0]).toContain("Could not detect workspace")
+      expect(errorMock.mock.calls[0]?.[0]).toContain("Could not detect workspace")
     } finally {
       process.exit = previousExit
       console.error = previousError

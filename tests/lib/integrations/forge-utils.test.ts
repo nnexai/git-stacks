@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
-import type { Workspace, WorkspaceRepo, RepoRegistryEntry, ForgeType } from "@/lib/config"
+import type { Workspace, WorkspaceRepo, RepoRegistryEntry } from "@/lib/config"
 import { makeConfigMock } from "../../helpers"
 
 // --- Mocks for config module ---
