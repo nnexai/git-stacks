@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
-status: Milestone extended — ready for Phase 85 execution after plan generation
-stopped_at: Completed 85-04-PLAN.md
-last_updated: "2026-05-15T05:33:56.846Z"
-last_activity: 2026-05-15 -- Phase 83 was already implemented and consumed by Phases 84/84.1; stale summaries and roadmap checkboxes were reconciled
+status: executing
+stopped_at: Completed 87-01-PLAN.md
+last_updated: "2026-05-15T05:39:36.085Z"
+last_activity: 2026-05-15
 progress:
   total_phases: 22
   completed_phases: 18
   total_plans: 50
-  completed_plans: 44
-  percent: 88
+  completed_plans: 45
+  percent: 90
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 85 — Core Real-Fixture Functional Hardening
+**Current focus:** Phase 87 — integration-contract-and-source-module-coverage
 
 ## Current Position
 
-Phase: 85 (Core Real-Fixture Functional Hardening)
-Plan: context gathered; planning in progress
-Status: Milestone extended — ready for Phase 85 execution after plan generation
-Last activity: 2026-05-15 -- Phase 83 was already implemented and consumed by Phases 84/84.1; stale summaries and roadmap checkboxes were reconciled
+Phase: 87 (integration-contract-and-source-module-coverage) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-05-15
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [█████████░] 88%
 | Phase 85 P02 | 3min | 2 tasks | 1 files |
 | Phase 85 P03 | 5min | 2 tasks | 1 files |
 | Phase 85-core-real-fixture-functional-hardening P04 | 20min | 2 tasks | 3 files |
+| Phase 87 P01 | 18 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,8 @@ Progress: [█████████░] 88%
 - [Phase 85-88]: Tests must execute real source modules. Existing patterns that inline implementation copies in mocks, especially around issue/forge utilities, should be replaced or supplemented so coverage means source behavior was exercised.
 - [Phase 85-core-real-fixture-functional-hardening]: Phase 85 coverage validation stays local-only without numeric thresholds or CI requirements.
 - [Phase 85-core-real-fixture-functional-hardening]: Phase 85 focused gap closure is limited to core source modules already inside the phase boundary.
+- [Phase 87]: Utility tests now import real issue-utils and forge-utils source modules while mocking only config, workspace detection, and forge environment boundaries.
+- [Phase 87]: Forge utility tests use the exported `_detect` seam and real `resolveForgeRepoAnyMode()` instead of source-copying mocks.
 
 ### Roadmap Evolution
 
@@ -120,6 +123,6 @@ None blocking. Concern: functional-only coverage is not yet sufficient for relea
 
 ## Session Continuity
 
-Last session: 2026-05-15T05:33:56.838Z
-Stopped at: Completed 85-04-PLAN.md
+Last session: 2026-05-15T05:39:36.079Z
+Stopped at: Completed 87-01-PLAN.md
 Resume file: None
