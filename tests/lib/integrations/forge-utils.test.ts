@@ -2,15 +2,6 @@ import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { Workspace, WorkspaceRepo, RepoRegistryEntry, ForgeType } from "@/lib/config"
 import { makeConfigMock } from "../../helpers"
 
-// ─── Isolation strategy ───────────────────────────────────────────────────────
-// integration-commands.test.ts mocks @/lib/integrations/forge-utils before this
-// file runs (it runs alphabetically before 'integrations/'). After that mock,
-// the plain import below would get the stub, not the real implementation.
-//
-// Fix: apply mock.module("@/lib/config") first, then apply
-// mock.module("@/lib/integrations/forge-utils") with the REAL function
-// implementations inlined here. This overrides integration-commands' mock.
-
 // --- Mocks for config module ---
 
 const workspaceExistsMock = mock((_name: string) => false)
@@ -23,155 +14,17 @@ mock.module("@/lib/config", () => makeConfigMock({
   readRegistry: readRegistryMock,
 }))
 
-// --- Restore real forge-utils implementations via mock.module ---
-// Inline the source implementations so they call through to our mocked config.
-// Uses require() to access @/lib/config at call time (when mock is active).
-
-const _detect = {
-  which: mock(async (_cmd: string): Promise<boolean> => false),
-  gitRemoteUrl: mock(async (_repoPath: string): Promise<string | null> => null),
-  teaPullsLs: mock(async (_repoPath: string): Promise<boolean> => false),
-}
-
-mock.module("@/lib/integrations/forge-utils", () => {
-  function resolveForgeRepo(workspaceName: string, repoArg: string | undefined, forge: string): unknown {
-    const { workspaceExists, readWorkspace, readRegistry } = require("@/lib/config")
-    if (!workspaceExists(workspaceName)) {
-      return { ok: false, error: "workspace_not_found", name: workspaceName }
-    }
-    const workspace = readWorkspace(workspaceName)
-    const worktreeRepos = workspace.repos.filter((r: WorkspaceRepo) => r.mode === "worktree")
-    let repo: WorkspaceRepo
-    if (repoArg !== undefined) {
-      const allMatch = workspace.repos.find((r: WorkspaceRepo) => r.name === repoArg)
-      if (!allMatch) return { ok: false, error: "repo_not_found", name: repoArg }
-      if (allMatch.mode !== "worktree") return { ok: false, error: "not_worktree_mode", repo: repoArg }
-      repo = allMatch
-    } else if (worktreeRepos.length === 1) {
-      repo = worktreeRepos[0]
-    } else if (worktreeRepos.length === 0) {
-      return { ok: false, error: "repo_required", worktreeRepos: [] }
-    } else {
-      return { ok: false, error: "repo_required", worktreeRepos: worktreeRepos.map((r: WorkspaceRepo) => r.name) }
-    }
-    const registry = readRegistry()
-    const registryEntry = registry.find((r: RepoRegistryEntry) => r.name === (repo as WorkspaceRepo).repo)
-    if (registryEntry?.forge !== forge) {
-      return {
-        ok: false, error: "forge_not_configured",
-        repo: (repo as WorkspaceRepo).name, expected: forge, actual: registryEntry?.forge,
-      }
-    }
-    const baseBranch = (repo as WorkspaceRepo).base_branch ?? registryEntry?.default_branch ?? "main"
-    return { ok: true, workspace, repo, repoPath: (repo as WorkspaceRepo).task_path, baseBranch }
-  }
-
-  function resolveForgeRepoAnyMode(workspaceName: string, repoArg: string | undefined, forge: string): unknown {
-    const { workspaceExists, readWorkspace, readRegistry } = require("@/lib/config")
-    if (!workspaceExists(workspaceName)) {
-      return { ok: false, error: "workspace_not_found", name: workspaceName }
-    }
-    const workspace = readWorkspace(workspaceName)
-    let repo: WorkspaceRepo
-    if (repoArg !== undefined) {
-      const match = workspace.repos.find((r: WorkspaceRepo) => r.name === repoArg)
-      if (!match) return { ok: false, error: "repo_not_found", name: repoArg }
-      repo = match
-    } else if (workspace.repos.length === 1) {
-      repo = workspace.repos[0]
-    } else {
-      const registry = readRegistry()
-      const forgeMatches = workspace.repos.filter((r: WorkspaceRepo) => {
-        const entry = registry.find((reg: RepoRegistryEntry) => reg.name === r.repo)
-        return entry?.forge === forge
-      })
-      if (forgeMatches.length === 1) repo = forgeMatches[0]
-      else return { ok: false, error: "repo_required", worktreeRepos: workspace.repos.map((r: WorkspaceRepo) => r.name) }
-    }
-    const registry = readRegistry()
-    const registryEntry = registry.find((r: RepoRegistryEntry) => r.name === (repo as WorkspaceRepo).repo)
-    if (registryEntry?.forge !== forge) {
-      return { ok: false, error: "forge_not_configured", repo: (repo as WorkspaceRepo).name, expected: forge, actual: registryEntry?.forge }
-    }
-    const baseBranch = (repo as WorkspaceRepo).base_branch ?? registryEntry?.default_branch ?? "main"
-    return { ok: true, workspace, repo, repoPath: (repo as WorkspaceRepo).main_path, baseBranch }
-  }
-
-  async function resolveRepoCwd(): Promise<string | null> { return null }
-
-  async function detectGitHubForge(repoPath: string): Promise<boolean> {
-    const installed = await _detect.which("gh")
-    if (!installed) return false
-    const remoteUrl = await _detect.gitRemoteUrl(repoPath)
-    if (!remoteUrl) return false
-    return remoteUrl.includes("github.com")
-  }
-
-  async function detectGitLabForge(repoPath: string): Promise<boolean> {
-    const installed = await _detect.which("glab")
-    if (!installed) return false
-    const remoteUrl = await _detect.gitRemoteUrl(repoPath)
-    if (!remoteUrl) return false
-    return remoteUrl.includes("gitlab.com")
-  }
-
-  async function detectGiteaForge(repoPath: string): Promise<boolean> {
-    const installed = await _detect.which("tea")
-    if (!installed) return false
-    return await _detect.teaPullsLs(repoPath)
-  }
-
-  async function detectForgeForRepo(repoPath: string): Promise<NonNullable<ForgeType>[]> {
-    const results: NonNullable<ForgeType>[] = []
-    if (await detectGitHubForge(repoPath)) results.push("github")
-    if (await detectGitLabForge(repoPath)) results.push("gitlab")
-    if (await detectGiteaForge(repoPath)) results.push("gitea")
-    return results
-  }
-
-  const FORGE_DEFAULTS_TEST: Array<{ id: "github" | "gitlab" | "gitea"; enabledByDefault: boolean }> = [
-    { id: "github", enabledByDefault: false },
-    { id: "gitlab", enabledByDefault: false },
-    { id: "gitea", enabledByDefault: false },
-  ]
-
-  async function detectForgeForRepoEnabled(
-    repoPath: string,
-    config: { integrations: Record<string, unknown> }
-  ): Promise<NonNullable<ForgeType>[]> {
-    const { resolveEnabledGlobally } = require("@/lib/integrations/types")
-    const results: NonNullable<ForgeType>[] = []
-    for (const { id, enabledByDefault } of FORGE_DEFAULTS_TEST) {
-      if (!resolveEnabledGlobally(id, enabledByDefault, config)) continue
-      if (id === "github" && await detectGitHubForge(repoPath)) results.push("github")
-      if (id === "gitlab" && await detectGitLabForge(repoPath)) results.push("gitlab")
-      if (id === "gitea" && await detectGiteaForge(repoPath)) results.push("gitea")
-    }
-    return results
-  }
-
-  function formatForgeError(err: { ok: false; error: string; name?: string; worktreeRepos?: string[]; repo?: string; expected?: string; actual?: string }): string {
-    switch (err.error) {
-      case "workspace_not_found": return `Workspace '${err.name}' not found.`
-      case "repo_required":
-        return (err.worktreeRepos?.length === 0)
-          ? "No worktree-mode repos in this workspace."
-          : `Multiple worktree repos — specify one: ${err.worktreeRepos?.join(", ")}`
-      case "repo_not_found": return `Repo '${err.name}' not found in workspace.`
-      case "not_worktree_mode": return `Repo '${err.repo}' is in trunk mode — PR operations require worktree mode.`
-      case "forge_not_configured":
-        return err.actual
-          ? `Repo '${err.repo}' is configured for ${err.actual}, not ${err.expected}. Update forge in registry with 'git-stacks repo edit'.`
-          : `Repo '${err.repo}' has no forge configured. Set forge to '${err.expected}' via 'git-stacks repo add' or edit the registry YAML.`
-      default: return `Unknown forge error: ${err.error}`
-    }
-  }
-
-  return { resolveForgeRepo, resolveForgeRepoAnyMode, resolveRepoCwd, _detect, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo, detectForgeForRepoEnabled, formatForgeError }
-})
-
-const { resolveForgeRepo, formatForgeError, detectGitHubForge, detectGitLabForge, detectGiteaForge, detectForgeForRepo, detectForgeForRepoEnabled } = await import("@/lib/integrations/forge-utils")
-// Note: _detect is already declared above and passed into the mock.module factory — it's the same object.
+const {
+  resolveForgeRepo,
+  resolveForgeRepoAnyMode,
+  formatForgeError,
+  _detect,
+  detectGitHubForge,
+  detectGitLabForge,
+  detectGiteaForge,
+  detectForgeForRepo,
+  detectForgeForRepoEnabled,
+} = await import("@/lib/integrations/forge-utils")
 
 // --- Factory helpers ---
 
@@ -363,6 +216,49 @@ describe("resolveForgeRepo", () => {
     const result3 = resolveForgeRepo("test-ws", undefined, "github")
     expect(result3.ok).toBe(true)
     if (result3.ok) expect(result3.baseBranch).toBe("main")
+  })
+})
+
+describe("resolveForgeRepoAnyMode", () => {
+  beforeEach(() => {
+    workspaceExistsMock.mockReset()
+    readWorkspaceMock.mockReset()
+    readRegistryMock.mockReset()
+    workspaceExistsMock.mockImplementation(() => true)
+    readRegistryMock.mockImplementation(() => [])
+  })
+
+  test("auto-selects the single matching forge repo across trunk and worktree modes", () => {
+    const githubRepo = makeTrunkRepo({ name: "trunk-repo", repo: "github-repo" })
+    const gitlabRepo = makeWorktreeRepo({ name: "worktree-repo", repo: "gitlab-repo" })
+    readWorkspaceMock.mockImplementation(() => makeWorkspace([githubRepo, gitlabRepo]))
+    readRegistryMock.mockImplementation(() => [
+      makeRegistryEntry("github-repo", { forge: "github" }),
+      makeRegistryEntry("gitlab-repo", { forge: "gitlab" }),
+    ])
+
+    const result = resolveForgeRepoAnyMode("test-ws", undefined, "github")
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.repo.name).toBe("trunk-repo")
+      expect(result.repoPath).toBe("/main/trunk-repo")
+    }
+  })
+
+  test("requires a repo when multiple repos match requested forge", () => {
+    const repoA = makeTrunkRepo({ name: "repo-a", repo: "repo-a" })
+    const repoB = makeWorktreeRepo({ name: "repo-b", repo: "repo-b" })
+    readWorkspaceMock.mockImplementation(() => makeWorkspace([repoA, repoB]))
+    readRegistryMock.mockImplementation(() => [
+      makeRegistryEntry("repo-a", { forge: "github" }),
+      makeRegistryEntry("repo-b", { forge: "github" }),
+    ])
+
+    expect(resolveForgeRepoAnyMode("test-ws", undefined, "github")).toEqual({
+      ok: false,
+      error: "repo_required",
+      worktreeRepos: ["repo-a", "repo-b"],
+    })
   })
 })
 
