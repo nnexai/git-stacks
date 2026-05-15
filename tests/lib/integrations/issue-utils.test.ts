@@ -2,20 +2,12 @@ import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { Workspace } from "@/lib/config"
 import { makeConfigMock } from "../../helpers"
 
-// ─── Isolation strategy ───────────────────────────────────────────────────────
-// gitea/github/gitlab/jira test files mock @/lib/integrations/issue-utils before
-// this file runs (they run alphabetically before 'issue-utils'). After those mocks,
-// the plain import on line N would get the stub, not the real implementation.
-//
-// Fix: apply mock.module("@/lib/config") first (so issue-utils uses our mock config),
-// then apply mock.module("@/lib/integrations/issue-utils") with the REAL function
-// implementations inlined here. This overrides whatever gitea/github/gitlab set.
-
 // --- Mock config module (issue-utils calls workspaceExists/readWorkspace/writeWorkspace) ---
 
 const workspaceExistsMock = mock((_name: string) => false)
 const writeWorkspaceMock = mock((_ws: unknown) => {})
 let mockWorkspaceData: Record<string, unknown> = {}
+const detectWorkspaceFromCwdMock = mock((): { ok: false } | { ok: true; workspace: Workspace } => ({ ok: false }))
 
 mock.module("@/lib/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
@@ -23,82 +15,17 @@ mock.module("@/lib/config", () => makeConfigMock({
   writeWorkspace: writeWorkspaceMock,
 }))
 
-// --- Restore real issue-utils implementations via mock.module ---
-// Inline the source implementations so they call through to our mocked config.
-// This bypasses the stale mock left by gitea/github/gitlab/jira test files.
-
-mock.module("@/lib/integrations/issue-utils", () => {
-  // These functions are imported via live binding from @/lib/config (now mocked above).
-  // We inline the real source logic here to avoid depending on the contaminated module cache.
-  function resolveIssueRef(workspaceName: string, trackerId: string): unknown {
-    const { workspaceExists, readWorkspace } = require("@/lib/config")
-    if (!workspaceExists(workspaceName)) {
-      return { ok: false, error: "workspace_not_found", name: workspaceName }
-    }
-    const workspace = readWorkspace(workspaceName)
-    const integrations = workspace?.settings?.integrations as Record<string, unknown> | undefined
-    const trackerConfig = integrations?.[trackerId] as Record<string, unknown> | undefined
-    const issueId = trackerConfig?.issue
-    if (issueId === undefined || issueId === null) {
-      return { ok: false, error: "no_issue_linked", tracker: trackerId, workspace: workspaceName }
-    }
-    return { ok: true, issueId: String(issueId), workspace }
-  }
-
-  function linkIssue(workspaceName: string, trackerId: string, issueId: string): void {
-    const { readWorkspace, writeWorkspace } = require("@/lib/config")
-    const workspace = readWorkspace(workspaceName)
-    const settings = workspace.settings ?? {}
-    const integrations = ((settings.integrations ?? {}) as Record<string, Record<string, unknown>>)
-    const existing = (integrations[trackerId] ?? {}) as Record<string, unknown>
-    integrations[trackerId] = { ...existing, issue: issueId }
-    writeWorkspace({ ...workspace, settings: { ...settings, integrations } })
-  }
-
-  function unlinkIssue(workspaceName: string, trackerId: string): void {
-    const { readWorkspace, writeWorkspace } = require("@/lib/config")
-    const workspace = readWorkspace(workspaceName)
-    const settings = workspace.settings ?? {}
-    const integrations = ((settings.integrations ?? {}) as Record<string, Record<string, unknown>>)
-    const existing = (integrations[trackerId] ?? {}) as Record<string, unknown>
-    const { issue: _, ...rest } = existing
-    integrations[trackerId] = rest
-    writeWorkspace({ ...workspace, settings: { ...settings, integrations } })
-  }
-
-  function formatIssueError(err: { ok: false; error: string; name?: string; tracker?: string; workspace?: string }): string {
-    switch (err.error) {
-      case "workspace_not_found":
-        return `Workspace '${err.name}' not found.`
-      case "no_issue_linked":
-        return (
-          `No issue linked to workspace '${err.workspace}' for ${err.tracker}. ` +
-          `Run: git-stacks integration ${err.tracker} issue link <issue-id> (from inside a worktree) ` +
-          `or: git-stacks integration ${err.tracker} issue link ${err.workspace} <issue-id>`
-        )
-      default:
-        return `Unknown issue error: ${err.error}`
-    }
-  }
-
-  function resolveWorkspaceArg(workspaceName: string | undefined, tracker: string, action: string): string {
-    const { workspaceExists } = require("@/lib/config")
-    if (workspaceName) {
-      if (!workspaceExists(workspaceName)) {
-        console.error(`Workspace '${workspaceName}' not found.`)
-        process.exit(1)
-      }
-      return workspaceName
-    }
-    console.error(`Could not detect workspace from current directory. Run from inside a worktree or specify: git-stacks integration ${tracker} issue ${action} <workspace> ...`)
-    process.exit(1)
-    return ""
-  }
-
-  return { resolveIssueRef, linkIssue, unlinkIssue, formatIssueError, resolveWorkspaceArg }
+mock.module("@/lib/workspace-status", () => {
+  return { detectWorkspaceFromCwd: detectWorkspaceFromCwdMock }
 })
 
-const { resolveIssueRef, linkIssue, unlinkIssue, formatIssueError } = await import("@/lib/integrations/issue-utils")
+const {
+  resolveIssueRef,
+  linkIssue,
+  unlinkIssue,
+  formatIssueError,
+  resolveWorkspaceArg,
+} = await import("@/lib/integrations/issue-utils")
 
 // --- Factory helpers ---
 
@@ -119,6 +46,7 @@ describe("resolveIssueRef", () => {
   beforeEach(() => {
     workspaceExistsMock.mockReset()
     writeWorkspaceMock.mockReset()
+    detectWorkspaceFromCwdMock.mockReset()
     mockWorkspaceData = {}
     // Default: workspace does not exist
     workspaceExistsMock.mockImplementation((_name: string) => _name === "my-ws")
@@ -198,6 +126,7 @@ describe("linkIssue", () => {
   beforeEach(() => {
     workspaceExistsMock.mockReset()
     writeWorkspaceMock.mockReset()
+    detectWorkspaceFromCwdMock.mockReset()
     mockWorkspaceData = {}
     workspaceExistsMock.mockImplementation((_name: string) => _name === "my-ws")
     mockWorkspaceData["my-ws"] = makeWorkspace()
@@ -233,6 +162,7 @@ describe("unlinkIssue", () => {
   beforeEach(() => {
     workspaceExistsMock.mockReset()
     writeWorkspaceMock.mockReset()
+    detectWorkspaceFromCwdMock.mockReset()
     mockWorkspaceData = {}
     workspaceExistsMock.mockImplementation((_name: string) => _name === "my-ws")
     mockWorkspaceData["my-ws"] = makeWorkspace()
@@ -272,5 +202,70 @@ describe("formatIssueError", () => {
     expect(msg).toContain("my-ws")
     expect(msg).toContain("github")
     expect(msg.toLowerCase()).toContain("link")
+  })
+})
+
+describe("resolveWorkspaceArg", () => {
+  beforeEach(() => {
+    workspaceExistsMock.mockReset()
+    writeWorkspaceMock.mockReset()
+    detectWorkspaceFromCwdMock.mockReset()
+    mockWorkspaceData = {}
+    workspaceExistsMock.mockImplementation((_name: string) => _name === "my-ws")
+    detectWorkspaceFromCwdMock.mockImplementation(() => ({ ok: false }))
+  })
+
+  test("returns explicit workspace when it exists", () => {
+    expect(resolveWorkspaceArg("my-ws", "github", "link")).toBe("my-ws")
+  })
+
+  test("returns detected workspace from cwd when workspace argument is omitted", () => {
+    detectWorkspaceFromCwdMock.mockImplementation(() => ({
+      ok: true,
+      workspace: makeWorkspace() as Workspace,
+    }))
+
+    expect(resolveWorkspaceArg(undefined, "github", "link")).toBe("my-ws")
+  })
+
+  test("exits with guidance when explicit workspace does not exist", () => {
+    workspaceExistsMock.mockImplementation(() => false)
+    const exitMock = mock(((_code?: string | number | null) => {
+      throw new Error("process.exit")
+    }) as typeof process.exit)
+    const errorMock = mock(() => {})
+    const previousExit = process.exit
+    const previousError = console.error
+    process.exit = exitMock
+    console.error = errorMock
+
+    try {
+      expect(() => resolveWorkspaceArg("missing", "github", "link")).toThrow("process.exit")
+      expect(exitMock).toHaveBeenCalledWith(1)
+      expect(errorMock.mock.calls[0][0]).toContain("missing")
+    } finally {
+      process.exit = previousExit
+      console.error = previousError
+    }
+  })
+
+  test("exits with cwd guidance when no workspace can be detected", () => {
+    const exitMock = mock(((_code?: string | number | null) => {
+      throw new Error("process.exit")
+    }) as typeof process.exit)
+    const errorMock = mock(() => {})
+    const previousExit = process.exit
+    const previousError = console.error
+    process.exit = exitMock
+    console.error = errorMock
+
+    try {
+      expect(() => resolveWorkspaceArg(undefined, "github", "link")).toThrow("process.exit")
+      expect(exitMock).toHaveBeenCalledWith(1)
+      expect(errorMock.mock.calls[0][0]).toContain("Could not detect workspace")
+    } finally {
+      process.exit = previousExit
+      console.error = previousError
+    }
   })
 })
