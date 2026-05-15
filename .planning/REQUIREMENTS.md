@@ -43,7 +43,7 @@ Requirements for v0.17.1 Functional Confidence Coverage. Each maps to roadmap ph
 ### Functional Confidence Extension
 
 - [x] **CORE-01**: Core workspace lifecycle behavior is covered with real temp directories and local git repositories for rollback, cleanup, rename, merge, missing-path, and destructive safety boundaries.
-- [ ] **CORE-02**: Core git operations are covered with local bare remotes for sync, pull, push, no-op, failure, branch-state, and dirty-worktree behavior that impacts real users.
+- [x] **CORE-02**: Core git operations are covered with local bare remotes for sync, pull, push, no-op, failure, branch-state, and dirty-worktree behavior that impacts real users.
 - [x] **CORE-03**: Hook execution is covered for ordering, cwd, env injection, captured output, failure propagation, and rollback interaction using automation-safe fixtures.
 - [ ] **CORE-04**: File operations, env/secrets/ports, and config persistence are covered where they affect workspace setup, cleanup, idempotency, external-file safety, resolver order, repo overlay, collision handling, and atomic YAML writes.
 - [x] **CORE-05**: Coverage-improving tests execute real source modules and do not satisfy coverage by inlining copies of implementation logic inside test mocks.
