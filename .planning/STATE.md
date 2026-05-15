@@ -4,14 +4,14 @@ milestone: v0.17.1
 milestone_name: Functional Confidence Coverage
 status: planning
 stopped_at: Extended v0.17.1 with Phase 85-88 functional confidence coverage
-last_updated: "2026-05-15T00:00:00.000Z"
-last_activity: "2026-05-15 -- Extended v0.17.1 after coverage review: add core real-fixture, workspace workflow, integration contract, and functional readiness phases"
+last_updated: "2026-05-15T04:35:00.000Z"
+last_activity: 2026-05-15 -- Reconciled stale Phase 83 completion artifacts; continuing with Phase 85 functional hardening
 progress:
   total_phases: 22
   completed_phases: 16
   total_plans: 50
-  completed_plans: 36
-  percent: 72
+  completed_plans: 37
+  percent: 73
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-10)
 ## Current Position
 
 Phase: 85 (Core Real-Fixture Functional Hardening)
-Plan: not planned
-Status: Milestone extended — ready for discuss/plan
-Last activity: 2026-05-15 -- Coverage report review showed functional gaps remain despite green tests; roadmap now adds Phases 85-88 to improve functional confidence without brittle TUI/plugin environment testing
+Plan: context gathered; planning in progress
+Status: Milestone extended — ready for Phase 85 execution after plan generation
+Last activity: 2026-05-15 -- Phase 83 was already implemented and consumed by Phases 84/84.1; stale summaries and roadmap checkboxes were reconciled
 
-Progress: [███████░░░] 72%
+Progress: [███████░░░] 73%
 
 ## Performance Metrics
 
@@ -96,6 +96,7 @@ Progress: [███████░░░] 72%
 - Phase 80 completed on 2026-05-14: shared E2E CLI harness and canonical machine-parseable inventory are now available.
 - Phase 82 completed on 2026-05-14: template, repo, label, and message command families now have isolated real-CLI E2E coverage and inventory mappings.
 - Phase 83 coverage surface remediated on 2026-05-14: `coverage`, `coverage:unit`, and `coverage:integ` scripts now generate stable `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html` artifacts for Phase 84 gates.
+- Phase 83 completion artifacts reconciled on 2026-05-15: summaries and roadmap checkboxes now match the already-shipped coverage implementation consumed by Phases 84 and 84.1.
 - Phase 84 completed on 2026-05-14: local `bun run verify` orchestration now checks prerequisite surfaces, refreshes coverage, aggregates inventory/mapping/coverage gate findings, runs existing quality commands, and documents the v0.17.1 release-prep path.
 - Phase 84.1 inserted after Phase 84: Coverage Report Accuracy and TUI Instrumentation Follow-up (URGENT)
 - Phase 85 inserted after Phase 84.1: Core Real-Fixture Functional Hardening

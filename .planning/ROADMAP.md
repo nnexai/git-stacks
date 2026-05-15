@@ -224,7 +224,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 81: Workspace and Git Operation E2E Coverage** - Prove high-risk workspace behavior including branch start points, env/hooks, explicit cwd/path handling, run/open safety, merge, and pull/sync/push (completed 2026-05-14)
 - [x] **Phase 82: Template, Repo, Label, and Message E2E Coverage** - Add focused E2E coverage for template, registry, label, and message command families (completed 2026-05-14)
 - [x] **Phase 82.1: Support Commands and Error-Path E2E Coverage** - Add config, doctor, completion, version, install hook, env/path support, and representative failure scenarios (completed 2026-05-14)
-- [ ] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files
+- [x] **Phase 83: Istanbul-Based Subprocess Coverage Reporting** - Generate coverage reports that include source exercised by both shared-process unit tests and isolated subprocess E2E files (completed 2026-05-14)
 - [x] **Phase 84: Local Coverage Gates, Docs, and Release Prep** - Add local inventory/test mapping gates and verify the expanded suite with existing quality commands (completed 2026-05-14)
 - [x] **Phase 84.1: Coverage Report Accuracy and TUI Instrumentation Follow-up** - Coverage report accuracy verified through canonical full-suite coverage and local release-prep gates (completed 2026-05-14)
 - [ ] **Phase 85: Core Real-Fixture Functional Hardening** - Add high-value tests for core workspace/git/hooks/files/env behavior using real temp directories and local git repositories instead of mocks
@@ -441,9 +441,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] `83-01-PLAN.md` — Prerequisites, dependency installation, coverage script surface, and runner/preload scaffold
-- [ ] `83-02-PLAN.md` — Instrumentation engine, subprocess delegation shim, preload plugin, and test execution wiring
-- [ ] `83-03-PLAN.md` — Coverage merge, zero-baseline, report generation (text/HTML/JSON/LCOV), and regression verification
+- [x] `83-01-PLAN.md` — Prerequisites, dependency installation, coverage script surface, and runner/preload scaffold
+- [x] `83-02-PLAN.md` — Instrumentation engine, subprocess delegation shim, preload plugin, and test execution wiring
+- [x] `83-03-PLAN.md` — Coverage merge, zero-baseline, report generation (text/HTML/JSON/LCOV), and regression verification
 
 ### Phase 84: Local Coverage Gates, Docs, and Release Prep
 **Goal**: Maintainers can keep the E2E inventory, mapped tests, coverage reports, and existing verification commands aligned without assuming CI exists
@@ -558,7 +558,7 @@ Plans:
 | 81. Workspace and Git Operation E2E Coverage | v0.17.1 | 4/4 | Complete    | 2026-05-14 |
 | 82. Template, Repo, Label, and Message E2E Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
 | 82.1. Support Commands and Error-Path E2E Coverage | v0.17.1 | 3/3 | Complete    | 2026-05-14 |
-| 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 0/TBD | Not started | - |
+| 83. Istanbul-Based Subprocess Coverage Reporting | v0.17.1 | 3/3 | Complete | 2026-05-14 |
 | 84. Local Coverage Gates, Docs, and Release Prep | v0.17.1 | 3/3 | Complete   | 2026-05-14 |
 | 84.1. Coverage Report Accuracy and TUI Instrumentation Follow-up | v0.17.1 | 2/2 | Complete   | 2026-05-14 |
 | 85. Core Real-Fixture Functional Hardening | v0.17.1 | 0/4 | Not started | - |
