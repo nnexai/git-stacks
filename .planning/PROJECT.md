@@ -288,7 +288,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 **Goal:** Make workspace file materialization useful for private planning/agent configuration through bidirectional real-file sync, then add a GitLab-first forge source path for creating normal template-backed workspaces from merge requests.
 
 **Target features:**
-- `files.sync` entries under the existing `files` model for real-file materialization of directories such as `.planning/` and `.codex/`, avoiding external symlink targets that agents may refuse to follow.
+- `files.sync` entries under the existing `files` model for real-file materialization of directories such as `.planning/` and `.codex/`, avoiding external symlink targets that agents may refuse to follow. Phase 89 completed the schema, composition, materialization, target-safety, tracked-target refusal, and repo-level local exclude slice.
 - `git-stacks files status|pull|push` as the user-facing command family for file materialization and bidirectional sync, keeping this separate from existing branch-level `git-stacks sync`.
 - Local `.git/info/exclude` support for synced targets so private planning/agent files can exist inside worktrees without becoming project repo commits.
 - Lightweight drift/conflict detection for sync targets without storing a full per-file hash manifest, because large `.planning` trees would make exhaustive manifests noisy and expensive.
@@ -316,10 +316,10 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Shipped:** v0.17.1 closed the broad local confidence pass for workspace, template, repo, label, message, support, and integration-contract surfaces. Common workspace flows are now covered with local automation, command contracts were tightened, and the release audit passed with all v0.17.1 requirements complete.
 
-**Status:** Milestone v0.18.0 is defining and planning bidirectional workspace file sync plus forge-source workspace creation. The first priority is `files.sync`; forge source work is included as a GitLab-first track with explicit research and validation constraints.
+**Status:** Phase 89 completed the foundational `files.sync` materialization layer. Next is the Phase 90 command/policy surface for `git-stacks files status|pull|push`; forge source work remains a GitLab-first track with explicit research and validation constraints.
 
 ## Next Milestone Goals
-- Add bidirectional real-file sync under `files.sync` for private planning and agent config directories that must appear as normal files inside a workspace.
+- Add the user-facing command and conflict-policy layer for `files.sync` now that Phase 89 provides real-file materialization and repo-local excludes.
 - Expose `git-stacks files status|pull|push` for inspecting, pulling, and pushing synced file targets without overloading git branch `sync`.
 - Keep sync-back explicit and operator-controlled; no automatic lifecycle push by default.
 - Avoid full file-hash manifests for large sync trees; choose a lighter status/conflict model that scales to `.planning/`.
@@ -500,4 +500,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-05-15 for v0.18.0 milestone initialization*
+*Last updated: 2026-05-16 after Phase 89 files.sync materialization*
