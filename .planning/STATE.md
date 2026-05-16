@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.18.0
 milestone_name: Workspace File Sync and Forge Sources
-status: verifying
-stopped_at: Phase 91 context gathered
-last_updated: "2026-05-16T08:48:21.004Z"
+status: ready_to_plan
+stopped_at: Phase 89 complete (3/3) — ready to discuss Phase 90
+last_updated: 2026-05-16T08:49:25.517Z
 last_activity: 2026-05-16
 progress:
   total_phases: 29
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 89 — Files Sync Schema and Materialization
+**Current focus:** Phase 90 — files command surface and conflict policy
 
 ## Current Position
 
-Phase: 89 (Files Sync Schema and Materialization) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 90
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-16
 
 ## Performance Metrics
@@ -57,6 +57,7 @@ Last activity: 2026-05-16
 | Phase 87 P04 | 12 min | 2 tasks | 3 files |
 | Phase 88 P01 | 4 min | 2 tasks | 4 files |
 | Phase 88 P02 | 12 min | 2 tasks | 6 files |
+| 89 | 3 | - | - |
 
 ## Accumulated Context
 
