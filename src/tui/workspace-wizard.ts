@@ -26,6 +26,7 @@ import { openWorkspace } from "../lib/workspace-ops"
 import { createWorkspace } from "../lib/workspace-lifecycle"
 import { composeTemplates } from "../lib/composition"
 import { mergePorts } from "../lib/ports"
+import { prepareWorkspaceSource, formatWorkspaceSourceError, _source } from "../lib/workspace-source"
 
 const LABEL_REGEX = /^[A-Za-z0-9._:-]+$/
 
@@ -133,7 +134,7 @@ export async function runWorkspaceNew(
   fromSource?: string,
   templateNames?: string[],
   cliLabels?: string[],
-  opts?: { nonInteractive?: boolean; branch?: string; open?: boolean },
+  opts?: { nonInteractive?: boolean; source?: string; repo?: string; dryRun?: boolean; branch?: string; open?: boolean },
 ) {
   p.intro("New workspace")
 
@@ -141,6 +142,28 @@ export async function runWorkspaceNew(
   const tasksDir = getTasksDir(config.workspace_root)
 
   if (opts?.nonInteractive) {
+    if (opts.source) {
+      try {
+        // D-03 full URL only.
+        // eslint-disable-next-line no-new
+        new URL(opts.source)
+      } catch {
+        console.error("[git-stacks] --source must be a full forge web URL.")
+        process.exit(1)
+      }
+      if (fromSource) {
+        console.error("[git-stacks] Error: --from and --source are mutually exclusive")
+        process.exit(1)
+      }
+      if (!templateNames || templateNames.length === 0) {
+        console.error("[git-stacks] --source requires --template")
+        process.exit(1)
+      }
+      if (!nameArg?.trim()) {
+        console.error("[git-stacks] --non-interactive requires: <name> (positional argument)")
+        process.exit(1)
+      }
+    }
     const missing: string[] = []
     if (!nameArg?.trim()) missing.push("<name> (positional argument)")
     if (!fromSource && (!templateNames || templateNames.length === 0)) {
@@ -214,8 +237,46 @@ export async function runWorkspaceNew(
     wsPorts = template.ports ? { ...template.ports } : undefined
 
     const firstPattern = template.repos.find(r => r.branch_pattern)?.branch_pattern
-    const branch = opts.branch?.trim() || (firstPattern ? expandBranchPattern(firstPattern, wsName) : `feature/${wsName}`)
+    let branch = opts.branch?.trim() || (firstPattern ? expandBranchPattern(firstPattern, wsName) : `feature/${wsName}`)
     const labels = normalizeLabels(cliLabels ?? [])
+    let sourceMetadata: Workspace["source"] | undefined
+    let sourceStartRefs: Record<string, string> | undefined
+    let cleanupRef: { repoPath: string; ref: string } | undefined
+
+    if (opts.source) {
+      const prepared = await prepareWorkspaceSource({
+        sourceUrl: opts.source,
+        repoOverride: opts.repo,
+        repos,
+        registry,
+        workspaceName: wsName,
+        branch,
+        dryRun: opts.dryRun,
+      })
+      if (!prepared.ok) {
+        console.error(`[git-stacks] ${formatWorkspaceSourceError(prepared)}`)
+        process.exit(1)
+      }
+
+      branch = prepared.branch
+      sourceMetadata = prepared.sourceMetadata
+      if (process.env.GS_TEST_SKIP_SOURCE_FETCH !== "1") {
+        sourceStartRefs = { [prepared.matchedRepoName]: prepared.fetchedRef }
+        cleanupRef = { repoPath: repos.find(r => r.name === prepared.matchedRepoName)!.main_path, ref: prepared.fetchedRef }
+      }
+
+      if (opts.dryRun) {
+        console.log(`source: ${prepared.preview.source}`)
+        console.log(`forge: ${prepared.preview.forge}`)
+        console.log(`change: ${prepared.preview.change}`)
+        console.log(`matched repo: ${prepared.preview.matchedRepo}`)
+        console.log(`source branch: ${prepared.preview.sourceBranch}`)
+        console.log(`source ref: ${prepared.preview.sourceRef}`)
+        console.log(`target branch: ${prepared.preview.targetBranch}`)
+        console.log(`planned workspace: ${prepared.preview.workspaceName}`)
+        return
+      }
+    }
     const result = await createWorkspace(
       {
         wsName,
@@ -230,11 +291,16 @@ export async function runWorkspaceNew(
         ...(wsIntegrationSettings ? { wsIntegrationSettings } : {}),
         ...(wsPorts ? { wsPorts } : {}),
         ...(labels.length > 0 ? { labels } : {}),
+        ...(sourceMetadata ? { source: sourceMetadata } : {}),
+        ...(sourceStartRefs ? { sourceStartRefs } : {}),
       },
       (msg) => p.log.info(msg),
     )
 
     if (!result.ok) {
+      if (cleanupRef) {
+        await _source.deleteRef(cleanupRef.repoPath, cleanupRef.ref)
+      }
       if (result.rollbackErrors.length > 0) {
         for (const rbErr of result.rollbackErrors) p.log.warn(rbErr)
       }

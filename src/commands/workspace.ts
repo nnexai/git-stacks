@@ -118,10 +118,13 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--from <source>", "Create from template name or local repo path")
     .option("--template <name>", "Compose from template(s) — repeatable", (val: string, arr: string[]) => { arr.push(val); return arr }, [] as string[])
     .option("--label <tag>", "Set label on workspace (repeatable)", (val: string, arr: string[]) => { arr.push(val); return arr }, [] as string[])
+    .option("--source <forge-url>", "Create workspace from forge change source URL (requires --template)")
+    .option("--repo <name>", "Template repo name to use for --source when multiple repos match")
+    .option("--dry-run", "Preview source resolution and planned creation without writing workspace/worktrees")
     .option("--branch <branch>", "Branch name (defaults to feature/<name> or template pattern)")
     .option("--non-interactive", "Skip all prompts; fail if required inputs are missing")
     .option("--open", "Open workspace after creation (non-interactive only)")
-    .action(async (name: string | undefined, opts: { from?: string; template?: string[]; label?: string[]; branch?: string; nonInteractive?: boolean; open?: boolean }) => {
+    .action(async (name: string | undefined, opts: { from?: string; template?: string[]; label?: string[]; source?: string; repo?: string; dryRun?: boolean; branch?: string; nonInteractive?: boolean; open?: boolean }) => {
       if (name !== undefined) validateName(name)
       if (opts.from && opts.template && opts.template.length > 0) {
         console.error("[git-stacks] Error: --from and --template are mutually exclusive")
@@ -130,6 +133,9 @@ export function registerWorkspaceCommands(program: Command) {
       const templateNames = opts.template && opts.template.length > 0 ? opts.template : undefined
       await runWorkspaceNew(name, opts.from, templateNames, opts.label, {
         nonInteractive: opts.nonInteractive,
+        source: opts.source,
+        repo: opts.repo,
+        dryRun: opts.dryRun,
         branch: opts.branch,
         open: opts.open,
       })
