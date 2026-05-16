@@ -268,7 +268,18 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
   3. `git-stacks files push [workspace]` explicitly syncs workspace target changes back to source paths.
   4. Push refuses obvious conflicts and unsafe deletes/overwrites by default.
   5. The implementation avoids a mandatory full per-file hash manifest for large sync trees such as `.planning/`.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- **Wave 1**
+  - `90-01-PLAN.md` — Add current-tree status and sync comparison helpers for copy, symlink, and sync entries.
+- **Wave 2** *(blocked on Wave 1 completion)*
+  - `90-02-PLAN.md` — Add conservative pull/push planning and application with dry-run, default refusals, and force mirror semantics.
+- **Wave 3** *(blocked on Wave 2 completion)*
+  - `90-03-PLAN.md` — Expose `git-stacks files status|pull|push`, register the command group, and validate CLI behavior.
+
+Cross-cutting constraints:
+- Phase 90 must not add mandatory manifests, stable JSON output, lifecycle integration, TUI behavior, or middle policy flags such as `--merge`/`--add-only`.
 
 ### Phase 91: Files Sync Integration and Machine Output
 **Goal**: File sync behavior is integrated with existing workspace lifecycle entrypoints where appropriate and exposes stable machine-readable output for future TUI/automation.
