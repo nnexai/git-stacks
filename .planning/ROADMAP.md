@@ -369,7 +369,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] `94-01-PLAN.md` - Align workspace/files CLI help and README docs for file sync and forge-source workflows.
+- [x] `94-01-PLAN.md` - Align workspace/files CLI help and README docs for file sync and forge-source workflows.
 - [ ] `94-02-PLAN.md` - Write the user-facing `0.18.0-rc.1` changelog entry and bump release-candidate package metadata.
 - [ ] `94-03-PLAN.md` - Add the repeatable release-candidate smoke gate, dry-run publish check, and RC tag handoff.
 
