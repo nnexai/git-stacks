@@ -250,7 +250,7 @@ export async function runWorkspaceNew(
         repos,
         registry,
         workspaceName: wsName,
-        branch,
+        branch: opts.branch?.trim(),
         dryRun: opts.dryRun,
       })
       if (!prepared.ok) {
