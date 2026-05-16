@@ -126,6 +126,16 @@ git-stacks label <action> <ws>     # Manage workspace labels (add/remove/list/cl
 git-stacks env [workspace]         # Show merged env vars that would be injected at open time
 ```
 
+Create a workspace from a forge change URL by pairing `--source` with the template that should own the workspace:
+
+```bash
+git-stacks new review-123 --template full-stack --source https://gitlab.example.com/org/repo/-/merge_requests/123
+```
+
+`--source` accepts full forge web URLs and requires `--template`; it creates a normal template-backed workspace, matches the change to a repo in that template, and fetches the source ref before worktree creation. If more than one template repo can match the URL, pass `--repo <name>` to choose the template repo explicitly. `--dry-run` previews the source resolution and planned workspace without writing workspace config or worktrees.
+
+Forge-source workspace creation has early support across GitLab merge requests plus GitHub and Gitea pull request URL parsing. Provider auth, self-hosted instances, and fork refs can still require manual verification in your environment; the automated coverage is local and injected, not a live matrix across every forge host.
+
 ### Real File Sync
 
 Use `files.sync` for private files that need to appear as real files inside a workspace, especially when tools or agents reject external symlinks. Common examples include dotfiles, task specs, and agent configuration such as `.planning` notes or `.codex` skills and hooks.
@@ -141,7 +151,21 @@ files:
       target: .codex
 ```
 
-Sync copies materialized files into the workspace. Symlinks are still useful when a live external reference is acceptable; sync is safer when the destination must be an ordinary file tree that local tools can read without following links outside the workspace.
+Repo-level sync entries can also keep generated private files out of Git status by writing local excludes:
+
+```yaml
+repos:
+  - repo: api
+    files:
+      sync:
+        - source: private/api-agent-config
+          target: .codex
+          git_exclude: true
+```
+
+`git_exclude: true` writes the target path to the repo's local `.git/info/exclude`; it does not modify the project's committed `.gitignore`. Workspace-level sync entries do not write excludes because the workspace root usually is not itself a Git repository.
+
+Sync copies materialized files into the workspace as ordinary files and directories. Symlinks are still useful when a live external reference is acceptable; sync is safer when the destination must be a real file tree that local tools can read without following links outside the workspace.
 
 Workspace creation materializes configured sync targets once. Normal `git-stacks open` does not auto-pull or refresh existing sync targets, so local edits are not overwritten by opening a workspace. If a missing worktree is recreated during open, only missing repo-level sync targets for that recreated worktree are materialized. Use the explicit commands for ongoing drift checks and manual sync:
 
