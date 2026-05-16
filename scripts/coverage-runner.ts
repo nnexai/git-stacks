@@ -14,6 +14,7 @@ import {
 } from "fs"
 import { basename, dirname, join, relative } from "path"
 import { createInstrumenter } from "istanbul-lib-instrument"
+import { parseRunnerArgs, runIsolatedPool, summarizeFailures } from "./test-runner-core"
 
 const require = createRequire(import.meta.url)
 const libCoverage = require("istanbul-lib-coverage")
@@ -28,14 +29,15 @@ const RUNTIME_TESTS_DIR = join(RUNTIME_ROOT, "tests")
 const SRC_INST_DIR = join(RUNTIME_ROOT, "src")
 const SHARDS_DIR = join(COVERAGE_DIR, "shards")
 const BLANK_TEMPLATES_PATH = join(COVERAGE_DIR, "blank-templates.json")
-const KEEP_WORKDIR = process.env.GS_COVERAGE_KEEP_WORKDIR === "1"
 
-type TestResult = { passed: number; failed: number }
-type CoverageOptions = {
+type TestResult = { passed: number; failed: number; mergeableShardDirs: string[] }
+export type CoverageOptions = {
   runUnitMode: boolean
   runIntegMode: boolean
   filters: string[]
   timeoutMs: number
+  workers: number
+  keepWorkdir: boolean
 }
 
 function discoverTests(): string[] {
@@ -88,17 +90,45 @@ function classifyFiles(): { unit: string[]; integ: string[] } {
 }
 
 export function parseArgs(args: string[]): CoverageOptions {
-  const modeSpecified = args.includes("--unit") || args.includes("--integ")
-  const runUnitMode = args.includes("--unit") || !modeSpecified
-  const runIntegMode = args.includes("--integ") || !modeSpecified
-  const timeoutArg = args.find((arg) => arg.startsWith("--timeout-ms="))
-  const timeoutMs = timeoutArg ? Number(timeoutArg.split("=")[1]) : 60_000
-  const filters = args.filter((arg) => !arg.startsWith("--"))
+  const runnerArgs: string[] = []
+  const filters: string[] = []
+  let timeoutMs = 60_000
+  let keepWorkdir = process.env.GS_COVERAGE_KEEP_WORKDIR === "1"
+
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === "--unit" || arg === "--integ" || arg === "--all") {
+      runnerArgs.push(arg)
+      continue
+    }
+    if (arg === "--workers") {
+      runnerArgs.push(arg)
+      runnerArgs.push(args[index + 1] ?? "")
+      index++
+      continue
+    }
+    if (arg === "--keep-workdir") {
+      keepWorkdir = true
+      continue
+    }
+    if (arg.startsWith("--timeout-ms=")) {
+      timeoutMs = Number(arg.split("=")[1])
+      continue
+    }
+    if (arg.startsWith("--")) {
+      throw new Error(`Unknown coverage argument: ${arg}`)
+    }
+    filters.push(arg)
+  }
+
+  const parsedRunner = parseRunnerArgs(runnerArgs)
 
   return {
-    runUnitMode,
-    runIntegMode,
+    runUnitMode: parsedRunner.runUnit,
+    runIntegMode: parsedRunner.runInteg,
     filters,
+    workers: parsedRunner.workers,
+    keepWorkdir,
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 60_000,
   }
 }
@@ -189,78 +219,154 @@ function prepareRuntimeRoot(): void {
 async function runTests(
   label: "unit" | "integ",
   files: string[],
-  timeoutMs: number
+  timeoutMs: number,
+  workers = 1
 ): Promise<TestResult> {
   if (files.length === 0) {
     console.log(`No ${label} test files found.`)
-    return { passed: 0, failed: 0 }
+    return { passed: 0, failed: 0, mergeableShardDirs: [] }
   }
 
-  console.log(`\n=== Coverage: ${label === "unit" ? "Unit" : "Integration"} Tests (${files.length} files, isolated processes) ===`)
+  const effectiveWorkers = label === "integ" ? workers : 1
+  console.log(`\n=== Coverage: ${label === "unit" ? "Unit" : "Integration"} Tests (${files.length} files, isolated processes, ${effectiveWorkers} workers) ===`)
 
-  let passed = 0
-  let failed = 0
   const preload = join(ROOT, "scripts", "coverage-preload.ts")
-  const env = {
-    ...process.env,
-    GS_COVERAGE_ROOT: RUNTIME_ROOT,
-    GS_COVERAGE_SRC_INST: SRC_INST_DIR,
-    GS_COVERAGE_SHARD_DIR: SHARDS_DIR,
-    GS_COVERAGE_CLI_ENTRY: join(SRC_INST_DIR, "index.ts"),
+
+  const result = await runIsolatedPool(files, {
+    workers: effectiveWorkers,
+    runFile: async (file) => {
+      const relPath = relative(ROOT, file)
+      const runtimeFile = join(RUNTIME_ROOT, relPath)
+      const shardDir = join(SHARDS_DIR, shardNameForFile(relPath))
+      const env = {
+        ...process.env,
+        GS_COVERAGE_ROOT: RUNTIME_ROOT,
+        GS_COVERAGE_SRC_INST: SRC_INST_DIR,
+        GS_COVERAGE_SHARD_DIR: shardDir,
+        GS_COVERAGE_CLI_ENTRY: join(SRC_INST_DIR, "index.ts"),
+      }
+
+      const proc = Bun.spawn(
+        ["bun", "test", "--preload", "@opentui/solid/preload", "--preload", preload, runtimeFile],
+        {
+          cwd: RUNTIME_ROOT,
+          stdout: "pipe",
+          stderr: "pipe",
+          stdin: "inherit",
+          env,
+        }
+      )
+
+      let timedOut = false
+      const timeout = setTimeout(() => {
+        timedOut = true
+        proc.kill()
+      }, timeoutMs)
+
+      const [stdout, stderr, exitCode] = await Promise.all([
+        readStream(proc.stdout),
+        readStream(proc.stderr),
+        proc.exited,
+      ])
+      clearTimeout(timeout)
+
+      const nextStderr =
+        timedOut && exitCode !== 0 ? `${stderr}\nTimed out after ${timeoutMs}ms: ${relPath}\n` : stderr
+      const completed = { file: relPath, exitCode, stdout, stderr: nextStderr, shardDir }
+      console.log(`\n--- [coverage:${label}] ${relPath} ---`)
+      if (stdout.length > 0) process.stdout.write(stdout)
+      if (nextStderr.length > 0) process.stderr.write(nextStderr)
+      return completed
+    },
+  })
+
+  const failures = result.results.filter((entry) => entry.exitCode !== 0)
+  const failureSummary = summarizeFailures(failures)
+  if (failureSummary.length > 0) {
+    console.log(failureSummary)
   }
 
-  for (const file of files) {
-    const relPath = relative(ROOT, file)
-    const runtimeFile = join(RUNTIME_ROOT, relPath)
-    console.log(`\n--- [coverage:${label}] ${relPath} ---`)
-
-    const proc = Bun.spawn(
-      ["bun", "test", "--preload", "@opentui/solid/preload", "--preload", preload, runtimeFile],
-      {
-        cwd: RUNTIME_ROOT,
-        stdio: ["inherit", "inherit", "inherit"],
-        env,
-      }
-    )
-
-    let timedOut = false
-    const timeout = setTimeout(() => {
-      timedOut = true
-      proc.kill()
-    }, timeoutMs)
-
-    const exitCode = await proc.exited
-    clearTimeout(timeout)
-    if (exitCode === 0) {
-      passed++
-    } else {
-      if (timedOut) {
-        console.error(`Timed out after ${timeoutMs}ms: ${relPath}`)
-      }
-      failed++
-    }
+  return {
+    passed: result.passed,
+    failed: result.failed,
+    mergeableShardDirs: mergeableShardDirs(
+      result.results as Array<{ exitCode: number; shardDir?: string }>
+    ),
   }
-
-  return { passed, failed }
 }
 
-function readShardData(): unknown[] {
-  if (!existsSync(SHARDS_DIR)) return []
+function shardNameForFile(relPath: string): string {
+  return relPath.replace(/[^A-Za-z0-9._-]+/g, "__")
+}
+
+async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!stream) {
+    return ""
+  }
+  return await new Response(stream).text()
+}
+
+function collectShardFiles(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  const files: string[] = []
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name)
+    if (lstatSync(path).isDirectory()) {
+      files.push(...collectShardFiles(path))
+    } else if (name.endsWith(".json")) {
+      files.push(path)
+    }
+  }
+  return files
+}
+
+export function mergeableShardDirs(
+  results: Array<{ exitCode: number; shardDir?: string }>
+): string[] {
+  return results
+    .filter((entry) => entry.exitCode === 0 && entry.shardDir)
+    .map((entry) => entry.shardDir as string)
+}
+
+export function readShardData(shardDirs: string[] = [SHARDS_DIR]): unknown[] {
+  if (shardDirs.length === 0) return []
 
   const shards: unknown[] = []
-  for (const name of readdirSync(SHARDS_DIR)) {
-    if (!name.endsWith(".json")) continue
-    const shardPath = join(SHARDS_DIR, name)
-    try {
-      shards.push(JSON.parse(readFileSync(shardPath, "utf8")))
-    } catch (err) {
-      console.warn(`Skipping malformed coverage shard ${relative(ROOT, shardPath)}:`, err)
+  for (const dir of shardDirs) {
+    if (!existsSync(dir)) continue
+    for (const shardPath of collectShardFiles(dir)) {
+      try {
+        shards.push(JSON.parse(readFileSync(shardPath, "utf8")))
+      } catch (err) {
+        console.warn(`Skipping malformed coverage shard ${relative(ROOT, shardPath)}:`, err)
+      }
     }
   }
   return shards
 }
 
-function mergeAndReport(): void {
+export function shouldPreserveCoverageWorkdirs(options: {
+  keepWorkdir: boolean
+  hadFailure: boolean
+}): boolean {
+  return options.keepWorkdir || options.hadFailure
+}
+
+export function cleanupCoverageWorkdirs(options: { keepWorkdir: boolean; hadFailure: boolean }): void {
+  cleanupCoveragePaths([SRC_INST_DIR, RUNTIME_ROOT, SHARDS_DIR, BLANK_TEMPLATES_PATH], options)
+}
+
+export function cleanupCoveragePaths(
+  paths: string[],
+  options: { keepWorkdir: boolean; hadFailure: boolean }
+): void {
+  if (shouldPreserveCoverageWorkdirs(options)) return
+  for (const path of paths) {
+    rmSync(path, { recursive: true, force: true })
+  }
+}
+
+function mergeAndReport(shardDirs?: string[]): void {
   const map = libCoverage.createCoverageMap({})
   const blankTemplates = JSON.parse(readFileSync(BLANK_TEMPLATES_PATH, "utf8")) as Record<
     string,
@@ -268,7 +374,7 @@ function mergeAndReport(): void {
   >
   const allowedFiles = new Set(Object.keys(blankTemplates))
 
-  for (const shard of readShardData()) {
+  for (const shard of readShardData(shardDirs)) {
     const shardMap = libCoverage.createCoverageMap(shard)
     const filteredShard: Record<string, unknown> = {}
     for (const filePath of shardMap.files()) {
@@ -329,17 +435,15 @@ async function main() {
   const unit = applyFilters(classified.unit, options.filters)
   const integ = applyFilters(classified.integ, options.filters)
   const unitResult = options.runUnitMode ? await runTests("unit", unit, options.timeoutMs) : null
-  const integResult = options.runIntegMode ? await runTests("integ", integ, options.timeoutMs) : null
+  const integResult = options.runIntegMode
+    ? await runTests("integ", integ, options.timeoutMs, options.workers)
+    : null
 
   console.log("\nPhase 3: Generating reports...")
-  mergeAndReport()
-
-  if (!KEEP_WORKDIR) {
-    rmSync(SRC_INST_DIR, { recursive: true, force: true })
-    rmSync(RUNTIME_ROOT, { recursive: true, force: true })
-    rmSync(SHARDS_DIR, { recursive: true, force: true })
-    rmSync(BLANK_TEMPLATES_PATH, { force: true })
-  }
+  mergeAndReport([
+    ...(unitResult?.mergeableShardDirs ?? []),
+    ...(integResult?.mergeableShardDirs ?? []),
+  ])
 
   console.log("\n=== Coverage Test Results ===")
   if (unitResult) {
@@ -351,6 +455,7 @@ async function main() {
 
   const allPassed =
     (!unitResult || unitResult.failed === 0) && (!integResult || integResult.failed === 0)
+  cleanupCoverageWorkdirs({ keepWorkdir: options.keepWorkdir, hadFailure: !allPassed })
   process.exit(allPassed ? 0 : 1)
 }
 

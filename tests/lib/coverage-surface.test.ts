@@ -28,6 +28,8 @@ describe("Phase 83 coverage command surface", () => {
     expect(runner).toContain("coverage-summary.json")
     expect(runner).toContain("lcov.info")
     expect(runner).toContain("index.html")
+    expect(runner).toContain("--workers")
+    expect(runner).toContain("--keep-workdir")
     expect(runner).toContain("istanbul-lib-instrument")
   })
 
@@ -39,6 +41,7 @@ describe("Phase 83 coverage command surface", () => {
     expect(runner).toContain("cpSync(TESTS_DIR, RUNTIME_TESTS_DIR")
     expect(runner).toContain("cwd: RUNTIME_ROOT")
     expect(runner).toContain("GS_COVERAGE_ROOT: RUNTIME_ROOT")
+    expect(runner).toContain("GS_COVERAGE_SHARD_DIR: shardDir")
     expect(preload).toContain("afterAll(writeCoverageShard)")
   })
 
@@ -55,6 +58,7 @@ describe("Phase 83 coverage command surface", () => {
       runUnitMode: true,
       runIntegMode: true,
       filters: ["tests/lib/messages.test.ts"],
+      workers: 4,
     })
 
     expect(parseArgs(["--unit", "tests/lib/messages.test.ts"])).toMatchObject({
@@ -67,6 +71,13 @@ describe("Phase 83 coverage command surface", () => {
       runUnitMode: false,
       runIntegMode: true,
       filters: ["tests/commands/message.test.ts"],
+    })
+
+    expect(parseArgs(["--integ", "--workers", "1", "--keep-workdir"])).toMatchObject({
+      runUnitMode: false,
+      runIntegMode: true,
+      workers: 1,
+      keepWorkdir: true,
     })
   })
 })
