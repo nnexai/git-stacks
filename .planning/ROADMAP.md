@@ -366,7 +366,12 @@ Plans:
   2. README documents forge `--source` workspace creation with GitLab-first examples and validation caveats.
   3. CHANGELOG describes user-visible v0.18.0 behavior without overstating live forge coverage.
   4. Local release verification passes before closeout.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] `94-01-PLAN.md` - Align workspace/files CLI help and README docs for file sync and forge-source workflows.
+- [ ] `94-02-PLAN.md` - Write the user-facing `0.18.0-rc.1` changelog entry and bump release-candidate package metadata.
+- [ ] `94-03-PLAN.md` - Add the repeatable release-candidate smoke gate, dry-run publish check, and RC tag handoff.
 
 ### Phase 74: Template Label CLI & Propagation
 **Goal**: Users can manage labels on templates via CLI, filter templates by label, and labels automatically flow into workspaces at creation time
