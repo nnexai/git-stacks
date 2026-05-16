@@ -2461,12 +2461,14 @@ describe("openWorkspace secret resolution", () => {
     expect(result.error).toContain("GS_PHASE61_SECRET")
   })
 
-  test("applies sync-bearing repo files through openWorkspace file-op surface", async () => {
-    const wsName = uniqueWsName("sync-open")
-    const registryName = uniqueRegistryName("sync-open")
+  test("does not refresh existing files.sync targets during normal open", async () => {
+    const wsName = uniqueWsName("sync-open-no-refresh")
+    const registryName = uniqueRegistryName("sync-open-no-refresh")
     const { repos, wsRoot } = await setupWorkspaceFixture(tmp, wsName, registryName)
     mkdirSync(join(repos[0].repoPath, "source"), { recursive: true })
     writeFileSync(join(repos[0].repoPath, "source", "config.txt"), "open sync\n")
+    mkdirSync(join(repos[0].worktreePath, "synced"), { recursive: true })
+    writeFileSync(join(repos[0].worktreePath, "synced", "config.txt"), "local edit\n")
 
     const ws = readWorkspace(wsName)
     ws.repos[0]!.files = {
@@ -2482,6 +2484,38 @@ describe("openWorkspace secret resolution", () => {
     const result = await openWorkspace(wsName, { ide: false, cmux: false }, () => {})
 
     expect(result.ok).toBe(true)
-    expect(readFileSync(join(repos[0].worktreePath, "synced", "config.txt"), "utf-8")).toBe("open sync\n")
+    expect(readFileSync(join(repos[0].worktreePath, "synced", "config.txt"), "utf-8")).toBe("local edit\n")
+  })
+
+  test("materializes missing files.sync repo targets after missing worktree recreation", async () => {
+    const wsName = uniqueWsName("sync-open-recreate")
+    const registryName = uniqueRegistryName("sync-open-recreate")
+    const { repos, wsRoot, tasksDir } = await setupWorkspaceFixture(tmp, wsName, registryName, { repoCount: 2 })
+    mkdirSync(join(repos[0].repoPath, "source"), { recursive: true })
+    writeFileSync(join(repos[0].repoPath, "source", "config.txt"), "recreated sync\n")
+    mkdirSync(join(tasksDir, wsName, "shared"), { recursive: true })
+    writeFileSync(join(tasksDir, wsName, "shared", "notes.txt"), "workspace local edit\n")
+
+    const ws = readWorkspace(wsName)
+    ws.files = {
+      sync: [{ source: "shared-source/notes.txt", target: "shared/notes.txt" }],
+    }
+    ws.repos[0]!.files = {
+      sync: [{ source: "source/config.txt", target: "synced/config.txt", git_exclude: true }],
+    }
+    writeWorkspace(ws)
+    writeGlobalConfig({
+      workspace_root: wsRoot,
+      integrations: {},
+      ports: { range_start: 10000, range_end: 65000 },
+    })
+    rmSync(repos[0].worktreePath, { recursive: true, force: true })
+
+    const result = await openWorkspace(wsName, { ide: false, cmux: false }, () => {})
+
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(repos[0].worktreePath, "synced", "config.txt"), "utf-8")).toBe("recreated sync\n")
+    expect(readFileSync(join(tasksDir, wsName, "shared", "notes.txt"), "utf-8")).toBe("workspace local edit\n")
+    expect(existsSync(join(repos[1].worktreePath, "synced", "config.txt"))).toBe(false)
   })
 })

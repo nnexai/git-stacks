@@ -1,4 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { dirname, join } from "path"
 import { cleanup, makeConfigMock } from "../helpers"
 
 const tempDirs: string[] = []
@@ -17,8 +19,10 @@ const removeWorktreeMock = mock(async (_repo: string, _path: string) => {})
 const ensureUpstreamTrackingMock = mock(async (_repo: string, _branch: string) => ({ tracked: false }))
 
 // ─── Files mocks ──────────────────────────────────────────────────────────────
-const applyFileOpsForRepoMock = mock(() => ({ ok: true as const }))
-const applyFileOpsForWorkspaceMock = mock(() => ({ ok: true as const }))
+const applyFileOpsForRepoMock = mock((_source?: any, _repo?: any) => ({ ok: true as const } as { ok: true } | { ok: false; error: string }))
+const applyFileOpsForWorkspaceMock = mock((_source?: any, _workspace?: any, _wsDir?: string) => (
+  { ok: true as const } as { ok: true } | { ok: false; error: string }
+))
 
 // ─── Workspace env mocks ──────────────────────────────────────────────────────
 const writeEnvFilesMock = mock(() => {})
@@ -250,6 +254,48 @@ describe("createWorkspace", () => {
         expect.objectContaining({ files: wsFiles }),
         expect.stringContaining("/tasks/test-ws"),
       )
+    })
+
+    test("materializes files.sync targets during workspace creation", async () => {
+      applyFileOpsForWorkspaceMock.mockImplementation((_source, _workspace, wsDir) => {
+        const target = join(wsDir ?? "", "synced", "config.txt")
+        mkdirSync(dirname(target), { recursive: true })
+        writeFileSync(target, "create sync\n")
+        return { ok: true as const }
+      })
+
+      const wsFiles = { sync: [{ source: "private/config.txt", target: "synced/config.txt" }] }
+      const result = await createWorkspace({
+        wsName: "test-ws",
+        branch: "feature/test",
+        repos: makeRepos(["a"]),
+        wsFiles,
+      })
+
+      const target = "/tmp/phase-78-root/tasks/test-ws/synced/config.txt"
+      expect(result.ok).toBe(true)
+      expect(existsSync(target)).toBe(true)
+      expect(readFileSync(target, "utf-8")).toBe("create sync\n")
+    })
+
+    test("fails workspace creation when files.sync target is unsafe or conflicting", async () => {
+      applyFileOpsForWorkspaceMock.mockImplementation(() => ({
+        ok: false as const,
+        error: "Sync target already exists: synced/config.txt",
+      }))
+
+      const result = await createWorkspace({
+        wsName: "test-ws",
+        branch: "feature/test",
+        repos: makeRepos(["a"]),
+        wsFiles: { sync: [{ source: "private/config.txt", target: "synced/config.txt" }] },
+      })
+
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).toContain("Sync target")
+      }
+      expect(writeWorkspaceMock).not.toHaveBeenCalled()
     })
   })
 
