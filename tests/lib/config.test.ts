@@ -121,6 +121,52 @@ describe("TemplateSchema", () => {
   })
 })
 
+describe("files.sync schema", () => {
+  test("TemplateSchema parses sync entries", () => {
+    const tpl = TemplateSchema.parse({
+      name: "tpl",
+      files: { sync: [{ source: ".planning", target: ".planning", git_exclude: true }] },
+    })
+    expect(tpl.files?.sync?.[0].source).toBe(".planning")
+    expect(tpl.files?.sync?.[0].target).toBe(".planning")
+    expect(tpl.files?.sync?.[0].git_exclude).toBe(true)
+  })
+
+  test("WorkspaceSchema parses sync entries", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "ws",
+      branch: "main",
+      created: "2026-01-01",
+      files: { sync: [{ source: ".codex-src", target: ".codex" }] },
+    })
+    expect(ws.files?.sync?.[0].source).toBe(".codex-src")
+    expect(ws.files?.sync?.[0].target).toBe(".codex")
+  })
+
+  test("WorkspaceRepoSchema parses sync entries", () => {
+    const repo = WorkspaceRepoSchema.parse({
+      name: "svc",
+      repo: "platform",
+      type: "typescript",
+      mode: "worktree",
+      main_path: "/main/svc",
+      task_path: "/tasks/ws/svc",
+      files: { sync: [{ source: ".planning", target: ".planning", git_exclude: true }] },
+    })
+    expect(repo.files?.sync?.[0].git_exclude).toBe(true)
+  })
+
+  test("rejects malformed sync entries", () => {
+    expect(() => TemplateSchema.parse({ name: "tpl", files: { sync: [".planning"] } })).toThrow()
+    expect(() => TemplateSchema.parse({ name: "tpl", files: { sync: [{ target: ".planning" }] } })).toThrow()
+    expect(() => TemplateSchema.parse({ name: "tpl", files: { sync: [{ source: ".planning" }] } })).toThrow()
+    expect(() => TemplateSchema.parse({
+      name: "tpl",
+      files: { sync: [{ source: ".planning", target: ".planning", git_exclude: "true" }] },
+    })).toThrow()
+  })
+})
+
 describe("labels", () => {
   test("WorkspaceSchema accepts valid labels", () => {
     const ws = WorkspaceSchema.parse({
