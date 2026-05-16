@@ -88,3 +88,20 @@ Provider checkout references:
 - `tea pulls checkout <pull index>`
 
 These commands are documentation references only and are not used as internal checkout execution.
+
+## Phase 93 handoff
+
+Phase 93 should fetch the exact source ref with plain Git before calling `createWorkspace()`.
+
+Handoff constraints:
+- Use the forge source branch name as the workspace branch name.
+- Reuse an existing local branch only when it points to the same source/ref metadata.
+- Fail with `branch_conflict` when the local branch name points at different source metadata.
+- Keep trunk and dir repos unsupported for this path; fail with `not_worktree_mode`.
+
+Fetch source details should use provider metadata fields when available:
+- GitHub `headRepository`/`headRepositoryOwner` and `headRefName`.
+- GitLab source project fields and source branch/ref fields.
+- Gitea `head` fields for source repo/ref details.
+
+Provider checkout commands remain research references and are not internal checkout implementation.
