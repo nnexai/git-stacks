@@ -18,7 +18,7 @@
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
 - ✅ **v0.17.1 Functional Confidence Coverage** — Phases 80-88 with 81.x/82.x/84.x splits (shipped 2026-05-15) — User-facing workspace, template, repo, label, message, support, and integration-contract behavior covered through local automation; safety fixes for gone-branch cleanup, JSON command contracts, and hook execution. See [milestones/v0.17.1-ROADMAP.md](milestones/v0.17.1-ROADMAP.md)
-- 🟡 **v0.18.0 Workspace File Sync and Forge Sources** — Phases 89-94 (planning) — Bidirectional real-file sync under `files.sync` with `git-stacks files status|pull|push`, plus GitLab-first forge `--source` workspace creation research and implementation.
+- 🟡 **v0.18.0 Workspace File Sync and Forge Sources** — Phases 89-94 with 93.1 split (planning) — Bidirectional real-file sync under `files.sync` with `git-stacks files status|pull|push`, GitLab-first forge `--source` workspace creation, and release-gate test runner parallelization with coherent coverage merging.
 
 ## Phases
 
@@ -242,6 +242,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [ ] **Phase 91: Files Sync Integration and Machine Output** - Integrate sync behavior with create/open/recreate flows where appropriate, expose stable JSON/status output, and keep future TUI hooks available without building broad TUI changes.
 - [ ] **Phase 92: Forge Source Research and Resolver Design** - Research GitLab MR, Gitea PR, and GitHub PR source resolution with GitLab first; design enabled-forge resolver contracts, repo matching, and validation boundaries.
 - [ ] **Phase 93: Forge Source Workspace Creation** - Add `git-stacks new --source <forge-url> --template <template>` for GitLab-first forge changes, including repo matching, source checkout/fetch, workspace metadata, labels, and clear failures.
+- [ ] **Phase 93.1: Parallel Integration Test Runner and Coherent Coverage Merging** - Run isolated integration test files in bounded parallel workers while preserving deterministic output, accurate failure reporting, and one coherent merged coverage result.
 - [ ] **Phase 94: v0.18.0 Docs and Release Prep** - Document `files.sync`, `git-stacks files status|pull|push`, forge-source workspace creation, validation limits, and prepare the user-facing v0.18.0 release artifacts.
 
 ## Phase Details
@@ -303,9 +304,22 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
   5. Created workspaces receive useful review/source labels such as `review`, forge id, and change number.
 **Plans**: TBD
 
+### Phase 93.1: Parallel integration test runner and coherent coverage merging (INSERTED)
+
+**Goal:** Integration and coverage runs complete faster through bounded parallel execution without losing the single coherent test result, failure summary, or merged Istanbul coverage artifacts required for local release gates.
+**Requirements**: TEST-01, TEST-02, COV-01
+**Depends on:** Phase 93
+**Success Criteria** (what must be TRUE):
+  1. `scripts/test-runner.ts --integ` runs isolated integration test files through a configurable bounded worker pool, with a conservative default that avoids overloading local git/filesystem fixtures.
+  2. Test output remains understandable: each file's result is attributed to the file, failures are summarized coherently, and the final pass/fail count matches the serial runner's semantics.
+  3. File-system and git fixtures are isolated enough for parallel execution, including temp directory/config paths that avoid fixed-path collisions.
+  4. Coverage execution preserves one coherent report by merging all per-process Istanbul coverage artifacts into the existing stable outputs: `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html`.
+  5. `bun run test`, `bun run test:integ`, `bun run coverage:integ`, and `bun run verify` continue to provide release-gate quality signals without requiring CI.
+**Plans**: TBD
+
 ### Phase 94: v0.18.0 Docs and Release Prep
 **Goal**: v0.18.0 is documented and packaged with user-facing release notes that accurately describe file sync behavior and forge source validation limits.
-**Depends on**: Phase 93
+**Depends on**: Phase 93.1
 **Requirements**: DOCS-01, DOCS-02, REL-01
 **Success Criteria** (what must be TRUE):
   1. README documents `files.sync`, `git-stacks files status|pull|push`, local exclude behavior, and manual push-back.
