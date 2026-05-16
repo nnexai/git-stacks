@@ -189,6 +189,24 @@ export const WorkspaceSettingsSchema = z.object({
 })
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettingsSchema>
 
+export const WorkspaceSourceSchema = z.object({
+  kind: z.literal("forge"),
+  forge: z.enum(["gitlab", "gitea", "github"]),
+  base_url: z.string().url(),
+  url: z.string().url(),
+  change_type: z.enum(["mr", "pr"]),
+  change_number: z.number().int().positive(),
+  repo: z.string().min(1),
+  repo_path: z.string().min(1),
+  source_branch: z.string().min(1),
+  source_ref: z.string().min(1),
+  target_branch: z.string().min(1),
+  web_url: z.string().url(),
+  fetched_ref: z.string().min(1),
+  title: z.string().optional(),
+})
+export type WorkspaceSource = z.infer<typeof WorkspaceSourceSchema>
+
 const WorkspaceHooksSchema = z.object({
   pre_create: z.array(z.string()).optional(),
   post_create: z.array(z.string()).optional(),
@@ -216,6 +234,7 @@ export const WorkspaceSchema = z.object({
   cmux_workspace_id: z.string().optional(),
   hooks: WorkspaceHooksSchema.optional(),
   settings: WorkspaceSettingsSchema.optional(),
+  source: WorkspaceSourceSchema.optional(),
   repos: z.array(WorkspaceRepoSchema).default([]),
   env: z.record(z.string(), z.string()).optional(),
   env_file: z.string().optional(),

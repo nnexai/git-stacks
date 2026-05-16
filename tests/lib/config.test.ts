@@ -236,6 +236,42 @@ describe("GlobalConfigSchema secrets", () => {
 })
 
 describe("Forge source config shapes", () => {
+  test("WorkspaceSchema parses top-level source metadata", () => {
+    const ws = WorkspaceSchema.parse({
+      name: "review-42",
+      branch: "source/gitlab-mr-42",
+      created: "2026-01-01",
+      source: {
+        kind: "forge",
+        forge: "gitlab",
+        base_url: "https://gitlab.example.com",
+        url: "https://gitlab.example.com/org/api/-/merge_requests/42",
+        change_type: "mr",
+        change_number: 42,
+        repo: "api",
+        repo_path: "org/api",
+        source_branch: "source/gitlab-mr-42",
+        source_ref: "refs/heads/source/gitlab-mr-42",
+        target_branch: "source/gitlab-mr-42",
+        web_url: "https://gitlab.example.com/org/api/-/merge_requests/42",
+        fetched_ref: "refs/git-stacks/sources/gitlab/42/api",
+      },
+    })
+    expect(ws.source?.forge).toBe("gitlab")
+    expect(ws.source?.change_number).toBe(42)
+  })
+
+  test("WorkspaceSchema rejects invalid source kind", () => {
+    expect(() => WorkspaceSchema.parse({
+      name: "review-42",
+      branch: "source/gitlab-mr-42",
+      created: "2026-01-01",
+      source: {
+        kind: "manual",
+      },
+    })).toThrow()
+  })
+
   test("GlobalConfigSchema keeps integration objects with optional base_url", () => {
     const config = GlobalConfigSchema.parse({
       integrations: {
