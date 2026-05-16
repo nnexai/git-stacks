@@ -2,6 +2,27 @@ import { $ } from "bun"
 import { existsSync, statSync } from "fs"
 import { join } from "path"
 
+export function isGitTrackedPathSync(repoPath: string, relPath: string): boolean {
+  const result = Bun.spawnSync([
+    "git",
+    "-C",
+    repoPath,
+    "ls-files",
+    "--error-unmatch",
+    "--",
+    relPath,
+  ], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  return result.exitCode === 0
+}
+
+export async function isGitTrackedPath(repoPath: string, relPath: string): Promise<boolean> {
+  const result = await $`git -C ${repoPath} ls-files --error-unmatch -- ${relPath}`.quiet().nothrow()
+  return result.exitCode === 0
+}
+
 export async function checkBranchExists(repoPath: string, branch: string): Promise<boolean> {
   const result = await $`git -C ${repoPath} rev-parse --verify ${branch}`.quiet().nothrow()
   return result.exitCode === 0

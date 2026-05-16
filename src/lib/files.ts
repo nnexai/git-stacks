@@ -1,7 +1,8 @@
 import { cpSync, symlinkSync, lstatSync, mkdirSync } from "fs"
-import { join, dirname, basename, isAbsolute } from "path"
+import { join, dirname, basename, isAbsolute, normalize, resolve, relative, sep } from "path"
 import { expandHome } from "./paths"
-import type { WorkspaceRepo, Workspace, Files } from "./config"
+import type { WorkspaceRepo, Workspace, Files, FileSyncEntry } from "./config"
+import { isGitTrackedPathSync } from "./git"
 
 export type ApplyResult = { ok: true; warnings?: string[] } | { ok: false; error: string }
 
@@ -87,11 +88,65 @@ export function applyEntry(op: "copy" | "symlink", src: string, dst: string): Ap
 export function mergeFiles(
   a: Files | undefined,
   b: Files | undefined
-): { copy: string[]; symlink: string[] } {
+): { copy: string[]; symlink: string[]; sync: FileSyncEntry[] } {
   return {
     copy: [...(a?.copy ?? []), ...(b?.copy ?? [])],
     symlink: [...(a?.symlink ?? []), ...(b?.symlink ?? [])],
+    sync: [...(a?.sync ?? []), ...(b?.sync ?? [])],
   }
+}
+
+function resolveSyncTargetPath(target: string, destDir: string): { ok: true; path: string; rel: string } | { ok: false; error: string } {
+  if (target.length === 0) {
+    return { ok: false, error: "Invalid sync target: target must not be empty" }
+  }
+  if (isAbsolute(target)) {
+    return { ok: false, error: `Invalid sync target '${target}': absolute targets are not allowed` }
+  }
+
+  const normalizedTarget = normalize(target)
+  const parts = normalizedTarget.split(/[\\/]+/)
+  if (parts.includes("..")) {
+    return { ok: false, error: `Invalid sync target '${target}': traversal is not allowed` }
+  }
+
+  const destRoot = resolve(destDir)
+  const targetPath = resolve(destRoot, normalizedTarget)
+  const relFromRoot = relative(destRoot, targetPath)
+  if (relFromRoot === "" || relFromRoot.startsWith("..") || isAbsolute(relFromRoot)) {
+    return { ok: false, error: `Invalid sync target '${target}': resolved path escapes destination root` }
+  }
+
+  return { ok: true, path: targetPath, rel: relFromRoot.split(sep).join("/") }
+}
+
+function applySyncEntry(entry: FileSyncEntry, sourceBaseDir: string, destDir: string, repoPath?: string): ApplyResult {
+  const target = resolveSyncTargetPath(entry.target, destDir)
+  if (!target.ok) return target
+
+  const sourcePath = resolveSourcePath(entry.source, sourceBaseDir)
+  if (!dstExists(sourcePath)) return { ok: false, error: `Source not found: ${sourcePath}` }
+  if (repoPath && isGitTrackedPathSync(repoPath, target.rel)) {
+    return { ok: false, error: `Refusing to overwrite tracked target: ${target.rel}` }
+  }
+  if (dstExists(target.path)) return { ok: false, error: `Sync target already exists: ${target.rel}` }
+
+  mkdirSync(dirname(target.path), { recursive: true })
+  cpSync(sourcePath, target.path, { recursive: true })
+  return { ok: true }
+}
+
+export function processSyncList(
+  entries: FileSyncEntry[],
+  sourceBaseDir: string,
+  destDir: string,
+  repoPath?: string
+): ApplyResult {
+  for (const entry of entries) {
+    const result = applySyncEntry(entry, sourceBaseDir, destDir, repoPath)
+    if (!result.ok) return result
+  }
+  return { ok: true }
 }
 
 /**
@@ -149,10 +204,14 @@ export function applyFileOpsForRepo(source: FileOpsRepoSource, wsRepo: Workspace
   const symlinkResult = processFileList("symlink", merged.symlink, sourceBase, destDir)
   if (!symlinkResult.ok) return symlinkResult
 
+  const syncResult = processSyncList(merged.sync, sourceBase, destDir, destDir)
+  if (!syncResult.ok) return syncResult
+
   // Combine any warnings from both operations
   const warnings = [
     ...(copyResult.warnings ?? []),
     ...(symlinkResult.warnings ?? []),
+    ...(syncResult.warnings ?? []),
   ]
   return warnings.length > 0 ? { ok: true, warnings } : { ok: true }
 }
@@ -178,10 +237,14 @@ export function applyFileOpsForWorkspace(
   const symlinkResult = processFileList("symlink", merged.symlink, sourceBase, destDir)
   if (!symlinkResult.ok) return symlinkResult
 
+  const syncResult = processSyncList(merged.sync, sourceBase, destDir)
+  if (!syncResult.ok) return syncResult
+
   // Combine any warnings from both operations
   const warnings = [
     ...(copyResult.warnings ?? []),
     ...(symlinkResult.warnings ?? []),
+    ...(syncResult.warnings ?? []),
   ]
   return warnings.length > 0 ? { ok: true, warnings } : { ok: true }
 }
