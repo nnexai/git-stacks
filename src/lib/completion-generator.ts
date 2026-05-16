@@ -191,6 +191,12 @@ function bashCaseBodyRecursive(node: CommandNode, depth: number, name: string, i
     }
     let out = `${indent}if [[ \${COMP_CWORD} -eq ${depth} ]]; then\n`
     out += `${indent}  COMPREPLY=($(compgen -W "${subcmdNames}" -- "$cur"))\n`
+    for (const sub of subcommands) {
+      if (sub.options.length === 0) continue
+      const flagsStr = sub.options.map(o => o.long).join(" ")
+      out += `${indent}elif [[ \${COMP_CWORD} -eq ${depth + 1} ]] && [[ "\${words[${depth}]}" == ${sub.name} ]] && [[ "$cur" == -* ]]; then\n`
+      out += `${indent}  COMPREPLY=($(compgen -W "${flagsStr}" -- "$cur"))\n`
+    }
     for (const [dynType, names] of byDynamic) {
       const pattern = names.length === 1 ? names[0] : `@(${names.join("|")})`
       out += `${indent}elif [[ \${COMP_CWORD} -eq ${depth + 1} ]] && [[ "\${words[${depth}]}" == ${pattern} ]]; then\n`
