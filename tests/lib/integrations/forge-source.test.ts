@@ -15,13 +15,13 @@ describe("parseForgeSourceUrl", () => {
   })
 
   test("parses GitHub pull request URL", () => {
-    const parsed = parseForgeSourceUrl("https://github.com/org/api/pull/17")
+    const parsed = parseForgeSourceUrl("https://github.com/org/api/pull/9")
     expect(parsed.ok).toBe(true)
     if (parsed.ok) {
       expect(parsed.forge).toBe("github")
       expect(parsed.changeType).toBe("pr")
       expect(parsed.repoPath).toBe("org/api")
-      expect(parsed.changeNumber).toBe(17)
+      expect(parsed.changeNumber).toBe(9)
     }
   })
 

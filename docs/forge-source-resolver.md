@@ -105,3 +105,10 @@ Fetch source details should use provider metadata fields when available:
 - Gitea `head` fields for source repo/ref details.
 
 Provider checkout commands remain research references and are not internal checkout implementation.
+
+## Phase 93 implementation boundaries
+
+- Internal source workspace creation uses plain Git fetch plus existing git-stacks worktree creation.
+- Live authenticated GitLab/GitHub runs are not local automated gates in this repo.
+- Gitea Tea validation in local automation is limited to command-shape/contracts unless credentials are available.
+- Phase 93 does not auto-label source-created workspaces (D-15). Template and manual labels remain the only label inputs.
