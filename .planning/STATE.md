@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.18.0
 milestone_name: Workspace File Sync and Forge Sources
-status: ready_to_plan
-stopped_at: Phase 89 complete (3/3) — ready to discuss Phase 90
-last_updated: 2026-05-16T08:49:25.517Z
-last_activity: 2026-05-16
+status: executing
+stopped_at: Phase 91 planned (4 plans) — Phase 90 remains next execution dependency
+last_updated: 2026-05-16T10:57:29+02:00
+last_activity: 2026-05-16 -- Phase 91 planning complete
 progress:
   total_phases: 29
   completed_phases: 1
-  total_plans: 6
+  total_plans: 10
   completed_plans: 3
   percent: 3
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 90 — files command surface and conflict policy
+**Current focus:** Phase 90 — files command surface and conflict policy; Phase 91 is planned and depends on Phase 90 execution.
 
 ## Current Position
 
 Phase: 90
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-16
+Status: Ready to execute
+Last activity: 2026-05-16 -- Phase 91 planning complete
 
 ## Performance Metrics
 

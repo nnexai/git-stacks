@@ -290,7 +290,13 @@ Cross-cutting constraints:
   2. `git-stacks files status|pull|push --json` or equivalent machine output is stable enough for future dashboard use.
   3. Existing file copy/symlink behavior remains backward-compatible.
   4. The README examples cover the GSD planning/agent config use case without requiring symlinks.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] `91-01-PLAN.md` — Integrate `files.sync` pull/materialization into workspace create and missing-worktree recreation while preserving conservative normal-open behavior and existing copy/symlink compatibility.
+- [ ] `91-02-PLAN.md` — Add stable machine-readable `--json` output for `git-stacks files status|pull|push` with capped details and meaningful automation exit codes.
+- [ ] `91-03-PLAN.md` — Expose `files status|pull|push` help/completion coverage and document the real-file sync workflow without adding dashboard UI or full README JSON examples.
+- [ ] `91-04-PLAN.md` — Run the final Phase 91 focused gates and record execution evidence for lifecycle integration, machine output, completion/help, documentation, and copy/symlink compatibility.
 
 ### Phase 92: Forge Source Research and Resolver Design
 **Goal**: GitLab-first forge source creation is researched and designed before implementation, with clear limits for live `glab` validation and a reusable resolver contract for Gitea/GitHub follow-up.
