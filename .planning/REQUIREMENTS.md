@@ -21,13 +21,13 @@ Requirements for v0.18.0 Workspace File Sync and Forge Sources. Each maps to roa
 
 ### Forge Sources
 
-- [ ] **FSRC-01**: User can create a normal template-backed workspace with `git-stacks new <name> --template <template> --source <forge-url>`.
+- [x] **FSRC-01**: User can create a normal template-backed workspace with `git-stacks new <name> --template <template> --source <forge-url>`.
 - [x] **FSRC-02**: GitLab merge request URLs are researched and resolved first through the enabled GitLab integration, with documented `glab` limitations and validation constraints.
 - [x] **FSRC-03**: Forge source resolution matches the source target repository to a repo in the selected template using existing registry/forge/upstream metadata where possible.
-- [ ] **FSRC-04**: If source-to-template repo matching is missing, ambiguous, or points at a `trunk`/`dir` repo, the user receives a clear failure with an explicit override path where appropriate.
-- [ ] **FSRC-05**: For the matched worktree repo, workspace creation checks out or fetches the merge-request/pull-request branch/ref while other worktree repos use normal workspace branch creation.
-- [ ] **FSRC-06**: Workspaces created from forge sources record source metadata in workspace YAML, including forge type, URL, matched repo, change number, and title when available.
-- [ ] **FSRC-07**: Forge source work auto-labels created workspaces with useful review/source labels such as `review`, forge id, and change number.
+- [x] **FSRC-04**: If source-to-template repo matching is missing, ambiguous, or points at a `trunk`/`dir` repo, the user receives a clear failure with an explicit override path where appropriate.
+- [x] **FSRC-05**: For the matched worktree repo, workspace creation checks out or fetches the merge-request/pull-request branch/ref while other worktree repos use normal workspace branch creation.
+- [x] **FSRC-06**: Workspaces created from forge sources record source metadata in workspace YAML, including forge type, URL, matched repo, change number, and title when available.
+- [x] **FSRC-07**: Forge source work auto-labels created workspaces with useful review/source labels such as `review`, forge id, and change number.
 - [x] **FSRC-08**: Gitea and GitHub source support are designed after GitLab, with at least URL parsing and resolver contract tests even if full live validation is deferred.
 
 ### Documentation and Release
@@ -80,13 +80,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FSYNC-07 | Phase 90 | Complete |
 | FSYNC-08 | Phase 90 | Complete |
 | FSYNC-09 | Phase 91 | Complete |
-| FSRC-01 | Phase 93 | Pending |
+| FSRC-01 | Phase 93 | Complete |
 | FSRC-02 | Phase 92 | Complete |
 | FSRC-03 | Phase 92 | Complete |
-| FSRC-04 | Phase 93 | Pending |
-| FSRC-05 | Phase 93 | Pending |
-| FSRC-06 | Phase 93 | Pending |
-| FSRC-07 | Phase 93 | Pending |
+| FSRC-04 | Phase 93 | Complete |
+| FSRC-05 | Phase 93 | Complete |
+| FSRC-06 | Phase 93 | Complete |
+| FSRC-07 | Phase 93 | Complete |
 | FSRC-08 | Phase 92 | Complete |
 | DOCS-01 | Phase 94 | Complete |
 | DOCS-02 | Phase 94 | Pending |
