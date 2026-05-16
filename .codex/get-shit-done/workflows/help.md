@@ -92,7 +92,7 @@ Plan a phase as a vertical MVP slice — three structured user-story prompts (`A
 Usage: `$gsd-mvp-phase 1`
 Usage: `$gsd-mvp-phase 2 --force`
 
-**`$gsd-plan-phase <number> [--research] [--skip-research] [--research-phase <N>] [--view] [--gaps] [--skip-verify] [--tdd] [--mvp]`**
+**`$gsd-plan-phase <number> [--research] [--skip-research] [--research-phase <N>] [--view] [--gaps] [--skip-verify] [--prd <file>] [--ingest <path-or-glob>] [--ingest-format <auto|nygard|madr|narrative>] [--tdd] [--mvp]`**
 Create detailed execution plan for a specific phase.
 
 - `--skip-research` — bypass the research subagent
@@ -100,6 +100,9 @@ Create detailed execution plan for a specific phase.
   - Modifiers: `--research` forces refresh (re-spawn researcher, no prompt). `--view` prints existing `RESEARCH.md` to stdout without spawning. With neither, prompts `update / view / skip` if `RESEARCH.md` already exists.
 - `--gaps` — focus only on closing gaps from a prior plan-check
 - `--skip-verify` — skip the post-plan verifier loop
+- `--prd <file>` — use a PRD file as planning context and skip discuss-phase (mutually exclusive with `--ingest`)
+- `--ingest <path-or-glob>` — use ADR file(s) as planning context and skip discuss-phase (mutually exclusive with `--prd`)
+- `--ingest-format <auto|nygard|madr|narrative>` — optional ADR parser format override
 - `--tdd` — plan in test-driven order (tests before code)
 - `--mvp` — vertical-slice MVP planning mode
 
@@ -114,7 +117,9 @@ Usage: `$gsd-plan-phase --research-phase 2 --view` — print existing `RESEARCH.
 Usage: `$gsd-plan-phase --research-phase 2 --research` — force-refresh, no prompt
 Result: Creates `.planning/phases/01-foundation/01-01-PLAN.md`
 
-**PRD Express Path:** Pass `--prd path/to/requirements.md` to skip discuss-phase entirely. Your PRD becomes locked decisions in CONTEXT.md. Useful when you already have clear acceptance criteria.
+**PRD Express Path:** Pass `--prd path/to/requirements.md` to skip discuss-phase entirely. Your PRD becomes locked decisions in CONTEXT.md. Useful when you already have clear acceptance criteria. Cannot be combined with `--ingest`.
+
+**ADR Ingest Express Path:** Pass `--ingest path/to/adr.md` (or a glob) to skip discuss-phase and synthesize CONTEXT.md from approved ADR decisions and scope fences. Cannot be combined with `--prd`.
 
 ### Execution
 
@@ -517,6 +522,19 @@ Configure GSD beyond the basic settings: model profile, advanced tuning, and thi
 
 Usage: `$gsd-config --profile budget`
 
+**`$gsd-surface [list|status|profile <name>|disable <cluster>|enable <cluster>|reset]`**
+Toggle which skills are surfaced — apply a profile, list, or disable a cluster without reinstall.
+
+- `list` / `status` — Show enabled and disabled clusters and skills with token cost
+- `profile <name>` — Switch to a named base profile (`core`, `standard`, `full`)
+- `disable <cluster>` — Remove a cluster from the active surface
+- `enable <cluster>` — Add a cluster back to the active surface
+- `reset` — Delete the surface delta and return to the install-time profile
+
+Usage: `$gsd-surface list`
+Usage: `$gsd-surface profile standard`
+Usage: `$gsd-surface disable utility`
+
 ### Utility Commands
 
 **`$gsd-cleanup`**
@@ -610,7 +628,7 @@ These six skills exist primarily for the model to perform two-stage hierarchical
 - **`$gsd-ideate`** — Exploration / capture routing (explore, sketch, spike, spec, capture).
 - **`$gsd-manage`** — Configuration and workspace routing (workstreams, thread, update, ship, inbox).
 - **`$gsd-project`** — Project-lifecycle routing (milestones, audits, summary).
-- **`$gsd-review`** — Quality-gate routing (code review, debug, audit, security, eval, ui).
+- **`$gsd-quality`** — Quality-gate routing (code review, debug, audit, security, eval, ui).
 - **`$gsd-workflow`** — Phase-pipeline routing (discuss, plan, execute, verify, phase, progress).
 
 ## Files & Structure

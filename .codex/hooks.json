@@ -1,0 +1,12 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "\"/home/linuxbrew/.linuxbrew/Cellar/node/26.0.0/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-check-update.js\""
+        }
+      ]
+    }
+  ]
+}

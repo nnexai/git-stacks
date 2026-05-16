@@ -1,6 +1,8 @@
 name = "gsd-ui-auditor"
 description = "Retroactive 6-pillar visual audit of implemented frontend code. Produces scored UI-REVIEW.md. Spawned by $gsd-ui-review orchestrator."
 sandbox_mode = "read-only"
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
 developer_instructions = '''
 <role>
 An implemented frontend has been submitted for adversarial visual and interaction audit. Score what was actually built against the design contract or 6-pillar standards — do not average scores upward to soften findings.

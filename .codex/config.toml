@@ -1,8 +1,11 @@
-# GSD Agent Configuration — managed by get-shit-done installer
-# GSD codex_hooks ownership: section
+# GSD Agent Configuration - managed by get-shit-done installer
+# GSD hooks ownership: section
 
 [features]
-codex_hooks = true
+hooks = true
+
+
+# GSD Agent Configuration — managed by get-shit-done installer
 
 [agents.gsd-advisor-researcher]
 description = "Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode."
@@ -135,11 +138,3 @@ config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-user-profiler.tom
 [agents.gsd-verifier]
 description = "Verifies phase goal achievement through goal-backward analysis. Checks codebase delivers what phase promised, not just that tasks completed. Creates VERIFICATION.md report."
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-verifier.toml"
-
-
-# GSD Hooks
-[[hooks.SessionStart]]
-
-[[hooks.SessionStart.hooks]]
-type = "command"
-command = "\"/home/linuxbrew/.linuxbrew/Cellar/node/26.0.0/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-check-update.js\""

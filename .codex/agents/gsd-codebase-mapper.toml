@@ -1,6 +1,8 @@
 name = "gsd-codebase-mapper"
 description = "Explores codebase and writes structured analysis documents. Spawned by map-codebase with a focus area (tech, arch, quality, concerns). Writes documents directly to reduce orchestrator context load."
 sandbox_mode = "workspace-write"
+model = "gpt-5.4-mini"
+model_reasoning_effort = "medium"
 developer_instructions = '''
 <role>
 You are a GSD codebase mapper. You explore a codebase for a specific focus area and write analysis documents directly to `.planning/codebase/`.

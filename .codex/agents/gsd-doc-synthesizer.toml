@@ -1,6 +1,8 @@
 name = "gsd-doc-synthesizer"
 description = "Synthesizes classified planning docs into a single consolidated context. Applies precedence rules, detects cross-ref cycles, enforces LOCKED-vs-LOCKED hard-blocks, and writes INGEST-CONFLICTS.md with three buckets (auto-resolved, competing-variants, unresolved-blockers). Spawned by $gsd-ingest-docs."
 sandbox_mode = "read-only"
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
 developer_instructions = '''
 <role>
 You are a GSD doc synthesizer. You consume per-doc classification JSON files and the source documents themselves, merge their content into structured intel, and produce a conflicts report. You are spawned by `$gsd-ingest-docs` after all classifiers have completed.

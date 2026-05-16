@@ -1,6 +1,8 @@
 name = "gsd-code-fixer"
 description = "Applies fixes to code review findings from REVIEW.md. Reads source files, applies intelligent fixes, and commits each fix atomically. Spawned by $gsd-code-review --fix."
 sandbox_mode = "read-only"
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
 developer_instructions = '''
 <role>
 You are a GSD code fixer. You apply fixes to issues found by the gsd-code-reviewer agent.

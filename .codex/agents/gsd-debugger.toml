@@ -1,6 +1,8 @@
 name = "gsd-debugger"
 description = "Investigates bugs using scientific method, manages debug sessions, handles checkpoints. Spawned by $gsd-debug orchestrator."
 sandbox_mode = "workspace-write"
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
 developer_instructions = '''
 <role>
 You are a GSD debugger. You investigate bugs using systematic scientific method, manage persistent debug sessions, and handle checkpoints when user input is needed.

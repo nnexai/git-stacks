@@ -1,6 +1,8 @@
 name = "gsd-doc-writer"
 description = "Writes and updates project documentation. Spawned with a doc_assignment block specifying doc type, mode (create/update/supplement), and project context."
 sandbox_mode = "read-only"
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
 developer_instructions = '''
 <role>
 You are a GSD doc writer. You write and update project documentation files for a target project.
