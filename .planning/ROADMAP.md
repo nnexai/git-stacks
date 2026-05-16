@@ -239,7 +239,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 
 - [x] **Phase 89: Files Sync Schema and Materialization** - Add `files.sync` to template/workspace schemas and materialize sync sources into workspace targets as real files with optional local git excludes. (completed 2026-05-16)
 - [x] **Phase 90: Files Command Surface and Conflict Policy** - Add `git-stacks files status|pull|push`, lightweight drift detection, conservative overwrite/delete behavior, and explicit sync-back semantics. (completed 2026-05-16)
-- [ ] **Phase 91: Files Sync Integration and Machine Output** - Integrate sync behavior with create/open/recreate flows where appropriate, expose stable JSON/status output, and keep future TUI hooks available without building broad TUI changes.
+- [x] **Phase 91: Files Sync Integration and Machine Output** - Integrate sync behavior with create/open/recreate flows where appropriate, expose stable JSON/status output, and keep future TUI hooks available without building broad TUI changes. (completed 2026-05-16)
 - [ ] **Phase 92: Forge Source Research and Resolver Design** - Research GitLab MR, Gitea PR, and GitHub PR source resolution with GitLab first; design enabled-forge resolver contracts, repo matching, and validation boundaries.
 - [ ] **Phase 93: Forge Source Workspace Creation** - Add `git-stacks new --source <forge-url> --template <template>` for GitLab-first forge changes, including repo matching, source checkout/fetch, workspace metadata, labels, and clear failures.
 - [ ] **Phase 93.1: Parallel Integration Test Runner and Coherent Coverage Merging** - Run isolated integration test files in bounded parallel workers while preserving deterministic output, accurate failure reporting, and one coherent merged coverage result.
@@ -293,10 +293,10 @@ Cross-cutting constraints:
 **Plans**: 4 plans
 
 Plans:
-- [ ] `91-01-PLAN.md` — Integrate `files.sync` pull/materialization into workspace create and missing-worktree recreation while preserving conservative normal-open behavior and existing copy/symlink compatibility.
-- [ ] `91-02-PLAN.md` — Add stable machine-readable `--json` output for `git-stacks files status|pull|push` with capped details and meaningful automation exit codes.
-- [ ] `91-03-PLAN.md` — Expose `files status|pull|push` help/completion coverage and document the real-file sync workflow without adding dashboard UI or full README JSON examples.
-- [ ] `91-04-PLAN.md` — Run the final Phase 91 focused gates and record execution evidence for lifecycle integration, machine output, completion/help, documentation, and copy/symlink compatibility.
+- [x] `91-01-PLAN.md` — Integrate `files.sync` pull/materialization into workspace create and missing-worktree recreation while preserving conservative normal-open behavior and existing copy/symlink compatibility.
+- [x] `91-02-PLAN.md` — Add stable machine-readable `--json` output for `git-stacks files status|pull|push` with capped details and meaningful automation exit codes.
+- [x] `91-03-PLAN.md` — Expose `files status|pull|push` help/completion coverage and document the real-file sync workflow without adding dashboard UI or full README JSON examples.
+- [x] `91-04-PLAN.md` — Run the final Phase 91 focused gates and record execution evidence for lifecycle integration, machine output, completion/help, documentation, and copy/symlink compatibility.
 
 ### Phase 92: Forge Source Research and Resolver Design
 **Goal**: GitLab-first forge source creation is researched and designed before implementation, with clear limits for live `glab` validation and a reusable resolver contract for Gitea/GitHub follow-up.
