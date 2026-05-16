@@ -34,7 +34,7 @@ Requirements for v0.18.0 Workspace File Sync and Forge Sources. Each maps to roa
 
 - [x] **DOCS-01**: README documents `files.sync`, `git-stacks files status|pull|push`, local exclude behavior, and the manual push-back model.
 - [x] **DOCS-02**: README documents forge `--source` workspace creation with GitLab-first examples and clear notes about live forge validation requirements.
-- [ ] **REL-01**: v0.18.0 release artifacts describe user-facing file sync and forge-source workspace creation behavior without overstating unverified live forge coverage.
+- [x] **REL-01**: v0.18.0 release artifacts describe user-facing file sync and forge-source workspace creation behavior without overstating unverified live forge coverage.
 
 ## Future Requirements
 
@@ -90,7 +90,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FSRC-08 | Phase 92 | Complete |
 | DOCS-01 | Phase 94 | Complete |
 | DOCS-02 | Phase 94 | Complete |
-| REL-01 | Phase 94 | Pending |
+| REL-01 | Phase 94 | Complete |
 
 **Coverage:**
 - v0.18.0 requirements: 20 total

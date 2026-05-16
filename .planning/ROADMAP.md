@@ -370,7 +370,7 @@ Plans:
 
 Plans:
 - [x] `94-01-PLAN.md` - Align workspace/files CLI help and README docs for file sync and forge-source workflows.
-- [ ] `94-02-PLAN.md` - Write the user-facing `0.18.0-rc.1` changelog entry and bump release-candidate package metadata.
+- [x] `94-02-PLAN.md` - Write the user-facing `0.18.0-rc.1` changelog entry and bump release-candidate package metadata.
 - [ ] `94-03-PLAN.md` - Add the repeatable release-candidate smoke gate, dry-run publish check, and RC tag handoff.
 
 ### Phase 74: Template Label CLI & Propagation
