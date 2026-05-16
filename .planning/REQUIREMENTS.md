@@ -17,7 +17,7 @@ Requirements for v0.18.0 Workspace File Sync and Forge Sources. Each maps to roa
 - [x] **FSYNC-06**: User can run `git-stacks files push [workspace]` to explicitly sync workspace target changes back to their sources.
 - [x] **FSYNC-07**: Sync push detects obvious conflicts and refuses unsafe writes by default without requiring a full per-file hash manifest for large trees.
 - [x] **FSYNC-08**: Sync delete/overwrite behavior is conservative by default and requires explicit flags or documented policy before removing source-side files.
-- [ ] **FSYNC-09**: Sync commands support machine-readable output suitable for future TUI and automation use.
+- [x] **FSYNC-09**: Sync commands support machine-readable output suitable for future TUI and automation use.
 
 ### Forge Sources
 
@@ -79,7 +79,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FSYNC-06 | Phase 90 | Complete |
 | FSYNC-07 | Phase 90 | Complete |
 | FSYNC-08 | Phase 90 | Complete |
-| FSYNC-09 | Phase 91 | Pending |
+| FSYNC-09 | Phase 91 | Complete |
 | FSRC-01 | Phase 93 | Pending |
 | FSRC-02 | Phase 92 | Pending |
 | FSRC-03 | Phase 92 | Pending |
