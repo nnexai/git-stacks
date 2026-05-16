@@ -126,6 +126,35 @@ git-stacks label <action> <ws>     # Manage workspace labels (add/remove/list/cl
 git-stacks env [workspace]         # Show merged env vars that would be injected at open time
 ```
 
+### Real File Sync
+
+Use `files.sync` for private files that need to appear as real files inside a workspace, especially when tools or agents reject external symlinks. Common examples include dotfiles, task specs, and agent configuration such as `.planning` notes or `.codex` skills and hooks.
+
+```yaml
+files:
+  sync:
+    - source: private/dotfiles/.env.local
+      target: .env.local
+    - source: specs/current-task
+      target: .planning/current-task
+    - source: agent-config/codex
+      target: .codex
+```
+
+Sync copies materialized files into the workspace. Symlinks are still useful when a live external reference is acceptable; sync is safer when the destination must be an ordinary file tree that local tools can read without following links outside the workspace.
+
+Workspace creation materializes configured sync targets once. Normal `git-stacks open` does not auto-pull or refresh existing sync targets, so local edits are not overwritten by opening a workspace. If a missing worktree is recreated during open, only missing repo-level sync targets for that recreated worktree are materialized. Use the explicit commands for ongoing drift checks and manual sync:
+
+```bash
+git-stacks files status my-feature
+git-stacks files pull my-feature --dry-run
+git-stacks files pull my-feature
+git-stacks files push my-feature --dry-run
+git-stacks files push my-feature
+```
+
+Default pull and push are conservative: they copy safe additions but refuse conflicts and destination-only deletes. `--force` mirrors the selected direction and can delete destination-only files, so preview with `--dry-run` before forcing.
+
 ### Shell `cd` integration
 
 Add to your shell config so `git-stacks cd` actually changes directory:
