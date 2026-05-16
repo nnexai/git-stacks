@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-import { existsSync, readFileSync, lstatSync } from "fs"
+import { existsSync, readFileSync, lstatSync, symlinkSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
 import { makeTmpDir, cleanup, makeFileTree, write, mkdir } from "../helpers"
@@ -216,23 +216,29 @@ describe("mergeFiles", () => {
   // FILES-15: additive merge
   test("FILES-15: mergeFiles concatenates copy and symlink arrays additively", () => {
     const result = mergeFiles(
-      { copy: ["a.txt"], symlink: ["node_modules"] },
-      { copy: ["b.txt"], symlink: ["dist"] }
+      { copy: ["a.txt"], symlink: ["node_modules"], sync: [{ source: "src-a", target: "dst-a" }] },
+      { copy: ["b.txt"], symlink: ["dist"], sync: [{ source: "src-b", target: "dst-b", git_exclude: true }] }
     )
     expect(result.copy).toEqual(["a.txt", "b.txt"])
     expect(result.symlink).toEqual(["node_modules", "dist"])
+    expect(result.sync).toEqual([
+      { source: "src-a", target: "dst-a" },
+      { source: "src-b", target: "dst-b", git_exclude: true },
+    ])
   })
 
   test("undefined inputs produce empty arrays", () => {
     const result = mergeFiles(undefined, undefined)
     expect(result.copy).toEqual([])
     expect(result.symlink).toEqual([])
+    expect(result.sync).toEqual([])
   })
 
   test("one undefined input merges with defined input", () => {
     const result = mergeFiles({ copy: ["a.txt"] }, undefined)
     expect(result.copy).toEqual(["a.txt"])
     expect(result.symlink).toEqual([])
+    expect(result.sync).toEqual([])
   })
 })
 
@@ -290,6 +296,71 @@ describe("applyFileOpsForWorkspace", () => {
     expect(result.ok).toBe(true)
     // File should appear at wsRoot/config.env (basename of absolute path)
     expect(existsSync(join(wsRoot, "config.env"))).toBe(true)
+  })
+
+  test("files.sync materializes files and directories as real filesystem entries", () => {
+    const wsRoot = join(tmp, "workspace-root")
+    mkdir(tmp, "workspace-root")
+    write(wsRoot, "source/file.txt", "sync file\n")
+    write(wsRoot, "source/dir/nested.txt", "sync nested\n")
+
+    const result = applyFileOpsForWorkspace(
+      { files: { sync: [
+        { source: "source/file.txt", target: "target/file.txt" },
+        { source: "source/dir", target: "target/dir" },
+      ] } },
+      { repos: [] } as Partial<Workspace> as Workspace,
+      wsRoot
+    )
+
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(wsRoot, "target/file.txt"), "utf-8")).toBe("sync file\n")
+    expect(readFileSync(join(wsRoot, "target/dir/nested.txt"), "utf-8")).toBe("sync nested\n")
+    expect(lstatSync(join(wsRoot, "target/file.txt")).isSymbolicLink()).toBe(false)
+    expect(lstatSync(join(wsRoot, "target/dir")).isSymbolicLink()).toBe(false)
+  })
+
+  test("files.sync supports absolute source paths and explicit relative targets", () => {
+    const wsRoot = join(tmp, "workspace-root")
+    const sourceRoot = join(tmp, "outside-source")
+    mkdir(tmp, "workspace-root")
+    write(sourceRoot, "file.txt", "absolute source\n")
+
+    const result = applyFileOpsForWorkspace(
+      { files: { sync: [{ source: join(sourceRoot, "file.txt"), target: "synced/file.txt" }] } },
+      { repos: [] } as Partial<Workspace> as Workspace,
+      wsRoot
+    )
+
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(wsRoot, "synced/file.txt"), "utf-8")).toBe("absolute source\n")
+  })
+
+  test("files.sync rejects missing sources and unsafe or existing targets", () => {
+    const wsRoot = join(tmp, "workspace-root")
+    mkdir(tmp, "workspace-root")
+    write(wsRoot, "source/file.txt", "data\n")
+    write(wsRoot, "existing-file.txt", "existing\n")
+    mkdir(wsRoot, "existing-dir")
+    symlinkSync(join(wsRoot, "source/file.txt"), join(wsRoot, "existing-link"))
+    symlinkSync(join(wsRoot, "missing-target"), join(wsRoot, "dangling-link"))
+
+    const workspace = { repos: [] } as Partial<Workspace> as Workspace
+    const fail = (source: string, target: string) => applyFileOpsForWorkspace(
+      { files: { sync: [{ source, target }] } },
+      workspace,
+      wsRoot
+    )
+
+    expect(fail("missing.txt", "target/missing.txt")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "/absolute.txt")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "../escape.txt")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "safe/../../escape.txt")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "existing-file.txt")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "existing-dir")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "existing-link")).toMatchObject({ ok: false })
+    expect(fail("source/file.txt", "dangling-link")).toMatchObject({ ok: false })
   })
 })
 
