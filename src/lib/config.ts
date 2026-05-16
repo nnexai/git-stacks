@@ -47,6 +47,18 @@ export type RepoType = z.infer<typeof RepoTypeSchema>
 
 export const ForgeTypeSchema = z.enum(["github", "gitlab", "gitea"]).optional()
 export type ForgeType = z.infer<typeof ForgeTypeSchema>
+export const ForgeIntegrationConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  base_url: z.string().url().optional(),
+})
+export type ForgeIntegrationConfig = z.infer<typeof ForgeIntegrationConfigSchema>
+
+export const ForgeRepoMetadataSchema = z.object({
+  forge: z.enum(["github", "gitlab", "gitea"]),
+  base_url: z.string().url().optional(),
+  repo_path: z.string().min(1).optional(),
+})
+export type ForgeRepoMetadata = z.infer<typeof ForgeRepoMetadataSchema>
 
 export const FileSyncEntrySchema = z.object({
   source: z.string(),
@@ -86,6 +98,7 @@ export const RepoRegistryEntrySchema = z.object({
   default_branch: z.string().default("main"),
   type: RepoTypeSchema.default("other"),
   forge: ForgeTypeSchema,
+  forge_metadata: ForgeRepoMetadataSchema.optional(),
   is_dir: z.boolean().default(false),
 })
 export type RepoRegistryEntry = z.infer<typeof RepoRegistryEntrySchema>
