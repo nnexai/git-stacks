@@ -84,16 +84,34 @@ export async function openWorkspace(
   )
   if (missing.length > 0) {
     let recreated = 0
+    const recreatedRepos: Array<WorkspaceRepo & { task_path: string }> = []
     for (const repo of missing) {
       onProgress?.(`Recreating worktree: ${repo.name}`)
       try {
         await createWorktree(repo.main_path, repo.task_path, wsWithPorts.branch)
         recreated++
+        recreatedRepos.push(repo)
       } catch (err) {
         onProgress?.(`\u26A0 Failed to recreate worktree for '${repo.name}': ${err instanceof Error ? err.message : String(err)}`)
       }
     }
     if (recreated > 0) onProgress?.(`${recreated} worktree(s) recreated`)
+
+    for (const repo of recreatedRepos) {
+      if (!repo.files?.sync?.length) continue
+      const repoSource = {
+        name: repo.name,
+        path: repo.main_path,
+        files: repo.files,
+      }
+      const fileResult = applyFileOpsForRepo(repoSource, repo, { sync: "missingOnly" })
+      if (!fileResult.ok) {
+        return { ok: false, error: `file-ops failed for recreated worktree '${repo.name}': ${fileResult.error}` }
+      }
+      if (fileResult.warnings) {
+        for (const w of fileResult.warnings) onProgress?.(`file-ops: ${w}`)
+      }
+    }
   }
 
   // Ensure upstream tracking for all worktree repos (parallel)
@@ -155,7 +173,7 @@ export async function openWorkspace(
       path: wsRepo.main_path,
       files: wsRepo.files,
     }
-    const fileResult = applyFileOpsForRepo(repoSource, wsRepo)
+    const fileResult = applyFileOpsForRepo(repoSource, wsRepo, { sync: "skip" })
     if (!fileResult.ok) {
       onProgress?.(`file-ops warning [${wsRepo.name}]: ${fileResult.error}`)
     } else if (fileResult.warnings) {
@@ -165,7 +183,7 @@ export async function openWorkspace(
 
   // Workspace-instance file ops
   if (wsWithPorts.files) {
-    const wsFileResult = applyFileOpsForWorkspace({ files: wsWithPorts.files }, wsWithPorts, wsDir)
+    const wsFileResult = applyFileOpsForWorkspace({ files: wsWithPorts.files }, wsWithPorts, wsDir, { sync: "skip" })
     if (!wsFileResult.ok) {
       onProgress?.(`file-ops warning [workspace]: ${wsFileResult.error}`)
     } else if (wsFileResult.warnings) {
@@ -344,4 +362,3 @@ export async function renameTemplate(
 
   return { ok: true }
 }
-

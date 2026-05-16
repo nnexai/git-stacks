@@ -54,6 +54,10 @@ export type FileEntryStatusOptions = {
   pathLimit?: number
 }
 
+export type FileOpsApplyOptions = {
+  sync?: "apply" | "skip" | "missingOnly"
+}
+
 export type SyncOperationDirection = "pull" | "push"
 export type SyncOperationOptions = {
   direction: SyncOperationDirection
@@ -197,7 +201,13 @@ function resolveSyncTargetPath(target: string, destDir: string): { ok: true; pat
   return { ok: true, path: targetPath, rel: relFromRoot.split(sep).join("/") }
 }
 
-function applySyncEntry(entry: FileSyncEntry, sourceBaseDir: string, destDir: string, repoPath?: string): ApplyResult {
+function applySyncEntry(
+  entry: FileSyncEntry,
+  sourceBaseDir: string,
+  destDir: string,
+  repoPath?: string,
+  mode: "apply" | "missingOnly" = "apply"
+): ApplyResult {
   const target = resolveSyncTargetPath(entry.target, destDir)
   if (!target.ok) return target
 
@@ -206,7 +216,11 @@ function applySyncEntry(entry: FileSyncEntry, sourceBaseDir: string, destDir: st
   if (repoPath && isGitTrackedPathSync(repoPath, target.rel)) {
     return { ok: false, error: `Refusing to overwrite tracked target: ${target.rel}` }
   }
-  if (dstExists(target.path)) return { ok: false, error: `Sync target already exists: ${target.rel}` }
+  if (dstExists(target.path)) {
+    return mode === "missingOnly"
+      ? { ok: true }
+      : { ok: false, error: `Sync target already exists: ${target.rel}` }
+  }
 
   mkdirSync(dirname(target.path), { recursive: true })
   cpSync(sourcePath, target.path, { recursive: true })
@@ -233,10 +247,11 @@ export function processSyncList(
   entries: FileSyncEntry[],
   sourceBaseDir: string,
   destDir: string,
-  repoPath?: string
+  repoPath?: string,
+  mode: "apply" | "missingOnly" = "apply"
 ): ApplyResult {
   for (const entry of entries) {
-    const result = applySyncEntry(entry, sourceBaseDir, destDir, repoPath)
+    const result = applySyncEntry(entry, sourceBaseDir, destDir, repoPath, mode)
     if (!result.ok) return result
   }
   return { ok: true }
@@ -631,7 +646,11 @@ export function applySyncOperation(
  * Source base: wsRepo.main_path (where large files live in the main clone)
  * Destination: wsRepo.task_path (the worktree)
  */
-export function applyFileOpsForRepo(source: FileOpsRepoSource, wsRepo: WorkspaceRepo): ApplyResult {
+export function applyFileOpsForRepo(
+  source: FileOpsRepoSource,
+  wsRepo: WorkspaceRepo,
+  options: FileOpsApplyOptions = {}
+): ApplyResult {
   const merged = mergeFiles(source.files, wsRepo.files)
   const sourceBase = wsRepo.main_path
   const destDir = wsRepo.task_path ?? wsRepo.main_path
@@ -642,7 +661,9 @@ export function applyFileOpsForRepo(source: FileOpsRepoSource, wsRepo: Workspace
   const symlinkResult = processFileList("symlink", merged.symlink, sourceBase, destDir)
   if (!symlinkResult.ok) return symlinkResult
 
-  const syncResult = processSyncList(merged.sync, sourceBase, destDir, destDir)
+  const syncResult = options.sync === "skip"
+    ? { ok: true as const }
+    : processSyncList(merged.sync, sourceBase, destDir, destDir, options.sync ?? "apply")
   if (!syncResult.ok) return syncResult
 
   // Combine any warnings from both operations
@@ -663,7 +684,8 @@ export function applyFileOpsForRepo(source: FileOpsRepoSource, wsRepo: Workspace
 export function applyFileOpsForWorkspace(
   source: FileOpsWorkspaceSource,
   workspace: Workspace,
-  wsInstanceRoot: string
+  wsInstanceRoot: string,
+  options: FileOpsApplyOptions = {}
 ): ApplyResult {
   const merged = mergeFiles(source.files, workspace.files)
   const sourceBase = wsInstanceRoot
@@ -675,7 +697,9 @@ export function applyFileOpsForWorkspace(
   const symlinkResult = processFileList("symlink", merged.symlink, sourceBase, destDir)
   if (!symlinkResult.ok) return symlinkResult
 
-  const syncResult = processSyncList(merged.sync, sourceBase, destDir)
+  const syncResult = options.sync === "skip"
+    ? { ok: true as const }
+    : processSyncList(merged.sync, sourceBase, destDir, undefined, options.sync ?? "apply")
   if (!syncResult.ok) return syncResult
 
   // Combine any warnings from both operations
