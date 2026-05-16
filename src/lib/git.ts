@@ -120,6 +120,24 @@ export async function createWorktree(
   await ensureUpstreamTracking(worktreePath, branch)
 }
 
+export async function createWorktreeFromRef(
+  repoPath: string,
+  worktreePath: string,
+  branch: string,
+  startRef: string,
+): Promise<void> {
+  if (existsSync(worktreePath) && existsSync(join(worktreePath, ".git"))) {
+    return
+  }
+  await $`git -C ${repoPath} worktree prune`.quiet().nothrow()
+  const result = await $`git -C ${repoPath} worktree add -B ${branch} ${worktreePath} ${startRef}`.quiet().nothrow()
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim()
+    throw new Error(`Failed to create worktree at '${worktreePath}' from '${startRef}': ${stderr}`)
+  }
+  await ensureUpstreamTracking(worktreePath, branch)
+}
+
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
   await $`git -C ${repoPath} worktree remove ${worktreePath} --force`
 }
@@ -210,6 +228,32 @@ export async function deleteLocalBranch(repoPath: string, branch: string): Promi
 
 export async function fetchOrigin(repoPath: string): Promise<void> {
   await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} -c fetch.timeout=30 fetch origin`.quiet()
+}
+
+export async function fetchSourceRef(
+  repoPath: string,
+  remote: string,
+  sourceRef: string,
+  fetchedRef: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const refspec = `${sourceRef}:${fetchedRef}`
+  const result = await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} -c fetch.timeout=30 fetch ${remote} ${refspec}`.quiet().nothrow()
+  if (result.exitCode !== 0) {
+    return { ok: false, error: result.stderr.toString().trim() || "fetch failed" }
+  }
+  return { ok: true }
+}
+
+export async function deleteRef(repoPath: string, ref: string): Promise<void> {
+  await $`git -C ${repoPath} update-ref -d ${ref}`.quiet().nothrow()
+}
+
+export async function resolveRef(repoPath: string, ref: string): Promise<{ ok: true; sha: string } | { ok: false; error: string }> {
+  const result = await $`git -C ${repoPath} rev-parse --verify ${ref}`.quiet().nothrow()
+  if (result.exitCode !== 0) {
+    return { ok: false, error: result.stderr.toString().trim() || "ref not found" }
+  }
+  return { ok: true, sha: result.stdout.toString().trim() }
 }
 
 /**

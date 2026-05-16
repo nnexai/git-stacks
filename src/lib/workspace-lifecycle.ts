@@ -15,6 +15,7 @@ import {
 } from "./config"
 import {
   createWorktree,
+  createWorktreeFromRef,
   removeWorktree,
   checkBranchExists,
   ensureUpstreamTracking,
@@ -609,6 +610,8 @@ export type CreateWorkspaceInputs = {
   wsIntegrationSettings?: Record<string, unknown>
   wsPorts?: Workspace["ports"]
   labels?: string[]
+  source?: Workspace["source"]
+  sourceStartRefs?: Record<string, string>
 }
 
 export type CreateWorkspaceResult =
@@ -655,6 +658,7 @@ export async function createWorkspace(
       created: new Date().toISOString().split("T")[0]!,
       ...(inputs.templateName ? { template: inputs.templateName } : {}),
       ...(inputs.wsHooks ? { hooks: inputs.wsHooks } : {}),
+      ...(inputs.source ? { source: inputs.source } : {}),
       repos: inputs.repos,
       ...(inputs.wsEnv ? { env: inputs.wsEnv } : {}),
       ...(inputs.wsEnvFile ? { env_file: inputs.wsEnvFile } : {}),
@@ -684,11 +688,16 @@ export async function createWorkspace(
 
       // ─── D-12 step 2: worktree creation (TRACKED) ───────────────────────────
       for (const repo of worktreeRepos) {
+        const sourceStartRef = inputs.sourceStartRefs?.[repo.name]
         await runner.do(
           `create worktree ${repo.name}`,
           async () => {
             onProgress?.(`Creating worktree for ${repo.name}`)
-            await createWorktree(repo.main_path, repo.task_path, inputs.branch)
+            if (sourceStartRef) {
+              await createWorktreeFromRef(repo.main_path, repo.task_path, inputs.branch, sourceStartRef)
+            } else {
+              await createWorktree(repo.main_path, repo.task_path, inputs.branch)
+            }
             onProgress?.(`created worktree for ${repo.name}`)
           },
           async () => {
