@@ -11,7 +11,14 @@
  *   bun run scripts/test-runner.ts --integ   -- run integration tests only
  */
 
-import { join, relative, basename } from "path"
+import { basename, join, relative } from "path"
+import {
+  formatIntegrationSummary,
+  parseRunnerArgs,
+  runIsolatedPool,
+  summarizeFailures,
+  type IsolatedRunResult,
+} from "./test-runner-core"
 
 const ROOT = join(import.meta.dir, "..")
 const TESTS_DIR = join(ROOT, "tests")
@@ -120,43 +127,60 @@ async function runUnit(files: string[]): Promise<boolean> {
   return exitCode === 0
 }
 
-async function runInteg(files: string[]): Promise<{ passed: number; failed: number }> {
+async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
+  if (!stream) {
+    return ""
+  }
+  return await new Response(stream).text()
+}
+
+async function runInteg(
+  files: string[],
+  workers: number
+): Promise<{ passed: number; failed: number; results: IsolatedRunResult[] }> {
   if (files.length === 0) {
     console.log("No integration test files found.")
-    return { passed: 0, failed: 0 }
+    return { passed: 0, failed: 0, results: [] }
   }
 
-  console.log(`\n=== Integration Tests (${files.length} files, isolated processes) ===`)
+  console.log(`\n=== Integration Tests (${files.length} files, isolated processes, ${workers} workers) ===`)
 
-  let passed = 0
-  let failed = 0
+  return await runIsolatedPool(files, {
+    workers,
+    runFile: async (file) => {
+      const relPath = relative(ROOT, file)
+      const proc = Bun.spawn(["bun", "test", file], {
+        cwd: ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+        stdin: "inherit",
+      })
 
-  for (const file of files) {
-    const relPath = relative(ROOT, file)
-    console.log(`\n--- [integ] ${relPath} ---`)
+      const [stdout, stderr, exitCode] = await Promise.all([
+        readStream(proc.stdout),
+        readStream(proc.stderr),
+        proc.exited,
+      ])
 
-    const proc = Bun.spawn(["bun", "test", file], {
-      cwd: ROOT,
-      stdio: ["inherit", "inherit", "inherit"],
-    })
-
-    const exitCode = await proc.exited
-    if (exitCode === 0) {
-      passed++
-    } else {
-      failed++
-    }
-  }
-
-  return { passed, failed }
+      const result = { file: relPath, exitCode, stdout, stderr }
+      console.log(`\n--- [integ] ${relPath} ---`)
+      if (stdout.length > 0) {
+        process.stdout.write(stdout)
+      }
+      if (stderr.length > 0) {
+        process.stderr.write(stderr)
+      }
+      return result
+    },
+  })
 }
 
 // --- Main ---
 
 async function main() {
-  const args = process.argv.slice(2)
-  const runUnitMode = args.includes("--unit") || args.includes("--all") || args.length === 0
-  const runIntegMode = args.includes("--integ") || args.includes("--all") || args.length === 0
+  const { runUnit: runUnitMode, runInteg: runIntegMode, workers } = parseRunnerArgs(
+    process.argv.slice(2)
+  )
 
   const { unit, integ } = classifyFiles()
 
@@ -168,7 +192,7 @@ async function main() {
   }
 
   if (runIntegMode) {
-    integResult = await runInteg(integ)
+    integResult = await runInteg(integ, workers)
   }
 
   // --- Summary ---
@@ -179,9 +203,15 @@ async function main() {
   }
 
   if (integResult !== null) {
-    const { passed, failed } = integResult
-    const total = passed + failed
-    console.log(`Integration tests: ${passed}/${total} passed${failed > 0 ? " (FAIL)" : ""}`)
+    console.log(
+      `Integration tests: ${formatIntegrationSummary(integResult)}${integResult.failed > 0 ? " (FAIL)" : ""}`
+    )
+    const failureSummary = summarizeFailures(
+      integResult.results.filter((entry) => entry.exitCode !== 0)
+    )
+    if (failureSummary.length > 0) {
+      console.log(failureSummary)
+    }
   }
 
   const allPassed =
