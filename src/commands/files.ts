@@ -195,7 +195,7 @@ function operationJson(workspace: Workspace, result: SyncOperationResult) {
 }
 
 export const filesCommand = new Command("files")
-  .description("Inspect and sync workspace files")
+  .description("Inspect and explicitly sync workspace files")
 
 filesCommand
   .command("status [workspace]")
@@ -226,7 +226,7 @@ filesCommand
 filesCommand
   .command("pull [workspace]")
   .description("Copy sync source changes into workspace targets")
-  .option("--force", "Mirror source to target, including overwrites and deletes")
+  .option("--force", "Mirror source to target, including overwrites and destination deletes")
   .option("--dry-run", "Show planned writes, deletes, and refusals without changing files")
   .option("--json", "Emit machine-readable JSON")
   .action((workspaceName: string | undefined, opts: { force?: boolean; dryRun?: boolean; json?: boolean }) => {
@@ -247,8 +247,8 @@ filesCommand
 
 filesCommand
   .command("push [workspace]")
-  .description("Copy workspace target changes back to sync sources")
-  .option("--force", "Mirror target to source, including overwrites and deletes")
+  .description("Explicitly copy workspace target changes back to sync sources")
+  .option("--force", "Mirror target to source, including overwrites and destination deletes")
   .option("--dry-run", "Show planned writes, deletes, and refusals without changing files")
   .option("--json", "Emit machine-readable JSON")
   .action((workspaceName: string | undefined, opts: { force?: boolean; dryRun?: boolean; json?: boolean }) => {
