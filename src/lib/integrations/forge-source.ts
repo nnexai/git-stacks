@@ -1,0 +1,157 @@
+export type ForgeSourceId = "github" | "gitlab" | "gitea"
+export type ForgeSourceChangeType = "mr" | "pr"
+
+export type ForgeSourceParsed = {
+  ok: true
+  forge: ForgeSourceId
+  changeType: ForgeSourceChangeType
+  changeNumber: number
+  baseUrl: string
+  repoPath: string
+  webUrl: string
+}
+
+export type ForgeSourceParseError =
+  | { ok: false; error: "unsupported_forge" }
+  | { ok: false; error: "url_parse_failed" }
+
+export type ForgeSourceParseResult = ForgeSourceParsed | ForgeSourceParseError
+
+export type ForgeSourceResolutionError =
+  | "unsupported_forge"
+  | "url_parse_failed"
+  | "repo_not_matched"
+  | "ambiguous_repo"
+  | "template_repo_missing"
+  | "not_worktree_mode"
+  | "cli_unavailable"
+  | "auth_required"
+  | "metadata_unavailable"
+  | "branch_conflict"
+
+export type ForgeSourceResolutionFailure = {
+  ok: false
+  error: ForgeSourceResolutionError
+}
+
+export type ForgeSourceResolution = {
+  forge: ForgeSourceId
+  changeType: ForgeSourceChangeType
+  changeNumber: number
+  baseUrl: string
+  repoPath: string
+  webUrl: string
+  source: {
+    branch: string
+    ref: string
+    repoPath?: string
+    sha?: string
+    remoteUrl?: string
+  }
+  target: {
+    branch: string
+    repoPath?: string
+    sha?: string
+  }
+  matchedRepo: {
+    registryName: string
+    templateRepoName: string
+    workspaceRepoMode: "worktree" | "trunk" | "dir"
+    mainPath?: string
+  }
+  metadataForWorkspace: {
+    forge: ForgeSourceId
+    baseUrl: string
+    repoPath: string
+    changeType: ForgeSourceChangeType
+    changeNumber: number
+    sourceBranch?: string
+    sourceRef?: string
+    targetBranch?: string
+  }
+  confidence: "url" | "cli" | "explicit-config"
+}
+
+function parsePositiveInt(raw: string): number | null {
+  if (!/^\d+$/.test(raw)) return null
+  const n = Number(raw)
+  return Number.isSafeInteger(n) && n > 0 ? n : null
+}
+
+export function parseForgeSourceUrl(raw: string): ForgeSourceParseResult {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return { ok: false, error: "url_parse_failed" }
+  }
+
+  const baseUrl = `${url.protocol}//${url.host}`
+  const parts = url.pathname.split("/").filter(Boolean)
+  const host = url.hostname.toLowerCase()
+
+  if (parts.length === 0) {
+    return { ok: false, error: "url_parse_failed" }
+  }
+
+  const gitlabMarker = parts.indexOf("-")
+  if (gitlabMarker >= 0 && parts[gitlabMarker + 1] === "merge_requests") {
+    const repoParts = parts.slice(0, gitlabMarker)
+    const numberPart = parts[gitlabMarker + 2]
+    const changeNumber = numberPart ? parsePositiveInt(numberPart) : null
+    if (repoParts.length === 0 || !changeNumber) {
+      return { ok: false, error: "url_parse_failed" }
+    }
+    return {
+      ok: true,
+      forge: "gitlab",
+      changeType: "mr",
+      changeNumber,
+      baseUrl,
+      repoPath: repoParts.join("/"),
+      webUrl: raw,
+    }
+  }
+
+  if (parts.length >= 4 && parts[2] === "pull") {
+    const changeNumber = parsePositiveInt(parts[3])
+    if (!changeNumber) {
+      return { ok: false, error: "url_parse_failed" }
+    }
+    return {
+      ok: true,
+      forge: host === "github.com" ? "github" : "gitea",
+      changeType: "pr",
+      changeNumber,
+      baseUrl,
+      repoPath: `${parts[0]}/${parts[1]}`,
+      webUrl: raw,
+    }
+  }
+
+  if (parts.length >= 4 && parts[2] === "pulls") {
+    const changeNumber = parsePositiveInt(parts[3])
+    if (!changeNumber) {
+      return { ok: false, error: "url_parse_failed" }
+    }
+    return {
+      ok: true,
+      forge: host === "github.com" ? "github" : "gitea",
+      changeType: "pr",
+      changeNumber,
+      baseUrl,
+      repoPath: `${parts[0]}/${parts[1]}`,
+      webUrl: raw,
+    }
+  }
+
+  if (host.includes("github")) {
+    return { ok: false, error: "url_parse_failed" }
+  }
+
+  if (host.includes("gitlab") || host.includes("gitea") || host.includes("git")) {
+    return { ok: false, error: "url_parse_failed" }
+  }
+
+  return { ok: false, error: "unsupported_forge" }
+}
