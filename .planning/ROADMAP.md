@@ -350,7 +350,12 @@ Plans:
   3. File-system and git fixtures are isolated enough for parallel execution, including temp directory/config paths that avoid fixed-path collisions.
   4. Coverage execution preserves one coherent report by merging all per-process Istanbul coverage artifacts into the existing stable outputs: `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html`.
   5. `bun run test`, `bun run test:integ`, `bun run coverage:integ`, and `bun run verify` continue to provide release-gate quality signals without requiring CI.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] `93.1-01-PLAN.md` - Add the shared worker contract, `--workers` parsing, and buffered completion-order integration output.
+- [ ] `93.1-02-PLAN.md` - Harden real-write integration fixtures against shared `/tmp` collisions and add fixture-safety guards.
+- [ ] `93.1-03-PLAN.md` - Parallelize coverage integration with per-worker shard dirs while preserving canonical merged Istanbul artifacts.
 
 ### Phase 94: v0.18.0 Docs and Release Prep
 **Goal**: v0.18.0 is documented and packaged with user-facing release notes that accurately describe file sync behavior and forge source validation limits.
