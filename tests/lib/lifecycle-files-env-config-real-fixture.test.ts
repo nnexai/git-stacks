@@ -1,8 +1,10 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
+import { execSync } from "child_process"
 import {
   cleanup,
+  gitExecOptions,
   makeFileTree,
   makeTmpDir,
   realCache,
@@ -141,6 +143,35 @@ describe("files, env, secrets, ports, and config real fixtures", () => {
     expect(warnExternalFiles(workspace, join(wsRoot, "tasks", workspace.name), join(wsRoot, "tasks"))).toEqual([
       `Warning: external destination ${join(tmpDir, "outside.txt")} was not removed`,
     ])
+  })
+
+  test("repo-level files.sync refuses real git tracked target collisions", () => {
+    const repoPath = join(tmpDir, "tracked-repo")
+    mkdirSync(repoPath, { recursive: true })
+    execSync("git init", gitExecOptions(repoPath, tmpDir))
+    writeFileSync(join(repoPath, "tracked.txt"), "tracked\n")
+    execSync("git add tracked.txt && git commit -m initial", gitExecOptions(repoPath, tmpDir))
+    writeFileSync(join(repoPath, "source.txt"), "new sync content\n")
+
+    const repo: WorkspaceRepo = {
+      name: "tracked",
+      repo: "tracked",
+      type: "typescript",
+      mode: "trunk",
+      main_path: repoPath,
+      files: {
+        sync: [{ source: "source.txt", target: "tracked.txt" }],
+      },
+    }
+
+    const result = applyFileOpsForRepo({ path: repoPath }, repo)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toContain("tracked target")
+      expect(result.error).toContain("tracked.txt")
+    }
+    expect(readFileSync(join(repoPath, "tracked.txt"), "utf8")).toBe("tracked\n")
   })
 
   test("workspace env resolves order, skips secrets on request, and writes env files safely", async () => {
