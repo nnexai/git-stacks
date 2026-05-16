@@ -4,6 +4,28 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.18.0-rc.1] — 2026-05-17
+
+### Added
+
+**Workspace file sync for private project context** — templates and workspaces can now use `files.sync` to materialize private files and directories into a workspace as ordinary files. This is intended for dotfiles, specs, planning notes, and agent configuration such as `.planning` and `.codex` content when symlinks are not accepted by local tools or agents.
+
+**Explicit file drift commands** — `git-stacks files status|pull|push` lets you inspect source/target drift, pull source updates into workspace targets, and push workspace target edits back to the configured source. Normal `git-stacks open` stays conservative and does not silently sync local edits back; `files push` is the explicit sync-back path.
+
+**Forge-source workspace creation** — `git-stacks new <name> --template <template> --source <forge-url>` can create a normal template-backed workspace from a forge change URL. The source URL must be a full forge web URL, and `--repo <name>` is available when multiple template repos could match the same change.
+
+### Safety Notes
+
+Default `files pull` and `files push` copy safe additions but refuse conflicts, overwrites, and destination-only deletes. Use `--dry-run` to preview planned changes, and use `--force` only when you want the destination mirrored to the selected direction, including deletes.
+
+Forge-source creation is early support. GitLab merge request URLs are the primary path, with GitHub and Gitea pull request URL parsing in place, but provider authentication, self-hosted instances, and fork refs may still need manual verification in your environment.
+
+### Release Candidate
+
+This is a release candidate for v0.18.0. The package version and matching tag target are `0.18.0-rc.1` / `v0.18.0-rc.1`; final `0.18.0` tagging remains separate after RC validation.
+
+---
+
 ## [0.17.2] — 2026-05-15
 
 ### Fixed
