@@ -307,7 +307,19 @@ Plans:
   2. Gitea and GitHub PR URL parsing and resolver differences are documented enough to avoid painting the implementation into a GitLab-only corner.
   3. A forge source resolver contract describes the normalized source metadata needed by workspace creation.
   4. Repo matching uses existing registry/forge/upstream metadata where possible, with ambiguity and missing-template-repo cases specified.
-**Plans**: TBD
+**Plans**:
+**Wave 1**
+- [ ] `92-01-PLAN.md` - Document official GitLab/GitHub research, local Tea validation limits, self-hosted config design, repo matching, and the plain Git checkout boundary for Phase 93.
+- [ ] `92-02-PLAN.md` - Add backwards-compatible config schema design for forge integration base URLs and repo-level forge metadata.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] `92-03-PLAN.md` - Add the pure forge source URL parser and typed resolver contract with GitLab, GitHub, and Gitea coverage.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] `92-04-PLAN.md` - Finalize the Phase 93 fetch/checkout handoff and run focused contract/config/typecheck gates.
+
+**Cross-cutting constraints:**
+- Provider checkout commands are research references only; internal workspace creation must use plain Git fetch/checkout through existing git-stacks logic.
 
 ### Phase 93: Forge Source Workspace Creation
 **Goal**: Users can create a normal template-backed workspace from a forge change source URL, with GitLab merge requests implemented first and Gitea/GitHub prepared by the shared resolver shape.
