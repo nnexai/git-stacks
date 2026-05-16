@@ -8,6 +8,7 @@ import {
   readShardData,
   shouldPreserveCoverageWorkdirs,
 } from "../../scripts/coverage-runner"
+import { DEFAULT_INTEGRATION_WORKERS } from "../../scripts/test-runner-core"
 import { cleanup, makeTmpDir } from "../helpers"
 
 describe("coverage runner parallel integration contract", () => {
@@ -15,7 +16,7 @@ describe("coverage runner parallel integration contract", () => {
     expect(parseArgs([])).toMatchObject({
       runUnitMode: true,
       runIntegMode: true,
-      workers: 4,
+      workers: DEFAULT_INTEGRATION_WORKERS,
       keepWorkdir: false,
     })
 
@@ -29,7 +30,7 @@ describe("coverage runner parallel integration contract", () => {
       runUnitMode: true,
       runIntegMode: false,
       filters: ["tests/lib/messages.test.ts"],
-      workers: 4,
+      workers: DEFAULT_INTEGRATION_WORKERS,
     })
   })
 

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
+  DEFAULT_INTEGRATION_WORKERS,
+  defaultIntegrationWorkers,
   formatIntegrationSummary,
   parseRunnerArgs,
   runIsolatedPool,
@@ -9,11 +11,20 @@ import {
 } from "../../scripts/test-runner-core"
 
 describe("test runner worker contract", () => {
+  test("calculates default workers from core count minus reserved cores", () => {
+    expect(defaultIntegrationWorkers(1)).toBe(1)
+    expect(defaultIntegrationWorkers(2)).toBe(1)
+    expect(defaultIntegrationWorkers(4)).toBe(2)
+    expect(defaultIntegrationWorkers(16)).toBe(14)
+    expect(defaultIntegrationWorkers(18)).toBe(16)
+    expect(defaultIntegrationWorkers(64)).toBe(16)
+  })
+
   test("parses worker defaults, serial override, and invalid counts", () => {
     expect(parseRunnerArgs([])).toEqual({
       runUnit: true,
       runInteg: true,
-      workers: 4,
+      workers: DEFAULT_INTEGRATION_WORKERS,
     })
 
     expect(parseRunnerArgs(["--integ", "--workers", "1"])).toEqual({

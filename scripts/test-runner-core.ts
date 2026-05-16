@@ -1,6 +1,11 @@
+import { availableParallelism } from "node:os"
 import { mapLimited } from "../src/lib/concurrency"
 
-export const DEFAULT_INTEGRATION_WORKERS = 4
+export function defaultIntegrationWorkers(coreCount = availableParallelism()): number {
+  return Math.min(16, Math.max(1, coreCount - 2))
+}
+
+export const DEFAULT_INTEGRATION_WORKERS = defaultIntegrationWorkers()
 
 export const serialOnlyFiles: Record<string, string> = {}
 

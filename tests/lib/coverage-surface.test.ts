@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { parseArgs } from "../../scripts/coverage-runner"
+import { DEFAULT_INTEGRATION_WORKERS } from "../../scripts/test-runner-core"
 
 const root = join(import.meta.dir, "..", "..")
 
@@ -58,7 +59,7 @@ describe("Phase 83 coverage command surface", () => {
       runUnitMode: true,
       runIntegMode: true,
       filters: ["tests/lib/messages.test.ts"],
-      workers: 4,
+      workers: DEFAULT_INTEGRATION_WORKERS,
     })
 
     expect(parseArgs(["--unit", "tests/lib/messages.test.ts"])).toMatchObject({
