@@ -12,15 +12,6 @@ Reference commands:
 - `tea pulls --fields index,url,base,head --output json`
 - `tea pulls checkout <pull index>`
 
-GitLab URL shape for parsing:
-- `https://gitlab.example.com/group/subgroup/api/-/merge_requests/42`
-
-GitHub URL shape for parsing:
-- `https://github.com/org/api/pull/17`
-
-Gitea URL shape for parsing:
-- `https://git.example.test/org/api/pulls/9`
-
 ## Validation limits
 
 - `glab` was not installed locally, so GitLab command behavior is constrained to official docs.
@@ -32,7 +23,19 @@ Provider checkout commands are research references only.
 
 ## Self-hosted instance config
 
-GitLab and Gitea are self-hosted aware. Resolver metadata must preserve provider instance identity and base URL from the source URL origin.
+Self-hosted instance identity is represented at integration defaults and repo-level overrides.
+
+Integration-level defaults (optional):
+- `integrations.gitlab.base_url`
+- `integrations.gitea.base_url`
+- `integrations.github.base_url`
+
+Repo-level override metadata (optional):
+- `forge_metadata.forge`
+- `forge_metadata.base_url`
+- `forge_metadata.repo_path`
+
+Existing integration config objects such as `{ enabled: true }` remain valid.
 
 ## Resolver contract
 
@@ -55,6 +58,8 @@ Failure shape includes typed reasons such as:
 - `url_parse_failed`
 - `repo_not_matched`
 - `ambiguous_repo`
+- `template_repo_missing`
+- `not_worktree_mode`
 - `cli_unavailable`
 - `auth_required`
 
@@ -62,7 +67,16 @@ No label suggestion fields are included in this phase.
 
 ## Repo matching
 
-Repo matching remains deterministic and explicit to avoid accidental cross-instance resolution.
+Matching precedence order is:
+1. repo-level forge metadata
+2. integration-level base URL config
+3. URL/remote inference only when it yields one enabled matching repo
+
+Resolver must fail clearly with typed errors for:
+- `repo_not_matched`
+- `ambiguous_repo`
+- `template_repo_missing`
+- `not_worktree_mode`
 
 ## Fetch and checkout strategy
 
