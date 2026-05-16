@@ -15,8 +15,16 @@ import {
   writeWorkspaceFixture,
 } from "../helpers"
 
-const README = readFileSync(join(import.meta.dir, "..", "..", "README.md"), "utf8")
-const CHANGELOG = readFileSync(join(import.meta.dir, "..", "..", "CHANGELOG.md"), "utf8")
+function repoRoot(): string {
+  const marker = `${join(".coverage", "runtime-root")}`
+  const markerIndex = import.meta.dir.indexOf(marker)
+  if (markerIndex >= 0) return import.meta.dir.slice(0, markerIndex - 1)
+  return join(import.meta.dir, "..", "..")
+}
+
+const ROOT = repoRoot()
+const README = readFileSync(join(ROOT, "README.md"), "utf8")
+const CHANGELOG = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")
 
 function expectSuccessful(result: ReturnType<typeof runCli>) {
   expect(result.stderr, formatCliFailure(result)).toBe("")
