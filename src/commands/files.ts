@@ -6,9 +6,12 @@ import { getTasksDir } from "../lib/paths"
 import { detectWorkspaceFromCwd } from "../lib/workspace-status"
 import {
   applySyncOperation,
+  DEFAULT_VERBOSE_PATH_LIMIT,
   getFileEntryStatuses,
   type FileEntryStatus,
   type SyncOperationResult,
+  type SyncOperationPlan,
+  type VerbosePathBucket,
 } from "../lib/files"
 
 function resolveWorkspace(workspaceName: string | undefined): Workspace {
@@ -79,6 +82,118 @@ function printOperationResult(result: SyncOperationResult): void {
   }
 }
 
+function jsonDetails(bucket: VerbosePathBucket) {
+  return {
+    paths: bucket.paths,
+    omitted: bucket.omitted,
+    truncated: bucket.omitted > 0,
+  }
+}
+
+function statusSummary(rows: FileEntryStatus[]) {
+  return rows.reduce(
+    (summary, row) => {
+      summary.total += 1
+      summary[row.state] = (summary[row.state] ?? 0) + 1
+      return summary
+    },
+    { total: 0 } as Record<string, number>
+  )
+}
+
+function statusJson(workspace: Workspace, rows: FileEntryStatus[], verbose: boolean) {
+  const entries = rows.map((row) => {
+    const base = {
+      scope: row.scope,
+      repo: row.scope === "repo" ? row.name : null,
+      name: row.name,
+      type: row.kind,
+      target: row.target,
+      state: row.state,
+      warnings: [] as string[],
+      errors: row.error ? [row.error] : [] as string[],
+    }
+    if (row.kind !== "sync") return base
+    return {
+      ...base,
+      counts: row.counts,
+      details: verbose && row.verbosePaths ? {
+        sourceOnly: jsonDetails(row.verbosePaths.sourceOnly),
+        targetOnly: jsonDetails(row.verbosePaths.targetOnly),
+        differing: jsonDetails(row.verbosePaths.differing),
+        errors: jsonDetails(row.verbosePaths.errors),
+      } : undefined,
+    }
+  })
+
+  return {
+    workspace: workspace.name,
+    entries,
+    summary: statusSummary(rows),
+    warnings: [] as string[],
+  }
+}
+
+function countPlan(plan: SyncOperationPlan) {
+  return {
+    writes: plan.writes.length + plan.overwrites.length,
+    deletes: plan.deletes.length,
+    refusals: plan.refusals.length,
+  }
+}
+
+function operationJson(workspace: Workspace, result: SyncOperationResult) {
+  let writes = 0
+  let deletes = 0
+  let refusals = 0
+  const errors: string[] = []
+
+  const results = result.entries.map((entry) => {
+    const counts = countPlan(entry.plan)
+    writes += counts.writes
+    deletes += counts.deletes
+    refusals += counts.refusals
+    if (entry.error) errors.push(entry.error)
+    return {
+      scope: entry.scope,
+      repo: entry.scope === "repo" ? entry.name : null,
+      name: entry.name,
+      target: entry.target,
+      ok: !entry.error && entry.plan.refusals.length === 0,
+      writes: counts.writes,
+      deletes: counts.deletes,
+      refusals: counts.refusals,
+      plan: {
+        writes: entry.plan.writes,
+        overwrites: entry.plan.overwrites,
+        deletes: entry.plan.deletes,
+        skipped: entry.plan.skipped,
+        refusals: entry.plan.refusals,
+      },
+      error: entry.error,
+    }
+  })
+
+  return {
+    ok: result.ok,
+    workspace: workspace.name,
+    operation: result.direction,
+    mode: result.direction,
+    dryRun: result.dryRun,
+    force: result.force,
+    results,
+    summary: {
+      entries: result.entries.length,
+      writes,
+      deletes,
+      refusals,
+      errors: errors.length,
+    },
+    warnings: [] as string[],
+    errors,
+  }
+}
+
 export const filesCommand = new Command("files")
   .description("Inspect and sync workspace files")
 
@@ -86,10 +201,18 @@ filesCommand
   .command("status [workspace]")
   .description("Show configured file entry status")
   .option("--verbose", "Show capped representative paths for sync entries")
-  .action((workspaceName: string | undefined, opts: { verbose?: boolean }) => {
+  .option("--json", "Emit machine-readable JSON")
+  .action((workspaceName: string | undefined, opts: { verbose?: boolean; json?: boolean }) => {
     const workspace = resolveWorkspace(workspaceName)
+    const rows = getFileEntryStatuses(workspace, workspaceRoot(workspace), {
+      verbose: opts.verbose,
+      pathLimit: DEFAULT_VERBOSE_PATH_LIMIT,
+    })
+    if (opts.json) {
+      console.log(JSON.stringify(statusJson(workspace, rows, opts.verbose === true), null, 2))
+      return
+    }
     console.log(`Workspace: ${workspace.name}`)
-    const rows = getFileEntryStatuses(workspace, workspaceRoot(workspace), { verbose: opts.verbose })
     if (rows.length === 0) {
       console.log("No file entries configured.")
       return
@@ -105,13 +228,19 @@ filesCommand
   .description("Copy sync source changes into workspace targets")
   .option("--force", "Mirror source to target, including overwrites and deletes")
   .option("--dry-run", "Show planned writes, deletes, and refusals without changing files")
-  .action((workspaceName: string | undefined, opts: { force?: boolean; dryRun?: boolean }) => {
+  .option("--json", "Emit machine-readable JSON")
+  .action((workspaceName: string | undefined, opts: { force?: boolean; dryRun?: boolean; json?: boolean }) => {
     const workspace = resolveWorkspace(workspaceName)
     const result = applySyncOperation(workspace, workspaceRoot(workspace), {
       direction: "pull",
       force: opts.force,
       dryRun: opts.dryRun,
     })
+    if (opts.json) {
+      console.log(JSON.stringify(operationJson(workspace, result), null, 2))
+      if (!result.ok && !result.dryRun) process.exit(1)
+      return
+    }
     printOperationResult(result)
     if (!result.ok) process.exit(1)
   })
@@ -121,13 +250,19 @@ filesCommand
   .description("Copy workspace target changes back to sync sources")
   .option("--force", "Mirror target to source, including overwrites and deletes")
   .option("--dry-run", "Show planned writes, deletes, and refusals without changing files")
-  .action((workspaceName: string | undefined, opts: { force?: boolean; dryRun?: boolean }) => {
+  .option("--json", "Emit machine-readable JSON")
+  .action((workspaceName: string | undefined, opts: { force?: boolean; dryRun?: boolean; json?: boolean }) => {
     const workspace = resolveWorkspace(workspaceName)
     const result = applySyncOperation(workspace, workspaceRoot(workspace), {
       direction: "push",
       force: opts.force,
       dryRun: opts.dryRun,
     })
+    if (opts.json) {
+      console.log(JSON.stringify(operationJson(workspace, result), null, 2))
+      if (!result.ok && !result.dryRun) process.exit(1)
+      return
+    }
     printOperationResult(result)
     if (!result.ok) process.exit(1)
   })
