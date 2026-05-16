@@ -2,11 +2,12 @@
 gsd_state_version: 1.0
 milestone: v0.18.0
 milestone_name: Workspace File Sync and Forge Sources
-status: planned
-last_updated: "2026-05-15T21:27:21.796Z"
-last_activity: 2026-05-15
+status: planning
+stopped_at: Phase 89 context gathered
+last_updated: "2026-05-16T08:23:10.595Z"
+last_activity: 2026-05-15 — Milestone v0.18.0 roadmap created
 progress:
-  total_phases: 6
+  total_phases: 29
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -127,6 +128,7 @@ Last activity: 2026-05-15 — Milestone v0.18.0 roadmap created
 - v0.18.0 milestone initialized on 2026-05-15: Phase 89-94 cover `files.sync`, `git-stacks files status|pull|push`, GitLab-first forge source research, `git-stacks new --source <forge-url>`, and release docs.
 - Pending todo "Add bidirectional files sync" tagged to Phase 89.
 - Pending todo "Create workspace from forge source" tagged to Phase 92.
+- Phase 93.1 inserted after Phase 93: Parallel integration test runner and coherent coverage merging (URGENT)
 
 ### Pending Todos
 
@@ -150,9 +152,9 @@ None blocking. Concern: forge source creation requires GitLab-first research bec
 
 ## Session Continuity
 
-Last session: 2026-05-15T06:13:59.593Z
-Stopped at: Completed 88-02-PLAN.md
-Resume file: None
+Last session: 2026-05-16T08:23:10.580Z
+Stopped at: Phase 89 context gathered
+Resume file: .planning/phases/89-files-sync-schema-and-materialization/89-CONTEXT.md
 
 ## Operator Next Steps
 
