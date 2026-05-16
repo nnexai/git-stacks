@@ -206,6 +206,33 @@ describe("composeTemplates", () => {
       expect(result.files?.copy).toEqual(["a.txt", "b.txt"])
       expect(result.files?.symlink).toEqual(["link-a", "link-b"])
     })
+
+    test("concatenates files.sync arrays in include order with other file ops", () => {
+      writeTestTemplate(isolated.configDir, "files-a", {
+        repos: [],
+        files: {
+          copy: ["a.txt"],
+          symlink: ["link-a"],
+          sync: [{ source: "a-src", target: "a-target" }],
+        },
+      })
+      writeTestTemplate(isolated.configDir, "files-b", {
+        repos: [],
+        files: {
+          copy: ["b.txt"],
+          symlink: ["link-b"],
+          sync: [{ source: "b-src", target: "b-target", git_exclude: true }],
+        },
+      })
+
+      const result = composeTemplates(["files-a", "files-b"])
+      expect(result.files?.copy).toEqual(["a.txt", "b.txt"])
+      expect(result.files?.symlink).toEqual(["link-a", "link-b"])
+      expect(result.files?.sync).toEqual([
+        { source: "a-src", target: "a-target" },
+        { source: "b-src", target: "b-target", git_exclude: true },
+      ])
+    })
   })
 
   describe("integrations merging", () => {
