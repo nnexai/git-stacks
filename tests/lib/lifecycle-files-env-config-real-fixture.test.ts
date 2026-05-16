@@ -18,6 +18,7 @@ import {
   useIsolatedConfig,
 } from "../helpers"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "../../src/lib/files"
+import { writeLocalGitExcludesSync } from "../../src/lib/git"
 import { buildWorkspaceEnv, mergeEnv, writeEnvFiles } from "../../src/lib/workspace-env"
 import { buildResolvers, resolveSecrets } from "../../src/lib/secrets"
 import { allocatePorts } from "../../src/lib/ports"
@@ -172,6 +173,55 @@ describe("files, env, secrets, ports, and config real fixtures", () => {
       expect(result.error).toContain("tracked.txt")
     }
     expect(readFileSync(join(repoPath, "tracked.txt"), "utf8")).toBe("tracked\n")
+  })
+
+  test("repo-level files.sync writes local excludes through linked worktree common git dir", () => {
+    const repoPath = join(tmpDir, "main-repo")
+    const worktreePath = join(tmpDir, "linked-worktree")
+    mkdirSync(repoPath, { recursive: true })
+    execSync("git init", gitExecOptions(repoPath, tmpDir))
+    writeFileSync(join(repoPath, "README.md"), "initial\n")
+    execSync("git add README.md && git commit -m initial", gitExecOptions(repoPath, tmpDir))
+    execSync(`git worktree add -b sync-worktree ${worktreePath}`, gitExecOptions(repoPath, tmpDir))
+
+    writeFileSync(join(repoPath, "source-file.txt"), "file sync\n")
+    makeFileTree(repoPath, { "source-dir/nested.txt": "dir sync\n" })
+
+    const commonGitDir = execSync("git rev-parse --git-common-dir", gitExecOptions(worktreePath, tmpDir)).toString().trim()
+    const excludePath = join(commonGitDir, "info", "exclude")
+    mkdirSync(join(commonGitDir, "info"), { recursive: true })
+    writeFileSync(excludePath, "# custom user line\n")
+
+    const repo: WorkspaceRepo = {
+      name: "linked",
+      repo: "linked",
+      type: "typescript",
+      mode: "worktree",
+      main_path: repoPath,
+      task_path: worktreePath,
+      files: {
+        sync: [
+          { source: "source-file.txt", target: "synced/file.txt", git_exclude: true },
+          { source: "source-dir", target: "synced/dir", git_exclude: true },
+        ],
+      },
+    }
+
+    const result = applyFileOpsForRepo({ path: repoPath }, repo)
+
+    expect(result.ok).toBe(true)
+    const exclude = readFileSync(excludePath, "utf8")
+    expect(exclude).toContain("# custom user line")
+    expect(exclude).toContain("/synced/file.txt")
+    expect(exclude).toContain("/synced/dir/")
+    expect(exclude).toContain("/synced/dir/**")
+    expect(execSync("git check-ignore synced/file.txt", gitExecOptions(worktreePath, tmpDir)).toString().trim()).toBe("synced/file.txt")
+    expect(execSync("git check-ignore synced/dir/nested.txt", gitExecOptions(worktreePath, tmpDir)).toString().trim()).toBe("synced/dir/nested.txt")
+
+    writeLocalGitExcludesSync(worktreePath, ["/synced/file.txt", "/synced/dir/", "/synced/dir/**"])
+    const repeated = readFileSync(excludePath, "utf8")
+    expect(repeated.match(/\/synced\/file\.txt/g)?.length).toBe(1)
+    expect(repeated.match(/\/synced\/dir\/\*\*/g)?.length).toBe(1)
   })
 
   test("workspace env resolves order, skips secrets on request, and writes env files safely", async () => {

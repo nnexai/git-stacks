@@ -226,6 +226,30 @@ describe("createWorkspace", () => {
         labels: ["template:shared", "team:platform", "cli:one"],
       })
     })
+
+    test("passes sync-bearing repo and workspace files through file-op surfaces", async () => {
+      const repos = makeRepos(["a"])
+      repos[0]!.files = { sync: [{ source: "repo-src", target: "repo-target", git_exclude: true }] }
+      const wsFiles = { sync: [{ source: "ws-src", target: "ws-target", git_exclude: true }] }
+
+      const result = await createWorkspace({
+        wsName: "test-ws",
+        branch: "feature/test",
+        repos,
+        wsFiles,
+      })
+
+      expect(result.ok).toBe(true)
+      expect(applyFileOpsForRepoMock).toHaveBeenCalledWith(
+        expect.objectContaining({ files: repos[0]!.files }),
+        expect.objectContaining({ files: repos[0]!.files }),
+      )
+      expect(applyFileOpsForWorkspaceMock).toHaveBeenCalledWith(
+        { files: wsFiles },
+        expect.objectContaining({ files: wsFiles }),
+        expect.stringContaining("/tasks/test-ws"),
+      )
+    })
   })
 
   describe("worktree failure mid-stream (Behavior 2 — success criterion 1)", () => {

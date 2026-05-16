@@ -362,6 +362,23 @@ describe("applyFileOpsForWorkspace", () => {
     expect(fail("source/file.txt", "existing-link")).toMatchObject({ ok: false })
     expect(fail("source/file.txt", "dangling-link")).toMatchObject({ ok: false })
   })
+
+  test("workspace-level files.sync ignores git_exclude and does not write local excludes", () => {
+    const wsRoot = join(tmp, "workspace-root")
+    mkdir(tmp, "workspace-root")
+    mkdir(wsRoot, ".git/info")
+    write(wsRoot, "source/file.txt", "workspace sync\n")
+
+    const result = applyFileOpsForWorkspace(
+      { files: { sync: [{ source: "source/file.txt", target: "synced/file.txt", git_exclude: true }] } },
+      { repos: [] } as Partial<Workspace> as Workspace,
+      wsRoot
+    )
+
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(wsRoot, "synced/file.txt"), "utf-8")).toBe("workspace sync\n")
+    expect(existsSync(join(wsRoot, ".git/info/exclude"))).toBe(false)
+  })
 })
 
 // --- applyFileOpsForRepo ---
@@ -420,6 +437,30 @@ describe("applyFileOpsForRepo", () => {
     expect(result.ok).toBe(true)
     expect(existsSync(join(taskPath, "source-file.txt"))).toBe(true)
     expect(existsSync(join(taskPath, "ws-file.txt"))).toBe(true)
+  })
+
+  test("repo-level files.sync does not write excludes when materialization fails", () => {
+    const repoPath = join(tmp, "repo")
+    mkdir(tmp, "repo/.git/info")
+    write(repoPath, ".git/info/exclude", "# existing\n")
+    write(repoPath, "source/file.txt", "new\n")
+    write(repoPath, "existing.txt", "old\n")
+
+    const repo: Partial<WorkspaceRepo> = {
+      name: "repo",
+      repo: "repo",
+      type: "typescript",
+      mode: "trunk",
+      main_path: repoPath,
+      files: {
+        sync: [{ source: "source/file.txt", target: "existing.txt", git_exclude: true }],
+      },
+    }
+
+    const result = applyFileOpsForRepo({ path: repoPath }, repo as WorkspaceRepo)
+
+    expect(result.ok).toBe(false)
+    expect(readFileSync(join(repoPath, ".git/info/exclude"), "utf-8")).toBe("# existing\n")
   })
 })
 

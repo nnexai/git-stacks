@@ -2460,4 +2460,28 @@ describe("openWorkspace secret resolution", () => {
     expect(result.error).toContain("Secret resolution failed")
     expect(result.error).toContain("GS_PHASE61_SECRET")
   })
+
+  test("applies sync-bearing repo files through openWorkspace file-op surface", async () => {
+    const wsName = uniqueWsName("sync-open")
+    const registryName = uniqueRegistryName("sync-open")
+    const { repos, wsRoot } = await setupWorkspaceFixture(tmp, wsName, registryName)
+    mkdirSync(join(repos[0].repoPath, "source"), { recursive: true })
+    writeFileSync(join(repos[0].repoPath, "source", "config.txt"), "open sync\n")
+
+    const ws = readWorkspace(wsName)
+    ws.repos[0]!.files = {
+      sync: [{ source: "source/config.txt", target: "synced/config.txt", git_exclude: true }],
+    }
+    writeWorkspace(ws)
+    writeGlobalConfig({
+      workspace_root: wsRoot,
+      integrations: {},
+      ports: { range_start: 10000, range_end: 65000 },
+    })
+
+    const result = await openWorkspace(wsName, { ide: false, cmux: false }, () => {})
+
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(repos[0].worktreePath, "synced", "config.txt"), "utf-8")).toBe("open sync\n")
+  })
 })
