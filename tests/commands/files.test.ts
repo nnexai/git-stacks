@@ -86,6 +86,46 @@ describe("files command", () => {
     expect(result.stdout).toContain("omitted")
   })
 
+  test("files status --json emits machine-readable sync entries", () => {
+    const { wsName } = setupFilesWorkspace(tmpDir, cfgDir)
+
+    const result = runCli(["files", "status", wsName, "--json"], { baseDir: tmpDir, configDir: cfgDir })
+    expectSuccessful(result)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.workspace).toBe(wsName)
+    expect(Array.isArray(parsed.entries)).toBe(true)
+    expect(parsed.summary).toHaveProperty("total")
+    expect(Array.isArray(parsed.warnings)).toBe(true)
+
+    const syncEntry = parsed.entries.find((entry: any) => entry.type === "sync")
+    expect(syncEntry).toMatchObject({
+      scope: "workspace",
+      repo: null,
+      type: "sync",
+      target: "target",
+      state: "diverged",
+    })
+    expect(typeof syncEntry.counts.sourceOnly).toBe("number")
+    expect(typeof syncEntry.counts.targetOnly).toBe("number")
+    expect(typeof syncEntry.counts.differing).toBe("number")
+    expect(typeof syncEntry.counts.equal).toBe("number")
+  })
+
+  test("files status --json --verbose caps details with truncation metadata", () => {
+    const { wsName, root } = setupFilesWorkspace(tmpDir, cfgDir)
+    for (let i = 0; i < 55; i += 1) {
+      write(root, `source/many-${i}.txt`, `${i}\n`)
+    }
+
+    const result = runCli(["files", "status", wsName, "--json", "--verbose"], { baseDir: tmpDir, configDir: cfgDir })
+    expectSuccessful(result)
+    const parsed = JSON.parse(result.stdout)
+    const syncEntry = parsed.entries.find((entry: any) => entry.type === "sync")
+    expect(syncEntry.details.sourceOnly.paths.length).toBeLessThanOrEqual(50)
+    expect(syncEntry.details.sourceOnly.truncated).toBe(true)
+    expect(syncEntry.details.sourceOnly.omitted).toBeGreaterThan(0)
+  })
+
   test("files pull --dry-run reports planned writes without changing targets", () => {
     const { wsName, root } = setupFilesWorkspace(tmpDir, cfgDir)
 
@@ -97,6 +137,28 @@ describe("files command", () => {
     expect(readFileSync(join(root, "target/differing.txt"), "utf-8")).toBe("target\n")
   })
 
+  test("files pull --json --dry-run emits operation results and exits zero for preview refusals", () => {
+    const { wsName, root } = setupFilesWorkspace(tmpDir, cfgDir)
+
+    const result = runCli(["files", "pull", wsName, "--json", "--dry-run"], { baseDir: tmpDir, configDir: cfgDir })
+    expect(result.stderr, formatCliFailure(result)).toBe("")
+    expect(result.exitCode, formatCliFailure(result)).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed).toMatchObject({
+      workspace: wsName,
+      operation: "pull",
+      mode: "pull",
+      dryRun: true,
+      force: false,
+    })
+    expect(Array.isArray(parsed.results)).toBe(true)
+    expect(typeof parsed.summary.writes).toBe("number")
+    expect(typeof parsed.summary.deletes).toBe("number")
+    expect(typeof parsed.summary.refusals).toBe("number")
+    expect(parsed.summary.refusals).toBeGreaterThan(0)
+    expect(existsSync(join(root, "target/source-only.txt"))).toBe(false)
+  })
+
   test("files push --dry-run reports planned writes without changing sources", () => {
     const { wsName, root } = setupFilesWorkspace(tmpDir, cfgDir)
 
@@ -106,6 +168,28 @@ describe("files command", () => {
     expect(result.stdout).toContain("refused")
     expect(existsSync(join(root, "source/target-only.txt"))).toBe(false)
     expect(readFileSync(join(root, "source/differing.txt"), "utf-8")).toBe("source\n")
+  })
+
+  test("files push --json --dry-run emits operation results and exits zero for preview refusals", () => {
+    const { wsName, root } = setupFilesWorkspace(tmpDir, cfgDir)
+
+    const result = runCli(["files", "push", wsName, "--json", "--dry-run"], { baseDir: tmpDir, configDir: cfgDir })
+    expect(result.stderr, formatCliFailure(result)).toBe("")
+    expect(result.exitCode, formatCliFailure(result)).toBe(0)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed).toMatchObject({
+      workspace: wsName,
+      operation: "push",
+      mode: "push",
+      dryRun: true,
+      force: false,
+    })
+    expect(Array.isArray(parsed.results)).toBe(true)
+    expect(typeof parsed.summary.writes).toBe("number")
+    expect(typeof parsed.summary.deletes).toBe("number")
+    expect(typeof parsed.summary.refusals).toBe("number")
+    expect(parsed.summary.refusals).toBeGreaterThan(0)
+    expect(existsSync(join(root, "source/target-only.txt"))).toBe(false)
   })
 
   test("omitted workspace resolves from cwd inside a workspace repo task path", () => {
@@ -123,5 +207,17 @@ describe("files command", () => {
     expect(result.exitCode).toBe(1)
     expect(result.stdout).toContain("source-only")
     expect(result.stdout).toContain("differing")
+  })
+
+  test("files pull --json exits nonzero with parseable refusal output when applying", () => {
+    const { wsName } = setupFilesWorkspace(tmpDir, cfgDir)
+
+    const result = runCli(["files", "pull", wsName, "--json"], { baseDir: tmpDir, configDir: cfgDir })
+    expect(result.stderr, formatCliFailure(result)).toBe("")
+    expect(result.exitCode).toBe(1)
+    const parsed = JSON.parse(result.stdout)
+    expect(parsed.ok).toBe(false)
+    expect(parsed.summary.refusals).toBeGreaterThan(0)
+    expect(Array.isArray(parsed.errors)).toBe(true)
   })
 })
