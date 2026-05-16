@@ -238,7 +238,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 **Milestone Goal:** Make workspace file materialization useful for private planning/agent configuration through bidirectional real-file sync, then add a GitLab-first forge source path for creating normal template-backed workspaces from merge requests.
 
 - [x] **Phase 89: Files Sync Schema and Materialization** - Add `files.sync` to template/workspace schemas and materialize sync sources into workspace targets as real files with optional local git excludes. (completed 2026-05-16)
-- [ ] **Phase 90: Files Command Surface and Conflict Policy** - Add `git-stacks files status|pull|push`, lightweight drift detection, conservative overwrite/delete behavior, and explicit sync-back semantics.
+- [x] **Phase 90: Files Command Surface and Conflict Policy** - Add `git-stacks files status|pull|push`, lightweight drift detection, conservative overwrite/delete behavior, and explicit sync-back semantics. (completed 2026-05-16)
 - [ ] **Phase 91: Files Sync Integration and Machine Output** - Integrate sync behavior with create/open/recreate flows where appropriate, expose stable JSON/status output, and keep future TUI hooks available without building broad TUI changes.
 - [ ] **Phase 92: Forge Source Research and Resolver Design** - Research GitLab MR, Gitea PR, and GitHub PR source resolution with GitLab first; design enabled-forge resolver contracts, repo matching, and validation boundaries.
 - [ ] **Phase 93: Forge Source Workspace Creation** - Add `git-stacks new --source <forge-url> --template <template>` for GitLab-first forge changes, including repo matching, source checkout/fetch, workspace metadata, labels, and clear failures.

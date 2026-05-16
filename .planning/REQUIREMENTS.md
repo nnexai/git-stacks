@@ -12,11 +12,11 @@ Requirements for v0.18.0 Workspace File Sync and Forge Sources. Each maps to roa
 - [x] **FSYNC-01**: User can define `files.sync` entries in templates and workspaces with `source`, `target`, and optional `git_exclude` fields.
 - [x] **FSYNC-02**: User can pull a sync source into a workspace target as real files without using symlinks.
 - [x] **FSYNC-03**: User can configure synced targets to be excluded through the worktree-local `.git/info/exclude` file, not through project `.gitignore`.
-- [ ] **FSYNC-04**: User can run `git-stacks files status [workspace]` to see copy/symlink/sync file materialization state, with sync drift visible at a useful summary level.
-- [ ] **FSYNC-05**: User can run `git-stacks files pull [workspace]` to refresh sync targets from their sources.
-- [ ] **FSYNC-06**: User can run `git-stacks files push [workspace]` to explicitly sync workspace target changes back to their sources.
-- [ ] **FSYNC-07**: Sync push detects obvious conflicts and refuses unsafe writes by default without requiring a full per-file hash manifest for large trees.
-- [ ] **FSYNC-08**: Sync delete/overwrite behavior is conservative by default and requires explicit flags or documented policy before removing source-side files.
+- [x] **FSYNC-04**: User can run `git-stacks files status [workspace]` to see copy/symlink/sync file materialization state, with sync drift visible at a useful summary level.
+- [x] **FSYNC-05**: User can run `git-stacks files pull [workspace]` to refresh sync targets from their sources.
+- [x] **FSYNC-06**: User can run `git-stacks files push [workspace]` to explicitly sync workspace target changes back to their sources.
+- [x] **FSYNC-07**: Sync push detects obvious conflicts and refuses unsafe writes by default without requiring a full per-file hash manifest for large trees.
+- [x] **FSYNC-08**: Sync delete/overwrite behavior is conservative by default and requires explicit flags or documented policy before removing source-side files.
 - [ ] **FSYNC-09**: Sync commands support machine-readable output suitable for future TUI and automation use.
 
 ### Forge Sources
@@ -74,11 +74,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FSYNC-01 | Phase 89 | Complete |
 | FSYNC-02 | Phase 89 | Complete |
 | FSYNC-03 | Phase 89 | Complete |
-| FSYNC-04 | Phase 90 | Pending |
-| FSYNC-05 | Phase 90 | Pending |
-| FSYNC-06 | Phase 90 | Pending |
-| FSYNC-07 | Phase 90 | Pending |
-| FSYNC-08 | Phase 90 | Pending |
+| FSYNC-04 | Phase 90 | Complete |
+| FSYNC-05 | Phase 90 | Complete |
+| FSYNC-06 | Phase 90 | Complete |
+| FSYNC-07 | Phase 90 | Complete |
+| FSYNC-08 | Phase 90 | Complete |
 | FSYNC-09 | Phase 91 | Pending |
 | FSRC-01 | Phase 93 | Pending |
 | FSRC-02 | Phase 92 | Pending |

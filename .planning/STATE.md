@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.18.0
 milestone_name: Workspace File Sync and Forge Sources
 status: executing
-stopped_at: Phase 92 context gathered
-last_updated: "2026-05-16T09:15:26.085Z"
-last_activity: 2026-05-16 -- Phase 91 planning complete
+stopped_at: Phase 90 complete
+last_updated: "2026-05-16T09:21:07.000Z"
+last_activity: 2026-05-16 -- Phase 90 executed and verified
 progress:
   total_phases: 29
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 10
-  completed_plans: 3
-  percent: 3
+  completed_plans: 6
+  percent: 6
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 90 — files command surface and conflict policy; Phase 91 is planned and depends on Phase 90 execution.
+**Current focus:** Phase 91 — files sync integration and machine output; Phase 90 command surface is complete.
 
 ## Current Position
 
-Phase: 90
-Plan: Not started
+Phase: 91
+Plan: Ready to execute
 Status: Ready to execute
-Last activity: 2026-05-16 -- Phase 91 planning complete
+Last activity: 2026-05-16 -- Phase 90 executed and verified
 
 ## Performance Metrics
 
@@ -127,6 +127,7 @@ Last activity: 2026-05-16 -- Phase 91 planning complete
 - Phase 87 inserted after Phase 86: Integration Contract and Source-Module Coverage
 - Phase 88 inserted after Phase 87: Functional Coverage Readiness Gate
 - v0.18.0 milestone initialized on 2026-05-15: Phase 89-94 cover `files.sync`, `git-stacks files status|pull|push`, GitLab-first forge source research, `git-stacks new --source <forge-url>`, and release docs.
+- Phase 90 completed on 2026-05-16: `git-stacks files status|pull|push` now exposes current-tree sync drift, conservative default pull/push behavior, dry-run previews, and explicit force mirroring.
 - Pending todo "Add bidirectional files sync" tagged to Phase 89.
 - Pending todo "Create workspace from forge source" tagged to Phase 92.
 - Phase 93.1 inserted after Phase 93: Parallel integration test runner and coherent coverage merging (URGENT)
@@ -154,9 +155,9 @@ None blocking. Concern: forge source creation requires GitLab-first research bec
 ## Session Continuity
 
 Last session: 2026-05-16T09:15:26.076Z
-Stopped at: Phase 92 context gathered
-Resume file: .planning/phases/92-forge-source-research-and-resolver-design/92-CONTEXT.md
+Stopped at: Phase 90 complete
+Resume file: .planning/phases/90-files-command-surface-and-conflict-policy/90-03-SUMMARY.md
 
 ## Operator Next Steps
 
-- Start Phase 89 with `$gsd-discuss-phase 89` to lock the `files.sync` schema, materialization rules, and local exclude behavior.
+- Execute Phase 91 with `$gsd-execute-phase 91` to add lifecycle integration and machine-readable output.
