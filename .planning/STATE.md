@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.18.0
 milestone_name: Workspace File Sync and Forge Sources
-status: ready_to_plan
-stopped_at: Phase 92 complete (4/4) — ready to discuss Phase 93
-last_updated: 2026-05-16T09:51:19.246Z
-last_activity: 2026-05-16 -- Phase 91 execution complete
+status: planning
+stopped_at: Phase 94 context gathered
+last_updated: "2026-05-16T09:56:29.107Z"
+last_activity: 2026-05-16
 progress:
   total_phases: 29
   completed_phases: 4
@@ -160,9 +160,9 @@ None blocking. Concern: forge source creation requires GitLab-first research bec
 
 ## Session Continuity
 
-Last session: 2026-05-16T09:50:51.341Z
-Stopped at: Completed Phase 91 execute-phase
-Resume file: None
+Last session: 2026-05-16T09:56:29.100Z
+Stopped at: Phase 94 context gathered
+Resume file: .planning/phases/94-v0-18-0-docs-and-release-prep/94-CONTEXT.md
 
 ## Operator Next Steps
 
