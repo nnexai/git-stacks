@@ -235,6 +235,46 @@ describe("GlobalConfigSchema secrets", () => {
   })
 })
 
+describe("Forge source config shapes", () => {
+  test("GlobalConfigSchema keeps integration objects with optional base_url", () => {
+    const config = GlobalConfigSchema.parse({
+      integrations: {
+        gitlab: { enabled: true, base_url: "https://gitlab.example.com" },
+        gitea: { enabled: true, base_url: "https://git.example.test" },
+        github: { enabled: true },
+      },
+    })
+    expect(config.integrations.gitlab).toEqual({ enabled: true, base_url: "https://gitlab.example.com" })
+    expect(config.integrations.gitea).toEqual({ enabled: true, base_url: "https://git.example.test" })
+    expect(config.integrations.github).toEqual({ enabled: true })
+  })
+
+  test("RepoRegistryEntrySchema accepts forge metadata with repo path", () => {
+    const entry = RepoRegistryEntrySchema.parse({
+      name: "api",
+      local_path: "/home/dev/api",
+      forge: "gitlab",
+      forge_metadata: {
+        forge: "gitlab",
+        base_url: "https://gitlab.example.com",
+        repo_path: "group/subgroup/api",
+      },
+    })
+    expect(entry.forge).toBe("gitlab")
+    expect(entry.forge_metadata?.repo_path).toBe("group/subgroup/api")
+  })
+
+  test("RepoRegistryEntrySchema stays compatible with forge only", () => {
+    const entry = RepoRegistryEntrySchema.parse({
+      name: "api",
+      local_path: "/home/dev/api",
+      forge: "gitea",
+    })
+    expect(entry.forge).toBe("gitea")
+    expect(entry.forge_metadata).toBeUndefined()
+  })
+})
+
 // --- expandBranchPattern ---
 
 describe("expandBranchPattern", () => {
