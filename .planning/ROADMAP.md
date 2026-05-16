@@ -331,7 +331,13 @@ Plans:
   3. Missing, ambiguous, trunk-mode, or dir-mode repo matches produce clear failures and explicit override guidance where appropriate.
   4. Created workspaces record source metadata in workspace YAML.
   5. Created workspaces receive useful review/source labels such as `review`, forge id, and change number.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] `93-01-PLAN.md` - Add the source CLI contract, resolver handoff, repo override behavior, and dry-run preview.
+- [ ] `93-02-PLAN.md` - Fetch source refs with plain Git and hand the matched repo into normal worktree creation.
+- [ ] `93-03-PLAN.md` - Persist the dedicated workspace `source` block and preserve the D-15 no-auto-label boundary.
+- [ ] `93-04-PLAN.md` - Cover GitLab, Gitea, and GitHub provider paths through local contracts and final source-workspace gates.
 
 ### Phase 93.1: Parallel integration test runner and coherent coverage merging (INSERTED)
 
