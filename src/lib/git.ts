@@ -1,6 +1,6 @@
 import { $ } from "bun"
-import { existsSync, statSync } from "fs"
-import { join } from "path"
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs"
+import { isAbsolute, join, resolve } from "path"
 
 export function isGitTrackedPathSync(repoPath: string, relPath: string): boolean {
   const result = Bun.spawnSync([
@@ -21,6 +21,49 @@ export function isGitTrackedPathSync(repoPath: string, relPath: string): boolean
 export async function isGitTrackedPath(repoPath: string, relPath: string): Promise<boolean> {
   const result = await $`git -C ${repoPath} ls-files --error-unmatch -- ${relPath}`.quiet().nothrow()
   return result.exitCode === 0
+}
+
+export function resolveCommonGitDirSync(repoPath: string): string {
+  const result = Bun.spawnSync([
+    "git",
+    "-C",
+    repoPath,
+    "rev-parse",
+    "--git-common-dir",
+  ], {
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+
+  if (result.exitCode !== 0) {
+    const stderr = new TextDecoder().decode(result.stderr).trim()
+    throw new Error(stderr || "git rev-parse --git-common-dir failed")
+  }
+
+  const raw = new TextDecoder().decode(result.stdout).trim()
+  if (!raw) throw new Error("git rev-parse --git-common-dir returned an empty path")
+  return isAbsolute(raw) ? raw : resolve(repoPath, raw)
+}
+
+export function writeLocalGitExcludesSync(repoPath: string, entries: string[]): string {
+  const commonGitDir = resolveCommonGitDirSync(repoPath)
+  const infoDir = join(commonGitDir, "info")
+  const excludePath = join(infoDir, "exclude")
+  mkdirSync(infoDir, { recursive: true })
+
+  const existing = existsSync(excludePath) ? readFileSync(excludePath, "utf8") : ""
+  const lines = existing.length > 0 ? existing.split(/\r?\n/) : []
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
+  const seen = new Set(lines)
+  for (const entry of entries) {
+    if (!seen.has(entry)) {
+      lines.push(entry)
+      seen.add(entry)
+    }
+  }
+
+  writeFileSync(excludePath, `${lines.join("\n")}${lines.length > 0 ? "\n" : ""}`)
+  return excludePath
 }
 
 export async function checkBranchExists(repoPath: string, branch: string): Promise<boolean> {

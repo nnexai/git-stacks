@@ -2,7 +2,7 @@ import { cpSync, symlinkSync, lstatSync, mkdirSync } from "fs"
 import { join, dirname, basename, isAbsolute, normalize, resolve, relative, sep } from "path"
 import { expandHome } from "./paths"
 import type { WorkspaceRepo, Workspace, Files, FileSyncEntry } from "./config"
-import { isGitTrackedPathSync } from "./git"
+import { isGitTrackedPathSync, writeLocalGitExcludesSync } from "./git"
 
 export type ApplyResult = { ok: true; warnings?: string[] } | { ok: false; error: string }
 
@@ -133,6 +133,22 @@ function applySyncEntry(entry: FileSyncEntry, sourceBaseDir: string, destDir: st
 
   mkdirSync(dirname(target.path), { recursive: true })
   cpSync(sourcePath, target.path, { recursive: true })
+
+  if (repoPath && entry.git_exclude === true) {
+    const sourceStats = lstatSync(sourcePath)
+    const patterns = sourceStats.isDirectory()
+      ? [`/${target.rel}/`, `/${target.rel}/**`]
+      : [`/${target.rel}`]
+    try {
+      writeLocalGitExcludesSync(repoPath, patterns)
+    } catch (err) {
+      return {
+        ok: false,
+        error: `git_exclude failed for ${target.rel}: ${err instanceof Error ? err.message : String(err)}`,
+      }
+    }
+  }
+
   return { ok: true }
 }
 

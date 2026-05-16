@@ -171,6 +171,7 @@ beforeEach(() => {
 
 afterAll(() => {
   for (const dir of tempDirs) cleanup(dir)
+  mock.restore()
 })
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -228,7 +229,7 @@ describe("createWorkspace", () => {
     })
 
     test("passes sync-bearing repo and workspace files through file-op surfaces", async () => {
-      const repos = makeRepos(["a"])
+      const repos = makeRepos(["a"]) as Array<ReturnType<typeof makeRepos>[number] & { files?: any }>
       repos[0]!.files = { sync: [{ source: "repo-src", target: "repo-target", git_exclude: true }] }
       const wsFiles = { sync: [{ source: "ws-src", target: "ws-target", git_exclude: true }] }
 
