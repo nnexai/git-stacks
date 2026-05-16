@@ -243,7 +243,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 92: Forge Source Research and Resolver Design** - Research GitLab MR, Gitea PR, and GitHub PR source resolution with GitLab first; design enabled-forge resolver contracts, repo matching, and validation boundaries. (completed 2026-05-16)
 - [x] **Phase 93: Forge Source Workspace Creation** - Add `git-stacks new --source <forge-url> --template <template>` for GitLab-first forge changes, including repo matching, source checkout/fetch, workspace metadata, labels, and clear failures. (completed 2026-05-16)
 - [x] **Phase 93.1: Parallel Integration Test Runner and Coherent Coverage Merging** - Run isolated integration test files in bounded parallel workers while preserving deterministic output, accurate failure reporting, and one coherent merged coverage result. (completed 2026-05-16)
-- [ ] **Phase 94: v0.18.0 Docs and Release Prep** - Document `files.sync`, `git-stacks files status|pull|push`, forge-source workspace creation, validation limits, and prepare the user-facing v0.18.0 release artifacts.
+- [x] **Phase 94: v0.18.0 Docs and Release Prep** - Document `files.sync`, `git-stacks files status|pull|push`, forge-source workspace creation, validation limits, and prepare the user-facing v0.18.0 release artifacts. (completed 2026-05-16)
 
 ## Phase Details
 
@@ -371,7 +371,7 @@ Plans:
 Plans:
 - [x] `94-01-PLAN.md` - Align workspace/files CLI help and README docs for file sync and forge-source workflows.
 - [x] `94-02-PLAN.md` - Write the user-facing `0.18.0-rc.1` changelog entry and bump release-candidate package metadata.
-- [ ] `94-03-PLAN.md` - Add the repeatable release-candidate smoke gate, dry-run publish check, and RC tag handoff.
+- [x] `94-03-PLAN.md` - Add the repeatable release-candidate smoke gate, dry-run publish check, and RC tag handoff.
 
 ### Phase 74: Template Label CLI & Propagation
 **Goal**: Users can manage labels on templates via CLI, filter templates by label, and labels automatically flow into workspaces at creation time
