@@ -59,6 +59,26 @@ function buildTestProgram(): Command {
     .command("completion [shell]")
     .description("Generate shell completion scripts")
 
+  const filesCmd = new Command("files").description("Inspect and sync workspace files")
+  filesCmd
+    .command("status [workspace]")
+    .description("Show configured file entry status")
+    .option("--json", "Emit machine-readable JSON")
+    .option("--verbose", "Show capped representative paths for sync entries")
+  filesCmd
+    .command("pull [workspace]")
+    .description("Copy sync source changes into workspace targets")
+    .option("--json", "Emit machine-readable JSON")
+    .option("--dry-run", "Show planned writes, deletes, and refusals without changing files")
+    .option("--force", "Mirror source to target, including overwrites and deletes")
+  filesCmd
+    .command("push [workspace]")
+    .description("Copy workspace target changes back to sync sources")
+    .option("--json", "Emit machine-readable JSON")
+    .option("--dry-run", "Show planned writes, deletes, and refusals without changing files")
+    .option("--force", "Mirror target to source, including overwrites and deletes")
+  program.addCommand(filesCmd)
+
   // sync command (has --strategy flag for OPTION_ENUMS testing)
   program
     .command("sync [workspace]")
@@ -369,6 +389,42 @@ describe("generateFish", () => {
     // Correct escaping: -d 'Attach to a workspace'\''s tmux session'
     expect(out).toContain("workspace'\\''s tmux session")
     expect(out).not.toContain("-d 'Attach to a workspace's tmux session'")
+  })
+})
+
+describe("files command completions", () => {
+  test("bash: files subcommands and flags are discoverable", () => {
+    const out = generateBash(buildTestProgram())
+    const section = out.slice(out.indexOf("    files)"), out.indexOf("    sync)"))
+    expect(section).toContain("status pull push")
+    expect(section).toContain("--json")
+    expect(section).toContain("--verbose")
+    expect(section).toContain("--dry-run")
+    expect(section).toContain("--force")
+  })
+
+  test("zsh: files subcommands and scoped flags are discoverable", () => {
+    const out = generateZsh(buildTestProgram())
+    expect(out).toContain("_git_stacks_files()")
+    expect(out).toContain("'status:Show configured file entry status'")
+    expect(out).toContain("'pull:Copy sync source changes into workspace targets'")
+    expect(out).toContain("'push:Copy workspace target changes back to sync sources'")
+    expect(out).toContain("'--json[Emit machine-readable JSON]'")
+    expect(out).toContain("'--verbose[Show capped representative paths for sync entries]'")
+    expect(out).toContain("'--dry-run[Show planned writes, deletes, and refusals without changing files]'")
+    expect(out).toContain("'--force[Mirror source to target, including overwrites and deletes]'")
+  })
+
+  test("fish: files subcommands and scoped flags are discoverable", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain("__fish_seen_subcommand_from files")
+    expect(out).toContain("-a 'status'")
+    expect(out).toContain("-a 'pull'")
+    expect(out).toContain("-a 'push'")
+    expect(out).toContain("-l json")
+    expect(out).toContain("-l verbose")
+    expect(out).toContain("-l dry-run")
+    expect(out).toContain("-l force")
   })
 })
 

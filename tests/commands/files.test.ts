@@ -63,6 +63,33 @@ describe("files command", () => {
 
   afterEach(() => cleanup(tmpDir))
 
+  test("files help exposes subcommands", () => {
+    const result = runCli(["files", "--help"], { baseDir: tmpDir, configDir: cfgDir })
+    expectSuccessful(result)
+    expect(result.stdout).toContain("status")
+    expect(result.stdout).toContain("pull")
+    expect(result.stdout).toContain("push")
+  })
+
+  test("files status help exposes JSON and verbose flags", () => {
+    const result = runCli(["files", "status", "--help"], { baseDir: tmpDir, configDir: cfgDir })
+    expectSuccessful(result)
+    expect(result.stdout).toContain("--json")
+    expect(result.stdout).toContain("--verbose")
+  })
+
+  test("files pull and push help expose JSON dry-run and force flags", () => {
+    const pull = runCli(["files", "pull", "--help"], { baseDir: tmpDir, configDir: cfgDir })
+    const push = runCli(["files", "push", "--help"], { baseDir: tmpDir, configDir: cfgDir })
+    expectSuccessful(pull)
+    expectSuccessful(push)
+    for (const result of [pull, push]) {
+      expect(result.stdout).toContain("--json")
+      expect(result.stdout).toContain("--dry-run")
+      expect(result.stdout).toContain("--force")
+    }
+  })
+
   test("files status prints current sync count labels", () => {
     const { wsName } = setupFilesWorkspace(tmpDir, cfgDir)
 
