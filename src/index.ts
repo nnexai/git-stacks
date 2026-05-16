@@ -12,6 +12,7 @@ import { messageCommand } from "./commands/message"
 import { installCommand } from "./commands/install"
 import { integrationCommand } from "./commands/integration"
 import { labelCommand } from "./commands/label"
+import { filesCommand } from "./commands/files"
 import { configureObservability, silenceObservability } from "./lib/observability"
 import { getVersionString } from "./lib/version"
 
@@ -65,6 +66,7 @@ program.addCommand(messageCommand)
 program.addCommand(installCommand)
 program.addCommand(integrationCommand)
 program.addCommand(labelCommand)
+program.addCommand(filesCommand)
 
 // Register last — program tree must be fully populated before the action runs
 program.addCommand(createCompletionCommand(program))

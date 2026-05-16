@@ -5,7 +5,9 @@ import { homedir } from "os"
 import { makeTmpDir, cleanup, makeFileTree, write, mkdir } from "../helpers"
 import {
   applyEntry,
+  applySyncOperation,
   expandGlob,
+  getFileEntryStatuses,
   isGlobPattern,
   resolveSourcePath,
   mergeFiles,
@@ -378,6 +380,163 @@ describe("applyFileOpsForWorkspace", () => {
     expect(result.ok).toBe(true)
     expect(readFileSync(join(wsRoot, "synced/file.txt"), "utf-8")).toBe("workspace sync\n")
     expect(existsSync(join(wsRoot, ".git/info/exclude"))).toBe(false)
+  })
+})
+
+// --- files status and sync operations ---
+
+describe("files status", () => {
+  let tmp: string
+
+  beforeEach(() => { tmp = makeTmpDir("files-status") })
+  afterEach(() => cleanup(tmp))
+
+  test("reports current-tree status for copy, symlink, and sync entries without manifests", () => {
+    const wsRoot = join(tmp, "workspace-root")
+    mkdir(tmp, "workspace-root")
+    write(wsRoot, "copy-present.txt", "copy\n")
+    symlinkSync(join(wsRoot, "copy-present.txt"), join(wsRoot, "link-present"))
+    write(wsRoot, "source/equal.txt", "same\n")
+    write(wsRoot, "target/equal.txt", "same\n")
+    write(wsRoot, "source/source-only.txt", "source\n")
+    write(wsRoot, "target/target-only.txt", "target\n")
+    write(wsRoot, "source/differing.txt", "source\n")
+    write(wsRoot, "target/differing.txt", "target\n")
+
+    const workspace = {
+      name: "status-ws",
+      repos: [],
+      files: {
+        copy: ["copy-present.txt", "copy-missing.txt"],
+        symlink: ["link-present", "link-missing"],
+        sync: [{ source: "source", target: "target" }],
+      },
+    } as Partial<Workspace> as Workspace
+
+    const rows = getFileEntryStatuses(workspace, wsRoot, { verbose: true })
+    const sync = rows.find((row) => row.kind === "sync")
+    expect(sync?.kind).toBe("sync")
+    if (sync?.kind === "sync") {
+      expect(sync.counts).toMatchObject({ sourceOnly: 1, targetOnly: 1, differing: 1, equal: 1 })
+    }
+    expect(rows).toContainEqual(expect.objectContaining({ kind: "copy", target: "copy-present.txt", state: "materialized" }))
+    expect(rows).toContainEqual(expect.objectContaining({ kind: "copy", target: "copy-missing.txt", state: "missing" }))
+    expect(rows).toContainEqual(expect.objectContaining({ kind: "symlink", target: "link-present", state: "materialized" }))
+    expect(rows).toContainEqual(expect.objectContaining({ kind: "symlink", target: "link-missing", state: "missing" }))
+
+    for (const manifest of [".git-stacks-sync", ".git-stacks-files", "sync-manifest.json", "files-manifest.json"]) {
+      expect(existsSync(join(wsRoot, manifest))).toBe(false)
+      expect(existsSync(join(wsRoot, "source", manifest))).toBe(false)
+      expect(existsSync(join(wsRoot, "target", manifest))).toBe(false)
+    }
+  })
+})
+
+describe("files pull and push policy", () => {
+  let tmp: string
+
+  beforeEach(() => { tmp = makeTmpDir("files-sync-policy") })
+  afterEach(() => cleanup(tmp))
+
+  function workspaceFor(source = "source", target = "target"): Workspace {
+    return {
+      name: "sync-ws",
+      repos: [],
+      files: { sync: [{ source, target }] },
+    } as Partial<Workspace> as Workspace
+  }
+
+  test("default pull copies source-only files and refuses target-only plus differing files", () => {
+    const wsRoot = join(tmp, "ws")
+    mkdir(tmp, "ws")
+    write(wsRoot, "source/add.txt", "new\n")
+    let result = applySyncOperation(workspaceFor(), wsRoot, { direction: "pull" })
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(wsRoot, "target/add.txt"), "utf-8")).toBe("new\n")
+
+    write(wsRoot, "source/differing.txt", "source\n")
+    write(wsRoot, "target/differing.txt", "target\n")
+    write(wsRoot, "target/target-only.txt", "target\n")
+    result = applySyncOperation(workspaceFor(), wsRoot, { direction: "pull" })
+    expect(result.ok).toBe(false)
+    const reasons = result.entries.flatMap((entry) => entry.plan.refusals.map((refusal) => refusal.reason))
+    expect(reasons).toContain("target-only")
+    expect(reasons).toContain("differing")
+  })
+
+  test("default push copies target-only files and refuses source-only plus differing files", () => {
+    const wsRoot = join(tmp, "ws")
+    mkdir(tmp, "ws")
+    write(wsRoot, "target/add.txt", "new\n")
+    let result = applySyncOperation(workspaceFor(), wsRoot, { direction: "push" })
+    expect(result.ok).toBe(true)
+    expect(readFileSync(join(wsRoot, "source/add.txt"), "utf-8")).toBe("new\n")
+
+    write(wsRoot, "source/source-only.txt", "source\n")
+    write(wsRoot, "source/differing.txt", "source\n")
+    write(wsRoot, "target/differing.txt", "target\n")
+    result = applySyncOperation(workspaceFor(), wsRoot, { direction: "push" })
+    expect(result.ok).toBe(false)
+    const reasons = result.entries.flatMap((entry) => entry.plan.refusals.map((refusal) => refusal.reason))
+    expect(reasons).toContain("source-only")
+    expect(reasons).toContain("differing")
+  })
+
+  test("dry-run pull and push return planned writes without mutating files", () => {
+    const wsRoot = join(tmp, "ws")
+    mkdir(tmp, "ws")
+    write(wsRoot, "source/pull.txt", "pull\n")
+    write(wsRoot, "target/push.txt", "push\n")
+
+    const pull = applySyncOperation(workspaceFor(), wsRoot, { direction: "pull", dryRun: true })
+    expect(pull.entries[0].plan.writes).toContain("pull.txt")
+    expect(existsSync(join(wsRoot, "target/pull.txt"))).toBe(false)
+
+    const push = applySyncOperation(workspaceFor(), wsRoot, { direction: "push", dryRun: true })
+    expect(push.entries[0].plan.writes).toContain("push.txt")
+    expect(existsSync(join(wsRoot, "source/push.txt"))).toBe(false)
+  })
+
+  test("force pull mirrors source into target and deletes target-only files", () => {
+    const wsRoot = join(tmp, "ws")
+    mkdir(tmp, "ws")
+    write(wsRoot, "source/nested/keep.txt", "source keep\n")
+    write(wsRoot, "source/differing.txt", "source\n")
+    write(wsRoot, "target/differing.txt", "target\n")
+    write(wsRoot, "target/delete-me.txt", "delete\n")
+
+    const result = applySyncOperation(workspaceFor(), wsRoot, { direction: "pull", force: true })
+    expect(result.ok).toBe(true)
+    expect(existsSync(join(wsRoot, "target/delete-me.txt"))).toBe(false)
+    expect(readFileSync(join(wsRoot, "target/differing.txt"), "utf-8")).toBe("source\n")
+    expect(readFileSync(join(wsRoot, "target/nested/keep.txt"), "utf-8")).toBe("source keep\n")
+  })
+
+  test("force push mirrors target into source and deletes source-only files", () => {
+    const wsRoot = join(tmp, "ws")
+    mkdir(tmp, "ws")
+    write(wsRoot, "target/nested/keep.txt", "target keep\n")
+    write(wsRoot, "target/differing.txt", "target\n")
+    write(wsRoot, "source/differing.txt", "source\n")
+    write(wsRoot, "source/delete-me.txt", "delete\n")
+
+    const result = applySyncOperation(workspaceFor(), wsRoot, { direction: "push", force: true })
+    expect(result.ok).toBe(true)
+    expect(existsSync(join(wsRoot, "source/delete-me.txt"))).toBe(false)
+    expect(readFileSync(join(wsRoot, "source/differing.txt"), "utf-8")).toBe("target\n")
+    expect(readFileSync(join(wsRoot, "source/nested/keep.txt"), "utf-8")).toBe("target keep\n")
+  })
+
+  test("force mode rejects traversal source paths before writing", () => {
+    const wsRoot = join(tmp, "ws")
+    mkdir(tmp, "ws")
+    write(tmp, "outside/file.txt", "outside\n")
+    write(wsRoot, "target/existing.txt", "target\n")
+
+    const result = applySyncOperation(workspaceFor("../outside", "target"), wsRoot, { direction: "pull", force: true })
+    expect(result.ok).toBe(false)
+    expect(result.entries[0].error).toMatch(/escapes root/)
+    expect(existsSync(join(wsRoot, "target/file.txt"))).toBe(false)
   })
 })
 
