@@ -111,6 +111,7 @@ function mergeTemplatePorts(templates: Template[]): Record<string, number | null
 function mergeFiles(templates: Template[]): Template["files"] {
   const copy: string[] = []
   const symlink: string[] = []
+  const sync: NonNullable<NonNullable<Template["files"]>["sync"]> = []
   let hasAny = false
 
   for (const tpl of templates) {
@@ -122,12 +123,17 @@ function mergeFiles(templates: Template[]): Template["files"] {
       symlink.push(...tpl.files.symlink)
       hasAny = true
     }
+    if (tpl.files?.sync) {
+      sync.push(...tpl.files.sync)
+      hasAny = true
+    }
   }
 
   if (!hasAny) return undefined
   return {
     ...(copy.length > 0 ? { copy } : {}),
     ...(symlink.length > 0 ? { symlink } : {}),
+    ...(sync.length > 0 ? { sync } : {}),
   }
 }
 

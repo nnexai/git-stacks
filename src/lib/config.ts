@@ -48,10 +48,18 @@ export type RepoType = z.infer<typeof RepoTypeSchema>
 export const ForgeTypeSchema = z.enum(["github", "gitlab", "gitea"]).optional()
 export type ForgeType = z.infer<typeof ForgeTypeSchema>
 
+export const FileSyncEntrySchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  git_exclude: z.boolean().optional(),
+})
+export type FileSyncEntry = z.infer<typeof FileSyncEntrySchema>
+
 export const FilesSchema = z
   .object({
     copy: z.array(z.string()).optional(),
     symlink: z.array(z.string()).optional(),
+    sync: z.array(FileSyncEntrySchema).optional(),
   })
   .optional()
 export type Files = z.infer<typeof FilesSchema>
