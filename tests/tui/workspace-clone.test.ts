@@ -1,5 +1,12 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { makeConfigMock, makeWorkspaceOpsMock } from "../helpers"
+import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { join } from "path"
+import { cleanup, makeConfigMock, makeTmpDir, makeWorkspaceOpsMock } from "../helpers"
+
+const fixtureRoot = makeTmpDir("workspace-clone")
+const workspaceRoot = join(fixtureRoot, "workspaces")
+const tasksRoot = join(workspaceRoot, "tasks")
+
+afterAll(() => cleanup(fixtureRoot))
 
 const mockIntro = mock(() => {})
 const mockOutro = mock(() => {})
@@ -65,7 +72,7 @@ const sourceWorkspace = {
       type: "typescript" as const,
       mode: "worktree" as const,
       main_path: "/repos/frontend",
-      task_path: "/tmp/test-workspaces/tasks/source/frontend",
+      task_path: join(tasksRoot, "source", "frontend"),
       base_branch: "main",
     },
   ],
@@ -76,7 +83,7 @@ const mockReadWorkspace = mock((_name: string) => sourceWorkspace)
 const mockWorkspaceExists = mock((name: string): boolean => name === "source")
 const mockWriteWorkspace = mock((_ws: unknown) => {})
 const mockReadGlobalConfig = mock(() => ({
-  workspace_root: "/tmp/test-workspaces",
+  workspace_root: workspaceRoot,
   integrations: {},
 }))
 const mockReadTemplate = mock((_name: string) => ({
@@ -96,7 +103,7 @@ mock.module("@/lib/config", () => makeConfigMock({
 }))
 
 mock.module("@/lib/paths", () => ({
-  getTasksDir: mock(() => "/tmp/test-workspaces/tasks"),
+  getTasksDir: mock(() => tasksRoot),
 }))
 
 const mockCreateWorktree = mock(async () => {})
@@ -138,7 +145,7 @@ describe("workspace-clone label propagation", () => {
 
     expect(mockCreateWorktree).toHaveBeenCalledWith(
       "/repos/frontend",
-      "/tmp/test-workspaces/tasks/source-copy/frontend",
+      join(tasksRoot, "source-copy", "frontend"),
       "feature/source-copy",
     )
     expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
@@ -148,7 +155,7 @@ describe("workspace-clone label propagation", () => {
       repos: [
         expect.objectContaining({
           name: "frontend",
-          task_path: "/tmp/test-workspaces/tasks/source-copy/frontend",
+          task_path: join(tasksRoot, "source-copy", "frontend"),
         }),
       ],
       labels: ["backend", "sprint:14"],
@@ -195,7 +202,7 @@ describe("clone --non-interactive", () => {
     expect(mockPromptIntegrationOverrides.mock.calls.length).toBe(0)
     expect(mockCreateWorktree).toHaveBeenCalledWith(
       "/repos/frontend",
-      "/tmp/test-workspaces/tasks/dest/frontend",
+      join(tasksRoot, "dest", "frontend"),
       "feature/dest",
     )
     expect(mockWriteWorkspace).toHaveBeenCalledWith(expect.objectContaining({
@@ -242,7 +249,7 @@ describe("clone --non-interactive", () => {
     expect(savedWs.branch).toBe("ticket/99")
     expect(mockCreateWorktree).toHaveBeenCalledWith(
       "/repos/frontend",
-      "/tmp/test-workspaces/tasks/dest/frontend",
+      join(tasksRoot, "dest", "frontend"),
       "ticket/99",
     )
   })

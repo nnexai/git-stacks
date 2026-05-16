@@ -1,5 +1,13 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
-import { makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeConfigMock } from "../helpers"
+import { afterAll, describe, test, expect, mock, beforeEach } from "bun:test"
+import { join } from "path"
+import { cleanup, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeConfigMock, makeTmpDir } from "../helpers"
+
+const fixtureRoot = makeTmpDir("workspace-edit")
+const workspaceRoot = join(fixtureRoot, "workspaces")
+const tasksRoot = join(workspaceRoot, "tasks")
+const editorTarget = join(fixtureRoot, "workspace.yml")
+
+afterAll(() => cleanup(fixtureRoot))
 
 // Shared mock instances used by @/tui/utils mock below
 const mockIntro = mock(() => {})
@@ -99,7 +107,7 @@ const baseWorkspace = {
 const mockReadWorkspace = mock((_name: string) => ({ ...baseWorkspace }))
 const mockWriteWorkspace = mock((_ws: unknown) => {})
 const mockReadGlobalConfig = mock(() => ({
-  workspace_root: "/tmp/test-workspaces",
+  workspace_root: workspaceRoot,
   integrations: {
     vscode: { enabled: true },
   },
@@ -129,7 +137,7 @@ mock.module("@/lib/config", () => makeConfigMock({
 
 // Mock lib/paths, lib/git, lib/detect, lib/lifecycle, lib/files, lib/workspace-ops
 mock.module("@/lib/paths", () => ({
-  getTasksDir: mock(() => "/tmp/test-workspaces/tasks"),
+  getTasksDir: mock(() => tasksRoot),
   expandHome: mock((p: string) => p),
 }))
 
@@ -178,7 +186,7 @@ mock.module("@/lib/workspace-status", () => makeWorkspaceStatusMock({
 }))
 
 mock.module("@/lib/workspace-yaml", () => makeWorkspaceYamlMock({
-  editWorkspaceYaml: mock(() => ({ path: "/tmp/test.yml", validate: () => ({ ok: true }) })),
+  editWorkspaceYaml: mock(() => ({ path: editorTarget, validate: () => ({ ok: true }) })),
 }))
 
 mock.module("@/lib/workspace-git", () => makeWorkspaceGitMock({
