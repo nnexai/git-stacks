@@ -318,10 +318,12 @@ Plans:
   3. Workspace details use structured sections ordered by operational value: attention/messages, repos, file config/status, source/issue links, integrations, notes, and config.
   4. Workspace notes and file status appear as compact summaries in details without replacing their full command surfaces.
   5. Narrow, medium, and wide terminal snapshots cover row truncation, grouped headers, detail ordering, file status display, note summary, and contextual footers.
-**Plans**: TBD
+**Plans**: 3
 
 Plans:
-- [ ] TBD
+- [ ] `98-01-PLAN.md` - Workspace list density and grouping modes
+- [ ] `98-02-PLAN.md` - Ordered scrollable workspace detail sections
+- [ ] `98-03-PLAN.md` - Dashboard footer and snapshot acceptance coverage
 
 ### Phase 99: Dashboard Actions and Correctness Polish
 **Goal**: Dashboard action menus expose the missing useful actions and dashboard create flows surface all rollback progress.
