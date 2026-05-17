@@ -25,7 +25,7 @@ Requirements for v0.19.0 Operator Control Center. Each maps to roadmap phases.
 - [ ] **TUI-01**: User sees a denser `git-stacks manage` workspace list/detail layout that preserves the current tabbed list/detail model and avoids dashboard-style unrelated panels.
 - [ ] **TUI-02**: User can group or filter workspaces beyond labels when useful, while list rows continue to expose concrete reasons through existing status tokens.
 - [ ] **TUI-03**: Workspace detail sections are ordered by operational value, including attention/messages, repos, file config/status, source/issue links, integrations, notes, and workspace config.
-- [ ] **TUI-04**: TUI file status display reuses the v0.18.0 files status model so copy, symlink, and sync mappings show configured paths, drift, missing targets, and unsafe states without duplicating sync logic.
+- [x] **TUI-04**: TUI file status display reuses the v0.18.0 files status model so copy, symlink, and sync mappings show configured paths, drift, missing targets, and unsafe states without duplicating sync logic.
 - [ ] **TUI-05**: User can edit repo configuration from the Repos tab action menu with behavior consistent with existing workspace/template edit flows.
 - [ ] **TUI-06**: User can open a linked workspace issue from the workspace action menu when issue metadata is configured.
 - [ ] **TUI-07**: TUI changes include focused terminal snapshot or component coverage for narrow/medium/wide rows, grouped headers, detail section ordering, file status display, note summary, and contextual footers.
