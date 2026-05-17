@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.19.0
 milestone_name: Operator Control Center
-status: verifying
-stopped_at: Completed 98-03-PLAN.md
-last_updated: "2026-05-17T14:05:57.086Z"
+status: executing
+stopped_at: Completed 99-01-PLAN.md
+last_updated: "2026-05-17T14:15:50.867Z"
 last_activity: 2026-05-17
 progress:
   total_phases: 33
   completed_phases: 4
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 12
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-17)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 98 — Grounded Dashboard Control Center
+**Current focus:** Phase 99 — Dashboard Actions and Correctness Polish
 
 ## Current Position
 
-Phase: 98 (Grounded Dashboard Control Center) — VERIFYING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 99 (Dashboard Actions and Correctness Polish) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-05-17
 
 ## Performance Metrics
@@ -128,6 +128,7 @@ Last activity: 2026-05-17
 - [Phase 88]: Phase 88 remains pre-finalization only; archive, tag, publish, cleanup, and $gsd-complete-milestone stay outside this phase.
 - [Phase ?]: [Phase 96]: notes command resolves workspace by explicit arg, cwd, then GS_WORKSPACE_NAME
 - [Phase ?]: [Phase 96]: Notes storage is config-root JSONL with parse-before-mutate fail-closed behavior.
+- [Phase 99]: Repo edit opens `registry.yml` through `editRegistryYaml()` rather than slicing a per-repo entry.
 
 ### Roadmap Evolution
 
@@ -175,10 +176,10 @@ blocking.
 
 ## Session Continuity
 
-Last session: 2026-05-17T14:05:57.079Z
-Stopped at: Completed 98-03-PLAN.md
+Last session: 2026-05-17T14:15:19.942Z
+Stopped at: Completed 99-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
 
-- Start execution with `$gsd-execute-phase 95`.
+- Continue execution with `$gsd-execute-phase 99`.
