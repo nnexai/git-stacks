@@ -59,6 +59,9 @@ mock.module("../../../src/lib/integrations/types", () => ({
   }),
   resolveEnabled: mock(() => true),
   isConditional: mock((integration: { applies?: unknown }) => typeof integration.applies === "function"),
+  isGenerator: mock(() => false),
+  isCleaner: mock(() => false),
+  isWindowDetecting: mock(() => false),
 }))
 
 // Mock config module
@@ -95,6 +98,13 @@ mock.module("../../../src/lib/config", () => ({
   WorkspaceSchema: {} as any,
   TemplateSchema: {} as any,
   RepoRegistryEntrySchema: {} as any,
+}))
+
+mock.module("../../../src/lib/notes", () => ({
+  listWorkspaceNotes: mock(async () => [
+    { text: "Check rollout logs", created: "2026-01-15T10:00:00Z" },
+    { text: "Confirm workspace owner", created: "2026-01-14T10:00:00Z" },
+  ]),
 }))
 
 const { testRender } = await import("@opentui/solid")
@@ -258,7 +268,7 @@ describe("WorkspaceDetail integration display", () => {
 })
 
 describe("WorkspaceDetail linked issues display", () => {
-  test("Test A: workspace with linked jira issue shows Linked Issues section", async () => {
+  test("Test A: workspace with linked jira issue shows Source/Issues section", async () => {
     const entry = makeEntry({
       workspace: {
         settings: {
@@ -273,18 +283,19 @@ describe("WorkspaceDetail linked issues display", () => {
     )
     await renderOnce()
     const frame = captureCharFrame()
-    expect(frame).toContain("Linked Issues:")
+    expect(frame).toContain("Source/Issues:")
     expect(frame).toContain("PROJ-123")
   })
 
-  test("Test B: workspace with no linked issues does not show Linked Issues section", async () => {
+  test("Test B: workspace with no linked issues shows compact Source/Issues zero state", async () => {
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
       () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
-    expect(frame).not.toContain("Linked Issues:")
+    expect(frame).toContain("Source/Issues:")
+    expect(frame).toContain("no linked source issues")
   })
 
   test("Test C: issue key is filtered from config summary parenthetical", async () => {
@@ -316,5 +327,100 @@ describe("WorkspaceDetail linked issues display", () => {
     await renderOnce()
     const frame = captureCharFrame()
     expect(frame).not.toContain("GLOBAL-999")
+  })
+})
+
+describe("WorkspaceDetail operational sections", () => {
+  test("renders locked section order", async () => {
+    const entry = makeEntry({
+      workspace: {
+        labels: ["ops"],
+        template: "my-tpl",
+        settings: {
+          integrations: {
+            jira: { issue: "OPS-42" },
+          },
+        },
+      },
+    })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    await renderOnce()
+    const frame = captureCharFrame()
+    const sections = ["Messages:", "Repos:", "Files:", "Source/Issues:", "Integrations:", "Notes:", "Config:"]
+    const positions = sections.map(section => frame.indexOf(section))
+    expect(positions.every(position => position >= 0)).toBe(true)
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions)
+  })
+
+  test("renders notes only in detail content", async () => {
+    const entry = makeEntry()
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+    )
+    await renderOnce()
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("Notes:")
+    expect(frame).toContain("Check rollout logs")
+  })
+
+  test("renders loaded and error file status without CLI subprocess copy", async () => {
+    const entry = makeEntry()
+    const loadedStatus = {
+      state: "loaded" as const,
+      workspaceName: "test-ws",
+      view: {
+        summary: { total: 2, ok: 1, warnings: 1, errors: 0, attention: 1, sections: 2, byState: {}, byType: {} },
+        warnings: [],
+        errors: [],
+        workspace: {
+          scope: "workspace" as const,
+          name: "test-ws",
+          root: "/tmp/test-ws",
+          summary: { total: 1, ok: 0, warnings: 1, errors: 0, attention: 1, sections: 1, byState: {}, byType: {} },
+          warnings: [],
+          errors: [],
+          entries: [{
+            scope: "workspace" as const,
+            repo: null,
+            type: "sync" as any,
+            target: ".env.local",
+            state: "pullable" as any,
+            severity: "warning" as const,
+            needsAttention: true,
+            hint: "source newer",
+            details: { warnings: [], errors: [] },
+          }],
+        },
+        repos: [],
+      },
+    }
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} fileStatus={loadedStatus as any} />
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("Files:")
+    expect(frame).toContain(".env.local")
+    expect(frame).toContain("source newer")
+
+    const source = await Bun.file("src/tui/dashboard/WorkspaceDetail.tsx").text()
+    expect(source).not.toContain("git-stacks files status")
+    expect(source).not.toContain("Bun.spawn")
+  })
+
+  test("detail scrolling exposes content beyond the first visible page", async () => {
+    const entry = makeEntry({ workspace: { labels: ["ops"], template: "my-tpl" } })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} height={5} scrollOffset={20} />
+    )
+    await renderOnce()
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("Config:")
+    expect(frame).not.toContain("Messages:")
   })
 })

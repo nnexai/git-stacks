@@ -39,3 +39,9 @@ exports[`WorkspaceRow snapshots renders long message text truncated 1`] = `
 " [ ] · my-feature               feat/my-feature           1wt 1tr  ci-pipeline: This is a ver…  69d 
 "
 `;
+
+exports[`WorkspaceRow snapshots renders narrow width row with message attention last 1`] = `">[ ~ my-     feat/   ↑2 ↓1 [backend] [   1wt      ci:"`;
+
+exports[`WorkspaceRow snapshots renders medium width row with message attention last 1`] = `">[ ]~ my-feature       feat/my-feature  ↑2 ↓1  [backend] [       1wt 1tr ~1 ci: Needs… 69d"`;
+
+exports[`WorkspaceRow snapshots renders wide width row with message attention last 1`] = `">[ ]~ my-feature              feat/my-feature                ↑2  ↓1  [backend] [urgent] 1wt 1tr ~1  ci: Needs operator attent… 69d"`;

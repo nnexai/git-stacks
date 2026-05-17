@@ -1,16 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 import { For, Show, createMemo } from "solid-js"
 import { WorkspaceRow } from "./WorkspaceRow"
-import type { WorkspaceEntry } from "./types"
+import type { GroupedWorkspaceItem, WorkspaceEntry } from "./types"
 import type { MessageRecord } from "../../lib/messages"
-
-type GroupedItem =
-  | { kind: "header"; label: string }
-  | { kind: "entry"; entry: WorkspaceEntry; originalIndex: number }
 
 type Props = {
   entries: WorkspaceEntry[]
-  grouped: GroupedItem[]
+  grouped: GroupedWorkspaceItem[]
   isGrouped: boolean
   cursor: number
   selected: Set<number>
@@ -34,10 +30,10 @@ export function WorkspaceList(props: Props) {
   )
 
   const navigableItems = createMemo(() => {
-    if (!props.isGrouped) return [] as { item: Extract<GroupedItem, { kind: "entry" }>; groupIdx: number }[]
+    if (!props.isGrouped) return [] as { item: Extract<GroupedWorkspaceItem, { kind: "entry" }>; groupIdx: number }[]
     return props.grouped
       .map((item, groupIdx) => ({ item, groupIdx }))
-      .filter((row): row is { item: Extract<GroupedItem, { kind: "entry" }>; groupIdx: number } => row.item.kind === "entry")
+      .filter((row): row is { item: Extract<GroupedWorkspaceItem, { kind: "entry" }>; groupIdx: number } => row.item.kind === "entry")
   })
 
   const cursorToGroupIdx = createMemo(() => {
@@ -56,7 +52,7 @@ export function WorkspaceList(props: Props) {
   })
 
   const groupedVisible = createMemo(() => {
-    if (!props.isGrouped) return [] as GroupedItem[]
+    if (!props.isGrouped) return [] as GroupedWorkspaceItem[]
     return props.grouped.slice(groupedScrollOffset(), groupedScrollOffset() + viewportHeight())
   })
 

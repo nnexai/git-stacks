@@ -121,7 +121,7 @@ mock.module("../../../src/lib/lifecycle", () => ({
 
 // Dynamic import after mocks are set
 const { testRender } = await import("@opentui/solid")
-const { default: App, matchesWorkspaceFilter } = await import("../../../src/tui/dashboard/App")
+const { default: App, matchesWorkspaceFilter, nextWorkspaceGroupingMode } = await import("../../../src/tui/dashboard/App")
 
 const renderOpts = { kittyKeyboard: true }
 
@@ -241,7 +241,14 @@ describe("integration: tab switching", () => {
     expect(matchesWorkspaceFilter({ ...wsFixtures[1], name: "backend-service" } as Workspace, "label:backend")).toBe(false)
   })
 
-  test("g toggles grouped-by-label view including unlabeled section", async () => {
+  test("grouping shortcut cycles through locked workspace grouping modes", () => {
+    expect(nextWorkspaceGroupingMode("none")).toBe("label")
+    expect(nextWorkspaceGroupingMode("label")).toBe("state")
+    expect(nextWorkspaceGroupingMode("state")).toBe("template")
+    expect(nextWorkspaceGroupingMode("template")).toBe("none")
+  })
+
+  test("g cycles grouped workspace views including label, state, and template sections", async () => {
     const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <App />, { kittyKeyboard: true, width: 140, height: 30 }
     )
@@ -251,12 +258,20 @@ describe("integration: tab switching", () => {
     mockInput.pressKey("g")
     await renderOnce()
 
-    const frame = captureCharFrame()
-    expect(frame).toContain("backend")
-    expect(frame).toContain("ops")
-    expect(frame).toContain("[unlabeled]")
-    expect(frame).toContain("├─")
-    expect(frame).toContain("└─")
+    const labelFrame = captureCharFrame()
+    expect(labelFrame).toContain("label: backend")
+    expect(labelFrame).toContain("label: ops")
+    expect(labelFrame).toContain("label: [unlabeled]")
+    expect(labelFrame).toContain("├─")
+    expect(labelFrame).toContain("└─")
+
+    mockInput.pressKey("g")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("state:")
+
+    mockInput.pressKey("g")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("template: [adhoc]")
   })
 })
 

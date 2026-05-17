@@ -1,11 +1,12 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, createMemo, Show, Switch, Match } from "solid-js"
+import { createEffect, createSignal, createMemo, Show, Switch, Match } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
 import { useTemplates } from "./hooks/useTemplates"
 import { useRepos } from "./hooks/useRepos"
 import { useMessages } from "./hooks/useMessages"
+import { useWorkspaceFileStatus } from "./hooks/useWorkspaceFileStatus"
 import { socketStatus } from "./ipc-state"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
@@ -44,13 +45,16 @@ import { isRepoDirty } from "../../lib/git"
 import { getTasksDir } from "../../lib/paths"
 import { join } from "path"
 import { existsSync } from "fs"
-import type { UIView, Action, Tab } from "./types"
-import type { WorkspaceEntry } from "./types"
+import type {
+  GroupedWorkspaceItem,
+  UIView,
+  Action,
+  Tab,
+  WorkspaceEntry,
+  WorkspaceGroupingMode,
+  WorkspaceStatus,
+} from "./types"
 import { matchesLabels } from "../../lib/labels"
-
-type GroupedItem =
-  | { kind: "header"; label: string }
-  | { kind: "entry"; entry: WorkspaceEntry; originalIndex: number }
 
 export function matchesWorkspaceFilter(workspace: Workspace, filter: string): boolean {
   const rawFilter = filter.trim()
@@ -70,6 +74,32 @@ export function matchesWorkspaceFilter(workspace: Workspace, filter: string): bo
   return name.includes(f)
     || matchesLabels(workspace, [rawFilter])
     || labels.some(label => label.toLowerCase().includes(f))
+}
+
+export function nextWorkspaceGroupingMode(mode: WorkspaceGroupingMode): WorkspaceGroupingMode {
+  if (mode === "none") return "label"
+  if (mode === "label") return "state"
+  if (mode === "state") return "template"
+  return "none"
+}
+
+function workspaceStateGroup(status: WorkspaceStatus): string {
+  if (status.state === "pending" || status.state === "loading") return "state: loading"
+  if (status.state === "error") return "state: error"
+  if (status.hasMissing) return "state: missing"
+  if (status.hasDirty) return "state: dirty"
+  if (status.aheadBehindStale) return "state: stale"
+  return "state: clean"
+}
+
+function workspaceGroupLabels(entry: WorkspaceEntry, mode: WorkspaceGroupingMode): string[] {
+  if (mode === "label") {
+    const labels = entry.workspace.labels ?? []
+    return labels.length > 0 ? labels.map(label => `label: ${label}`) : ["label: [unlabeled]"]
+  }
+  if (mode === "state") return [workspaceStateGroup(entry.status)]
+  if (mode === "template") return [`template: ${entry.workspace.template ?? "[adhoc]"}`]
+  return []
 }
 
 export default function App() {
@@ -102,7 +132,9 @@ export default function App() {
   const [createDone, setCreateDone] = createSignal(false)
   const [createSummary, setCreateSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
   const [repoRemoveTarget, setRepoRemoveTarget] = createSignal<string | null>(null)
-  const [groupedByLabel, setGroupedByLabel] = createSignal(false)
+  const [workspaceGroupingMode, setWorkspaceGroupingMode] = createSignal<WorkspaceGroupingMode>("none")
+  const [detailScrollOffset, setDetailScrollOffset] = createSignal(0)
+  const [detailCanScroll, setDetailCanScroll] = createSignal(false)
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -134,6 +166,7 @@ export default function App() {
 
   // List pane height estimate for scroll viewport
   const listHeight = createMemo(() => Math.max(6, Math.floor(dims().height * 0.6) - 2))
+  const detailHeight = createMemo(() => Math.max(5, dims().height - listHeight() - 7))
 
   // Tab title
   const tabTitle = createMemo(() => {
@@ -150,35 +183,24 @@ export default function App() {
     return entries().filter((entry) => matchesWorkspaceFilter(entry.workspace, rawFilter))
   })
 
-  const groupedEntries = createMemo((): GroupedItem[] => {
-    if (!groupedByLabel() || tab() !== "workspaces") return []
+  const groupedEntries = createMemo((): GroupedWorkspaceItem[] => {
+    const mode = workspaceGroupingMode()
+    if (mode === "none" || tab() !== "workspaces") return []
 
     const labelMap = new Map<string, { entry: WorkspaceEntry; originalIndex: number }[]>()
-    const unlabeled: { entry: WorkspaceEntry; originalIndex: number }[] = []
 
     filteredEntries().forEach((entry, originalIndex) => {
-      const labels = entry.workspace.labels ?? []
-      if (labels.length === 0) {
-        unlabeled.push({ entry, originalIndex })
-        return
-      }
-      for (const label of labels) {
+      for (const label of workspaceGroupLabels(entry, mode)) {
         const items = labelMap.get(label) ?? []
         items.push({ entry, originalIndex })
         labelMap.set(label, items)
       }
     })
 
-    const items: GroupedItem[] = []
+    const items: GroupedWorkspaceItem[] = []
     for (const label of [...labelMap.keys()].sort()) {
       items.push({ kind: "header", label })
       for (const item of labelMap.get(label) ?? []) {
-        items.push({ kind: "entry", ...item })
-      }
-    }
-    if (unlabeled.length > 0) {
-      items.push({ kind: "header", label: "[unlabeled]" })
-      for (const item of unlabeled) {
         items.push({ kind: "entry", ...item })
       }
     }
@@ -186,7 +208,7 @@ export default function App() {
   })
 
   const groupedNavigableEntries = createMemo(() =>
-    groupedEntries().filter((item): item is Extract<GroupedItem, { kind: "entry" }> => item.kind === "entry")
+    groupedEntries().filter((item): item is Extract<GroupedWorkspaceItem, { kind: "entry" }> => item.kind === "entry")
   )
 
   const filteredTemplates = createMemo(() => {
@@ -202,7 +224,7 @@ export default function App() {
   })
 
   const currentEntry = createMemo(() => {
-    if (groupedByLabel() && tab() === "workspaces") {
+    if (workspaceGroupingMode() !== "none" && tab() === "workspaces") {
       const groupedEntry = groupedNavigableEntries()[tabCursor.workspaces[0]()]
       return groupedEntry ? filteredEntries()[groupedEntry.originalIndex] : undefined
     }
@@ -212,6 +234,17 @@ export default function App() {
   const currentRepo = createMemo(() => filteredRepos()[tabCursor.repos[0]()])
 
   const allWorkspaces = createMemo(() => entries().map(e => e.workspace))
+  const selectedWorkspace = createMemo(() => currentEntry()?.workspace)
+  const fileStatus = useWorkspaceFileStatus(selectedWorkspace)
+
+  createEffect(() => {
+    void selectedWorkspace()?.name
+    setDetailScrollOffset(0)
+  })
+
+  createEffect(() => {
+    if (!detailCanScroll()) setDetailScrollOffset(0)
+  })
 
   const selectedName = createMemo(() => {
     const t = tab()
@@ -240,14 +273,16 @@ export default function App() {
     const w = dims().width
     const t = tab()
     const msgShortcut = t === "workspaces" ? "  m Messages" : ""
+    const groupHint = t === "workspaces" ? `  g Group:${workspaceGroupingMode()}` : ""
+    const scrollHint = t === "workspaces" && detailCanScroll() ? "  Pg Detail" : ""
+    const clearHint = filter() ? "  esc Clear" : ""
 
     if (w < 50) return "? Help  q Quit"
-    const core = `Enter Actions  Space Select  / Filter${msgShortcut}  ? Help  q Quit`
+    const core = `Enter Actions  Space Select  / Filter${msgShortcut}${clearHint}  ? Help  q Quit`
     if (w < 65) return core
     if (w <= 80) return `r Refresh  ${core}`
     if (w < 100) return `1/2/3 Tabs  r Refresh  ${core}`
-    const groupHint = tab() === "workspaces" ? "  g Group" : ""
-    return `\u2191\u2193/jk Navigate  1/2/3 Tabs  r Refresh  ${core}${groupHint}`
+    return `\u2191\u2193/jk Navigate  1/2/3 Tabs  r Refresh  ${core}${groupHint}${scrollHint}`
   })
 
   const inlineInputLabel = createMemo(() => {
@@ -259,7 +294,7 @@ export default function App() {
   })
 
   function clampCursor() {
-    const entriesList = tab() === "workspaces" && groupedByLabel() ? groupedNavigableEntries()
+    const entriesList = tab() === "workspaces" && workspaceGroupingMode() !== "none" ? groupedNavigableEntries()
       : tab() === "workspaces" ? filteredEntries()
       : tab() === "templates" ? filteredTemplates()
       : filteredRepos()
@@ -1059,7 +1094,7 @@ export default function App() {
       const activeEntries = tab() === "workspaces" ? filteredEntries()
         : tab() === "templates" ? filteredTemplates()
         : filteredRepos()
-      const len = tab() === "workspaces" && groupedByLabel()
+      const len = tab() === "workspaces" && workspaceGroupingMode() !== "none"
         ? groupedNavigableEntries().length
         : activeEntries.length
 
@@ -1088,12 +1123,18 @@ export default function App() {
         return
       }
 
+      if (tab() === "workspaces" && detailCanScroll() && (key.name === "pagedown" || key.name === "pageup")) {
+        const direction = key.name === "pagedown" ? 1 : -1
+        setDetailScrollOffset((i) => Math.max(0, i + direction * Math.max(1, Math.floor(detailHeight() / 2))))
+        return
+      }
+
       if (key.name === "return") {
         if (tab() === "repos") {
           if (len > 0) setView({ view: "repo-action-menu", index: cursor() })
           return
         }
-        if (tab() === "workspaces" && groupedByLabel()) {
+        if (tab() === "workspaces" && workspaceGroupingMode() !== "none") {
           const item = groupedNavigableEntries()[cursor()]
           if (item) setView({ view: "action-menu", index: item.originalIndex })
           return
@@ -1105,7 +1146,7 @@ export default function App() {
       if (key.name === "space" && tab() === "workspaces") {
         setSelected((prev) => {
           const next = new Set(prev)
-          const selectedIndex = groupedByLabel()
+          const selectedIndex = workspaceGroupingMode() !== "none"
             ? groupedNavigableEntries()[cursor()]?.originalIndex
             : cursor()
           if (selectedIndex === undefined) return next
@@ -1172,7 +1213,7 @@ export default function App() {
       }
 
       if (key.name === "g" && tab() === "workspaces") {
-        setGroupedByLabel(prev => !prev)
+        setWorkspaceGroupingMode(mode => nextWorkspaceGroupingMode(mode))
         setCursor(0)
         return
       }
@@ -1404,7 +1445,7 @@ export default function App() {
               <WorkspaceList
                 entries={filteredEntries()}
                 grouped={groupedEntries()}
-                isGrouped={groupedByLabel()}
+                isGrouped={workspaceGroupingMode() !== "none"}
                 cursor={cursor()}
                 selected={selected()}
                 filter={filtering() ? filter() : ""}
@@ -1452,7 +1493,15 @@ export default function App() {
           {/* Tab-specific detail — always visible (dialogs overlay via absolute positioning) */}
           <Switch>
               <Match when={tab() === "workspaces"}>
-                <WorkspaceDetail entry={currentEntry()} messages={currentEntry() ? (msgMap().get(currentEntry()!.workspace.name) ?? []) : []} tick={tick()} />
+                <WorkspaceDetail
+                  entry={currentEntry()}
+                  messages={currentEntry() ? (msgMap().get(currentEntry()!.workspace.name) ?? []) : []}
+                  tick={tick()}
+                  fileStatus={fileStatus.state()}
+                  scrollOffset={detailScrollOffset()}
+                  height={detailHeight()}
+                  onOverflowChange={setDetailCanScroll}
+                />
               </Match>
               <Match when={tab() === "templates"}>
                 <TemplateDetail template={currentTemplate()} />

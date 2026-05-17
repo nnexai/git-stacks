@@ -22,6 +22,12 @@ export type WorkspaceEntry = {
   status: WorkspaceStatus
 }
 
+export type WorkspaceGroupingMode = "none" | "label" | "state" | "template"
+
+export type GroupedWorkspaceItem =
+  | { kind: "header"; label: string }
+  | { kind: "entry"; entry: WorkspaceEntry; originalIndex: number }
+
 export type WorkspaceFileStatusState =
   | { state: "idle" }
   | { state: "loading"; workspaceName: string }

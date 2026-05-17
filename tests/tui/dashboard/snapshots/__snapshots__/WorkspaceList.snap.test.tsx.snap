@@ -1,0 +1,25 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`WorkspaceList snapshots renders label grouped headers with concrete row status tokens 1`] = `
+"  label: backend                                                                                              
+  └─ >[ ] ~ api-fix                  feature/api-fix        ↑1   [backend]  1wt 0tr ~1  122d                  
+  label: [unlabeled]                                                                                          
+  └─  [ ] · plain                    feature/plain               0wt 0tr  122d                                
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+"
+`;
+
+exports[`WorkspaceList snapshots renders state and template grouped headers 1`] = `
+"  state: dirty                                                                                                
+  └─  [ ] ~ api-fix                  feature/api-fix        ↑1   [backend]  1wt 0tr ~1  122d                  
+  template: [adhoc]                                                                                           
+  └─ >[x] · plain                    feature/plain               0wt 0tr  122d                                
+                                                                                                              
+                                                                                                              
+                                                                                                              
+                                                                                                              
+"
+`;

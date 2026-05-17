@@ -223,4 +223,43 @@ describe("WorkspaceRow snapshots", () => {
     await renderOnce()
     expect(captureCharFrame()).toMatchSnapshot()
   })
+
+  test.each([
+    ["narrow", 60],
+    ["medium", 90],
+    ["wide", 130],
+  ] as const)("renders %s width row with message attention last", async (_label, width) => {
+    const messages: MessageRecord[] = [
+      { workspace: "my-feature", text: "Needs operator attention before handoff", from: "ci", timestamp: "2026-01-15T10:05:00Z" },
+    ]
+    const status: WorkspaceEntry["status"] = {
+      state: "loaded",
+      hasDirty: true,
+      hasMissing: false,
+      aheadBehindStale: false,
+      repos: [
+        { name: "api", exists: true, dirty: true, branch: "feat/my-feature", mode: "worktree", ahead: 2, behind: 1 },
+        { name: "web", exists: true, dirty: false, branch: "main", mode: "trunk", ahead: 0, behind: 0 },
+      ],
+    }
+    const { renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <WorkspaceRow
+          entry={makeEntry({ labels: ["backend", "urgent"] } as any, status)}
+          focused={true}
+          selected={false}
+          messages={messages}
+          tick={0}
+        />
+      ),
+      { kittyKeyboard: true, width, height: 1 }
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("↑2")
+    expect(frame).toContain("↓1")
+    expect(frame).toContain("ci:")
+    if (width >= 90) expect(frame.trimEnd()).toMatch(/\d+[smhd]$/)
+    expect(frame.trimEnd()).toMatchSnapshot()
+  })
 })
