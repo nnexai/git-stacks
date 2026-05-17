@@ -254,7 +254,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata. (completed 2026-05-17)
 - [x] **Phase 97: File Status View Model for TUI** - Expose a reusable TUI-facing file config/status model from the v0.18.0 files status behavior, covering copy, symlink, and sync mappings. (completed 2026-05-17)
 - [x] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots. (completed 2026-05-17)
-- [ ] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, and complete rollback progress visibility in dashboard create flows.
+- [x] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, and complete rollback progress visibility in dashboard create flows. (completed 2026-05-17)
 
 ## Phase Details
 
@@ -930,7 +930,7 @@ Plans:
 | 96. Workspace Notes | v0.19.0 | 2/2 | Complete   | 2026-05-17 |
 | 97. File Status View Model for TUI | v0.19.0 | 2/2 | Complete    | 2026-05-17 |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 3/3 | Complete   | 2026-05-17 |
-| 99. Dashboard Actions and Correctness Polish | v0.19.0 | 3/4 | In Progress|  |
+| 99. Dashboard Actions and Correctness Polish | v0.19.0 | 4/4 | Complete   | 2026-05-17 |
 
 ## Backlog
 
