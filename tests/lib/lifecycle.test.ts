@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
 import { spawn } from "bun"
-import type { HookOutputLine, HookResult, SpawnHandle } from "@/lib/lifecycle"
+import type { HookOutputLine, HookResult, ShellSequenceResult, SpawnHandle } from "@/lib/lifecycle"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
 // integration-commands.test.ts mocks @/lib/lifecycle (as a consumer test).
@@ -107,12 +107,34 @@ async function runHooksCaptured(
   return results
 }
 
+async function runShellSequence(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>
+): Promise<ShellSequenceResult> {
+  if (!commands || commands.length === 0) return { exitCode: 0 }
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+  for (const cmd of commands) {
+    const handle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "inherit",
+      stderr: "inherit",
+    })
+    const exitCode = await handle.exited
+    if (exitCode !== 0) return { exitCode, failedCommand: cmd }
+  }
+  return { exitCode: 0 }
+}
+
 // Re-apply mock.module to override whatever integration-commands.test.ts set.
 // Our module uses the local _exec and local implementations above.
 mock.module("@/lib/lifecycle", () => ({
   _exec,
   runHooks,
   runHooksCaptured,
+  runShellSequence,
 }))
 
 // ─── Real-shell tests ─────────────────────────────────────────────────────────
@@ -314,6 +336,23 @@ describe("runHooks _exec injection", () => {
     await runHooks([], "/tmp", {})
 
     expect(capturedSpawnArgs).toHaveLength(0)
+  })
+})
+
+describe("runShellSequence _exec injection", () => {
+  beforeEach(() => {
+    originalSpawn = _exec.spawn
+    _exec.spawn = mockSpawn as any
+    resetSpawnMocks(makeSpawnHandle(1))
+  })
+
+  afterEach(() => {
+    _exec.spawn = originalSpawn
+  })
+
+  test("returns failing exit code and command", async () => {
+    const result = await runShellSequence(["false"], "/tmp", {})
+    expect(result).toEqual({ exitCode: 1, failedCommand: "false" })
   })
 })
 

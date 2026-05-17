@@ -11,6 +11,11 @@ export type HookResult = {
   command: string
 }
 
+export type ShellSequenceResult = {
+  exitCode: number
+  failedCommand?: string
+}
+
 // ─── Injectable executor ──────────────────────────────────────────────────────
 // Bun.spawn calls funnel through _exec.spawn. The object property is mutable
 // even in ESM (unlike named exports), so tests can replace it:
@@ -136,4 +141,26 @@ export async function runHooksCaptured(
   }
 
   return results
+}
+
+export async function runShellSequence(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>
+): Promise<ShellSequenceResult> {
+  if (!commands || commands.length === 0) return { exitCode: 0 }
+
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+  for (const cmd of commands) {
+    const handle = _exec.spawn({
+      cmd: ["/bin/sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "inherit",
+      stderr: "inherit",
+    })
+    const exitCode = await handle.exited
+    if (exitCode !== 0) return { exitCode, failedCommand: cmd }
+  }
+  return { exitCode: 0 }
 }
