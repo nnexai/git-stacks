@@ -349,6 +349,30 @@ describe("integration: action menu dispatch", () => {
     expect(frame).toContain("Opening Jira: OPS-7")
   })
 
+  test("linked issue failure stays in progress view until keypress", async () => {
+    workspaceSettings = { integrations: { github: { issue: "ABC-123" } } }
+    openWorkspaceIssueMock.mockResolvedValueOnce({
+      exitCode: 7,
+      lines: ["tracker unavailable"],
+    })
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("i")
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    const frame = captureCharFrame()
+    expect(frame).toContain("tracker unavailable")
+    expect(frame).toContain("ERROR: GitHub: ABC-123 open failed with exit code 7.")
+  })
+
   test("manual commands picker lists visible commands and runs selected command", async () => {
     workspaceCommands = {
       preverify: "echo pre",

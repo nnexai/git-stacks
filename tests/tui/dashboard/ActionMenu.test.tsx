@@ -240,4 +240,33 @@ describe("ActionMenu", () => {
     await renderOnce()
     expect(dispatched).toBe("")
   })
+
+  test("disabled grouped rows cannot be activated with Enter", async () => {
+    let dispatched = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="ws"
+          issueDisabledReason="none linked"
+          commandsDisabledReason="none configured"
+          onAction={(a) => { dispatched = a }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    for (let i = 0; i < 9; i++) {
+      mockInput.pressArrow("down")
+      await renderOnce()
+    }
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(dispatched).toBe("")
+    mockInput.pressArrow("down")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(dispatched).toBe("")
+  })
 })
