@@ -1,4 +1,5 @@
 import type { Workspace } from "../../lib/config"
+import type { WorkspaceFileStatusView } from "../../lib/workspace-file-status"
 
 export type RepoStatus = {
   name: string
@@ -20,6 +21,12 @@ export type WorkspaceEntry = {
   workspace: Workspace
   status: WorkspaceStatus
 }
+
+export type WorkspaceFileStatusState =
+  | { state: "idle" }
+  | { state: "loading"; workspaceName: string }
+  | { state: "loaded"; workspaceName: string; view: WorkspaceFileStatusView }
+  | { state: "error"; workspaceName?: string; message: string }
 
 export type Tab = "workspaces" | "templates" | "repos"
 

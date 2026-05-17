@@ -13,7 +13,7 @@ import {
 import type { FileSyncEntry, Workspace, WorkspaceRepo } from "./config"
 
 export type WorkspaceFileStatusSeverity = "ok" | "warning" | "error"
-export type WorkspaceFileStatusState = SimpleFileEntryState | SyncEntryState
+export type WorkspaceFileEntryState = SimpleFileEntryState | SyncEntryState
 
 export type WorkspaceFileStatusEntryDetails = {
   warnings: string[]
@@ -32,7 +32,7 @@ export type WorkspaceFileStatusEntry = {
   repo: string | null
   type: FileEntryKind
   target: string
-  state: WorkspaceFileStatusState
+  state: WorkspaceFileEntryState
   severity: WorkspaceFileStatusSeverity
   needsAttention: boolean
   hint: string
@@ -46,7 +46,7 @@ export type WorkspaceFileStatusSummary = {
   errors: number
   attention: number
   sections: number
-  byState: Partial<Record<WorkspaceFileStatusState, number>>
+  byState: Partial<Record<WorkspaceFileEntryState, number>>
   byType: Partial<Record<FileEntryKind, number>>
 }
 
@@ -81,7 +81,7 @@ export type WorkspaceFileStatusView = {
   errors: string[]
 }
 
-function severityFor(state: WorkspaceFileStatusState): WorkspaceFileStatusSeverity {
+function severityFor(state: WorkspaceFileEntryState): WorkspaceFileStatusSeverity {
   if (state === "error" || state === "diverged") return "error"
   if (state === "missing" || state === "pullable" || state === "pushable") return "warning"
   return "ok"
@@ -123,7 +123,7 @@ function combineSummaries(sections: Array<{ summary: WorkspaceFileStatusSummary 
     summary.errors += section.summary.errors
     summary.attention += section.summary.attention
     for (const [state, count] of Object.entries(section.summary.byState)) {
-      const key = state as WorkspaceFileStatusState
+      const key = state as WorkspaceFileEntryState
       summary.byState[key] = (summary.byState[key] ?? 0) + (count ?? 0)
     }
     for (const [type, count] of Object.entries(section.summary.byType)) {

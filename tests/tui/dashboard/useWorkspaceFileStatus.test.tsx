@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test"
-import { createRoot, createSignal } from "solid-js"
+import { createRoot } from "solid-js"
 import type { Workspace } from "../../../src/lib/config"
 
 const getWorkspaceFileStatusView = mock((workspace: Workspace, root: string) => ({
@@ -60,37 +60,26 @@ function workspace(name: string): Workspace {
   } as Workspace
 }
 
-async function flush() {
-  await Promise.resolve()
-  await Promise.resolve()
-}
-
 describe("useWorkspaceFileStatus", () => {
   test("loads grouped file status for the selected workspace only", async () => {
     getWorkspaceFileStatusView.mockClear()
-    let state!: ReturnType<typeof useWorkspaceFileStatus>["state"]
-    let setSelected!: (workspace: Workspace | undefined) => void
+    let api!: ReturnType<typeof useWorkspaceFileStatus>
     const wsA = workspace("alpha")
     const wsB = workspace("bravo")
 
-    createRoot((dispose) => {
-      const [selected, setter] = createSignal<Workspace | undefined>(undefined)
-      setSelected = setter
-      state = useWorkspaceFileStatus(selected).state
-
-      expect(state()).toEqual({ state: "idle" })
-      setSelected(wsA)
-      expect(state()).toMatchObject({ state: "loading", workspaceName: "alpha" })
-      dispose
+    createRoot(() => {
+      api = useWorkspaceFileStatus()
     })
 
-    await flush()
+    expect(api.state()).toEqual({ state: "idle" })
+    const alphaLoad = api.load(wsA)
+    expect(api.state()).toMatchObject({ state: "loading", workspaceName: "alpha" })
+    await alphaLoad
     expect(getWorkspaceFileStatusView).toHaveBeenCalledTimes(1)
     expect(getWorkspaceFileStatusView).toHaveBeenLastCalledWith(wsA, "/tmp/dashboard-workspaces/tasks/alpha", { verbose: true })
-    expect(state()).toMatchObject({ state: "loaded", workspaceName: "alpha" })
+    expect(api.state()).toMatchObject({ state: "loaded", workspaceName: "alpha" })
 
-    setSelected(wsB)
-    await flush()
+    await api.load(wsB)
     expect(getWorkspaceFileStatusView).toHaveBeenCalledTimes(2)
     expect(getWorkspaceFileStatusView).toHaveBeenLastCalledWith(wsB, "/tmp/dashboard-workspaces/tasks/bravo", { verbose: true })
   })
@@ -98,19 +87,15 @@ describe("useWorkspaceFileStatus", () => {
   test("resets to idle when selection clears and supports explicit load", async () => {
     getWorkspaceFileStatusView.mockClear()
     let api!: ReturnType<typeof useWorkspaceFileStatus>
-    let setSelected!: (workspace: Workspace | undefined) => void
     const ws = workspace("selected")
 
     createRoot(() => {
-      const [selected, setter] = createSignal<Workspace | undefined>(ws)
-      setSelected = setter
-      api = useWorkspaceFileStatus(selected)
+      api = useWorkspaceFileStatus()
     })
 
-    await flush()
+    await api.load(ws)
     expect(api.state()).toMatchObject({ state: "loaded", workspaceName: "selected" })
-    setSelected(undefined)
-    await flush()
+    api.reset()
     expect(api.state()).toEqual({ state: "idle" })
 
     await api.load(ws)
