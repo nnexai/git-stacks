@@ -26,6 +26,7 @@ describe("ActionMenu", () => {
     expect(frame).toContain("Sync")
     expect(frame).toContain("Push")
     expect(frame).toContain("Issue...")
+    expect(frame).toContain("Commands...")
   })
 
   test("shows cursor indicator on first item initially", async () => {
@@ -196,6 +197,46 @@ describe("ActionMenu", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("[i] Issue... (none linked)")
     mockInput.pressKey("i")
+    await renderOnce()
+    expect(dispatched).toBe("")
+  })
+
+  test("renders enabled commands row and dispatches d shortcut", async () => {
+    let dispatched = ""
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="ws"
+          commandsDisabledReason={undefined}
+          onAction={(a) => { dispatched = a }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("[d] Commands...")
+    mockInput.pressKey("d")
+    await renderOnce()
+    expect(dispatched).toBe("commands")
+  })
+
+  test("disabled commands row is visible and cannot be activated", async () => {
+    let dispatched = ""
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="ws"
+          commandsDisabledReason="none configured"
+          onAction={(a) => { dispatched = a }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("[d] Commands... (none configured)")
+    mockInput.pressKey("d")
     await renderOnce()
     expect(dispatched).toBe("")
   })

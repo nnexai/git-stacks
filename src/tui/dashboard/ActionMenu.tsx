@@ -7,6 +7,7 @@ import { CenteredDialog } from "./CenteredDialog"
 type Props = {
   workspaceName: string
   issueDisabledReason?: "none linked" | "no opener"
+  commandsDisabledReason?: "none configured"
   onAction: (action: Action) => void
   onCancel: () => void
   onRun?: () => void
@@ -33,8 +34,14 @@ export function ActionMenu(props: Props) {
     label: props.issueDisabledReason ? `Issue... (${props.issueDisabledReason})` : "Issue...",
     disabled: Boolean(props.issueDisabledReason),
   })
+  const commandsItem = (): ActionItem => ({
+    key: "d",
+    action: "commands",
+    label: props.commandsDisabledReason ? `Commands... (${props.commandsDisabledReason})` : "Commands...",
+    disabled: Boolean(props.commandsDisabledReason),
+  })
   const fullActions = () => {
-    const base = [...actions, issueItem()]
+    const base = [...actions, issueItem(), commandsItem()]
     return props.onRun
       ? [...base, { key: "u", action: "run" as const, label: "Run" }]
       : base
