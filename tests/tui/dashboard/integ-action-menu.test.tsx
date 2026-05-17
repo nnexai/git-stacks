@@ -31,6 +31,9 @@ const registryFixture = [
     default_branch: "main",
   },
 ]
+const listRegistryEntriesMock = mock(() => registryFixture)
+const registryValidateMock = mock(() => ({ ok: true }))
+const editRegistryYamlMock = mock(() => ({ path: "/tmp/registry.yml", validate: registryValidateMock }))
 
 // Inline template fixture
 const templateFixture = {
@@ -52,7 +55,7 @@ mock.module("../../../src/lib/config", () => ({
   workspacePath: mock((name: string) => `${configDir}/workspaces/${name}.yml`),
   readRegistry: mock(() => registryFixture),
   writeRegistry: mock(() => {}),
-  listRegistryEntries: mock(() => registryFixture),
+  listRegistryEntries: listRegistryEntriesMock,
   listTemplates: mock(() => [templateFixture]),
   readTemplate: mock((_name: string) => templateFixture),
   writeTemplate: mock(() => {}),
@@ -99,6 +102,7 @@ mock.module("../../../src/lib/workspace-status", () => makeWorkspaceStatusMock({
 
 mock.module("../../../src/lib/workspace-yaml", () => makeWorkspaceYamlMock({
   editWorkspaceYaml: mock(() => ({ path: "/tmp/fake.yml", validate: () => ({ ok: true }) })),
+  editRegistryYaml: editRegistryYamlMock,
 }))
 
 // Mock lifecycle hooks
@@ -128,6 +132,10 @@ let activeRenderer: { destroy(): void } | null = null
 beforeEach(() => {
   // Reset wsRemoved state and re-seed workspace YAML for each test
   wsRemoved = false
+  listRegistryEntriesMock.mockClear()
+  registryValidateMock.mockClear()
+  editRegistryYamlMock.mockClear()
+  process.env.EDITOR = "true"
   write(configDir, "workspaces/test-ws.yml", `name: test-ws
 branch: feature/test
 created: "2026-01-15T00:00:00.000Z"
@@ -214,6 +222,32 @@ describe("integration: action menu dispatch", () => {
     expect(frame).toContain("test-ws")
     // The action menu ">" cursor indicator should be gone
     expect(frame).not.toContain("> [o] Open")
+  })
+
+  test("repo edit opens registry YAML and returns to repos list without remove confirmation", async () => {
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressKey("3")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(captureCharFrame()).toContain("[e] Edit ($EDITOR)")
+
+    mockInput.pressKey("e")
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    const frame = captureCharFrame()
+    expect(editRegistryYamlMock).toHaveBeenCalled()
+    expect(registryValidateMock).toHaveBeenCalled()
+    expect(listRegistryEntriesMock.mock.calls.length).toBeGreaterThan(1)
+    expect(frame).toContain("my-repo")
+    expect(frame).not.toContain("[y]")
   })
 })
 

@@ -34,7 +34,7 @@ import {
 } from "../../lib/workspace-ops"
 import { syncWorkspace, pushWorkspace } from "../../lib/workspace-git"
 import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-git"
-import { editWorkspaceYaml } from "../../lib/workspace-yaml"
+import { editRegistryYaml, editWorkspaceYaml } from "../../lib/workspace-yaml"
 import { readTemplate, writeTemplate, templateExists, templatePath, deleteTemplate, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, isWorktreeRepo, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
 import { createWorkspace } from "../../lib/workspace-lifecycle"
 import { SyncProgressView } from "./SyncProgressView"
@@ -621,7 +621,7 @@ export default function App() {
     setView({ view: "list" })
   }
 
-  async function handleRepoAction(action: "create-workspace" | "create-template" | "remove") {
+  async function handleRepoAction(action: "create-workspace" | "create-template" | "edit" | "remove") {
     const v = view() as { view: "repo-action-menu"; index: number }
     const repo = filteredRepos()[v.index]
     if (!repo) { setView({ view: "list" }); return }
@@ -644,6 +644,25 @@ export default function App() {
     if (action === "create-template") {
       setReposSelected(new Set<number>())
       setView({ view: "wizard-create-template", source: "repos", repoNames })
+      return
+    }
+
+    if (action === "edit") {
+      const editor = process.env.VISUAL || process.env.EDITOR || "vi"
+      const { path, validate } = editRegistryYaml()
+      renderer.suspend()
+      try {
+        const proc = spawn([editor, path], { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
+        await proc.exited
+        const result = validate()
+        if (!result.ok) {
+          process.stdout.write(`\nValidation error: ${result.error}\n`)
+        }
+      } finally {
+        renderer.resume()
+        reloadRepos()
+        setView({ view: "list" })
+      }
       return
     }
 
