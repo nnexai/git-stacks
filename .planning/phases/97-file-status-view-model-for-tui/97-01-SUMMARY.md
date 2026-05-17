@@ -57,6 +57,7 @@ completed: 2026-05-17
 1. **Task 1 RED:** `0307b64` test(97-01): add failing workspace file status view tests
 2. **Task 1 GREEN:** `4148fd4` feat(97-01): add grouped file status view model
 3. **Task 2:** `f651dc7` test(97-01): lock files status grouped model parity
+4. **Review fix:** `d8014a7` fix(97): count file status detail warnings
 
 ## Files Created/Modified
 
@@ -80,10 +81,18 @@ The helper delegates policy to `getFileEntryStatuses()` and only adds grouping, 
 - **Verification:** `bun test tests/lib/workspace-file-status.test.ts tests/commands/files.test.ts` and `bun run typecheck` passed.
 - **Committed in:** N/A
 
+**2. [Rule 2 - Missing Critical] Detail warnings were not counted in compact summary attention**
+- **Found during:** Required phase code review gate
+- **Issue:** Missing sync source and repo-root warnings were exposed in detail arrays, but a source-missing entry with otherwise `ok` sync state could remain `severity: "ok"` and not increase warning/attention totals.
+- **Fix:** Escalated entries with detail warnings to warning severity and included root warnings in section summary warning/attention counts.
+- **Files modified:** `src/lib/workspace-file-status.ts`, `tests/lib/workspace-file-status.test.ts`
+- **Verification:** `bun test tests/lib/workspace-file-status.test.ts tests/commands/files.test.ts tests/tui/dashboard/useWorkspaceFileStatus.test.tsx` and `bun run typecheck` passed.
+- **Committed in:** `d8014a7`
+
 ---
 
-**Total deviations:** 1 auto-handled verification-command mismatch.
-**Impact on plan:** Implementation scope unchanged; repo-supported focused verification passed.
+**Total deviations:** 2 auto-handled issues.
+**Impact on plan:** The second fix improves D-07/D-08 fidelity without changing sync policy or CLI behavior.
 
 ## Issues Encountered
 
