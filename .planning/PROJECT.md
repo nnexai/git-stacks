@@ -321,7 +321,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Lightweight workspace notes stored outside managed project repositories.
 - TUI file config/status visibility based on the v0.18.0 `git-stacks files status` model.
 - Grounded TUI control-center improvements: denser list/detail layout, useful grouping, structured detail sections, notes/file summaries, and snapshot coverage.
-- Dashboard action polish: repo edit, linked issue opening, and complete rollback progress visibility.
+- Dashboard action polish: repo edit, linked issue opening, manual command actions, and regression coverage; rollback progress visibility remains deferred.
 
 ### Out of Scope
 
