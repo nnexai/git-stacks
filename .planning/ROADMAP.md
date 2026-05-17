@@ -259,111 +259,142 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 ## Phase Details
 
 ### Phase 95: Manual Workspace Commands
+
 **Goal**: Users can define, inspect, and run named workspace commands manually, using existing workspace execution context rather than lifecycle timing.
 **Depends on**: Phase 94
 **Requirements**: WCMD-01, WCMD-02, WCMD-03, WCMD-04
 **Success Criteria** (what must be TRUE):
+
   1. Templates, workspaces, and repo entries accept a narrow string-valued `commands.<name>: <shell command>` shape, and template-backed workspaces snapshot those commands into saved workspace YAML.
   2. Workspace command resolution follows copied-template semantics, with workspace-level entries before repo-level entries and npm-style `pre<name>` / `post<name>` bucket ordering.
   3. `git-stacks command list [workspace]` hides `pre*` / `post*` commands by default, while `git-stacks command run --dry-run [workspace] <command>` shows the full resolved execution plan.
   4. `git-stacks command run [workspace] <command>` uses existing workspace env, ports, cwd targeting, and optional secret skipping, streams output directly, and exits on the first failing command status.
   5. Focused tests cover schema parsing, template/workspace snapshot behavior, dry-run inspection, execution context, failure propagation, and inventory/gate alignment for the new command family.
+
 **Plans**: 4 plans
 
 Plans:
+
 - [x] 95-01-PLAN.md - Schema and persistence contract for manual commands
 - [x] 95-02-PLAN.md - Template snapshot wiring across create and clone surfaces
 - [x] 95-03-PLAN.md - Resolved manual command engine and exit semantics
 - [x] 95-04-PLAN.md - `git-stacks command` CLI surface and verification inventory
 
 ### Phase 96: Workspace Notes
+
 **Goal**: Users can keep lightweight operator notes for workspaces without writing those notes into managed project repos or GSD planning directories.
 **Depends on**: Phase 95
 **Requirements**: NOTE-01, NOTE-02
 **Success Criteria** (what must be TRUE):
+
   1. User can add, list, and clear notes for a workspace through `git-stacks notes`, with explicit workspace name, cwd detection, or `GS_WORKSPACE_NAME` fallback.
   2. Notes are stored as append-only JSONL records outside project repos and `.planning`, using per-workspace files with plain-text note content and created timestamp.
   3. `notes list` is the only read surface, displays newest notes first, defaults to a latest-N slice, and has a way to show all notes.
   4. Missing workspace, orphaned old-name note files, cleared/empty notes, and malformed note stores fail or recover predictably without mutating corrupt data.
   5. Tests cover persistence, ordering, resolution precedence, clear confirmation/`--force`, and summary metadata needed by later TUI work.
+
 **Plans**: 2 plans
 
 Plans:
+
 - [x] 96-01-PLAN.md - Storage, path, and summary contract for workspace notes
 - [x] 96-02-PLAN.md - `git-stacks notes` CLI surface and workspace resolution
 
 ### Phase 97: File Status View Model for TUI
+
 **Goal**: TUI code can display file copy/symlink/sync configuration and status using the same behavior exposed by `git-stacks files status`, without duplicating file sync logic.
 **Depends on**: Phase 96
 **Requirements**: TUI-04
 **Success Criteria** (what must be TRUE):
+
   1. A reusable source module returns workspace file config/status for copy, symlink, and sync entries in a TUI-friendly shape.
   2. Sync status exposes useful drift/missing/unsafe states from the v0.18.0 files status model while preserving conservative sync semantics.
   3. File status loading handles missing workspaces, missing paths, dir/trunk/worktree differences, and JSON/human command parity.
   4. The dashboard can consume file status without running separate CLI subprocesses or reimplementing file sync policy.
   5. Tests cover copy, symlink, sync, missing target/source, drift, and status-summary aggregation.
+
 **Plans**: 2 plans
 
 Plans:
+
 - [x] 97-01-PLAN.md - Shared grouped file-status model and CLI parity coverage
 - [x] 97-02-PLAN.md - Lazy dashboard loader and TUI file-status state contract
 
 ### Phase 98: Grounded Dashboard Control Center
+
 **Goal**: `git-stacks manage` becomes a denser operator control center while preserving the current keyboard-first list/detail model.
 **Depends on**: Phase 97
 **Requirements**: NOTE-03, TUI-01, TUI-02, TUI-03, TUI-07
 **Success Criteria** (what must be TRUE):
+
   1. The workspace list preserves the current tabbed list/detail model while improving density and keeping message attention last in rows.
   2. Workspace grouping supports scan-focused modes such as none/label/state without hiding the concrete status tokens that explain group placement.
   3. Workspace details use structured sections ordered by operational value: attention/messages, repos, file config/status, source/issue links, integrations, notes, and config.
   4. Workspace notes and file status appear as compact summaries in details without replacing their full command surfaces.
   5. Narrow, medium, and wide terminal snapshots cover row truncation, grouped headers, detail ordering, file status display, note summary, and contextual footers.
+
 **Plans**: 3
 
 Plans:
+
 - [ ] `98-01-PLAN.md` - Workspace list density and grouping modes
 - [ ] `98-02-PLAN.md` - Ordered scrollable workspace detail sections
 - [ ] `98-03-PLAN.md` - Dashboard footer and snapshot acceptance coverage
 
 ### Phase 99: Dashboard Actions and Correctness Polish
+
 **Goal**: Dashboard action menus expose the missing useful actions and dashboard create flows surface all rollback progress.
 **Depends on**: Phase 98
 **Requirements**: TUI-05, TUI-06, DASH-01
 **Success Criteria** (what must be TRUE):
+
   1. Repos tab action menu includes an edit action wired consistently with workspace/template edit behavior.
   2. Workspace action menu can open linked issues when issue metadata is configured, using existing issue integration behavior and clear disabled/error states.
   3. Dashboard create flows display every rollback progress event emitted by `createWorkspace()`, including file ops, workspace file ops, and env-file writes.
   4. Action menu shortcuts, labels, disabled states, and footer hints stay coherent across Workspaces, Templates, and Repos.
   5. Focused component/snapshot tests cover repo edit, linked issue opening, rollback progress rendering, and action-menu regressions.
+
 **Plans**: TBD
 
 Plans:
+
 - [ ] TBD
 
+**Cross-cutting constraints:**
+
+- D-13: rollback progress visibility is excluded from this plan.
+
 ### Phase 89: Files Sync Schema and Materialization
+
 **Goal**: Users can define `files.sync` entries and pull source directories/files into workspace targets as real files, with optional worktree-local git excludes.
 **Depends on**: Phase 88
 **Requirements**: FSYNC-01, FSYNC-02, FSYNC-03
 **Success Criteria** (what must be TRUE):
+
   1. `TemplateSchema` and `WorkspaceSchema` accept `files.sync` entries with `source`, `target`, and optional `git_exclude` fields while preserving existing `copy` and `symlink` behavior.
   2. Sync materialization copies source content into the workspace target as real files/directories, not symlinks.
   3. `git_exclude: true` writes target paths to the local worktree `.git/info/exclude` file without modifying project `.gitignore`.
   4. Sync materialization refuses obvious unsafe target paths and tracked-file collisions unless an explicit later policy allows them.
+
 **Plans**: TBD
 
 ### Phase 90: Files Command Surface and Conflict Policy
+
 **Goal**: Users can inspect, pull, and push synced workspace files through `git-stacks files status|pull|push` with conservative conflict and delete behavior.
 **Depends on**: Phase 89
 **Requirements**: FSYNC-04, FSYNC-05, FSYNC-06, FSYNC-07, FSYNC-08
 **Success Criteria** (what must be TRUE):
+
   1. `git-stacks files status [workspace]` shows file materialization state for copy/symlink/sync entries, with sync drift visible at a useful summary level.
   2. `git-stacks files pull [workspace]` refreshes sync targets from their configured sources.
   3. `git-stacks files push [workspace]` explicitly syncs workspace target changes back to source paths.
   4. Push refuses obvious conflicts and unsafe deletes/overwrites by default.
   5. The implementation avoids a mandatory full per-file hash manifest for large sync trees such as `.planning/`.
+
 **Plans**: 3 plans
 
 Plans:
+
 - **Wave 1**
   - `90-01-PLAN.md` — Add current-tree status and sync comparison helpers for copy, symlink, and sync entries.
 - **Wave 2** *(blocked on Wave 1 completion)*
@@ -372,61 +403,77 @@ Plans:
   - `90-03-PLAN.md` — Expose `git-stacks files status|pull|push`, register the command group, and validate CLI behavior.
 
 Cross-cutting constraints:
+
 - Phase 90 must not add mandatory manifests, stable JSON output, lifecycle integration, TUI behavior, or middle policy flags such as `--merge`/`--add-only`.
 
 ### Phase 91: Files Sync Integration and Machine Output
+
 **Goal**: File sync behavior is integrated with existing workspace lifecycle entrypoints where appropriate and exposes stable machine-readable output for future TUI/automation.
 **Depends on**: Phase 90
 **Requirements**: FSYNC-09
 **Success Criteria** (what must be TRUE):
+
   1. Workspace create/open/recreate behavior has a clear and documented relationship to `files.sync` pull behavior.
   2. `git-stacks files status|pull|push --json` or equivalent machine output is stable enough for future dashboard use.
   3. Existing file copy/symlink behavior remains backward-compatible.
   4. The README examples cover the GSD planning/agent config use case without requiring symlinks.
+
 **Plans**: 4 plans
 
 Plans:
+
 - [x] `91-01-PLAN.md` — Integrate `files.sync` pull/materialization into workspace create and missing-worktree recreation while preserving conservative normal-open behavior and existing copy/symlink compatibility.
 - [x] `91-02-PLAN.md` — Add stable machine-readable `--json` output for `git-stacks files status|pull|push` with capped details and meaningful automation exit codes.
 - [x] `91-03-PLAN.md` — Expose `files status|pull|push` help/completion coverage and document the real-file sync workflow without adding dashboard UI or full README JSON examples.
 - [x] `91-04-PLAN.md` — Run the final Phase 91 focused gates and record execution evidence for lifecycle integration, machine output, completion/help, documentation, and copy/symlink compatibility.
 
 ### Phase 92: Forge Source Research and Resolver Design
+
 **Goal**: GitLab-first forge source creation is researched and designed before implementation, with clear limits for live `glab` validation and a reusable resolver contract for Gitea/GitHub follow-up.
 **Depends on**: Phase 91
 **Requirements**: FSRC-02, FSRC-03, FSRC-08
 **Success Criteria** (what must be TRUE):
+
   1. GitLab MR URL formats, `glab` capabilities, fetch strategies, and local validation constraints are documented.
   2. Gitea and GitHub PR URL parsing and resolver differences are documented enough to avoid painting the implementation into a GitLab-only corner.
   3. A forge source resolver contract describes the normalized source metadata needed by workspace creation.
   4. Repo matching uses existing registry/forge/upstream metadata where possible, with ambiguity and missing-template-repo cases specified.
+
 **Plans**:
 **Wave 1**
+
 - [ ] `92-01-PLAN.md` - Document official GitLab/GitHub research, local Tea validation limits, self-hosted config design, repo matching, and the plain Git checkout boundary for Phase 93.
 - [ ] `92-02-PLAN.md` - Add backwards-compatible config schema design for forge integration base URLs and repo-level forge metadata.
 
 **Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] `92-03-PLAN.md` - Add the pure forge source URL parser and typed resolver contract with GitLab, GitHub, and Gitea coverage.
 
 **Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] `92-04-PLAN.md` - Finalize the Phase 93 fetch/checkout handoff and run focused contract/config/typecheck gates.
 
 **Cross-cutting constraints:**
+
 - Provider checkout commands are research references only; internal workspace creation must use plain Git fetch/checkout through existing git-stacks logic.
 
 ### Phase 93: Forge Source Workspace Creation
+
 **Goal**: Users can create a normal template-backed workspace from a forge change source URL, with GitLab merge requests implemented first and Gitea/GitHub prepared by the shared resolver shape.
 **Depends on**: Phase 92
 **Requirements**: FSRC-01, FSRC-04, FSRC-05, FSRC-06, FSRC-07
 **Success Criteria** (what must be TRUE):
+
   1. `git-stacks new <name> --template <template> --source <forge-url>` routes the source through enabled forge integrations.
   2. The matched worktree repo is checked out or fetched to the forge change branch/ref while other worktree repos use normal workspace branch creation.
   3. Missing, ambiguous, trunk-mode, or dir-mode repo matches produce clear failures and explicit override guidance where appropriate.
   4. Created workspaces record source metadata in workspace YAML.
   5. Created workspaces receive useful review/source labels such as `review`, forge id, and change number.
+
 **Plans**: 4 plans
 
 Plans:
+
 - [ ] `93-01-PLAN.md` - Add the source CLI contract, resolver handoff, repo override behavior, and dry-run preview.
 - [ ] `93-02-PLAN.md` - Fetch source refs with plain Git and hand the matched repo into normal worktree creation.
 - [ ] `93-03-PLAN.md` - Persist the dedicated workspace `source` block and preserve the D-15 no-auto-label boundary.
@@ -438,105 +485,132 @@ Plans:
 **Requirements**: TEST-01, TEST-02, COV-01
 **Depends on:** Phase 93
 **Success Criteria** (what must be TRUE):
+
   1. `scripts/test-runner.ts --integ` runs isolated integration test files through a configurable bounded worker pool, with a conservative default that avoids overloading local git/filesystem fixtures.
   2. Test output remains understandable: each file's result is attributed to the file, failures are summarized coherently, and the final pass/fail count matches the serial runner's semantics.
   3. File-system and git fixtures are isolated enough for parallel execution, including temp directory/config paths that avoid fixed-path collisions.
   4. Coverage execution preserves one coherent report by merging all per-process Istanbul coverage artifacts into the existing stable outputs: `.coverage/coverage-final.json`, `.coverage/coverage-summary.json`, `.coverage/lcov.info`, and `.coverage/index.html`.
   5. `bun run test`, `bun run test:integ`, `bun run coverage:integ`, and `bun run verify` continue to provide release-gate quality signals without requiring CI.
+
 **Plans**: 3 plans
 
 Plans:
+
 - [ ] `93.1-01-PLAN.md` - Add the shared worker contract, `--workers` parsing, and buffered completion-order integration output.
 - [ ] `93.1-02-PLAN.md` - Harden real-write integration fixtures against shared `/tmp` collisions and add fixture-safety guards.
 - [ ] `93.1-03-PLAN.md` - Parallelize coverage integration with per-worker shard dirs while preserving canonical merged Istanbul artifacts.
 
 ### Phase 94: v0.18.0 Docs and Release Prep
+
 **Goal**: v0.18.0 is documented and packaged with user-facing release notes that accurately describe file sync behavior and forge source validation limits.
 **Depends on**: Phase 93.1
 **Requirements**: DOCS-01, DOCS-02, REL-01
 **Success Criteria** (what must be TRUE):
+
   1. README documents `files.sync`, `git-stacks files status|pull|push`, local exclude behavior, and manual push-back.
   2. README documents forge `--source` workspace creation with GitLab-first examples and validation caveats.
   3. CHANGELOG describes user-visible v0.18.0 behavior without overstating live forge coverage.
   4. Local release verification passes before closeout.
+
 **Plans**: 3 plans
 
 Plans:
+
 - [x] `94-01-PLAN.md` - Align workspace/files CLI help and README docs for file sync and forge-source workflows.
 - [x] `94-02-PLAN.md` - Write the user-facing `0.18.0-rc.1` changelog entry and bump release-candidate package metadata.
 - [x] `94-03-PLAN.md` - Add the repeatable release-candidate smoke gate, dry-run publish check, and RC tag handoff.
 
 ### Phase 74: Template Label CLI & Propagation
+
 **Goal**: Users can manage labels on templates via CLI, filter templates by label, and labels automatically flow into workspaces at creation time
 **Depends on**: Phase 73 (v0.16.0 complete)
 **Requirements**: TLBL-01, TLBL-02, TLBL-03, TLBL-04, TLBL-05, TLBL-06, TLBL-07
 **Success Criteria** (what must be TRUE):
+
   1. User can run `git-stacks template label add <template> <label...>` and the label persists to the template YAML
   2. User can run `git-stacks template label remove/list/clear` symmetrically with the existing workspace label commands
   3. `git-stacks template list --label <label>` returns only templates matching that label
   4. Workspace created from a labeled template has those labels snapshot-copied into the workspace YAML (not a live reference)
   5. `git-stacks clone <workspace>` copies labels from the source workspace into the new workspace YAML
+
 **Plans**: 2 plans
 
 Plans:
+
 - [x] `74-01-PLAN.md` — Nested `template label` CRUD plus `template list --label` exact-match AND filtering
 - [x] `74-02-PLAN.md` — Label propagation through template composition, workspace creation snapshot, and workspace clone preservation
 
 ### Phase 75: DI Seams & Structured Logging
+
 **Goal**: `workspace-lifecycle.ts` and `workspace-git.ts` have injectable subprocess seams, and debug output carries structured fields filterable by module name
 **Depends on**: Phase 74
 **Requirements**: OBSV-01, OBSV-02, OBSV-03, OBSV-04, OBSV-05
 **Success Criteria** (what must be TRUE):
+
   1. `workspace-lifecycle.ts` exports a mutable `_exec` object; tests can replace `_exec.spawn` without spawning real processes
   2. `workspace-git.ts` exports a mutable `_exec` object with the same injection pattern
   3. Running `GS_DEBUG=1 git-stacks open <ws>` emits lines with structured fields `{ op, module, repo?, ms?, msg }` on stderr
   4. Running `GS_DEBUG=lifecycle git-stacks open <ws>` emits debug lines only from the `lifecycle` module; git module lines are suppressed
   5. Running `GS_DEBUG=true` shows all module output (backward-compatible with existing behavior)
+
 **Plans**: 2 plans
 
 Plans:
+
 - [x] `75-01-PLAN.md` — Add real mutable `_exec` seams to `workspace-lifecycle.ts` and `workspace-git.ts` with focused module tests
 - [x] `75-02-PLAN.md` — Extend `src/lib/observability.ts` and `src/index.ts` for `GS_DEBUG`, structured stderr fields, selector filtering, and CLI regression coverage
 
 ### Phase 76: Integration Plugin Capability Contracts
+
 **Goal**: Every integration plugin declares its capabilities explicitly, the runner uses those declarations instead of duck-typing, and `integration list` exposes them
 **Depends on**: Phase 75
 **Requirements**: ENGN-07, ENGN-08, ENGN-09
 **Success Criteria** (what must be TRUE):
+
   1. `Integration` interface has a typed `capabilities` field; `bun run typecheck` passes with all 10 plugin files updated
   2. Integration runner gates `generate()` and `open()` calls on capability declarations, not optional chaining
   3. `git-stacks integration list` output includes a capabilities column for each plugin
+
 **Plans**: 2 plans
 
 Plans:
+
 - [x] `76-01-PLAN.md` — Capability type, Integration interface field, all 10 plugins updated, runner capability-gated calls
 - [x] `76-02-PLAN.md` — integration list capabilities column (table + JSON output)
 
 ### Phase 77: Indexed Config Store
+
 **Goal**: Workspace and template lookups use an in-memory index instead of re-scanning and re-parsing all YAML files on every call
 **Depends on**: Phase 76
 **Requirements**: ENGN-04, ENGN-05, ENGN-06
 **Success Criteria** (what must be TRUE):
+
   1. `listWorkspaces()` and `readWorkspace()` return results sourced from the in-memory index without triggering a full directory scan on repeated calls
   2. Any write operation (create, rename, remove) invalidates the affected index entry so the next read reflects the change
   3. If a requested name is not in the index, the code falls back to a YAML scan and populates the index entry (cache, not source of truth)
+
 **Plans**: 2 plans
 
 Plans:
+
 - [x] `77-01-PLAN.md` — In-memory index Maps with _cache seam, cache-gated read/write/list/exists, deleteWorkspace/deleteTemplate, tests
 - [x] `77-02-PLAN.md` — Migrate all unlinkSync(workspacePath/templatePath) call sites to deleteWorkspace/deleteTemplate
 
 ### Phase 78: Operation Runner with Rollback
+
 **Goal**: Multi-step workspace creation executes via a LIFO compensation stack so partial failures clean up completed steps automatically. Both the wizard and dashboard creation call sites migrate to a shared `createWorkspace()` that uses the runner (resolves CONCERNS.md:51-55 dashboard duplication).
 **Depends on**: Phase 77
 **Requirements**: ENGN-01, ENGN-02, ENGN-03
 **Success Criteria** (what must be TRUE):
+
   1. When workspace creation fails mid-way (e.g., second worktree fails), already-created worktrees are removed and the workspace YAML is not written
   2. Rollback steps emit progress messages through the existing `onProgress` callback so the user sees "Rollback: create worktree <repo>" (D-14/D-15: routed through onProgress, not stderr — OpenTUI safety)
   3. If an individual rollback step fails, the error is captured in `rollbackErrors[]` and surfaced via `onProgress`; remaining rollback steps continue (best-effort, no abort)
+
 **Plans**: 3 plans
 
 Plans:
+
 - [x] `78-01-PLAN.md` — Pure operation-runner primitive (`src/lib/operation-runner.ts`) with LIFO compensation stack, discriminated-union return, and eight unit tests
 - [x] `78-02-PLAN.md` — `createWorkspace()` on `workspace-lifecycle.ts` wiring runner into D-12 creation ordering with integration tests forcing failures via Phase 75 _exec seams
 - [x] `78-03-PLAN.md` — Wizard and dashboard migration to shared `createWorkspace()`; delete hand-rolled rollback at App.tsx:883-911; CONCERNS.md:51-55 resolved
@@ -549,28 +623,35 @@ Plans:
 **Plans:** 3/3 plans complete
 
 Plans:
+
 - [x] `78.1-01-PLAN.md` — Add narrow capability interfaces (Generates, Cleans, HasCommands, HasConfigExample, WindowDetecting, Conditional) and type predicates (isGenerator, isCleaner, isConditional, isWindowDetecting) to src/lib/integrations/types.ts; remove Capability type and capabilities field from base Integration interface
 - [x] `78.1-02-PLAN.md` — Update all 10 plugin files to drop `capabilities: new Set(...)` literal and use intersection types at export site; rewrite runner.ts to use type predicates with zero non-null assertions on integration method calls
 - [x] `78.1-03-PLAN.md` — Strip Capabilities column from `git-stacks integration list` (table + JSON), delete TAG_MAP constant, update 4 test files (drop fake `capabilities: new Set(...)` and delete obsolete Phase 76-02 test block), rewrite REQUIREMENTS.md ENGN-07/08/09 in place, append Phase 78.1 decisions section to STATE.md
 
 ### Phase 79: Release Prep
+
 **Goal**: v0.17.0 is version-bumped, documented, and ready to ship
 **Depends on**: Phase 78.1
 **Requirements**: (release prep — no REQUIREMENTS.md entry)
 **Success Criteria** (what must be TRUE):
+
   1. `package.json` version is `0.17.0` and `bun run dev --version` reports it
   2. CHANGELOG has an entry for v0.17.0 listing all milestone features
   3. README documents `template label` commands and `GS_DEBUG` module filter syntax
+
 **Plans**: 1/1 plans complete
 
 Plans:
+
 - [x] `79-01-PLAN.md` — Bump the published version to `0.17.0`, add a user-facing v0.17.0 changelog entry (Added / Changed / Internal), document template-label commands/filtering/propagation plus `GS_DEBUG=<module[,module]>` in README, run release validations, and write Phase 79 closeout artifacts
 
 ### Phase 80: E2E CLI Harness and Living Inventory
+
 **Goal**: Test authors can run isolated real-process CLI scenarios, and maintainers have an exact machine-parseable inventory source for the non-TUI, non-integration surface tied to the harness
 **Depends on**: Phase 79 (v0.17.0 complete)
 **Requirements**: E2E-01, E2E-02, E2E-03, E2E-04, E2E-05, E2E-06, E2E-07
 **Success Criteria** (what must be TRUE):
+
   1. Test author can run `git-stacks` as a real CLI process inside an isolated config home without touching developer config
   2. Test author can create disposable git repo, template, workspace, and config fixtures by extending existing `tests/helpers.ts` helpers (`makeTmpDir`, `cleanup`, `touch`, `write`, `makeGitRepo`, git env helpers)
   3. Test author can assert exit code, stdout, stderr, generated files, persisted YAML, and failure diagnostics for each E2E command invocation
@@ -578,22 +659,27 @@ Plans:
   5. Maintainer can see explicit exclusions for terminal UI behavior, external integration behavior, editor-launching edit commands, and the v0.17.0 rollback-visibility audit gap
   6. The inventory has a machine-parseable source of truth, with stable IDs, command/user-flow names, scope status, mapped test file(s), and rationale fields
   7. Maintainer can compare every in-scope inventory item with the implemented E2E suite and identify unmapped coverage gaps while later phases add tests
+
 **Plans**: TBD
 
 ### Phase 81: Workspace and Git Operation E2E Coverage
+
 **Goal**: Users can trust workspace lifecycle and git-operation behavior because the highest-risk CLI assumptions are proven in real repos and isolated config homes
 **Depends on**: Phase 80
 **Requirements**: E2E-08, E2E-14
 **Success Criteria** (what must be TRUE):
+
   1. Workspace create and clone E2E tests prove correct source branch selection, task path/main path persistence, generated YAML, and created worktree layout
   2. Workspace env and hook E2E tests prove injected environment values, hook execution cwd, command cwd/path selection, and generated env files
   3. Workspace list/status/status --fetch/open (`--no-ide`)/close/cd/paths/env/run E2E tests prove stdout, stderr, JSON/text contracts, and no accidental external integration launch
   4. Workspace clean/remove/rename E2E tests prove filesystem and YAML side effects, missing/dirty repo behavior, and safe failure messages
   5. Workspace merge, pull, sync, and push E2E tests run against disposable local git repositories/remotes and prove guard behavior for dir repos, dirty repos, missing remotes, and branch/upstream assumptions
   6. Command-execution E2E tests prove run/hooks/git operations use explicit cwd/path handling and do not depend on shell `cd` state
+
 **Plans:** 4/4 plans complete
 
 Plans:
+
 - [x] 81-01-PLAN.md — Shared E2E helpers + create/clone side-effect tests
 - [x] 81-02-PLAN.md — Execution context probes + JSON/text output contracts
 - [x] 81-03-PLAN.md — Lifecycle cascading + guard behavior tests
@@ -606,6 +692,7 @@ Plans:
 **Depends on:** Phase 81
 **Plans:** 1/1 plans complete
 **Success Criteria** (what must be TRUE):
+
   1. `repo add` only runs forge detectors for globally enabled forge integrations (D-01)
   2. Disabled forges are invisible to both auto-detection and prompt options (D-02)
   3. Zero enabled forge matches → forge unset, no prompt (D-03)
@@ -613,6 +700,7 @@ Plans:
   5. All tests pass including new forge-utils and repo-add coverage
 
 Plans:
+
 - [x] 81.1-01-PLAN.md — Enabled-aware forge detection + repo add behavioral fix + tests
 
 ### Phase 81.1.1: Minimal non-interactive workspace create and clone variants (INSERTED)
@@ -623,74 +711,91 @@ Plans:
 **Plans:** 1/1 plans complete
 
 Plans:
+
 - [x] 81.1.1-01-PLAN.md — Non-interactive new and clone: Commander flags, TUI guards, unit tests
 
 ### Phase 82: Template, Repo, Label, and Message E2E Coverage
+
 **Goal**: Users can trust non-workspace command families because template, registry, label, and message behavior is covered through real CLI processes
 **Depends on**: Phase 81
 **Requirements**: E2E-09, E2E-10, E2E-11
 **Success Criteria** (what must be TRUE):
+
   1. Template flows have E2E coverage for `template list/show/clone/rename/remove`, template label behavior, and template-backed `new --non-interactive` / composition / clone propagation; `template new` and other wizard-driven template flows remain excluded
   2. Repo registry flows have E2E coverage for `repo add/list/show/rename/remove --force` across separate git-repo and dir-repo scenarios, using only no-enabled-forge and exact-one-enabled-match success paths; `repo scan` remains excluded
   3. Workspace label flows extend the existing subprocess coverage to close add/remove/list/clear and output-contract gaps without adding the deferred failure matrix
   4. Message flows have E2E coverage for send/list/clear, workspace resolution, sender metadata, newest-first JSONL persistence, missing-workspace behavior, and an automation-safe socket opt-out; live dashboard delivery remains excluded
   5. The Phase 80 inventory source is updated inline with flow-level mappings and exclusions as each Phase 82 suite lands
+
 **Plans**: 3 plans
 
 Plans:
+
 - [x] 82-01-PLAN.md — Block on missing prerequisites, then add the split template command and template-consumption suites with inline inventory updates
 - [x] 82-02-PLAN.md — Add repo registry git-vs-dir success-path coverage and extend workspace label subprocess coverage with inline inventory updates
 - [x] 82-03-PLAN.md — Add the explicit message socket opt-out plus the focused message CLI/file contract suite with inline inventory updates
 
 ### Phase 82.1: Support Commands and Error-Path E2E Coverage
+
 **Goal**: Users can trust support commands and representative failures because command behavior is exercised outside narrow unit mocks
 **Depends on**: Phase 82
 **Requirements**: E2E-12, E2E-13
 **Success Criteria** (what must be TRUE):
+
   1. Config show, doctor, completion, version, install hook, env, paths, `edit --yaml` (workspace/template/config/registry), `integration list`, and `integration <id> config show/example` support flows have E2E coverage for success cases and output contracts
   2. Representative malformed input, missing entity, missing path, validation-failure, dirty repo, and permission/error cases are covered for in-scope command families
   3. Doctor tests verify local-only checks without depending on unavailable external integration CLIs unless those integrations are explicitly configured in fixtures
   4. Completion tests verify generated shell completions for current command tree shape without invoking TUI or external integrations
   5. The Phase 80 inventory source has no unmapped in-scope item except consciously deferred exclusions documented with rationale
   6. A minimal pre-Phase-83 proof confirms the chosen Istanbul instrumentation approach can produce mergeable coverage artifacts from at least one isolated subprocess E2E invocation
+
 **Plans**: 3 plans
 
 Plans:
+
 - [x] `82.1-01-PLAN.md` — Verify Phase 80/81.1/81.1.1/82 prerequisite surfaces first, then add readonly plus workspace-adjacent support-command suites
 - [x] `82.1-02-PLAN.md` — Add doctor/install and integration-config success-path support-command coverage
 - [x] `82.1-03-PLAN.md` — Add representative failure coverage, update the canonical E2E inventory, and commit the Phase 83 Istanbul smoke handoff
 
 ### Phase 83: Istanbul-Based Subprocess Coverage Reporting
+
 **Goal**: Developers can generate useful Istanbul-format code coverage reports that include both shared-process unit tests and isolated subprocess E2E files
 **Depends on**: Phase 82.1
 **Requirements**: COVR-01, COVR-02, COVR-03, COVR-04
 **Success Criteria** (what must be TRUE):
+
   1. Developer can run one command that generates coverage for the full test suite across shared-process unit tests and isolated runner files
   2. Coverage reports include source files exercised by subprocess E2E tests through Istanbul-compatible source instrumentation and per-process JSON artifact merging
   3. Coverage output is written to a stable ignored directory with human-readable summary output and machine-readable Istanbul artifacts usable by local verification gates
   4. Normal `bun run test`, `bun run test:unit`, and `bun run test:integ` runs are not materially slower unless coverage is explicitly requested
   5. Coverage implementation documents any tool-specific caveats without using those caveats as a substitute for subprocess source coverage
+
 **Plans:** 3 plans
 
 Plans:
+
 - [x] `83-01-PLAN.md` — Prerequisites, dependency installation, coverage script surface, and runner/preload scaffold
 - [x] `83-02-PLAN.md` — Instrumentation engine, subprocess delegation shim, preload plugin, and test execution wiring
 - [x] `83-03-PLAN.md` — Coverage merge, zero-baseline, report generation (text/HTML/JSON/LCOV), and regression verification
 
 ### Phase 84: Local Coverage Gates, Docs, and Release Prep
+
 **Goal**: Maintainers can keep the E2E inventory, mapped tests, coverage reports, and existing verification commands aligned without assuming CI exists
 **Depends on**: Phase 83
 **Requirements**: GATE-01, GATE-02, GATE-03
 **Success Criteria** (what must be TRUE):
+
   1. Local verification fails when a new in-scope command is added without updating the E2E coverage inventory
   2. Local verification fails when an in-scope inventory item has no mapped E2E test
   3. Existing unit, integration, dependency, and typecheck commands continue to pass with the expanded E2E and coverage tooling
   4. Maintainer can run the documented v0.17.1 verification path and see the inventory gates, coverage command, and existing quality commands represented
   5. Release prep updates version/changelog/README as needed for the new E2E and coverage commands
   6. README structured debug logging examples updated to match the shipped key/value format (promotes backlog 999.2)
+
 **Plans**: 3 plans
 
 Plans:
+
 - [x] `84-01-PLAN.md` — Verify Phase 80 inventory and Phase 83 coverage prerequisite surfaces before any Phase 84 implementation work
 - [x] `84-02-PLAN.md` — Add local `bun run verify` orchestration plus aggregated inventory, mapping, and coverage gates
 - [x] `84-03-PLAN.md` — Apply focused README, CHANGELOG, and version release-prep updates for verify and debug docs
@@ -703,76 +808,93 @@ Plans:
 **Plans:** 2/2 plans complete
 
 Plans:
+
 - [x] `84.1-01-PLAN.md` — Instrumented runtime-root coverage repair plus sentinel verify-gate checks
 - [x] `84.1-02-PLAN.md` — Verify canonical full-suite coverage and local release-prep gates after the instrumentation repair
 
 ### Phase 85: Core Real-Fixture Functional Hardening
+
 **Goal**: Core workspace, git, file, hook, env, config, and rollback behavior is covered through real temp directories and local git repositories rather than fragile mocks or command-wrapper-only assertions
 **Depends on**: Phase 84.1
 **Requirements**: CORE-01, CORE-02, CORE-03, CORE-04, CORE-05, GATE-03
 **Success Criteria** (what must be TRUE):
+
   1. Workspace lifecycle operations have additional real-fixture coverage for rollback, cleanup, rename, merge, missing path, and destructive safety boundaries
   2. Git operations have real local bare-remote coverage for sync/pull/push edge behavior not already covered by the first E2E pass, including failure and no-op cases
   3. Hook execution coverage proves ordering, cwd, env injection, failure propagation, captured output, and rollback interaction using real temp workspaces
   4. File operation coverage proves copy/symlink/glob/external warning/idempotency behavior where it affects workspace setup and cleanup
   5. Env/secrets/ports/config coverage proves resolver order, repo overlay, collision handling, backward-compatible YAML reads, and atomic write behavior with isolated config homes
   6. Coverage improvements come from real source execution; tests must not inline copies of implementation logic to satisfy coverage
+
 **Plans**: 4 plans
 
 Plans:
+
 - [ ] `85-01-PLAN.md` — Workspace lifecycle and rollback real-fixture coverage
 - [ ] `85-02-PLAN.md` — Git operation and branch-state real-fixture coverage
 - [ ] `85-03-PLAN.md` — Hook, file, env, secrets, ports, and config hardening coverage
 - [ ] `85-04-PLAN.md` — Coverage report review and focused gap closure for core source modules
 
 ### Phase 86: Workspace Command Workflow Edge Coverage
+
 **Goal**: Stable user-facing workspace command workflows have behavior coverage where CLI wiring matters, without chasing every prompt branch or brittle text formatting detail
 **Depends on**: Phase 85
 **Requirements**: CMD-01, CMD-02, CMD-03, CMD-04, GATE-03
 **Success Criteria** (what must be TRUE):
+
   1. `open --recreate` is covered with template-backed fixtures for no-change, added/removed repos, hook/env/file/integration changes, missing template, workspace-without-template, and force/cancel-safe behavior where automation-safe
   2. `clean --gone` is covered with local bare remotes for gone-branch detection, dirty-worktree refusal, dry-run/force behavior, multi-workspace handling, and removal failure reporting
   3. Destructive workspace commands (`clean`, `remove`, `merge`, `rename`) have CLI-level smoke for dry-run/force/error behavior that is not already proven by core libraries
   4. `run`, `paths`, `env`, `status`, `sync`, `push`, and `pull` command wrappers have focused coverage for meaningful option interactions, JSON contracts, cwd detection, and "nothing to do" branches
   5. Tests avoid brittle assertions on spinner wording or prompt rendering unless the text is part of a machine-readable or safety-critical contract
+
 **Plans**: 3 plans
 
 Plans:
+
 - [ ] `86-01-PLAN.md` — `open --recreate` and template/workspace update workflows
 - [ ] `86-02-PLAN.md` — `clean --gone` and destructive command safety workflows
 - [ ] `86-03-PLAN.md` — Command wrapper JSON/cwd/no-op/error contracts for run/status/env/paths/sync/push/pull
 
 ### Phase 87: Integration Contract and Source-Module Coverage
+
 **Goal**: Integration-related functionality is covered through real source modules and injected executors without requiring local Niri, AeroSpace, cmux, VSCode, browser, or forge CLI environments
 **Depends on**: Phase 86
 **Requirements**: INTG-02, INTG-03, INTG-04, GATE-03
 **Success Criteria** (what must be TRUE):
+
   1. `issue-utils` tests exercise the real source module and cover linked issue resolution, link/unlink persistence, error formatting, and CWD workspace resolution without inlining implementation copies
   2. `forge-utils` tests exercise the real source module and cover worktree/trunk selection, any-mode repo selection, forge mismatch errors, base branch selection, enabled-forge detection, and no-tool/no-remote cases
   3. Forge integration command modules (GitHub/GitLab/Gitea/Jira where applicable) have injected-executor contract tests for argument construction, JSON parse failures, missing PR/issue/repo cases, and safe browser-open behavior
   4. Session/IDE integrations (tmux/cmux/niri/AeroSpace/VSCode/IntelliJ where applicable) have contract tests for config parsing, command construction, artifact-bag use, skip behavior, and safe failure handling without launching real external tools
   5. Existing integration tests that currently mock by reimplementing source logic are replaced or supplemented so coverage reports reflect the real implementation
+
 **Plans**: 4 plans
 
 Plans:
+
 - [ ] `87-01-PLAN.md` — Real-source issue-utils and forge-utils coverage repair
 - [ ] `87-02-PLAN.md` — Forge command contract tests with injected executors
 - [ ] `87-03-PLAN.md` — Session and IDE integration contract tests without external environments
 - [ ] `87-04-PLAN.md` — Remove source-bypassing mock patterns and verify integration coverage deltas
 
 ### Phase 88: Functional Coverage Readiness Gate
+
 **Goal**: Maintainers can decide whether v0.17.1 is ready using functional coverage evidence, explicit accepted gaps, and local gates that protect the newly covered core areas
 **Depends on**: Phase 87
 **Requirements**: GATE-04, COVR-05
 **Success Criteria** (what must be TRUE):
+
   1. A functional-only coverage report is produced and documented, excluding TUI rendering surfaces and real external-environment plugins while keeping core integration contracts in scope
   2. Remaining uncovered functional areas are classified as accepted gap, deferred external-environment coverage, or must-fix-before-release
   3. Local verification includes either numeric thresholds or targeted sentinel gates for the functional core areas covered in phases 85-87
   4. The milestone inventory and requirements clearly distinguish "green suite", "covered source", and "functional confidence" so future agents do not equate passing tests with complete behavior
   5. Final release-readiness docs summarize what is covered, what is intentionally not covered, and what manual verification remains
+
 **Plans**: 2 plans
 
 Plans:
+
 - [ ] `88-01-PLAN.md` — Functional coverage report, accepted-gap classification, and gate design
 - [ ] `88-02-PLAN.md` — Implement readiness gates and final v0.17.1 release evidence update
 
@@ -830,4 +952,5 @@ Plans:
 **Plans:** 0 plans
 
 Plans:
+
 - [ ] TBD (promote with /gsd-review-backlog when ready)
