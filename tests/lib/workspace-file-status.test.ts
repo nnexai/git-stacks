@@ -150,7 +150,7 @@ describe("workspace file status view", () => {
     expect(invalidTarget).toMatchObject({ state: "error", severity: "error" })
     expect(invalidTarget?.details.errors.join("\n")).toContain("traversal")
     const drifted = view.workspace.entries.find((entry) => entry.target === "target")
-    expect(drifted?.details.sync?.sourceOnly.paths).toContain("source-only.txt")
+    expect(drifted?.details.sync?.sourceOnly?.paths).toContain("source-only.txt")
     const repoSection = view.repos.find((repo) => repo.name === "api")
     expect(repoSection?.warnings.join("\n")).toContain("Repo root not found")
     expect(existsSync(join(wsRoot, "deleted-api"))).toBe(false)
