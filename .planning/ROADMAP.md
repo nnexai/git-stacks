@@ -281,15 +281,16 @@ Plans:
 **Depends on**: Phase 95
 **Requirements**: NOTE-01, NOTE-02
 **Success Criteria** (what must be TRUE):
-  1. User can add, list, show, and clear notes for a workspace through a CLI command surface.
-  2. Notes are stored as append-only records outside project repos with created timestamp, workspace name, text, and optional lightweight tags.
-  3. Notes remain separate from `.planning` and managed project content.
-  4. Missing workspace, renamed workspace, cleared notes, empty note, and malformed note-store cases fail or recover predictably.
-  5. Tests cover persistence, ordering, workspace isolation, clear behavior, and summary metadata needed by the TUI.
-**Plans**: TBD
+  1. User can add, list, and clear notes for a workspace through `git-stacks notes`, with explicit workspace name, cwd detection, or `GS_WORKSPACE_NAME` fallback.
+  2. Notes are stored as append-only JSONL records outside project repos and `.planning`, using per-workspace files with plain-text note content and created timestamp.
+  3. `notes list` is the only read surface, displays newest notes first, defaults to a latest-N slice, and has a way to show all notes.
+  4. Missing workspace, orphaned old-name note files, cleared/empty notes, and malformed note stores fail or recover predictably without mutating corrupt data.
+  5. Tests cover persistence, ordering, resolution precedence, clear confirmation/`--force`, and summary metadata needed by later TUI work.
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD
+- [ ] 96-01-PLAN.md - Storage, path, and summary contract for workspace notes
+- [ ] 96-02-PLAN.md - `git-stacks notes` CLI surface and workspace resolution
 
 ### Phase 97: File Status View Model for TUI
 **Goal**: TUI code can display file copy/symlink/sync configuration and status using the same behavior exposed by `git-stacks files status`, without duplicating file sync logic.
@@ -801,7 +802,7 @@ Plans:
 | 93.1. Parallel Integration Test Runner and Coherent Coverage Merging | v0.18.0 | 3/3 | Complete | 2026-05-16 |
 | 94. v0.18.0 Docs and Release Prep | v0.18.0 | 3/3 | Complete | 2026-05-16 |
 | 95. Manual Workspace Commands | v0.19.0 | 4/4 | Complete   | 2026-05-17 |
-| 96. Workspace Notes | v0.19.0 | 0/TBD | Planned | — |
+| 96. Workspace Notes | v0.19.0 | 0/2 | Planned | — |
 | 97. File Status View Model for TUI | v0.19.0 | 0/TBD | Planned | — |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 0/TBD | Planned | — |
 | 99. Dashboard Actions and Correctness Polish | v0.19.0 | 0/TBD | Planned | — |
