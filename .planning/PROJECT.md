@@ -19,6 +19,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Add named manual workspace commands that reuse existing hook/env/cwd execution machinery.
 - Add linked issue opening from the workspace action menu.
 - Surface file config/status in the TUI, especially v0.18.0 `files.sync` status and drift from the `git-stacks files status` work.
+- Keep dashboard rollback progress visibility deferred; Phase 99 explicitly excluded that work.
 
 ## Recent State (2026-05-17)
 
@@ -27,6 +28,8 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - **Manual workspace commands** — templates and workspaces can define named manual commands that reuse the existing environment/cwd execution path without becoming lifecycle hooks.
 - **Workspace notes** — `git-stacks notes` stores append-only workspace notes in the config root, outside managed project repos.
 - **TUI file-status model** — `getWorkspaceFileStatusView()` and `useWorkspaceFileStatus()` expose grouped copy/symlink/sync status, summaries, severity, and lazy selected-workspace loading for the dashboard without duplicating `git-stacks files status` sync policy.
+- **Grounded dashboard control center** — `git-stacks manage` now has denser workspace rows, grouping, ordered detail sections, contextual footers, notes summaries, and file-status summaries.
+- **Dashboard action polish** — Repos can edit registry YAML from the action menu, workspaces can open linked issues or run visible manual commands from grouped menu rows, and tests guard disabled states, picker routing, failure persistence, and the rollback-progress exclusion.
 
 ### What shipped in v0.18.0
 
