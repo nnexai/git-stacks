@@ -82,8 +82,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TUI-01 | Phase 98 | Complete |
 | TUI-02 | Phase 98 | Complete |
 | TUI-03 | Phase 98 | Complete |
-| TUI-04 | Phase 97 | Planned |
-| TUI-05 | Phase 99 | Planned |
-| TUI-06 | Phase 99 | Planned |
+| TUI-04 | Phase 97 | Complete |
+| TUI-05 | Phase 99 | Complete |
+| TUI-06 | Phase 99 | Complete |
 | TUI-07 | Phase 98 | Complete |
-| DASH-01 | Phase 99 | Planned |
+| DASH-01 | Backlog | Deferred |

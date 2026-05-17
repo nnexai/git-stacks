@@ -19,7 +19,7 @@
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
 - ✅ **v0.17.1 Functional Confidence Coverage** — Phases 80-88 with 81.x/82.x/84.x splits (shipped 2026-05-15) — User-facing workspace, template, repo, label, message, support, and integration-contract behavior covered through local automation; safety fixes for gone-branch cleanup, JSON command contracts, and hook execution. See [milestones/v0.17.1-ROADMAP.md](milestones/v0.17.1-ROADMAP.md)
 - ✅ **v0.18.0 Workspace File Sync and Forge Sources** — Phases 89-94 with 93.1 split (completed 2026-05-16) — Bidirectional real-file sync under `files.sync` with `git-stacks files status|pull|push`, GitLab-first forge `--source` workspace creation, and release-gate test runner parallelization with coherent coverage merging.
-- 🟡 **v0.19.0 Operator Control Center** — Phases 95-99 (planning) — Manual workspace commands, workspace notes, file status in the TUI, grounded dashboard density/grouping improvements, repo edit, linked issue opening, and rollback progress visibility.
+- 🟡 **v0.19.0 Operator Control Center** — Phases 95-99 (planning) — Manual workspace commands, workspace notes, file status in the TUI, grounded dashboard density/grouping improvements, repo edit, linked issue opening, and manual command dashboard actions; rollback progress visibility is deferred.
 
 ## Phases
 
@@ -254,7 +254,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata. (completed 2026-05-17)
 - [x] **Phase 97: File Status View Model for TUI** - Expose a reusable TUI-facing file config/status model from the v0.18.0 files status behavior, covering copy, symlink, and sync mappings. (completed 2026-05-17)
 - [x] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots. (completed 2026-05-17)
-- [x] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, and complete rollback progress visibility in dashboard create flows. (completed 2026-05-17)
+- [x] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, manual command actions, and action-menu regression coverage. (completed 2026-05-17)
 
 ## Phase Details
 
@@ -343,16 +343,16 @@ Plans:
 
 ### Phase 99: Dashboard Actions and Correctness Polish
 
-**Goal**: Dashboard action menus expose the missing useful actions and dashboard create flows surface all rollback progress.
+**Goal**: Dashboard action menus expose the missing useful actions, with rollback progress visibility explicitly excluded by `99-CONTEXT.md`.
 **Depends on**: Phase 98
-**Requirements**: TUI-05, TUI-06, DASH-01
+**Requirements**: TUI-05, TUI-06
 **Success Criteria** (what must be TRUE):
 
   1. Repos tab action menu includes an edit action wired consistently with workspace/template edit behavior.
   2. Workspace action menu can open linked issues when issue metadata is configured, using existing issue integration behavior and clear disabled/error states.
-  3. Dashboard create flows display every rollback progress event emitted by `createWorkspace()`, including file ops, workspace file ops, and env-file writes.
+  3. Workspace action menu can discover and run visible manual workspace commands while preserving hidden `pre*`/`post*` command semantics.
   4. Action menu shortcuts, labels, disabled states, and footer hints stay coherent across Workspaces, Templates, and Repos.
-  5. Focused component/snapshot tests cover repo edit, linked issue opening, rollback progress rendering, and action-menu regressions.
+  5. Focused component/snapshot tests cover repo edit, linked issue opening, manual command picking, action-menu regressions, and the rollback-progress exclusion guard.
 
 **Plans**: TBD
 
@@ -930,13 +930,13 @@ Plans:
 | 96. Workspace Notes | v0.19.0 | 2/2 | Complete   | 2026-05-17 |
 | 97. File Status View Model for TUI | v0.19.0 | 2/2 | Complete    | 2026-05-17 |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 3/3 | Complete   | 2026-05-17 |
-| 99. Dashboard Actions and Correctness Polish | v0.19.0 | 4/4 | Complete   | 2026-05-17 |
+| 99. Dashboard Actions and Correctness Polish | v0.19.0 | 4/4 | Complete    | 2026-05-17 |
 
 ## Backlog
 
-### ~~Phase 999.1: Dashboard Rollback Progress Visibility~~ (PROMOTED → Phase 99)
+### Phase 999.1: Dashboard Rollback Progress Visibility (BACKLOG)
 
-**Promoted:** Folded into Phase 99 Dashboard Actions and Correctness Polish.
+**Deferred:** Explicitly excluded from Phase 99 by `99-CONTEXT.md`; keep as backlog until deliberately re-promoted.
 **Source:** `.planning/v0.17.0-MILESTONE-AUDIT.md` ENGN-02 gap.
 
 ### ~~Phase 999.2: README Structured Debug Logging Format~~ (PROMOTED → Phase 84 SC 6)
@@ -949,7 +949,7 @@ Plans:
 **Goal:** Run or fill validation for the v0.17.0 phases whose audit status is partial or missing: 74, 75, 76, 77, 78, 78.1, and 79.
 **Source:** `.planning/v0.17.0-MILESTONE-AUDIT.md` Nyquist coverage section.
 **Requirements:** TBD
-**Plans:** 0 plans
+**Plans:** 4/4 plans complete
 
 Plans:
 

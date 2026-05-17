@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.19.0
 milestone_name: Operator Control Center
-status: verifying
-stopped_at: Completed 99-04-PLAN.md
-last_updated: "2026-05-17T14:26:14.672Z"
+status: ready_to_plan
+stopped_at: Phase 99 complete (4/4) — ready to discuss Phase 999.1
+last_updated: 2026-05-17T14:30:24.052Z
 last_activity: 2026-05-17
 progress:
   total_phases: 33
   completed_phases: 4
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
   percent: 12
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-17)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 99 — Dashboard Actions and Correctness Polish
+**Current focus:** Phase 999.1 — dashboard rollback progress visibility (backlog)
 
 ## Current Position
 
-Phase: 99 (Dashboard Actions and Correctness Polish) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Phase: 999.1
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-05-17
 
 ## Performance Metrics
@@ -75,6 +75,7 @@ Last activity: 2026-05-17
 | Phase 98 P01 | 40 min | 2 tasks | 8 files |
 | Phase 98 P02 | 35 min | 2 tasks | 4 files |
 | Phase 98 P03 | 25 min | 2 tasks | 7 files |
+| 99 | 4 | - | - |
 
 ## Accumulated Context
 
@@ -154,7 +155,7 @@ Last activity: 2026-05-17
 - Phase 93.1 inserted after Phase 93: Parallel integration test runner and coherent coverage merging (URGENT)
 - Phase 93.1 completed on 2026-05-16: integration test runs now support bounded parallel workers with coherent per-file failure attribution and merged Istanbul coverage artifacts.
 - Phase 94 completed on 2026-05-16: v0.18.0 RC docs, changelog, smoke gate, package metadata, and tag handoff were prepared.
-- v0.19.0 milestone initialized on 2026-05-17: Phase 95-99 cover manual workspace commands, workspace notes, TUI file status visibility, grounded dashboard control-center improvements, repo edit, linked issue opening, and rollback progress visibility.
+- v0.19.0 milestone initialized on 2026-05-17: Phase 95-99 cover manual workspace commands, workspace notes, TUI file status visibility, grounded dashboard control-center improvements, repo edit, linked issue opening, and manual command dashboard actions; rollback progress visibility remains deferred.
 
 ### Pending Todos
 
