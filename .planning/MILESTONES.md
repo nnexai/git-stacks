@@ -1,5 +1,33 @@
 # Milestones
 
+## v0.19.0-rc.1 Operator Control Center (Release Candidate: 2026-05-17)
+
+**Phases completed:** 5 phases, 15 plans, 22 tasks
+
+**Key accomplishments:**
+
+- Workspace notes storage now uses config-root JSONL files with fail-closed corruption handling and a reusable count/latest summary helper.
+- `git-stacks notes` now supports add/list/clear with deterministic workspace resolution, newest-first display, and guarded clear semantics over the JSONL note store.
+- Grouped workspace/repo file-status model with TUI severity, detail buckets, and CLI parity tests over the existing files status behavior
+- Lazy dashboard file-status hook that loads the grouped model for one selected workspace and returns explicit dashboard state
+- Typed workspace grouping and focused row/list snapshots for the grounded dashboard list surface
+- Scrollable operational workspace detail with notes and Phase 97 file-status data
+- Contextual dashboard footer and terminal snapshots for the Phase 98 acceptance matrix
+- Repos tab registry editing via `Edit ($EDITOR)` with stable existing shortcuts and dashboard reload after editor exit
+- Workspace `Issue...` action with disabled state, direct single-issue opening, multi-tracker picker, and persistent progress output
+- Workspace `Commands...` action with visible-command picker, `runManualCommand()` execution, and persistent failure output
+- Focused regression tests for grouped action rows, failure persistence, and explicit non-implementation of rollback progress rows
+
+**Release candidate boundary:**
+
+- Package metadata and tag target are `0.19.0-rc.1` / `v0.19.0-rc.1`; final `0.19.0` tagging remains separate after RC validation.
+- Dashboard rollback progress visibility remains deferred as backlog work and was explicitly excluded from Phase 99.
+- Known deferred artifacts at close: 6 acknowledged open items, recorded in `.planning/STATE.md`.
+
+**Archive:** [.planning/milestones/v0.19.0-ROADMAP.md](.planning/milestones/v0.19.0-ROADMAP.md)
+
+---
+
 ## v0.17.1 Functional Confidence Coverage (Shipped: 2026-05-15)
 
 **Phases completed:** 13 phases, 35 plans, 35 requirements

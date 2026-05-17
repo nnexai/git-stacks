@@ -569,6 +569,51 @@ Living document — one section per shipped milestone.
 
 ---
 
+## Milestone: v0.19.0-rc.1 — Operator Control Center
+
+**Prepared:** 2026-05-17
+**Phases:** 5 (Phases 95-99) | **Plans:** 15
+
+### What Was Built
+
+- Manual workspace commands for explicit operator-triggered actions.
+- Workspace notes stored outside managed project repositories.
+- TUI file-status model and lazy dashboard loading for copy, symlink, and sync mappings.
+- Denser grounded dashboard layout with grouping, ordered detail sections, notes summaries, file-status summaries, and contextual footers.
+- Dashboard action polish for repo edit, linked issue opening, visible manual command execution, disabled states, picker routing, and failure persistence.
+
+### What Worked
+
+- The explicit rollback-progress exclusion kept Phase 99 focused and prevented older `DASH-01` text from expanding the scope.
+- Reusing source helpers such as `listManualCommands()`, `runManualCommand()`, and the file-status model kept dashboard behavior aligned with CLI behavior.
+- Focused component/integration tests were enough to validate menu behavior without adding broad TUI churn.
+
+### What Was Inefficient
+
+- Manager and roadmap tooling still surfaced stale older milestone recommendations, so live roadmap/state validation remained necessary.
+- Bun module-cache interactions required separating some dashboard test files into distinct `bun test` invocations.
+- The release-candidate closeout reused a final-release milestone archive path, requiring manual RC wording corrections.
+
+### Patterns Established
+
+- RC closeout should keep package version, changelog entry, and tag name aligned before verification.
+- Dashboard actions should stay grouped, visible, disabled with reasons, and route failures through the generic progress view until keypress.
+- Backlog exclusions should be backed by negative tests when older roadmap text could pull scope back in.
+
+### Key Lessons
+
+1. Treat explicit user scope overrides as stronger than stale roadmap requirements and make them visible in context, verification, and tests.
+2. Keep action-menu additions source-helper-backed; avoid new subprocess command surfaces when existing source behavior is testable.
+3. RC archive tooling needs a first-class prerelease mode so generated milestone language does not imply final release.
+
+### Cost Observations
+
+- Model mix: manager plus executor/security agents under the repo's balanced profile.
+- Sessions: one manager-driven closeout session.
+- Notable: Phase 99 security verification closed 12/12 plan-time threats, including the accepted manual-command risk.
+
+---
+
 ## Cross-Milestone Trends
 
 | Milestone | Phases | Plans | Days | Rework Plans |

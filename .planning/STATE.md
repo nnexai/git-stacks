@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.19.0
 milestone_name: Operator Control Center
-status: ready_to_plan
-stopped_at: Phase 99 complete (4/4) — ready to discuss Phase 999.1
-last_updated: 2026-05-17T14:30:24.052Z
-last_activity: 2026-05-17
+status: v0.19.0-rc.1 release candidate prepared
+stopped_at: v0.19.0-rc.1 closeout in progress
+last_updated: "2026-05-17T14:45:25.813Z"
+last_activity: 2026-05-17 — Milestone v0.19.0 archived as release candidate v0.19.0-rc.1
 progress:
-  total_phases: 33
-  completed_phases: 4
+  total_phases: 34
+  completed_phases: 5
   total_plans: 15
   completed_plans: 15
-  percent: 12
+  percent: 15
 ---
 
 # Project State
@@ -21,14 +21,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-17)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 999.1 — dashboard rollback progress visibility (backlog)
+**Current focus:** v0.19.0-rc.1 release candidate validation
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-05-17
+Phase: Milestone v0.19.0 release candidate
+Plan: —
+Status: v0.19.0-rc.1 release candidate prepared
+Last activity: 2026-05-17 — Milestone v0.19.0 archived as release candidate v0.19.0-rc.1
+
+## Deferred Items
+
+Items acknowledged and deferred at v0.19.0-rc.1 closeout on 2026-05-17:
+
+| Category | Item | Status |
+|----------|------|--------|
+| quick_task | 260515-u0q-update-worktree-creation-so-an-existing- | missing |
+| todo | 2026-05-15-add-manual-workspace-commands.md | deferred |
+| todo | 2026-05-15-add-workspace-notes.md | deferred |
+| todo | 2026-05-15-add-workspace-stale-view.md | deferred |
+| todo | 2026-05-15-create-workspace-from-forge-source.md | deferred |
+| todo | 2026-05-15-improve-template-composition-understanding.md | deferred |
 
 ## Performance Metrics
 
@@ -183,4 +196,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Continue execution with `$gsd-execute-phase 99`.
+- Start the next milestone with /gsd-new-milestone

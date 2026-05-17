@@ -8,7 +8,7 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Current Milestone: v0.19.0 Operator Control Center
+## Completed RC: v0.19.0 Operator Control Center
 
 **Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
 
@@ -21,9 +21,11 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Surface file config/status in the TUI, especially v0.18.0 `files.sync` status and drift from the `git-stacks files status` work.
 - Keep dashboard rollback progress visibility deferred; Phase 99 explicitly excluded that work.
 
+**Release candidate:** `0.19.0-rc.1` is prepared for validation. Final `0.19.0` tagging remains separate.
+
 ## Recent State (2026-05-17)
 
-### What shipped so far in v0.19.0
+### What is in v0.19.0-rc.1
 
 - **Manual workspace commands** — templates and workspaces can define named manual commands that reuse the existing environment/cwd execution path without becoming lifecycle hooks.
 - **Workspace notes** — `git-stacks notes` stores append-only workspace notes in the config root, outside managed project repos.
@@ -340,18 +342,16 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Current State
 
-**Latest milestone release:** v0.17.1 Functional Confidence Coverage (2026-05-15)
+**Latest release candidate:** v0.19.0-rc.1 Operator Control Center (2026-05-17)
 
-**Shipped:** v0.17.1 closed the broad local confidence pass for workspace, template, repo, label, message, support, and integration-contract surfaces. Common workspace flows are now covered with local automation, command contracts were tightened, and the release audit passed with all v0.17.1 requirements complete.
+**Prepared:** v0.19.0-rc.1 adds manual workspace commands, workspace notes, TUI file status visibility, a denser grounded dashboard control center, repo edit actions, linked issue opening, and manual command dashboard actions. Final v0.19.0 tagging remains separate after RC validation.
 
-**Status:** Phase 89 completed the foundational `files.sync` materialization layer. Next is the Phase 90 command/policy surface for `git-stacks files status|pull|push`; forge source work remains a GitLab-first track with explicit research and validation constraints.
+**Status:** RC archive and validation are the current release focus. Dashboard rollback progress visibility remains deferred in backlog per the Phase 99 scope override.
 
 ## Next Milestone Goals
-- Add the user-facing command and conflict-policy layer for `files.sync` now that Phase 89 provides real-file materialization and repo-local excludes.
-- Expose `git-stacks files status|pull|push` for inspecting, pulling, and pushing synced file targets without overloading git branch `sync`.
-- Keep sync-back explicit and operator-controlled; no automatic lifecycle push by default.
-- Avoid full file-hash manifests for large sync trees; choose a lighter status/conflict model that scales to `.planning/`.
-- Add forge-source workspace creation with GitLab merge requests first, then Gitea and GitHub, using enabled forge integrations and normal template-backed workspace creation.
+- Validate the v0.19.0 release candidate and decide whether to promote it to final `0.19.0`.
+- Keep dashboard rollback progress visibility as explicit backlog until deliberately re-promoted.
+- Start the next milestone with fresh requirements after RC validation.
 
 ## Completed Milestone: v0.17.0 Engine Hardening & Template Labels (2026-04-06)
 
@@ -528,4 +528,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-05-17 for v0.19.0 Operator Control Center milestone start*
+*Last updated: 2026-05-17 for v0.19.0-rc.1 Operator Control Center release candidate*
