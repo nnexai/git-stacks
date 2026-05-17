@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createEffect, createSignal, createMemo, Show, Switch, Match } from "solid-js"
+import { createEffect, createSignal, createMemo, Show, Switch, Match, For } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
 import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
@@ -24,6 +24,7 @@ import { MessageOverlay } from "./MessageOverlay"
 import { TemplateActionMenu } from "./TemplateActionMenu"
 import { RepoActionMenu } from "./RepoActionMenu"
 import { RemoveBlockedView } from "./RemoveBlockedView"
+import { CenteredDialog } from "./CenteredDialog"
 import {
   cleanWorkspace,
   closeWorkspace,
@@ -53,8 +54,10 @@ import type {
   WorkspaceEntry,
   WorkspaceGroupingMode,
   WorkspaceStatus,
+  IssueCandidate,
 } from "./types"
 import { matchesLabels } from "../../lib/labels"
+import { issueTrackerLabels, openWorkspaceIssue } from "./issue-actions"
 
 export function matchesWorkspaceFilter(workspace: Workspace, filter: string): boolean {
   const rawFilter = filter.trim()
@@ -100,6 +103,35 @@ function workspaceGroupLabels(entry: WorkspaceEntry, mode: WorkspaceGroupingMode
   if (mode === "state") return [workspaceStateGroup(entry.status)]
   if (mode === "template") return [`template: ${entry.workspace.template ?? "[adhoc]"}`]
   return []
+}
+
+function IssuePicker(props: {
+  candidates: IssueCandidate[]
+  onSelect: (candidate: IssueCandidate) => void
+  onCancel: () => void
+}) {
+  const [cursor, setCursor] = createSignal(0)
+  useKeyboard((key) => {
+    if (key.name === "escape") { props.onCancel(); return }
+    if (key.name === "down") { setCursor(c => Math.min(c + 1, props.candidates.length - 1)); return }
+    if (key.name === "up") { setCursor(c => Math.max(c - 1, 0)); return }
+    if (key.name === "return") {
+      const candidate = props.candidates[cursor()]
+      if (candidate) props.onSelect(candidate)
+    }
+  })
+  return (
+    <CenteredDialog title="Issue" size="medium">
+      <For each={props.candidates}>
+        {(candidate, i) => (
+          <text fg={i() === cursor() ? "cyan" : "white"}>
+            {i() === cursor() ? "> " : "  "}{candidate.label}
+          </text>
+        )}
+      </For>
+      <text fg="gray">{"\n"}  [Esc] Back</text>
+    </CenteredDialog>
+  )
 }
 
 export default function App() {
@@ -236,6 +268,12 @@ export default function App() {
   const allWorkspaces = createMemo(() => entries().map(e => e.workspace))
   const selectedWorkspace = createMemo(() => currentEntry()?.workspace)
   const fileStatus = useWorkspaceFileStatus(selectedWorkspace)
+  const selectedIssueCandidates = createMemo(() => buildIssueCandidates(selectedWorkspace()))
+  const issueDisabledReason = createMemo(() => {
+    const workspace = selectedWorkspace()
+    if (!workspace) return "none linked" as const
+    return selectedIssueCandidates().length > 0 ? undefined : "none linked" as const
+  })
 
   createEffect(() => {
     void selectedWorkspace()?.name
@@ -362,6 +400,17 @@ export default function App() {
 
     if (action === "edit") {
       await launchEditor(name)
+      return
+    }
+
+    if (action === "issue") {
+      const candidates = buildIssueCandidates(entry.workspace)
+      if (candidates.length === 0) return
+      if (candidates.length === 1) {
+        await executeIssueOpen(entry.workspace.name, candidates[0])
+      } else {
+        setView({ view: "issue-picker", index, candidates })
+      }
       return
     }
 
@@ -521,6 +570,34 @@ export default function App() {
       setPushSummary({ text: `Push failed: ${msg}. Press any key to continue.`, color: "red" })
     }
     setPushDone(true)
+  }
+
+  async function executeIssueOpen(workspaceName: string, candidate: IssueCandidate) {
+    setProgressLines([])
+    setProgressDone(false)
+    setView({ view: "progress", message: `Opening ${candidate.label}...` })
+    const result = await openWorkspaceIssue(workspaceName, candidate)
+    setProgressLines(prev => [
+      ...prev,
+      ...result.lines,
+      result.exitCode === 0
+        ? `Opened ${candidate.label}.`
+        : `ERROR: ${candidate.label} open failed with exit code ${result.exitCode}.`,
+    ])
+    setProgressDone(true)
+  }
+
+  function buildIssueCandidates(workspace: Workspace | undefined): IssueCandidate[] {
+    const integrations = workspace?.settings?.integrations as Record<string, unknown> | undefined
+    if (!integrations) return []
+    const trackers: IssueCandidate["tracker"][] = ["github", "gitlab", "gitea", "jira"]
+    return trackers.flatMap((tracker) => {
+      const value = integrations[tracker] as Record<string, unknown> | undefined
+      const issue = value?.issue
+      if (issue === undefined || issue === null || String(issue).trim() === "") return []
+      const issueId = String(issue)
+      return [{ tracker, issueId, label: `${issueTrackerLabels[tracker]}: ${issueId}` }]
+    })
   }
 
   async function launchEditor(name: string) {
@@ -1070,6 +1147,7 @@ export default function App() {
 
     // Action menu
     if (v.view === "action-menu") return // ActionMenu has its own keyboard handler
+    if (v.view === "issue-picker") return // Issue picker handles its own keys
 
     // Inline input
     if (v.view === "inline-input") return
@@ -1277,6 +1355,7 @@ export default function App() {
           <Match when={tab() === "workspaces"}>
             <ActionMenu
               workspaceName={currentEntry()?.workspace.name ?? ""}
+              issueDisabledReason={issueDisabledReason()}
               onAction={(action) => runAction(action, (view() as any).index)}
               onCancel={() => setView({ view: "list" })}
               onRun={() => handleRun(selectedName())}
@@ -1290,6 +1369,22 @@ export default function App() {
             />
           </Match>
         </Switch>
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "issue-picker"}>
+        {(() => {
+          const v = view() as { view: "issue-picker"; index: number; candidates: IssueCandidate[] }
+          return (
+            <IssuePicker
+              candidates={v.candidates}
+              onCancel={() => setView({ view: "action-menu", index: v.index })}
+              onSelect={(candidate) => {
+                const workspace = filteredEntries()[v.index]?.workspace
+                if (workspace) void executeIssueOpen(workspace.name, candidate)
+              }}
+            />
+          )
+        })()}
       </Show>
 
       {/* Repo action menu — full-screen CenteredDialog overlay */}

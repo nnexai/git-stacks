@@ -21,6 +21,8 @@ const wsFixture = {
   created: "2026-01-15T00:00:00.000Z",
   repos: [] as any[],
 }
+let workspaceSettings: Record<string, unknown> = {}
+const workspaceFixture = () => ({ ...wsFixture, settings: workspaceSettings })
 
 // Inline registry fixture
 const registryFixture = [
@@ -34,6 +36,10 @@ const registryFixture = [
 const listRegistryEntriesMock = mock(() => registryFixture)
 const registryValidateMock = mock(() => ({ ok: true }))
 const editRegistryYamlMock = mock(() => ({ path: "/tmp/registry.yml", validate: registryValidateMock }))
+const openWorkspaceIssueMock = mock(async (_workspaceName: string, candidate: { label: string }) => ({
+  exitCode: 0,
+  lines: [`opened ${candidate.label}`],
+}))
 
 // Inline template fixture
 const templateFixture = {
@@ -48,8 +54,8 @@ let wsRemoved = false
 // Mock config module with inline fixtures — resilient to module cache ordering.
 // listWorkspaces returns empty array when wsRemoved to simulate post-delete state.
 mock.module("../../../src/lib/config", () => ({
-  listWorkspaces: mock(() => (wsRemoved ? [] : [wsFixture])),
-  readWorkspace: mock((_name: string) => wsFixture),
+  listWorkspaces: mock(() => (wsRemoved ? [] : [workspaceFixture()])),
+  readWorkspace: mock((_name: string) => workspaceFixture()),
   writeWorkspace: mock(() => {}),
   workspaceExists: mock((name: string) => !wsRemoved && name === "test-ws"),
   workspacePath: mock((name: string) => `${configDir}/workspaces/${name}.yml`),
@@ -105,6 +111,16 @@ mock.module("../../../src/lib/workspace-yaml", () => makeWorkspaceYamlMock({
   editRegistryYaml: editRegistryYamlMock,
 }))
 
+mock.module("../../../src/tui/dashboard/issue-actions", () => ({
+  issueTrackerLabels: {
+    github: "GitHub",
+    gitlab: "GitLab",
+    gitea: "Gitea",
+    jira: "Jira",
+  },
+  openWorkspaceIssue: openWorkspaceIssueMock,
+}))
+
 // Mock lifecycle hooks
 mock.module("../../../src/lib/lifecycle", () => ({
   runHooks: mock(async () => {}),
@@ -132,9 +148,11 @@ let activeRenderer: { destroy(): void } | null = null
 beforeEach(() => {
   // Reset wsRemoved state and re-seed workspace YAML for each test
   wsRemoved = false
+  workspaceSettings = {}
   listRegistryEntriesMock.mockClear()
   registryValidateMock.mockClear()
   editRegistryYamlMock.mockClear()
+  openWorkspaceIssueMock.mockClear()
   process.env.EDITOR = "true"
   write(configDir, "workspaces/test-ws.yml", `name: test-ws
 branch: feature/test
@@ -248,6 +266,72 @@ describe("integration: action menu dispatch", () => {
     expect(listRegistryEntriesMock.mock.calls.length).toBeGreaterThan(1)
     expect(frame).toContain("my-repo")
     expect(frame).not.toContain("[y]")
+  })
+
+  test("single linked issue opens directly and keeps progress visible until keypress", async () => {
+    workspaceSettings = { integrations: { github: { issue: "ABC-123" } } }
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(captureCharFrame()).toContain("[i] Issue...")
+
+    mockInput.pressKey("i")
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    expect(openWorkspaceIssueMock).toHaveBeenCalledWith("test-ws", {
+      tracker: "github",
+      issueId: "ABC-123",
+      label: "GitHub: ABC-123",
+    })
+    let frame = captureCharFrame()
+    expect(frame).toContain("Opening GitHub: ABC-123")
+    expect(frame).toContain("opened GitHub: ABC-123")
+
+    mockInput.pressKey("a")
+    await renderOnce()
+    frame = captureCharFrame()
+    expect(frame).toContain("test-ws")
+    expect(frame).not.toContain("Opening GitHub: ABC-123")
+  })
+
+  test("multiple linked issues show a tracker picker", async () => {
+    workspaceSettings = { integrations: { github: { issue: "ABC-123" }, jira: { issue: "OPS-7" } } }
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("i")
+    await renderOnce()
+
+    let frame = captureCharFrame()
+    expect(frame).toContain("GitHub: ABC-123")
+    expect(frame).toContain("Jira: OPS-7")
+
+    mockInput.pressArrow("down")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    expect(openWorkspaceIssueMock).toHaveBeenCalledWith("test-ws", {
+      tracker: "jira",
+      issueId: "OPS-7",
+      label: "Jira: OPS-7",
+    })
+    frame = captureCharFrame()
+    expect(frame).toContain("Opening Jira: OPS-7")
   })
 })
 
