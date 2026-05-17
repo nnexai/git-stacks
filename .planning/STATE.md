@@ -4,13 +4,13 @@ milestone: v0.19.0
 milestone_name: Operator Control Center
 status: executing
 stopped_at: Phase 98 context gathered
-last_updated: "2026-05-17T13:18:57.504Z"
-last_activity: 2026-05-17 — Phase 95 planning complete
+last_updated: "2026-05-17T13:27:00.908Z"
+last_activity: 2026-05-17
 progress:
   total_phases: 33
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 6
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-17)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 95 — Manual Workspace Commands
+**Current focus:** Phase 97 — File Status View Model for TUI
 
 ## Current Position
 
-Phase: 95 — Manual Workspace Commands
-Plan: 95-01 through 95-04
+Phase: 97 (File Status View Model for TUI) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-05-17 — Phase 95 planning complete
+Last activity: 2026-05-17
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Last activity: 2026-05-17 — Phase 95 planning complete
 | 94 | 3 | - | - |
 | Phase 96 P02 | 24 | 2 tasks | 3 files |
 | Phase 96 P01 | 18 | 2 tasks | 5 files |
+| Phase 97 P01 | 12 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
