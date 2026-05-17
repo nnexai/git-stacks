@@ -25,6 +25,7 @@ describe("ActionMenu", () => {
     expect(frame).toContain("Merge")
     expect(frame).toContain("Sync")
     expect(frame).toContain("Push")
+    expect(frame).toContain("Issue...")
   })
 
   test("shows cursor indicator on first item initially", async () => {
@@ -156,5 +157,46 @@ describe("ActionMenu", () => {
     mockInput.pressKey("p")
     await renderOnce()
     expect(dispatched).toBe("push")
+  })
+
+  test("renders enabled issue row and dispatches i shortcut", async () => {
+    let dispatched = ""
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="ws"
+          issueDisabledReason={undefined}
+          onAction={(a) => { dispatched = a }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("[i] Issue...")
+    mockInput.pressKey("i")
+    await renderOnce()
+    expect(dispatched).toBe("issue")
+  })
+
+  test("disabled issue row is visible and cannot be activated", async () => {
+    let dispatched = ""
+    const { mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <ActionMenu
+          workspaceName="ws"
+          issueDisabledReason="none linked"
+          onAction={(a) => { dispatched = a }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("[i] Issue... (none linked)")
+    mockInput.pressKey("i")
+    await renderOnce()
+    expect(dispatched).toBe("")
   })
 })

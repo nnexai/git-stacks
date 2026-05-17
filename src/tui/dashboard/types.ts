@@ -36,7 +36,13 @@ export type WorkspaceFileStatusState =
 
 export type Tab = "workspaces" | "templates" | "repos"
 
-export type Action = "open" | "close" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync" | "push" | "create-workspace"
+export type Action = "open" | "close" | "edit" | "rename" | "clean" | "remove" | "merge" | "sync" | "push" | "create-workspace" | "issue"
+
+export type IssueCandidate = {
+  tracker: "github" | "gitlab" | "gitea" | "jira"
+  label: string
+  issueId: string
+}
 
 export type UIView =
   | { view: "list" }
@@ -46,6 +52,7 @@ export type UIView =
   | { view: "sync-progress"; message: string }
   | { view: "push-progress"; message: string }
   | { view: "inline-input"; index: number; purpose: "rename" | "clone-template" | "add-label"; prefill: string }
+  | { view: "issue-picker"; index: number; candidates: IssueCandidate[] }
   | { view: "messages"; workspaceName: string }
   | { view: "wizard-create"; source: "template"; templateIndex: number }
   | { view: "wizard-create-adhoc"; source: "repos"; repoNames: string[] }
