@@ -2,6 +2,7 @@
 created: 2026-05-15T20:42:51.892Z
 title: Improve TUI dashboard experience
 area: ui
+resolves_phase: 98
 files:
   - src/tui/dashboard/App.tsx
   - src/tui/dashboard/WorkspaceDetail.tsx

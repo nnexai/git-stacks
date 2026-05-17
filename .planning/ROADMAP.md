@@ -18,7 +18,8 @@
 - ✅ **v0.16.0 Core Engine & Observability** — Phases 69-73 (shipped 2026-04-05) — Workspace engine extraction, stderr debug observability, focused module tests, dependency gate. See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md)
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
 - ✅ **v0.17.1 Functional Confidence Coverage** — Phases 80-88 with 81.x/82.x/84.x splits (shipped 2026-05-15) — User-facing workspace, template, repo, label, message, support, and integration-contract behavior covered through local automation; safety fixes for gone-branch cleanup, JSON command contracts, and hook execution. See [milestones/v0.17.1-ROADMAP.md](milestones/v0.17.1-ROADMAP.md)
-- 🟡 **v0.18.0 Workspace File Sync and Forge Sources** — Phases 89-94 with 93.1 split (planning) — Bidirectional real-file sync under `files.sync` with `git-stacks files status|pull|push`, GitLab-first forge `--source` workspace creation, and release-gate test runner parallelization with coherent coverage merging.
+- ✅ **v0.18.0 Workspace File Sync and Forge Sources** — Phases 89-94 with 93.1 split (completed 2026-05-16) — Bidirectional real-file sync under `files.sync` with `git-stacks files status|pull|push`, GitLab-first forge `--source` workspace creation, and release-gate test runner parallelization with coherent coverage merging.
+- 🟡 **v0.19.0 Operator Control Center** — Phases 95-99 (planning) — Manual workspace commands, workspace notes, file status in the TUI, grounded dashboard density/grouping improvements, repo edit, linked issue opening, and rollback progress visibility.
 
 ## Phases
 
@@ -233,7 +234,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 87: Integration Contract and Source-Module Coverage** - Replace brittle or source-bypassing integration tests with injected-executor contract tests that exercise the real forge/issue/session modules without launching external tools (completed 2026-05-15)
 - [x] **Phase 88: Functional Coverage Readiness Gate** - Reassess functional-only coverage, document remaining accepted gaps, and add local gates or inventories that prevent regression in the newly covered core areas (completed 2026-05-15)
 
-### 🟡 v0.18.0 Workspace File Sync and Forge Sources (Active)
+### ✅ v0.18.0 Workspace File Sync and Forge Sources (Complete)
 
 **Milestone Goal:** Make workspace file materialization useful for private planning/agent configuration through bidirectional real-file sync, then add a GitLab-first forge source path for creating normal template-backed workspaces from merge requests.
 
@@ -245,7 +246,92 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 93.1: Parallel Integration Test Runner and Coherent Coverage Merging** - Run isolated integration test files in bounded parallel workers while preserving deterministic output, accurate failure reporting, and one coherent merged coverage result. (completed 2026-05-16)
 - [x] **Phase 94: v0.18.0 Docs and Release Prep** - Document `files.sync`, `git-stacks files status|pull|push`, forge-source workspace creation, validation limits, and prepare the user-facing v0.18.0 release artifacts. (completed 2026-05-16)
 
+### 🟡 v0.19.0 Operator Control Center (Active)
+
+**Milestone Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
+
+- [ ] **Phase 95: Manual Workspace Commands** - Add named, inspectable, manually-triggered template/workspace commands that reuse existing hook/env/cwd execution machinery without becoming lifecycle hooks.
+- [ ] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata.
+- [ ] **Phase 97: File Status View Model for TUI** - Expose a reusable TUI-facing file config/status model from the v0.18.0 files status behavior, covering copy, symlink, and sync mappings.
+- [ ] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots.
+- [ ] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, and complete rollback progress visibility in dashboard create flows.
+
 ## Phase Details
+
+### Phase 95: Manual Workspace Commands
+**Goal**: Users can define, inspect, and run named workspace commands manually, using existing workspace execution context rather than lifecycle timing.
+**Depends on**: Phase 94
+**Requirements**: WCMD-01, WCMD-02, WCMD-03, WCMD-04
+**Success Criteria** (what must be TRUE):
+  1. Templates and workspaces accept a narrow `commands` shape for named manual commands with description, command, and cwd/repo/scope targeting.
+  2. Workspace command resolution follows existing template inheritance/snapshot conventions and reports conflicts or missing commands clearly.
+  3. User can list and show resolved commands before executing shell from YAML.
+  4. User can run a command with workspace env, cwd/repo targeting, ports, secrets, and captured output behavior aligned with existing hook/run machinery.
+  5. Focused tests cover schema parsing, template/workspace resolution, dry-run/show output, execution context, failure propagation, and command naming.
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 96: Workspace Notes
+**Goal**: Users can keep lightweight operator notes for workspaces without writing those notes into managed project repos or GSD planning directories.
+**Depends on**: Phase 95
+**Requirements**: NOTE-01, NOTE-02
+**Success Criteria** (what must be TRUE):
+  1. User can add, list, show, and clear notes for a workspace through a CLI command surface.
+  2. Notes are stored as append-only records outside project repos with created timestamp, workspace name, text, and optional lightweight tags.
+  3. Notes remain separate from `.planning` and managed project content.
+  4. Missing workspace, renamed workspace, cleared notes, empty note, and malformed note-store cases fail or recover predictably.
+  5. Tests cover persistence, ordering, workspace isolation, clear behavior, and summary metadata needed by the TUI.
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 97: File Status View Model for TUI
+**Goal**: TUI code can display file copy/symlink/sync configuration and status using the same behavior exposed by `git-stacks files status`, without duplicating file sync logic.
+**Depends on**: Phase 96
+**Requirements**: TUI-04
+**Success Criteria** (what must be TRUE):
+  1. A reusable source module returns workspace file config/status for copy, symlink, and sync entries in a TUI-friendly shape.
+  2. Sync status exposes useful drift/missing/unsafe states from the v0.18.0 files status model while preserving conservative sync semantics.
+  3. File status loading handles missing workspaces, missing paths, dir/trunk/worktree differences, and JSON/human command parity.
+  4. The dashboard can consume file status without running separate CLI subprocesses or reimplementing file sync policy.
+  5. Tests cover copy, symlink, sync, missing target/source, drift, and status-summary aggregation.
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 98: Grounded Dashboard Control Center
+**Goal**: `git-stacks manage` becomes a denser operator control center while preserving the current keyboard-first list/detail model.
+**Depends on**: Phase 97
+**Requirements**: NOTE-03, TUI-01, TUI-02, TUI-03, TUI-07
+**Success Criteria** (what must be TRUE):
+  1. The workspace list preserves the current tabbed list/detail model while improving density and keeping message attention last in rows.
+  2. Workspace grouping supports scan-focused modes such as none/label/state without hiding the concrete status tokens that explain group placement.
+  3. Workspace details use structured sections ordered by operational value: attention/messages, repos, file config/status, source/issue links, integrations, notes, and config.
+  4. Workspace notes and file status appear as compact summaries in details without replacing their full command surfaces.
+  5. Narrow, medium, and wide terminal snapshots cover row truncation, grouped headers, detail ordering, file status display, note summary, and contextual footers.
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
+
+### Phase 99: Dashboard Actions and Correctness Polish
+**Goal**: Dashboard action menus expose the missing useful actions and dashboard create flows surface all rollback progress.
+**Depends on**: Phase 98
+**Requirements**: TUI-05, TUI-06, DASH-01
+**Success Criteria** (what must be TRUE):
+  1. Repos tab action menu includes an edit action wired consistently with workspace/template edit behavior.
+  2. Workspace action menu can open linked issues when issue metadata is configured, using existing issue integration behavior and clear disabled/error states.
+  3. Dashboard create flows display every rollback progress event emitted by `createWorkspace()`, including file ops, workspace file ops, and env-file writes.
+  4. Action menu shortcuts, labels, disabled states, and footer hints stay coherent across Workspaces, Templates, and Repos.
+  5. Focused component/snapshot tests cover repo edit, linked issue opening, rollback progress rendering, and action-menu regressions.
+**Plans**: TBD
+
+Plans:
+- [ ] TBD
 
 ### Phase 89: Files Sync Schema and Materialization
 **Goal**: Users can define `files.sync` entries and pull source directories/files into workspace targets as real files, with optional worktree-local git excludes.
@@ -704,18 +790,25 @@ Plans:
 | 86. Workspace Command Workflow Edge Coverage | v0.17.1 | 3/3 | Complete   | 2026-05-15 |
 | 87. Integration Contract and Source-Module Coverage | v0.17.1 | 4/4 | Complete   | 2026-05-15 |
 | 88. Functional Coverage Readiness Gate | v0.17.1 | 2/2 | Complete   | 2026-05-15 |
+| 89. Files Sync Schema and Materialization | v0.18.0 | 3/3 | Complete | 2026-05-16 |
+| 90. Files Command Surface and Conflict Policy | v0.18.0 | 3/3 | Complete | 2026-05-16 |
+| 91. Files Sync Integration and Machine Output | v0.18.0 | 4/4 | Complete | 2026-05-16 |
+| 92. Forge Source Research and Resolver Design | v0.18.0 | 4/4 | Complete | 2026-05-16 |
+| 93. Forge Source Workspace Creation | v0.18.0 | 4/4 | Complete | 2026-05-16 |
+| 93.1. Parallel Integration Test Runner and Coherent Coverage Merging | v0.18.0 | 3/3 | Complete | 2026-05-16 |
+| 94. v0.18.0 Docs and Release Prep | v0.18.0 | 3/3 | Complete | 2026-05-16 |
+| 95. Manual Workspace Commands | v0.19.0 | 0/TBD | Planned | — |
+| 96. Workspace Notes | v0.19.0 | 0/TBD | Planned | — |
+| 97. File Status View Model for TUI | v0.19.0 | 0/TBD | Planned | — |
+| 98. Grounded Dashboard Control Center | v0.19.0 | 0/TBD | Planned | — |
+| 99. Dashboard Actions and Correctness Polish | v0.19.0 | 0/TBD | Planned | — |
 
 ## Backlog
 
-### Phase 999.1: Dashboard Rollback Progress Visibility (BACKLOG)
+### ~~Phase 999.1: Dashboard Rollback Progress Visibility~~ (PROMOTED → Phase 99)
 
-**Goal:** Surface every rollback progress event emitted by `createWorkspace()` in the dashboard create flow, including non-worktree tracked steps such as file ops, workspace file ops, and env-file writes.
+**Promoted:** Folded into Phase 99 Dashboard Actions and Correctness Polish.
 **Source:** `.planning/v0.17.0-MILESTONE-AUDIT.md` ENGN-02 gap.
-**Requirements:** TBD
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (promote with /gsd-review-backlog when ready)
 
 ### ~~Phase 999.2: README Structured Debug Logging Format~~ (PROMOTED → Phase 84 SC 6)
 

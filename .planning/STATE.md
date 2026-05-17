@@ -1,34 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.18.0
-milestone_name: Workspace File Sync and Forge Sources
+milestone: v0.19.0
+milestone_name: Operator Control Center
 status: ready_to_plan
-stopped_at: Phase 94 complete (3/3) — ready to discuss Phase 999.1
-last_updated: 2026-05-16T23:44:11.336Z
-last_activity: 2026-05-16
+stopped_at: Phase 95 ready to discuss/plan
+last_updated: "2026-05-17T11:48:00.000Z"
+last_activity: 2026-05-17
 progress:
-  total_phases: 29
-  completed_phases: 7
-  total_plans: 24
-  completed_plans: 25
-  percent: 24
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-15)
+See: .planning/PROJECT.md (updated 2026-05-17)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** Phase 999.1 — dashboard rollback progress visibility
+**Current focus:** Phase 95 — Manual Workspace Commands
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
+Phase: 95 — Manual Workspace Commands
+Plan: —
 Status: Ready to plan
-Last activity: 2026-05-16
+Last activity: 2026-05-17 — Milestone v0.19.0 requirements and roadmap defined
 
 ## Performance Metrics
 
@@ -141,21 +141,19 @@ Last activity: 2026-05-16
 - Pending todo "Add bidirectional files sync" tagged to Phase 89.
 - Pending todo "Create workspace from forge source" tagged to Phase 92.
 - Phase 93.1 inserted after Phase 93: Parallel integration test runner and coherent coverage merging (URGENT)
+- Phase 93.1 completed on 2026-05-16: integration test runs now support bounded parallel workers with coherent per-file failure attribution and merged Istanbul coverage artifacts.
+- Phase 94 completed on 2026-05-16: v0.18.0 RC docs, changelog, smoke gate, package metadata, and tag handoff were prepared.
+- v0.19.0 milestone initialized on 2026-05-17: Phase 95-99 cover manual workspace commands, workspace notes, TUI file status visibility, grounded dashboard control-center improvements, repo edit, linked issue opening, and rollback progress visibility.
 
 ### Pending Todos
 
-- Add manual workspace commands — captured 2026-05-15. Explore named, manually triggered template/workspace command recipes that reuse hook/env/cwd execution machinery without being bound to lifecycle events. See `.planning/todos/pending/2026-05-15-add-manual-workspace-commands.md`.
-- Add bidirectional files sync — captured 2026-05-15. Explore `files.sync` for real-file two-way sync of uncommitted planning/agent config directories, with a `git-stacks files ...` command family and lightweight drift detection instead of large hash manifests. See `.planning/todos/pending/2026-05-15-add-bidirectional-files-sync.md`.
-- Add workspace notes — captured 2026-05-15. Explore lightweight operator notes for workspaces, stored outside project repos and surfaced later in dashboard/stale views. See `.planning/todos/pending/2026-05-15-add-workspace-notes.md`.
-- Add workspace stale view — captured 2026-05-15. Explore a `git-stacks stale` advisory command that classifies old workspaces as active, idle, ready-to-clean, needs-attention, or orphaned. See `.planning/todos/pending/2026-05-15-add-workspace-stale-view.md`.
-- Add repo edit action — captured 2026-05-17. Add an edit action to the Repos tab action menu so repo configuration can be edited from `git-stacks manage`, matching workspace/template edit affordances. See `.planning/todos/pending/2026-05-17-add-repo-edit-action.md`.
-- Improve TUI dashboard experience — captured 2026-05-15. Future reminder to make `git-stacks manage` a richer workspace control center, especially after notes/stale/files/manual-command surfaces are chosen. See `.planning/todos/pending/2026-05-15-improve-tui-dashboard-experience.md`.
+- Add workspace stale view — captured 2026-05-15. Deferred from v0.19.0 by user request; keep as future advisory cleanup/classification work. See `.planning/todos/pending/2026-05-15-add-workspace-stale-view.md`.
 - Improve template composition understanding — captured 2026-05-15. Weak idea to make composed/baseline templates easier to preview and explain instead of adding a separate profiles concept. See `.planning/todos/pending/2026-05-15-improve-template-composition-understanding.md`.
-- Create workspace from forge source — captured 2026-05-15. Explore `git-stacks new --source <forge-url>` for creating normal template-backed workspaces from GitLab MR, Gitea PR, then GitHub PR sources. See `.planning/todos/pending/2026-05-15-create-workspace-from-forge-source.md`.
+- Install skills command — captured 2026-03-18. Consider `git-stacks install --skills` or similar to bootstrap agent skills for using git-stacks workflows directly from the CLI. See `.planning/notes/2026-03-18-install-skills-command.md`.
 
 ### Blockers/Concerns
 
-None blocking. Concern: forge source creation requires GitLab-first research because live `glab` integration cannot be fully validated locally by the user.
+None blocking.
 
 ### Quick Tasks Completed
 
@@ -165,10 +163,10 @@ None blocking. Concern: forge source creation requires GitLab-first research bec
 
 ## Session Continuity
 
-Last session: 2026-05-16T23:43:46.658Z
-Stopped at: Completed 94-03-PLAN.md
+Last session: 2026-05-17T11:48:00.000Z
+Stopped at: Phase 95 ready to discuss/plan
 Resume file: None
 
 ## Operator Next Steps
 
-- Execute Phase 92 with `$gsd-execute-phase 92` to complete forge source research and resolver design.
+- Start Phase 95 with `$gsd-plan-phase 95` or `$gsd-discuss-phase 95`.

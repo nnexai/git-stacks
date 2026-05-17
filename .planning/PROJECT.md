@@ -8,7 +8,26 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Recent State (2026-05-15)
+## Current Milestone: v0.19.0 Operator Control Center
+
+**Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
+
+**Target features:**
+- Improve `git-stacks manage` using the grounded TUI reset direction: denser list/detail layout, better grouping/filtering, clearer detail sections, and snapshot-covered terminal behavior.
+- Add a repo edit action in the Repos tab.
+- Add lightweight workspace notes stored outside project repos.
+- Add named manual workspace commands that reuse existing hook/env/cwd execution machinery.
+- Add linked issue opening from the workspace action menu.
+- Surface file config/status in the TUI, especially v0.18.0 `files.sync` status and drift from the `git-stacks files status` work.
+
+## Recent State (2026-05-17)
+
+### What shipped in v0.18.0
+
+- **Workspace file sync** — templates and workspaces can define `files.sync` entries that materialize source paths into workspaces as real files, with local git exclude support for synced targets.
+- **Files command family** — `git-stacks files status|pull|push` exposes copy/symlink/sync materialization state, conservative pull/push behavior, dry-run previews, explicit force mirroring, and JSON output for future automation/TUI consumers.
+- **Forge source workspace creation** — `git-stacks new <name> --template <template> --source <forge-url>` creates normal template-backed review workspaces from forge change URLs, with GitLab-first resolution and persisted source metadata.
+- **Release-gate speed and coverage** — integration test execution now supports bounded parallel workers with coherent per-file failures and merged Istanbul coverage artifacts.
 
 ### What shipped in v0.17.1
 
@@ -283,18 +302,16 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Active
 
-## Current Milestone: v0.18.0 Workspace File Sync and Forge Sources
+## Current Milestone: v0.19.0 Operator Control Center
 
-**Goal:** Make workspace file materialization useful for private planning/agent configuration through bidirectional real-file sync, then add a GitLab-first forge source path for creating normal template-backed workspaces from merge requests.
+**Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
 
 **Target features:**
-- `files.sync` entries under the existing `files` model for real-file materialization of directories such as `.planning/` and `.codex/`, avoiding external symlink targets that agents may refuse to follow. Phase 89 completed the schema, composition, materialization, target-safety, tracked-target refusal, and repo-level local exclude slice.
-- `git-stacks files status|pull|push` as the user-facing command family for file materialization and bidirectional sync, keeping this separate from existing branch-level `git-stacks sync`.
-- Local `.git/info/exclude` support for synced targets so private planning/agent files can exist inside worktrees without becoming project repo commits.
-- Lightweight drift/conflict detection for sync targets without storing a full per-file hash manifest, because large `.planning` trees would make exhaustive manifests noisy and expensive.
-- Manual sync-back only by default: `files push` is explicit, not tied to close/clean/remove/open lifecycle hooks.
-- Forge source workspace creation through `git-stacks new --source <forge-url> --template <template>`, with GitLab merge requests first, then Gitea pull requests, then GitHub pull requests.
-- Forge source resolution should run through enabled forge integrations and existing forge/upstream autodetection where possible; live `glab` coverage is research-heavy and may be limited to contract/local proof unless the user can validate against a real GitLab environment.
+- Named manual workspace commands for repeatable operator actions that are explicitly triggered instead of lifecycle-bound.
+- Lightweight workspace notes stored outside managed project repositories.
+- TUI file config/status visibility based on the v0.18.0 `git-stacks files status` model.
+- Grounded TUI control-center improvements: denser list/detail layout, useful grouping, structured detail sections, notes/file summaries, and snapshot coverage.
+- Dashboard action polish: repo edit, linked issue opening, and complete rollback progress visibility.
 
 ### Out of Scope
 
@@ -307,6 +324,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Nix/devenv as first-class dependency | Out of domain; composable via hooks |
 | Container/sandbox isolation | Out of scope for v0.x; revisit when agent-safety requirements clarify |
 | Monorepo build caching | Nx/Turborepo's domain |
+| `git-stacks stale` advisory classification | Deferred from v0.19.0 by user request |
 | Windows IPC support | Deferred to v0.4.0+ (AF_UNIX on Win10 1803+) |
 | Opinionated onboarding (init/task) | Deferred until author has more hands-on usage experience |
 
@@ -500,4 +518,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-05-16 after Phase 89 files.sync materialization*
+*Last updated: 2026-05-17 for v0.19.0 Operator Control Center milestone start*

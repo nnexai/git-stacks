@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sketch 006 - Message Feedback Surface</title>
+  <link rel="stylesheet" href="../themes/default.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-mono); font-size: 14px; padding-top: 52px; }
+    button, select { font: inherit; }
+    .variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--color-bg-2); border-bottom: 1px solid var(--color-border); }
+    .variant-tab { color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 7px 10px; cursor: pointer; }
+    .variant-tab.active, .variant-tab:hover { color: var(--color-text); border-color: var(--color-primary); background: rgba(124,199,255,0.12); }
+    .variant { display: none; min-height: calc(100vh - 52px); padding: 12px; }
+    .variant.active { display: block; }
+    .terminal { max-width: 1180px; height: 34em; margin: 0 auto; border: 1px solid var(--color-border-strong); background: #0b0d12; box-shadow: var(--shadow-md); padding: 8px; display: grid; grid-template-columns: 36ch 1fr; grid-template-rows: 1fr 2em; gap: 6px; overflow: hidden; }
+    .terminal.stack { grid-template-columns: 1fr; grid-template-rows: 46% 1fr 2em; max-width: 96ch; }
+    .pane { border: 1px solid var(--color-border); background: var(--color-bg-2); min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .title { height: 2em; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid var(--color-border); color: var(--color-primary); background: var(--color-surface); white-space: nowrap; }
+    .body { padding: 6px 8px; overflow: hidden; flex: 1; }
+    .footer { grid-column: 1 / -1; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-muted); min-height: 2em; padding: 5px 8px; overflow: hidden; white-space: nowrap; }
+    .row { display: grid; grid-template-columns: 3ch 1fr auto; gap: 7px; min-height: 1.6em; align-items: center; white-space: nowrap; overflow: hidden; }
+    .row span { overflow: hidden; text-overflow: ellipsis; }
+    .focus { background: var(--color-surface-2); outline: 1px solid var(--color-primary); }
+    .muted { color: var(--color-text-muted); }
+    .ok { color: var(--color-success); }
+    .warn { color: var(--color-warning); }
+    .bad { color: var(--color-danger); }
+    .info { color: var(--color-primary); }
+    .purple { color: var(--color-purple); }
+    .cmd, .kbd { color: var(--color-accent); }
+    .bar { height: 1px; background: var(--color-border); margin: 5px 0; }
+    .detail { display: grid; grid-template-rows: auto auto 1fr; gap: 6px; min-height: 0; }
+    .section { border: 1px solid var(--color-border); background: var(--color-surface); padding: 6px 8px; overflow: hidden; }
+    .section h3 { margin: 0 0 5px; color: var(--color-primary); font-size: 1em; }
+    .table { display: grid; grid-template-columns: 12ch 11ch 1fr 8ch; gap: 7px; white-space: nowrap; }
+    .table > div { overflow: hidden; text-overflow: ellipsis; min-height: 1.45em; border-bottom: 1px solid rgba(90,101,120,0.35); }
+    .kv { display: grid; grid-template-columns: 10ch 1fr auto; gap: 8px; white-space: nowrap; min-height: 1.45em; border-bottom: 1px solid rgba(90,101,120,0.35); }
+    .kv span { overflow: hidden; text-overflow: ellipsis; }
+    .message-banner { border: 1px solid var(--color-warning); color: var(--color-text); background: rgba(242,200,107,0.08); padding: 5px 7px; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .queue { border: 1px solid var(--color-warning); background: rgba(242,200,107,0.08); padding: 5px 7px; margin-bottom: 6px; }
+    .queue-row { display: grid; grid-template-columns: 10ch 1fr auto; gap: 8px; white-space: nowrap; }
+    .message-mode { display: grid; grid-template-rows: auto 1fr; gap: 6px; height: 100%; min-height: 0; }
+    .message-list { border: 1px solid var(--color-border); background: var(--color-surface); padding: 6px 8px; overflow: hidden; }
+    #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 20; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.76); color: white; padding: 8px 10px; border-radius: 8px; opacity: 0.42; transition: opacity .15s; }
+    #sketch-tools:hover { opacity: 1; }
+    @media (max-width: 920px) {
+      .terminal { grid-template-columns: 1fr; grid-template-rows: 44% 1fr 2em; height: 36em; }
+      .footer { grid-column: auto; }
+      .table { grid-template-columns: 10ch 9ch 1fr 6ch; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="variant-nav">
+    <button class="variant-tab active" onclick="showVariant('a', this)">A: Banner</button>
+    <button class="variant-tab" onclick="showVariant('b', this)">B: Queue</button>
+    <button class="variant-tab" onclick="showVariant('c', this)">C: Message Mode</button>
+  </nav>
+
+  <section id="variant-a" class="variant active">
+    <div class="terminal">
+      <workspace-list></workspace-list>
+      <div class="pane">
+        <div class="title"><span>bugfix-login-race</span><span>detail: repos</span></div>
+        <div class="body detail">
+          <div>
+            <div class="message-banner"><span class="warn">msg:3</span> codex: "Waiting for input: use fallback branch name?"  <span class="cmd">m messages</span></div>
+            <repos-section></repos-section>
+          </div>
+          <services-section></services-section>
+          <details-section></details-section>
+        </div>
+      </div>
+        <div class="footer">Space Select  Enter Actions  g Group  r Refresh  m Messages  d Detail Section  / Filter  ? Help</div>
+    </div>
+  </section>
+
+  <section id="variant-b" class="variant">
+    <div class="terminal">
+      <workspace-list></workspace-list>
+      <div class="pane">
+        <div class="title"><span>bugfix-login-race</span><span>feedback queue + repos</span></div>
+        <div class="body detail">
+          <div>
+            <div class="queue">
+              <div class="queue-row"><span class="warn">waiting</span><span>codex: Use fallback branch name?</span><span class="cmd">m</span></div>
+              <div class="queue-row"><span class="info">done</span><span>test-fixer: auth race fixed</span><span>2m</span></div>
+            </div>
+            <repos-section></repos-section>
+          </div>
+          <services-section></services-section>
+          <details-section></details-section>
+        </div>
+      </div>
+        <div class="footer">Space Select  Enter Actions  g Group  m Messages  c Clear Sender  d Detail Section  / Filter  ? Help</div>
+    </div>
+  </section>
+
+  <section id="variant-c" class="variant">
+    <div class="terminal">
+      <workspace-list></workspace-list>
+      <div class="pane">
+        <div class="title"><span>bugfix-login-race</span><span>detail mode: messages</span></div>
+        <div class="body message-mode">
+          <div class="section-tabs"><span class="muted">repos services</span> <span class="cmd">[messages]</span> <span class="muted">details</span></div>
+          <div class="message-list">
+            <div class="kv"><span class="warn">codex</span><span>WAITING: Use fallback branch name for missing source ref?</span><span class="cmd">new</span></div>
+            <div class="kv"><span class="info">test-fixer</span><span>Fixed auth race. Unit and smoke tests pass.</span><span>2m</span></div>
+            <div class="kv"><span class="info">reviewer</span><span>api is behind main by 5 commits before merge.</span><span>5m</span></div>
+            <div class="kv"><span class="muted">system</span><span>workspace opened from fullstack template.</span><span>21m</span></div>
+            <div class="bar"></div>
+            <div class="muted">Full overlay still available for grouped history and clearing senders.</div>
+          </div>
+        </div>
+      </div>
+        <div class="footer">d Detail Section  c Clear Sender  m Full Overlay  Enter Actions  / Filter  ? Help</div>
+    </div>
+  </section>
+
+  <template id="workspace-list-template">
+    <div class="pane">
+      <div class="title"><span>[1 Workspaces]  2 Templates  3 Repos</span><span>g: state</span></div>
+      <div class="body">
+        <div class="muted">needs attention</div>
+        <div class="row focus"><span class="warn">![x]</span><span>bugfix-login-race  msg:3 wait svc:4</span><span>2m</span></div>
+        <div class="row"><span class="bad">x[x]</span><span>hotfix-auth-token  missing D1</span><span>1h</span></div>
+        <div class="muted">active</div>
+        <div class="row"><span class="info">i[ ]</span><span>review/pr-128  review M1</span><span>41m</span></div>
+        <div class="row"><span class="warn">~[ ]</span><span>feat/manual-commands  tools D4</span><span>2h</span></div>
+        <div class="muted">ready</div>
+        <div class="row"><span class="ok">o[ ]</span><span>feat/files-sync  clean +2</span><span>18m</span></div>
+        <div class="bar"></div>
+        <div class="cmd">2 selected  r remove batch</div>
+      </div>
+    </div>
+  </template>
+
+  <template id="repos-template">
+    <div class="section">
+      <h3>Repos</h3>
+      <div class="table">
+        <div class="warn">web-ui</div><div>worktree</div><div>dirty 3</div><div>dirty</div>
+        <div class="bad">api</div><div>worktree</div><div>dirty 1 behind 5</div><div>stale</div>
+        <div class="ok">worker</div><div>worktree</div><div>clean ahead 1</div><div>ahead</div>
+        <div class="muted">docs</div><div>dir</div><div>no git metrics</div><div>dir</div>
+      </div>
+    </div>
+  </template>
+
+  <template id="services-template">
+    <div class="section">
+      <h3>Running Services</h3>
+      <div class="table">
+        <div class="ok">tmux</div><div>session</div><div>4 panes</div><div>alive</div>
+        <div class="ok">web-ui</div><div>pid 4921</div><div>bun dev :5173</div><div>alive</div>
+        <div class="warn">api</div><div>pid ?</div><div>bun test --watch</div><div>unknown</div>
+      </div>
+    </div>
+  </template>
+
+  <template id="details-template">
+    <div class="section">
+      <h3>Details</h3>
+      <div class="kv"><span class="info">source</span><span>gitlab !128 login race -> main</span><span>MR</span></div>
+      <div class="kv"><span class="purple">ticket</span><span>jira AUTH-42</span><span>issue</span></div>
+      <div class="kv"><span class="info">env</span><span>API_BASE_URL, FEATURE_LOGIN_RACE, LOG_LEVEL</span><span>3 vars</span></div>
+      <div class="kv"><span class="warn">files</span><span>2 sync, 1 symlink</span><span>3 entries</span></div>
+    </div>
+  </template>
+
+  <div id="sketch-tools">
+    Theme <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default.css">Default</option></select>
+  </div>
+  <script>
+    for (const [name, id] of [['workspace-list', 'workspace-list-template'], ['repos-section', 'repos-template'], ['services-section', 'services-template'], ['details-section', 'details-template']]) {
+      customElements.define(name, class extends HTMLElement {
+        connectedCallback() {
+          this.replaceWith(document.getElementById(id).content.cloneNode(true));
+        }
+      });
+    }
+    function showVariant(id, button) {
+      document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('variant-' + id).classList.add('active');
+      button.classList.add('active');
+    }
+  </script>
+</body>
+</html>

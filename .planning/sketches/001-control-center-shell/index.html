@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sketch 001 - Control Center Shell</title>
+  <link rel="stylesheet" href="../themes/default.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-sm); padding-top: 52px; }
+    button, select { font: inherit; }
+    .variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--color-bg-2); border-bottom: 1px solid var(--color-border); }
+    .variant-tab { color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 7px 10px; cursor: pointer; }
+    .variant-tab.active, .variant-tab:hover { color: var(--color-text); border-color: var(--color-primary); background: rgba(124,199,255,0.12); }
+    .variant { display: none; min-height: calc(100vh - 52px); padding: 12px; }
+    .variant.active { display: block; }
+    .terminal { max-width: 1400px; margin: 0 auto; height: calc(100vh - 76px); border: 1px solid var(--color-border-strong); background: #0b0d12; box-shadow: var(--shadow-md); display: grid; gap: 8px; padding: 8px; }
+    .pane { border: 1px solid var(--color-border); background: var(--color-bg-2); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    .pane-title { display: flex; justify-content: space-between; gap: 12px; padding: 6px 8px; border-bottom: 1px solid var(--color-border); color: var(--color-primary); background: var(--color-surface); white-space: nowrap; }
+    .pane-body { padding: 8px; overflow: hidden; flex: 1; }
+    .row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: var(--radius-sm); min-height: 26px; cursor: pointer; }
+    .row:hover, .row.focused { background: var(--color-surface-2); }
+    .row.focused { outline: 1px solid var(--color-primary); }
+    .muted { color: var(--color-text-muted); }
+    .ok { color: var(--color-success); }
+    .warn { color: var(--color-warning); }
+    .bad { color: var(--color-danger); }
+    .info { color: var(--color-primary); }
+    .purple { color: var(--color-purple); }
+    .badge { display: inline-block; padding: 1px 5px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-muted); margin-left: 4px; }
+    .cmd { color: var(--color-accent); }
+    .bar { height: 1px; background: var(--color-border); margin: 8px 0; }
+    .kbd { color: var(--color-accent); }
+    .mini-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+    .metric { border: 1px solid var(--color-border); padding: 7px; background: var(--color-surface); }
+    .metric strong { display: block; font-size: var(--text-lg); }
+    .footer { grid-column: 1 / -1; display: flex; gap: 18px; align-items: center; border: 1px solid var(--color-border); padding: 6px 8px; background: var(--color-surface); color: var(--color-text-muted); min-height: 32px; }
+    .shell-a { grid-template-columns: 34% 41% 25%; grid-template-rows: 1fr 32px; }
+    .shell-b { grid-template-columns: 33% 1fr; grid-template-rows: 34% 27% 1fr 32px; }
+    .shell-c { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: 62% 1fr 32px; }
+    .shell-d { grid-template-columns: 34% 1fr; grid-template-rows: 42% 24% 24% 32px; }
+    .span2 { grid-column: span 2; }
+    .span4 { grid-column: span 4; }
+    .compact { min-height: 21px; padding: 2px 5px; }
+    .stack { display: grid; gap: 8px; min-height: 0; }
+    .service { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; padding: 3px 0; }
+    .lane { border: 1px solid var(--color-border); background: var(--color-bg-2); min-width: 0; display: flex; flex-direction: column; }
+    .lane .pane-body { padding: 6px; }
+    .toast { position: fixed; right: 16px; bottom: 16px; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-primary); padding: 9px 12px; display: none; }
+    #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 20; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.76); color: white; padding: 8px 10px; border-radius: 8px; opacity: 0.42; transition: opacity .15s; }
+    #sketch-tools:hover { opacity: 1; }
+    @media (max-width: 900px) {
+      .terminal { height: auto; min-height: calc(100vh - 76px); }
+      .shell-a, .shell-b, .shell-c, .shell-d { grid-template-columns: 1fr; grid-template-rows: none; }
+      .footer, .span2, .span4 { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="variant-nav">
+    <button class="variant-tab active" onclick="showVariant('a', this)">A: Three Column</button>
+    <button class="variant-tab" onclick="showVariant('b', this)">B: Lazygit Stack</button>
+    <button class="variant-tab" onclick="showVariant('c', this)">C: Activity Board</button>
+    <button class="variant-tab" onclick="showVariant('d', this)">D: Status Groups</button>
+  </nav>
+
+  <section id="variant-a" class="variant active">
+    <div class="terminal shell-a">
+      <div class="pane">
+        <div class="pane-title"><span>Workspaces</span><span>8 total</span></div>
+        <div class="pane-body">
+          <div class="row focused" onclick="focusRow(this)"><span class="warn">!</span><span>bugfix-login-race <span class="badge">agent</span></span><span class="muted">2m</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="ok">o</span><span>feat/files-sync <span class="badge">ready</span></span><span class="muted">18m</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="info">i</span><span>review/pr-128 <span class="badge">review</span></span><span class="muted">41m</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="bad">x</span><span>hotfix-auth-token</span><span class="muted">1h</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="ok">o</span><span>main-docs-pass</span><span class="muted">4h</span></div>
+          <div class="bar"></div>
+          <div class="muted">filter: label:backend  group: state</div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>bugfix-login-race</span><span>branch feature/login-race</span></div>
+        <div class="pane-body">
+          <div class="mini-grid">
+            <div class="metric"><strong class="warn">dirty</strong><span>2 repos changed</span></div>
+            <div class="metric"><strong class="info">agent done</strong><span>3 new messages</span></div>
+            <div class="metric"><strong class="ok">tmux up</strong><span>4 panes</span></div>
+            <div class="metric"><strong class="bad">behind 5</strong><span>api repo stale</span></div>
+          </div>
+          <div class="row"><span class="warn">~</span><span>web-ui</span><span>3 files, tests running</span></div>
+          <div class="row"><span class="bad">v</span><span>api</span><span>behind 5, migration conflict</span></div>
+          <div class="row"><span class="ok">o</span><span>worker</span><span>clean, ahead 1</span></div>
+          <div class="bar"></div>
+          <div class="service"><span class="ok">up</span><span>tmux: bugfix-login-race</span><span>4 panes</span></div>
+          <div class="service"><span class="ok">up</span><span>dev server :5173</span><span>21m</span></div>
+          <div class="service"><span class="warn">busy</span><span>agent codex-review</span><span>needs read</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Actions</span><span>Enter</span></div>
+        <div class="pane-body">
+          <div><span class="kbd">o</span> open workspace</div>
+          <div><span class="kbd">n</span> rename</div>
+          <div><span class="kbd">s</span> sync with stash</div>
+          <div><span class="kbd">p</span> push</div>
+          <div><span class="kbd">m</span> merge when ready</div>
+          <div><span class="kbd">M</span> messages</div>
+          <div><span class="kbd">t</span> attach tmux</div>
+          <div class="bar"></div>
+          <div class="cmd">next best action</div>
+          <div>Read 3 agent messages, then sync api.</div>
+        </div>
+      </div>
+      <div class="footer"><span>1 Workspaces</span><span>2 Templates</span><span>3 Repos</span><span>/ filter</span><span>c create</span><span>? help</span></div>
+    </div>
+  </section>
+
+  <section id="variant-b" class="variant">
+    <div class="terminal shell-b">
+      <div class="pane" style="grid-row:1 / 4">
+        <div class="pane-title"><span>Workspaces by state</span><span>g cycles</span></div>
+        <div class="pane-body">
+          <div class="muted">needs attention</div>
+          <div class="row focused" onclick="focusRow(this)"><span class="warn">!</span><span>bugfix-login-race</span><span>agent</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="bad">x</span><span>hotfix-auth-token</span><span>fail</span></div>
+          <div class="muted" style="margin-top:8px">merge ready</div>
+          <div class="row" onclick="focusRow(this)"><span class="ok">o</span><span>feat/files-sync</span><span>clean</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="ok">o</span><span>main-docs-pass</span><span>clean</span></div>
+          <div class="muted" style="margin-top:8px">reviewing</div>
+          <div class="row" onclick="focusRow(this)"><span class="info">i</span><span>review/pr-128</span><span>2 repos</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Repos</span><span>3 worktree, 1 dir</span></div>
+        <div class="pane-body">
+          <div class="row"><span class="warn">~</span><span>web-ui</span><span>3 files</span></div>
+          <div class="row"><span class="bad">v</span><span>api</span><span>behind 5</span></div>
+          <div class="row"><span class="ok">o</span><span>worker</span><span>ahead 1</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Runtime and agents</span><span>live</span></div>
+        <div class="pane-body">
+          <div class="service"><span class="ok">up</span><span>tmux bugfix-login-race</span><span>4 panes</span></div>
+          <div class="service"><span class="ok">up</span><span>bun dev web-ui</span><span>:5173</span></div>
+          <div class="service"><span class="warn">done</span><span>agent test-fixer</span><span>2m</span></div>
+          <div class="service"><span class="info">run</span><span>agent reviewer</span><span>11m</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Messages and next action</span><span>m opens</span></div>
+        <div class="pane-body">
+          <div><span class="warn">test-fixer:</span> Fixed auth race, tests pass.</div>
+          <div><span class="info">reviewer:</span> API branch is 5 behind main.</div>
+          <div class="bar"></div>
+          <div class="cmd">Suggested: sync api, rerun smoke, push.</div>
+        </div>
+      </div>
+      <div class="footer"><span>c create</span><span>Enter actions</span><span>tab moves panes</span><span>space batch</span><span>q quit</span></div>
+    </div>
+  </section>
+
+  <section id="variant-c" class="variant">
+    <div class="terminal shell-c">
+      <div class="lane">
+        <div class="pane-title"><span>Attention</span><span>2</span></div>
+        <div class="pane-body">
+          <div class="row focused" onclick="focusRow(this)"><span class="warn">!</span><span>bugfix-login-race</span><span>agent</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="bad">x</span><span>hotfix-auth-token</span><span>fail</span></div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="pane-title"><span>Active</span><span>3</span></div>
+        <div class="pane-body">
+          <div class="row" onclick="focusRow(this)"><span class="info">i</span><span>review/pr-128</span><span>2 msg</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="warn">~</span><span>feat/commands</span><span>dirty</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="info">i</span><span>spike/gitlab</span><span>run</span></div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="pane-title"><span>Merge ready</span><span>2</span></div>
+        <div class="pane-body">
+          <div class="row" onclick="focusRow(this)"><span class="ok">o</span><span>feat/files-sync</span><span>clean</span></div>
+          <div class="row" onclick="focusRow(this)"><span class="ok">o</span><span>main-docs-pass</span><span>clean</span></div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="pane-title"><span>Idle</span><span>1</span></div>
+        <div class="pane-body">
+          <div class="row" onclick="focusRow(this)"><span class="muted">.</span><span>old-refactor</span><span>4d</span></div>
+        </div>
+      </div>
+      <div class="pane span4">
+        <div class="pane-title"><span>Focused workspace: bugfix-login-race</span><span>ready after sync</span></div>
+        <div class="pane-body">
+          <div class="mini-grid">
+            <div class="metric"><strong class="warn">2 dirty</strong><span>web-ui, api</span></div>
+            <div class="metric"><strong class="bad">behind 5</strong><span>api only</span></div>
+            <div class="metric"><strong class="ok">services up</strong><span>tmux + dev</span></div>
+            <div class="metric"><strong class="warn">3 messages</strong><span>agent done</span></div>
+          </div>
+          <div class="cmd">State board is fast for triage, but weaker for exact repo operations.</div>
+        </div>
+      </div>
+      <div class="footer"><span>lanes: attention active ready idle</span><span>Enter opens action sheet</span><span>/ narrows all lanes</span></div>
+    </div>
+  </section>
+
+  <section id="variant-d" class="variant">
+    <div class="terminal shell-d">
+      <div class="pane" style="grid-row:1 / 4">
+        <div class="pane-title"><span>[1 Workspaces]</span><span>group: status</span></div>
+        <div class="pane-body">
+          <div class="muted">needs attention  (messages > dirty/behind)</div>
+          <div class="row compact focused" onclick="focusRow(this)"><span class="warn">!</span><span>bugfix-login-race <span class="badge">agent:3</span></span><span>2m</span></div>
+          <div class="row compact" onclick="focusRow(this)"><span class="bad">x</span><span>hotfix-auth-token <span class="badge">failed</span></span><span>1h</span></div>
+          <div class="muted" style="margin-top:6px">active work  (dirty, running, review labels)</div>
+          <div class="row compact" onclick="focusRow(this)"><span class="info">i</span><span>review/pr-128 <span class="badge">review</span></span><span>41m</span></div>
+          <div class="row compact" onclick="focusRow(this)"><span class="warn">~</span><span>feat/manual-commands <span class="badge">tools</span></span><span>dirty</span></div>
+          <div class="muted" style="margin-top:6px">ready / quiet  (clean + no unread messages)</div>
+          <div class="row compact" onclick="focusRow(this)"><span class="ok">o</span><span>feat/files-sync <span class="badge">ready</span></span><span>clean</span></div>
+          <div class="row compact" onclick="focusRow(this)"><span class="ok">o</span><span>main-docs-pass</span><span>clean</span></div>
+          <div class="bar"></div>
+          <div><span class="kbd">g</span> group status/label  <span class="kbd">/</span> filter  <span class="kbd">c</span> create</div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>bugfix-login-race</span><span>summary</span></div>
+        <div class="pane-body">
+          <div class="mini-grid">
+            <div class="metric"><strong class="warn">3 msg</strong><span>agent done</span></div>
+            <div class="metric"><strong class="bad">behind 5</strong><span>api</span></div>
+            <div class="metric"><strong class="warn">2 dirty</strong><span>web/api</span></div>
+            <div class="metric"><strong class="ok">tmux</strong><span>4 panes</span></div>
+          </div>
+          <div class="row compact"><span class="warn">~</span><span>web-ui</span><span>3 files, tests running</span></div>
+          <div class="row compact"><span class="bad">v</span><span>api</span><span>behind 5, sync next</span></div>
+          <div class="row compact"><span class="ok">o</span><span>worker</span><span>clean, ahead 1</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Status derivation</span><span>uses today's data</span></div>
+        <div class="pane-body">
+          <div class="row compact"><span class="warn">1</span><span>Unread fresh messages</span><span>attention</span></div>
+          <div class="row compact"><span class="bad">2</span><span>Missing repos / failed ops / behind</span><span>blocked</span></div>
+          <div class="row compact"><span class="warn">3</span><span>Dirty repos or active label</span><span>active</span></div>
+          <div class="row compact"><span class="ok">4</span><span>Clean, pushed, no messages</span><span>ready</span></div>
+          <div class="bar"></div>
+          <div class="muted">Labels remain explicit grouping. Status grouping is derived and can be toggled.</div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Overlay menus</span><span>not permanent</span></div>
+        <div class="pane-body">
+          <div><span class="kbd">Enter</span> workspace actions overlay</div>
+          <div><span class="kbd">m</span> messages overlay</div>
+          <div><span class="kbd">c</span> create workspace wizard</div>
+          <div><span class="kbd">2</span> templates tab</div>
+          <div><span class="kbd">3</span> repos tab</div>
+          <div class="bar"></div>
+          <div class="cmd">Main screen spends space on list + selected workspace state.</div>
+        </div>
+      </div>
+      <div class="footer"><span>1 Workspaces</span><span>2 Templates</span><span>3 Repos</span><span>g group status/label</span><span>Enter menu</span><span>m messages</span><span>? help</span></div>
+    </div>
+  </section>
+
+  <div id="sketch-tools">
+    Theme <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default.css">Default</option></select>
+    <button onclick="setWidth('760px')">Tablet</button>
+    <button onclick="setWidth('1280px')">Desktop</button>
+    <button onclick="setWidth('none')">Full</button>
+  </div>
+  <div class="toast" id="toast">Focused workspace changed</div>
+  <script>
+    function showVariant(id, button) {
+      document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('variant-' + id).classList.add('active');
+      button.classList.add('active');
+    }
+    function focusRow(row) {
+      row.closest('.terminal').querySelectorAll('.row').forEach(r => r.classList.remove('focused'));
+      row.classList.add('focused');
+      toast('Focused workspace changed');
+    }
+    function toast(text) {
+      const t = document.getElementById('toast');
+      t.textContent = text;
+      t.style.display = 'block';
+      setTimeout(() => t.style.display = 'none', 1100);
+    }
+    function setWidth(width) {
+      document.querySelectorAll('.terminal').forEach(el => el.style.maxWidth = width);
+    }
+  </script>
+</body>
+</html>

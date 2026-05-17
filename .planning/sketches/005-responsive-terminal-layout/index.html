@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sketch 005 - Responsive Terminal Layout</title>
+  <link rel="stylesheet" href="../themes/default.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-mono); font-size: 14px; padding-top: 52px; }
+    button, select { font: inherit; }
+    .variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--color-bg-2); border-bottom: 1px solid var(--color-border); }
+    .variant-tab { color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 7px 10px; cursor: pointer; }
+    .variant-tab.active, .variant-tab:hover { color: var(--color-text); border-color: var(--color-primary); background: rgba(124,199,255,0.12); }
+    .variant { display: none; min-height: calc(100vh - 52px); padding: 12px; }
+    .variant.active { display: block; }
+    .terminal-wrap { max-width: 1280px; margin: 0 auto; }
+    .controls { display: flex; gap: 8px; margin-bottom: 10px; color: var(--color-text-muted); align-items: center; }
+    .controls button { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); padding: 5px 8px; cursor: pointer; }
+    .terminal { border: 1px solid var(--color-border-strong); background: #0b0d12; box-shadow: var(--shadow-md); padding: 8px; display: grid; gap: 6px; overflow: hidden; margin: 0 auto; transition: width .15s, height .15s; }
+    .term-80 { width: 80ch; height: 26em; }
+    .term-100 { width: 100ch; height: 30em; }
+    .term-132 { width: min(132ch, 100%); height: 36em; }
+    .term-short { width: 100ch; height: 20em; }
+    .pane { border: 1px solid var(--color-border); background: var(--color-bg-2); min-width: 0; min-height: 0; overflow: hidden; }
+    .title { height: 2em; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid var(--color-border); color: var(--color-primary); background: var(--color-surface); white-space: nowrap; }
+    .body { padding: 6px 8px; overflow: hidden; }
+    .footer { border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-muted); min-height: 2em; padding: 5px 8px; overflow: hidden; white-space: nowrap; }
+    .row { display: grid; grid-template-columns: 4ch 2ch minmax(16ch, 1fr) minmax(14ch, .8fr) auto minmax(14ch, 1.1fr) auto; gap: 6px; min-height: 1.6em; align-items: center; white-space: nowrap; overflow: hidden; }
+    .row span { overflow: hidden; text-overflow: ellipsis; }
+    .focus { background: var(--color-surface-2); outline: 1px solid var(--color-primary); }
+    .muted { color: var(--color-text-muted); }
+    .ok { color: var(--color-success); }
+    .warn { color: var(--color-warning); }
+    .bad { color: var(--color-danger); }
+    .info { color: var(--color-primary); }
+    .purple { color: var(--color-purple); }
+    .kbd, .cmd { color: var(--color-accent); }
+    .bar { height: 1px; background: var(--color-border); margin: 5px 0; }
+    .section-tabs { color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
+    .table { display: grid; grid-template-columns: 12ch 12ch 1fr 8ch; gap: 7px; white-space: nowrap; }
+    .table > div { overflow: hidden; text-overflow: ellipsis; min-height: 1.5em; border-bottom: 1px solid rgba(90,101,120,0.35); }
+    .stack-a { grid-template-rows: minmax(8em, 45%) 1fr 2em; }
+    .split-b { grid-template-columns: 38ch 1fr; grid-template-rows: 1fr 2em; }
+    .short-c { grid-template-rows: 1fr 3.6em 2em; }
+    .overlay { border: 1px solid var(--color-primary); background: var(--color-bg-2); padding: 6px 8px; box-shadow: var(--shadow-md); }
+    #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 20; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.76); color: white; padding: 8px 10px; border-radius: 8px; opacity: 0.42; transition: opacity .15s; }
+    #sketch-tools:hover { opacity: 1; }
+    @media (max-width: 900px) {
+      .terminal { width: 100% !important; height: 34em; }
+      .split-b { grid-template-columns: 1fr; grid-template-rows: 45% 1fr 2em; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="variant-nav">
+    <button class="variant-tab active" onclick="showVariant('a', this)">A: Stack</button>
+    <button class="variant-tab" onclick="showVariant('b', this)">B: Wide Split</button>
+    <button class="variant-tab" onclick="showVariant('c', this)">C: Short Focus</button>
+  </nav>
+
+  <section id="variant-a" class="variant active">
+    <div class="terminal-wrap">
+      <div class="controls">Preview width <button onclick="sizeTerminal('a','term-80')">80x26</button><button onclick="sizeTerminal('a','term-100')">100x30</button><button onclick="sizeTerminal('a','term-132')">132x36</button></div>
+      <div id="term-a" class="terminal stack-a term-100">
+        <div class="pane">
+          <div class="title"><span>[1 Workspaces]  2 Templates  3 Repos</span><span>g: state | label | none</span></div>
+          <div class="body">
+            <div class="muted">needs attention</div>
+            <div class="row focus"><span class="warn">>[x]</span><span class="warn">~</span><span>bugfix-login-race</span><span class="info">feature/login-race</span><span class="warn">↓5 ~2</span><span class="warn">codex: waiting</span><span>2m</span></div>
+            <div class="row"><span class="bad"> [x]</span><span class="bad">x</span><span>hotfix-auth-token</span><span class="info">hotfix/auth</span><span class="warn">~1</span><span class="muted"></span><span>1h</span></div>
+            <div class="muted">active</div>
+            <div class="row"><span class="info"> [ ]</span><span class="ok">o</span><span>review/pr-128</span><span class="info">review/pr-128</span><span class="muted">2wt</span><span class="info">reviewer: needs pass</span><span>41m</span></div>
+            <div class="row"><span class="warn"> [ ]</span><span class="warn">~</span><span>feat/manual-commands</span><span class="info">feat/commands</span><span class="warn">~4</span><span class="muted">1wt</span><span>2h</span></div>
+            <div class="muted">ready</div>
+            <div class="row"><span class="ok"> [ ]</span><span class="ok">o</span><span>feat/files-sync</span><span class="info">feat/files-sync</span><span class="ok">↑2</span><span class="muted">3wt</span><span>18m</span></div>
+            <div class="bar"></div>
+            <div class="cmd">2 selected  c clean  r remove  Esc clear</div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="title"><span>bugfix-login-race</span><span>detail: repos</span></div>
+          <div class="body">
+            <div class="section-tabs"><span class="cmd">stacked:</span> message banner -> repos -> services -> details</div>
+            <div class="table">
+              <div class="warn">web-ui</div><div>worktree</div><div>feature/login-race dirty 3</div><div>dirty</div>
+              <div class="bad">api</div><div>worktree</div><div>dirty 1 behind 5</div><div>stale</div>
+              <div class="ok">worker</div><div>worktree</div><div>clean ahead 1</div><div>ahead</div>
+              <div class="muted">docs</div><div>dir</div><div>no git metrics</div><div>dir</div>
+            </div>
+          </div>
+        </div>
+        <div class="footer">Space Select  Enter Actions  g Group  r Refresh  / Filter  m Messages  ? Help  q Quit</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="variant-b" class="variant">
+    <div class="terminal-wrap">
+      <div class="controls">Preview width <button onclick="sizeTerminal('b','term-100')">100x30</button><button onclick="sizeTerminal('b','term-132')">132x36</button></div>
+      <div id="term-b" class="terminal split-b term-132">
+        <div class="pane">
+          <div class="title"><span>[1 Workspaces]  2 Templates  3 Repos</span><span>state</span></div>
+          <div class="body">
+            <div class="row focus"><span class="warn">>[x]</span><span class="warn">~</span><span>bugfix-login-race</span><span class="info">feature/login-race</span><span class="warn">↓5 ~2</span><span class="warn">codex: waiting</span><span>2m</span></div>
+            <div class="row"><span class="bad"> [x]</span><span class="bad">x</span><span>hotfix-auth-token</span><span class="info">hotfix/auth</span><span class="warn">~1</span><span class="muted"></span><span>1h</span></div>
+            <div class="row"><span class="info"> [ ]</span><span class="ok">o</span><span>review/pr-128</span><span class="info">review/pr-128</span><span class="muted">2wt</span><span class="info">reviewer: needs pass</span><span>41m</span></div>
+            <div class="row"><span class="warn"> [ ]</span><span class="warn">~</span><span>feat/manual-commands</span><span class="info">feat/commands</span><span class="warn">~4</span><span class="muted">1wt</span><span>2h</span></div>
+            <div class="row"><span class="ok"> [ ]</span><span class="ok">o</span><span>feat/files-sync</span><span class="info">feat/files-sync</span><span class="ok">↑2</span><span class="muted">3wt</span><span>18m</span></div>
+            <div class="bar"></div>
+            <div class="cmd">2 selected  r remove batch</div>
+          </div>
+        </div>
+        <div class="pane">
+          <div class="title"><span>bugfix-login-race</span><span>detail: services</span></div>
+          <div class="body">
+            <div class="section-tabs"><span class="cmd">wide stacked:</span> repos -> services -> details</div>
+            <div class="table">
+              <div class="ok">tmux</div><div>session</div><div>bugfix-login-race 4 panes</div><div>alive</div>
+              <div class="ok">web-ui</div><div>pid 4921</div><div>bun dev :5173 21m</div><div>alive</div>
+              <div class="warn">api</div><div>pid ?</div><div>bun test --watch 6m</div><div>unknown</div>
+              <div class="info">agent</div><div>message</div><div>test-fixer completed 2m</div><div>done</div>
+            </div>
+            <div class="bar"></div>
+            <div class="muted">Wide split still uses stacked detail while height allows. Operations use Enter/menu overlays.</div>
+          </div>
+        </div>
+        <div class="footer">Space Select  Enter Actions  g Group  r Refresh  m Messages  ? Help</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="variant-c" class="variant">
+    <div class="terminal-wrap">
+      <div class="controls">Preview height <button onclick="sizeTerminal('c','term-short')">100x20</button><button onclick="sizeTerminal('c','term-100')">100x30</button></div>
+      <div id="term-c" class="terminal short-c term-short">
+        <div class="pane">
+          <div class="title"><span>[1 Workspaces]  2 Templates  3 Repos</span><span>short mode</span></div>
+          <div class="body">
+            <div class="row focus"><span class="warn">>[x]</span><span class="warn">~</span><span>bugfix-login-race</span><span class="info">feature/login-race</span><span class="warn">↓5 ~2</span><span class="warn">codex: waiting</span><span>2m</span></div>
+            <div class="row"><span class="bad"> [x]</span><span class="bad">x</span><span>hotfix-auth-token</span><span class="info">hotfix/auth</span><span class="warn">~1</span><span class="muted"></span><span>1h</span></div>
+            <div class="row"><span class="info"> [ ]</span><span class="ok">o</span><span>review/pr-128</span><span class="info">review/pr-128</span><span class="muted">2wt</span><span class="info">reviewer: needs pass</span><span>41m</span></div>
+            <div class="row"><span class="warn"> [ ]</span><span class="warn">~</span><span>feat/manual-commands</span><span class="info">feat/commands</span><span class="warn">~4</span><span class="muted">1wt</span><span>2h</span></div>
+            <div class="row"><span class="ok"> [ ]</span><span class="ok">o</span><span>feat/files-sync</span><span class="info">feat/files-sync</span><span class="ok">↑2</span><span class="muted">3wt</span><span>18m</span></div>
+          </div>
+        </div>
+        <div class="overlay">
+          <div><span class="cmd">bugfix-login-race</span>  msg:3 dirty:2 behind:5 svc:4  labels: tools, backend</div>
+          <div>repos: web-ui dirty3, api behind5, worker clean | services: tmux, web, test, agent</div>
+        </div>
+        <div class="footer">Enter Actions  d Detail Overlay  Space Select  / Filter  r Refresh  ? Help</div>
+      </div>
+    </div>
+  </section>
+
+  <div id="sketch-tools">
+    Theme <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default.css">Default</option></select>
+  </div>
+  <script>
+    function showVariant(id, button) {
+      document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('variant-' + id).classList.add('active');
+      button.classList.add('active');
+    }
+    function sizeTerminal(id, cls) {
+      const el = document.getElementById('term-' + id);
+      el.classList.remove('term-80', 'term-100', 'term-132', 'term-short');
+      el.classList.add(cls);
+    }
+  </script>
+</body>
+</html>

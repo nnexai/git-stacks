@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sketch 003 - Create Switch Flow</title>
+  <link rel="stylesheet" href="../themes/default.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-sm); padding-top: 52px; }
+    button, input, select { font: inherit; }
+    .variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--color-bg-2); border-bottom: 1px solid var(--color-border); }
+    .variant-tab { color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 7px 10px; cursor: pointer; }
+    .variant-tab.active, .variant-tab:hover { color: var(--color-text); border-color: var(--color-primary); background: rgba(124,199,255,0.12); }
+    .variant { display: none; min-height: calc(100vh - 52px); padding: 12px; }
+    .variant.active { display: block; }
+    .terminal { max-width: 1320px; margin: 0 auto; min-height: calc(100vh - 76px); border: 1px solid var(--color-border-strong); background: #0b0d12; box-shadow: var(--shadow-md); display: grid; grid-template-columns: 31% 1fr 25%; grid-template-rows: 1fr 32px; gap: 8px; padding: 8px; position: relative; }
+    .terminal.two { grid-template-columns: 34% 1fr; }
+    .pane { border: 1px solid var(--color-border); background: var(--color-bg-2); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    .pane-title { display: flex; justify-content: space-between; gap: 12px; padding: 6px 8px; border-bottom: 1px solid var(--color-border); color: var(--color-primary); background: var(--color-surface); white-space: nowrap; }
+    .pane-body { padding: 8px; overflow: hidden; flex: 1; }
+    .row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: var(--radius-sm); min-height: 26px; cursor: pointer; }
+    .row:hover, .row.focused { background: var(--color-surface-2); }
+    .row.focused { outline: 1px solid var(--color-primary); }
+    .muted { color: var(--color-text-muted); }
+    .ok { color: var(--color-success); }
+    .warn { color: var(--color-warning); }
+    .bad { color: var(--color-danger); }
+    .info { color: var(--color-primary); }
+    .purple { color: var(--color-purple); }
+    .cmd { color: var(--color-accent); }
+    .footer { grid-column: 1 / -1; display: flex; gap: 18px; align-items: center; border: 1px solid var(--color-border); padding: 6px 8px; background: var(--color-surface); color: var(--color-text-muted); min-height: 32px; }
+    .overlay { position: absolute; inset: 9% 11%; border: 1px solid var(--color-primary); background: rgba(21,25,34,0.98); box-shadow: var(--shadow-md); display: flex; flex-direction: column; }
+    .overlay input { width: 100%; background: #0b0d12; color: var(--color-text); border: 1px solid var(--color-border); padding: 8px 10px; outline: none; }
+    .overlay input:focus { border-color: var(--color-primary); }
+    .template-card { border: 1px solid var(--color-border); padding: 8px; background: var(--color-surface); margin-bottom: 8px; cursor: pointer; }
+    .template-card:hover, .template-card.focused { border-color: var(--color-primary); background: var(--color-surface-2); }
+    .form-row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .field { border: 1px solid var(--color-border); background: #0b0d12; color: var(--color-text); padding: 6px 8px; }
+    .stepper { display: flex; gap: 8px; margin-top: 10px; }
+    .step { border: 1px solid var(--color-border); color: var(--color-text-muted); padding: 4px 7px; }
+    .step.active { border-color: var(--color-primary); color: var(--color-text); background: rgba(124,199,255,0.12); }
+    .toast { position: fixed; right: 16px; bottom: 16px; background: var(--color-surface); color: var(--color-text); border: 1px solid var(--color-primary); padding: 9px 12px; display: none; }
+    #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 20; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.76); color: white; padding: 8px 10px; border-radius: 8px; opacity: 0.42; transition: opacity .15s; }
+    #sketch-tools:hover { opacity: 1; }
+    @media (max-width: 900px) {
+      .terminal, .terminal.two { grid-template-columns: 1fr; grid-template-rows: none; }
+      .footer { grid-column: auto; }
+      .overlay { position: static; min-height: 420px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="variant-nav">
+    <button class="variant-tab active" onclick="showVariant('a', this)">A: Command Palette</button>
+    <button class="variant-tab" onclick="showVariant('b', this)">B: Create Rail</button>
+    <button class="variant-tab" onclick="showVariant('c', this)">C: Switcher Overlay</button>
+  </nav>
+
+  <section id="variant-a" class="variant active">
+    <div class="terminal two">
+      <div class="pane">
+        <div class="pane-title"><span>Workspaces</span><span>c create</span></div>
+        <div class="pane-body">
+          <div class="row focused"><span class="warn">!</span><span>bugfix-login-race</span><span>agent</span></div>
+          <div class="row"><span class="ok">o</span><span>feat/files-sync</span><span>ready</span></div>
+          <div class="row"><span class="info">i</span><span>review/pr-128</span><span>review</span></div>
+          <div class="row"><span class="bad">x</span><span>hotfix-auth-token</span><span>fail</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Focused detail</span><span>bugfix-login-race</span></div>
+        <div class="pane-body">
+          <div><span class="warn">attention:</span> 3 agent messages</div>
+          <div><span class="bad">git:</span> api behind 5, web-ui dirty</div>
+          <div><span class="ok">runtime:</span> tmux up, dev server :5173</div>
+          <div class="cmd" style="margin-top:12px">Press c for the command palette.</div>
+        </div>
+      </div>
+      <div class="overlay">
+        <div class="pane-title"><span>Command palette</span><span>Esc closes</span></div>
+        <div class="pane-body">
+          <input value="create workspace from fullstack">
+          <div class="row focused" onclick="toast('Create wizard opened')"><span class="cmd">c</span><span>Create workspace from template fullstack</span><span>recommended</span></div>
+          <div class="row" onclick="toast('Create from selected repos')"><span class="cmd">r</span><span>Create workspace from selected repos</span><span>3 repos</span></div>
+          <div class="row" onclick="toast('Switched workspace')"><span class="cmd">o</span><span>Open feat/files-sync</span><span>clean</span></div>
+          <div class="row" onclick="toast('Sync started')"><span class="cmd">s</span><span>Sync current workspace</span><span>stash</span></div>
+          <div class="row" onclick="toast('Messages opened')"><span class="cmd">m</span><span>Read agent messages</span><span>3 unread</span></div>
+        </div>
+      </div>
+      <div class="footer"><span>palette keeps creation fast</span><span>works best for keyboard-heavy users</span></div>
+    </div>
+  </section>
+
+  <section id="variant-b" class="variant">
+    <div class="terminal">
+      <div class="pane">
+        <div class="pane-title"><span>Workspaces</span><span>manage</span></div>
+        <div class="pane-body">
+          <div class="row focused"><span class="warn">!</span><span>bugfix-login-race</span><span>agent</span></div>
+          <div class="row"><span class="ok">o</span><span>feat/files-sync</span><span>ready</span></div>
+          <div class="row"><span class="info">i</span><span>review/pr-128</span><span>review</span></div>
+          <div class="row"><span class="bad">x</span><span>hotfix-auth-token</span><span>fail</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Create workspace</span><span>template fullstack</span></div>
+        <div class="pane-body">
+          <div class="form-row"><label>Name</label><input class="field" value="bugfix-login-race-2"></div>
+          <div class="form-row"><label>Branch</label><input class="field" value="feature/bugfix-login-race-2"></div>
+          <div class="form-row"><label>Source</label><div class="field">template: fullstack</div></div>
+          <div class="stepper"><div class="step active">1 name</div><div class="step">2 branch</div><div class="step">3 confirm</div><div class="step">4 create</div></div>
+          <div class="row" style="margin-top:12px"><span class="ok">+</span><span>api, web-ui, worker</span><span>worktree</span></div>
+          <div class="row"><span class="muted">.</span><span>docs</span><span>dir</span></div>
+          <p class="muted">This makes creation visible as part of the main control center instead of a modal-only path.</p>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Templates and recent repos</span><span>rail</span></div>
+        <div class="pane-body">
+          <div class="template-card focused" onclick="toast('Selected fullstack')"><div class="info">fullstack</div><div class="muted">api, web-ui, worker, docs</div></div>
+          <div class="template-card" onclick="toast('Selected library')"><div class="info">library</div><div class="muted">package, examples, docs</div></div>
+          <div class="template-card" onclick="toast('Selected forge-review')"><div class="info">forge-review</div><div class="muted">source from GitLab branch</div></div>
+          <div class="cmd">n new template  r scan repos</div>
+        </div>
+      </div>
+      <div class="footer"><span>creation always visible</span><span>cost: less room for detail</span><span>Enter advances</span></div>
+    </div>
+  </section>
+
+  <section id="variant-c" class="variant">
+    <div class="terminal two">
+      <div class="pane">
+        <div class="pane-title"><span>Workspaces</span><span>Tab switcher</span></div>
+        <div class="pane-body">
+          <div class="row focused"><span class="warn">!</span><span>bugfix-login-race</span><span>agent</span></div>
+          <div class="row"><span class="ok">o</span><span>feat/files-sync</span><span>ready</span></div>
+          <div class="row"><span class="info">i</span><span>review/pr-128</span><span>review</span></div>
+          <div class="row"><span class="bad">x</span><span>hotfix-auth-token</span><span>fail</span></div>
+        </div>
+      </div>
+      <div class="pane">
+        <div class="pane-title"><span>Focused detail</span><span>bugfix-login-race</span></div>
+        <div class="pane-body">
+          <div><span class="warn">messages:</span> test-fixer done, reviewer running</div>
+          <div><span class="bad">blocker:</span> api behind 5</div>
+          <div><span class="ok">runtime:</span> tmux available</div>
+        </div>
+      </div>
+      <div class="overlay">
+        <div class="pane-title"><span>Workspace switcher</span><span>sort: attention</span></div>
+        <div class="pane-body">
+          <input value="bug">
+          <div class="row focused" onclick="toast('Attached to tmux')"><span class="warn">!</span><span>bugfix-login-race <span class="muted">agent done, tmux up</span></span><span>2m</span></div>
+          <div class="row" onclick="toast('Opened hotfix')"><span class="bad">x</span><span>hotfix-auth-token <span class="muted">failed smoke</span></span><span>1h</span></div>
+          <div class="row" onclick="toast('Opened files sync')"><span class="ok">o</span><span>feat/files-sync <span class="muted">merge ready</span></span><span>18m</span></div>
+          <div class="row" onclick="toast('Opened review')"><span class="info">i</span><span>review/pr-128 <span class="muted">2 branches</span></span><span>41m</span></div>
+          <div class="cmd" style="margin-top:10px">Enter open  t attach tmux  m messages  s sync</div>
+        </div>
+      </div>
+      <div class="footer"><span>switching is optimized for active multi-workspace juggling</span><span>creation still lives behind c</span></div>
+    </div>
+  </section>
+
+  <div id="sketch-tools">
+    Theme <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default.css">Default</option></select>
+  </div>
+  <div class="toast" id="toast">Action</div>
+  <script>
+    function showVariant(id, button) {
+      document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('variant-' + id).classList.add('active');
+      button.classList.add('active');
+    }
+    function toast(text) {
+      const t = document.getElementById('toast');
+      t.textContent = text;
+      t.style.display = 'block';
+      setTimeout(() => t.style.display = 'none', 1100);
+    }
+  </script>
+</body>
+</html>

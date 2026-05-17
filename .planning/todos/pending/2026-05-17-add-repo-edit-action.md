@@ -2,6 +2,7 @@
 created: 2026-05-17T11:01:03.605Z
 title: Add repo edit action
 area: ui
+resolves_phase: 99
 files:
   - src/tui/dashboard/RepoActionMenu.tsx
   - src/tui/dashboard/App.tsx

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sketch 002 - Workspace Detail Density</title>
+  <link rel="stylesheet" href="../themes/default.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-mono); font-size: var(--text-sm); padding-top: 52px; }
+    button, select { font: inherit; }
+    .variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--color-bg-2); border-bottom: 1px solid var(--color-border); }
+    .variant-tab { color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 7px 10px; cursor: pointer; }
+    .variant-tab.active, .variant-tab:hover { color: var(--color-text); border-color: var(--color-primary); background: rgba(124,199,255,0.12); }
+    .variant { display: none; min-height: calc(100vh - 52px); padding: 12px; }
+    .variant.active { display: block; }
+    .terminal { max-width: 1320px; margin: 0 auto; min-height: calc(100vh - 76px); border: 1px solid var(--color-border-strong); background: #0b0d12; box-shadow: var(--shadow-md); display: grid; grid-template-columns: 31% 1fr; grid-template-rows: 1fr 32px; gap: 8px; padding: 8px; }
+    .pane { border: 1px solid var(--color-border); background: var(--color-bg-2); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    .pane-title { display: flex; justify-content: space-between; gap: 12px; padding: 6px 8px; border-bottom: 1px solid var(--color-border); color: var(--color-primary); background: var(--color-surface); white-space: nowrap; }
+    .pane-body { padding: 8px; overflow: hidden; flex: 1; }
+    .row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 4px 6px; border-radius: var(--radius-sm); min-height: 26px; cursor: pointer; }
+    .row:hover, .row.focused { background: var(--color-surface-2); }
+    .row.focused { outline: 1px solid var(--color-primary); }
+    .muted { color: var(--color-text-muted); }
+    .ok { color: var(--color-success); }
+    .warn { color: var(--color-warning); }
+    .bad { color: var(--color-danger); }
+    .info { color: var(--color-primary); }
+    .purple { color: var(--color-purple); }
+    .badge { display: inline-block; padding: 1px 5px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-muted); margin-left: 4px; }
+    .footer { grid-column: 1 / -1; display: flex; gap: 18px; align-items: center; border: 1px solid var(--color-border); padding: 6px 8px; background: var(--color-surface); color: var(--color-text-muted); min-height: 32px; }
+    .detail { display: grid; gap: 8px; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: min-content; }
+    .card { border: 1px solid var(--color-border); background: var(--color-surface); padding: 8px; min-width: 0; }
+    .card h3 { margin: 0 0 7px; font-size: var(--text-sm); color: var(--color-primary); font-weight: 600; }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .metric strong { display: block; font-size: var(--text-lg); }
+    .span3 { grid-column: span 3; }
+    .span4 { grid-column: span 4; }
+    .span5 { grid-column: span 5; }
+    .span6 { grid-column: span 6; }
+    .span7 { grid-column: span 7; }
+    .span8 { grid-column: span 8; }
+    .span12 { grid-column: span 12; }
+    .repo-table { width: 100%; border-collapse: collapse; }
+    .repo-table td, .repo-table th { padding: 4px 6px; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
+    .repo-table th { color: var(--color-text-muted); font-weight: 500; }
+    .check { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--color-border); }
+    .timeline { position: relative; padding-left: 18px; }
+    .timeline:before { content: ""; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 1px; background: var(--color-border); }
+    .event { position: relative; padding: 0 0 10px; }
+    .event:before { content: ""; position: absolute; left: -16px; top: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); }
+    .cmd { color: var(--color-accent); }
+    #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 20; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.76); color: white; padding: 8px 10px; border-radius: 8px; opacity: 0.42; transition: opacity .15s; }
+    #sketch-tools:hover { opacity: 1; }
+    @media (max-width: 900px) {
+      .terminal { grid-template-columns: 1fr; grid-template-rows: none; }
+      .footer { grid-column: auto; }
+      .detail { grid-template-columns: 1fr; }
+      .span3, .span4, .span5, .span6, .span7, .span8, .span12 { grid-column: auto; }
+      .metric-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="variant-nav">
+    <button class="variant-tab active" onclick="showVariant('a', this)">A: Status Dashboard</button>
+    <button class="variant-tab" onclick="showVariant('b', this)">B: Merge Checklist</button>
+    <button class="variant-tab" onclick="showVariant('c', this)">C: Timeline Detail</button>
+  </nav>
+
+  <section id="variant-a" class="variant active">
+    <div class="terminal">
+      <workspace-list></workspace-list>
+      <div class="pane">
+        <div class="pane-title"><span>bugfix-login-race detail</span><span>hand-designed summary</span></div>
+        <div class="pane-body detail">
+          <div class="card span12">
+            <div class="metric-grid">
+              <div class="metric"><strong class="warn">attention</strong><span>3 agent messages</span></div>
+              <div class="metric"><strong class="bad">not merge-ready</strong><span>api behind 5</span></div>
+              <div class="metric"><strong class="warn">dirty</strong><span>2 repos changed</span></div>
+              <div class="metric"><strong class="ok">runtime up</strong><span>tmux + 2 services</span></div>
+            </div>
+          </div>
+          <div class="card span7">
+            <h3>Repo Matrix</h3>
+            <table class="repo-table">
+              <tr><th>repo</th><th>git</th><th>branch</th><th>next</th></tr>
+              <tr><td>web-ui</td><td class="warn">3 dirty</td><td>feature/login-race</td><td>run tests</td></tr>
+              <tr><td>api</td><td class="bad">behind 5</td><td>feature/login-race</td><td>sync</td></tr>
+              <tr><td>worker</td><td class="ok">clean +1</td><td>feature/login-race</td><td>push</td></tr>
+              <tr><td>docs</td><td class="muted">dir</td><td>main</td><td>none</td></tr>
+            </table>
+          </div>
+          <div class="card span5">
+            <h3>Messages</h3>
+            <div><span class="warn">test-fixer:</span> fixed failing auth spec <span class="muted">2m</span></div>
+            <div><span class="info">reviewer:</span> api is behind main <span class="muted">5m</span></div>
+            <div><span class="purple">system:</span> workspace opened <span class="muted">21m</span></div>
+          </div>
+          <div class="card span6">
+            <h3>Runtime</h3>
+            <div class="check"><span class="ok">up</span><span>tmux: bugfix-login-race</span><span>4 panes</span></div>
+            <div class="check"><span class="ok">up</span><span>web dev server</span><span>:5173</span></div>
+            <div class="check"><span class="warn">busy</span><span>playwright smoke</span><span>6m</span></div>
+          </div>
+          <div class="card span6">
+            <h3>Actions</h3>
+            <div><span class="cmd">s</span> sync api with stash</div>
+            <div><span class="cmd">m</span> read all messages</div>
+            <div><span class="cmd">p</span> push clean repos</div>
+            <div><span class="cmd">t</span> attach tmux session</div>
+          </div>
+        </div>
+      </div>
+      <div class="footer"><span>Enter actions</span><span>m messages</span><span>t tmux</span><span>s sync</span><span>/ filter</span></div>
+    </div>
+  </section>
+
+  <section id="variant-b" class="variant">
+    <div class="terminal">
+      <workspace-list></workspace-list>
+      <div class="pane">
+        <div class="pane-title"><span>Merge readiness: bugfix-login-race</span><span>2 blockers</span></div>
+        <div class="pane-body detail">
+          <div class="card span8">
+            <h3>Readiness Checklist</h3>
+            <div class="check"><span class="bad">block</span><span>api is behind upstream by 5 commits</span><span>s sync</span></div>
+            <div class="check"><span class="warn">warn</span><span>web-ui has 3 uncommitted files</span><span>open</span></div>
+            <div class="check"><span class="ok">ok</span><span>worker is clean and ahead 1</span><span>p push</span></div>
+            <div class="check"><span class="ok">ok</span><span>workspace hooks captured cleanly</span><span>view</span></div>
+            <div class="check"><span class="warn">review</span><span>3 unread agent messages</span><span>m read</span></div>
+          </div>
+          <div class="card span4">
+            <h3>Outcome</h3>
+            <div class="bad">Do not merge yet.</div>
+            <p class="muted">Fast path: read messages, sync api, resolve web-ui files, rerun smoke, then merge.</p>
+          </div>
+          <div class="card span6">
+            <h3>Git Summary</h3>
+            <table class="repo-table">
+              <tr><td>ahead</td><td class="ok">1 repo</td></tr>
+              <tr><td>behind</td><td class="bad">api 5</td></tr>
+              <tr><td>dirty</td><td class="warn">web-ui 3, api 1</td></tr>
+              <tr><td>missing</td><td class="ok">0</td></tr>
+            </table>
+          </div>
+          <div class="card span6">
+            <h3>Agent State</h3>
+            <div class="check"><span class="warn">done</span><span>test-fixer</span><span>2m</span></div>
+            <div class="check"><span class="info">run</span><span>reviewer</span><span>11m</span></div>
+            <div class="check"><span class="ok">idle</span><span>executor</span><span>closed</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="footer"><span>merge action disabled until blockers clear</span><span>space selects batch</span><span>r refresh</span></div>
+    </div>
+  </section>
+
+  <section id="variant-c" class="variant">
+    <div class="terminal">
+      <workspace-list></workspace-list>
+      <div class="pane">
+        <div class="pane-title"><span>Activity timeline: bugfix-login-race</span><span>last 25 minutes</span></div>
+        <div class="pane-body detail">
+          <div class="card span7">
+            <h3>Timeline</h3>
+            <div class="timeline">
+              <div class="event"><span class="warn">2m</span> test-fixer sent "auth race fixed, tests pass"</div>
+              <div class="event"><span class="info">5m</span> reviewer noted api branch is behind main by 5</div>
+              <div class="event"><span class="ok">9m</span> web dev server started on :5173</div>
+              <div class="event"><span class="warn">13m</span> playwright smoke still running</div>
+              <div class="event"><span class="muted">21m</span> workspace opened from template fullstack</div>
+            </div>
+          </div>
+          <div class="card span5">
+            <h3>Current State</h3>
+            <div class="check"><span class="warn">messages</span><span>3 unread</span><span>m</span></div>
+            <div class="check"><span class="bad">git</span><span>not ready</span><span>s</span></div>
+            <div class="check"><span class="ok">runtime</span><span>available</span><span>t</span></div>
+            <div class="check"><span class="warn">tests</span><span>running</span><span>view</span></div>
+          </div>
+          <div class="card span12">
+            <h3>Why this variant</h3>
+            <p class="muted">This works when the hard part is reconstructing what happened across manual and AI work. It is weaker than A/B for quick repo-by-repo operations unless paired with a compact repo strip.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer"><span>[ ] timeline focus</span><span>m messages</span><span>t attach service</span><span>s sync</span></div>
+    </div>
+  </section>
+
+  <template id="workspace-list-template">
+    <div class="pane">
+      <div class="pane-title"><span>Workspaces</span><span>state group</span></div>
+      <div class="pane-body">
+        <div class="row focused"><span class="warn">!</span><span>bugfix-login-race</span><span>agent</span></div>
+        <div class="row"><span class="ok">o</span><span>feat/files-sync</span><span>ready</span></div>
+        <div class="row"><span class="info">i</span><span>review/pr-128</span><span>review</span></div>
+        <div class="row"><span class="bad">x</span><span>hotfix-auth-token</span><span>fail</span></div>
+        <div class="row"><span class="muted">.</span><span>old-refactor</span><span>idle</span></div>
+      </div>
+    </div>
+  </template>
+  <div id="sketch-tools">
+    Theme <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default.css">Default</option></select>
+  </div>
+  <script>
+    customElements.define('workspace-list', class extends HTMLElement {
+      connectedCallback() {
+        const tpl = document.getElementById('workspace-list-template');
+        this.replaceWith(tpl.content.cloneNode(true));
+      }
+    });
+    function showVariant(id, button) {
+      document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('variant-' + id).classList.add('active');
+      button.classList.add('active');
+    }
+  </script>
+</body>
+</html>

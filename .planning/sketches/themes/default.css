@@ -1,0 +1,35 @@
+:root {
+  --color-bg: #0f1117;
+  --color-bg-2: #151922;
+  --color-surface: #1d2330;
+  --color-surface-2: #252d3c;
+  --color-border: #394251;
+  --color-border-strong: #5a6578;
+  --color-text: #e7ecf3;
+  --color-text-muted: #9aa6b8;
+  --color-primary: #7cc7ff;
+  --color-primary-hover: #a6d9ff;
+  --color-accent: #f2c86b;
+  --color-danger: #ff7b72;
+  --color-success: #74d69d;
+  --color-warning: #f2c86b;
+  --color-purple: #c8a2ff;
+  --font-sans: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --text-xs: 0.72rem;
+  --text-sm: 0.84rem;
+  --text-base: 0.95rem;
+  --text-lg: 1.05rem;
+  --text-xl: 1.18rem;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.35);
+}
