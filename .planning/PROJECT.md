@@ -22,6 +22,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ## Recent State (2026-05-17)
 
+### What shipped so far in v0.19.0
+
+- **Manual workspace commands** — templates and workspaces can define named manual commands that reuse the existing environment/cwd execution path without becoming lifecycle hooks.
+- **Workspace notes** — `git-stacks notes` stores append-only workspace notes in the config root, outside managed project repos.
+- **TUI file-status model** — `getWorkspaceFileStatusView()` and `useWorkspaceFileStatus()` expose grouped copy/symlink/sync status, summaries, severity, and lazy selected-workspace loading for the dashboard without duplicating `git-stacks files status` sync policy.
+
 ### What shipped in v0.18.0
 
 - **Workspace file sync** — templates and workspaces can define `files.sync` entries that materialize source paths into workspaces as real files, with local git exclude support for synced targets.
@@ -185,6 +191,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 ### Validated
 
+- ✓ TUI file status display reuses the v0.18.0 files status model for copy, symlink, and sync mappings without duplicating sync logic — v0.19.0 Phase 97
 - ✓ Template labels on templates, exact-match `template list --label`, and snapshot propagation into workspace create/clone flows — v0.17.0 Phase 74
 - ✓ Workspace engine decomposition — `workspace-env`, `workspace-lifecycle`, `workspace-status`, `workspace-git`, and `workspace-yaml` extracted behind a stable facade — v0.16.0 Phases 69-70
 - ✓ Stderr-only debug observability — `GIT_STACKS_DEBUG=1` labeled timings/logs with JSON-safe stdout and pre-TUI silencing for `manage` — v0.16.0 Phase 71
