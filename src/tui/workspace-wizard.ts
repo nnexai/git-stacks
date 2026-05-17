@@ -99,6 +99,7 @@ function buildReposFromTemplate(
         type: regEntry.type,
         mode: "dir" as const,
         main_path: regEntry.local_path,
+        ...(tplRepo.commands ? { commands: { ...tplRepo.commands } } : {}),
       })
       continue
     }
@@ -113,6 +114,7 @@ function buildReposFromTemplate(
         main_path: regEntry.local_path,
         task_path: join(tasksDir, wsName, regEntry.name),
         base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+        ...(tplRepo.commands ? { commands: { ...tplRepo.commands } } : {}),
       })
     } else {
       repos.push({
@@ -122,6 +124,7 @@ function buildReposFromTemplate(
         mode,
         main_path: regEntry.local_path,
         base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+        ...(tplRepo.commands ? { commands: { ...tplRepo.commands } } : {}),
       })
     }
   }
@@ -185,6 +188,7 @@ export async function runWorkspaceNew(
     let templateName: string | undefined
     let template: Template | undefined
     let wsHooks: Workspace["hooks"] | undefined
+    let wsCommands: Workspace["commands"] | undefined
     let wsEnv: Record<string, string> | undefined
     let wsEnvFile: string | undefined
     let wsFiles: Workspace["files"]
@@ -230,6 +234,7 @@ export async function runWorkspaceNew(
     }
 
     wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+    wsCommands = template.commands ? { ...template.commands } : undefined
     wsEnv = template.env ? { ...template.env } : undefined
     wsEnvFile = template.env_file
     wsFiles = template.files
@@ -285,6 +290,7 @@ export async function runWorkspaceNew(
         ...(template.labels?.length ? { templateLabels: template.labels } : {}),
         repos,
         ...(wsHooks ? { wsHooks } : {}),
+        ...(wsCommands ? { wsCommands } : {}),
         ...(wsEnv ? { wsEnv } : {}),
         ...(wsEnvFile ? { wsEnvFile } : {}),
         ...(wsFiles ? { wsFiles } : {}),
@@ -334,6 +340,7 @@ export async function runWorkspaceNew(
   let repos: WorkspaceRepo[] = []
   let templateName: string | undefined
   let wsHooks: Workspace["hooks"] | undefined
+  let wsCommands: Workspace["commands"] | undefined
   let wsEnv: Record<string, string> | undefined
   let wsEnvFile: string | undefined
   let wsFiles: Workspace["files"]
@@ -359,6 +366,7 @@ export async function runWorkspaceNew(
     templateName = templateNames[templateNames.length - 1] // top-level template name for metadata
     repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
     wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+    wsCommands = template.commands ? { ...template.commands } : undefined
     wsEnv = template.env ? { ...template.env } : undefined
     wsEnvFile = template.env_file
     wsFiles = template.files
@@ -427,6 +435,7 @@ export async function runWorkspaceNew(
 
       // Snapshot template config into workspace
       wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+      wsCommands = template.commands ? { ...template.commands } : undefined
       wsEnv = template.env ? { ...template.env } : undefined
       wsEnvFile = template.env_file
       wsFiles = template.files
@@ -492,6 +501,7 @@ export async function runWorkspaceNew(
 
       // Snapshot template config
       wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+      wsCommands = template.commands ? { ...template.commands } : undefined
       wsEnv = template.env ? { ...template.env } : undefined
       wsEnvFile = template.env_file
       wsFiles = template.files
@@ -646,6 +656,7 @@ export async function runWorkspaceNew(
       ...(template?.labels?.length ? { templateLabels: template.labels } : {}),
       repos,
       ...(wsHooks ? { wsHooks } : {}),
+      ...(wsCommands ? { wsCommands } : {}),
       ...(wsEnv ? { wsEnv } : {}),
       ...(wsEnvFile ? { wsEnvFile } : {}),
       ...(wsFiles ? { wsFiles } : {}),

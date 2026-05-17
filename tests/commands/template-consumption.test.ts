@@ -48,6 +48,8 @@ name: base
 repos:
   - repo: api
     mode: dir
+    commands:
+      verify: echo api-verify
 env:
   SHARED: base
   API_LEVEL: stable
@@ -56,6 +58,9 @@ labels:
 hooks:
   post_create:
     - echo base
+commands:
+  verify: echo base-verify
+  preverify: echo base-pre
 `
   )
   writeTemplateFixture(
@@ -66,6 +71,8 @@ name: service
 repos:
   - repo: docs
     mode: dir
+    commands:
+      verify: echo docs-verify
 env:
   API_LEVEL: service
   SERVICE_ONLY: "1"
@@ -74,6 +81,9 @@ labels:
 hooks:
   pre_open:
     - echo open
+commands:
+  verify: echo service-verify
+  postverify: echo service-post
 `
   )
   writeTemplateFixture(
@@ -91,6 +101,8 @@ env:
   INCLUDED: "yes"
 labels:
   - included
+commands:
+  verify: echo included-verify
 `
   )
 }
@@ -109,7 +121,7 @@ describe("template consumption subprocess contracts", () => {
     cleanup(baseDir)
   })
 
-  test("new --non-interactive --from <template> snapshots template labels and config", () => {
+  test("new --non-interactive --from <template> snapshots template labels config and commands", () => {
     const created = runCli(["new", "from-template", "--non-interactive", "--from", "included"], {
       baseDir,
       configDir,
@@ -125,9 +137,11 @@ describe("template consumption subprocess contracts", () => {
     expect(saved).toContain("included")
     expect(saved).toContain("repo: api")
     expect(saved).toContain("repo: docs")
+    expect(saved).toContain("commands:")
+    expect(saved).toContain("verify: echo included-verify")
   })
 
-  test("repeatable --template composition snapshots merged labels config and repos", () => {
+  test("repeatable --template composition snapshots merged labels config repos and commands", () => {
     const created = runCli(
       ["new", "composed", "--non-interactive", "--template", "base", "--template", "service", "--label", "manual"],
       { baseDir, configDir }
@@ -148,9 +162,14 @@ describe("template consumption subprocess contracts", () => {
     expect(saved).toContain("repo: docs")
     expect(saved).toContain("post_create")
     expect(saved).toContain("pre_open")
+    expect(saved).toContain("verify: echo service-verify")
+    expect(saved).toContain("preverify: echo base-pre")
+    expect(saved).toContain("postverify: echo service-post")
+    expect(saved).toContain("commands:\n      verify: echo api-verify")
+    expect(saved).toContain("commands:\n      verify: echo docs-verify")
   })
 
-  test("clone --non-interactive preserves template-derived labels and config", () => {
+  test("clone --non-interactive preserves template-derived labels config and commands", () => {
     const created = runCli(
       ["new", "clone-source", "--non-interactive", "--template", "base", "--template", "service"],
       { baseDir, configDir }
@@ -176,6 +195,9 @@ describe("template consumption subprocess contracts", () => {
     expect(target).toContain("service")
     expect(target).toContain("repo: api")
     expect(target).toContain("repo: docs")
+    expect(target).toContain("verify: echo service-verify")
+    expect(target).toContain("preverify: echo base-pre")
+    expect(target).toContain("postverify: echo service-post")
     expect(source).toContain("name: clone-source")
   })
 })

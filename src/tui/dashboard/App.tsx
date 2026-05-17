@@ -790,6 +790,7 @@ export default function App() {
       // Build repos array
       let repos: WorkspaceRepo[]
       let wsHooks: Workspace["hooks"] | undefined
+      let wsCommands: Workspace["commands"] | undefined
       let wsEnv: Record<string, string> | undefined
       let wsEnvFile: string | undefined
       let wsFiles: Workspace["files"]
@@ -813,6 +814,7 @@ export default function App() {
               main_path: regEntry.local_path,
               task_path: join(tasksDir, wsName, regEntry.name),
               base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+              ...(tplRepo.commands ? { commands: { ...tplRepo.commands } } : {}),
             })
           } else {
             repos.push({
@@ -822,10 +824,12 @@ export default function App() {
               mode,
               main_path: regEntry.local_path,
               base_branch: tplRepo.base_branch ?? regEntry.default_branch,
+              ...(tplRepo.commands ? { commands: { ...tplRepo.commands } } : {}),
             })
           }
         }
         wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
+        wsCommands = template.commands ? { ...template.commands } : undefined
         wsEnv = template.env ? { ...template.env } : undefined
         wsEnvFile = template.env_file
         wsFiles = template.files
@@ -904,6 +908,7 @@ export default function App() {
           ...(templateName ? { templateName } : {}),
           repos,
           ...(wsHooks ? { wsHooks } : {}),
+          ...(wsCommands ? { wsCommands } : {}),
           ...(wsEnv ? { wsEnv } : {}),
           ...(wsEnvFile ? { wsEnvFile } : {}),
           ...(wsFiles ? { wsFiles } : {}),
