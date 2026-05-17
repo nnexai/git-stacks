@@ -220,6 +220,18 @@ export function writeWorkspaceFixture(configDir: string, fileName: string, yaml:
   return path
 }
 
+export function renderCommandsYaml(
+  commands: Record<string, string> | undefined,
+  indent = ""
+): string {
+  if (!commands || Object.keys(commands).length === 0) return ""
+  const lines: string[] = [`${indent}commands:`]
+  for (const [name, shell] of Object.entries(commands)) {
+    lines.push(`${indent}  ${name}: "${shell.replaceAll('"', '\\"')}"`)
+  }
+  return `${lines.join("\n")}\n`
+}
+
 export function mkdir(base: string, ...parts: string[]) {
   mkdirSync(join(base, ...parts), { recursive: true })
 }

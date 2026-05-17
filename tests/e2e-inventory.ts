@@ -70,6 +70,16 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     rationale: "Command execution across workspace repos is a high-risk shell boundary; baseline parallel coverage is extended with Phase 86 option-conflict and mixed-result JSON checks.",
   },
   {
+    id: "workspace.manual-commands",
+    family: "workspace",
+    flowType: "command",
+    title: "Manual workspace command list and run",
+    commands: ["command list", "command list --all", "command run", "command run --dry-run"],
+    scopeStatus: "in-scope",
+    mappedTests: ["tests/commands/command.test.ts"],
+    rationale: "Manual command resolution/listing and execution semantics are covered by dedicated subprocess tests.",
+  },
+  {
     id: "workspace.paths",
     family: "workspace",
     flowType: "command",
