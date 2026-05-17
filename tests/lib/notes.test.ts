@@ -64,10 +64,10 @@ describe("workspace notes store", () => {
     }
 
     const listed = await listWorkspaceNotes(ws)
-    expect(listed.map((row) => row.text)).toEqual(["newer", "middle", "older"])
+    expect(listed.map((row: { text: string }) => row.text)).toEqual(["newer", "middle", "older"])
 
     const limited = await listWorkspaceNotes(ws, { limit: 2 })
-    expect(limited.map((row) => row.text)).toEqual(["newer", "middle"])
+    expect(limited.map((row: { text: string }) => row.text)).toEqual(["newer", "middle"])
   })
 
   test("clear deletes file and summary returns empty contract for missing store", async () => {
