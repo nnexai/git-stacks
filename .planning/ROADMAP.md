@@ -302,10 +302,11 @@ Plans:
   3. File status loading handles missing workspaces, missing paths, dir/trunk/worktree differences, and JSON/human command parity.
   4. The dashboard can consume file status without running separate CLI subprocesses or reimplementing file sync policy.
   5. Tests cover copy, symlink, sync, missing target/source, drift, and status-summary aggregation.
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD
+- [ ] 97-01-PLAN.md - Shared grouped file-status model and CLI parity coverage
+- [ ] 97-02-PLAN.md - Lazy dashboard loader and TUI file-status state contract
 
 ### Phase 98: Grounded Dashboard Control Center
 **Goal**: `git-stacks manage` becomes a denser operator control center while preserving the current keyboard-first list/detail model.
