@@ -4,6 +4,30 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.19.0-rc.1] — 2026-05-17
+
+### Added
+
+**Manual workspace commands** — templates and workspaces can now define named commands for repeatable operator actions that are triggered explicitly. `git-stacks command list` and `git-stacks command run` expose the resolved commands while reusing the same workspace environment, cwd/repo targeting, port, secret, and output handling used by the existing execution machinery.
+
+**Workspace notes** — `git-stacks notes` stores lightweight append-only operator notes outside managed project repositories. Notes can be added, listed, cleared, and summarized in the dashboard without turning private working context into project files.
+
+**Grounded dashboard control center** — `git-stacks manage` now has denser workspace rows, grouping modes, ordered detail sections, contextual footers, notes summaries, and file sync/config status based on the same model as `git-stacks files status`.
+
+**Dashboard actions** — action menus now expose repo config editing, linked issue opening, and visible manual command execution. Disabled rows stay visible with clear reasons, one linked issue opens directly, multiple linked issues use a tracker picker, and command/issue failures stay in the progress view until keypress.
+
+### Safety Notes
+
+Manual commands are operator-authored actions and remain explicit manual triggers, not lifecycle hooks. Hidden `pre*` and `post*` command buckets stay implicit in the dashboard picker.
+
+Dashboard rollback progress visibility is not part of this release candidate. It was explicitly excluded from Phase 99 and remains deferred as backlog work.
+
+### Release Candidate
+
+This is a release candidate for v0.19.0. The package version and matching tag target are `0.19.0-rc.1` / `v0.19.0-rc.1`; final `0.19.0` tagging remains separate after RC validation.
+
+---
+
 ## [0.18.0-rc.1] — 2026-05-17
 
 ### Added

@@ -2,9 +2,6 @@
 import { readFileSync } from "fs"
 import { runVerifyWorkflow } from "./verify"
 
-const RC_VERSION = "0.18.0-rc.1"
-const RC_TAG = `v${RC_VERSION}`
-
 type RunOptions = {
   skipTag: boolean
 }
@@ -36,34 +33,39 @@ function packageVersion(): string {
   return JSON.parse(readFileSync("package.json", "utf8")).version
 }
 
-async function assertTagState(): Promise<"absent" | "same"> {
+function changelog(): string {
+  return readFileSync("CHANGELOG.md", "utf8")
+}
+
+async function assertTagState(rcTag: string): Promise<"absent" | "same"> {
   const head = (await capture("git rev-parse HEAD")).stdout.trim()
-  const tag = await capture(`git rev-parse ${RC_TAG}^{}`)
+  const tag = await capture(`git rev-parse ${rcTag}^{}`)
 
   if (tag.exitCode !== 0) return "absent"
 
   const taggedCommit = tag.stdout.trim()
   if (taggedCommit !== head) {
-    console.error(`ERROR: ${RC_TAG} already points to ${taggedCommit}, not current HEAD ${head}. Refusing to move it.`)
+    console.error(`ERROR: ${rcTag} already points to ${taggedCommit}, not current HEAD ${head}. Refusing to move it.`)
     process.exit(1)
   }
 
   return "same"
 }
 
-async function createTagIfNeeded(options: RunOptions): Promise<void> {
+async function createTagIfNeeded(rcVersion: string, options: RunOptions): Promise<void> {
+  const rcTag = `v${rcVersion}`
   if (options.skipTag) {
-    console.log(`Skipping tag creation for ${RC_TAG} (--skip-tag).`)
+    console.log(`Skipping tag creation for ${rcTag} (--skip-tag).`)
     return
   }
 
-  const tagState = await assertTagState()
+  const tagState = await assertTagState(rcTag)
   if (tagState === "same") {
-    console.log(`${RC_TAG} already points at the verified commit.`)
+    console.log(`${rcTag} already points at the verified commit.`)
     return
   }
 
-  const exitCode = await runCommand(`git tag -a ${RC_TAG} -m "git-stacks ${RC_VERSION} release candidate"`)
+  const exitCode = await runCommand(`git tag -a ${rcTag} -m "git-stacks ${rcVersion} release candidate"`)
   if (exitCode !== 0) process.exit(exitCode)
 }
 
@@ -72,8 +74,14 @@ async function main() {
     skipTag: process.argv.includes("--skip-tag"),
   }
 
-  if (packageVersion() !== RC_VERSION) {
-    console.error(`ERROR: package.json version must be ${RC_VERSION} before RC verification.`)
+  const rcVersion = packageVersion()
+  if (!/^\d+\.\d+\.\d+-rc\.\d+$/.test(rcVersion)) {
+    console.error(`ERROR: package.json version must be a release candidate before RC verification. Found ${rcVersion}.`)
+    process.exit(1)
+  }
+
+  if (!changelog().includes(`## [${rcVersion}]`)) {
+    console.error(`ERROR: CHANGELOG.md must contain an entry for ${rcVersion} before RC verification.`)
     process.exit(1)
   }
 
@@ -86,8 +94,8 @@ async function main() {
   const publishExit = await runCommand("bun publish --dry-run")
   if (publishExit !== 0) process.exit(publishExit)
 
-  await createTagIfNeeded(options)
-  console.log(`RC verification passed for ${RC_VERSION}.`)
+  await createTagIfNeeded(rcVersion, options)
+  console.log(`RC verification passed for ${rcVersion}.`)
 }
 
 await main()
