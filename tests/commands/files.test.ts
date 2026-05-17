@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, readFileSync, symlinkSync, writeFileSync } from "fs"
 import { join } from "path"
+import { getWorkspaceFileStatusView } from "../../src/lib/workspace-file-status"
+import type { Workspace } from "../../src/lib/config"
 import {
   cleanup,
   createConfigFixture,
@@ -23,6 +25,8 @@ function setupFilesWorkspace(tmpDir: string, cfgDir: string, wsName = "files-ws"
   const repoTask = join(root, "api")
   mkdir(tmpDir, "workspaces", "tasks", wsName, "api")
   mkdir(tmpDir, "main-api")
+  write(root, "copy-present.txt", "copy\n")
+  symlinkSync(join(root, "copy-present.txt"), join(root, "link-present"))
   write(root, "source/equal.txt", "same\n")
   write(root, "target/equal.txt", "same\n")
   write(root, "source/source-only.txt", "source\n")
@@ -36,6 +40,10 @@ function setupFilesWorkspace(tmpDir: string, cfgDir: string, wsName = "files-ws"
     `branch: feat/${wsName}`,
     'created: "2024-01-01"',
     "files:",
+    "  copy:",
+    "    - copy-present.txt",
+    "  symlink:",
+    "    - link-present",
     "  sync:",
     "    - source: source",
     "      target: target",
@@ -49,7 +57,28 @@ function setupFilesWorkspace(tmpDir: string, cfgDir: string, wsName = "files-ws"
     "",
   ].join("\n"))
 
-  return { wsName, wsRoot, root, repoTask }
+  const workspace = {
+    name: wsName,
+    branch: `feat/${wsName}`,
+    created: "2024-01-01",
+    files: {
+      copy: ["copy-present.txt"],
+      symlink: ["link-present"],
+      sync: [{ source: "source", target: "target" }],
+    },
+    repos: [
+      {
+        name: "api",
+        repo: "api",
+        type: "other",
+        mode: "worktree",
+        main_path: repoMain,
+        task_path: repoTask,
+      },
+    ],
+  } as Workspace
+
+  return { wsName, wsRoot, root, repoTask, workspace }
 }
 
 describe("files command", () => {
@@ -136,6 +165,48 @@ describe("files command", () => {
     expect(typeof syncEntry.counts.targetOnly).toBe("number")
     expect(typeof syncEntry.counts.differing).toBe("number")
     expect(typeof syncEntry.counts.equal).toBe("number")
+  })
+
+  test("D-03: grouped helper matches files status --json states and targets", () => {
+    const { wsName, root, workspace } = setupFilesWorkspace(tmpDir, cfgDir)
+
+    const result = runCli(["files", "status", wsName, "--json"], { baseDir: tmpDir, configDir: cfgDir })
+    expectSuccessful(result)
+    const parsed = JSON.parse(result.stdout)
+    const view = getWorkspaceFileStatusView(workspace, root)
+    const groupedEntries = [view.workspace, ...view.repos].flatMap((section) => section.entries)
+
+    const cliRows = parsed.entries.map((entry: any) => ({
+      scope: entry.scope,
+      repo: entry.repo,
+      type: entry.type,
+      target: entry.target,
+      state: entry.state,
+    }))
+    const groupedRows = groupedEntries.map((entry) => ({
+      scope: entry.scope,
+      repo: entry.repo,
+      type: entry.type,
+      target: entry.target,
+      state: entry.state,
+    }))
+
+    expect(groupedRows).toEqual(cliRows)
+    expect(groupedRows).toContainEqual(expect.objectContaining({ type: "copy", target: "copy-present.txt", state: "materialized" }))
+    expect(groupedRows).toContainEqual(expect.objectContaining({ type: "symlink", target: "link-present", state: "materialized" }))
+    expect(groupedRows).toContainEqual(expect.objectContaining({ type: "sync", target: "target", state: "diverged" }))
+  })
+
+  test("D-03: grouped summary counts match files status --json summary", () => {
+    const { wsName, root, workspace } = setupFilesWorkspace(tmpDir, cfgDir)
+    const result = runCli(["files", "status", wsName, "--json"], { baseDir: tmpDir, configDir: cfgDir })
+    expectSuccessful(result)
+    const parsed = JSON.parse(result.stdout)
+
+    const view = getWorkspaceFileStatusView(workspace, root)
+    expect({ total: view.summary.total, ...view.summary.byState }).toMatchObject(parsed.summary)
+    expect(view.summary.total).toBe(parsed.summary.total)
+    expect(view.summary.byState.diverged).toBe(1)
   })
 
   test("files status --json --verbose caps details with truncation metadata", () => {
