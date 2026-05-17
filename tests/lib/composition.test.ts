@@ -191,6 +191,30 @@ describe("composeTemplates", () => {
     })
   })
 
+  describe("command merging", () => {
+    test("merges workspace command names with last-write-wins", () => {
+      writeTestTemplate(isolated.configDir, "cmd-a", {
+        repos: [{ repo: "a", mode: "worktree", commands: { verify: "pnpm -C a test" } }],
+        commands: { verify: "bun test", preverify: "echo pre-a" },
+      })
+      writeTestTemplate(isolated.configDir, "cmd-b", {
+        repos: [{ repo: "b", mode: "worktree", commands: { verify: "pnpm -C b test" } }],
+        commands: { verify: "pnpm test", postverify: "echo post-b" },
+      })
+
+      const result = composeTemplates(["cmd-a", "cmd-b"])
+      expect(result.commands).toEqual({
+        verify: "pnpm test",
+        preverify: "echo pre-a",
+        postverify: "echo post-b",
+      })
+      const repoA = result.repos.find((r: TemplateRepo) => r.repo === "a") as any
+      const repoB = result.repos.find((r: TemplateRepo) => r.repo === "b") as any
+      expect(repoA.commands.verify).toBe("pnpm -C a test")
+      expect(repoB.commands.verify).toBe("pnpm -C b test")
+    })
+  })
+
   describe("files merging", () => {
     test("concatenates files.copy and files.symlink arrays in include order", () => {
       writeTestTemplate(isolated.configDir, "files-a", {

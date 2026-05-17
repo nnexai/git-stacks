@@ -604,6 +604,7 @@ export type CreateWorkspaceInputs = {
   repos: WorkspaceRepo[]
   /** Snapshot of merged template+workspace hooks; copied by the caller. */
   wsHooks?: Workspace["hooks"]
+  wsCommands?: Workspace["commands"]
   wsEnv?: Record<string, string>
   wsEnvFile?: string
   wsFiles?: Workspace["files"]
@@ -658,6 +659,7 @@ export async function createWorkspace(
       created: new Date().toISOString().split("T")[0]!,
       ...(inputs.templateName ? { template: inputs.templateName } : {}),
       ...(inputs.wsHooks ? { hooks: inputs.wsHooks } : {}),
+      ...(inputs.wsCommands ? { commands: inputs.wsCommands } : {}),
       ...(inputs.source ? { source: inputs.source } : {}),
       repos: inputs.repos,
       ...(inputs.wsEnv ? { env: inputs.wsEnv } : {}),

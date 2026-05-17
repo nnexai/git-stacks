@@ -51,6 +51,59 @@ describe("WorkspaceSchema", () => {
   })
 })
 
+describe("manual commands schema", () => {
+  test("TemplateSchema accepts string-valued commands", () => {
+    const tpl = TemplateSchema.parse({ name: "cmd-tpl", commands: { verify: "bun test" } })
+    expect(tpl.commands?.verify).toBe("bun test")
+  })
+
+  test("TemplateSchema rejects object-valued commands", () => {
+    expect(() => TemplateSchema.parse({
+      name: "cmd-tpl",
+      commands: { verify: { cmd: "bun test" } },
+    })).toThrow()
+  })
+
+  test("WorkspaceSchema accepts string-valued commands", () => {
+    const ws = WorkspaceSchema.parse({ name: "ws", branch: "main", created: "2026-01-01", commands: { verify: "bun test" } })
+    expect(ws.commands?.verify).toBe("bun test")
+  })
+
+  test("WorkspaceSchema rejects object-valued commands", () => {
+    expect(() => WorkspaceSchema.parse({
+      name: "ws",
+      branch: "main",
+      created: "2026-01-01",
+      commands: { verify: { cmd: "bun test" } },
+    })).toThrow()
+  })
+
+  test("WorkspaceRepoSchema accepts string-valued commands", () => {
+    const repo = WorkspaceRepoSchema.parse({
+      name: "svc",
+      repo: "svc",
+      type: "other",
+      mode: "worktree",
+      main_path: "/tmp/main/svc",
+      task_path: "/tmp/tasks/ws/svc",
+      commands: { verify: "bun test" },
+    })
+    expect(repo.commands?.verify).toBe("bun test")
+  })
+
+  test("WorkspaceRepoSchema rejects object-valued commands", () => {
+    expect(() => WorkspaceRepoSchema.parse({
+      name: "svc",
+      repo: "svc",
+      type: "other",
+      mode: "worktree",
+      main_path: "/tmp/main/svc",
+      task_path: "/tmp/tasks/ws/svc",
+      commands: { verify: { cmd: "bun test" } },
+    })).toThrow()
+  })
+})
+
 describe("WorkspaceRepoSchema", () => {
   test("parses a worktree repo", () => {
     const repo = WorkspaceRepoSchema.parse({

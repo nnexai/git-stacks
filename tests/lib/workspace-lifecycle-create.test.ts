@@ -297,6 +297,26 @@ describe("createWorkspace", () => {
       }
       expect(writeWorkspaceMock).not.toHaveBeenCalled()
     })
+
+    test("persists wsCommands directly into saved workspace yaml object", async () => {
+      const wsCommands = {
+        preverify: "echo pre",
+        verify: "bun test",
+        postverify: "echo post",
+      }
+      const result = await createWorkspace({
+        wsName: "test-ws",
+        branch: "feature/test",
+        repos: makeRepos(["a"]),
+        wsCommands,
+      })
+
+      expect(result.ok).toBe(true)
+      expect(writeWorkspaceMock).toHaveBeenCalledTimes(1)
+      expect(writeWorkspaceMock.mock.calls[0]?.[0]).toMatchObject({
+        commands: wsCommands,
+      })
+    })
   })
 
   describe("worktree failure mid-stream (Behavior 2 — success criterion 1)", () => {

@@ -52,6 +52,7 @@ function mergeRepos(templates: Template[]): TemplateRepo[] {
           mode: worktreeSet.has(repo.repo) ? "worktree" : repo.mode,
           ...(repo.base_branch !== undefined ? { base_branch: repo.base_branch } : existing.base_branch !== undefined ? { base_branch: existing.base_branch } : {}),
           ...(repo.branch_pattern !== undefined ? { branch_pattern: repo.branch_pattern } : existing.branch_pattern !== undefined ? { branch_pattern: existing.branch_pattern } : {}),
+          ...(repo.commands !== undefined ? { commands: repo.commands } : existing.commands !== undefined ? { commands: existing.commands } : {}),
         })
       } else {
         repoMap.set(repo.repo, {
@@ -103,6 +104,17 @@ function mergeTemplatePorts(templates: Template[]): Record<string, number | null
     if (tpl.ports) {
       if (!result) result = {}
       Object.assign(result, tpl.ports)  // last-wins, same as env merge
+    }
+  }
+  return result
+}
+
+function mergeCommands(templates: Template[]): Record<string, string> | undefined {
+  let result: Record<string, string> | undefined
+  for (const tpl of templates) {
+    if (tpl.commands) {
+      if (!result) result = {}
+      Object.assign(result, tpl.commands)
     }
   }
   return result
@@ -253,6 +265,7 @@ export function composeTemplates(templateNames: string[]): Template {
     integrations: mergeIntegrations(orderedTemplates),
     labels: mergeLabels(orderedTemplates),
     ports: mergeTemplatePorts(orderedTemplates),
+    commands: mergeCommands(orderedTemplates),
     // includes is not carried forward — the result is a fully resolved template
   }
 }

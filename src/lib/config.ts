@@ -113,6 +113,7 @@ export const TemplateRepoSchema = z.object({
   mode: z.enum(["trunk", "worktree", "dir"]).default("worktree"),
   base_branch: z.string().optional(),                  // overrides registry default_branch
   branch_pattern: z.string().optional(),               // e.g. "feature/<workspace-name>"
+  commands: z.record(z.string(), z.string()).optional(),
 })
 export type TemplateRepo = z.infer<typeof TemplateRepoSchema>
 
@@ -142,6 +143,7 @@ export const TemplateSchema = z.object({
   includes: z.array(z.string()).optional(),
   ports: PortsSchema,
   labels: z.array(LabelSchema).optional(),
+  commands: z.record(z.string(), z.string()).optional(),
 })
 export type Template = z.infer<typeof TemplateSchema>
 
@@ -159,6 +161,7 @@ const WorkspaceRepoBaseSchema = z.object({
   base_branch: z.string().optional(),  // base branch for merge/sync resolution
   hooks: WorkspaceRepoHooksSchema.optional(),
   files: FilesSchema,
+  commands: z.record(z.string(), z.string()).optional(),
 })
 export const WorktreeRepoSchema = WorkspaceRepoBaseSchema.extend({
   mode: z.literal("worktree"),
@@ -241,6 +244,7 @@ export const WorkspaceSchema = z.object({
   files: FilesSchema,
   ports: PortsSchema,
   labels: z.array(LabelSchema).optional(),
+  commands: z.record(z.string(), z.string()).optional(),
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 
