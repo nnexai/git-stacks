@@ -79,6 +79,18 @@ describe("paths.ts GIT_STACKS_CONFIG_DIR override", () => {
     expect(result.stdout.trim()).toBe(join(tmp, "messages"))
   })
 
+  test("NOTES_DIR derives from overridden WS_CONFIG_DIR in a fresh process", () => {
+    const script = `
+      const { NOTES_DIR } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
+      console.log(NOTES_DIR)
+    `
+    const result = spawnSync("bun", ["--eval", script], {
+      env: { ...process.env, GIT_STACKS_CONFIG_DIR: tmp },
+      encoding: "utf-8",
+    })
+    expect(result.stdout.trim()).toBe(join(tmp, "notes"))
+  })
+
   test("GLOBAL_CONFIG_FILE derives from overridden WS_CONFIG_DIR in a fresh process", () => {
     const script = `
       const { GLOBAL_CONFIG_FILE } = await import("${join(import.meta.dir, "../../src/lib/paths")}")
