@@ -16,8 +16,8 @@ Requirements for v0.19.0 Operator Control Center. Each maps to roadmap phases.
 
 ### Workspace Notes
 
-- [ ] **NOTE-01**: User can add, list, and clear lightweight workspace notes stored outside managed project repositories.
-- [ ] **NOTE-02**: Notes are append-only records at first, preserving creation time, workspace identity, and note text without becoming project planning artifacts.
+- [x] **NOTE-01**: User can add, list, and clear lightweight workspace notes stored outside managed project repositories.
+- [x] **NOTE-02**: Notes are append-only records at first, preserving creation time, workspace identity, and note text without becoming project planning artifacts.
 - [ ] **NOTE-03**: Workspace detail surfaces can show a latest-note or note-count summary without replacing the full notes command surface.
 
 ### TUI Control Center

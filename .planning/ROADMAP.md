@@ -251,7 +251,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 **Milestone Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
 
 - [x] **Phase 95: Manual Workspace Commands** - Add named, inspectable, manually-triggered template/workspace commands that reuse existing hook/env/cwd execution machinery without becoming lifecycle hooks. (completed 2026-05-17)
-- [ ] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata.
+- [x] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata. (completed 2026-05-17)
 - [ ] **Phase 97: File Status View Model for TUI** - Expose a reusable TUI-facing file config/status model from the v0.18.0 files status behavior, covering copy, symlink, and sync mappings.
 - [ ] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots.
 - [ ] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, and complete rollback progress visibility in dashboard create flows.
@@ -289,8 +289,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 96-01-PLAN.md - Storage, path, and summary contract for workspace notes
-- [ ] 96-02-PLAN.md - `git-stacks notes` CLI surface and workspace resolution
+- [x] 96-01-PLAN.md - Storage, path, and summary contract for workspace notes
+- [x] 96-02-PLAN.md - `git-stacks notes` CLI surface and workspace resolution
 
 ### Phase 97: File Status View Model for TUI
 **Goal**: TUI code can display file copy/symlink/sync configuration and status using the same behavior exposed by `git-stacks files status`, without duplicating file sync logic.
@@ -802,7 +802,7 @@ Plans:
 | 93.1. Parallel Integration Test Runner and Coherent Coverage Merging | v0.18.0 | 3/3 | Complete | 2026-05-16 |
 | 94. v0.18.0 Docs and Release Prep | v0.18.0 | 3/3 | Complete | 2026-05-16 |
 | 95. Manual Workspace Commands | v0.19.0 | 4/4 | Complete   | 2026-05-17 |
-| 96. Workspace Notes | v0.19.0 | 0/2 | Planned | — |
+| 96. Workspace Notes | v0.19.0 | 2/2 | Complete   | 2026-05-17 |
 | 97. File Status View Model for TUI | v0.19.0 | 0/TBD | Planned | — |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 0/TBD | Planned | — |
 | 99. Dashboard Actions and Correctness Polish | v0.19.0 | 0/TBD | Planned | — |
