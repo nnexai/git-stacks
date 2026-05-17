@@ -806,7 +806,7 @@ Plans:
 | 94. v0.18.0 Docs and Release Prep | v0.18.0 | 3/3 | Complete | 2026-05-16 |
 | 95. Manual Workspace Commands | v0.19.0 | 4/4 | Complete   | 2026-05-17 |
 | 96. Workspace Notes | v0.19.0 | 2/2 | Complete   | 2026-05-17 |
-| 97. File Status View Model for TUI | v0.19.0 | 2/2 | Complete   | 2026-05-17 |
+| 97. File Status View Model for TUI | v0.19.0 | 2/2 | Complete    | 2026-05-17 |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 0/TBD | Planned | — |
 | 99. Dashboard Actions and Correctness Polish | v0.19.0 | 0/TBD | Planned | — |
 
