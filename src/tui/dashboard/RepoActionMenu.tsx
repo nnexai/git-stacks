@@ -6,7 +6,7 @@ import { CenteredDialog } from "./CenteredDialog"
 type Props = {
   repoName: string
   selectionCount: number
-  onAction: (action: "create-workspace" | "create-template" | "remove") => void
+  onAction: (action: "create-workspace" | "create-template" | "edit" | "remove") => void
   onCancel: () => void
 }
 
@@ -29,6 +29,7 @@ export function RepoActionMenu(props: Props) {
   const items = [
     { key: "w", action: "create-workspace" as const, getLabel: () => wsLabel() },
     { key: "t", action: "create-template" as const, getLabel: () => tplLabel() },
+    { key: "e", action: "edit" as const, getLabel: () => "Edit ($EDITOR)" },
     { key: "r", action: "remove" as const, getLabel: () => removeLabel() },
   ]
 
@@ -41,6 +42,7 @@ export function RepoActionMenu(props: Props) {
     if (key.name === "return") { props.onAction(items[cursor()].action); return }
     if (key.name === "w") { props.onAction("create-workspace"); return }
     if (key.name === "t") { props.onAction("create-template"); return }
+    if (key.name === "e") { props.onAction("edit"); return }
     if (key.name === "r") { props.onAction("remove"); return }
   })
 

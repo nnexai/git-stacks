@@ -6,7 +6,7 @@ import { RepoActionMenu } from "../../../src/tui/dashboard/RepoActionMenu"
 const renderOpts = { kittyKeyboard: true }
 
 describe("RepoActionMenu", () => {
-  test("renders all three action labels in single-select mode (selectionCount=0)", async () => {
+  test("renders action labels in single-select mode (selectionCount=0)", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
       () => (
         <RepoActionMenu
@@ -22,6 +22,7 @@ describe("RepoActionMenu", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("[w] Create workspace")
     expect(frame).toContain("[t] Create template")
+    expect(frame).toContain("[e] Edit ($EDITOR)")
     expect(frame).toContain("[r] Remove")
     expect(frame).toContain("[Esc] Back")
   })
@@ -81,6 +82,25 @@ describe("RepoActionMenu", () => {
     mockInput.pressKey("t")
     await renderOnce()
     expect(received).toBe("create-template")
+  })
+
+  test("pressing e calls onAction with edit", async () => {
+    let received = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => (
+        <RepoActionMenu
+          repoName="my-repo"
+          selectionCount={0}
+          onAction={(a) => { received = a }}
+          onCancel={() => {}}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    mockInput.pressKey("e")
+    await renderOnce()
+    expect(received).toBe("edit")
   })
 
   test("pressing r calls onAction with remove", async () => {
@@ -157,7 +177,7 @@ describe("RepoActionMenu", () => {
     expect(frame).toContain("> [t]")
   })
 
-  test("clamps cursor at bottom (down 3 times stays on last item)", async () => {
+  test("clamps cursor at bottom (down 4 times stays on last item)", async () => {
     const { mockInput, renderOnce, captureCharFrame } = await testRender(
       () => (
         <RepoActionMenu
@@ -170,7 +190,7 @@ describe("RepoActionMenu", () => {
       renderOpts
     )
     await renderOnce()
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       mockInput.pressArrow("down")
       await renderOnce()
     }
