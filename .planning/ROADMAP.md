@@ -930,7 +930,7 @@ Plans:
 | 96. Workspace Notes | v0.19.0 | 2/2 | Complete   | 2026-05-17 |
 | 97. File Status View Model for TUI | v0.19.0 | 2/2 | Complete    | 2026-05-17 |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 3/3 | Complete   | 2026-05-17 |
-| 99. Dashboard Actions and Correctness Polish | v0.19.0 | 1/4 | In Progress|  |
+| 99. Dashboard Actions and Correctness Polish | v0.19.0 | 2/4 | In Progress|  |
 
 ## Backlog
 
