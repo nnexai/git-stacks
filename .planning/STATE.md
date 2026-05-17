@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.19.0
 milestone_name: Operator Control Center
-status: planning
-stopped_at: Phase 95 planned
-last_updated: "2026-05-17T12:44:48.356Z"
+status: executing
+stopped_at: Phase 97 context gathered
+last_updated: "2026-05-17T13:00:01.034Z"
 last_activity: 2026-05-17 — Phase 95 planning complete
 progress:
-  total_phases: 5
-  completed_phases: 0
+  total_phases: 33
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 4
+  percent: 3
 ---
 
 # Project State
@@ -163,9 +163,9 @@ None blocking.
 
 ## Session Continuity
 
-Last session: 2026-05-17T12:44:48.349Z
-Stopped at: Phase 95 planned
-Resume file: .planning/phases/95-manual-workspace-commands/95-01-PLAN.md
+Last session: 2026-05-17T13:00:01.027Z
+Stopped at: Phase 97 context gathered
+Resume file: .planning/phases/97-file-status-view-model-for-tui/97-CONTEXT.md
 
 ## Operator Next Steps
 
