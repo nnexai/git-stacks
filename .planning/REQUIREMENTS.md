@@ -18,17 +18,17 @@ Requirements for v0.19.0 Operator Control Center. Each maps to roadmap phases.
 
 - [x] **NOTE-01**: User can add, list, and clear lightweight workspace notes stored outside managed project repositories.
 - [x] **NOTE-02**: Notes are append-only records at first, preserving creation time, workspace identity, and note text without becoming project planning artifacts.
-- [ ] **NOTE-03**: Workspace detail surfaces can show a latest-note or note-count summary without replacing the full notes command surface.
+- [x] **NOTE-03**: Workspace detail surfaces can show a latest-note or note-count summary without replacing the full notes command surface.
 
 ### TUI Control Center
 
-- [ ] **TUI-01**: User sees a denser `git-stacks manage` workspace list/detail layout that preserves the current tabbed list/detail model and avoids dashboard-style unrelated panels.
-- [ ] **TUI-02**: User can group or filter workspaces beyond labels when useful, while list rows continue to expose concrete reasons through existing status tokens.
-- [ ] **TUI-03**: Workspace detail sections are ordered by operational value, including attention/messages, repos, file config/status, source/issue links, integrations, notes, and workspace config.
+- [x] **TUI-01**: User sees a denser `git-stacks manage` workspace list/detail layout that preserves the current tabbed list/detail model and avoids dashboard-style unrelated panels.
+- [x] **TUI-02**: User can group or filter workspaces beyond labels when useful, while list rows continue to expose concrete reasons through existing status tokens.
+- [x] **TUI-03**: Workspace detail sections are ordered by operational value, including attention/messages, repos, file config/status, source/issue links, integrations, notes, and workspace config.
 - [x] **TUI-04**: TUI file status display reuses the v0.18.0 files status model so copy, symlink, and sync mappings show configured paths, drift, missing targets, and unsafe states without duplicating sync logic.
 - [ ] **TUI-05**: User can edit repo configuration from the Repos tab action menu with behavior consistent with existing workspace/template edit flows.
 - [ ] **TUI-06**: User can open a linked workspace issue from the workspace action menu when issue metadata is configured.
-- [ ] **TUI-07**: TUI changes include focused terminal snapshot or component coverage for narrow/medium/wide rows, grouped headers, detail section ordering, file status display, note summary, and contextual footers.
+- [x] **TUI-07**: TUI changes include focused terminal snapshot or component coverage for narrow/medium/wide rows, grouped headers, detail section ordering, file status display, note summary, and contextual footers.
 
 ### Dashboard Correctness
 
@@ -78,12 +78,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WCMD-04 | Phase 95 | Planned |
 | NOTE-01 | Phase 96 | Planned |
 | NOTE-02 | Phase 96 | Planned |
-| NOTE-03 | Phase 98 | Planned |
-| TUI-01 | Phase 98 | Planned |
-| TUI-02 | Phase 98 | Planned |
-| TUI-03 | Phase 98 | Planned |
+| NOTE-03 | Phase 98 | Complete |
+| TUI-01 | Phase 98 | Complete |
+| TUI-02 | Phase 98 | Complete |
+| TUI-03 | Phase 98 | Complete |
 | TUI-04 | Phase 97 | Planned |
 | TUI-05 | Phase 99 | Planned |
 | TUI-06 | Phase 99 | Planned |
-| TUI-07 | Phase 98 | Planned |
+| TUI-07 | Phase 98 | Complete |
 | DASH-01 | Phase 99 | Planned |

@@ -253,7 +253,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 95: Manual Workspace Commands** - Add named, inspectable, manually-triggered template/workspace commands that reuse existing hook/env/cwd execution machinery without becoming lifecycle hooks. (completed 2026-05-17)
 - [x] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata. (completed 2026-05-17)
 - [x] **Phase 97: File Status View Model for TUI** - Expose a reusable TUI-facing file config/status model from the v0.18.0 files status behavior, covering copy, symlink, and sync mappings. (completed 2026-05-17)
-- [ ] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots.
+- [x] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots. (completed 2026-05-17)
 - [ ] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, and complete rollback progress visibility in dashboard create flows.
 
 ## Phase Details
@@ -337,9 +337,9 @@ Plans:
 
 Plans:
 
-- [ ] `98-01-PLAN.md` - Workspace list density and grouping modes
-- [ ] `98-02-PLAN.md` - Ordered scrollable workspace detail sections
-- [ ] `98-03-PLAN.md` - Dashboard footer and snapshot acceptance coverage
+- [x] `98-01-PLAN.md` - Workspace list density and grouping modes
+- [x] `98-02-PLAN.md` - Ordered scrollable workspace detail sections
+- [x] `98-03-PLAN.md` - Dashboard footer and snapshot acceptance coverage
 
 ### Phase 99: Dashboard Actions and Correctness Polish
 
@@ -929,7 +929,7 @@ Plans:
 | 95. Manual Workspace Commands | v0.19.0 | 4/4 | Complete   | 2026-05-17 |
 | 96. Workspace Notes | v0.19.0 | 2/2 | Complete   | 2026-05-17 |
 | 97. File Status View Model for TUI | v0.19.0 | 2/2 | Complete    | 2026-05-17 |
-| 98. Grounded Dashboard Control Center | v0.19.0 | 0/TBD | Planned | — |
+| 98. Grounded Dashboard Control Center | v0.19.0 | 3/3 | Complete   | 2026-05-17 |
 | 99. Dashboard Actions and Correctness Polish | v0.19.0 | 0/TBD | Planned | — |
 
 ## Backlog
