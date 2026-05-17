@@ -146,6 +146,7 @@ describe("workspace file status view", () => {
 
     const missingSource = view.workspace.entries.find((entry) => entry.target === "missing-target")
     expect(missingSource?.details.warnings.join("\n")).toContain("Sync source not found")
+    expect(missingSource).toMatchObject({ severity: "warning", needsAttention: true })
     const invalidTarget = view.workspace.entries.find((entry) => entry.target === "../escape")
     expect(invalidTarget).toMatchObject({ state: "error", severity: "error" })
     expect(invalidTarget?.details.errors.join("\n")).toContain("traversal")
@@ -153,6 +154,7 @@ describe("workspace file status view", () => {
     expect(drifted?.details.sync?.sourceOnly?.paths).toContain("source-only.txt")
     const repoSection = view.repos.find((repo) => repo.name === "api")
     expect(repoSection?.warnings.join("\n")).toContain("Repo root not found")
+    expect(repoSection?.summary.warnings).toBeGreaterThan(0)
     expect(existsSync(join(wsRoot, "deleted-api"))).toBe(false)
   })
 })

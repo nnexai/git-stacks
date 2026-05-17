@@ -100,8 +100,11 @@ function emptySummary(sections = 1): WorkspaceFileStatusSummary {
   }
 }
 
-function summarize(entries: WorkspaceFileStatusEntry[], sections = 1): WorkspaceFileStatusSummary {
+function summarize(entries: WorkspaceFileStatusEntry[], sections = 1, extraWarnings: string[] = [], extraErrors: string[] = []): WorkspaceFileStatusSummary {
   const summary = emptySummary(sections)
+  summary.warnings += extraWarnings.length
+  summary.errors += extraErrors.length
+  summary.attention += extraWarnings.length + extraErrors.length
   for (const entry of entries) {
     summary.total += 1
     summary.byState[entry.state] = (summary.byState[entry.state] ?? 0) + 1
@@ -171,7 +174,13 @@ function detailsFor(
 }
 
 function entryFromRow(row: FileEntryStatus, sourceBase: string, syncEntry?: FileSyncEntry): WorkspaceFileStatusEntry {
-  const severity = severityFor(row.state)
+  const details = detailsFor(row, sourceBase, syncEntry)
+  const baseSeverity = severityFor(row.state)
+  const severity = details.errors.length > 0
+    ? "error"
+    : details.warnings.length > 0 && baseSeverity === "ok"
+      ? "warning"
+      : baseSeverity
   return {
     scope: row.scope,
     repo: row.scope === "repo" ? row.name : null,
@@ -181,7 +190,7 @@ function entryFromRow(row: FileEntryStatus, sourceBase: string, syncEntry?: File
     severity,
     needsAttention: severity !== "ok",
     hint: row.hint,
-    details: detailsFor(row, sourceBase, syncEntry),
+    details,
   }
 }
 
@@ -237,7 +246,7 @@ function buildRepoSection(repo: WorkspaceRepo, rows: FileEntryStatus[]): Workspa
     mainPath: repo.main_path,
     root,
     entries,
-    summary: summarize(entries),
+    summary: summarize(entries, 1, rootWarnings),
     warnings: messages.warnings,
     errors: messages.errors,
   }
