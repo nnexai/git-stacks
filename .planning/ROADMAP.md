@@ -263,15 +263,18 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 **Depends on**: Phase 94
 **Requirements**: WCMD-01, WCMD-02, WCMD-03, WCMD-04
 **Success Criteria** (what must be TRUE):
-  1. Templates and workspaces accept a narrow `commands` shape for named manual commands with description, command, and cwd/repo/scope targeting.
-  2. Workspace command resolution follows existing template inheritance/snapshot conventions and reports conflicts or missing commands clearly.
-  3. User can list and show resolved commands before executing shell from YAML.
-  4. User can run a command with workspace env, cwd/repo targeting, ports, secrets, and captured output behavior aligned with existing hook/run machinery.
-  5. Focused tests cover schema parsing, template/workspace resolution, dry-run/show output, execution context, failure propagation, and command naming.
-**Plans**: TBD
+  1. Templates, workspaces, and repo entries accept a narrow string-valued `commands.<name>: <shell command>` shape, and template-backed workspaces snapshot those commands into saved workspace YAML.
+  2. Workspace command resolution follows copied-template semantics, with workspace-level entries before repo-level entries and npm-style `pre<name>` / `post<name>` bucket ordering.
+  3. `git-stacks command list [workspace]` hides `pre*` / `post*` commands by default, while `git-stacks command run --dry-run [workspace] <command>` shows the full resolved execution plan.
+  4. `git-stacks command run [workspace] <command>` uses existing workspace env, ports, cwd targeting, and optional secret skipping, streams output directly, and exits on the first failing command status.
+  5. Focused tests cover schema parsing, template/workspace snapshot behavior, dry-run inspection, execution context, failure propagation, and inventory/gate alignment for the new command family.
+**Plans**: 4 plans
 
 Plans:
-- [ ] TBD
+- [ ] 95-01-PLAN.md - Schema and persistence contract for manual commands
+- [ ] 95-02-PLAN.md - Template snapshot wiring across create and clone surfaces
+- [ ] 95-03-PLAN.md - Resolved manual command engine and exit semantics
+- [ ] 95-04-PLAN.md - `git-stacks command` CLI surface and verification inventory
 
 ### Phase 96: Workspace Notes
 **Goal**: Users can keep lightweight operator notes for workspaces without writing those notes into managed project repos or GSD planning directories.
