@@ -9,6 +9,7 @@ import { doctorCommand } from "./commands/doctor"
 import { repoCommand } from "./commands/repo"
 import { templateCommand } from "./commands/template"
 import { messageCommand } from "./commands/message"
+import { notesCommand } from "./commands/notes"
 import { installCommand } from "./commands/install"
 import { integrationCommand } from "./commands/integration"
 import { labelCommand } from "./commands/label"
@@ -64,6 +65,7 @@ program.addCommand(doctorCommand)
 program.addCommand(repoCommand)
 program.addCommand(templateCommand)
 program.addCommand(messageCommand)
+program.addCommand(notesCommand)
 program.addCommand(installCommand)
 program.addCommand(integrationCommand)
 program.addCommand(labelCommand)
