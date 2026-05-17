@@ -22,7 +22,8 @@ const wsFixture = {
   repos: [] as any[],
 }
 let workspaceSettings: Record<string, unknown> = {}
-const workspaceFixture = () => ({ ...wsFixture, settings: workspaceSettings })
+let workspaceCommands: Record<string, string> = {}
+const workspaceFixture = () => ({ ...wsFixture, settings: workspaceSettings, commands: workspaceCommands })
 
 // Inline registry fixture
 const registryFixture = [
@@ -39,6 +40,10 @@ const editRegistryYamlMock = mock(() => ({ path: "/tmp/registry.yml", validate: 
 const openWorkspaceIssueMock = mock(async (_workspaceName: string, candidate: { label: string }) => ({
   exitCode: 0,
   lines: [`opened ${candidate.label}`],
+}))
+const runManualCommandMock = mock(async (_workspace: unknown, _commandName: string) => ({
+  exitCode: 0,
+  plan: [],
 }))
 
 // Inline template fixture
@@ -121,6 +126,14 @@ mock.module("../../../src/tui/dashboard/issue-actions", () => ({
   openWorkspaceIssue: openWorkspaceIssueMock,
 }))
 
+mock.module("../../../src/lib/workspace-command", () => ({
+  listManualCommands: mock((workspace: { commands?: Record<string, string> }, opts?: { all?: boolean }) => {
+    const names = Object.keys(workspace.commands ?? {}).sort()
+    return opts?.all ? names : names.filter(name => !name.startsWith("pre") && !name.startsWith("post"))
+  }),
+  runManualCommand: runManualCommandMock,
+}))
+
 // Mock lifecycle hooks
 mock.module("../../../src/lib/lifecycle", () => ({
   runHooks: mock(async () => {}),
@@ -149,10 +162,12 @@ beforeEach(() => {
   // Reset wsRemoved state and re-seed workspace YAML for each test
   wsRemoved = false
   workspaceSettings = {}
+  workspaceCommands = {}
   listRegistryEntriesMock.mockClear()
   registryValidateMock.mockClear()
   editRegistryYamlMock.mockClear()
   openWorkspaceIssueMock.mockClear()
+  runManualCommandMock.mockClear()
   process.env.EDITOR = "true"
   write(configDir, "workspaces/test-ws.yml", `name: test-ws
 branch: feature/test
@@ -332,6 +347,67 @@ describe("integration: action menu dispatch", () => {
     })
     frame = captureCharFrame()
     expect(frame).toContain("Opening Jira: OPS-7")
+  })
+
+  test("manual commands picker lists visible commands and runs selected command", async () => {
+    workspaceCommands = {
+      preverify: "echo pre",
+      verify: "bun run verify",
+      postverify: "echo post",
+    }
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("d")
+    await renderOnce()
+
+    let frame = captureCharFrame()
+    expect(frame).toContain("verify")
+    expect(frame).not.toContain("preverify")
+    expect(frame).not.toContain("postverify")
+
+    mockInput.pressEnter()
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    expect(runManualCommandMock).toHaveBeenCalled()
+    expect(runManualCommandMock.mock.calls[0][1]).toBe("verify")
+    frame = captureCharFrame()
+    expect(frame).toContain("Running command verify")
+    expect(frame).toContain("Command verify completed.")
+  })
+
+  test("manual command failure stays in progress view with failed command", async () => {
+    workspaceCommands = { verify: "bun run verify" }
+    runManualCommandMock.mockResolvedValueOnce({
+      exitCode: 42,
+      failedCommand: "bun test",
+      plan: [],
+    })
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("d")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    const frame = captureCharFrame()
+    expect(frame).toContain("ERROR: Command verify failed with exit code 42.")
+    expect(frame).toContain("Failed command: bun test.")
   })
 })
 

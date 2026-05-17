@@ -58,6 +58,7 @@ import type {
 } from "./types"
 import { matchesLabels } from "../../lib/labels"
 import { issueTrackerLabels, openWorkspaceIssue } from "./issue-actions"
+import { listManualCommands, runManualCommand } from "../../lib/workspace-command"
 
 export function matchesWorkspaceFilter(workspace: Workspace, filter: string): boolean {
   const rawFilter = filter.trim()
@@ -126,6 +127,35 @@ function IssuePicker(props: {
         {(candidate, i) => (
           <text fg={i() === cursor() ? "cyan" : "white"}>
             {i() === cursor() ? "> " : "  "}{candidate.label}
+          </text>
+        )}
+      </For>
+      <text fg="gray">{"\n"}  [Esc] Back</text>
+    </CenteredDialog>
+  )
+}
+
+function CommandPicker(props: {
+  commands: string[]
+  onSelect: (commandName: string) => void
+  onCancel: () => void
+}) {
+  const [cursor, setCursor] = createSignal(0)
+  useKeyboard((key) => {
+    if (key.name === "escape") { props.onCancel(); return }
+    if (key.name === "down") { setCursor(c => Math.min(c + 1, props.commands.length - 1)); return }
+    if (key.name === "up") { setCursor(c => Math.max(c - 1, 0)); return }
+    if (key.name === "return") {
+      const commandName = props.commands[cursor()]
+      if (commandName) props.onSelect(commandName)
+    }
+  })
+  return (
+    <CenteredDialog title="Commands" size="medium">
+      <For each={props.commands}>
+        {(commandName, i) => (
+          <text fg={i() === cursor() ? "cyan" : "white"}>
+            {i() === cursor() ? "> " : "  "}{commandName}
           </text>
         )}
       </For>
@@ -269,11 +299,16 @@ export default function App() {
   const selectedWorkspace = createMemo(() => currentEntry()?.workspace)
   const fileStatus = useWorkspaceFileStatus(selectedWorkspace)
   const selectedIssueCandidates = createMemo(() => buildIssueCandidates(selectedWorkspace()))
+  const selectedManualCommands = createMemo(() => {
+    const workspace = selectedWorkspace()
+    return workspace ? listManualCommands(workspace) : []
+  })
   const issueDisabledReason = createMemo(() => {
     const workspace = selectedWorkspace()
     if (!workspace) return "none linked" as const
     return selectedIssueCandidates().length > 0 ? undefined : "none linked" as const
   })
+  const commandsDisabledReason = createMemo(() => selectedManualCommands().length > 0 ? undefined : "none configured" as const)
 
   createEffect(() => {
     void selectedWorkspace()?.name
@@ -411,6 +446,13 @@ export default function App() {
       } else {
         setView({ view: "issue-picker", index, candidates })
       }
+      return
+    }
+
+    if (action === "commands") {
+      const commands = listManualCommands(entry.workspace)
+      if (commands.length === 0) return
+      setView({ view: "command-picker", index, commands })
       return
     }
 
@@ -583,6 +625,21 @@ export default function App() {
       result.exitCode === 0
         ? `Opened ${candidate.label}.`
         : `ERROR: ${candidate.label} open failed with exit code ${result.exitCode}.`,
+    ])
+    setProgressDone(true)
+  }
+
+  async function executeManualCommand(workspace: Workspace, commandName: string) {
+    setProgressLines([])
+    setProgressDone(false)
+    setView({ view: "progress", message: `Running command ${commandName}...` })
+    const result = await runManualCommand(workspace, commandName, { config: readGlobalConfig() })
+    const failed = result.failedCommand ? ` Failed command: ${result.failedCommand}.` : ""
+    setProgressLines(prev => [
+      ...prev,
+      result.exitCode === 0
+        ? `Command ${commandName} completed.`
+        : `ERROR: Command ${commandName} failed with exit code ${result.exitCode}.${failed}`,
     ])
     setProgressDone(true)
   }
@@ -1148,6 +1205,7 @@ export default function App() {
     // Action menu
     if (v.view === "action-menu") return // ActionMenu has its own keyboard handler
     if (v.view === "issue-picker") return // Issue picker handles its own keys
+    if (v.view === "command-picker") return // Command picker handles its own keys
 
     // Inline input
     if (v.view === "inline-input") return
@@ -1356,6 +1414,7 @@ export default function App() {
             <ActionMenu
               workspaceName={currentEntry()?.workspace.name ?? ""}
               issueDisabledReason={issueDisabledReason()}
+              commandsDisabledReason={commandsDisabledReason()}
               onAction={(action) => runAction(action, (view() as any).index)}
               onCancel={() => setView({ view: "list" })}
               onRun={() => handleRun(selectedName())}
@@ -1369,6 +1428,22 @@ export default function App() {
             />
           </Match>
         </Switch>
+      </Show>
+
+      <Show when={!helpOpen() && !messagesOpen() && view().view === "command-picker"}>
+        {(() => {
+          const v = view() as { view: "command-picker"; index: number; commands: string[] }
+          return (
+            <CommandPicker
+              commands={v.commands}
+              onCancel={() => setView({ view: "action-menu", index: v.index })}
+              onSelect={(commandName) => {
+                const workspace = filteredEntries()[v.index]?.workspace
+                if (workspace) void executeManualCommand(workspace, commandName)
+              }}
+            />
+          )
+        })()}
       </Show>
 
       <Show when={!helpOpen() && !messagesOpen() && view().view === "issue-picker"}>
