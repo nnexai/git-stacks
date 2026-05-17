@@ -117,6 +117,7 @@ mock.module("../../../src/lib/workspace-yaml", () => makeWorkspaceYamlMock({
 }))
 
 mock.module("../../../src/tui/dashboard/issue-actions", () => ({
+  _exec: {},
   issueTrackerLabels: {
     github: "GitHub",
     gitlab: "GitLab",

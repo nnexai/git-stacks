@@ -12,11 +12,17 @@ export const issueTrackerLabels: Record<IssueCandidate["tracker"], string> = {
   jira: "Jira",
 }
 
+export const _exec = {
+  spawn: Bun.spawn,
+}
+
 export async function openWorkspaceIssue(
   workspaceName: string,
   candidate: IssueCandidate
 ): Promise<IssueOpenResult> {
-  const proc = Bun.spawn(["git-stacks", "integration", candidate.tracker, "issue", "open", workspaceName], {
+  const args = ["git-stacks", "integration", candidate.tracker, "issue", "open", workspaceName]
+  if (candidate.tracker !== "jira") args.push("--web")
+  const proc = _exec.spawn(args, {
     stdout: "pipe",
     stderr: "pipe",
   })
