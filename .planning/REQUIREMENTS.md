@@ -9,10 +9,10 @@ Requirements for v0.19.0 Operator Control Center. Each maps to roadmap phases.
 
 ### Manual Workspace Commands
 
-- [ ] **WCMD-01**: User can define named manual commands in templates and workspaces for repeatable operator actions that are not tied to lifecycle hooks.
-- [ ] **WCMD-02**: User can list and inspect resolved manual commands for a workspace before running them.
-- [ ] **WCMD-03**: User can run a named manual command with the same workspace environment, cwd/repo targeting, ports, secrets, and safe output handling used by existing hook/run machinery.
-- [ ] **WCMD-04**: Template-defined manual commands are snapshotted or resolved into workspaces consistently with existing template inheritance behavior.
+- [x] **WCMD-01**: User can define named manual commands in templates and workspaces for repeatable operator actions that are not tied to lifecycle hooks.
+- [x] **WCMD-02**: User can list and inspect resolved manual commands for a workspace before running them.
+- [x] **WCMD-03**: User can run a named manual command with the same workspace environment, cwd/repo targeting, ports, secrets, and safe output handling used by existing hook/run machinery.
+- [x] **WCMD-04**: Template-defined manual commands are snapshotted or resolved into workspaces consistently with existing template inheritance behavior.
 
 ### Workspace Notes
 

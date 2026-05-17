@@ -250,7 +250,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 
 **Milestone Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
 
-- [ ] **Phase 95: Manual Workspace Commands** - Add named, inspectable, manually-triggered template/workspace commands that reuse existing hook/env/cwd execution machinery without becoming lifecycle hooks.
+- [x] **Phase 95: Manual Workspace Commands** - Add named, inspectable, manually-triggered template/workspace commands that reuse existing hook/env/cwd execution machinery without becoming lifecycle hooks. (completed 2026-05-17)
 - [ ] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata.
 - [ ] **Phase 97: File Status View Model for TUI** - Expose a reusable TUI-facing file config/status model from the v0.18.0 files status behavior, covering copy, symlink, and sync mappings.
 - [ ] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots.
@@ -271,10 +271,10 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 **Plans**: 4 plans
 
 Plans:
-- [ ] 95-01-PLAN.md - Schema and persistence contract for manual commands
-- [ ] 95-02-PLAN.md - Template snapshot wiring across create and clone surfaces
-- [ ] 95-03-PLAN.md - Resolved manual command engine and exit semantics
-- [ ] 95-04-PLAN.md - `git-stacks command` CLI surface and verification inventory
+- [x] 95-01-PLAN.md - Schema and persistence contract for manual commands
+- [x] 95-02-PLAN.md - Template snapshot wiring across create and clone surfaces
+- [x] 95-03-PLAN.md - Resolved manual command engine and exit semantics
+- [x] 95-04-PLAN.md - `git-stacks command` CLI surface and verification inventory
 
 ### Phase 96: Workspace Notes
 **Goal**: Users can keep lightweight operator notes for workspaces without writing those notes into managed project repos or GSD planning directories.
@@ -800,7 +800,7 @@ Plans:
 | 93. Forge Source Workspace Creation | v0.18.0 | 4/4 | Complete | 2026-05-16 |
 | 93.1. Parallel Integration Test Runner and Coherent Coverage Merging | v0.18.0 | 3/3 | Complete | 2026-05-16 |
 | 94. v0.18.0 Docs and Release Prep | v0.18.0 | 3/3 | Complete | 2026-05-16 |
-| 95. Manual Workspace Commands | v0.19.0 | 0/TBD | Planned | — |
+| 95. Manual Workspace Commands | v0.19.0 | 4/4 | Complete   | 2026-05-17 |
 | 96. Workspace Notes | v0.19.0 | 0/TBD | Planned | — |
 | 97. File Status View Model for TUI | v0.19.0 | 0/TBD | Planned | — |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 0/TBD | Planned | — |
