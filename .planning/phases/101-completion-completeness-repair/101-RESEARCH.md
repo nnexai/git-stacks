@@ -224,12 +224,12 @@ program.addCommand(createCompletionCommand(program)) // register last
 |---|-------|---------|---------------|
 | A1 | Existing `scripts/verify-gates.ts` should be extended (not replaced) for completion drift checks. [ASSUMED] | Architecture Patterns | Medium: planner might choose a separate gate command. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `buildTree()` be exported or should tests compare via completion output parsing only?**
    - What we know: `buildTree()` is internal today; tests already parse generated scripts and run real CLI completion output. [VERIFIED: codebase grep]
-   - What's unclear: Whether exposing a structured completion inventory reduces brittleness enough to justify API change.
-   - Recommendation: Decide in planning based on smallest safe delta; both satisfy D-08/D-09 if live Commander tree remains source of truth. [ASSUMED]
+   - Resolution: Do not export internal `buildTree()` as the primary public/test surface. Phase 101 plans instead create a shared live CLI program builder plus `collectCommandPaths()`/completion-audit helpers, then compare generated bash, zsh, and fish output against that live inventory. This keeps the Commander tree as the source of truth while avoiding a brittle dependency on generator internals.
+   - Planned in: `101-01-PLAN.md` Task 1 and `101-02-PLAN.md` Task 1.
 
 ## Environment Availability
 
