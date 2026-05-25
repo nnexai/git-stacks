@@ -16,9 +16,9 @@ These requirements extend the unreleased v0.19.0 Operator Control Center after `
 
 ### Completion Completeness
 
-- [ ] **COMP-01**: Shell completions cover the current command tree, including v0.18/v0.19 command families and nested subcommands.
-- [ ] **COMP-02**: Dynamic completions for workspace, template, repo, command, integration, issue/forge surfaces, and option enums remain position-aware and do not repeat already-satisfied positional args.
-- [ ] **COMP-03**: Completion generation has focused regression coverage for bash, zsh, and fish so future command additions do not silently ship incomplete completion entries.
+- [x] **COMP-01**: Shell completions cover the current command tree, including v0.18/v0.19 command families and nested subcommands.
+- [x] **COMP-02**: Dynamic completions for workspace, template, repo, command, integration, issue/forge surfaces, and option enums remain position-aware and do not repeat already-satisfied positional args.
+- [x] **COMP-03**: Completion generation has focused regression coverage for bash, zsh, and fish so future command additions do not silently ship incomplete completion entries.
 
 ### Workspace Root Auto-detection
 
@@ -48,9 +48,9 @@ These requirements extend the unreleased v0.19.0 Operator Control Center after `
 | TOUT-02 | Phase 100 | Complete |
 | TOUT-03 | Phase 100 | Complete |
 | TOUT-04 | Phase 100 | Complete |
-| COMP-01 | Phase 101 | Planned |
-| COMP-02 | Phase 101 | Planned |
-| COMP-03 | Phase 101 | Planned |
+| COMP-01 | Phase 101 | Complete |
+| COMP-02 | Phase 101 | Complete |
+| COMP-03 | Phase 101 | Complete |
 | WDET-01 | Phase 102 | Planned |
 | WDET-02 | Phase 102 | Planned |
 | WDET-03 | Phase 102 | Planned |
