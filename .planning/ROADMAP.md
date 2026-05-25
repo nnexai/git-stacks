@@ -257,7 +257,7 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, manual command actions, and action-menu regression coverage. (completed 2026-05-17)
 - [x] **Phase 100: Manager TUI Command Output Containment** - Buffer stdout/stderr from TUI-launched commands, show bounded output in the manager UI, and restore the OpenTUI screen cleanly afterward. (completed 2026-05-25)
 - [x] **Phase 101: Completion Completeness Repair** - Audit and repair generated bash/zsh/fish completions for current command families and dynamic completion positions. (completed 2026-05-25)
-- [ ] **Phase 102: Workspace Root Auto-detection** - Extend workspace resolution so commands work when invoked from the workspace root directory as well as from repo worktrees.
+- [x] **Phase 102: Workspace Root Auto-detection** - Extend workspace resolution so commands work when invoked from the workspace root directory as well as from repo worktrees. (completed 2026-05-25)
 - [ ] **Phase 103: v0.19.0 Final Release Validation** - Update final release artifacts and run focused RC follow-up plus existing release gates before final tagging.
 
 ## Phase Details
@@ -425,8 +425,8 @@ Plans:
 
 Plans:
 
-- [ ] `102-01-PLAN.md` - Resolver behavior, edge cases, and command integration audit
-- [ ] `102-02-PLAN.md` - Real-fixture workspace-root detection tests and docs alignment
+- [x] `102-01-PLAN.md` - Resolver behavior, edge cases, and command integration audit
+- [x] `102-02-PLAN.md` - Real-fixture workspace-root detection tests and docs alignment
 
 ### Phase 103: v0.19.0 Final Release Validation
 
@@ -1015,7 +1015,7 @@ Plans:
 | 99. Dashboard Actions and Correctness Polish | v0.19.0 | 4/4 | Complete    | 2026-05-17 |
 | 100. Manager TUI Command Output Containment | v0.19.0 | 3/3 | Complete    | 2026-05-25 |
 | 101. Completion Completeness Repair | v0.19.0 | 2/2 | Complete   | 2026-05-25 |
-| 102. Workspace Root Auto-detection | v0.19.0 | 1/2 | In Progress|  |
+| 102. Workspace Root Auto-detection | v0.19.0 | 2/2 | Complete    | 2026-05-25 |
 | 103. v0.19.0 Final Release Validation | v0.19.0 | 0/1 | Planned | - |
 
 ## Backlog
