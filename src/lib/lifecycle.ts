@@ -5,6 +5,8 @@ export type HookOutputLine = {
   stream: "stdout" | "stderr"
 }
 
+export type ShellOutputLine = HookOutputLine
+
 export type HookResult = {
   exitCode: number
   failed: boolean
@@ -159,6 +161,55 @@ export async function runShellSequence(
       stdout: "inherit",
       stderr: "inherit",
     })
+    const exitCode = await handle.exited
+    if (exitCode !== 0) return { exitCode, failedCommand: cmd }
+  }
+  return { exitCode: 0 }
+}
+
+async function readOutputStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  stream: "stdout" | "stderr",
+  onOutput: (output: ShellOutputLine) => void
+) {
+  const decoder = new TextDecoder()
+  let buf = ""
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      if (buf) onOutput({ line: buf, stream })
+      break
+    }
+    buf += decoder.decode(value)
+    const lines = buf.split("\n")
+    buf = lines.pop() ?? ""
+    for (const line of lines) {
+      if (line) onOutput({ line, stream })
+    }
+  }
+}
+
+export async function runShellSequenceCaptured(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  onOutput: (output: ShellOutputLine) => void
+): Promise<ShellSequenceResult> {
+  if (!commands || commands.length === 0) return { exitCode: 0 }
+
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+  for (const cmd of commands) {
+    const handle = _exec.spawn({
+      cmd: ["/bin/sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    await Promise.all([
+      readOutputStream(handle.stdout!.getReader(), "stdout", onOutput),
+      readOutputStream(handle.stderr!.getReader(), "stderr", onOutput),
+    ])
     const exitCode = await handle.exited
     if (exitCode !== 0) return { exitCode, failedCommand: cmd }
   }

@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
 import { spawn } from "bun"
-import type { HookOutputLine, HookResult, ShellSequenceResult, SpawnHandle } from "@/lib/lifecycle"
+import type { HookOutputLine, HookResult, ShellOutputLine, ShellSequenceResult, SpawnHandle } from "@/lib/lifecycle"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
 // integration-commands.test.ts mocks @/lib/lifecycle (as a consumer test).
@@ -128,6 +128,52 @@ async function runShellSequence(
   return { exitCode: 0 }
 }
 
+async function runShellSequenceCaptured(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  onOutput: (output: ShellOutputLine) => void
+): Promise<ShellSequenceResult> {
+  if (!commands || commands.length === 0) return { exitCode: 0 }
+  const mergedEnv = { ...process.env, ...env } as Record<string, string>
+  for (const cmd of commands) {
+    const handle = _exec.spawn({
+      cmd: ["sh", "-c", cmd],
+      cwd,
+      env: mergedEnv,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const readStream = async (
+      reader: ReadableStreamDefaultReader<Uint8Array>,
+      stream: "stdout" | "stderr"
+    ) => {
+      const decoder = new TextDecoder()
+      let buf = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          if (buf) onOutput({ line: buf, stream })
+          break
+        }
+        buf += decoder.decode(value)
+        const lines = buf.split("\n")
+        buf = lines.pop() ?? ""
+        for (const line of lines) {
+          if (line) onOutput({ line, stream })
+        }
+      }
+    }
+    await Promise.all([
+      readStream(handle.stdout!.getReader(), "stdout"),
+      readStream(handle.stderr!.getReader(), "stderr"),
+    ])
+    const exitCode = await handle.exited
+    if (exitCode !== 0) return { exitCode, failedCommand: cmd }
+  }
+  return { exitCode: 0 }
+}
+
 // Re-apply mock.module to override whatever integration-commands.test.ts set.
 // Our module uses the local _exec and local implementations above.
 mock.module("@/lib/lifecycle", () => ({
@@ -135,6 +181,7 @@ mock.module("@/lib/lifecycle", () => ({
   runHooks,
   runHooksCaptured,
   runShellSequence,
+  runShellSequenceCaptured,
 }))
 
 // ─── Real-shell tests ─────────────────────────────────────────────────────────
@@ -353,6 +400,46 @@ describe("runShellSequence _exec injection", () => {
   test("returns failing exit code and command", async () => {
     const result = await runShellSequence(["false"], "/tmp", {})
     expect(result).toEqual({ exitCode: 1, failedCommand: "false" })
+  })
+})
+
+describe("runShellSequenceCaptured _exec injection", () => {
+  beforeEach(() => {
+    originalSpawn = _exec.spawn
+    _exec.spawn = mockSpawn as any
+    resetSpawnMocks(makeSpawnHandle(0))
+  })
+
+  afterEach(() => {
+    _exec.spawn = originalSpawn
+  })
+
+  test("calls _exec.spawn with stdout=pipe and stderr=pipe", async () => {
+    resetSpawnMocks(makeSpawnHandle(0, "output\n", ""))
+    await runShellSequenceCaptured(["echo hello"], "/tmp", {}, () => {})
+
+    expect(capturedSpawnArgs).toHaveLength(1)
+    expect(capturedSpawnArgs[0].stdout).toBe("pipe")
+    expect(capturedSpawnArgs[0].stderr).toBe("pipe")
+  })
+
+  test("captures stdout and stderr output with stream tags", async () => {
+    resetSpawnMocks(makeSpawnHandle(0, "hello\n", "err\n"))
+    const lines: ShellOutputLine[] = []
+    await runShellSequenceCaptured(["echo hello"], "/tmp", {}, (out) => lines.push(out))
+
+    expect(lines).toEqual([
+      { line: "hello", stream: "stdout" },
+      { line: "err", stream: "stderr" },
+    ])
+  })
+
+  test("stops after first failing command", async () => {
+    resetSpawnMocks(makeSpawnHandle(1), makeSpawnHandle(0))
+    const result = await runShellSequenceCaptured(["false", "echo second"], "/tmp", {}, () => {})
+
+    expect(result).toEqual({ exitCode: 1, failedCommand: "false" })
+    expect(capturedSpawnArgs).toHaveLength(1)
   })
 })
 
