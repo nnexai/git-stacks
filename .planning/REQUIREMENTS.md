@@ -28,8 +28,8 @@ These requirements extend the unreleased v0.19.0 Operator Control Center after `
 
 ### Final Release Readiness
 
-- [ ] **REL-01**: v0.19.0 final release notes and package metadata include the RC follow-up fixes and do not describe unresolved RC defects as shipped behavior.
-- [ ] **REL-02**: Final verification includes focused manager/TUI output smoke coverage, completion generation checks, workspace-root detection tests, and the existing release gate.
+- [x] **REL-01**: v0.19.0 final release notes and package metadata include the RC follow-up fixes and do not describe unresolved RC defects as shipped behavior.
+- [x] **REL-02**: Final verification includes focused manager/TUI output smoke coverage, completion generation checks, workspace-root detection tests, and the existing release gate.
 
 ## Out of Scope
 
