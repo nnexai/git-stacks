@@ -113,18 +113,25 @@ repos:
 }
 
 describe("v0.19.0 release candidate smoke", () => {
-  test("package, changelog, and README describe the RC.2 follow-up boundary", () => {
-    const rcEntry = changelogEntry("0.19.0-rc.2")
+  test("package, changelog, and README describe the RC.3 follow-up boundary", () => {
+    const rcEntry = changelogEntry("0.19.0-rc.3")
+    const rc2Entry = changelogEntry("0.19.0-rc.2")
 
-    expect(PACKAGE_JSON.version).toBe("0.19.0-rc.2")
-    expect(CHANGELOG.indexOf("## [0.19.0-rc.2]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.1]"))
-    expect(rcEntry).toContain("v0.19.0-rc.2")
-    expect(rcEntry).toContain("Manager command-output containment")
-    expect(rcEntry).toContain("Completion completeness repair")
-    expect(rcEntry).toContain("Workspace-root auto-detection")
-    expect(rcEntry.toLowerCase()).toContain("dashboard rollback progress visibility")
-    expect(rcEntry).toContain("deferred backlog work")
-    expect(rcEntry).not.toContain("Dashboard rollback progress visibility is now")
+    expect(PACKAGE_JSON.version).toBe("0.19.0-rc.3")
+    expect(CHANGELOG.indexOf("## [0.19.0-rc.3]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.2]"))
+    expect(rcEntry).toContain("v0.19.0-rc.3")
+    expect(rcEntry).toContain("Manager refresh re-reads config files")
+    expect(rcEntry).toContain("invalidates")
+    expect(rcEntry).toContain("direct YAML edits")
+    expect(rcEntry).toContain("separate CLI changes")
+
+    expect(rc2Entry).toContain("v0.19.0-rc.2")
+    expect(rc2Entry).toContain("Manager command-output containment")
+    expect(rc2Entry).toContain("Completion completeness repair")
+    expect(rc2Entry).toContain("Workspace-root auto-detection")
+    expect(rc2Entry.toLowerCase()).toContain("dashboard rollback progress visibility")
+    expect(rc2Entry).toContain("deferred backlog work")
+    expect(rc2Entry).not.toContain("Dashboard rollback progress visibility is now")
 
     expect(README).toContain("git-stacks paths    # same as: git-stacks paths my-feature")
     expect(README).toContain("The current directory may be the workspace root")
@@ -133,6 +140,7 @@ describe("v0.19.0 release candidate smoke", () => {
 
   test("release smoke names stable Phase 100-102 follow-up coverage surfaces", () => {
     const managerFrame = readFileSync(join(ROOT, "tests/tui/dashboard/integ-action-menu.test.tsx"), "utf8")
+    const config = readFileSync(join(ROOT, "tests/lib/config.test.ts"), "utf8")
     const lifecycle = readFileSync(join(ROOT, "tests/lib/lifecycle.test.ts"), "utf8")
     const completionGenerator = readFileSync(join(ROOT, "tests/lib/completion-generator.test.ts"), "utf8")
     const supportReadonly = readFileSync(join(ROOT, "tests/commands/support-readonly.test.ts"), "utf8")
@@ -143,6 +151,8 @@ describe("v0.19.0 release candidate smoke", () => {
 
     expect(managerFrame).toContain("noisy manual command output stays bounded inside progress frame")
     expect(managerFrame).toContain("... 21 earlier lines omitted ...")
+    expect(config).toContain("invalidateConfigCache forces workspace and template reads to see external file edits")
+    expect(config).toContain("invalidateConfigCache removes externally deleted entries from list reloads")
     expect(lifecycle).toContain("captures stderr-only output")
 
     expect(completionGenerator).toContain("completion audit - real program")

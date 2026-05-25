@@ -20,9 +20,10 @@
 
 **Release candidate boundary:**
 
-- Package metadata and tag target are `0.19.0-rc.1` / `v0.19.0-rc.1`; final `0.19.0` tagging remains separate after RC validation.
+- Package metadata and tag target are `0.19.0-rc.3` / `v0.19.0-rc.3`; final `0.19.0` tagging remains separate after RC validation.
 - RC validation on 2026-05-25 found follow-up defects: manager TUI command output can corrupt the screen, shell completions are incomplete, and workspace auto-detection does not work from the workspace root directory.
 - Active follow-up phases are 100-103: manager TUI command output containment, completion completeness repair, workspace-root auto-detection, and final v0.19.0 release validation.
+- RC.3 adds manager dashboard refresh cache invalidation so external workspace/template YAML edits and separate CLI updates are visible without restarting the TUI.
 - Dashboard rollback progress visibility remains deferred as backlog work and was explicitly excluded from Phase 99.
 - Known deferred artifacts at close: 6 acknowledged open items, recorded in `.planning/STATE.md`.
 

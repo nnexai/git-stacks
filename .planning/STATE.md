@@ -149,7 +149,7 @@ Items acknowledged and deferred at v0.19.0-rc.1 closeout on 2026-05-17:
 - [Phase ?]: [Phase 96]: notes command resolves workspace by explicit arg, cwd, then GS_WORKSPACE_NAME
 - [Phase ?]: [Phase 96]: Notes storage is config-root JSONL with parse-before-mutate fail-closed behavior.
 - [Phase 99]: Repo edit opens `registry.yml` through `editRegistryYaml()` rather than slicing a per-repo entry.
-- [Phase 103]: Phase 103 validated 0.19.0-rc.2 with release-rc-check --skip-tag; v0.19.0-rc.2 tag creation and publish remain operator-controlled handoff steps. — Separates validation from git/npm mutation while preserving an exact publish path after approval.
+- [Phase 103]: Phase 103 validated 0.19.0-rc.2 with release-rc-check --skip-tag; RC.3 supersedes the RC.2 handoff after manager refresh cache invalidation follow-up. — Preserves historical RC.2 evidence while keeping the current operator target on RC.3.
 
 ### Roadmap Evolution
 
@@ -177,6 +177,7 @@ Items acknowledged and deferred at v0.19.0-rc.1 closeout on 2026-05-17:
 - Phase 94 completed on 2026-05-16: v0.18.0 RC docs, changelog, smoke gate, package metadata, and tag handoff were prepared.
 - v0.19.0 milestone initialized on 2026-05-17: Phase 95-99 cover manual workspace commands, workspace notes, TUI file status visibility, grounded dashboard control-center improvements, repo edit, linked issue opening, and manual command dashboard actions; rollback progress visibility remains deferred.
 - v0.19.0 RC follow-up added on 2026-05-25: Phase 100 manager TUI command output containment, Phase 101 completion completeness repair, Phase 102 workspace-root auto-detection, and Phase 103 final release validation.
+- v0.19.0 RC.3 follow-up added on 2026-05-25: manager dashboard refresh now invalidates workspace/template config caches so external YAML edits and separate CLI changes are visible without restarting the TUI.
 
 ### Pending Todos
 
@@ -204,4 +205,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Create the RC.2 annotated tag with `bun run scripts/release-rc-check.ts` when ready, then publish with `bun publish`.
+- Create the RC.3 annotated tag with `bun run scripts/release-rc-check.ts` when ready, then publish with `bun publish`.

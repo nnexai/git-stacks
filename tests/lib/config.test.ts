@@ -17,7 +17,7 @@ import {
   realWriteWorkspace, realReadWorkspace, realListWorkspaces,
   realWorkspaceExists, realTemplateExists, realReadTemplate,
   realWriteTemplate, realListTemplates,
-  realCache, realDeleteWorkspace, realDeleteTemplate,
+  realCache, realDeleteWorkspace, realDeleteTemplate, realInvalidateConfigCache,
 } from "../helpers"
 
 const isolated = useIsolatedConfig("config-test")
@@ -1291,5 +1291,48 @@ describe("in-memory index", () => {
     // File still exists — scan fallback should succeed
     const ws = realReadWorkspace("seam-ws")
     expect(ws.name).toBe("seam-ws")
+  })
+
+  test("invalidateConfigCache forces workspace and template reads to see external file edits", () => {
+    const wsFile = join(wsDir(), "external-ws.yml")
+    const tplFile = join(tplDir(), "external-tpl.yml")
+    writeFileSync(wsFile, `${makeWsYaml("external-ws")}description: before\n`)
+    writeFileSync(tplFile, `${makeTplYaml("external-tpl")}description: before\n`)
+
+    expect(realReadWorkspace("external-ws").description).toBe("before")
+    expect(realReadTemplate("external-tpl").description).toBe("before")
+
+    writeFileSync(wsFile, `${makeWsYaml("external-ws")}description: after\n`)
+    writeFileSync(tplFile, `${makeTplYaml("external-tpl")}description: after\n`)
+
+    expect(realReadWorkspace("external-ws").description).toBe("before")
+    expect(realReadTemplate("external-tpl").description).toBe("before")
+
+    realInvalidateConfigCache()
+
+    expect(realReadWorkspace("external-ws").description).toBe("after")
+    expect(realReadTemplate("external-tpl").description).toBe("after")
+  })
+
+  test("invalidateConfigCache removes externally deleted entries from list reloads", () => {
+    const wsFile = join(wsDir(), "external-delete-ws.yml")
+    const tplFile = join(tplDir(), "external-delete-tpl.yml")
+    writeFileSync(wsFile, makeWsYaml("external-delete-ws"))
+    writeFileSync(tplFile, makeTplYaml("external-delete-tpl"))
+
+    expect(realListWorkspaces().map((w: { name: string }) => w.name)).toContain("external-delete-ws")
+    expect(realListTemplates().map((t: { name: string }) => t.name)).toContain("external-delete-tpl")
+
+    const { unlinkSync } = require("fs")
+    unlinkSync(wsFile)
+    unlinkSync(tplFile)
+
+    expect(realListWorkspaces().map((w: { name: string }) => w.name)).toContain("external-delete-ws")
+    expect(realListTemplates().map((t: { name: string }) => t.name)).toContain("external-delete-tpl")
+
+    realInvalidateConfigCache()
+
+    expect(realListWorkspaces().map((w: { name: string }) => w.name)).not.toContain("external-delete-ws")
+    expect(realListTemplates().map((t: { name: string }) => t.name)).not.toContain("external-delete-tpl")
   })
 })

@@ -4,6 +4,18 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.19.0-rc.3] - 2026-05-25
+
+### Fixed
+
+**Manager refresh re-reads config files** - `git-stacks manage` now invalidates its in-process workspace/template cache when refreshing the dashboard, so direct YAML edits and separate CLI changes are visible without restarting the TUI.
+
+### Release Candidate
+
+This is a targeted follow-up release candidate for v0.19.0. The package version and matching tag target are `0.19.0-rc.3` / `v0.19.0-rc.3`; final `0.19.0` tagging remains separate after RC validation.
+
+---
+
 ## [0.19.0-rc.2] - 2026-05-25
 
 ### Fixed

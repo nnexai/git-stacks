@@ -834,6 +834,7 @@ export const {
   writeRegistry: realWriteRegistry,
   listRegistryEntries: realListRegistryEntries,
   expandBranchPattern: realExpandBranchPattern,
+  invalidateConfigCache: realInvalidateConfigCache,
   _cache: realCache,
   deleteWorkspace: realDeleteWorkspace,
   deleteTemplate: realDeleteTemplate,

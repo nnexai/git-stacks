@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from "solid-js"
-import { listWorkspaces } from "../../../lib/config"
+import { invalidateConfigCache, listWorkspaces } from "../../../lib/config"
 import { listMessages, listMessagesSync, clearMessages, type MessageRecord } from "../../../lib/messages"
 import { setIpcCallback } from "../ipc-state"
 
@@ -87,6 +87,7 @@ export function useMessages() {
 
   // Synchronous reload — setMsgMap fires immediately before caller's next line
   function reloadMessages() {
+    invalidateConfigCache()
     loadAllSync()
     setTick(t => t + 1)
   }

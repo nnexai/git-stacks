@@ -29,6 +29,13 @@ export const _cache = {
   },
 }
 
+export function invalidateConfigCache(): void {
+  workspaceIndex.clear()
+  templateIndex.clear()
+  workspaceListPopulated = false
+  templateListPopulated = false
+}
+
 // --- Error formatting ---
 
 export function formatZodError(err: ZodError): string {

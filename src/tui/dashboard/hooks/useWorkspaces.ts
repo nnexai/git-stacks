@@ -1,5 +1,5 @@
 import { createSignal, onCleanup } from "solid-js"
-import { listWorkspaces, isWorktreeRepo, type Workspace } from "../../../lib/config"
+import { invalidateConfigCache, listWorkspaces, isWorktreeRepo, type Workspace } from "../../../lib/config"
 import { getWorkspaceStatus } from "../../../lib/workspace-status"
 import { isFetchStale } from "../../../lib/git"
 import type { WorkspaceEntry, WorkspaceStatus } from "../types"
@@ -32,6 +32,7 @@ export function useWorkspaces() {
   }
 
   function reload(): Promise<void> {
+    invalidateConfigCache()
     const workspaces = listWorkspaces()
     const fresh: WorkspaceEntry[] = workspaces.map((ws) => ({
       workspace: ws,
