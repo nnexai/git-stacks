@@ -4,6 +4,26 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.19.0-rc.2] - 2026-05-25
+
+### Fixed
+
+**Manager command-output containment** - `git-stacks manage` now keeps noisy manual command output bounded inside the progress view, preserves recent stdout/stderr context, and returns cleanly to the workspace list after the command view closes.
+
+**Completion completeness repair** - bash, zsh, and fish completion output now tracks the current command tree, including the v0.19.0 command families, and the release gate checks for completion coverage drift.
+
+**Workspace-root auto-detection** - optional workspace commands such as `paths`, `env`, and `notes` now detect a workspace from the workspace root or a non-repo subdirectory before falling back to `GS_WORKSPACE_NAME`.
+
+### Safety Notes
+
+Dashboard rollback progress visibility is not part of this release candidate. It remains deferred backlog work and is not described as shipped behavior in `v0.19.0-rc.2`.
+
+### Release Candidate
+
+This is a follow-up release candidate for v0.19.0. The package version and matching tag target are `0.19.0-rc.2` / `v0.19.0-rc.2`; final `0.19.0` tagging remains separate after RC validation.
+
+---
+
 ## [0.19.0-rc.1] — 2026-05-17
 
 ### Added

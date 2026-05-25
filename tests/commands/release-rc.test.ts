@@ -25,6 +25,16 @@ function repoRoot(): string {
 const ROOT = repoRoot()
 const README = readFileSync(join(ROOT, "README.md"), "utf8")
 const CHANGELOG = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")
+const PACKAGE_JSON = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { version: string }
+
+function changelogEntry(version: string): string {
+  const heading = `## [${version}]`
+  const start = CHANGELOG.indexOf(heading)
+  expect(start).toBeGreaterThanOrEqual(0)
+
+  const next = CHANGELOG.indexOf("\n---\n\n## [", start + heading.length)
+  return CHANGELOG.slice(start, next === -1 ? undefined : next)
+}
 
 function expectSuccessful(result: ReturnType<typeof runCli>) {
   expect(result.stderr, formatCliFailure(result)).toBe("")
@@ -101,6 +111,63 @@ repos:
     mode: worktree
 `)
 }
+
+describe("v0.19.0 release candidate smoke", () => {
+  test("package, changelog, and README describe the RC.2 follow-up boundary", () => {
+    const rcEntry = changelogEntry("0.19.0-rc.2")
+
+    expect(PACKAGE_JSON.version).toBe("0.19.0-rc.2")
+    expect(CHANGELOG.indexOf("## [0.19.0-rc.2]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.1]"))
+    expect(rcEntry).toContain("v0.19.0-rc.2")
+    expect(rcEntry).toContain("Manager command-output containment")
+    expect(rcEntry).toContain("Completion completeness repair")
+    expect(rcEntry).toContain("Workspace-root auto-detection")
+    expect(rcEntry.toLowerCase()).toContain("dashboard rollback progress visibility")
+    expect(rcEntry).toContain("deferred backlog work")
+    expect(rcEntry).not.toContain("Dashboard rollback progress visibility is now")
+
+    expect(README).toContain("git-stacks paths    # same as: git-stacks paths my-feature")
+    expect(README).toContain("The current directory may be the workspace root")
+    expect(README).toContain("Notes resolve the workspace by explicit argument first")
+  })
+
+  test("release smoke names stable Phase 100-102 follow-up coverage surfaces", () => {
+    const managerFrame = readFileSync(join(ROOT, "tests/tui/dashboard/integ-action-menu.test.tsx"), "utf8")
+    const lifecycle = readFileSync(join(ROOT, "tests/lib/lifecycle.test.ts"), "utf8")
+    const completionGenerator = readFileSync(join(ROOT, "tests/lib/completion-generator.test.ts"), "utf8")
+    const supportReadonly = readFileSync(join(ROOT, "tests/commands/support-readonly.test.ts"), "utf8")
+    const verifyGates = readFileSync(join(ROOT, "scripts/verify-gates.ts"), "utf8")
+    const workspaceWrapper = readFileSync(join(ROOT, "tests/commands/workspace-wrapper-edges.test.ts"), "utf8")
+    const notes = readFileSync(join(ROOT, "tests/commands/notes.test.ts"), "utf8")
+    const cwdResolver = readFileSync(join(ROOT, "tests/lib/detect-workspace-cwd.test.ts"), "utf8")
+
+    expect(managerFrame).toContain("noisy manual command output stays bounded inside progress frame")
+    expect(managerFrame).toContain("... 21 earlier lines omitted ...")
+    expect(lifecycle).toContain("captures stderr-only output")
+
+    expect(completionGenerator).toContain("completion audit - real program")
+    expect(completionGenerator).toContain("real bash output covers files, command, notes, and source-adjacent workspace flags")
+    expect(supportReadonly).toContain("completion bash exposes wrapper, registration, and current command markers")
+    expect(verifyGates).toContain("auditCompletionCoverage(buildProgram())")
+    expect(verifyGates).toContain("for (const shell of [\"bash\", \"zsh\", \"fish\"] as const)")
+
+    expect(cwdResolver).toContain("exact workspace root CWD returns that workspace")
+    expect(cwdResolver).toContain("non-repo subdirectory under workspace root returns that workspace")
+    expect(workspaceWrapper).toContain("paths detects workspace from workspace root and non-repo subdirectory")
+    expect(workspaceWrapper).toContain("env detects workspace from root cwd without repo overlay")
+    expect(notes).toContain("workspace root and non-repo subdirectory cwd outrank GS_WORKSPACE_NAME")
+  })
+
+  test("RC release script derives tag/version state from package metadata", () => {
+    const releaseScript = readFileSync(join(ROOT, "scripts/release-rc-check.ts"), "utf8")
+
+    expect(releaseScript).toContain("const rcVersion = packageVersion()")
+    expect(releaseScript).toContain("const rcTag = `v${rcVersion}`")
+    expect(releaseScript).toContain("process.argv.includes(\"--skip-tag\")")
+    expect(releaseScript).toContain("bun test tests/commands/release-rc.test.ts")
+    expect(releaseScript).toContain("bun publish --dry-run")
+  })
+})
 
 describe("v0.18.0 release candidate smoke", () => {
   let baseDir: string
