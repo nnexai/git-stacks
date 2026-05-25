@@ -11,6 +11,15 @@ const buildRepoEnvMock = mock((base: Record<string, string>, repo: any) => ({
 const runShellSequenceMock = mock(async (_commands: string[] | undefined, _cwd: string, _env: Record<string, string>): Promise<{ exitCode: number; failedCommand?: string }> => ({
   exitCode: 0,
 }))
+const runShellSequenceCapturedMock = mock(async (
+  _commands: string[] | undefined,
+  _cwd: string,
+  _env: Record<string, string>,
+  onOutput: (output: { line: string; stream: "stdout" | "stderr" }) => void
+): Promise<{ exitCode: number; failedCommand?: string }> => {
+  onOutput({ line: "captured error", stream: "stderr" })
+  return { exitCode: 0 }
+})
 
 mock.module("@/lib/workspace-env", () => ({
   buildWorkspaceEnv: buildWorkspaceEnvMock,
@@ -18,6 +27,7 @@ mock.module("@/lib/workspace-env", () => ({
 }))
 mock.module("@/lib/lifecycle", () => ({
   runShellSequence: runShellSequenceMock,
+  runShellSequenceCaptured: runShellSequenceCapturedMock,
 }))
 
 const { listManualCommands, planManualCommand, runManualCommand } = await import("@/lib/workspace-command")
@@ -55,7 +65,12 @@ describe("workspace-command planning", () => {
     buildWorkspaceEnvMock.mockClear()
     buildRepoEnvMock.mockClear()
     runShellSequenceMock.mockClear()
+    runShellSequenceCapturedMock.mockClear()
     runShellSequenceMock.mockImplementation(async () => ({ exitCode: 0 }))
+    runShellSequenceCapturedMock.mockImplementation(async (_commands, _cwd, _env, onOutput) => {
+      onOutput({ line: "captured error", stream: "stderr" })
+      return { exitCode: 0 }
+    })
   })
 
   test("lists visible names by default and shows hidden with --all", () => {
@@ -93,5 +108,26 @@ describe("workspace-command planning", () => {
     const result = await runManualCommand(ws, "verify")
     expect(result.exitCode).toBe(42)
     expect(result.failedCommand).toBe("echo api-pre")
+  })
+
+  test("uses captured shell execution when onOutput is provided", async () => {
+    const ws = makeWorkspace()
+    const emitted: Array<{ line: string; stream: "stdout" | "stderr"; stepCommand: string }> = []
+    const result = await runManualCommand(ws, "preverify", {
+      onOutput: (output) => emitted.push({
+        line: output.line,
+        stream: output.stream,
+        stepCommand: output.step.commandName,
+      }),
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(runShellSequenceMock).not.toHaveBeenCalled()
+    expect(runShellSequenceCapturedMock).toHaveBeenCalled()
+    expect(emitted).toContainEqual({
+      line: "captured error",
+      stream: "stderr",
+      stepCommand: "preverify",
+    })
   })
 })

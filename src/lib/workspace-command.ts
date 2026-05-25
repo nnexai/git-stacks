@@ -1,6 +1,6 @@
 import { join } from "path"
 import { getRepoPath, type GlobalConfig, type Workspace, type WorkspaceRepo } from "./config"
-import { runShellSequence } from "./lifecycle"
+import { runShellSequence, runShellSequenceCaptured, type ShellOutputLine } from "./lifecycle"
 import { getTasksDir } from "./paths"
 import { buildRepoEnv, buildWorkspaceEnv } from "./workspace-env"
 
@@ -20,6 +20,7 @@ export type ManualCommandStep = {
 export type RunManualCommandOptions = {
   config?: GlobalConfig
   skipSecrets?: boolean
+  onOutput?: (output: ShellOutputLine & { step: ManualCommandStep }) => void
 }
 
 export type RunManualCommandResult = {
@@ -106,7 +107,9 @@ export async function runManualCommand(
 
   for (const step of plan) {
     const env = step.scope === "repo" && step.repo ? buildRepoEnv(baseEnv, step.repo) : baseEnv
-    const result = await runShellSequence([step.shell], step.cwd, env)
+    const result = opts?.onOutput
+      ? await runShellSequenceCaptured([step.shell], step.cwd, env, (output) => opts.onOutput?.({ ...output, step }))
+      : await runShellSequence([step.shell], step.cwd, env)
     if (result.exitCode !== 0) {
       return {
         exitCode: result.exitCode,
@@ -117,4 +120,3 @@ export async function runManualCommand(
   }
   return { exitCode: 0, plan }
 }
-
