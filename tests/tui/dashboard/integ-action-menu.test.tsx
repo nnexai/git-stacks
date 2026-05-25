@@ -442,6 +442,81 @@ describe("integration: action menu dispatch", () => {
     expect(frame).toContain("Failed command: bun test.")
   })
 
+  test("manual command no-output success shows explicit completion", async () => {
+    workspaceCommands = { verify: "bun run verify" }
+    runManualCommandMock.mockImplementationOnce(async () => ({
+      exitCode: 0,
+      plan: [],
+    }))
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("d")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    const frame = captureCharFrame()
+    expect(frame).toContain("Running command verify")
+    expect(frame).toContain("Command verify completed.")
+  })
+
+  test("noisy manual command output stays bounded inside progress frame", async () => {
+    workspaceCommands = { verify: "bun run verify" }
+    runManualCommandMock.mockImplementationOnce(async (_workspace, _commandName, opts?: { onOutput?: (output: { line: string; stream: "stdout" | "stderr" }) => void }) => {
+      for (let i = 1; i <= 120; i += 1) {
+        const id = String(i).padStart(3, "0")
+        opts?.onOutput?.({
+          line: `line-${id}`,
+          stream: i % 10 === 0 ? "stderr" : "stdout",
+        })
+      }
+      return {
+        exitCode: 42,
+        failedCommand: "bun test",
+        plan: [],
+      }
+    })
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />,
+      { ...renderOpts, width: 120, height: 160 }
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("d")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    let frame = captureCharFrame()
+    expect(frame).toContain("Running command verify")
+    expect(frame).toContain("... 21 earlier lines omitted ...")
+    expect(frame).toContain("line-119")
+    expect(frame).toContain("line-120")
+    expect(frame).toContain("ERROR: Command verify failed with exit code 42.")
+    expect(frame).not.toContain("line-001")
+    expect(frame).not.toContain("line-021")
+
+    mockInput.pressKey("a")
+    await renderOnce()
+    frame = captureCharFrame()
+    expect(frame).toContain("Workspaces")
+    expect(frame).toContain("test-ws")
+    expect(frame).not.toContain("Running command verify")
+  })
+
   test("running manual command cannot be closed until completion and returns to workspaces", async () => {
     workspaceCommands = { verify: "bun run verify" }
     let resolveCommand: ((value: { exitCode: number; plan: unknown[] }) => void) | undefined

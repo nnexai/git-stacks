@@ -434,6 +434,14 @@ describe("runShellSequenceCaptured _exec injection", () => {
     ])
   })
 
+  test("captures stderr-only output", async () => {
+    resetSpawnMocks(makeSpawnHandle(0, "", "only stderr\n"))
+    const lines: ShellOutputLine[] = []
+    await runShellSequenceCaptured(["echo only stderr >&2"], "/tmp", {}, (out) => lines.push(out))
+
+    expect(lines).toEqual([{ line: "only stderr", stream: "stderr" }])
+  })
+
   test("stops after first failing command", async () => {
     resetSpawnMocks(makeSpawnHandle(1), makeSpawnHandle(0))
     const result = await runShellSequenceCaptured(["false", "echo second"], "/tmp", {}, () => {})
