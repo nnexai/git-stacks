@@ -44,10 +44,10 @@ These requirements extend the unreleased v0.19.0 Operator Control Center after `
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TOUT-01 | Phase 100 | Planned |
-| TOUT-02 | Phase 100 | Planned |
-| TOUT-03 | Phase 100 | Planned |
-| TOUT-04 | Phase 100 | Planned |
+| TOUT-01 | Phase 100 | Complete |
+| TOUT-02 | Phase 100 | Complete |
+| TOUT-03 | Phase 100 | Complete |
+| TOUT-04 | Phase 100 | Complete |
 | COMP-01 | Phase 101 | Planned |
 | COMP-02 | Phase 101 | Planned |
 | COMP-03 | Phase 101 | Planned |
