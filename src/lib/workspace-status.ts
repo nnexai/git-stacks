@@ -1,9 +1,9 @@
 import { existsSync } from "fs"
 import { resolve } from "path"
 import { isRepoDirty, getCurrentBranch, getCommitsAhead, getCommitsBehind, isFetchStale } from "./git"
-import { listWorkspaces, getRepoPath, isGitRepo, isWorktreeRepo, type Workspace } from "./config"
+import { listWorkspaces, readGlobalConfig, getRepoPath, isGitRepo, isWorktreeRepo, type Workspace } from "./config"
 import { logDebug, timeOperation } from "./observability"
-import { expandHome } from "./paths"
+import { expandHome, getTasksDir } from "./paths"
 
 const OBS_CATEGORY = "workspace-status"
 
@@ -189,35 +189,40 @@ export type CwdDetectionResult =
   | { ok: false; error: "no_match" }
 
 /**
- * Detect the current workspace by matching the working directory against
- * stored worktree task_path values. Only worktree-mode repos are considered
- * (trunk repos share a single clone path across workspaces).
+ * Detect the current workspace by matching the working directory against the
+ * workspace root or stored worktree task_path values. Worktree paths can win
+ * over the broader workspace-root candidate by being more specific.
  *
  * @param cwd - Directory to match against (defaults to process.cwd())
  * @returns The workspace whose worktree task_path contains cwd, or no_match
  */
 export function detectWorkspaceFromCwd(cwd?: string): CwdDetectionResult {
   return timeOperation<CwdDetectionResult>(OBS_CATEGORY, "detectWorkspaceFromCwd", () => {
-    const currentDir = cwd ?? process.cwd()
+    const currentDir = resolve(expandHome(cwd ?? process.cwd()))
     const workspaces = listWorkspaces()
+    const config = readGlobalConfig()
 
     let bestMatch: Workspace | null = null
     let bestPathLen = 0
 
+    function consider(ws: Workspace, candidatePath: string) {
+      const resolvedPath = resolve(expandHome(candidatePath))
+      if (
+        currentDir === resolvedPath ||
+        currentDir.startsWith(resolvedPath + "/")
+      ) {
+        if (resolvedPath.length > bestPathLen) {
+          bestMatch = ws
+          bestPathLen = resolvedPath.length
+        }
+      }
+    }
+
     for (const ws of workspaces) {
+      consider(ws, `${getTasksDir(config.workspace_root)}/${ws.name}`)
       for (const repo of ws.repos) {
         if (!isWorktreeRepo(repo)) continue
-        const resolvedTaskPath = resolve(expandHome(repo.task_path))
-        // Match CWD exactly OR as a subdirectory (trailing separator prevents prefix collisions)
-        if (
-          currentDir === resolvedTaskPath ||
-          currentDir.startsWith(resolvedTaskPath + "/")
-        ) {
-          if (resolvedTaskPath.length > bestPathLen) {
-            bestMatch = ws
-            bestPathLen = resolvedTaskPath.length
-          }
-        }
+        consider(ws, repo.task_path)
       }
     }
 
