@@ -3,26 +3,26 @@
 exports[`ProgressView snapshots renders done state with lines and completion message 1`] = `
 "                                                                                
                                                                                 
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-            ┌─ Creating workspace ─────────────────────────────────┐            
-            │ Cloned repo-a                                        │            
-            │ Cloned repo-b                                        │            
-            │                                                      │            
-            │ Done. Press any key to continue.                     │            
-            └──────────────────────────────────────────────────────┘            
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
+    ┌─ Creating workspace ─────────────────────────────────────────────────┐    
+    │ Cloned repo-a                                                        │    
+    │ Cloned repo-b                                                        │    
+    │ Done. Press any key to continue.                                     │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    └──────────────────────────────────────────────────────────────────────┘    
                                                                                 
                                                                                 
 "

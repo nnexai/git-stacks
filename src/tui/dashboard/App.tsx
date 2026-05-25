@@ -665,10 +665,12 @@ export default function App() {
       config: readGlobalConfig(),
       onOutput: (output) => appendCommandLine({ text: output.line, stream: output.stream }),
     })
-    const failed = result.failedCommand ? ` Failed command: ${result.failedCommand}.` : ""
-    appendSystemLine(result.exitCode === 0
-      ? `Command ${commandName} completed.`
-      : `ERROR: Command ${commandName} failed with exit code ${result.exitCode}.${failed}`)
+    if (result.exitCode === 0) {
+      appendSystemLine(`Command ${commandName} completed.`)
+    } else {
+      appendSystemLine(`ERROR: Command ${commandName} failed with exit code ${result.exitCode}.`)
+      if (result.failedCommand) appendSystemLine(`Failed command: ${result.failedCommand}.`)
+    }
     finishCommandOutput(result.exitCode === 0 ? "success" : "failed")
   }
 

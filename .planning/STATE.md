@@ -149,7 +149,7 @@ Items acknowledged and deferred at v0.19.0-rc.1 closeout on 2026-05-17:
 - [Phase ?]: [Phase 96]: notes command resolves workspace by explicit arg, cwd, then GS_WORKSPACE_NAME
 - [Phase ?]: [Phase 96]: Notes storage is config-root JSONL with parse-before-mutate fail-closed behavior.
 - [Phase 99]: Repo edit opens `registry.yml` through `editRegistryYaml()` rather than slicing a per-repo entry.
-- [Phase 103]: Phase 103 validated 0.19.0-rc.2 with release-rc-check --skip-tag; RC.3 supersedes the RC.2 handoff after manager refresh cache invalidation follow-up. — Preserves historical RC.2 evidence while keeping the current operator target on RC.3.
+- [Phase 103]: Phase 103 validated 0.19.0-rc.2 with release-rc-check --skip-tag; RC.4 supersedes the RC.2/RC.3 handoff after manager refresh cache invalidation and command-output dialog sizing follow-ups. — Preserves historical RC.2 evidence while keeping the current operator target on RC.4.
 
 ### Roadmap Evolution
 

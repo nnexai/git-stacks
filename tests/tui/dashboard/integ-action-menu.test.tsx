@@ -502,7 +502,7 @@ describe("integration: action menu dispatch", () => {
 
     let frame = captureCharFrame()
     expect(frame).toContain("Running command verify")
-    expect(frame).toContain("... 21 earlier lines omitted ...")
+    expect(frame).toContain("... 22 earlier lines omitted ...")
     expect(frame).toContain("line-119")
     expect(frame).toContain("line-120")
     expect(frame).toContain("ERROR: Command verify failed with exit code 42.")

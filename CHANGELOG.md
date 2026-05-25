@@ -4,6 +4,18 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.19.0-rc.4] - 2026-05-25
+
+### Fixed
+
+**Manager command-output dialog sizing** - `git-stacks manage` now keeps command output dialogs fully visible within the current terminal size, clips long lines to the dialog width, and tails the newest output lines as command output grows.
+
+### Release Candidate
+
+This is a targeted follow-up release candidate for v0.19.0. The package version and matching tag target are `0.19.0-rc.4` / `v0.19.0-rc.4`; final `0.19.0` tagging remains separate after RC validation.
+
+---
+
 ## [0.19.0-rc.3] - 2026-05-25
 
 ### Fixed

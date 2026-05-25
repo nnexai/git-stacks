@@ -1,29 +1,29 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`HelpOverlay snapshots renders full keybinding reference for workspaces tab 1`] = `
-"    ┌─ Keybindings ────────────────────────────────────────────────────────┐    
-    │                                                                      │    
-    │ 1l/b2l/ 3 Switch tabs (Workspaces / Templates / Repos)               │    
+"    │ Global:                                                              │    
+    │ 1 / 2 / 3 Switch tabs (Workspaces / Templates / Repos)               │    
     │ [ / ] Previous / next tab                                            │    
     │ r Refresh current tab                                                │    
-    │ q Quitl(fromslistpview only)                                         │    
+    │ ? Toggle this help                                                   │    
+    │ q Quit (from list view only)                                         │    
     │                                                                      │    
     │ Navigation:                                                          │    
     │ ↑ ↓ / j k Move cursor                                                │    
-    │ EsctBackf/lclear filter / close overlay                              │    
+    │ / Start filter                                                       │    
+    │ Esc Back / clear filter / close overlay                              │    
     │                                                                      │    
     │ Workspaces tab:                                                      │    
     │ Enter Open action menu                                               │    
     │ Space Select for batch operation                                     │    
-    │ Actions:oo=Openee=Editgn=Rename u=Run m=Merge c=Clean r=Remove       │    
+    │ m View workspace messages                                            │    
+    │ Actions: o=Open e=Edit n=Rename u=Run m=Merge c=Clean r=Remove       │    
     │                                                                      │    
     │ Templates tab:                                                       │    
     │ Enter Open action menu                                               │    
     │ e=Edit($EDITOR) c=Clone r=Remove                                     │    
+    │                                                                      │    
     │ Repos tab:                                                           │    
     │ (read-only — no actions)                                             │    
-    │                                                                      │    
-    │ Press Esc or ? to close                                              │    
-    └──────────────────────────────────────────────────────────────────────┘    
 "
 `;

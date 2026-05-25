@@ -113,17 +113,24 @@ repos:
 }
 
 describe("v0.19.0 release candidate smoke", () => {
-  test("package, changelog, and README describe the RC.3 follow-up boundary", () => {
-    const rcEntry = changelogEntry("0.19.0-rc.3")
+  test("package, changelog, and README describe the RC.4 follow-up boundary", () => {
+    const rcEntry = changelogEntry("0.19.0-rc.4")
+    const rc3Entry = changelogEntry("0.19.0-rc.3")
     const rc2Entry = changelogEntry("0.19.0-rc.2")
 
-    expect(PACKAGE_JSON.version).toBe("0.19.0-rc.3")
-    expect(CHANGELOG.indexOf("## [0.19.0-rc.3]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.2]"))
-    expect(rcEntry).toContain("v0.19.0-rc.3")
-    expect(rcEntry).toContain("Manager refresh re-reads config files")
-    expect(rcEntry).toContain("invalidates")
-    expect(rcEntry).toContain("direct YAML edits")
-    expect(rcEntry).toContain("separate CLI changes")
+    expect(PACKAGE_JSON.version).toBe("0.19.0-rc.4")
+    expect(CHANGELOG.indexOf("## [0.19.0-rc.4]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.3]"))
+    expect(rcEntry).toContain("v0.19.0-rc.4")
+    expect(rcEntry).toContain("Manager command-output dialog sizing")
+    expect(rcEntry).toContain("fully visible")
+    expect(rcEntry).toContain("terminal size")
+    expect(rcEntry).toContain("tails the newest output lines")
+
+    expect(rc3Entry).toContain("v0.19.0-rc.3")
+    expect(rc3Entry).toContain("Manager refresh re-reads config files")
+    expect(rc3Entry).toContain("invalidates")
+    expect(rc3Entry).toContain("direct YAML edits")
+    expect(rc3Entry).toContain("separate CLI changes")
 
     expect(rc2Entry).toContain("v0.19.0-rc.2")
     expect(rc2Entry).toContain("Manager command-output containment")
@@ -150,7 +157,7 @@ describe("v0.19.0 release candidate smoke", () => {
     const cwdResolver = readFileSync(join(ROOT, "tests/lib/detect-workspace-cwd.test.ts"), "utf8")
 
     expect(managerFrame).toContain("noisy manual command output stays bounded inside progress frame")
-    expect(managerFrame).toContain("... 21 earlier lines omitted ...")
+    expect(managerFrame).toContain("... 22 earlier lines omitted ...")
     expect(config).toContain("invalidateConfigCache forces workspace and template reads to see external file edits")
     expect(config).toContain("invalidateConfigCache removes externally deleted entries from list reloads")
     expect(lifecycle).toContain("captures stderr-only output")
