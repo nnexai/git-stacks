@@ -2,33 +2,33 @@
 gsd_state_version: 1.0
 milestone: v0.19.0
 milestone_name: Operator Control Center
-status: v0.19.0-rc.1 release candidate prepared
-stopped_at: v0.19.0-rc.1 closeout in progress
-last_updated: "2026-05-17T14:45:25.813Z"
-last_activity: 2026-05-17 — Milestone v0.19.0 archived as release candidate v0.19.0-rc.1
+status: v0.19.0 RC follow-up planned
+stopped_at: Phase 100 ready for discuss/plan
+last_updated: "2026-05-25T14:01:00.000Z"
+last_activity: 2026-05-25 — Extended unreleased v0.19.0 with RC follow-up phases for manager output containment, completion repair, and workspace-root detection
 progress:
-  total_phases: 34
-  completed_phases: 5
-  total_plans: 15
+  total_phases: 38
+  completed_phases: 11
+  total_plans: 23
   completed_plans: 15
-  percent: 15
+  percent: 29
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-17)
+See: .planning/PROJECT.md (updated 2026-05-25)
 
 **Core value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
-**Current focus:** v0.19.0-rc.1 release candidate validation
+**Current focus:** v0.19.0 RC follow-up before final release
 
 ## Current Position
 
-Phase: Milestone v0.19.0 release candidate
+Phase: Phase 100 — Manager TUI Command Output Containment
 Plan: —
-Status: v0.19.0-rc.1 release candidate prepared
-Last activity: 2026-05-17 — Milestone v0.19.0 archived as release candidate v0.19.0-rc.1
+Status: Ready for discuss/plan
+Last activity: 2026-05-25 — Extended v0.19.0 with RC follow-up phases based on manager TUI output corruption, incomplete completions, and workspace-root auto-detection gaps
 
 ## Deferred Items
 
@@ -169,6 +169,7 @@ Items acknowledged and deferred at v0.19.0-rc.1 closeout on 2026-05-17:
 - Phase 93.1 completed on 2026-05-16: integration test runs now support bounded parallel workers with coherent per-file failure attribution and merged Istanbul coverage artifacts.
 - Phase 94 completed on 2026-05-16: v0.18.0 RC docs, changelog, smoke gate, package metadata, and tag handoff were prepared.
 - v0.19.0 milestone initialized on 2026-05-17: Phase 95-99 cover manual workspace commands, workspace notes, TUI file status visibility, grounded dashboard control-center improvements, repo edit, linked issue opening, and manual command dashboard actions; rollback progress visibility remains deferred.
+- v0.19.0 RC follow-up added on 2026-05-25: Phase 100 manager TUI command output containment, Phase 101 completion completeness repair, Phase 102 workspace-root auto-detection, and Phase 103 final release validation.
 
 ### Pending Todos
 
@@ -196,4 +197,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Start Phase 100 with `/gsd-discuss-phase 100`, then `/gsd-plan-phase 100`.

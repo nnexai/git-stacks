@@ -8,7 +8,7 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Completed RC: v0.19.0 Operator Control Center
+## Active RC Follow-up: v0.19.0 Operator Control Center
 
 **Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
 
@@ -19,9 +19,12 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - Add named manual workspace commands that reuse existing hook/env/cwd execution machinery.
 - Add linked issue opening from the workspace action menu.
 - Surface file config/status in the TUI, especially v0.18.0 `files.sync` status and drift from the `git-stacks files status` work.
+- Fix manager TUI command output containment so stdout/stderr from TUI-launched commands is buffered in a bounded viewer and the UI restores cleanly afterward.
+- Repair incomplete shell completions before final v0.19.0 release.
+- Extend workspace auto-detection to work from the workspace root directory, not only from inside an individual repo.
 - Keep dashboard rollback progress visibility deferred; Phase 99 explicitly excluded that work.
 
-**Release candidate:** `0.19.0-rc.1` is prepared for validation. Final `0.19.0` tagging remains separate.
+**Release candidate:** `0.19.0-rc.1` exposed RC follow-up defects on 2026-05-25. Final `0.19.0` tagging remains separate until the manager output, completion, and workspace-root detection fixes are complete.
 
 ## Recent State (2026-05-17)
 
@@ -324,6 +327,7 @@ One command should take you from "I need to work on feature X" to a fully runnin
 - TUI file config/status visibility based on the v0.18.0 `git-stacks files status` model.
 - Grounded TUI control-center improvements: denser list/detail layout, useful grouping, structured detail sections, notes/file summaries, and snapshot coverage.
 - Dashboard action polish: repo edit, linked issue opening, manual command actions, and regression coverage; rollback progress visibility remains deferred.
+- RC follow-up polish: contain stdout/stderr from TUI-launched commands in a bounded output viewer, restore the manager UI cleanly afterward, repair incomplete shell completions, and support workspace auto-detection from the workspace root directory.
 
 ### Out of Scope
 
@@ -344,14 +348,15 @@ One command should take you from "I need to work on feature X" to a fully runnin
 
 **Latest release candidate:** v0.19.0-rc.1 Operator Control Center (2026-05-17)
 
-**Prepared:** v0.19.0-rc.1 adds manual workspace commands, workspace notes, TUI file status visibility, a denser grounded dashboard control center, repo edit actions, linked issue opening, and manual command dashboard actions. Final v0.19.0 tagging remains separate after RC validation.
+**Prepared:** v0.19.0-rc.1 adds manual workspace commands, workspace notes, TUI file status visibility, a denser grounded dashboard control center, repo edit actions, linked issue opening, and manual command dashboard actions.
 
-**Status:** RC archive and validation are the current release focus. Dashboard rollback progress visibility remains deferred in backlog per the Phase 99 scope override.
+**Status:** RC validation found follow-up defects on 2026-05-25: TUI-launched command stdout/stderr can corrupt the manager screen, shell completions are incomplete, and workspace auto-detection does not work from the workspace root directory. Final v0.19.0 tagging waits on these fixes. Dashboard rollback progress visibility remains deferred in backlog per the Phase 99 scope override.
 
 ## Next Milestone Goals
-- Validate the v0.19.0 release candidate and decide whether to promote it to final `0.19.0`.
+- Finish v0.19.0 RC follow-up phases for manager command output containment, completion completeness, and workspace-root auto-detection.
+- Promote v0.19.0 to final only after focused RC follow-up verification and the existing release gate pass.
 - Keep dashboard rollback progress visibility as explicit backlog until deliberately re-promoted.
-- Start the next milestone with fresh requirements after RC validation.
+- Start the next milestone with fresh requirements after final v0.19.0 validation.
 
 ## Completed Milestone: v0.17.0 Engine Hardening & Template Labels (2026-04-06)
 
@@ -528,4 +533,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-05-17 for v0.19.0-rc.1 Operator Control Center release candidate*
+*Last updated: 2026-05-25 for v0.19.0 RC follow-up planning*

@@ -19,7 +19,7 @@
 - ✅ **v0.17.0 Engine Hardening & Template Labels** — Phases 74-79 (shipped 2026-04-06) — Template label CLI + propagation, DI seams + structured logging, integration plugin contracts, indexed config store, operation runner with rollback, release prep.
 - ✅ **v0.17.1 Functional Confidence Coverage** — Phases 80-88 with 81.x/82.x/84.x splits (shipped 2026-05-15) — User-facing workspace, template, repo, label, message, support, and integration-contract behavior covered through local automation; safety fixes for gone-branch cleanup, JSON command contracts, and hook execution. See [milestones/v0.17.1-ROADMAP.md](milestones/v0.17.1-ROADMAP.md)
 - ✅ **v0.18.0 Workspace File Sync and Forge Sources** — Phases 89-94 with 93.1 split (completed 2026-05-16) — Bidirectional real-file sync under `files.sync` with `git-stacks files status|pull|push`, GitLab-first forge `--source` workspace creation, and release-gate test runner parallelization with coherent coverage merging.
-- 🟡 **v0.19.0-rc.1 Operator Control Center** — Phases 95-99 (release candidate 2026-05-17) — Manual workspace commands, workspace notes, file status in the TUI, grounded dashboard density/grouping improvements, repo edit, linked issue opening, and manual command dashboard actions; rollback progress visibility is deferred. See [milestones/v0.19.0-ROADMAP.md](milestones/v0.19.0-ROADMAP.md)
+- 🟡 **v0.19.0 Operator Control Center** — Phases 95-103 (release candidate follow-up active) — Manual workspace commands, workspace notes, TUI file status, grounded dashboard actions, manager command-output containment, completion repair, workspace-root auto-detection, and final release validation; rollback progress visibility is deferred. See [milestones/v0.19.0-ROADMAP.md](milestones/v0.19.0-ROADMAP.md)
 
 ## Phases
 
@@ -246,15 +246,19 @@ See [milestones/v0.16.0-ROADMAP.md](milestones/v0.16.0-ROADMAP.md) for full deta
 - [x] **Phase 93.1: Parallel Integration Test Runner and Coherent Coverage Merging** - Run isolated integration test files in bounded parallel workers while preserving deterministic output, accurate failure reporting, and one coherent merged coverage result. (completed 2026-05-16)
 - [x] **Phase 94: v0.18.0 Docs and Release Prep** - Document `files.sync`, `git-stacks files status|pull|push`, forge-source workspace creation, validation limits, and prepare the user-facing v0.18.0 release artifacts. (completed 2026-05-16)
 
-### 🟡 v0.19.0 Operator Control Center (Release Candidate)
+### 🟡 v0.19.0 Operator Control Center (Release Candidate Follow-up)
 
-**Milestone Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
+**Milestone Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, useful workspace actions, and RC follow-up fixes needed before final release.
 
 - [x] **Phase 95: Manual Workspace Commands** - Add named, inspectable, manually-triggered template/workspace commands that reuse existing hook/env/cwd execution machinery without becoming lifecycle hooks. (completed 2026-05-17)
 - [x] **Phase 96: Workspace Notes** - Add lightweight append-only workspace notes stored outside managed project repos, with CLI surfaces and durable operator metadata. (completed 2026-05-17)
 - [x] **Phase 97: File Status View Model for TUI** - Expose a reusable TUI-facing file config/status model from the v0.18.0 files status behavior, covering copy, symlink, and sync mappings. (completed 2026-05-17)
 - [x] **Phase 98: Grounded Dashboard Control Center** - Apply the grounded TUI reset: denser list/detail layout, grouped workspace scanning, structured detail sections, notes and file status summaries, and focused terminal snapshots. (completed 2026-05-17)
 - [x] **Phase 99: Dashboard Actions and Correctness Polish** - Add repo edit, linked issue opening, manual command actions, and action-menu regression coverage. (completed 2026-05-17)
+- [ ] **Phase 100: Manager TUI Command Output Containment** - Buffer stdout/stderr from TUI-launched commands, show bounded output in the manager UI, and restore the OpenTUI screen cleanly afterward.
+- [ ] **Phase 101: Completion Completeness Repair** - Audit and repair generated bash/zsh/fish completions for current command families and dynamic completion positions.
+- [ ] **Phase 102: Workspace Root Auto-detection** - Extend workspace resolution so commands work when invoked from the workspace root directory as well as from repo worktrees.
+- [ ] **Phase 103: v0.19.0 Final Release Validation** - Update final release artifacts and run focused RC follow-up plus existing release gates before final tagging.
 
 ## Phase Details
 
@@ -363,6 +367,84 @@ Plans:
 **Cross-cutting constraints:**
 
 - D-13: rollback progress visibility is excluded from this plan.
+
+### Phase 100: Manager TUI Command Output Containment
+
+**Goal**: Commands launched from `git-stacks manage` can emit stdout/stderr without corrupting the manager screen.
+**Depends on**: Phase 99
+**Requirements**: TOUT-01, TOUT-02, TOUT-03, TOUT-04
+**Success Criteria** (what must be TRUE):
+
+  1. TUI action paths that run workspace/manual/opening commands route process stdout and stderr through a captured output channel instead of writing raw bytes behind the OpenTUI screen.
+  2. The manager shows command output in a bounded viewer or modal with command label, running/exit status, recent output, and clear close/back behavior.
+  3. Closing the output viewer restores the same selected tab, row, action context, footer hints, and alternate-screen rendering without visual corruption.
+  4. Long output, stderr-only output, no-output success, nonzero exit, and interrupted/cancelled commands have predictable UI states and test coverage.
+  5. Focused TUI/component tests or terminal snapshots prove that stdout/stderr-producing commands do not damage the screen and that the post-command UI is restored.
+
+**Plans**: 3 plans
+
+Plans:
+
+- [ ] `100-01-PLAN.md` - Inventory TUI-launched command paths and define captured-output state
+- [ ] `100-02-PLAN.md` - Output viewer/modal rendering, focus restoration, and command lifecycle wiring
+- [ ] `100-03-PLAN.md` - Noisy command, failure, restore, and regression coverage
+
+### Phase 101: Completion Completeness Repair
+
+**Goal**: Shell completions match the current CLI surface and stay covered when command families evolve.
+**Depends on**: Phase 100
+**Requirements**: COMP-01, COMP-02, COMP-03
+**Success Criteria** (what must be TRUE):
+
+  1. Bash, zsh, and fish completion generators include current v0.18/v0.19 command families and nested subcommands, including `files`, `command`, `notes`, forge/source-adjacent commands, and manager/support surfaces where applicable.
+  2. Dynamic completion inference remains position-aware for workspace, template, repo, manual command names, integrations, fixed enum choices, and optional positional args.
+  3. Completion output avoids repeated already-satisfied positional args and preserves previous fixes for parent flag leakage and optional positional handling.
+  4. Tests compare generated completion behavior against the live Commander command tree or another machine-readable command inventory so missing commands are caught before release.
+
+**Plans**: 2 plans
+
+Plans:
+
+- [ ] `101-01-PLAN.md` - Completion inventory audit and generator repair
+- [ ] `101-02-PLAN.md` - Bash/zsh/fish regression coverage and release-gate wiring
+
+### Phase 102: Workspace Root Auto-detection
+
+**Goal**: Optional-workspace commands resolve the current workspace when run from the workspace root directory, not only from inside a repo worktree.
+**Depends on**: Phase 101
+**Requirements**: WDET-01, WDET-02, WDET-03
+**Success Criteria** (what must be TRUE):
+
+  1. `detectWorkspaceFromCwd()` or the shared resolver recognizes a workspace root path as the matching workspace when the cwd is the root itself.
+  2. Existing deepest-match behavior still prefers nested repo worktree paths over broader workspace-root matches, with prefix-collision protection intact.
+  3. Dir repos, trunk paths, missing worktrees, and workspace paths with overlapping prefixes are covered by tests.
+  4. Commands that accept optional `[workspace]` arguments use one documented resolution order: explicit arg, cwd detection, then `GS_WORKSPACE_NAME` where that command already supports the env fallback.
+  5. Focused real-fixture tests prove workspace-root detection through representative user-facing commands, not only direct unit calls.
+
+**Plans**: 2 plans
+
+Plans:
+
+- [ ] `102-01-PLAN.md` - Resolver behavior, edge cases, and command integration audit
+- [ ] `102-02-PLAN.md` - Real-fixture workspace-root detection tests and docs alignment
+
+### Phase 103: v0.19.0 Final Release Validation
+
+**Goal**: Final v0.19.0 release artifacts reflect the RC follow-up fixes and the final gate proves the release is ready.
+**Depends on**: Phase 102
+**Requirements**: REL-01, REL-02
+**Success Criteria** (what must be TRUE):
+
+  1. CHANGELOG, README/help text where relevant, package metadata, and release notes describe the final v0.19.0 behavior including RC follow-up fixes.
+  2. Focused verification covers manager command output containment, completion generation, workspace-root detection, and the previously prepared v0.19.0 release smoke path.
+  3. `bun run verify` or the current canonical release gate passes, or any unrelated pre-existing failures are documented with evidence and a release decision.
+  4. The final release handoff clearly distinguishes the older `0.19.0-rc.1` artifact from the final `0.19.0` tag/publish path.
+
+**Plans**: 1 plan
+
+Plans:
+
+- [ ] `103-01-PLAN.md` - Final docs, package metadata, release gate, and tag handoff
 
 ### Phase 89: Files Sync Schema and Materialization
 
@@ -931,6 +1013,10 @@ Plans:
 | 97. File Status View Model for TUI | v0.19.0 | 2/2 | Complete    | 2026-05-17 |
 | 98. Grounded Dashboard Control Center | v0.19.0 | 3/3 | Complete   | 2026-05-17 |
 | 99. Dashboard Actions and Correctness Polish | v0.19.0 | 4/4 | Complete    | 2026-05-17 |
+| 100. Manager TUI Command Output Containment | v0.19.0 | 0/3 | Planned | - |
+| 101. Completion Completeness Repair | v0.19.0 | 0/2 | Planned | - |
+| 102. Workspace Root Auto-detection | v0.19.0 | 0/2 | Planned | - |
+| 103. v0.19.0 Final Release Validation | v0.19.0 | 0/1 | Planned | - |
 
 ## Backlog
 

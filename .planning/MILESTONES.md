@@ -1,8 +1,8 @@
 # Milestones
 
-## v0.19.0-rc.1 Operator Control Center (Release Candidate: 2026-05-17)
+## v0.19.0 Operator Control Center (Release Candidate Follow-up Active)
 
-**Phases completed:** 5 phases, 15 plans, 22 tasks
+**Phases completed:** 5 phases complete; 4 RC follow-up phases planned
 
 **Key accomplishments:**
 
@@ -21,6 +21,8 @@
 **Release candidate boundary:**
 
 - Package metadata and tag target are `0.19.0-rc.1` / `v0.19.0-rc.1`; final `0.19.0` tagging remains separate after RC validation.
+- RC validation on 2026-05-25 found follow-up defects: manager TUI command output can corrupt the screen, shell completions are incomplete, and workspace auto-detection does not work from the workspace root directory.
+- Active follow-up phases are 100-103: manager TUI command output containment, completion completeness repair, workspace-root auto-detection, and final v0.19.0 release validation.
 - Dashboard rollback progress visibility remains deferred as backlog work and was explicitly excluded from Phase 99.
 - Known deferred artifacts at close: 6 acknowledged open items, recorded in `.planning/STATE.md`.
 
