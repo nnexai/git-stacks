@@ -1,8 +1,9 @@
 import type { IssueCandidate } from "./types"
+import type { CommandOutputLine } from "./command-output"
 
 export type IssueOpenResult = {
   exitCode: number
-  lines: string[]
+  lines: CommandOutputLine[]
 }
 
 export const issueTrackerLabels: Record<IssueCandidate["tracker"], string> = {
@@ -31,6 +32,9 @@ export async function openWorkspaceIssue(
     new Response(proc.stderr).text(),
     proc.exited,
   ])
-  const lines = [...stdout.split("\n"), ...stderr.split("\n")].map(line => line.trim()).filter(Boolean)
+  const lines: CommandOutputLine[] = [
+    ...stdout.split("\n").map(line => ({ text: line.trim(), stream: "stdout" as const })),
+    ...stderr.split("\n").map(line => ({ text: line.trim(), stream: "stderr" as const })),
+  ].filter(line => line.text)
   return { exitCode, lines }
 }

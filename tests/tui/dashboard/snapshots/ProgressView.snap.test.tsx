@@ -11,8 +11,14 @@ describe("ProgressView snapshots", () => {
       () => (
         <ProgressView
           title="Creating workspace"
-          lines={["Cloned repo-a", "Cloned repo-b"]}
-          done={true}
+          output={{
+            status: "success",
+            omittedCount: 0,
+            lines: [
+              { text: "Cloned repo-a", stream: "system" },
+              { text: "Cloned repo-b", stream: "system" },
+            ],
+          }}
         />
       ),
       renderOpts
@@ -27,8 +33,14 @@ describe("ProgressView snapshots", () => {
       () => (
         <ProgressView
           title="Creating workspace"
-          lines={["Cloning repo-a", "Cloning repo-b"]}
-          done={false}
+          output={{
+            status: "running",
+            omittedCount: 0,
+            lines: [
+              { text: "Cloning repo-a", stream: "system" },
+              { text: "Cloning repo-b", stream: "system" },
+            ],
+          }}
         />
       ),
       renderOpts
@@ -40,5 +52,40 @@ describe("ProgressView snapshots", () => {
     expect(frame).toContain("Working")
     expect(frame).toContain("Cloning repo-a")
     expect(frame).toContain("Cloning repo-b")
+  })
+
+  test("renders empty running state", async () => {
+    const { renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <ProgressView
+          title="Running command verify"
+          output={{ status: "running", omittedCount: 0, lines: [] }}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    expect(captureCharFrame()).toContain("No command output yet")
+  })
+
+  test("renders omitted marker and stderr failure state", async () => {
+    const { renderOnce, captureCharFrame } = await testRender(
+      () => (
+        <ProgressView
+          title="Running command verify"
+          output={{
+            status: "failed",
+            omittedCount: 12,
+            lines: [{ text: "stderr detail", stream: "stderr" }],
+          }}
+        />
+      ),
+      renderOpts
+    )
+    await renderOnce()
+    const frame = captureCharFrame()
+    expect(frame).toContain("Command failed")
+    expect(frame).toContain("... 12 earlier lines omitted ...")
+    expect(frame).toContain("stderr detail")
   })
 })

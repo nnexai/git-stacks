@@ -59,6 +59,13 @@ import type {
 import { matchesLabels } from "../../lib/labels"
 import { issueTrackerLabels, openWorkspaceIssue } from "./issue-actions"
 import { listManualCommands, runManualCommand } from "../../lib/workspace-command"
+import {
+  appendCommandOutput,
+  initialCommandOutputState,
+  type CommandOutputLine,
+  type CommandOutputState,
+  type CommandOutputStatus,
+} from "./command-output"
 
 export function matchesWorkspaceFilter(workspace: Workspace, filter: string): boolean {
   const rawFilter = filter.trim()
@@ -177,8 +184,7 @@ export default function App() {
   const [selected, setSelected] = createSignal<Set<number>>(new Set())
   const [reposSelected, setReposSelected] = createSignal<Set<number>>(new Set())
   const [templatesSelected, setTemplatesSelected] = createSignal<Set<number>>(new Set())
-  const [progressLines, setProgressLines] = createSignal<string[]>([])
-  const [progressDone, setProgressDone] = createSignal(false)
+  const [commandOutput, setCommandOutput] = createSignal<CommandOutputState>(initialCommandOutputState())
   const [helpOpen, setHelpOpen] = createSignal(false)
   const [messagesOpen, setMessagesOpen] = createSignal(false)
   const [messagesWorkspace, setMessagesWorkspace] = createSignal("")
@@ -374,6 +380,45 @@ export default function App() {
     setCursor(c => Math.min(c, Math.max(0, entriesList.length - 1)))
   }
 
+  function resetCommandOutput(status: CommandOutputStatus = "running") {
+    setCommandOutput(initialCommandOutputState(status))
+  }
+
+  function appendCommandLine(line: CommandOutputLine) {
+    setCommandOutput(prev => appendCommandOutput(prev, line))
+  }
+
+  function appendSystemLine(text: string) {
+    appendCommandLine({ text, stream: "system" })
+  }
+
+  function finishCommandOutput(status: CommandOutputStatus) {
+    setCommandOutput(prev => ({ ...prev, status }))
+  }
+
+  async function drainCommandStream(
+    stream: ReadableStream<Uint8Array> | null,
+    outputStream: "stdout" | "stderr",
+  ) {
+    if (!stream) return
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    let buf = ""
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        if (buf) appendCommandLine({ text: buf, stream: outputStream })
+        break
+      }
+      buf += decoder.decode(value)
+      const lines = buf.split("\n")
+      buf = lines.pop() ?? ""
+      for (const line of lines) {
+        if (line) appendCommandLine({ text: line, stream: outputStream })
+      }
+    }
+  }
+
   function buildSummary(result: SyncResult): { text: string; color: "green" | "yellow" | "red" } {
     const ns = result.synced.length
     const nsk = result.skipped.filter(s => s.reason.includes("conflict")).length
@@ -400,27 +445,18 @@ export default function App() {
 
   async function handleRun(name: string) {
     if (!name) return
-    setProgressLines([])
-    setProgressDone(false)
+    resetCommandOutput()
     setView({ view: "progress", message: `Running ${name}...` })
     const proc = Bun.spawn(["git-stacks", "run", name], {
       stdout: "pipe",
-      stderr: "inherit",
+      stderr: "pipe",
     })
-    const reader = proc.stdout.getReader()
-    const decoder = new TextDecoder()
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const text = decoder.decode(value)
-        for (const line of text.split("\n")) {
-          if (line) setProgressLines(prev => [...prev, line])
-        }
-      }
-    } catch {}
-    await proc.exited
-    setProgressDone(true)
+    const [exitCode] = await Promise.all([
+      proc.exited,
+      drainCommandStream(proc.stdout, "stdout"),
+      drainCommandStream(proc.stderr, "stderr"),
+    ])
+    finishCommandOutput(exitCode === 0 ? "success" : "failed")
   }
 
   async function runAction(action: Action, index: number) {
@@ -457,26 +493,24 @@ export default function App() {
     }
 
     if (action === "open") {
-      setProgressLines([])
-      setProgressDone(false)
+      resetCommandOutput()
       setView({ view: "progress", message: `Opening ${name}...` })
       const result = await openWorkspace(name, { captured: true }, (msg) =>
-        setProgressLines((prev) => [...prev, msg])
+        appendSystemLine(msg)
       )
-      if (!result.ok) setProgressLines((prev) => [...prev, `ERROR: ${result.error}`])
-      setProgressDone(true)
+      if (!result.ok) appendSystemLine(`ERROR: ${result.error}`)
+      finishCommandOutput(result.ok ? "success" : "failed")
       return
     }
 
     if (action === "close") {
-      setProgressLines([])
-      setProgressDone(false)
+      resetCommandOutput()
       setView({ view: "progress", message: `Closing ${name}...` })
       const result = await closeWorkspace(name, { captured: true }, (msg) =>
-        setProgressLines((prev) => [...prev, msg])
+        appendSystemLine(msg)
       )
-      if (!result.ok) setProgressLines((prev) => [...prev, `ERROR: ${result.error}`])
-      setProgressDone(true)
+      if (!result.ok) appendSystemLine(`ERROR: ${result.error}`)
+      finishCommandOutput(result.ok ? "success" : "failed")
       return
     }
 
@@ -512,12 +546,11 @@ export default function App() {
 
     const names = indicesToProcess.map((i) => filteredEntries()[i]?.workspace.name).filter(Boolean)
 
-    setProgressLines([])
-    setProgressDone(false)
+    resetCommandOutput()
     setView({ view: "progress", message: `${action}: ${names.join(", ")}` })
 
     const onProgress = (msg: string) =>
-      setProgressLines((prev) => [...prev, msg])
+      appendSystemLine(msg)
 
     for (const wsName of names) {
       if (!wsName) continue
@@ -543,7 +576,7 @@ export default function App() {
     }
 
     if (batch) setSelected(new Set<number>())
-    setProgressDone(true)
+    finishCommandOutput("success")
   }
 
   async function executeSync(name: string) {
@@ -615,33 +648,28 @@ export default function App() {
   }
 
   async function executeIssueOpen(workspaceName: string, candidate: IssueCandidate) {
-    setProgressLines([])
-    setProgressDone(false)
+    resetCommandOutput()
     setView({ view: "progress", message: `Opening ${candidate.label}...` })
     const result = await openWorkspaceIssue(workspaceName, candidate)
-    setProgressLines(prev => [
-      ...prev,
-      ...result.lines,
-      result.exitCode === 0
-        ? `Opened ${candidate.label}.`
-        : `ERROR: ${candidate.label} open failed with exit code ${result.exitCode}.`,
-    ])
-    setProgressDone(true)
+    for (const line of result.lines) appendCommandLine(line)
+    appendSystemLine(result.exitCode === 0
+      ? `Opened ${candidate.label}.`
+      : `ERROR: ${candidate.label} open failed with exit code ${result.exitCode}.`)
+    finishCommandOutput(result.exitCode === 0 ? "success" : "failed")
   }
 
   async function executeManualCommand(workspace: Workspace, commandName: string) {
-    setProgressLines([])
-    setProgressDone(false)
+    resetCommandOutput()
     setView({ view: "progress", message: `Running command ${commandName}...` })
-    const result = await runManualCommand(workspace, commandName, { config: readGlobalConfig() })
+    const result = await runManualCommand(workspace, commandName, {
+      config: readGlobalConfig(),
+      onOutput: (output) => appendCommandLine({ text: output.line, stream: output.stream }),
+    })
     const failed = result.failedCommand ? ` Failed command: ${result.failedCommand}.` : ""
-    setProgressLines(prev => [
-      ...prev,
-      result.exitCode === 0
-        ? `Command ${commandName} completed.`
-        : `ERROR: Command ${commandName} failed with exit code ${result.exitCode}.${failed}`,
-    ])
-    setProgressDone(true)
+    appendSystemLine(result.exitCode === 0
+      ? `Command ${commandName} completed.`
+      : `ERROR: Command ${commandName} failed with exit code ${result.exitCode}.${failed}`)
+    finishCommandOutput(result.exitCode === 0 ? "success" : "failed")
   }
 
   function buildIssueCandidates(workspace: Workspace | undefined): IssueCandidate[] {
@@ -703,17 +731,16 @@ export default function App() {
     if (v.purpose === "rename") {
       const oldName = filteredEntries()[v.index]?.workspace.name
       if (!oldName) { setView({ view: "list" }); return }
-      setProgressLines([])
-      setProgressDone(false)
+      resetCommandOutput()
       setView({ view: "progress", message: `Renaming ${oldName} → ${trimmed}...` })
       const result = await renameWorkspace(oldName, trimmed, {}, (msg) =>
-        setProgressLines(prev => [...prev, msg])
+        appendSystemLine(msg)
       )
       if (!result.ok) {
-        setProgressLines(prev => [...prev, `ERROR: ${result.error}`])
-        setProgressDone(true)
+        appendSystemLine(`ERROR: ${result.error}`)
+        finishCommandOutput("failed")
       } else {
-        setProgressDone(true)
+        finishCommandOutput("success")
         reload()
         setView({ view: "list" })
       }
@@ -1173,7 +1200,7 @@ export default function App() {
     // dialog is active. These must come before tab switching so 1/2/3 don't leak through.
 
     // Progress view — any key returns to list
-    if (v.view === "progress" && progressDone()) {
+    if (v.view === "progress" && commandOutput().status !== "running") {
       reload()
       setView({ view: "list" })
       clampCursor()
@@ -1546,8 +1573,7 @@ export default function App() {
       <Show when={!helpOpen() && !messagesOpen() && view().view === "progress"}>
         <ProgressView
           title={(view() as any).message}
-          lines={progressLines()}
-          done={progressDone()}
+          output={commandOutput()}
         />
       </Show>
 

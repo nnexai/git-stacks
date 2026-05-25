@@ -39,12 +39,15 @@ const registryValidateMock = mock(() => ({ ok: true }))
 const editRegistryYamlMock = mock(() => ({ path: "/tmp/registry.yml", validate: registryValidateMock }))
 const openWorkspaceIssueMock = mock(async (_workspaceName: string, candidate: { label: string }) => ({
   exitCode: 0,
-  lines: [`opened ${candidate.label}`],
+  lines: [{ text: `opened ${candidate.label}`, stream: "stdout" as const }],
 }))
-const runManualCommandMock = mock(async (_workspace: unknown, _commandName: string) => ({
+const runManualCommandMock = mock(async (_workspace: unknown, _commandName: string, opts?: { onOutput?: (output: { line: string; stream: "stdout" | "stderr" }) => void }) => {
+  opts?.onOutput?.({ line: "command stdout", stream: "stdout" })
+  return {
   exitCode: 0,
   plan: [],
-}))
+  }
+})
 
 // Inline template fixture
 const templateFixture = {
@@ -354,7 +357,7 @@ describe("integration: action menu dispatch", () => {
     workspaceSettings = { integrations: { github: { issue: "ABC-123" } } }
     openWorkspaceIssueMock.mockResolvedValueOnce({
       exitCode: 7,
-      lines: ["tracker unavailable"],
+      lines: [{ text: "tracker unavailable", stream: "stderr" }],
     })
     const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <App />, renderOpts
@@ -403,8 +406,12 @@ describe("integration: action menu dispatch", () => {
 
     expect(runManualCommandMock).toHaveBeenCalled()
     expect(runManualCommandMock.mock.calls[0][1]).toBe("verify")
+    expect(runManualCommandMock.mock.calls[0][2]).toEqual(expect.objectContaining({
+      onOutput: expect.any(Function),
+    }))
     frame = captureCharFrame()
     expect(frame).toContain("Running command verify")
+    expect(frame).toContain("command stdout")
     expect(frame).toContain("Command verify completed.")
   })
 
@@ -433,6 +440,44 @@ describe("integration: action menu dispatch", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("ERROR: Command verify failed with exit code 42.")
     expect(frame).toContain("Failed command: bun test.")
+  })
+
+  test("running manual command cannot be closed until completion and returns to workspaces", async () => {
+    workspaceCommands = { verify: "bun run verify" }
+    let resolveCommand: ((value: { exitCode: number; plan: unknown[] }) => void) | undefined
+    runManualCommandMock.mockImplementationOnce(async (_workspace, _commandName, opts?: { onOutput?: (output: { line: string; stream: "stdout" | "stderr" }) => void }) => {
+      opts?.onOutput?.({ line: "line-001", stream: "stdout" })
+      return await new Promise(resolve => { resolveCommand = resolve })
+    })
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    mockInput.pressKey("d")
+    await renderOnce()
+    mockInput.pressEnter()
+    await renderOnce()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+
+    mockInput.pressKey("a")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("Running command verify")
+
+    resolveCommand?.({ exitCode: 0, plan: [] })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    await renderOnce()
+    mockInput.pressKey("a")
+    await renderOnce()
+
+    const frame = captureCharFrame()
+    expect(frame).toContain("Workspaces")
+    expect(frame).toContain("test-ws")
+    expect(frame).not.toContain("Running command verify")
   })
 })
 
