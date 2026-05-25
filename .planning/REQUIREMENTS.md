@@ -9,10 +9,10 @@ These requirements extend the unreleased v0.19.0 Operator Control Center after `
 
 ### Manager TUI Output Containment
 
-- [ ] **TOUT-01**: Commands launched from `git-stacks manage` that write stdout or stderr do not corrupt, scroll, or displace the OpenTUI screen.
-- [ ] **TOUT-02**: TUI-launched command output is captured into a bounded viewer or modal that preserves command ordering, exit status, and enough recent output for diagnosis.
+- [x] **TOUT-01**: Commands launched from `git-stacks manage` that write stdout or stderr do not corrupt, scroll, or displace the OpenTUI screen.
+- [x] **TOUT-02**: TUI-launched command output is captured into a bounded viewer or modal that preserves command ordering, exit status, and enough recent output for diagnosis.
 - [ ] **TOUT-03**: When the output viewer closes, the manager UI restores cleanly, including focus, selected tab/list item, footer hints, and alternate-screen state.
-- [ ] **TOUT-04**: Long-running, failing, noisy, and no-output commands all produce predictable TUI states without leaking raw process output behind the dashboard.
+- [x] **TOUT-04**: Long-running, failing, noisy, and no-output commands all produce predictable TUI states without leaking raw process output behind the dashboard.
 
 ### Completion Completeness
 
