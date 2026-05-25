@@ -1015,7 +1015,7 @@ Plans:
 | 99. Dashboard Actions and Correctness Polish | v0.19.0 | 4/4 | Complete    | 2026-05-17 |
 | 100. Manager TUI Command Output Containment | v0.19.0 | 3/3 | Complete    | 2026-05-25 |
 | 101. Completion Completeness Repair | v0.19.0 | 2/2 | Complete   | 2026-05-25 |
-| 102. Workspace Root Auto-detection | v0.19.0 | 0/2 | Planned | - |
+| 102. Workspace Root Auto-detection | v0.19.0 | 1/2 | In Progress|  |
 | 103. v0.19.0 Final Release Validation | v0.19.0 | 0/1 | Planned | - |
 
 ## Backlog

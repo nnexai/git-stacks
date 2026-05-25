@@ -22,9 +22,9 @@ These requirements extend the unreleased v0.19.0 Operator Control Center after `
 
 ### Workspace Root Auto-detection
 
-- [ ] **WDET-01**: Workspace auto-detection works when the current directory is the workspace root directory, not only when inside an individual repo worktree.
-- [ ] **WDET-02**: Workspace auto-detection keeps existing deepest-repo matching behavior for nested repo paths, trunk paths, dir repos, and prefix-collision cases.
-- [ ] **WDET-03**: Commands that accept optional `[workspace]` arguments share one documented resolution order across explicit arg, cwd detection, and `GS_WORKSPACE_NAME`.
+- [x] **WDET-01**: Workspace auto-detection works when the current directory is the workspace root directory, not only when inside an individual repo worktree.
+- [x] **WDET-02**: Workspace auto-detection keeps existing deepest-repo matching behavior for nested repo paths, trunk paths, dir repos, and prefix-collision cases.
+- [x] **WDET-03**: Commands that accept optional `[workspace]` arguments share one documented resolution order across explicit arg, cwd detection, and `GS_WORKSPACE_NAME`.
 
 ### Final Release Readiness
 
