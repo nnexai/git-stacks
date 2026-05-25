@@ -5,6 +5,7 @@ import { tmpdir } from "os"
 import { collectVerifyGateReport, formatVerifyGateReport } from "../../scripts/verify-gates"
 import type { E2EInventoryItem } from "../e2e-inventory"
 import { FUNCTIONAL_READINESS_AREAS } from "../functional-readiness-inventory"
+import type { CompletionCoverageReport } from "../../src/lib/completion-audit"
 
 const tempRoots: string[] = []
 
@@ -74,6 +75,22 @@ function item(overrides: Partial<E2EInventoryItem> = {}): E2EInventoryItem {
   }
 }
 
+function completionCoverage(
+  missing: Partial<Record<"bash" | "zsh" | "fish", string[]>> = {}
+): CompletionCoverageReport {
+  const paths = ["new", "files status"]
+  const shells = {
+    bash: { shell: "bash" as const, checkedPaths: paths, missingPaths: missing.bash ?? [] },
+    zsh: { shell: "zsh" as const, checkedPaths: paths, missingPaths: missing.zsh ?? [] },
+    fish: { shell: "fish" as const, checkedPaths: paths, missingPaths: missing.fish ?? [] },
+  }
+  return {
+    ok: Object.values(shells).every((report) => report.missingPaths.length === 0),
+    paths,
+    shells,
+  }
+}
+
 describe("verify gate collector", () => {
   test("reports every live in-scope command missing from the canonical inventory", () => {
     const root = makeRoot()
@@ -84,6 +101,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new", "unmapped-one", "unmapped-two"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -105,6 +123,7 @@ describe("verify gate collector", () => {
         item({ id: "workspace.status", commands: ["status"], mappedTests: [] }),
         item({ id: "workspace.run", commands: ["run"], mappedTests: ["tests/commands/missing.test.ts"] }),
       ],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -125,6 +144,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -144,6 +164,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report).toMatchObject({
@@ -168,6 +189,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -189,6 +211,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -211,6 +234,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -239,6 +263,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -263,6 +288,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new", "unmapped"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
     })
 
     expect(report.ok).toBe(false)
@@ -298,6 +324,7 @@ describe("verify gate collector", () => {
       root,
       liveCommands: ["new"],
       inventory: [item()],
+      completionCoverage: completionCoverage(),
       functionalReadinessAreas: [
         {
           id: "accepted.failure-matrix",
@@ -325,5 +352,34 @@ describe("verify gate collector", () => {
     expect(report.functionalReadiness.groups["deferred-external-environment"].map((area) => area.id)).toEqual([
       "deferred.live-forge",
     ])
+  })
+
+  test("reports completion drift per shell and aggregates with existing findings", () => {
+    const root = makeRoot()
+    writeCoverageArtifacts(root)
+    writeTest(root, "tests/commands/new.test.ts")
+
+    const report = collectVerifyGateReport({
+      root,
+      liveCommands: ["new", "unmapped"],
+      inventory: [item()],
+      completionCoverage: completionCoverage({
+        bash: ["files status"],
+        zsh: ["command run"],
+        fish: ["notes add"],
+      }),
+    })
+
+    expect(report.ok).toBe(false)
+    expect(report.inventoryDrift.missingFromInventory).toEqual(["unmapped"])
+    expect(report.completionCoverage.shells.bash.missingPaths).toEqual(["files status"])
+    const formatted = formatVerifyGateReport(report)
+    expect(formatted).toContain("Completion coverage drift:")
+    expect(formatted).toContain("bash:")
+    expect(formatted).toContain("files status")
+    expect(formatted).toContain("zsh:")
+    expect(formatted).toContain("command run")
+    expect(formatted).toContain("fish:")
+    expect(formatted).toContain("notes add")
   })
 })

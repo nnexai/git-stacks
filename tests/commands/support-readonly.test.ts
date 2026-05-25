@@ -48,7 +48,7 @@ describe("support readonly commands", () => {
       expect(result.stderr).toBe("")
       expect(result.stdout).toContain("_git_stacks_complete()")
       expect(result.stdout).toContain("complete -F _git_stacks_complete git-stacks")
-      for (const marker of ["env", "paths", "integration", "message"]) {
+      for (const marker of ["command", "notes", "files", "env", "paths", "integration", "message"]) {
         expect(result.stdout).toContain(marker)
       }
     } finally {
@@ -65,7 +65,7 @@ describe("support readonly commands", () => {
       expect(result.stderr).toBe("")
       expect(result.stdout).toContain("#compdef git-stacks")
       expect(result.stdout).toContain("_git_stacks_top_commands")
-      for (const marker of ["env", "paths", "integration", "message"]) {
+      for (const marker of ["command", "notes", "files", "env", "paths", "integration", "message"]) {
         expect(result.stdout).toContain(marker)
       }
     } finally {
@@ -82,7 +82,7 @@ describe("support readonly commands", () => {
       expect(result.stderr).toBe("")
       expect(result.stdout).toContain("function git-stacks")
       expect(result.stdout).toContain("complete -c git-stacks")
-      for (const marker of ["env", "paths", "integration", "message"]) {
+      for (const marker of ["command", "notes", "files", "env", "paths", "integration", "message"]) {
         expect(result.stdout).toContain(marker)
       }
     } finally {

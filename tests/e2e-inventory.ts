@@ -3,7 +3,7 @@ export type E2EFlowType = "command" | "user-flow" | "library-backed-flow"
 
 export type E2EInventoryItem = {
   id: string
-  family: "workspace" | "template" | "repo" | "label" | "message" | "support" | "exclude"
+  family: "workspace" | "template" | "repo" | "label" | "message" | "notes" | "files" | "support" | "exclude"
   flowType: E2EFlowType
   title: string
   commands: readonly string[]
@@ -78,6 +78,26 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     scopeStatus: "in-scope",
     mappedTests: ["tests/commands/command.test.ts"],
     rationale: "Manual command resolution/listing and execution semantics are covered by dedicated subprocess tests.",
+  },
+  {
+    id: "workspace.notes",
+    family: "notes",
+    flowType: "command",
+    title: "Workspace notes command family",
+    commands: ["notes add", "notes list", "notes clear"],
+    scopeStatus: "in-scope",
+    mappedTests: ["tests/commands/notes.test.ts"],
+    rationale: "Workspace note add/list/clear behavior is covered through isolated subprocess tests with explicit workspace, cwd, env, limit, clear, and corrupt-store cases.",
+  },
+  {
+    id: "workspace.files-sync",
+    family: "files",
+    flowType: "command",
+    title: "Workspace file sync command family",
+    commands: ["files status", "files pull", "files push"],
+    scopeStatus: "in-scope",
+    mappedTests: ["tests/commands/files.test.ts", "tests/commands/release-rc.test.ts"],
+    rationale: "Files status/pull/push behavior is covered through dedicated command tests and the RC smoke path for conservative explicit sync behavior.",
   },
   {
     id: "workspace.paths",

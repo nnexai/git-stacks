@@ -3,16 +3,11 @@ import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { Command } from "commander"
 import { E2E_INVENTORY, type E2EInventoryItem } from "../tests/e2e-inventory"
-import { registerWorkspaceCommands } from "../src/commands/workspace"
-import { configCommand } from "../src/commands/config"
-import { createCompletionCommand } from "../src/commands/completion"
-import { doctorCommand } from "../src/commands/doctor"
-import { repoCommand } from "../src/commands/repo"
-import { templateCommand } from "../src/commands/template"
-import { messageCommand } from "../src/commands/message"
-import { installCommand } from "../src/commands/install"
-import { integrationCommand } from "../src/commands/integration"
-import { labelCommand } from "../src/commands/label"
+import { buildCliProgram } from "../src/lib/cli-program"
+import {
+  auditCompletionCoverage,
+  type CompletionCoverageReport,
+} from "../src/lib/completion-audit"
 import {
   collectFunctionalCoverageReadiness,
   type FunctionalCoverageReadinessReport,
@@ -43,6 +38,7 @@ export type VerifyGateReport = {
   missingMappedTests: MissingMappedTest[]
   coverageArtifacts: CoverageArtifactProblem[]
   coverageSentinels: CoverageSentinelProblem[]
+  completionCoverage: CompletionCoverageReport
   functionalReadiness: FunctionalCoverageReadinessReport
 }
 
@@ -50,6 +46,7 @@ type CollectOptions = {
   root?: string
   inventory?: readonly E2EInventoryItem[]
   liveCommands?: readonly string[]
+  completionCoverage?: CompletionCoverageReport
   functionalReadinessAreas?: readonly FunctionalReadinessArea[]
 }
 
@@ -64,20 +61,7 @@ const COVERAGE_SENTINELS = [
 ] as const
 
 function buildProgram(): Command {
-  const program = new Command()
-  program.name("git-stacks").enablePositionalOptions()
-  registerWorkspaceCommands(program)
-  program.addCommand(configCommand)
-  program.command("manage").description("Interactive workspace dashboard")
-  program.addCommand(doctorCommand)
-  program.addCommand(repoCommand)
-  program.addCommand(templateCommand)
-  program.addCommand(messageCommand)
-  program.addCommand(installCommand)
-  program.addCommand(integrationCommand)
-  program.addCommand(labelCommand)
-  program.addCommand(createCompletionCommand(program))
-  return program
+  return buildCliProgram("git-stacks")
 }
 
 function collectCommandPaths(command: Command, parents: string[] = []): string[] {
@@ -273,6 +257,7 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
   const missingMappedTests = collectMissingMappedTests(root, inventory)
   const coverageArtifacts = collectCoverageArtifactProblems(root)
   const coverageSentinels = collectCoverageSentinelProblems(root)
+  const completionCoverage = options.completionCoverage ?? auditCompletionCoverage(buildProgram())
   const functionalReadiness = collectFunctionalCoverageReadiness({
     root,
     areas: options.functionalReadinessAreas,
@@ -285,6 +270,7 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
       missingMappedTests.length === 0 &&
       coverageArtifacts.length === 0 &&
       coverageSentinels.length === 0 &&
+      completionCoverage.ok &&
       functionalReadiness.ok,
     inventoryDrift: {
       missingFromInventory,
@@ -293,6 +279,7 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
     missingMappedTests,
     coverageArtifacts,
     coverageSentinels,
+    completionCoverage,
     functionalReadiness,
   }
 }
@@ -336,6 +323,18 @@ export function formatVerifyGateReport(report: VerifyGateReport): string {
     lines.push("", "Coverage sentinel problems:")
     for (const sentinel of report.coverageSentinels) {
       lines.push(`  - ${sentinel.path}: ${sentinel.problem}`)
+    }
+  }
+
+  if (!report.completionCoverage.ok) {
+    lines.push("", "Completion coverage drift:")
+    for (const shell of ["bash", "zsh", "fish"] as const) {
+      const shellReport = report.completionCoverage.shells[shell]
+      if (shellReport.missingPaths.length === 0) continue
+      lines.push(`  ${shell}:`)
+      for (const path of shellReport.missingPaths) {
+        lines.push(`    - ${path}`)
+      }
     }
   }
 
