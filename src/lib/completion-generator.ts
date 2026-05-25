@@ -35,6 +35,8 @@ const FLAG_COMPLETIONS: Record<string, DynamicCompletion> = {
 // Do NOT add message.send:--from or message.clear:--from — those sender names are freeform
 const COMMAND_FLAG_COMPLETIONS: Record<string, DynamicCompletion> = {
   "new:--from": "template",
+  "new:--template": "template",
+  "new:--repo": "repo",
 }
 
 function resolveFlagCompletion(commandPath: string, flagName: string): DynamicCompletion | undefined {

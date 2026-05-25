@@ -1,6 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import { Command, Argument, Option } from "commander"
 import { generateBash, generateZsh, generateFish } from "../../src/lib/completion-generator"
+import { buildCliProgram, collectCommandPaths } from "../../src/lib/cli-program"
 
 function buildTestProgram(): Command {
   const program = new Command()
@@ -91,6 +92,10 @@ function buildTestProgram(): Command {
     .command("new [name]")
     .description("Create a new workspace interactively")
     .option("--from <source>", "Create from template name or local repo path")
+    .option("--template <name>", "Compose from template(s)")
+    .option("--label <tag>", "Set label on workspace")
+    .option("--source <forge-url>", "Create workspace from full forge change URL")
+    .option("--repo <name>", "Resolve --source ambiguity by selecting a template repo name")
 
   // close command (should complete workspace names)
   program
@@ -621,6 +626,32 @@ describe("COMMAND_FLAG_COMPLETIONS - per-command flag completions", () => {
     )
   })
 
+  test("bash: new --template and --repo use scoped dynamic completions", () => {
+    const out = generateBash(buildTestProgram())
+    const newStart = out.indexOf("    new)")
+    const newSection = out.slice(newStart, newStart + 1400)
+    expect(newSection).toContain('"--template")')
+    expect(newSection).toContain(".config/git-stacks/templates")
+    expect(newSection).toContain('"--repo")')
+    expect(newSection).toContain("registry.yml")
+  })
+
+  test("zsh: new --template and --repo use scoped dynamic completions", () => {
+    const out = generateZsh(buildTestProgram())
+    expect(out).toContain("--template[Compose from template(s)]:template:_git_stacks_templates")
+    expect(out).toContain("--repo[Resolve --source ambiguity by selecting a template repo name]:repo:_git_stacks_repos")
+  })
+
+  test("fish: new --template and --repo use scoped dynamic completions", () => {
+    const out = generateFish(buildTestProgram())
+    expect(out).toContain(
+      "complete -c git-stacks -f -n '__fish_seen_subcommand_from new' -l template -ra \"(__git_stacks_templates)\""
+    )
+    expect(out).toContain(
+      "complete -c git-stacks -f -n '__fish_seen_subcommand_from new' -l repo -ra \"(__git_stacks_repos)\""
+    )
+  })
+
   test("message send --from has no template completion in bash", () => {
     const out = generateBash(buildTestProgram())
     // The global --from case in bash should not appear — only per-command via COMMAND_FLAG_COMPLETIONS
@@ -754,6 +785,106 @@ describe("integration nested completions (depth 3-4)", () => {
 })
 
 describe("completion audit - real program", () => {
+  test("shared CLI builder exposes current v0.18/v0.19 command paths", () => {
+    const paths = collectCommandPaths(buildCliProgram())
+    for (const path of [
+      "notes add",
+      "notes list",
+      "notes clear",
+      "files status",
+      "files pull",
+      "files push",
+      "command list",
+      "command run",
+      "integration github config show",
+      "integration github config example",
+    ]) {
+      expect(paths).toContain(path)
+    }
+  })
+
+  test("real bash output covers files, command, notes, and source-adjacent workspace flags", () => {
+    const out = generateBash(buildCliProgram())
+    expect(out).toContain('compgen -W "')
+    for (const marker of ["files", "command", "notes", "status pull push", "list run", "add list clear"]) {
+      expect(out).toContain(marker)
+    }
+    const newStart = out.indexOf("    new)")
+    const newSection = out.slice(newStart, newStart + 1800)
+    for (const flag of ["--template", "--label", "--source", "--repo"]) {
+      expect(newSection).toContain(flag)
+    }
+    expect(newSection).toContain('"--template")')
+    expect(newSection).toContain(".config/git-stacks/templates")
+    expect(newSection).toContain('"--repo")')
+    expect(newSection).toContain("registry.yml")
+    expect(out).toContain("--name")
+    expect(out).toContain("--prefix")
+  })
+
+  test("real zsh output covers files, command, notes, and source-adjacent workspace flags", () => {
+    const out = generateZsh(buildCliProgram())
+    for (const marker of [
+      "'files:Inspect and explicitly sync workspace files'",
+      "'command:List and run manual workspace commands'",
+      "'notes:Workspace operator notes'",
+      "'status:Show configured file entry status'",
+      "'pull:Copy sync source changes into workspace targets'",
+      "'push:Explicitly copy workspace target changes back to sync sources'",
+      "'list:List available manual commands'",
+      "'run:Run a manual command with pre/post resolution'",
+      "'add:Add a note for a workspace'",
+      "'clear:Clear all notes for a workspace'",
+    ]) {
+      expect(out).toContain(marker)
+    }
+    expect(out).toContain("--template[Compose from template(s) ")
+    expect(out).toContain("repeatable]:template:_git_stacks_templates")
+    expect(out).toContain("--repo[Resolve --source ambiguity by selecting a template repo name]:repo:_git_stacks_repos")
+    expect(out).toContain("--name[New workspace name (required in --non-interactive)]")
+    expect(out).toContain("--prefix[Prepend each path with a flag string")
+  })
+
+  test("real fish output covers files, command, notes, and source-adjacent workspace flags", () => {
+    const out = generateFish(buildCliProgram())
+    for (const marker of [
+      "-a files",
+      "-a command",
+      "-a notes",
+      "-a 'status'",
+      "-a 'pull'",
+      "-a 'push'",
+      "-a 'list'",
+      "-a 'run'",
+      "-a 'add'",
+      "-a 'clear'",
+    ]) {
+      expect(out).toContain(marker)
+    }
+    expect(out).toContain("-l template -ra \"(__git_stacks_templates)\"")
+    expect(out).toContain("-l repo -ra \"(__git_stacks_repos)\"")
+    expect(out).toContain("-l name")
+    expect(out).toContain("-l prefix")
+  })
+
+  test("command run second positional remains freeform in all shells", () => {
+    const bash = generateBash(buildCliProgram())
+    const commandStart = bash.indexOf("    command)")
+    const commandSection = bash.slice(commandStart, commandStart + 1400)
+    expect(commandSection).not.toContain("registry.yml")
+    expect(commandSection).not.toContain(".config/git-stacks/templates")
+
+    const zsh = generateZsh(buildCliProgram())
+    const zshCommand = zsh.slice(zsh.indexOf("_git_stacks_command()"), zsh.indexOf("_git_stacks_notes()"))
+    expect(zshCommand).not.toContain("_git_stacks_repos")
+    expect(zshCommand).not.toContain("_git_stacks_templates")
+
+    const fish = generateFish(buildCliProgram())
+    const fishCommand = fish.slice(fish.indexOf("# command subcommands"), fish.indexOf("# notes subcommands"))
+    expect(fishCommand).not.toContain("__git_stacks_repos")
+    expect(fishCommand).not.toContain("__git_stacks_templates")
+  })
+
   test("bash output contains all top-level commands", async () => {
     const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
       stdout: "pipe", stderr: "pipe",
