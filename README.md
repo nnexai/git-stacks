@@ -124,6 +124,7 @@ git-stacks pull [workspace]        # Pull latest for all repos (--ff-only, skips
 git-stacks push [name]             # Push workspace branches to remote (parallel, skips trunk)
 git-stacks label <action> <ws>     # Manage workspace labels (add/remove/list/clear)
 git-stacks env [workspace]         # Show merged env vars that would be injected at open time
+git-stacks notes add|list|clear    # Store lightweight operator notes for a workspace
 ```
 
 Create a workspace from a forge change URL by pairing `--source` with the template that should own the workspace:
@@ -215,12 +216,12 @@ claude $(git-stacks paths my-feature --prefix "--add-dir")
 git-stacks paths my-feature --filter worktree   # Only worktree repos
 git-stacks paths my-feature --filter trunk       # Only trunk repos
 
-# Autodetects workspace when run inside a worktree directory
+# Autodetects workspace from the workspace root or a repo worktree directory
 cd ~/workspaces/tasks/my-feature/api
 git-stacks paths    # same as: git-stacks paths my-feature
 ```
 
-Worktree repos emit their task path; trunk repos emit their main clone path. Repos with missing task directories are skipped with a stderr warning.
+Autodetection checks an explicit workspace argument first, then the current directory. The current directory may be the workspace root (`~/workspaces/tasks/my-feature`), a non-repo subdirectory below it, or a repo worktree. Worktree repos emit their task path; trunk repos emit their main clone path. Repos with missing task directories are skipped with a stderr warning.
 
 ## Multi-Repo Pull
 
@@ -230,7 +231,7 @@ Pull latest commits for all repos in a workspace:
 # Pull all repos in a workspace
 git-stacks pull my-feature
 
-# Autodetects workspace from current directory
+# Autodetects workspace from the workspace root or a repo worktree directory
 git-stacks pull
 ```
 
@@ -313,7 +314,11 @@ git-stacks env my-feature --format json
 git-stacks env my-feature --repo backend-api
 ```
 
-Shows GS_* injected vars, user-defined `env:` from workspace YAML, resolved port vars, and resolved secret refs using the same resolver pipeline as `open`. If a secret cannot be resolved, `env` fails with the same error you would hit during `open`, so the preview stays faithful to runtime behavior. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
+Shows GS_* injected vars, user-defined `env:` from workspace YAML, resolved port vars, and resolved secret refs using the same resolver pipeline as `open`. If a secret cannot be resolved, `env` fails with the same error you would hit during `open`, so the preview stays faithful to runtime behavior. When run from the workspace root, only workspace vars are shown. When run inside a repo worktree without `--repo`, the repo is auto-detected and its vars are included.
+
+## Workspace Notes
+
+`git-stacks notes add|list|clear [workspace]` stores local operator notes for a workspace. Notes resolve the workspace by explicit argument first, then current directory detection from the workspace root or repo worktree, then `GS_WORKSPACE_NAME` only when cwd detection is unavailable.
 
 ## Debug Output
 
@@ -601,7 +606,7 @@ Repos must have a `forge` field set in the registry (`github`, `gitlab`, or `git
 
 **Issue tracking** (GitHub, GitLab, Gitea, Jira):
 
-Link workspaces to issues from any supported tracker. Issue references are stored in workspace YAML — no external state. When run from inside a worktree, the workspace is auto-detected from your working directory — no need to specify it.
+Link workspaces to issues from any supported tracker. Issue references are stored in workspace YAML — no external state. When run from a workspace root or worktree, the workspace is auto-detected from your working directory — no need to specify it.
 
 ```bash
 # Link an issue — auto-detects workspace from CWD
