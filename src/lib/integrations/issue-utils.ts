@@ -1,10 +1,10 @@
 import {
-  workspaceExists,
   readWorkspace,
   writeWorkspace,
   type Workspace,
+  workspaceExists,
 } from "../config"
-import { detectWorkspaceFromCwd } from "../workspace-status"
+import { resolveOptionalWorkspace } from "../workspace-resolution"
 
 // --- Types ---
 
@@ -80,7 +80,7 @@ export function formatIssueError(err: IssueRefResolutionError): string {
     case "no_issue_linked":
       return (
         `No issue linked to workspace '${err.workspace}' for ${err.tracker}. ` +
-        `Run: git-stacks integration ${err.tracker} issue link <issue-id> (from inside a worktree) ` +
+        `Run: git-stacks integration ${err.tracker} issue link <issue-id> (from a workspace root or worktree) ` +
         `or: git-stacks integration ${err.tracker} issue link ${err.workspace} <issue-id>`
       )
   }
@@ -101,21 +101,18 @@ export function resolveWorkspaceArg(
   tracker: string,
   action: string
 ): string {
-  if (workspaceName) {
-    if (!workspaceExists(workspaceName)) {
-      console.error(`Workspace '${workspaceName}' not found.`)
-      process.exit(1)
-    }
-    return workspaceName
-  }
-  const detection = detectWorkspaceFromCwd()
-  if (!detection.ok) {
+  const resolution = resolveOptionalWorkspace(workspaceName)
+  if (resolution.ok) return resolution.workspace.name
+
+  if (resolution.error === "workspace_not_found") {
+    console.error(`Workspace '${resolution.name}' not found.`)
+    process.exit(1)
+  } else {
     console.error(
       `Could not detect workspace from current directory. ` +
-      `Run from inside a worktree or specify: ` +
+      `Run from a workspace root or worktree, or specify: ` +
       `git-stacks integration ${tracker} issue ${action} <workspace> ...`
     )
     process.exit(1)
   }
-  return detection.workspace.name
 }

@@ -1,9 +1,9 @@
 import { Command } from "commander"
 import { join } from "path"
 import { formatError } from "../lib/errors"
-import { readGlobalConfig, readWorkspace, workspaceExists, type Workspace } from "../lib/config"
+import { readGlobalConfig, type Workspace } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
-import { detectWorkspaceFromCwd } from "../lib/workspace-status"
+import { resolveOptionalWorkspace } from "../lib/workspace-resolution"
 import {
   applySyncOperation,
   DEFAULT_VERBOSE_PATH_LIMIT,
@@ -15,18 +15,17 @@ import {
 } from "../lib/files"
 
 function resolveWorkspace(workspaceName: string | undefined): Workspace {
-  if (workspaceName) {
-    if (!workspaceExists(workspaceName)) {
-      console.error(formatError(`Workspace '${workspaceName}' not found`, "run: git-stacks list"))
-      process.exit(1)
-    }
-    return readWorkspace(workspaceName)
+  const resolution = resolveOptionalWorkspace(workspaceName)
+  if (resolution.ok) return resolution.workspace
+
+  if (resolution.error === "workspace_not_found") {
+    console.error(formatError(`Workspace '${resolution.name}' not found`, "run: git-stacks list"))
+  } else {
+    console.error(formatError(
+      "Missing workspace name",
+      "usage: git-stacks files <verb> <workspace>, or run from a workspace root/worktree"
+    ))
   }
-
-  const detected = detectWorkspaceFromCwd()
-  if (detected.ok) return detected.workspace
-
-  console.error(formatError("Missing workspace name", "usage: git-stacks files <verb> <workspace>"))
   process.exit(1)
 }
 

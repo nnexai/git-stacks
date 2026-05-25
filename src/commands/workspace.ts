@@ -35,6 +35,7 @@ import { syncWorkspace, pushWorkspace, pullWorkspace } from "../lib/workspace-gi
 import type { SyncRow, PushRow, PullRow } from "../lib/workspace-git"
 import { editWorkspaceYaml, openYamlInEditor } from "../lib/workspace-yaml"
 import { getDirtyWorktrees, getWorkspaceStatus, getWorkspaceListInfo, detectWorkspaceFromCwd } from "../lib/workspace-status"
+import { resolveOptionalWorkspace } from "../lib/workspace-resolution"
 import { formatEnv, detectRepoFromCwd, type EnvFormat } from "../lib/env"
 import { matchesLabels } from "../lib/labels"
 
@@ -1058,28 +1059,21 @@ export function registerWorkspaceCommands(program: Command) {
     .option("--prefix <str>", "Prepend each path with a flag string (e.g., --prefix '--add-dir')")
     .addOption(new Option("--filter <mode>", "Filter repos by mode: worktree or trunk").choices(["worktree", "trunk"]))
     .action(async (name: string | undefined, opts: { prefix?: string; filter?: string }) => {
-      let workspaceName: string
-
-      if (name) {
-        if (!workspaceExists(name)) {
-          console.error(formatError(`Workspace '${name}' not found`, "run: git-stacks list"))
-          process.exit(1)
-        }
-        workspaceName = name
-      } else {
-        const detection = detectWorkspaceFromCwd()
-        if (!detection.ok) {
+      const resolution = resolveOptionalWorkspace(name)
+      if (!resolution.ok) {
+        if (resolution.error === "workspace_not_found") {
+          console.error(formatError(`Workspace '${resolution.name}' not found`, "run: git-stacks list"))
+        } else {
           console.error(formatError(
             "Could not detect workspace from current directory",
-            "run from inside a worktree or specify: git-stacks paths <workspace>"
+            "run from a workspace root or worktree, or specify: git-stacks paths <workspace>"
           ))
-          process.exit(1)
         }
-        workspaceName = detection.workspace.name
+        process.exit(1)
       }
 
       const filter = opts.filter as "worktree" | "trunk" | undefined
-      const result = getWorkspacePaths(workspaceName, { prefix: opts.prefix, filter })
+      const result = getWorkspacePaths(resolution.workspace.name, { prefix: opts.prefix, filter })
       if (!result.ok) {
         console.error(formatError(result.error))
         process.exit(1)
@@ -1113,24 +1107,19 @@ export function registerWorkspaceCommands(program: Command) {
         process.exit(1)
       }
 
-      let ws
-      if (workspace !== undefined) {
-        if (!workspaceExists(workspace)) {
-          console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
-          process.exit(1)
-        }
-        ws = readWorkspace(workspace)
-      } else {
-        const detection = detectWorkspaceFromCwd()
-        if (!detection.ok) {
+      const resolution = resolveOptionalWorkspace(workspace)
+      if (!resolution.ok) {
+        if (resolution.error === "workspace_not_found") {
+          console.error(formatError(`Workspace '${resolution.name}' not found`, "run: git-stacks list"))
+        } else {
           console.error(formatError(
             "Could not detect workspace from current directory",
-            "run from inside a worktree or specify: git-stacks env <workspace>"
+            "run from a workspace root or worktree, or specify: git-stacks env <workspace>"
           ))
-          process.exit(1)
         }
-        ws = detection.workspace
+        process.exit(1)
       }
+      const ws = resolution.workspace
 
       let env: Record<string, string>
       try {
@@ -1153,7 +1142,7 @@ export function registerWorkspaceCommands(program: Command) {
           process.exit(1)
         }
         env = buildRepoEnv(env, repo)
-      } else if (workspace === undefined) {
+      } else if (resolution.source === "cwd") {
         // CWD detection was used — auto-detect repo too
         const repoName = detectRepoFromCwd(ws)
         if (repoName) {
@@ -1169,27 +1158,20 @@ export function registerWorkspaceCommands(program: Command) {
     .command("pull [workspace]")
     .description("Pull latest commits for all repos in a workspace (--ff-only)")
     .action(async (workspace: string | undefined) => {
-      let workspaceName: string
-
-      if (workspace) {
-        if (!workspaceExists(workspace)) {
-          console.error(formatError(`Workspace '${workspace}' not found`, "run: git-stacks list"))
-          process.exit(1)
-        }
-        workspaceName = workspace
-      } else {
-        const detection = detectWorkspaceFromCwd()
-        if (!detection.ok) {
+      const resolution = resolveOptionalWorkspace(workspace)
+      if (!resolution.ok) {
+        if (resolution.error === "workspace_not_found") {
+          console.error(formatError(`Workspace '${resolution.name}' not found`, "run: git-stacks list"))
+        } else {
           console.error(formatError(
             "Could not detect workspace from current directory",
-            "run from inside a worktree or specify: git-stacks pull <workspace>"
+            "run from a workspace root or worktree, or specify: git-stacks pull <workspace>"
           ))
-          process.exit(1)
         }
-        workspaceName = detection.workspace.name
+        process.exit(1)
       }
 
-      const result = await pullWorkspace(workspaceName, (row) => {
+      const result = await pullWorkspace(resolution.workspace.name, (row) => {
         if (row.status === "skipped" || row.status === "failed") {
           console.error(`  ${formatPullRow(row)}`)
         } else if (row.status === "pulled") {

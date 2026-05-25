@@ -4,16 +4,14 @@ import { workspaceExists } from "../lib/config"
 import { formatError } from "../lib/errors"
 import { addWorkspaceNote, clearWorkspaceNotes, listWorkspaceNotes, type WorkspaceNoteRecord } from "../lib/notes"
 import { NOTES_DIR } from "../lib/paths"
-import { detectWorkspaceFromCwd } from "../lib/workspace-status"
+import { resolveOptionalWorkspace } from "../lib/workspace-resolution"
 import { prompts } from "../tui/utils"
 
 export const notesCommand = new Command("notes").description("Workspace operator notes")
 
 function resolveWorkspace(explicitWorkspace?: string): string | null {
-  if (explicitWorkspace) return explicitWorkspace
-  const detected = detectWorkspaceFromCwd()
-  if (detected.ok) return detected.workspace.name
-  return process.env.GS_WORKSPACE_NAME ?? null
+  const resolution = resolveOptionalWorkspace(explicitWorkspace, { allowEnvFallback: true })
+  return resolution.ok ? resolution.workspace.name : null
 }
 
 function requireExistingWorkspace(explicitWorkspace?: string): string {
@@ -22,7 +20,7 @@ function requireExistingWorkspace(explicitWorkspace?: string): string {
     throw new Error(
       formatError(
         "no workspace specified",
-        "use [workspace], run inside a workspace task path, or set GS_WORKSPACE_NAME"
+        "use [workspace], run from a workspace root/worktree, or set GS_WORKSPACE_NAME"
       )
     )
   }

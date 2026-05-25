@@ -1,20 +1,20 @@
 import { Command } from "commander"
 import { formatError } from "../lib/errors"
-import { readWorkspace, workspaceExists, type Workspace } from "../lib/config"
-import { detectWorkspaceFromCwd } from "../lib/workspace-status"
+import type { Workspace } from "../lib/config"
+import { resolveOptionalWorkspace } from "../lib/workspace-resolution"
 import { listManualCommands, planManualCommand, runManualCommand } from "../lib/workspace-command"
 
 function resolveWorkspace(workspaceName: string | undefined): Workspace {
-  if (workspaceName) {
-    if (!workspaceExists(workspaceName)) {
-      console.error(formatError(`Workspace '${workspaceName}' not found`, "run: git-stacks list"))
-      process.exit(1)
-    }
-    return readWorkspace(workspaceName)
+  const resolution = resolveOptionalWorkspace(workspaceName)
+  if (resolution.ok) return resolution.workspace
+  if (resolution.error === "workspace_not_found") {
+    console.error(formatError(`Workspace '${resolution.name}' not found`, "run: git-stacks list"))
+  } else {
+    console.error(formatError(
+      "Missing workspace name",
+      "usage: git-stacks command <verb> <workspace>, or run from a workspace root/worktree"
+    ))
   }
-  const detected = detectWorkspaceFromCwd()
-  if (detected.ok) return detected.workspace
-  console.error(formatError("Missing workspace name", "usage: git-stacks command <verb> <workspace>"))
   process.exit(1)
 }
 
