@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, writeFileSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
 import {
@@ -44,6 +44,10 @@ function setupWorkspace(tmpDir: string, configDir: string) {
     env: { API_URL: "https://wrapper.test" },
   })
   return { wsName, api, web }
+}
+
+function workspaceRoot(tmpDir: string, wsName: string): string {
+  return join(tmpDir, "workspaces", "tasks", wsName)
 }
 
 describe("workspace wrapper command edges", () => {
@@ -106,6 +110,23 @@ describe("workspace wrapper command edges", () => {
     expect(filtered.stderr).toContain("No paths to output")
   })
 
+  test("paths detects workspace from workspace root and non-repo subdirectory", () => {
+    const { wsName, api, web } = setupWorkspace(tmpDir, configDir)
+    const root = workspaceRoot(tmpDir, wsName)
+    const scratch = join(root, "scratch", "notes")
+    mkdirSync(scratch, { recursive: true })
+
+    const fromRoot = runCli(["paths"], { baseDir: tmpDir, configDir, cwd: root })
+    expectSuccessful(fromRoot)
+    expect(fromRoot.stdout).toContain(api.taskPath)
+    expect(fromRoot.stdout).toContain(web.taskPath)
+
+    const fromSubdir = runCli(["paths"], { baseDir: tmpDir, configDir, cwd: scratch })
+    expectSuccessful(fromSubdir)
+    expect(fromSubdir.stdout).toContain(api.taskPath)
+    expect(fromSubdir.stdout).toContain(web.taskPath)
+  })
+
   test("paths outside a workspace fails with bounded cwd-detection guidance", () => {
     setupWorkspace(tmpDir, configDir)
 
@@ -131,6 +152,34 @@ describe("workspace wrapper command edges", () => {
     const explicitJson = JSON.parse(explicit.stdout.trim())
     expect(explicitJson.GS_REPO_NAME).toBe("web")
     expect(explicitJson.GS_REPO_PATH).toBe(web.taskPath)
+  })
+
+  test("env detects workspace from root cwd without repo overlay until repo cwd or explicit repo", () => {
+    const { wsName, api } = setupWorkspace(tmpDir, configDir)
+    const root = workspaceRoot(tmpDir, wsName)
+    const scratch = join(root, "scratch")
+    mkdirSync(scratch, { recursive: true })
+
+    const fromRoot = runCli(["env", "--format", "json"], { baseDir: tmpDir, configDir, cwd: root })
+    expectSuccessful(fromRoot)
+    const rootJson = JSON.parse(fromRoot.stdout.trim())
+    expect(rootJson.GS_WORKSPACE_NAME).toBe(wsName)
+    expect(rootJson.GS_REPO_NAME).toBeUndefined()
+    expect(rootJson.GS_REPO_PATH).toBeUndefined()
+
+    const fromSubdir = runCli(["env", "--format", "json"], { baseDir: tmpDir, configDir, cwd: scratch })
+    expectSuccessful(fromSubdir)
+    const subdirJson = JSON.parse(fromSubdir.stdout.trim())
+    expect(subdirJson.GS_WORKSPACE_NAME).toBe(wsName)
+    expect(subdirJson.GS_REPO_NAME).toBeUndefined()
+
+    const fromRepo = runCli(["env", "--format", "json"], { baseDir: tmpDir, configDir, cwd: api.taskPath })
+    expectSuccessful(fromRepo)
+    expect(JSON.parse(fromRepo.stdout.trim()).GS_REPO_NAME).toBe("api")
+
+    const explicitRepo = runCli(["env", "--format", "json", "--repo", "web"], { baseDir: tmpDir, configDir, cwd: root })
+    expectSuccessful(explicitRepo)
+    expect(JSON.parse(explicitRepo.stdout.trim()).GS_REPO_NAME).toBe("web")
   })
 
   test("status --fetch keeps JSON parseable after progress output", () => {

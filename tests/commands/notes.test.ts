@@ -114,6 +114,39 @@ describe("notes command subprocess contracts", () => {
     expect(existsSync(noteFile(configDir, "beta"))).toBe(false)
   })
 
+  test("workspace root and non-repo subdirectory cwd outrank GS_WORKSPACE_NAME", () => {
+    const taskRoot = join(baseDir, "ws-root", "tasks")
+    const alphaTask = join(taskRoot, "alpha")
+    const betaTask = join(taskRoot, "beta")
+    const scratch = join(alphaTask, "scratch", "notes")
+    mkdirSync(join(alphaTask, "app"), { recursive: true })
+    mkdirSync(join(betaTask, "app"), { recursive: true })
+    mkdirSync(scratch, { recursive: true })
+    writeWorkspace(configDir, "alpha", alphaTask)
+    writeWorkspace(configDir, "beta", betaTask)
+
+    const env = { GS_WORKSPACE_NAME: "beta" }
+    const fromRoot = runCli(["notes", "add", "from-root"], {
+      baseDir,
+      configDir,
+      cwd: alphaTask,
+      env,
+    })
+    expectSuccess(fromRoot)
+
+    const fromSubdir = runCli(["notes", "add", "from-subdir"], {
+      baseDir,
+      configDir,
+      cwd: scratch,
+      env,
+    })
+    expectSuccess(fromSubdir)
+
+    expect(readFileSync(noteFile(configDir, "alpha"), "utf8")).toContain("from-root")
+    expect(readFileSync(noteFile(configDir, "alpha"), "utf8")).toContain("from-subdir")
+    expect(existsSync(noteFile(configDir, "beta"))).toBe(false)
+  })
+
   test("GS_WORKSPACE_NAME fallback is used when explicit arg and cwd detection are unavailable", () => {
     const taskRoot = join(baseDir, "ws-root", "tasks")
     const betaTask = join(taskRoot, "beta")
