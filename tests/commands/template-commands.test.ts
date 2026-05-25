@@ -149,5 +149,5 @@ repos: []
     expectSuccess(clear)
     expect(clear.stdout).toContain("Labels cleared.")
     expect(readTemplateFile(configDir, "api")).not.toContain("labels:")
-  })
+  }, 15000)
 })

@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { describe, expect, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { WorkspaceList } from "../../../../src/tui/dashboard/WorkspaceList"
 import type { GroupedWorkspaceItem, WorkspaceEntry } from "../../../../src/tui/dashboard/types"
@@ -45,7 +45,18 @@ function grouped(label: string): GroupedWorkspaceItem[] {
   ]
 }
 
+const FROZEN_NOW = new Date("2026-01-15T00:00:00.000Z").getTime() + (122 * 24 * 60 * 60 * 1000)
+const originalDateNow = Date.now
+
 describe("WorkspaceList snapshots", () => {
+  beforeAll(() => {
+    Date.now = () => FROZEN_NOW
+  })
+
+  afterAll(() => {
+    Date.now = originalDateNow
+  })
+
   test("renders label grouped headers with concrete row status tokens", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
       () => (

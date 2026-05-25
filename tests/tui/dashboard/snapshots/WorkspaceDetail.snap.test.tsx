@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { describe, expect, mock, test } from "bun:test"
+import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 
 mock.module("../../../../src/lib/config", () => ({
@@ -31,6 +31,9 @@ mock.module("../../../../src/lib/notes", () => ({
 }))
 
 const { WorkspaceDetail } = await import("../../../../src/tui/dashboard/WorkspaceDetail")
+
+const FROZEN_NOW = new Date("2026-01-15T10:00:00Z").getTime() + (122 * 24 * 60 * 60 * 1000)
+const originalDateNow = Date.now
 
 const entry = {
   workspace: {
@@ -86,6 +89,14 @@ const fileStatus = {
 }
 
 describe("WorkspaceDetail snapshots", () => {
+  beforeAll(() => {
+    Date.now = () => FROZEN_NOW
+  })
+
+  afterAll(() => {
+    Date.now = originalDateNow
+  })
+
   test("renders ordered detail sections with notes and file status", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
       () => <WorkspaceDetail entry={entry as any} messages={[{ workspace: "operator-ws", text: "Build failed", from: "ci", timestamp: "2026-01-15T10:00:00Z" }]} tick={0} fileStatus={fileStatus as any} />,

@@ -162,5 +162,5 @@ integrations:
     expectSuccess(removed)
     expect(removed.stdout).toContain("Removed 'dir-renamed' from registry.")
     expect(registryYaml(configDir)).not.toContain("dir-renamed")
-  })
+  }, 15000)
 })

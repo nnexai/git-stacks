@@ -4,7 +4,6 @@
 [features]
 hooks = true
 
-
 # GSD Agent Configuration — managed by get-shit-done installer
 
 [agents.gsd-advisor-researcher]

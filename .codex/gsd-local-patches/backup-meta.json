@@ -1,8 +1,9 @@
 {
-  "backed_up_at": "2026-05-15T21:47:03.187Z",
-  "from_version": "1.42.2",
-  "from_manifest_timestamp": "2026-05-15T21:37:12.451Z",
+  "backed_up_at": "2026-05-25T13:57:32.270Z",
+  "from_version": "1.42.3",
+  "from_manifest_timestamp": "2026-05-16T07:54:54.896Z",
   "files": [
+    "get-shit-done/bin/lib/workstream-name-policy.cjs",
     "get-shit-done/references/tdd.md",
     "agents/gsd-codebase-mapper.md",
     "agents/gsd-doc-writer.md",
@@ -13,13 +14,14 @@
     "agents/gsd-security-auditor.md"
   ],
   "pristine_hashes": {
+    "get-shit-done/bin/lib/workstream-name-policy.cjs": "1738e4898e5e3f774a7450c281e70b431369c06867f74fbfc56a77a332157ef6",
     "get-shit-done/references/tdd.md": "e4708ede157478b6b5c011e4b1defafb4967a0b0d29b1cdf355edfaa843c6fde",
     "agents/gsd-codebase-mapper.md": "394d957ae68b746b3ad938a29037a647acbf89b9ad8bc035dfc21d724e316f1e",
     "agents/gsd-doc-writer.md": "66127061af6c85a51f88b00457d5270a3bc8ff3809ee1a0c36a4133790b429cc",
     "agents/gsd-integration-checker.md": "7435d9667905005d157c2def948cab7c24a0335ecb49294967afdbef978df7ad",
     "agents/gsd-intel-updater.md": "9073531901475b1a2cb3c2cdfa5cbedf02954b8ae97282b7cb948af6878c456e",
     "agents/gsd-nyquist-auditor.md": "54160990e73c205d93f9d1daee39bec5eba010d86724d552f7ac23c9951fca3f",
-    "agents/gsd-roadmapper.md": "c8112eae1252c6e3fccad6bfd984aeff488774fc58a040bdbdfed6f5fe7a8857",
+    "agents/gsd-roadmapper.md": "7c61791fe3a721bea1cc025f25d5f96d7e441030c02cdc487bfdf57a86aa36f8",
     "agents/gsd-security-auditor.md": "8e2838a7d4de95015692bdb5724ab2caa93542aca4eb6c1ee366657a4efaed05"
   }
 }
