@@ -212,6 +212,7 @@ describe("resolveWorkspaceArg", () => {
     detectWorkspaceFromCwdMock.mockReset()
     mockWorkspaceData = {}
     workspaceExistsMock.mockImplementation((_name: string) => _name === "my-ws")
+    mockWorkspaceData["my-ws"] = makeWorkspace()
     detectWorkspaceFromCwdMock.mockImplementation(() => ({ ok: false }))
   })
 
