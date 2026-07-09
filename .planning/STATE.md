@@ -181,7 +181,7 @@ Items acknowledged and deferred at v0.19.0-rc.1 closeout on 2026-05-17:
 
 ### Pending Todos
 
-- Plan broader code quality improvement run — captured 2026-07-09. Contains the 33 remaining findings from the full parallel review, grouped into lifecycle safety, integration contracts, TUI/IPC correctness, core validation, and verification reliability. See `.planning/todos/pending/2026-07-09-plan-broader-code-quality-improvement-run.md`.
+- Broader code quality improvement run — planned 2026-07-09 with provisional Phases 104-109 covering all 33 remaining findings; milestone/release assignment is intentionally not activated. See `.planning/plans/2026-07-09-broader-code-quality-improvement-run.md` and the source todo.
 - Add workspace stale view — captured 2026-05-15. Deferred from v0.19.0 by user request; keep as future advisory cleanup/classification work. See `.planning/todos/pending/2026-05-15-add-workspace-stale-view.md`.
 - Improve template composition understanding — captured 2026-05-15. Weak idea to make composed/baseline templates easier to preview and explain instead of adding a separate profiles concept. See `.planning/todos/pending/2026-05-15-improve-template-composition-understanding.md`.
 - Install skills command — captured 2026-03-18. Consider `git-stacks install --skills` or similar to bootstrap agent skills for using git-stacks workflows directly from the CLI. See `.planning/notes/2026-03-18-install-skills-command.md`.

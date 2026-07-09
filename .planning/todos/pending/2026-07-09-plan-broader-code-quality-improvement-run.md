@@ -2,6 +2,8 @@
 created: 2026-07-09T18:11:15.083Z
 title: Plan broader code quality improvement run
 area: tooling
+status: planned
+plan: .planning/plans/2026-07-09-broader-code-quality-improvement-run.md
 files:
   - src/lib/workspace-lifecycle.ts
   - src/lib/workspace-git.ts
@@ -82,3 +84,7 @@ The next planning pass should preserve current CLI/TUI behavior unless a finding
 - Platform adapters prove nonzero subprocess results cannot produce success artifacts/messages.
 - `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 bun run test`, `bun run typecheck`, `bun run test:deps`, and `bun run verify:gates` pass.
 - Any intentional behavior/API changes are documented in README/help and release notes.
+
+## Planning Outcome
+
+Provisionally sequenced as Phases 104-109 in [the broader code quality improvement run](../../plans/2026-07-09-broader-code-quality-improvement-run.md). The plan assigns every finding to one bounded work package, establishes verification reliability first, and makes destructive lifecycle safety the first production phase. Milestone/release assignment remains a separate decision.
