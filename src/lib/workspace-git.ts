@@ -332,7 +332,9 @@ export async function syncWorkspace(
           async () =>
             Promise.all(
               repoInfos
-                .filter(({ repo }) => existsSync(repo.task_path))
+                // A failed fetch leaves origin/<baseBranch> unavailable or stale.
+                // Do not replace the fetch failure with a misleading preflight error.
+                .filter(({ repo }) => existsSync(repo.task_path) && !fetchFailures.has(repo.name))
                 .map(async ({ repo, baseBranch }) => ({
                   repo: repo.name,
                   result: await _exec.getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
