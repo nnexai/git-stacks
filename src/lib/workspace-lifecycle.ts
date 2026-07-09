@@ -19,8 +19,10 @@ import {
   removeWorktree,
   ensureUpstreamTracking,
   getMergeConflicts,
-  mergeNoFF,
   deleteLocalBranch,
+  prepareMergeCommit,
+  compareAndSwapBranch,
+  type PreparedMerge,
 } from "./git"
 import { type IntegrationContext } from "./integrations"
 import { runIntegrationCleanup, runIntegrationGenerate } from "./integrations/runner"
@@ -126,55 +128,124 @@ async function runWorkspaceHooksCaptured(
 
 type ProgressCallback = (message: string) => void
 
-async function _executeClean(
+type LifecycleOptions = { captured?: boolean; triggeredBy: string }
+
+function workspaceHookCwd(workspace: Workspace, tasksDir: string): string {
+  const workspaceDir = join(tasksDir, workspace.name)
+  return existsSync(workspaceDir) ? workspaceDir : tasksDir
+}
+
+async function runHookPhase(
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  opts: LifecycleOptions,
+  onProgress?: ProgressCallback,
+  abortOnFailure = true
+): Promise<void> {
+  if (opts.captured) {
+    await runWorkspaceHooksCaptured(commands, cwd, env, (output) => onProgress?.(output.line), abortOnFailure)
+  } else {
+    await runWorkspaceHooks(commands, cwd, env, abortOnFailure)
+  }
+}
+
+async function prepareLifecycle(
   workspace: Workspace,
-  config: GlobalConfig,
   tasksDir: string,
-  opts: { captured?: boolean; force?: boolean; deleteFolder?: boolean; triggeredBy: string },
+  opts: LifecycleOptions & { clean?: boolean; merge?: boolean; remove?: boolean },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
-  const closeResult = await _executeClose(workspace, config, tasksDir, {
-    captured: opts.captured,
-    triggeredBy: opts.triggeredBy,
-  }, onProgress)
-  if (!closeResult.ok) return closeResult
-
   const baseEnv = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
-  const wsDir = join(tasksDir, workspace.name)
-  const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
-
-  if (workspace.hooks?.pre_clean?.length) {
+  const hookCwd = workspaceHookCwd(workspace, tasksDir)
+  try {
+    await runHookPhase(workspace.hooks?.pre_close, hookCwd, baseEnv, opts, onProgress)
+  } catch (err) {
+    return { ok: false, error: `pre_close hook failed (${err})` }
+  }
+  if (opts.clean) {
     try {
-      if (opts.captured) {
-        await runWorkspaceHooksCaptured(workspace.hooks.pre_clean, hookCwd, baseEnv,
-          (output) => onProgress?.(output.line))
-      } else {
-        await runWorkspaceHooks(workspace.hooks.pre_clean, hookCwd, baseEnv)
-      }
+      await runHookPhase(workspace.hooks?.pre_clean, hookCwd, baseEnv, opts, onProgress)
     } catch (err) {
       return { ok: false, error: `pre_clean hook failed (${err})` }
     }
   }
+  for (const repo of opts.clean ? workspace.repos.filter(isWorktreeRepo) : []) {
+    try {
+      // Validation is intentionally part of the prepare barrier: every abort-capable
+      // hook still runs while all original worktrees exist.
+      if (!existsSync(repo.task_path)) continue
+      if (repo.hooks?.pre_clean?.length) {
+        await runHookPhase(repo.hooks.pre_clean, repo.task_path, buildRepoEnv(baseEnv, repo), opts, onProgress)
+      }
+    } catch (err) {
+      return { ok: false, error: `pre_clean[${repo.name}] hook failed (${err})` }
+    }
+  }
+  if (opts.merge) {
+    try {
+      await runHookPhase(workspace.hooks?.pre_merge, hookCwd, baseEnv, opts, onProgress)
+    } catch (err) {
+      return { ok: false, error: `pre_merge hook failed (${err})` }
+    }
+  }
+  if (opts.remove) {
+    try {
+      await runHookPhase(workspace.hooks?.pre_remove, hookCwd, baseEnv, opts, onProgress)
+    } catch (err) {
+      return { ok: false, error: `pre_remove hook failed (${err})` }
+    }
+  }
+  return { ok: true }
+}
+
+async function runPostHookWarning(
+  name: string,
+  commands: string[] | undefined,
+  cwd: string,
+  env: Record<string, string>,
+  opts: LifecycleOptions,
+  onProgress?: ProgressCallback
+): Promise<void> {
+  try {
+    await runHookPhase(commands, cwd, env, opts, onProgress)
+  } catch (err) {
+    onProgress?.(`warning: ${name} hook failed (cwd: ${cwd}): ${err}`)
+  }
+}
+
+async function commitClose(
+  workspace: Workspace,
+  config: GlobalConfig,
+  tasksDir: string,
+  opts: LifecycleOptions,
+  onProgress?: ProgressCallback
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await runIntegrationCleanup({ workspace, tasksDir, config })
+  } catch (err) {
+    return { ok: false, error: `integration cleanup failed (${err})` }
+  }
+  const env = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
+  // Workspace post hooks fall back to tasksDir once workspace cleanup has removed its folder.
+  await runPostHookWarning("post_close", workspace.hooks?.post_close, workspaceHookCwd(workspace, tasksDir), env, opts, onProgress)
+  onProgress?.(`Closed '${workspace.name}'.`)
+  return { ok: true }
+}
+
+async function commitCleanup(
+  workspace: Workspace,
+  config: GlobalConfig,
+  tasksDir: string,
+  opts: LifecycleOptions & { deleteFolder?: boolean; deleteConfig?: boolean },
+  onProgress?: ProgressCallback
+): Promise<{ ok: boolean; error?: string }> {
+  const closeResult = await commitClose(workspace, config, tasksDir, opts, onProgress)
+  if (!closeResult.ok) return closeResult
 
   const failures: string[] = []
   for (const repo of workspace.repos.filter(isWorktreeRepo)) {
-    if (!existsSync(repo.task_path)) {
-      onProgress?.(`skip  ${repo.name} (already removed)`)
-      continue
-    }
-    if (repo.hooks?.pre_clean?.length) {
-      const repoEnv = buildRepoEnv(baseEnv, repo)
-      try {
-        if (opts.captured) {
-          await runWorkspaceHooksCaptured(repo.hooks.pre_clean, repo.task_path, repoEnv,
-            (output) => onProgress?.(output.line))
-        } else {
-          await runWorkspaceHooks(repo.hooks.pre_clean, repo.task_path, repoEnv)
-        }
-      } catch (err) {
-        return { ok: false, error: `pre_clean[${repo.name}] hook failed (${err})` }
-      }
-    }
+    if (!existsSync(repo.task_path)) continue
     try {
       await removeWorktree(repo.main_path, repo.task_path)
       onProgress?.(`removed  ${repo.name}`)
@@ -182,32 +253,32 @@ async function _executeClean(
       failures.push(`${repo.name} (${err})`)
     }
   }
-
   if (failures.length > 0) {
     return { ok: false, error: `Could not clean worktrees:\n  ${failures.join("\n  ")}` }
   }
 
-  if (workspace.hooks?.post_clean?.length) {
-    try {
-      if (opts.captured) {
-        await runWorkspaceHooksCaptured(workspace.hooks.post_clean, hookCwd, baseEnv,
-          (output) => onProgress?.(output.line))
-      } else {
-        await runWorkspaceHooks(workspace.hooks.post_clean, hookCwd, baseEnv)
-      }
-    } catch (err) {
-      return { ok: false, error: `post_clean hook failed (${err})` }
-    }
-  }
+  const env = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
+  await runPostHookWarning("post_clean", workspace.hooks?.post_clean, tasksDir, env, opts, onProgress)
 
   if (opts.deleteFolder) {
-    const wsFolderDir = join(tasksDir, workspace.name)
-    if (existsSync(wsFolderDir)) {
-      rmSync(wsFolderDir, { recursive: true, force: true })
-      onProgress?.(`deleted  tasks/${workspace.name}/`)
+    try {
+      const wsDir = join(tasksDir, workspace.name)
+      if (existsSync(wsDir)) {
+        rmSync(wsDir, { recursive: true, force: true })
+        onProgress?.(`deleted  tasks/${workspace.name}/`)
+      }
+    } catch (err) {
+      return { ok: false, error: `workspace folder cleanup failed (${err})` }
     }
   }
 
+  if (opts.deleteConfig) {
+    try {
+      deleteWorkspace(workspace.name)
+    } catch (err) {
+      return { ok: false, error: `workspace config deletion failed (${err})` }
+    }
+  }
   return { ok: true }
 }
 
@@ -217,91 +288,29 @@ export async function cleanWorkspace(
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   return timeOperation(OBS_CATEGORY, "cleanWorkspace", async () => {
-    if (!workspaceExists(name)) {
-      return { ok: false, error: `Workspace '${name}' not found.` }
-    }
-
+    if (!workspaceExists(name)) return { ok: false, error: `Workspace '${name}' not found.` }
     const config = readGlobalConfig()
     const tasksDir = getTasksDir(config.workspace_root)
     const workspace = readWorkspace(name)
-
     if (!opts.force) {
       const dirty = await getDirtyWorktrees(workspace)
-      if (dirty.length > 0) {
-        return { ok: false, error: `Dirty worktrees: ${dirty.join(", ")}` }
-      }
+      if (dirty.length > 0) return { ok: false, error: `Dirty worktrees: ${dirty.join(", ")}` }
     }
-
-    const wsDir = join(tasksDir, workspace.name)
-    const externalWarnings = warnExternalFiles(workspace, wsDir, tasksDir)
-    for (const w of externalWarnings) {
-      onProgress?.(w)
-    }
-
+    for (const warning of warnExternalFiles(workspace, join(tasksDir, workspace.name), tasksDir)) onProgress?.(warning)
     if (opts.dryRun) {
-      onProgress?.("[dry-run] would close workspace (run pre_close, integration cleanup, post_close)")
+      onProgress?.("[dry-run] would run the complete prepare barrier")
       for (const repo of workspace.repos.filter(isWorktreeRepo)) {
-        if (!existsSync(repo.task_path)) continue
-        onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
+        if (existsSync(repo.task_path)) onProgress?.(`[dry-run] would remove worktree: ${repo.task_path}`)
       }
-      if (opts.deleteFolder) {
-        onProgress?.(`[dry-run] would delete folder: tasks/${name}/`)
-      }
+      if (opts.deleteFolder) onProgress?.(`[dry-run] would delete folder: tasks/${workspace.name}/`)
       onProgress?.("Dry run complete. No changes made.")
       return { ok: true }
     }
-
-    return _executeClean(workspace, config, tasksDir, {
-      captured: opts.captured,
-      force: opts.force,
-      deleteFolder: opts.deleteFolder,
-      triggeredBy: "clean",
-    }, onProgress)
+    const lifecycleOpts = { captured: opts.captured, triggeredBy: "clean" }
+    const prepared = await prepareLifecycle(workspace, tasksDir, { ...lifecycleOpts, clean: true }, onProgress)
+    if (!prepared.ok) return prepared
+    return commitCleanup(workspace, config, tasksDir, { ...lifecycleOpts, deleteFolder: opts.deleteFolder }, onProgress)
   })
-}
-
-async function _executeClose(
-  workspace: Workspace,
-  config: GlobalConfig,
-  tasksDir: string,
-  opts: { captured?: boolean; triggeredBy: string },
-  onProgress?: ProgressCallback
-): Promise<{ ok: boolean; error?: string }> {
-  const env = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
-  const wsDir = join(tasksDir, workspace.name)
-  const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
-
-  if (workspace.hooks?.pre_close?.length) {
-    try {
-      if (opts.captured) {
-        await runWorkspaceHooksCaptured(workspace.hooks.pre_close, hookCwd, env,
-          (output) => onProgress?.(output.line))
-      } else {
-        await runWorkspaceHooks(workspace.hooks.pre_close, hookCwd, env)
-      }
-    } catch (err) {
-      return { ok: false, error: `pre_close hook failed (${err})` }
-    }
-  }
-
-  const ctx: IntegrationContext = { workspace, tasksDir, config }
-  await runIntegrationCleanup(ctx)
-
-  if (workspace.hooks?.post_close?.length) {
-    try {
-      if (opts.captured) {
-        await runWorkspaceHooksCaptured(workspace.hooks.post_close, hookCwd, env,
-          (output) => onProgress?.(output.line))
-      } else {
-        await runWorkspaceHooks(workspace.hooks.post_close, hookCwd, env)
-      }
-    } catch (err) {
-      return { ok: false, error: `post_close hook failed (${err})` }
-    }
-  }
-
-  onProgress?.(`Closed '${workspace.name}'.`)
-  return { ok: true }
 }
 
 export async function closeWorkspace(
@@ -316,7 +325,10 @@ export async function closeWorkspace(
     const config = readGlobalConfig()
     const tasksDir = getTasksDir(config.workspace_root)
     const workspace = readWorkspace(name)
-    return _executeClose(workspace, config, tasksDir, { captured: opts.captured, triggeredBy: "close" }, onProgress)
+    const lifecycleOpts = { captured: opts.captured, triggeredBy: "close" }
+    const prepared = await prepareLifecycle(workspace, tasksDir, lifecycleOpts, onProgress)
+    if (!prepared.ok) return prepared
+    return commitClose(workspace, config, tasksDir, lifecycleOpts, onProgress)
   })
 }
 
@@ -386,44 +398,21 @@ export async function removeWorkspace(
       return { ok: true }
     }
 
-    const cleanResult = await _executeClean(workspace, config, tasksDir, {
-      captured: opts.captured,
-      force: opts.force,
-      deleteFolder: true,
-      triggeredBy: "remove",
+    const lifecycleOpts = { captured: opts.captured, triggeredBy: "remove" }
+    const prepared = await prepareLifecycle(workspace, tasksDir, {
+      ...lifecycleOpts,
+      clean: true,
+      remove: true,
     }, onProgress)
-    if (!cleanResult.ok) return cleanResult
-
-    const baseEnv = buildBaseEnv(workspace, tasksDir, "remove")
-    const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
-
-    if (workspace.hooks?.pre_remove?.length) {
-      try {
-        if (opts.captured) {
-          await runWorkspaceHooksCaptured(workspace.hooks.pre_remove, hookCwd, baseEnv,
-            (output) => onProgress?.(output.line))
-        } else {
-          await runWorkspaceHooks(workspace.hooks.pre_remove, hookCwd, baseEnv)
-        }
-      } catch (err) {
-        return { ok: false, error: `pre_remove hook failed (${err})` }
-      }
-    }
-
-    deleteWorkspace(name)
-
-    if (workspace.hooks?.post_remove?.length) {
-      try {
-        if (opts.captured) {
-          await runWorkspaceHooksCaptured(workspace.hooks.post_remove, hookCwd, baseEnv,
-            (output) => onProgress?.(output.line))
-        } else {
-          await runWorkspaceHooks(workspace.hooks.post_remove, hookCwd, baseEnv)
-        }
-      } catch (err) {
-        onProgress?.(`post_remove hook error: ${err}`)
-      }
-    }
+    if (!prepared.ok) return prepared
+    const committed = await commitCleanup(workspace, config, tasksDir, {
+      ...lifecycleOpts,
+      deleteFolder: true,
+      deleteConfig: true,
+    }, onProgress)
+    if (!committed.ok) return committed
+    await runPostHookWarning("post_remove", workspace.hooks?.post_remove, tasksDir,
+      buildBaseEnv(workspace, tasksDir, "remove"), lifecycleOpts, onProgress)
 
     onProgress?.(`Workspace '${name}' removed.`)
     return { ok: true }
@@ -497,89 +486,65 @@ export async function mergeWorkspace(
       return { ok: true }
     }
 
-    const cleanResult = await _executeClean(workspace, config, tasksDir, {
-      captured: opts.captured,
-      force: opts.force,
-      deleteFolder: true,
-      triggeredBy: "merge",
+    const lifecycleOpts = { captured: opts.captured, triggeredBy: "merge" }
+    const prepared = await prepareLifecycle(workspace, tasksDir, {
+      ...lifecycleOpts,
+      clean: true,
+      merge: true,
+      remove: true,
     }, onProgress)
-    if (!cleanResult.ok) return cleanResult
+    if (!prepared.ok) return prepared
 
-    const baseEnv = buildBaseEnv(workspace, tasksDir, "merge")
-    const hookCwd = existsSync(wsDir) ? wsDir : tasksDir
-
-    if (workspace.hooks?.pre_merge?.length) {
-      try {
-        if (opts.captured) {
-          await runWorkspaceHooksCaptured(workspace.hooks.pre_merge, hookCwd, baseEnv,
-            (output) => onProgress?.(output.line))
-        } else {
-          await runWorkspaceHooks(workspace.hooks.pre_merge, hookCwd, baseEnv)
-        }
-      } catch (err) {
-        return { ok: false, error: `pre_merge hook failed (${err})` }
-      }
+    const preparedMerges: Array<{ repo: WorkspaceRepo; prepared: PreparedMerge }> = []
+    for (const { repo, baseBranch } of repoBases) {
+      const result = await prepareMergeCommit(repo.main_path, baseBranch, workspace.branch)
+      if (!result.ok) return { ok: false, error: `Merge preparation failed for '${repo.name}' (${result.error})` }
+      preparedMerges.push({ repo, prepared: result.prepared })
     }
 
-    for (const { repo, baseBranch } of repoBases) {
-      const result = await mergeNoFF(repo.main_path, baseBranch, workspace.branch)
+    const updated: Array<{ repo: WorkspaceRepo; prepared: PreparedMerge }> = []
+    for (const entry of preparedMerges) {
+      const result = await compareAndSwapBranch(
+        entry.prepared.repoPath,
+        entry.prepared.baseBranch,
+        entry.prepared.oldSha,
+        entry.prepared.preparedSha
+      )
       if (!result.ok) {
-        return { ok: false, error: `Merge failed for '${repo.name}' (${result.error})` }
+        for (const prior of [...updated].reverse()) {
+          await compareAndSwapBranch(
+            prior.prepared.repoPath,
+            prior.prepared.baseBranch,
+            prior.prepared.preparedSha,
+            prior.prepared.oldSha
+          )
+        }
+        return { ok: false, error: `Merge ref update failed for '${entry.repo.name}' (${result.error}); earlier refs were restored when unchanged.` }
       }
-      onProgress?.(`merged  ${repo.name}  ->  ${baseBranch}`)
+      updated.push(entry)
+      onProgress?.(`merged  ${entry.repo.name}  ->  ${entry.prepared.baseBranch}`)
+    }
+
+    const cleaned = await commitCleanup(workspace, config, tasksDir, {
+      ...lifecycleOpts,
+      deleteFolder: true,
+      deleteConfig: true,
+    }, onProgress)
+    if (!cleaned.ok) {
+      return {
+        ok: false,
+        error: `bases merged; cleanup incomplete: ${cleaned.error}. Workspace YAML and feature refs were retained. Recover by completing cleanup manually, then rerun remove if needed.`,
+      }
     }
 
     for (const { repo } of repoBases) {
-      await deleteLocalBranch(repo.main_path, workspace.branch)
+      const deleted = await deleteLocalBranch(repo.main_path, workspace.branch)
+      if (!deleted.ok) onProgress?.(`warning: feature branch cleanup failed for ${repo.name}: ${deleted.error}`)
     }
-
-    if (workspace.hooks?.pre_remove?.length) {
-      try {
-        if (opts.captured) {
-          await runWorkspaceHooksCaptured(workspace.hooks.pre_remove, hookCwd, baseEnv,
-            (output) => onProgress?.(output.line))
-        } else {
-          await runWorkspaceHooks(workspace.hooks.pre_remove, hookCwd, baseEnv)
-        }
-      } catch (err) {
-        return { ok: false, error: `pre_remove hook failed (${err})` }
-      }
-    }
-
-    deleteWorkspace(name)
-
-    if (workspace.hooks?.post_remove?.length) {
-      try {
-        if (opts.captured) {
-          await runWorkspaceHooksCaptured(workspace.hooks.post_remove, hookCwd, baseEnv,
-            (output) => onProgress?.(output.line))
-        } else {
-          await runWorkspaceHooks(workspace.hooks.post_remove, hookCwd, baseEnv)
-        }
-      } catch (err) {
-        onProgress?.(`post_remove hook error: ${err}`)
-      }
-    }
-
-    if (workspace.hooks?.post_merge?.length) {
-      const mergeBaseEnv = {
-        ...baseEnv,
-        GS_MERGED_BRANCH: workspace.branch,
-      }
-      for (const cmd of workspace.hooks.post_merge) {
-        onProgress?.(`post_merge: ${cmd}`)
-        try {
-          if (opts.captured) {
-            await runWorkspaceHooksCaptured([cmd], hookCwd, mergeBaseEnv,
-              (output) => onProgress?.(output.line))
-          } else {
-            await runWorkspaceHooks([cmd], hookCwd, mergeBaseEnv)
-          }
-        } catch (err) {
-          onProgress?.(`post_merge hook error: ${err}`)
-        }
-      }
-    }
+    const baseEnv = buildBaseEnv(workspace, tasksDir, "merge")
+    await runPostHookWarning("post_remove", workspace.hooks?.post_remove, tasksDir, baseEnv, lifecycleOpts, onProgress)
+    await runPostHookWarning("post_merge", workspace.hooks?.post_merge, tasksDir,
+      { ...baseEnv, GS_MERGED_BRANCH: workspace.branch }, lifecycleOpts, onProgress)
 
     onProgress?.(`Merged and cleaned '${name}'.`)
     return { ok: true }

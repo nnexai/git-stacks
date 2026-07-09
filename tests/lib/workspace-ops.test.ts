@@ -291,13 +291,13 @@ describe("mergeWorkspace", () => {
     expect(postRemoveIdx).toBeGreaterThanOrEqual(0)
     expect(postMergeIdx).toBeGreaterThanOrEqual(0)
 
-    // D-10 order: PRE_CLOSE < POST_CLOSE < PRE_CLEAN < POST_CLEAN < PRE_MERGE < PRE_REMOVE < POST_REMOVE < POST_MERGE
-    expect(preCloseIdx).toBeLessThan(postCloseIdx)
-    expect(postCloseIdx).toBeLessThan(preCleanIdx)
-    expect(preCleanIdx).toBeLessThan(postCleanIdx)
-    expect(postCleanIdx).toBeLessThan(preMergeIdx)
+    // Prepare barrier: every abort-capable hook precedes integration cleanup and mutations.
+    expect(preCloseIdx).toBeLessThan(preCleanIdx)
+    expect(preCleanIdx).toBeLessThan(preMergeIdx)
     expect(preMergeIdx).toBeLessThan(preRemoveIdx)
-    expect(preRemoveIdx).toBeLessThan(postRemoveIdx)
+    expect(preRemoveIdx).toBeLessThan(postCloseIdx)
+    expect(postCloseIdx).toBeLessThan(postCleanIdx)
+    expect(postCleanIdx).toBeLessThan(postRemoveIdx)
     expect(postRemoveIdx).toBeLessThan(postMergeIdx)
 
     try { unlinkSync(logFile) } catch { /* ignore */ }

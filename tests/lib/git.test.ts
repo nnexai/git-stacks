@@ -16,6 +16,8 @@ import {
   removeWorktree,
   isWorktreeRegistered,
   getMergeConflicts,
+  prepareMergeCommit,
+  compareAndSwapBranch,
   mergeNoFF,
   rebaseBranch,
   getCommitsBehind,
@@ -270,6 +272,36 @@ describe("getMergeConflicts", () => {
     if (missingBase.status === "error") expect(missingBase.error).toContain("missing-base")
     if (missingFeature.status === "error") expect(missingFeature.error).toContain("missing-feature")
     if (invalidRepo.status === "error") expect(invalidRepo.error.length).toBeGreaterThan(0)
+  })
+})
+
+describe("prepared merge ref updates", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-prepared-merge")
+    repoPath = makeGitRepo(tmp)
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("prepares a detached merge before compare-and-swap moves the base ref", async () => {
+    const worktreePath = join(tmp, "wt", "prepared")
+    await createWorktree(repoPath, worktreePath, "feature/prepared")
+    writeFileSync(join(worktreePath, "prepared.txt"), "feature\n")
+    execSync("git add .", gitExecOptions(worktreePath, tmp))
+    execSync('git commit -m "prepared feature"', gitExecOptions(worktreePath, tmp))
+    const baseBefore = execSync("git rev-parse main", gitExecOptions(repoPath, tmp)).toString().trim()
+
+    const result = await prepareMergeCommit(repoPath, "main", "feature/prepared")
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.prepared.oldSha).toBe(baseBefore)
+    expect(execSync("git rev-parse main", gitExecOptions(repoPath, tmp)).toString().trim()).toBe(baseBefore)
+    expect(await compareAndSwapBranch(repoPath, "main", "0".repeat(40), result.prepared.preparedSha)).toMatchObject({ ok: false })
+    expect(await compareAndSwapBranch(repoPath, "main", baseBefore, result.prepared.preparedSha)).toEqual({ ok: true })
+    expect(execSync("git rev-parse main", gitExecOptions(repoPath, tmp)).toString().trim()).toBe(result.prepared.preparedSha)
   })
 })
 

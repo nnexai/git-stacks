@@ -275,8 +275,73 @@ export async function mergeNoFF(
   }
 }
 
-export async function deleteLocalBranch(repoPath: string, branch: string): Promise<void> {
-  await $`git -C ${repoPath} branch -d ${branch}`.quiet().nothrow()
+export type PreparedMerge = {
+  repoPath: string
+  baseBranch: string
+  oldSha: string
+  preparedSha: string
+}
+
+export async function prepareMergeCommit(
+  repoPath: string,
+  baseBranch: string,
+  branch: string
+): Promise<{ ok: true; prepared: PreparedMerge } | { ok: false; error: string }> {
+  const baseResult = await $`git -C ${repoPath} rev-parse --verify ${baseBranch + "^{commit}"}`
+    .quiet()
+    .nothrow()
+  if (baseResult.exitCode !== 0) {
+    return { ok: false, error: `Cannot resolve ${baseBranch}: ${baseResult.stderr.toString().trim()}` }
+  }
+  const oldSha = baseResult.stdout.toString().trim()
+  const tmpPath = join(repoPath, `../.gs-prepare-merge-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+  const addResult = await $`git -C ${repoPath} worktree add --detach ${tmpPath} ${oldSha}`.quiet().nothrow()
+  if (addResult.exitCode !== 0) {
+    return { ok: false, error: `Cannot create temporary merge worktree: ${addResult.stderr.toString().trim()}` }
+  }
+
+  try {
+    const mergeResult = await $`git -C ${tmpPath} merge --no-ff ${branch}`.quiet().nothrow()
+    if (mergeResult.exitCode !== 0) {
+      await $`git -C ${tmpPath} merge --abort`.quiet().nothrow()
+      return { ok: false, error: mergeResult.stderr.toString().trim() || "merge preparation failed" }
+    }
+    const preparedResult = await $`git -C ${tmpPath} rev-parse HEAD`.quiet().nothrow()
+    if (preparedResult.exitCode !== 0) {
+      return { ok: false, error: `Cannot resolve prepared merge commit: ${preparedResult.stderr.toString().trim()}` }
+    }
+    return {
+      ok: true,
+      prepared: { repoPath, baseBranch, oldSha, preparedSha: preparedResult.stdout.toString().trim() },
+    }
+  } finally {
+    await $`git -C ${repoPath} worktree remove ${tmpPath} --force`.quiet().nothrow()
+  }
+}
+
+export async function compareAndSwapBranch(
+  repoPath: string,
+  branch: string,
+  oldSha: string,
+  newSha: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await $`git -C ${repoPath} update-ref ${"refs/heads/" + branch} ${newSha} ${oldSha}`
+    .quiet()
+    .nothrow()
+  if (result.exitCode === 0) return { ok: true }
+  return {
+    ok: false,
+    error: result.stderr.toString().trim() || `compare-and-swap failed for ${branch}`,
+  }
+}
+
+export async function deleteLocalBranch(
+  repoPath: string,
+  branch: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await $`git -C ${repoPath} branch -d ${branch}`.quiet().nothrow()
+  if (result.exitCode === 0) return { ok: true }
+  return { ok: false, error: result.stderr.toString().trim() || `could not delete ${branch}` }
 }
 
 export async function fetchOrigin(repoPath: string): Promise<void> {

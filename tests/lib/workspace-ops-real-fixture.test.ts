@@ -262,6 +262,50 @@ describe("workspace lifecycle real fixtures", () => {
     expect(probe).toContain("GS_TRIGGERED_BY=clean")
   })
 
+  test("a later repository pre-clean failure stops before any worktree mutation", async () => {
+    const wsName = "prepare-barrier"
+    const branch = `feat/${wsName}`
+    const first = makeRepoWithRemote(tmpDir, "prepare-first", branch)
+    const second = makeRepoWithRemote(tmpDir, "prepare-second", branch)
+    const wsRoot = join(tmpDir, "workspaces")
+    const firstLog = join(tmpDir, "prepare-first.log")
+    const firstHook = writeProbeScript(tmpDir, "prepare-first.sh", firstLog, ["GS_TRIGGERED_BY"])
+    const failHook = join(tmpDir, "prepare-second-fail.sh")
+    writeFileSync(failHook, "#!/bin/sh\nexit 17\n")
+    execSync(`chmod +x ${failHook}`)
+    makeWorkspaceFixture(isolated.configDir, wsName, [
+      { name: "first", mainPath: first.mainPath, taskPath: first.taskPath, hooks: { pre_clean: [firstHook] } },
+      { name: "second", mainPath: second.mainPath, taskPath: second.taskPath, hooks: { pre_clean: [failHook] } },
+    ], { wsRoot, branch })
+    realCache.workspaces.clear()
+    realCache.resetList()
+
+    const result = await cleanWorkspace(wsName, { force: true, captured: true })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("pre_clean[second]")
+    expect(existsSync(firstLog)).toBe(true)
+    expect(await isWorktreeRegistered(first.mainPath, first.taskPath)).toBe(true)
+    expect(await isWorktreeRegistered(second.mainPath, second.taskPath)).toBe(true)
+    expect(workspaceExists(wsName)).toBe(true)
+  })
+
+  test("post-clean hook failures are warnings after committed cleanup", async () => {
+    const failHook = join(tmpDir, "post-clean-fail.sh")
+    writeFileSync(failHook, "#!/bin/sh\nexit 9\n")
+    execSync(`chmod +x ${failHook}`)
+    const { repo, wsName } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "post-clean-warning", {
+      hooks: { post_clean: [failHook] },
+    })
+    const messages: string[] = []
+
+    const result = await cleanWorkspace(wsName, { force: true, captured: true }, (message: string) => messages.push(message))
+
+    expect(result.ok).toBe(true)
+    expect(await isWorktreeRegistered(repo.mainPath, repo.taskPath)).toBe(false)
+    expect(messages.some((message) => message.includes("warning: post_clean hook failed"))).toBe(true)
+  })
+
   test("close succeeds when the workspace task folder is already missing", async () => {
     const { wsName, wsRoot } = makeRealWorkspaceFixture(tmpDir, isolated.configDir, "close-missing")
     cleanup(join(wsRoot, "tasks", wsName))
