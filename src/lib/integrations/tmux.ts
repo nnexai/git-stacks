@@ -108,6 +108,17 @@ async function applyPaneLayout(ctx: IntegrationContext): Promise<void> {
   let focusPaneId: string | null = null
 
   for (const pane of parsed.data.panes) {
+    const surfaces = pane.surfaces.flatMap((surface) => {
+      if (surface.repo === undefined) return [{ surface, cwd: surface.cwd ?? wsRoot }]
+      const repo = ctx.workspace.repos.find((candidate) => candidate.name === surface.repo)
+      if (!repo) {
+        if (!ctx.silent) p.log.warn(`tmux: repo '${surface.repo}' not found — skipping surface`)
+        return []
+      }
+      return [{ surface, cwd: repo.task_path ?? wsRoot }]
+    })
+    if (surfaces.length === 0) continue
+
     const isMainPane = pane.direction === undefined
     const paneFirstId = isMainPane
       ? mainPaneId
@@ -117,14 +128,10 @@ async function applyPaneLayout(ctx: IntegrationContext): Promise<void> {
 
     if (pane.focus) focusPaneId = paneFirstId
 
-    for (let i = 0; i < pane.surfaces.length; i++) {
-      const surface = pane.surfaces[i]
+    for (let i = 0; i < surfaces.length; i++) {
+      const { surface, cwd } = surfaces[i]
       const paneId = i === 0 ? paneFirstId : await addTmuxPane(session, pane.direction)
       if (!paneId) continue
-
-      const cwd = surface.repo
-        ? (ctx.workspace.repos.find((r) => r.name === surface.repo)?.task_path ?? wsRoot)
-        : (surface.cwd ?? wsRoot)
 
       await sendToTmuxPane(paneId, `cd ${shellQuote(cwd)}`)
       if (surface.command) await sendToTmuxPane(paneId, surface.command)

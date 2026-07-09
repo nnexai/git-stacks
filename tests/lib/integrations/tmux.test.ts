@@ -123,6 +123,26 @@ describe("tmux open()", () => {
     expect(focusTmuxPaneMock).toHaveBeenCalledWith("%1")
   })
 
+  test("skips a surface with an unknown repo before creating pane or sending commands", async () => {
+    const ctx = {
+      ...fakeCtx,
+      workspace: {
+        ...fakeCtx.workspace,
+        settings: {
+          integrations: {
+            tmux: { panes: [{ direction: "right", focus: true, surfaces: [{ repo: "typo", command: "bun test" }] }] },
+          },
+        },
+      },
+    } as IntegrationContext
+
+    await tmuxIntegration.open(ctx, null, {})
+
+    expect(addTmuxPaneMock).not.toHaveBeenCalled()
+    expect(sendToTmuxPaneMock).not.toHaveBeenCalled()
+    expect(focusTmuxPaneMock).not.toHaveBeenCalled()
+  })
+
   test("skips invalid pane config without layout helper calls", async () => {
     const ctx = {
       ...fakeCtx,

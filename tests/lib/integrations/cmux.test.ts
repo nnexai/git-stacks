@@ -134,6 +134,27 @@ describe("cmux open()", () => {
     expect(focusCmuxSurfaceMock).toHaveBeenCalledWith("workspace:2", "surface:3")
   })
 
+  test("skips a surface with an unknown repo before creating pane or sending commands", async () => {
+    const ctx = {
+      ...fakeCtx,
+      workspace: {
+        ...fakeCtx.workspace,
+        settings: {
+          integrations: {
+            cmux: { panes: [{ direction: "right", surfaces: [{ repo: "typo", command: "bun test" }] }] },
+          },
+        },
+      },
+    } as IntegrationContext
+
+    await cmuxIntegration.open(ctx, null, {})
+
+    expect(addCmuxPaneMock).not.toHaveBeenCalled()
+    expect(addCmuxSurfaceMock).not.toHaveBeenCalled()
+    expect(sendToCmuxSurfaceMock).not.toHaveBeenCalled()
+    expect(focusCmuxSurfaceMock).not.toHaveBeenCalled()
+  })
+
   test("skips invalid pane config after workspace open", async () => {
     const ctx = {
       ...fakeCtx,

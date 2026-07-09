@@ -77,6 +77,17 @@ async function applyPaneLayout(ref: string, ctx: IntegrationContext): Promise<vo
   let focusRef: string | null = null
 
   for (const pane of parsed.data.panes) {
+    const surfaces = pane.surfaces.flatMap((surface) => {
+      if (surface.repo === undefined) return [{ surface, cwd: surface.cwd ?? wsRoot }]
+      const repo = ctx.workspace.repos.find((candidate) => candidate.name === surface.repo)
+      if (!repo) {
+        if (!ctx.silent) p.log.warn(`cmux: repo '${surface.repo}' not found — skipping surface`)
+        return []
+      }
+      return [{ surface, cwd: repo.task_path ?? wsRoot }]
+    })
+    if (surfaces.length === 0) continue
+
     const isMainPane = pane.direction === undefined
     let currentPaneRef: string
     let paneFirstSurfaceRef: string
@@ -91,8 +102,8 @@ async function applyPaneLayout(ref: string, ctx: IntegrationContext): Promise<vo
       paneFirstSurfaceRef = newPane.surfaceRef
     }
 
-    for (let i = 0; i < pane.surfaces.length; i++) {
-      const surface = pane.surfaces[i]
+    for (let i = 0; i < surfaces.length; i++) {
+      const { surface, cwd } = surfaces[i]
       let surfaceRef: string
       if (i === 0) {
         surfaceRef = paneFirstSurfaceRef
@@ -103,10 +114,6 @@ async function applyPaneLayout(ref: string, ctx: IntegrationContext): Promise<vo
       }
 
       if (surface.focus) focusRef = surfaceRef
-
-      const cwd = surface.repo
-        ? (ctx.workspace.repos.find((r) => r.name === surface.repo)?.task_path ?? wsRoot)
-        : (surface.cwd ?? wsRoot)
 
       await sendToCmuxSurface(ref, surfaceRef, `cd ${cwd}\n`)
       if (surface.command) await sendToCmuxSurface(ref, surfaceRef, `${surface.command}\n`)

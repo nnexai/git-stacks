@@ -718,6 +718,29 @@ describe("commands array", () => {
     expect(movedWindows.some(m => m.windowId === 100)).toBe(true)
   })
 
+  test("skips a command with an unknown repo without spawn, move, or layout", async () => {
+    mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
+    mockWindows = [{ windowId: 10, workspace: "dev" } as AerospaceWindow]
+    mockSnapshotResult = [100]
+    const ctx = makeCtx({
+      wsIntegrations: {
+        aerospace: {
+          enabled: true, workspaces: [{
+            workspace: "dev",
+            commands: [{ command: "echo hello", repo: "typo" }],
+          }],
+        },
+      },
+    })
+    mockSnapshotWindowIds.mockClear()
+
+    await aerospaceIntegration.open(ctx, null, {})
+
+    expect(mockSnapshotWindowIds).not.toHaveBeenCalled()
+    expect(movedWindows).toHaveLength(0)
+    expect(layoutCalls).toHaveLength(0)
+  })
+
   test("processes multiple commands sequentially", async () => {
     mockWorkspaces = [{ workspace: "dev", isFocused: false, isVisible: false, monitorId: 1 }]
     mockSnapshotResult = [110]

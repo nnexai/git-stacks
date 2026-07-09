@@ -197,6 +197,11 @@ export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExam
 
           for (const window of column.windows) {
             try {
+              if (window.repo !== undefined && !ctx.workspace.repos.some((repo) => repo.name === window.repo)) {
+                if (!ctx.silent) p.log.warn(`niri: repo '${window.repo}' not found — skipping window`)
+                continue
+              }
+
               let windowId: number | undefined
 
               if (window.source !== undefined) {
@@ -225,7 +230,7 @@ export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExam
                 let resolvedCwd: string | undefined
                 if (window.repo !== undefined) {
                   const repoEntry = ctx.workspace.repos.find((r) => r.name === window.repo)
-                  resolvedCwd = repoEntry?.task_path
+                  resolvedCwd = repoEntry!.task_path
                 } else if (window.cwd !== undefined) {
                   resolvedCwd = expandVars(window.cwd)
                 }

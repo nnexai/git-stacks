@@ -255,6 +255,11 @@ export const aerospaceIntegration: Integration & Cleans & HasCommands & HasConfi
           if (commands?.length) {
             for (const cmd of commands) {
               try {
+                if (cmd.repo !== undefined && !ctx.workspace.repos.some((repo) => repo.name === cmd.repo)) {
+                  if (!ctx.silent) p.log.warn(`AeroSpace: repo '${cmd.repo}' not found — skipping command`)
+                  continue
+                }
+
                 let newWindowIds: number[] = []
 
                 if (cmd.source !== undefined) {
@@ -293,7 +298,7 @@ export const aerospaceIntegration: Integration & Cleans & HasCommands & HasConfi
                   let resolvedCwd: string | undefined
                   if (cmd.repo !== undefined) {
                     const repoEntry = ctx.workspace.repos.find((r) => r.name === cmd.repo)
-                    resolvedCwd = repoEntry?.task_path
+                    resolvedCwd = repoEntry!.task_path
                   } else if (cmd.cwd !== undefined) {
                     resolvedCwd = expandVars(cmd.cwd)
                   }

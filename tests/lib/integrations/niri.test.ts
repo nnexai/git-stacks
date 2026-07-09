@@ -339,6 +339,27 @@ describe("column config — command: windows", () => {
     expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd '/path/to/backend' && ghostty -e npm run dev")
   })
 
+  test("command: window with an unknown repo is skipped without spawn or layout", async () => {
+    const ctx: IntegrationContext = {
+      ...fakeCtx,
+      config: {
+        integrations: {
+          niri: {
+            enabled: true,
+            columns: [{ width: "50%", windows: [{ command: "ghostty -e npm run dev", repo: "typo" }] }],
+          },
+        },
+      } as any,
+    }
+
+    await niriIntegration.open(ctx, null, emptyBag)
+
+    expect(mockSnapshotWindowIds).not.toHaveBeenCalled()
+    expect(mockNiriSpawnSh).not.toHaveBeenCalled()
+    expect(mockMoveColumnToIndex).not.toHaveBeenCalled()
+    expect(mockSetWindowWidth).not.toHaveBeenCalled()
+  })
+
   test("command: window with cwd prepends cd to niriSpawnSh", async () => {
     const ctx: IntegrationContext = {
       ...fakeCtx,
