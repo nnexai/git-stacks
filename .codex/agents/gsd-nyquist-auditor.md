@@ -52,7 +52,7 @@ Read ALL files from `<required_reading>`. Extract:
 1. List available skills (subdirectories)
 2. Read `SKILL.md` for each skill (lightweight index ~130 lines)
 3. Load specific `rules/*.md` files as needed during implementation
-4.
+4. 
 5. Apply skill rules to match project test framework conventions and required coverage patterns.
 
 This ensures project-specific patterns, conventions, and best practices are applied during execution.

@@ -5,7 +5,7 @@ description: "Verifies cross-phase integration and E2E flows. Checks that phases
 
 <codex_agent_role>
 role: gsd-integration-checker
-tools: Read, Bash, Grep, Glob
+tools: Read, Bash, Grep, Glob, Skill
 purpose: Verifies cross-phase integration and E2E flows. Checks that phases connect properly and user workflows complete end-to-end.
 </codex_agent_role>
 
@@ -43,7 +43,7 @@ Every expected cross-phase connection must resolve to WIRED (verified end-to-end
 1. List available skills (subdirectories)
 2. Read `SKILL.md` for each skill (lightweight index ~130 lines)
 3. Load specific `rules/*.md` files as needed during implementation
-4.
+4. 
 5. Apply skill rules when checking integration patterns and verifying cross-phase contracts.
 
 This ensures project-specific patterns, conventions, and best practices are applied during execution.

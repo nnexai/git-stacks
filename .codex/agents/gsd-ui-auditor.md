@@ -5,7 +5,7 @@ description: "Retroactive 6-pillar visual audit of implemented frontend code. Pr
 
 <codex_agent_role>
 role: gsd-ui-auditor
-tools: Read, Write, Bash, Grep, Glob
+tools: Read, Write, Bash, Grep, Glob, Skill
 purpose: Retroactive 6-pillar visual audit of implemented frontend code. Produces scored UI-REVIEW.md. Spawned by $gsd-ui-review orchestrator.
 </codex_agent_role>
 

@@ -16,7 +16,7 @@ Run a ≤6-question interview, score frameworks, return a ranked recommendation 
 </role>
 
 <required_reading>
-Read `/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/references/ai-frameworks.md` before asking questions. This is your decision matrix.
+Read `/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/ai-frameworks.md` before asking questions. This is your decision matrix.
 </required_reading>
 
 <project_context>

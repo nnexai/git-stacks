@@ -1,7 +1,7 @@
 {
-  "backed_up_at": "2026-05-25T13:57:32.270Z",
+  "backed_up_at": "2026-07-09T17:39:33.352Z",
   "from_version": "1.42.3",
-  "from_manifest_timestamp": "2026-05-16T07:54:54.896Z",
+  "from_manifest_timestamp": "2026-05-25T13:57:32.414Z",
   "files": [
     "get-shit-done/bin/lib/workstream-name-policy.cjs",
     "get-shit-done/references/tdd.md",

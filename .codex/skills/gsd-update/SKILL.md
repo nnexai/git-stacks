@@ -27,7 +27,7 @@ Multi-select workaround:
 - Codex has no `multiSelect`. Use sequential single-selects, or present a numbered freeform list asking the user to enter comma-separated numbers.
 
 Execute mode fallback:
-- When `request_user_input` is rejected or unavailable, you MUST stop and present the questions as a plain-text numbered list, then wait for the user's reply. Do NOT pick a default and continue (#3018).
+- When `request_user_input` is rejected or unavailable, activate TEXT_MODE: append `--text` to `{{GSD_ARGS}}` so the workflow's built-in text-mode branching takes over. Present every `AskUserQuestion` call as a plain-text numbered list, then stop and wait for the user's reply. Do NOT pick a default and continue (#3018 / #3808).
 - You may only proceed without a user answer when one of these is true:
   (a) the invocation included an explicit non-interactive flag (`--auto` or `--all`),
   (b) the user has explicitly approved a specific default for this question, or
@@ -37,8 +37,15 @@ Execute mode fallback:
 ## C. Task() → spawn_agent Mapping
 GSD workflows use `Task(...)` (Claude Code syntax). Translate to Codex collaboration tools:
 
-Direct mapping:
+**Schema detection (required first step):** Codex exposes two `spawn_agent` schemas:
+- **agent_type-capable schema** (e.g. `multi_agent_v2`): `spawn_agent` accepts `agent_type`, `message`, `reasoning_effort`, `fork_context`, etc. — typed GSD agent dispatch is available.
+- **Generic schema** (`multi_agent_v1`): `spawn_agent` accepts only `message`, `items`, `fork_context` — there is **no `agent_type` field**. Typed GSD agent dispatch is unavailable in this session.
+
+Before spawning, inspect the `spawn_agent` tool's visible parameter schema (via `tool_search` or the tool list) to determine which form is active.
+
+Typed mapping (agent_type-capable schema only):
 - `Task(subagent_type="X", prompt="Y")` → `spawn_agent(agent_type="X", message="Y")`
+- `Agent(subagent_type="X", prompt="Y")` → `spawn_agent(agent_type="X", message="Y")`
 - `Task(model="...")` → omit. `spawn_agent` has no inline `model` parameter;
   GSD embeds the resolved per-agent model directly into each agent's `.toml`
   at install time so `model_overrides` from `.planning/config.json` and
@@ -53,10 +60,31 @@ Direct mapping:
   Workflows that require this isolation must fail closed or use an explicit
   manual worktree protocol before spawning (#3360).
 
+Generic-agent workaround (multi_agent_v1 schema — NO agent_type field):
+When only the generic `multi_agent_v1` schema is available, typed GSD agent dispatch
+(`gsd-planner`, `gsd-executor`, etc.) is NOT possible. This is a known Codex limitation
+(openai/codex#15250). **This workaround is NOT equivalent to typed gsd-planner/gsd-executor
+execution** — GSD agents carry project-aware prompts, audit logging, and workflow context
+that a generic subagent lacks. Use the following fallback:
+1. Resolve your active Codex config root — the directory that contains your `config.toml`.
+   This directory is determined in priority order: `$CODEX_HOME` (if set), the path given
+   by `--config-dir` (if passed on invocation), a local `.codex` directory in the current
+   project (if `--local` was used), or the default global config directory. Read
+   `agents/<agent-name>.toml` relative to that config root to extract the agent's system
+   instructions.
+2. Inject those instructions as a role-preamble into a generic `spawn_agent(message=...)` call.
+3. Label results and logs clearly as "generic-agent workaround" so the orchestrator and user
+   know full typed-agent guarantees are not in effect.
+4. Where typed dispatch is mandatory for correctness (e.g. worktree isolation), fail closed
+   and report the schema limitation rather than silently degrading.
+
 Spawn restriction:
 - Codex restricts `spawn_agent` to cases where the user has explicitly
   requested sub-agents. When automatic spawning is not permitted, do the
   work inline in the current agent rather than attempting to force a spawn.
+- In some Codex sessions, multi-agent tooling can be deferred. If `spawn_agent`
+  is not currently visible, discover tools first via `tool_search` before
+  defaulting to inline execution.
 
 Parallel fan-out:
 - Spawn multiple agents → collect agent IDs → `wait(ids)` for all to complete
@@ -79,12 +107,13 @@ Routes to the update workflow which handles:
 </objective>
 
 <execution_context>
-@/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/update.md
+@/home/nnex/dev/prj/git-stacks/.codex/gsd-core/workflows/update.md
 </execution_context>
 
 <flags>
 - **--sync**: Sync managed GSD skills across runtime roots so multi-runtime users stay aligned after an update. Runs the sync-skills workflow (--from, --to, --dry-run, --apply flags supported).
 - **--reapply**: Reapply local modifications after a GSD update. Uses three-way comparison (pristine baseline, user-modified backup, newly installed version) to merge user customizations back. Runs the reapply-patches workflow.
+- **--next** (alias **--rc**): Target the `@next` RC dist-tag instead of `@latest` so you can install or refresh a release candidate (e.g. `1.4.0-rc.1`) through the normal update flow — scope/runtime detection, changelog preview, custom-file backup, and cache clearing all still apply. Omitting it keeps targeting `@latest` (no change). See ADR #660 for the RC channel.
 - **(no flag)**: Standard update — check for new version, show changelog, install.
 </flags>
 
@@ -92,11 +121,11 @@ Routes to the update workflow which handles:
 Parse the first token of {{GSD_ARGS}}:
 - If it is `--sync`: strip the flag, execute the sync-skills workflow (passing remaining args for --from/--to/--dry-run/--apply).
 - If it is `--reapply`: strip the flag, execute the reapply-patches workflow.
-- Otherwise: execute the update workflow end-to-end.
+- Otherwise (including `--next` / `--rc`): execute the update workflow end-to-end, passing `{{GSD_ARGS}}` through so the workflow's parse_update_channel step can select the release channel.
 
 </process>
 
 <execution_context_extended>
-@/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/sync-skills.md
-@/home/nnex/dev/prj/git-stacks/.codex/get-shit-done/workflows/reapply-patches.md
+@/home/nnex/dev/prj/git-stacks/.codex/gsd-core/workflows/sync-skills.md
+@/home/nnex/dev/prj/git-stacks/.codex/gsd-core/workflows/reapply-patches.md
 </execution_context_extended>

@@ -6,6 +6,8 @@ hooks = true
 
 # GSD Agent Configuration — managed by get-shit-done installer
 
+# GSD Agent Configuration — managed by gsd-core installer
+
 [agents.gsd-advisor-researcher]
 description = "Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode."
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-advisor-researcher.toml"
@@ -82,6 +84,10 @@ config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-integration-check
 description = "Analyzes codebase and writes structured intel files to .planning/intel/."
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-intel-updater.toml"
 
+[agents.gsd-mempalace-curator]
+description = "Ship-time MemPalace curation — writes the session diary, proposes/creates cross-project tunnels, mirrors extract-learnings into the temporal KG, and runs wing-scoped drawer pruning. Spawned at ship:post by the mempalace capability."
+config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-mempalace-curator.toml"
+
 [agents.gsd-nyquist-auditor]
 description = "Fills Nyquist validation gaps by generating tests and verifying coverage for phase requirements"
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-nyquist-auditor.toml"
@@ -137,3 +143,4 @@ config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-user-profiler.tom
 [agents.gsd-verifier]
 description = "Verifies phase goal achievement through goal-backward analysis. Checks codebase delivers what phase promised, not just that tasks completed. Creates VERIFICATION.md report."
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-verifier.toml"
+

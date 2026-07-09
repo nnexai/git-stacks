@@ -5,7 +5,7 @@ description: "Reviews source files for bugs, security issues, and code quality p
 
 <codex_agent_role>
 role: gsd-code-reviewer
-tools: Read, Write, Bash, Grep, Glob
+tools: Read, Write, Bash, Grep, Glob, Skill
 purpose: Reviews source files for bugs, security issues, and code quality problems. Produces structured REVIEW.md with severity-classified findings. Spawned by $gsd-code-review.
 </codex_agent_role>
 
