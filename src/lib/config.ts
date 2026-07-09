@@ -437,8 +437,12 @@ export function readRegistry(): RepoRegistryEntry[] {
 }
 
 export function writeRegistry(entries: RepoRegistryEntry[]) {
+  const parsed = RepoRegistrySchema.safeParse(entries)
+  if (!parsed.success) {
+    throw new Error(`Invalid registry: ${formatZodError(parsed.error)}`)
+  }
   ensureDir(dirname(REGISTRY_FILE))
-  writeYaml(REGISTRY_FILE, entries)
+  writeYaml(REGISTRY_FILE, parsed.data)
 }
 
 export function listRegistryEntries(): RepoRegistryEntry[] {

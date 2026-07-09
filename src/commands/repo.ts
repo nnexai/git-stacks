@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { existsSync } from "fs"
 import { resolve, basename, join } from "path"
-import { readRegistry, writeRegistry, readGlobalConfig, type RepoRegistryEntry } from "../lib/config"
+import { readRegistry, writeRegistry, readGlobalConfig, NameSchema, type RepoRegistryEntry } from "../lib/config"
 import { expandHome } from "../lib/paths"
 import { detectRepoType } from "../lib/detect"
 import { getCurrentBranch } from "../lib/git"
@@ -36,6 +36,11 @@ repoCommand
     const isDir = !existsSync(join(localPath, ".git"))
     const registry = readRegistry()
     const name = opts.name ?? basename(localPath)
+    const nameResult = NameSchema.safeParse(name)
+    if (!nameResult.success) {
+      console.error(`Invalid repo name '${name}': ${nameResult.error.issues[0]?.message}`)
+      process.exit(1)
+    }
     if (registry.some((r) => r.name === name)) {
       console.error(`Repo '${name}' already registered. Use a different --name or remove first.`)
       process.exit(1)
@@ -175,6 +180,11 @@ repoCommand
   .command("rename <repo> <new-name>")
   .description("Rename a registered repo in the registry")
   .action((repo: string, newName: string) => {
+    const nameResult = NameSchema.safeParse(newName)
+    if (!nameResult.success) {
+      console.error(`Invalid repo name '${newName}': ${nameResult.error.issues[0]?.message}`)
+      process.exit(1)
+    }
     const registry = readRegistry()
     const entry = registry.find((r) => r.name === repo)
     if (!entry) {

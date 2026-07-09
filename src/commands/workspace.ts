@@ -654,7 +654,7 @@ export function registerWorkspaceCommands(program: Command) {
           console.error(formatError(`Repo '${repo}' not found in workspace '${workspace}'`, `available repos: ${ws.repos.map(r => r.name).join(", ")}`))
           process.exit(1)
         }
-        process.stdout.write(found.task_path + "\n")
+        process.stdout.write(getRepoPath(found) + "\n")
       } else {
         process.stdout.write(join(tasksDir, workspace) + "\n")
       }
