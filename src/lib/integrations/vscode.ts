@@ -32,9 +32,13 @@ const configSchema = z.object({
   enabled: z.boolean().default(true),
   cmd: z.string().default("code-insiders"),
 })
+const configOverrideSchema = z.object({ enabled: z.boolean().optional(), cmd: z.string().optional() })
 
 function getConfig(ctx: IntegrationContext) {
-  return configSchema.parse(ctx.config.integrations["vscode"] ?? {})
+  const global = configSchema.parse(ctx.config.integrations["vscode"] ?? {})
+  const workspace = ctx.workspace.settings?.integrations?.["vscode"]
+  const parsedWorkspace = configOverrideSchema.safeParse(workspace ?? {})
+  return { ...global, ...(parsedWorkspace.success ? parsedWorkspace.data : {}) }
 }
 
 export const vscodeIntegration: Integration & Generates & HasCommands & HasConfigExample = {

@@ -86,6 +86,17 @@ describe("vscode integration plugin", () => {
     expect(result).toEqual({ kind: "window", pid: 1234, app_id: "code", title: "" })
   })
 
+  test("workspace cmd override takes precedence over global command", async () => {
+    const ctx = {
+      ...fakeCtx,
+      workspace: { ...fakeCtx.workspace, settings: { integrations: { vscode: { cmd: "code-workspace" } } } },
+    } as IntegrationContext
+
+    await vscodeIntegration.open(ctx, "/tmp/work.code-workspace", {})
+
+    expect(_exec.which).toHaveBeenCalledWith("code-workspace")
+  })
+
   test("open returns null when configured command is missing", async () => {
     _exec.which = mock(async () => false)
 
