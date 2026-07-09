@@ -1,4 +1,5 @@
 import { $ } from "bun"
+import { requirePlatformSuccess } from "./platform-exec"
 import { z } from "zod"
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
@@ -91,6 +92,10 @@ export const _exec = {
   },
 }
 
+async function runAction(args: string[], command: string): Promise<void> {
+  requirePlatformSuccess(command, await _exec.run(args))
+}
+
 // ─── Exported Functions ───────────────────────────────────────────────────────
 
 /**
@@ -138,9 +143,9 @@ export async function setNiriWorkspaceName(
   workspaceRef?: string | number
 ): Promise<void> {
   if (workspaceRef !== undefined) {
-    await _exec.run(["action", "set-workspace-name", name, "--workspace", String(workspaceRef)])
+    await runAction(["action", "set-workspace-name", name, "--workspace", String(workspaceRef)], "niri set-workspace-name")
   } else {
-    await _exec.run(["action", "set-workspace-name", name])
+    await runAction(["action", "set-workspace-name", name], "niri set-workspace-name")
   }
 }
 
@@ -152,13 +157,13 @@ export async function moveWindowToWorkspace(
   windowId: number,
   workspaceRef: string | number
 ): Promise<void> {
-  await _exec.run([
+  await runAction([
     "action",
     "move-window-to-workspace",
     String(workspaceRef),
     "--window-id",
     String(windowId),
-  ])
+  ], "niri move-window-to-workspace")
 }
 
 /**
@@ -167,7 +172,7 @@ export async function moveWindowToWorkspace(
  * misinterpreted as niri flags.
  */
 export async function niriSpawn(command: string[]): Promise<void> {
-  await _exec.run(["action", "spawn", "--", ...command])
+  await runAction(["action", "spawn", "--", ...command], "niri spawn")
 }
 
 /**
@@ -175,7 +180,7 @@ export async function niriSpawn(command: string[]): Promise<void> {
  * ref: string = workspace name, number = workspace index.
  */
 export async function focusNiriWorkspace(ref: string | number): Promise<void> {
-  await _exec.run(["action", "focus-workspace", String(ref)])
+  await runAction(["action", "focus-workspace", String(ref)], "niri focus-workspace")
 }
 
 /**
@@ -183,7 +188,7 @@ export async function focusNiriWorkspace(ref: string | number): Promise<void> {
  * Used to create a fresh niri workspace for a new git-stacks workspace.
  */
 export async function focusNiriWorkspaceDown(): Promise<void> {
-  await _exec.run(["action", "focus-workspace-down"])
+  await runAction(["action", "focus-workspace-down"], "niri focus-workspace-down")
 }
 
 /**
@@ -195,9 +200,9 @@ export async function unsetNiriWorkspaceName(
   workspaceRef?: string | number
 ): Promise<void> {
   if (workspaceRef !== undefined) {
-    await _exec.run(["action", "unset-workspace-name", String(workspaceRef)])
+    await runAction(["action", "unset-workspace-name", String(workspaceRef)], "niri unset-workspace-name")
   } else {
-    await _exec.run(["action", "unset-workspace-name"])
+    await runAction(["action", "unset-workspace-name"], "niri unset-workspace-name")
   }
 }
 
@@ -248,7 +253,7 @@ export async function snapshotWindowIds(
  * Used before setNiriColumnWidth to ensure the correct column is targeted.
  */
 export async function focusNiriWindow(windowId: number): Promise<void> {
-  await _exec.run(["action", "focus-window", "--id", String(windowId)])
+  await runAction(["action", "focus-window", "--id", String(windowId)], "niri focus-window")
 }
 
 /**
@@ -256,7 +261,7 @@ export async function focusNiriWindow(windowId: number): Promise<void> {
  * change can be an absolute pixel value (e.g. "800") or percentage (e.g. "50%").
  */
 export async function setNiriColumnWidth(change: string): Promise<void> {
-  await _exec.run(["action", "set-column-width", change])
+  await runAction(["action", "set-column-width", change], "niri set-column-width")
 }
 
 /**
@@ -266,9 +271,9 @@ export async function setNiriColumnWidth(change: string): Promise<void> {
  */
 export async function consumeOrExpelWindowLeft(windowId?: number): Promise<void> {
   if (windowId !== undefined) {
-    await _exec.run(["action", "consume-or-expel-window-left", "--id", String(windowId)])
+    await runAction(["action", "consume-or-expel-window-left", "--id", String(windowId)], "niri consume-or-expel-window-left")
   } else {
-    await _exec.run(["action", "consume-or-expel-window-left"])
+    await runAction(["action", "consume-or-expel-window-left"], "niri consume-or-expel-window-left")
   }
 }
 
@@ -278,7 +283,7 @@ export async function consumeOrExpelWindowLeft(windowId?: number): Promise<void>
  * semicolons, and other shell features (cd, &&, etc.).
  */
 export async function niriSpawnSh(command: string): Promise<void> {
-  await _exec.run(["action", "spawn-sh", "--", command])
+  await runAction(["action", "spawn-sh", "--", command], "niri spawn-sh")
 }
 
 /**
@@ -287,7 +292,7 @@ export async function niriSpawnSh(command: string): Promise<void> {
  * Used in the two-phase layout approach (Phase 2 reorder step).
  */
 export async function moveColumnToIndex(index: number): Promise<void> {
-  await _exec.run(["action", "move-column-to-index", String(index)])
+  await runAction(["action", "move-column-to-index", String(index)], "niri move-column-to-index")
 }
 
 /**
@@ -296,5 +301,5 @@ export async function moveColumnToIndex(index: number): Promise<void> {
  * Unlike setNiriColumnWidth, this uses --id and does not require the window to be focused.
  */
 export async function setWindowWidth(windowId: number, change: string): Promise<void> {
-  await _exec.run(["action", "set-window-width", "--id", String(windowId), change])
+  await runAction(["action", "set-window-width", "--id", String(windowId), change], "niri set-window-width")
 }
