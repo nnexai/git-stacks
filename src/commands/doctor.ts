@@ -1,5 +1,5 @@
 import { Command } from "commander"
-import { existsSync, readdirSync, readFileSync, rmSync } from "fs"
+import { existsSync, readdirSync, readFileSync, rmSync, renameSync } from "fs"
 import { join } from "path"
 import { $ } from "bun"
 import { parse } from "yaml"
@@ -11,6 +11,7 @@ import {
   WorkspaceSchema,
   TemplateSchema,
   isWorktreeRepo,
+  invalidateConfigCache,
   type Workspace,
   type RepoRegistryEntry,
 } from "../lib/config"
@@ -23,8 +24,8 @@ type FixOperation =
   | { action: "remove-dir"; path: string }
   | { action: "open-workspace"; name: string }
   | { action: "remove-repo"; name: string }
-  | { action: "rename-workspace"; name: string }
-  | { action: "rename-template"; name: string }
+  | { action: "rename-workspace"; name: string; sourcePath: string; targetPath: string }
+  | { action: "rename-template"; name: string; sourcePath: string; targetPath: string }
   | { action: "info"; message: string }
 
 interface Issue {
@@ -39,8 +40,8 @@ function formatFix(fix: FixOperation): string {
     case "remove-dir": return `rm -rf ${fix.path}`
     case "open-workspace": return `git-stacks open ${fix.name} --no-ide --no-cmux`
     case "remove-repo": return `git-stacks repo remove ${fix.name}`
-    case "rename-workspace": return `git-stacks rename ${fix.name} ${fix.name}`
-    case "rename-template": return `git-stacks template rename ${fix.name} ${fix.name}`
+    case "rename-workspace": return `rename storage file to ${fix.targetPath}`
+    case "rename-template": return `rename storage file to ${fix.targetPath}`
     case "info": return fix.message
   }
 }
@@ -76,20 +77,16 @@ async function executeFix(
       )
       return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }
     }
-    case "rename-workspace": {
-      const result = Bun.spawnSync(
-        ["bun", "run", join(import.meta.dir, "../index.ts"), "rename", fix.name, fix.name],
-        { stdio }
-      )
-      return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }
-    }
-    case "rename-template": {
-      const result = Bun.spawnSync(
-        ["bun", "run", join(import.meta.dir, "../index.ts"), "template", "rename", fix.name, fix.name],
-        { stdio }
-      )
-      return result.exitCode === 0 ? { ok: true } : { ok: false, error: `exit ${result.exitCode}` }
-    }
+    case "rename-workspace":
+    case "rename-template":
+      try {
+        if (existsSync(fix.targetPath)) return { ok: false, error: `target already exists: ${fix.targetPath}` }
+        renameSync(fix.sourcePath, fix.targetPath)
+        invalidateConfigCache()
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: String(err) }
+      }
     case "info":
       // Info-only — not executable, display only
       return { ok: true }
@@ -238,7 +235,7 @@ function findWorkspaceNameDrift(): Issue[] {
           icon: "warn",
           entity: parsed.data.name,
           message: `name field '${parsed.data.name}' does not match filename '${f}'`,
-          fix: { action: "rename-workspace", name: parsed.data.name },
+          fix: { action: "rename-workspace", name: parsed.data.name, sourcePath: join(WORKSPACES_DIR, f), targetPath: join(WORKSPACES_DIR, `${parsed.data.name}.yml`) },
         })
       }
     } catch { /* skip unreadable */ }
@@ -260,7 +257,7 @@ function findTemplateNameDrift(): Issue[] {
           icon: "warn",
           entity: parsed.data.name,
           message: `name field '${parsed.data.name}' does not match filename '${f}'`,
-          fix: { action: "rename-template", name: parsed.data.name },
+          fix: { action: "rename-template", name: parsed.data.name, sourcePath: join(TEMPLATES_DIR, f), targetPath: join(TEMPLATES_DIR, `${parsed.data.name}.yml`) },
         })
       }
     } catch { /* skip unreadable */ }
@@ -347,6 +344,7 @@ export const doctorCommand = new Command("doctor")
     }
 
     // Collect ALL issues into one flat array
+    const checks = binaryIssues.filter((issue) => issue.icon === "pass")
     const allIssues: Issue[] = [
       ...orphaned,
       ...missingWorktrees,
@@ -356,7 +354,7 @@ export const doctorCommand = new Command("doctor")
       ...deadRegistryPaths,
       ...workspaceNameDrift,
       ...templateNameDrift,
-      ...binaryIssues,
+      ...binaryIssues.filter((issue) => issue.icon !== "pass"),
     ]
 
     // --- JSON output (UX-02) ---
@@ -374,13 +372,13 @@ export const doctorCommand = new Command("doctor")
           })
         }
         const healthy = allIssues.length === 0
-        const output = { healthy, issues: allIssues, fixes: fixResults }
+        const output = { healthy, issues: allIssues, checks, fixes: fixResults }
         console.log(JSON.stringify(output, null, 2))
         return
       }
 
       const healthy = allIssues.length === 0
-      const output = { healthy, issues: allIssues }
+      const output = { healthy, issues: allIssues, checks }
       console.log(JSON.stringify(output, null, 2))
       return
     }
