@@ -1,22 +1,57 @@
 import { prompts as p, safeText, cancel } from "./utils"
-import { mkdirSync, existsSync } from "fs"
 import { join } from "path"
 import {
   listWorkspaces,
   readWorkspace,
   workspaceExists,
-  writeWorkspace,
   readGlobalConfig,
   readTemplate,
   isWorktreeRepo,
+  type Workspace,
   type WorkspaceRepo,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
-import { createWorktree, ensureUpstreamTracking } from "../lib/git"
-import { integrations, resolveEnabledGlobally, type IntegrationContext } from "../lib/integrations"
+import { integrations, resolveEnabledGlobally } from "../lib/integrations"
 import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
-import { runIntegrationGenerate } from "../lib/integrations/runner"
 import { openWorkspace } from "../lib/workspace-ops"
+import { createWorkspace } from "../lib/workspace-lifecycle"
+
+function cloneRepos(source: Workspace, tasksDir: string, name: string): WorkspaceRepo[] {
+  return source.repos.map((repo) =>
+    repo.mode === "worktree"
+      ? { ...repo, task_path: join(tasksDir, name, repo.name) } as WorkspaceRepo
+      : repo
+  )
+}
+
+async function createClone(
+  source: Workspace,
+  name: string,
+  branch: string,
+  tasksDir: string,
+  integrationOverrides?: Record<string, unknown>
+) {
+  const sourceStartRefs = Object.fromEntries(
+    source.repos.filter(isWorktreeRepo).map((repo) => [repo.name, source.branch])
+  )
+  return createWorkspace({
+    wsName: name,
+    branch,
+    description: source.description,
+    templateName: source.template,
+    repos: cloneRepos(source, tasksDir, name),
+    wsHooks: source.hooks,
+    wsCommands: source.commands,
+    wsEnv: source.env,
+    wsEnvFile: source.env_file,
+    wsFiles: source.files,
+    wsIntegrationSettings: integrationOverrides ?? (source.settings?.integrations as Record<string, unknown> | undefined),
+    wsPorts: source.ports,
+    labels: source.labels,
+    source: source.source,
+    sourceStartRefs,
+  })
+}
 
 export async function runWorkspaceClone(
   sourceArg?: string,
@@ -49,51 +84,10 @@ export async function runWorkspaceClone(
     const newBranch = opts.branch?.trim() || `feature/${newName}`
     const source = readWorkspace(sourceName)
 
-    const newRepos: WorkspaceRepo[] = source.repos.map((repo) => {
-      if (repo.mode === "worktree") {
-        return { ...repo, task_path: join(tasksDir, newName, repo.name) } as WorkspaceRepo
-      }
-      return repo
-    })
-
-    const worktreeRepos = newRepos.filter(isWorktreeRepo)
-    if (worktreeRepos.length > 0) {
-      const wsDir = join(tasksDir, newName)
-      if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
-      for (const repo of worktreeRepos) {
-        p.log.info(`Creating worktree for ${repo.name}`)
-        try {
-          await createWorktree(repo.main_path, repo.task_path, newBranch)
-        } catch (err) {
-          console.error(`[git-stacks] Failed to create worktree for ${repo.name}: ${err instanceof Error ? err.message : String(err)}`)
-          process.exit(1)
-        }
-      }
-
-      const trackingResults = await Promise.all(
-        worktreeRepos.map(repo => ensureUpstreamTracking(repo.main_path, newBranch))
-      )
-      const tracked = trackingResults.filter(r => r.tracked)
-      if (tracked.length > 0) {
-        p.log.info(`Upstream tracking set for ${tracked.length} repo(s)`)
-      }
-    }
-
-    const { cmux_workspace_id: _, ...restSource } = source
-    const newWorkspace = {
-      ...restSource,
-      name: newName,
-      branch: newBranch,
-      created: new Date().toISOString().split("T")[0],
-      repos: newRepos,
-      labels: source.labels,
-    }
-    writeWorkspace(newWorkspace)
-
-    const ctx: IntegrationContext = { workspace: newWorkspace, tasksDir, config }
-    const results = await runIntegrationGenerate(ctx)
-    for (const { integration, path } of results) {
-      if (path) p.log.success(`${integration.label}: ${path}`)
+    const created = await createClone(source, newName, newBranch, tasksDir)
+    if (!created.ok) {
+      console.error(`[git-stacks] Failed to clone workspace: ${created.error}`)
+      process.exit(1)
     }
 
     if (opts.open) {
@@ -200,70 +194,10 @@ export async function runWorkspaceClone(
 
   const userIntegrationOverrides = await promptIntegrationOverrides(initialEnabledIds, currentConfigs)
 
-  // Recompute task_paths for worktree repos
-  const newRepos: WorkspaceRepo[] = source.repos.map((repo) => {
-    if (repo.mode === "worktree") {
-      // Cast: spreading a WorkspaceRepo with an updated task_path is always a valid WorkspaceRepo
-      return { ...repo, task_path: join(tasksDir, newName, repo.name) } as WorkspaceRepo
-    }
-    return repo
-  })
-
-  // Create worktrees
-  const worktreeRepos = newRepos.filter(isWorktreeRepo)
-  if (worktreeRepos.length > 0) {
-    const spinner = p.spinner()
-    spinner.start("Creating worktrees")
-    const wsDir = join(tasksDir, newName)
-    if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
-    for (const repo of worktreeRepos) {
-      spinner.message(`${repo.name}\u2026`)
-      try {
-        await createWorktree(repo.main_path, repo.task_path, newBranch)
-      } catch (err) {
-        spinner.stop(`Failed on ${repo.name}`)
-        p.log.error(String(err))
-        process.exit(1)
-      }
-    }
-    spinner.stop(`${worktreeRepos.length} worktree(s) created`)
-
-    // Set upstream tracking for branches that exist on origin
-    const trackingResults = await Promise.all(
-      worktreeRepos.map(repo => ensureUpstreamTracking(repo.main_path, newBranch))
-    )
-    const tracked = trackingResults.filter(r => r.tracked)
-    if (tracked.length > 0) {
-      p.log.info(`Upstream tracking set for ${tracked.length} repo(s)`)
-    }
-  }
-
-  // Build and save new workspace (drop cmux_workspace_id, preserve template ref)
-  const { cmux_workspace_id: _, settings: _existingSettings, ...restNoSettings } = source
-  const mergedSettings = (() => {
-    const base = _existingSettings ?? {}
-    if (userIntegrationOverrides && Object.keys(userIntegrationOverrides).length > 0) {
-      return { ...base, integrations: userIntegrationOverrides }
-    }
-    return base
-  })()
-
-  const newWorkspace = {
-    ...restNoSettings,
-    name: newName,
-    branch: newBranch,
-    created: new Date().toISOString().split("T")[0],
-    repos: newRepos,
-    labels: source.labels,
-    ...(Object.keys(mergedSettings).length > 0 ? { settings: mergedSettings } : {}),
-  }
-  writeWorkspace(newWorkspace)
-
-  // Generate integration artifacts
-  const ctx: IntegrationContext = { workspace: newWorkspace, tasksDir, config }
-  const results = await runIntegrationGenerate(ctx)
-  for (const { integration, path } of results) {
-    if (path) p.log.success(`${integration.label}: ${path}`)
+  const created = await createClone(source, newName, newBranch, tasksDir, userIntegrationOverrides)
+  if (!created.ok) {
+    p.cancel(`Failed to clone workspace: ${created.error}`)
+    process.exit(1)
   }
 
   const openNow = await p.confirm({ message: "Open workspace now?", initialValue: true })

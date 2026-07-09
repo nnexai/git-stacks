@@ -13,6 +13,7 @@ import {
 } from "../helpers"
 import {
   createWorktree,
+  createWorktreeFromRef,
   removeWorktree,
   isWorktreeRegistered,
   getMergeConflicts,
@@ -191,6 +192,49 @@ describe("createWorktree", () => {
     expect(registered).toBe(true)
     expect(wtHead).toBe(branchHead)
     expect(readFileSync(join(wtPath, "existing.txt"), "utf8")).toBe("existing branch\n")
+  })
+})
+
+describe("createWorktreeFromRef", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-test")
+    repoPath = makeGitRepo(tmp)
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("does not move an equivalent existing branch", async () => {
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git branch feature/equivalent", opts)
+    const wtPath = join(tmp, "wt", "equivalent")
+
+    const result = await createWorktreeFromRef(repoPath, wtPath, "feature/equivalent", "main")
+
+    expect(result).toEqual({ createdWorktree: true, createdBranch: false })
+    expect(execSync("git rev-parse feature/equivalent", opts).toString().trim())
+      .toBe(execSync("git rev-parse main", opts).toString().trim())
+  })
+
+  test("records provenance when it moves an existing branch", async () => {
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git checkout -b seed", opts)
+    writeFileSync(join(repoPath, "seed.txt"), "seed\n")
+    execSync("git add seed.txt && git commit -m seed", opts)
+    const previousSha = execSync("git rev-parse HEAD", opts).toString().trim()
+    execSync("git branch feature/moved && git checkout main", opts)
+    const wtPath = join(tmp, "wt", "moved")
+    const mainSha = execSync("git rev-parse main", opts).toString().trim()
+
+    const result = await createWorktreeFromRef(repoPath, wtPath, "feature/moved", "main")
+
+    expect(result).toEqual({
+      createdWorktree: true,
+      createdBranch: false,
+      movedBranch: { previousSha, createdSha: mainSha },
+    })
+    expect(execSync("git rev-parse feature/moved", opts).toString().trim()).toBe(mainSha)
   })
 })
 

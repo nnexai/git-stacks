@@ -14,9 +14,12 @@ const readGlobalConfigMock = mock(() => ({
 }))
 
 // ─── Git mocks ────────────────────────────────────────────────────────────────
-const createWorktreeMock = mock(async (_repo: string, _path: string, _branch: string) => {})
+const createWorktreeMock = mock(async (_repo: string, _path: string, _branch: string) => ({ createdWorktree: true, createdBranch: true }))
+const createWorktreeFromRefMock = mock(async (_repo: string, _path: string, _branch: string, _ref: string) => ({ createdWorktree: true, createdBranch: true }))
 const removeWorktreeMock = mock(async (_repo: string, _path: string) => {})
 const ensureUpstreamTrackingMock = mock(async (_repo: string, _branch: string) => ({ tracked: false }))
+const deleteLocalBranchMock = mock(async () => ({ ok: true as const }))
+const compareAndSwapBranchMock = mock(async () => ({ ok: true as const }))
 
 // ─── Files mocks ──────────────────────────────────────────────────────────────
 const applyFileOpsForRepoMock = mock((_source?: any, _repo?: any) => ({ ok: true as const } as { ok: true } | { ok: false; error: string }))
@@ -48,6 +51,7 @@ mock.module("@/lib/config", () =>
 mock.module("@/lib/git", () => ({
   // createWorkspace consumes these directly:
   createWorktree: createWorktreeMock,
+  createWorktreeFromRef: createWorktreeFromRefMock,
   removeWorktree: removeWorktreeMock,
   ensureUpstreamTracking: ensureUpstreamTrackingMock,
   // Existing clean/close/merge/remove paths in workspace-lifecycle.ts also import
@@ -55,7 +59,8 @@ mock.module("@/lib/git", () => ({
   checkBranchExists: mock(async () => false),
   getMergeConflicts: mock(async () => ({ status: "clean" })),
   mergeNoFF: mock(async () => ({ ok: true })),
-  deleteLocalBranch: mock(async () => {}),
+  deleteLocalBranch: deleteLocalBranchMock,
+  compareAndSwapBranch: compareAndSwapBranchMock,
 }))
 
 mock.module("@/lib/files", () => ({
@@ -147,8 +152,11 @@ function defaultSpawn(_args: any): any {
 beforeEach(() => {
   writeWorkspaceMock.mockClear()
   createWorktreeMock.mockClear()
+  createWorktreeFromRefMock.mockClear()
   removeWorktreeMock.mockClear()
   ensureUpstreamTrackingMock.mockClear()
+  deleteLocalBranchMock.mockClear()
+  compareAndSwapBranchMock.mockClear()
   applyFileOpsForRepoMock.mockClear()
   applyFileOpsForWorkspaceMock.mockClear()
   writeEnvFilesMock.mockClear()
@@ -156,7 +164,10 @@ beforeEach(() => {
   composeTemplatesMock.mockClear()
 
   // Reset default behaviors
-  createWorktreeMock.mockImplementation(async () => {})
+  createWorktreeMock.mockImplementation(async () => ({ createdWorktree: true, createdBranch: true }))
+  createWorktreeFromRefMock.mockImplementation(async () => ({ createdWorktree: true, createdBranch: true }))
+  deleteLocalBranchMock.mockResolvedValue({ ok: true })
+  compareAndSwapBranchMock.mockResolvedValue({ ok: true })
   removeWorktreeMock.mockImplementation(async () => {})
   ensureUpstreamTrackingMock.mockImplementation(async () => ({ tracked: false }))
   applyFileOpsForRepoMock.mockImplementation(() => ({ ok: true as const }))
@@ -326,6 +337,7 @@ describe("createWorkspace", () => {
       createWorktreeMock.mockImplementation(async (_repo, _path) => {
         calls++
         if (calls === 2) throw new Error("simulated B failure")
+        return { createdWorktree: true, createdBranch: true }
       })
 
       const messages: string[] = []
@@ -350,6 +362,66 @@ describe("createWorkspace", () => {
       )
       // Rollback message routed through onProgress (D-14, D-15)
       expect(messages.some((m) => m === "Rollback: create worktree a")).toBe(true)
+    })
+  })
+
+  describe("worktree ownership compensation", () => {
+    test("removes a new branch after a later repo fails", async () => {
+      let calls = 0
+      createWorktreeMock.mockImplementation(async () => {
+        calls++
+        if (calls === 2) throw new Error("later repo failed")
+        return { createdWorktree: true, createdBranch: true }
+      })
+
+      const result = await createWorkspace({
+        wsName: "test-ws", branch: "feature/test", repos: makeRepos(["a", "b"]),
+      })
+
+      expect(result.ok).toBe(false)
+      expect(removeWorktreeMock).toHaveBeenCalledWith("/tmp/main/a", expect.any(String))
+      expect(deleteLocalBranchMock).toHaveBeenCalledWith("/tmp/main/a", "feature/test")
+      expect(writeWorkspaceMock).not.toHaveBeenCalled()
+    })
+
+    test("restores a moved source branch after a later repo fails", async () => {
+      let calls = 0
+      createWorktreeFromRefMock.mockImplementation(async () => {
+        calls++
+        if (calls === 2) throw new Error("later repo failed")
+        return {
+          createdWorktree: true,
+          createdBranch: false,
+          movedBranch: { previousSha: "before", createdSha: "source" },
+        }
+      })
+
+      const result = await createWorkspace({
+        wsName: "test-ws",
+        branch: "feature/test",
+        repos: makeRepos(["a", "b"]),
+        sourceStartRefs: { a: "source/a", b: "source/b" },
+      })
+
+      expect(result.ok).toBe(false)
+      expect(compareAndSwapBranchMock).toHaveBeenCalledWith("/tmp/main/a", "feature/test", "source", "before")
+      expect(deleteLocalBranchMock).not.toHaveBeenCalled()
+    })
+
+    test("does not remove a pre-existing worktree after a later repo fails", async () => {
+      let calls = 0
+      createWorktreeMock.mockImplementation(async () => {
+        calls++
+        if (calls === 2) throw new Error("later repo failed")
+        return { createdWorktree: false, createdBranch: false }
+      })
+
+      await createWorkspace({
+        wsName: "test-ws", branch: "feature/test", repos: makeRepos(["a", "b"]),
+      })
+
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+      expect(deleteLocalBranchMock).not.toHaveBeenCalled()
     })
   })
 
@@ -389,6 +461,7 @@ describe("createWorkspace", () => {
       // Repo B's removeWorktree throws; Repo A's removeWorktree succeeds.
       createWorktreeMock.mockImplementation(async (_repo, path) => {
         if (path.endsWith("/c")) throw new Error("simulated C failure")
+        return { createdWorktree: true, createdBranch: true }
       })
       removeWorktreeMock.mockImplementation(async (_repo, path) => {
         if (path.endsWith("/b")) throw new Error("simulated remove B failure")
@@ -448,6 +521,7 @@ describe("createWorkspace", () => {
       createWorktreeMock.mockImplementation(async () => {
         calls++
         if (calls === 2) throw new Error("simulated second failure")
+        return { createdWorktree: true, createdBranch: true }
       })
 
       const messages: string[] = []

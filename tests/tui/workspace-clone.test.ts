@@ -64,6 +64,8 @@ const sourceWorkspace = {
   branch: "feature/source",
   created: "2026-04-01",
   template: "source-template",
+  cmux_workspace_id: "runtime-only",
+  settings: { integrations: { vscode: { enabled: true } } },
   labels: ["backend", "sprint:14"],
   repos: [
     {
@@ -81,7 +83,6 @@ const sourceWorkspace = {
 const mockListWorkspaces = mock(() => [sourceWorkspace])
 const mockReadWorkspace = mock((_name: string) => sourceWorkspace)
 const mockWorkspaceExists = mock((name: string): boolean => name === "source")
-const mockWriteWorkspace = mock((_ws: unknown) => {})
 const mockReadGlobalConfig = mock(() => ({
   workspace_root: workspaceRoot,
   integrations: {},
@@ -96,7 +97,6 @@ mock.module("@/lib/config", () => makeConfigMock({
   listWorkspaces: mockListWorkspaces,
   readWorkspace: mockReadWorkspace,
   workspaceExists: mockWorkspaceExists,
-  writeWorkspace: mockWriteWorkspace,
   readGlobalConfig: mockReadGlobalConfig,
   readTemplate: mockReadTemplate,
   isWorktreeRepo: (repo: { mode: string }) => repo.mode === "worktree",
@@ -106,11 +106,11 @@ mock.module("@/lib/paths", () => ({
   getTasksDir: mock(() => tasksRoot),
 }))
 
-const mockCreateWorktree = mock(async () => {})
-const mockEnsureUpstreamTracking = mock(async () => ({ tracked: false }))
-mock.module("@/lib/git", () => ({
-  createWorktree: mockCreateWorktree,
-  ensureUpstreamTracking: mockEnsureUpstreamTracking,
+const mockCreateWorkspace = mock(async (_input: unknown): Promise<
+  { ok: true; workspace: unknown } | { ok: false; error: string; rollbackErrors: string[] }
+> => ({ ok: true, workspace: {} }))
+mock.module("@/lib/workspace-lifecycle", () => ({
+  createWorkspace: mockCreateWorkspace,
 }))
 
 const mockOpenWorkspace = mock(async () => ({ ok: true }))
@@ -124,9 +124,7 @@ describe("workspace-clone label propagation", () => {
   beforeEach(() => {
     mockSafeText.mockReset()
     mockConfirm.mockReset()
-    mockWriteWorkspace.mockReset()
-    mockCreateWorktree.mockReset()
-    mockEnsureUpstreamTracking.mockReset()
+    mockCreateWorkspace.mockReset()
     mockPromptIntegrationOverrides.mockReset()
     mockRunIntegrationGenerate.mockReset()
 
@@ -134,23 +132,16 @@ describe("workspace-clone label propagation", () => {
       .mockResolvedValueOnce("source-copy")
       .mockResolvedValueOnce("feature/source-copy")
     mockConfirm.mockResolvedValue(false)
-    mockCreateWorktree.mockResolvedValue(undefined)
-    mockEnsureUpstreamTracking.mockResolvedValue({ tracked: false })
+    mockCreateWorkspace.mockResolvedValue({ ok: true, workspace: {} })
     mockPromptIntegrationOverrides.mockResolvedValue(undefined)
     mockRunIntegrationGenerate.mockResolvedValue([])
   })
 
-  test("preserves source labels in the cloned workspace YAML", async () => {
+  test("passes source labels and snapshot refs to transactional creation", async () => {
     await runWorkspaceClone("source")
 
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
-      "/repos/frontend",
-      join(tasksRoot, "source-copy", "frontend"),
-      "feature/source-copy",
-    )
-    expect(mockWriteWorkspace).toHaveBeenCalledTimes(1)
-    expect(mockWriteWorkspace).toHaveBeenCalledWith(expect.objectContaining({
-      name: "source-copy",
+    expect(mockCreateWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      wsName: "source-copy",
       branch: "feature/source-copy",
       repos: [
         expect.objectContaining({
@@ -159,7 +150,10 @@ describe("workspace-clone label propagation", () => {
         }),
       ],
       labels: ["backend", "sprint:14"],
+      sourceStartRefs: { frontend: "feature/source" },
+      wsIntegrationSettings: { vscode: { enabled: true } },
     }))
+    expect(mockCreateWorkspace.mock.calls[0][0]).not.toHaveProperty("cmux_workspace_id")
   })
 })
 
@@ -169,9 +163,7 @@ describe("clone --non-interactive", () => {
     mockSafeText.mockReset()
     mockSelect.mockReset()
     mockConfirm.mockReset()
-    mockWriteWorkspace.mockReset()
-    mockCreateWorktree.mockReset()
-    mockEnsureUpstreamTracking.mockReset()
+    mockCreateWorkspace.mockReset()
     mockPromptIntegrationOverrides.mockReset()
     mockRunIntegrationGenerate.mockReset()
     mockWorkspaceExists.mockReset()
@@ -180,8 +172,7 @@ describe("clone --non-interactive", () => {
     exitMock.mockReset()
 
     mockWorkspaceExists.mockImplementation((name: string) => name === "source")
-    mockCreateWorktree.mockResolvedValue(undefined)
-    mockEnsureUpstreamTracking.mockResolvedValue({ tracked: false })
+    mockCreateWorkspace.mockResolvedValue({ ok: true, workspace: {} })
     mockPromptIntegrationOverrides.mockResolvedValue(undefined)
     mockRunIntegrationGenerate.mockResolvedValue([])
     mockOpenWorkspace.mockResolvedValue({ ok: true })
@@ -200,15 +191,11 @@ describe("clone --non-interactive", () => {
     expect(mockSelect.mock.calls.length).toBe(0)
     expect(mockConfirm.mock.calls.length).toBe(0)
     expect(mockPromptIntegrationOverrides.mock.calls.length).toBe(0)
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
-      "/repos/frontend",
-      join(tasksRoot, "dest", "frontend"),
-      "feature/dest",
-    )
-    expect(mockWriteWorkspace).toHaveBeenCalledWith(expect.objectContaining({
-      name: "dest",
+    expect(mockCreateWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      wsName: "dest",
       branch: "feature/dest",
       labels: ["backend", "sprint:14"],
+      sourceStartRefs: { frontend: "feature/source" },
     }))
   })
 
@@ -238,20 +225,25 @@ describe("clone --non-interactive", () => {
   test("clone --non-interactive branch defaults to feature destination name", async () => {
     await runWorkspaceClone("source", { nonInteractive: true, name: "dest" })
 
-    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { branch: string }
-    expect(savedWs.branch).toBe("feature/dest")
+    const input = mockCreateWorkspace.mock.calls[0][0] as { branch: string }
+    expect(input.branch).toBe("feature/dest")
   })
 
   test("clone --non-interactive uses explicit branch", async () => {
     await runWorkspaceClone("source", { nonInteractive: true, name: "dest", branch: "ticket/99" })
 
-    const savedWs = mockWriteWorkspace.mock.calls[0][0] as { branch: string }
-    expect(savedWs.branch).toBe("ticket/99")
-    expect(mockCreateWorktree).toHaveBeenCalledWith(
-      "/repos/frontend",
-      join(tasksRoot, "dest", "frontend"),
-      "ticket/99",
-    )
+    const input = mockCreateWorkspace.mock.calls[0][0] as { branch: string; repos: Array<{ task_path: string }> }
+    expect(input.branch).toBe("ticket/99")
+    expect(input.repos[0].task_path).toBe(join(tasksRoot, "dest", "frontend"))
+  })
+
+  test("clone --non-interactive reports transactional creation failures", async () => {
+    mockCreateWorkspace.mockResolvedValue({ ok: false, error: "repo two failed", rollbackErrors: [] })
+
+    await expect(runWorkspaceClone("source", { nonInteractive: true, name: "dest" }))
+      .rejects.toThrow("process.exit(1)")
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("repo two failed"))
   })
 
   test("clone --non-interactive opens only when --open is set", async () => {

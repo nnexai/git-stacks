@@ -76,10 +76,10 @@ export async function createWorktree(
   repoPath: string,
   worktreePath: string,
   branch: string
-): Promise<void> {
+): Promise<WorktreeCreation> {
   // If directory exists and is already a git worktree, skip
   if (existsSync(worktreePath) && existsSync(join(worktreePath, ".git"))) {
-    return
+    return { createdWorktree: false, createdBranch: false }
   }
 
   // Prune stale worktree entries that point to missing directories
@@ -119,6 +119,13 @@ export async function createWorktree(
   }
 
   await ensureUpstreamTracking(worktreePath, branch)
+  return { createdWorktree: true, createdBranch: !branchExists }
+}
+
+export type WorktreeCreation = {
+  createdWorktree: boolean
+  createdBranch: boolean
+  movedBranch?: { previousSha: string; createdSha: string }
 }
 
 export async function createWorktreeFromRef(
@@ -126,17 +133,34 @@ export async function createWorktreeFromRef(
   worktreePath: string,
   branch: string,
   startRef: string,
-): Promise<void> {
+): Promise<WorktreeCreation> {
   if (existsSync(worktreePath) && existsSync(join(worktreePath, ".git"))) {
-    return
+    return { createdWorktree: false, createdBranch: false }
   }
   await $`git -C ${repoPath} worktree prune`.quiet().nothrow()
-  const result = await $`git -C ${repoPath} worktree add -B ${branch} ${worktreePath} ${startRef}`.quiet().nothrow()
+  const startResult = await $`git -C ${repoPath} rev-parse --verify ${startRef + "^{commit}"}`.quiet().nothrow()
+  if (startResult.exitCode !== 0) {
+    throw new Error(`Cannot resolve source start ref '${startRef}': ${startResult.stderr.toString().trim()}`)
+  }
+  const startSha = startResult.stdout.toString().trim()
+  const branchResult = await $`git -C ${repoPath} rev-parse --verify ${branch + "^{commit}"}`.quiet().nothrow()
+  const branchExists = branchResult.exitCode === 0
+  const previousSha = branchExists ? branchResult.stdout.toString().trim() : undefined
+  const result = !branchExists
+    ? await $`git -C ${repoPath} worktree add -b ${branch} ${worktreePath} ${startSha}`.quiet().nothrow()
+    : previousSha === startSha
+      ? await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet().nothrow()
+      : await $`git -C ${repoPath} worktree add -B ${branch} ${worktreePath} ${startSha}`.quiet().nothrow()
   if (result.exitCode !== 0) {
     const stderr = result.stderr.toString().trim()
     throw new Error(`Failed to create worktree at '${worktreePath}' from '${startRef}': ${stderr}`)
   }
   await ensureUpstreamTracking(worktreePath, branch)
+  return {
+    createdWorktree: true,
+    createdBranch: !branchExists,
+    ...(previousSha && previousSha !== startSha ? { movedBranch: { previousSha, createdSha: startSha } } : {}),
+  }
 }
 
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {

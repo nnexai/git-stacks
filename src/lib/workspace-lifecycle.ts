@@ -655,21 +655,33 @@ export async function createWorkspace(
       // ─── D-12 step 2: worktree creation (TRACKED) ───────────────────────────
       for (const repo of worktreeRepos) {
         const sourceStartRef = inputs.sourceStartRefs?.[repo.name]
+        let creation: Awaited<ReturnType<typeof createWorktree>> | undefined
         await runner.do(
           `create worktree ${repo.name}`,
           async () => {
             onProgress?.(`Creating worktree for ${repo.name}`)
             if (sourceStartRef) {
-              await createWorktreeFromRef(repo.main_path, repo.task_path, inputs.branch, sourceStartRef)
+              creation = await createWorktreeFromRef(repo.main_path, repo.task_path, inputs.branch, sourceStartRef)
             } else {
-              await createWorktree(repo.main_path, repo.task_path, inputs.branch)
+              creation = await createWorktree(repo.main_path, repo.task_path, inputs.branch)
             }
             onProgress?.(`created worktree for ${repo.name}`)
           },
           async () => {
-            // The runner's per-undo try/catch converts any throw here into a
-            // "Rollback error: create worktree <name> failed (...)" message.
+            if (!creation?.createdWorktree) return
             await removeWorktree(repo.main_path, repo.task_path)
+            if (creation.createdBranch) {
+              const deleted = await deleteLocalBranch(repo.main_path, inputs.branch)
+              if (!deleted.ok) throw new Error(deleted.error)
+            } else if (creation.movedBranch) {
+              const restored = await compareAndSwapBranch(
+                repo.main_path,
+                inputs.branch,
+                creation.movedBranch.createdSha,
+                creation.movedBranch.previousSha
+              )
+              if (!restored.ok) throw new Error(restored.error)
+            }
           },
         )
       }
