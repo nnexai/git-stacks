@@ -203,11 +203,11 @@ describe("windowDetector", () => {
     expect(detector!.id).toBe("aerospace")
   })
 
-  test("begin() returns empty set when aerospace is not running", async () => {
+  test("begin() returns an unavailable snapshot when aerospace is not running", async () => {
     mockIsRunning = false
     const snapshot = await detector!.begin()
     expect(snapshot._brand).toBe("aerospace")
-    expect((snapshot.data as Set<number>).size).toBe(0)
+    expect(snapshot.available).toBe(false)
   })
 
   test("begin() returns current window IDs when running", async () => {
