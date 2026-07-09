@@ -1,12 +1,12 @@
 import { describe, test, expect, mock, beforeEach } from "bun:test"
-import type { IntegrationContext, ArtifactBag, WindowArtifact, WindowDetector } from "@/lib/integrations/types"
+import type { IntegrationContext, ArtifactBag, WindowArtifact, WindowDetector, DetectorSnapshot } from "@/lib/integrations/types"
 
 // === TDD RED: WindowDetector interface and runner integration ===
 // These tests are written BEFORE the implementation and should fail initially.
 
 // ─── Shared mocks ────────────────────────────────────────────────────────────
 
-const mockBegin = mock(async () => ({ _brand: "niri", data: new Set([1, 2]) }))
+const mockBegin = mock(async (): Promise<DetectorSnapshot> => ({ available: true, _brand: "niri", data: new Set([1, 2]) }))
 const mockResolve = mock(async () => [42, 43])
 
 const windowDetectorMock: WindowDetector = {
@@ -106,7 +106,7 @@ describe("WindowDetector — runner integration", () => {
     nonWindowOpenMock.mockReset()
     consumerOpenMock.mockReset()
 
-    mockBegin.mockImplementation(async () => ({ _brand: "niri", data: new Set([1, 2]) }))
+    mockBegin.mockImplementation(async () => ({ available: true as const, _brand: "niri", data: new Set([1, 2]) }))
     mockResolve.mockImplementation(async () => [42, 43])
     windowOpenMock.mockImplementation(async () => ({
       kind: "window" as const,
@@ -168,6 +168,14 @@ describe("WindowDetector — runner integration", () => {
     expect(mockResolve.mock.calls.length).toBe(0)
   })
 
+  test("runner never resolves an unavailable detector snapshot", async () => {
+    mockBegin.mockResolvedValue({ available: false, _brand: "niri" })
+
+    await runIntegrations(fakeCtx)
+
+    expect(mockResolve).not.toHaveBeenCalled()
+  })
+
   test("runner calls begin() for each integration opened (pre-spawn snapshot per open)", async () => {
     // There are 3 integrations: window-producer, non-window, consumer
     // The runner calls begin() on each detector before every integration's open()
@@ -183,7 +191,7 @@ describe("WindowDetector — runner integration", () => {
 
     mockBegin.mockImplementation(async () => {
       callOrder.push("begin")
-      return { _brand: "niri", data: new Set<number>() }
+      return { available: true as const, _brand: "niri", data: new Set<number>() }
     })
     windowOpenMock.mockImplementation(async () => {
       callOrder.push("open")

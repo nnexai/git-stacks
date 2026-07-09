@@ -227,6 +227,7 @@ describe("windowDetector", () => {
     // Snapshot says only window 1 was present before
     const beforeIds = new Set([1])
     const snapshot: import("@/lib/integrations/types").DetectorSnapshot = {
+      available: true,
       _brand: "aerospace",
       data: beforeIds,
     }
@@ -245,6 +246,7 @@ describe("windowDetector", () => {
   test("resolve() returns empty array when no new windows appear (timeout)", async () => {
     const beforeIds = new Set([1])
     const snapshot: import("@/lib/integrations/types").DetectorSnapshot = {
+      available: true,
       _brand: "aerospace",
       data: beforeIds,
     }

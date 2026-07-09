@@ -130,13 +130,14 @@ export const aerospaceIntegration: Integration & Cleans & HasCommands & HasConfi
     async begin(): Promise<DetectorSnapshot> {
       const running = await isAerospaceRunning()
       if (!running) {
-        return { _brand: "aerospace", data: new Set<number>() }
+        return { available: false, _brand: "aerospace" }
       }
       const windows = await listWindows()
       const ids = new Set(windows.map((w) => w.windowId))
-      return { _brand: "aerospace", data: ids }
+      return { available: true, _brand: "aerospace", data: ids }
     },
     async resolve(snapshot: DetectorSnapshot, _hints?: { pid?: number; app_id?: string }): Promise<number[]> {
+      if (!snapshot.available) return []
       const beforeIds = snapshot.data as Set<number>
       const timeoutMs = 10_000
       const initialDelayMs = 200

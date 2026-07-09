@@ -94,13 +94,14 @@ export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExam
     async begin(): Promise<DetectorSnapshot> {
       const running = await isNiriRunning()
       if (!running) {
-        return { _brand: "niri", data: new Set<number>() }
+        return { available: false, _brand: "niri" }
       }
       const windows = await listNiriWindows()
       const ids = new Set(windows.map((w) => w.id))
-      return { _brand: "niri", data: ids }
+      return { available: true, _brand: "niri", data: ids }
     },
     async resolve(snapshot: DetectorSnapshot, _hints?: { pid?: number; app_id?: string }): Promise<number[]> {
+      if (!snapshot.available) return []
       const beforeIds = snapshot.data as Set<number>
       // If niri was not running when begin() was called, the set is empty — skip
       // (we still poll in case niri started, but realistically it won't have)

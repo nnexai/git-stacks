@@ -22,17 +22,17 @@ export async function runIntegrationGenerate(ctx: IntegrationContext): Promise<R
 export async function runIntegrations(ctx: IntegrationContext, skip?: Set<string>): Promise<ArtifactBag> {
   const sorted = [...integrations].sort((a, b) => a.order - b.order)
   const bag: ArtifactBag = {}
+  const active = sorted.filter((integration) =>
+    !skip?.has(integration.id) && integration.isEnabled(ctx) &&
+    (!isConditional(integration) || integration.applies(ctx.workspace))
+  )
 
   // Collect all enabled WindowDetectors from integrations that provide one
-  const detectors: WindowDetector[] = sorted
+  const detectors: WindowDetector[] = active
     .filter(isWindowDetecting)
-    .filter((i) => i.isEnabled(ctx) && (!isConditional(i) || i.applies(ctx.workspace)))
     .map((i) => i.windowDetector)
 
-  for (const integration of sorted) {
-    if (skip?.has(integration.id)) continue
-    if (!integration.isEnabled(ctx)) continue
-    if (isConditional(integration) && !integration.applies(ctx.workspace)) continue
+  for (const integration of active) {
     const artifactPath = isGenerator(integration) ? integration.generate(ctx) : null
 
     // Before spawning, capture pre-spawn snapshots from all detectors
@@ -48,6 +48,7 @@ export async function runIntegrations(ctx: IntegrationContext, skip?: Set<string
       const windowIds: Record<string, number[]> = artifact.windowIds ?? {}
       for (const detector of detectors) {
         const snapshot = snapshots.get(detector)!
+        if (!snapshot.available) continue
         const ids = await detector.resolve(snapshot, { pid: artifact.pid, app_id: artifact.app_id })
         if (ids.length > 0) {
           windowIds[detector.id] = ids

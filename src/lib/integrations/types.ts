@@ -12,7 +12,9 @@ export type CmuxArtifact = {
   workspaceRef: string
 }
 
-export type DetectorSnapshot = { _brand: string; data: unknown }
+export type DetectorSnapshot =
+  | { available: true; _brand: string; data: unknown }
+  | { available: false; _brand: string }
 
 export interface WindowDetector {
   id: string
