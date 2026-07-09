@@ -226,6 +226,28 @@ export function allocatePorts(
       }
     }
 
+    const duplicateValues = new Map<number, string[]>()
+    for (const [name, port] of Object.entries(resolvedPorts)) {
+      const names = duplicateValues.get(port) ?? []
+      names.push(name)
+      duplicateValues.set(port, names)
+    }
+    const duplicates = [...duplicateValues.entries()].filter(([, names]) => names.length > 1)
+    if (duplicates.length > 0) {
+      if (!opts.reallocate) {
+        return {
+          ok: false,
+          error: `Duplicate explicit ports: ${duplicates.map(([port, names]) => `${names.join(", ")}=${port}`).join("; ")}. Re-run with --reallocate to resolve.`,
+        }
+      }
+      for (const [, names] of duplicates) {
+        for (const name of names.slice(1)) {
+          nullPortNames.push(name)
+          delete resolvedPorts[name]
+        }
+      }
+    }
+
     // 4d. Validate resolved ports
     const conflictingResolved: string[] = []
     for (const [name, port] of Object.entries(resolvedPorts)) {

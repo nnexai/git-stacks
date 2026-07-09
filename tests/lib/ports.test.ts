@@ -278,6 +278,18 @@ describe("allocatePorts", () => {
     }
   })
 
+  test("rejects duplicate explicit ports within one workspace without reallocate", () => {
+    const result = allocatePorts(makeWorkspace("duplicate", { API: 10000, WEB: 10000 }), makeConfig(), { reallocate: false })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain("API, WEB=10000")
+  })
+
+  test("keeps the first duplicate explicit port and reallocates later names deterministically", () => {
+    const result = allocatePorts(makeWorkspace("duplicate", { API: 10000, WEB: 10000 }), makeConfig(), { reallocate: true })
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.workspace.ports).toEqual({ API: 10000, WEB: 10001 })
+  })
+
   test("errors on conflict with another workspace port when reallocate=false", () => {
     // Set up: write another workspace with PORT=10000 to isolated config dir
     writeFileSync(

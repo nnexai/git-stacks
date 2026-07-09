@@ -957,6 +957,16 @@ describe("writeYaml fsync (PORT-WRITE-01)", () => {
 // --- PortsSchema fields (PORT-SCHEMA-01, PORT-SCHEMA-02) ---
 
 describe("PortsSchema fields", () => {
+  test("rejects invalid environment and port identifiers", () => {
+    expect(WorkspaceSchema.safeParse({
+      name: "valid", branch: "main", created: "2026-01-01", repos: [],
+      env: { "BAD-NAME": "value" },
+    }).success).toBe(false)
+    expect(WorkspaceSchema.safeParse({
+      name: "valid", branch: "main", created: "2026-01-01", repos: [],
+      ports: { "1PORT": 3000 },
+    }).success).toBe(false)
+  })
   test("WorkspaceSchema accepts ports with null values (PORT-SCHEMA-01)", () => {
     const ws = WorkspaceSchema.parse({
       name: "port-ws", branch: "b", created: "d",

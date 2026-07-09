@@ -2,6 +2,7 @@ import { resolve } from "path"
 import type { Workspace } from "./config"
 import { isWorktreeRepo } from "./config"
 import { expandHome } from "./paths"
+import { ShellIdentifierSchema } from "./config"
 
 // --- Types ---
 
@@ -29,6 +30,9 @@ export function formatEnvTable(env: Record<string, string>): string {
 export function formatEnvShell(env: Record<string, string>): string {
   const keys = Object.keys(env).sort()
   return keys.map(k => {
+    if (!ShellIdentifierSchema.safeParse(k).success) {
+      throw new Error(`Invalid shell environment identifier: ${k}`)
+    }
     const v = env[k]
     if (needsShellQuoting(v)) {
       const escaped = v.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\$/g, "\\$").replace(/`/g, "\\`")

@@ -45,6 +45,9 @@ describe("formatEnvTable", () => {
 })
 
 describe("formatEnvShell", () => {
+  test("rejects invalid programmatic export identifiers", () => {
+    expect(() => formatEnvShell({ "BAD-NAME": "value" })).toThrow("Invalid shell environment identifier")
+  })
   test("exports simple values unquoted", () => {
     expect(formatEnvShell({ KEY: "simple" })).toBe("export KEY=simple")
   })

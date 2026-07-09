@@ -83,7 +83,11 @@ export const FilesSchema = z
   .optional()
 export type Files = z.infer<typeof FilesSchema>
 
-export const PortsSchema = z.record(z.string(), z.number().nullable()).optional()
+export const ShellIdentifierSchema = z.string().regex(
+  /^[A-Za-z_][A-Za-z0-9_]*$/,
+  "Must be a shell identifier (letters, digits, and underscores; cannot start with a digit)"
+)
+export const PortsSchema = z.record(ShellIdentifierSchema, z.number().nullable()).optional()
 export type Ports = z.infer<typeof PortsSchema>
 
 const LabelSchema = z.string().regex(
@@ -144,7 +148,7 @@ export const TemplateSchema = z.object({
     pre_merge: z.array(z.string()).optional(),
     post_remove: z.array(z.string()).optional(),
   }).optional(),
-  env: z.record(z.string(), z.string()).optional(),
+  env: z.record(ShellIdentifierSchema, z.string()).optional(),
   env_file: z.string().optional(),
   files: FilesSchema,
   integrations: z.record(z.string(), z.unknown()).optional(),
@@ -247,7 +251,7 @@ export const WorkspaceSchema = z.object({
   settings: WorkspaceSettingsSchema.optional(),
   source: WorkspaceSourceSchema.optional(),
   repos: z.array(WorkspaceRepoSchema).default([]),
-  env: z.record(z.string(), z.string()).optional(),
+  env: z.record(ShellIdentifierSchema, z.string()).optional(),
   env_file: z.string().optional(),
   files: FilesSchema,
   ports: PortsSchema,
