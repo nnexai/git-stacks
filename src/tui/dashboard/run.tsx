@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { render } from "@opentui/solid"
-import { existsSync, unlinkSync } from "node:fs"
+import { existsSync, unlinkSync, statSync } from "node:fs"
 import type { UnixSocketListener } from "bun"
 import App from "./App"
 import type { MessageRecord } from "../../lib/messages"
@@ -19,11 +19,31 @@ const SOCKET_PATH = "/tmp/git-stacks.sock"
  *
  * Returns null if binding was skipped (another TUI running) or failed.
  */
-async function openSocketServer(): Promise<UnixSocketListener<undefined> | null> {
-  // Always clean up stale socket files — previous process may have been killed
-  // without cleanup. For a single-user CLI tool, last-writer-wins is fine.
+async function socketIsLive(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (!settled) { settled = true; resolve(value) }
+    }
+    try {
+      Bun.connect({
+        unix: SOCKET_PATH,
+        socket: {
+          open(socket) { socket.end(); finish(true) },
+          data() {},
+          close() { finish(false) },
+          error() { finish(false) },
+          connectError() { finish(false) },
+        },
+      })
+    } catch { finish(false) }
+  })
+}
+
+async function openSocketServer(): Promise<{ server: UnixSocketListener<undefined>; inode: number; device: number } | null> {
   if (existsSync(SOCKET_PATH)) {
-    try { unlinkSync(SOCKET_PATH) } catch {}
+    if (await socketIsLive()) return null
+    try { unlinkSync(SOCKET_PATH) } catch { return null }
   }
 
   try {
@@ -45,7 +65,8 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
     })
     server.unref()
     setSocketStatus("bound")
-    return server
+    const stat = statSync(SOCKET_PATH)
+    return { server, inode: stat.ino, device: stat.dev }
   } catch (e) {
     setSocketStatus("error")
     return null
@@ -61,10 +82,11 @@ export async function runDashboard() {
     screenMode: "alternate-screen",
     onDestroy() {
       if (server) {
-        server.stop(true)
-        if (existsSync(SOCKET_PATH)) {
-          unlinkSync(SOCKET_PATH)
-        }
+        server.server.stop(true)
+        try {
+          const stat = statSync(SOCKET_PATH)
+          if (stat.ino === server.inode && stat.dev === server.device) unlinkSync(SOCKET_PATH)
+        } catch { /* replaced or already removed */ }
       }
     },
   })
