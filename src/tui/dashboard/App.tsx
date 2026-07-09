@@ -8,6 +8,7 @@ import { useRepos } from "./hooks/useRepos"
 import { useMessages } from "./hooks/useMessages"
 import { useWorkspaceFileStatus } from "./hooks/useWorkspaceFileStatus"
 import { socketStatus } from "./ipc-state"
+import { drainCommandStream } from "./command-stream"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
 import { TemplateList } from "./TemplateList"
@@ -396,29 +397,6 @@ export default function App() {
     setCommandOutput(prev => ({ ...prev, status }))
   }
 
-  async function drainCommandStream(
-    stream: ReadableStream<Uint8Array> | null,
-    outputStream: "stdout" | "stderr",
-  ) {
-    if (!stream) return
-    const reader = stream.getReader()
-    const decoder = new TextDecoder()
-    let buf = ""
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) {
-        if (buf) appendCommandLine({ text: buf, stream: outputStream })
-        break
-      }
-      buf += decoder.decode(value)
-      const lines = buf.split("\n")
-      buf = lines.pop() ?? ""
-      for (const line of lines) {
-        if (line) appendCommandLine({ text: line, stream: outputStream })
-      }
-    }
-  }
-
   function buildSummary(result: SyncResult): { text: string; color: "green" | "yellow" | "red" } {
     const ns = result.synced.length
     const nsk = result.skipped.filter(s => s.reason.includes("conflict")).length
@@ -453,8 +431,8 @@ export default function App() {
     })
     const [exitCode] = await Promise.all([
       proc.exited,
-      drainCommandStream(proc.stdout, "stdout"),
-      drainCommandStream(proc.stderr, "stderr"),
+      drainCommandStream(proc.stdout, (text) => appendCommandLine({ text, stream: "stdout" })),
+      drainCommandStream(proc.stderr, (text) => appendCommandLine({ text, stream: "stderr" })),
     ])
     finishCommandOutput(exitCode === 0 ? "success" : "failed")
   }
