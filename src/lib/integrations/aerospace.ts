@@ -25,6 +25,7 @@ import {
   _exec,
 } from "../aerospace"
 import { readGlobalConfig, readWorkspace, workspaceExists } from "../config"
+import { pollForNewWindowIds } from "./window-detection"
 
 /** Wrap a string in single quotes, escaping any embedded single quotes. */
 function shellQuote(s: string): string {
@@ -139,21 +140,7 @@ export const aerospaceIntegration: Integration & Cleans & HasCommands & HasConfi
     async resolve(snapshot: DetectorSnapshot, _hints?: { pid?: number; app_id?: string }): Promise<number[]> {
       if (!snapshot.available) return []
       const beforeIds = snapshot.data as Set<number>
-      const timeoutMs = 10_000
-      const initialDelayMs = 200
-      const maxDelayMs = 2_000
-      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-      const deadline = Date.now() + timeoutMs
-      let delay = initialDelayMs
-
-      while (Date.now() < deadline) {
-        await sleep(delay)
-        const after = await listWindows()
-        const newIds = after.map((w) => w.windowId).filter((id) => !beforeIds.has(id))
-        if (newIds.length > 0) return newIds
-        delay = Math.min(delay * 2, maxDelayMs)
-      }
-      return []
+      return pollForNewWindowIds(beforeIds, async () => (await listWindows()).map((window) => window.windowId))
     },
   } satisfies WindowDetector,
 

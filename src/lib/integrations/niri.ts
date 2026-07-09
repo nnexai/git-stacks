@@ -36,6 +36,7 @@ import {
   niriSpawnSh,
   snapshotWindowIds,
 } from "../niri"
+import { pollForNewWindowIds } from "./window-detection"
 
 // ─── Config schemas ───────────────────────────────────────────────────────────
 
@@ -103,24 +104,7 @@ export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExam
     async resolve(snapshot: DetectorSnapshot, _hints?: { pid?: number; app_id?: string }): Promise<number[]> {
       if (!snapshot.available) return []
       const beforeIds = snapshot.data as Set<number>
-      // If niri was not running when begin() was called, the set is empty — skip
-      // (we still poll in case niri started, but realistically it won't have)
-      // Poll with exponential backoff, same strategy as snapshotWindowIds
-      const timeoutMs = 10_000
-      const initialDelayMs = 200
-      const maxDelayMs = 2_000
-      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-      const deadline = Date.now() + timeoutMs
-      let delay = initialDelayMs
-
-      while (Date.now() < deadline) {
-        await sleep(delay)
-        const after = await listNiriWindows()
-        const newIds = after.map((w) => w.id).filter((id) => !beforeIds.has(id))
-        if (newIds.length > 0) return newIds
-        delay = Math.min(delay * 2, maxDelayMs)
-      }
-      return []
+      return pollForNewWindowIds(beforeIds, async () => (await listNiriWindows()).map((window) => window.id))
     },
   } satisfies WindowDetector,
 
