@@ -95,6 +95,7 @@ const LabelSchema = z.string().regex(
 export const NameSchema = z.string()
   .min(1, "Name must not be empty")
   .regex(/^[A-Za-z0-9._-]+$/, "Name may only contain letters, digits, dots, hyphens, and underscores")
+  .refine((name) => name !== "." && name !== "..", "Name must not be '.' or '..'")
 
 // --- Registry ---
 

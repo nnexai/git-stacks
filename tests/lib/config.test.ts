@@ -719,6 +719,10 @@ describe("NameSchema", () => {
     expect(() => NameSchema.parse("Valid123")).not.toThrow()
   })
 
+  test.each([".", ".."])('rejects path alias "%s"', (name) => {
+    expect(() => NameSchema.parse(name)).toThrow()
+  })
+
   test("rejects path traversal (../escape)", () => {
     expect(() => NameSchema.parse("../escape")).toThrow()
   })
@@ -751,6 +755,10 @@ describe("NameSchema", () => {
 describe("NameSchema composed into entity schemas", () => {
   test("WorkspaceSchema rejects name with path traversal", () => {
     expect(() => WorkspaceSchema.parse({ name: "../evil", branch: "main", created: "2026-01-01" })).toThrow()
+  })
+
+  test.each([".", ".."])('WorkspaceSchema rejects path alias "%s"', (name) => {
+    expect(() => WorkspaceSchema.parse({ name, branch: "main", created: "2026-01-01" })).toThrow()
   })
 
   test("TemplateSchema rejects name with slash", () => {

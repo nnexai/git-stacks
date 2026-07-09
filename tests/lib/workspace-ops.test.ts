@@ -861,6 +861,24 @@ describe("cleanWorkspace", () => {
     tmp = makeTmpDir("ws-ops-clean")
   })
 
+  test.each([".", ".."])('rejects stored workspace name "%s" before deleting its resolved folder', async (name) => {
+    const wsRoot = join(tmp, "workspaces")
+    const tasksDir = join(wsRoot, "tasks")
+    const sentinel = join(wsRoot, "must-remain.txt")
+    mkdirSync(tasksDir, { recursive: true })
+    writeFileSync(sentinel, "safe")
+    writeGlobalConfig({ workspace_root: wsRoot, integrations: {} })
+    writeFileSync(workspacePath(name), `name: ${name}\nbranch: main\ncreated: 2026-01-01\n`)
+
+    const result = await cleanWorkspace(name, { force: true, deleteFolder: true })
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/not found/)
+    expect(readFileSync(sentinel, "utf-8")).toBe("safe")
+    try { unlinkSync(workspacePath(name)) } catch { /* ignore */ }
+    cleanup(tmp)
+  })
+
   afterEach(() => {
     // tmp dir is cleaned by cleanupFixture — nothing extra needed here
   })
