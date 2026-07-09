@@ -74,6 +74,16 @@ function workspaceYaml(repo: ReturnType<typeof makeRepoWithRemote>, extras = "")
   ].filter(Boolean).join("\n")
 }
 
+function writeApiRegistry(configDir: string, repo: ReturnType<typeof makeRepoWithRemote>) {
+  writeRegistryFixture(configDir, [
+    "- name: api",
+    `  local_path: ${repo.mainPath}`,
+    "  default_branch: main",
+    "  type: other",
+    "",
+  ].join("\n"))
+}
+
 describe("workspace open --recreate", () => {
   let tmpDir: string
   let configDir: string
@@ -129,8 +139,25 @@ describe("workspace open --recreate", () => {
     expect(readWorkspaceYaml(configDir)).toBe(before)
   })
 
-  test("template-backed no-change recreate opens without applying template drift", () => {
+  test("missing registry repo refuses recreate before mutating workspace YAML", () => {
     const repo = makeRepoWithRemote(tmpDir, "api", "feat/edge-ws")
+    writeTemplateFixture(configDir, "edge-template.yml", templateYaml(["api"]))
+    writeWorkspaceFixture(configDir, "edge-ws.yml", workspaceYaml(repo))
+    const before = readWorkspaceYaml(configDir)
+
+    const result = runCli(["open", "edge-ws", "--recreate", "--force", "--no-ide", "--no-cmux"], {
+      baseDir: tmpDir,
+      configDir,
+    })
+
+    expect(result.exitCode, formatCliFailure(result)).not.toBe(0)
+    expect(result.stderr).toContain("missing registry repos: api")
+    expect(readWorkspaceYaml(configDir)).toBe(before)
+  })
+
+  test("recreate detects registry-derived worktree path drift without mutating before confirmation", () => {
+    const repo = makeRepoWithRemote(tmpDir, "api", "feat/edge-ws")
+    writeApiRegistry(configDir, repo)
     writeTemplateFixture(configDir, "edge-template.yml", templateYaml(["api"]))
     writeWorkspaceFixture(configDir, "edge-ws.yml", workspaceYaml(repo))
     const before = readWorkspace(configDir)
@@ -141,15 +168,16 @@ describe("workspace open --recreate", () => {
     })
 
     expectSuccessful(result)
-    expect(result.stdout).toContain("No changes detected")
+    expect(result.stdout).toContain("Template changes detected")
     const after = readWorkspace(configDir)
     expect(withoutLastOpened(after)).toEqual(withoutLastOpened(before))
-    expect(after.last_opened).toEqual(expect.any(String))
+    expect(after.last_opened).toBeUndefined()
     expect(existsSync(repo.taskPath)).toBe(true)
   })
 
   test("non-force recreate with detected drift cancels without mutating workspace YAML", () => {
     const repo = makeRepoWithRemote(tmpDir, "api", "feat/edge-ws")
+    writeApiRegistry(configDir, repo)
     writeTemplateFixture(configDir, "edge-template.yml", templateYaml(["api"], "env:\n  API_ENV: template\n"))
     writeWorkspaceFixture(configDir, "edge-ws.yml", workspaceYaml(repo))
     const before = readWorkspaceYaml(configDir)
@@ -238,6 +266,7 @@ describe("workspace open --recreate", () => {
 
   test("forced recreate copies template config drift while preserving identity fields", () => {
     const repo = makeRepoWithRemote(tmpDir, "api", "feat/edge-ws")
+    writeApiRegistry(configDir, repo)
     writeTemplateFixture(configDir, "edge-template.yml", templateYaml(["api"], [
       "hooks:",
       "  pre_create:",

@@ -8,16 +8,15 @@ import {
   readWorkspace,
   workspaceExists,
   readGlobalConfig,
-  readTemplate,
-  readRegistry,
   templateExists,
-  writeWorkspace,
   NameSchema,
   getRepoPath,
   isGitRepo,
   type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
+import { composeTemplates } from "../lib/composition"
+import { applyWorkspaceRecreate, planWorkspaceRecreate } from "../lib/workspace-recreate"
 import {
   isBranchGoneOnRemote,
   fetchOrigin,
@@ -204,27 +203,25 @@ export function registerWorkspaceCommands(program: Command) {
           process.exit(1)
         }
 
-        const template = readTemplate(ws.template)
-        const registry = readRegistry()
+        let recreatePlan
+        try {
+          const config = readGlobalConfig()
+          recreatePlan = planWorkspaceRecreate(
+            ws,
+            composeTemplates([ws.template]),
+            (await import("../lib/config")).readRegistry(),
+            getTasksDir(config.workspace_root),
+          )
+        } catch (error) {
+          console.error(formatError(error instanceof Error ? error.message : String(error)))
+          process.exit(1)
+        }
 
-        // Compute diff — compare template repos vs workspace repos
-        const tplRepoNames = new Set(template.repos.map(r => r.repo))
-        const wsRepoNames = new Set(ws.repos.map(r => r.repo))
-        const added = [...tplRepoNames].filter(n => !wsRepoNames.has(n))
-        const removed = [...wsRepoNames].filter(n => !tplRepoNames.has(n))
-
-        // Check for hook/env changes
-        const hooksChanged = JSON.stringify(template.hooks ?? {}) !== JSON.stringify(ws.hooks ?? {})
-        const envChanged = JSON.stringify(template.env ?? {}) !== JSON.stringify(ws.env ?? {})
-
-        if (added.length === 0 && removed.length === 0 && !hooksChanged && !envChanged) {
+        if (recreatePlan.changes.length === 0) {
           console.log("No changes detected between workspace and template.")
         } else {
           console.log("\nTemplate changes detected:")
-          if (added.length > 0) console.log(`  Added repos:   ${added.join(", ")}`)
-          if (removed.length > 0) console.log(`  Removed repos: ${removed.join(", ")}`)
-          if (hooksChanged) console.log("  Hooks changed")
-          if (envChanged) console.log("  Environment changed")
+          for (const change of recreatePlan.changes) console.log(`  ${change} changed`)
           console.log("")
 
           if (!opts.force) {
@@ -238,38 +235,11 @@ export function registerWorkspaceCommands(program: Command) {
             }
           }
 
-          // Apply: update workspace hooks, env, env_file, files, integrations from template
-          ws.hooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
-          ws.env = template.env ? { ...template.env } : undefined
-          ws.env_file = template.env_file
-          ws.files = template.files
-          if (template.integrations) {
-            ws.settings = { ...ws.settings, integrations: JSON.parse(JSON.stringify(template.integrations)) }
+          const applied = await applyWorkspaceRecreate(recreatePlan)
+          if (!applied.ok) {
+            console.error(formatError(applied.error))
+            process.exit(1)
           }
-
-          // Update repo list from template
-          const registryMap = new Map(registry.map(r => [r.name, r]))
-          const { getTasksDir: getTD } = await import("../lib/paths")
-          const config = readGlobalConfig()
-          const td = getTD(config.workspace_root)
-
-          ws.repos = template.repos.map(tplRepo => {
-            const existing = ws.repos.find(r => r.repo === tplRepo.repo)
-            if (existing) return { ...existing, base_branch: tplRepo.base_branch ?? existing.base_branch }
-            const regEntry = registryMap.get(tplRepo.repo)
-            if (!regEntry) return null
-            return {
-              name: regEntry.name,
-              repo: tplRepo.repo,
-              type: regEntry.type,
-              mode: tplRepo.mode ?? "worktree",
-              main_path: regEntry.local_path,
-              task_path: tplRepo.mode === "trunk" ? regEntry.local_path : join(td, workspace, regEntry.name),
-              base_branch: tplRepo.base_branch ?? regEntry.default_branch,
-            }
-          }).filter(Boolean) as typeof ws.repos
-
-          writeWorkspace(ws)
           console.log("Workspace updated from template.")
         }
       }
