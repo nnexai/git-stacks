@@ -94,7 +94,7 @@ describe("WorkspaceList snapshots", () => {
           ]}
           isGrouped={true}
           cursor={1}
-          selected={new Set([1])}
+          selected={new Set([entries[1]!.workspace.name])}
           filter=""
           height={6}
           allMessages={new Map()}

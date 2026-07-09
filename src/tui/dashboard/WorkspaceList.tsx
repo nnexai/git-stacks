@@ -9,7 +9,7 @@ type Props = {
   grouped: GroupedWorkspaceItem[]
   isGrouped: boolean
   cursor: number
-  selected: Set<number>
+  selected: Set<string>
   filter: string
   height: number
   allMessages: Map<string, MessageRecord[]>
@@ -70,7 +70,7 @@ export function WorkspaceList(props: Props) {
                 <WorkspaceRow
                   entry={entry}
                   focused={realIndex() === props.cursor}
-                  selected={props.selected.has(realIndex())}
+                  selected={props.selected.has(entry.workspace.name)}
                   messages={props.allMessages.get(entry.workspace.name) ?? []}
                   tick={props.tick}
                 />
@@ -105,7 +105,7 @@ export function WorkspaceList(props: Props) {
                 <WorkspaceRow
                   entry={item.entry}
                   focused={navIdx() === props.cursor}
-                  selected={props.selected.has(item.originalIndex)}
+                  selected={props.selected.has(item.entry.workspace.name)}
                   messages={props.allMessages.get(item.entry.workspace.name) ?? []}
                   tick={props.tick}
                   groupPrefix={isLastInGroup() ? "  └─ " : "  ├─ "}

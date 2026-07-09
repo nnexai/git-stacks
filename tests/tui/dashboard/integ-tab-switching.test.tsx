@@ -62,6 +62,10 @@ const templateFixture = {
   repos: [{ repo: "my-repo", mode: "worktree" as const }],
 }
 
+const cleanWorkspaceMock = mock(async (_name: string) => ({ ok: true }))
+const removeWorkspaceMock = mock(async (_name: string) => ({ ok: true }))
+const mergeWorkspaceMock = mock(async (_name: string) => ({ ok: true }))
+
 // Mock config module with inline fixtures — resilient to module cache ordering
 mock.module("../../../src/lib/config", () => ({
   listWorkspaces: mock(() => [...wsFixtures]),
@@ -94,10 +98,10 @@ mock.module("../../../src/lib/git", () => makeGitMock())
 
 mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => {}),
-  cleanWorkspace: mock(async () => ({ ok: true })),
+  cleanWorkspace: cleanWorkspaceMock,
   closeWorkspace: mock(async () => ({ ok: true })),
-  removeWorkspace: mock(async () => ({ ok: true })),
-  mergeWorkspace: mock(async () => ({ ok: true })),
+  removeWorkspace: removeWorkspaceMock,
+  mergeWorkspace: mergeWorkspaceMock,
   renameWorkspace: mock(async () => {}),
 }))
 
@@ -127,6 +131,12 @@ const renderOpts = { kittyKeyboard: true }
 
 // Track active renderer to destroy after each test (prevents keyboard event leakage)
 let activeRenderer: { destroy(): void } | null = null
+
+beforeEach(() => {
+  cleanWorkspaceMock.mockClear()
+  removeWorkspaceMock.mockClear()
+  mergeWorkspaceMock.mockClear()
+})
 
 afterEach(() => {
   // Destroy renderer after each test to prevent keyboard event leakage between tests
@@ -239,6 +249,36 @@ describe("integration: tab switching", () => {
     expect(matchesWorkspaceFilter(wsFixtures[0] as unknown as Workspace, "label:backend")).toBe(true)
     expect(matchesWorkspaceFilter(wsFixtures[1] as unknown as Workspace, "label:backend")).toBe(false)
     expect(matchesWorkspaceFilter({ ...wsFixtures[1], name: "backend-service" } as Workspace, "label:backend")).toBe(false)
+  })
+
+  test("batch selection remains bound to workspace name after filtering reindexes the list", async () => {
+    const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
+      () => <App />, renderOpts
+    )
+    activeRenderer = renderer
+
+    await renderOnce()
+    await mockInput.pressKeys([" "]) // select test-ws at index 0
+    await renderOnce()
+    expect(captureCharFrame()).toContain("1 selected")
+
+    mockInput.pressKey("/")
+    await renderOnce()
+    await mockInput.typeText("billing") // billing is now the only entry, at index 0
+    mockInput.pressEnter()
+    await renderOnce()
+    expect(captureCharFrame()).toContain("billing")
+
+    mockInput.pressKey("c")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("clean 1 workspace(s)?")
+    mockInput.pressKey("y")
+    await renderOnce()
+    await renderOnce()
+
+    expect(cleanWorkspaceMock).toHaveBeenCalledTimes(1)
+    expect(cleanWorkspaceMock.mock.calls[0]?.[0]).toBe("test-ws")
+    expect(cleanWorkspaceMock).not.toHaveBeenCalledWith("billing", expect.anything(), expect.anything())
   })
 
   test("grouping shortcut cycles through locked workspace grouping modes", () => {

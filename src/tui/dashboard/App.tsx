@@ -181,7 +181,7 @@ export default function App() {
   const [refreshFlash, setRefreshFlash] = createSignal("")
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
-  const [selected, setSelected] = createSignal<Set<number>>(new Set())
+  const [selected, setSelected] = createSignal<Set<string>>(new Set())
   const [reposSelected, setReposSelected] = createSignal<Set<number>>(new Set())
   const [templatesSelected, setTemplatesSelected] = createSignal<Set<number>>(new Set())
   const [commandOutput, setCommandOutput] = createSignal<CommandOutputState>(initialCommandOutputState())
@@ -540,11 +540,9 @@ export default function App() {
       return
     }
 
-    const indicesToProcess = batch
+    const names = batch
       ? [...selected()]
-      : [index]
-
-    const names = indicesToProcess.map((i) => filteredEntries()[i]?.workspace.name).filter(Boolean)
+      : [filteredEntries()[index]?.workspace.name].filter((name): name is string => Boolean(name))
 
     resetCommandOutput()
     setView({ view: "progress", message: `${action}: ${names.join(", ")}` })
@@ -575,7 +573,7 @@ export default function App() {
       }
     }
 
-    if (batch) setSelected(new Set<number>())
+    if (batch) setSelected(new Set<string>())
     finishCommandOutput("success")
   }
 
@@ -1290,7 +1288,7 @@ export default function App() {
         if (helpOpen()) { setHelpOpen(false); return }
         if (filtering()) { setFiltering(false); setFilter(""); clampCursor(); return }
         if (filter()) { setFilter(""); clampCursor(); return }
-        if (selected().size > 0) { setSelected(() => new Set<number>()); return }
+        if (selected().size > 0) { setSelected(() => new Set<string>()); return }
         if (reposSelected().size > 0) { setReposSelected(() => new Set<number>()); return }
         if (templatesSelected().size > 0) { setTemplatesSelected(() => new Set<number>()); return }
         // NO-OP at top-level list — do NOT call renderer.destroy()
@@ -1330,12 +1328,12 @@ export default function App() {
       if (key.name === "space" && tab() === "workspaces") {
         setSelected((prev) => {
           const next = new Set(prev)
-          const selectedIndex = workspaceGroupingMode() !== "none"
-            ? groupedNavigableEntries()[cursor()]?.originalIndex
-            : cursor()
-          if (selectedIndex === undefined) return next
-          if (next.has(selectedIndex)) next.delete(selectedIndex)
-          else next.add(selectedIndex)
+          const workspaceName = workspaceGroupingMode() !== "none"
+            ? groupedNavigableEntries()[cursor()]?.entry.workspace.name
+            : filteredEntries()[cursor()]?.workspace.name
+          if (!workspaceName) return next
+          if (next.has(workspaceName)) next.delete(workspaceName)
+          else next.add(workspaceName)
           return next
         })
         setCursor((i) => Math.min(len - 1, i + 1))
