@@ -1,6 +1,7 @@
 import { appendFile, readFile, writeFile } from "node:fs/promises"
 import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { isAbsolute, relative, resolve, sep } from "node:path"
+import { NameSchema } from "./config"
 import { MESSAGES_DIR } from "./paths"
 
 export interface MessageRecord {
@@ -14,7 +15,18 @@ const SOCKET_PATH = "/tmp/git-stacks.sock"
 const IPC_TIMEOUT_MS = 500
 
 function messagePath(workspace: string): string {
-  return join(MESSAGES_DIR, `${workspace}.jsonl`)
+  const parsed = NameSchema.safeParse(workspace)
+  if (!parsed.success) {
+    throw new Error(`Invalid workspace name '${workspace}': ${parsed.error.issues[0].message}`)
+  }
+
+  const root = resolve(MESSAGES_DIR)
+  const path = resolve(root, `${parsed.data}.jsonl`)
+  const rel = relative(root, path)
+  if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    throw new Error(`Invalid workspace name '${workspace}': message path escapes messages directory`)
+  }
+  return path
 }
 
 export async function appendMessage(

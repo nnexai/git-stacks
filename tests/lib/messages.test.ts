@@ -1,11 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach, afterAll } from "bun:test"
-import { mkdirSync, existsSync, readFileSync, rmSync } from "node:fs"
+import { mkdirSync, existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { useIsolatedConfig } from "../helpers"
 
 const isolated = useIsolatedConfig("messages-test")
 
-const { appendMessage, listMessages, clearMessages, pushToSocket } = await import("@/lib/messages")
+const { appendMessage, listMessages, listMessagesSync, clearMessages, pushToSocket } = await import("@/lib/messages")
 
 afterAll(() => isolated.cleanup())
 
@@ -129,6 +129,36 @@ describe("clearMessages", () => {
 
   test("clearMessages from sender: no error when file does not exist", async () => {
     await expect(clearMessages("_msgtest-no-such-ws-ever", "agent")).resolves.toBeUndefined()
+  })
+})
+
+describe("workspace name path safety", () => {
+  const operations = {
+    send: (workspace: string) => appendMessage(workspace, "must not be written"),
+    list: (workspace: string) => listMessages(workspace),
+    clear: (workspace: string) => clearMessages(workspace),
+  }
+
+  test.each(Object.entries(operations))("%s rejects traversal, dot, and dot-dot without touching an external sentinel", async (_operation, run) => {
+    const messagesDir = join(isolated.configDir, "messages")
+    for (const [index, invalidName] of ["../external-message-sentinel", ".", ".."].entries()) {
+      const sentinel = join(isolated.configDir, `external-message-sentinel${index === 0 ? "" : `-${index}`}.jsonl`)
+      const sentinelContent = `${JSON.stringify({ workspace: "sentinel", text: "keep", timestamp: "2026-01-01T00:00:00.000Z" })}\n`
+      writeFileSync(sentinel, sentinelContent)
+
+      const vulnerablePath = join(messagesDir, `${invalidName}.jsonl`)
+      if (vulnerablePath !== sentinel) symlinkSync(sentinel, vulnerablePath)
+
+      await expect(run(invalidName)).rejects.toThrow(/Invalid workspace name/)
+      expect(readFileSync(sentinel, "utf8")).toBe(sentinelContent)
+
+      if (vulnerablePath !== sentinel) rmSync(vulnerablePath, { force: true })
+      rmSync(sentinel, { force: true })
+    }
+  })
+
+  test.each(["../external-message-sentinel", ".", ".."])('synchronous list rejects invalid workspace name "%s"', (workspace) => {
+    expect(() => listMessagesSync(workspace)).toThrow(/Invalid workspace name/)
   })
 })
 
