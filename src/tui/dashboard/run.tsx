@@ -5,6 +5,7 @@ import type { UnixSocketListener } from "bun"
 import App from "./App"
 import type { MessageRecord } from "../../lib/messages"
 import { dispatchIpcMessage, setSocketStatus } from "./ipc-state"
+import { NdjsonFrameDecoder } from "./ndjson"
 
 const SOCKET_PATH = "/tmp/git-stacks.sock"
 
@@ -26,18 +27,19 @@ async function openSocketServer(): Promise<UnixSocketListener<undefined> | null>
   }
 
   try {
+    const decoders = new WeakMap<object, NdjsonFrameDecoder<MessageRecord>>()
     const server = Bun.listen<undefined>({
       unix: SOCKET_PATH,
       socket: {
-        data(_socket, data) {
-          const line = data.toString().trim()
-          if (!line) return
-          try {
-            const record = JSON.parse(line) as MessageRecord
-            dispatchIpcMessage(record)
-          } catch {
-            // ignore malformed JSON lines
+        data(socket, data) {
+          let decoder = decoders.get(socket)
+          if (!decoder) {
+            decoder = new NdjsonFrameDecoder<MessageRecord>()
+            decoders.set(socket, decoder)
           }
+          const result = decoder.push(data)
+          for (const record of result.values) dispatchIpcMessage(record)
+          if (result.oversized) socket.end()
         },
       },
     })
