@@ -12,6 +12,7 @@ import {
 } from "../config"
 import type { GlobalConfig } from "../config"
 import { resolveEnabledGlobally } from "./types"
+import { remoteHasExactHost } from "./forge-origin"
 
 // --- Types ---
 
@@ -186,7 +187,7 @@ export async function detectGitHubForge(repoPath: string): Promise<boolean> {
   if (!installed) return false
   const remoteUrl = await _detect.gitRemoteUrl(repoPath)
   if (!remoteUrl) return false
-  return remoteUrl.includes("github.com")
+  return remoteHasExactHost(remoteUrl, "github.com")
 }
 
 export async function detectGitLabForge(repoPath: string): Promise<boolean> {
@@ -195,7 +196,7 @@ export async function detectGitLabForge(repoPath: string): Promise<boolean> {
   const remoteUrl = await _detect.gitRemoteUrl(repoPath)
   if (!remoteUrl) return false
   // Only match gitlab.com SaaS with high confidence (per Pitfall 4 in RESEARCH.md)
-  return remoteUrl.includes("gitlab.com")
+  return remoteHasExactHost(remoteUrl, "gitlab.com")
 }
 
 export async function detectGiteaForge(repoPath: string): Promise<boolean> {

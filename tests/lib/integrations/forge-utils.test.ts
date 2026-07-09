@@ -349,10 +349,22 @@ describe("forge detection", () => {
     expect(await detectGitHubForge("/tmp/repo")).toBe(false)
   })
 
+  test("detectGitHubForge rejects hostname substrings", async () => {
+    _detect.which = mock(async () => true)
+    _detect.gitRemoteUrl = mock(async () => "https://github.com.evil.example/org/repo.git")
+    expect(await detectGitHubForge("/repo")).toBe(false)
+  })
+
   test("detectGitLabForge returns true for gitlab.com remote with glab installed", async () => {
     _detect.which = mock(async (cmd: string) => cmd === "glab")
     _detect.gitRemoteUrl = mock(async () => "git@gitlab.com:org/repo.git")
     expect(await detectGitLabForge("/tmp/repo")).toBe(true)
+  })
+
+  test("detectGitLabForge rejects hostname substrings", async () => {
+    _detect.which = mock(async () => true)
+    _detect.gitRemoteUrl = mock(async () => "git@gitlab.com.evil:org/repo.git")
+    expect(await detectGitLabForge("/repo")).toBe(false)
   })
 
   test("detectGitLabForge returns false when glab not installed", async () => {
