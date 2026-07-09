@@ -1,6 +1,7 @@
 import { $ } from "bun"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
+import { requirePlatformSuccess } from "./platform-exec"
 
 // ─── Injectable executor ──────────────────────────────────────────────────────
 // All Bun.$ tmux calls funnel through _exec.run. The object property is mutable
@@ -8,18 +9,19 @@ import { existsSync, mkdirSync } from "fs"
 //   import { _exec } from "@/lib/tmux?tmux-test"
 //   _exec.run = mockFn
 
-export type CmdResult = { exitCode: number; stdout: string }
+export type CmdResult = { exitCode: number; stdout: string; stderr?: string }
 
 export const _exec = {
   run: async (args: string[]): Promise<CmdResult> => {
     const result = await $`tmux ${args}`.quiet().nothrow()
-    return { exitCode: result.exitCode, stdout: result.text() }
+    return { exitCode: result.exitCode, stdout: result.text(), stderr: result.stderr.toString() }
   },
 }
 
 // Kills a tmux session by name (no-op if it does not exist).
 export async function killTmuxSession(name: string): Promise<void> {
-  await _exec.run(["kill-session", "-t", name])
+  const result = await _exec.run(["kill-session", "-t", name])
+  requirePlatformSuccess("tmux kill-session", result)
 }
 
 // Returns true if a tmux session with the given name exists.
@@ -31,16 +33,16 @@ export async function tmuxSessionExists(name: string): Promise<boolean> {
 // Focuses an existing tmux session.
 // Uses switch-client when inside tmux, attach-session otherwise.
 export async function focusTmuxSession(name: string): Promise<void> {
-  if (process.env.TMUX) {
-    await _exec.run(["switch-client", "-t", name])
-  } else {
-    await _exec.run(["attach-session", "-t", name])
-  }
+  const result = await _exec.run(process.env.TMUX
+    ? ["switch-client", "-t", name]
+    : ["attach-session", "-t", name])
+  requirePlatformSuccess("tmux focus session", result)
 }
 
 // Creates a new detached tmux session rooted at cwd.
 export async function createTmuxSession(cwd: string, name: string): Promise<void> {
-  await _exec.run(["new-session", "-d", "-s", name, "-c", cwd])
+  const result = await _exec.run(["new-session", "-d", "-s", name, "-c", cwd])
+  requirePlatformSuccess("tmux new-session", result)
 }
 
 // Opens a tmux session: focuses if it already exists, otherwise creates one.
@@ -62,9 +64,11 @@ export async function openTmuxSession(
 }
 
 // Returns the global pane ID (e.g. "%0") of the first pane in the session.
-export async function getTmuxMainPane(session: string): Promise<string> {
+export async function getTmuxMainPane(session: string): Promise<string | null> {
   const r = await _exec.run(["list-panes", "-t", session, "-F", "#{pane_id}"])
-  return r.stdout.trim().split("\n")[0] || "%0"
+  if (r.exitCode !== 0) return null
+  const pane = r.stdout.trim().split("\n")[0]
+  return pane && /^%\d+$/.test(pane) ? pane : null
 }
 
 // Splits a window in the given session and returns the new pane ID, or null on failure.
@@ -85,7 +89,8 @@ export async function addTmuxPane(session: string, direction = "down"): Promise<
 // Sends text to a pane and presses Enter to execute it.
 // Pane IDs (%N) are globally unique — no session prefix needed.
 export async function sendToTmuxPane(paneId: string, text: string): Promise<void> {
-  await _exec.run(["send-keys", "-t", paneId, text, "Enter"])
+  const result = await _exec.run(["send-keys", "-t", paneId, text, "Enter"])
+  requirePlatformSuccess("tmux send-keys", result)
 }
 
 // Focuses a specific pane. Returns true if successful.

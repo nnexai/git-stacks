@@ -51,9 +51,11 @@ async function openTmuxSession(name: string, tasksDir: string): Promise<{ create
   return { created: true }
 }
 
-async function getTmuxMainPane(session: string): Promise<string> {
+async function getTmuxMainPane(session: string): Promise<string | null> {
   const r = await _exec.run(["list-panes", "-t", session, "-F", "#{pane_id}"])
-  return r.stdout.trim().split("\n")[0] || "%0"
+  if (r.exitCode !== 0) return null
+  const pane = r.stdout.trim().split("\n")[0]
+  return pane && /^%\d+$/.test(pane) ? pane : null
 }
 
 async function addTmuxPane(session: string, direction = "down"): Promise<string | null> {
@@ -221,18 +223,25 @@ describe("getTmuxMainPane", () => {
     expect(capturedArgs).toEqual(["list-panes", "-t", "my-session", "-F", "#{pane_id}"])
   })
 
-  test("returns %0 when stdout is empty", async () => {
+  test("returns null when stdout is empty", async () => {
     mockResult = { exitCode: 0, stdout: "" }
     const pane = await getTmuxMainPane("my-session")
 
-    expect(pane).toBe("%0")
+    expect(pane).toBeNull()
   })
 
-  test("returns %0 when stdout is only whitespace", async () => {
+  test("returns null when stdout is only whitespace", async () => {
     mockResult = { exitCode: 0, stdout: "   \n  " }
     const pane = await getTmuxMainPane("my-session")
 
-    expect(pane).toBe("%0")
+    expect(pane).toBeNull()
+  })
+
+  test("returns null when list-panes fails or output is malformed", async () => {
+    mockResult = { exitCode: 1, stdout: "%5\n" }
+    expect(await getTmuxMainPane("my-session")).toBeNull()
+    mockResult = { exitCode: 0, stdout: "not-a-pane\n" }
+    expect(await getTmuxMainPane("my-session")).toBeNull()
   })
 
   test("returns single pane ID when only one pane", async () => {

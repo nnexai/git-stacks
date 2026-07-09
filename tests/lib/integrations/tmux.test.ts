@@ -29,7 +29,7 @@ const killTmuxSessionMock = mock(async (_name: string) => {})
 const tmuxSessionExistsMock = mock(async (_name: string) => true)
 const addTmuxPaneMock = mock(async (_session: string, _direction?: string) => null as string | null)
 const sendToTmuxPaneMock = mock(async (_paneId: string, _text: string) => {})
-const getTmuxMainPaneMock = mock(async (_session: string) => "%0")
+const getTmuxMainPaneMock = mock(async (_session: string): Promise<string | null> => "%0")
 const focusTmuxPaneMock = mock(async (_paneId: string) => true)
 
 // Register mock BEFORE importing the integration
@@ -121,6 +121,22 @@ describe("tmux open()", () => {
     expect(sendToTmuxPaneMock).toHaveBeenCalledWith("%1", "cd '/tmp/tasks/my-workspace/api'")
     expect(sendToTmuxPaneMock).toHaveBeenCalledWith("%1", "bun test")
     expect(focusTmuxPaneMock).toHaveBeenCalledWith("%1")
+  })
+
+  test("does not issue pane commands when main-pane lookup fails", async () => {
+    const ctx = {
+      ...fakeCtx,
+      workspace: {
+        ...fakeCtx.workspace,
+        settings: { integrations: { tmux: { panes: [{ surfaces: [{ command: "nvim ." }] }] } } },
+      },
+    } as IntegrationContext
+    getTmuxMainPaneMock.mockResolvedValue(null)
+
+    await tmuxIntegration.open(ctx, null, {})
+
+    expect(addTmuxPaneMock).not.toHaveBeenCalled()
+    expect(sendToTmuxPaneMock).not.toHaveBeenCalled()
   })
 
   test("skips a surface with an unknown repo before creating pane or sending commands", async () => {

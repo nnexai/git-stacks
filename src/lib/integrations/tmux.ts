@@ -105,6 +105,10 @@ async function applyPaneLayout(ctx: IntegrationContext): Promise<void> {
   const session = ctx.workspace.name
   const wsRoot = join(ctx.tasksDir, ctx.workspace.name)
   const mainPaneId = await getTmuxMainPane(session)
+  if (!mainPaneId) {
+    if (!ctx.silent) p.log.warn("tmux: could not determine main pane; layout skipped")
+    return
+  }
   let focusPaneId: string | null = null
 
   for (const pane of parsed.data.panes) {
