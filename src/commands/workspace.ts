@@ -18,7 +18,12 @@ import {
   type Workspace,
 } from "../lib/config"
 import { getTasksDir } from "../lib/paths"
-import { isBranchGoneOnRemote, fetchOrigin } from "../lib/git"
+import {
+  isBranchGoneOnRemote,
+  fetchOrigin,
+  resolveCommonGitDirSync,
+  type RemoteBranchStatus,
+} from "../lib/git"
 import { runWorkspaceNew, runWorkspaceEdit } from "../tui/workspace-wizard"
 import { runWorkspaceClone } from "../tui/workspace-clone"
 import {
@@ -450,14 +455,71 @@ export function registerWorkspaceCommands(program: Command) {
         const spinner = p.spinner()
         spinner.start("Checking remote branches")
         const goneWorkspaces: Workspace[] = []
+        const indeterminate: Array<{ workspace: string; repo: string; error: string }> = []
+        const remoteStatusCache = new Map<string, RemoteBranchStatus>()
+
         for (const ws of allWorkspaces) {
-          const rep = ws.repos.find((r) => r.mode === "worktree")
-          if (!rep) continue
-          if (await isBranchGoneOnRemote(rep.main_path, ws.branch)) {
+          const worktreeRepos = ws.repos.filter((repo) => repo.mode === "worktree")
+          if (worktreeRepos.length === 0) continue
+
+          const seenGitDirs = new Set<string>()
+          let allMissing = true
+          let hasError = false
+
+          for (const repo of worktreeRepos) {
+            let commonGitDir: string
+            try {
+              commonGitDir = resolveCommonGitDirSync(repo.main_path)
+            } catch (error) {
+              hasError = true
+              allMissing = false
+              indeterminate.push({
+                workspace: ws.name,
+                repo: repo.name,
+                error: error instanceof Error ? error.message : String(error),
+              })
+              continue
+            }
+
+            if (seenGitDirs.has(commonGitDir)) continue
+            seenGitDirs.add(commonGitDir)
+
+            const cacheKey = `${commonGitDir}\0${ws.branch}`
+            let status = remoteStatusCache.get(cacheKey)
+            if (!status) {
+              status = await isBranchGoneOnRemote(repo.main_path, ws.branch)
+              remoteStatusCache.set(cacheKey, status)
+            }
+
+            if (status.status === "present") {
+              allMissing = false
+            } else if (status.status === "error") {
+              hasError = true
+              allMissing = false
+              indeterminate.push({
+                workspace: ws.name,
+                repo: repo.name,
+                error: status.error,
+              })
+            }
+          }
+
+          if (!hasError && seenGitDirs.size > 0 && allMissing) {
             goneWorkspaces.push(ws)
           }
         }
         spinner.stop(`Checked ${allWorkspaces.length} workspace(s)`)
+
+        if (indeterminate.length > 0) {
+          const details = indeterminate
+            .map((entry) => `  ${entry.workspace} / ${entry.repo}: ${entry.error}`)
+            .join("\n")
+          console.error(formatError(
+            `Cannot determine remote branch status:\n${details}`,
+            "no workspaces were removed; fix repository paths or remote access and retry"
+          ))
+          process.exit(1)
+        }
 
         if (goneWorkspaces.length === 0) {
           console.log("No gone workspaces found.")

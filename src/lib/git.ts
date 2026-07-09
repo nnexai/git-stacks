@@ -1,5 +1,5 @@
 import { $ } from "bun"
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "fs"
 import { isAbsolute, join, resolve } from "path"
 
 export function isGitTrackedPathSync(repoPath: string, relPath: string): boolean {
@@ -42,7 +42,8 @@ export function resolveCommonGitDirSync(repoPath: string): string {
 
   const raw = new TextDecoder().decode(result.stdout).trim()
   if (!raw) throw new Error("git rev-parse --git-common-dir returned an empty path")
-  return isAbsolute(raw) ? raw : resolve(repoPath, raw)
+  const commonGitDir = isAbsolute(raw) ? raw : resolve(repoPath, raw)
+  return realpathSync(commonGitDir)
 }
 
 export function writeLocalGitExcludesSync(repoPath: string, entries: string[]): string {
@@ -157,11 +158,26 @@ export async function getCurrentBranch(repoPath: string): Promise<string> {
   return result.trim()
 }
 
-export async function isBranchGoneOnRemote(mainPath: string, branch: string): Promise<boolean> {
+export type RemoteBranchStatus =
+  | { status: "present" }
+  | { status: "missing" }
+  | { status: "error"; error: string }
+
+export async function isBranchGoneOnRemote(
+  mainPath: string,
+  branch: string
+): Promise<RemoteBranchStatus> {
   const result = await $`GIT_TERMINAL_PROMPT=0 git -C ${mainPath} ls-remote --exit-code --heads origin ${branch}`
     .quiet()
     .nothrow()
-  return result.exitCode !== 0
+  if (result.exitCode === 0) return { status: "present" }
+  if (result.exitCode === 2) return { status: "missing" }
+
+  const stderr = result.stderr.toString().trim()
+  return {
+    status: "error",
+    error: stderr || `git ls-remote failed with exit code ${result.exitCode}`,
+  }
 }
 
 export async function getMergeConflicts(

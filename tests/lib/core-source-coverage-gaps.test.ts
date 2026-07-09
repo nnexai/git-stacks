@@ -118,16 +118,32 @@ describe("core source coverage gaps: ports", () => {
 })
 
 describe("core source coverage gaps: git", () => {
-  test("isBranchGoneOnRemote reflects real bare remote branch presence", async () => {
+  test("isBranchGoneOnRemote distinguishes missing and present remote branches", async () => {
     const branch = "feat/gone-remote"
     const { mainPath, taskPath } = makeRepoWithRemote(tmpDir, "api", branch)
 
-    expect(await isBranchGoneOnRemote(mainPath, branch)).toBe(true)
+    expect(await isBranchGoneOnRemote(mainPath, branch)).toEqual({ status: "missing" })
 
     commitFile(taskPath, "feature.txt", "feature\n", "feature branch")
     execSync(`git push -u origin ${branch}`, gitExecOptions(taskPath, tmpDir))
 
-    expect(await isBranchGoneOnRemote(mainPath, branch)).toBe(false)
+    expect(await isBranchGoneOnRemote(mainPath, branch)).toEqual({ status: "present" })
+  })
+
+  test("isBranchGoneOnRemote preserves operational ls-remote errors", async () => {
+    const branch = "feat/remote-error"
+    const { mainPath } = makeRepoWithRemote(tmpDir, "broken-origin", branch)
+    execSync(
+      "git remote set-url origin /nonexistent/remote/that/cannot-be-opened",
+      gitExecOptions(mainPath, tmpDir)
+    )
+
+    const result = await isBranchGoneOnRemote(mainPath, branch)
+
+    expect(result.status).toBe("error")
+    if (result.status === "error") {
+      expect(result.error).toContain("/nonexistent/remote/that/cannot-be-opened")
+    }
   })
 
   test("mergeBranchFF returns ok for a real merge and aborts cleanly on conflict", async () => {
