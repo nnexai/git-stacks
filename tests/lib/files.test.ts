@@ -188,6 +188,63 @@ describe("processFileList", () => {
       expect(result.warnings![0]).toContain("*.nomatch")
     }
   })
+
+  test.each(["copy", "symlink"] as const)("rejects traversal for %s entries", (op) => {
+    const src = join(tmp, "source/root")
+    const dst = join(tmp, "destination/root")
+    write(tmp, "source/outside.txt", "secret")
+    mkdir(tmp, "destination/root")
+
+    const result = processFileList(op, ["../outside.txt"], src, dst)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/traversal/)
+    expect(existsSync(join(tmp, "destination/outside.txt"))).toBe(false)
+  })
+
+  test("rejects traversal glob patterns before expansion", () => {
+    const src = join(tmp, "source/root")
+    const dst = join(tmp, "destination/root")
+    write(tmp, "source/outside/file.txt", "secret")
+    mkdir(tmp, "destination/root")
+
+    const result = processFileList("copy", ["../outside/*.txt"], src, dst)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/traversal/)
+  })
+
+  test("rejects a literal destination whose existing parent symlink resolves outside the root", () => {
+    const src = join(tmp, "source")
+    const dst = join(tmp, "destination")
+    const outside = join(tmp, "outside")
+    write(src, "linked/file.txt", "secret")
+    mkdir(tmp, "destination")
+    mkdir(tmp, "outside")
+    symlinkSync(outside, join(dst, "linked"))
+
+    const result = processFileList("copy", ["linked/file.txt"], src, dst)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/parent resolves outside/)
+    expect(existsSync(join(outside, "file.txt"))).toBe(false)
+  })
+
+  test("rejects a glob-derived destination whose existing parent symlink resolves outside the root", () => {
+    const src = join(tmp, "source")
+    const dst = join(tmp, "destination")
+    const outside = join(tmp, "outside")
+    write(src, "nested/file.txt", "secret")
+    mkdir(tmp, "destination")
+    mkdir(tmp, "outside")
+    symlinkSync(outside, join(dst, "nested"))
+
+    const result = processFileList("symlink", ["nested/*.txt"], src, dst)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/parent resolves outside/)
+    expect(existsSync(join(outside, "file.txt"))).toBe(false)
+  })
 })
 
 // --- resolveSourcePath ---

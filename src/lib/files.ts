@@ -1,4 +1,4 @@
-import { cpSync, symlinkSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync } from "fs"
+import { cpSync, symlinkSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync } from "fs"
 import { join, dirname, basename, isAbsolute, normalize, resolve, relative, sep } from "path"
 import { expandHome } from "./paths"
 import type { WorkspaceRepo, Workspace, Files, FileSyncEntry } from "./config"
@@ -162,6 +162,46 @@ export function applyEntry(op: "copy" | "symlink", src: string, dst: string): Ap
   return { ok: true }
 }
 
+function projectedRealPath(path: string): { ok: true; path: string } | { ok: false; error: string } {
+  const requested = resolve(path)
+  let ancestor = requested
+  while (!dstExists(ancestor)) {
+    const parent = dirname(ancestor)
+    if (parent === ancestor) break
+    ancestor = parent
+  }
+
+  try {
+    return { ok: true, path: resolve(realpathSync(ancestor), relative(ancestor, requested)) }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+function hasRelativeTraversal(path: string): boolean {
+  return !isAbsolute(expandHome(path)) && normalize(path).split(/[\\/]+/).includes("..")
+}
+
+function validateFileDestination(entry: string, destDir: string, dst: string): ApplyResult {
+  if (hasRelativeTraversal(entry)) {
+    return { ok: false, error: `Invalid file entry '${entry}': traversal is not allowed` }
+  }
+
+  if (!isInsideRoot(destDir, dst)) {
+    return { ok: false, error: `Invalid file destination '${dst}': path escapes destination root` }
+  }
+
+  const realRoot = projectedRealPath(destDir)
+  if (!realRoot.ok) return { ok: false, error: `Cannot resolve destination root: ${realRoot.error}` }
+  const realParent = projectedRealPath(dirname(dst))
+  if (!realParent.ok) return { ok: false, error: `Cannot resolve destination parent: ${realParent.error}` }
+  if (!isInsideRoot(realRoot.path, realParent.path)) {
+    return { ok: false, error: `Invalid file destination '${dst}': parent resolves outside destination root` }
+  }
+
+  return { ok: true }
+}
+
 /**
  * Additively merge two Files configs. Returns a normalized object with empty arrays as defaults.
  * Stack files and workspace files are concatenated, not replaced.
@@ -270,6 +310,9 @@ export function processFileList(
 ): ApplyResult {
   const warnings: string[] = []
   for (const entry of entries) {
+    if (hasRelativeTraversal(entry)) {
+      return { ok: false, error: `Invalid file entry '${entry}': traversal is not allowed` }
+    }
     if (isGlobPattern(entry)) {
       const matches = expandGlob(entry, sourceBaseDir)
       if (matches.length === 0) {
@@ -279,6 +322,8 @@ export function processFileList(
       for (const match of matches) {
         const src = join(sourceBaseDir, match)
         const dst = join(destDir, match)
+        const validation = validateFileDestination(match, destDir, dst)
+        if (!validation.ok) return validation
         const r = applyEntry(op, src, dst)
         if (!r.ok) return r
       }
@@ -288,6 +333,8 @@ export function processFileList(
       const expanded = expandHome(entry)
       const dstRel = isAbsolute(expanded) ? basename(expanded) : entry
       const dst = join(destDir, dstRel)
+      const validation = validateFileDestination(entry, destDir, dst)
+      if (!validation.ok) return validation
       const r = applyEntry(op, src, dst)
       if (!r.ok) return r
     }
