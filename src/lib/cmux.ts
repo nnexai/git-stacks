@@ -14,15 +14,21 @@ export const _exec = {
   },
 }
 
+async function runMutation(args: string[], command: string): Promise<CmdResult> {
+  const result = await _exec.run(args)
+  requirePlatformSuccess(command, result)
+  return result
+}
+
 // Creates a new cmux workspace rooted at the given directory.
 // Returns the workspace ref (e.g. "workspace:2") for later use.
 export async function createCmuxWorkspace(cwd: string, name: string): Promise<string> {
-  const r = await _exec.run(["new-workspace", "--cwd", cwd])
+  const r = await runMutation(["new-workspace", "--cwd", cwd], "cmux new-workspace")
   // cmux may prefix output with "OK " — extract just the workspace:N ref
   const ref = r.stdout.trim().match(/workspace:\d+/)?.[0]
   if (!ref) throw new Error(`cmux new-workspace: unexpected output: ${r.stdout.trim()}`)
-  await _exec.run(["rename-workspace", "--workspace", ref, name])
-  await _exec.run(["select-workspace", "--workspace", ref])
+  await runMutation(["rename-workspace", "--workspace", ref, name], "cmux rename-workspace")
+  await runMutation(["select-workspace", "--workspace", ref], "cmux select-workspace")
   return ref
 }
 
@@ -114,7 +120,7 @@ export async function addCmuxSurface(wsRef: string, paneRef: string): Promise<st
 // Sends text to a specific surface in a cmux workspace.
 // Append "\n" to the text to execute it as a command.
 export async function sendToCmuxSurface(wsRef: string, surfaceRef: string, text: string): Promise<void> {
-  await _exec.run(["send", "--workspace", wsRef, "--surface", surfaceRef, text])
+  await runMutation(["send", "--workspace", wsRef, "--surface", surfaceRef, text], "cmux send")
 }
 
 // Focuses a specific surface (tab) within a cmux workspace.
@@ -141,3 +147,4 @@ export async function getCmuxMainPane(wsRef: string): Promise<{ paneRef: string;
 
   return { paneRef, surfaceRef }
 }
+import { requirePlatformSuccess } from "./platform-exec"
