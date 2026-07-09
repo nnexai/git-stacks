@@ -206,7 +206,7 @@ export const aerospaceIntegration: Integration & Cleans & HasCommands & HasConfi
       const vars: Record<string, string> = {
         GS_WORKSPACE_NAME: ctx.workspace.name,
         GS_WORKSPACE_BRANCH: ctx.workspace.branch ?? "",
-        GS_WORKSPACE_PATH: ctx.tasksDir,
+        GS_WORKSPACE_PATH: `${ctx.tasksDir}/${ctx.workspace.name}`,
       }
       const expandVars = (s: string): string =>
         s.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")

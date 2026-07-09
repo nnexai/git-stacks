@@ -653,7 +653,7 @@ describe("column config — env var substitution", () => {
     await niriIntegration.open(ctx, null, emptyBag)
 
     expect(mockNiriSpawnSh.mock.calls.length).toBe(1)
-    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd '/tmp/tasks/mydir' && ghostty")
+    expect(mockNiriSpawnSh.mock.calls[0][0]).toBe("cd '/tmp/tasks/my-workspace/mydir' && ghostty")
   })
 })
 
@@ -693,7 +693,7 @@ describe("column config — config precedence", () => {
     expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["alacritty"])
   })
 
-  test("falls back to global config when workspace has no columns", async () => {
+  test("uses an empty workspace override instead of inheriting global layout", async () => {
     const ctx: IntegrationContext = {
       ...fakeCtx,
       workspace: {
@@ -716,8 +716,7 @@ describe("column config — config precedence", () => {
 
     await niriIntegration.open(ctx, null, emptyBag)
 
-    expect(mockNiriSpawn.mock.calls.length).toBe(1)
-    expect(mockNiriSpawn.mock.calls[0][0]).toEqual(["ghostty"])
+    expect(mockNiriSpawn).not.toHaveBeenCalled()
   })
 })
 

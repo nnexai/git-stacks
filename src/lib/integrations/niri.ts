@@ -73,10 +73,12 @@ export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExam
   niri:
     enabled: true
     columns:
-      - source: vscode
+      - windows:
+          - source: vscode
         width: "60%"
-      - source: terminal
-        command: "kitty"
+      - windows:
+          - source: terminal
+            command: "kitty"
         width: "40%"`,
 
   isEnabled: (ctx) => resolveEnabled("niri", false, ctx),
@@ -139,7 +141,8 @@ export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExam
         ctx.workspace.settings?.integrations?.["niri"] ?? {}
       )
       const globalConfig = niriConfigSchema.safeParse(ctx.config.integrations["niri"] ?? {})
-      const parsedConfig = wsConfig.success && (wsConfig.data.columns?.length || wsConfig.data.focus !== undefined)
+      const hasWorkspaceOverride = ctx.workspace.settings?.integrations?.["niri"] !== undefined
+      const parsedConfig = hasWorkspaceOverride && wsConfig.success
         ? wsConfig.data
         : globalConfig.success ? globalConfig.data : undefined
       const shouldFocusWorkspace = parsedConfig?.focus === true
@@ -182,7 +185,7 @@ export const niriIntegration: Integration & Cleans & HasCommands & HasConfigExam
         const vars: Record<string, string> = {
           GS_WORKSPACE_NAME: ctx.workspace.name,
           GS_WORKSPACE_BRANCH: ctx.workspace.branch ?? "",
-          GS_WORKSPACE_PATH: ctx.tasksDir,
+          GS_WORKSPACE_PATH: `${ctx.tasksDir}/${ctx.workspace.name}`,
         }
         const expandVars = (s: string): string =>
           s.replace(/\$([A-Z_][A-Z0-9_]*)/g, (_, key) => vars[key] ?? "")
