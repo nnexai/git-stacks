@@ -1,26 +1,23 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
-import { join } from "path"
 import { execSync } from "child_process"
-import { cleanup, createConfigFixture, formatCliFailure, makeTmpDir, runCli, writeRegistryFixture, writeTemplateFixture } from "../helpers"
+import { existsSync, readFileSync, writeFileSync } from "fs"
+import { join } from "path"
+import {
+  applyHostileGlobalGitEnv,
+  cleanup,
+  createConfigFixture,
+  formatCliFailure,
+  gitExecOptions,
+  makeGitRepo,
+  makeTmpDir,
+  runCli,
+  writeRegistryFixture,
+  writeTemplateFixture,
+} from "../helpers"
 
-describe("workspace source command contracts", () => {
-  let baseDir: string
-  let configDir: string
-
-  beforeEach(() => {
-    baseDir = makeTmpDir("workspace-source-cmd")
-    configDir = createConfigFixture(baseDir)
-    const apiRepo = join(baseDir, "repos", "api")
-    mkdirSync(apiRepo, { recursive: true })
-    execSync("git init -q", { cwd: apiRepo })
-    execSync("git config user.name 'Test User'", { cwd: apiRepo })
-    execSync("git config user.email test@example.com", { cwd: apiRepo })
-    writeFileSync(join(apiRepo, "README.md"), "seed\n")
-    execSync("git add README.md", { cwd: apiRepo })
-    execSync("git commit -q -m init", { cwd: apiRepo })
-    execSync("git branch -M main", { cwd: apiRepo })
-    writeRegistryFixture(configDir, `- schema_version: "1"
+function setupWorkspaceSourceFixture(baseDir: string, configDir: string): string {
+  const apiRepo = makeGitRepo(join(baseDir, "repos"), "api")
+  writeRegistryFixture(configDir, `- schema_version: "1"
   name: api
   local_path: ${apiRepo}
   default_branch: main
@@ -31,7 +28,7 @@ describe("workspace source command contracts", () => {
     base_url: https://gitlab.example.com
     repo_path: org/api
 `)
-    writeTemplateFixture(configDir, "review.yml", `schema_version: "1"
+  writeTemplateFixture(configDir, "review.yml", `schema_version: "1"
 name: review
 repos:
   - repo: api
@@ -39,9 +36,41 @@ repos:
 labels:
   - template:review
 `)
+  return apiRepo
+}
+
+describe("workspace source command contracts", () => {
+  let baseDir: string
+  let configDir: string
+
+  beforeEach(() => {
+    baseDir = makeTmpDir("workspace-source-cmd")
+    configDir = createConfigFixture(baseDir)
+    setupWorkspaceSourceFixture(baseDir, configDir)
   })
 
   afterEach(() => cleanup(baseDir))
+
+  test("source fixture commits ignore hostile global signing and hooks", () => {
+    const fixtureBase = makeTmpDir("workspace-source-hostile")
+    const fixtureConfig = createConfigFixture(fixtureBase)
+    const restoreHostileEnv = applyHostileGlobalGitEnv(fixtureBase)
+
+    try {
+      const apiRepo = setupWorkspaceSourceFixture(fixtureBase, fixtureConfig)
+      writeFileSync(join(apiRepo, "source.txt"), "source fixture\n")
+      const opts = gitExecOptions(apiRepo, fixtureBase)
+      execSync("git add source.txt", opts)
+      execSync('git commit -m "source fixture commit"', opts)
+
+      expect(execSync("git log -1 --format=%s", opts).toString().trim()).toBe(
+        "source fixture commit"
+      )
+    } finally {
+      restoreHostileEnv()
+      cleanup(fixtureBase)
+    }
+  })
 
   test("--source requires --template", () => {
     const result = runCli(["new", "src-ws", "--source", "https://gitlab.example.com/org/api/-/merge_requests/1", "--non-interactive"], { baseDir, configDir })

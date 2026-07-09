@@ -37,6 +37,10 @@ function ensureGitTestHome(baseDir: string): string {
         "\tgpgsign = false",
         "[tag]",
         "\tgpgSign = false",
+        "[core]",
+        "\thooksPath = /dev/null",
+        "[init]",
+        "\tdefaultBranch = main",
         "",
       ].join("\n")
     )
@@ -93,6 +97,70 @@ export function applyTestGitEnv(baseDir: string): () => void {
       } else {
         process.env[key] = value
       }
+    }
+  }
+}
+
+export function applyHostileGlobalGitEnv(baseDir: string): () => void {
+  const hostileHome = join(baseDir, ".hostile-git-home")
+  const hostileConfig = join(hostileHome, "gitconfig")
+  const hostileHooks = join(hostileHome, "hooks")
+  const hostileSigner = writeExecutable(
+    hostileHome,
+    "fail-signing",
+    "#!/bin/sh\nexit 94\n"
+  )
+
+  writeExecutable(hostileHooks, "pre-commit", "#!/bin/sh\nexit 93\n")
+  writeFileSync(
+    hostileConfig,
+    [
+      "[user]",
+      "\tname = Hostile User",
+      "\temail = hostile@example.com",
+      "[commit]",
+      "\tgpgsign = true",
+      "[tag]",
+      "\tgpgSign = true",
+      "[core]",
+      `\thooksPath = ${hostileHooks}`,
+      "[gpg]",
+      `\tprogram = ${hostileSigner}`,
+      "[init]",
+      "\tdefaultBranch = hostile",
+      "",
+    ].join("\n")
+  )
+
+  const managedKeys = [
+    "HOME",
+    "XDG_CONFIG_HOME",
+    "GNUPGHOME",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_NOSYSTEM",
+    "GIT_TERMINAL_PROMPT",
+  ] as const
+  const previous = Object.fromEntries(
+    managedKeys.map((key) => [key, process.env[key]])
+  ) as Record<(typeof managedKeys)[number], string | undefined>
+  const nextEnv: Record<(typeof managedKeys)[number], string> = {
+    HOME: hostileHome,
+    XDG_CONFIG_HOME: join(hostileHome, ".config"),
+    GNUPGHOME: join(hostileHome, ".gnupg"),
+    GIT_CONFIG_GLOBAL: hostileConfig,
+    GIT_CONFIG_NOSYSTEM: "1",
+    GIT_TERMINAL_PROMPT: "0",
+  }
+
+  for (const key of managedKeys) {
+    process.env[key] = nextEnv[key]
+  }
+
+  return () => {
+    for (const key of managedKeys) {
+      const value = previous[key]
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
     }
   }
 }

@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { execSync } from "child_process"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import {
+  applyHostileGlobalGitEnv,
   cleanup,
   createConfigFixture,
   formatCliFailure,
+  gitExecOptions,
+  makeGitRepo,
   makeTmpDir,
   mkdir,
   runCli,
@@ -82,16 +85,8 @@ function setupFilesWorkspace(tmpDir: string, cfgDir: string, wsName = "rc-files"
   return { wsName, root }
 }
 
-function setupForgeSourceFixture(baseDir: string, cfgDir: string) {
-  const apiRepo = join(baseDir, "repos", "api")
-  mkdirSync(apiRepo, { recursive: true })
-  execSync("git init -q", { cwd: apiRepo })
-  execSync("git config user.name 'Test User'", { cwd: apiRepo })
-  execSync("git config user.email test@example.com", { cwd: apiRepo })
-  writeFileSync(join(apiRepo, "README.md"), "seed\n")
-  execSync("git add README.md", { cwd: apiRepo })
-  execSync("git commit -q -m init", { cwd: apiRepo })
-  execSync("git branch -M main", { cwd: apiRepo })
+function setupForgeSourceFixture(baseDir: string, cfgDir: string): string {
+  const apiRepo = makeGitRepo(join(baseDir, "repos"), "api")
 
   writeRegistryFixture(cfgDir, `- schema_version: "1"
   name: api
@@ -110,6 +105,7 @@ repos:
   - repo: api
     mode: worktree
 `)
+  return apiRepo
 }
 
 describe("v0.19.0 release candidate smoke", () => {
@@ -196,6 +192,20 @@ describe("v0.18.0 release candidate smoke", () => {
   })
 
   afterEach(() => cleanup(baseDir))
+
+  test("release fixture tags ignore hostile global signing and hooks", () => {
+    const restoreHostileEnv = applyHostileGlobalGitEnv(baseDir)
+
+    try {
+      const apiRepo = setupForgeSourceFixture(baseDir, configDir)
+      const opts = gitExecOptions(apiRepo, baseDir)
+      execSync('git tag -a v-fixture -m "release fixture tag"', opts)
+
+      expect(execSync("git tag --list v-fixture", opts).toString().trim()).toBe("v-fixture")
+    } finally {
+      restoreHostileEnv()
+    }
+  })
 
   test("README and changelog describe the RC workflows and safety boundaries", () => {
     expect(README).toContain("git-stacks new review-123 --template full-stack --source https://gitlab.example.com/org/repo/-/merge_requests/123")

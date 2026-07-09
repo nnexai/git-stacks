@@ -2,7 +2,15 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { execSync } from "child_process"
 import { readFileSync, writeFileSync, utimesSync } from "fs"
-import { makeTmpDir, cleanup, makeGitRepo, applyTestGitEnv, gitExecOptions } from "../helpers"
+import {
+  makeTmpDir,
+  cleanup,
+  makeBareRemote,
+  makeGitRepo,
+  applyHostileGlobalGitEnv,
+  applyTestGitEnv,
+  gitExecOptions,
+} from "../helpers"
 import {
   createWorktree,
   removeWorktree,
@@ -76,6 +84,62 @@ describe("makeGitRepo", () => {
       .toString()
       .trim()
     expect(email).toBe("test@example.com")
+  })
+})
+
+describe("isolated Git fixtures", () => {
+  let tmp: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-fixture-isolation")
+  })
+
+  afterEach(() => cleanup(tmp))
+
+  test("bare remotes advertise a valid main HEAD", () => {
+    const originPath = makeBareRemote(tmp)
+    const head = execSync("git symbolic-ref HEAD", gitExecOptions(originPath, tmp))
+      .toString()
+      .trim()
+
+    expect(head).toBe("refs/heads/main")
+  })
+
+  test("hostile global signing and hooks cannot affect source commits or release tags", () => {
+    const restoreHostileEnv = applyHostileGlobalGitEnv(tmp)
+    const hostileHooks = join(tmp, ".hostile-git-home", "hooks")
+
+    try {
+      const hostileOptions = { cwd: tmp, env: process.env, stdio: "pipe" as const }
+      expect(
+        execSync("git config --global --get commit.gpgsign", hostileOptions).toString().trim()
+      ).toBe("true")
+      expect(
+        execSync("git config --global --get tag.gpgSign", hostileOptions).toString().trim()
+      ).toBe("true")
+      expect(
+        execSync("git config --global --get core.hooksPath", hostileOptions).toString().trim()
+      ).toBe(hostileHooks)
+
+      const sourceRepo = makeGitRepo(tmp, "source-fixture")
+      writeFileSync(join(sourceRepo, "source.txt"), "source fixture\n")
+      const sourceOptions = gitExecOptions(sourceRepo, tmp)
+      execSync("git add source.txt", sourceOptions)
+      execSync('git commit -m "source fixture commit"', sourceOptions)
+
+      const releaseRepo = makeGitRepo(tmp, "release-fixture")
+      const releaseOptions = gitExecOptions(releaseRepo, tmp)
+      execSync('git tag -a v-test -m "release fixture tag"', releaseOptions)
+
+      expect(
+        execSync("git branch --show-current", sourceOptions).toString().trim()
+      ).toBe("main")
+      expect(
+        execSync("git tag --list v-test", releaseOptions).toString().trim()
+      ).toBe("v-test")
+    } finally {
+      restoreHostileEnv()
+    }
   })
 })
 
@@ -563,11 +627,11 @@ describe("fetchOrigin", () => {
 
 function makeRepoWithOrigin(tmp: string, repoName = "repo"): { repoPath: string; originPath: string } {
   // Create a true bare repo as origin (no initial commit — accepts any push)
-  const originPath = join(tmp, `${repoName}-origin-bare`)
-  execSync(`git init --bare ${originPath}`, { stdio: "pipe" })
+  const originPath = makeBareRemote(tmp, `${repoName}-origin`)
   const repoPath = makeGitRepo(tmp, repoName)
-  execSync(`git -C ${repoPath} remote add origin ${originPath}`, { stdio: "pipe" })
-  execSync(`git -C ${repoPath} push origin main`, { stdio: "pipe" })
+  const opts = gitExecOptions(repoPath, tmp)
+  execSync(`git remote add origin ${originPath}`, opts)
+  execSync("git push origin main", opts)
   return { repoPath, originPath }
 }
 
@@ -584,9 +648,10 @@ describe("checkRemoteTrackingRef", () => {
     const setup = makeRepoWithOrigin(tmp)
     repoPath = setup.repoPath
     // Push a feature branch so origin/feature-upstream exists
-    execSync(`git -C ${repoPath} branch feature-upstream`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} push origin feature-upstream`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} fetch origin`, { stdio: "pipe" })
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git branch feature-upstream", opts)
+    execSync("git push origin feature-upstream", opts)
+    execSync("git fetch origin", opts)
   })
   afterEach(() => cleanup(tmp))
 
@@ -613,8 +678,9 @@ describe("checkBranchExistsOnRemote", () => {
     tmp = makeTmpDir("git-upstream-test")
     const setup = makeRepoWithOrigin(tmp)
     repoPath = setup.repoPath
-    execSync(`git -C ${repoPath} branch feature-remote`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} push origin feature-remote`, { stdio: "pipe" })
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git branch feature-remote", opts)
+    execSync("git push origin feature-remote", opts)
   })
   afterEach(() => cleanup(tmp))
 
@@ -630,7 +696,10 @@ describe("checkBranchExistsOnRemote", () => {
 
   test("returns false when origin is unreachable (non-existent remote path)", async () => {
     // Override origin to point to a non-existent path to simulate network failure
-    execSync(`git -C ${repoPath} remote set-url origin /nonexistent/path/that/does/not/exist`, { stdio: "pipe" })
+    execSync(
+      "git remote set-url origin /nonexistent/path/that/does/not/exist",
+      gitExecOptions(repoPath, tmp)
+    )
     const result = await checkBranchExistsOnRemote(repoPath, "feature-remote")
     expect(result).toBe(false)
   })
@@ -648,14 +717,18 @@ describe("hasUpstreamTracking", () => {
     tmp = makeTmpDir("git-upstream-test")
     const setup = makeRepoWithOrigin(tmp)
     repoPath = setup.repoPath
-    execSync(`git -C ${repoPath} branch feature-tracked`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} push origin feature-tracked`, { stdio: "pipe" })
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git branch feature-tracked", opts)
+    execSync("git push origin feature-tracked", opts)
   })
   afterEach(() => cleanup(tmp))
 
   test("returns true when branch has upstream tracking configured", async () => {
     // Manually set upstream tracking
-    execSync(`git -C ${repoPath} branch --set-upstream-to=origin/feature-tracked feature-tracked`, { stdio: "pipe" })
+    execSync(
+      "git branch --set-upstream-to=origin/feature-tracked feature-tracked",
+      gitExecOptions(repoPath, tmp)
+    )
     const result = await hasUpstreamTracking(repoPath, "feature-tracked")
     expect(result).toBe(true)
   })
@@ -667,7 +740,7 @@ describe("hasUpstreamTracking", () => {
   })
 
   test("returns false for a brand-new local branch with no remote", async () => {
-    execSync(`git -C ${repoPath} branch brand-new-local`, { stdio: "pipe" })
+    execSync("git branch brand-new-local", gitExecOptions(repoPath, tmp))
     const result = await hasUpstreamTracking(repoPath, "brand-new-local")
     expect(result).toBe(false)
   })
@@ -689,9 +762,10 @@ describe("ensureUpstreamTracking", () => {
   afterEach(() => cleanup(tmp))
 
   test("sets tracking via local ref when origin/<branch> exists after fetch (source: local)", async () => {
-    execSync(`git -C ${repoPath} branch feature-local`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} push origin feature-local`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} fetch origin`, { stdio: "pipe" })
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git branch feature-local", opts)
+    execSync("git push origin feature-local", opts)
+    execSync("git fetch origin", opts)
 
     const result = await ensureUpstreamTracking(repoPath, "feature-local")
     expect(result.tracked).toBe(true)
@@ -704,14 +778,15 @@ describe("ensureUpstreamTracking", () => {
 
     // Push the branch from origin directly (simulates a colleague pushing) so it exists on remote
     // but repoPath2 never fetched it — so no local remote-tracking ref exists
-    execSync(`git -C ${originPath2} branch feature-remote-only`, { stdio: "pipe" })
+    execSync("git branch feature-remote-only", gitExecOptions(originPath2, tmp))
 
     // Create the local branch in repoPath2 (no push, no fetch — so origin/feature-remote-only not in local refs)
-    execSync(`git -C ${repoPath2} branch feature-remote-only`, { stdio: "pipe" })
+    const repoOptions = gitExecOptions(repoPath2, tmp)
+    execSync("git branch feature-remote-only", repoOptions)
     // Verify no local remote-tracking ref exists
     const localRef = execSync(
-      `git -C ${repoPath2} rev-parse --verify origin/feature-remote-only 2>/dev/null || echo "missing"`,
-      { stdio: "pipe" }
+      `git rev-parse --verify origin/feature-remote-only 2>/dev/null || echo "missing"`,
+      repoOptions
     ).toString().trim()
     expect(localRef).toBe("missing")
 
@@ -721,16 +796,17 @@ describe("ensureUpstreamTracking", () => {
   })
 
   test("returns tracked:false for brand-new branch not yet on remote", async () => {
-    execSync(`git -C ${repoPath} branch brand-new-not-pushed`, { stdio: "pipe" })
+    execSync("git branch brand-new-not-pushed", gitExecOptions(repoPath, tmp))
     const result = await ensureUpstreamTracking(repoPath, "brand-new-not-pushed")
     expect(result.tracked).toBe(false)
   })
 
   test("returns tracked:false immediately when branch already has upstream tracking (skip)", async () => {
-    execSync(`git -C ${repoPath} branch already-tracked`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} push origin already-tracked`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} fetch origin`, { stdio: "pipe" })
-    execSync(`git -C ${repoPath} branch --set-upstream-to=origin/already-tracked already-tracked`, { stdio: "pipe" })
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git branch already-tracked", opts)
+    execSync("git push origin already-tracked", opts)
+    execSync("git fetch origin", opts)
+    execSync("git branch --set-upstream-to=origin/already-tracked already-tracked", opts)
 
     const result = await ensureUpstreamTracking(repoPath, "already-tracked")
     // Already tracked — should return tracked:false (skip path, not setting tracking again)
@@ -738,9 +814,10 @@ describe("ensureUpstreamTracking", () => {
   })
 
   test("is non-fatal when ls-remote fails (network unreachable)", async () => {
-    execSync(`git -C ${repoPath} branch offline-branch`, { stdio: "pipe" })
+    const opts = gitExecOptions(repoPath, tmp)
+    execSync("git branch offline-branch", opts)
     // Point origin at non-existent path to simulate network failure
-    execSync(`git -C ${repoPath} remote set-url origin /nonexistent/path`, { stdio: "pipe" })
+    execSync("git remote set-url origin /nonexistent/path", opts)
     // Should not throw — returns tracked:false
     const result = await ensureUpstreamTracking(repoPath, "offline-branch")
     expect(result.tracked).toBe(false)
