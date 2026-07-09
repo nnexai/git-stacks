@@ -4,6 +4,18 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- Workspace clone and template recreate now use transactional worktree handling: only resources created by the active operation are removed on failure, and moved local refs are restored when possible.
+- `clean --gone` fails closed when remote branch discovery is unavailable; `pull` refuses worktrees on an unexpected or detached branch.
+- Dashboard IPC preserves live socket owners, handles framed UTF-8 messages safely, and reports failed batch mutations instead of a false success.
+- Workspace recreation resolves the composed template and registry before mutation, preserves workspace identity/runtime metadata, and treats YAML write as the commit point.
+- Environment/port identifiers are validated as shell-safe names; duplicate explicit ports are rejected or deterministically reallocated with `--reallocate`.
+
+---
+
 ## [0.19.0-rc.4] - 2026-05-25
 
 ### Fixed
