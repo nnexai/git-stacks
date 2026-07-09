@@ -26,6 +26,7 @@ const stashPushMock = mock(async (_repoPath: string, _message: string) => ({ ok:
 const stashPopMock = mock(async (_repoPath: string) => ({ ok: true }))
 const hasAutoStashMock = mock(async (_repoPath: string) => false)
 const pullFFOnlyMock = mock(async (_repoPath: string, _branch: string) => ({ ok: true, commits: 0 }))
+const getCurrentBranchMock = mock(async (_repoPath: string) => "feature/test")
 
 mock.module("@/lib/config", () =>
   makeConfigMock({
@@ -51,10 +52,11 @@ mock.module("@/lib/git", () =>
     stashPop: stashPopMock,
     hasAutoStash: hasAutoStashMock,
     pullFFOnly: pullFFOnlyMock,
+    getCurrentBranch: getCurrentBranchMock,
   })
 )
 
-const { pushWorkspace, syncWorkspace, _exec } = await import("../../src/lib/workspace-git")
+const { pushWorkspace, syncWorkspace, pullWorkspace, _exec } = await import("../../src/lib/workspace-git")
 
 let tempRoot = ""
 
@@ -79,6 +81,7 @@ beforeEach(() => {
   stashPopMock.mockReset()
   hasAutoStashMock.mockReset()
   pullFFOnlyMock.mockReset()
+  getCurrentBranchMock.mockReset()
 
   workspaceExistsMock.mockImplementation(() => true)
   getRepoPathMock.mockImplementation((repo: WorkspaceRepo) =>
@@ -98,6 +101,7 @@ beforeEach(() => {
   stashPopMock.mockImplementation(async () => ({ ok: true }))
   hasAutoStashMock.mockImplementation(async () => false)
   pullFFOnlyMock.mockImplementation(async () => ({ ok: true, commits: 0 }))
+  getCurrentBranchMock.mockImplementation(async () => "feature/test")
 })
 
 afterAll(() => {
@@ -390,5 +394,42 @@ describe("workspace-git", () => {
       status: "failed",
       detail: "unsupported merge-tree behavior",
     }))
+  })
+
+  test("pullWorkspace fails wrong and detached branches without fetching or pulling them", async () => {
+    const wrongRepo = makeRepo("wrong", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "wrong"),
+    })
+    const detachedRepo = makeRepo("detached", "trunk", {
+      main_path: join(tempRoot, "main", "detached"),
+      base_branch: "main",
+    })
+    const cleanRepo = makeRepo("clean", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "clean"),
+    })
+    mkdirSync(worktreePath(wrongRepo), { recursive: true })
+    mkdirSync(detachedRepo.main_path, { recursive: true })
+    mkdirSync(worktreePath(cleanRepo), { recursive: true })
+    getCurrentBranchMock.mockImplementation(async (repoPath: string) => {
+      if (repoPath === worktreePath(wrongRepo)) return "other-branch"
+      if (repoPath === detachedRepo.main_path) return "HEAD"
+      return "feature/test"
+    })
+
+    const result = await pullWorkspace(makeWorkspace([wrongRepo, detachedRepo, cleanRepo]))
+
+    expect(result.ok).toBe(false)
+    expect(result.failed).toContainEqual(expect.objectContaining({
+      repo: "wrong",
+      reason: "branch mismatch: current 'other-branch', expected 'feature/test'",
+    }))
+    expect(result.failed).toContainEqual(expect.objectContaining({
+      repo: "detached",
+      reason: "branch mismatch: current 'HEAD', expected 'main'",
+    }))
+    expect(fetchOriginMock).toHaveBeenCalledTimes(1)
+    expect(fetchOriginMock).toHaveBeenCalledWith(cleanRepo.main_path)
+    expect(pullFFOnlyMock).toHaveBeenCalledTimes(1)
+    expect(pullFFOnlyMock).toHaveBeenCalledWith(cleanRepo.task_path, "feature/test")
   })
 })

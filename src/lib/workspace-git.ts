@@ -12,6 +12,7 @@ import {
   stashPop,
   hasAutoStash,
   pullFFOnly,
+  getCurrentBranch,
 } from "./git"
 import {
   readWorkspace,
@@ -42,6 +43,7 @@ export const _exec = {
   stashPop,
   hasAutoStash,
   pullFFOnly,
+  getCurrentBranch,
 }
 
 // ─── Sync types ───────────────────────────────────────────────────────────────
@@ -477,9 +479,27 @@ export async function pullWorkspace(
       return { ok: true, pulled: [], skipped: [], failed: [] }
     }
 
-    // Phase 1: Parallel fetch, deduplicated by main_path
+    // Phase 1: Fail branch mismatches before any fetch or pull can update a different ref.
+    const branchFailures = new Map<string, string>()
+    for (const repo of repos) {
+      const repoPath = getRepoPath(repo)
+      if (!existsSync(repoPath)) continue
+      const expectedBranch = repo.mode === "worktree" ? workspace.branch : (repo.base_branch ?? "main")
+      try {
+        const currentBranch = await _exec.getCurrentBranch(repoPath)
+        if (currentBranch !== expectedBranch) {
+          branchFailures.set(repo.name, `branch mismatch: current '${currentBranch}', expected '${expectedBranch}'`)
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        branchFailures.set(repo.name, `could not determine current branch (expected '${expectedBranch}'): ${detail}`)
+      }
+    }
+
+    // Phase 2: Parallel fetch, deduplicated by main_path.
     const fetchGroups = new Map<string, typeof repos>()
     for (const repo of repos) {
+      if (branchFailures.has(repo.name)) continue
       const key = repo.main_path
       if (!fetchGroups.has(key)) fetchGroups.set(key, [])
       fetchGroups.get(key)!.push(repo)
@@ -504,7 +524,7 @@ export async function pullWorkspace(
       })
     )
 
-    // Phase 2: Sequential pull per repo
+    // Phase 3: Sequential pull per repo
     const pulled: PullResult["pulled"] = []
     const skipped: PullResult["skipped"] = []
     const failed: PullResult["failed"] = []
@@ -518,6 +538,13 @@ export async function pullWorkspace(
       if (!existsSync(repoPath)) {
         skipped.push({ repo: repo.name, reason: "path missing" })
         onProgress?.({ repo: repo.name, status: "skipped", detail: "path missing" })
+        continue
+      }
+
+      if (branchFailures.has(repo.name)) {
+        const reason = branchFailures.get(repo.name)!
+        failed.push({ repo: repo.name, reason })
+        onProgress?.({ repo: repo.name, status: "failed", detail: reason })
         continue
       }
 

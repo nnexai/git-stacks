@@ -242,7 +242,7 @@ describe("pullWorkspace", () => {
     expect(result.pulled[1].commits).toBe(1)
   })
 
-  test("deduplicates fetch per main_path", async () => {
+  test("deduplicates fetch per main_path while rejecting a worktree on another branch", async () => {
     const tmp = makeTmpDir("pull-ws-dedup")
     tmpDirs.push(tmp)
 
@@ -271,11 +271,13 @@ describe("pullWorkspace", () => {
       if (row.status === "fetching") fetchEvents.push(row.repo)
     })
 
-    // Both repos should report fetching (they're in the same group),
-    // but the actual fetch only happens once per main_path
-    expect(fetchEvents.length).toBe(2)
-    // Both should have been pulled
-    expect(result.pulled.length).toBe(2)
+    // The workspace declares feat-a, so the feat-b worktree is rejected before fetch/pull.
+    expect(fetchEvents).toEqual(["wt1"])
+    expect(result.pulled).toHaveLength(1)
+    expect(result.failed).toContainEqual(expect.objectContaining({
+      repo: "wt2",
+      reason: "branch mismatch: current 'feat-b', expected 'feat-a'",
+    }))
   })
 
   test("returns error for nonexistent workspace by name", async () => {
