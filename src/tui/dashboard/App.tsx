@@ -990,13 +990,18 @@ export default function App() {
       let wsIntegrationSettings: Record<string, unknown> | undefined
       let templateName: string | undefined
 
+      const requestedRepoNames = template ? template.repos.map((repo) => repo.repo) : repoNames ?? []
+      const missingRepoNames = requestedRepoNames.filter((name) => !registryMap.has(name))
+      if (missingRepoNames.length > 0) {
+        throw new Error(`Missing registry repos: ${[...new Set(missingRepoNames)].join(", ")}`)
+      }
+
       if (template) {
         // Template-based flow
         templateName = template.name
         repos = []
         for (const tplRepo of template.repos) {
-          const regEntry = registryMap.get(tplRepo.repo)
-          if (!regEntry) continue  // skip missing registry entries silently
+          const regEntry = registryMap.get(tplRepo.repo)!
           const mode = tplRepo.mode ?? "worktree"
           if (mode === "worktree") {
             repos.push({
