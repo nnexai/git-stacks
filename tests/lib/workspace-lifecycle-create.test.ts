@@ -53,7 +53,7 @@ mock.module("@/lib/git", () => ({
   // Existing clean/close/merge/remove paths in workspace-lifecycle.ts also import
   // these from "./git". Provide harmless stubs so the module loads cleanly.
   checkBranchExists: mock(async () => false),
-  getMergeConflicts: mock(async () => [] as string[]),
+  getMergeConflicts: mock(async () => ({ status: "clean" })),
   mergeNoFF: mock(async () => ({ ok: true })),
   deleteLocalBranch: mock(async () => {}),
 }))

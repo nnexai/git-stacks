@@ -7,6 +7,8 @@ import {
   cleanup,
   gitExecOptions,
   makeRealWorkspaceFixture,
+  makeRepoWithRemote,
+  makeWorkspaceFixture,
   makeTmpDir,
   useIsolatedConfig,
   writeProbeScript,
@@ -16,6 +18,7 @@ import {
   realIsWorktreeRegistered as isWorktreeRegistered,
   realMergeWorkspace as mergeWorkspace,
   realReadWorkspace as readWorkspace,
+  realWriteGlobalConfig as writeGlobalConfig,
   realRemoveWorkspace as removeWorkspace,
   realRenameWorkspace as renameWorkspace,
   realWorkspaceExists as workspaceExists,
@@ -23,6 +26,7 @@ import {
   realRunHooks,
   realRunHooksCaptured,
   lifecycleRealExec,
+  tmuxRealExec,
 } from "../helpers"
 
 const isolated = useIsolatedConfig("workspace-ops-real-fixture")
@@ -137,6 +141,72 @@ describe("workspace lifecycle real fixtures", () => {
       stderr: "pipe",
     })
     expect(branchLookup.exitCode).not.toBe(0)
+  })
+
+  test("a later repo preflight error leaves hooks, integrations, worktrees, base refs, and YAML untouched", async () => {
+    const wsName = "merge-preflight-error"
+    const branch = `feat/${wsName}`
+    const first = makeRepoWithRemote(tmpDir, "preflight-first", branch)
+    const second = makeRepoWithRemote(tmpDir, "preflight-second", branch)
+    const wsRoot = join(tmpDir, "workspaces")
+    const hookLog = join(tmpDir, "merge-preflight-hooks.log")
+    const hookScript = writeProbeScript(tmpDir, "merge-preflight-hook.sh", hookLog, ["GS_TRIGGERED_BY"])
+    mkdirSync(join(wsRoot, "tasks"), { recursive: true })
+
+    makeWorkspaceFixture(isolated.configDir, wsName, [
+      { name: "first", mainPath: first.mainPath, taskPath: first.taskPath },
+      {
+        name: "second",
+        mainPath: second.mainPath,
+        taskPath: second.taskPath,
+        baseBranch: "missing-base",
+      },
+    ], {
+      wsRoot,
+      branch,
+      hooks: {
+        pre_close: [hookScript],
+        pre_clean: [hookScript],
+        pre_merge: [hookScript],
+      },
+    })
+    writeGlobalConfig({
+      workspace_root: wsRoot,
+      integrations: { tmux: { enabled: true } },
+    })
+    realCache.workspaces.clear()
+    realCache.resetList()
+
+    commitIn(first.taskPath, "first-feature.txt", "feature\n", "first feature")
+    const firstBaseBefore = execSync("git rev-parse main", gitExecOptions(first.mainPath, tmpDir)).toString().trim()
+    const secondBaseBefore = execSync("git rev-parse main", gitExecOptions(second.mainPath, tmpDir)).toString().trim()
+    const yamlBefore = readFileSync(workspaceFile(wsName), "utf8")
+    const tmuxCalls: string[][] = []
+    const originalTmuxRun = tmuxRealExec.run
+    tmuxRealExec.run = async (args: string[]) => {
+      tmuxCalls.push(args)
+      return { exitCode: 0, stdout: "" }
+    }
+
+    let result: Awaited<ReturnType<typeof mergeWorkspace>>
+    try {
+      result = await mergeWorkspace(wsName, { force: true })
+    } finally {
+      tmuxRealExec.run = originalTmuxRun
+    }
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("second")
+    expect(result.error).toContain("missing-base")
+    expect(existsSync(hookLog)).toBe(false)
+    expect(tmuxCalls).toEqual([])
+    expect(existsSync(first.taskPath)).toBe(true)
+    expect(existsSync(second.taskPath)).toBe(true)
+    expect(await isWorktreeRegistered(first.mainPath, first.taskPath)).toBe(true)
+    expect(await isWorktreeRegistered(second.mainPath, second.taskPath)).toBe(true)
+    expect(execSync("git rev-parse main", gitExecOptions(first.mainPath, tmpDir)).toString().trim()).toBe(firstBaseBefore)
+    expect(execSync("git rev-parse main", gitExecOptions(second.mainPath, tmpDir)).toString().trim()).toBe(secondBaseBefore)
+    expect(readFileSync(workspaceFile(wsName), "utf8")).toBe(yamlBefore)
   })
 
   test("rename re-registers worktrees and updates workspace identity", async () => {

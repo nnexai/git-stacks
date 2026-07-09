@@ -13,7 +13,7 @@ const readGlobalConfigMock = mock(() => ({
 }))
 
 // ─── Git mocks ────────────────────────────────────────────────────────────────
-const getMergeConflictsMock = mock(async () => [] as string[])
+const getMergeConflictsMock = mock(async () => ({ status: "clean" } as any))
 const checkBranchExistsMock = mock(async () => false)
 
 // ─── Integration runner mock ──────────────────────────────────────────────────

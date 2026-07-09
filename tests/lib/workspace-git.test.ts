@@ -20,7 +20,7 @@ const getCommitsAheadMock = mock(async (_repoPath: string, _baseRef: string, _he
 const rebaseBranchMock = mock(async (_repoPath: string, _baseRef: string) => ({ ok: true }))
 const mergeBranchFFMock = mock(async (_repoPath: string, _baseRef: string) => ({ ok: true }))
 const getCommitsBehindMock = mock(async (_repoPath: string, _baseRef: string, _headRef: string) => 0)
-const getMergeConflictsMock = mock(async (_repoPath: string, _baseRef: string, _branch: string) => [] as string[])
+const getMergeConflictsMock = mock(async (_repoPath: string, _baseRef: string, _branch: string) => ({ status: "clean" } as any))
 const isRepoDirtyMock = mock(async (_repoPath: string) => false)
 const stashPushMock = mock(async (_repoPath: string, _message: string) => ({ ok: true }))
 const stashPopMock = mock(async (_repoPath: string) => ({ ok: true }))
@@ -92,7 +92,7 @@ beforeEach(() => {
   rebaseBranchMock.mockImplementation(async () => ({ ok: true }))
   mergeBranchFFMock.mockImplementation(async () => ({ ok: true }))
   getCommitsBehindMock.mockImplementation(async () => 0)
-  getMergeConflictsMock.mockImplementation(async () => [])
+  getMergeConflictsMock.mockImplementation(async () => ({ status: "clean" } as any))
   isRepoDirtyMock.mockImplementation(async () => false)
   stashPushMock.mockImplementation(async () => ({ ok: true }))
   stashPopMock.mockImplementation(async () => ({ ok: true }))
@@ -190,7 +190,7 @@ describe("workspace-git _exec seam", () => {
     }
     _exec.getMergeConflicts = async (repoPath: any, baseRef: any, branch: any) => {
       conflictCalls.push({ repoPath, baseRef, branch })
-      return []
+      return { status: "clean" } as any
     }
     _exec.rebaseBranch = async (repoPath: any, baseRef: any) => {
       rebaseCalls.push({ repoPath, baseRef })
@@ -301,7 +301,7 @@ describe("workspace-git", () => {
     readWorkspaceMock.mockImplementation(() => makeWorkspace([worktreeRepo]))
     isRepoDirtyMock.mockImplementation(async () => true)
     getCommitsBehindMock.mockImplementation(async () => 2)
-    getMergeConflictsMock.mockImplementation(async () => [])
+    getMergeConflictsMock.mockImplementation(async () => ({ status: "clean" } as any))
     rebaseBranchMock.mockImplementation(async () => ({ ok: true }))
 
     const rows: Array<{ repo: string; status: string; detail: string; conflicts: string[] }> = []
@@ -325,5 +325,70 @@ describe("workspace-git", () => {
     expect(rows.some((row) => row.status === "rebasing")).toBe(true)
     expect(rows.some((row) => row.status === "popping")).toBe(true)
     expect(rows.some((row) => row.status === "synced" && row.detail.includes("+2 commits"))).toBe(true)
+  })
+
+  test("syncWorkspace reports a merge preflight error as a failure in normal mode", async () => {
+    const worktreeRepo = makeRepo("api", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "api"),
+      base_branch: "main",
+    })
+    mkdirSync(worktreePath(worktreeRepo), { recursive: true })
+    readWorkspaceMock.mockImplementation(() => makeWorkspace([worktreeRepo]))
+    getMergeConflictsMock.mockImplementation(async () => ({
+      status: "error",
+      error: "cannot resolve origin/main",
+    } as any))
+
+    const rows: Array<{ repo: string; status: string; detail: string }> = []
+    const result = await syncWorkspace("feature-ws", { strategy: "rebase" }, (row) => rows.push(row))
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("Merge preflight failed")
+    expect(result.error).toContain("api (cannot resolve origin/main)")
+    expect(result.skipped).toContainEqual({ repo: "api", reason: "cannot resolve origin/main" })
+    expect(rebaseBranchMock).not.toHaveBeenCalled()
+    expect(rows).toContainEqual(expect.objectContaining({
+      repo: "api",
+      status: "failed",
+      detail: "cannot resolve origin/main",
+    }))
+  })
+
+  test("syncWorkspace best-effort syncs clean repos but still fails operational preflight errors", async () => {
+    const brokenRepo = makeRepo("broken", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "broken"),
+      base_branch: "main",
+    })
+    const cleanRepo = makeRepo("clean", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "clean"),
+      base_branch: "main",
+    })
+    mkdirSync(worktreePath(brokenRepo), { recursive: true })
+    mkdirSync(worktreePath(cleanRepo), { recursive: true })
+    readWorkspaceMock.mockImplementation(() => makeWorkspace([brokenRepo, cleanRepo]))
+    getCommitsBehindMock.mockImplementation(async () => 1)
+    getMergeConflictsMock.mockImplementation(async (repoPath: string) => (
+      repoPath === worktreePath(brokenRepo)
+        ? { status: "error", error: "unsupported merge-tree behavior" }
+        : { status: "clean" }
+    ) as any)
+
+    const rows: Array<{ repo: string; status: string; detail: string }> = []
+    const result = await syncWorkspace(
+      "feature-ws",
+      { strategy: "rebase", bestEffort: true },
+      (row) => rows.push(row)
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.synced).toEqual([{ repo: "clean", commits: 1 }])
+    expect(result.skipped).toContainEqual({ repo: "broken", reason: "unsupported merge-tree behavior" })
+    expect(rebaseBranchMock).toHaveBeenCalledTimes(1)
+    expect(rebaseBranchMock).toHaveBeenCalledWith(worktreePath(cleanRepo), "origin/main")
+    expect(rows).toContainEqual(expect.objectContaining({
+      repo: "broken",
+      status: "failed",
+      detail: "unsupported merge-tree behavior",
+    }))
   })
 })

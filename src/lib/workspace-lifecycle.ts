@@ -17,7 +17,6 @@ import {
   createWorktree,
   createWorktreeFromRef,
   removeWorktree,
-  checkBranchExists,
   ensureUpstreamTracking,
   getMergeConflicts,
   mergeNoFF,
@@ -465,16 +464,21 @@ export async function mergeWorkspace(
     })
 
     const conflicting: string[] = []
+    const preflightErrors: string[] = []
     for (const { repo, baseBranch } of repoBases) {
-      const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
-      if (!branchExists) continue
-      const conflicts = await getMergeConflicts(repo.main_path, baseBranch, workspace.branch)
-      if (conflicts.length > 0) {
-        conflicting.push(`${repo.name} (${conflicts.join(", ")})`)
+      const result = await getMergeConflicts(repo.main_path, baseBranch, workspace.branch)
+      if (result.status === "conflicted") {
+        conflicting.push(`${repo.name} (${result.files.join(", ")})`)
+      } else if (result.status === "error") {
+        preflightErrors.push(`${repo.name} (${result.error})`)
       }
     }
-    if (conflicting.length > 0) {
-      return { ok: false, error: `Merge conflicts detected:\n  ${conflicting.join("\n  ")}` }
+    if (conflicting.length > 0 || preflightErrors.length > 0) {
+      const sections = [
+        conflicting.length > 0 ? `Merge conflicts detected:\n  ${conflicting.join("\n  ")}` : "",
+        preflightErrors.length > 0 ? `Merge preflight failed:\n  ${preflightErrors.join("\n  ")}` : "",
+      ].filter(Boolean)
+      return { ok: false, error: sections.join("\n\n") }
     }
 
     if (opts.dryRun) {
@@ -518,11 +522,6 @@ export async function mergeWorkspace(
     }
 
     for (const { repo, baseBranch } of repoBases) {
-      const branchExists = await checkBranchExists(repo.main_path, workspace.branch)
-      if (!branchExists) {
-        onProgress?.(`skip  ${repo.name} (branch '${workspace.branch}' not found)`)
-        continue
-      }
       const result = await mergeNoFF(repo.main_path, baseBranch, workspace.branch)
       if (!result.ok) {
         return { ok: false, error: `Merge failed for '${repo.name}' (${result.error})` }

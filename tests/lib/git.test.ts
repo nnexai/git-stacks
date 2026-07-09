@@ -15,6 +15,7 @@ import {
   createWorktree,
   removeWorktree,
   isWorktreeRegistered,
+  getMergeConflicts,
   mergeNoFF,
   rebaseBranch,
   getCommitsBehind,
@@ -211,6 +212,64 @@ describe("removeWorktree", () => {
     expect(await isWorktreeRegistered(repoPath, wtPath)).toBe(true)
     await removeWorktree(repoPath, wtPath)
     expect(await isWorktreeRegistered(repoPath, wtPath)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// describe("getMergeConflicts")
+// ---------------------------------------------------------------------------
+
+describe("getMergeConflicts", () => {
+  let tmp: string
+  let repoPath: string
+
+  beforeEach(() => {
+    tmp = makeTmpDir("git-merge-preflight")
+    repoPath = makeGitRepo(tmp)
+  })
+  afterEach(() => cleanup(tmp))
+
+  test("returns clean when refs merge without conflicts", async () => {
+    const wtPath = join(tmp, "wt", "clean")
+    await createWorktree(repoPath, wtPath, "feature/clean")
+    writeFileSync(join(wtPath, "feature.txt"), "feature\n")
+    execSync("git add .", gitExecOptions(wtPath, tmp))
+    execSync('git commit -m "feature commit"', gitExecOptions(wtPath, tmp))
+
+    expect(await getMergeConflicts(repoPath, "main", "feature/clean")).toEqual({
+      status: "clean",
+    })
+  })
+
+  test("returns conflicted with exact filenames", async () => {
+    const wtPath = join(tmp, "wt", "conflicted")
+    await createWorktree(repoPath, wtPath, "feature/conflicted")
+
+    writeFileSync(join(wtPath, "README.md"), "feature\n")
+    execSync("git add .", gitExecOptions(wtPath, tmp))
+    execSync('git commit -m "feature conflict"', gitExecOptions(wtPath, tmp))
+
+    writeFileSync(join(repoPath, "README.md"), "main\n")
+    execSync("git add .", gitExecOptions(repoPath, tmp))
+    execSync('git commit -m "main conflict"', gitExecOptions(repoPath, tmp))
+
+    expect(await getMergeConflicts(repoPath, "main", "feature/conflicted")).toEqual({
+      status: "conflicted",
+      files: ["README.md"],
+    })
+  })
+
+  test("returns errors for missing refs and invalid repositories", async () => {
+    const missingBase = await getMergeConflicts(repoPath, "missing-base", "main")
+    const missingFeature = await getMergeConflicts(repoPath, "main", "missing-feature")
+    const invalidRepo = await getMergeConflicts(join(tmp, "not-a-repo"), "main", "feature")
+
+    expect(missingBase.status).toBe("error")
+    expect(missingFeature.status).toBe("error")
+    expect(invalidRepo.status).toBe("error")
+    if (missingBase.status === "error") expect(missingBase.error).toContain("missing-base")
+    if (missingFeature.status === "error") expect(missingFeature.error).toContain("missing-feature")
+    if (invalidRepo.status === "error") expect(invalidRepo.error.length).toBeGreaterThan(0)
   })
 })
 

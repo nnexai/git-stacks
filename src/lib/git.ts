@@ -180,22 +180,59 @@ export async function isBranchGoneOnRemote(
   }
 }
 
+export type MergePreflightResult =
+  | { status: "clean" }
+  | { status: "conflicted"; files: string[] }
+  | { status: "error"; error: string }
+
+function gitCommandError(
+  command: string,
+  result: { exitCode: number; stdout: Uint8Array; stderr: Uint8Array }
+): MergePreflightResult {
+  const stdout = result.stdout.toString().trim()
+  const stderr = result.stderr.toString().trim()
+  const detail = stderr || stdout || `exit code ${result.exitCode}`
+  return { status: "error", error: `${command}: ${detail}` }
+}
+
 export async function getMergeConflicts(
   repoPath: string,
   baseBranch: string,
   branch: string
-): Promise<string[]> {
+): Promise<MergePreflightResult> {
+  const baseResult = await $`git -C ${repoPath} rev-parse --verify ${baseBranch + "^{commit}"}`
+    .quiet()
+    .nothrow()
+  if (baseResult.exitCode !== 0) {
+    return gitCommandError(`Cannot resolve base ref '${baseBranch}'`, baseResult)
+  }
+
+  const branchResult = await $`git -C ${repoPath} rev-parse --verify ${branch + "^{commit}"}`
+    .quiet()
+    .nothrow()
+  if (branchResult.exitCode !== 0) {
+    return gitCommandError(`Cannot resolve feature ref '${branch}'`, branchResult)
+  }
+
   const result = await $`git -C ${repoPath} merge-tree --write-tree ${baseBranch} ${branch}`
     .quiet()
     .nothrow()
-  if (result.exitCode === 0) return []
+  if (result.exitCode === 0) return { status: "clean" }
+  if (result.exitCode !== 1) {
+    return gitCommandError("git merge-tree --write-tree failed", result)
+  }
+
   // Parse conflict file paths from stdout (lines starting with "CONFLICT")
-  return result.stdout
+  const files = result.stdout
     .toString()
     .split("\n")
     .filter((l) => l.startsWith("CONFLICT"))
-    .map((l) => l.replace(/^CONFLICT \([^)]+\): /, "").trim())
+    .map((l) => l.replace(/^CONFLICT \([^)]+\): /, "").replace(/^Merge conflict in /, "").trim())
     .filter(Boolean)
+  if (files.length === 0) {
+    return gitCommandError("git merge-tree --write-tree returned unparseable conflict output", result)
+  }
+  return { status: "conflicted", files }
 }
 
 export async function mergeNoFF(

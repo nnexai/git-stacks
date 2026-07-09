@@ -324,7 +324,7 @@ export async function syncWorkspace(
         )
 
         logDebug(OBS_CATEGORY, `syncWorkspace.conflictDetection: ${repoInfos.length} repos`)
-        const conflictResults = await timeOperation(
+        const preflightResults = await timeOperation(
           OBS_CATEGORY,
           "syncWorkspace.conflictDetection",
           async () =>
@@ -333,24 +333,50 @@ export async function syncWorkspace(
                 .filter(({ repo }) => existsSync(repo.task_path))
                 .map(async ({ repo, baseBranch }) => ({
                   repo: repo.name,
-                  files: await _exec.getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
+                  result: await _exec.getMergeConflicts(repo.task_path, `origin/${baseBranch}`, workspace.branch),
                 }))
             )
         )
-        const conflicts = conflictResults.filter((r) => r.files.length > 0)
+        const preflightErrors = preflightResults
+          .filter((entry) => entry.result.status === "error")
+          .map((entry) => ({
+            repo: entry.repo,
+            error: (entry.result as Extract<typeof entry.result, { status: "error" }>).error,
+          }))
+        const conflicts = preflightResults
+          .filter((entry) => entry.result.status === "conflicted")
+          .map((entry) => ({
+            repo: entry.repo,
+            files: (entry.result as Extract<typeof entry.result, { status: "conflicted" }>).files,
+          }))
 
-        if (!opts.bestEffort && conflicts.length > 0) {
-          const detail = conflicts
+        for (const failure of preflightErrors) {
+          emitSettled({ repo: failure.repo, status: "failed", detail: failure.error, conflicts: [] })
+        }
+
+        if (!opts.bestEffort && (conflicts.length > 0 || preflightErrors.length > 0)) {
+          const conflictDetail = conflicts
             .map(c => `  ${c.repo} (${c.files.join(", ")})`)
             .join("\n")
+          const errorDetail = preflightErrors
+            .map(failure => `  ${failure.repo} (${failure.error})`)
+            .join("\n")
+          const details = [
+            conflictDetail && `Conflicts detected:\n${conflictDetail}`,
+            errorDetail && `Merge preflight failed:\n${errorDetail}`,
+          ].filter(Boolean).join("\n\n")
           baseResult = {
             ok: false,
             synced: [],
-            skipped: conflicts.map(c => ({ repo: c.repo, reason: `conflict in ${c.files.join(", ")}` })),
-            error: `Conflicts detected:\n${detail}\n\nUse --best-effort to skip conflicting repos.`,
+            skipped: [
+              ...conflicts.map(c => ({ repo: c.repo, reason: `conflict in ${c.files.join(", ")}` })),
+              ...preflightErrors.map(failure => ({ repo: failure.repo, reason: failure.error })),
+            ],
+            error: `${details}\n\nUse --best-effort to skip conflicting repos.`,
           }
         } else {
           const conflictRepos = new Set(conflicts.map(c => c.repo))
+          const errorRepos = new Map(preflightErrors.map(failure => [failure.repo, failure.error]))
           const synced: SyncResult["synced"] = []
           const skipped: SyncResult["skipped"] = []
 
@@ -369,6 +395,12 @@ export async function syncWorkspace(
               const c = conflicts.find(c => c.repo === repo.name)!
               skipped.push({ repo: repo.name, reason: `conflict in ${c.files.join(", ")}` })
               emitSettled({ repo: repo.name, status: "skipped", detail: `conflict: ${c.files[0]}`, conflicts: c.files.slice(1) })
+              continue
+            }
+
+            const preflightError = errorRepos.get(repo.name)
+            if (preflightError) {
+              skipped.push({ repo: repo.name, reason: preflightError })
               continue
             }
 
@@ -393,7 +425,14 @@ export async function syncWorkspace(
             emitSettled({ repo: repo.name, status: "synced", detail: `+${commitsBefore} commits`, conflicts: [] })
           }
 
-          baseResult = { ok: skipped.length === 0 || opts.bestEffort === true, synced, skipped }
+          baseResult = {
+            ok: preflightErrors.length === 0 && (skipped.length === 0 || opts.bestEffort === true),
+            synced,
+            skipped,
+            ...(preflightErrors.length > 0
+              ? { error: `Merge preflight failed:\n${preflightErrors.map(failure => `  ${failure.repo} (${failure.error})`).join("\n")}` }
+              : {}),
+          }
         }
       }
     } finally {
