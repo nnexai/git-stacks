@@ -11,6 +11,7 @@ export function useWorkspaces() {
   const [loading, setLoading] = createSignal(true)
 
   let cancelled = false
+  let generation = 0
   onCleanup(() => { cancelled = true })
 
   // Initial load
@@ -24,14 +25,16 @@ export function useWorkspaces() {
 
   // Staggered async status fetching
   if (workspaces.length > 0) {
-    fetchStatuses(workspaces, setEntries, () => cancelled).then(() => {
-      if (!cancelled) setLoading(false)
+    const initialGeneration = generation
+    fetchStatuses(workspaces, setEntries, () => cancelled || generation !== initialGeneration).then(() => {
+      if (!cancelled && generation === initialGeneration) setLoading(false)
     })
   } else {
     setLoading(false)
   }
 
   function reload(): Promise<void> {
+    const reloadGeneration = ++generation
     invalidateConfigCache()
     const workspaces = listWorkspaces()
     const fresh: WorkspaceEntry[] = workspaces.map((ws) => ({
@@ -40,8 +43,8 @@ export function useWorkspaces() {
     }))
     setEntries(fresh)
     setLoading(true)
-    return fetchStatuses(workspaces, setEntries, () => cancelled).then(() => {
-      if (!cancelled) setLoading(false)
+    return fetchStatuses(workspaces, setEntries, () => cancelled || generation !== reloadGeneration).then(() => {
+      if (!cancelled && generation === reloadGeneration) setLoading(false)
     })
   }
 
