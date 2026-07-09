@@ -1,5 +1,6 @@
 import { $ } from "bun"
 import { z } from "zod"
+import { requirePlatformSuccess } from "./platform-exec"
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 
@@ -59,6 +60,10 @@ export const _exec = {
     const result = await $`aerospace ${args}`.quiet().nothrow()
     return { exitCode: result.exitCode, stdout: result.text() }
   },
+}
+
+async function runMutation(args: string[], command: string): Promise<void> {
+  requirePlatformSuccess(command, await _exec.run(args))
 }
 
 // ─── Internal TSV parsing helpers ────────────────────────────────────────────
@@ -166,14 +171,14 @@ export async function listWorkspaces(): Promise<AerospaceWorkspace[]> {
  * Moves a window (by numeric ID) to an aerospace workspace.
  */
 export async function moveNodeToWorkspace(windowId: number, workspace: string): Promise<void> {
-  await _exec.run(["move-node-to-workspace", "--window-id", String(windowId), workspace])
+  await runMutation(["move-node-to-workspace", "--window-id", String(windowId), workspace], "aerospace move-node-to-workspace")
 }
 
 /**
  * Focuses a specific aerospace window by its numeric ID.
  */
 export async function focusWindow(windowId: number): Promise<void> {
-  await _exec.run(["focus", "--window-id", String(windowId)])
+  await runMutation(["focus", "--window-id", String(windowId)], "aerospace focus")
 }
 
 /**
@@ -182,9 +187,9 @@ export async function focusWindow(windowId: number): Promise<void> {
  */
 export async function setLayout(layout: string, windowId?: number): Promise<void> {
   if (windowId !== undefined) {
-    await _exec.run(["layout", "--window-id", String(windowId), layout])
+    await runMutation(["layout", "--window-id", String(windowId), layout], "aerospace layout")
   } else {
-    await _exec.run(["layout", layout])
+    await runMutation(["layout", layout], "aerospace layout")
   }
 }
 
@@ -193,9 +198,9 @@ export async function setLayout(layout: string, windowId?: number): Promise<void
  */
 export async function flattenWorkspaceTree(workspace?: string): Promise<void> {
   if (workspace !== undefined) {
-    await _exec.run(["flatten-workspace-tree", "--workspace", workspace])
+    await runMutation(["flatten-workspace-tree", "--workspace", workspace], "aerospace flatten-workspace-tree")
   } else {
-    await _exec.run(["flatten-workspace-tree"])
+    await runMutation(["flatten-workspace-tree"], "aerospace flatten-workspace-tree")
   }
 }
 
