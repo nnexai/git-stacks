@@ -1226,6 +1226,10 @@ export default function App() {
     if (v.view === "repo-action-menu") return         // RepoActionMenu handles its own keys
     if (v.view === "repo-remove-blocked") return      // RemoveBlockedView handles Esc
 
+    // A running create transaction owns the UI. Check this before tab shortcuts
+    // so a numeric key cannot escape the progress view and launch another mutation.
+    if (v.view === "create-progress" && !createDone()) return
+
     // Tab switching
     if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
     if (key.name === "2") { setTab("templates"); setView({ view: "list" }); return }
@@ -1252,7 +1256,7 @@ export default function App() {
       })
       return
     }
-    if (v.view === "create-progress") return  // block all keys during creation
+    if (v.view === "create-progress") return
 
     // List view
     if (v.view === "list") {
