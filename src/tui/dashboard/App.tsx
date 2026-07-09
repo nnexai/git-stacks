@@ -528,6 +528,7 @@ export default function App() {
     const onProgress = (msg: string) =>
       appendSystemLine(msg)
 
+    let failures = 0
     for (const wsName of names) {
       if (!wsName) continue
       let result: { ok: boolean; error?: string }
@@ -547,12 +548,16 @@ export default function App() {
       }
 
       if (!result.ok) {
+        failures++
         onProgress(`ERROR [${wsName}]: ${result.error}`)
       }
     }
 
     if (batch) setSelected(new Set<string>())
-    finishCommandOutput("success")
+    if (failures > 0) {
+      appendSystemLine(`${failures}/${names.length} ${action} operation${failures === 1 ? "" : "s"} failed.`)
+    }
+    finishCommandOutput(failures === 0 ? "success" : "failed")
   }
 
   async function executeSync(name: string) {
