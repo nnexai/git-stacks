@@ -2,7 +2,7 @@ import { z } from "zod"
 import type { Command } from "commander"
 import { resolveEnabled, type ArtifactBag, type HasCommands, type Integration, type IntegrationContext } from "./types"
 import { linkIssue, unlinkIssue, resolveIssueRef, formatIssueError, resolveWorkspaceArg } from "./issue-utils"
-import { workspaceExists, readGlobalConfig } from "../config"
+import { workspaceExists, readGlobalConfig, readWorkspace } from "../config"
 import { prompts as p } from "../../tui/utils"
 
 // --- Config Schema ---
@@ -106,11 +106,17 @@ export const jiraIntegration: Integration & HasCommands = {
         }
         const { issueId } = resolution
 
-        // Read configurable open_cmd from global config (per D-06)
+        // Field-level cascade: workspace config overrides global only when it
+        // supplies open_cmd; enabled state remains resolved independently.
         const config = readGlobalConfig()
-        const jiraConfig = jiraConfigSchema.safeParse(config.integrations["jira"])
-        const openCmdTemplate = (jiraConfig.success && jiraConfig.data.open_cmd)
-          ? jiraConfig.data.open_cmd
+        const globalJiraConfig = jiraConfigSchema.safeParse(config.integrations["jira"])
+        const workspaceJiraConfig = jiraConfigSchema.safeParse(
+          readWorkspace(resolved).settings?.integrations?.["jira"]
+        )
+        const openCmdTemplate = (workspaceJiraConfig.success && workspaceJiraConfig.data.open_cmd)
+          ? workspaceJiraConfig.data.open_cmd
+          : (globalJiraConfig.success && globalJiraConfig.data.open_cmd)
+          ? globalJiraConfig.data.open_cmd
           : "jira open $ISSUE_ID"
 
         // Use sh -c with ISSUE_ID as env var (per Pitfall 5 — no string interpolation)
