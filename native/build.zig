@@ -4,6 +4,36 @@ pub fn build(b: *std.Build) void {
     const source = b.option([]const u8, "ghostty-source", "Path to the pinned Ghostty checkout") orelse
         @panic("-Dghostty-source is required; run through scripts/verify-native.ts");
 
+    const ghostty_vt = b.createModule(.{ .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ source, "src/lib_vt.zig" }) }, .target = b.graph.host, .optimize = .Debug });
+    const terminal_options = b.addOptions();
+    terminal_options.addOption(enum { ghostty, lib }, "artifact", .lib);
+    terminal_options.addOption(bool, "c_abi", false);
+    terminal_options.addOption(bool, "oniguruma", false);
+    terminal_options.addOption(bool, "simd", false);
+    terminal_options.addOption(bool, "slow_runtime_safety", true);
+    terminal_options.addOption(bool, "kitty_graphics", false);
+    terminal_options.addOption(bool, "tmux_control_mode", false);
+    ghostty_vt.addOptions("terminal_options", terminal_options);
+    const uucode_config: std.Build.LazyPath = .{ .cwd_relative = b.pathJoin(&.{ source, "src/build/uucode_config.zig" }) };
+    const uucode_tables_dep = b.dependency("uucode", .{ .build_config_path = uucode_config });
+    const uucode = b.dependency("uucode", .{ .target = b.graph.host, .optimize = .Debug, .tables_path = uucode_tables_dep.namedLazyPath("tables.zig"), .build_config_path = uucode_config });
+    ghostty_vt.addImport("uucode", uucode.module("uucode"));
+    const props_gen = b.addExecutable(.{ .name = "ghostty-props-unigen", .root_module = b.createModule(.{ .root_source_file = .{ .cwd_relative = b.pathJoin(&.{ source, "src/unicode/props_uucode.zig" }) }, .target = b.graph.host, .strip = false, .omit_frame_pointer = false, .unwind_tables = .sync }), .use_llvm = true });
+    props_gen.root_module.addImport("uucode", uucode.module("uucode"));
+    const props_run = b.addRunArtifact(props_gen);
+    const generated_unicode = b.addWriteFiles();
+    const props_output = generated_unicode.addCopyFile(props_run.captureStdOut(), "ghostty-props.zig");
+    ghostty_vt.addAnonymousImport("unicode_tables", .{ .root_source_file = props_output });
+    const vt_adapter = b.createModule(.{ .root_source_file = b.path("terminal/vt_adapter.zig") });
+    vt_adapter.addImport("ghostty_vt", ghostty_vt);
+    const vt_test_module = b.createModule(.{ .root_source_file = b.path("tests/vt_adapter_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    vt_test_module.addImport("vt_adapter", vt_adapter);
+    const vt_tests = b.addTest(.{ .root_module = vt_test_module });
+    vt_tests.linkLibC();
+    const run_vt_tests = b.addRunArtifact(vt_tests);
+    const vt_step = b.step("vt-test", "Run exact-pin ghostty-vt adapter tests");
+    vt_step.dependOn(&run_vt_tests.step);
+
     const generated = b.addWriteFiles();
     const smoke_source = generated.add("ghostty_api_smoke.zig",
         \\const ghostty = @cImport({ @cInclude("ghostty.h"); });
@@ -106,8 +136,7 @@ pub fn build(b: *std.Build) void {
     const host_test_module = b.createModule(.{
         .root_source_file = b.path("tests/terminal_host_test.zig"), .target = b.graph.host, .optimize = .Debug,
     });
-    const adapter_module = b.createModule(.{ .root_source_file = b.path("terminal/adapter.zig") });
-    adapter_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "include" }) });
+    const adapter_module = vt_adapter;
     const host_ownership_module = b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") });
     const terminal_host_module = b.createModule(.{ .root_source_file = b.path("linux/terminal_host.zig") });
     terminal_host_module.addImport("adapter", adapter_module);

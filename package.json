@@ -49,6 +49,7 @@
     "native:test:lifecycle": "bun run scripts/verify-native.ts lifecycle",
     "native:test:terminal-build": "bun run scripts/verify-native.ts terminal-build",
     "native:test:terminal-host": "bun run scripts/verify-native.ts terminal-host",
+    "native:test:vt": "bun run scripts/verify-native.ts vt",
     "native:test:accessibility": "bun run scripts/verify-native.ts accessibility",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",

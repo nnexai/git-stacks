@@ -77,7 +77,7 @@ async function verifyHeaderPortability(): Promise<void> {
 }
 
 function verifyNativeSourceBoundaries(): void {
-  const productionAllowlist = new Set(["native/terminal/adapter.zig", "native/build.zig"])
+  const productionAllowlist = new Set(["native/terminal/vt_adapter.zig", "native/build.zig"])
   const upstreamPattern = /(?:@cInclude\(["<]ghostty\.h[">]\)|\bghostty_(?:surface|app|runtime|config|input|clipboard)\w*|\blibghostty\b)/i
   const platformPattern = /\b(?:Gtk|Gdk|Adw)[A-Z]\w*|@cInclude\(["<](?:gtk|adwaita)\//
   const violations: string[] = []
@@ -214,6 +214,11 @@ async function verifyTerminalHost(): Promise<void> {
   await verify("terminal-host-test")
 }
 
+async function verifyVt(): Promise<void> {
+  verifyNativeSourceBoundaries()
+  await verify("vt-test")
+}
+
 function verifyAccessibilityContract(): void {
   const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
   const accessibilityPath = join(ROOT, "docs", "native-terminal-accessibility.md")
@@ -241,6 +246,7 @@ else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()
 else if (mode === "lifecycle") await verifyLifecycle()
 else if (mode === "terminal-host") await verifyTerminalHost()
+else if (mode === "vt") await verifyVt()
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "quick" || mode === "verify") await verifyQuick()
 else if (mode === "terminal-build") await verify()
