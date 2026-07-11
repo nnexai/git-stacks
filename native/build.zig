@@ -178,9 +178,10 @@ pub fn build(b: *std.Build) void {
     const stress_test_module = b.createModule(.{
         .root_source_file = b.path("tests/lifecycle_stress.zig"), .target = b.graph.host, .optimize = .Debug,
     });
-    stress_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));
+    stress_test_module.addImport("runtime", runtime_module);
     const stress_tests = b.addTest(.{ .root_module = stress_test_module });
     stress_tests.linkLibC();
+    stress_tests.linkSystemLibrary("util");
     const run_stress_tests = b.addRunArtifact(stress_tests);
     const stress_step = b.step("lifecycle-stress", "Run bounded terminal lifecycle resource stress");
     stress_step.dependOn(&run_stress_tests.step);

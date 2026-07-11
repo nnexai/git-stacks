@@ -47,6 +47,7 @@
     "native:test:model": "bun run scripts/verify-native.ts model",
     "native:test:restore": "bun run scripts/verify-native.ts restore",
     "native:test:lifecycle": "bun run scripts/verify-native.ts lifecycle",
+    "native:test:stress": "bun run scripts/verify-native.ts stress",
     "native:test:terminal-build": "bun run scripts/verify-native.ts terminal-build",
     "native:test:terminal-host": "bun run scripts/verify-native.ts terminal-host",
     "native:test:vt": "bun run scripts/verify-native.ts vt",

@@ -1,5 +1,5 @@
 const std = @import("std");
-const ownership = @import("ownership");
+const runtime = @import("runtime");
 
 const warm_up_cycles = 10;
 const ci_cycles = 100;
@@ -8,7 +8,6 @@ const rss_slope_limit_bytes: i64 = 64 * 1024;
 const rss_median_limit_bytes: i64 = 16 * 1024 * 1024;
 
 const Resources = struct { rss_bytes: i64, fd_count: usize, thread_count: usize };
-const Counters = struct { surfaces: usize = 0, children: usize = 0, pgids: usize = 0, gpu_contexts: usize = 0 };
 
 fn procResources(allocator: std.mem.Allocator) !Resources {
     const statm = try std.fs.cwd().readFileAlloc(allocator, "/proc/self/statm", 4096);
@@ -56,22 +55,12 @@ fn runStress(allocator: std.mem.Allocator, cycles: usize) !void {
     const baseline = try procResources(allocator);
     var rss = try allocator.alloc(i64, cycles);
     defer allocator.free(rss);
-    var counters = Counters{};
-
     for (0..cycles) |index| {
-        counters.surfaces += 1; counters.children += 1; counters.pgids += 1; counters.gpu_contexts += 1;
-        var backend = ownership.TestBackend.init();
-        var owner = ownership.Owner.init(index + 1, @intCast(3000 + index), @intCast(3000 + index), index + 1);
-        try owner.exposeLive(&backend, 7, 8);
-        try owner.close(&backend);
-        try std.testing.expectEqual(ownership.Lifecycle.ended, owner.lifecycle);
-        try std.testing.expect(!backend.registered);
-        counters.pgids -= 1;
-        counters.children -= 1;
-        counters.surfaces -= 1;
-        counters.gpu_contexts -= 1;
-        backend.deinit();
-        try std.testing.expectEqualDeep(Counters{}, counters);
+        var terminal = try runtime.TerminalRuntime.init(allocator, "printf 'STRESS_READY\\n'; sleep 0.001", 80, 24);
+        _ = terminal.waitFor("STRESS_READY", 40) catch false;
+        try terminal.resize(@intCast(80 + index % 20), @intCast(24 + index % 10));
+        terminal.close();
+        try std.testing.expectEqual(runtime.Counters{}, runtime.counters);
         const current = try procResources(allocator);
         try std.testing.expectEqual(baseline.fd_count, current.fd_count);
         try std.testing.expectEqual(baseline.thread_count, current.thread_count);
@@ -90,5 +79,6 @@ fn runStress(allocator: std.mem.Allocator, cycles: usize) !void {
 
 test "D-14 lifecycle ownership and resource trends remain bounded" {
     const extended = std.process.hasEnvVarConstant("GIT_STACKS_NATIVE_EXTENDED_STRESS");
-    try runStress(std.testing.allocator, if (extended) extended_cycles else ci_cycles);
+    const cycles: usize = if (extended) extended_cycles else ci_cycles;
+    try runStress(std.testing.allocator, cycles + warm_up_cycles);
 }

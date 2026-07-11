@@ -208,6 +208,7 @@ async function verifyRestore(): Promise<void> {
 async function verifyLifecycle(): Promise<void> {
   await verify("lifecycle-test")
 }
+async function verifyStress(): Promise<void> { await verify("lifecycle-stress") }
 
 async function verifyTerminalHost(): Promise<void> {
   verifyNativeSourceBoundaries()
@@ -306,6 +307,7 @@ if (mode === "setup") await setup()
 else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()
 else if (mode === "lifecycle") await verifyLifecycle()
+else if (mode === "stress") await verifyStress()
 else if (mode === "terminal-host") await verifyTerminalHost()
 else if (mode === "vt") await verifyVt()
 else if (mode === "pty") await verify("pty-test")
