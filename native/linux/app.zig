@@ -683,6 +683,13 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         showLauncherError(state, @errorName(err));
         return null;
     };
+    if(model.surfaceLocation(&state.graph.state,surface.surface_id))|location|{
+        var entry=&state.graph.state.pairs[location.pair].surfaces[location.surface];
+        const cwd=spec.cwd[0..std.mem.indexOfScalar(u8,&spec.cwd,0).?];entry.cwd_len=@intCast(@min(cwd.len,entry.cwd.len));@memcpy(entry.cwd[0..entry.cwd_len],cwd[0..entry.cwd_len]);
+        var title:[]const u8="shell";
+        if(command_id)|requested|for(state.graph.state.commands[0..state.graph.state.command_count])|command|if(std.mem.eql(u8,requested,command.id[0..command.id_len])){title=command.name[0..command.name_len];break;};
+        entry.title_len=@intCast(@min(title.len,entry.title.len));@memcpy(entry.title[0..entry.title_len],title[0..entry.title_len]);
+    }
     if (predecessor) |old_id| {
         const loc = model.surfaceLocation(&state.graph.state, surface.surface_id) orelse return null;
         state.graph.state.pairs[loc.pair].surface_count -= 1;
