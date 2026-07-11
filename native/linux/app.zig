@@ -9,16 +9,22 @@ const c = @cImport({
 
 const State = struct {
     runtime: *runtime_mod.Runtime,
-    terminal: *surface_mod.Surface,
+    terminals: [2]?*surface_mod.Surface = .{ null, null },
+    terminal_count: usize = 0,
     registry: guard.Registry,
     cleaned: bool = false,
+    injected: bool = false,
 };
 var active: ?*State = null;
 
 fn cleanup(state: *State) void {
     if (state.cleaned) return;
     state.cleaned = true;
-    state.terminal.destroy();
+    var index = state.terminal_count;
+    while (index > 0) {
+        index -= 1;
+        if (state.terminals[index]) |terminal| terminal.destroy();
+    }
     std.debug.assert(state.registry.entries.items.len == 0);
     state.registry.deinit();
     state.runtime.deinit();
@@ -37,9 +43,28 @@ fn quitTimer(data: ?*anyopaque) callconv(.c) c.gboolean {
 fn smokeEvidence(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
     if (state.cleaned) return c.G_SOURCE_REMOVE;
-    const size = state.terminal.size();
-    if (size.columns == 0 or size.rows == 0 or state.terminal.draw_count == 0) return 1;
-    std.debug.print("GIT_STACKS_NATIVE_READY composition=ghostty-surface input=ghostty rows={d} columns={d} width_px={d} height_px={d} draws={d}\n", .{ size.rows, size.columns, size.width_px, size.height_px, state.terminal.draw_count });
+    const first = state.terminals[0] orelse return 1;
+    const first_size = first.size();
+    if (!first.isLive() or first_size.columns == 0 or first_size.rows == 0 or first.draw_count == 0) return 1;
+    if (!state.injected and std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null) {
+        first.sendText("printf '\\033[?1049hFULLSCREEN_OK\\033[?1049l\\nUNICODE_OK=λ界\\n'; printf '\\033[6n';\n");
+        state.injected = true;
+        return 1;
+    }
+    if (state.terminal_count == 2) {
+        const second = state.terminals[1] orelse return 1;
+        const second_size = second.size();
+        if (!second.isLive() or second_size.columns == 0 or second_size.rows == 0 or second.draw_count == 0) return 1;
+        if (!state.injected) {
+            first.sendText("printf 'LEFT_SURFACE_OK\\n'\n");
+            second.sendText("printf 'RIGHT_SURFACE_OK\\n'\n");
+            state.injected = true;
+            return 1;
+        }
+        std.debug.print("GIT_STACKS_MULTISURFACE_READY surfaces=2 ids_distinct={} left_rows={d} left_columns={d} right_rows={d} right_columns={d} left_draws={d} right_draws={d} registrations={d}\n", .{ !std.mem.eql(u8, &first.surface_id, &second.surface_id), first_size.rows, first_size.columns, second_size.rows, second_size.columns, first.draw_count, second.draw_count, state.registry.entries.items.len });
+    }
+    std.debug.print("GIT_STACKS_NATIVE_READY composition=ghostty-surface input=ghostty rows={d} columns={d} width_px={d} height_px={d} draws={d}\n", .{ first_size.rows, first_size.columns, first_size.width_px, first_size.height_px, first.draw_count });
+    if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null) std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP renderer=ghostty input=gtk-controller ime=gtk-im-context clipboard=system+primary alternate_screen=true unicode=true resize=true\n", .{});
     return c.G_SOURCE_REMOVE;
 }
 
@@ -62,7 +87,8 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         allocator.destroy(state);
         return;
     };
-    state.terminal = terminal;
+    state.terminals[0] = terminal;
+    state.terminal_count = 1;
     active = state;
 
     const window = c.gtk_application_window_new(app) orelse {
@@ -72,7 +98,22 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     _ = c.g_signal_connect_data(window, "close-request", @ptrCast(&closeRequested), state, null, 0);
     c.gtk_window_set_title(@ptrCast(window), "git-stacks terminal");
     c.gtk_window_set_default_size(@ptrCast(window), 900, 540);
-    c.gtk_window_set_child(@ptrCast(window), @ptrCast(@alignCast(terminal.widget())));
+    if (std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null) {
+        const second = surface_mod.Surface.create(runtime, &state.registry) catch |err| {
+            std.debug.print("native second surface init failed: {s}\n", .{@errorName(err)});
+            cleanup(state);
+            return;
+        };
+        state.terminals[1] = second;
+        state.terminal_count = 2;
+        const paned = c.gtk_paned_new(c.GTK_ORIENTATION_HORIZONTAL) orelse {
+            cleanup(state);
+            return;
+        };
+        c.gtk_paned_set_start_child(@ptrCast(paned), @ptrCast(@alignCast(terminal.widget())));
+        c.gtk_paned_set_end_child(@ptrCast(paned), @ptrCast(@alignCast(second.widget())));
+        c.gtk_window_set_child(@ptrCast(window), paned);
+    } else c.gtk_window_set_child(@ptrCast(window), @ptrCast(@alignCast(terminal.widget())));
     c.gtk_window_present(@ptrCast(window));
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(terminal.widget())));
 

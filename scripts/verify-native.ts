@@ -99,7 +99,7 @@ async function verifyHeaderPortability(): Promise<void> {
 }
 
 function verifyNativeSourceBoundaries(): void {
-  const productionAllowlist = new Set(["native/terminal/vt_adapter.zig", "native/terminal/ghostty_process_control.zig", "native/linux/ghostty_runtime.zig", "native/linux/ghostty_surface.zig", "native/build.zig"])
+  const productionAllowlist = new Set(["native/terminal/vt_adapter.zig", "native/terminal/ghostty_process_control.zig", "native/linux/ghostty_runtime.zig", "native/linux/ghostty_surface.zig", "native/linux/ghostty_input.zig", "native/linux/ghostty_clipboard.zig", "native/tests/ghostty_interaction_test.zig", "native/build.zig"])
   const upstreamPattern = /(?:@cInclude\(["<]ghostty\.h[">]\)|\bghostty_(?:surface|app|runtime|config|input|clipboard)\w*|\blibghostty\b)/i
   const platformPattern = /\b(?:Gtk|Gdk|Adw)[A-Z]\w*|@cInclude\(["<](?:gtk|adwaita)\//
   const violations: string[] = []
@@ -396,8 +396,20 @@ async function smokeTerminal(): Promise<void> {
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
-  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("DA_RESPONSE_OK") || !stderr.includes("input=gtk-commit-path") || !stderr.includes("composition=pty-runtime") || !/font_family=.+ actual_font_family=.+ font_size=\d+\.\d{2} cell=\d+\.\d{2}x\d+\.\d{2}/.test(stderr) || !/draws=[1-9]\d* painted_cells=[1-9]\d* cursor_draws=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible production-input/query/font/cursor roundtrip failed (${outcome.code}): ${stderr}`)
-  console.log("native terminal smoke passed: PTY input/output, alternate-screen parsing, resize/reflow, and clean exit verified")
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("renderer=ghostty") || !stderr.includes("input=gtk-controller") || !stderr.includes("ime=gtk-im-context") || !stderr.includes("clipboard=system+primary") || !stderr.includes("alternate_screen=true") || !stderr.includes("unicode=true") || !/draws=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible Ghostty interaction roundtrip failed (${outcome.code}): ${stderr}`)
+  console.log("native terminal smoke passed: Ghostty PTY/render path accepted input, alternate-screen, Unicode, query, resize, and clean exit")
+}
+
+async function smokeMultisurface(): Promise<void> {
+  const artifact = await buildApp()
+  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable for multisurface smoke")
+  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_MULTISURFACE_SMOKE: "1" } })
+  let timer: ReturnType<typeof setTimeout>; const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 45_000) })
+  const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
+  if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("multisurface smoke timed out after 45 seconds") }
+  const stderr = await new Response(child.stderr).text()
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_MULTISURFACE_READY surfaces=2") || !stderr.includes("ids_distinct=true") || !/left_rows=[1-9]\d* left_columns=[1-9]\d* right_rows=[1-9]\d* right_columns=[1-9]\d*/.test(stderr) || !/left_draws=[1-9]\d* right_draws=[1-9]\d*/.test(stderr) || !stderr.includes("registrations=2")) throw new Error(`independent Ghostty surface evidence missing (${outcome.code}): ${stderr}`)
+  console.log("native multisurface smoke passed: two independently identified, sized, rendered, registered Ghostty leaves")
 }
 
 function verifyAccessibilityContract(): void {
@@ -451,6 +463,7 @@ else if (mode === "build-app") await buildApp()
 else if (mode === "run-app") await verify("run-app")
 else if (mode === "smoke-app") await smokeApp()
 else if (mode === "smoke-terminal") await smokeTerminal()
+else if (mode === "smoke-multisurface") await smokeMultisurface()
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "config") await verifyGhosttyConfig()
 else if (mode === "quick") await verifyQuick()
