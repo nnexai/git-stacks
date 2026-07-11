@@ -98,6 +98,25 @@ function verifyNativeSourceBoundaries(): void {
   if (violations.length) throw new Error(`native source boundary audit failed:\n  - ${violations.join("\n  - ")}`)
 }
 
+function verifyProductionTerminalComposition(): void {
+  const app = readFileSync(join(NATIVE, "linux", "app.zig"), "utf8")
+  const required = [
+    "TerminalRuntime.init(allocator, commandForLaunch()",
+    "gtk_event_controller_key_new()",
+    '"key-pressed"',
+    "gtk_im_multicontext_new()",
+    '"preedit-changed"',
+    '"resize"',
+    "g_timeout_add(8, pumpTimer",
+  ]
+  for (const seam of required) {
+    if (!app.includes(seam)) throw new Error(`production terminal composition missing: ${seam}`)
+  }
+  if (/else\s*\{[\s\S]{0,300}VtAdapter\.init/.test(app)) {
+    throw new Error("production launch must not fall back to a static VT-only composition")
+  }
+}
+
 async function setup(): Promise<void> {
   if (!artifact) throw new Error(`unsupported native platform ${platformKey}; no pinned Zig artifact`)
   mkdirSync(CACHE, { recursive: true })
@@ -249,6 +268,7 @@ async function verifyGraphical(target: "renderer-test" | "widget-test"): Promise
 }
 
 async function buildApp(): Promise<string> {
+  verifyProductionTerminalComposition()
   await verify("build-app")
   const artifact = join(NATIVE, "zig-out", "bin", "git-stacks-native")
   if (!existsSync(artifact)) throw new Error(`production GTK artifact missing: ${artifact}`)
@@ -266,7 +286,7 @@ async function smokeApp(): Promise<void> {
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("production GTK smoke timed out after 30 seconds") }
   const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
   if (outcome.code !== 0) throw new Error(`production GTK smoke exited ${outcome.code}: ${stderr || stdout}`)
-  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("text=git-stacks-native-terminal-ready") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`production GTK visible-content evidence missing: ${stderr || stdout}`)
+  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("composition=pty-runtime") || !stderr.includes("input=gtk-controller") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`production GTK PTY composition evidence missing: ${stderr || stdout}`)
   console.log(`native GTK smoke passed: backend=${process.env.GDK_BACKEND ?? "auto"} display=${process.env.WAYLAND_DISPLAY ?? process.env.DISPLAY} clean-exit=true`)
 }
 async function smokeTerminal(): Promise<void> {
@@ -277,7 +297,7 @@ async function smokeTerminal(): Promise<void> {
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
-  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("SHELL_RESULT_UNIQUE") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible roundtrip failed (${outcome.code}): ${stderr}`)
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("input=gtk-commit-path") || !stderr.includes("composition=pty-runtime") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible production-input roundtrip failed (${outcome.code}): ${stderr}`)
   console.log("native terminal smoke passed: PTY input/output, alternate-screen parsing, resize/reflow, and clean exit verified")
 }
 
