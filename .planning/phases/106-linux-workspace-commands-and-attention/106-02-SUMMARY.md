@@ -18,14 +18,14 @@ key-decisions:
   - "Native product state uses bounded copyable identity collections so reducer transitions remain pure and ABI-safe."
   - "A tab is appended to product state only after ownership-valid host registration succeeds."
   - "Service replay duplicates are ignored, sequence gaps require an authoritative refresh, and shutdown cancels later transport decoding."
-requirements-completed: [LNX-01, LNX-02, LNX-03, LNX-04, LNX-05, ACT-01, ACT-02, ACT-03, ACT-04, ACT-05, ACT-06]
-status: complete
+requirements-completed: []
+status: remediation-incomplete
 completed: 2026-07-11
 ---
 
 # Phase 106 Plan 02: Native State, Attention, Service, and Host Registry Summary
 
-**Pair-local terminal state, structured attention, authenticated replay, and navigation-independent live-host ownership now share stable native identities.**
+**The original false-green implementation has been substantially remediated, but Plan 02 remains open pending authoritative launch injection and continuously running replay orchestration.**
 
 ## Accomplishments
 
@@ -40,6 +40,20 @@ completed: 2026-07-11
 2. **Derive and route structured attention** — `0c915df3`
 3. **Synchronize service and retain terminal hosts** — `e0d93b10`
 
+## False-green review and remediation
+
+The deep review in `106-REVIEW.md` established that the original three commits only exercised hand-fed helpers. The following production remediation commits replace those seams:
+
+1. `a16e4081` — authenticated request/SSE contracts and injected terminal-host lifecycle ownership
+2. `da9d7b06` — reachable normalized ABI actions/effects, attention corrections, and presentation persistence safety
+3. `0079e402` — bounded snapshot and attention ABI ingestion with full collection/effect projection
+4. `87a99e3d` — Linux production graph ownership of the service client and terminal registry
+5. `6ed596c4` — secure descriptor/credential discovery and real `std.http` loopback transport
+6. `75452fbf` — authenticated aggregate snapshot fetch and reducer bridge
+7. `edc67976` — replayable SSE parsing, cursor resumption, gap refresh, and reducer bridge
+8. `82bf655e` — retained authoritative attention IDs and command projection
+9. `f0b415b0` — adoption and teardown of realized Ghostty hosts through the pair registry
+
 ## Verification
 
 - `bun run native:test:restore` — passed
@@ -48,6 +62,9 @@ completed: 2026-07-11
 - `bun run native:test:tabs` — passed
 - `bun run native:test:quick` — passed, including ABI harness, model, restore, lifecycle, source-boundary, accessibility-contract, and production-graph checks
 - `bun run typecheck` — passed
+- `bun run test:deps` — passed
+- `bun run verify:gates` — passed
+- `bun run native:verify` — passed
 - `git diff --check` — passed
 
 ## Deviations from Plan
@@ -72,15 +89,17 @@ completed: 2026-07-11
 
 **Total deviations:** 2 auto-fixed (one blocking integration issue, one lifetime bug). **Impact:** Both fixes preserve the planned service contract and strengthen ownership correctness.
 
-## Issues Encountered
+## Remaining work
 
-The public model gate initially failed on stale Phase 106-01 fixture exports; no implementation blocker remains.
+- Fresh `/v1/native-launch` resolution is decoded and request construction is implemented, but its owned argv/environment/cwd is not yet injected into Ghostty surface creation. The application still creates its initial default surface before authoritative resolution.
+- The production graph exposes replay and gap-refresh execution, but the GTK application does not yet own a cancellable background replay loop. Calling the one-shot replay path directly would block the GTK activation thread on the persistent SSE response.
+- Therefore the review's launch ordering and continuous synchronization obligations are not yet proven, and `requirements-completed` remains intentionally empty.
 
 ## Next Phase Readiness
 
-Plan 106-03 can project normalized pair/tab/attention state into GTK and bind real Ghostty surfaces to the registry without navigation owning terminal lifetimes.
+Do not treat Plan 106-02 as a completed foundation until the two remaining production orchestration items above are implemented and re-reviewed.
 
-## Self-Check: PASSED
+## Self-Check: INCOMPLETE
 
 ---
 *Phase: 106-linux-workspace-commands-and-attention*
