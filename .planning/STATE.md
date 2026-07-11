@@ -4,11 +4,11 @@ milestone: v0.20.0
 milestone_name: milestone
 current_phase: 105
 current_phase_name: shared-native-model-and-terminal-foundation
-status: executing
-stopped_at: Phase 106 context gathered
+status: planning
+stopped_at: Phase 105 terminal implementation requires replan from spikes 005-009
 last_updated: "2026-07-11T14:42:58.360Z"
 last_activity: 2026-07-11
-last_activity_desc: Completed Phase 105 Plan 05 pinned VT and GTK terminal frame
+last_activity_desc: Validated full Linux Ghostty pane architecture; custom VT/Pango terminal superseded
 progress:
   total_phases: 4
   completed_phases: 1
@@ -30,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 Phase: 105 (shared-native-model-and-terminal-foundation) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
-Last activity: 2026-07-11 — Completed Phase 105 Plan 05 pinned VT and GTK terminal frame
+Status: Replan required before further execution
+Last activity: 2026-07-11 — Spikes 005-009 validated Ghostty-owned GTK terminal surfaces
 
 Progress: [██████░░░░] 64%
 
@@ -99,6 +99,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 105]: Service disconnection retains an explicitly stale snapshot; revision drift and replay gaps enter refresh_required and emit only a refresh effect. — Preserve useful context while freezing mutations until authoritative refresh.
 - [Phase 105]: Restoration accepts valid records independently and always materializes them as ended presentation state. — Presentation continuity must never spoof process liveness.
 - [Phase 105]: Relaunch creates a distinct live surface with predecessor lineage and never rewrites the ended predecessor identity. — A new process lifetime cannot masquerade as the old surface.
+- [Phase 105]: Linux terminal leaves use full Ghostty rendered surfaces hosted by GTK; git-stacks owns pane/workspace layout while Ghostty owns PTY, rendering, fonts, input protocol, and terminal compatibility. — The custom `ghostty-vt` plus Pango path cannot provide Ghostty fidelity or fully functional panes.
+- [Phase 105]: The initial Linux surface integration may use the exact Limux Ghostty fork commit while an upstreamable patch and automated rebase/ABI audit are established. — Current upstream does not expose the rendered surface on Linux, but working multi-pane prior art exists.
 
 ### Pending Todos
 
@@ -106,7 +108,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 105 requires an early spike against the exact pinned libghostty and Zig versions.
+- Phase 105 plans 05-08 must be replanned around the full rendered `ghostty_surface_*` lifecycle; continuing the custom VT/Pango widget is explicitly superseded.
+- The Limux Ghostty fork is materially behind current upstream and requires a pinned patch, ABI/build verification, and an upstream/rebase strategy.
 - Phase 107 requires access to a macOS CI runner or physical macOS host; Linux-only inspection cannot complete MAC-06.
 
 ## Deferred Items
@@ -116,5 +119,5 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 ## Session Continuity
 
 Last session: 2026-07-11T13:29:43.608Z
-Stopped at: Phase 106 context gathered
-Resume file: .planning/phases/106-linux-workspace-commands-and-attention/106-CONTEXT.md
+Stopped at: Phase 105 terminal architecture replan after spikes 005-009
+Resume file: .planning/spikes/005-libghostty-ecosystem-survey/README.md
