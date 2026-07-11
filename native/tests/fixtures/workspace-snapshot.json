@@ -1,0 +1,19 @@
+{
+  "protocol": "v1",
+  "request_id": "req_0123456789abcdef",
+  "ok": true,
+  "revision": "7",
+  "generated_at": "2026-07-11T00:00:00.000Z",
+  "workspace": {
+    "id": "018f47f4-5ab1-7c2d-8e90-123456789abc",
+    "name": "feature-one",
+    "branch": "feature/one",
+    "repositories": [{
+      "id": "018f47f4-5ab1-7c2d-8e90-abcdef012345",
+      "name": "git-stacks",
+      "mode": "worktree",
+      "path": "/work/feature-one/git-stacks"
+    }],
+    "launch": { "commands": ["bun test"], "environment": { "NODE_ENV": "development" }, "redacted": ["API_TOKEN"], "references": { "API_TOKEN": "secret://api-token" } }
+  }
+}

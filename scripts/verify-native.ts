@@ -51,6 +51,31 @@ async function sha256(path: string): Promise<string> {
   return new Bun.CryptoHasher("sha256").update(await Bun.file(path).arrayBuffer()).digest("hex")
 }
 
+const fixtureSource = join(ROOT, "tests", "fixtures", "service-v1")
+const fixtureExport = join(NATIVE, "tests", "fixtures")
+const fixtureNames = ["discovery.json", "request-timeout-error.json", "workspace-snapshot.json"]
+
+async function verifyFixtureExport(): Promise<void> {
+  for (const name of fixtureNames) {
+    const source = join(fixtureSource, name)
+    const exported = join(fixtureExport, name)
+    if (!existsSync(exported)) throw new Error(`native fixture export missing: ${name}`)
+    const [sourceHash, exportHash] = await Promise.all([sha256(source), sha256(exported)])
+    if (sourceHash !== exportHash) throw new Error(`native fixture drift: ${name} differs from tests/fixtures/service-v1/${name}`)
+  }
+  const extras = Array.from(new Bun.Glob("*.json").scanSync(fixtureExport)).filter((name) => !fixtureNames.includes(name))
+  if (extras.length) throw new Error(`native fixture export has non-canonical files: ${extras.join(", ")}`)
+}
+
+async function verifyHeaderPortability(): Promise<void> {
+  const compiler = process.env.CC ?? "clang"
+  const result = await run([
+    compiler, "-std=c11", "-pedantic-errors", "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+    "-x", "c", join(NATIVE, "include", "git_stacks_native_v1.h"),
+  ])
+  if (result.code !== 0) throw new Error(`public ABI portability diagnostics failed with ${compiler}: ${result.stderr || result.stdout}`)
+}
+
 async function setup(): Promise<void> {
   if (!artifact) throw new Error(`unsupported native platform ${platformKey}; no pinned Zig artifact`)
   mkdirSync(CACHE, { recursive: true })
@@ -138,8 +163,21 @@ async function verify(target = "terminal-api-smoke"): Promise<void> {
     : `native feasibility verified: Zig ${lock.zig.version}; Ghostty tag ${lock.tag_object}; peeled ${lock.peeled_commit}; full surface API seams present`)
 }
 
+async function verifyModel(): Promise<void> {
+  await verifyFixtureExport()
+  await verifyHeaderPortability()
+  await requireSuccess(["bun", "test", "tests/lib/service/contract.test.ts"])
+  await verify("model-test")
+}
+
+async function verifyQuick(): Promise<void> {
+  await verifyModel()
+  await verify("terminal-api-smoke")
+}
+
 const mode = process.argv[2] ?? "verify"
 if (mode === "setup") await setup()
-else if (mode === "model") await verify("model-test")
-else if (mode === "verify" || mode === "quick" || mode === "terminal-build") await verify()
+else if (mode === "model") await verifyModel()
+else if (mode === "quick" || mode === "verify") await verifyQuick()
+else if (mode === "terminal-build") await verify()
 else throw new Error(`unknown native verification mode: ${mode}`)

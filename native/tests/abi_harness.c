@@ -5,6 +5,20 @@
 
 static gs_bytes_v1 bytes(const void *ptr, size_t len) { gs_bytes_v1 b = {(const uint8_t *)ptr, len}; return b; }
 
+static void roundtrip_file(const char *path) {
+  FILE *fixture = fopen(path, "rb");
+  char corpus[GS_NATIVE_MAX_INPUT_V1];
+  assert(fixture);
+  size_t len = fread(corpus, 1, sizeof(corpus), fixture);
+  assert(!ferror(fixture) && feof(fixture)); fclose(fixture);
+  gs_model_v1 *model = NULL; gs_bytes_v1 error = {0}, output = {0};
+  assert(gs_model_create_v1(GS_NATIVE_ABI_V1, bytes(corpus, len), &model, &error) == GS_OK_V1);
+  assert(gs_model_snapshot_v1(model, &output, &error) == GS_OK_V1);
+  assert(output.len == len && memcmp(output.ptr, corpus, len) == 0);
+  assert(gs_bytes_free_v1(output) == GS_OK_V1);
+  assert(gs_model_destroy_v1(model, &error) == GS_OK_V1);
+}
+
 int main(int argc, char **argv) {
   const char *fallback = "{\"protocol\":\"v1\",\"request_id\":\"req_0123456789abcdef\",\"ok\":true}";
   const char *json = fallback;
@@ -33,6 +47,9 @@ int main(int argc, char **argv) {
   assert(gs_model_create_v1(1, bytes(json, GS_NATIVE_MAX_INPUT_V1 + 1u), &model, &error) == GS_INPUT_TOO_LARGE_V1); assert(gs_bytes_free_v1(error) == GS_OK_V1);
   const uint8_t bad_utf8[] = {0xff}; assert(gs_model_create_v1(1, bytes(bad_utf8, 1), &model, &error) == GS_INVALID_UTF8_V1); assert(gs_bytes_free_v1(error) == GS_OK_V1);
   assert(gs_model_create_v1(1, bytes("{", 1), &model, &error) == GS_INVALID_JSON_V1); assert(gs_bytes_free_v1(error) == GS_OK_V1);
+  roundtrip_file("tests/fixtures/discovery.json");
+  roundtrip_file("tests/fixtures/workspace-snapshot.json");
+  roundtrip_file("tests/fixtures/request-timeout-error.json");
   puts("native ABI harness passed");
   return 0;
 }
