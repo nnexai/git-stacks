@@ -4,17 +4,17 @@ milestone: v0.20.0
 milestone_name: milestone
 current_phase: 104
 current_phase_name: Workspace Service and Event Contract
-status: executing
-stopped_at: Completed 104-04-PLAN.md; next sequential incomplete plan is 104-06
-last_updated: "2026-07-11T12:02:04.562Z"
+status: verifying
+stopped_at: Completed 104-06-PLAN.md
+last_updated: "2026-07-11T12:14:57.758Z"
 last_activity: 2026-07-11
-last_activity_desc: Completed durable operation lifecycle and idempotency plan
+last_activity_desc: Completed authenticated loopback service transport and lifecycle
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 5
-  percent: 83
+  completed_plans: 6
+  percent: 25
 ---
 
 # Project State
@@ -28,33 +28,34 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 104 (Workspace Service and Event Contract) — EXECUTING
+Phase: 104 (Workspace Service and Event Contract) — VERIFYING
 Plan: 6 of 6
-Status: Ready to execute
-Last activity: 2026-07-11 — Completed durable operation lifecycle and idempotency plan
+Status: Phase complete — ready for verification
+Last activity: 2026-07-11 — Completed authenticated loopback service transport and lifecycle
 
-Progress: [████████░░] 83%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: 7min
-- Total execution time: 34min
+- Total execution time: 44min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| Phase 104 | 5 | 34min | 7min |
+| Phase 104 | 6 | 44min | 7min |
 
-**Recent Trend:** No v0.20.0 plans completed yet.
+**Recent Trend:** Phase 104 complete and ready for verification.
 | Phase 104 P01 | 11min | 2 tasks | 7 files |
 | Phase 104 P03 | 8min | 2 tasks | 3 files |
 | Phase 104 P02 | 6min | 2 tasks | 4 files |
 | Phase 104 P05 | 3min | 2 tasks | 6 files |
 | Phase 104 P04 | 6min | 2 tasks | 4 files |
+| Phase 104 P06 | 10min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Legacy message JSONL persistence remains authoritative and structured attention publication is additive and failure-isolated. — Preserves SVC-04 compatibility when the journal is unavailable.
 - [Phase 104]: Operation state is persisted before journal append but becomes query/observer-visible only after append succeeds. — Prevents clients from observing unreplayable lifecycle transitions.
 - [Phase 104]: Idempotency reservations are scoped by client, endpoint, and key with canonical request hashes. — Prevents retries and restarts from duplicating destructive workspace work.
+- [Phase 104]: Every v1 request authenticates before route lookup, body parsing, capability checks, or rate-state evaluation. — Prevents admission oracles and isolates rate state by credential.
+- [Phase 104]: Service descriptors carry endpoint and instance metadata plus a credential lookup identity, never bearer secrets. — Enables automatic protected discovery without secret duplication.
+- [Phase 104]: Service commands register through the shared live Commander tree. — Keeps completion and release inventory aligned with the executable CLI.
 
 ### Pending Todos
 
@@ -91,6 +95,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T12:02:04.543Z
-Stopped at: Completed 104-04-PLAN.md; next sequential incomplete plan is 104-06
+Last session: 2026-07-11T12:14:57.736Z
+Stopped at: Completed 104-06-PLAN.md
 Resume file: None

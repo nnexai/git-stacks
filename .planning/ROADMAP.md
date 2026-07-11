@@ -6,7 +6,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 
 ## Phases
 
-- [ ] **Phase 104: Workspace Service and Event Contract** - Native clients can securely query authoritative workspace state, launch context, operations, and replayable events without changing existing CLI or OpenTUI behavior.
+- [x] **Phase 104: Workspace Service and Event Contract** - Native clients can securely query authoritative workspace state, launch context, operations, and replayable events without changing existing CLI or OpenTUI behavior. (completed 2026-07-11)
 - [ ] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface.
 - [ ] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention.
 - [ ] **Phase 107: Native Delivery and Cross-Platform Proof** - The Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
@@ -26,14 +26,14 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
   4. A reconnecting client receives ordered operation and attention events from retained history, or detects a replay gap and rebuilds from an authoritative snapshot.
   5. Existing CLI and OpenTUI workflows remain compatible, and slow or disconnected event consumers cannot grow service memory without bound.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 - [x] 104-01-PLAN.md
 - [x] 104-02-PLAN.md
 - [x] 104-03-PLAN.md
 - [x] 104-04-PLAN.md
 - [x] 104-05-PLAN.md
-- [ ] 104-06-PLAN.md
+- [x] 104-06-PLAN.md
 
 Wave 1:
 
@@ -47,7 +47,7 @@ Wave 2 *(blocked on Wave 1 completion)*:
 
 Wave 3 *(blocked on Wave 2 completion)*:
 
-- [ ] 104-04 — Build durable operations, cancellation, and idempotency
+- [x] 104-04 — Build durable operations, cancellation, and idempotency
 
 Wave 4 *(blocked on Wave 3 completion)*:
 
@@ -107,7 +107,7 @@ Wave 4 *(blocked on Wave 3 completion)*:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 104. Workspace Service and Event Contract | 5/6 | In Progress|  |
+| 104. Workspace Service and Event Contract | 6/6 | Complete   | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 0/TBD | Not started | - |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
