@@ -86,7 +86,52 @@
 
 ## Traceability
 
-Populated during roadmap creation. Every v0.20.0 requirement must map to exactly one phase.
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SVC-01 | Phase 104 | Pending |
+| SVC-02 | Phase 104 | Pending |
+| SVC-03 | Phase 104 | Pending |
+| SVC-04 | Phase 104 | Pending |
+| SVC-05 | Phase 104 | Pending |
+| EVT-01 | Phase 104 | Pending |
+| EVT-02 | Phase 104 | Pending |
+| EVT-03 | Phase 104 | Pending |
+| EVT-04 | Phase 104 | Pending |
+| EVT-05 | Phase 104 | Pending |
+| CORE-01 | Phase 105 | Pending |
+| CORE-02 | Phase 105 | Pending |
+| CORE-03 | Phase 105 | Pending |
+| CORE-04 | Phase 105 | Pending |
+| CORE-05 | Phase 105 | Pending |
+| TERM-01 | Phase 105 | Pending |
+| TERM-02 | Phase 105 | Pending |
+| TERM-03 | Phase 105 | Pending |
+| TERM-04 | Phase 105 | Pending |
+| TERM-05 | Phase 105 | Pending |
+| LNX-01 | Phase 106 | Pending |
+| LNX-02 | Phase 106 | Pending |
+| LNX-03 | Phase 106 | Pending |
+| LNX-04 | Phase 106 | Pending |
+| LNX-05 | Phase 106 | Pending |
+| LNX-06 | Phase 106 | Pending |
+| ACT-01 | Phase 106 | Pending |
+| ACT-02 | Phase 106 | Pending |
+| ACT-03 | Phase 106 | Pending |
+| ACT-04 | Phase 106 | Pending |
+| ACT-05 | Phase 106 | Pending |
+| ACT-06 | Phase 106 | Pending |
+| PKG-01 | Phase 107 | Pending |
+| PKG-02 | Phase 107 | Pending |
+| PKG-03 | Phase 107 | Pending |
+| PKG-04 | Phase 107 | Pending |
+| MAC-01 | Phase 107 | Pending |
+| MAC-02 | Phase 107 | Pending |
+| MAC-03 | Phase 107 | Pending |
+| MAC-04 | Phase 107 | Pending |
+| MAC-05 | Phase 107 | Pending |
+| MAC-06 | Phase 107 | Pending |
+
+**Coverage:** 42/42 requirements mapped exactly once.
 
 ---
 *Requirements defined: 2026-07-11*
