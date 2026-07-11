@@ -61,6 +61,19 @@ pub fn build(b: *std.Build) void {
     const widget_step = b.step("widget-test", "Run production GTK widget lifecycle tests");
     widget_step.dependOn(&run_widget_tests.step);
 
+    const app_module = b.createModule(.{ .root_source_file = b.path("linux/app.zig"), .target = b.graph.host, .optimize = .Debug });
+    app_module.addImport("vt_adapter", vt_adapter);
+    app_module.addImport("terminal_widget", widget_module);
+    addGtkIncludes(app_module);
+    const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
+    linkGtk(app);
+    b.installArtifact(app);
+    const app_step = b.step("build-app", "Build and install the production GTK application");
+    app_step.dependOn(b.getInstallStep());
+    const run_app = b.addRunArtifact(app);
+    const run_app_step = b.step("run-app", "Run the production GTK application");
+    run_app_step.dependOn(&run_app.step);
+
     const generated = b.addWriteFiles();
     const smoke_source = generated.add("ghostty_api_smoke.zig",
         \\const ghostty = @cImport({ @cInclude("ghostty.h"); });

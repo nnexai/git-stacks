@@ -247,6 +247,28 @@ async function verifyGraphical(target: "renderer-test" | "widget-test"): Promise
   }
 }
 
+async function buildApp(): Promise<string> {
+  await verify("build-app")
+  const artifact = join(NATIVE, "zig-out", "bin", "git-stacks-native")
+  if (!existsSync(artifact)) throw new Error(`production GTK artifact missing: ${artifact}`)
+  return artifact
+}
+
+async function smokeApp(): Promise<void> {
+  const artifact = await buildApp()
+  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable: set DISPLAY/WAYLAND_DISPLAY or install a supported virtual display")
+  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1" } })
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 30_000) })
+  const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout])
+  clearTimeout(timer!)
+  if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("production GTK smoke timed out after 30 seconds") }
+  const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
+  if (outcome.code !== 0) throw new Error(`production GTK smoke exited ${outcome.code}: ${stderr || stdout}`)
+  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("text=git-stacks-native-terminal-ready")) throw new Error(`production GTK readiness evidence missing: ${stderr || stdout}`)
+  console.log(`native GTK smoke passed: backend=${process.env.GDK_BACKEND ?? "auto"} display=${process.env.WAYLAND_DISPLAY ?? process.env.DISPLAY} clean-exit=true`)
+}
+
 function verifyAccessibilityContract(): void {
   const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
   const accessibilityPath = join(ROOT, "docs", "native-terminal-accessibility.md")
@@ -277,6 +299,9 @@ else if (mode === "terminal-host") await verifyTerminalHost()
 else if (mode === "vt") await verifyVt()
 else if (mode === "renderer") await verifyGraphical("renderer-test")
 else if (mode === "widget") await verifyGraphical("widget-test")
+else if (mode === "build-app") await buildApp()
+else if (mode === "run-app") await verify("run-app")
+else if (mode === "smoke-app") await smokeApp()
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "quick" || mode === "verify") await verifyQuick()
 else if (mode === "terminal-build") await verify()
