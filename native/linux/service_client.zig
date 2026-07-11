@@ -136,6 +136,12 @@ pub const Client = struct {
         const seq=id orelse return .{.failure="invalid_sse"}; const value=data orelse return .{.failure="invalid_sse"};
         const event=decodeEvent(seq,value) catch return .{.failure="invalid_event"}; return self.order(event);
     }
+    pub fn decodeSseReducerAction(self:*Client,frame:[]const u8)!reducer.Action {
+        var id:?u64=null;var data:?[]const u8=null;var lines=std.mem.splitScalar(u8,frame,'\n');while(lines.next())|raw|{const line=std.mem.trimRight(u8,raw,"\r");if(std.mem.startsWith(u8,line,"id:"))id=std.fmt.parseInt(u64,std.mem.trim(u8,line[3..]," "),10) catch null else if(std.mem.startsWith(u8,line,"data:"))data=std.mem.trim(u8,line[5..]," ");}
+        const sequence=id orelse return error.InvalidSse;const payload=data orelse return error.InvalidSse;
+        const ordered=self.acceptSse(frame);if(ordered==.gap_refresh)return error.ReplayGap;if(ordered==.duplicate)return error.Duplicate;if(ordered!=.event)return error.InvalidSse;
+        return decodeReducerEvent(sequence,payload,self.revision);
+    }
     pub fn decodeAggregateSnapshot(self:*Client,body:[]const u8)!reducer.Action {var state=try aggregateState(body);state.sequence=self.sequence;self.revision=state.revision;self.state=.replaying;return .{.snapshot=state};}
     pub fn resolveLaunch(self: *Client, status: u16, body: []const u8) !Outcome { if (self.cancelled) return error.Cancelled; if(status!=200)return .{.failure="transport"}; return .{.launch=decodeLaunch(body) catch return .{.failure="invalid_payload"}}; }
 };
@@ -165,4 +171,17 @@ fn aggregateState(body:[]const u8)!model.State {
         state.workspaces[wi]=ws;state.workspace_count+=1;
     }
     return state;
+}
+
+fn attentionKey(source:[]const u8)model.Id {var digest:[32]u8=undefined;std.crypto.hash.sha2.Sha256.hash(source,&digest,.{});const hex=std.fmt.bytesToHex(digest[0..16],.lower);var out:model.Id=undefined;@memcpy(out[0..8],hex[0..8]);out[8]='-';@memcpy(out[9..13],hex[8..12]);out[13]='-';@memcpy(out[14..18],hex[12..16]);out[18]='-';@memcpy(out[19..23],hex[16..20]);out[23]='-';@memcpy(out[24..36],hex[20..32]);return out;}
+fn decodeReducerEvent(sequence:u64,body:[]const u8,revision:u64)!reducer.Action {
+    const parsed=try std.json.parseFromSlice(std.json.Value,std.heap.page_allocator,body,.{});defer parsed.deinit();if(parsed.value!=.object)return error.Invalid;const root=parsed.value.object;
+    const typ=string(root,"type") orelse return error.Invalid;if(!std.mem.eql(u8,typ,"attention"))return .{.event=.{.revision=revision,.sequence=sequence}};
+    const value=root.get("attention") orelse return error.Invalid;if(value!=.object)return error.Invalid;const a=value.object;const aid=string(a,"id") orelse return error.Invalid;if(!prefixed(aid,"att_") or aid.len>64)return error.Invalid;
+    const wid=string(a,"workspace_id") orelse return error.Invalid;if(!uuid(wid))return error.Invalid;const status=string(a,"state") orelse return error.Invalid;
+    var item:model.Attention=.{.id=attentionKey(aid),.workspace_id=undefined,.status=if(std.mem.eql(u8,status,"failed")) .failed else if(std.mem.eql(u8,status,"waiting")) .waiting else if(std.mem.eql(u8,status,"completed")) .completed else if(std.mem.eql(u8,status,"working")) .working else if(std.mem.eql(u8,status,"idle")) .idle else return error.Invalid};
+    @memcpy(item.service_id[0..aid.len],aid);item.service_id_len=@intCast(aid.len);@memcpy(&item.workspace_id,wid);
+    if(a.get("repository_id"))|r|{if(r!=.string or !uuid(r.string))return error.Invalid;var rid:model.Id=undefined;@memcpy(&rid,r.string);item.repository_id=rid;}
+    if(a.get("surface_id"))|s|{if(s!=.string or !uuid(s.string) or item.repository_id==null)return error.Invalid;var sid:model.Id=undefined;@memcpy(&sid,s.string);item.surface_id=sid;}
+    return .{.attention_received=item};
 }

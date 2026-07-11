@@ -77,6 +77,12 @@ test "aggregate snapshot decodes normalized workspace repository pairs into redu
     try std.testing.expectEqual(@as(u8,1),action.snapshot.pair_count);
     try std.testing.expectEqual(@as(u64,9),action.snapshot.revision);
 }
+test "structured SSE attention retains service identity and produces reducer action" {
+    var c=service.Client.init("Bearer secret");c.sequence=10;
+    const action=try c.decodeSseReducerAction("id: 11\ndata: {\"protocol\":\"v1\",\"sequence\":\"11\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"attention\",\"attention\":{\"id\":\"att_1234567890123456\",\"state\":\"failed\",\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"source\":\"codex\",\"title\":\"Needs input\",\"occurred_at\":\"2026-01-01T00:00:00Z\",\"journal_sequence\":\"11\"}}\n\n");
+    try std.testing.expect(action==.attention_received);
+    try std.testing.expectEqualStrings("att_1234567890123456",action.attention_received.service_id[0..action.attention_received.service_id_len]);
+}
 test "incompatible and authentication states stay explicit" {
     var c = service.Client.init("Bearer secret");
     try std.testing.expect((try c.acceptDiscovery(401, "{}")) == .failure);

@@ -57,6 +57,11 @@ pub const ProductionGraph = struct {
         const action=try self.service.decodeAggregateSnapshot(response.body);
         self.state=reducer.reduce(self.state,action).state;
     }
+    pub fn replayOnce(self:*ProductionGraph)!void {
+        var cursor:[20]u8=undefined;const request=try self.service.eventsRequest(&cursor);
+        const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);if(response.status!=200)return error.EventStreamRejected;
+        var frames=std.mem.splitSequence(u8,response.body,"\n\n");while(frames.next())|frame|{if(frame.len==0)continue;const action=self.service.decodeSseReducerAction(frame) catch |err| switch(err){error.Duplicate=>continue,error.ReplayGap=>{try self.refreshSnapshot();return;},else=>return err};self.state=reducer.reduce(self.state,action).state;}
+    }
 
     pub fn synchronizeDiscovery(self:*ProductionGraph)!void {
         const request=try self.service.discoveryRequest();
