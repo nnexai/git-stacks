@@ -118,7 +118,24 @@ Wave 5 *(blocked on Wave 4 completion)*:
   4. Structured agent hooks report working, waiting, completed, failed, and idle states; unread attention is visible at workspace, repository, and tab levels.
   5. Selecting attention focuses the exact surviving surface or documented nearest context, never steals focus automatically, and keyboard, focus, IME, and accessibility navigation remain usable across sidebar and terminals.
 
-**Plans**: TBD
+**Plans**: 0/3 plans complete
+
+- [ ] 106-01-PLAN.md — Freeze authoritative native launch and structured attention contracts
+- [ ] 106-02-PLAN.md — Build normalized pair tabs, attention routing, and navigation-independent host ownership
+- [ ] 106-03-PLAN.md — Compose the GTK workspace client and prove real-session interaction
+
+Wave 1:
+
+- [ ] 106-01 — Extend stable command/attention identities, fresh launch resolution, and structured hooks
+
+Wave 2 *(blocked on Wave 1 completion)*:
+
+- [ ] 106-02 — Extend native state/persistence/ABI and own multiple live hosts outside navigation
+
+Wave 3 *(blocked on Wave 2 completion)*:
+
+- [ ] 106-03 — Build the adaptive GTK UI, scoped actions, launcher, attention presentation, and acceptance evidence
+
 **UI hint**: yes
 
 ### Phase 107: Native Delivery and Cross-Platform Proof

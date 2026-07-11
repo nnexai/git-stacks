@@ -1,9 +1,9 @@
 ---
 phase: 106
 slug: linux-workspace-commands-and-attention
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: planned
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-07-11
 ---
 
@@ -38,13 +38,15 @@ created: 2026-07-11
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 106-W0-01 | TBD | 0 | ACT-01, ACT-02 | — | Resolution failure creates no phantom terminal surface | contract + integration | `bun test tests/lib/service/native-launch.test.ts` | ❌ W0 | ⬜ pending |
-| 106-W0-02 | TBD | 0 | ACT-03 | — | Hook input is structured and identity-bound rather than terminal-scraped | unit + integration | `bun test tests/lib/agent-hooks/structured-attention.test.ts tests/lib/service/event-journal.test.ts` | ❌ W0 | ⬜ pending |
-| 106-W0-03 | TBD | 0 | LNX-01, LNX-02 | — | Explicit incompatible and failure states remain visible | reducer + GTK harness | `bun run native:test:workspace-ui` | ❌ W0 | ⬜ pending |
-| 106-W0-04 | TBD | 0 | LNX-03, LNX-04, ACT-01, ACT-02 | — | Terminal hosts remain pair-bound and navigation-independent | Zig integration + real host | `bun run native:test:tabs` | ❌ W0 | ⬜ pending |
-| 106-W0-05 | TBD | 0 | LNX-05 | — | Restore marks dead processes ended and preserves ordering/lineage | Zig persistence | `bun run native:test:restore` | ✅ expand | ⬜ pending |
-| 106-W0-06 | TBD | 0 | ACT-04, ACT-05, ACT-06 | — | Receipt never focuses; explicit selection resolves exact or documented fallback target | reducer + effect harness | `bun run native:test:attention` | ❌ W0 | ⬜ pending |
-| 106-UAT-01 | TBD | final | LNX-06 | — | Keyboard, IME, focus, and accessibility navigation remain usable | automated semantics + manual UAT | `bun run native:test:accessibility` | ✅ expand | ⬜ pending |
+| 106-01-01 | 106-01 | 1 | ACT-01, ACT-02, ACT-03 | — | Strict stable-ID schemas negotiate fresh launch and structured attention | contract | `bun test tests/lib/service/contract.test.ts` | 🆕 task | ⬜ pending |
+| 106-01-02 | 106-01 | 1 | ACT-01, ACT-02 | — | Resolution failure creates no launch specification or phantom surface | contract + integration | `bun test tests/lib/service/snapshot.test.ts tests/lib/service/native-launch.test.ts` | 🆕 task | ⬜ pending |
+| 106-01-03 | 106-01 | 1 | ACT-03, ACT-06 | — | Hook lifecycle is structured and identity-bound rather than terminal-scraped | unit + integration | `bun test tests/lib/agent-hooks/structured-attention.test.ts tests/lib/service/event-journal.test.ts` | 🆕 task | ⬜ pending |
+| 106-02-01 | 106-02 | 2 | LNX-01, LNX-02, LNX-03, LNX-05 | — | Normalized pair collections restore presentation as ended and reconcile vanished identities | reducer + persistence | `bun run native:test:restore && bun run native:test:model` | ✅ expand | ⬜ pending |
+| 106-02-02 | 106-02 | 2 | ACT-03, ACT-04, ACT-05, ACT-06 | — | Derived aggregates cannot drift; receipt never focuses; explicit selection returns exact/fallback route | reducer + ABI | `bun run native:test:attention && bun run native:test:model` | 🆕 task | ⬜ pending |
+| 106-02-03 | 106-02 | 2 | LNX-03, LNX-04, ACT-01, ACT-02 | — | Terminal hosts remain pair-bound, navigation-independent, and absent on launch failure | Zig integration + fake host | `bun run native:test:tabs && bun run native:test:quick` | 🆕 task | ⬜ pending |
+| 106-03-01 | 106-03 | 3 | LNX-01, LNX-02, LNX-03, LNX-04, LNX-05, LNX-06 | — | GTK projection exposes explicit states and preserves hidden host identity/lifetime | GTK/model harness | `bun run native:test:workspace-ui && bun run native:test:tabs` | 🆕 task | ⬜ pending |
+| 106-03-02 | 106-03 | 3 | LNX-06, ACT-01, ACT-02, ACT-04, ACT-05, ACT-06 | — | One action path preserves IME/accessibility and asynchronous events never focus | effect + accessibility harness | `bun run native:test:workspace-ui && bun run native:test:attention && bun run native:test:accessibility` | ✅ expand | ⬜ pending |
+| 106-03-03 | 106-03 | 3 | LNX-01, LNX-02, LNX-03, LNX-04, LNX-05, LNX-06, ACT-01, ACT-02, ACT-03, ACT-04, ACT-05, ACT-06 | — | Complete graphical-session acceptance including no focus theft | full automation + manual UAT | `bun run native:verify && bun run test && bun run typecheck && bun run test:deps && bun run verify:gates` | 🆕 task | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -52,12 +54,11 @@ created: 2026-07-11
 
 ## Wave 0 Requirements
 
-- [ ] `tests/lib/service/native-launch.test.ts` — fresh resolved shell/command contract and no-phantom-tab failure fixtures.
-- [ ] `tests/lib/agent-hooks/structured-attention.test.ts` and `tests/lib/service/event-journal.test.ts` — structured lifecycle, repository identity, and surface identity coverage.
-- [ ] Native fixture export/decoder cases for navigation entities, command identities, tab collections, and attention.
-- [ ] `workspace-ui`, `tabs`, and `attention` native build/test targets with Bun script wrappers.
-- [ ] Fake terminal-host registry backend for deterministic multi-host navigation, close, and failure tests.
-- [ ] Expanded restore and accessibility matrices plus real-session UAT for sidebar/tab/launcher focus, drag-and-drop, IME, badges, and no-focus-theft.
+- [x] Plan 106-01 Task 1 creates contract fixtures before contract implementation.
+- [x] Plan 106-01 Tasks 2-3 create fresh-resolution and structured-hook tests before implementation.
+- [x] Plan 106-02 Tasks 1-3 create/expand native restore, attention, ABI, and fake-host registry tests before implementation.
+- [x] Plan 106-03 Tasks 1-2 create GTK action/projection and accessibility harnesses before implementation.
+- [x] Plan 106-03 Task 3 creates and completes the real-session evidence matrix before phase approval.
 
 ---
 
@@ -74,12 +75,12 @@ created: 2026-07-11
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verification or Wave 0 dependencies.
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verification.
-- [ ] Wave 0 covers all MISSING references.
-- [ ] No watch-mode flags.
-- [ ] Focused feedback latency is below 30 seconds.
-- [ ] Full native real-session UAT is documented and completed.
-- [ ] `nyquist_compliant: true` is set in frontmatter after the final plan map is populated.
+- [x] All tasks have `<automated>` verification and test-first behavior where production code changes.
+- [x] Sampling continuity: every task has automated verification.
+- [x] Former Wave 0 gaps are assigned to concrete task-first test artifacts.
+- [x] No watch-mode flags.
+- [ ] Focused feedback latency is below 30 seconds (measure during execution).
+- [ ] Full native real-session UAT is documented and completed (Plan 106-03 Task 3 gate).
+- [x] `nyquist_compliant: true` is set after the concrete task map is populated.
 
 **Approval:** pending
