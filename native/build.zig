@@ -93,6 +93,17 @@ pub fn build(b: *std.Build) void {
     const lifecycle_step = b.step("lifecycle-test", "Run terminal ownership and guard lifecycle tests");
     lifecycle_step.dependOn(&run_ownership_tests.step);
 
+    const host_test_module = b.createModule(.{
+        .root_source_file = b.path("tests/terminal_host_test.zig"), .target = b.graph.host, .optimize = .Debug,
+    });
+    host_test_module.addImport("adapter", b.createModule(.{ .root_source_file = b.path("terminal/adapter.zig") }));
+    host_test_module.addImport("terminal_host", b.createModule(.{ .root_source_file = b.path("linux/terminal_host.zig") }));
+    host_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));
+    const host_tests = b.addTest(.{ .root_module = host_test_module });
+    const run_host_tests = b.addRunArtifact(host_tests);
+    const host_step = b.step("terminal-host-test", "Run terminal host lifecycle and input tests");
+    host_step.dependOn(&run_host_tests.step);
+
     const harness = b.addExecutable(.{
         .name = "abi-harness",
         .root_module = b.createModule(.{

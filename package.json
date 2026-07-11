@@ -48,6 +48,7 @@
     "native:test:restore": "bun run scripts/verify-native.ts restore",
     "native:test:lifecycle": "bun run scripts/verify-native.ts lifecycle",
     "native:test:terminal-build": "bun run scripts/verify-native.ts terminal-build",
+    "native:test:terminal-host": "bun run scripts/verify-native.ts terminal-host",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run typecheck && bun run test"
