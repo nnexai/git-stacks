@@ -11,8 +11,13 @@ test "renderer snapshots a detached deterministic VT frame" {
     var frame = try terminal.snapshot();
     defer frame.deinit();
     const snapshot = c.gtk_snapshot_new() orelse return error.SnapshotCreationFailed;
-    (renderer.Renderer{}).render(@ptrCast(snapshot), frame, true);
+    var subject = renderer.Renderer{}; subject.render(@ptrCast(snapshot), frame, true);
     const node = c.gtk_snapshot_free_to_node(snapshot);
     try std.testing.expect(node != null);
     if (node) |value| c.gsk_render_node_unref(value);
+}
+
+test "renderer bounds unusually large frames and resets scale cache" {
+    var subject = renderer.Renderer{}; subject.rendered_cells = 42; subject.resetScale(.{ .cell_width = 10, .cell_height = 20 });
+    try std.testing.expectEqual(@as(usize, 0), subject.rendered_cells);
 }

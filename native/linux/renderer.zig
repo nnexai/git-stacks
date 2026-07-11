@@ -8,8 +8,10 @@ const c = @cImport({
 pub const Metrics = struct { cell_width: f32 = 9, cell_height: f32 = 18 };
 pub const Renderer = struct {
     metrics: Metrics = .{},
+    rendered_cells: usize = 0,
+    pub fn resetScale(self: *Renderer, metrics: Metrics) void { self.metrics = metrics; self.rendered_cells = 0; }
 
-    pub fn render(self: Renderer, raw_snapshot: *anyopaque, frame: vt.RenderFrame, focused: bool) void {
+    pub fn render(self: *Renderer, raw_snapshot: *anyopaque, frame: vt.RenderFrame, focused: bool) void {
         const snapshot: *c.GtkSnapshot = @ptrCast(@alignCast(raw_snapshot));
         const width: f32 = @floatFromInt(frame.columns);
         const height: f32 = @floatFromInt(frame.rows);
@@ -25,11 +27,14 @@ pub const Renderer = struct {
         c.pango_layout_set_font_description(layout, description);
         var buffer: [4]u8 = undefined;
         for (frame.cells) |cell| {
+            if (self.rendered_cells >= 131_072) break;
+            self.rendered_cells += 1;
             const len = std.unicode.utf8Encode(cell.codepoint, &buffer) catch continue;
             c.pango_layout_set_text(layout, &buffer, @intCast(len));
             c.gtk_snapshot_save(snapshot);
             c.gtk_snapshot_translate(snapshot, &.{ .x = @as(f32, @floatFromInt(cell.column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(cell.row)) * self.metrics.cell_height });
-            c.gtk_snapshot_append_layout(snapshot, layout, &.{ .red = 0.82, .green = 0.86, .blue = 0.92, .alpha = 1 });
+            const fg = if (cell.style.inverse) cell.style.background else cell.style.foreground;
+            c.gtk_snapshot_append_layout(snapshot, layout, &.{ .red = @as(f32, @floatFromInt((fg >> 16) & 255)) / 255, .green = @as(f32, @floatFromInt((fg >> 8) & 255)) / 255, .blue = @as(f32, @floatFromInt(fg & 255)) / 255, .alpha = 1 });
             c.gtk_snapshot_restore(snapshot);
         }
         const cursor = c.graphene_rect_t{ .origin = .{ .x = @as(f32, @floatFromInt(frame.cursor_column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(frame.cursor_row)) * self.metrics.cell_height + self.metrics.cell_height - 2 }, .size = .{ .width = self.metrics.cell_width, .height = 2 } };

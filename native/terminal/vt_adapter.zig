@@ -2,7 +2,8 @@
 const std = @import("std");
 const ghostty = @import("ghostty_vt");
 
-pub const Cell = struct { codepoint: u21, row: u16, column: u16 };
+pub const Style = struct { foreground: u32 = 0xd1d9ea, background: u32 = 0x09101a, bold: bool = false, italic: bool = false, underline: bool = false, inverse: bool = false };
+pub const Cell = struct { codepoint: u21, row: u16, column: u16, width: u2 = 1, style: Style = .{} };
 pub const RenderFrame = struct {
     allocator: std.mem.Allocator,
     cells: []Cell,
@@ -11,6 +12,7 @@ pub const RenderFrame = struct {
     cursor_row: u16,
     cursor_column: u16,
     alternate_screen: bool,
+    truncated: bool = false,
 
     pub fn deinit(self: *RenderFrame) void { self.allocator.free(self.cells); }
 };
@@ -54,10 +56,10 @@ pub const VtAdapter = struct {
             while (column < cols) : (column += 1) {
                 const pin = screen.pages.getCell(.{ .screen = .{ .x = column, .y = row } }) orelse continue;
                 const cp = pin.cell.codepoint();
-                if (cp != 0) try cells.append(self.allocator, .{ .codepoint = cp, .row = row, .column = column });
+                if (cp != 0 and cells.items.len < 131_072) try cells.append(self.allocator, .{ .codepoint = cp, .row = row, .column = column });
             }
         }
-        return .{ .allocator = self.allocator, .cells = try cells.toOwnedSlice(self.allocator), .columns = cols, .rows = rows, .cursor_row = @intCast(screen.cursor.y), .cursor_column = @intCast(screen.cursor.x), .alternate_screen = self.isAlternateScreen() };
+        return .{ .allocator = self.allocator, .cells = try cells.toOwnedSlice(self.allocator), .columns = cols, .rows = rows, .cursor_row = @intCast(screen.cursor.y), .cursor_column = @intCast(screen.cursor.x), .alternate_screen = self.isAlternateScreen(), .truncated = @as(usize, rows) * @as(usize, cols) > 131_072 };
     }
 
     pub fn encodeKey(_: *const VtAdapter, key: Key, output: []u8) ![]const u8 {
