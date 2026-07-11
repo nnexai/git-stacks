@@ -134,7 +134,7 @@ pub const Client = struct {
         var lines = std.mem.splitScalar(u8, frame, '\n');
         while (lines.next()) |raw| { const line=std.mem.trimRight(u8,raw,"\r"); if (std.mem.startsWith(u8,line,"id:")) id=std.fmt.parseInt(u64,std.mem.trim(u8,line[3..]," "),10) catch null else if (std.mem.startsWith(u8,line,"data:")) data=std.mem.trim(u8,line[5..]," "); }
         const seq=id orelse return .{.failure="invalid_sse"}; const value=data orelse return .{.failure="invalid_sse"};
-        const event=decodeEvent(seq,value) catch return .{.failure="invalid_event"}; return self.order(event);
+        const event=decodeEvent(seq,value) catch |err| return if(err==error.ReplayGap) blk:{self.state=.refresh_required;break :blk .gap_refresh;} else .{.failure="invalid_event"}; return self.order(event);
     }
     pub fn decodeSseReducerAction(self:*Client,frame:[]const u8)!reducer.Action {
         var id:?u64=null;var data:?[]const u8=null;var lines=std.mem.splitScalar(u8,frame,'\n');while(lines.next())|raw|{const line=std.mem.trimRight(u8,raw,"\r");if(std.mem.startsWith(u8,line,"id:"))id=std.fmt.parseInt(u64,std.mem.trim(u8,line[3..]," "),10) catch null else if(std.mem.startsWith(u8,line,"data:"))data=std.mem.trim(u8,line[5..]," ");}
@@ -168,6 +168,7 @@ fn aggregateState(body:[]const u8)!model.State {
         const wid=string(wo,"id") orelse return error.Invalid;if(!uuid(wid))return error.Invalid;var ws:model.Workspace=.{.id=undefined};@memcpy(&ws.id,wid);
         const repos=wo.get("repositories") orelse return error.Invalid;if(repos!=.array or repos.array.items.len>8)return error.Capacity;
         for(repos.array.items,0..) |repo,ri| {if(repo!=.object)return error.Invalid;const rid=string(repo.object,"id") orelse return error.Invalid;if(!uuid(rid))return error.Invalid;@memcpy(&ws.repository_ids[ri],rid);ws.repository_count+=1;state.pairs[state.pair_count]=.{.key=.{.workspace_id=ws.id,.repository_id=ws.repository_ids[ri]},.surfaces=undefined};state.pair_count+=1;}
+        if(wo.get("launch"))|launch| if(launch==.object) if(launch.object.get("named"))|named| if(named==.array) for(named.array.items)|value| {if(value!=.object or state.command_count>=state.commands.len)return error.Invalid;const cid=string(value.object,"id") orelse return error.Invalid;const name=string(value.object,"name") orelse return error.Invalid;if(!prefixed(cid,"cmd_") or cid.len>64 or name.len==0 or name.len>96)return error.Invalid;var command:model.Command=.{.workspace_id=ws.id};@memcpy(command.id[0..cid.len],cid);command.id_len=@intCast(cid.len);@memcpy(command.name[0..name.len],name);command.name_len=@intCast(name.len);if(value.object.get("repository_id"))|r|{if(r!=.string or !uuid(r.string))return error.Invalid;var rid:model.Id=undefined;@memcpy(&rid,r.string);command.repository_id=rid;}state.commands[state.command_count]=command;state.command_count+=1;};
         state.workspaces[wi]=ws;state.workspace_count+=1;
     }
     return state;
@@ -179,6 +180,8 @@ fn decodeReducerEvent(sequence:u64,body:[]const u8,revision:u64)!reducer.Action 
     const typ=string(root,"type") orelse return error.Invalid;if(!std.mem.eql(u8,typ,"attention"))return .{.event=.{.revision=revision,.sequence=sequence}};
     const value=root.get("attention") orelse return error.Invalid;if(value!=.object)return error.Invalid;const a=value.object;const aid=string(a,"id") orelse return error.Invalid;if(!prefixed(aid,"att_") or aid.len>64)return error.Invalid;
     const wid=string(a,"workspace_id") orelse return error.Invalid;if(!uuid(wid))return error.Invalid;const status=string(a,"state") orelse return error.Invalid;
+    const source=string(a,"source") orelse return error.Invalid;const title=string(a,"title") orelse return error.Invalid;const occurred=string(a,"occurred_at") orelse return error.Invalid;const journal=uintString(a,"journal_sequence") orelse return error.Invalid;
+    if(journal!=sequence or title.len==0 or title.len>160 or occurred.len<20 or !(std.mem.eql(u8,source,"claude") or std.mem.eql(u8,source,"copilot") or std.mem.eql(u8,source,"codex") or std.mem.eql(u8,source,"other")))return error.Invalid;
     var item:model.Attention=.{.id=attentionKey(aid),.workspace_id=undefined,.status=if(std.mem.eql(u8,status,"failed")) .failed else if(std.mem.eql(u8,status,"waiting")) .waiting else if(std.mem.eql(u8,status,"completed")) .completed else if(std.mem.eql(u8,status,"working")) .working else if(std.mem.eql(u8,status,"idle")) .idle else return error.Invalid};
     @memcpy(item.service_id[0..aid.len],aid);item.service_id_len=@intCast(aid.len);@memcpy(&item.workspace_id,wid);
     if(a.get("repository_id"))|r|{if(r!=.string or !uuid(r.string))return error.Invalid;var rid:model.Id=undefined;@memcpy(&rid,r.string);item.repository_id=rid;}

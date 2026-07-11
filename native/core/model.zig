@@ -147,15 +147,23 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
         }
         try w.writeAll("]}");
     }
+    try w.writeAll("],\"commands\":[");
+    for (state.commands[0..state.command_count], 0..) |command, i| {
+        if (i != 0) try w.writeByte(',');
+        try w.print("{{\"id\":{f},\"name\":{f},\"workspace_id\":\"{s}\",\"repository_id\":", .{ std.json.fmt(command.id[0..command.id_len], .{}), std.json.fmt(command.name[0..command.name_len], .{}), command.workspace_id });
+        if (command.repository_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
+        try w.writeByte('}');
+    }
     try w.writeAll("],\"attention\":[");
     for (state.attention[0..state.attention_count], 0..) |item, i| {
         if (i != 0) try w.writeByte(',');
-        try w.print("{{\"id\":\"{s}\",\"workspace_id\":\"{s}\",\"repository_id\":", .{ item.id, item.workspace_id });
+        const attention_id = if (item.service_id_len > 0) item.service_id[0..item.service_id_len] else item.id[0..];
+        try w.print("{{\"id\":\"{s}\",\"workspace_id\":\"{s}\",\"repository_id\":", .{ attention_id, item.workspace_id });
         if (item.repository_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
         try w.writeAll(",\"surface_id\":");
         if (item.surface_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
         try w.print(",\"status\":\"{s}\",\"read\":{},\"resolved\":{}}}", .{ @tagName(item.status), item.read, item.resolved });
     }
-    try w.print("],\"pair_count\":{d},\"attention_count\":{d}}}", .{ state.pair_count, state.attention_count });
+    try w.print("],\"pair_count\":{d},\"command_count\":{d},\"attention_count\":{d}}}", .{ state.pair_count, state.command_count, state.attention_count });
     return out.toOwnedSlice(allocator);
 }
