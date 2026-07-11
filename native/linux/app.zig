@@ -23,8 +23,9 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     const state = allocator.create(AppState) catch return;
     state.allocator = allocator;
     if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null) {
-        state.runtime = runtime_mod.TerminalRuntime.init(allocator, "printf 'SHELL_PROMPT_UNIQUE\\n'; read line; printf 'SHELL_RESULT_UNIQUE:%s\\n' \"$line\"", 80, 24) catch return;
+        state.runtime = runtime_mod.TerminalRuntime.init(allocator, "printf '\\033[?1049hALT_SCREEN_UNIQUE\\033[?1049lSHELL_PROMPT_UNIQUE\\n'; read line; printf 'SHELL_RESULT_UNIQUE:%s\\n' \"$line\"", 80, 24) catch return;
         if (!(state.runtime.?.waitFor("SHELL_PROMPT_UNIQUE", 400) catch false)) return;
+        state.runtime.?.resize(100, 30) catch return;
         state.runtime.?.send("widget-input-path\n") catch return;
         if (!(state.runtime.?.waitFor("SHELL_RESULT_UNIQUE:widget-input-path", 400) catch false)) return;
     } else {

@@ -277,7 +277,7 @@ async function smokeTerminal(): Promise<void> {
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
   if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("SHELL_RESULT_UNIQUE")) throw new Error(`terminal roundtrip failed (${outcome.code}): ${stderr}`)
-  console.log("native terminal smoke passed: PTY input/output reached production VT/widget and process exited cleanly")
+  console.log("native terminal smoke passed: PTY input/output, alternate-screen parsing, resize/reflow, and clean exit verified")
 }
 
 function verifyAccessibilityContract(): void {
