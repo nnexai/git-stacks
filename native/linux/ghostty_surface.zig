@@ -74,9 +74,9 @@ pub const Surface = struct {
     surface_id: [36]u8,
     launch: ?LaunchSpec = null,
     exit_context: ?*anyopaque = null,
-    exit_handler: ?*const fn(*anyopaque,[36]u8)void = null,
+    exit_handler: ?*const fn(*anyopaque,[36]u8,u32,u64)void = null,
 
-    pub fn setExitHandler(self:*Surface,context:*anyopaque,handler:*const fn(*anyopaque,[36]u8)void)void{self.exit_context=context;self.exit_handler=handler;}
+    pub fn setExitHandler(self:*Surface,context:*anyopaque,handler:*const fn(*anyopaque,[36]u8,u32,u64)void)void{self.exit_context=context;self.exit_handler=handler;}
 
     pub fn create(runtime: *runtime_mod.Runtime, registry: *guard.Registry) !*Surface {
         return createWithLaunch(runtime, registry, null);
@@ -315,11 +315,11 @@ fn requestClose(data: *anyopaque, generation: u64) void {
     const self: *Surface = @ptrCast(@alignCast(data));
     if (!self.destroyed and self.generation == generation) c.gtk_widget_set_visible(@ptrCast(self.area), 0);
 }
-fn childExit(data: *anyopaque, generation: u64) void {
+fn childExit(data: *anyopaque, generation: u64, exit_code: u32, elapsed_ms: u64) void {
     const self:*Surface=@ptrCast(@alignCast(data));
     // Keep the realized surface visible after process exit so command output
     // and scrollback remain inspectable on the retained ended page.
-    if(!self.destroyed and self.generation==generation)if(self.exit_handler)|handler|handler(self.exit_context orelse return,self.surface_id);
+    if(!self.destroyed and self.generation==generation)if(self.exit_handler)|handler|handler(self.exit_context orelse return,self.surface_id,exit_code,elapsed_ms);
 }
 fn onRealize(_: ?*c.GtkGLArea, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));

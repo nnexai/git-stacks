@@ -318,7 +318,10 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     if (command.steps.length !== 1) return fail("operation_failed", "Native launch requires exactly one configured command step")
     const step = command.steps[0]!
     return NativeLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
-      argv: [process.env.SHELL || "/bin/sh", "-lc", step.command], cwd: step.cwd,
+      // Configured commands use the same POSIX-shell contract as the existing
+      // CLI/TUI command runner. They must not be reparsed by the user's login
+      // shell (Fish, Nushell, etc.).
+      argv: ["/bin/sh", "-lc", step.command], cwd: step.cwd,
       environment: step.environment, ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
     } })
   }

@@ -124,6 +124,22 @@ describe("authoritative service snapshots", () => {
     expect(await builder.currentRevision()).toBe("1")
   })
 
+  test("resolves configured commands through the POSIX shell contract", async () => {
+    const builder = createSnapshotBuilder(dependencies({
+      planManualCommand: () => [{ bucket: "main", scope: "workspace", shell: "for i in 1 2; do echo $i; done", cwd: "/tasks/alpha", environment: {} }],
+    }))
+    const snapshot = (await builder.buildAll())[0]!
+    const command = snapshot.workspace.launch.named![0]!
+    const resolution = await builder.resolveNativeLaunch({
+      workspace_id: snapshot.workspace.id,
+      repository_id: snapshot.workspace.repositories[0]!.id,
+      command_id: command.id,
+      expected_revision: snapshot.revision,
+    })
+    expect(resolution.resolved).toBe(true)
+    if (resolution.resolved) expect(resolution.launch.argv).toEqual(["/bin/sh", "-lc", "for i in 1 2; do echo $i; done"])
+  })
+
   test("does not invent a snapshot revision when no workspaces exist", async () => {
     const builder = createSnapshotBuilder(dependencies({ listWorkspaceNames: () => [] }))
     expect(await builder.currentRevision()).toBe("0")

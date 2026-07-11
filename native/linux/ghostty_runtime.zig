@@ -11,7 +11,7 @@ pub const SurfaceCallbacks = struct {
     generation: u64,
     queue_render: *const fn (*anyopaque, u64) void,
     close: *const fn (*anyopaque, u64) void,
-    child_exit: *const fn (*anyopaque, u64) void,
+    child_exit: *const fn (*anyopaque, u64, u32, u64) void,
 };
 
 const Entry = struct {
@@ -140,7 +140,7 @@ fn action(app: c.ghostty_app_t, target: c.ghostty_target_s, value: c.ghostty_act
     switch (value.tag) {
         c.GHOSTTY_ACTION_RENDER => cb.queue_render(cb.context, cb.generation),
         c.GHOSTTY_ACTION_CLOSE_TAB, c.GHOSTTY_ACTION_CLOSE_WINDOW, c.GHOSTTY_ACTION_QUIT => cb.close(cb.context, cb.generation),
-        c.GHOSTTY_ACTION_SHOW_CHILD_EXITED => cb.child_exit(cb.context, cb.generation),
+        c.GHOSTTY_ACTION_SHOW_CHILD_EXITED => cb.child_exit(cb.context, cb.generation, value.action.child_exited.exit_code, value.action.child_exited.timetime_ms),
         // Title, cwd, bell, notification and config actions are accepted here;
         // product observers are added without taking terminal ownership.
         c.GHOSTTY_ACTION_SET_TITLE, c.GHOSTTY_ACTION_PWD, c.GHOSTTY_ACTION_RING_BELL, c.GHOSTTY_ACTION_DESKTOP_NOTIFICATION, c.GHOSTTY_ACTION_RELOAD_CONFIG, c.GHOSTTY_ACTION_CONFIG_CHANGE => {},

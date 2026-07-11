@@ -8,7 +8,7 @@ test "generation tagged callbacks reject stale generations" {
             if (generation == 7) (@as(*usize, @ptrCast(@alignCast(raw)))).* += 1;
         }
         fn close(_: *anyopaque, _: u64) void {}
-        fn exit(_: *anyopaque, _: u64) void {}
+        fn exit(_: *anyopaque, _: u64, _: u32, _: u64) void {}
     };
     const callbacks: runtime.SurfaceCallbacks = .{ .context = &queued, .generation = 7, .queue_render = Probe.queue, .close = Probe.close, .child_exit = Probe.exit };
     callbacks.queue_render(callbacks.context, callbacks.generation);

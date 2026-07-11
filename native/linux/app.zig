@@ -50,6 +50,8 @@ const State = struct {
     programmatic_tab_close: bool = false,
     creating_terminal: bool = false,
     pending_exit: ?model.Id = null,
+    pending_exit_code: u32 = 0,
+    pending_exit_elapsed_ms: u64 = 0,
     ui_smoke_stage: u8 = 0,
     ui_smoke_wait: u16 = 0,
     ui_smoke_ids: [6]?model.Id = [_]?model.Id{null} ** 6,
@@ -86,6 +88,7 @@ fn restorePresentation(state: *State) void {
     const path = presentationPath(&path_buffer) orelse return;
     const quarantined=persistence.restoreStateFile(state.graph.allocator,path,&state.graph.state) catch return;
     if(quarantined>0)std.debug.print("native presentation quarantined {d} corrupt records\n",.{quarantined});
+    savePresentation(state);
 }
 
 fn appendQuoted(buffer: []u8, offset: *usize, value: []const u8) !void {
@@ -392,18 +395,21 @@ fn terminalExited(context: *anyopaque, _: i32, _: u64) !void {
     _ = context;
 }
 fn terminalDestroy(_: *anyopaque) void {}
-fn handleSurfaceExited(state:*State,id:model.Id)void{
+fn handleSurfaceExited(state:*State,id:model.Id,exit_code:u32,elapsed_ms:u64)void{
     const loc=model.surfaceLocation(&state.graph.state,id) orelse return;
     if(state.graph.state.pairs[loc.pair].surfaces[loc.surface].kind==.shell){closeTerminal(state,id);return;}
-    state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle=.ended;
+    var surface=&state.graph.state.pairs[loc.pair].surfaces[loc.surface];
+    surface.last_exit_status=@intCast(@min(exit_code,@as(u32,std.math.maxInt(i32))));
+    if(exit_code==127 and elapsed_ms<2_000){closeTerminal(state,id);return;}
+    surface.lifecycle=.ended;
     state.graph.terminals.childExited(id) catch |err| if (err != error.UnknownSurface)
         std.debug.print("native terminal exit detach failed: {s}\n", .{@errorName(err)});
     savePresentation(state);refreshProjection(state);
 }
-fn surfaceExited(context:*anyopaque,id:model.Id)void{
+fn surfaceExited(context:*anyopaque,id:model.Id,exit_code:u32,elapsed_ms:u64)void{
     const state:*State=@ptrCast(@alignCast(context));
-    if(state.creating_terminal){state.pending_exit=id;return;}
-    handleSurfaceExited(state,id);
+    if(state.creating_terminal){state.pending_exit=id;state.pending_exit_code=exit_code;state.pending_exit_elapsed_ms=elapsed_ms;return;}
+    handleSurfaceExited(state,id,exit_code,elapsed_ms);
 }
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
@@ -868,7 +874,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     state.creating_terminal=true;
     defer {
         state.creating_terminal=false;
-        if(state.pending_exit)|ended| { state.pending_exit=null; handleSurfaceExited(state,ended); }
+        if(state.pending_exit)|ended| { const code=state.pending_exit_code;const elapsed=state.pending_exit_elapsed_ms;state.pending_exit=null;handleSurfaceExited(state,ended,code,elapsed); }
     }
     state.terminals[state.terminal_count] = surface;
     surface.setExitHandler(state,surfaceExited);
@@ -986,6 +992,12 @@ fn launcherClosed(_: ?*c.AdwDialog, data: ?*anyopaque) callconv(.c) void {
         }
     }
     state.focus_before_launcher = null;
+}
+fn launcherKeyPressed(_: ?*c.GtkEventControllerKey, keyval: c.guint, _: c.guint, _: c.GdkModifierType, data: ?*anyopaque) callconv(.c) c.gboolean {
+    if (keyval != c.GDK_KEY_Escape) return 0;
+    const state: *State = @ptrCast(@alignCast(data orelse return 0));
+    if (state.launcher) |dialog| _ = c.adw_dialog_close(dialog);
+    return 1;
 }
 fn launcherChanged(_: ?*c.GtkEditable, data: ?*anyopaque) callconv(.c) void {
     refreshLauncher(@ptrCast(@alignCast(data orelse return)));
@@ -1251,6 +1263,9 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.gtk_search_entry_set_placeholder_text(@ptrCast(search), "Search configured commands…");
     setAccessible(search, c.GTK_ACCESSIBLE_ROLE_SEARCH_BOX, "Command search", "Input is isolated from terminal IME until the launcher closes");
     _ = c.g_signal_connect_data(search, "changed", @ptrCast(&launcherChanged), state, null, 0);
+    const launcher_keys = c.gtk_event_controller_key_new() orelse return null;
+    _ = c.g_signal_connect_data(launcher_keys, "key-pressed", @ptrCast(&launcherKeyPressed), state, null, 0);
+    c.gtk_widget_add_controller(search, launcher_keys);
     c.gtk_box_append(@ptrCast(launcher_box), search);
     const error_label = c.gtk_label_new("") orelse return null;
     state.launcher_error = @ptrCast(error_label);
