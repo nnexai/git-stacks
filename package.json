@@ -52,6 +52,8 @@
     "native:test:model": "bun run scripts/verify-native.ts model",
     "native:test:restore": "bun run scripts/verify-native.ts restore",
     "native:test:attention": "bun run scripts/verify-native.ts attention",
+    "native:test:workspace-ui": "bun run scripts/verify-native.ts workspace-ui",
+    "native:test:application-actions": "bun run scripts/verify-native.ts application-actions",
     "native:test:tabs": "bun run scripts/verify-native.ts tabs",
     "native:test:service-client": "bun run scripts/verify-native.ts service-client",
     "native:test:app-graph": "bun run scripts/verify-native.ts app-graph",
