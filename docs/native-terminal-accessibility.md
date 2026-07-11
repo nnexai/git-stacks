@@ -2,53 +2,70 @@
 
 Status: NOT YET OBSERVED
 
-The widget inherits the supported Ghostty `font-family` and `font-size` subset described in `native-terminal-acceptance.md`; accessibility observations must be made using the resolved font reported by readiness evidence. Other Ghostty configuration remains unsupported.
+This D-16 contract describes the production Ghostty `GtkGLArea`, not the removed custom renderer. Automated inspection confirms only the GTK properties that the leaf actually exposes. Human GTK Inspector/AT-SPI/Orca evidence is required before stronger claims.
 
-This D-16 contract must describe only behavior observed on the exact pinned stack. Cell-level screen-reader output remains **unsupported/unverified** unless the attached inspection demonstrates otherwise. Misleading claims or broken core focus/input behavior fail acceptance.
+## Automated contract
 
-## Observation identity
+| Area | Verified production behavior |
+| --- | --- |
+| GTK accessible role | `GENERIC` (the actual `GtkGLArea` role; it is not presented as a text widget) |
+| Accessible name | `git-stacks Ghostty terminal` |
+| Description | `Focusable embedded terminal surface` |
+| Focus | GTK widget is focusable; focus events are forwarded to the matching Ghostty surface |
+| Keyboard and IME | GTK key controllers and `GtkIMContext` forward input/preedit/commit to the matching Ghostty surface |
+| Visible cursor/focus | Rendered by Ghostty and reserved for human visual observation |
+| Accessible actions | unsupported/unverified; the GL leaf declares none |
+| Cell text, caret, selection | unsupported/unverified; no `GtkAccessibleText` implementation is claimed |
+
+The absence of cell text/caret/selection semantics is an upstream embedded-surface limitation, not a passing screen-reader claim. Broken focus, keyboard, or IME behavior remains a git-stacks regression and fails acceptance.
+
+## Human observation identity
 
 - Observer:
 - Date:
 - Distro/session/compositor:
-- GTK/libadwaita versions:
+- GTK version:
 - Assistive technology and version:
-- Accessibility inspection tool and version:
+- GTK Inspector/AT-SPI inspection tool and version:
 - Locale and IME:
-- Ghostty peeled commit/build identifier:
+- Ghostty commit and patch digest:
+- Production artifact SHA-256:
 
 ## Inspection procedure
 
-1. Launch the exact production terminal with `bun run native:run` in the real graphical session recorded above.
-2. Inspect the GTK accessibility tree with Accerciser, GTK Inspector, or the named equivalent.
-3. Navigate into and away from the terminal using keyboard and assistive technology.
-4. Exercise IME preedit/commit, selection, both clipboard paths, and visible focus.
-5. Record exposed roles, labels, actions, state changes, spoken output, and gaps below.
+1. Launch the exact production artifact with `bun run native:run`.
+2. Inspect the focused leaf using GTK Inspector and an AT-SPI inspector.
+3. Navigate into and away from it using keyboard and Orca where available.
+4. Exercise typing, IME preedit/commit, selection, system clipboard, primary selection, and visible focus/cursor.
+5. Record only observed roles, labels, states, actions, events, and spoken output.
 
 ## Observed semantics
 
-Use `PASS`, `FAIL`, or `UNSUPPORTED/UNVERIFIED`; attach evidence for every claim.
+Use `PASS`, `FAIL`, or `UNSUPPORTED/UNVERIFIED` and attach evidence.
 
 | Contract area | Result | Exact observed semantics / artifact |
 | --- | --- | --- |
 | Focus enters, leaves, and is reported truthfully | | |
-| Labels, roles, states, and actions | | |
+| Generic role, name, description, and state | | |
 | Keyboard and IME remain functional with AT enabled | | |
-| Selection and clipboard operations | | |
-| Visible focus indication | | |
-| Cell-level screen-reader output | UNSUPPORTED/UNVERIFIED until observed | |
+| Selection and clipboard operations remain functional | | |
+| Visible focus and Ghostty cursor | | |
+| Accessible actions | UNSUPPORTED/UNVERIFIED until observed | |
+| Cell-level text, caret, and selection | UNSUPPORTED/UNVERIFIED | No `GtkAccessibleText` implementation is exposed |
+| Screen-reader terminal output | UNSUPPORTED/UNVERIFIED until observed | |
 
-## Known limitations
+## Upstream gaps and regressions
 
 - Upstream/native limitation observed:
 - User impact:
-- Workaround, if verified:
+- Verified workaround, if any:
 - Tracking reference:
+- Product regression observed (must be `none` to pass core input/focus):
 
-## Failure rules and sign-off
+## Sign-off
 
-- [ ] No claim exceeds the attached observation.
-- [ ] Core focus, keyboard, and IME behavior works; otherwise the run is FAIL.
-- [ ] Unsupported cell-level semantics are stated explicitly.
+- [ ] No claim exceeds attached inspection evidence.
+- [ ] Core focus, keyboard, and IME work with AT enabled.
+- [ ] Unsupported cell semantics are stated explicitly.
 - Overall result: [ ] PASS [ ] FAIL
 - Observer signature/reference:

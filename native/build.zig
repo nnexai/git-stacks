@@ -100,6 +100,20 @@ pub fn build(b: *std.Build) void {
     const stress_step = b.step("lifecycle-stress", "Validate production graphical stress diagnostics");
     stress_step.dependOn(&b.addRunArtifact(stress_tests).step);
 
+    const accessibility_test_module = b.createModule(.{ .root_source_file = b.path("tests/accessibility_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    accessibility_test_module.addImport("ghostty_surface", surface_module);
+    accessibility_test_module.addIncludePath(include_dir);
+    accessibility_test_module.addCSourceFile(.{ .file = .{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "src", "gl.c" }) }, .flags = &.{} });
+    accessibility_test_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "include" }) });
+    accessibility_test_module.addLibraryPath(library_dir);
+    accessibility_test_module.addRPath(library_dir);
+    const accessibility_tests = b.addTest(.{ .root_module = accessibility_test_module });
+    accessibility_tests.linkLibC();
+    accessibility_tests.linkSystemLibrary("ghostty");
+    accessibility_tests.linkSystemLibrary("gtk4");
+    const accessibility_step = b.step("accessibility-test", "Inspect the production GtkGLArea accessibility contract");
+    accessibility_step.dependOn(&b.addRunArtifact(accessibility_tests).step);
+
     const model = b.addLibrary(.{
         .name = "git_stacks_native_v1",
         .linkage = .static,

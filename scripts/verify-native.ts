@@ -99,7 +99,7 @@ async function verifyHeaderPortability(): Promise<void> {
 }
 
 function verifyNativeSourceBoundaries(): void {
-  const productionAllowlist = new Set(["native/terminal/vt_adapter.zig", "native/terminal/ghostty_process_control.zig", "native/linux/ghostty_runtime.zig", "native/linux/ghostty_surface.zig", "native/linux/ghostty_input.zig", "native/linux/ghostty_clipboard.zig", "native/tests/ghostty_interaction_test.zig", "native/build.zig"])
+  const productionAllowlist = new Set(["native/terminal/vt_adapter.zig", "native/terminal/ghostty_process_control.zig", "native/linux/app.zig", "native/linux/ghostty_runtime.zig", "native/linux/ghostty_surface.zig", "native/linux/ghostty_input.zig", "native/linux/ghostty_clipboard.zig", "native/tests/accessibility_test.zig", "native/tests/ghostty_surface_abi.zig", "native/tests/ghostty_surface_test.zig", "native/tests/ghostty_interaction_test.zig", "native/build.zig"])
   const upstreamPattern = /(?:@cInclude\(["<]ghostty\.h[">]\)|\bghostty_(?:surface|app|runtime|config|input|clipboard)\w*|\blibghostty\b)/i
   const platformPattern = /\b(?:Gtk|Gdk|Adw)[A-Z]\w*|@cInclude\(["<](?:gtk|adwaita)\//
   const violations: string[] = []
@@ -314,9 +314,9 @@ async function verifyQuick(): Promise<void> {
   verifyNativeSourceBoundaries()
   verifyAccessibilityContract()
   await verifyModel()
-  await verify("terminal-api-smoke")
-  await verify("terminal-host-test")
-  await verify("lifecycle-stress")
+  await verifyRestore()
+  await verifyLifecycle()
+  auditProductionGraph()
 }
 
 async function verifyRestore(): Promise<void> {
@@ -487,7 +487,12 @@ function verifyAccessibilityContract(): void {
     if (!source.includes("Observer:") || !source.includes("Date:")) throw new Error(`${path} lacks fillable evidence identity fields`)
   }
   const accessibility = readFileSync(accessibilityPath, "utf8")
-  for (const required of ["Focus", "Keyboard and IME", "Selection and clipboard", "Visible focus", "Cell-level screen-reader output"]) {
+  const acceptance = readFileSync(acceptancePath, "utf8")
+  for (const required of [lock.base_commit, lock.patch_sha256, "Ghostty-owned PTY", "Fish starts without terminal-query timeout", "Full-screen TUI uses the complete pane", "Two-surface isolation"]) {
+    if (!acceptance.includes(required)) throw new Error(`acceptance contract missing production evidence seam: ${required}`)
+  }
+  if (acceptance.includes("product-owned compatibility reader") || acceptance.includes("embeds pinned `ghostty-vt`")) throw new Error("acceptance contract still describes the superseded custom renderer")
+  for (const required of ["Focus", "Keyboard and IME", "Selection and clipboard", "Visible focus", "Cell-level text, caret, and selection", "GTK accessible role", "GENERIC"]) {
     if (!accessibility.includes(required)) throw new Error(`accessibility contract missing observation row: ${required}`)
   }
   if (!accessibility.includes("unsupported/unverified")) throw new Error("accessibility contract must explicitly permit truthful unsupported/unverified cell semantics")
@@ -495,15 +500,26 @@ function verifyAccessibilityContract(): void {
 
 async function verifyAccessibility(): Promise<void> {
   verifyAccessibilityContract()
-  await verify("accessibility-test")
+  await withGraphicalSession(() => verify("accessibility-test"))
   console.log("native accessibility evidence templates verified; human observations remain required")
 }
-async function verifyGhosttyConfig(): Promise<void> { await verify("config-test") }
 async function verifyAll(): Promise<void> {
-  await verifyQuick(); await verifyGhosttyConfig(); await verify("vt-test"); await verify("pty-test");
-  await verifyGraphical("renderer-test"); await verifyGraphical("widget-test");
-  await verify("input-test"); await verify("interaction-test"); await verify("runtime-test"); await verifyStress();
-  await verifyAccessibility(); await buildApp(); await smokeApp(); await smokeTerminal();
+  await buildGhostty()
+  verifyNativeSourceBoundaries()
+  auditProductionGraph()
+  await verifyModel()
+  await verifyRestore()
+  await verifyLifecycle()
+  await verify("surface-abi")
+  await verify("surface-test")
+  await verify("interaction-test")
+  await verifyStress()
+  await verifyAccessibility()
+  await withGraphicalSession(async () => {
+    await smokeApp()
+    await smokeTerminal()
+    await smokeMultisurface()
+  })
 }
 
 const mode = process.argv[2] ?? "verify"
@@ -530,7 +546,7 @@ else if (mode === "smoke-app") await smokeApp()
 else if (mode === "smoke-terminal") await smokeTerminal()
 else if (mode === "smoke-multisurface") await smokeMultisurface()
 else if (mode === "accessibility") await verifyAccessibility()
-else if (mode === "config") await verifyGhosttyConfig()
+else if (mode === "config") throw new Error("Ghostty configuration is verified through the production runtime; use native:verify")
 else if (mode === "quick") await verifyQuick()
 else if (mode === "verify") await verifyAll()
 else if (mode === "terminal-build") await verify()

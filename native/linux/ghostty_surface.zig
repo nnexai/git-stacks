@@ -18,6 +18,32 @@ pub fn liveSurfaceCount() usize { return live_surfaces; }
 pub fn liveAreaCount() usize { return live_areas; }
 pub fn liveGlContextCount() usize { return live_gl_contexts; }
 
+pub const AccessibilityContract = struct {
+    pub const name = "git-stacks Ghostty terminal";
+    pub const description = "Focusable embedded terminal surface";
+    pub const cell_text = false;
+    pub const caret = false;
+    pub const selection = false;
+    pub const actions = false;
+};
+
+pub const AccessibilitySnapshot = struct { role: c.GtkAccessibleRole, focusable: bool };
+
+pub fn configureAccessibility(area: *c.GtkGLArea) void {
+    c.gtk_widget_set_focusable(@ptrCast(area), 1);
+    c.gtk_accessible_update_property(@ptrCast(area),
+        c.GTK_ACCESSIBLE_PROPERTY_LABEL, AccessibilityContract.name,
+        c.GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, AccessibilityContract.description,
+        @as(c_int, -1));
+}
+
+pub fn inspectAccessibility(area: *c.GtkGLArea) AccessibilitySnapshot {
+    return .{
+        .role = c.gtk_accessible_get_accessible_role(@ptrCast(area)),
+        .focusable = c.gtk_widget_get_focusable(@ptrCast(area)) != 0,
+    };
+}
+
 pub const Surface = struct {
     runtime: *runtime_mod.Runtime,
     area: *c.GtkGLArea,
@@ -59,7 +85,7 @@ pub const Surface = struct {
         c.gtk_gl_area_set_has_depth_buffer(self.area, 1);
         c.gtk_gl_area_set_has_stencil_buffer(self.area, 1);
         c.gtk_gl_area_set_auto_render(self.area, 0);
-        c.gtk_widget_set_focusable(@ptrCast(self.area), 1);
+        configureAccessibility(self.area);
         _ = c.g_signal_connect_data(self.area, "realize", @ptrCast(&onRealize), self, null, 0);
         _ = c.g_signal_connect_data(self.area, "render", @ptrCast(&onRender), self, null, 0);
         _ = c.g_signal_connect_data(self.area, "resize", @ptrCast(&onResize), self, null, 0);

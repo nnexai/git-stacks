@@ -59,7 +59,6 @@
     "native:smoke-terminal": "bun run scripts/verify-native.ts smoke-terminal",
     "native:smoke-multisurface": "bun run scripts/verify-native.ts smoke-multisurface",
     "native:test:accessibility": "bun run scripts/verify-native.ts accessibility",
-    "native:test:config": "bun run scripts/verify-native.ts config",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run typecheck && bun run test"

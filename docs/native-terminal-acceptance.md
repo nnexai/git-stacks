@@ -1,76 +1,99 @@
-# Native Terminal Acceptance Evidence
+# Native Full-Ghostty Terminal Acceptance Evidence
 
 Status: NOT YET OBSERVED
 
-This template records the required D-13/D-14 real-session evidence. An unchecked row is not a pass.
+This matrix is for the exact production `GtkGLArea`-hosted `ghostty_surface_t`. Automated results are prerequisites, not substitutes for the D-13/D-14/D-23 human observations below. An empty row is not a pass.
 
-## Configuration boundary
+## Automated artifact identity
 
-This application embeds pinned `ghostty-vt`, not GhosttyKit/full libghostty. A product-owned compatibility reader inherits the regular `font-family` fallback list and `font-size` from `$XDG_CONFIG_HOME/ghostty/config` followed by `config.ghostty` (the newer file overrides later; `$HOME/.config` when XDG is unset). It follows Ghostty's whitespace, comment, quoting, repeat, and empty-reset semantics for those keys. `config-file` includes and all other Ghostty keys—including themes, shaders, adjustments, keybindings, and dynamic reload—remain unsupported. Invalid values fall back safely and are counted without logging configuration contents. This is intentionally not full Ghostty configuration parity.
+- Architecture: host-owned GTK pane layout; Ghostty-owned PTY, renderer, fonts, configuration, input protocol, and terminal state
+- Ghostty base commit: `81ab8ffa90185221782baf785e85387321e16f8d`
+- Repository patch digest: `581a77479ec62fc55d7e6822766a6a68db4e9a5d3655388f95b08aac84ff055b`
+- Zig: `0.15.2`
+- Lock source: `native/deps/ghostty.lock`
+- Production source: `native/linux/app.zig` → `ghostty_runtime.zig` → `ghostty_surface.zig`
+- Automated gate: `bun run native:verify`
+- Ordinary stress: 25 alternating single/two-surface production processes
+- Extended stress: `GIT_STACKS_NATIVE_EXTENDED_STRESS=1 bun run native:test:stress` (250 cycles)
 
-## Observation identity
+The 25-cycle lane is the bounded ordinary `native:verify` gate. The 250-cycle lane is deliberately opt-in for Ghostty dependency upgrades, release qualification, and focused leak investigations; it is not part of the inner development loop.
+
+Ghostty loads its normal default and recursive configuration files through `ghostty_config_load_default_files`, `ghostty_config_load_recursive_files`, `ghostty_config_load_cli_args`, and `ghostty_config_finalize`. Git-stacks does not parse or reinterpret font, cursor, palette, theme, include, keybinding, or shell-integration settings.
+
+## Human observation identity
 
 - Observer:
 - Date:
 - Distro and version:
-- Session protocol: [ ] Wayland [ ] X11 [ ] Unsupported (explain):
+- Session protocol: [ ] Wayland [ ] X11
 - Desktop/compositor and version:
-- GTK/libadwaita versions:
-- Zig version:
-- Ghostty peeled commit:
-- GPU and driver:
+- GTK version:
+- GPU, renderer, and driver:
 - Locale:
 - IME framework and input method:
-- Command/build identifier:
+- Standalone Ghostty command/version:
+- Production artifact SHA-256:
+- `native/deps/ghostty.lock` SHA-256:
+- Effective Ghostty configuration paths/includes:
 - Launch command: `bun run native:run`
-- Resolved font family / size from readiness evidence:
-- Actual Pango family / cell width / cell height / baseline from readiness evidence:
 
-## Interaction matrix
+## Standalone Ghostty fidelity
 
-Fill every row with `PASS`, `FAIL`, or `UNSUPPORTED`, then attach concise observations and artifact references.
+Use the same shell, working directory, environment, and Ghostty configuration on both sides.
 
 | Check | Result | Observation / artifact |
 | --- | --- | --- |
-| Plain keys, modifiers, shortcuts, and rich keyboard protocol | | |
-| Mouse selection and mouse-reporting application | | |
-| Unicode, combining marks, emoji, and grapheme clusters | | |
-| Resize and reflow while output is visible | | |
-| Alternate-screen application enter/exit | | |
+| Font family, fallback, size, weight, shaping, and glyph clarity match | | |
+| Cursor shape, color, visibility, and blink match | | |
+| Palette, foreground/background, bold/dim, and theme match | | |
+| Config includes, keybindings, and shell integration take effect | | |
+| Fish starts without terminal-query timeout | | |
+| Fish autosuggestions remain visually distinguishable | | |
+
+## D-23 interaction matrix
+
+Fill every row with `PASS`, `FAIL`, or `UNSUPPORTED`, plus concise evidence.
+
+| Check | Result | Observation / artifact |
+| --- | --- | --- |
+| Plain typing and key release | | |
+| Ctrl/Alt/Super, function, navigation, and rich keyboard protocol | | |
+| Unicode, combining marks, emoji, grapheme clusters, and complex scripts | | |
+| Mouse selection and application mouse reporting | | |
+| Smooth/discrete scrolling and scrollback | | |
 | System clipboard copy and paste | | |
 | Primary selection copy and paste | | |
-| IME preedit, commit, and cursor placement | | |
-| Window and terminal focus in/out | | |
+| IME preedit, commit, cancellation, and cursor placement | | |
+| Focus in/out and visible focus/cursor | | |
+| Resize/reflow with nonzero full-pane geometry | | |
+| Alternate screen enter/exit | | |
+| Full-screen TUI uses the complete pane | | |
+| Terminal queries receive valid responses | | |
 | Natural child exit | | |
-| Graceful close and meaningful-activity confirmation | | |
-| Forced close after bounded graceful period | | |
-| Application quit cleanup | | |
-| Simulated client-crash guard cleanup | | |
+| Close request with meaningful activity | | |
+| Ordinary close and application quit | | |
+| Abrupt host/crash guard cleanup | | |
 
-## Ownership and cleanup evidence
+## Two-surface isolation
 
-- Commands/process tree used:
-- Surface, child, and PGID counts after each teardown:
-- Absence proof method:
-- Any `failed_cleanup` observed (must not be hidden):
-- Diagnostic artifact references (do not attach terminal/clipboard secrets):
+| Check | Result | Observation / artifact |
+| --- | --- | --- |
+| Both leaves render nonzero independent grids | | |
+| Focus and typing stay in the selected leaf | | |
+| Selection and both clipboards do not crosstalk | | |
+| Independent resize/reflow and TUI state | | |
+| Close left then right leaves no child | | |
+| Close right then left leaves no child | | |
 
-## Real-GPU lifecycle: 25 cycles
+## Automated lifecycle evidence
 
-- Cycle range/date:
-- Per-cycle create/resize/draw/destroy result artifact:
-- Final live surfaces / children / PGIDs (all must be zero):
-- FD baseline/final:
-- Thread baseline/final:
-- RSS warm median/final median:
-- GPU or compositor warnings:
-
-## Automated stress evidence
-
-- `bun run native:verify` result/artifact:
-- 100-cycle result:
-- Optional 500-cycle command: `GIT_STACKS_NATIVE_EXTENDED_STRESS=1 bun run native:verify`
-- Optional 500-cycle result/artifact:
+- Ordinary JSON diagnostic:
+- Extended JSON diagnostic:
+- Final live surfaces/callbacks/clipboard/GL areas/GL contexts/children (all zero):
+- RSS median/range/slope:
+- FD range:
+- Thread range:
+- GPU/compositor warnings:
 
 ## Sign-off
 
