@@ -12,6 +12,18 @@ Assistive technology:
 
 Automated model/action tests do not fill this blocking Phase 106 graphical checkpoint.
 
+## Automated preflight (implementation checkpoint)
+
+- [x] Every registered `win.*` action has a production callback branch; the contract test rejects a missing branch.
+- [x] Shell shortcut/action and empty-tab-bar double-click share `createTerminal`.
+- [x] Configured-command activation passes the selected stable command id through authoritative `/v1/native-launch` resolution.
+- [x] Close tears down the registered terminal host; ended-tab relaunch resolves and registers a distinct host before publishing predecessor lineage.
+- [x] Rename uses an editable production dialog; tab and workspace contextual menus expose lifecycle-valid actions.
+- [x] Pin/unpin and pin drag ordering write the private native presentation file atomically and restore after snapshot discovery.
+- [x] Attention replay remains projection-only; only explicit attention activation applies its exact/fallback focus route.
+
+Last focused preflight: `bun run native:test:application-actions && bun run native:test:workspace-ui && bun run native:test:tabs` — PASS. `bun run native:build-app` — PASS. These results do not replace the observations below.
+
 | Requirement and observation | Wayland | X11 | Evidence / failure |
 |---|---|---|---|
 | LNX-01 adaptive workspace-first navigation and single-repository collapse | PENDING | PENDING | |

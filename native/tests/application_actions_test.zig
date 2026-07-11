@@ -17,6 +17,7 @@ fn cmd(i: u8, name: []const u8, repo: ?model.Id) model.Command {
 }
 test "all activation sources converge on scoped action names and readiness" {
     _ = production_contract;
+    try production_contract.verifyCallbacks();
     try std.testing.expect(app.actions.len >= 14);
     var stale: model.State = .{ .connection = .stale };
     for (app.actions) |a| if (a.requires_ready) try std.testing.expect(!app.enabled(&stale, a));

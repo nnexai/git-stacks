@@ -39,3 +39,27 @@ test "production GTK shell registers widgets actions callbacks and non-presentin
     const replay_worker = std.mem.indexOfPos(u8, source, replay_refresh, "fn replayWorker").?;
     try std.testing.expect(std.mem.indexOf(u8, source[replay_refresh..replay_worker], "gtk_window_present") == null);
 }
+
+pub fn verifyCallbacks() !void {
+    const source = @embedFile("app.zig");
+    const actions = @import("application").actions;
+    for (actions) |spec| {
+        const bare = spec.name[4..];
+        var branch: [80]u8 = undefined;
+        const needle = try std.fmt.bufPrint(&branch, "name, \"{s}\"", .{bare});
+        try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
+    }
+    const required = [_][]const u8{
+        "createTerminal(state, command.id",
+        "state.graph.terminals.close(id)",
+        "publishRelaunch(old_id, surface.surface_id)",
+        "promptRename(state, id)",
+        "launchVscode(state)",
+        "savePresentation(state)",
+        "pinDropped",
+        "repositoryMenuPressed",
+        "tabBarPressed",
+    };
+    for (required) |needle| try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
+}
+test "every registered production action reaches a concrete callback path" { try verifyCallbacks(); }

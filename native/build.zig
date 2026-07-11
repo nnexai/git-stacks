@@ -219,7 +219,9 @@ pub fn build(b: *std.Build) void {
     aa_test.addImport("application", aa_app);
     aa_test.addImport("command_launcher", aa_launcher);
     aa_test.addImport("attention_view", aa_attention);
-    aa_test.addImport("production_app_contract", b.createModule(.{ .root_source_file = b.path("linux/app_contract_test.zig") }));
+    const production_contract = b.createModule(.{ .root_source_file = b.path("linux/app_contract_test.zig") });
+    production_contract.addImport("application", aa_app);
+    aa_test.addImport("production_app_contract", production_contract);
     const application_actions_step = b.step("application-actions-test", "Run scoped application command and attention action tests");
     application_actions_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = aa_test })).step);
 

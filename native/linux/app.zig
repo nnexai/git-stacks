@@ -46,6 +46,83 @@ const State = struct {
 };
 var active: ?*State = null;
 
+fn presentationPath(buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
+    if (std.posix.getenv("GIT_STACKS_CONFIG_DIR")) |root|
+        return std.fmt.bufPrint(buffer, "{s}/native-presentation.json", .{root}) catch return null;
+    const home = std.posix.getenv("HOME") orelse return null;
+    return std.fmt.bufPrint(buffer, "{s}/.config/git-stacks/native-presentation.json", .{home}) catch return null;
+}
+fn executableAvailable(name: []const u8) bool {
+    const path = std.posix.getenv("PATH") orelse return false;
+    var entries = std.mem.splitScalar(u8, path, ':');
+    var buffer: [std.fs.max_path_bytes]u8 = undefined;
+    while (entries.next()) |directory| {
+        const candidate = std.fmt.bufPrint(&buffer, "{s}/{s}", .{ directory, name }) catch continue;
+        std.posix.access(candidate, std.posix.X_OK) catch continue;
+        return true;
+    }
+    return false;
+}
+
+fn savePresentation(state: *State) void {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = presentationPath(&path_buffer) orelse return;
+    const directory = std.fs.path.dirname(path) orelse return;
+    std.fs.cwd().makePath(directory) catch return;
+    var bytes: std.ArrayList(u8) = .empty;
+    defer bytes.deinit(state.graph.allocator);
+    const writer = bytes.writer(state.graph.allocator);
+    writer.writeAll("{\"protocol\":\"v1\",\"pins\":[") catch return;
+    for (state.graph.state.pins[0..state.graph.state.pin_count], 0..) |pin, index| {
+        if (index != 0) writer.writeByte(',') catch return;
+        writer.print("\"{s}\"", .{pin}) catch return;
+    }
+    writer.writeAll("],\"last_pair\":") catch return;
+    if (state.graph.state.last_pair) |pair| writer.print("{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\"}}", .{ pair.workspace_id, pair.repository_id }) catch return else writer.writeAll("null") catch return;
+    writer.writeByte('}') catch return;
+    var tmp_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp = std.fmt.bufPrint(&tmp_buffer, "{s}.tmp", .{path}) catch return;
+    const file = std.fs.createFileAbsolute(tmp, .{ .truncate = true, .mode = 0o600 }) catch return;
+    file.writeAll(bytes.items) catch { file.close(); return; };
+    file.sync() catch { file.close(); return; };
+    file.close();
+    std.fs.renameAbsolute(tmp, path) catch {};
+}
+
+fn restorePresentation(state: *State) void {
+    var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
+    const path = presentationPath(&path_buffer) orelse return;
+    const file = std.fs.openFileAbsolute(path, .{}) catch return;
+    defer file.close();
+    const bytes = file.readToEndAlloc(state.graph.allocator, 64 * 1024) catch return;
+    defer state.graph.allocator.free(bytes);
+    const parsed = std.json.parseFromSlice(std.json.Value, state.graph.allocator, bytes, .{}) catch return;
+    defer parsed.deinit();
+    if (parsed.value != .object) return;
+    const pins = parsed.value.object.get("pins") orelse return;
+    if (pins != .array) return;
+    state.graph.state.pin_count = 0;
+    var view = workspace_view.View{ .state = &state.graph.state };
+    for (pins.array.items) |pin| if (pin == .string and pin.string.len == 36) {
+        var id: model.Id = undefined;
+        @memcpy(&id, pin.string);
+        view.pin(id) catch {};
+    };
+    if (parsed.value.object.get("last_pair")) |value| if (value == .object) {
+        const ws = value.object.get("workspace_id") orelse return;
+        const repo = value.object.get("repository_id") orelse return;
+        if (ws == .string and repo == .string and ws.string.len == 36 and repo.string.len == 36) {
+            var pair: model.PairKey = undefined;
+            @memcpy(&pair.workspace_id, ws.string);
+            @memcpy(&pair.repository_id, repo.string);
+            if (model.pairValid(&state.graph.state, pair)) {
+                state.graph.state.last_pair = pair;
+                state.graph.state.selected_pair = pair;
+            }
+        }
+    };
+}
+
 fn appendQuoted(buffer: []u8, offset: *usize, value: []const u8) !void {
     if (offset.* != 0) {
         if (offset.* >= buffer.len) return error.CommandTooLong;
@@ -70,8 +147,8 @@ fn appendQuoted(buffer: []u8, offset: *usize, value: []const u8) !void {
     offset.* += 1;
 }
 
-fn resolvedLaunchSpec(state: *State, pair: model.PairKey) !surface_mod.LaunchSpec {
-    const launch = try state.graph.resolveLaunch(pair, null);
+fn launchSpec(state: *State, pair: model.PairKey, command_id: ?[]const u8) !surface_mod.LaunchSpec {
+    const launch = try state.graph.resolveLaunch(pair, command_id);
     var spec: surface_mod.LaunchSpec = .{ .surface_id = undefined, .workspace_id = pair.workspace_id, .repository_id = pair.repository_id, .revision = launch.revision };
     _ = try std.fmt.bufPrint(&spec.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{state.runtime.allocateSurfaceNumber()});
     @memcpy(spec.cwd[0..launch.cwd_len], launch.cwdSlice());
@@ -121,6 +198,10 @@ fn resolvedLaunchSpec(state: *State, pair: model.PairKey) !surface_mod.LaunchSpe
         spec.environment_count += 1;
     }
     return spec;
+}
+
+fn resolvedLaunchSpec(state: *State, pair: model.PairKey) !surface_mod.LaunchSpec {
+    return launchSpec(state, pair, null);
 }
 
 fn cleanup(state: *State) void {
@@ -326,6 +407,19 @@ fn refreshLauncher(state: *State) void {
 }
 
 fn refreshProjection(state: *State) void {
+    if (state.action_group) |group| for (application.actions) |spec| {
+        const bare = spec.name[4..];
+        var name: [64:0]u8 = [_:0]u8{0} ** 64;
+        const z = std.fmt.bufPrintZ(&name, "{s}", .{bare}) catch continue;
+        const action = c.g_action_map_lookup_action(@ptrCast(group), z.ptr) orelse continue;
+        var enabled = application.enabled(&state.graph.state, spec);
+        const selected = state.graph.state.surface;
+        if (std.mem.eql(u8, bare, "close-tab")) enabled = enabled and selected != null and selected.?.lifecycle == .live;
+        if (std.mem.eql(u8, bare, "rename-tab")) enabled = enabled and selected != null;
+        if (std.mem.eql(u8, bare, "open-vscode")) enabled = enabled and executableAvailable("code");
+        if (std.mem.eql(u8, bare, "next-tab") or std.mem.eql(u8, bare, "previous-tab") or std.mem.eql(u8, bare, "reorder-tab")) enabled = enabled and (workspace_view.View{ .state = &state.graph.state }).pair() != null;
+        c.g_simple_action_set_enabled(@ptrCast(action), @intFromBool(enabled));
+    };
     if (state.connection_label) |label| {
         const text = switch (application.page(&state.graph.state)) {
             .loading => "Loading authoritative workspaces…",
@@ -359,7 +453,31 @@ fn refreshProjection(state: *State) void {
             c.gtk_label_set_xalign(@ptrCast(header), 0);
             c.gtk_widget_add_css_class(header, if (pinned) "heading" else "dim-label");
             setAccessible(header, c.GTK_ACCESSIBLE_ROLE_HEADING, title.ptr, "Workspace identity and pin state");
-            c.gtk_list_box_append(list, header);
+            const heading_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
+            c.gtk_widget_set_hexpand(header, 1);
+            c.gtk_box_append(@ptrCast(heading_box), header);
+            const workspace_menu = c.gtk_menu_button_new() orelse continue;
+            c.gtk_menu_button_set_icon_name(@ptrCast(workspace_menu), "view-more-symbolic");
+            const workspace_actions = c.g_menu_new() orelse continue;
+            var detailed_buffer: [96:0]u8 = [_:0]u8{0} ** 96;
+            const detailed = std.fmt.bufPrintZ(&detailed_buffer, "win.{s}-workspace('{s}')", .{ if (pinned) "unpin" else "pin", ws.id }) catch continue;
+            c.g_menu_append(workspace_actions, if (pinned) "Unpin workspace" else "Pin workspace", detailed.ptr);
+            c.gtk_menu_button_set_menu_model(@ptrCast(workspace_menu), @ptrCast(@alignCast(workspace_actions)));
+            c.g_object_unref(workspace_actions);
+            c.gtk_box_append(@ptrCast(heading_box), workspace_menu);
+            const workspace_id = std.heap.c_allocator.create(model.Id) catch continue;
+            workspace_id.* = ws.id;
+            c.g_object_set_data_full(@ptrCast(heading_box), "git-stacks-workspace", workspace_id, @ptrCast(&freeId));
+            if (pinned) {
+                const drag = c.gtk_drag_source_new() orelse continue;
+                c.gtk_drag_source_set_actions(drag, c.GDK_ACTION_MOVE);
+                _ = c.g_signal_connect_data(drag, "prepare", @ptrCast(&pinDragPrepare), state, null, 0);
+                c.gtk_widget_add_controller(heading_box, @ptrCast(drag));
+                const drop = c.gtk_drop_target_new(c.g_type_from_name("gchararray"), c.GDK_ACTION_MOVE) orelse continue;
+                _ = c.g_signal_connect_data(drop, "drop", @ptrCast(&pinDropped), state, null, 0);
+                c.gtk_widget_add_controller(heading_box, @ptrCast(drop));
+            }
+            c.gtk_list_box_append(list, heading_box);
             for (ws.repository_ids[0..ws.repository_count]) |repository_id| {
                 var row_text: [128:0]u8 = [_:0]u8{0} ** 128;
                 const selected = if (state.graph.state.selected_pair) |pair| model.PairKey.eql(pair, .{ .workspace_id = ws.id, .repository_id = repository_id }) else false;
@@ -367,10 +485,28 @@ fn refreshProjection(state: *State) void {
                 const row = c.gtk_list_box_row_new() orelse continue;
                 const label = c.gtk_label_new(rendered.ptr) orelse continue;
                 c.gtk_label_set_xalign(@ptrCast(label), 0);
+                c.gtk_widget_set_hexpand(label, 1);
                 setAccessible(label, c.GTK_ACCESSIBLE_ROLE_LABEL, rendered.ptr, "Repository; activate to show its persistent terminal tabs");
                 c.g_object_set_data_full(@ptrCast(row), "git-stacks-pair", std.heap.c_allocator.create(model.PairKey) catch continue, @ptrCast(&freePair));
                 (@as(*model.PairKey, @ptrCast(@alignCast(c.g_object_get_data(@ptrCast(row), "git-stacks-pair"))))).* = .{ .workspace_id = ws.id, .repository_id = repository_id };
-                c.gtk_list_box_row_set_child(@ptrCast(row), label);
+                const row_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
+                c.gtk_box_append(@ptrCast(row_box), label);
+                const repository_menu = c.gtk_menu_button_new() orelse continue;
+                c.gtk_menu_button_set_icon_name(@ptrCast(repository_menu), "view-more-symbolic");
+                const repository_actions = c.g_menu_new() orelse continue;
+                c.g_menu_append(repository_actions, "New shell", "win.new-shell");
+                c.g_menu_append(repository_actions, "Configured commands…", "win.launch-command");
+                c.g_menu_append(repository_actions, "Open in VS Code", "win.open-vscode");
+                c.gtk_menu_button_set_menu_model(@ptrCast(repository_menu), @ptrCast(@alignCast(repository_actions)));
+                c.g_object_unref(repository_actions);
+                const repository_pair = std.heap.c_allocator.create(model.PairKey) catch continue;
+                repository_pair.* = .{ .workspace_id = ws.id, .repository_id = repository_id };
+                c.g_object_set_data_full(@ptrCast(repository_menu), "git-stacks-pair", repository_pair, @ptrCast(&freePair));
+                const menu_click = c.gtk_gesture_click_new() orelse continue;
+                _ = c.g_signal_connect_data(menu_click, "pressed", @ptrCast(&repositoryMenuPressed), state, null, 0);
+                c.gtk_widget_add_controller(repository_menu, @ptrCast(menu_click));
+                c.gtk_box_append(@ptrCast(row_box), repository_menu);
+                c.gtk_list_box_row_set_child(@ptrCast(row), row_box);
                 c.gtk_list_box_append(list, row);
             }
         }
@@ -397,6 +533,24 @@ fn refreshProjection(state: *State) void {
                 c.gtk_widget_add_controller(button, @ptrCast(drop));
                 _ = c.g_signal_connect_data(button, "clicked", @ptrCast(&tabClicked), state, null, 0);
                 c.gtk_box_append(bar, button);
+                const tab_menu = c.gtk_menu_button_new() orelse continue;
+                c.gtk_menu_button_set_icon_name(@ptrCast(tab_menu), "view-more-symbolic");
+                const menu = c.g_menu_new() orelse continue;
+                var rename_action: [96:0]u8 = [_:0]u8{0} ** 96;
+                const rename = std.fmt.bufPrintZ(&rename_action, "win.rename-tab('{s}')", .{surface.id}) catch continue;
+                c.g_menu_append(menu, "Rename…", rename.ptr);
+                if (surface.lifecycle == .ended) {
+                    var relaunch_action: [96:0]u8 = [_:0]u8{0} ** 96;
+                    const relaunch = std.fmt.bufPrintZ(&relaunch_action, "win.relaunch-tab('{s}')", .{surface.id}) catch continue;
+                    c.g_menu_append(menu, "Relaunch", relaunch.ptr);
+                } else c.g_menu_append(menu, "Close", "win.close-tab");
+                c.gtk_menu_button_set_menu_model(@ptrCast(tab_menu), @ptrCast(@alignCast(menu)));
+                c.g_object_unref(menu);
+                const menu_id = std.heap.c_allocator.create(model.Id) catch continue;
+                menu_id.* = surface.id;
+                c.g_object_set_data_full(@ptrCast(tab_menu), "git-stacks-surface", menu_id, @ptrCast(&freeId));
+                _ = c.g_signal_connect_data(tab_menu, "clicked", @ptrCast(&tabClicked), state, null, 0);
+                c.gtk_box_append(bar, tab_menu);
             }
         }
     }
@@ -451,12 +605,45 @@ fn tabDropped(target: ?*c.GtkDropTarget, value: ?*const c.GValue, _: f64, _: f64
     refreshProjection(state);
     return 1;
 }
+fn pinDragPrepare(source: ?*c.GtkDragSource, _: f64, _: f64, _: ?*anyopaque) callconv(.c) ?*c.GdkContentProvider {
+    const widget = c.gtk_event_controller_get_widget(@ptrCast(source orelse return null)) orelse return null;
+    const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-workspace") orelse return null;
+    const id: *model.Id = @ptrCast(@alignCast(ptr));
+    var text: [37:0]u8 = [_:0]u8{0} ** 37;
+    @memcpy(text[0..36], id);
+    return c.gdk_content_provider_new_typed(c.g_type_from_name("gchararray"), text[0..36 :0].ptr);
+}
+fn pinDropped(target: ?*c.GtkDropTarget, value: ?*const c.GValue, _: f64, _: f64, data: ?*anyopaque) callconv(.c) c.gboolean {
+    const state: *State = @ptrCast(@alignCast(data orelse return 0));
+    const widget = c.gtk_event_controller_get_widget(@ptrCast(target orelse return 0)) orelse return 0;
+    const target_ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-workspace") orelse return 0;
+    const source = std.mem.span(c.g_value_get_string(value orelse return 0) orelse return 0);
+    if (source.len != 36) return 0;
+    var source_id: model.Id = undefined;
+    @memcpy(&source_id, source);
+    const target_id: *model.Id = @ptrCast(@alignCast(target_ptr));
+    var index: ?usize = null;
+    for (state.graph.state.pins[0..state.graph.state.pin_count], 0..) |pin, i| if (std.mem.eql(u8, &pin, target_id)) { index = i; break; };
+    (workspace_view.View{ .state = &state.graph.state }).reorderPin(source_id, index orelse return 0) catch return 0;
+    savePresentation(state);
+    refreshProjection(state);
+    return 1;
+}
+fn repositoryMenuPressed(gesture: ?*c.GtkGestureClick, _: c_int, _: f64, _: f64, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const widget = c.gtk_event_controller_get_widget(@ptrCast(gesture orelse return)) orelse return;
+    const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-pair") orelse return;
+    const pair: *model.PairKey = @ptrCast(@alignCast(ptr));
+    _ = (workspace_view.View{ .state = &state.graph.state }).select(pair.*);
+}
 fn workspaceActivated(_: ?*c.GtkListBox, row: ?*c.GtkListBoxRow, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
     const r = row orelse return;
     const ptr = c.g_object_get_data(@ptrCast(r), "git-stacks-pair") orelse return;
     const pair: *model.PairKey = @ptrCast(@alignCast(ptr));
     state.graph.state = @import("reducer").reduce(state.graph.state, .{ .navigate_pair = pair.* }).state;
+    state.graph.state.last_pair = pair.*;
+    savePresentation(state);
     refreshProjection(state);
 }
 fn tabClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
@@ -469,34 +656,78 @@ fn tabClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
     if (state.terminal_stack) |stack| c.gtk_stack_set_visible_child_name(stack, idText(sid.*, &name).ptr);
     refreshProjection(state);
 }
+const RenameContext = struct { state: *State, id: model.Id, entry: *c.GtkEntry };
+fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) callconv(.c) void {
+    const context: *RenameContext = @ptrCast(@alignCast(data orelse return));
+    defer std.heap.c_allocator.destroy(context);
+    if (response == c.GTK_RESPONSE_ACCEPT) {
+        const title = std.mem.span(c.gtk_editable_get_text(@ptrCast(context.entry)));
+        (workspace_view.View{ .state = &context.state.graph.state }).renameTab(context.id, title) catch {};
+        refreshProjection(context.state);
+    }
+    c.gtk_window_destroy(@ptrCast(dialog orelse return));
+}
+fn promptRename(state: *State, id: model.Id) void {
+    const dialog = c.gtk_dialog_new_with_buttons("Rename terminal tab", state.window, c.GTK_DIALOG_MODAL, "Cancel", c.GTK_RESPONSE_CANCEL, "Rename", c.GTK_RESPONSE_ACCEPT, @as(?*anyopaque, null)) orelse return;
+    const entry = c.gtk_entry_new() orelse { c.gtk_window_destroy(@ptrCast(dialog)); return; };
+    const loc = model.surfaceLocation(&state.graph.state, id) orelse { c.gtk_window_destroy(@ptrCast(dialog)); return; };
+    const surface = state.graph.state.pairs[loc.pair].surfaces[loc.surface];
+    if (surface.title_len > 0) {
+        var title: [129:0]u8 = [_:0]u8{0} ** 129;
+        @memcpy(title[0..surface.title_len], surface.title[0..surface.title_len]);
+        c.gtk_editable_set_text(@ptrCast(entry), title[0..surface.title_len :0].ptr);
+    }
+    c.gtk_box_append(@ptrCast(c.gtk_dialog_get_content_area(@ptrCast(dialog))), entry);
+    const context = std.heap.c_allocator.create(RenameContext) catch { c.gtk_window_destroy(@ptrCast(dialog)); return; };
+    context.* = .{ .state = state, .id = id, .entry = @ptrCast(entry) };
+    _ = c.g_signal_connect_data(dialog, "response", @ptrCast(&renameResponse), context, null, 0);
+    c.gtk_window_present(@ptrCast(dialog));
+}
+fn tabBarPressed(_: ?*c.GtkGestureClick, presses: c_int, _: f64, _: f64, data: ?*anyopaque) callconv(.c) void {
+    if (presses == 2) createShell(@ptrCast(@alignCast(data orelse return)));
+}
 
-fn createShell(state: *State) void {
-    if (state.graph.state.connection != .ready) return;
-    const pair = state.graph.state.selected_pair orelse return;
-    if (state.terminal_count >= state.terminals.len) return;
-    const spec = resolvedLaunchSpec(state, pair) catch |err| {
+fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id) ?model.Id {
+    if (state.graph.state.connection != .ready) return null;
+    const pair = state.graph.state.selected_pair orelse return null;
+    if (state.terminal_count >= state.terminals.len) return null;
+    const spec = launchSpec(state, pair, command_id) catch |err| {
         showLauncherError(state, @errorName(err));
-        return;
+        return null;
     };
     const surface = surface_mod.Surface.createWithLaunch(state.runtime, &state.registry, spec) catch |err| {
         showLauncherError(state, @errorName(err));
-        return;
+        return null;
     };
     state.terminals[state.terminal_count] = surface;
     state.terminal_count += 1;
     const identity = surface.ownershipIdentity() orelse {
         surface.destroy();
         state.terminal_count -= 1;
-        return;
+        return null;
     };
-    const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = surface.generation, .child_pid = identity.pid, .pgid = identity.pgid, .birth_token = identity.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
+    const generation = if (predecessor) |old_id| blk: {
+        const old = model.surfaceLocation(&state.graph.state, old_id) orelse return null;
+        break :blk state.graph.state.pairs[old.pair].surfaces[old.surface].generation +% 1;
+    } else surface.generation;
+    const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = generation, .child_pid = identity.pid, .pgid = identity.pgid, .birth_token = identity.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
     tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| {
         surface.destroy();
         state.terminals[state.terminal_count - 1] = null;
         state.terminal_count -= 1;
         showLauncherError(state, @errorName(err));
-        return;
+        return null;
     };
+    if (predecessor) |old_id| {
+        const loc = model.surfaceLocation(&state.graph.state, surface.surface_id) orelse return null;
+        state.graph.state.pairs[loc.pair].surface_count -= 1;
+        (workspace_view.View{ .state = &state.graph.state }).publishRelaunch(old_id, surface.surface_id) catch {
+            state.graph.terminals.close(surface.surface_id) catch {};
+            state.terminals[state.terminal_count - 1] = null;
+            state.terminal_count -= 1;
+            return null;
+        };
+    }
     if (state.terminal_stack) |stack| {
         var name: [37]u8 = undefined;
         _ = c.gtk_stack_add_named(stack, @ptrCast(@alignCast(surface.widget())), idText(surface.surface_id, &name).ptr);
@@ -504,7 +735,9 @@ fn createShell(state: *State) void {
     }
     refreshProjection(state);
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
+    return surface.surface_id;
 }
+fn createShell(state: *State) void { _ = createTerminal(state, null, null); }
 fn showLauncherError(state: *State, message: []const u8) void {
     if (state.launcher_model) |*launcher| launcher.fail(message);
     if (state.launcher_error) |label| {
@@ -540,16 +773,69 @@ fn launcherActivated(_: ?*c.GtkListBox, row: ?*c.GtkListBoxRow, data: ?*anyopaqu
     const index = @intFromPtr(raw) - 1;
     if (index >= state.graph.state.command_count) return;
     const command = state.graph.state.commands[index];
-    const pair = state.graph.state.selected_pair orelse return;
-    const launch = state.graph.resolveLaunch(pair, command.id[0..command.id_len]) catch |err| {
-        showLauncherError(state, @errorName(err));
-        return;
-    };
-    _ = launch;
+    if (createTerminal(state, command.id[0..command.id_len], null) == null) return;
     state.launcher_model.?.record(command.id[0..command.id_len]);
     if (state.launcher_error) |label| c.gtk_widget_set_visible(@ptrCast(@alignCast(label)), 0);
     if (state.launcher) |popover| c.gtk_popover_popdown(popover);
-    createShell(state);
+}
+
+fn variantString(parameter: ?*c.GVariant) ?[]const u8 {
+    return if (parameter) |p| std.mem.span(c.g_variant_get_string(p, null)) else null;
+}
+fn variantId(parameter: ?*c.GVariant) ?model.Id {
+    const value = variantString(parameter) orelse return null;
+    if (value.len != 36) return null;
+    var result: model.Id = undefined;
+    @memcpy(&result, value);
+    return result;
+}
+fn orderedId(parameter: ?*c.GVariant) ?struct { id: model.Id, index: usize } {
+    const value = variantString(parameter) orelse return null;
+    if (value.len < 38 or value[36] != ':') return null;
+    var id: model.Id = undefined;
+    @memcpy(&id, value[0..36]);
+    return .{ .id = id, .index = std.fmt.parseInt(usize, value[37..], 10) catch return null };
+}
+fn forgetTerminal(state: *State, id: model.Id) void {
+    for (state.terminals[0..state.terminal_count], 0..) |candidate, index| if (candidate) |surface| {
+        if (!std.mem.eql(u8, &surface.surface_id, &id)) continue;
+        var i = index;
+        while (i + 1 < state.terminal_count) : (i += 1) state.terminals[i] = state.terminals[i + 1];
+        state.terminal_count -= 1;
+        state.terminals[state.terminal_count] = null;
+        break;
+    };
+}
+fn closeTerminal(state: *State, id: model.Id) void {
+    (workspace_view.View{ .state = &state.graph.state }).closeTab(id) catch return;
+    forgetTerminal(state, id);
+    state.graph.terminals.close(id) catch {};
+}
+fn focusTerminal(state: *State, requested: ?model.Id) void {
+    var target = requested;
+    if (target == null) if ((workspace_view.View{ .state = &state.graph.state }).pair()) |pair| {
+        for (pair.surfaces[0..pair.surface_count]) |surface| if (surface.lifecycle == .live) { target = surface.id; break; };
+    };
+    const id = target orelse return;
+    _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id);
+    var name: [37]u8 = undefined;
+    if (state.terminal_stack) |stack| c.gtk_stack_set_visible_child_name(stack, idText(id, &name).ptr);
+    for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |surface| if (std.mem.eql(u8, &surface.surface_id, &id)) {
+        _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
+        break;
+    };
+}
+fn launchVscode(state: *State) void {
+    const pair = state.graph.state.selected_pair orelse return;
+    const launch = state.graph.resolveLaunch(pair, null) catch |err| {
+        showLauncherError(state, @errorName(err));
+        return;
+    };
+    var child = std.process.Child.init(&.{ "code", "--reuse-window", launch.cwdSlice() }, state.graph.allocator);
+    child.stdin_behavior = .Ignore;
+    child.stdout_behavior = .Ignore;
+    child.stderr_behavior = .Ignore;
+    child.spawn() catch |err| showLauncherError(state, @errorName(err));
 }
 
 fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*anyopaque) callconv(.c) void {
@@ -565,11 +851,24 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
     }
     var view = workspace_view.View{ .state = &state.graph.state };
     if (std.mem.eql(u8, name, "next-tab")) {
-        _ = view.cycleTab(1);
+        if (view.cycleTab(1)) focusTerminal(state, state.graph.state.surface.?.id);
     } else if (std.mem.eql(u8, name, "previous-tab")) {
-        _ = view.cycleTab(-1);
+        if (view.cycleTab(-1)) focusTerminal(state, state.graph.state.surface.?.id);
+    } else if (std.mem.eql(u8, name, "select-tab")) {
+        if (variantId(parameter)) |id| focusTerminal(state, id);
+    } else if (std.mem.eql(u8, name, "reorder-tab")) {
+        if (orderedId(parameter)) |value| view.reorderTab(value.id, value.index) catch {};
+    } else if (std.mem.eql(u8, name, "activate-command")) {
+        const command_id = variantString(parameter) orelse return;
+        _ = createTerminal(state, command_id, null);
+    } else if (std.mem.eql(u8, name, "rename-tab")) {
+        if (variantId(parameter)) |id| promptRename(state, id);
     } else if (std.mem.eql(u8, name, "close-tab")) {
-        if (state.graph.state.surface) |s| view.closeTab(s.id) catch {};
+        if (state.graph.state.surface) |s| closeTerminal(state, s.id);
+    } else if (std.mem.eql(u8, name, "relaunch-tab")) {
+        if (variantId(parameter)) |id| _ = createTerminal(state, null, id);
+    } else if (std.mem.eql(u8, name, "open-vscode")) {
+        launchVscode(state);
     } else if (std.mem.eql(u8, name, "focus-attention")) {
         if (parameter) |p| {
             const id_str = std.mem.span(c.g_variant_get_string(p, null));
@@ -581,7 +880,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
                 if (result.effect == .platform_focus) {
                     const route = result.effect.platform_focus;
                     state.graph.state.selected_pair = if (route.repository_id) |rid| .{ .workspace_id = route.workspace_id, .repository_id = rid } else state.graph.state.selected_pair;
-                    if (route.surface_id) |sid| _ = view.selectTab(sid);
+                    focusTerminal(state, route.surface_id);
                 }
             }
         }
@@ -592,6 +891,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
                 var id: model.Id = undefined;
                 @memcpy(&id, id_str);
                 view.pin(id) catch {};
+                savePresentation(state);
             }
         }
     } else if (std.mem.eql(u8, name, "unpin-workspace")) {
@@ -601,7 +901,13 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
                 var id: model.Id = undefined;
                 @memcpy(&id, id_str);
                 view.unpin(id);
+                savePresentation(state);
             }
+        }
+    } else if (std.mem.eql(u8, name, "reorder-pin")) {
+        if (orderedId(parameter)) |value| {
+            view.reorderPin(value.id, value.index) catch {};
+            savePresentation(state);
         }
     }
     refreshProjection(state);
@@ -617,7 +923,7 @@ fn registerActions(state: *State, window: *c.GtkWindow) void {
         const bare = spec.name[4..];
         var bare_buffer: [64:0]u8 = [_:0]u8{0} ** 64;
         const bare_z = std.fmt.bufPrintZ(&bare_buffer, "{s}", .{bare}) catch continue;
-        const parameter_type = if (std.mem.eql(u8, bare, "focus-attention") or std.mem.eql(u8, bare, "select-tab") or std.mem.eql(u8, bare, "rename-tab") or std.mem.eql(u8, bare, "relaunch-tab") or std.mem.eql(u8, bare, "pin-workspace") or std.mem.eql(u8, bare, "unpin-workspace")) string_type else null;
+        const parameter_type = if (std.mem.eql(u8, bare, "focus-attention") or std.mem.eql(u8, bare, "activate-command") or std.mem.eql(u8, bare, "select-tab") or std.mem.eql(u8, bare, "reorder-tab") or std.mem.eql(u8, bare, "rename-tab") or std.mem.eql(u8, bare, "relaunch-tab") or std.mem.eql(u8, bare, "pin-workspace") or std.mem.eql(u8, bare, "unpin-workspace") or std.mem.eql(u8, bare, "reorder-pin")) string_type else null;
         const action = c.g_simple_action_new(bare_z.ptr, parameter_type) orelse continue;
         c.g_simple_action_set_enabled(action, @intFromBool(application.enabled(&state.graph.state, spec)));
         _ = c.g_signal_connect_data(action, "activate", @ptrCast(&actionActivate), state, null, 0);
@@ -681,6 +987,10 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     const workspace = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
     const tabs = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return null;
     state.tab_bar = @ptrCast(tabs);
+    const tab_click = c.gtk_gesture_click_new() orelse return null;
+    c.gtk_gesture_single_set_button(@ptrCast(tab_click), 1);
+    _ = c.g_signal_connect_data(tab_click, "pressed", @ptrCast(&tabBarPressed), state, null, 0);
+    c.gtk_widget_add_controller(tabs, @ptrCast(tab_click));
     setAccessible(tabs, c.GTK_ACCESSIBLE_ROLE_TAB_LIST, "Terminal tabs", "Persistent terminals for the selected workspace and repository");
     c.gtk_box_append(@ptrCast(workspace), tabs);
     const terminals = c.gtk_stack_new() orelse return null;
@@ -827,6 +1137,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         return;
     };
     state.* = .{ .runtime = runtime, .registry = guard.Registry.init(allocator, @intCast(c.getpgrp()), -1), .graph = graph };
+    restorePresentation(state);
     state.graph.assertWired() catch |err| {
         std.debug.print("native production graph wiring failed: {s}\n", .{@errorName(err)});
         state.graph.deinit();
