@@ -78,4 +78,19 @@ pub fn build(b: *std.Build) void {
     ownership_tests.linkLibC();
     const lifecycle_step = b.step("lifecycle-test", "Run independently retained ownership tests");
     lifecycle_step.dependOn(&b.addRunArtifact(ownership_tests).step);
+    const process_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_process_control_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    const process_guard_module = b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") });
+    process_test_module.addImport("guard", process_guard_module);
+    const process_module = b.createModule(.{ .root_source_file = b.path("terminal/ghostty_process_control.zig") });
+    process_module.addImport("guard", process_guard_module);
+    process_module.addIncludePath(include_dir);
+    process_test_module.addImport("ghostty_process_control", process_module);
+    process_test_module.addLibraryPath(library_dir);
+    process_test_module.addRPath(library_dir);
+    process_test_module.addCSourceFile(.{ .file = .{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "src", "gl.c" }) }, .flags = &.{} });
+    process_test_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "include" }) });
+    const process_tests = b.addTest(.{ .root_module = process_test_module });
+    process_tests.linkLibC();
+    process_tests.linkSystemLibrary("ghostty");
+    lifecycle_step.dependOn(&b.addRunArtifact(process_tests).step);
 }

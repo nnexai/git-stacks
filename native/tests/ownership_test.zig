@@ -19,10 +19,14 @@ test "real process-group escalation removes a leader and descendant" {
         const descendant = c.fork();
         if (descendant < 0) c._exit(121);
         if (descendant == 0) {
-            while (true) { _ = c.pause(); }
+            while (true) {
+                _ = c.pause();
+            }
         }
         _ = c.write(fds[1], &descendant, @sizeOf(c.pid_t));
-        while (true) { _ = c.pause(); }
+        while (true) {
+            _ = c.pause();
+        }
     }
     _ = c.close(fds[1]);
     var descendant: c.pid_t = 0;
@@ -35,7 +39,10 @@ test "real process-group escalation removes a leader and descendant" {
     // (it may briefly remain as an init-owned zombie, which is already absent).
     var absent = false;
     for (0..100) |_| {
-        if (c.kill(descendant, 0) != 0) { absent = true; break; }
+        if (c.kill(descendant, 0) != 0) {
+            absent = true;
+            break;
+        }
         _ = c.usleep(10_000);
     }
     if (!absent) {
@@ -74,11 +81,11 @@ test "guard rejects unsafe groups and EOF tears down every registered group" {
     defer backend.deinit();
     var registry = guard.Registry.init(std.testing.allocator, 55, 66);
     defer registry.deinit();
-    try std.testing.expectError(error.UnsafeProcessGroup, registry.register(55, 1));
-    try std.testing.expectError(error.UnsafeProcessGroup, registry.register(66, 1));
-    try registry.register(1203, 101);
-    try std.testing.expectError(error.BirthTokenMismatch, registry.register(1203, 999));
-    try registry.register(1204, 102);
+    try std.testing.expectError(error.UnsafeProcessGroup, registry.register(.{ .pid = 55, .pgid = 55, .birth_token = 1 }));
+    try std.testing.expectError(error.UnsafeProcessGroup, registry.register(.{ .pid = 66, .pgid = 66, .birth_token = 1 }));
+    try registry.register(.{ .pid = 1203, .pgid = 1203, .birth_token = 101 });
+    try std.testing.expectError(error.BirthTokenMismatch, registry.register(.{ .pid = 1203, .pgid = 1203, .birth_token = 999 }));
+    try registry.register(.{ .pid = 1204, .pgid = 1204, .birth_token = 102 });
     try registry.controlEof(&backend);
     try std.testing.expectEqual(@as(usize, 2), backend.cleaned.items.len);
 }
