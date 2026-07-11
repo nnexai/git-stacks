@@ -139,6 +139,8 @@ function verifyProductionTerminalComposition(): void {
     "ghostty_config_load_recursive_files",
     "ghostty_config_load_cli_args",
     "ghostty_config_finalize",
+    "ProductionGraph.initFromEnvironment(allocator)",
+    "state.graph.assertWired()",
   ]
   for (const seam of required) {
     if (!production.includes(seam)) throw new Error(`production terminal composition missing: ${seam}`)
@@ -540,6 +542,7 @@ else if (mode === "restore") await verifyRestore()
 else if (mode === "attention") await verify("attention-test")
 else if (mode === "tabs") await verify("tabs-test")
 else if (mode === "service-client") await verify("service-client-test")
+else if (mode === "app-graph") await verify("app-graph-test")
 else if (mode === "lifecycle") await verifyLifecycle()
 else if (mode === "stress") await verifyStress()
 else if (mode === "terminal-host") await verifyTerminalHost()

@@ -4,6 +4,7 @@ const surface_mod = @import("ghostty_surface");
 const clipboard = @import("ghostty_clipboard");
 const terminal_environment = @import("terminal_environment");
 const guard = @import("guard");
+const app_graph = @import("app_graph");
 const c = @cImport({
     @cInclude("gtk/gtk.h");
     @cInclude("unistd.h");
@@ -14,6 +15,7 @@ const State = struct {
     terminals: [2]?*surface_mod.Surface = .{ null, null },
     terminal_count: usize = 0,
     registry: guard.Registry,
+    graph: app_graph.ProductionGraph,
     window: ?*c.GtkWindow = null,
     close_handler: c.gulong = 0,
     cleaned: bool = false,
@@ -44,6 +46,7 @@ fn cleanup(state: *State) void {
     const gl_areas = surface_mod.liveAreaCount();
     const gl_contexts = surface_mod.liveGlContextCount();
     const stress_cycle = parseStressCycle();
+    state.graph.deinit();
     state.registry.deinit();
     state.runtime.deinit();
     if (stress_cycle) |cycle| reportStressSample(cycle, surfaces, clipboard_pending, gl_areas, gl_contexts, children);
@@ -138,10 +141,25 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         allocator.destroy(state);
         return;
     };
-    state.* = .{ .runtime = runtime, .registry = guard.Registry.init(allocator, @intCast(c.getpgrp()), -1) };
+    const graph = app_graph.ProductionGraph.initFromEnvironment(allocator) catch |err| {
+        std.debug.print("native production graph init failed: {s}\n", .{@errorName(err)});
+        runtime.deinit();
+        allocator.destroy(state);
+        return;
+    };
+    state.* = .{ .runtime = runtime, .registry = guard.Registry.init(allocator, @intCast(c.getpgrp()), -1), .graph = graph };
+    state.graph.assertWired() catch |err| {
+        std.debug.print("native production graph wiring failed: {s}\n", .{@errorName(err)});
+        state.graph.deinit();
+        state.registry.deinit();
+        runtime.deinit();
+        allocator.destroy(state);
+        return;
+    };
     const terminal = surface_mod.Surface.create(runtime, &state.registry) catch |err| {
         std.debug.print("native surface init failed: {s}\n", .{@errorName(err)});
         state.registry.deinit();
+        state.graph.deinit();
         runtime.deinit();
         allocator.destroy(state);
         return;

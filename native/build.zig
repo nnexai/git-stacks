@@ -52,7 +52,9 @@ pub fn build(b: *std.Build) void {
     surface_module.addImport("ghostty_clipboard", clipboard_module);
     surface_module.addImport("ghostty_input", input_module);
     const app_guard_module = b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") });
+    const app_model_module = b.createModule(.{ .root_source_file = b.path("core/model.zig") });
     const app_reducer_module = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
+    app_reducer_module.addImport("model", app_model_module);
     const app_process_module = b.createModule(.{ .root_source_file = b.path("terminal/ghostty_process_control.zig") });
     app_process_module.addImport("guard", app_guard_module);
     app_process_module.addImport("reducer", app_reducer_module);
@@ -66,6 +68,13 @@ pub fn build(b: *std.Build) void {
     app_module.addImport("ghostty_clipboard", clipboard_module);
     app_module.addImport("terminal_environment", terminal_environment_module);
     app_module.addImport("guard", app_guard_module);
+    const app_tab_registry_module = b.createModule(.{ .root_source_file = b.path("linux/tab_registry.zig") });
+    app_tab_registry_module.addImport("model", app_model_module);
+    const app_service_client_module = b.createModule(.{ .root_source_file = b.path("linux/service_client.zig") });
+    const app_graph_module = b.createModule(.{ .root_source_file = b.path("linux/app_graph.zig") });
+    app_graph_module.addImport("service_client", app_service_client_module);
+    app_graph_module.addImport("tab_registry", app_tab_registry_module);
+    app_module.addImport("app_graph", app_graph_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
     app.linkSystemLibrary("ghostty");
@@ -123,11 +132,14 @@ pub fn build(b: *std.Build) void {
         .linkage = .static,
         .root_module = b.createModule(.{ .root_source_file = b.path("core/abi.zig"), .target = b.graph.host, .optimize = .Debug }),
     });
+    model.root_module.addImport("model", b.createModule(.{ .root_source_file = b.path("core/model.zig") }));
     model.linkLibC();
     const model_tests = b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("core/contract.zig"), .target = b.graph.host, .optimize = .Debug }) });
     const run_model_tests = b.addRunArtifact(model_tests);
     const reducer_test_module = b.createModule(.{ .root_source_file = b.path("tests/reducer_test.zig"), .target = b.graph.host, .optimize = .Debug });
-    reducer_test_module.addImport("reducer", b.createModule(.{ .root_source_file = b.path("core/reducer.zig") }));
+    const tested_reducer = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
+    tested_reducer.addImport("model", b.createModule(.{ .root_source_file = b.path("core/model.zig") }));
+    reducer_test_module.addImport("reducer", tested_reducer);
     const run_reducer_tests = b.addRunArtifact(b.addTest(.{ .root_module = reducer_test_module }));
     const harness = b.addExecutable(.{ .name = "abi-harness", .root_module = b.createModule(.{ .target = b.graph.host, .optimize = .Debug }) });
     harness.root_module.addCSourceFile(.{ .file = b.path("tests/abi_harness.c"), .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Werror" } });
@@ -146,7 +158,9 @@ pub fn build(b: *std.Build) void {
     restore_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = persistence_test_module })).step);
 
     const attention_test_module = b.createModule(.{ .root_source_file = b.path("tests/attention_test.zig"), .target = b.graph.host, .optimize = .Debug });
-    attention_test_module.addImport("reducer", b.createModule(.{ .root_source_file = b.path("core/reducer.zig") }));
+    const attention_reducer = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
+    attention_reducer.addImport("model", b.createModule(.{ .root_source_file = b.path("core/model.zig") }));
+    attention_test_module.addImport("reducer", attention_reducer);
     const attention_step = b.step("attention-test", "Run structured attention derivation and focus routing tests");
     attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = attention_test_module })).step);
 
@@ -163,6 +177,11 @@ pub fn build(b: *std.Build) void {
     const service_step = b.step("service-client-test", "Run authenticated service replay and launch decoding tests");
     service_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = service_module })).step);
 
+    const graph_test_module = b.createModule(.{ .root_source_file = b.path("tests/app_graph_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    graph_test_module.addImport("app_graph", app_graph_module);
+    const graph_step = b.step("app-graph-test", "Assert the production service and terminal registry composition");
+    graph_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = graph_test_module })).step);
+
     const ownership_test_module = b.createModule(.{ .root_source_file = b.path("tests/ownership_test.zig"), .target = b.graph.host, .optimize = .Debug });
     ownership_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));
     ownership_test_module.addImport("guard", b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") }));
@@ -174,6 +193,7 @@ pub fn build(b: *std.Build) void {
     const process_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_process_control_test.zig"), .target = b.graph.host, .optimize = .Debug });
     const process_guard_module = b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") });
     const process_reducer_module = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
+    process_reducer_module.addImport("model", b.createModule(.{ .root_source_file = b.path("core/model.zig") }));
     process_test_module.addImport("guard", process_guard_module);
     process_test_module.addImport("reducer", process_reducer_module);
     const process_module = b.createModule(.{ .root_source_file = b.path("terminal/ghostty_process_control.zig") });

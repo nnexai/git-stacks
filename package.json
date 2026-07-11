@@ -54,6 +54,7 @@
     "native:test:attention": "bun run scripts/verify-native.ts attention",
     "native:test:tabs": "bun run scripts/verify-native.ts tabs",
     "native:test:service-client": "bun run scripts/verify-native.ts service-client",
+    "native:test:app-graph": "bun run scripts/verify-native.ts app-graph",
     "native:test:lifecycle": "bun run scripts/verify-native.ts lifecycle",
     "native:test:stress": "bun run scripts/verify-native.ts stress",
     "native:build-app": "bun run scripts/verify-native.ts build-app",
