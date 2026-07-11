@@ -4,6 +4,10 @@ Status: NOT YET OBSERVED
 
 This template records the required D-13/D-14 real-session evidence. An unchecked row is not a pass.
 
+## Configuration boundary
+
+This application embeds the pinned `ghostty-vt` parser/state library, not the Ghostty application or its configuration loader. It therefore does **not** inherit `~/.config/ghostty/config`, Ghostty themes, fonts, shaders, keybindings, or other arbitrary Ghostty settings. Phase 105 uses product-owned terminal defaults and the VT-provided ANSI/256/truecolor/style state. Full Ghostty application-configuration parity is not claimed by this foundation.
+
 ## Observation identity
 
 - Observer:

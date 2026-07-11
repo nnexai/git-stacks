@@ -13,13 +13,15 @@ const AppState = struct {
     im: *c.GtkIMContext,
     pump_source: c.guint = 0,
     cleaned: bool = false,
+    drag_origin_x: f64 = 0,
+    drag_origin_y: f64 = 0,
 };
 
 var active_state: ?*AppState = null;
 
 fn commandForLaunch() [*:0]const u8 {
     if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null)
-        return "printf '\\x1b[?1049hALT_SCREEN_UNIQUE\\x1b[?1049lSHELL_PROMPT_UNIQUE\\n'; read line; printf 'SHELL_RESULT_UNIQUE:%s\\n' \"$line\"; sleep 1";
+        return "stty raw -echo; printf '\\033[c'; response=$(dd bs=1 count=9 2>/dev/null); stty sane; [ \"$response\" = \"$(printf '\\033[?62;22c')\" ] && printf 'DA_RESPONSE_OK\\n'; printf '\\033[?1049hALT_SCREEN_UNIQUE\\033[?1049lSHELL_PROMPT_UNIQUE\\n'; read line; printf 'SHELL_RESULT_UNIQUE:%s\\n' \"$line\"; sleep 1";
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null)
         return "printf 'git-stacks native terminal ready\\n'; sleep 3600";
     if (std.posix.getenv("GIT_STACKS_NATIVE_STATIC_FIXTURE") != null)
@@ -45,6 +47,10 @@ fn keyPressed(controller: ?*c.GtkEventControllerKey, keyval: c.guint, _: c.guint
     if (controller) |ctl| if (c.gtk_event_controller_get_current_event(@ptrCast(ctl))) |event| {
         if (c.gtk_im_context_filter_keypress(state.im, event) != 0) return 1;
     };
+    if ((modifiers & c.GDK_CONTROL_MASK) != 0 and (modifiers & c.GDK_SHIFT_MASK) != 0) {
+        if (keyval == c.GDK_KEY_c or keyval == c.GDK_KEY_C) { copySelection(state); return 1; }
+        if (keyval == c.GDK_KEY_v or keyval == c.GDK_KEY_V) { requestPaste(state, false); return 1; }
+    }
     const special: ?vt.Key = switch (keyval) {
         c.GDK_KEY_Return, c.GDK_KEY_KP_Enter => .enter,
         c.GDK_KEY_Tab, c.GDK_KEY_ISO_Left_Tab => .tab,
@@ -67,6 +73,33 @@ fn keyPressed(controller: ?*c.GtkEventControllerKey, keyval: c.guint, _: c.guint
     const length = std.unicode.utf8Encode(@intCast(codepoint), &bytes) catch return 0;
     return @intFromBool(sendCommitted(state, bytes[0..length]));
 }
+
+fn gridPoint(x: f64, y: f64) vt.GridPoint { return .{ .column = @intCast(@min(65535, @as(u64, @intFromFloat(@max(0, x) / 9)))), .row = @intCast(@min(65535, @as(u64, @intFromFloat(@max(0, y) / 18)))) }; }
+fn copySelection(state: *AppState) void {
+    const text_value = state.widget.selectionText(state.allocator) catch return orelse return; defer state.allocator.free(text_value);
+    const terminated = state.allocator.dupeZ(u8, text_value) catch return; defer state.allocator.free(terminated);
+    const display = c.gtk_widget_get_display(@ptrCast(@alignCast(state.widget.widget))) orelse return;
+    c.gdk_clipboard_set_text(c.gdk_display_get_clipboard(display), terminated.ptr);
+    c.gdk_clipboard_set_text(c.gdk_display_get_primary_clipboard(display), terminated.ptr);
+}
+const PasteRequest = struct { state: *AppState, generation: u64 };
+fn pasteReady(source: ?*c.GObject, result: ?*c.GAsyncResult, data: ?*anyopaque) callconv(.c) void {
+    const request: *PasteRequest = @ptrCast(@alignCast(data orelse return)); defer request.state.allocator.destroy(request);
+    const state = request.state; if (state.cleaned or request.generation != state.runtime.generation) return;
+    var err: ?*c.GError = null; const raw = c.gdk_clipboard_read_text_finish(@ptrCast(source), result, &err);
+    defer if (err) |value| c.g_error_free(value); defer if (raw) |value| c.g_free(value);
+    if (raw) |value| state.input.paste(std.mem.span(value), true) catch {};
+}
+fn requestPaste(state: *AppState, primary: bool) void {
+    if (state.cleaned) return; const display = c.gtk_widget_get_display(@ptrCast(@alignCast(state.widget.widget))) orelse return;
+    const request = state.allocator.create(PasteRequest) catch return; request.* = .{ .state = state, .generation = state.runtime.generation };
+    const clipboard = if (primary) c.gdk_display_get_primary_clipboard(display) else c.gdk_display_get_clipboard(display);
+    c.gdk_clipboard_read_text_async(clipboard, null, pasteReady, request);
+}
+fn dragBegin(_: ?*c.GtkGestureDrag, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.drag_origin_x = x; state.drag_origin_y = y; state.widget.selectionBegin(gridPoint(x, y)); }
+fn dragUpdate(_: ?*c.GtkGestureDrag, dx: f64, dy: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.widget.selectionUpdate(gridPoint(state.drag_origin_x + dx, state.drag_origin_y + dy)); }
+fn dragEnd(_: ?*c.GtkGestureDrag, dx: f64, dy: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.widget.selectionUpdate(gridPoint(state.drag_origin_x + dx, state.drag_origin_y + dy)); copySelection(state); }
+fn middlePressed(_: ?*c.GtkGestureClick, _: c_int, _: f64, _: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); requestPaste(state, true); }
 
 fn imCommit(_: ?*c.GtkIMContext, text: ?[*:0]const u8, data: ?*anyopaque) callconv(.c) void {
     const state: *AppState = @ptrCast(@alignCast(data orelse return));
@@ -132,6 +165,7 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     state.im = c.gtk_im_multicontext_new() orelse return;
     state.pump_source = 0;
     state.cleaned = false;
+    state.drag_origin_x = 0; state.drag_origin_y = 0;
     active_state = state;
 
     const key = c.gtk_event_controller_key_new() orelse return;
@@ -141,6 +175,16 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     _ = c.g_signal_connect_data(focus, "enter", @ptrCast(&focusEnter), state, null, 0);
     _ = c.g_signal_connect_data(focus, "leave", @ptrCast(&focusLeave), state, null, 0);
     c.gtk_widget_add_controller(@ptrCast(@alignCast(state.widget.widget)), focus);
+    const drag = c.gtk_gesture_drag_new() orelse return;
+    c.gtk_gesture_single_set_button(@ptrCast(drag), c.GDK_BUTTON_PRIMARY);
+    _ = c.g_signal_connect_data(drag, "drag-begin", @ptrCast(&dragBegin), state, null, 0);
+    _ = c.g_signal_connect_data(drag, "drag-update", @ptrCast(&dragUpdate), state, null, 0);
+    _ = c.g_signal_connect_data(drag, "drag-end", @ptrCast(&dragEnd), state, null, 0);
+    c.gtk_widget_add_controller(@ptrCast(@alignCast(state.widget.widget)), @ptrCast(drag));
+    const middle = c.gtk_gesture_click_new() orelse return;
+    c.gtk_gesture_single_set_button(@ptrCast(middle), c.GDK_BUTTON_MIDDLE);
+    _ = c.g_signal_connect_data(middle, "pressed", @ptrCast(&middlePressed), state, null, 0);
+    c.gtk_widget_add_controller(@ptrCast(@alignCast(state.widget.widget)), @ptrCast(middle));
     _ = c.g_signal_connect_data(state.im, "commit", @ptrCast(&imCommit), state, null, 0);
     _ = c.g_signal_connect_data(state.im, "preedit-changed", @ptrCast(&imPreeditChanged), state, null, 0);
     _ = c.g_signal_connect_data(state.widget.widget, "resize", @ptrCast(&resized), state, null, 0);
@@ -176,7 +220,7 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     if (state.widget.drawCount() == 0 or state.widget.paintedCellCount() == 0) { std.debug.print("GIT_STACKS_NATIVE_BLANK draws={d} cells={d}\n", .{ state.widget.drawCount(), state.widget.paintedCellCount() }); return; }
     std.debug.print("GIT_STACKS_NATIVE_READY composition=pty-runtime input=gtk-controller text=git-stacks-native-terminal-ready focused={d} draws={d} painted_cells={d}\n", .{ c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget))), state.widget.drawCount(), state.widget.paintedCellCount() });
     if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null and state.runtime.frameContains("SHELL_RESULT_UNIQUE:widget-input-path") catch false)
-        std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP marker=SHELL_RESULT_UNIQUE input=gtk-commit-path resources=owned\n", .{});
+        std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP marker=SHELL_RESULT_UNIQUE query=DA_RESPONSE_OK input=gtk-commit-path resources=owned\n", .{});
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) _ = c.g_timeout_add(250, quitTimer, @ptrCast(app));
 }
 
