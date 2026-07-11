@@ -16,9 +16,10 @@ pub const PairKey = struct {
     }
 };
 pub const Workspace = struct { id: Id, repository_ids: [8]Id = undefined, repository_count: u8 = 0 };
+pub const Command = struct { id: [64]u8 = [_]u8{0} ** 64, id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
 pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
 pub const PairCollection = struct { key: PairKey, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
-pub const Attention = struct { id: Id, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: AttentionStatus, read: bool = false, resolved: bool = true };
+pub const Attention = struct { id: Id, service_id: [64]u8 = [_]u8{0} ** 64, service_id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: AttentionStatus, read: bool = false, resolved: bool = true };
 pub const Aggregate = struct { unread: u32 = 0, severity: Severity = .none };
 pub const FocusRoute = struct { workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, reason: FallbackReason };
 
@@ -41,6 +42,8 @@ pub const State = struct {
     last_pair: ?PairKey = null,
     pairs: [32]PairCollection = undefined,
     pair_count: u8 = 0,
+    commands: [64]Command = undefined,
+    command_count: u8 = 0,
     attention: [64]Attention = undefined,
     attention_count: u8 = 0,
 };

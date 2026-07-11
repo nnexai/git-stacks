@@ -1,6 +1,8 @@
 const std = @import("std");
 const service_client = @import("service_client");
 const tab_registry = @import("tab_registry");
+const model = @import("model");
+const reducer = @import("reducer");
 
 pub const ProductionGraph = struct {
     allocator: std.mem.Allocator,
@@ -9,6 +11,7 @@ pub const ProductionGraph = struct {
     service: service_client.Client,
     transport: service_client.HttpTransport,
     terminals: tab_registry.Registry,
+    state: model.State = .{},
 
     pub fn init(allocator: std.mem.Allocator, token: ?[]const u8) !ProductionGraph {
         const authorization = if (token) |value|
@@ -44,7 +47,15 @@ pub const ProductionGraph = struct {
         graph.endpoint = try allocator.dupe(u8,access.endpointSlice());
         graph.service = service_client.Client.init(graph.authorization); graph.service.begin();
         try graph.synchronizeDiscovery();
+        try graph.refreshSnapshot();
         return graph;
+    }
+    pub fn refreshSnapshot(self:*ProductionGraph)!void {
+        const request=try self.service.aggregateSnapshotRequest();
+        const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);
+        if(response.status!=200)return error.SnapshotRejected;
+        const action=try self.service.decodeAggregateSnapshot(response.body);
+        self.state=reducer.reduce(self.state,action).state;
     }
 
     pub fn synchronizeDiscovery(self:*ProductionGraph)!void {

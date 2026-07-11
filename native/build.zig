@@ -71,9 +71,13 @@ pub fn build(b: *std.Build) void {
     const app_tab_registry_module = b.createModule(.{ .root_source_file = b.path("linux/tab_registry.zig") });
     app_tab_registry_module.addImport("model", app_model_module);
     const app_service_client_module = b.createModule(.{ .root_source_file = b.path("linux/service_client.zig") });
+    app_service_client_module.addImport("model", app_model_module);
+    app_service_client_module.addImport("reducer", app_reducer_module);
     const app_graph_module = b.createModule(.{ .root_source_file = b.path("linux/app_graph.zig") });
     app_graph_module.addImport("service_client", app_service_client_module);
     app_graph_module.addImport("tab_registry", app_tab_registry_module);
+    app_graph_module.addImport("model", app_model_module);
+    app_graph_module.addImport("reducer", app_reducer_module);
     app_module.addImport("app_graph", app_graph_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
@@ -173,7 +177,13 @@ pub fn build(b: *std.Build) void {
     const tabs_step = b.step("tabs-test", "Run navigation-independent terminal host registry tests");
     tabs_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = tabs_module })).step);
     const service_module = b.createModule(.{ .root_source_file = b.path("tests/service_client_test.zig"), .target = b.graph.host, .optimize = .Debug });
-    service_module.addImport("service_client", b.createModule(.{ .root_source_file = b.path("linux/service_client.zig") }));
+    const tested_service_client = b.createModule(.{ .root_source_file = b.path("linux/service_client.zig") });
+    const service_model = b.createModule(.{ .root_source_file = b.path("core/model.zig") });
+    const service_reducer = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
+    service_reducer.addImport("model", service_model);
+    tested_service_client.addImport("model", service_model);
+    tested_service_client.addImport("reducer", service_reducer);
+    service_module.addImport("service_client", tested_service_client);
     const service_step = b.step("service-client-test", "Run authenticated service replay and launch decoding tests");
     service_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = service_module })).step);
 

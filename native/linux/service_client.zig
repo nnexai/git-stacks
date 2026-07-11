@@ -1,4 +1,6 @@
 const std = @import("std");
+const model = @import("model");
+const reducer = @import("reducer");
 
 pub const Connection = enum { disconnected, discovering, snapshot_loading, replaying, ready, refresh_required, incompatible, failed, shutting_down };
 pub const Method = enum { GET, POST };
@@ -134,6 +136,7 @@ pub const Client = struct {
         const seq=id orelse return .{.failure="invalid_sse"}; const value=data orelse return .{.failure="invalid_sse"};
         const event=decodeEvent(seq,value) catch return .{.failure="invalid_event"}; return self.order(event);
     }
+    pub fn decodeAggregateSnapshot(self:*Client,body:[]const u8)!reducer.Action {var state=try aggregateState(body);state.sequence=self.sequence;self.revision=state.revision;self.state=.replaying;return .{.snapshot=state};}
     pub fn resolveLaunch(self: *Client, status: u16, body: []const u8) !Outcome { if (self.cancelled) return error.Cancelled; if(status!=200)return .{.failure="transport"}; return .{.launch=decodeLaunch(body) catch return .{.failure="invalid_payload"}}; }
 };
 
@@ -146,3 +149,20 @@ fn validDiscovery(body:[]const u8)bool { const p=std.json.parseFromSlice(std.jso
 fn decodeSnapshot(body:[]const u8)!Snapshot { const p=try std.json.parseFromSlice(std.json.Value,std.heap.page_allocator,body,.{}); defer p.deinit(); if(p.value!=.object)return error.Invalid; const o=p.value.object; if(!exactKeys(o,&.{"protocol","request_id","ok","revision","generated_at","workspace"}))return error.Invalid; if(!std.mem.eql(u8,string(o,"protocol") orelse return error.Invalid,"v1") or o.get("ok").?!=.bool or !o.get("ok").?.bool)return error.Invalid; const ws=o.get("workspace") orelse return error.Invalid; if(ws!=.object)return error.Invalid; const id=string(ws.object,"id") orelse return error.Invalid; if(!uuid(id))return error.Invalid; var result=Snapshot{.revision=uintString(o,"revision") orelse return error.Invalid,.sequence=0,.workspace_id=undefined}; @memcpy(&result.workspace_id,id); return result; }
 fn decodeEvent(sse_id:u64,body:[]const u8)!Event { const p=try std.json.parseFromSlice(std.json.Value,std.heap.page_allocator,body,.{}); defer p.deinit(); if(p.value!=.object)return error.Invalid; const o=p.value.object; const seq=uintString(o,"sequence") orelse return error.Invalid; if(seq!=sse_id or !std.mem.eql(u8,string(o,"protocol") orelse return error.Invalid,"v1"))return error.Invalid; const typ=string(o,"type") orelse return error.Invalid; if(std.mem.eql(u8,typ,"attention")){if(o.get("attention")==null)return error.Invalid;return .{.sequence=seq,.kind=.attention};} if(std.mem.eql(u8,typ,"operation")){if(o.get("operation")==null)return error.Invalid;return .{.sequence=seq,.kind=.operation};} if(std.mem.eql(u8,typ,"control")){const c=o.get("control") orelse return error.Invalid;if(c!=.object)return error.Invalid;const k=string(c.object,"kind") orelse return error.Invalid;if(std.mem.eql(u8,k,"replay_gap"))return error.ReplayGap;if(!std.mem.eql(u8,k,"heartbeat"))return error.Invalid;return .{.sequence=seq,.kind=.heartbeat};} return error.Invalid; }
 fn decodeLaunch(body:[]const u8)!Launch { const p=try std.json.parseFromSlice(std.json.Value,std.heap.page_allocator,body,.{}); defer p.deinit(); if(p.value!=.object)return error.Invalid; const root=p.value.object; const wrapped=root.get("data"); const o=if(wrapped)|v| blk:{if(!exactKeys(root,&.{"protocol","request_id","ok","data"}) or v!=.object)return error.Invalid;break :blk v.object;} else root; const resolved=o.get("resolved") orelse return error.Invalid; if(resolved!=.bool or !resolved.bool)return error.ResolutionFailed; if(!exactKeys(o,&.{"resolved","revision","launch"}))return error.Invalid; const l=o.get("launch").?; if(l!=.object or !exactKeys(l.object,&.{"argv","cwd","environment","ports","configuration","redacted"}))return error.Invalid; const av=l.object.get("argv").?; const cwd=string(l.object,"cwd") orelse return error.Invalid; if(av!=.array or av.array.items.len==0 or av.array.items.len>32 or cwd.len==0 or cwd.len>512)return error.Invalid; var out:Launch=.{.revision=uintString(o,"revision") orelse return error.Invalid,.cwd_len=@intCast(cwd.len)}; @memcpy(out.cwd[0..cwd.len],cwd); for(av.array.items,0..) |v,i| {if(v!=.string or v.string.len==0 or v.string.len>256)return error.Invalid;@memcpy(out.argv[i][0..v.string.len],v.string);out.argv_lens[i]=@intCast(v.string.len);} out.argv_count=@intCast(av.array.items.len); const env=l.object.get("environment").?; const ports=l.object.get("ports").?; const red=l.object.get("redacted").?; const cfg=l.object.get("configuration").?; if(env!=.object or ports!=.object or red!=.array or cfg!=.object or !exactKeys(cfg.object,&.{"shell"}) and !exactKeys(cfg.object,&.{"command_id","shell"}))return error.Invalid; const shell=cfg.object.get("shell").?; if(shell!=.bool)return error.Invalid; out.shell=shell.bool; out.environment_count=@intCast(env.object.count());out.port_count=@intCast(ports.object.count());out.redacted_count=@intCast(red.array.items.len);return out; }
+
+fn aggregateState(body:[]const u8)!model.State {
+    const parsed=try std.json.parseFromSlice(std.json.Value,std.heap.page_allocator,body,.{});defer parsed.deinit();
+    if(parsed.value!=.object)return error.Invalid;const root=parsed.value.object;
+    if(!exactKeys(root,&.{"protocol","request_id","ok","data"}) or !std.mem.eql(u8,string(root,"protocol") orelse return error.Invalid,"v1"))return error.Invalid;
+    const data=root.get("data") orelse return error.Invalid;if(data!=.array or data.array.items.len>16)return error.Capacity;
+    var state:model.State=.{.connection=.ready,.has_snapshot=true};
+    for(data.array.items,0..) |entry,wi| {
+        if(entry!=.object)return error.Invalid;const eo=entry.object;state.revision=@max(state.revision,uintString(eo,"revision") orelse return error.Invalid);
+        const workspace=eo.get("workspace") orelse return error.Invalid;if(workspace!=.object)return error.Invalid;const wo=workspace.object;
+        const wid=string(wo,"id") orelse return error.Invalid;if(!uuid(wid))return error.Invalid;var ws:model.Workspace=.{.id=undefined};@memcpy(&ws.id,wid);
+        const repos=wo.get("repositories") orelse return error.Invalid;if(repos!=.array or repos.array.items.len>8)return error.Capacity;
+        for(repos.array.items,0..) |repo,ri| {if(repo!=.object)return error.Invalid;const rid=string(repo.object,"id") orelse return error.Invalid;if(!uuid(rid))return error.Invalid;@memcpy(&ws.repository_ids[ri],rid);ws.repository_count+=1;state.pairs[state.pair_count]=.{.key=.{.workspace_id=ws.id,.repository_id=ws.repository_ids[ri]},.surfaces=undefined};state.pair_count+=1;}
+        state.workspaces[wi]=ws;state.workspace_count+=1;
+    }
+    return state;
+}
