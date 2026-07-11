@@ -99,7 +99,7 @@ async function verifyHeaderPortability(): Promise<void> {
 }
 
 function verifyNativeSourceBoundaries(): void {
-  const productionAllowlist = new Set(["native/terminal/vt_adapter.zig", "native/build.zig"])
+  const productionAllowlist = new Set(["native/terminal/vt_adapter.zig", "native/terminal/ghostty_process_control.zig", "native/linux/ghostty_runtime.zig", "native/linux/ghostty_surface.zig", "native/build.zig"])
   const upstreamPattern = /(?:@cInclude\(["<]ghostty\.h[">]\)|\bghostty_(?:surface|app|runtime|config|input|clipboard)\w*|\blibghostty\b)/i
   const platformPattern = /\b(?:Gtk|Gdk|Adw)[A-Z]\w*|@cInclude\(["<](?:gtk|adwaita)\//
   const violations: string[] = []
@@ -122,21 +122,26 @@ function verifyNativeSourceBoundaries(): void {
 
 function verifyProductionTerminalComposition(): void {
   const app = readFileSync(join(NATIVE, "linux", "app.zig"), "utf8")
+  const surface = readFileSync(join(NATIVE, "linux", "ghostty_surface.zig"), "utf8")
+  const runtime = readFileSync(join(NATIVE, "linux", "ghostty_runtime.zig"), "utf8")
+  const production = `${app}\n${surface}\n${runtime}`
   const required = [
-    "TerminalRuntime.init(allocator, commandForLaunch()",
-    "gtk_event_controller_key_new()",
-    '"key-pressed"',
-    "gtk_im_multicontext_new()",
-    "gtk_gesture_drag_new()",
-    "gdk_clipboard_read_text_async",
-    "gdk_display_get_primary_clipboard",
-    '"preedit-changed"',
+    "Runtime.init(allocator)",
+    "Surface.create(runtime, &state.registry)",
+    "gtk_gl_area_new()",
+    "ghostty_surface_new",
+    "ghostty_surface_draw",
+    "ghostty_surface_display_realized",
+    "ghostty_surface_display_unrealized",
     '"resize"',
-    "state.runtime.resizeViewport(grid.columns, grid.rows",
-    "g_timeout_add(8, pumpTimer",
+    "ghostty_surface_set_size",
+    "ghostty_config_load_default_files",
+    "ghostty_config_load_recursive_files",
+    "ghostty_config_load_cli_args",
+    "ghostty_config_finalize",
   ]
   for (const seam of required) {
-    if (!app.includes(seam)) throw new Error(`production terminal composition missing: ${seam}`)
+    if (!production.includes(seam)) throw new Error(`production terminal composition missing: ${seam}`)
   }
   if (/else\s*\{[\s\S]{0,300}VtAdapter\.init/.test(app)) {
     throw new Error("production launch must not fall back to a static VT-only composition")
@@ -380,7 +385,7 @@ async function smokeApp(): Promise<void> {
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("production GTK smoke timed out after 30 seconds") }
   const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
   if (outcome.code !== 0) throw new Error(`production GTK smoke exited ${outcome.code}: ${stderr || stdout}`)
-  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("composition=pty-runtime") || !stderr.includes("input=gtk-controller") || !/font_family=.+ actual_font_family=.+ font_size=\d+\.\d{2} cell=\d+\.\d{2}x\d+\.\d{2}/.test(stderr) || !/draws=[1-9]\d* painted_cells=[1-9]\d* cursor_draws=[1-9]\d*/.test(stderr)) throw new Error(`production GTK PTY composition/font/cursor evidence missing: ${stderr || stdout}`)
+  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("composition=ghostty-surface") || !stderr.includes("input=ghostty") || !/rows=[1-9]\d* columns=[1-9]\d*/.test(stderr) || !/draws=[1-9]\d*/.test(stderr)) throw new Error(`production Ghostty surface evidence missing: ${stderr || stdout}`)
   console.log(`native GTK smoke passed: backend=${process.env.GDK_BACKEND ?? "auto"} display=${process.env.WAYLAND_DISPLAY ?? process.env.DISPLAY} clean-exit=true`)
 }
 async function smokeTerminal(): Promise<void> {
@@ -428,6 +433,7 @@ const mode = process.argv[2] ?? "verify"
 if (mode === "setup") await setup()
 else if (mode === "audit-ghostty") await auditGhostty()
 else if (mode === "surface-abi") { await buildGhostty(); await verify("surface-abi") }
+else if (mode === "surface") { await buildGhostty(); await verify("surface-test") }
 else if (mode === "audit-production-graph") auditProductionGraph()
 else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()

@@ -45,6 +45,7 @@
     "native:setup": "bun run scripts/verify-native.ts setup",
     "native:audit-ghostty": "bun run scripts/verify-native.ts audit-ghostty",
     "native:test:surface-abi": "bun run scripts/verify-native.ts surface-abi",
+    "native:test:surface": "bun run scripts/verify-native.ts surface",
     "native:audit-production-graph": "bun run scripts/verify-native.ts audit-production-graph",
     "native:test:quick": "bun run scripts/verify-native.ts quick",
     "native:test:model": "bun run scripts/verify-native.ts model",

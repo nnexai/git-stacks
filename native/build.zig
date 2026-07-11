@@ -23,11 +23,8 @@ pub fn build(b: *std.Build) void {
     const surface_abi_step = b.step("surface-abi", "Compile, link, and execute the pinned Ghostty surface ABI contract");
     surface_abi_step.dependOn(&run_surface_abi.step);
 
-    // Phase 105-06 replaces this link-contract executable with linux/app.zig.
-    // Keeping the executable here makes full libghostty linkage independently
-    // testable while the obsolete product renderer/PTy graph stays excised.
     const app_module = b.createModule(.{
-        .root_source_file = b.path("tests/ghostty_surface_abi.zig"),
+        .root_source_file = b.path("linux/app.zig"),
         .target = b.graph.host,
         .optimize = .ReleaseSafe,
     });
@@ -36,12 +33,45 @@ pub fn build(b: *std.Build) void {
     app_module.addRPath(library_dir);
     app_module.addCSourceFile(.{ .file = .{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "src", "gl.c" }) }, .flags = &.{} });
     app_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "include" }) });
+    const runtime_module = b.createModule(.{ .root_source_file = b.path("linux/ghostty_runtime.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
+    runtime_module.addIncludePath(include_dir);
+    runtime_module.addLibraryPath(library_dir);
+    runtime_module.addRPath(library_dir);
+    runtime_module.linkSystemLibrary("gtk4", .{ .use_pkg_config = .force });
+    const surface_module = b.createModule(.{ .root_source_file = b.path("linux/ghostty_surface.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
+    surface_module.addImport("ghostty_runtime", runtime_module);
+    const app_guard_module = b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") });
+    const app_reducer_module = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
+    const app_process_module = b.createModule(.{ .root_source_file = b.path("terminal/ghostty_process_control.zig") });
+    app_process_module.addImport("guard", app_guard_module);
+    app_process_module.addImport("reducer", app_reducer_module);
+    app_process_module.addIncludePath(include_dir);
+    surface_module.addImport("ghostty_process_control", app_process_module);
+    surface_module.addImport("guard", app_guard_module);
+    surface_module.addIncludePath(include_dir);
+    surface_module.linkSystemLibrary("gtk4", .{ .use_pkg_config = .force });
+    app_module.addImport("ghostty_runtime", runtime_module);
+    app_module.addImport("ghostty_surface", surface_module);
+    app_module.addImport("guard", app_guard_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
     app.linkSystemLibrary("ghostty");
+    app.linkSystemLibrary("gtk4");
     b.installArtifact(app);
     const app_step = b.step("build-app", "Build the full-libghostty-linked native executable");
     app_step.dependOn(b.getInstallStep());
+
+    const surface_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_surface_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    surface_test_module.addImport("ghostty_runtime", runtime_module);
+    surface_test_module.addIncludePath(include_dir);
+    surface_test_module.addLibraryPath(library_dir);
+    surface_test_module.addRPath(library_dir);
+    const surface_tests = b.addTest(.{ .root_module = surface_test_module });
+    surface_tests.linkLibC();
+    surface_tests.linkSystemLibrary("ghostty");
+    surface_tests.linkSystemLibrary("gtk4");
+    const surface_step = b.step("surface-test", "Run embedded Ghostty runtime and surface lifecycle tests");
+    surface_step.dependOn(&b.addRunArtifact(surface_tests).step);
 
     const model = b.addLibrary(.{
         .name = "git_stacks_native_v1",
