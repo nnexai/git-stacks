@@ -78,6 +78,7 @@ pub fn build(b: *std.Build) void {
     app_module.addImport("vt_adapter", vt_adapter);
     app_module.addImport("terminal_widget", widget_module);
     app_module.addImport("runtime", runtime_module);
+    app_module.addImport("input", input_module);
     addGtkIncludes(app_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     linkGtk(app); app.linkSystemLibrary("util");
