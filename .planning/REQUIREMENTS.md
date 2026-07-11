@@ -24,10 +24,10 @@
 ### Shared Native Model
 
 - [x] **CORE-01**: Linux and macOS clients share stable workspace, repository, command, operation, surface, and attention identities.
-- [ ] **CORE-02**: A shared state reducer models connection, loading, failure, operation, tab, and attention transitions independently of platform UI types.
+- [x] **CORE-02**: A shared state reducer models connection, loading, failure, operation, tab, and attention transitions independently of platform UI types.
 - [x] **CORE-03**: Native shells access shared behavior through an opaque, versioned product-owned ABI.
 - [x] **CORE-04**: Cross-language golden fixtures verify native decoding and state transitions against the TypeScript contract.
-- [ ] **CORE-05**: Restored session metadata never represents terminated processes as still running.
+- [x] **CORE-05**: Restored session metadata never represents terminated processes as still running.
 
 ### Linux Terminal Foundation
 
@@ -99,10 +99,10 @@
 | EVT-04 | Phase 104 | Complete |
 | EVT-05 | Phase 104 | Complete |
 | CORE-01 | Phase 105 | Complete |
-| CORE-02 | Phase 105 | Pending |
+| CORE-02 | Phase 105 | Complete |
 | CORE-03 | Phase 105 | Complete |
 | CORE-04 | Phase 105 | Complete |
-| CORE-05 | Phase 105 | Pending |
+| CORE-05 | Phase 105 | Complete |
 | TERM-01 | Phase 105 | Pending |
 | TERM-02 | Phase 105 | Pending |
 | TERM-03 | Phase 105 | Complete |

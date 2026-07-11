@@ -6,14 +6,14 @@ current_phase: 105
 current_phase_name: Shared Native Model and Terminal Foundation
 status: executing
 stopped_at: Completed 105-02-PLAN.md
-last_updated: "2026-07-11T13:18:48.890Z"
+last_updated: "2026-07-11T13:25:34.712Z"
 last_activity: 2026-07-11
 last_activity_desc: Phase 105 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 14
-  completed_plans: 11
+  completed_plans: 12
   percent: 25
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 105 (Shared Native Model and Terminal Foundation) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-07-11 — Phase 105 execution started
 
@@ -62,6 +62,7 @@ Progress: [██████░░░░] 64%
 | Phase 104 P09 | 2min | 2 tasks | 5 files |
 | Phase 105 P01 | 8min | 1 tasks | 5 files |
 | Phase 105 P02 | 10min | 2 tasks | 12 files |
+| Phase 105 P03 | 6min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 105]: ABI interchange preserves canonical v1 JSON bytes behind opaque handles; no Zig or platform layout crosses the header. — Keeps both native shells on one product-owned contract.
 - [Phase 105]: Destroyed handles retain a bounded tombstone while owned payload bytes are released immediately. — Makes double-destroy and post-destroy calls deterministic.
 - [Phase 105]: Header portability is proven in Phase 105, while actual macOS execution and byte parity remain Phase 107 work. — Avoids a false runtime claim.
+- [Phase 105]: Service disconnection retains an explicitly stale snapshot; revision drift and replay gaps enter refresh_required and emit only a refresh effect. — Preserve useful context while freezing mutations until authoritative refresh.
+- [Phase 105]: Restoration accepts valid records independently and always materializes them as ended presentation state. — Presentation continuity must never spoof process liveness.
+- [Phase 105]: Relaunch creates a distinct live surface with predecessor lineage and never rewrites the ended predecessor identity. — A new process lifetime cannot masquerade as the old surface.
 
 ### Pending Todos
 
@@ -108,6 +112,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T13:18:48.870Z
+Last session: 2026-07-11T13:25:15.298Z
 Stopped at: Completed 105-02-PLAN.md
 Resume file: None
