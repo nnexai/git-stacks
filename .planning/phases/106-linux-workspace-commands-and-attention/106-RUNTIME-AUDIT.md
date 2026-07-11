@@ -216,3 +216,64 @@ Runtime closure on 2026-07-11 replaced the false-green workspace smoke with an i
 That gate exposed and repaired additional production defects: `AdwTabView::close-page` was recursively re-requested without `close_page_finish`, launcher children became dangling after dialog close, relaunch retained its predecessor page, terminal destruction raced queued GTK/IME callbacks, new installations had no default authoritative pair, and shutdown replay had no finite join point. SSE replay now uses bounded one-frame leases with `Last-Event-ID`, preserving ordered reconnect while allowing deterministic shutdown.
 
 The prior `clipboard=1` stress result was also a real leak: an unrealized `Surface` returned from teardown before invalidating its clipboard context. Teardown now invalidates clipboard ownership independently of Ghostty realization. The 25-cycle production stress lane passes exact-zero surface/callback/clipboard/GL/child accounting; trend checks are stratified by the intentionally different one- and two-surface workloads (final ranges: two-surface thread range 0, single-surface thread range 2). Two consecutive full workspace lifecycle smokes passed after the final close/relaunch ordering repair.
+
+## Follow-up runtime audit — 2026-07-12
+
+The second real-user UAT disproves the preceding smoke-based closure. The implementation still has two meanings for close, invalid detailed-action wiring, immediate destruction of command output, synchronous network shutdown, and stale-page GTK calls. These are production state-machine defects, not visual polish.
+
+### F1 — Tab X removes the live page and deliberately recreates an ended page (P0)
+
+`nativeClosePage` changes the model surface from live to ended, removes its terminal host, calls `adw_tab_view_close_page_finish(..., true)`, and immediately calls `refreshProjection` (`app.zig:633-659`). Projection sees an ended record with no page and appends a new ended page (`app.zig:527-558`). This exactly produces the reported close-then-reopen behavior; it is not a race. `workspace_view.closeTab` means retain history (`workspace_view.zig:31`), while a tab close conventionally means remove it.
+
+Fix contract: separate `processExited(id)` from `userClosedTab(id)`. Natural exit may retain an ended presentation. User close must terminate the child, detach one host, remove one page and record, choose a sibling, persist once, and never recreate that ID. Test a real tab-X click and assert the ID is absent from model, registry, terminal slots, GTK pages, and persisted state after the main loop drains.
+
+### F2 — Ctrl+Shift+W and tab X execute different transactions (P0)
+
+The accelerator activates `win.close-tab` (`application.zig:4`, `app.zig:1012-1014`). `closeTerminal` marks the model ended, requests a programmatic GTK close, forgets/closes the host, and saves, but does not refresh (`app.zig:950-960`). Tab X instead finishes the pending close and refreshes (`app.zig:633-659`). Thus keyboard close leaves an ended record without an ended page until a later refresh, matching UAT.
+
+Fix contract: X, accelerator, and context Close must call one ID-targeted transition; `close-page` is only a request adapter. Regression-test all three from identical fixtures and compare normalized model/registry/page/persistence snapshots.
+
+### F3 — Ended Relaunch and Remove are disabled by malformed action names (P0)
+
+The buttons build detailed strings such as `win.relaunch-tab('uuid')` but pass them to `gtk_actionable_set_action_name` (`app.zig:546-553`). That API accepts a plain action name, not a detailed action target. Use `gtk_actionable_set_detailed_action_name`, or set a plain action name plus a typed target. Test realized buttons for sensitivity and activate them through GTK: relaunch must create distinct live lineage; remove must erase model/page/persistence state.
+
+### F4 — Natural command exit hides output and leaves ownership inconsistent (P0)
+
+Ghostty child exit hides the GLArea (`ghostty_surface.zig:314-321`). `surfaceExited` only marks ended, saves, and refreshes (`app.zig:362-366`); it does not call `tab_registry.childExited`, forget the terminal, or replace the page coherently. A short command therefore appears gray/ended immediately, final output is invisible, and host ownership remains until later cleanup. The command is shell-quoted into one Ghostty command string (`app.zig:107-166`, `ghostty_surface.zig:196-205`), so a successful short command naturally exits quickly.
+
+Fix contract: natural exit unregisters ownership exactly once while retaining the rendered buffer/page (or captured transcript) until user close; do not hide the widget on child exit. If Ghostty cannot safely retain it, use an interactive command wrapper that prints exit status and waits for dismissal without changing argv/cwd/env semantics. Test stdout, stderr, exit 0/nonzero, visible final text, ended lifecycle, zero ownership, and enabled actions.
+
+### F5 — Programmatic close paths can use stale/already-closing AdwTabPage pointers (P0)
+
+Multiple paths call `adw_tab_view_close_page` while the shared signal remains active (`app.zig:817,830,862,956,1021,1028`). Remove mutates the model first and does not consistently set `programmatic_tab_close` (`app.zig:1014-1029`); relaunch publishes/reprojects before removing its predecessor (`app.zig:837-867`). Reentrancy can detach a page between lookup and request, explaining `ADW_IS_TAB_PAGE(page)`.
+
+Fix contract: maintain one GTK-thread page map and a closing-ID set. Claim/remove mapping before close, never close pending/detached pages, complete each request once, and prevent projection from recreating an ID mid-transaction. Race-test close, exit, remove, relaunch, selection, and refresh; any GTK/Adwaita warning fails.
+
+### F6 — Window shutdown joins an uncancellable HTTP fetch on the GTK thread (P0)
+
+Window close synchronously calls cleanup (`app.zig:1266-1268`), which sets a flag then joins replay (`app.zig:173-180`). Replay may be blocked in `std.http.Client.fetch` (`service_client.zig:55-64`); `cancel` only sets a boolean checked before fetch. Join latency therefore follows the HTTP lease/server and explains about 13 seconds.
+
+Fix contract: initiate asynchronous shutdown and return promptly. Use an actually interruptible replay connection or strict short deadline; cancel/close it safely, then join and free state after queued dispatch drains. Test a held-open event endpoint and require application exit within a fixed local budget with zero worker leaks or use-after-free.
+
+### F7 — Reopen LaunchRejected is consistent with stale expected revision/service metadata (P1)
+
+Launch includes `expected_revision` (`service_client.zig:129-132`), and every non-200 becomes generic `LaunchRejected` (`service_client.zig:163`, `app_graph.zig:66-71`). Replay reduces state but does not synchronize `graph.service.revision` after accepted frames (`app.zig:265-327`). A revision change can make launches stay rejected until refresh; generic mapping hides stale descriptor/service causes.
+
+Fix contract: synchronize revision on every snapshot/event; on conflict refresh once and retry idempotently; preserve typed failures. The run wrapper must validate descriptor PID/instance/credential health and replace stale metadata. Test revision mutation and stale descriptor recovery without manual retries.
+
+### F8 — The production smoke codifies the rejected behavior (P0 verification gap)
+
+The smoke invokes GActions directly (`app.zig:1350-1410`); it does not click ended buttons, compare X and keyboard close, inspect retained output, or block replay during shutdown. Its `close=live-safe ended-page=true` checkpoint explicitly codifies F1 (`app.zig:1380-1387`). Passing it cannot close Phase 106.
+
+Required acceptance: all close entry points converge; natural exit retains visible output with working actions; actual ended buttons are clicked; a short command proves stdout/stderr/status/cwd/env; close/exit/relaunch races emit no GTK warning; blocked replay closes within budget; restart launches immediately.
+
+### Required state-machine invariants
+
+- A surface ID has at most one model record, native host, terminal slot, and GTK page.
+- Live implies all owners and matching process identity; ended implies no registered process owner.
+- User close removes presentation; natural exit may retain it.
+- Page close is claimed/completed once; projection never recreates an explicitly closed ID.
+- UI entry points use the same ID-targeted transition, not incidental global selection.
+- Final command output remains inspectable after exit.
+- Persist only after the complete transaction, never between ownership mutations.
+- Shutdown never waits synchronously on an unbounded network operation on the GTK thread.
