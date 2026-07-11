@@ -26,12 +26,12 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
   4. A reconnecting client receives ordered operation and attention events from retained history, or detects a replay gap and rebuilds from an authoritative snapshot.
   5. Existing CLI and OpenTUI workflows remain compatible, and slow or disconnected event consumers cannot grow service memory without bound.
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 - [x] 104-01-PLAN.md
 - [x] 104-02-PLAN.md
 - [x] 104-03-PLAN.md
-- [ ] 104-04-PLAN.md
+- [x] 104-04-PLAN.md
 - [x] 104-05-PLAN.md
 - [ ] 104-06-PLAN.md
 
@@ -43,7 +43,7 @@ Wave 1:
 Wave 2 *(blocked on Wave 1 completion)*:
 
 - [x] 104-02 — Build authoritative snapshots and redacted launch contexts
-- [ ] 104-05 — Build the durable ordered journal and bounded live broker
+- [x] 104-05 — Build the durable ordered journal and bounded live broker
 
 Wave 3 *(blocked on Wave 2 completion)*:
 
@@ -107,7 +107,7 @@ Wave 4 *(blocked on Wave 3 completion)*:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 104. Workspace Service and Event Contract | 4/6 | In Progress|  |
+| 104. Workspace Service and Event Contract | 5/6 | In Progress|  |
 | 105. Shared Native Model and Terminal Foundation | 0/TBD | Not started | - |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |

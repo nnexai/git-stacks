@@ -15,8 +15,8 @@
 
 ### Operations and Events
 
-- [ ] **EVT-01**: Long-running workspace mutations return operation identities and structured progress without blocking ordinary queries.
-- [ ] **EVT-02**: Retried mutations use idempotency keys so destructive work is not duplicated.
+- [x] **EVT-01**: Long-running workspace mutations return operation identities and structured progress without blocking ordinary queries.
+- [x] **EVT-02**: Retried mutations use idempotency keys so destructive work is not duplicated.
 - [x] **EVT-03**: Native clients receive ordered operation and agent-attention events over SSE.
 - [x] **EVT-04**: A reconnecting client can replay retained events or detect a gap and rebuild state from an authoritative snapshot.
 - [x] **EVT-05**: Slow or disconnected clients cannot create unbounded service memory or event queues.
@@ -93,8 +93,8 @@
 | SVC-03 | Phase 104 | Complete |
 | SVC-04 | Phase 104 | Complete |
 | SVC-05 | Phase 104 | Complete |
-| EVT-01 | Phase 104 | Pending |
-| EVT-02 | Phase 104 | Pending |
+| EVT-01 | Phase 104 | Complete |
+| EVT-02 | Phase 104 | Complete |
 | EVT-03 | Phase 104 | Complete |
 | EVT-04 | Phase 104 | Complete |
 | EVT-05 | Phase 104 | Complete |
