@@ -17,16 +17,20 @@ fn draw(widget: ?*c.GtkDrawingArea, cr: ?*c.cairo_t, width: c_int, height: c_int
     var frame = ctx.terminal.snapshot() catch return; defer frame.deinit(); ctx.draws += 1; ctx.painted_cells = 0;
     const layout = c.pango_cairo_create_layout(cairo) orelse return; defer c.g_object_unref(layout);
     const desc = c.pango_font_description_new(); defer c.pango_font_description_free(desc); c.pango_font_description_set_family(desc, ctx.font_family.ptr); c.pango_font_description_set_size(desc, @intFromFloat(ctx.font_size * c.PANGO_SCALE)); c.pango_layout_set_font_description(layout, desc);
-    var bytes: [4]u8 = undefined; for (frame.cells) |cell| {
+    for (frame.cells) |cell| {
         const is_selected = selected(ctx, cell); const style = cell.style;
         const bg = if (is_selected) @as(u32, 0x315b7d) else if (style.inverse) style.foreground else style.background;
         c.cairo_set_source_rgb(cairo, @as(f64, @floatFromInt((bg >> 16) & 255)) / 255, @as(f64, @floatFromInt((bg >> 8) & 255)) / 255, @as(f64, @floatFromInt(bg & 255)) / 255);
         c.cairo_rectangle(cairo, @as(f64, @floatFromInt(cell.column)) * ctx.cell_width, @as(f64, @floatFromInt(cell.row)) * ctx.cell_height, @as(f64, @floatFromInt(cell.width)) * ctx.cell_width, ctx.cell_height); c.cairo_fill(cairo);
-        const n = std.unicode.utf8Encode(cell.codepoint, &bytes) catch continue; c.pango_layout_set_text(layout, &bytes, @intCast(n));
-        const fg = if (is_selected) @as(u32, 0xffffff) else if (style.inverse) style.background else style.foreground;
-        c.cairo_move_to(cairo, @as(f64, @floatFromInt(cell.column)) * ctx.cell_width, @as(f64, @floatFromInt(cell.row)) * ctx.cell_height); c.cairo_set_source_rgba(cairo, @as(f64, @floatFromInt((fg >> 16) & 255)) / 255, @as(f64, @floatFromInt((fg >> 8) & 255)) / 255, @as(f64, @floatFromInt(fg & 255)) / 255, if (style.faint) 0.62 else 1.0); c.pango_cairo_show_layout(cairo, layout);
-        if (style.underline) { c.cairo_set_line_width(cairo, 1); c.cairo_move_to(cairo, @as(f64, @floatFromInt(cell.column)) * ctx.cell_width, @as(f64, @floatFromInt(cell.row + 1)) * ctx.cell_height - 2); c.cairo_line_to(cairo, @as(f64, @floatFromInt(cell.column + cell.width)) * ctx.cell_width, @as(f64, @floatFromInt(cell.row + 1)) * ctx.cell_height - 2); c.cairo_stroke(cairo); }
-        ctx.painted_cells += 1;
+    }
+    var i: usize = 0; while (i < frame.cells.len) {
+        const first = frame.cells[i]; const run_selected = selected(ctx, first); const style = first.style; var expected = first.column; var text: std.ArrayList(u8) = .empty; defer text.deinit(ctx.terminal.allocator);
+        var j = i; while (j < frame.cells.len) : (j += 1) { const cell = frame.cells[j]; if (cell.row != first.row or cell.column != expected or selected(ctx, cell) != run_selected or !std.meta.eql(cell.style, style)) break; var bytes: [4]u8 = undefined; const n = std.unicode.utf8Encode(cell.codepoint, &bytes) catch break; text.appendSlice(ctx.terminal.allocator, bytes[0..n]) catch break; expected +%= cell.width; }
+        if (j == i) { i += 1; continue; }
+        c.pango_layout_set_text(layout, text.items.ptr, @intCast(text.items.len)); const fg = if (run_selected) @as(u32, 0xffffff) else if (style.inverse) style.background else style.foreground;
+        c.cairo_move_to(cairo, @as(f64, @floatFromInt(first.column)) * ctx.cell_width, @as(f64, @floatFromInt(first.row)) * ctx.cell_height); c.cairo_set_source_rgba(cairo, @as(f64, @floatFromInt((fg >> 16) & 255)) / 255, @as(f64, @floatFromInt((fg >> 8) & 255)) / 255, @as(f64, @floatFromInt(fg & 255)) / 255, if (style.faint) 0.62 else 1.0); c.pango_cairo_show_layout(cairo, layout);
+        if (style.underline) { c.cairo_set_line_width(cairo, 1); c.cairo_move_to(cairo, @as(f64, @floatFromInt(first.column)) * ctx.cell_width, @as(f64, @floatFromInt(first.row + 1)) * ctx.cell_height - 2); c.cairo_line_to(cairo, @as(f64, @floatFromInt(expected)) * ctx.cell_width, @as(f64, @floatFromInt(first.row + 1)) * ctx.cell_height - 2); c.cairo_stroke(cairo); }
+        ctx.painted_cells += j - i; i = j;
     }
     ctx.cursor_draws = 0;
     if (frame.cursor_visible and frame.cursor_column < frame.columns and frame.cursor_row < frame.rows) {
