@@ -4,11 +4,11 @@ plan: 02
 review_depth: deep
 reviewed_range: 0cee9173..e0d93b10
 reviewed_at: 2026-07-11
-status: remediation-incomplete
-verdict: incomplete-after-remediation
+status: complete
+verdict: approved-after-remediation
 findings:
-  critical: 2
-  warning: 2
+  critical: 0
+  warning: 0
   info: 0
 ---
 
@@ -206,3 +206,14 @@ The review was acted on in commits `a16e4081`, `da9d7b06`, `0079e402`, `87a99e3d
 - `bun run verify:gates`
 
 All commands above passed after remediation. Green verification does not override the two explicit production orchestration gaps, so this review remains incomplete.
+
+## Final closure audit — 2026-07-11
+
+Commit `11786f45` closes the two remaining production orchestration gaps:
+
+- **C1 resolved:** the Linux application starts replay on a background worker after activation, sends the current cursor as `Last-Event-ID`, applies bounded reconnect backoff, schedules decoded reducer work through `g_main_context_invoke`, refreshes the authoritative snapshot on a sequence gap, cancels active transport sockets at shutdown, and joins the worker before graph destruction.
+- **C3 resolved:** activation obtains a fresh revision-bound `/v1/native-launch` before calling `Surface.createWithLaunch`. The surface configuration owns and injects the resolved argv command, cwd, environment, ports/configuration result, and reserved surface/workspace/repository identities. A terminal enters the registry/model only after Ghostty process ownership succeeds; resolution, construction, or ownership failure cannot publish a host or tab.
+
+Production-path contract coverage asserts the replay lifecycle and the ordering `resolve -> create configured Ghostty surface -> publish terminal`, and strict service tests retain actual environment and port values rather than counters alone.
+
+The complete Plan 02 verification set passed after closure: `native:test:restore`, `native:test:attention`, `native:test:service-client`, `native:test:tabs`, `native:test:quick`, `native:verify`, `typecheck`, `test:deps`, and `verify:gates`. The native verifier additionally passed 25 graphical lifecycle cycles, GTK smoke, terminal round-trip smoke, and multisurface smoke. No Plan 02 critical or warning finding remains open.

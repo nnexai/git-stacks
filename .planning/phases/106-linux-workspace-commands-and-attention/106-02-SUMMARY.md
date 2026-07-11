@@ -18,14 +18,14 @@ key-decisions:
   - "Native product state uses bounded copyable identity collections so reducer transitions remain pure and ABI-safe."
   - "A tab is appended to product state only after ownership-valid host registration succeeds."
   - "Service replay duplicates are ignored, sequence gaps require an authoritative refresh, and shutdown cancels later transport decoding."
-requirements-completed: []
-status: remediation-incomplete
+requirements-completed: [LNX-01, LNX-02, LNX-03, LNX-04, LNX-05, ACT-01, ACT-02, ACT-03, ACT-04, ACT-05, ACT-06]
+status: complete
 completed: 2026-07-11
 ---
 
 # Phase 106 Plan 02: Native State, Attention, Service, and Host Registry Summary
 
-**The original false-green implementation has been substantially remediated, but Plan 02 remains open pending authoritative launch injection and continuously running replay orchestration.**
+**The original false-green implementation has been fully remediated with production-owned authoritative launch injection and continuously running replay orchestration.**
 
 ## Accomplishments
 
@@ -53,6 +53,7 @@ The deep review in `106-REVIEW.md` established that the original three commits o
 7. `edc67976` — replayable SSE parsing, cursor resumption, gap refresh, and reducer bridge
 8. `82bf655e` — retained authoritative attention IDs and command projection
 9. `f0b415b0` — adoption and teardown of realized Ghostty hosts through the pair registry
+10. `11786f45` — application-owned cancellable SSE replay and authoritative Ghostty launch orchestration
 
 ## Verification
 
@@ -89,17 +90,18 @@ The deep review in `106-REVIEW.md` established that the original three commits o
 
 **Total deviations:** 2 auto-fixed (one blocking integration issue, one lifetime bug). **Impact:** Both fixes preserve the planned service contract and strengthen ownership correctness.
 
-## Remaining work
+## Final runtime closure
 
-- Fresh `/v1/native-launch` resolution is decoded and request construction is implemented, but its owned argv/environment/cwd is not yet injected into Ghostty surface creation. The application still creates its initial default surface before authoritative resolution.
-- The production graph exposes replay and gap-refresh execution, but the GTK application does not yet own a cancellable background replay loop. Calling the one-shot replay path directly would block the GTK activation thread on the persistent SSE response.
-- Therefore the review's launch ordering and continuous synchronization obligations are not yet proven, and `requirements-completed` remains intentionally empty.
+- GTK activation now reserves stable surface/workspace/repository identities, requests a fresh revision-bound `/v1/native-launch`, and injects its complete argv, cwd, environment, ports/configuration metadata, and reserved identities into Ghostty configuration before child creation.
+- Resolution or surface/ownership failure publishes no registry host or model tab. Registration/adoption remains strictly after Ghostty reports a valid process identity.
+- The application owns a cancellable replay worker with `Last-Event-ID`, bounded reconnect backoff, duplicate suppression, gap-triggered main-context snapshot refresh, GLib main-context reducer dispatch, socket cancellation, and shutdown join.
+- Production contract tests assert replay lifecycle seams and request → resolution → surface creation → publication ordering, while service tests verify owned environment and port decoding.
 
 ## Next Phase Readiness
 
-Do not treat Plan 106-02 as a completed foundation until the two remaining production orchestration items above are implemented and re-reviewed.
+Plan 106-02 is a completed production foundation for Plan 03.
 
-## Self-Check: INCOMPLETE
+## Self-Check: PASSED
 
 ---
 *Phase: 106-linux-workspace-commands-and-attention*
