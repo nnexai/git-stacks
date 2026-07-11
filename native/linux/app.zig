@@ -2,7 +2,7 @@ const std = @import("std");
 const widget_mod = @import("terminal_widget");
 const runtime_mod = @import("runtime");
 const input_mod = @import("input");
-const ghostty_config = @import("ghostty_config");
+const appearance_config = @import("appearance_config");
 const vt = @import("vt_adapter");
 const c = @cImport({ @cInclude("gtk/gtk.h"); });
 
@@ -14,7 +14,7 @@ const AppState = struct {
     im: *c.GtkIMContext,
     pump_source: c.guint = 0,
     cleaned: bool = false,
-    appearance: ghostty_config.Appearance,
+    appearance: appearance_config.Appearance,
     drag_origin_x: f64 = 0,
     drag_origin_y: f64 = 0,
 };
@@ -160,7 +160,7 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     var runtime = runtime_mod.TerminalRuntime.init(allocator, commandForLaunch(), 80, 24) catch { allocator.destroy(state); return; };
     errdefer runtime.close();
     state.allocator = allocator;
-    state.appearance = ghostty_config.load(allocator) catch ghostty_config.Appearance.init(allocator) catch { runtime.close(); allocator.destroy(state); return; };
+    state.appearance = appearance_config.load(allocator) catch appearance_config.Appearance.init(allocator) catch { runtime.close(); allocator.destroy(state); return; };
     state.runtime = runtime;
     state.input = input_mod.Input.init(&state.runtime);
     state.widget = widget_mod.TerminalWidget.initAppearance(&state.runtime.terminal, state.appearance.primaryFamily(), state.appearance.font_size) catch { state.input.deinit(); state.runtime.close(); state.appearance.deinit(); allocator.destroy(state); return; };

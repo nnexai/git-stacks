@@ -1,4 +1,4 @@
-const std = @import("std"); const config = @import("ghostty_config");
+const std = @import("std"); const config = @import("appearance_config");
 test "absent configuration uses safe Linux defaults" { var got = try config.parseText(std.testing.allocator, ""); defer got.deinit(); try std.testing.expectEqualStrings("Monospace", got.primaryFamily()); try std.testing.expectEqual(@as(f32, 12), got.font_size); }
 test "comments whitespace quotes repeats reset override and invalid bounds" {
     var got = try config.parseText(std.testing.allocator,
