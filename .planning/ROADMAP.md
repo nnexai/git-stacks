@@ -137,7 +137,7 @@ Wave 5 *(blocked on Wave 4 completion)*:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 104. Workspace Service and Event Contract | 9/9 | Complete   | 2026-07-11 |
+| 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 0/TBD | Not started | - |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
