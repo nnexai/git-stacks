@@ -1,0 +1,14 @@
+{
+  "protocol": "v1",
+  "request_id": "req_0123456789abcdef",
+  "ok": true,
+  "data": {
+    "service_version": "0.20.0",
+    "capabilities": {
+      "workspace_snapshots": { "available": true },
+      "operations": { "available": true },
+      "attention_events": { "available": false, "reason": "capability_unavailable" }
+    },
+    "limits": { "request_body_bytes": 262144, "subscriber_events": 1024, "subscriber_bytes": 1048576 }
+  }
+}
