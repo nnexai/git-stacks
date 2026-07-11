@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const Domain = enum { workspace, repository, command, operation, surface, attention };
+pub const PairKey = struct { workspace: [36]u8, repository: [36]u8 };
 
 pub fn isUuid(value: []const u8) bool {
     if (value.len != 36) return false;

@@ -21,6 +21,12 @@ test "valid entries restore beside independently quarantined entries" {
     try std.testing.expectEqualStrings("invalid_identity", restored.diagnostics.items[1].code);
 }
 
+test "pair-local order title cwd exit and lineage restore ended" {
+    const bytes="{\"protocol\":\"v1\",\"entries\":[{\"surface_id\":\"018f47f4-5ab1-7c2d-8e90-123456789abc\",\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"title\":\"named\",\"cwd_label\":\"repo\",\"order\":7,\"last_exit_status\":3,\"predecessor_surface_id\":\"318f47f4-5ab1-7c2d-8e90-123456789abc\",\"lifecycle\":\"live\",\"argv\":[\"secret\"]}]}";
+    var restored=try persistence.restore(std.testing.allocator,bytes); defer restored.deinit();
+    const r=restored.records.items[0]; try std.testing.expectEqual(@as(u32,7),r.order); try std.testing.expectEqualStrings("named",r.title); try std.testing.expectEqual(@as(?i32,3),r.last_exit_status); try std.testing.expect(r.predecessor_surface_id != null); try std.testing.expectEqualStrings("ended",@tagName(r.lifecycle));
+}
+
 test "owner-only permission policy is strict" {
     try std.testing.expect(persistence.isSafeMode(0o700, true));
     try std.testing.expect(persistence.isSafeMode(0o600, false));

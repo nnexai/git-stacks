@@ -13,6 +13,12 @@ pub const Record = struct {
     predecessor_surface_id: ?[36]u8 = null,
     lifecycle: model.Lifecycle = .ended,
 };
+pub const Presentation = struct {
+    organization_mode: model.OrganizationMode = .simple,
+    pinned_workspace_ids: []const [36]u8 = &.{},
+    last_pair: ?model.PairKey = null,
+    records: []const Record = &.{},
+};
 
 pub const Diagnostic = struct { index: usize, hash: [16]u8, code: []const u8 };
 pub const RestoreResult = struct {
@@ -37,12 +43,16 @@ pub fn encodeAlloc(allocator: std.mem.Allocator, records: []const Record) ![]u8 
         if (!identity.isUuid(&record.surface_id) or record.lifecycle != .ended) return error.InvalidRecord;
         var status_buffer: [16]u8 = undefined;
         const status_text = if (record.last_exit_status) |status| try std.fmt.bufPrint(&status_buffer, "{d}", .{status}) else "null";
-        const item = try std.fmt.allocPrint(allocator, "{{\"surface_id\":\"{s}\",\"title\":\"{s}\",\"order\":{d},\"cwd_label\":\"{s}\",\"last_exit_status\":{s},\"lifecycle\":\"ended\"}}", .{
-            record.surface_id, record.title, record.order, record.cwd_label,
-            status_text,
-        });
-        defer allocator.free(item);
-        try out.appendSlice(allocator, item);
+        try out.writer(allocator).print("{{\"surface_id\":\"{s}\",", .{record.surface_id});
+        try out.appendSlice(allocator, "\"workspace_id\":");
+        if (record.workspace_id) |v| try out.writer(allocator).print("\"{s}\"", .{v}) else try out.appendSlice(allocator,"null");
+        try out.appendSlice(allocator, ",\"repository_id\":");
+        if (record.repository_id) |v| try out.writer(allocator).print("\"{s}\"", .{v}) else try out.appendSlice(allocator,"null");
+        try out.writer(allocator).print(",\"title\":{f}", .{std.json.fmt(record.title,.{})});
+        try out.writer(allocator).print(",\"order\":{d},\"cwd_label\":{f}", .{record.order,std.json.fmt(record.cwd_label,.{})});
+        try out.writer(allocator).print(",\"last_exit_status\":{s},", .{status_text});
+        try out.appendSlice(allocator, "\"predecessor_surface_id\":"); if(record.predecessor_surface_id)|v| try out.writer(allocator).print("\"{s}\"",.{v}) else try out.appendSlice(allocator,"null");
+        try out.appendSlice(allocator, ",\"lifecycle\":\"ended\"}");
     }
     try out.appendSlice(allocator, "]}");
     return out.toOwnedSlice(allocator);
@@ -74,7 +84,12 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
         const title = if (title_value != null and title_value.? == .string) title_value.?.string else "";
         const cwd_value = object.get("cwd_label");
         const cwd = if (cwd_value != null and cwd_value.? == .string) cwd_value.?.string else "";
-        try result.records.append(a, .{ .surface_id = id, .title = title, .cwd_label = cwd, .lifecycle = .ended });
+        const order_value=object.get("order"); const order:u32=if(order_value != null and order_value.? == .integer and order_value.?.integer >= 0) @intCast(order_value.?.integer) else 0;
+        var ws:?model.Id=null; if(object.get("workspace_id"))|v| if(v==.string and identity.isUuid(v.string)){ var x:model.Id=undefined; @memcpy(&x,v.string); ws=x; };
+        var repo:?model.Id=null; if(object.get("repository_id"))|v| if(v==.string and identity.isUuid(v.string)){ var x:model.Id=undefined; @memcpy(&x,v.string); repo=x; };
+        var predecessor:?model.Id=null; if(object.get("predecessor_surface_id"))|v| if(v==.string and identity.isUuid(v.string)){ var x:model.Id=undefined; @memcpy(&x,v.string); predecessor=x; };
+        const exit_value=object.get("last_exit_status"); const exit:?i32=if(exit_value != null and exit_value.? == .integer) @intCast(exit_value.?.integer) else null;
+        try result.records.append(a, .{ .surface_id = id, .workspace_id=ws, .repository_id=repo, .title = title, .order=order, .cwd_label = cwd, .last_exit_status=exit, .predecessor_surface_id=predecessor, .lifecycle = .ended });
     }
     return result;
 }
