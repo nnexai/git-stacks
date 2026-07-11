@@ -57,6 +57,7 @@
     "native:build-app": "bun run scripts/verify-native.ts build-app",
     "native:run": "bun run scripts/verify-native.ts run-app",
     "native:smoke-app": "bun run scripts/verify-native.ts smoke-app",
+    "native:smoke-terminal": "bun run scripts/verify-native.ts smoke-terminal",
     "native:test:accessibility": "bun run scripts/verify-native.ts accessibility",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",

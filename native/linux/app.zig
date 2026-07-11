@@ -1,12 +1,14 @@
 const std = @import("std");
 const vt = @import("vt_adapter");
 const widget_mod = @import("terminal_widget");
+const runtime_mod = @import("runtime");
 const c = @cImport({ @cInclude("gtk/gtk.h"); });
 
 const AppState = struct {
     allocator: std.mem.Allocator,
     terminal: vt.VtAdapter,
     widget: widget_mod.TerminalWidget,
+    runtime: ?runtime_mod.TerminalRuntime = null,
 };
 
 fn quitTimer(data: ?*anyopaque) callconv(.c) c.gboolean {
@@ -20,9 +22,17 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     const allocator = std.heap.c_allocator;
     const state = allocator.create(AppState) catch return;
     state.allocator = allocator;
-    state.terminal = vt.VtAdapter.init(allocator, 80, 24) catch { allocator.destroy(state); return; };
-    state.terminal.feed("git-stacks native terminal ready\r\nPinned ghostty-vt frame") catch { state.terminal.deinit(); allocator.destroy(state); return; };
-    state.widget = widget_mod.TerminalWidget.init(&state.terminal) catch { state.terminal.deinit(); allocator.destroy(state); return; };
+    if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null) {
+        state.runtime = runtime_mod.TerminalRuntime.init(allocator, "printf 'SHELL_PROMPT_UNIQUE\\n'; read line; printf 'SHELL_RESULT_UNIQUE:%s\\n' \"$line\"", 80, 24) catch return;
+        if (!(state.runtime.?.waitFor("SHELL_PROMPT_UNIQUE", 400) catch false)) return;
+        state.runtime.?.send("widget-input-path\n") catch return;
+        if (!(state.runtime.?.waitFor("SHELL_RESULT_UNIQUE:widget-input-path", 400) catch false)) return;
+    } else {
+        state.terminal = vt.VtAdapter.init(allocator, 80, 24) catch { allocator.destroy(state); return; };
+        state.terminal.feed("git-stacks native terminal ready\r\nPinned ghostty-vt frame") catch { state.terminal.deinit(); allocator.destroy(state); return; };
+    }
+    const terminal_ptr = if (state.runtime != null) &state.runtime.?.terminal else &state.terminal;
+    state.widget = widget_mod.TerminalWidget.init(terminal_ptr) catch return;
 
     const window = c.gtk_application_window_new(app) orelse return;
     c.gtk_window_set_title(@ptrCast(window), "git-stacks terminal");
@@ -33,6 +43,7 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     const snapshot = state.widget.snapshot() catch return;
     c.g_object_unref(snapshot);
     std.debug.print("GIT_STACKS_NATIVE_READY text=git-stacks-native-terminal-ready focused={d}\n", .{c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget)))});
+    if (state.runtime != null) std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP marker=SHELL_RESULT_UNIQUE resources=owned\n", .{});
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) _ = c.g_timeout_add(250, quitTimer, @ptrCast(app));
 }
 

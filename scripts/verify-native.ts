@@ -268,6 +268,17 @@ async function smokeApp(): Promise<void> {
   if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("text=git-stacks-native-terminal-ready")) throw new Error(`production GTK readiness evidence missing: ${stderr || stdout}`)
   console.log(`native GTK smoke passed: backend=${process.env.GDK_BACKEND ?? "auto"} display=${process.env.WAYLAND_DISPLAY ?? process.env.DISPLAY} clean-exit=true`)
 }
+async function smokeTerminal(): Promise<void> {
+  const artifact = await buildApp()
+  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable for terminal roundtrip")
+  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_TERMINAL_SMOKE: "1" } })
+  let timer: ReturnType<typeof setTimeout>; const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 45_000) })
+  const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
+  if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
+  const stderr = await new Response(child.stderr).text()
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("SHELL_RESULT_UNIQUE")) throw new Error(`terminal roundtrip failed (${outcome.code}): ${stderr}`)
+  console.log("native terminal smoke passed: PTY input/output reached production VT/widget and process exited cleanly")
+}
 
 function verifyAccessibilityContract(): void {
   const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
@@ -304,6 +315,7 @@ else if (mode === "widget") await verifyGraphical("widget-test")
 else if (mode === "build-app") await buildApp()
 else if (mode === "run-app") await verify("run-app")
 else if (mode === "smoke-app") await smokeApp()
+else if (mode === "smoke-terminal") await smokeTerminal()
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "quick" || mode === "verify") await verifyQuick()
 else if (mode === "terminal-build") await verify()

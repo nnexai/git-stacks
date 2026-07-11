@@ -73,9 +73,10 @@ pub fn build(b: *std.Build) void {
     const app_module = b.createModule(.{ .root_source_file = b.path("linux/app.zig"), .target = b.graph.host, .optimize = .Debug });
     app_module.addImport("vt_adapter", vt_adapter);
     app_module.addImport("terminal_widget", widget_module);
+    app_module.addImport("runtime", runtime_module);
     addGtkIncludes(app_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
-    linkGtk(app);
+    linkGtk(app); app.linkSystemLibrary("util");
     b.installArtifact(app);
     const app_step = b.step("build-app", "Build and install the production GTK application");
     app_step.dependOn(b.getInstallStep());
