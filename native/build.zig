@@ -62,6 +62,7 @@ pub fn build(b: *std.Build) void {
     surface_module.linkSystemLibrary("gtk4", .{ .use_pkg_config = .force });
     app_module.addImport("ghostty_runtime", runtime_module);
     app_module.addImport("ghostty_surface", surface_module);
+    app_module.addImport("ghostty_clipboard", clipboard_module);
     app_module.addImport("guard", app_guard_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
@@ -94,6 +95,10 @@ pub fn build(b: *std.Build) void {
     interaction_tests.linkSystemLibrary("gtk4");
     const interaction_step = b.step("interaction-test", "Run Ghostty interaction and generation-isolation tests");
     interaction_step.dependOn(&b.addRunArtifact(interaction_tests).step);
+
+    const stress_tests = b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("tests/lifecycle_stress.zig"), .target = b.graph.host, .optimize = .Debug }) });
+    const stress_step = b.step("lifecycle-stress", "Validate production graphical stress diagnostics");
+    stress_step.dependOn(&b.addRunArtifact(stress_tests).step);
 
     const model = b.addLibrary(.{
         .name = "git_stacks_native_v1",

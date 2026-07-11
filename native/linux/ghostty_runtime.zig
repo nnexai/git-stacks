@@ -27,7 +27,7 @@ pub const Runtime = struct {
     app: c.ghostty_app_t,
     entries: std.ArrayList(Entry) = .empty,
     tick_source: c.guint = 0,
-    wakeup_pending: bool = false,
+    idle_source: c.guint = 0,
     shutting_down: bool = false,
     next_surface_number: u64 = 1,
 
@@ -70,11 +70,16 @@ pub const Runtime = struct {
         std.debug.assert(self.entries.items.len == 0);
         self.shutting_down = true;
         if (self.tick_source != 0) _ = c.g_source_remove(self.tick_source);
+        if (self.idle_source != 0) _ = c.g_source_remove(self.idle_source);
         c.ghostty_app_free(self.app);
         c.ghostty_config_free(self.config);
         self.entries.deinit(self.allocator);
         const allocator = self.allocator;
         allocator.destroy(self);
+    }
+
+    pub fn queuedCallbackCount(self: *const Runtime) usize {
+        return @intFromBool(self.idle_source != 0);
     }
 
     pub fn attach(self: *Runtime, surface: c.ghostty_surface_t, callbacks: SurfaceCallbacks) !void {
@@ -102,16 +107,21 @@ fn reportDiagnostics(config: c.ghostty_config_t) void {
 fn tick(data: ?*anyopaque) callconv(.c) c.gboolean {
     const self: *Runtime = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
     if (self.shutting_down) return c.G_SOURCE_REMOVE;
-    self.wakeup_pending = false;
     c.ghostty_app_tick(self.app);
     return 1;
 }
 
+fn idleTick(data: ?*anyopaque) callconv(.c) c.gboolean {
+    const self: *Runtime = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
+    self.idle_source = 0;
+    if (!self.shutting_down) c.ghostty_app_tick(self.app);
+    return c.G_SOURCE_REMOVE;
+}
+
 fn wakeup(data: ?*anyopaque) callconv(.c) void {
     const self: *Runtime = @ptrCast(@alignCast(data orelse return));
-    if (self.shutting_down or self.wakeup_pending) return;
-    self.wakeup_pending = true;
-    _ = c.g_idle_add(tick, self);
+    if (self.shutting_down or self.idle_source != 0) return;
+    self.idle_source = c.g_idle_add(idleTick, self);
     c.g_main_context_wakeup(null);
 }
 

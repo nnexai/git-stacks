@@ -10,6 +10,14 @@ const c = @cImport({
     @cInclude("unistd.h");
 });
 
+var live_surfaces: usize = 0;
+var live_areas: usize = 0;
+var live_gl_contexts: usize = 0;
+
+pub fn liveSurfaceCount() usize { return live_surfaces; }
+pub fn liveAreaCount() usize { return live_areas; }
+pub fn liveGlContextCount() usize { return live_gl_contexts; }
+
 pub const Surface = struct {
     runtime: *runtime_mod.Runtime,
     area: *c.GtkGLArea,
@@ -29,6 +37,8 @@ pub const Surface = struct {
         const self = try runtime.allocator.create(Surface);
         errdefer runtime.allocator.destroy(self);
         const area = c.gtk_gl_area_new() orelse return error.GtkGlAreaFailed;
+        _ = c.g_object_ref_sink(area);
+        live_areas += 1;
         self.* = undefined;
         self.runtime = runtime;
         self.area = @ptrCast(area);
@@ -56,7 +66,6 @@ pub const Surface = struct {
         _ = c.g_signal_connect_data(self.area, "map", @ptrCast(&onMap), self, null, 0);
         _ = c.g_signal_connect_data(self.area, "unmap", @ptrCast(&onUnmap), self, null, 0);
         _ = c.g_signal_connect_data(self.area, "unrealize", @ptrCast(&onUnrealize), self, null, 0);
-        _ = c.g_signal_connect_data(self.area, "destroy", @ptrCast(&onDestroy), self, null, 0);
         const focus = c.gtk_event_controller_focus_new() orelse return error.FocusControllerFailed;
         _ = c.g_signal_connect_data(focus, "enter", @ptrCast(&onFocusEnter), self, null, 0);
         _ = c.g_signal_connect_data(focus, "leave", @ptrCast(&onFocusLeave), self, null, 0);
@@ -82,6 +91,10 @@ pub const Surface = struct {
         self.destroyed = true;
         self.teardownSurface();
         self.input.deinit();
+        const widget_ptr: *c.GtkWidget = @ptrCast(self.area);
+        if (c.gtk_widget_get_parent(widget_ptr) != null) c.gtk_widget_unparent(widget_ptr);
+        c.g_object_unref(self.area);
+        live_areas -= 1;
         const allocator = self.runtime.allocator;
         allocator.destroy(self);
     }
@@ -107,6 +120,7 @@ pub const Surface = struct {
             std.debug.print("native Ghostty surface creation failed\n", .{});
             return;
         };
+        live_surfaces += 1;
         self.clipboard_context.surface = surface;
         self.clipboard_context.alive = true;
         self.clipboard_context.generation = self.generation;
@@ -140,8 +154,11 @@ pub const Surface = struct {
             self.teardownSurface();
             return true;
         };
-        c.ghostty_surface_display_realized(surface);
-        self.realized = true;
+        if (!self.realized) {
+            c.ghostty_surface_display_realized(surface);
+            self.realized = true;
+            live_gl_contexts += 1;
+        }
         self.updateSize();
         c.gtk_gl_area_queue_render(self.area);
         return true;
@@ -158,10 +175,12 @@ pub const Surface = struct {
             self.controller = null;
         }
         if (self.realized and self.current()) c.ghostty_surface_display_unrealized(surface);
+        if (self.realized) live_gl_contexts -= 1;
         self.realized = false;
         self.runtime.detach(surface);
         clipboard.invalidate(self.clipboard_context);
         c.ghostty_surface_free(surface);
+        live_surfaces -= 1;
         self.surface = null;
         self.generation +%= 1;
     }
@@ -228,8 +247,11 @@ fn onResize(_: ?*c.GtkGLArea, _: c_int, _: c_int, data: ?*anyopaque) callconv(.c
 fn onMap(_: ?*c.GtkWidget, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));
     if (self.surface) |surface| {
-        if (self.current()) c.ghostty_surface_display_realized(surface);
-        self.realized = true;
+        if (!self.realized and self.current()) {
+            c.ghostty_surface_display_realized(surface);
+            self.realized = true;
+            live_gl_contexts += 1;
+        }
         self.updateSize();
     }
 }
@@ -239,9 +261,10 @@ fn onUnmap(_: ?*c.GtkWidget, data: ?*anyopaque) callconv(.c) void {
 }
 fn onUnrealize(_: ?*c.GtkGLArea, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));
-    if (self.surface) |surface| if (self.realized and self.current()) {
-        c.ghostty_surface_display_unrealized(surface);
+    if (self.surface) |surface| if (self.realized) {
+        if (self.current()) c.ghostty_surface_display_unrealized(surface);
         self.realized = false;
+        live_gl_contexts -= 1;
     };
 }
 fn onFocusEnter(_: ?*c.GtkEventControllerFocus, data: ?*anyopaque) callconv(.c) void {
@@ -257,8 +280,4 @@ fn onFocusLeave(_: ?*c.GtkEventControllerFocus, data: ?*anyopaque) callconv(.c) 
         c.ghostty_surface_set_focus(surface, false);
         self.input.focusOut();
     }
-}
-fn onDestroy(_: ?*c.GtkWidget, data: ?*anyopaque) callconv(.c) void {
-    const self: *Surface = @ptrCast(@alignCast(data orelse return));
-    self.teardownSurface();
 }

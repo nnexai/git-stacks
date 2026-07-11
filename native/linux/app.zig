@@ -1,6 +1,7 @@
 const std = @import("std");
 const runtime_mod = @import("ghostty_runtime");
 const surface_mod = @import("ghostty_surface");
+const clipboard = @import("ghostty_clipboard");
 const guard = @import("guard");
 const c = @cImport({
     @cInclude("gtk/gtk.h");
@@ -12,6 +13,8 @@ const State = struct {
     terminals: [2]?*surface_mod.Surface = .{ null, null },
     terminal_count: usize = 0,
     registry: guard.Registry,
+    window: ?*c.GtkWindow = null,
+    close_handler: c.gulong = 0,
     cleaned: bool = false,
     injected: bool = false,
 };
@@ -20,16 +23,68 @@ var active: ?*State = null;
 fn cleanup(state: *State) void {
     if (state.cleaned) return;
     state.cleaned = true;
-    var index = state.terminal_count;
-    while (index > 0) {
-        index -= 1;
-        if (state.terminals[index]) |terminal| terminal.destroy();
+    active = null;
+    if (state.window) |window| if (state.close_handler != 0) {
+        c.g_signal_handler_disconnect(window, state.close_handler);
+        state.close_handler = 0;
+    };
+    if (state.window) |window| c.gtk_window_set_child(window, null);
+    const forward = std.posix.getenv("GIT_STACKS_NATIVE_DESTROY_FORWARD") != null;
+    for (0..state.terminal_count) |offset| {
+        const index = if (forward) offset else state.terminal_count - 1 - offset;
+        if (state.terminals[index]) |terminal| {
+            terminal.destroy();
+            state.terminals[index] = null;
+        }
     }
-    std.debug.assert(state.registry.entries.items.len == 0);
+    const children = state.registry.entries.items.len;
+    const surfaces = @max(state.runtime.entries.items.len, surface_mod.liveSurfaceCount());
+    const clipboard_pending = clipboard.liveContextCount() + clipboard.pendingReadCount();
+    const gl_areas = surface_mod.liveAreaCount();
+    const gl_contexts = surface_mod.liveGlContextCount();
+    const stress_cycle = parseStressCycle();
     state.registry.deinit();
     state.runtime.deinit();
+    if (stress_cycle) |cycle| reportStressSample(cycle, surfaces, clipboard_pending, gl_areas, gl_contexts, children);
     std.heap.c_allocator.destroy(state);
-    active = null;
+}
+
+const ProcessResources = struct { rss_bytes: i64, fd_count: usize, thread_count: usize };
+
+fn countDirectory(path: []const u8) usize {
+    var directory = std.fs.openDirAbsolute(path, .{ .iterate = true }) catch return 0;
+    defer directory.close();
+    var count: usize = 0;
+    var iterator = directory.iterate();
+    while (iterator.next() catch null) |_| count += 1;
+    return count;
+}
+
+fn processResources() ProcessResources {
+    var rss_bytes: i64 = 0;
+    if (std.fs.openFileAbsolute("/proc/self/statm", .{})) |file| {
+        defer file.close();
+        var buffer: [256]u8 = undefined;
+        if (file.readAll(&buffer)) |length| {
+            var fields = std.mem.tokenizeScalar(u8, buffer[0..length], ' ');
+            _ = fields.next();
+            if (std.fmt.parseInt(i64, fields.next() orelse "0", 10)) |pages| {
+                const page_size = c.sysconf(c._SC_PAGESIZE);
+                if (page_size > 0) rss_bytes = pages * page_size;
+            } else |_| {}
+        } else |_| {}
+    } else |_| {}
+    return .{ .rss_bytes = rss_bytes, .fd_count = countDirectory("/proc/self/fd"), .thread_count = countDirectory("/proc/self/task") };
+}
+
+fn parseStressCycle() ?usize {
+    const raw = std.posix.getenv("GIT_STACKS_NATIVE_STRESS_CYCLE") orelse return null;
+    return std.fmt.parseInt(usize, raw, 10) catch null;
+}
+
+fn reportStressSample(cycle: usize, surfaces: usize, clipboard_pending: usize, gl_areas: usize, gl_contexts: usize, children: usize) void {
+    const resources = processResources();
+    std.debug.print("GIT_STACKS_STRESS_SAMPLE cycle={d} surfaces={d} callbacks=0 clipboard={d} gl_areas={d} gl_contexts={d} children={d} rss_bytes={d} fd_count={d} thread_count={d}\n", .{ cycle, surfaces, clipboard_pending, gl_areas, gl_contexts, children, resources.rss_bytes, resources.fd_count, resources.thread_count });
 }
 
 fn closeRequested(_: ?*c.GtkWindow, data: ?*anyopaque) callconv(.c) c.gboolean {
@@ -77,9 +132,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         allocator.destroy(state);
         return;
     };
-    state.runtime = runtime;
-    state.registry = guard.Registry.init(allocator, @intCast(c.getpgrp()), -1);
-    state.cleaned = false;
+    state.* = .{ .runtime = runtime, .registry = guard.Registry.init(allocator, @intCast(c.getpgrp()), -1) };
     const terminal = surface_mod.Surface.create(runtime, &state.registry) catch |err| {
         std.debug.print("native surface init failed: {s}\n", .{@errorName(err)});
         state.registry.deinit();
@@ -95,9 +148,11 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         cleanup(state);
         return;
     };
-    _ = c.g_signal_connect_data(window, "close-request", @ptrCast(&closeRequested), state, null, 0);
+    state.window = @ptrCast(window);
+    state.close_handler = c.g_signal_connect_data(window, "close-request", @ptrCast(&closeRequested), state, null, 0);
     c.gtk_window_set_title(@ptrCast(window), "git-stacks terminal");
-    c.gtk_window_set_default_size(@ptrCast(window), 900, 540);
+    const stress_cycle = parseStressCycle() orelse 0;
+    c.gtk_window_set_default_size(@ptrCast(window), @intCast(800 + stress_cycle % 7 * 31), @intCast(480 + stress_cycle % 5 * 29));
     if (std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null) {
         const second = surface_mod.Surface.create(runtime, &state.registry) catch |err| {
             std.debug.print("native second surface init failed: {s}\n", .{@errorName(err)});
@@ -119,7 +174,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
 
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) {
         _ = c.g_timeout_add(20, smokeEvidence, state);
-        _ = c.g_timeout_add(1500, quitTimer, @ptrCast(app));
+        _ = c.g_timeout_add(if (parseStressCycle() != null) 500 else 1500, quitTimer, @ptrCast(app));
     }
 }
 

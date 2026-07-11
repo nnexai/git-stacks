@@ -326,23 +326,14 @@ async function verifyRestore(): Promise<void> {
 async function verifyLifecycle(): Promise<void> {
   await verify("lifecycle-test")
 }
-async function verifyStress(): Promise<void> { await verify("lifecycle-stress") }
 
-async function verifyTerminalHost(): Promise<void> {
-  verifyNativeSourceBoundaries()
-  await verify("terminal-host-test")
+type StressSample = {
+  cycle: number; surfaces: number; callbacks: number; clipboard: number; gl_areas: number;
+  gl_contexts: number; children: number; rss_bytes: number; fd_count: number; thread_count: number;
 }
 
-async function verifyVt(): Promise<void> {
-  verifyNativeSourceBoundaries()
-  await verify("vt-test")
-}
-
-async function verifyGraphical(target: "renderer-test" | "widget-test"): Promise<void> {
-  if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
-    await verify(target)
-    return
-  }
+async function withGraphicalSession<T>(operation: () => Promise<T>): Promise<T> {
+  if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) return operation()
   const runtime = join(CACHE, `wayland-${process.pid}`)
   mkdirSync(runtime, { recursive: true, mode: 0o700 })
   const socket = `git-stacks-${process.pid}`
@@ -355,7 +346,7 @@ async function verifyGraphical(target: "renderer-test" | "widget-test"): Promise
     const previousDisplay = process.env.WAYLAND_DISPLAY
     process.env.XDG_RUNTIME_DIR = runtime
     process.env.WAYLAND_DISPLAY = socket
-    try { await verify(target) } finally {
+    try { return await operation() } finally {
       if (previousRuntime === undefined) delete process.env.XDG_RUNTIME_DIR; else process.env.XDG_RUNTIME_DIR = previousRuntime
       if (previousDisplay === undefined) delete process.env.WAYLAND_DISPLAY; else process.env.WAYLAND_DISPLAY = previousDisplay
     }
@@ -364,6 +355,80 @@ async function verifyGraphical(target: "renderer-test" | "widget-test"): Promise
     await Promise.race([compositor.exited, Bun.sleep(3000)])
     rmSync(runtime, { recursive: true, force: true })
   }
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.floor(sorted.length / 2)]!
+}
+
+function slope(values: number[]): number {
+  const n = values.length
+  const sumX = n * (n - 1) / 2
+  const sumY = values.reduce((sum, value) => sum + value, 0)
+  const sumXY = values.reduce((sum, value, index) => sum + index * value, 0)
+  const sumXX = values.reduce((sum, _value, index) => sum + index * index, 0)
+  return (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX)
+}
+
+async function verifyStress(): Promise<void> {
+  await verify("lifecycle-stress")
+  const artifact = await buildApp()
+  const extended = process.env.GIT_STACKS_NATIVE_EXTENDED_STRESS === "1"
+  const cycles = extended ? 250 : 25
+  const samples: StressSample[] = []
+  await withGraphicalSession(async () => {
+    for (let cycle = 1; cycle <= cycles; cycle++) {
+      const child = Bun.spawn([artifact], {
+        stdout: "pipe", stderr: "pipe",
+        env: {
+          ...process.env,
+          GIT_STACKS_NATIVE_SMOKE: "1",
+          GIT_STACKS_NATIVE_STRESS_CYCLE: String(cycle),
+          ...(cycle % 2 === 0 ? { GIT_STACKS_NATIVE_MULTISURFACE_SMOKE: "1" } : {}),
+          ...(cycle % 4 < 2 ? { GIT_STACKS_NATIVE_DESTROY_FORWARD: "1" } : {}),
+        },
+      })
+      const outcome = await Promise.race([child.exited.then((code) => ({ code })), Bun.sleep(15_000).then(() => "timeout" as const)])
+      if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error(`production stress cycle ${cycle} timed out`) }
+      const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
+      if (outcome.code !== 0) throw new Error(`production stress cycle ${cycle} exited ${outcome.code}: ${stderr || stdout}`)
+      const line = stderr.split("\n").find((candidate) => candidate.startsWith("GIT_STACKS_STRESS_SAMPLE "))
+      if (!line) throw new Error(`production stress cycle ${cycle} omitted teardown diagnostics: ${stderr || stdout}`)
+      const fields = Object.fromEntries(line.slice("GIT_STACKS_STRESS_SAMPLE ".length).split(" ").map((field) => {
+        const [key, value] = field.split("="); return [key, Number(value)]
+      })) as StressSample
+      for (const key of ["surfaces", "callbacks", "clipboard", "gl_areas", "gl_contexts", "children"] as const) {
+        if (fields[key] !== 0) throw new Error(`production stress cycle ${cycle} leaked ${key}=${fields[key]}: ${line}`)
+      }
+      if (fields.cycle !== cycle || fields.rss_bytes <= 0 || fields.fd_count <= 0 || fields.thread_count <= 0) throw new Error(`invalid production stress metadata: ${line}`)
+      samples.push(fields)
+    }
+  })
+  const measured = samples.slice(Math.min(5, samples.length - 2))
+  const rssValues = measured.map((sample) => sample.rss_bytes)
+  const rssRange = Math.max(...rssValues) - Math.min(...rssValues)
+  const rssSlope = slope(rssValues)
+  const fdRange = Math.max(...measured.map((sample) => sample.fd_count)) - Math.min(...measured.map((sample) => sample.fd_count))
+  const threadRange = Math.max(...measured.map((sample) => sample.thread_count)) - Math.min(...measured.map((sample) => sample.thread_count))
+  if (rssRange > 64 * 1024 * 1024 || rssSlope > 512 * 1024 || fdRange > 4 || threadRange > 4) {
+    throw new Error(`production stress trend exceeded bounds: rss_range=${rssRange} rss_slope=${rssSlope} fd_range=${fdRange} thread_range=${threadRange}`)
+  }
+  console.log(JSON.stringify({ kind: "native-production-stress", lane: extended ? "extended" : "ordinary", cycles, warmup: Math.min(5, samples.length - 2), rss_median: median(rssValues), rss_range: rssRange, rss_slope: rssSlope, fd_range: fdRange, thread_range: threadRange, exact_zero: true }))
+}
+
+async function verifyTerminalHost(): Promise<void> {
+  verifyNativeSourceBoundaries()
+  await verify("terminal-host-test")
+}
+
+async function verifyVt(): Promise<void> {
+  verifyNativeSourceBoundaries()
+  await verify("vt-test")
+}
+
+async function verifyGraphical(target: "renderer-test" | "widget-test"): Promise<void> {
+  await withGraphicalSession(() => verify(target))
 }
 
 async function buildApp(): Promise<string> {

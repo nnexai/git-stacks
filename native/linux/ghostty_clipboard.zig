@@ -4,6 +4,12 @@ const c = @cImport({
     @cInclude("gtk/gtk.h");
 });
 
+var live_contexts: usize = 0;
+var pending_reads: usize = 0;
+
+pub fn liveContextCount() usize { return live_contexts; }
+pub fn pendingReadCount() usize { return pending_reads; }
+
 /// Stable userdata passed to Ghostty. It outlives every asynchronous clipboard
 /// completion and is invalidated before the Ghostty surface is freed.
 pub const Context = struct {
@@ -17,11 +23,15 @@ pub const Context = struct {
     pub fn create(allocator: std.mem.Allocator, widget: *anyopaque, generation: u64) !*Context {
         const self = try allocator.create(Context);
         self.* = .{ .allocator = allocator, .widget = widget, .generation = generation };
+        live_contexts += 1;
         return self;
     }
 
     fn releaseIfDead(self: *Context) void {
-        if (!self.alive and self.pending_reads == 0) self.allocator.destroy(self);
+        if (!self.alive and self.pending_reads == 0) {
+            live_contexts -= 1;
+            self.allocator.destroy(self);
+        }
     }
 };
 
@@ -57,6 +67,7 @@ pub fn read(userdata: ?*anyopaque, raw_kind: c_int, state: ?*anyopaque) void {
     const request = std.heap.c_allocator.create(Read) catch return;
     request.* = .{ .context = context, .generation = context.generation, .state = state };
     context.pending_reads += 1;
+    pending_reads += 1;
     c.gdk_clipboard_read_text_async(value, null, readComplete, request);
 }
 
@@ -66,6 +77,7 @@ fn readComplete(source: ?*c.GObject, result: ?*c.GAsyncResult, data: ?*anyopaque
     const context = request.context;
     defer {
         context.pending_reads -= 1;
+        pending_reads -= 1;
         context.releaseIfDead();
     }
     if (!context.alive or context.generation != request.generation or context.surface == null) return;
