@@ -7,7 +7,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 ## Phases
 
 - [x] **Phase 104: Workspace Service and Event Contract** - Native clients can securely query authoritative workspace state, launch context, operations, and replayable events without changing existing CLI or OpenTUI behavior. (completed 2026-07-11)
-- [ ] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface.
+- [x] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface. (completed 2026-07-11)
 - [ ] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention.
 - [ ] **Phase 107: Native Delivery and Cross-Platform Proof** - The Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
 
@@ -75,17 +75,17 @@ Wave 5 *(verification gap closure)*:
   4. Closing, exiting, quitting, or crashing a terminal surface cleans up its exclusive PTY and process group, and repeated create/resize/destroy cycles leave no orphaned processes or leaked surfaces.
   5. The pinned libghostty/Zig pair is reproducible behind the product adapter, upgrade smoke tests detect incompatibility, and the terminal exposes an honest documented native accessibility contract.
 
-**Plans**: 4/9 plans executed
+**Plans**: 9/9 plans complete
 
 - [x] 105-01-PLAN.md
 - [x] 105-02-PLAN.md
 - [x] 105-03-PLAN.md
 - [x] 105-04-PLAN.md
-- [ ] 105-05-PLAN.md
-- [ ] 105-06-PLAN.md
-- [ ] 105-07-PLAN.md
-- [ ] 105-08-PLAN.md
-- [ ] 105-09-PLAN.md
+- [x] 105-05-PLAN.md
+- [x] 105-06-PLAN.md
+- [x] 105-07-PLAN.md
+- [x] 105-08-PLAN.md
+- [x] 105-09-PLAN.md
 
 Wave 1:
 
@@ -105,23 +105,23 @@ Wave 4 *(blocked on Wave 3 completion)*:
 
 Wave 5 *(blocked on Wave 4 completion)*:
 
-- [ ] 105-05 — Pin, build, and drift-audit the validated full Linux Ghostty surface runtime
+- [x] 105-05 — Pin, build, and drift-audit the validated full Linux Ghostty surface runtime
 
 Wave 6 *(blocked on Wave 5 completion)*:
 
-- [ ] 105-06 — Bind Ghostty-owned children to exclusive cleanup and crash-guard truth
+- [x] 105-06 — Bind Ghostty-owned children to exclusive cleanup and crash-guard truth
 
 Wave 7 *(blocked on Wave 6 completion)*:
 
-- [ ] 105-07 — Host a Ghostty-owned rendered terminal leaf in GtkGLArea with delegated configuration
+- [x] 105-07 — Host a Ghostty-owned rendered terminal leaf in GtkGLArea with delegated configuration
 
 Wave 8 *(blocked on Wave 7 completion)*:
 
-- [ ] 105-08 — Complete Ghostty-native interaction and multi-surface isolation
+- [x] 105-08 — Complete Ghostty-native interaction and multi-surface isolation
 
 Wave 9 *(blocked on Wave 8 completion; final human evidence)*:
 
-- [ ] 105-09 — Prove production full-surface stress, accessibility, and real-session acceptance
+- [x] 105-09 — Prove production full-surface stress, accessibility, and real-session acceptance
 
 **UI hint**: yes
 

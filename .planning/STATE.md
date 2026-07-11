@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: milestone
-current_phase: 105
-current_phase_name: shared-native-model-and-terminal-foundation
+current_phase: 106
+current_phase_name: linux-workspace-commands-and-attention
 status: planned
-stopped_at: Phase 105 replanned; ready to execute 105-05
-last_updated: "2026-07-11T14:42:58.360Z"
+stopped_at: Phase 105 complete; ready for Phase 106
+last_updated: "2026-07-11T19:00:00.000Z"
 last_activity: 2026-07-11
-last_activity_desc: Replanned 105-05 through 105-08 around full Ghostty surfaces and production cleanup ownership
+last_activity_desc: Completed and human-approved the full Ghostty terminal foundation
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 20
-  completed_plans: 16
-  percent: 25
+  completed_phases: 2
+  total_plans: 21
+  completed_plans: 18
+  percent: 50
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** One command takes a user from feature intent to a fully running development environment without manual setup.
-**Current focus:** Phase 105 — shared-native-model-and-terminal-foundation
+**Current focus:** Phase 106 — linux-workspace-commands-and-attention
 
 ## Current Position
 
-Phase: 105 (shared-native-model-and-terminal-foundation) — PLANNED
-Plan: 4 of 9 complete; next 105-05
-Status: Replan complete; ready for execution
-Last activity: 2026-07-11 — Full Ghostty plans validated with production cleanup/guard path
+Phase: 106 (linux-workspace-commands-and-attention) — PLANNED
+Plan: Phase 105 complete; Phase 106 planning in progress
+Status: Full Ghostty terminal foundation approved
+Last activity: 2026-07-11 — Phase 105 production interaction, stress, accessibility, and configuration acceptance passed
 
-Progress: [██████░░░░] 64%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -101,6 +101,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 105]: Relaunch creates a distinct live surface with predecessor lineage and never rewrites the ended predecessor identity. — A new process lifetime cannot masquerade as the old surface.
 - [Phase 105]: Linux terminal leaves use full Ghostty rendered surfaces hosted by GTK; git-stacks owns pane/workspace layout while Ghostty owns PTY, rendering, fonts, input protocol, and terminal compatibility. — The custom `ghostty-vt` plus Pango path cannot provide Ghostty fidelity or fully functional panes.
 - [Phase 105]: The initial Linux surface integration may use the exact Limux Ghostty fork commit while an upstreamable patch and automated rebase/ABI audit are established. — Current upstream does not expose the rendered surface on Linux, but working multi-pane prior art exists.
+- [Phase 105]: Plain GTK IM commits are buffered into the original Ghostty key event while true composition commits directly. — Preserves raw-mode TUI keys without duplicating cooked input.
+- [Phase 105]: Launcher-scoped NO_COLOR is removed before Ghostty initializes while TERM, COLORTERM, TERMINFO, resources, and user configuration remain Ghostty-owned. — Prevents an embedding launcher from suppressing terminal child color capabilities.
 
 ### Pending Todos
 
@@ -108,7 +110,6 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 105 plans 05-08 are replanned around the full rendered `ghostty_surface_*` lifecycle; continuing the custom VT/Pango widget is explicitly superseded.
 - The Limux Ghostty fork is materially behind current upstream and requires a pinned patch, ABI/build verification, and an upstream/rebase strategy.
 - Phase 107 requires access to a macOS CI runner or physical macOS host; Linux-only inspection cannot complete MAC-06.
 
@@ -119,5 +120,5 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 ## Session Continuity
 
 Last session: 2026-07-11T13:29:43.608Z
-Stopped at: Phase 105 Plan 105-05 ready for execution
-Resume file: .planning/phases/105-shared-native-model-and-terminal-foundation/105-05-PLAN.md
+Stopped at: Phase 105 complete; Phase 106 ready
+Resume file: .planning/phases/106-linux-workspace-commands-and-attention/106-01-PLAN.md

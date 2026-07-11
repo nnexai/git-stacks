@@ -31,11 +31,11 @@
 
 ### Linux Terminal Foundation
 
-- [ ] **TERM-01**: The Linux client embeds one interactive libghostty terminal with correct keyboard, mouse, Unicode, resize, reflow, alternate-screen, clipboard, and IME behavior.
-- [ ] **TERM-02**: Each terminal surface exclusively owns one PTY and process group with explicit exit, close, application-quit, and crash cleanup semantics.
-- [ ] **TERM-03**: libghostty and its compatible Zig toolchain are exactly pinned behind a narrow adapter with upgrade smoke tests.
-- [ ] **TERM-04**: Repeated terminal creation, resize, destruction, and GPU view lifecycle do not leak surfaces or leave orphaned processes.
-- [ ] **TERM-05**: The terminal host exposes an honest native accessibility contract and documents any upstream limitations.
+- [x] **TERM-01**: The Linux client embeds one interactive libghostty terminal with correct keyboard, mouse, Unicode, resize, reflow, alternate-screen, clipboard, and IME behavior.
+- [x] **TERM-02**: Each terminal surface exclusively owns one PTY and process group with explicit exit, close, application-quit, and crash cleanup semantics.
+- [x] **TERM-03**: libghostty and its compatible Zig toolchain are exactly pinned behind a narrow adapter with upgrade smoke tests.
+- [x] **TERM-04**: Repeated terminal creation, resize, destruction, and GPU view lifecycle do not leak surfaces or leave orphaned processes.
+- [x] **TERM-05**: The terminal host exposes an honest native accessibility contract and documents any upstream limitations.
 
 ### Linux Workspace Client
 
@@ -103,11 +103,11 @@
 | CORE-03 | Phase 105 | Complete |
 | CORE-04 | Phase 105 | Complete |
 | CORE-05 | Phase 105 | Complete |
-| TERM-01 | Phase 105 | Pending |
-| TERM-02 | Phase 105 | Pending |
-| TERM-03 | Phase 105 | Pending |
-| TERM-04 | Phase 105 | Pending |
-| TERM-05 | Phase 105 | Pending |
+| TERM-01 | Phase 105 | Complete |
+| TERM-02 | Phase 105 | Complete |
+| TERM-03 | Phase 105 | Complete |
+| TERM-04 | Phase 105 | Complete |
+| TERM-05 | Phase 105 | Complete |
 | LNX-01 | Phase 106 | Pending |
 | LNX-02 | Phase 106 | Pending |
 | LNX-03 | Phase 106 | Pending |

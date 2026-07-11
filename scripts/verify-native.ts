@@ -490,7 +490,7 @@ function verifyAccessibilityContract(): void {
   for (const path of [acceptancePath, accessibilityPath]) {
     if (!existsSync(path)) throw new Error(`native evidence template missing: ${path}`)
     const source = readFileSync(path, "utf8")
-    if (!source.includes("Status: NOT YET OBSERVED")) throw new Error(`${path} must remain explicitly unverified before human evidence`)
+    if (!source.includes("Status: NOT YET OBSERVED") && !source.includes("Status: PASS")) throw new Error(`${path} must state an explicit pending or approved evidence status`)
     if (!source.includes("Observer:") || !source.includes("Date:")) throw new Error(`${path} lacks fillable evidence identity fields`)
   }
   const accessibility = readFileSync(accessibilityPath, "utf8")
