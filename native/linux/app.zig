@@ -105,7 +105,14 @@ fn appendQuoted(buffer: []u8, offset: *usize, value: []const u8) !void {
 fn launchSpec(state: *State, pair: model.PairKey, command_id: ?[]const u8) !surface_mod.LaunchSpec {
     const launch = try state.graph.resolveLaunch(pair, command_id);
     var spec: surface_mod.LaunchSpec = .{ .surface_id = undefined, .workspace_id = pair.workspace_id, .repository_id = pair.repository_id, .revision = launch.revision };
-    _ = try std.fmt.bufPrint(&spec.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{state.runtime.allocateSurfaceNumber()});
+    var random: [16]u8 = undefined;
+    std.crypto.random.bytes(&random);
+    random[6] = (random[6] & 0x0f) | 0x40;
+    random[8] = (random[8] & 0x3f) | 0x80;
+    _ = try std.fmt.bufPrint(&spec.surface_id, "{x:0>2}{x:0>2}{x:0>2}{x:0>2}-{x:0>2}{x:0>2}-{x:0>2}{x:0>2}-{x:0>2}{x:0>2}-{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{
+        random[0], random[1], random[2], random[3], random[4], random[5], random[6], random[7],
+        random[8], random[9], random[10], random[11], random[12], random[13], random[14], random[15],
+    });
     @memcpy(spec.cwd[0..launch.cwd_len], launch.cwdSlice());
     var command_len: usize = 0;
     for (0..launch.argv_count) |i| try appendQuoted(spec.command[0 .. spec.command.len - 1], &command_len, launch.arg(i));
@@ -173,7 +180,7 @@ fn cleanup(state: *State) void {
         c.g_signal_handler_disconnect(window, state.close_handler);
         state.close_handler = 0;
     };
-    if (state.window) |window| c.gtk_window_set_child(window, null);
+    if (state.window) |window| c.adw_application_window_set_content(@ptrCast(window), null);
     var adopted: [2]bool = .{ false, false };
     for (0..state.terminal_count) |i| {
         if (state.terminals[i]) |terminal| adopted[i] = state.graph.terminals.find(terminal.surface_id) != null;
@@ -511,7 +518,9 @@ fn refreshProjection(state: *State) void {
                 const menu_id = std.heap.c_allocator.create(model.Id) catch continue;
                 menu_id.* = surface.id;
                 c.g_object_set_data_full(@ptrCast(tab_menu), "git-stacks-surface", menu_id, @ptrCast(&freeId));
-                _ = c.g_signal_connect_data(tab_menu, "clicked", @ptrCast(&tabClicked), state, null, 0);
+                const menu_click = c.gtk_gesture_click_new() orelse continue;
+                _ = c.g_signal_connect_data(menu_click, "pressed", @ptrCast(&tabMenuPressed), state, null, 0);
+                c.gtk_widget_add_controller(tab_menu, @ptrCast(menu_click));
                 c.gtk_box_append(bar, tab_menu);
             }
         }
@@ -618,6 +627,15 @@ fn tabClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
     var name: [37]u8 = undefined;
     if (state.terminal_stack) |stack| c.gtk_stack_set_visible_child_name(stack, idText(sid.*, &name).ptr);
     refreshProjection(state);
+}
+fn tabMenuPressed(gesture: ?*c.GtkGestureClick, _: c_int, _: f64, _: f64, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const widget = c.gtk_event_controller_get_widget(@ptrCast(gesture orelse return)) orelse return;
+    const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-surface") orelse return;
+    const sid: *model.Id = @ptrCast(@alignCast(ptr));
+    _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(sid.*);
+    var name: [37]u8 = undefined;
+    if (state.terminal_stack) |stack| c.gtk_stack_set_visible_child_name(stack, idText(sid.*, &name).ptr);
 }
 const RenameContext = struct { state: *State, id: model.Id, entry: *c.GtkEntry };
 fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) callconv(.c) void {
@@ -1094,6 +1112,10 @@ fn smokeEvidence(data: ?*anyopaque) callconv(.c) c.gboolean {
 
 fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     const app = raw orelse return;
+    if (active) |state| {
+        if (state.window) |window| c.gtk_window_present(window);
+        return;
+    }
     const allocator = std.heap.c_allocator;
     const state = allocator.create(State) catch return;
     const runtime = runtime_mod.Runtime.init(allocator) catch |err| {
@@ -1173,13 +1195,13 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         };
         c.gtk_paned_set_start_child(@ptrCast(paned), @ptrCast(@alignCast(terminal.widget())));
         c.gtk_paned_set_end_child(@ptrCast(paned), @ptrCast(@alignCast(second.widget())));
-        c.gtk_window_set_child(@ptrCast(window), paned);
+        c.adw_application_window_set_content(@ptrCast(window), paned);
     } else {
         const shell = buildWorkspaceUi(state, @ptrCast(window), terminal) orelse {
             cleanup(state);
             return;
         };
-        c.gtk_window_set_child(@ptrCast(window), shell);
+        c.adw_application_window_set_content(@ptrCast(window), shell);
     }
     c.gtk_window_present(@ptrCast(window));
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(terminal.widget())));

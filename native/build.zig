@@ -224,7 +224,7 @@ pub fn build(b: *std.Build) void {
     aa_test.addImport("application", aa_app);
     aa_test.addImport("command_launcher", aa_launcher);
     aa_test.addImport("attention_view", aa_attention);
-    const production_contract = b.createModule(.{ .root_source_file = b.path("linux/app_contract_test.zig") });
+    const production_contract = b.createModule(.{ .root_source_file = b.path("linux/app_contract_test.zig"), .target = b.graph.host, .optimize = .Debug });
     production_contract.addImport("application", aa_app);
     aa_test.addImport("production_app_contract", production_contract);
     const application_actions_step = b.step("application-actions-test", "Run scoped application command and attention action tests");
@@ -253,7 +253,7 @@ pub fn build(b: *std.Build) void {
     graph_test_module.addImport("app_graph", app_graph_module);
     const graph_step = b.step("app-graph-test", "Assert the production service and terminal registry composition");
     graph_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = graph_test_module })).step);
-    const app_contract_tests = b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("linux/app_contract_test.zig"), .target = b.graph.host, .optimize = .Debug }) });
+    const app_contract_tests = b.addTest(.{ .root_module = production_contract });
     graph_step.dependOn(&b.addRunArtifact(app_contract_tests).step);
 
     const ownership_test_module = b.createModule(.{ .root_source_file = b.path("tests/ownership_test.zig"), .target = b.graph.host, .optimize = .Debug });

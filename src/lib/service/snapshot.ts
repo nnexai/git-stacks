@@ -149,8 +149,9 @@ function defaultFingerprint(workspace: IdentityWorkspace): string {
   const inputs = [`${configPath}:${readFileSync(configPath, "utf8")}`]
   for (const repo of workspace.repos) {
     const path = getRepoPath(repo)
-    inputs.push(fileStamp(path), fileStamp(join(path, ".git")), fileStamp(join(path, ".git", "HEAD")), fileStamp(join(path, ".git", "index")))
     if (existsSync(path) && repo.mode !== "dir") {
+      // `git status` may refresh the index metadata. Run it before collecting
+      // file stamps so the snapshot does not invalidate its own fingerprint.
       const status = Bun.spawnSync(["git", "status", "--porcelain=v2", "--branch", "--untracked-files=all"], {
         cwd: path,
         stdout: "pipe",
@@ -158,6 +159,10 @@ function defaultFingerprint(workspace: IdentityWorkspace): string {
       })
       inputs.push(`git:${status.exitCode}:${status.stdout.toString()}:${status.stderr.toString()}`)
     }
+    // The porcelain payload already captures index/worktree changes. Index and
+    // `.git` mtimes are deliberately excluded because ordinary read-only Git
+    // commands may refresh them without changing contract-visible state.
+    inputs.push(fileStamp(path), fileStamp(join(path, ".git", "HEAD")))
   }
   return digest(inputs)
 }

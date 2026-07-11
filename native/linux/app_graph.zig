@@ -92,7 +92,10 @@ pub const ProductionGraph = struct {
         if (self.terminals.allocator.ptr != self.allocator.ptr) return error.DetachedTerminalRegistry;
         if (self.authorization.len == 0) {
             if (self.service.state != .disconnected) return error.InvalidAnonymousServiceState;
-        } else if (self.service.state != .discovering and self.service.state != .snapshot_loading) return error.ServiceNotStarted;
+        } else switch (self.service.state) {
+            .discovering, .snapshot_loading, .replaying, .ready, .refresh_required => {},
+            else => return error.ServiceNotStarted,
+        }
     }
 
     pub fn terminalRegistry(self: *ProductionGraph) *tab_registry.Registry {
