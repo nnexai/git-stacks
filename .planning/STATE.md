@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 105
 current_phase_name: Shared Native Model and Terminal Foundation
 status: executing
-stopped_at: Completed 104-09-PLAN.md
-last_updated: "2026-07-11T13:12:32.157Z"
+stopped_at: Completed 105-02-PLAN.md
+last_updated: "2026-07-11T13:18:48.890Z"
 last_activity: 2026-07-11
 last_activity_desc: Phase 105 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 11
   percent: 25
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 105 (Shared Native Model and Terminal Foundation) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-11 — Phase 105 execution started
 
@@ -61,6 +61,7 @@ Progress: [██████░░░░] 64%
 | Phase 104 P08 | 8min | 2 tasks | 4 files |
 | Phase 104 P09 | 2min | 2 tasks | 5 files |
 | Phase 105 P01 | 8min | 1 tasks | 5 files |
+| Phase 105 P02 | 10min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Only the private ordinary execution-deadline sentinel maps to request_timeout; SSE remains exempt. — Preserves generic adapter failures and long-lived event streams while enforcing SVC-05.
 - [Phase 105]: Ordinary native verification is offline and consumes a setup-populated user cache whose artifact and checkout identities are revalidated before every compile. — Preserves reproducibility without vendoring large upstream payloads or using network during ordinary verification.
 - [Phase 105]: The feasibility spike imports the pinned full ghostty.h surface into a Zig object, proving API declarations without prematurely implementing or linking the later GTK host. — Retires API availability risk while leaving terminal lifecycle implementation in its planned slice.
+- [Phase 105]: ABI interchange preserves canonical v1 JSON bytes behind opaque handles; no Zig or platform layout crosses the header. — Keeps both native shells on one product-owned contract.
+- [Phase 105]: Destroyed handles retain a bounded tombstone while owned payload bytes are released immediately. — Makes double-destroy and post-destroy calls deterministic.
+- [Phase 105]: Header portability is proven in Phase 105, while actual macOS execution and byte parity remain Phase 107 work. — Avoids a false runtime claim.
 
 ### Pending Todos
 
@@ -104,6 +108,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T13:11:53.267Z
-Stopped at: Completed 104-09-PLAN.md
+Last session: 2026-07-11T13:18:48.870Z
+Stopped at: Completed 105-02-PLAN.md
 Resume file: None
