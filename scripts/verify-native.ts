@@ -166,6 +166,10 @@ async function setup(): Promise<void> {
     await requireSuccess(["git", "checkout", "--detach", lock.base_commit], temporary)
     await requireSuccess(["mv", temporary, baseDir])
   }
+  const upstream = await run(["git", "remote", "get-url", "upstream"], baseDir)
+  if (upstream.code !== 0) await requireSuccess(["git", "remote", "add", "upstream", lock.upstream_repository], baseDir)
+  else if (upstream.stdout !== lock.upstream_repository) throw new Error(`Ghostty upstream remote must be ${lock.upstream_repository}, got ${upstream.stdout}`)
+  await requireSuccess(["git", "fetch", "--no-tags", "upstream", "main"], baseDir)
   const baseProblems = await collectBaseProblems()
   if (baseProblems.length) throw new Error(`immutable Ghostty base rejected:\n  - ${baseProblems.join("\n  - ")}`)
   if (await sha256(patchPath) !== lock.patch_sha256) throw new Error("repository Ghostty patch digest differs from lock")
@@ -192,6 +196,8 @@ async function collectBaseProblems(): Promise<string[]> {
   if (!existsSync(join(baseDir, ".git"))) return ["missing immutable base checkout"]
   const origin = await run(["git", "remote", "get-url", "origin"], baseDir)
   if (origin.stdout !== lock.repository) problems.push(`base origin must be ${lock.repository}, got ${origin.stdout}`)
+  const upstream = await run(["git", "remote", "get-url", "upstream"], baseDir)
+  if (upstream.stdout !== lock.upstream_repository) problems.push(`upstream remote must be ${lock.upstream_repository}, got ${upstream.stdout || "missing"}`)
   const head = await run(["git", "rev-parse", "HEAD"], baseDir)
   if (head.stdout !== lock.base_commit) problems.push(`base HEAD must be ${lock.base_commit}, got ${head.stdout}`)
   const treeObject = await run(["git", "rev-parse", "HEAD^{tree}"], baseDir)
@@ -277,7 +283,9 @@ async function auditGhostty(): Promise<void> {
   const problems = await collectProblems()
   if (problems.length) throw new Error(`Ghostty audit failed:\n  - ${problems.join("\n  - ")}`)
   const central = await requireSuccess(["git", "diff", "--stat", `${lock.upstream_merge_base}..${lock.base_commit}`, "--", "include/ghostty.h", "src/apprt/embedded.zig"], baseDir)
-  const counts = await requireSuccess(["git", "rev-list", "--left-right", "--count", `${lock.base_commit}...upstream/main`], baseDir).catch(() => `${lock.recorded_ahead}\t${lock.recorded_behind} (recorded; upstream remote unavailable)`)
+  const mergeBase = await requireSuccess(["git", "merge-base", lock.base_commit, "upstream/main"], baseDir)
+  if (mergeBase !== lock.upstream_merge_base) throw new Error(`upstream merge-base drift: expected ${lock.upstream_merge_base}, got ${mergeBase}`)
+  const counts = await requireSuccess(["git", "rev-list", "--left-right", "--count", `${lock.base_commit}...upstream/main`], baseDir)
   console.log(`Ghostty drift audit: base=${lock.base_commit} merge_base=${lock.upstream_merge_base} ahead/behind=${counts}\n${central}`)
   await buildGhostty()
 }
