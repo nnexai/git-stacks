@@ -138,12 +138,21 @@ function fileStamp(path: string): string {
 }
 
 function defaultFingerprint(workspace: IdentityWorkspace): string {
-  const inputs = [workspaceFilePath(workspace.name)]
+  const configPath = workspaceFilePath(workspace.name)
+  const inputs = [`${configPath}:${readFileSync(configPath, "utf8")}`]
   for (const repo of workspace.repos) {
     const path = getRepoPath(repo)
-    inputs.push(path, join(path, ".git"), join(path, ".git", "HEAD"), join(path, ".git", "index"))
+    inputs.push(fileStamp(path), fileStamp(join(path, ".git")), fileStamp(join(path, ".git", "HEAD")), fileStamp(join(path, ".git", "index")))
+    if (existsSync(path) && repo.mode !== "dir") {
+      const status = Bun.spawnSync(["git", "status", "--porcelain=v2", "--branch", "--untracked-files=all"], {
+        cwd: path,
+        stdout: "pipe",
+        stderr: "pipe",
+      })
+      inputs.push(`git:${status.exitCode}:${status.stdout.toString()}:${status.stderr.toString()}`)
+    }
   }
-  return digest(inputs.map(fileStamp))
+  return digest(inputs)
 }
 
 function defaultDependencies(): SnapshotDependencies {
