@@ -98,6 +98,7 @@ pub const Surface = struct {
         c.gtk_widget_add_controller(@ptrCast(self.area), focus);
         return self;
     }
+    pub fn ownershipIdentity(self:*Surface)?process_control.Identity { const controller=self.controller orelse return null;const value=controller.registration orelse return null;return .{.pid=value.pid,.pgid=value.pgid,.linux_birth_token=value.birth_token}; }
 
     pub fn widget(self: *Surface) *anyopaque {
         return @ptrCast(self.area);

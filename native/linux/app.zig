@@ -3,6 +3,7 @@ const runtime_mod = @import("ghostty_runtime");
 const surface_mod = @import("ghostty_surface");
 const clipboard = @import("ghostty_clipboard");
 const terminal_environment = @import("terminal_environment");
+const tab_registry = @import("tab_registry");
 const guard = @import("guard");
 const app_graph = @import("app_graph");
 const c = @cImport({
@@ -32,6 +33,10 @@ fn cleanup(state: *State) void {
         state.close_handler = 0;
     };
     if (state.window) |window| c.gtk_window_set_child(window, null);
+    var adopted:[2]bool=.{false,false};
+    for(0..state.terminal_count)|i| { if(state.terminals[i])|terminal| adopted[i]=state.graph.terminals.find(terminal.surface_id)!=null; }
+    state.graph.terminals.quit() catch |err| std.debug.print("native terminal registry teardown failed: {s}\n", .{@errorName(err)});
+    for (0..state.terminal_count) |i| { if(adopted[i]) state.terminals[i] = null; }
     const forward = std.posix.getenv("GIT_STACKS_NATIVE_DESTROY_FORWARD") != null;
     for (0..state.terminal_count) |offset| {
         const index = if (forward) offset else state.terminal_count - 1 - offset;
@@ -51,6 +56,22 @@ fn cleanup(state: *State) void {
     state.runtime.deinit();
     if (stress_cycle) |cycle| reportStressSample(cycle, surfaces, clipboard_pending, gl_areas, gl_contexts, children);
     std.heap.c_allocator.destroy(state);
+}
+
+fn terminalRegister(context:*anyopaque,pgid:i32,birth:u64)!void {const surface:*surface_mod.Surface=@ptrCast(@alignCast(context));const identity=surface.ownershipIdentity() orelse return error.IdentityUnavailable;if(identity.pgid!=pgid or identity.linux_birth_token!=birth)return error.IdentityMismatch;}
+fn terminalTeardown(context:*anyopaque,_:i32,_:u64)!void {const surface:*surface_mod.Surface=@ptrCast(@alignCast(context));surface.destroy();}
+fn terminalExited(context:*anyopaque,_:i32,_:u64)!void {const surface:*surface_mod.Surface=@ptrCast(@alignCast(context));surface.destroy();}
+fn terminalDestroy(_: *anyopaque)void {}
+fn adoptHosts(data:?*anyopaque) callconv(.c) c.gboolean {
+    const state:*State=@ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));if(state.cleaned)return c.G_SOURCE_REMOVE;
+    const pair=state.graph.state.selected_pair orelse return 1;
+    for(state.terminals[0..state.terminal_count]) |candidate| if(candidate)|surface| {
+        if(state.graph.terminals.find(surface.surface_id)!=null)continue;
+        const identity=surface.ownershipIdentity() orelse continue;
+        const host:tab_registry.Host=.{.surface_id=surface.surface_id,.pair=pair,.generation=surface.generation,.child_pid=identity.pid,.pgid=identity.pgid,.birth_token=identity.linux_birth_token,.terminal=.{.context=surface,.registerOwnership=terminalRegister,.teardown=terminalTeardown,.childExited=terminalExited,.destroy=terminalDestroy}};
+        tab_registry.commitAfterRegistration(&state.graph.state,&state.graph.terminals,host) catch |err| std.debug.print("native terminal adoption failed: {s}\n",.{@errorName(err)});
+    };
+    return 1;
 }
 
 const ProcessResources = struct { rss_bytes: i64, fd_count: usize, thread_count: usize };
@@ -167,6 +188,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     state.terminals[0] = terminal;
     state.terminal_count = 1;
     active = state;
+    _ = c.g_timeout_add(10, adoptHosts, state);
 
     const window = c.gtk_application_window_new(app) orelse {
         cleanup(state);

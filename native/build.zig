@@ -79,6 +79,7 @@ pub fn build(b: *std.Build) void {
     app_graph_module.addImport("model", app_model_module);
     app_graph_module.addImport("reducer", app_reducer_module);
     app_module.addImport("app_graph", app_graph_module);
+    app_module.addImport("tab_registry", app_tab_registry_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
     app.linkSystemLibrary("ghostty");
