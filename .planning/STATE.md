@@ -4,11 +4,11 @@ milestone: v0.20.0
 milestone_name: milestone
 current_phase: 105
 current_phase_name: shared-native-model-and-terminal-foundation
-status: planning
-stopped_at: Phase 105 terminal implementation requires replan from spikes 005-009
+status: planned
+stopped_at: Phase 105 replanned; ready to execute 105-05
 last_updated: "2026-07-11T14:42:58.360Z"
 last_activity: 2026-07-11
-last_activity_desc: Validated full Linux Ghostty pane architecture; custom VT/Pango terminal superseded
+last_activity_desc: Replanned 105-05 through 105-08 around full Ghostty surfaces and production cleanup ownership
 progress:
   total_phases: 4
   completed_phases: 1
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 105 (shared-native-model-and-terminal-foundation) — EXECUTING
-Plan: 8 of 8
-Status: Replan required before further execution
-Last activity: 2026-07-11 — Spikes 005-009 validated Ghostty-owned GTK terminal surfaces
+Phase: 105 (shared-native-model-and-terminal-foundation) — PLANNED
+Plan: 4 of 8 complete; next 105-05
+Status: Replan complete; ready for execution
+Last activity: 2026-07-11 — Full Ghostty plans validated with production cleanup/guard path
 
 Progress: [██████░░░░] 64%
 
@@ -108,7 +108,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 105 plans 05-08 must be replanned around the full rendered `ghostty_surface_*` lifecycle; continuing the custom VT/Pango widget is explicitly superseded.
+- Phase 105 plans 05-08 are replanned around the full rendered `ghostty_surface_*` lifecycle; continuing the custom VT/Pango widget is explicitly superseded.
 - The Limux Ghostty fork is materially behind current upstream and requires a pinned patch, ABI/build verification, and an upstream/rebase strategy.
 - Phase 107 requires access to a macOS CI runner or physical macOS host; Linux-only inspection cannot complete MAC-06.
 
@@ -119,5 +119,5 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 ## Session Continuity
 
 Last session: 2026-07-11T13:29:43.608Z
-Stopped at: Phase 105 terminal architecture replan after spikes 005-009
-Resume file: .planning/spikes/005-libghostty-ecosystem-survey/README.md
+Stopped at: Phase 105 Plan 105-05 ready for execution
+Resume file: .planning/phases/105-shared-native-model-and-terminal-foundation/105-05-PLAN.md

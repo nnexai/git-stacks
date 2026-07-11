@@ -176,6 +176,6 @@ Wave 3 *(blocked on Wave 2 completion)*:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
-| 105. Shared Native Model and Terminal Foundation | 7/8 | In Progress|  |
+| 105. Shared Native Model and Terminal Foundation | 4/8 | Planned |  |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
