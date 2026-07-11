@@ -75,14 +75,14 @@ Wave 5 *(verification gap closure)*:
   4. Closing, exiting, quitting, or crashing a terminal surface cleans up its exclusive PTY and process group, and repeated create/resize/destroy cycles leave no orphaned processes or leaked surfaces.
   5. The pinned libghostty/Zig pair is reproducible behind the product adapter, upgrade smoke tests detect incompatibility, and the terminal exposes an honest documented native accessibility contract.
 
-**Plans**: 5/8 plans executed
+**Plans**: 6/8 plans executed
 
 - [x] 105-01-PLAN.md
 - [x] 105-02-PLAN.md
 - [x] 105-03-PLAN.md
 - [x] 105-04-PLAN.md
 - [x] 105-05-PLAN.md
-- [ ] 105-06-PLAN.md
+- [x] 105-06-PLAN.md
 - [ ] 105-07-PLAN.md
 - [ ] 105-08-PLAN.md
 
@@ -104,7 +104,7 @@ Wave 4 *(blocked on Wave 3 completion)*:
 
 Wave 5 *(blocked on Wave 4 completion)*:
 
-- [ ] 105-05 — Pivot to pinned ghostty-vt and ship a runnable GTK frame
+- [x] 105-05 — Pivot to pinned ghostty-vt and ship a runnable GTK frame
 
 Wave 6 *(blocked on Wave 5 completion)*:
 
@@ -176,6 +176,6 @@ Wave 3 *(blocked on Wave 2 completion)*:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
-| 105. Shared Native Model and Terminal Foundation | 5/8 | In Progress|  |
+| 105. Shared Native Model and Terminal Foundation | 6/8 | In Progress|  |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
