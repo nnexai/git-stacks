@@ -71,6 +71,10 @@ pub const Surface = struct {
     input: input_mod.Input,
     surface_id: [36]u8,
     launch: ?LaunchSpec = null,
+    exit_context: ?*anyopaque = null,
+    exit_handler: ?*const fn(*anyopaque,[36]u8)void = null,
+
+    pub fn setExitHandler(self:*Surface,context:*anyopaque,handler:*const fn(*anyopaque,[36]u8)void)void{self.exit_context=context;self.exit_handler=handler;}
 
     pub fn create(runtime: *runtime_mod.Runtime, registry: *guard.Registry) !*Surface {
         return createWithLaunch(runtime, registry, null);
@@ -282,7 +286,9 @@ fn requestClose(data: *anyopaque, generation: u64) void {
     if (!self.destroyed and self.generation == generation) c.gtk_widget_set_visible(@ptrCast(self.area), 0);
 }
 fn childExit(data: *anyopaque, generation: u64) void {
+    const self:*Surface=@ptrCast(@alignCast(data));
     requestClose(data, generation);
+    if(!self.destroyed and self.generation==generation)if(self.exit_handler)|handler|handler(self.exit_context orelse return,self.surface_id);
 }
 fn onRealize(_: ?*c.GtkGLArea, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));

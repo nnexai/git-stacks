@@ -5,3 +5,11 @@ pub const actions=[_]ActionSpec{.{.name="win.new-shell",.accelerator="<Primary><
 pub fn enabled(state:*const model.State,spec:ActionSpec)bool{return !spec.requires_ready or state.connection==.ready;}
 pub fn page(state:*model.State)workspace.Page{return (workspace.View{.state=state}).page();}
 pub const Breakpoint=struct{sidebar_collapsed_below:i32=720,wide_content_above:i32=1080};
+pub const IntegrationInvocation=struct{argv:[5][]const u8,len:usize};
+pub fn vscodeInvocation(state:*const model.State,pair:model.PairKey,executable:[]const u8)!IntegrationInvocation{
+    for(state.workspaces[0..state.workspace_count])|*ws|if(model.PairKey.eql(.{.workspace_id=ws.id,.repository_id=pair.repository_id},pair)){
+        if(ws.name_len==0)return error.MissingWorkspaceName;
+        return .{.argv=.{executable,"integration","vscode","open",ws.name[0..ws.name_len]},.len=5};
+    };
+    return error.UnknownWorkspace;
+}

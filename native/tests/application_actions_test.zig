@@ -53,3 +53,13 @@ test "incoming attention has no focus effect and explicit activation explains fa
     try std.testing.expect(activated.effect == .platform_focus);
     try std.testing.expectEqual(model.FallbackReason.repository, activated.effect.platform_focus.reason);
 }
+test "VS Code invocation uses authoritative git-stacks workspace name" {
+    var s:model.State=.{.connection=.ready,.workspace_count=1};
+    s.workspaces[0]=.{.id=id('w'),.repository_count=1};
+    s.workspaces[0].repository_ids[0]=id('r');s.workspaces[0].repositories[0].id=id('r');
+    @memcpy(s.workspaces[0].name[0..7],"feature");s.workspaces[0].name_len=7;
+    @memcpy(s.workspaces[0].repositories[0].name[0..3],"api");s.workspaces[0].repositories[0].name_len=3;
+    const invocation=try app.vscodeInvocation(&s,.{.workspace_id=id('w'),.repository_id=id('r')},"git-stacks");
+    try std.testing.expectEqual(@as(usize,5),invocation.len);
+    const expected:[5][]const u8=.{"git-stacks","integration","vscode","open","feature"};for(expected,0..)|value,i|try std.testing.expectEqualStrings(value,invocation.argv[i]);
+}

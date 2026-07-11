@@ -81,6 +81,9 @@ pub fn build(b: *std.Build) void {
     app_module.addImport("app_graph", app_graph_module);
     app_module.addImport("tab_registry", app_tab_registry_module);
     app_module.addImport("model", app_model_module);
+    const app_persistence_module=b.createModule(.{ .root_source_file = b.path("core/persistence.zig") });
+    app_persistence_module.addImport("model",app_model_module);
+    app_module.addImport("persistence", app_persistence_module);
     app_module.addImport("reducer", app_reducer_module);
     app_module.addImport("service_client", app_service_client_module);
     const workspace_module = b.createModule(.{ .root_source_file = b.path("linux/workspace_view.zig") });
@@ -181,7 +184,9 @@ pub fn build(b: *std.Build) void {
     model_step.dependOn(&run_harness.step);
 
     const persistence_test_module = b.createModule(.{ .root_source_file = b.path("tests/persistence_test.zig"), .target = b.graph.host, .optimize = .Debug });
-    persistence_test_module.addImport("persistence", b.createModule(.{ .root_source_file = b.path("core/persistence.zig") }));
+    const tested_persistence=b.createModule(.{ .root_source_file = b.path("core/persistence.zig") });
+    tested_persistence.addImport("model",b.createModule(.{ .root_source_file = b.path("core/model.zig") }));
+    persistence_test_module.addImport("persistence", tested_persistence);
     const restore_step = b.step("restore-test", "Run presentation restoration and quarantine tests");
     restore_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = persistence_test_module })).step);
 

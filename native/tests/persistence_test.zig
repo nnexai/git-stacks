@@ -41,3 +41,17 @@ test "owner-only permission policy is strict" {
     try std.testing.expect(!persistence.isSafeMode(0o755, true));
     try std.testing.expect(!persistence.isSafeMode(0o644, false));
 }
+
+test "atomic process restart restores pair-local presentation ended and quarantines corrupt peer" {
+    var tmp=std.testing.tmpDir(.{});defer tmp.cleanup();
+    var root:[std.fs.max_path_bytes]u8=undefined;const dir=try tmp.dir.realpath(".",&root);var path_buf:[std.fs.max_path_bytes]u8=undefined;const path=try std.fmt.bufPrint(&path_buf,"{s}/presentation.json",.{dir});
+    var before:persistence.State=.{.workspace_count=1,.pair_count=1,.pin_count=1,.organization_mode=.repository};
+    before.workspaces[0]=.{.id=id("118f47f4-5ab1-7c2d-8e90-123456789abc"),.repository_count=1};before.workspaces[0].repository_ids[0]=id("218f47f4-5ab1-7c2d-8e90-123456789abc");before.pins[0]=before.workspaces[0].id;
+    before.pairs[0]=.{.key=.{.workspace_id=before.workspaces[0].id,.repository_id=before.workspaces[0].repository_ids[0]},.surface_count=1};before.last_pair=before.pairs[0].key;
+    before.pairs[0].surfaces[0]=.{.id=id("018f47f4-5ab1-7c2d-8e90-123456789abc"),.lifecycle=.live,.order=4,.last_exit_status=7,.predecessor_surface_id=id("318f47f4-5ab1-7c2d-8e90-123456789abc")};
+    @memcpy(before.pairs[0].surfaces[0].title[0..7],"renamed");before.pairs[0].surfaces[0].title_len=7;@memcpy(before.pairs[0].surfaces[0].cwd[0..4],"repo");before.pairs[0].surfaces[0].cwd_len=4;
+    try persistence.writeStateAtomic(std.testing.allocator,path,&before);
+    var after:persistence.State=.{.workspace_count=1,.pair_count=1};after.workspaces[0]=before.workspaces[0];after.pairs[0]=.{.key=before.pairs[0].key};
+    try std.testing.expectEqual(@as(usize,0),try persistence.restoreStateFile(std.testing.allocator,path,&after));
+    const restored=after.pairs[0].surfaces[0];try std.testing.expect(restored.lifecycle==.ended);try std.testing.expectEqualStrings("renamed",restored.title[0..restored.title_len]);try std.testing.expectEqualStrings("repo",restored.cwd[0..restored.cwd_len]);try std.testing.expectEqual(@as(?i32,7),restored.last_exit_status);try std.testing.expect(restored.predecessor_surface_id!=null);
+}

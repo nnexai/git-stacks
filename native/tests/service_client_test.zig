@@ -71,7 +71,7 @@ test "secure descriptor and credential discovery rejects unsafe authority" {
 }
 test "aggregate snapshot decodes normalized workspace repository pairs into reducer action" {
     var c=service.Client.init("Bearer secret");
-    const action=try c.decodeAggregateSnapshot("{\"protocol\":\"v1\",\"request_id\":\"req_1234567890123456\",\"ok\":true,\"data\":[{\"protocol\":\"v1\",\"request_id\":\"req_abcdefghijklmnop\",\"ok\":true,\"revision\":\"9\",\"generated_at\":\"2026-01-01T00:00:00Z\",\"workspace\":{\"id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repositories\":[{\"id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\"}]}}]}");
+    const action=try c.decodeAggregateSnapshot("{\"protocol\":\"v1\",\"request_id\":\"req_1234567890123456\",\"ok\":true,\"data\":[{\"protocol\":\"v1\",\"request_id\":\"req_abcdefghijklmnop\",\"ok\":true,\"revision\":\"9\",\"generated_at\":\"2026-01-01T00:00:00Z\",\"workspace\":{\"id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"feature\",\"repositories\":[{\"id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"repo\"}]}}]}");
     try std.testing.expect(action==.snapshot);
     try std.testing.expectEqual(@as(u8,1),action.snapshot.workspace_count);
     try std.testing.expectEqual(@as(u8,1),action.snapshot.pair_count);

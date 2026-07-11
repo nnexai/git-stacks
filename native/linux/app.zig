@@ -7,6 +7,7 @@ const tab_registry = @import("tab_registry");
 const guard = @import("guard");
 const app_graph = @import("app_graph");
 const model = @import("model");
+const persistence = @import("persistence");
 const application = @import("application");
 const workspace_view = @import("workspace_view");
 const command_launcher = @import("command_launcher");
@@ -67,60 +68,14 @@ fn executableAvailable(name: []const u8) bool {
 fn savePresentation(state: *State) void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = presentationPath(&path_buffer) orelse return;
-    const directory = std.fs.path.dirname(path) orelse return;
-    std.fs.cwd().makePath(directory) catch return;
-    var bytes: std.ArrayList(u8) = .empty;
-    defer bytes.deinit(state.graph.allocator);
-    const writer = bytes.writer(state.graph.allocator);
-    writer.writeAll("{\"protocol\":\"v1\",\"pins\":[") catch return;
-    for (state.graph.state.pins[0..state.graph.state.pin_count], 0..) |pin, index| {
-        if (index != 0) writer.writeByte(',') catch return;
-        writer.print("\"{s}\"", .{pin}) catch return;
-    }
-    writer.writeAll("],\"last_pair\":") catch return;
-    if (state.graph.state.last_pair) |pair| writer.print("{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\"}}", .{ pair.workspace_id, pair.repository_id }) catch return else writer.writeAll("null") catch return;
-    writer.writeByte('}') catch return;
-    var tmp_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp = std.fmt.bufPrint(&tmp_buffer, "{s}.tmp", .{path}) catch return;
-    const file = std.fs.createFileAbsolute(tmp, .{ .truncate = true, .mode = 0o600 }) catch return;
-    file.writeAll(bytes.items) catch { file.close(); return; };
-    file.sync() catch { file.close(); return; };
-    file.close();
-    std.fs.renameAbsolute(tmp, path) catch {};
+    persistence.writeStateAtomic(state.graph.allocator,path,&state.graph.state) catch |err| std.debug.print("native presentation save failed: {s}\n",.{@errorName(err)});
 }
 
 fn restorePresentation(state: *State) void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = presentationPath(&path_buffer) orelse return;
-    const file = std.fs.openFileAbsolute(path, .{}) catch return;
-    defer file.close();
-    const bytes = file.readToEndAlloc(state.graph.allocator, 64 * 1024) catch return;
-    defer state.graph.allocator.free(bytes);
-    const parsed = std.json.parseFromSlice(std.json.Value, state.graph.allocator, bytes, .{}) catch return;
-    defer parsed.deinit();
-    if (parsed.value != .object) return;
-    const pins = parsed.value.object.get("pins") orelse return;
-    if (pins != .array) return;
-    state.graph.state.pin_count = 0;
-    var view = workspace_view.View{ .state = &state.graph.state };
-    for (pins.array.items) |pin| if (pin == .string and pin.string.len == 36) {
-        var id: model.Id = undefined;
-        @memcpy(&id, pin.string);
-        view.pin(id) catch {};
-    };
-    if (parsed.value.object.get("last_pair")) |value| if (value == .object) {
-        const ws = value.object.get("workspace_id") orelse return;
-        const repo = value.object.get("repository_id") orelse return;
-        if (ws == .string and repo == .string and ws.string.len == 36 and repo.string.len == 36) {
-            var pair: model.PairKey = undefined;
-            @memcpy(&pair.workspace_id, ws.string);
-            @memcpy(&pair.repository_id, repo.string);
-            if (model.pairValid(&state.graph.state, pair)) {
-                state.graph.state.last_pair = pair;
-                state.graph.state.selected_pair = pair;
-            }
-        }
-    };
+    const quarantined=persistence.restoreStateFile(state.graph.allocator,path,&state.graph.state) catch return;
+    if(quarantined>0)std.debug.print("native presentation quarantined {d} corrupt records\n",.{quarantined});
 }
 
 fn appendQuoted(buffer: []u8, offset: *usize, value: []const u8) !void {
@@ -338,6 +293,12 @@ fn terminalExited(context: *anyopaque, _: i32, _: u64) !void {
     surface.destroy();
 }
 fn terminalDestroy(_: *anyopaque) void {}
+fn surfaceExited(context:*anyopaque,id:model.Id)void{
+    const state:*State=@ptrCast(@alignCast(context));
+    const loc=model.surfaceLocation(&state.graph.state,id) orelse return;
+    state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle=.ended;
+    savePresentation(state);refreshProjection(state);
+}
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
     if (state.cleaned) return c.G_SOURCE_REMOVE;
@@ -416,7 +377,7 @@ fn refreshProjection(state: *State) void {
         const selected = state.graph.state.surface;
         if (std.mem.eql(u8, bare, "close-tab")) enabled = enabled and selected != null and selected.?.lifecycle == .live;
         if (std.mem.eql(u8, bare, "rename-tab")) enabled = enabled and selected != null;
-        if (std.mem.eql(u8, bare, "open-vscode")) enabled = enabled and executableAvailable("code");
+        if (std.mem.eql(u8, bare, "open-vscode")) enabled = enabled and executableAvailable("git-stacks") and state.graph.state.selected_pair != null;
         if (std.mem.eql(u8, bare, "next-tab") or std.mem.eql(u8, bare, "previous-tab") or std.mem.eql(u8, bare, "reorder-tab")) enabled = enabled and (workspace_view.View{ .state = &state.graph.state }).pair() != null;
         c.g_simple_action_set_enabled(@ptrCast(action), @intFromBool(enabled));
     };
@@ -448,7 +409,7 @@ fn refreshProjection(state: *State) void {
                 break :blk false;
             };
             var heading: [96:0]u8 = [_:0]u8{0} ** 96;
-            const title = std.fmt.bufPrintZ(&heading, "{s}{s}", .{ if (pinned) "★ " else "", ws.id[0..8] }) catch continue;
+            const title = std.fmt.bufPrintZ(&heading, "{s}{s}", .{ if (pinned) "★ " else "", if(ws.name_len>0)ws.name[0..ws.name_len] else ws.id[0..8] }) catch continue;
             const header = c.gtk_label_new(title.ptr) orelse continue;
             c.gtk_label_set_xalign(@ptrCast(header), 0);
             c.gtk_widget_add_css_class(header, if (pinned) "heading" else "dim-label");
@@ -478,10 +439,11 @@ fn refreshProjection(state: *State) void {
                 c.gtk_widget_add_controller(heading_box, @ptrCast(drop));
             }
             c.gtk_list_box_append(list, heading_box);
-            for (ws.repository_ids[0..ws.repository_count]) |repository_id| {
+            for (ws.repository_ids[0..ws.repository_count],0..) |repository_id,repository_index| {
                 var row_text: [128:0]u8 = [_:0]u8{0} ** 128;
                 const selected = if (state.graph.state.selected_pair) |pair| model.PairKey.eql(pair, .{ .workspace_id = ws.id, .repository_id = repository_id }) else false;
-                const rendered = std.fmt.bufPrintZ(&row_text, "{s}{s}", .{ if (selected) "● " else "", if (ws.repository_count == 1) "Workspace terminal" else repository_id[0..8] }) catch continue;
+                const repository=ws.repositories[repository_index];
+                const rendered = std.fmt.bufPrintZ(&row_text, "{s}{s}", .{ if (selected) "● " else "", if (ws.repository_count == 1) "Workspace terminal" else if(repository.name_len>0)repository.name[0..repository.name_len] else repository_id[0..8] }) catch continue;
                 const row = c.gtk_list_box_row_new() orelse continue;
                 const label = c.gtk_label_new(rendered.ptr) orelse continue;
                 c.gtk_label_set_xalign(@ptrCast(label), 0);
@@ -602,6 +564,7 @@ fn tabDropped(target: ?*c.GtkDropTarget, value: ?*const c.GValue, _: f64, _: f64
         break;
     };
     (workspace_view.View{ .state = &state.graph.state }).reorderTab(source_id, target_index orelse return 0) catch return 0;
+    savePresentation(state);
     refreshProjection(state);
     return 1;
 }
@@ -663,6 +626,7 @@ fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) cal
     if (response == c.GTK_RESPONSE_ACCEPT) {
         const title = std.mem.span(c.gtk_editable_get_text(@ptrCast(context.entry)));
         (workspace_view.View{ .state = &context.state.graph.state }).renameTab(context.id, title) catch {};
+        savePresentation(context.state);
         refreshProjection(context.state);
     }
     c.gtk_window_destroy(@ptrCast(dialog orelse return));
@@ -700,6 +664,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         return null;
     };
     state.terminals[state.terminal_count] = surface;
+    surface.setExitHandler(state,surfaceExited);
     state.terminal_count += 1;
     const identity = surface.ownershipIdentity() orelse {
         surface.destroy();
@@ -734,6 +699,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         c.gtk_stack_set_visible_child_name(stack, name[0..36 :0].ptr);
     }
     refreshProjection(state);
+    savePresentation(state);
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
     return surface.surface_id;
 }
@@ -810,6 +776,7 @@ fn closeTerminal(state: *State, id: model.Id) void {
     (workspace_view.View{ .state = &state.graph.state }).closeTab(id) catch return;
     forgetTerminal(state, id);
     state.graph.terminals.close(id) catch {};
+    savePresentation(state);
 }
 fn focusTerminal(state: *State, requested: ?model.Id) void {
     var target = requested;
@@ -827,11 +794,8 @@ fn focusTerminal(state: *State, requested: ?model.Id) void {
 }
 fn launchVscode(state: *State) void {
     const pair = state.graph.state.selected_pair orelse return;
-    const launch = state.graph.resolveLaunch(pair, null) catch |err| {
-        showLauncherError(state, @errorName(err));
-        return;
-    };
-    var child = std.process.Child.init(&.{ "code", "--reuse-window", launch.cwdSlice() }, state.graph.allocator);
+    const invocation=application.vscodeInvocation(&state.graph.state,pair,"git-stacks") catch |err| {showLauncherError(state,@errorName(err));return;};
+    var child = std.process.Child.init(invocation.argv[0..invocation.len], state.graph.allocator);
     child.stdin_behavior = .Ignore;
     child.stdout_behavior = .Ignore;
     child.stderr_behavior = .Ignore;
@@ -1170,6 +1134,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         return;
     };
     state.terminals[0] = terminal;
+    terminal.setExitHandler(state,surfaceExited);
     state.terminal_count = 1;
     active = state;
     if (state.graph.authorization.len != 0 and state.graph.endpoint.len != 0) state.replay_thread = std.Thread.spawn(.{}, replayWorker, .{state}) catch |err| blk: {

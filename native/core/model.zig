@@ -15,7 +15,15 @@ pub const PairKey = struct {
         return std.mem.eql(u8, &a.workspace_id, &b.workspace_id) and std.mem.eql(u8, &a.repository_id, &b.repository_id);
     }
 };
-pub const Workspace = struct { id: Id, repository_ids: [8]Id = undefined, repository_count: u8 = 0 };
+pub const NamedRepository = struct { id: Id, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
+pub const Workspace = struct {
+    id: Id,
+    name: [96]u8 = [_]u8{0} ** 96,
+    name_len: u8 = 0,
+    repositories: [8]NamedRepository = undefined,
+    repository_ids: [8]Id = undefined,
+    repository_count: u8 = 0,
+};
 pub const Command = struct { id: [64]u8 = [_]u8{0} ** 64, id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
 pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
 pub const PairCollection = struct { key: PairKey, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
@@ -124,10 +132,10 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
     for (state.workspaces[0..state.workspace_count], 0..) |ws, i| {
         if (i != 0) try w.writeByte(',');
         const summary = aggregate(&state, ws.id, null, null);
-        try w.print("{{\"id\":\"{s}\",\"unread\":{d},\"severity\":\"{s}\",\"repository_ids\":[", .{ ws.id, summary.unread, @tagName(summary.severity) });
+        try w.print("{{\"id\":\"{s}\",\"name\":{f},\"unread\":{d},\"severity\":\"{s}\",\"repositories\":[", .{ ws.id, std.json.fmt(ws.name[0..ws.name_len], .{}), summary.unread, @tagName(summary.severity) });
         for (ws.repository_ids[0..ws.repository_count], 0..) |rid, j| {
             if (j != 0) try w.writeByte(',');
-            try w.print("\"{s}\"", .{rid});
+            try w.print("{{\"id\":\"{s}\",\"name\":{f}}}", .{rid, std.json.fmt(ws.repositories[j].name[0..ws.repositories[j].name_len], .{})});
         }
         try w.writeAll("]}");
     }
