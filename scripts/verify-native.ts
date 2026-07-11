@@ -439,6 +439,13 @@ async function buildApp(): Promise<string> {
   return artifact
 }
 
+async function runInteractiveApp(): Promise<void> {
+  const artifact = await buildApp()
+  const child = Bun.spawn([artifact], { cwd: ROOT, stdin: "inherit", stdout: "inherit", stderr: "inherit", env: process.env })
+  const code = await child.exited
+  if (code !== 0) throw new Error(`production native executable exited ${code}`)
+}
+
 async function smokeApp(): Promise<void> {
   const artifact = await buildApp()
   if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable: set DISPLAY/WAYLAND_DISPLAY or install a supported virtual display")
@@ -541,7 +548,7 @@ else if (mode === "interaction") await verify("interaction-test")
 else if (mode === "renderer") await verifyGraphical("renderer-test")
 else if (mode === "widget") await verifyGraphical("widget-test")
 else if (mode === "build-app") await buildApp()
-else if (mode === "run-app") await verify("run-app")
+else if (mode === "run-app") await runInteractiveApp()
 else if (mode === "smoke-app") await smokeApp()
 else if (mode === "smoke-terminal") await smokeTerminal()
 else if (mode === "smoke-multisurface") await smokeMultisurface()
