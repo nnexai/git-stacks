@@ -11,7 +11,7 @@
 - [x] **SVC-02**: Native clients can query workspace, repository, and named-command snapshots using stable opaque identities.
 - [ ] **SVC-03**: Native clients receive git-stacks-resolved launch specifications without reading workspace YAML.
 - [x] **SVC-04**: Existing CLI and OpenTUI behavior remains compatible with the extracted service boundary.
-- [ ] **SVC-05**: The local service accepts authenticated requests only from the paired native client and enforces bounded request, rate, and timeout policies.
+- [x] **SVC-05**: The local service accepts authenticated requests only from the paired native client and enforces bounded request, rate, and timeout policies.
 
 ### Operations and Events
 
@@ -92,7 +92,7 @@
 | SVC-02 | Phase 104 | Complete |
 | SVC-03 | Phase 104 | Pending |
 | SVC-04 | Phase 104 | Complete |
-| SVC-05 | Phase 104 | Pending |
+| SVC-05 | Phase 104 | Complete |
 | EVT-01 | Phase 104 | Pending |
 | EVT-02 | Phase 104 | Pending |
 | EVT-03 | Phase 104 | Pending |
