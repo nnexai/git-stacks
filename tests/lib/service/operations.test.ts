@@ -48,7 +48,7 @@ describe("OperationRegistry lifecycle", () => {
         return {} as ServiceEvent
       },
       schedule: (run) => { scheduled = true; queueMicrotask(run) },
-      onOperation: (operation) => observed.push(structuredClone(operation)),
+      onOperation: (operation) => { observed.push(structuredClone(operation)) },
     })
 
     const accepting = registry.accept(execution([]))
@@ -110,7 +110,7 @@ describe("OperationRegistry lifecycle", () => {
 
   test("keeps original failure separate from rollback failures", async () => {
     const dir = await root()
-    const registry = new OperationRegistry({ root: dir, id: () => "op_failure12345678", publishOperationEvent: async () => ({} as ServiceEvent) })
+    const registry = new OperationRegistry({ root: dir, id: () => "op_failure123456789", publishOperationEvent: async () => ({} as ServiceEvent) })
     const accepted = await registry.accept(execution([
       { name: "first", stage: "executing", message: "First", run: async () => {}, rollback: async () => { throw new Error("undo broke") } },
       { name: "second", stage: "executing", message: "Second", run: async () => { throw new Error("forward broke") } },
@@ -128,12 +128,12 @@ describe("OperationRegistry lifecycle", () => {
     const observed: Operation[] = []
     const registry = new OperationRegistry({
       root: dir,
-      id: () => "op_append123456789",
+      id: () => "op_append1234567890",
       publishOperationEvent: async (operation) => {
         if (operation.state === "running") throw new Error("journal unavailable")
         return {} as ServiceEvent
       },
-      onOperation: (operation) => observed.push(structuredClone(operation)),
+      onOperation: (operation) => { observed.push(structuredClone(operation)) },
     })
     const accepted = await registry.accept(execution([]))
     await registry.wait(accepted.operation_id)
@@ -148,7 +148,7 @@ describe("OperationRegistry lifecycle", () => {
     const blocker = deferred()
     const first = new OperationRegistry({
       root: dir,
-      id: () => "op_restart1234567",
+      id: () => "op_restart123456789",
       publishOperationEvent: async () => ({} as ServiceEvent),
       schedule: () => {},
     })
@@ -157,7 +157,7 @@ describe("OperationRegistry lifecycle", () => {
     const recoveredEvents: Operation[] = []
     const recovered = new OperationRegistry({ root: dir, publishOperationEvent: async (operation) => { recoveredEvents.push(structuredClone(operation)); return {} as ServiceEvent } })
     await recovered.initialize()
-    const operation = recovered.get("op_restart1234567")
+    const operation = recovered.get("op_restart123456789")
     expect(operation?.state).toBe("failed")
     if (operation?.state === "failed") expect(operation.error.details?.reason).toBe("interrupted")
     expect(recoveredEvents).toHaveLength(1)

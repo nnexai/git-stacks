@@ -16,7 +16,7 @@ export const TimestampSchema = z.string().datetime({ offset: true })
 
 export const ErrorCodeSchema = z.enum([
   "invalid_request", "unauthorized", "not_found", "conflict", "rate_limited",
-  "capability_unavailable", "replay_gap", "snapshot_busy", "internal_error", "operation_failed",
+  "capability_unavailable", "replay_gap", "snapshot_busy", "internal_error", "operation_failed", "idempotency_conflict",
 ])
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>
 export const ApiErrorSchema = z.strictObject({
@@ -106,8 +106,16 @@ export const OperationProgressSchema = z.strictObject({
   stage: OperationStageSchema, message: z.string().optional(), completed: z.number().int().nonnegative().optional(), total: z.number().int().positive().optional(),
 }).refine((v) => (v.completed === undefined) === (v.total === undefined), { message: "completed and total must be provided together" })
 export type OperationProgress = z.infer<typeof OperationProgressSchema>
-export const OperationResultSchema = z.strictObject({ operation_id: OperationIdSchema, state: z.literal("succeeded"), completed_steps: z.array(z.string()), result: z.record(z.string(), z.unknown()).optional() })
-export const OperationFailureSchema = z.strictObject({ operation_id: OperationIdSchema, state: z.enum(["failed", "cancelled"]), completed_steps: z.array(z.string()), error: ApiErrorSchema, rollback_errors: z.array(ApiErrorSchema) })
+export const OperationResultSchema = z.strictObject({
+  operation_id: OperationIdSchema, state: z.literal("succeeded"), accepted_at: TimestampSchema,
+  started_at: TimestampSchema, finished_at: TimestampSchema, completed_steps: z.array(z.string()),
+  result: z.record(z.string(), z.unknown()).optional(),
+})
+export const OperationFailureSchema = z.strictObject({
+  operation_id: OperationIdSchema, state: z.enum(["failed", "cancelled"]), accepted_at: TimestampSchema,
+  started_at: TimestampSchema.optional(), finished_at: TimestampSchema, completed_steps: z.array(z.string()),
+  error: ApiErrorSchema, rollback_attempted: z.boolean(), rollback_succeeded: z.boolean(), rollback_errors: z.array(ApiErrorSchema),
+})
 export const OperationSchema = z.discriminatedUnion("state", [
   z.strictObject({ operation_id: OperationIdSchema, state: z.literal("accepted"), accepted_at: TimestampSchema }),
   z.strictObject({ operation_id: OperationIdSchema, state: z.literal("running"), accepted_at: TimestampSchema, started_at: TimestampSchema, progress: OperationProgressSchema }),
