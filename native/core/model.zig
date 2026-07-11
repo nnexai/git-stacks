@@ -5,6 +5,7 @@ pub const Lifecycle = enum { live, ended, failed_cleanup };
 
 pub const Surface = struct {
     id: [36]u8,
+    generation: u64 = 0,
     predecessor_surface_id: ?[36]u8 = null,
     lifecycle: Lifecycle = .ended,
     order: u32 = 0,
@@ -24,9 +25,7 @@ pub const State = struct {
 pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
     const surface_id = if (state.surface) |surface| surface.id[0..] else "";
     const predecessor = if (state.surface) |surface| if (surface.predecessor_surface_id) |id| id[0..] else "" else "";
-    return std.fmt.allocPrint(allocator,
-        "{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"surface_id\":\"{s}\",\"predecessor_surface_id\":\"{s}\"}}",
-        .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, surface_id, predecessor });
+    return std.fmt.allocPrint(allocator, "{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"surface_id\":\"{s}\",\"predecessor_surface_id\":\"{s}\"}}", .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, surface_id, predecessor });
 }
 
 test "canonical state serialization is stable" {

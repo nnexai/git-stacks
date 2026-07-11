@@ -1,5 +1,6 @@
 const std = @import("std");
 const guard = @import("guard");
+const reducer = @import("reducer");
 const c = @cImport(@cInclude("ghostty.h"));
 
 pub const Identity = extern struct {
@@ -84,6 +85,13 @@ pub const Callback = struct {
     surface_id: [36]u8,
     generation: u64,
     outcome: Outcome,
+
+    pub fn reducerAction(self: Callback) reducer.Action {
+        return switch (self.outcome) {
+            .ended => .{ .terminal_ended = .{ .surface_id = self.surface_id, .generation = self.generation } },
+            .failed_cleanup => .{ .terminal_failed_cleanup = .{ .surface_id = self.surface_id, .generation = self.generation } },
+        };
+    }
 };
 
 pub const Controller = struct {

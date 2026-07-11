@@ -1,6 +1,7 @@
 const std = @import("std");
 const control = @import("ghostty_process_control");
 const guard = @import("guard");
+const reducer = @import("reducer");
 
 fn id(comptime value: []const u8) [36]u8 {
     return value[0..36].*;
@@ -118,6 +119,9 @@ test "unproven absence remains registered and emits failed cleanup" {
     try std.testing.expectEqual(control.Outcome.failed_cleanup, callback.outcome);
     try std.testing.expectEqual(@as(u64, 8), callback.generation);
     try std.testing.expect(fixture.registered != null);
+    var state = reducer.model.State{ .surface = .{ .id = callback.surface_id, .generation = 8, .lifecycle = .live } };
+    state = reducer.reduce(state, callback.reducerAction()).state;
+    try std.testing.expectEqual(reducer.model.Lifecycle.failed_cleanup, state.surface.?.lifecycle);
 }
 
 const GuardFailure = struct {

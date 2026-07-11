@@ -80,9 +80,12 @@ pub fn build(b: *std.Build) void {
     lifecycle_step.dependOn(&b.addRunArtifact(ownership_tests).step);
     const process_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_process_control_test.zig"), .target = b.graph.host, .optimize = .Debug });
     const process_guard_module = b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") });
+    const process_reducer_module = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
     process_test_module.addImport("guard", process_guard_module);
+    process_test_module.addImport("reducer", process_reducer_module);
     const process_module = b.createModule(.{ .root_source_file = b.path("terminal/ghostty_process_control.zig") });
     process_module.addImport("guard", process_guard_module);
+    process_module.addImport("reducer", process_reducer_module);
     process_module.addIncludePath(include_dir);
     process_test_module.addImport("ghostty_process_control", process_module);
     process_test_module.addLibraryPath(library_dir);
