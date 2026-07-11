@@ -68,6 +68,8 @@ pub const Surface = struct {
     registry: *guard.Registry,
     registration_source: c.guint = 0,
     clipboard_context: *clipboard.Context,
+    clipboard_invalidated: bool = false,
+    deferred_widget_ref: bool = false,
     input: input_mod.Input,
     surface_id: [36]u8,
     launch: ?LaunchSpec = null,
@@ -101,6 +103,8 @@ pub const Surface = struct {
         if (launch) |spec| self.surface_id = spec.surface_id else
             _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
         self.clipboard_context = try clipboard.Context.create(runtime.allocator, @ptrCast(self.area), self.generation);
+        self.clipboard_invalidated = false;
+        self.deferred_widget_ref = false;
         errdefer runtime.allocator.destroy(self.clipboard_context);
         try input_mod.Input.install(self.clipboard_context, &self.input);
         c.g_object_set_data(@ptrCast(self.area), "git-stacks-ime", self.input.ime);
@@ -136,14 +140,37 @@ pub const Surface = struct {
         return !self.destroyed and self.surface != null and self.controller != null and self.controller.?.registration != null;
     }
 
+    pub fn retainForDeferredDestroy(self: *Surface) void {
+        if (self.destroyed or self.deferred_widget_ref) return;
+        _ = c.g_object_ref(self.area);
+        self.deferred_widget_ref = true;
+    }
+
     pub fn destroy(self: *Surface) void {
         if (self.destroyed) return;
         self.destroyed = true;
+        // GTK can queue render/resize/unrealize emissions while a tab close is
+        // completing. They carry `self` as callback data, so disconnect them
+        // before the Surface allocation is released.
+        _ = c.g_signal_handlers_disconnect_matched(self.area, c.G_SIGNAL_MATCH_DATA, 0, 0, null, null, self);
+        _ = c.g_signal_handlers_disconnect_matched(self.input.ime, c.G_SIGNAL_MATCH_DATA, 0, 0, null, null, &self.input);
+        if (c.gtk_widget_observe_controllers(@ptrCast(self.area))) |controllers| {
+            const count = c.g_list_model_get_n_items(@ptrCast(controllers));
+            for (0..count) |index| if (c.g_list_model_get_item(@ptrCast(controllers), @intCast(index))) |controller| {
+                _ = c.g_signal_handlers_disconnect_matched(controller, c.G_SIGNAL_MATCH_DATA, 0, 0, null, null, self);
+                _ = c.g_signal_handlers_disconnect_matched(controller, c.G_SIGNAL_MATCH_DATA, 0, 0, null, null, &self.input);
+                _ = c.g_signal_handlers_disconnect_matched(controller, c.G_SIGNAL_MATCH_DATA, 0, 0, null, null, self.clipboard_context);
+                c.g_object_unref(controller);
+            };
+            c.g_object_unref(controllers);
+        }
         self.teardownSurface();
         self.input.deinit();
-        const widget_ptr: *c.GtkWidget = @ptrCast(self.area);
-        if (c.gtk_widget_get_parent(widget_ptr) != null) c.gtk_widget_unparent(widget_ptr);
+        // Container ownership is released by AdwTabView/window teardown. Never
+        // manually unparent a container-owned child from terminal destruction;
+        // close paths defer this callback until GTK has completed that removal.
         c.g_object_unref(self.area);
+        if (self.deferred_widget_ref) c.g_object_unref(self.area);
         live_areas -= 1;
         const allocator = self.runtime.allocator;
         allocator.destroy(self);
@@ -226,7 +253,6 @@ pub const Surface = struct {
     }
 
     fn teardownSurface(self: *Surface) void {
-        const surface = self.surface orelse return;
         if (self.registration_source != 0) {
             _ = c.g_source_remove(self.registration_source);
             self.registration_source = 0;
@@ -235,11 +261,15 @@ pub const Surface = struct {
             if (controller.registration != null) _ = controller.close() catch {};
             self.controller = null;
         }
+        if (!self.clipboard_invalidated) {
+            clipboard.invalidate(self.clipboard_context);
+            self.clipboard_invalidated = true;
+        }
+        const surface = self.surface orelse return;
         if (self.realized and self.current()) c.ghostty_surface_display_unrealized(surface);
         if (self.realized) live_gl_contexts -= 1;
         self.realized = false;
         self.runtime.detach(surface);
-        clipboard.invalidate(self.clipboard_context);
         c.ghostty_surface_free(surface);
         live_surfaces -= 1;
         self.surface = null;

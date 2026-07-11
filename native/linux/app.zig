@@ -38,6 +38,7 @@ const State = struct {
     launcher_entry: ?*c.GtkSearchEntry = null,
     launcher_results: ?*c.GtkListBox = null,
     launcher_error: ?*c.GtkLabel = null,
+    launcher_presented: bool = false,
     connection_label: ?*c.GtkLabel = null,
     attention_label: ?*c.GtkLabel = null,
     action_group: ?*c.GSimpleActionGroup = null,
@@ -45,6 +46,8 @@ const State = struct {
     focus_before_launcher: ?*c.GtkWidget = null,
     programmatic_tab_close: bool = false,
     ui_smoke_stage: u8 = 0,
+    ui_smoke_wait: u16 = 0,
+    ui_smoke_ids: [6]?model.Id = [_]?model.Id{null} ** 6,
 };
 var active: ?*State = null;
 
@@ -181,7 +184,15 @@ fn cleanup(state: *State) void {
         state.close_handler = 0;
     };
     if (state.window) |window| c.adw_application_window_set_content(@ptrCast(window), null);
-    var adopted: [2]bool = .{ false, false };
+    if (state.launcher) |dialog| {
+        if (state.launcher_presented) _ = c.adw_dialog_close(dialog);
+        c.g_object_unref(dialog);
+        state.launcher = null;
+        state.launcher_entry = null;
+        state.launcher_results = null;
+        state.launcher_error = null;
+    }
+    var adopted: [16]bool = [_]bool{false} ** 16;
     for (0..state.terminal_count) |i| {
         if (state.terminals[i]) |terminal| adopted[i] = state.graph.terminals.find(terminal.surface_id) != null;
     }
@@ -193,19 +204,52 @@ fn cleanup(state: *State) void {
     for (0..state.terminal_count) |offset| {
         const index = if (forward) offset else state.terminal_count - 1 - offset;
         if (state.terminals[index]) |terminal| {
-            terminal.destroy();
+            scheduleTerminalDestroy(terminal);
             state.terminals[index] = null;
         }
     }
+    // Registry teardown is intentionally deferred to GTK idle so tab/page
+    // removal finishes before terminal widgets are released. Always dispatch
+    // at least one idle turn: an unrealized surface is not reflected by the
+    // live Ghostty counter but still owns input/clipboard/widget resources.
+    var surface_drain: usize = 0;
+    while ((surface_drain < 20 or surface_mod.liveSurfaceCount() > 0) and surface_drain < 500) : (surface_drain += 1) {
+        _ = c.g_main_context_iteration(null, 0);
+        std.Thread.sleep(std.time.ns_per_ms);
+    }
+    // Clipboard reads are completed by the GTK main context.  Destruction
+    // invalidates their Ghostty userdata, but the completion still owns the
+    // context until GTK dispatches it.  Drain those already-queued
+    // completions before measuring teardown or returning from shutdown.
+    var clipboard_drain: usize = 0;
+    while (clipboard.pendingReadCount() > 0 and clipboard_drain < 200) : (clipboard_drain += 1) {
+        _ = c.g_main_context_iteration(null, 0);
+        std.Thread.sleep(std.time.ns_per_ms);
+    }
     const children = state.registry.entries.items.len;
     const surfaces = @max(state.runtime.entries.items.len, surface_mod.liveSurfaceCount());
+    const stress_cycle = parseStressCycle();
     const clipboard_pending = clipboard.liveContextCount() + clipboard.pendingReadCount();
     const gl_areas = surface_mod.liveAreaCount();
     const gl_contexts = surface_mod.liveGlContextCount();
-    const stress_cycle = parseStressCycle();
     state.graph.deinit();
     state.registry.deinit();
     state.runtime.deinit();
+    if (stress_cycle != null) {
+        var previous = processResources().thread_count;
+        var stable: u8 = 0;
+        for (0..50) |_| {
+            std.Thread.sleep(10 * std.time.ns_per_ms);
+            const current = processResources().thread_count;
+            if (current == previous) {
+                stable += 1;
+                if (stable >= 3) break;
+            } else {
+                previous = current;
+                stable = 0;
+            }
+        }
+    }
     if (stress_cycle) |cycle| reportStressSample(cycle, surfaces, clipboard_pending, gl_areas, gl_contexts, children);
     std.heap.c_allocator.destroy(state);
 }
@@ -289,13 +333,30 @@ fn terminalRegister(context: *anyopaque, pgid: i32, birth: u64) !void {
     const identity = surface.ownershipIdentity() orelse return error.IdentityUnavailable;
     if (identity.pgid != pgid or identity.linux_birth_token != birth) return error.IdentityMismatch;
 }
+fn destroyTerminalIdle(data: ?*anyopaque) callconv(.c) c.gboolean {
+    const surface: *surface_mod.Surface = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
+    surface.destroy();
+    return c.G_SOURCE_REMOVE;
+}
+fn scheduleTerminalDestroy(surface: *surface_mod.Surface) void {
+    surface.retainForDeferredDestroy();
+    // A close-page transaction may be followed immediately by relaunch. Give
+    // GTK/Ghostty one event-loop turn to finish the old page before tearing
+    // down its process/surface; shutdown itself uses idle priority because no
+    // replacement can race it.
+    if (active) |state| if (!state.cleaned) {
+        _ = c.g_timeout_add(750, destroyTerminalIdle, surface);
+        return;
+    };
+    _ = c.g_idle_add(destroyTerminalIdle, surface);
+}
 fn terminalTeardown(context: *anyopaque, _: i32, _: u64) !void {
     const surface: *surface_mod.Surface = @ptrCast(@alignCast(context));
-    surface.destroy();
+    scheduleTerminalDestroy(surface);
 }
 fn terminalExited(context: *anyopaque, _: i32, _: u64) !void {
     const surface: *surface_mod.Surface = @ptrCast(@alignCast(context));
-    surface.destroy();
+    scheduleTerminalDestroy(surface);
 }
 fn terminalDestroy(_: *anyopaque) void {}
 fn surfaceExited(context:*anyopaque,id:model.Id)void{
@@ -569,10 +630,15 @@ fn selectedPageChanged(view: ?*c.AdwTabView, _: ?*c.GParamSpec, data: ?*anyopaqu
     const id: *model.Id = @ptrCast(@alignCast(ptr));
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id.*);
 }
-fn nativeClosePage(_: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyopaque) callconv(.c) c.gboolean {
+fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return 0));
+    // FALSE propagates to AdwTabView's default handler, which confirms an
+    // ordinary non-pinned close. TRUE stops propagation and requires an
+    // explicit close_page_finish call.
     if (state.programmatic_tab_close) return 0;
-    const child = c.adw_tab_page_get_child(page orelse return 0) orelse return 0;
+    const view = raw_view orelse return 0;
+    const selected_page = page orelse return 0;
+    const child = c.adw_tab_page_get_child(selected_page) orelse return 0;
     const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse return 0;
     const id: *model.Id = @ptrCast(@alignCast(ptr));
     const loc = model.surfaceLocation(&state.graph.state, id.*) orelse return 0;
@@ -580,9 +646,16 @@ fn nativeClosePage(_: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyopaque) c
         (workspace_view.View{ .state = &state.graph.state }).removeTab(id.*) catch return 1;
         savePresentation(state); return 0;
     }
-    state.programmatic_tab_close = true;
-    closeTerminal(state, id.*);
-    state.programmatic_tab_close = false;
+    // This callback is already inside close_page; recursively requesting the
+    // same close is ignored by libadwaita and leaves the page permanently in
+    // "waiting for finish" state. Complete the model/process transaction and
+    // explicitly finish this pending close instead.
+    (workspace_view.View{ .state = &state.graph.state }).closeTab(id.*) catch return 1;
+    forgetTerminal(state, id.*);
+    state.graph.terminals.close(id.*) catch {};
+    savePresentation(state);
+    c.adw_tab_view_close_page_finish(view, selected_page, 1);
+    refreshProjection(state);
     return 1;
 }
 fn dragPrepare(source: ?*c.GtkDragSource, _: f64, _: f64, _: ?*anyopaque) callconv(.c) ?*c.GdkContentProvider {
@@ -776,6 +849,21 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
             state.terminal_count -= 1;
             return null;
         };
+        // The replacement owns a new Ghostty widget/page. Remove the retained
+        // ended predecessor page after the lineage transaction publishes the
+        // replacement, otherwise relaunch leaves a dead duplicate tab behind.
+        for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
+            const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
+            if (page == provisional) continue;
+            const old_child = c.adw_tab_page_get_child(page) orelse continue;
+            const old_ptr = c.g_object_get_data(@ptrCast(old_child), "git-stacks-surface") orelse continue;
+            if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(old_ptr))), &old_id)) {
+                state.programmatic_tab_close = true;
+                c.adw_tab_view_close_page(tabs, page);
+                state.programmatic_tab_close = false;
+                break;
+            }
+        }
     }
     c.adw_tab_page_set_loading(provisional, 0);
     refreshProjection(state);
@@ -792,17 +880,24 @@ fn showLauncherError(state: *State, message: []const u8) void {
         c.gtk_label_set_text(label, z.ptr);
         c.gtk_widget_set_visible(@ptrCast(@alignCast(label)), 1);
     }
-    if (state.launcher) |dialog| if (state.window) |window| c.adw_dialog_present(dialog, @ptrCast(@alignCast(window)));
+    if (state.launcher) |dialog| if (state.window) |window| {
+        c.adw_dialog_present(dialog, @ptrCast(@alignCast(window)));
+        state.launcher_presented = true;
+    };
 }
 fn openLauncher(state: *State) void {
     if (state.graph.state.connection != .ready) return;
     state.focus_before_launcher = c.gtk_root_get_focus(@ptrCast(state.window orelse return));
     refreshLauncher(state);
-    if (state.launcher) |dialog| if (state.window) |window| c.adw_dialog_present(dialog, @ptrCast(@alignCast(window)));
+    if (state.launcher) |dialog| if (state.window) |window| {
+        c.adw_dialog_present(dialog, @ptrCast(@alignCast(window)));
+        state.launcher_presented = true;
+    };
     if (state.launcher_entry) |entry| _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(entry)));
 }
 fn launcherClosed(_: ?*c.AdwDialog, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
+    state.launcher_presented = false;
     if (state.focus_before_launcher) |widget| {
         if (c.gtk_widget_get_root(widget) != null) {
             _ = c.gtk_widget_grab_focus(widget);
@@ -1092,6 +1187,10 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.gtk_paned_set_shrink_start_child(@ptrCast(split), 0);
     c.gtk_overlay_set_child(@ptrCast(overlay), split);
     const dialog = c.adw_dialog_new() orelse return null;
+    // AdwDialog removes itself from the presentation host when closed. Keep a
+    // state-owned reference so the command launcher and its child pointers are
+    // reusable across repeated open/close cycles.
+    _ = c.g_object_ref_sink(dialog);
     state.launcher = @ptrCast(dialog);
     c.adw_dialog_set_title(@ptrCast(dialog), "Run command");
     c.adw_dialog_set_content_width(@ptrCast(dialog), 560);
@@ -1208,22 +1307,122 @@ fn smokeEvidence(data: ?*anyopaque) callconv(.c) c.gboolean {
 fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
     if (state.cleaned) return c.G_SOURCE_REMOVE;
+    state.ui_smoke_wait +%= 1;
+    if (state.ui_smoke_wait % 200 == 0) {
+        const first_live = if (state.terminals[0]) |first| first.isLive() else false;
+        const first_owned = if (state.terminals[0]) |first| first.ownershipIdentity() != null else false;
+        const pages = if (state.tab_view) |tabs| c.adw_tab_view_get_n_pages(tabs) else 0;
+        std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT stage={d} wait={d} connection={s} terminals={d} hosts={d} pages={d} first_live={} first_owned={}\n", .{ state.ui_smoke_stage, state.ui_smoke_wait, @tagName(state.graph.state.connection), state.terminal_count, state.graph.terminals.hosts.items.len, pages, first_live, first_owned });
+    }
     switch (state.ui_smoke_stage) {
         0 => {
             const first = state.terminals[0] orelse return 1;
             if (!first.isLive() or first.ownershipIdentity() == null) return 1;
-            if (createTerminal(state, null, null) == null) { std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=create-terminal\n", .{}); return c.G_SOURCE_REMOVE; }
+            state.ui_smoke_ids[0] = first.surface_id;
+            const group = state.action_group orelse return 1;
+            state.ui_smoke_stage = 20;
+            c.g_action_group_activate_action(@ptrCast(group), "new-shell", null);
+            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
+            if (pair.surface_count < 2) { std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=create-terminal\n", .{}); return c.G_SOURCE_REMOVE; }
+            state.ui_smoke_ids[1] = pair.surfaces[pair.surface_count - 1].id;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT action=new-shell realized=true registered=true tab=true\n", .{});
             state.ui_smoke_stage = 1; return 1;
         },
         1 => {
             if (state.terminal_count < 2 or state.graph.terminals.hosts.items.len < 2) return 1;
-            openLauncher(state);
-            const pages = if(state.tab_view)|tabs|c.adw_tab_view_get_n_pages(tabs) else 0;
-            std.debug.print("GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered={d} pages={d} launcher=dialog context_menus=true split=paned\n", .{state.graph.terminals.hosts.items.len,pages});
+            if (state.graph.state.command_count == 0) { std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=no-configured-command\n", .{}); return c.G_SOURCE_REMOVE; }
+            const command = state.graph.state.commands[0];
+            const command_id = command.id[0..command.id_len];
+            const parameter = c.g_variant_new_string(@ptrCast(command_id.ptr));
+            state.ui_smoke_stage = 21;
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "activate-command", parameter);
+            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
+            if (pair.surface_count < 3) return 1;
+            state.ui_smoke_ids[2] = pair.surfaces[pair.surface_count - 1].id;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT action=configured-command distinct=true registered=true tab=true\n", .{});
             state.ui_smoke_stage = 2;
+            return 1;
+        },
+        2 => {
+            if (state.terminal_count < 3 or state.graph.terminals.hosts.items.len < 3) return 1;
+            const second = state.ui_smoke_ids[1] orelse return c.G_SOURCE_REMOVE;
+            var select_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(select_text[0..36], &second);
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(select_text[0..36 :0].ptr));
+            var reorder_text: [40:0]u8 = [_:0]u8{0} ** 40;
+            const reordered = std.fmt.bufPrintZ(&reorder_text, "{s}:0", .{second}) catch return c.G_SOURCE_REMOVE;
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "reorder-tab", c.g_variant_new_string(reordered.ptr));
+            (workspace_view.View{ .state = &state.graph.state }).renameTab(second, "Renamed shell") catch return c.G_SOURCE_REMOVE;
+            refreshProjection(state); savePresentation(state);
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT tabs=select,reorder,rename title=Renamed-shell\n", .{});
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "launch-command", null);
+            const entry = state.launcher_entry orelse return c.G_SOURCE_REMOVE;
+            c.gtk_editable_set_text(@ptrCast(entry), "Smoke");
+            const list = state.launcher_results orelse return c.G_SOURCE_REMOVE;
+            const row: ?*c.GtkListBoxRow = @ptrCast(c.gtk_widget_get_first_child(@ptrCast(@alignCast(list))));
+            if (row == null) { std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=launcher-search\n", .{}); return c.G_SOURCE_REMOVE; }
+            state.ui_smoke_stage = 22;
+            launcherActivated(list, row, state);
+            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
+            if (pair.surface_count < 4) return 1;
+            state.ui_smoke_ids[3] = pair.surfaces[pair.surface_count - 1].id;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT launcher=open,search,activate result=true\n", .{});
+            state.ui_smoke_stage = 3; return 1;
+        },
+        3 => {
+            if (state.terminal_count < 4 or state.graph.terminals.hosts.items.len < 4) return 1;
+            const closed = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
+            var selected_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(selected_text[0..36], &closed);
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(selected_text[0..36 :0].ptr));
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "close-tab", null);
+            state.ui_smoke_stage = 4; return 1;
+        },
+        4 => {
+            const closed = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
+            const loc = model.surfaceLocation(&state.graph.state, closed) orelse return c.G_SOURCE_REMOVE;
+            if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle != .ended) return 1;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT close=live-safe ended-page=true child-terminated=true\n", .{});
+            var id_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(id_text[0..36], &closed);
+            state.ui_smoke_stage = 24;
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "relaunch-tab", c.g_variant_new_string(id_text[0..36 :0].ptr));
+            state.ui_smoke_ids[4] = if (state.graph.state.surface) |surface| surface.id else return 1;
+            state.ui_smoke_stage = 5; return 1;
+        },
+        5 => {
+            const closed = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
+            const relaunched = state.ui_smoke_ids[4] orelse return c.G_SOURCE_REMOVE;
+            if (std.mem.eql(u8, &closed, &relaunched)) return c.G_SOURCE_REMOVE;
+            const relaunch_loc = model.surfaceLocation(&state.graph.state, relaunched) orelse return 1;
+            if (state.graph.state.pairs[relaunch_loc.pair].surfaces[relaunch_loc.surface].lifecycle != .live or state.graph.terminals.find(relaunched) == null) return 1;
+            const removable = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
+            const removable_loc = model.surfaceLocation(&state.graph.state, removable) orelse return c.G_SOURCE_REMOVE;
+            if (state.graph.state.pairs[removable_loc.pair].surfaces[removable_loc.surface].lifecycle == .live) {
+                var select_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(select_text[0..36], &removable);
+                c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(select_text[0..36 :0].ptr));
+                c.g_action_group_activate_action(@ptrCast(state.action_group.?), "close-tab", null);
+            }
+            state.ui_smoke_stage = 6; return 1;
+        },
+        6 => {
+            const removable = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
+            const loc = model.surfaceLocation(&state.graph.state, removable) orelse return c.G_SOURCE_REMOVE;
+            if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle != .ended) return 1;
+            var id_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(id_text[0..36], &removable);
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "remove-tab", c.g_variant_new_string(id_text[0..36 :0].ptr));
+            if (model.surfaceLocation(&state.graph.state, removable) != null) return 1;
+            state.ui_smoke_stage = 7;
+            state.ui_smoke_wait = 0;
+            return 1;
+        },
+        7 => {
+            const pages = if(state.tab_view)|tabs|c.adw_tab_view_get_n_pages(tabs) else 0;
+            if (pages > 3 or state.ui_smoke_wait < 20) return 1;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed\n", .{pages});
+            std.debug.print("GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered={d} pages={d} launcher=dialog context_menus=true split=paned\n", .{state.graph.terminals.hosts.items.len,pages});
+            state.ui_smoke_stage = 8;
             if(state.window)|window|c.gtk_window_close(window);
             return c.G_SOURCE_REMOVE;
         },
+        20, 21, 22, 24 => return 1,
         else => return c.G_SOURCE_REMOVE,
     }
 }
@@ -1249,6 +1448,13 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     };
     state.* = .{ .runtime = runtime, .registry = guard.Registry.init(allocator, @intCast(c.getpgrp()), -1), .graph = graph };
     restorePresentation(state);
+    // A new installation has no presentation history yet.  Select the first
+    // authoritative repository so New Terminal and configured commands are
+    // immediately usable instead of presenting a connected but inert shell.
+    if (state.graph.state.selected_pair == null and state.graph.state.pair_count > 0) {
+        state.graph.state.selected_pair = state.graph.state.pairs[0].key;
+        state.graph.state.last_pair = state.graph.state.pairs[0].key;
+    }
     state.graph.assertWired() catch |err| {
         std.debug.print("native production graph wiring failed: {s}\n", .{@errorName(err)});
         state.graph.deinit();

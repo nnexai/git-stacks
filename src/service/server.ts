@@ -69,11 +69,13 @@ export class SseTransportBridge {
   private released = false
   private heartbeatActive = false
   private removeCloseListener: () => void
+  private delivered = 0
 
   constructor(
     private readonly subscription: EventSubscription,
     private readonly heartbeatMs: number,
     private readonly onRelease: () => void,
+    private readonly maxFrames?: number,
   ) { this.removeCloseListener = subscription.onClosed(() => this.release()) }
 
   get diagnostics(): SseTransportDiagnostics {
@@ -98,6 +100,8 @@ export class SseTransportBridge {
             if (available === "heartbeat") {
               await controller.write(": heartbeat\n\n")
               await controller.flush()
+              this.delivered += 1
+              if (this.maxFrames !== undefined && this.delivered >= this.maxFrames) { controller.close(); this.release(); return }
               continue
             }
             this.reservation = this.subscription.reserve()
@@ -107,6 +111,8 @@ export class SseTransportBridge {
               await controller.flush()
               this.subscription.ack(this.reservation)
               this.reservation = undefined
+              this.delivered += 1
+              if (this.maxFrames !== undefined && this.delivered >= this.maxFrames) { controller.close(); this.release(); return }
               continue
             }
             if (this.subscription.disconnect) {
@@ -229,12 +235,12 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
     try { return JSON.parse(new TextDecoder().decode(bytes)) } catch { throw Object.assign(new Error("Malformed JSON body"), { status: 400 }) }
   }
 
-  const events = async (request: Request, client: AuthenticatedClient, id: string, server: Bun.Server<undefined>): Promise<Response> => {
+  const events = async (request: Request, client: AuthenticatedClient, id: string, server: Bun.Server<undefined>, finite = false): Promise<Response> => {
     if (!options.broker) return failure(id, "capability_unavailable", "Event streaming is unavailable", 409)
     if ((sseByClient.get(client.clientId) ?? 0) >= maxPerClient || sseTotal >= maxTotal) {
       return failure(id, "rate_limited", "Event connection limit reached", 429)
     }
-    const cursor = new URL(request.url).searchParams.get("cursor") ?? "0"
+    const cursor = new URL(request.url).searchParams.get("cursor") ?? request.headers.get("last-event-id") ?? "0"
     if (!/^(0|[1-9][0-9]*)$/.test(cursor)) return failure(id, "invalid_request", "Invalid event cursor", 400)
     let subscription: EventSubscription
     try { subscription = await options.broker.subscribe(cursor) } catch (caught) {
@@ -255,7 +261,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
       if (remaining) sseByClient.set(client.clientId, remaining); else sseByClient.delete(client.clientId)
       options.onConnectionChange?.(sseTotal)
     }
-    const bridge = new SseTransportBridge(subscription, heartbeat, () => { bridges.delete(bridge); release() })
+    const bridge = new SseTransportBridge(subscription, heartbeat, () => { bridges.delete(bridge); release() }, finite ? 1 : undefined)
     bridges.add(bridge)
     const stream = bridge.stream()
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" } })
@@ -272,7 +278,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
       const id = requestId()
       if (!consume(admission.client.clientId)) return failure(id, "rate_limited", "Request rate limit exceeded", 429)
       const url = new URL(request.url)
-      if (request.method === "GET" && url.pathname === "/v1/events") return events(request, admission.client, id, server)
+      if (request.method === "GET" && url.pathname === "/v1/events") return events(request, admission.client, id, server, url.searchParams.get("finite") === "1")
       server.timeout(request, REQUEST_TIMEOUT_SECONDS)
       try {
         return await withDeadline(async (signal) => {

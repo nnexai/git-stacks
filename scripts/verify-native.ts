@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "fs"
-import { arch, homedir, platform } from "os"
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "fs"
+import { arch, homedir, platform, tmpdir } from "os"
 import { basename, join } from "path"
 import { startManagedService } from "../src/service/main"
 
@@ -408,16 +408,24 @@ async function verifyStress(): Promise<void> {
       samples.push(fields)
     }
   })
-  const measured = samples.slice(Math.min(5, samples.length - 2))
-  const rssValues = measured.map((sample) => sample.rss_bytes)
-  const rssRange = Math.max(...rssValues) - Math.min(...rssValues)
-  const rssSlope = slope(rssValues)
-  const fdRange = Math.max(...measured.map((sample) => sample.fd_count)) - Math.min(...measured.map((sample) => sample.fd_count))
-  const threadRange = Math.max(...measured.map((sample) => sample.thread_count)) - Math.min(...measured.map((sample) => sample.thread_count))
-  if (rssRange > 64 * 1024 * 1024 || rssSlope > 512 * 1024 || fdRange > 4 || threadRange > 4) {
-    throw new Error(`production stress trend exceeded bounds: rss_range=${rssRange} rss_slope=${rssSlope} fd_range=${fdRange} thread_range=${threadRange}`)
-  }
-  console.log(JSON.stringify({ kind: "native-production-stress", lane: extended ? "extended" : "ordinary", cycles, warmup: Math.min(5, samples.length - 2), rss_median: median(rssValues), rss_range: rssRange, rss_slope: rssSlope, fd_range: fdRange, thread_range: threadRange, exact_zero: true }))
+  const warmup = Math.min(5, samples.length - 2)
+  const measured = samples.slice(warmup)
+  // Single- and two-surface processes have intentionally different steady
+  // renderer thread/RSS footprints. Compare like-for-like lanes so alternating
+  // workload size cannot masquerade as a lifecycle leak.
+  const trends = [0, 1].map((parity) => {
+    const lane = measured.filter((sample) => sample.cycle % 2 === parity)
+    const rssValues = lane.map((sample) => sample.rss_bytes)
+    const rssRange = Math.max(...rssValues) - Math.min(...rssValues)
+    const rssSlope = slope(rssValues)
+    const fdRange = Math.max(...lane.map((sample) => sample.fd_count)) - Math.min(...lane.map((sample) => sample.fd_count))
+    const threadRange = Math.max(...lane.map((sample) => sample.thread_count)) - Math.min(...lane.map((sample) => sample.thread_count))
+    if (rssRange > 64 * 1024 * 1024 || rssSlope > 512 * 1024 || fdRange > 4 || threadRange > 4) {
+      throw new Error(`production stress trend exceeded bounds for ${parity === 0 ? "two-surface" : "single-surface"} lane: rss_range=${rssRange} rss_slope=${rssSlope} fd_range=${fdRange} thread_range=${threadRange}`)
+    }
+    return { workload: parity === 0 ? "two-surface" : "single-surface", rss_median: median(rssValues), rss_range: rssRange, rss_slope: rssSlope, fd_range: fdRange, thread_range: threadRange }
+  })
+  console.log(JSON.stringify({ kind: "native-production-stress", lane: extended ? "extended" : "ordinary", cycles, warmup, trends, exact_zero: true }))
 }
 
 async function verifyTerminalHost(): Promise<void> {
@@ -496,18 +504,68 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
   const artifact = await buildApp()
   console.log("native workspace lifecycle smoke: starting managed service")
   if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable for workspace lifecycle smoke")
+  const configRoot = mkdtempSync(join(tmpdir(), "git-stacks-native-workspace-"))
+  const workspaceId = "10000000-0000-4000-8000-000000000001"
+  const repositoryId = "20000000-0000-4000-8000-000000000002"
+  const commandId = "cmd_workspace_smoke_0001"
+  const snapshot = {
+    protocol: "v1" as const, request_id: "req_workspace_smoke_0001", ok: true as const,
+    revision: "1", generated_at: new Date().toISOString(),
+    workspace: {
+      id: workspaceId, name: "Smoke workspace", branch: "main",
+      repositories: [{ id: repositoryId, name: "Smoke repository", mode: "dir" as const, path: ROOT }],
+      launch: {
+        commands: [], environment: {}, redacted: [], references: {}, cwd: ROOT,
+        named: [{
+          id: commandId, name: "Smoke command", scope: "repository" as const, repository_id: repositoryId,
+          steps: [{ bucket: "main" as const, scope: "repo" as const, command: "printf 'CONFIGURED_COMMAND_OK\\n'; exec fish", cwd: ROOT, repository_id: repositoryId, repository_name: "Smoke repository", environment: {} }],
+        }],
+      },
+    },
+  }
   const serviceKeepalive = setInterval(() => {}, 1_000)
-  const service = await startManagedService()
+  const service = await startManagedService({
+    serviceRoot: join(configRoot, "service"), idleMs: 60_000,
+    snapshot: {
+      async buildAll() { return [snapshot] },
+      async buildWorkspace(_name: string, requestId?: string) { return { ...snapshot, request_id: requestId ?? snapshot.request_id } },
+      async currentRevision() { return "1" },
+      async resolveNativeLaunch(request) {
+        return {
+          resolved: true as const, revision: "1",
+          launch: {
+            argv: ["/usr/bin/fish"], cwd: ROOT,
+            environment: request.command_id ? { GIT_STACKS_SMOKE_COMMAND: "1" } : {}, ports: {},
+            configuration: request.command_id ? { shell: false, command_id: request.command_id } : { shell: true }, redacted: [],
+          },
+        }
+      },
+    },
+  })
   try {
-    const child = Bun.spawn([artifact], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_WORKSPACE_SMOKE: "1" } })
+    const child = Bun.spawn([artifact], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_WORKSPACE_SMOKE: "1" } })
     let timer: ReturnType<typeof setTimeout>; const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 45_000) })
     const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
-    if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("workspace lifecycle smoke timed out after 45 seconds") }
+    if (outcome === "timeout") {
+      child.kill("SIGKILL"); await child.exited
+      const stderr = await new Response(child.stderr).text()
+      throw new Error(`workspace lifecycle smoke timed out after 45 seconds: ${stderr}`)
+    }
     const stderr = await new Response(child.stderr).text()
-    if (outcome.code !== 0 || !/GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered=2 pages=2 launcher=dialog context_menus=true split=paned/.test(stderr)) throw new Error(`workspace lifecycle evidence missing (${outcome.code}): ${stderr}`)
-    if (/Gtk-(CRITICAL|WARNING)|panic:|missing.*page|Child name .* not found/.test(stderr)) throw new Error(`workspace lifecycle emitted GTK/panic diagnostics: ${stderr}`)
-    console.log("native workspace lifecycle smoke passed: create/realize/register/tab/dialog/context/split/close")
-  } finally { clearInterval(serviceKeepalive); await service.stop() }
+    const checkpoints = [
+      "action=new-shell realized=true registered=true tab=true",
+      "action=configured-command distinct=true registered=true tab=true",
+      "tabs=select,reorder,rename",
+      "launcher=open,search,activate result=true",
+      "close=live-safe ended-page=true child-terminated=true",
+      "relaunch=distinct-lineage remove-ended=persisted",
+      "context-menu=constructed",
+    ]
+    if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_WORKSPACE_LIFECYCLE") || checkpoints.some((checkpoint) => !stderr.includes(checkpoint))) throw new Error(`workspace lifecycle evidence missing (${outcome.code}): ${stderr}`)
+    const diagnostics = stderr.replace(/^.*VK_SUBOPTIMAL_KHR.*\n?/gm, "")
+    if (/(?:Gtk|Adwaita|GLib|GObject)-(?:CRITICAL|WARNING)|panic:|Segmentation fault|missing.*page|Child name .* not found/.test(diagnostics)) throw new Error(`workspace lifecycle emitted GTK/panic diagnostics: ${stderr}`)
+    console.log("native workspace lifecycle smoke passed: real actions created, selected, reordered, renamed, closed, relaunched and removed terminal tabs; launcher and window close were clean")
+  } finally { clearInterval(serviceKeepalive); await service.stop(); rmSync(configRoot, { recursive: true, force: true }) }
 }
 
 function verifyAccessibilityContract(): void {

@@ -121,7 +121,10 @@ pub const Client = struct {
     }
     pub fn eventsRequest(self: *Client, cursor_buf: *[20]u8) !Request {
         const cursor = try std.fmt.bufPrint(cursor_buf, "{d}", .{self.sequence});
-        var req = try self.request(.GET, "/v1/events", ""); req.last_event_id = cursor; return req;
+        // Bound each replay fetch to one event or heartbeat. This preserves SSE
+        // ordering while giving the owning application a finite join point on
+        // shutdown; the worker reconnects with Last-Event-ID after every frame.
+        var req = try self.request(.GET, "/v1/events?finite=1", ""); req.last_event_id = cursor; return req;
     }
     pub fn launchRequestAlloc(self: *Client, allocator: std.mem.Allocator, workspace_id: []const u8, repository_id: []const u8, command_id: ?[]const u8) !Request {
         if (!uuid(workspace_id) or !uuid(repository_id)) return error.InvalidIdentity;
