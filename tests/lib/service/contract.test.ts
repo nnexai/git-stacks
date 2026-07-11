@@ -18,7 +18,7 @@ describe("service v1 contract", () => {
       ["workspace-snapshot.json", WorkspaceSnapshotResponseSchema],
     ] as const) {
       const value = fixture(name)
-      expect(schema.parse(value)).toEqual(value)
+      expect(schema.parse(value) as unknown).toEqual(value)
     }
   })
 
@@ -30,7 +30,7 @@ describe("service v1 contract", () => {
   })
 
   test("rejects sensitive and undeclared error data", () => {
-    const base = { protocol: "v1", request_id: "req_0123456789abcdef", ok: false, error: { code: "internal_error", message: "Request failed" } }
+    const base = { protocol: "v1", request_id: "req_0123456789abcdef", ok: false, error: { code: "internal_error", message: "Request failed" } } as const
     expect(ErrorEnvelopeSchema.parse(base)).toEqual(base)
     expect(() => ErrorEnvelopeSchema.parse({ ...base, stack: "secret" })).toThrow()
     expect(() => ErrorEnvelopeSchema.parse({ ...base, error: { ...base.error, credential: "bearer" } })).toThrow()
