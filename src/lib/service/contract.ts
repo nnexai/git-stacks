@@ -17,6 +17,7 @@ export const TimestampSchema = z.string().datetime({ offset: true })
 export const ErrorCodeSchema = z.enum([
   "invalid_request", "unauthorized", "not_found", "conflict", "rate_limited",
   "capability_unavailable", "replay_gap", "snapshot_busy", "internal_error", "operation_failed", "idempotency_conflict",
+  "request_timeout",
 ])
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>
 export const ApiErrorSchema = z.strictObject({

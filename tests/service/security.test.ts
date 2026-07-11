@@ -9,6 +9,8 @@ import {
   UNAUTHENTICATED_RESPONSE,
 } from "../../src/lib/service/credentials"
 import { ErrorEnvelopeSchema } from "../../src/lib/service/contract"
+import { EventBroker } from "../../src/lib/service/event-broker"
+import { EventJournal } from "../../src/lib/service/event-journal"
 import { startServiceServer } from "../../src/service/server"
 
 const roots: string[] = []
@@ -119,30 +121,24 @@ describe("service authentication admission", () => {
   test("keeps SSE exempt from the ordinary handler deadline", async () => {
     const serviceRoot = root()
     const credential = provisionOfficialClient("sse-deadline-client", { serviceRoot })
-    let closed = false
-    const subscription = {
-      diagnostics: { queuedEvents: 0, queuedBytes: 0, reservedEvents: 0, reservedBytes: 0, combinedEvents: 0, combinedBytes: 0, closed: false },
-      peek: () => undefined,
-      reserve: () => undefined,
-      ack: () => {},
-      waitForAvailable: () => new Promise<void>(() => {}),
-      onClosed: () => () => {},
-      close: () => { closed = true },
-    }
+    const broker = new EventBroker(new EventJournal({ root: serviceRoot }))
     const service = startServiceServer({
       serviceRoot,
       handlerTimeoutMs: 20,
       heartbeatMs: 10,
       snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
-      broker: { subscribe: async () => subscription, close: () => {} } as never,
+      broker,
     })
     try {
-      const response = await fetch(new URL("/v1/events?cursor=0", service.url), { headers: { authorization: `Bearer ${credential.token}` } })
+      const responsePending = fetch(new URL("/v1/events?cursor=0", service.url), { headers: { authorization: `Bearer ${credential.token}` } })
+      await Bun.sleep(30)
+      broker.publish({ protocol: "v1", sequence: "1", timestamp: new Date().toISOString(), type: "control", control: { kind: "heartbeat" } })
+      const response = await responsePending
       expect(response.status).toBe(200)
       const reader = response.body!.getReader()
       await Bun.sleep(50)
       expect((await reader.read()).done).toBe(false)
-      expect(closed).toBe(false)
+      expect(service.connectedClients).toBe(1)
       await reader.cancel()
     } finally {
       await service.stop()

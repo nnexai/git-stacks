@@ -39,7 +39,7 @@ describe("service v1 contract", () => {
 
   test("closes request timeout errors over the strict golden envelope", () => {
     const timeout = fixture("request-timeout-error.json")
-    expect(ErrorEnvelopeSchema.parse(timeout)).toEqual(timeout)
+    expect(ErrorEnvelopeSchema.parse(timeout) as unknown).toEqual(timeout)
     expect(ErrorCodeSchema.parse("request_timeout")).toBe("request_timeout")
     expect(() => ErrorEnvelopeSchema.parse({ ...(timeout as object), details: "late adapter text" })).toThrow()
     const envelope = timeout as { error: Record<string, unknown> }

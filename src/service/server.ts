@@ -19,8 +19,8 @@ const MutationRequestSchema = z.strictObject({
 })
 
 type SnapshotAdapter = {
-  buildAll(): Promise<WorkspaceSnapshotResponse[]>
-  buildWorkspace(name: string, requestId?: string): Promise<WorkspaceSnapshotResponse>
+  buildAll(signal?: AbortSignal): Promise<WorkspaceSnapshotResponse[]>
+  buildWorkspace(name: string, requestId?: string, signal?: AbortSignal): Promise<WorkspaceSnapshotResponse>
 }
 
 export interface ServiceServerOptions {
@@ -28,7 +28,7 @@ export interface ServiceServerOptions {
   snapshot: SnapshotAdapter
   operations?: OperationRegistry
   broker?: EventBroker
-  mutations?: Record<string, (request: z.infer<typeof MutationRequestSchema>) => OperationExecution>
+  mutations?: Record<string, (request: z.infer<typeof MutationRequestSchema>, signal?: AbortSignal) => OperationExecution>
   hostname?: "127.0.0.1"
   port?: number
   now?: () => number
@@ -38,6 +38,9 @@ export interface ServiceServerOptions {
   maxBodyBytes?: number
   maxSsePerCredential?: number
   maxSseTotal?: number
+  handlerTimeoutMs?: number
+  setTimeoutFn?: typeof setTimeout
+  clearTimeoutFn?: typeof clearTimeout
   onConnectionChange?: (count: number) => void
 }
 
@@ -156,6 +159,10 @@ export class SseTransportBridge {
 
 type Bucket = { tokens: number; updatedAt: number }
 
+class RequestTimeoutError extends Error {
+  constructor() { super("Service request timed out") }
+}
+
 function requestId(): string { return `req_${randomBytes(16).toString("base64url")}` }
 function json(body: unknown, status = 200, headers?: HeadersInit): Response {
   return Response.json(body, { status, headers })
@@ -177,6 +184,27 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
   const heartbeat = options.heartbeatMs ?? SSE_HEARTBEAT_MS
   const maxPerClient = options.maxSsePerCredential ?? SSE_MAX_PER_CREDENTIAL
   const maxTotal = options.maxSseTotal ?? SSE_MAX_TOTAL
+  const handlerTimeoutMs = options.handlerTimeoutMs ?? REQUEST_TIMEOUT_SECONDS * 1_000
+  const setTimer = options.setTimeoutFn ?? setTimeout
+  const clearTimer = options.clearTimeoutFn ?? clearTimeout
+
+  const withDeadline = async <T>(handler: (signal: AbortSignal) => Promise<T>): Promise<T> => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const work = Promise.resolve().then(() => handler(controller.signal))
+    void work.catch(() => {})
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimer(() => {
+        controller.abort(new RequestTimeoutError())
+        reject(new RequestTimeoutError())
+      }, handlerTimeoutMs)
+    })
+    try {
+      return await Promise.race([work, deadline])
+    } finally {
+      if (timer) clearTimer(timer)
+    }
+  }
 
   const consume = (clientId: string): boolean => {
     const timestamp = now()
@@ -244,6 +272,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
       if (request.method === "GET" && url.pathname === "/v1/events") return events(request, admission.client, id, server)
       server.timeout(request, REQUEST_TIMEOUT_SECONDS)
       try {
+        return await withDeadline(async (signal) => {
         if (request.method === "GET" && url.pathname === "/v1") return json(success(id, {
           service_version: "1",
           capabilities: {
@@ -253,13 +282,13 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           },
           limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024 },
         }))
-        if (request.method === "GET" && url.pathname === "/v1/snapshot") return json(success(id, await options.snapshot.buildAll()))
+        if (request.method === "GET" && url.pathname === "/v1/snapshot") return json(success(id, await options.snapshot.buildAll(signal)))
         const workspaceMatch = /^\/v1\/workspaces\/([^/]+)$/.exec(url.pathname)
         if (request.method === "GET" && workspaceMatch) {
-          const all = await options.snapshot.buildAll()
+          const all = await options.snapshot.buildAll(signal)
           const workspace = all.find((item) => item.workspace.id === decodeURIComponent(workspaceMatch[1]!))
           if (!workspace) return failure(id, "not_found", "Workspace not found", 404)
-          return json(await options.snapshot.buildWorkspace(workspace.workspace.name, id))
+          return json(await options.snapshot.buildWorkspace(workspace.workspace.name, id, signal))
         }
         const mutationMatch = /^\/v1\/operations\/([^/]+)$/.exec(url.pathname)
         if (request.method === "POST" && mutationMatch && mutationMatch[1] !== "cancel") {
@@ -270,7 +299,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           if (!parsed.success) return failure(id, "invalid_request", "Invalid mutation request", 400)
           const key = request.headers.get("idempotency-key")
           if (!key || key.length > 256) return failure(id, "invalid_request", "A valid Idempotency-Key header is required", 400)
-          const operation = await options.operations.submit({ clientId: admission.client.clientId, endpoint: mutation, idempotencyKey: key, request: parsed.data, execution: adapter(parsed.data) })
+          const operation = await options.operations.submit({ clientId: admission.client.clientId, endpoint: mutation, idempotencyKey: key, request: parsed.data, execution: adapter(parsed.data, signal) })
           return json(success(id, operation), 202)
         }
         const operationMatch = /^\/v1\/operations\/(op_[A-Za-z0-9_-]{16,})$/.exec(url.pathname)
@@ -285,7 +314,9 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           return json(success(id, await options.operations.cancel(cancelMatch[1]!)), 202)
         }
         return failure(id, "not_found", "Route not found", 404)
+        })
       } catch (caught) {
+        if (caught instanceof RequestTimeoutError) return failure(id, "request_timeout", "Service request timed out", 504)
         if (caught instanceof IdempotencyConflictError) return failure(id, "idempotency_conflict", caught.message, 409, { operation_id: caught.operationId })
         const status = (caught as { status?: number }).status
         if (status === 400 || status === 413) return failure(id, "invalid_request", (caught as Error).message, status)
