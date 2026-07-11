@@ -194,9 +194,11 @@ async function verifyModel(): Promise<void> {
 
 async function verifyQuick(): Promise<void> {
   verifyNativeSourceBoundaries()
+  verifyAccessibilityContract()
   await verifyModel()
   await verify("terminal-api-smoke")
   await verify("terminal-host-test")
+  await verify("lifecycle-stress")
 }
 
 async function verifyRestore(): Promise<void> {
@@ -212,12 +214,34 @@ async function verifyTerminalHost(): Promise<void> {
   await verify("terminal-host-test")
 }
 
+function verifyAccessibilityContract(): void {
+  const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
+  const accessibilityPath = join(ROOT, "docs", "native-terminal-accessibility.md")
+  for (const path of [acceptancePath, accessibilityPath]) {
+    if (!existsSync(path)) throw new Error(`native evidence template missing: ${path}`)
+    const source = readFileSync(path, "utf8")
+    if (!source.includes("Status: NOT YET OBSERVED")) throw new Error(`${path} must remain explicitly unverified before human evidence`)
+    if (!source.includes("Observer:") || !source.includes("Date:")) throw new Error(`${path} lacks fillable evidence identity fields`)
+  }
+  const accessibility = readFileSync(accessibilityPath, "utf8")
+  for (const required of ["Focus", "Keyboard and IME", "Selection and clipboard", "Visible focus", "Cell-level screen-reader output"]) {
+    if (!accessibility.includes(required)) throw new Error(`accessibility contract missing observation row: ${required}`)
+  }
+  if (!accessibility.includes("unsupported/unverified")) throw new Error("accessibility contract must explicitly permit truthful unsupported/unverified cell semantics")
+}
+
+async function verifyAccessibility(): Promise<void> {
+  verifyAccessibilityContract()
+  console.log("native accessibility evidence templates verified; human observations remain required")
+}
+
 const mode = process.argv[2] ?? "verify"
 if (mode === "setup") await setup()
 else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()
 else if (mode === "lifecycle") await verifyLifecycle()
 else if (mode === "terminal-host") await verifyTerminalHost()
+else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "quick" || mode === "verify") await verifyQuick()
 else if (mode === "terminal-build") await verify()
 else throw new Error(`unknown native verification mode: ${mode}`)
