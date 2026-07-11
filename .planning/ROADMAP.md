@@ -23,7 +23,21 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
   3. A long-running mutation returns promptly with an operation identity, reports structured progress, and a retry with the same idempotency key does not repeat destructive work.
   4. A reconnecting client receives ordered operation and attention events from retained history, or detects a replay gap and rebuilds from an authoritative snapshot.
   5. Existing CLI and OpenTUI workflows remain compatible, and slow or disconnected event consumers cannot grow service memory without bound.
-**Plans**: TBD
+**Plans**: 6 plans in 4 waves
+
+Wave 1:
+- [ ] 104-01 — Freeze the v1 contract and stable identity migration
+- [ ] 104-03 — Establish protected per-client credential admission
+
+Wave 2 *(blocked on Wave 1 completion)*:
+- [ ] 104-02 — Build authoritative snapshots and redacted launch contexts
+- [ ] 104-05 — Build the durable ordered journal and bounded live broker
+
+Wave 3 *(blocked on Wave 2 completion)*:
+- [ ] 104-04 — Build durable operations, cancellation, and idempotency
+
+Wave 4 *(blocked on Wave 3 completion)*:
+- [ ] 104-06 — Compose authenticated HTTP/SSE transport and service lifecycle
 
 ### Phase 105: Shared Native Model and Terminal Foundation
 **Goal**: Native shells share deterministic product state while Linux users can operate one correct, exclusively owned embedded terminal surface.

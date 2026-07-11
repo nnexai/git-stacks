@@ -355,17 +355,17 @@ Cursor encoding is opaque to clients; internally store sequence as a decimal str
 | A3 | Launch specifications should not expose resolved secret values by default. | Anti-patterns / Security | Phase 105 may require selected secrets; contract needs an explicit allowlist/capability rather than accidental leakage. |
 | A4 | Other processes running as the same OS user can generally read user-owned service credentials. | Security Domain | Per-client credentials are revocable but are not an OS-user sandbox boundary. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Which mutations are in the first `/v1` capability set?**
+1. **RESOLVED — Which mutations are in the first `/v1` capability set?**
    - What we know: EVT requirements need long-running mutation infrastructure; milestone clients primarily need launch and command actions.
    - What's unclear: exact lifecycle/Git endpoint breadth is not locked.
-   - Recommendation: implement the generic operation substrate plus a minimal representative command/lifecycle mutation set, advertise each mutation as a capability, and return `capability_unavailable` for unimplemented optional actions.
+   - Resolution: implement the generic operation substrate and advertise workspace `open` and `close` as the initial mutation capabilities. Return `capability_unavailable` for every other optional mutation. This proves lifecycle, cancellation, and idempotency without expanding command authoring, forge, or unrelated CRUD scope.
 
-2. **May native launch specs receive secret-resolved environment values?**
+2. **RESOLVED — May native launch specs receive secret-resolved environment values?**
    - What we know: existing `buildWorkspaceEnv` resolves secrets and clients need launch environment.
    - What's unclear: exposure policy across a local process boundary.
-   - Recommendation: default to non-secret/resolved ordinary env plus explicit secret references/redaction metadata; require a separately advertised capability and tests before transmitting secret values.
+   - Resolution: launch specs include resolved ordinary environment values but omit resolved secret values by default, representing them only through explicit secret-reference/redaction metadata. Phase 104 does not advertise a capability that transmits resolved secrets.
 
 ## Environment Availability
 
@@ -390,29 +390,27 @@ Cursor encoding is opaque to clients; internally store sequence as a decimal str
 | Full suite command | `bun run test && bun run typecheck && bun run test:deps && bun run verify:gates` |
 
 ### Phase Requirements → Test Map
-| Req ID | Behavior | Test Type | Automated Command | File Exists? |
-|--------|----------|-----------|-------------------|-------------|
-| SVC-01 | discovery/version/capability unavailable | contract + integration | `bun test tests/lib/service/contract.test.ts tests/service/discovery.test.ts` | ❌ Wave 0 |
-| SVC-02 | stable IDs, consistent aggregate, monotonic revision | unit + integration | `bun test tests/lib/service/identity.test.ts tests/lib/service/snapshot.test.ts` | ❌ Wave 0 |
-| SVC-03 | resolved cwd/env/ports/commands without YAML exposure | unit | `bun test tests/lib/service/launch-context.test.ts` | ❌ Wave 0 |
-| SVC-04 | unchanged CLI/OpenTUI contracts | regression | `bun test tests/commands/command.test.ts tests/commands/workspace-json-contracts.test.ts tests/tui` | Existing plus new fixtures |
-| SVC-05 | auth, revocation, loopback, body/rate/timeout bounds | unit + integration | `bun test tests/lib/service/credentials.test.ts tests/service/security.test.ts` | ❌ Wave 0 |
-| EVT-01 | nonblocking lifecycle and structured transitions | unit + integration | `bun test tests/lib/service/operations.test.ts tests/service/operations.test.ts` | ❌ Wave 0 |
-| EVT-02 | same-key replay and conflict after restart | unit | `bun test tests/lib/service/idempotency.test.ts` | ❌ Wave 0 |
-| EVT-03 | ordered operation/attention SSE | integration | `bun test tests/service/events.test.ts` | ❌ Wave 0 |
-| EVT-04 | replay, restart, gap metadata/rebuild revision | unit + integration | `bun test tests/lib/service/event-journal.test.ts tests/service/events.test.ts` | ❌ Wave 0 |
-| EVT-05 | event/byte queue caps and producer nonblocking | unit | `bun test tests/lib/service/event-broker.test.ts` | ❌ Wave 0 |
+| Req ID | Behavior | Test Type | Automated Command | RED-First Test Creation Owner |
+|--------|----------|-----------|-------------------|-------------------------------|
+| SVC-01 | discovery/version/capability unavailable | contract + integration | `bun test tests/lib/service/contract.test.ts tests/service/discovery.test.ts` | 104-01-01 and 104-06-01 |
+| SVC-02 | stable IDs, consistent aggregate, monotonic revision | unit + integration | `bun test tests/lib/service/identity.test.ts tests/lib/service/snapshot.test.ts` | 104-01-02, 104-02-01, and 104-06-01 |
+| SVC-03 | resolved cwd/env/ports/commands without YAML exposure | unit | `bun test tests/lib/service/launch-context.test.ts` | 104-02-02 and 104-06-01 |
+| SVC-04 | unchanged CLI/OpenTUI contracts | regression | `bun test tests/commands/command.test.ts tests/commands/workspace-json-contracts.test.ts tests/tui` | Existing regression suites plus 104-01-01, 104-01-02, 104-02-01, 104-02-02, 104-05-02, and 104-06-02 |
+| SVC-05 | auth, revocation, loopback, body/rate/timeout bounds | unit + integration | `bun test tests/lib/service/credentials.test.ts tests/service/security.test.ts` | 104-03-01, 104-03-02, 104-06-01, and 104-06-02 |
+| EVT-01 | nonblocking lifecycle and structured transitions | unit + integration | `bun test tests/lib/service/operations.test.ts tests/service/operations.test.ts` | 104-04-01 and 104-06-01 |
+| EVT-02 | same-key replay and conflict after restart | unit | `bun test tests/lib/service/idempotency.test.ts` | 104-04-02 and 104-06-01 |
+| EVT-03 | ordered operation/attention SSE | unit + integration | `bun test tests/lib/service/event-journal.test.ts tests/lib/service/event-broker.test.ts tests/lib/service/operations.test.ts tests/service/events.test.ts` | 104-05-01, 104-05-02, 104-04-01, and 104-06-01 |
+| EVT-04 | replay, restart, gap metadata/rebuild revision | unit + integration | `bun test tests/lib/service/event-journal.test.ts tests/service/events.test.ts` | 104-05-01 and 104-06-01 |
+| EVT-05 | event/byte queue caps and producer nonblocking | unit + integration | `bun test tests/lib/service/event-broker.test.ts tests/service/events.test.ts` | 104-05-02 and 104-06-01 |
 
 ### Sampling Rate
 - **Per task commit:** focused `bun test <changed test files>` plus `bun run typecheck`.
 - **Per wave merge:** `bun run test:unit && bun run test:deps` or relevant integration set.
 - **Phase gate:** `bun run test && bun run typecheck && bun run test:deps && bun run verify:gates` green before verification.
 
-### Wave 0 Gaps
-- [ ] Create service contract golden fixtures before implementation so Phase 105 has stable cross-language inputs.
-- [ ] Add injectable clock, random-ID source, persistence root, limits, and operation executor fixtures.
-- [ ] Add loopback server harness using port `0`, isolated `GIT_STACKS_CONFIG_DIR`, and cleanup that proves no daemon/process remains.
-- [ ] Add crash/restart journal and idempotency fixtures, corrupt-tail recovery cases, concurrent publish ordering, replay/live handoff race, and exact size boundary tests.
+### Test-Creation Ownership (RESOLVED — No Separate Wave 0)
+
+All missing tests and fixtures are owned by the twelve `tdd="true"` implementation tasks and must be created and run RED before production changes. Task 104-01-01 owns the cross-language golden fixtures; the corresponding unit tasks own injectable clocks, IDs, persistence roots, limits, and executors; 104-06-01 owns the isolated port-0 loopback harness and cleanup; and 104-05-01, 104-05-02, and 104-04-02 own crash/restart, corrupt-tail, concurrent ordering, replay/live handoff, idempotency, and exact-boundary fixtures. This assignment matches `104-VALIDATION.md`; no standalone Wave 0 plan remains.
 
 ## Security Domain
 
