@@ -81,6 +81,17 @@ pub fn build(b: *std.Build) void {
     const restore_step = b.step("restore-test", "Run presentation restoration and quarantine tests");
     restore_step.dependOn(&run_persistence_tests.step);
 
+    const ownership_test_module = b.createModule(.{
+        .root_source_file = b.path("tests/ownership_test.zig"), .target = b.graph.host, .optimize = .Debug,
+    });
+    ownership_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));
+    ownership_test_module.addImport("guard", b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") }));
+    ownership_test_module.addImport("diagnostics", b.createModule(.{ .root_source_file = b.path("terminal/diagnostics.zig") }));
+    const ownership_tests = b.addTest(.{ .root_module = ownership_test_module });
+    const run_ownership_tests = b.addRunArtifact(ownership_tests);
+    const lifecycle_step = b.step("lifecycle-test", "Run terminal ownership and guard lifecycle tests");
+    lifecycle_step.dependOn(&run_ownership_tests.step);
+
     const harness = b.addExecutable(.{
         .name = "abi-harness",
         .root_module = b.createModule(.{

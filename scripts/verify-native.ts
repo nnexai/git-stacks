@@ -179,10 +179,15 @@ async function verifyRestore(): Promise<void> {
   await verify("restore-test")
 }
 
+async function verifyLifecycle(): Promise<void> {
+  await verify("lifecycle-test")
+}
+
 const mode = process.argv[2] ?? "verify"
 if (mode === "setup") await setup()
 else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()
+else if (mode === "lifecycle") await verifyLifecycle()
 else if (mode === "quick" || mode === "verify") await verifyQuick()
 else if (mode === "terminal-build") await verify()
 else throw new Error(`unknown native verification mode: ${mode}`)
