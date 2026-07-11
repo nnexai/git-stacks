@@ -105,6 +105,9 @@ function verifyProductionTerminalComposition(): void {
     "gtk_event_controller_key_new()",
     '"key-pressed"',
     "gtk_im_multicontext_new()",
+    "gtk_gesture_drag_new()",
+    "gdk_clipboard_read_text_async",
+    "gdk_display_get_primary_clipboard",
     '"preedit-changed"',
     '"resize"',
     "g_timeout_add(8, pumpTimer",
@@ -297,7 +300,7 @@ async function smokeTerminal(): Promise<void> {
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
-  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("input=gtk-commit-path") || !stderr.includes("composition=pty-runtime") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible production-input roundtrip failed (${outcome.code}): ${stderr}`)
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("DA_RESPONSE_OK") || !stderr.includes("input=gtk-commit-path") || !stderr.includes("composition=pty-runtime") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible production-input/query roundtrip failed (${outcome.code}): ${stderr}`)
   console.log("native terminal smoke passed: PTY input/output, alternate-screen parsing, resize/reflow, and clean exit verified")
 }
 
