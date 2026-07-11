@@ -1,178 +1,226 @@
 # Project Research Summary
 
-**Project:** git-stacks v0.17.0 — Engine Hardening & Template Labels
-**Domain:** CLI workspace manager — structural hardening of an existing Bun/TypeScript CLI tool
-**Researched:** 2026-04-05
-**Confidence:** HIGH
+**Project:** git-stacks v0.20.0 Native Workspace Client
+**Domain:** Native desktop workspace and terminal command center
+**Researched:** 2026-07-11
+**Confidence:** HIGH overall; MEDIUM for libghostty embedding details
 
 ## Executive Summary
 
-git-stacks v0.17.0 is a hardening milestone on a stable, shipping CLI tool. Research confirms that all four capability areas — template label propagation, operation runner with rollback, indexed config store, and integration plugin contracts — are implementable entirely with existing dependencies. No new packages are needed. The additions are structural TypeScript patterns: a LIFO compensation stack for rollback, a module-level `Map` for config caching, a `capabilities` field on the `Integration` interface, and a label merge in the workspace creation path.
+The milestone should add a native companion to git-stacks, not a replacement workspace engine or a new terminal multiplexer. The existing Bun/TypeScript code remains authoritative for workspace queries, mutations, resolved execution context, progress, and structured attention. Native clients consume a versioned machine contract, while each client exclusively owns its terminal processes, surface lifecycle, tabs, and session metadata. The first credible product is a Linux GTK4/libadwaita application with correct libghostty input/render/lifecycle behavior, workspace and repository navigation, multiple workspace-bound tabs, contextual named-command launch, and attention routing.
 
-The recommended approach is incremental delivery ordered by dependency and blast radius. Template labels and DI/logging additions are pure additions with zero risk to existing behavior. Plugin contracts require touching 10 files but are mechanical and additive. Config indexing and operation-runner wiring into `workspace-lifecycle.ts` are the highest-risk changes and must ship as discrete phases with regression coverage before combining. The facade signature of `workspace-ops.ts` must remain unchanged throughout — callers (command handlers, TUI dashboard) should see no API changes.
+The recommended native boundary is a small Zig model/reducer with an opaque product-owned C ABI, plus platform-specific libghostty adapters: Zig/GTK/OpenGL on Linux and SwiftUI with an AppKit/Metal host on macOS. Pin libghostty to the Ghostty v1.3.1 commit and Zig 0.15.2 as a compatibility pair; no upstream types may escape the adapter. Validate one real Linux terminal early, but establish the service contract and stable identities first so neither frontend duplicates YAML or engine policy.
 
-The dominant risks are correctness details, not technical complexity: rollback undo order must be strictly LIFO; the config index must be read-only with YAML as source of truth; labels must be snapshot-copied at creation time (not resolved at runtime via the template reference); and interface additions must remain optional until all 10 plugins are updated. Each risk has a specific test that proves prevention — those tests are the acceptance criteria.
+For the MVP protocol, use authenticated HTTP/1.1 JSON on an ephemeral `127.0.0.1` port for queries and mutations, with SSE for ordered progress and attention events. This is the only researched option directly supported by both Linux libsoup and macOS URLSession and therefore best fits the same-protocol proof constraint. Launch the service/client as a trust pair with a per-launch bearer token, bind loopback only, validate Host/Origin where applicable, cap bodies and queues, and negotiate `/v1` capabilities. Unix-domain-socket NDJSON/JSON-RPC offers stronger OS-local peer controls and full duplex, but creates a macOS transport adapter and conflicts with the common-denominator proof; defer it to post-MVP Linux hardening. WebSocket is also deferred until bidirectional high-frequency traffic is demonstrated. The largest remaining risks are unstable libghostty embedding, GPU/native-view teardown, IME/accessibility, PTY process-tree ownership, reconnect correctness, and installed-artifact packaging.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is unchanged. All v0.17.0 work ships in existing packages: Bun (runtime), TypeScript ^6.0.2 (strict mode), Zod ^4.3.6 (schema validation; already used for all config; v4 metadata API available for plugin contract schemas), yaml ^2.8.3 (config I/O), and @logtape/logtape ^2.0.5 (structured logging; `withContext()` via AsyncLocalStorage is available in the installed version for per-operation log correlation). Avoiding new dependencies is a deliberate constraint — sub-100ms CLI startup and zero-build Bun execution are incompatible with saga engines, DI containers, or embedded databases.
+Keep the production workspace engine in Bun/TypeScript with Zod as the canonical runtime schema source. Generate OpenAPI 3.1/JSON Schema and golden fixtures for native consumers. Use Zig 0.15.2 for the portable reducer/C ABI and Linux adapter, exact-pinned libghostty from Ghostty v1.3.1, GTK 4.14+ and libadwaita 1.5+ for Linux, libsoup 3 for HTTP/SSE, and SwiftUI/AppKit with URLSession for the thin macOS proof.
 
-**Core technologies (v0.17.0 relevant):**
-- Zod ^4.3.6: plugin contract schema validation via `parseConfig()` per integration; already installed; v4 discriminated unions used for operation result types
-- @logtape/logtape ^2.0.5: extend `timeOperation()` from `observability.ts` to cover operation runner steps; `withContext()` available for per-operation correlation at no extra cost
-- Bun `$` shell: unchanged for git operations; `_exec` injectable pattern extended to `lifecycle.ts` to close a DI gap
+**Core technologies:**
 
-**Explicitly rejected:**
-- Temporal / NestJS sagas: durable execution requires external server; wrong abstraction layer for a CLI process that lives under one second
-- xstate: state machine overhead for a linear step sequence; adds heavy dependency for zero benefit
-- better-sqlite3 / LevelDB: schema migrations, binary dependency, startup cost for a dataset of dozens of YAML records
-- tsyringe / InversifyJS: requires `experimentalDecorators`; conflicts with Bun's zero-build TS execution and TypeScript ^6.x
+- **Bun + TypeScript + Zod:** authoritative service and wire-schema source, preserving existing CLI/TUI behavior.
+- **HTTP/1.1 JSON + SSE:** common cross-platform MVP transport with ordinary mutations and replayable one-way events.
+- **Zig 0.15.2 + opaque C ABI:** shared stable identities and deterministic state transitions without leaking Zig or Ghostty layouts.
+- **Pinned libghostty v1.3.1 commit:** terminal core behind narrow platform adapters and explicit compatibility tests.
+- **GTK4/libadwaita/libsoup:** Linux native shell, lifecycle, accessibility, and networking at the declared distro floor.
+- **SwiftUI/AppKit/URLSession:** macOS-native proof using the same contract and model, not Linux view reuse.
+
+Critical compatibility pairs are libghostty v1.3.1 with Zig 0.15.2, GTK 4.14+ with libadwaita 1.5+, and a product-owned C ABI version independent of upstream libghostty. Detailed evidence is in [STACK.md](./STACK.md).
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Template label CLI (`template label add/remove/list/clear`) — symmetry with existing workspace label commands; users expect parity
-- Template labels propagate to workspace at `new` and `clone` time — workspace YAML must be self-contained at creation; runtime template lookup violates the existing invariant
-- `--label` filter on `template list` — `matchesLabels()` already exists; wire it up
-- Rollback on partial workspace creation failure — orphan worktrees on failed `new` are a known correctness bug; multi-step ops need a compensation ledger
-- Indexed workspace/template lookups — repeated `readdirSync` + full parse on every call is measurable at 50+ workspaces; TUI dashboard polls on keypress
-- Integration plugin capability declarations — runner uses duck-typing today; explicit `capabilities` field enables doctor checks and removes optional-chain guards from the runner
+**Must have (v0.20.0):**
 
-**Should have (differentiators):**
-- Rollback progress visible to user — "Rolling back: removed worktree for api" on stderr; reuses existing `onProgress` callback channel, no new plumbing
-- `GS_DEBUG` module filter (`GS_DEBUG=lifecycle,git`) — targeted debug without noise from all modules
-- Plugin capability introspection via `integration list` — useful for plugin authors and `doctor` output
+- Versioned query, resolved-launch, operation, error, and structured-event contract with stable IDs.
+- Shared workspace/repository/command/operation/surface/attention model.
+- GTK4 workspace and repository navigation with explicit loading, disconnected, incompatible, empty, and failure states.
+- One fully correct embedded terminal, followed by multiple independent workspace-bound tabs.
+- Shell and named-command launch from git-stacks-resolved cwd/environment/ports/configuration only.
+- Honest session continuity: live tabs survive navigation; restart restores metadata but never claims dead processes survived.
+- Attention badges and exact-surface routing without scraping output or stealing focus.
+- CLI, OpenTUI, tmux/cmux, IDE integrations, and YAML authority remain intact.
+- Thin macOS proof using the same protocol/model and one interactive native libghostty surface.
 
-**Defer (v2+):**
-- TUI label management panel — depends on OpenTUI input components; add-on after core is solid
-- On-disk index file persistence — only needed at 50+ workspaces; in-memory index sufficient for v0.17.0
-- Shell completion for label values — requires reading all labels at completion time; low priority until label adoption grows
+**Should have after the slice is validated:**
+
+- Split panes and richer layout persistence.
+- Terminal search, richer attention history, and additional native workspace mutations.
+- Broader packaging, update, signing, and platform polish.
+
+**Defer:**
+
+- Built-in editor, diff/PR/CI dashboard, merge automation, or issue UI.
+- Agent-specific orchestration, prompts, fan-out, or naming policy.
+- External tmux/cmux inventory and control plane.
+- New command palette/configuration language, exhaustive Ghostty settings, Windows, and polished macOS parity.
+
+Detailed prioritization is in [FEATURES.md](./FEATURES.md).
 
 ### Architecture Approach
 
-The architecture is layered and stable. v0.17.0 adds two new modules (`src/lib/operation-runner.ts`, `src/lib/config-index.ts`) and modifies eight existing files (`workspace-lifecycle.ts`, `config.ts`, `observability.ts`, `lifecycle.ts`, `integrations/types.ts`, `integrations/runner.ts`, `commands/label.ts`, `commands/doctor.ts`) plus the 10 plugin files and `tui/workspace-clone.ts`. The facade layer (`workspace-ops.ts`) is intentionally unchanged — same exported function signatures, same return types throughout.
+Use a functional core with imperative platform shells. The service exposes semantic DTOs and engine-backed operations; the Zig core decodes contract data and reduces application state; GTK and SwiftUI project that state; platform adapters own native views, rendering, input, clipboard, and libghostty churn; the client-local session registry owns PTYs and process trees. Stable identity is shared, presentation identity is platform-local, and snapshots remain authoritative over events after reconnect.
 
-**New modules:**
-1. `src/lib/operation-runner.ts` — step sequencing with LIFO compensation stack; domain-agnostic (steps are closures; runner knows only `{name, run, rollback}`); emits progress via callback; exports `_exec` for test injection
-2. `src/lib/config-index.ts` — in-memory `Map<name, {filePath, mtime, data}>` for workspaces and templates; read-only cache with mtime-based staleness detection; invalidated via write functions in `config.ts`
+**Major components:**
 
-**Modified components:**
-3. `workspace-lifecycle.ts` — internal step composition replaced by `runOperation()` calls; public API and return types unchanged
-4. `config.ts` — write functions call `invalidateWorkspace()`/`invalidateTemplate()` after atomic YAML write; read functions delegate to `config-index.ts` with scan fallback
-5. `integrations/types.ts` — `Capability` type added; `capabilities?: Capability[]` and `isolatedFailure?: boolean` on `Integration` interface (additive, optional)
-6. `integrations/runner.ts` — isolated failure wrapping in `open()` call; capability-based guard logic
-7. `label.ts` — template label subcommands added in parallel to existing workspace label structure
-8. `tui/workspace-clone.ts` — copy `source.labels` into clone YAML (one-line addition; already partially handled in `workspace-wizard.ts` for new path)
+1. **Workspace service:** engine-backed snapshots, command resolution, mutations, progress, attention, auth, and protocol compatibility.
+2. **Protocol contract and fixtures:** `/v1` HTTP schemas, operation IDs, event cursors, error taxonomy, capability negotiation, limits, and cross-language golden tests.
+3. **Shared Zig core/C ABI:** stable IDs, reducer, connection/operation state, attention correlation, and metadata restoration semantics.
+4. **Platform shells:** GTK4/libadwaita Linux product and thin SwiftUI macOS proof.
+5. **Platform libghostty adapters:** pinned upstream isolation plus native input/render/view lifecycle.
+6. **Client session registry:** terminal surfaces, PTYs/process groups, workspace/repository binding, exit and idempotent teardown.
+
+### MVP Protocol Decision
+
+Adopt HTTP/1.1 JSON over an ephemeral loopback TCP port plus SSE `/v1/events`.
+
+- `/v1/hello` negotiates protocol minor/capabilities and rejects major incompatibility.
+- Requests use opaque workspace/repository/command IDs; raw executable/cwd/environment triples are forbidden.
+- Mutations use idempotency keys and return an operation descriptor quickly; clients query terminal operation state after reconnect.
+- SSE events carry `serviceInstanceId`, monotonic event ID/cursor, typed payload version, and operation or attention identity. Reconnect uses `Last-Event-ID` when retained; a gap forces a fresh authoritative snapshot and operation-state query.
+- The service binds `127.0.0.1` only, selects an ephemeral port, requires a high-entropy per-launch bearer token, applies strict Host/Origin policy, redacts secrets, and limits request size, event retention, subscriber queues, rates, and timeouts.
+- Progress is coalescible; operation terminal states and attention are retained within bounded replay windows. Terminal output never crosses this service.
+
+**Deferred alternatives:** Unix-domain-socket NDJSON/JSON-RPC is a strong Linux hardening option once a macOS-compatible transport abstraction or platform-specific endpoint is justified; it is not the MVP because Foundation URLSession has no direct UDS support. WebSocket remains unnecessary until client-to-service streaming or high-frequency bidirectional messaging appears. Neither alternative changes DTOs, operation semantics, reducer behavior, or golden fixtures.
 
 ### Critical Pitfalls
 
-1. **Rollback out of order** — push compensation entries with `stack.push()` immediately after each successful forward step; drain with `while (stack.length) stack.pop().undo()` (LIFO, not FIFO). Each undo must be wrapped in try/catch so a failing undo does not abort subsequent undos. Proven by: 3-step test where middle step fails and undo call order is asserted as `[step3, step2]` not `[step1, step2]`.
+1. **libghostty churn leaks across layers** — exact-pin source and toolchain, isolate symbols in adapters, and require compatibility smoke tests for upgrades.
+2. **A visual terminal demo masks missing behavior** — gate on resize/reflow, alternate screen, mouse, Unicode, keyboard protocols, IME, clipboard, exit, and repeated teardown.
+3. **GPU/native-view lifecycle is mishandled** — explicitly model GTK realize/render/unrealize and AppKit/Metal create/resize/destroy, including DPI and failure paths.
+4. **PTY ownership is ambiguous** — one client surface owns one process group; service owns no terminals; close/quit/crash semantics and reaping are explicit and idempotent.
+5. **Protocol works only on a happy connection** — version/capability negotiation, idempotency, bounded replay, snapshot resync, frame/body limits, slow-consumer policy, and mixed-version tests are required.
+6. **Local IPC is assumed safe** — pair process launch with bearer auth, bind loopback only, forbid raw command context, redact secrets, and test endpoint discovery/token permissions.
+7. **GUI becomes a second workspace engine** — forbid YAML/config-engine dependencies and parity-test service DTOs against existing engine functions.
+8. **IME, focus, and accessibility arrive late** — define native input and shortcut arbitration before tab UX; attention never steals focus automatically.
+9. **Installed builds depend on the checkout** — pin/build native dependencies reproducibly and smoke a clean installed artifact outside the source tree.
 
-2. **Labels resolved at runtime instead of copied at creation** — `workspace.labels` must contain the merged label array in the written YAML, not a reference to the template. Template mutation must not retroactively change existing workspace labels. Proven by: create workspace from labeled template, mutate template labels, read workspace YAML, assert workspace labels unchanged.
-
-3. **Index divergence from disk** — index is read-only; YAML is the source of truth. Every `write*` function in `config.ts` calls `invalidate*()` after the atomic rename. Index entries include `mtime`; stale entries trigger a re-parse. Failing YAML parses during index build use `safeParse` with a fallback entry and a stderr warning — no silent drops. Proven by a diff test: `listWorkspaces()` via index must equal `listWorkspaces()` via scan for all CRUD operations.
-
-4. **Breaking the Integration interface** — new fields must be optional on the interface; enforcement goes in the runner (`if (!integration.capabilities) throw new Error(...)`). Run `bun run typecheck` after any interface change with all 10 plugin files in scope. Signature changes to `open()`, `generate()`, or `commands()` are forbidden in this milestone.
-
-5. **Hooks running before git ops creating unrollback-able state** — `pre_create` hooks must run after worktree creation, not before. If git ops fail before hooks run, rollback has nothing to undo on the hooks side. The hook/git ordering contract must be documented before writing any rollback code. Add `GS_ROLLBACK=1` env var to any compensating context so hook authors can detect rollback scenarios.
+Detailed mitigations are in [PITFALLS.md](./PITFALLS.md).
 
 ## Implications for Roadmap
 
-Architecture research provides an explicit build order with risk ratings (LOW/MEDIUM/HIGH per step). The suggested phase structure follows that dependency order, grouping zero-risk additions early and deferring the highest-risk lifecycle rewrite until prior phases provide coverage and infrastructure.
+### Phase 1: Protocol, Authority, and Security Contract
 
-### Phase 1: Template Label CLI and Propagation
-**Rationale:** Zero-risk additions; schema already supports labels on both `TemplateSchema` and `WorkspaceSchema`; `matchesLabels()` already exists. Highest user-visible feature per unit of implementation risk. Unblocks every downstream feature that references template labels, and creates regression coverage for the creation path that Phase 5 will later refactor.
-**Delivers:** `template label add/remove/list/clear` commands; `--label` filter on `template list`; labels snapshot-copied into workspace YAML at `new` time; labels copied at `clone` time
-**Addresses:** All P1 label features from FEATURES.md; symmetry expectation from users
-**Avoids:** Labels-as-runtime-reference pitfall (Pitfall 2); label schema bypass (re-validate via `LabelSchema.parse()` on each copied value)
-**Research flag:** None — direct extension of existing pattern with no unknowns
+**Rationale:** Every native feature depends on stable semantic identities and an engine-owned boundary.
+**Delivers:** Zod schemas, OpenAPI/JSON Schema, golden fixtures, `/v1` hello/auth/errors, workspace/repository/command snapshots, loopback endpoint discovery, limits, and architecture dependency tests.
+**Addresses:** versioned API, stable IDs, authoritative resolved context, CLI/TUI continuity.
+**Avoids:** second YAML engine, insecure local endpoint, incompatible lockstep clients.
 
-### Phase 2: DI Seams and Structured Logging
-**Rationale:** Pure additions to two files (`lifecycle.ts` and `observability.ts`); no behavior change; creates test infrastructure that Phase 5 (operation runner) depends on. Doing this before the operation runner ensures rollback closures are written with proper `_exec` injection from the start rather than retrofitted.
-**Delivers:** `_exec.spawn` injectable seam in `lifecycle.ts`; optional `context?: Record<string, string | number | boolean>` parameter on `logDebug()` in `observability.ts`
-**Addresses:** DI and structured logging features from FEATURES.md (P2 priority)
-**Avoids:** DI container pitfall (Pitfall 5); rollback closures bypassing `_exec` (ARCHITECTURE.md Anti-Pattern 4)
-**Research flag:** None — established codebase pattern; two-file addition
+### Phase 2: Operations, Progress, Events, and Resynchronization
 
-### Phase 3: Integration Plugin Capability Contracts
-**Rationale:** Interface change touches 10 plugin files but is purely additive (optional fields with runner-side enforcement). Must be done before Phase 5 (operation runner) because the runner's isolated failure handling reads `integration.isolatedFailure`. Also enables `doctor.ts` capability-driven checks.
-**Delivers:** `Capability` type in `types.ts`; `capabilities` and `isolatedFailure` fields on `Integration`; isolated failure wrapping in `runner.ts`; capability-driven checks in `doctor.ts` replacing ad-hoc per-plugin binary checks
-**Addresses:** Integration plugin contract features from FEATURES.md
-**Avoids:** Breaking interface pitfall (Pitfall 4); duck-typing fragility in runner
-**Research flag:** None — additive interface extension enforced at compile time with `bun run typecheck`
+**Rationale:** Long mutations and attention require semantics beyond ordinary request/response before either GUI consumes them.
+**Delivers:** idempotency keys, operation registry/states, structured progress, cancellation checkpoints, SSE cursor/replay/gap behavior, authoritative resync, structured attention envelope, backpressure tests.
+**Addresses:** loading/progress/failure/retry and agent-neutral attention production.
+**Avoids:** duplicate destructive mutations, lost terminal states, stale events, unbounded queues.
 
-### Phase 4: Indexed Config Store
-**Rationale:** Self-contained new module with clear fallback semantics. Must be validated in isolation before Phase 5 (operation runner) depends on fast lookups during rollback execution. Migration safety (Pitfall 7: schema-invalid YAML silently dropped from index) requires specific test coverage before any command switches to the indexed path.
-**Delivers:** `src/lib/config-index.ts` with mtime-based cache; `config.ts` write functions call invalidation; `listWorkspaces()` and `readWorkspace()` delegate to cache with scan fallback; `doctor --fix` triggers `rebuildIndex()`
-**Addresses:** Indexed lookup features from FEATURES.md; TUI dashboard polling performance
-**Avoids:** Index divergence pitfall (Pitfall 3); silent entry dropping on Zod parse failure (Pitfall 7); write-through cache anti-pattern (ARCHITECTURE.md Anti-Pattern 2)
-**Research flag:** None for the pattern; implementation requires a diff-test proving index === scan for all CRUD operations before Phase 5 starts. TUI long-lived process cache invalidation is an acknowledged gap (see Gaps section).
+### Phase 3: Shared Native Model and ABI
 
-### Phase 5: Operation Runner with Rollback
-**Rationale:** Highest-risk change — modifies the core workspace creation path in `workspace-lifecycle.ts`. Placed last because it depends on DI seams (Phase 2), integration contracts (Phase 3 provides `isolatedFailure`), and benefits from the indexed config (Phase 4). Requires the most test coverage before shipping.
-**Delivers:** `src/lib/operation-runner.ts` with LIFO compensation stack; `workspace-lifecycle.ts` refactored to use `runOperation()`; user-visible rollback progress messages via existing `onProgress` channel; `workspace-ops.ts` facade signature unchanged
-**Addresses:** Rollback on partial failure (P1 table stakes from FEATURES.md); structured progress visibility
-**Avoids:** Rollback out-of-order pitfall (Pitfall 1); hooks-before-git-ops ordering pitfall (Pitfall 6); god-object runner anti-pattern (steps are closures, runner knows only `{name, run, rollback}`); rollback closures bypassing `_exec` (Anti-Pattern 4)
-**Research flag:** Consider `/gsd-research-phase` during planning for integration-specific rollback edge cases: git worktree `--force` semantics, tmux `has-session` guard before `kill-session`, VSCode artifact vs window state mismatch, YAML atomic write rollback path (Pitfall noted in PITFALLS.md Integration Gotchas section).
+**Rationale:** Freeze portable behavior before platform view identity and libghostty details become entangled.
+**Delivers:** Zig DTO decoding, IDs, reducer, connection/operation/attention state, metadata-restoration semantics, opaque C ABI, C/Swift contract harnesses.
+**Addresses:** shared application model and cross-platform engine/client separation.
+**Avoids:** platform types in shared state, unstable ABI layouts, false process restoration.
+
+### Phase 4: Pinned Linux Terminal Adapter
+
+**Rationale:** libghostty embedding, GPU lifecycle, PTY teardown, and IME are the highest technical risks and must be proven before a broad UI.
+**Delivers:** reproducible libghostty/Zig build, GTK host widget, one interactive surface, process-group ownership, input/IME/clipboard/accessibility contract, terminal acceptance and lifecycle stress tests.
+**Addresses:** correct embedded terminal baseline.
+**Avoids:** API leakage, ANSI-parser fallback, black/leaking surfaces, orphaned processes, ASCII-only input.
+
+### Phase 5: Linux Navigation and Persistent Tabs
+
+**Rationale:** Once the service/model and terminal lifecycle are sound, compose the first user-visible daily workflow.
+**Delivers:** GtkApplication/libadwaita shell, service startup/reconnect UX, workspace/repository navigator, selection persistence, multiple workspace-bound tabs, visible running/exited/failed state, honest metadata restoration.
+**Addresses:** navigation, tab management, workspace-bound continuity, keyboard-first Linux UX.
+**Avoids:** UI-thread engine work, terminal recreation on selection, false empty states, focus loss.
+
+### Phase 6: Resolved Launch and Attention Vertical Slice
+
+**Rationale:** Command launch and exact-surface attention depend on stable client-owned surface registration established by Phase 5.
+**Delivers:** resolved shell launch, contextual named-command launch, opaque-ID authorization/parity tests, surface correlation, unread aggregation, nearest-surviving-context fallback, explicit focus action.
+**Addresses:** git-stacks differentiation through multi-repo context, resolved environment/ports, commands, and structured attention.
+**Avoids:** raw command injection, shell-wrapping drift, output scraping, unsolicited focus stealing.
+
+### Phase 7: Linux Packaging and Vertical-Slice Acceptance
+
+**Rationale:** The slice is usable only when it launches outside a developer checkout and passes integrated behavior on supported Linux variants.
+**Delivers:** desktop metadata, relocatable service/native discovery, pinned dependency provenance, clean-prefix artifact, Wayland/X11 smoke, shutdown/crash cleanup, performance and accessibility acceptance.
+**Addresses:** usable Linux deliverable and non-regression gate.
+**Avoids:** checkout-relative assets, ABI surprises, background rendering drain, untested endpoint permissions.
+
+### Phase 8: macOS Architectural Proof
+
+**Rationale:** Validate portability only after Linux stabilizes contract and model behavior; share semantics and fixtures, not widgets.
+**Delivers:** SwiftUI navigation/state binding, URLSession protocol client, AppKit/Metal libghostty host, one interactive service-resolved terminal, input/resize/exit/teardown and attention proof.
+**Addresses:** shared protocol/model architectural proof.
+**Avoids:** Linux UI reuse, screenshot-parity goals, incomplete `NSTextInputClient` lifecycle, premature signing/polish scope.
 
 ### Phase Ordering Rationale
 
-- Labels first: independent, high-value, low-risk, exercises the creation path that Phase 5 later refactors — tests become regression coverage.
-- DI seams before operation runner: rollback closures must use `_exec` from the start, not retrofitted after the fact.
-- Plugin contracts before operation runner: runner's isolated failure path reads `integration.isolatedFailure`; capability checks in `doctor.ts` are coherent before rollback adds another failure surface.
-- Config index before operation runner: multi-step ops and rollback must not trigger repeated directory scans; the index fallback semantics must be proven stable before being used under rollback conditions.
-- Operation runner last: widest blast radius; all prior phases provide infrastructure, test coverage, and reduced unknowns.
+- Authority, compatibility, security, and event semantics precede clients so no prototype becomes an accidental second engine or unstable protocol.
+- The portable reducer precedes views; the risky terminal adapter precedes broad navigation; multiple tabs precede exact-surface attention.
+- Linux packaging is an acceptance gate, not cleanup. macOS follows the Linux slice because its purpose is to falsify or validate portability, not double implementation effort.
+- Splits, richer mutations, tmux control, agent orchestration, and product-wide macOS parity remain outside this milestone.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 5 (Operation Runner):** Integration-specific rollback closures (tmux, VSCode, niri/aerospace, YAML atomic write path) have documented edge cases in PITFALLS.md but exact guard conditions are not yet enumerated. Recommend a planning research pass enumerating rollback closures for each of the 10 integrations before implementation begins.
+Phases needing deeper research during planning:
 
-Phases with standard patterns (skip research phase):
-- **Phase 1 (Template Labels):** Purely extends existing pattern; `matchesLabels()`, `LabelSchema`, and both Zod schemas are in place. Wizard propagation already works at line 390-391 of `workspace-wizard.ts` for the `new` path.
-- **Phase 2 (DI/Logging):** Documented codebase pattern; two-file addition; zero behavior change.
-- **Phase 3 (Plugin Contracts):** TypeScript interface extension; additive with compile-time enforcement.
-- **Phase 4 (Config Index):** Standard mtime-based read cache; pattern is well-understood and fully reversible by disabling delegation in `config.ts`.
+- **Phase 1:** Validate secure token/endpoint handoff and whether the process topology is app-spawned only or also supports user-service activation without weakening bearer lifecycle.
+- **Phase 2:** Specify Bun SSE retention, disconnect, cancellation, and slow-consumer behavior with executable fault-injection fixtures.
+- **Phase 3:** Time-box the Zig shared-core ABI; define a fallback to duplicated thin platform reducers if ABI friction outweighs deterministic sharing.
+- **Phase 4:** Mandatory implementation spike against the exact libghostty commit, GTK/OpenGL host, PTY ownership, IME, clipboard, and destruction matrix.
+- **Phase 7:** Research supported distro/container matrix, linkage/rpath strategy, Wayland/X11 CI availability, and clean-install packaging.
+- **Phase 8:** Mandatory macOS availability spike for libghostty C/AppKit/Metal integration and `NSTextInputClient` on the selected Xcode/macOS floor.
+
+Phases with established patterns where broad research can be skipped:
+
+- **Phase 5:** GTK application navigation and persisted presentation state are well documented once adapter interfaces are fixed.
+- **Phase 6:** Engine-backed command resolution and attention seams already exist repo-locally; planning should emphasize parity and authorization tests.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified against `bun.lock`, official LogTape and Zod v4 docs, and existing source files; all alternatives explicitly rejected with sourced rationale |
-| Features | HIGH | Derived from direct codebase analysis; existing Zod schemas confirm the implementation gap is narrow; `matchesLabels()` and label commands are already in place |
-| Architecture | HIGH | Primary sources are the actual source files; build order verified against real import dependencies with risk ratings from the architecture researcher |
-| Pitfalls | HIGH | Grounded in direct codebase invariants from CLAUDE.md and concrete test prescriptions; each pitfall includes a specific test that proves prevention |
+| Stack | HIGH | Official Ghostty, GTK, Apple, Bun, and repository evidence support the shells and service choices; full embedding remains MEDIUM. |
+| Features | HIGH | Competitor baselines and existing git-stacks capabilities converge on a narrow daily-use Linux slice. |
+| Architecture | HIGH | Authority, PTY ownership, functional-core, and platform-adapter boundaries are strong; exact shared ABI and transport topology require validation. |
+| Pitfalls | HIGH | Risks are supported by official lifecycle/input/security documentation and repo-local spikes. |
 
-**Overall confidence:** HIGH
+**Overall confidence:** HIGH, with two mandatory proof points: Linux libghostty embedding and macOS adapter viability.
 
 ### Gaps to Address
 
-- **Hook ordering contract for operation runner:** PITFALLS.md identifies that `pre_create` hooks must run after git ops, not before, but the current `workspace-lifecycle.ts` interleaves hooks and git operations. The exact ordering contract must be decided and documented before Phase 5 implementation begins. The planning phase for Phase 5 should produce a step-order diagram mapping the current lifecycle flow to the new operation runner step array.
-
-- **Integration-specific rollback semantics:** PITFALLS.md notes that tmux session kill, VSCode window artifact deletion, and git worktree force-remove each have edge cases (non-existent session check, open window state, untracked files). These are identified but the exact guard conditions are not enumerated per integration. Phase 5 planning should enumerate rollback closures for each of the 10 integrations before implementation.
-
-- **TUI dashboard cache invalidation for external edits:** The dashboard runs as a long-lived process and polls `listWorkspaces()` via SolidJS reactive accessors. Once `config-index.ts` is in place, external YAML edits (user directly editing `~/.config/git-stacks/workspaces/*.yml`) will not invalidate the in-process cache. This is acceptable for the CLI (short-lived) but the dashboard is long-lived. Phase 4 planning should decide whether to add a polling invalidation strategy or document this as a known limitation.
+- **libghostty API surface:** Confirm exact functions and any upstream patching needed at the pinned commit before promising full Linux acceptance.
+- **Protocol process topology:** Decide whether v0.20 uses app-spawned ephemeral service only, user activation, or both; keep authentication and discovery explicit in every mode.
+- **SSE replay bounds:** Choose retention size/time, cursor-gap response, and terminal-state query semantics from measured event volume.
+- **Environment handoff:** Define a secret-safe launch mechanism; command execution needs resolved environment without exposing it in logs or broad display DTOs.
+- **Stable identity migration:** Verify how existing workspace/repository records obtain opaque stable IDs across rename and refresh without making display names routing keys.
+- **Terminal accessibility:** Confirm what libghostty exposes to native accessibility APIs and document honest limitations if cell text cannot be represented fully.
+- **Supported platform matrix:** Select Linux distro/display/driver targets and macOS architecture/Xcode floors before packaging plans.
+- **Shared Zig core fallback threshold:** Establish measurable criteria for retaining the shared reducer versus duplicating a very thin platform model.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `/home/nnex/dev/prj/git-stacks/src/lib/config.ts` — Zod schemas, scan-based lookup, write paths (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/types.ts` — Integration interface structure (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/runner.ts` — orchestration logic (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/workspace-lifecycle.ts` — lifecycle step composition (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/observability.ts` — LogTape wrapper API (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/tui/workspace-wizard.ts` — existing label propagation at lines 390-391 (direct read)
-- `/home/nnex/dev/prj/git-stacks/bun.lock` — confirms `@logtape/logtape@2.0.5` and `zod@4.3.6` (direct read)
-- `https://logtape.org/manual/contexts` — `withContext()` API for AsyncLocalStorage-based log correlation
-- `https://zod.dev/v4` — Zod 4 discriminated unions and metadata registry
+
+- Ghostty official documentation, v1.3 release notes, source repository, and Ghostling example — libghostty status, exact toolchain relationship, native platform architecture, and embedding boundary.
+- GTK4, GDK, GLib/GIO, libadwaita, and accessibility/input documentation — Linux lifecycle, rendering, IME, focus, and application patterns.
+- Apple SwiftUI/AppKit/Metal and `NSTextInputClient` documentation — macOS host and input lifecycle.
+- Bun HTTP/server documentation — loopback service, streaming response, timeout, and Unix-socket alternative capabilities.
+- JSON-RPC 2.0 and XDG Base Directory specifications — semantics considered for the deferred UDS alternative and local endpoint security.
+- Repository implementation and spikes — workspace command resolution, operation runner, message hooks, PTY feasibility, and tmux attention findings.
 
 ### Secondary (MEDIUM confidence)
-- `.planning/PROJECT.md` — v0.17.0 milestone goals (project planning document)
-- `PROJECT-DIRECTION.md` — author architectural intent for plugin contracts and capability declarations
-- `CLAUDE.md` — established invariants: atomic writes, `_exec` injectable pattern, workspace YAML self-containment
+
+- Supacode and dmux product documentation — workspace-terminal baseline, attention, commands, and intentionally deferred product breadth.
+
+### Tertiary (LOW confidence)
+
+- Contextual named-command placement and the long-term need for a shared Zig reducer remain product/implementation hypotheses to validate through the vertical slice.
 
 ---
-*Research completed: 2026-04-05*
+*Research completed: 2026-07-11*
 *Ready for roadmap: yes*

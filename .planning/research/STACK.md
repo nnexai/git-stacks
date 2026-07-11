@@ -1,275 +1,159 @@
 # Stack Research
 
-**Domain:** Bun CLI tool — Engine hardening and template labels (v0.17.0)
-**Researched:** 2026-04-05
-**Confidence:** HIGH (all decisions verified against official docs, existing codebase, or npm registry)
+**Domain:** Native desktop workspace client with embedded terminal surfaces
+**Researched:** 2026-07-11
+**Confidence:** HIGH for the host toolkits and service stack; MEDIUM for full libghostty embedding because its public API is explicitly pre-1.0 and still changing
 
----
+## Recommendation in One Sentence
 
-## Scope
-
-This document covers **only what is new for the v0.17.0 milestone**. The base stack (Bun, TypeScript strict ^6.0.2, Commander.js ^14.0.3, SolidJS + OpenTUI, yaml ^2.8.3, @clack/prompts ^1.2.0, Zod ^4.3.6, @logtape/logtape ^2.0.5) is unchanged and not re-researched.
-
-**Four capability areas this milestone adds:**
-
-1. **Template labels → workspace propagation** — schema extension only; label copy at `new`/`clone` time
-2. **Operation runner with rollback** — structured step execution with compensating transactions
-3. **Indexed config store** — replace O(n) scan-based YAML lookups with O(1) in-memory Map
-4. **Integration plugin contracts** — runtime-enforced capability declarations on the `Integration` interface
-5. **Broader DI + structured logging** — extend `_exec` pattern and LogTape usage to new modules
-
----
-
-## Verdict: No New Dependencies
-
-All four feature areas are implementable with what is already installed. The additions are **purely structural patterns** in TypeScript.
-
-This is the key finding: adding libraries for a rollback runner (Temporal, a saga framework) or a config store (a key-value library) would impose runtime overhead and operational complexity on a CLI tool where sub-100ms startup is critical. The patterns map cleanly to plain TypeScript.
-
----
+Keep the existing Bun/TypeScript workspace engine behind a versioned localhost HTTP/JSON + SSE service, build a small shared Zig application-model/terminal-adapter library with an opaque C ABI, implement Linux first in Zig against GTK4/libadwaita and libghostty's Zig module, and prove macOS with SwiftUI/AppKit importing that C ABI.
 
 ## Recommended Stack
 
-### Core Technologies (unchanged)
+### Core Technologies
 
-| Technology | Version | Purpose | Status |
-|------------|---------|---------|--------|
-| Bun | latest | Runtime, shell, test runner | Unchanged |
-| TypeScript | ^6.0.2 | Type system | Unchanged |
-| Zod | ^4.3.6 | Schema validation — used for plugin contract schemas | Already in use; v4 features unlock contract registration |
-| yaml | ^2.8.3 | Config I/O | Unchanged |
-| @logtape/logtape | ^2.0.5 | Structured logging — extend to operation runner and config store | Already installed; extend usage |
+| Technology | Version / pin | Purpose | Why Recommended |
+|------------|---------------|---------|-----------------|
+| Bun | Existing repo runtime; keep the lockfile/runtime pin (Bun 1.3 generation) | Authoritative git-stacks service process | Reuses the production workspace engine instead of porting YAML, Git, environment, and lifecycle policy. `Bun.serve` supports streaming responses and Unix sockets, but use loopback TCP for the first cross-platform transport so both Swift `URLSession` and Linux HTTP clients work without platform-specific socket adapters. |
+| TypeScript | Existing `6.0.2` | Service handlers, DTOs, progress, and event production | This is the repository's implementation language and preserves the CLI/TUI as peers of the new service rather than replacing them. |
+| Zod | Existing `4.3.6` | Runtime validation and versioned wire schemas | The native boundary must reject malformed or incompatible requests. Derive JSON Schema/OpenAPI artifacts from the canonical service schemas rather than hand-maintaining a second contract. |
+| Zig | `0.15.2` for the Ghostty 1.3.x pin | Shared application model, C ABI, and libghostty adapter | Ghostty 1.3.x is guaranteed against Zig 0.15.2, and its Linux GUI compiles the Zig libghostty module directly. Zig can expose a narrow, ownership-explicit C ABI that Swift and C-compatible GTK code can consume. |
+| libghostty | Exact upstream commit, initially the `v1.3.1` commit `22efb0be…`; no semver range | Terminal core, renderer, PTY surfaces | Ghostty 1.3.1 is the current stable desktop release, but libghostty has no independently tagged release and its API signatures remain in flux. An exact commit plus a repo-owned adapter is mandatory. Upgrade only through an explicit compatibility spike. |
+| GTK | `>=4.14,<5` | Linux application/widget toolkit | Matches Ghostty 1.3's supported floor and provides the event, accessibility, focus, clipboard, and native rendering integration a real terminal surface needs. Do not target whatever happens to be the newest GTK API if it raises the distro floor. |
+| libadwaita | `>=1.5,<2` | Linux application shell and GNOME-native navigation | Matches Ghostty 1.3's floor and supplies modern application/window/navigation patterns. Keep the terminal surface a GTK widget owned by the adapter; libadwaita should own surrounding chrome only. |
+| Swift / SwiftUI | Xcode toolchain for macOS 13 during the 1.3.1 proof | macOS shell, navigation, and state presentation | Ghostty's own macOS app validates this native combination. SwiftUI is appropriate for the shell while terminal rendering/input remains an AppKit view. Ghostty 1.4 is expected to raise its floor to macOS 14, so a later libghostty upgrade may force the same decision. |
+| AppKit | Platform SDK paired with Xcode | Terminal host view, focus, keyboard/IME, clipboard, Metal layer lifecycle | `NSViewRepresentable` is Apple's supported bridge for hosting an `NSView` in SwiftUI and provides explicit create/update/teardown hooks. This is a better boundary than trying to implement a terminal renderer as a pure SwiftUI view. |
 
-### New Dependencies
+### Supporting Libraries and Protocols
 
-None.
+| Library / protocol | Version | Purpose | When to Use |
+|--------------------|---------|---------|-------------|
+| HTTP/1.1 over `127.0.0.1` | Versioned `/v1` API | Queries and bounded mutations | Use JSON request/response DTOs, an ephemeral port, a per-launch bearer token, and strict origin/host checks. Bind loopback only. Do not expose the service to the LAN. |
+| Server-Sent Events | `/v1/events` | Progress and structured agent-attention stream | Use for one-way ordered events, replay IDs, heartbeats, and reconnect. It is simpler than WebSocket for a client that sends mutations through ordinary HTTP requests. Disable Bun's per-request idle timeout for this stream. |
+| OpenAPI 3.1 / JSON Schema | Generated artifact, checked in | Language-neutral wire contract and fixtures | Generate from the TypeScript/Zod source of truth and use it for contract tests and native DTO generation or validation. Do not make generated native DTOs the shared behavioral model. |
+| libsoup | `3.x` | Linux HTTP and SSE client | Integrates naturally with GLib's main loop. Keep it below a transport interface so protocol fixtures can be tested without GTK. |
+| Foundation `URLSession` | macOS platform SDK | macOS HTTP and SSE client | Suitable for the architectural proof over loopback HTTP; parse SSE incrementally from response bytes and reconnect using event IDs. |
+| GLib/GIO | Version implied by GTK 4.14 | Linux main loop, actions, settings, process integration | Marshal all UI/model notifications onto the main context. Never invoke GTK from libghostty or network worker threads. |
+| Meson | Current distro-supported release | Linux native shell build/packaging | Use as the outer Linux build only if it can invoke a pinned Zig build reproducibly; otherwise use Zig as the top-level build. Avoid maintaining two independent dependency graphs. |
+| Swift Package Manager / Xcode project | Current Xcode | macOS proof build | Import the adapter through a module map/XCFramework or a statically linked library with generated header. Keep the proof intentionally thin. |
 
----
+### Development and Verification Tools
 
-## Pattern: Template Labels → Workspace Propagation
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| Zig build system | Build libghostty, the shared model, adapter, and C header | Treat the Ghostty source commit and Zig compiler as a compatibility pair. Record both in a lock/manifest. |
+| `pkg-config` | Resolve GTK4, libadwaita, and libsoup on Linux | CI should test the declared minimums (GTK 4.14, libadwaita 1.5), not only a rolling distro. |
+| Bun test | Service schema, authorization, cancellation, progress, and replay tests | Add golden JSON fixtures that are consumed by Zig and Swift tests too. |
+| AddressSanitizer / Valgrind where supported | C ABI lifetime and callback verification | Exercise create/destroy, tab churn, callbacks after teardown, resize storms, and service reconnects. |
+| Sysprof and Instruments | UI/render performance and leak investigation | Profile frame pacing and terminal churn on real GTK/OpenGL and AppKit/Metal paths before expanding to splits. |
 
-**What it is:** `Template.labels` already exists in the Zod schema (line 106 of `config.ts`). `Workspace.labels` also exists (line 186). The gap is that `newWorkspace()` in `workspace-lifecycle.ts` does not copy template labels to the workspace at creation time.
+## Boundary Design Implied by the Stack
 
-**What to add:**
+The stack should have three independently testable seams:
 
-No schema changes. The copy happens in `workspace-lifecycle.ts` inside `newWorkspace()`:
+1. **Service contract (TypeScript):** workspace facts and mutations only. It resolves workspace/repository paths, environment, ports, named commands, progress, and attention targets. It never owns PTYs or terminal tabs.
+2. **Shared native model (Zig with C ABI):** consumes versioned DTOs and emits deterministic model actions. Export opaque handles, explicit retain/release or create/destroy calls, copied strings/slices with documented lifetime, and callback registration/unregistration. Do not expose Zig structs in the ABI.
+3. **Platform terminal adapter:** owns libghostty objects and translates GTK or AppKit lifecycle/input/rendering into the pinned upstream API. Neither frontend calls raw libghostty symbols outside this adapter.
 
-```typescript
-// At workspace creation, merge template labels (dedup)
-const inherited = template?.labels ?? []
-const explicit = options.labels ?? []
-workspace.labels = [...new Set([...inherited, ...explicit])]
+The first compatibility deliverable must be a two-platform adapter spike: one interactive GTK surface and one `NSViewRepresentable`-hosted AppKit surface, each proving input, resize/DPI, clipboard, IME, teardown, and a command launched with a service-resolved `cwd` and environment. Do not build workspace navigation on top until this passes.
+
+## Installation / Build Shape
+
+```bash
+# Existing service dependencies remain owned by the repository lockfile.
+bun install --frozen-lockfile
+
+# Linux native development floor (package names vary by distribution).
+# Required capabilities: zig 0.15.2, gtk4 >= 4.14, libadwaita >= 1.5,
+# libsoup 3, pkg-config, gettext, and a C toolchain.
+
+# Build the pinned native core and adapter.
+zig build -Doptimize=Debug
+
+# Run service and native contract fixtures independently of the GUI.
+bun test
+zig build test
 ```
 
-**Why no library:** This is a three-line array merge. The label data model, schema, and storage are already complete.
-
----
-
-## Pattern: Operation Runner with Rollback
-
-**What it is:** A lightweight step executor that runs an ordered list of operations and, on failure, calls compensating functions in reverse order for any completed steps.
-
-**Why not a saga framework or Temporal:** This is a local CLI process, not a distributed system. Saga frameworks designed for microservices (Temporal, NestJS sagas) bring async queues, worker processes, and durable execution — none of which apply to a process that lives for under a second. The Command pattern with explicit compensate functions is sufficient and already idiomatic in the codebase's discriminated union error style.
-
-**Interface pattern (zero dependencies):**
-
-```typescript
-// src/lib/operations.ts
-
-export interface OperationStep<T = void> {
-  name: string
-  run: () => Promise<T>
-  rollback?: () => Promise<void>
-}
-
-export type OperationResult<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string; rolledBack: boolean }
-
-export async function runWithRollback<T>(
-  steps: OperationStep<T>[]
-): Promise<OperationResult<T>> {
-  const completed: OperationStep<unknown>[] = []
-  try {
-    let last: T = undefined as T
-    for (const step of steps) {
-      last = await step.run()
-      completed.push(step)
-    }
-    return { ok: true, value: last }
-  } catch (err) {
-    // Compensate in reverse
-    for (const step of [...completed].reverse()) {
-      if (step.rollback) await step.rollback().catch(() => {})
-    }
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-      rolledBack: true,
-    }
-  }
-}
-```
-
-**Integration with LogTape:** The runner logs each step start/completion/failure using the existing `timeOperation()` wrapper in `observability.ts`. No changes to the logging system needed.
-
-**File location:** `src/lib/operations.ts` — single new file, ~40 lines.
-
----
-
-## Pattern: Indexed Config Store
-
-**What it is:** Replace `listTemplates()` and `listWorkspaces()` in `config.ts` (which `readdirSync` and parse every YAML file on every call) with an in-memory `Map` keyed by name. The store is populated once per process on first access, with explicit invalidation on writes.
-
-**Why not a key-value library (LevelDB, better-sqlite3, etc.):** The dataset is tiny (dozens of files, kilobytes of YAML). The bottleneck is filesystem I/O + Zod parse, not the lookup itself. A `Map<string, Template>` eliminates the repeat `readdirSync` + `readFileSync` + `parse` + `safeParse` cycle on repeated operations (e.g., `status --all` calls `listWorkspaces()` multiple times). A database would add a persistent file, migration logic, and startup overhead for zero gain.
-
-**Interface pattern:**
-
-```typescript
-// src/lib/config-store.ts
-
-let workspaceCache: Map<string, Workspace> | null = null
-let templateCache: Map<string, Template> | null = null
-
-export function getWorkspaceIndex(): Map<string, Workspace> {
-  if (!workspaceCache) workspaceCache = buildWorkspaceIndex()
-  return workspaceCache
-}
-
-export function invalidateWorkspaceIndex(): void {
-  workspaceCache = null
-}
-
-// config.ts write functions call invalidateWorkspaceIndex() after writeYaml()
-```
-
-**Lookup path:** `getWorkspaceIndex().get(name)` — O(1), replaces `listWorkspaces().find(w => w.name === name)`.
-
-**Invalidation:** Called in `writeWorkspace()`, `removeWorkspace()`, and `renameWorkspace()` after each write. No cache persistence across processes — CLI is short-lived; the cost of a cold read on startup is negligible vs. eliminating repeated re-reads within a single invocation.
-
-**File location:** Either a new `src/lib/config-store.ts` or a module-level cache within `config.ts` behind exported invalidation functions. The latter is lower complexity.
-
----
-
-## Pattern: Integration Plugin Contracts
-
-**What it is:** Formal capability declarations on the `Integration` interface that let the runner introspect what an integration supports without duck-typing or try/catch around optional method calls. Also: Zod-backed validation of integration config objects at `configure` time rather than at `open` time.
-
-**What already exists:** The `Integration` interface in `src/lib/integrations/types.ts` already uses optional methods (`applies?`, `generate?`, `cleanup?`, `commands?`, `windowDetector?`). The contract gap is that config validation is deferred to each plugin's internal parse at `open()` time, and there's no standard way for the runner to know which capabilities a plugin declares.
-
-**What to add — capability flags:**
-
-```typescript
-// src/lib/integrations/types.ts additions
-
-export type IntegrationCapability =
-  | "generate"     // has generate() method
-  | "cleanup"      // has cleanup() method
-  | "commands"     // registers subcommands
-  | "window-detect" // has windowDetector
-
-export interface Integration {
-  // ... existing fields ...
-
-  /** Declare capabilities statically. Runner uses this instead of duck-typing. */
-  capabilities: ReadonlyArray<IntegrationCapability>
-
-  /** Validate and parse this integration's config from globalConfig.integrations[id].
-   *  Returns parsed config or throws ZodError. Called by runner before open(). */
-  parseConfig(raw: unknown): Record<string, unknown>
-}
-```
-
-**What to add — Zod schema per integration:**
-
-Each plugin defines a `z.object({...})` schema for its config and exposes `parseConfig(raw) { return MyConfigSchema.parse(raw) }`. The runner calls `parseConfig()` during `runIntegrations()` and surfaces validation errors as structured failures before any side effects occur.
-
-**Why Zod and not a custom validator:** Zod ^4.3.6 is already the project's validation layer. The `z.discriminatedUnion()` improvements and metadata registry in Zod 4 are available if needed for complex config shapes. No new dependency.
-
-**File impact:** Add `capabilities` and `parseConfig` to `Integration` interface (types.ts). Update each of the 10 plugin files to implement `parseConfig`. Update `runner.ts` to call `parseConfig` before `generate`/`open`. The 10 plugin updates are mechanical.
-
----
-
-## Pattern: Broader DI + Structured Logging
-
-**DI extension:** The `_exec` mutable object pattern is already established in `lifecycle.ts`, `niri.ts`, `tmux.ts`, `cmux.ts`, `aerospace.ts`. The v0.17.0 additions (operations runner, config-store invalidation hooks) should follow the same pattern:
-
-```typescript
-// src/lib/operations.ts
-export const _exec = {
-  // Override in tests to simulate step failures or rollback errors
-  runStep: async <T>(step: OperationStep<T>): Promise<T> => step.run(),
-}
-```
-
-No new DI library. No decorators. The pattern is simple, test-isolated, and consistent with the established codebase idiom documented in CLAUDE.md.
-
-**LogTape extension:** LogTape ^2.0.5 is already installed and configured. Extend `timeOperation()` from `observability.ts` to the new `runWithRollback()` function:
-
-```typescript
-// In operations.ts — reuse existing timeOperation
-import { timeOperation, logDebug } from "./observability"
-
-for (const step of steps) {
-  await timeOperation("operations", `step:${step.name}`, () => step.run())
-  // ...
-}
-```
-
-The `withContext()` API (available in LogTape 2.x via `AsyncLocalStorage`) is available for correlating all log records within a single `runWithRollback()` invocation under a shared `operationId`. This is optional for v0.17.0 but requires no new dependency — it is part of the installed `@logtape/logtape@^2.0.5`.
-
-**API reference:** `withContext({ operationId }, async () => { ... })` from `@logtape/logtape` — the `contextLocalStorage` option must be set in `configure()` to activate implicit context propagation.
-
----
+Do not install `libghostty` from an unversioned system package and do not follow its `main` branch in normal builds. Vendor it as a locked source dependency or use a reproducibly fetched commit with its checksum.
 
 ## Alternatives Considered
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| Plain `Map` in config-store | LevelDB / better-sqlite3 | Persistent DB is overkill for dozens of YAML files; adds migration logic; longer startup; `Map` invalidation is simpler |
-| Plain `Map` in config-store | Redis / Bun KV | No network infrastructure in a local CLI tool |
-| Handwritten `runWithRollback` | Temporal / NestJS sagas | Distributed workflow engines for microservices; wrong abstraction layer for a CLI process |
-| Handwritten `runWithRollback` | xstate (state machines) | Statechart overhead for a linear step sequence; adds a heavy dependency |
-| Zod `parseConfig()` per plugin | JSON Schema validation | Zod already present; switching to JSON Schema would add a second validation library |
-| Capability flags on `Integration` | Runtime duck-typing | Duck-typing with `'generate' in plugin` works but is fragile across TypeScript strict mode changes; explicit declaration is clearer |
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| Zig shared model + opaque C ABI | Duplicate Swift and Linux application models | Only if the shared model collapses to trivial generated DTOs with no state transitions. For persistent tabs, attention routing, and lifecycle, duplication will drift. |
+| Zig GTK frontend using the libghostty Zig module | C/Rust GTK app calling the current C embedding API | Reconsider after libghostty publishes a stable, platform-complete C release. At 1.3.1 the header itself describes the embedding API as undocumented and primarily consumed by macOS. |
+| SwiftUI shell + AppKit terminal view | Pure AppKit application | Use pure AppKit if SwiftUI focus/layout behavior blocks correct terminal interaction; the proof should preserve this escape hatch. |
+| Loopback HTTP/JSON + SSE | Unix-domain-socket-only HTTP | Prefer UDS later for Linux hardening if both native transports are implemented. It is not the first common denominator because Foundation does not provide a direct URLSession UDS transport. |
+| SSE for events | WebSocket | Use WebSocket only if later requirements need high-frequency bidirectional messages on one connection. Current mutations remain ordinary HTTP and events are server-to-client. |
+| Service-owned workspace semantics | Native YAML parsing or CLI screen scraping | Never for this milestone. CLI output is presentation-oriented and direct YAML access creates a second mutation engine. |
+| libghostty | VTE/`GtkTerminal`, xterm.js, or a homegrown VT renderer | Use VTE only as a temporary diagnostic fallback if the libghostty GTK adapter is proven infeasible. Using a different terminal engine defeats the milestone's compatibility proof; xterm.js adds a browser runtime; a custom renderer repeats the failed complexity identified by the PTY spike. |
 
----
-
-## What NOT to Add
+## What NOT to Use
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| Temporal / Inngest | Durable execution requires external server; wrong for a local CLI | Handwritten `runWithRollback()` in `src/lib/operations.ts` |
-| xstate | State machine abstraction adds cognitive overhead and bundle size for a linear step runner | Plain step array with compensate functions |
-| better-sqlite3 or any embedded DB | Schema migrations, binary dependency, startup cost — all for a dataset of dozens of records | Module-level `Map` with explicit invalidation |
-| tsyringe / InversifyJS | Requires `experimentalDecorators`; conflicts with Bun's zero-build TS execution and TypeScript ^6.x | Existing `_exec` mutable object pattern |
-| New logging library | LogTape 2.0.5 already installed; `withContext()` for correlation is built-in | Extend existing `timeOperation()` and `logDebug()` calls |
+| A floating libghostty dependency or Ghostty `main` | libghostty has no tagged standalone version and explicitly allows API churn | Pin one commit and isolate it behind compile-time adapter tests. |
+| Assuming the current C embedding header is a ready-made Linux widget API | The 1.3.1 header says it is not a general-purpose documented embedding API and identifies the macOS app as its consumer; the Linux app compiles the Zig module directly | Use the Zig module for Linux and prove the GTK host adapter before roadmap expansion. |
+| GTK 3, Libhandy, `GtkTreeView`, or old dialog APIs | They are legacy/deprecated paths and create immediate migration work | GTK4 list models/views and libadwaita 1.5 APIs. |
+| Electron/Tauri/webview for the native client | Adds a browser/web rendering layer without helping the libghostty GTK/AppKit integration and weakens platform-native input/focus behavior | GTK4/libadwaita on Linux and SwiftUI/AppKit on macOS. |
+| Bun FFI directly from both GUIs into the workspace engine | Couples native lifetime/thread rules to JavaScript runtime internals and bypasses a versioned machine contract | A separate Bun service with validated DTOs. |
+| Exposing raw pointers, Zig enums, allocator-owned slices, or callbacks without teardown rules across the C boundary | ABI/layout and lifetime changes will become crashes rather than compiler errors | Opaque handles, fixed-width values, explicit ownership, status/error objects, and adapter-controlled callbacks. |
+| Persisting terminal state in git-stacks YAML | Violates the authoritative-engine boundary and mixes client session concerns with workspace configuration | Client-owned state storage keyed by stable workspace/repository IDs. |
 
----
+## Stack Patterns by Variant
+
+**Linux first usable slice:**
+
+- Compile the native client in Zig, import the exact libghostty Zig module, and call GTK4/libadwaita through the same generation/binding strategy proven by Ghostty.
+- Put workspace navigation around one adapter-owned terminal widget before implementing multiple tabs and splits.
+- Target GTK 4.14 and libadwaita 1.5 APIs even when developing on newer GNOME releases.
+
+**macOS architectural proof:**
+
+- Import only the shared C header and terminal adapter into Swift.
+- Host the terminal `NSView` through `NSViewRepresentable`; use a coordinator for callbacks and `dismantleNSView` for deterministic teardown.
+- Validate the shared service/model contract and one real terminal surface; defer parity, restoration polish, and native window/tab behaviors.
+
+**If libghostty publishes a stable standalone release before implementation:**
+
+- Re-evaluate the pin and its C API, but upgrade only after the same GTK/AppKit compatibility suite passes.
+- Preserve the adapter even if the upstream API stabilizes; it is still the product's boundary for configuration and lifecycle policy.
 
 ## Version Compatibility
 
-| Package | Zod | LogTape | Bun | TypeScript |
-|---------|-----|---------|-----|------------|
-| Current `@logtape/logtape@^2.0.5` | No dependency | N/A | Compatible (zero Node-specific deps) | Compatible (no decorators) |
-| Current `zod@^4.3.6` | N/A | No dependency | Compatible | Compatible |
-| Proposed `src/lib/operations.ts` | Uses Zod discriminated unions for result type | Uses `timeOperation()` | Bun native | strict mode |
-| Proposed `src/lib/config-store.ts` | Reuses existing Zod-validated read functions | Uses `logDebug()` | Bun native | strict mode |
+| Package A | Compatible With | Notes |
+|-----------|-----------------|-------|
+| Ghostty/libghostty at `v1.3.1` commit | Zig `0.15.2` | Ghostty guarantees each release against a specific Zig version; newer or older compilers may fail. |
+| Ghostty 1.3.x Linux path | GTK `>=4.14`, libadwaita `>=1.5` | These are the official 1.3 system floors. Develop against the floor and test newer GTK renderers separately. |
+| Ghostty 1.3.x macOS | macOS `>=13` | 1.3 is the last line supporting macOS 13; planned 1.4 tip/release work raises the floor to macOS 14. |
+| Shared C ABI | Swift and GTK/Zig callers | Freeze an application-owned ABI version independent of libghostty's version. ABI compatibility tests should compile both consumers against the installed/generated header. |
+| Bun SSE endpoint | Bun server idle timeout | Explicitly disable the request timeout for the event stream and send heartbeats; the documented default can terminate quiet streams. |
 
----
+## Confidence and Open Risks
+
+| Finding | Confidence | Evidence / implication |
+|---------|------------|------------------------|
+| GTK4/libadwaita and SwiftUI/AppKit are the correct native shells | HIGH | Official Ghostty and platform documentation use these exact platform stacks. |
+| Bun/TypeScript should remain the workspace service | HIGH | It is the current production engine; Bun officially supports streaming HTTP and local sockets. |
+| Zig is the correct shared/adaptation layer | HIGH | It matches libghostty's primary module and can generate a C-compatible boundary. |
+| A complete Linux libghostty embedding can be delivered without upstream changes | MEDIUM | The Zig module is described as full-featured and Ghostty's Linux GUI uses it, but the standalone C embedding surface is still work in progress. The first phase must prove this empirically. |
+| One identical binary-level terminal API can be used unchanged on Linux and macOS | LOW; do not assume | Current upstream integration paths differ. Share the product model and product-owned ABI, but allow platform-specific libghostty adapters underneath. |
 
 ## Sources
 
-- `bun.lock` (project file) — confirms `@logtape/logtape@2.0.5` and `zod@4.3.6` installed (HIGH confidence — direct file read)
-- `src/lib/config.ts` — confirmed `Template.labels` and `Workspace.labels` already in Zod schemas at lines 106 and 186 (HIGH confidence — direct source read)
-- `src/lib/integrations/types.ts` — confirmed current `Integration` interface structure; capability gaps identified (HIGH confidence — direct source read)
-- `src/lib/observability.ts` — confirmed `timeOperation()`, `logDebug()` API available for reuse (HIGH confidence — direct source read)
-- https://logtape.org/manual/contexts — `withContext()` API and `AsyncLocalStorage` integration for implicit context propagation in LogTape 2.x (HIGH confidence — official docs)
-- https://logtape.org/changelog — version 2.0.5 released 2026-03-24 is latest stable (HIGH confidence — official changelog, confirmed by `bun.lock`)
-- https://zod.dev/v4 — Zod 4 discriminated union composition, metadata registry, `z.toJSONSchema()` for plugin contract schemas (HIGH confidence — official release notes)
-- https://github.com/dahlia/logtape/discussions/133 — LogTape 2.0.0 discussion confirming async lazy evaluation and dynamic context values (MEDIUM confidence — official maintainer discussion)
+- [Ghostty 1.3.0 release notes](https://ghostty.org/docs/install/release-notes/1-3-0) — current libghostty status, standalone Zig module, work-in-progress C API, GTK/libadwaita floors, macOS support policy. **HIGH confidence (official primary source).**
+- [Ghostty release index](https://ghostty.org/docs/install/release-notes) — verified 1.3.1 as the current published stable release on 2026-07-11. **HIGH confidence.**
+- [Ghostty repository](https://github.com/ghostty-org/ghostty) — verified current tags, the `v1.3.1` commit, examples, C header warnings, and the 0.15.2 Zig requirement. **HIGH confidence (official source repository).**
+- [Ghostty build documentation](https://ghostty.org/docs/install/build) — exact Zig pairing and Linux build dependencies. **HIGH confidence.**
+- [Ghostty Linux support policy](https://ghostty.org/docs/linux) — supported GTK and libadwaita minimums. **HIGH confidence.**
+- [About Ghostty](https://ghostty.org/docs/about) — confirms Swift/AppKit/SwiftUI on macOS and Zig/GTK4 on Linux, with libghostty still unstable. **HIGH confidence.**
+- [Bun server documentation](https://bun.sh/docs/runtime/http/server) — streaming responses, Unix sockets, server lifecycle, and timeout behavior. **HIGH confidence.**
+- [Bun Unix-socket fetch documentation](https://bun.sh/docs/guides/http/fetch-unix) — confirms Bun client support while informing the transport alternative. **HIGH confidence.**
+- [GTK4 documentation](https://docs.gtk.org/gtk4/) and [GTK drawing model](https://docs.gtk.org/gtk4/drawing-model.html) — current widget/rendering model and deprecated API boundaries. **HIGH confidence.**
+- [GNOME 49 developer notes](https://release.gnome.org/49/developers/) — current stable GTK 4.20/libadwaita 1.8 context; intentionally not selected as the minimum deployment floor. **HIGH confidence.**
+- [Apple `NSViewRepresentable`](https://developer.apple.com/documentation/swiftui/nsviewrepresentable) — supported AppKit-in-SwiftUI creation, coordination, layout, and teardown lifecycle. **HIGH confidence.**
 
 ---
-
-*Stack research for: git-stacks v0.17.0 engine hardening and template labels*
-*Researched: 2026-04-05*
+*Stack research for: git-stacks v0.20.0 Native Workspace Client*
+*Researched: 2026-07-11*

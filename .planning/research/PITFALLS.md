@@ -1,292 +1,318 @@
 # Pitfalls Research
 
-**Domain:** CLI workspace manager — adding operation runner/rollback, config indexing, plugin contracts, template labels
-**Researched:** 2026-04-05
-**Confidence:** HIGH (based on direct codebase analysis + known patterns in this domain)
-
----
+**Domain:** Native workspace client with embedded terminal surfaces and a local workspace service
+**Researched:** 2026-07-11
+**Confidence:** HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: Rollback That Only Half-Undoes
+### Pitfall 1: Treating libghostty as a stable application framework
 
 **What goes wrong:**
-An operation runner records compensating actions but applies them out of order, or applies them against state that was already mutated by later steps. Example: a workspace creation that creates a worktree, writes a YAML, and calls `post_create` hooks — if the rollback fires after hook failure, it deletes the YAML but leaves the worktree on disk. Or if rollback order is `[step1_undo, step2_undo, step3_undo]` instead of the required `[step3_undo, step2_undo, step1_undo]`, earlier undos depend on side effects that later undos already destroyed.
+The client binds application state, window lifecycle, and build tooling directly to current libghostty symbols. A Ghostty update then becomes a cross-application rewrite, or the project silently forks an old terminal core with no upgrade path.
 
 **Why it happens:**
-Developers push compensating actions into a list in forward order, then iterate it forward instead of reversed. Git worktree creation, YAML writes, hook execution, and IDE session spawning all have different failure surfaces and must be undone in strict LIFO order.
+Ghostty is production-grade as a terminal, but its own documentation says the standalone `libghostty` API is not versioned and its signatures remain in flux. The available `libghostty-vt` surface also does not supply the complete renderer, windowing, tabs, splits, or session-management product.
 
 **How to avoid:**
-- Use a typed `CompensationStack` (not an array of plain strings): each entry is `{ label: string; undo: () => Promise<void> }`.
-- Push entries with `stack.push()` immediately after each successful step, and always pop with `while (stack.length) await stack.pop()!.undo()`.
-- Never register an undo that assumes a later step succeeded.
-- Run undo steps in reverse (pop from end, not shift from front).
-- Wrap each undo in a try/catch that logs but does not abort — a failing undo must not prevent subsequent undos from running.
+Pin an exact upstream commit (including Zig/toolchain requirements), record its license and build provenance, and expose only a narrow repo-owned adapter: create/destroy surface, attach native view, resize/scale, send input, receive title/bell/exit/attention callbacks, and report capabilities/errors. Keep all upstream types out of shared application and IPC models. Add one compile-and-smoke conformance fixture based on the upstream examples and require an explicit adapter migration note before changing the pin.
 
 **Warning signs:**
-- Rollback function takes the `steps` array as a parameter and iterates with `for (const step of steps)`.
-- Undo functions share mutable state (e.g., a `createdPaths` object mutated by multiple steps).
-- Tests for rollback only cover the "last step fails" case, not "middle step fails".
+libghostty headers imported outside one adapter package; shared models contain Ghostty handles; builds fetch `main`; changing the pin modifies UI or service code; the adapter has no destruction/error-path test.
 
 **Phase to address:**
-Operation runner phase (first phase of v0.17.0).
+Terminal adapter and build-reproducibility phase, before application-shell work.
 
 ---
 
-### Pitfall 2: Template Labels Not Copied at Creation Time
+### Pitfall 2: Confusing a terminal state engine with a complete embedded terminal
 
 **What goes wrong:**
-Template labels are stored on `Template.labels` but not snapshotted into the workspace YAML at creation time. The workspace inherits labels lazily by looking them up via its `template` field at runtime. When the template is later edited (labels added or removed), all historical workspaces retroactively gain or lose labels — violating the "workspace YAML is self-contained at creation" invariant that the entire system relies on.
+A demo renders shell output but production lacks correct PTY resize, scrollback, selection, clipboard, hyperlinks, alternate screen, mouse reporting, Unicode width, Kitty keyboard input, IME, or clean teardown. The existing OpenTUI spikes already classify the PTY/state substrate as only PARTIAL for this reason.
 
 **Why it happens:**
-Template-to-workspace propagation feels "obvious" when the template field already links to the template. Developers reach for runtime resolution instead of copying, reasoning that it's DRY. The existing system already has this invariant for env, hooks, and repos — but labels are a new field, and the invariant must be explicitly applied to it.
+Rendering rows of cells is visually persuasive. Ghostling explicitly leaves rendering/windowing and product session features to the consumer, and documents that insufficiently rich host input events break advanced keyboard protocols.
 
 **How to avoid:**
-- In the workspace creation path, copy `template.labels ?? []` into `workspace.labels` before writing the YAML.
-- Merge: if the user also specified labels at creation time, union them with the template labels.
-- Treat label propagation identically to how `env` propagation is handled: deep-copy, not reference.
-- Add a test that creates a workspace from a labeled template, then mutates the template's labels, and asserts that the workspace labels are unchanged.
+Define a terminal-surface acceptance matrix before UI polish: interactive programs, resize/reflow, UTF-8 and wide glyphs, compose/dead keys/IME preedit, modifiers, mouse, alternate screen, clipboard/selection, OSC/title/bell, focus transitions, shell exit, and destruction under load. Prefer the full supported libghostty embedding seam where available; never fill missing features with an ad-hoc ANSI parser.
 
 **Warning signs:**
-- Labels are resolved at read time via `readTemplate(ws.template)?.labels`.
-- No label fields appear in the workspace YAML written during `git-stacks new`.
-- The `WorkspaceSchema` has `labels` optional but nothing in the creation flow sets it from the template.
+Tests use only `echo`; input is reduced to character strings; rows/columns update without pixel scale; background tabs share emulator or callback state; terminal output is scraped to infer agent attention.
 
 **Phase to address:**
-Template labels phase (likely first or second phase of v0.17.0).
+Terminal adapter phase, with the full matrix repeated in the Linux vertical-slice phase.
 
 ---
 
-### Pitfall 3: Index Divergence from Disk Truth
+### Pitfall 3: Violating GPU and native-view lifecycle rules
 
 **What goes wrong:**
-An in-memory or on-disk index is populated by scanning YAML files, but the index is not updated on every write. A workspace is created (YAML written, index not updated), then an immediate `list` command reads from the stale index and omits the new workspace. Or conversely, a workspace is deleted (YAML removed) but the index still contains its entry — causing "workspace not found" errors when the index entry is acted upon.
+Surfaces render black, leak GPU resources, crash after tab/window removal, blur on scale changes, or call graphics APIs from the wrong context/thread. Linux works with one compositor but fails when context creation or the OpenGL API differs; macOS has analogous drawable/layer lifecycle hazards with Metal.
 
 **Why it happens:**
-Index updates are added at the "obvious" write sites (create, remove) but missed at rename, update (YAML patch), and clone paths. The scan-based approach is self-healing (always reads current disk state); an index trades accuracy for speed and breaks in partial-update scenarios.
+The renderer is treated like an ordinary GTK or SwiftUI child. GTK states that GL resources belong in `realize`/`unrealize`, the context must be current, framebuffer ownership remains with GTK, and context creation may fail. Metal presents through a `CAMetalLayer`; SwiftUI view identity and native view lifetime are not terminal-surface lifetime.
 
 **How to avoid:**
-- Make every `write*` function in `config.ts` the single update point — index write is part of the same atomic operation as the YAML write. Never update the index outside of the paired `read*/write*` functions.
-- On index read, add a staleness check: compare the workspace YAML `mtime` against the index entry's recorded `mtime`. On mismatch, fall back to direct YAML parse and repair the index.
-- Provide an explicit `rebuildIndex()` operation that `doctor --fix` can invoke.
-- Design the index as an acceleration structure, not the source of truth: every index miss falls back to a YAML scan and backfills the index.
+Make platform hosts thin but explicit. On GTK, create/check the context during realization, render only with the correct current context/framebuffer, resize from allocated pixel dimensions and scale factor, stop frame callbacks before unrealize, and show a recoverable renderer error. On macOS, isolate an AppKit/Metal host behind `NSViewRepresentable`, bind drawable size to backing scale, and destroy the surface exactly once from native-view teardown. Test repeated mount/unmount, tab moves, window close, monitor/DPI changes, suspend/resume, software-renderer fallback, Wayland, and X11.
 
 **Warning signs:**
-- Index update logic appears in command handlers instead of in `config.ts` write functions.
-- No `mtime` or content hash stored in index entries.
-- Tests only cover the "index is warm" path; no tests for "index is empty, YAML exists".
-- `doctor` has no index integrity check.
+GPU work in widget constructors; no context-error UI; logical points used as framebuffer pixels; render callbacks outlive widgets; one rendering implementation is conditionally compiled for both OpenGL and Metal.
 
 **Phase to address:**
-Indexed config store phase. Needs a test proving index + scan produce identical results for all CRUD operations.
+Platform embedding spike immediately after the adapter; lifecycle stress gates in each frontend phase.
 
 ---
 
-### Pitfall 4: Breaking the Integration Interface Without a Deprecation Path
+### Pitfall 4: Ambiguous PTY and session ownership
 
 **What goes wrong:**
-A "plugin contract" phase adds required fields or renames methods on the `Integration` interface — `applies()` becomes required, `configurePrompt()` gets a new required parameter, a new `capabilities` field is added. All 10 existing plugins immediately fail to compile. The fix is a grep-and-add across 10 files. If done carelessly, plugins get stub implementations that silently misbehave rather than type errors that force correctness.
+Closing a tab leaves shells or grandchildren running, quitting the client kills sessions users expected to persist, reconnect duplicates a command, or both the service and GUI believe they own the same PTY. Restored UI tabs point to nonexistent processes.
 
 **Why it happens:**
-TypeScript structural typing means adding required interface members breaks all implementations immediately. Developers underestimate how many plugins implement the interface and add required fields without checking each implementation.
+Process lifetime, UI lifetime, and persistence are conflated. The earlier spikes established that persistence across dashboard restarts requires a daemon/external owner, while this milestone explicitly assigns terminal processes and session state to the native client.
 
 **How to avoid:**
-- Use optional fields with defaults in the runner. If a new field is required for correctness, add it as optional to the interface and enforce the invariant in `runner.ts` with an explicit `if (!integration.capabilities) throw ...` check on registration.
-- When a method signature changes (e.g., new required parameter), prefer adding a new optional parameter over changing the existing signature. `open(ctx, artifact, bag, opts?: RunnerOpts)` instead of changing the third parameter.
-- After adding any interface change, run `bun run typecheck` before committing. Add a "does every plugin still satisfy the interface" check.
-- For genuine breaking changes, add a migration comment in the runner: `// TODO remove in v1.0: legacy plugins may omit X`.
+Write the ownership contract into the shared model: one client-owned surface owns one PTY/process tree; the workspace service never owns terminal processes; tab close performs graceful hangup then bounded escalation; app quit has an explicit close-or-confirm policy; crash recovery restores metadata only and labels dead sessions rather than pretending processes survived. Spawn named commands without a shell unless shell semantics are explicitly part of the resolved command. Track PID/process group, PTY fd, exit status, and one idempotent teardown state machine.
 
 **Warning signs:**
-- `Integration` interface changes are in the same commit as plugin usage changes (masking the breakage surface).
-- New required field added to `Integration` without checking all 10 plugin files compile.
-- `configurePrompt` or `open` parameter count changes.
+PTY handles cross IPC; service methods named `createTerminal`; detached children without a documented persistence mode; teardown only calls `kill(pid)`; app restart automatically reruns prior commands.
 
 **Phase to address:**
-Plugin contract / capability phase of v0.17.0.
+Shared model/terminal lifecycle phase before persistent tabs and named-command launch.
 
 ---
 
-### Pitfall 5: DI Container That Adds More Complexity Than It Removes
+### Pitfall 5: An IPC protocol that works only on the happy-path connection
 
 **What goes wrong:**
-A dependency injection container is introduced to wire up `logger`, `git`, `config`, and `secrets` — but it requires all callers to import a container instance, wrap every function call in a `container.get(...)`, and add new types for each service. The refactor touches 30+ files for a benefit that existing patterns (mutable `_exec` objects, `useIsolatedConfig` helper) already achieve for testing. End result: more abstraction, same testability, harder to grep call sites.
+Client and service upgrades become lockstep; reconnect loses mutations or events; stale responses overwrite fresh state; event floods exhaust memory; half-written frames corrupt the stream; a restart causes duplicate destructive operations.
 
 **Why it happens:**
-DI frameworks are familiar from server-side TypeScript. Developers apply them to CLI tools without accounting for the fact that CLI processes are short-lived and stateless — the "constructor injection" problem that DI solves (long-lived object graphs) does not exist in a CLI context.
+A local socket is mistaken for an in-process function call. Request/response, progress, events, cancellation, snapshots, and compatibility have different delivery semantics.
 
 **How to avoid:**
-- Keep the existing `_exec` injectable pattern for subprocesses. Extend it only where a new subprocess-spawning module is added.
-- For structured logging, use a simple module-level `logger` object with a replaceable `sink` function — not a DI container. `logger.sink = process.stderr.write.bind(process.stderr)` is enough; tests replace `logger.sink`.
-- DI is acceptable at the `IntegrationContext` level (already exists) where the context is passed explicitly. Do not introduce a global container.
-- If a function needs a new collaborator (e.g., a port allocator), pass it as a parameter with a sensible default: `function openWorkspace(ws, opts = { ports: defaultPortAllocator })`.
+Start with a framed, schema-validated envelope containing protocol version, request/operation ID, message kind, and payload version. Negotiate a supported version range and fail with an actionable incompatibility error. Mutations get idempotency keys and terminal results; progress is replaceable by operation ID; events carry a monotonic cursor; reconnect performs handshake then authoritative snapshot then cursor-based resume (or an explicit gap/resync). Bound every writer queue, coalesce replaceable status/progress events, pause reads/writes under backpressure, cap frame size, set timeouts, and cancel subscriptions on disconnect. Test fragmentation, concatenation, malformed frames, slow readers, service restart, cursor gaps, duplicate mutation delivery, and mixed-version peers.
 
 **Warning signs:**
-- A `container.ts` or `di.ts` file is created.
-- Existing `_exec` patterns are replaced with injected service objects across the codebase.
-- `IntegrationContext` grows more than 2 new fields in a single phase.
+Newline JSON without size limits; unbounded arrays per subscriber; UI applies events before a snapshot generation; reconnect simply retries every request; compatibility is inferred from the app package version.
 
 **Phase to address:**
-DI / structured logging phase. Scope to "add a `logger` object and wire it to the decomposed workspace modules" — not a full DI refactor.
+Versioned local-service protocol phase, before either GUI consumes the service.
 
 ---
 
-### Pitfall 6: Rollback Triggering Hooks After Partial Failure
+### Pitfall 6: Assuming “local” IPC is authenticated and safe
 
 **What goes wrong:**
-A workspace creation fails midway. The operation runner's rollback fires and removes the worktrees and YAML. However, `pre_create` hooks already ran (they ran before the git operations). The rollback does not know that hooks ran, so it does not run `pre_remove` hooks. The user's project is left in whatever state the `pre_create` hooks put it in (e.g., a database schema migration, a DNS entry, a Slack channel created). Alternatively, rollback tries to run `post_remove` hooks — but the workspace YAML no longer exists, so the hooks cannot resolve the workspace context.
+Another local user or process invokes workspace mutations or launches named commands, a symlink/socket replacement redirects a client, sensitive environment values leak through responses/logs, or commands execute in attacker-controlled paths.
 
 **Why it happens:**
-Hooks and git/YAML operations are treated as equivalent steps in the rollback ledger, but hooks are opaque shell commands that may have arbitrary external side effects. Rollback cannot undo what it cannot model.
+Unix-domain transport is treated as an authorization boundary by itself. Workspace operations and command launch are powerful capabilities.
 
 **How to avoid:**
-- Do not run `pre_create` hooks until after all git/YAML operations succeed. Then if git/YAML fails, hooks never ran and there is nothing to undo on the hooks side.
-- If hooks must run early (e.g., to provision external resources), document clearly that the operation is not fully atomic past the hook boundary and provide user-facing warnings.
-- The rollback runner should log "WARNING: pre_create hooks ran but cannot be automatically reversed. Manual cleanup may be required." rather than silently leaving the system in a partial state.
-- Add `GS_ROLLBACK=1` env var to any compensating hooks that do run, so hook authors can detect the rollback scenario.
+On Linux place the socket in `$XDG_RUNTIME_DIR`, whose specification requires user ownership and mode 0700; create a private subdirectory, reject unsafe ownership/modes and symlinks, use restrictive umask, and verify peer credentials where supported. On macOS use an equivalently user-scoped endpoint and peer check. Never accept arbitrary executable/cwd/environment triples from the GUI: accept a workspace ID plus named-command ID and resolve all paths/config/env inside git-stacks. Redact environment secrets from DTOs, errors, and logs. Add request authorization by capability, even with one current client.
 
 **Warning signs:**
-- `runHooks("pre_create")` is called before `createWorktrees()` in the operation plan.
-- Rollback function has a `runHooks("post_remove")` call.
-- No test covers "pre_create hooks ran, then git op failed".
+Socket under world-writable `/tmp`; GUI sends raw shell text for a named command; API returns the entire merged environment; endpoint permissions are untested; logs dump protocol payloads.
 
 **Phase to address:**
-Operation runner phase — define a clear hook/git ordering contract before writing any rollback code.
+Protocol/security phase, with command-resolution tests in named-command phase and packaging permission tests later.
 
 ---
 
-### Pitfall 7: Scan-to-Index Migration Silently Dropping Entries
+### Pitfall 7: Creating a second workspace engine in the GUI
 
 **What goes wrong:**
-The indexed config store writes an index file to `~/.config/git-stacks/index.json`. On first run after upgrade, the index is absent and the tool tries to build it by scanning. The scan uses the current `WorkspaceSchema` which has evolved since some users' YAML files were written. Old YAML files fail Zod validation (e.g., missing new required fields) and are silently excluded from the index. Those workspaces become invisible to the indexed path but visible to the scan path — so `git-stacks list` (indexed) shows fewer workspaces than `git-stacks status` (still scan-based). User data appears lost.
+CLI/TUI and native client disagree about workspace identity, paths, ports, command environment, or mutations. Direct YAML writes bypass validation, atomic-write/locking rules, caches, rollback, hooks, and future schema migrations; concurrent writes corrupt or lose data.
 
 **Why it happens:**
-Schema evolution without forward migration. The `schema_version` field exists in all workspace YAMLs but no migration functions are implemented — the comment in `config.ts` says "keyed by version" but the implementation is empty.
+Reading YAML appears faster than designing complete query DTOs, and GUI forms tempt developers to mirror domain logic client-side.
 
 **How to avoid:**
-- Build the index using `safeParse` with fallback: if strict parse fails, attempt a lenient parse with `.passthrough()` and include the entry with a `schema_version_mismatch: true` flag. The `doctor` command can then surface these entries.
-- Never let an index build silently drop entries — always emit a warning to stderr for each parse failure.
-- Test: corrupt one YAML in the test fixture, build the index, assert the other workspaces are still present and the corrupted one appears in a warnings list.
-- Before switching any command from scan to index, confirm that `safeParse` failures are logged and handled gracefully.
+Make git-stacks service methods the only workspace authority. DTOs expose stable semantic fields, capability flags, resolved command descriptors safe for display, and opaque IDs—not YAML shapes or paths that invite mutation. All writes call existing engine operations and stream their progress/results. Add an architectural dependency test forbidding YAML/config-engine imports from native/shared UI packages, plus parity fixtures asserting CLI and service views derive from the same engine functions.
 
 **Warning signs:**
-- Index build iterates YAML files and calls `WorkspaceSchema.parse()` (throwing) instead of `safeParse()`.
-- No test exercises the "one bad YAML in a directory of good ones" scenario.
-- `git-stacks doctor` has no index integrity section.
+YAML dependency in GUI manifests; duplicated Zod schemas; client calculates ports or merged env; filesystem watchers parse workspace files; client-side optimistic mutation writes durable state before service confirmation.
 
 **Phase to address:**
-Indexed config store phase. Migration safety must be validated before the index is used in any non-read-only path.
+Service boundary/shared model phase, before workspace navigation.
 
 ---
+
+### Pitfall 8: Treating Linux and macOS as skins over identical behavior
+
+**What goes wrong:**
+The shared model becomes polluted with GTK/SwiftUI assumptions, shortcuts conflict with platform conventions, rendering behavior diverges, or the macOS “proof” compiles but cannot accept real text input or survive lifecycle transitions.
+
+**Why it happens:**
+Ghostty deliberately uses GTK/OpenGL on Linux and SwiftUI/Metal/CoreText on macOS to provide native experiences. Only domain state and protocol semantics are naturally shared.
+
+**How to avoid:**
+Share immutable domain DTOs, reducer/state-machine semantics, protocol fixtures, and behavior tests. Keep view identity, menus, shortcuts, clipboard, renderer host, font discovery, notifications, and lifecycle in platform adapters. Specify capability negotiation for genuinely unavailable features. Define macOS proof success as a real service handshake, workspace navigation, one interactive terminal, resize/input/exit, and teardown—not pixel parity with Linux.
+
+**Warning signs:**
+Platform UI types in shared models; `#if linux` throughout domain code; screenshot parity is the primary cross-platform test; macOS uses an OpenGL assumption; Linux adopts Command-key semantics.
+
+**Phase to address:**
+Shared-model phase establishes boundaries; macOS proof phase validates the contract after Linux stabilizes it.
+
+---
+
+### Pitfall 9: Shipping keyboard input while omitting IME, focus, and accessibility
+
+**What goes wrong:**
+Dead keys, CJK input, compose sequences, screen readers, keyboard-only tab navigation, and clipboard selection fail. Global app shortcuts steal terminal keys; focus jumps on attention events and destroys active IME composition.
+
+**Why it happens:**
+ASCII keydown tests pass. GTK key events participate in capture/target/bubble propagation and require an `IMContext` for commit and preedit; AppKit custom text views must implement `NSTextInputClient`. GPU-rendered terminal cells do not automatically expose meaningful accessible text or tab semantics.
+
+**How to avoid:**
+Write an input-routing contract: reserved app actions are minimal and explicit; focused terminal receives unconsumed physical key/modifier events; committed text and preedit are separate; focus-in/out updates the IME; attention marks a surface without stealing focus unless the user invokes focus. Implement platform text-input protocols and cursor rectangle updates. Give workspace/tab controls native accessible roles, relationships, labels, selected state, and actions; establish an explicit terminal accessibility strategy with upstream capabilities rather than claiming support from a canvas. Test keyboard-only use, screen reader smoke, dead keys, compose, emoji, CJK IME, Alt/Meta/Ctrl, paste, and focus during tab switching.
+
+**Warning signs:**
+One callback named `onText`; no preedit model; global capture consumes all shortcuts; attention handler calls `grab_focus`; custom tabs expose no selected/controls relation; accessibility is deferred until visual polish.
+
+**Phase to address:**
+Input/accessibility contract in terminal adapter phase; full Linux acceptance before vertical-slice completion; macOS-specific protocol proof in macOS phase.
+
+---
+
+### Pitfall 10: Packaging succeeds only in the developer checkout
+
+**What goes wrong:**
+The app cannot find libghostty, schemas, icons, service binary, or locale data after installation; ABI/toolchain mismatch appears on another distribution; macOS signing/notarization fails; the socket or child process behaves differently under a launcher/systemd environment.
+
+**Why it happens:**
+Native dependencies and runtime paths are resolved relative to the repository, and CI validates only unit tests. GTK/libadwaita minimum versions, graphics drivers, Zig-produced libraries, rpaths, desktop metadata, and macOS bundles introduce independent failure modes.
+
+**How to avoid:**
+Decide supported distro/runtime and macOS deployment targets early. Build libghostty from the pinned source in a reproducible build, inspect linkage/rpaths, bundle or declare dependencies deliberately, and never download executable components at first launch. Install into a clean prefix/container/VM and run service handshake plus interactive-terminal smoke without the source tree. Validate desktop file, icon, Wayland/X11 launch, runtime directory, crash cleanup, macOS architecture slices, hardened runtime/signing/notarization assumptions, and upgrade compatibility.
+
+**Warning signs:**
+Absolute checkout paths; `LD_LIBRARY_PATH` required; only `bun run` launches work; CI has no packaged-artifact smoke; service discovery depends on current working directory; universal macOS build untested.
+
+**Phase to address:**
+Build skeleton in adapter phase; install/package gate after Linux vertical slice; macOS bundle gate in proof phase.
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Skip rollback for read-only steps | Simpler ledger | No harm | Always — only track write steps |
-| Use `any` in CompensationStack undo closures | Less boilerplate | Closures capture mutable vars, undo acts on wrong state | Never — capture immutable values at push time |
-| Index-only mode (no fallback scan) | Faster reads | Data loss risk on partial write | Never in v0.x |
-| Add optional interface fields for plugins | No immediate breakage | Stale defaults accumulate | Acceptable with explicit TODO to make required in v1.0 |
-| Single global logger sink | Simple | Not TUI-safe if sink is stdout | Only if TUI silencing is applied before dashboard starts |
-| Propagate labels by reference to template at runtime | DRY | Violates workspace self-containment invariant | Never |
-
----
+| Expose libghostty handles/types above the adapter | Fewer wrapper calls | Upstream churn crosses every layer | Never |
+| Parse workspace YAML in the GUI | Fast list prototype | Duplicate authority, unsafe mutations, migration drift | Never; use a fixture DTO for a throwaway visual mock only |
+| Model events as ordinary responses | One message shape | No replay, ordering, resync, or backpressure semantics | Never beyond a disposable spike |
+| Persist live PID/PTY identifiers as restorable sessions | Easy-looking restart | Stale/reused PIDs and phantom sessions | Never |
+| Implement ASCII key events first and “add IME later” | Quick demo | Input architecture must be rewritten | Never for the production adapter |
+| Make macOS share Linux view/controller code | Apparent reuse | Lowest-common-denominator UX and renderer leakage | Never; share models and fixtures instead |
+| Shell-wrap resolved named commands | Convenient env/cwd syntax | Quoting, injection, and signal/process-group ambiguity | Only when the command explicitly declares shell semantics |
+| Unbounded event buffers | Simple reconnect | Memory growth and stale UI storms | Never |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| Git worktree rollback | Call `git worktree remove` without `--force` — fails if worktree has untracked files | Always use `--force` in rollback context; workspace creation failed, data loss is acceptable |
-| tmux session rollback | Kill a non-existent session causes error that aborts the rollback chain | Check `tmux has-session -t name` before `kill-session`; swallow "not found" errors in undo |
-| IDE artifact rollback | Delete `.code-workspace` but leave VSCode window open — next open creates a duplicate session | Log "cannot close VSCode window automatically" rather than silently deleting the artifact |
-| YAML atomic write rollback | `renameSync(tmp, dst)` already ran — rollback must delete `dst`, not `tmp` | Track the final path at push-to-ledger time, not the tmp path |
-| Plugin `commands()` registration | Registering commands inside `commands()` assumes Commander parent is set up — called before `program.parse()` | Always call `commands()` during command tree setup, not lazily |
-| Index + scan race | Index is built, then a new workspace is created by a parallel process before index is written | Index file write must be atomic (tmp+rename), same as YAML writes |
-
----
+| libghostty | Track latest branch or copy internal Ghostty GUI code | Pin a commit, use public C boundary/examples, isolate it behind a capability adapter |
+| GTK4/OpenGL | Render outside GTK's context/framebuffer lifecycle | Realize, make current/check error, render, resize, and unrealize explicitly |
+| SwiftUI/Metal | Equate SwiftUI wrapper identity with native surface lifetime | Own Metal terminal in a thin AppKit view and make creation/destruction idempotent |
+| PTY/process | Kill only the immediate shell | Own the process group/session, close PTY, reap, then escalate on a bounded timer |
+| Workspace service | Accept raw paths/env/command strings from client | Accept opaque workspace/command IDs and resolve through authoritative engine code |
+| Agent attention | Infer state by scraping terminal output and force focus | Consume structured hook events, mark attention, preserve current focus |
+| Unix socket | Assume filesystem path implies same-user peer | Private runtime directory, strict permissions, peer credentials, frame limits |
+| Desktop packaging | Resolve binaries/assets from cwd | Install/bundle with relocatable discovery and smoke the installed artifact |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Rebuilding index on every command | Startup latency grows linearly with workspace count | Build index once; invalidate only on writes; never scan in hot path | ~50 workspaces |
-| Running `safeParse` on every YAML for every command | `list` takes 200ms with 30 workspaces | Index stores name → filepath + mtime; full parse done on demand | ~20 workspaces |
-| Holding full `Workspace` objects in index | Index file as large as individual YAMLs combined | Index stores only name + filepath + mtime | ~100 workspaces |
-| Running integration `applies()` during index build | Imports all 10 integration modules at startup | `applies()` is workspace-context check — never call at config-scan time | Immediate |
-| Structured logger formatting every git op | Adds string overhead to every git call | Gate logging behind `GIT_STACKS_DEBUG` check before constructing log message | Imperceptible until git ops in a hot loop |
-
----
+| Rendering every background surface continuously | High GPU/CPU use, laptop drain | Visibility-aware frame scheduling while PTY parsing continues | A few busy terminals |
+| Sending full workspace snapshot for every event | UI stalls and allocation spikes | Initial snapshot plus small revisioned deltas and explicit resync | Dozens of repos or bursty git status |
+| Unbounded terminal output/event queues | Memory growth, seconds-late UI | Bounded ring buffers, coalescing, backpressure, gap markers | One runaway command or slow client |
+| Synchronous git/YAML work on UI thread | Frozen navigation/input | Service-side async operations with progress and cancellation | First slow/networked multi-repo workspace |
+| One polling timer per workspace/repo/surface | Wakeup storm | Central scheduler, invalidation, TTL, and visible-work prioritization | Tens of workspaces/surfaces |
+| Recreating terminal on tab selection | Lost state and process churn | Stable surface identity; switch projection/visibility only | Immediately with interactive programs |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Labels copied from template without schema re-validation | Injected label bypasses `LabelSchema` regex if copied as raw string | Apply `LabelSchema.parse()` to each copied label at workspace creation time |
-| Rollback log written to workspace YAML | Log may contain partial git output with credentials | Rollback log goes to stderr only, never persisted to YAML |
-| Index file world-readable | Index exposes all workspace names and paths | Index written with same permissions as existing config files (user-only via umask) |
-| Plugin `configurePrompt` persists raw user input | Plugin stores uncleaned input (e.g., API tokens) in `globalConfig.integrations[id]` | Plugin must apply its own Zod schema before persisting; runner does not sanitize plugin config |
-
----
+| World-accessible or replaceable local socket | Unauthorized mutation/command execution | User-private runtime location, ownership/mode and peer checks |
+| Raw command/cwd/env accepted over IPC | Command injection and path escape | Resolve named commands in engine from opaque IDs; validate canonical paths |
+| Environment included in DTOs/logs | Credential/token disclosure | Allowlist display fields and redact secrets at serialization/log boundaries |
+| Unlimited frames/queues/subscriptions | Local denial of service | Frame, queue, rate, and subscription limits with disconnect policy |
+| Automatic rerun after uncertain disconnect | Duplicate destructive operation | Idempotency keys and queryable operation terminal state |
+| Loading unpinned native code | Supply-chain/ABI compromise | Vendored or checksummed exact source pin and reproducible build provenance |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Rollback silently succeeds with no output | User does not know if workspace was partially created or fully cleaned up | Print explicit "Creation failed — all changes rolled back." or "Creation failed — partial cleanup, manual action required." |
-| Template labels silently discarded on conflict with workspace labels | User adds labels at creation time, template labels disappear | Always union template labels + user labels; deduplicate silently |
-| Index rebuild on `doctor --fix` takes 5 seconds | User thinks the tool hung | Print "Rebuilding config index..." before starting, "Done." when finished |
-| Plugin capability contract error printed as raw TypeScript | `TypeError: integration.capabilities is undefined` in production | Validate plugin registration at startup with plain-English error: "Integration 'X' is missing required capability declaration" |
-
----
+| Attention event steals keyboard focus | Typing lands in another shell; IME composition lost | Badge/highlight/notification first; focus only on explicit action |
+| Hidden background tab is silently killed | Lost servers and agent work | Explicit close semantics and running-process confirmation |
+| Dead service looks like empty workspace list | User assumes data vanished | Distinct disconnected/reconnecting/incompatible states with retry details |
+| Renderer failure produces a blank panel | No recovery path | Surface-local error with diagnostic and retry/fallback action |
+| Tabs are visual-only custom widgets | Keyboard and screen-reader users cannot navigate | Native accessible tab roles, selected state, relations, and actions |
+| Restored tab implies restored process | Misleading continuity after crash/restart | Label session ended and offer explicit restart with resolved command |
+| Linux and macOS shortcuts are identical | Conflicts with platform muscle memory | Platform-native shortcut maps over shared semantic actions |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Template label propagation:** Labels appear in workspace YAML at creation — verify by reading the written YAML file, not just the in-memory struct.
-- [ ] **Rollback completeness:** Every step that writes to disk or spawns a process has a corresponding undo entry — verify by counting compensation entries against operation steps.
-- [ ] **Rollback reversal order:** Undos run in reverse of registration — verify with a test that mocks each step and asserts undo call order is reversed.
-- [ ] **Index fallback:** Deleting the index file and running `git-stacks list` produces identical output to the scan-based path — verify with a diff test.
-- [ ] **Plugin compilation:** All 10 integration plugins compile after any `Integration` interface change — verify with `bun run typecheck` in CI.
-- [ ] **Label schema enforcement:** Labels copied from templates are re-validated through `LabelSchema` — verify by placing an invalid label in a template fixture and asserting workspace creation fails with a clear error.
-- [ ] **Rollback no-throw:** Each undo step is wrapped in try/catch — verify that if the second undo throws, the third undo still runs.
-- [ ] **Index mtime check:** An index entry whose mtime differs from the current file mtime is not used — verify by writing a workspace YAML after the index is built and asserting the index re-reads the file.
-
----
+- [ ] **libghostty integration:** Exact upstream commit/toolchain is recorded; adapter conformance builds without exposing upstream types.
+- [ ] **Terminal surface:** `vim`/alternate-screen, resize/reflow, mouse, selection/clipboard, Unicode width, IME, exit, and repeated destroy all pass.
+- [ ] **GPU host:** Context/drawable failure, DPI changes, tab move, window close, Wayland/X11, and repeated mount/unmount are tested.
+- [ ] **Process lifecycle:** Child and grandchild behavior is verified for tab close, app quit, crash, shell exit, and escalation timeout with no zombies.
+- [ ] **Protocol:** Fragmented/malformed/oversized frames, slow readers, version mismatch, service restart, cursor gap, cancellation, and duplicate mutation are tested.
+- [ ] **IPC security:** Endpoint location, owner/mode, symlink handling, peer identity, payload redaction, and capability checks are verified.
+- [ ] **Workspace authority:** Native packages have no YAML parser/config-engine imports; CLI and service fixtures resolve identical paths/env/ports/commands.
+- [ ] **Attention routing:** Structured event targets the correct workspace/surface without output scraping or unsolicited focus.
+- [ ] **Accessibility/input:** Keyboard-only navigation, screen-reader smoke, preedit/marked text, dead keys, CJK, modifiers, paste, and focus transitions pass on each platform.
+- [ ] **Reconnect UX:** UI distinguishes reconnecting, incompatible, resyncing, and authoritative empty state; stale generations cannot overwrite current state.
+- [ ] **Packaging:** Clean installed artifact launches outside checkout and completes service plus interactive-terminal smoke on declared platform variants.
+- [ ] **macOS proof:** Uses the same protocol/model fixtures but native Metal/AppKit input lifecycle; it proves behavior, not screenshot parity.
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Partial-order rollback left orphaned worktrees | MEDIUM | `git worktree list` in each registered repo, manually prune with `git worktree remove --force <path>` |
-| Index diverged from disk | LOW | `git-stacks doctor --fix` triggers `rebuildIndex()` |
-| Labels not propagated to existing workspaces | LOW | `git-stacks label add <workspace> <label>` per workspace; no batch command needed if labels are new |
-| Plugin interface change broke a custom third-party plugin | MEDIUM | Plugin author must add the new field; document the change in CHANGELOG with before/after example |
-| Template label with illegal characters in user's YAML | LOW | Schema validation on read will error; user edits the YAML directly |
-| Rollback left YAML written but worktree absent | MEDIUM | `git-stacks doctor` detects missing worktrees; `doctor --fix` removes the orphaned YAML |
-
----
+| libghostty API leaked across layers | HIGH | Freeze pin, inventory imports/types, introduce adapter façade, migrate callers, add boundary test, then upgrade |
+| Duplicate YAML/domain engine | HIGH | Make GUI read-only, define missing service DTOs/mutations, parity-test engine calls, remove parser and direct writes |
+| Protocol lacks replay/versioning | HIGH | Version old envelope, add handshake/IDs/cursors/snapshot generation, support a compatibility window, migrate clients |
+| Orphaned terminal processes | MEDIUM | Enumerate owned process groups, add idempotent teardown/reaping, surface survivors, add crash/quit stress tests |
+| Broken IME/focus model | MEDIUM-HIGH | Separate physical keys from committed/preedit text, adopt native input protocol, rewrite shortcut arbitration tests |
+| GPU lifecycle crashes | MEDIUM | Disable affected renderer path, add explicit native-host states, serialize teardown, validate context/drawable errors |
+| Insecure endpoint | HIGH | Stop service, remove endpoint safely, move to private runtime directory, add peer checks, rotate any exposed secrets |
+| Packaging path/ABI failure | MEDIUM | Capture linkage and runtime diagnostics, make discovery relocatable, rebuild pinned dependency, smoke clean install |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Rollback out-of-order | Operation runner (define CompensationStack type first) | Unit test: 3-step op, middle fails, assert undo call order is [3, 2, 1] |
-| Labels not copied at creation | Template labels propagation | Integration test: create workspace from labeled template, mutate template, assert workspace labels unchanged |
-| Index divergence | Indexed config store | Diff test: `listWorkspaces()` via index === `listWorkspaces()` via scan for all CRUD ops |
-| Breaking plugin interface | Plugin contracts / capability phase | `bun run typecheck` passes with all 10 plugins after interface change |
-| Over-engineered DI | DI + logging (scope-gate: only logger + 5 modules) | No `container.ts` file exists; `_exec` pattern unchanged |
-| Hooks running before git ops | Operation runner | Test: pre_create mock hook ran, git op fails, assert post_remove hook NOT called |
-| Index dropping Zod-invalid entries | Indexed config store (migration safety) | Test: one bad YAML in fixture, index build completes, warning emitted, other workspaces present |
-| Label schema bypass | Template labels | Test: invalid label in template YAML, workspace creation returns Zod error |
-
----
+| Unstable libghostty API | 1. Reproducible terminal adapter | Exact-pin build plus public-boundary dependency test and upstream example smoke |
+| GPU/native lifecycle | 2. Linux embedding spike | Repeated realize/render/resize/unrealize under Wayland/X11, DPI and failure injection |
+| Duplicate workspace authority | 3. Shared model and service boundary | No YAML imports in client; CLI/service parity fixtures |
+| Weak IPC semantics/security | 4. Versioned local protocol | Mixed-version, fragmentation, replay, backpressure, restart, permissions, and peer tests |
+| Ambiguous PTY/process ownership | 5. Terminal lifecycle and session model | Close/quit/crash/exit process-tree tests and honest metadata restoration |
+| IME/focus/accessibility omissions | 6. Linux interaction foundation | IME/preedit, keyboard protocol, accessible tabs, screen-reader and focus tests |
+| Named-command injection/drift | 7. Workspace navigation and command launch | Opaque-ID resolution parity, canonical cwd/env, shell-free spawn, cancellation/progress |
+| Attention scraping/focus theft | 8. Structured attention routing | Revisioned event targets correct surface and never changes focus without action |
+| Developer-only packaging | 9. Linux vertical-slice packaging | Clean installed-artifact smoke on supported distro/display variants |
+| False cross-platform parity | 10. macOS architectural proof | Shared protocol fixtures plus native Metal, `NSTextInputClient`, lifecycle and bundle smoke |
 
 ## Sources
 
-- Direct codebase analysis: `src/lib/config.ts`, `src/lib/integrations/types.ts`, `src/lib/labels.ts`, `.planning/PROJECT.md`
-- Established invariants from CLAUDE.md: workspace YAML self-containment, atomic writes, `_exec` injectable pattern, scan-based lookup behavior
-- Pattern: LIFO compensation stacks — standard in saga/transaction patterns for distributed systems, applicable to multi-step CLI ops
-- Pattern: index-as-cache (not source of truth) — mtime-based invalidation is the simplest correct approach for a single-user CLI
-- Known anti-pattern: DI containers in short-lived CLI processes (documented in many Go/Rust CLI codebases)
+- [Ghostty About: architecture and unstable libghostty status](https://ghostty.org/docs/about)
+- [Ghostty repository: libghostty roadmap/status, OpenGL on Linux and Metal on macOS](https://github.com/ghostty-org/ghostty)
+- [Ghostling: minimum libghostty consumer, consumer-owned features, and input limitations](https://github.com/ghostty-org/ghostling)
+- [GTK4 `GtkGLArea`: context, framebuffer, realize/render/unrealize, and error lifecycle](https://docs.gtk.org/gtk4/class.GLArea.html)
+- [GDK `GLContext`: current-context and platform-dependent failure constraints](https://docs.gtk.org/gdk4/class.GLContext.html)
+- [GTK4 input and event handling: focus, propagation, shortcuts, and IM context wiring](https://docs.gtk.org/gtk4/input-handling.html)
+- [GTK4 `IMContext`: preedit, commit, focus, cursor, and surrounding-text contract](https://docs.gtk.org/gtk4/class.IMContext.html)
+- [GTK4 accessibility authoring practices: roles, custom entries, and accessible tabs](https://docs.gtk.org/gtk4/section-accessibility.html)
+- [Apple `NSTextInputClient`: required custom text-view input protocol](https://developer.apple.com/documentation/AppKit/NSTextInputClient)
+- [Apple custom Metal view guidance](https://developer.apple.com/documentation/Metal/creating-a-custom-metal-view)
+- [XDG Base Directory specification: security and lifetime requirements for runtime sockets](https://specifications.freedesktop.org/basedir/)
+- [Node child-process lifecycle: exit/close/error distinctions and signal behavior](https://nodejs.org/api/child_process.html)
+- Repo-local spikes 001–003: PTY/state feasibility is partial; multiple owned surfaces require explicit lifecycle; structured attention should not scrape output.
 
 ---
-*Pitfalls research for: git-stacks v0.17.0 Engine Hardening & Template Labels*
-*Researched: 2026-04-05*
+*Pitfalls research for: git-stacks v0.20.0 Native Workspace Client*
+*Researched: 2026-07-11*

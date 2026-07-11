@@ -1,449 +1,342 @@
 # Architecture Research
 
-**Domain:** CLI workspace manager — engine hardening & plugin contracts
-**Researched:** 2026-04-05
-**Confidence:** HIGH (primary sources: full codebase read)
+**Domain:** Local native workspace client with embedded terminal surfaces
+**Researched:** 2026-07-11
+**Confidence:** HIGH for service and ownership boundaries; MEDIUM for the exact libghostty adapter API because upstream has not tagged a stable libghostty release
 
----
+## Recommendation
 
-## Current Architecture (Baseline)
+Build a local, three-part system:
 
-```
-commands/ (CLI parsing + Commander.js routing)
-    ↓ calls
-workspace-ops.ts (facade / re-export hub)
-    ↓ delegates to
-workspace-lifecycle.ts  workspace-env.ts  workspace-status.ts
-workspace-git.ts        workspace-yaml.ts
-    ↓ both use
-config.ts (Zod schemas + scan-based YAML I/O)  git.ts (Bun shell ops)
-    ↓ persistence
-~/.config/git-stacks/{workspaces,templates,registry}.yml  (flat YAML files)
+1. a **Bun/TypeScript workspace service** that is the only native-client path into git-stacks workspace configuration and operations;
+2. a small **portable Zig application core** containing protocol DTOs, identity types, connection state, normalized client state, and pure action/reducer logic; and
+3. **platform-native application shells** (GTK4/libadwaita first, SwiftUI proof second) that own windows, terminal tabs, PTYs, libghostty surfaces, focus, and persistence.
 
-tui/ (wizards + SolidJS dashboard — parallel adapter, not layered above commands/)
-integrations/ (runner.ts orchestrates 10 plugins via Integration interface)
-```
+Do not move the existing workspace engine to Zig in this milestone. The service should call the existing TypeScript modules directly, not shell out to the CLI and not reimplement YAML semantics. Do not put libghostty objects or GTK/Swift types into the portable core. The resulting boundary is deliberately asymmetric: git-stacks owns durable workspace truth; each running native client owns ephemeral terminal truth.
 
----
+## Standard Architecture
 
-## Features and Their Integration Points
+### System Overview
 
-### 1. Template Labels to Workspace Propagation
-
-**Current state:** Partially done.
-
-The TUI wizard (`src/tui/workspace-wizard.ts:390-391`) already merges `template.labels` into workspace labels at creation time. The schema supports `labels` on both `TemplateSchema` and `WorkspaceSchema` (`src/lib/config.ts:106,186`). The `label add/remove/list/clear` CLI commands (`src/commands/label.ts`) work only on workspaces.
-
-**What is missing:**
-
-- The `workspace-clone` path (`src/tui/workspace-clone.ts`) does not propagate labels from the source workspace or its originating template.
-- No CLI surface for managing template labels (only workspace labels exist via `label` command).
-- `listTemplates()` and `readTemplate()` already return labels from YAML, but no command exposes them.
-
-**New vs modified:**
-
-| Target | New/Modified | Work |
-|--------|-------------|------|
-| `src/commands/label.ts` | Modified | Add `label add/remove/list/clear <template>` subcommands via `--template` flag or separate subcommand tree |
-| `src/tui/workspace-clone.ts` | Modified | Propagate source workspace labels into clone |
-| `src/tui/workspace-wizard.ts` | No change needed | Already propagates template labels |
-| `src/lib/labels.ts` | Modified | Add `matchesLabels` variant for templates if filter parity needed |
-
-**Data flow for propagation (creation path):**
-
-```
-git-stacks new --template <name>
-    → workspace-wizard.ts reads template.labels
-    → merges into workspace.labels at line 390-391
-    → writeWorkspace() persists
-
-git-stacks clone <source>
-    → workspace-clone.ts reads source.labels (currently ignored)
-    → should copy source.labels into clone YAML  ← gap
+```text
+┌──────────────────────────── Native client process ────────────────────────────┐
+│                                                                              │
+│  ┌──────────────── platform-native shell ─────────────────────────────────┐  │
+│  │ Linux: GTK4/libadwaita             macOS proof: SwiftUI/AppKit         │  │
+│  │ windows • navigation • focus • menus • lifecycle • state persistence   │  │
+│  └──────────────┬──────────────────────────────┬───────────────────────────┘  │
+│                 │ actions/view state           │ terminal callbacks           │
+│  ┌──────────────▼──────────────┐  ┌────────────▼──────────────────────────┐  │
+│  │ portable Zig app core      │  │ platform libghostty adapter          │  │
+│  │ models • reducer • RPC     │  │ surface/config/renderer/PTTY bridge  │  │
+│  │ connection • event routing│  │ PINNED upstream API, narrow wrapper   │  │
+│  └──────────────┬──────────────┘  └────────────┬──────────────────────────┘  │
+│                 │ JSON-RPC 2.0 over NDJSON      │ owns child processes/PTYs    │
+└─────────────────┼───────────────────────────────┼──────────────────────────────┘
+                  │ AF_UNIX stream               └── shells / named commands
+┌─────────────────▼──────── git-stacks workspace service ──────────────────────┐
+│ handshake/version • queries • mutations • operation registry • event fanout │
+│ authorization by local socket ownership • schema validation • backpressure  │
+└─────────────────┬─────────────────────────────────────────────────────────────┘
+                  │ direct typed calls (no CLI subprocess, no duplicated YAML)
+┌─────────────────▼──────── existing git-stacks TypeScript engine ─────────────┐
+│ config/index • resolution/env/ports • status • lifecycle • operation runner  │
+│ commands • messages/agent hooks • git/files • integrations                   │
+└─────────────────┬─────────────────────────────────────────────────────────────┘
+                  │
+          YAML/config root, git worktrees, message journal, external tools
 ```
 
-**Build order:** Label CLI for templates first (schema already supports it). Clone propagation second. No new modules needed.
+The workspace service and native client should be separate processes. This preserves the CLI/TUI, makes crashes and upgrades independently recoverable, gives all native shells the same contract, and avoids loading Bun plus the workspace engine into every platform UI runtime.
 
----
+### Component Responsibilities
 
-### 2. Operation Runner With Rollback
+| Component | Responsibility | Must not own |
+|---|---|---|
+| Workspace engine (existing, modified) | Canonical config, validation, resolution, env/ports, workspace/repo status, mutations, rollback semantics | GUI state, terminal processes, client persistence |
+| Workspace service (new) | Version handshake, RPC dispatch, DTO mapping, operation IDs, progress/events, cancellation requests, connection lifecycle | YAML interpretation duplicated from engine, terminal state |
+| Protocol package (new) | JSON schemas/types, method and event names, error taxonomy, fixtures, compatibility rules | Runtime I/O or business logic |
+| Portable Zig app core (new) | Stable cross-platform IDs/models, normalized state, reducer/actions, RPC client state machine, event-to-attention routing | GTK/Swift/libghostty handles, workspace mutations, PTYs |
+| GTK4/libadwaita shell (new) | Linux application lifecycle, windows/navigation, presentation, focus, persisted layout | Workspace truth, YAML parsing |
+| SwiftUI shell proof (new) | Proves C ABI/model/protocol portability and one embedded surface | Linux parity or independent model semantics |
+| libghostty adapter per platform (new) | Encapsulates pinned upstream surface/config/render/input callbacks and translates to shell/core actions | Workspace service calls or workspace identity policy |
+| Terminal session registry (new, client-local) | Stable surface IDs, workspace/repo binding, PTY/child lifetime, tabs/splits, exit status, restart/close policy | Durable workspace lifecycle |
 
-**Current state:** None. Failures in `openWorkspace`, `cleanWorkspace`, `mergeWorkspace` are best-effort via discriminated unions. Partial state (e.g. some worktrees created, integration not opened) is left on disk with no cleanup plan.
+## Versioned Local Service Boundary
 
-**Proposed module:** `src/lib/operation-runner.ts`
+### Transport and framing
 
-**Responsibilities:**
-- Execute a sequence of named steps, each returning `{ ok: true } | { ok: false; error: string }`
-- On step failure: run registered rollback/undo actions in reverse order
-- Emit structured progress events via callback (compatible with existing `ProgressCallback` signature)
-- Optionally persist an operation log to JSONL for post-mortem visibility
+Use one JSON object per UTF-8 line over an `AF_UNIX` stream socket. JSON-RPC 2.0 is transport-agnostic; NDJSON supplies the message boundary that a byte stream does not. A connection is full duplex and long-lived so requests, responses, progress, and attention notifications can interleave. Correlate responses only by JSON-RPC `id`; never assume response order.
 
-**Interface shape:**
+Recommended socket location is `$XDG_RUNTIME_DIR/git-stacks/service-v1.sock` on Linux, with a private per-user fallback directory only when the runtime directory is unavailable. Do not use a shared predictable `/tmp/git-stacks.sock`: the current TUI notification socket is useful prior art for framing and stale-socket handling, but not an adequate authenticated service endpoint. On macOS use a user-private Application Support/cache runtime directory initially; launchd socket activation can be added without changing the protocol.
 
-```typescript
-type Step<T = void> = {
-  name: string
-  run: () => Promise<{ ok: true; result?: T } | { ok: false; error: string }>
-  rollback?: () => Promise<void>   // Called in reverse order on failure
-}
+On accept, require `system.hello` before other methods:
 
-type OperationResult =
-  | { ok: true }
-  | { ok: false; failedAt: string; error: string; rolledBack: boolean }
-
-async function runOperation(
-  name: string,
-  steps: Step[],
-  onProgress?: ProgressCallback
-): Promise<OperationResult>
+```json
+{"jsonrpc":"2.0","id":"1","method":"system.hello","params":{"protocol":{"major":1,"minor":0},"client":{"name":"git-stacks-gtk","version":"0.20.0"},"capabilities":["operations.cancel","events.agentAttention"]}}
 ```
 
-**Integration with existing lifecycle modules:**
+The result selects a compatible protocol minor and advertises server capabilities. A major mismatch fails closed with a typed incompatibility error. Additive fields and methods increment the minor version; breaking field meaning, identity, or framing increments the major and uses a new socket name. Unknown object fields must be ignored, but unknown enum variants must map to an explicit `unknown` representation in clients rather than crashing.
 
-Each `workspace-lifecycle.ts` function currently composes steps inline with manual if/return error chains. The operation runner replaces that composition pattern.
+Use namespaced methods such as `workspace.list`, `workspace.get`, `workspace.create`, `workspace.status`, `command.list`, `command.resolve`, and `operation.cancel`. Prefer object parameters. Preserve standard JSON-RPC error codes for parse/request/method/params failures and reserve a documented application range for conflicts, validation, not-found, busy, cancellation, and incompatible-version errors.
 
-```
-workspace-lifecycle.ts (modified)
-    → builds Step[] array (worktree creation, hook execution, integration open, etc.)
-    → calls runOperation(steps, onProgress)
-    → returns OperationResult
+### Long operations and events
 
-workspace-ops.ts (facade — minimal change)
-    → still exports openWorkspace/cleanWorkspace/etc with same signatures
-    → delegates to updated lifecycle functions
-```
+A mutating call that can exceed a UI interaction budget should quickly return an operation descriptor rather than holding the request open:
 
-**Rollback scope per operation:**
-
-| Operation | Rollback if step N fails |
-|-----------|--------------------------|
-| openWorkspace | kill integration sessions created so far via cleanup(), undo port allocation |
-| cleanWorkspace | no rollback (destructive by intent), but log partial state |
-| mergeWorkspace | abort git merge if started, re-open worktrees on failure |
-
-**New file:** `src/lib/operation-runner.ts` — new module
-
-**Modified files:** `src/lib/workspace-lifecycle.ts` — refactor internal step composition to use operation runner
-
-**Operation log path (optional):** `~/.config/git-stacks/ops/{workspace}.jsonl` parallel to `messages/`
-
----
-
-### 3. Indexed Config Store
-
-**Current state:** `config.ts` has `findWorkspaceFile()` and `findTemplateFile()` that scan all `.yml` files in the directory on every lookup. `readWorkspace(name)` is O(n) filesystem reads. `listWorkspaces()` reads and parses every file every call.
-
-**Proposed module:** `src/lib/config-index.ts`
-
-**Strategy:** Keep YAML files as source of truth (human-editable). Add an in-process cache layer populated lazily on first access and invalidated on write. File-modification-time (`mtime`) comparison handles external edits.
-
-```typescript
-// In-memory index built from YAML directory scans
-type IndexEntry<T> = { filePath: string; mtime: number; data: T }
-
-type ConfigIndex = {
-  workspaces: Map<string, IndexEntry<Workspace>>
-  templates:  Map<string, IndexEntry<Template>>
-}
-
-// Drop-in cached equivalents — same return types as config.ts functions
-export function readWorkspaceCached(name: string): Workspace | null
-export function listWorkspacesCached(): Workspace[]
-export function invalidateWorkspace(name: string): void   // Called by writeWorkspace()
+```json
+{"jsonrpc":"2.0","id":"17","result":{"operationId":"op_01...","state":"accepted"}}
+{"jsonrpc":"2.0","method":"event.operation","params":{"seq":42,"operationId":"op_01...","state":"running","phase":"worktree.create","message":"Creating api","completed":1,"total":3}}
+{"jsonrpc":"2.0","method":"event.operation","params":{"seq":47,"operationId":"op_01...","state":"succeeded","result":{"workspace":"feature-x"}}}
 ```
 
-**Integration points:**
+The service owns an in-memory operation registry with bounded completed-operation retention. Every event carries a monotonically increasing per-service-instance sequence and a `serviceInstanceId`; reconnection uses a fresh snapshot plus current operation states, not an assumption that notifications were replayed. For milestone v0.20.0, delivery is **at-most-once live notification plus explicit resynchronization**, which is honest and sufficient for a local UI. Durable event replay can follow only if a concrete need appears.
 
-`config.ts` `writeWorkspace()` and `writeTemplate()` call `invalidateWorkspace()`/`invalidateTemplate()` from the index module after writing. No callers need to change — the cache is internal to config.ts.
+Terminal output from client-owned commands does not traverse the service. Workspace mutation progress does. Convert existing callback strings into structured phases at the engine/service seam, retaining a human message as presentation fallback. Cancellation is cooperative: `operation.cancel` records intent and the operation reports `cancelling` then `cancelled` only after a safe checkpoint. Never claim cancellation for a non-interruptible git/filesystem step, and never kill an engine operation in a way that bypasses its compensation stack.
 
-The TUI dashboard calls `listWorkspaces()` and `listTemplates()` in reactive SolidJS accessors. These benefit most from caching because the dashboard polls on keypress events.
+Apply per-connection output bounds. Coalesce replaceable progress events, never drop terminal operation states or agent-attention events, and disconnect persistently slow consumers after emitting a diagnostic when possible. Cap line/frame size and reject invalid UTF-8 or malformed envelopes before dispatch.
 
-**Alternative considered:** SQLite index file at `~/.config/git-stacks/index.db`. Rejected for this milestone: adds a binary dependency and complicates the human-editable config story. YAML-with-mtime-cache is lower risk and reversible.
+### Structured agent attention
 
-**New file:** `src/lib/config-index.ts` — new module
-**Modified file:** `src/lib/config.ts` — `writeWorkspace()` and `writeTemplate()` call invalidation; `listWorkspaces()` and `readWorkspace()` delegate to cache
+Replace the current free-form socket notification as the native routing contract with a typed event containing at least:
 
----
+- `eventId`, timestamp, kind, urgency, and optional display text;
+- canonical workspace identity and optional repository identity;
+- optional client terminal `surfaceId` supplied earlier through a client registration/correlation method;
+- source framework/session metadata that is safe to expose.
 
-### 4. Integration Plugin Capability Contracts
+The service validates and persists workspace-oriented attention through the existing message/hook subsystem, then fans it out. The client reducer resolves workspace/repo IDs and requests the platform shell to raise/focus; the shell decides whether focus stealing is allowed. If no matching surface exists, focus the workspace and show attention in navigation rather than inventing a terminal association. Production attention must not scrape terminal output, consistent with the validated tmux control-plane spike.
 
-**Current state:** The `Integration` interface (`src/lib/integrations/types.ts`) is already solid — id, label, order, isEnabled(), applies(), generate(), open(), cleanup(), commands(), configExample, windowDetector. The runner orchestrates correctly.
+## Shared Zig Core Versus Native Shells
 
-**Gaps identified from `PROJECT-DIRECTION.md`:**
+Use Zig for the smallest portion that benefits from identical behavior on Linux and macOS:
 
-1. **Capability declaration:** Plugins do not declare what they require (e.g. "needs tmux binary", "only macOS", "requires forge CLI"). Doctor checks are ad-hoc per plugin rather than driven by declared capabilities.
+- protocol envelopes and generated/hand-maintained DTO decoding;
+- canonical IDs and normalized workspace/repository/terminal-surface models;
+- connection and resynchronization state machine;
+- pure reducer from actions/events to app state;
+- attention target resolution and deterministic selection policy.
 
-2. **Isolated failure handling:** `runIntegrationCleanup()` already catches and logs, but `runIntegrations()` propagates throws from `open()`. A plugin crash stops the entire integration chain.
+Expose an opaque C ABI (`gs_app_create`, `gs_app_dispatch_json`, `gs_app_snapshot_json`, `gs_app_destroy`) or similarly narrow callback interface. Opaque handles keep Zig allocation and layout private; callers copy or explicitly free returned buffers. Do not expose Zig structs by layout across the ABI. Keep the C header versioned and exercise it from a tiny C harness plus Swift and GTK bindings.
 
-3. **Third-party plugin path:** No external plugin registration mechanism. This milestone can lay the contract foundation without implementing dynamic loading.
+Keep platform concerns native:
 
-**Proposed additions to `Integration` interface:**
+- GTK/SwiftUI view trees and observable bindings;
+- application/window lifecycle and single-instance activation;
+- filesystem locations and state restoration integration;
+- libghostty surface/view creation, renderer integration, clipboard, IME, menus, drag/drop, accessibility;
+- PTY creation, process groups, signals, resize, child reaping, and terminal session persistence policy.
 
-```typescript
-// Add to src/lib/integrations/types.ts
+This is not a mandate for a broad Zig rewrite. If the C ABI spike cannot demonstrate clean reducer snapshots and callbacks early, keep the protocol client/model native per platform for v0.20.0 rather than delaying Linux. The non-negotiable shared boundary is the wire protocol; shared in-process code is valuable but subordinate to the vertical slice.
 
-export type Capability =
-  | { kind: "binary"; name: string; hint: string }
-  | { kind: "platform"; os: "darwin" | "linux" | "win32" }
-  | { kind: "forge"; type: "github" | "gitlab" | "gitea" }
+## Terminal Ownership and libghostty Adapter
 
-// On the Integration interface:
-capabilities?: Capability[]       // Declared requirements — checked by doctor
-isolatedFailure?: boolean         // If true, open() failure is non-fatal
+The native client creates each terminal from a **resolved launch specification**, never from raw workspace YAML. For a shell this contains resolved `cwd`, environment delta, shell/argv, workspace/repo IDs, and display metadata. For a named command, the workspace service should resolve path/env/ports/config and return a launch specification; the client starts the PTY so output, input, job control, and lifetime remain local to the surface.
+
+Each terminal session has a client-generated stable `surfaceId` and bindings to workspace/repo/command identities. A session registry owns:
+
+```text
+SurfaceId → binding + PTY + child process group + libghostty surface + view placement
 ```
 
-**Runner changes (`runner.ts`):**
+Closing a workspace in git-stacks must not implicitly kill native terminals unless the user explicitly chooses that client action. Conversely, closing a terminal never mutates the workspace. App shutdown must apply an explicit policy: warn for live foreground jobs, terminate gracefully, escalate after a timeout, reap children, then persist only reconstructable metadata. “Persistent tabs” in this milestone should mean persistence while the app remains alive and restoration metadata across launches; true surviving processes require a separate daemon/multiplexer architecture and should not be implied.
 
-```typescript
-// Wrap open() for isolated plugins
-const artifact = await (async () => {
-  try {
-    return await integration.open(ctx, artifactPath, bag)
-  } catch (err) {
-    if (integration.isolatedFailure) {
-      console.warn(`[${integration.id}] open failed (non-fatal): ${err}`)
-      return null
-    }
-    throw err
-  }
-})()
+Pin libghostty to an exact upstream revision/submodule or reproducible package artifact. Put every unstable call behind one adapter target per platform, with a repo-owned stable interface for create/destroy, resize, focus, input, clipboard, title/cwd callbacks, child exit, and render invalidation. Compile-time/API smoke tests should fail at the adapter boundary on pin updates. Do not fork Ghostty’s application-level tab/split/window model: consume libghostty as terminal machinery and keep git-stacks-specific session organization in the client.
+
+## Recommended Project Structure
+
+```text
+src/
+├── lib/                         # existing workspace engine
+│   ├── workspace-*.ts           # MODIFIED: DTO-friendly query/operation seams
+│   ├── workspace-command.ts     # MODIFIED: resolved launch-plan seam
+│   ├── operation-runner.ts      # MODIFIED: structured progress/checkpoints
+│   └── messages.ts              # MODIFIED: structured attention ingestion
+├── service/                     # NEW: Bun local service
+│   ├── server.ts                # socket accept, lifecycle, peer credentials
+│   ├── connection.ts            # NDJSON framing, bounds, backpressure
+│   ├── router.ts                # JSON-RPC validation and dispatch
+│   ├── operations.ts            # registry, progress, cancellation, retention
+│   ├── events.ts                # fanout and resync metadata
+│   └── methods/                 # thin adapters into src/lib
+└── protocol/                    # NEW: canonical schemas and fixtures
+    ├── v1.ts                    # Zod wire schemas/types
+    ├── errors.ts
+    └── fixtures/
+native/
+├── core/                        # NEW: optional portable Zig app core
+│   ├── src/{model,reducer,rpc}.zig
+│   ├── include/git_stacks_app.h
+│   └── tests/
+├── ghostty/                     # NEW: pinned dependency + adapter contract
+│   ├── include/git_stacks_terminal.h
+│   └── pin metadata
+├── linux/                       # NEW: GTK4/libadwaita application
+│   ├── src/{app,window,state,terminal}/
+│   └── packaging/{desktop,metainfo,systemd}/
+└── macos/                       # NEW: thin SwiftUI proof
+    └── GitStacksNative/{App,Model,Terminal}/
+tests/
+├── service/                     # NEW: socket/RPC/operation integration tests
+├── protocol/                    # NEW: compatibility and malformed-input tests
+└── fixtures/protocol-v1/        # NEW: shared cross-language golden messages
 ```
 
-**Doctor integration:** A new `checkCapabilities(integration)` helper in `doctor.ts` reads `integration.capabilities` and runs binary/platform/forge checks — replacing current per-plugin ad-hoc checks scattered across individual plugin files.
+Keep protocol schemas owned by the TypeScript service because it validates untrusted input there. Generate or verify C/Zig/Swift fixture compatibility in CI, but do not create multiple manually authoritative schemas.
 
-**Modified files:**
-- `src/lib/integrations/types.ts` — add `Capability` type and new fields on `Integration`
-- `src/lib/integrations/runner.ts` — isolated failure handling in `runIntegrations()`
-- `src/commands/doctor.ts` — capability-driven checks
-- Individual plugin files (10 plugins) — add `capabilities` and `isolatedFailure` declarations
+## Process Lifecycle and Packaging
 
-**No new module needed.** Interface extensions and runner behavior changes only.
+For development and the first vertical slice, the native app may spawn `git-stacks service --stdio-ready` or connect to an already-running user service, using a startup lock and readiness handshake to avoid races. The service must survive client disconnects only while it has other clients or active non-cancellable operations, then exit after an inactivity timeout. The client reconnects with bounded exponential backoff and always resynchronizes snapshots.
 
----
+For Linux packaging, install a user `systemd.socket`/`systemd.service` pair when systemd user services are available; socket activation removes stale-socket races and starts the service on demand. Also support direct app-managed startup for non-systemd desktops and development. `GtkApplication`/`GApplication` should own GUI uniqueness and window lifecycle; it already routes later activations to the primary session instance. These are separate uniqueness domains: GTK owns one GUI instance per desktop session, while the service socket owns one workspace service per user/runtime directory.
 
-### 5. Broader DI and Structured Logging
+For macOS, bundle the SwiftUI app, Zig core library, and pinned libghostty artifacts with correct code signing and runtime search paths. Begin with app-managed child-service startup for the architectural proof; design service acceptance around an inherited listening FD so later launchd socket activation (`launch_activate_socket`) does not require a protocol redesign.
 
-**Current state:** `src/lib/observability.ts` uses logtape with `timeOperation()` wrapper. DI for subprocess execution uses the `_exec` mutable object pattern (one per module). Structured logging produces only timing/debug lines.
+The service executable version may follow git-stacks releases, but wire compatibility is independent. Packaging must never silently connect a new client to an incompatible old service: the hello exchange reports both product and protocol versions and gives an actionable restart/upgrade error.
 
-**DI status by module:**
+## Data Flows
 
-| Module | Has `_exec` injectable | Test coverage via mock |
-|--------|----------------------|----------------------|
-| `workspace-yaml.ts` | Yes (`spawnEditor`) | Yes |
-| All 10 integration plugins | Yes (`_exec` per plugin) | Yes |
-| `git.ts` | No (uses `$` shell directly) | Tests use real git in tmp dirs |
-| `lifecycle.ts` | No (`runHooks` calls `Bun.spawn` directly) | Mock via `mock.module()` |
-| `workspace-lifecycle.ts` | No | Relies on git.ts mocks |
+### Query and resynchronization
 
-**Gaps to close:**
-
-- `lifecycle.ts` (`runHooks`) uses `Bun.spawn` with no injectable seam. Adding `_exec.spawn` here allows lifecycle unit tests to avoid `mock.module()` entirely.
-- `observability.ts` logs timing but not structured operation context (which workspace, which step). Adding optional key-value context to `logDebug` enables richer tracing without breaking callers.
-
-**Proposed additions:**
-
-```typescript
-// src/lib/lifecycle.ts — add injectable seam
-export const _exec = {
-  spawn: (cmd: string[], opts: SpawnOptions) => Bun.spawn(cmd, opts)
-}
+```text
+platform activate
+  → connect/start service
+  → system.hello
+  → workspace.snapshot + operation.listActive
+  → Zig reducer replaces normalized authoritative workspace slice
+  → native shell renders navigation
 ```
 
-```typescript
-// src/lib/observability.ts — extend logDebug for structured context
-export function logDebug(
-  category: string,
-  detail: string,
-  context?: Record<string, string | number | boolean>
-): void
+### Workspace mutation
+
+```text
+UI action
+  → reducer emits RPC effect
+  → service validates request and returns operationId
+  → engine mutation + structured progress/rollback callbacks
+  → event.operation notifications
+  → terminal state event + workspace.changed revision hint
+  → client refreshes affected authoritative entities
 ```
 
-**No new modules.** Additions to two existing files.
+Do not optimistically mutate canonical workspace state for destructive actions. The UI may show an operation placeholder immediately, but refresh workspace truth after completion or `workspace.changed`.
 
----
+### Named-command launch
 
-## System Overview After v0.17.0
-
-```
-commands/ (CLI — unchanged structure)
-    ↓
-workspace-ops.ts (facade — unchanged surface)
-    ↓
-workspace-lifecycle.ts  (modified: uses operation-runner.ts internally)
-workspace-env.ts        workspace-status.ts
-workspace-git.ts        workspace-yaml.ts
-
-lib/
-  operation-runner.ts  ← NEW: step sequencing + rollback
-  config-index.ts      ← NEW: in-memory YAML cache with mtime invalidation
-  config.ts            (modified: delegates reads to config-index, calls invalidation on writes)
-  observability.ts     (modified: optional context param on logDebug)
-  lifecycle.ts         (modified: injectable _exec.spawn seam)
-
-integrations/
-  types.ts             (modified: Capability type + capabilities/isolatedFailure fields)
-  runner.ts            (modified: isolated failure handling)
-  *.ts (10 plugins)    (modified: add capabilities/isolatedFailure declarations)
-
-commands/
-  label.ts             (modified: add template label subcommands)
-  doctor.ts            (modified: capability-driven checks)
-
-tui/
-  workspace-clone.ts   (modified: propagate labels from source workspace)
+```text
+UI selects command
+  → command.resolve(workspaceId, repoId?, commandName)
+  → service uses workspace-command + workspace-env to return launch steps
+  → client session registry creates PTY/libghostty surface per chosen policy
+  → process output stays client-local
 ```
 
----
+For multi-step pre/main/post command sequences, either create one shell script/PTY launch spec preserving current sequence semantics, or explicitly model steps. Do not ask each platform client to rediscover ordering and environment rules.
 
-## Component Responsibilities
+### Agent attention
 
-| Component | Responsibility | Changes in v0.17.0 |
-|-----------|---------------|-------------------|
-| `operation-runner.ts` | Step sequencing, rollback orchestration, op log | NEW |
-| `config-index.ts` | In-memory YAML cache, mtime-based invalidation | NEW |
-| `workspace-lifecycle.ts` | Business logic for open/clean/close/merge/remove | Modified: delegates step composition to operation-runner |
-| `config.ts` | Zod schemas, atomic YAML reads/writes | Modified: write functions call invalidation |
-| `integrations/types.ts` | Plugin contracts (Integration interface) | Modified: Capability type added |
-| `integrations/runner.ts` | Orchestration across 10 plugins | Modified: isolated failure handling |
-| `observability.ts` | Structured debug logging and timing | Modified: context parameter on logDebug |
-| `lifecycle.ts` | Hook execution (runHooks/runHooksCaptured) | Modified: injectable _exec.spawn |
-
----
-
-## Data Flow Changes
-
-### Workspace Open (current)
-
-```
-openWorkspace(name)
-    → allocatePorts()
-    → buildWorkspaceEnv()
-    → runHooks(pre_open)
-    → createWorktree() per repo
-    → runIntegrations()
-    → runHooks(post_open)
-    → return { ok }
+```text
+agent hook → service ingestion → durable workspace message + event.agentAttention
+  → reducer records attention and resolves target
+  → shell focuses existing surface or workspace navigation
 ```
 
-### Workspace Open (after operation-runner)
+## Architectural Patterns
 
-```
-openWorkspace(name)
-    → runOperation("open", [
-        { name: "allocate-ports",    run: allocatePorts,   rollback: releasePorts },
-        { name: "resolve-env",       run: buildWorkspaceEnv, rollback: noop },
-        { name: "pre-open-hooks",    run: runPreOpenHooks, rollback: noop },
-        { name: "create-worktrees",  run: createWorktrees, rollback: removeCreatedWorktrees },
-        { name: "run-integrations",  run: runIntegrations, rollback: runIntegrationCleanup },
-        { name: "post-open-hooks",   run: runPostOpenHooks, rollback: noop },
-      ], onProgress)
-    → OperationResult
-```
+### Functional core, imperative shells
 
-Callers (`workspace.ts`, TUI dashboard) receive the same `{ ok: boolean; error?: string }` shape — the facade signature is unchanged.
+All durable mutations remain in the TypeScript engine; all cross-platform selection/state transitions in the Zig reducer are pure; OS APIs and libghostty live in imperative adapters. This makes protocol fixtures and reducer transitions testable without a display server or terminal process.
 
-### Config Read (after config-index)
+### Snapshot plus invalidation events
 
-```
-readWorkspace(name)              listWorkspaces()
-    → config-index.ts                → config-index.ts
-    → stat() each file for mtime     → stat() scan (no full parse)
-    → parse only stale entries        → return cached Map values
-    → return cached entry
-```
+Queries return self-contained DTO snapshots. Events announce operation transitions and entity revision hints; clients re-query affected state. Avoid an event-sourced replica in v0.20.0. The local dataset is small, while correctness after sleep, crash, upgrade, or missed notification matters more than minimizing bytes.
 
----
+### Stable identity, separate presentation
 
-## Build Order (Dependency-Aware)
+Wire DTOs use canonical workspace names/IDs and repo identity from the engine, plus client-generated surface IDs. Paths are data, not identity. Display labels and ordering can evolve without breaking event routing.
 
-| Step | Feature | Depends On | Risk |
-|------|---------|-----------|------|
-| 1 | Template label CLI (`label add/remove/list/clear <template>`) | Schema already supports it | Low |
-| 2 | Clone label propagation | Step 1 for consistency | Low |
-| 3 | `_exec.spawn` in `lifecycle.ts` | None | Low |
-| 4 | `logDebug` context parameter in `observability.ts` | None | Low |
-| 5 | `Capability` type + `capabilities`/`isolatedFailure` on `Integration` | None | Low |
-| 6 | Isolated failure handling in `runner.ts` | Step 5 | Low |
-| 7 | Plugin `capabilities` declarations (all 10 plugins) | Step 5 | Medium (touches 10 files) |
-| 8 | Doctor capability-driven checks | Step 7 | Medium |
-| 9 | `config-index.ts` module | None | Medium |
-| 10 | Wire index into `config.ts` | Step 9, tests passing | Medium |
-| 11 | `operation-runner.ts` module | None | Medium |
-| 12 | Wire operation-runner into `workspace-lifecycle.ts` | Step 11 | High (core logic change) |
+### Explicit effect ownership
 
-Steps 1-4 are pure additions with no cross-dependencies. Steps 5-8 are interface additions with low blast radius. Steps 9-10 and 11-12 are higher-risk pairs — each should ship as a separate phase with regression tests before moving on.
+Reducer output distinguishes service RPC effects, terminal effects, and platform focus/persistence effects. Only the owning adapter performs each effect. This prevents a server event handler from directly touching GTK/SwiftUI/libghostty objects and makes macOS proof behavior comparable.
 
----
+## Scaling and Reliability Considerations
+
+This is a single-user local system; user-count scaling tables are irrelevant. The important dimensions are workspaces, repositories, concurrent operations, terminal surfaces, and event rate.
+
+| Pressure | First likely failure | Adjustment |
+|---|---|---|
+| Hundreds of workspaces/repos | Expensive full status refresh | Existing indexed config plus summary/detail queries, revisions, bounded concurrency |
+| Many simultaneous mutations | Conflicting filesystem/git operations | Service-side resource locks keyed by workspace/repo and explicit conflict errors |
+| Many terminal surfaces | GPU/PTY/process memory | Lazy surface realization, suspend hidden rendering, visible lifecycle metrics |
+| Bursty hook/progress events | Slow UI connection queue | Coalesce progress, bounded queues, preserve terminal events, resync after reconnect |
+| Service crash/restart | Missed notifications/stale operations | New serviceInstanceId, snapshot resync, mark former operations interrupted |
+
+The first concurrency rule should be simple: serialize mutations that touch the same workspace or underlying main repository; permit independent read queries and independent workspace operations only where existing engine locking makes them safe.
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Operation Runner as God Object
+### GUI parses git-stacks YAML
 
-**What people do:** Pass the full `Workspace`, `GlobalConfig`, `tasksDir`, and every helper function into the runner core.
+This creates two authorities and makes schema migration, composition, env/secret resolution, caches, and validation diverge. All GUI reads and writes go through versioned service DTOs.
 
-**Why it's wrong:** The runner's job is step sequencing and rollback bookkeeping. Domain knowledge (what to rollback for a worktree) belongs in the step definitions, not the runner.
+### Service shells out to the public CLI
 
-**Do this instead:** Steps are closures. Each step captures its own context. The runner only knows `{ name, run, rollback }`.
+Parsing CLI output loses typed errors/progress, adds quoting and process overhead, and couples machine behavior to human presentation. Invoke existing `src/lib` functions directly and add narrow reusable seams where commands still contain orchestration.
 
----
+### PTYs in the workspace service
 
-### Anti-Pattern 2: Config Index as Write-Through Cache
+This turns the service into a terminal daemon, complicates crash recovery, security, multiplexing, and packaging, and contradicts client ownership. Keep embedded terminal processes with the native client for this milestone.
 
-**What people do:** Write to the index first, then flush to disk asynchronously.
+### Treating JSON-RPC notification as durable delivery
 
-**Why it's wrong:** git-stacks writes YAML atomically (tmp+fsync+rename) to avoid corruption. Async flush breaks that guarantee. If the process dies between index write and YAML flush, the index diverges from disk.
+The specification intentionally provides no response for notifications. A disconnected client cannot know what it missed. Use snapshot/resync and operation queries; do not infer exactly-once delivery.
 
-**Do this instead:** Write to YAML first (atomic, as today). Then invalidate the index entry. The next read re-parses from disk. The cache is read-only.
+### Raw prose as progress state
 
----
+Strings cannot reliably drive progress bars, cancellation, rollback UI, or compatibility. Emit stable state/phase fields plus optional human text.
 
-### Anti-Pattern 3: Capability Checks Inside Plugin `open()`
+### Leaking libghostty through the shared core
 
-**What people do:** `if (!which("tmux")) return null` inside the plugin's open() method.
+Upstream APIs are still evolving. Passing upstream handles/types across the app ABI expands the blast radius of every pin update. The native adapter is the only code that knows libghostty symbols.
 
-**Why it's wrong:** Doctor cannot report missing capabilities until the user actually tries to open a workspace. Errors surface at the wrong time with no guidance.
+### Premature durable terminal daemon
 
-**Do this instead:** Declare capabilities on the plugin. Doctor checks them upfront on `git-stacks doctor`. `open()` can assume capabilities are met.
+Restoring tabs is not the same as preserving child processes across app exit. State the milestone semantics accurately and defer survivable PTYs until there is an explicit product requirement.
 
----
+## Build Order
 
-### Anti-Pattern 4: Rollbacks Bypassing the `_exec` Injectable Pattern
+1. **Protocol contract and fixtures.** Define v1 hello, errors, workspace/repo/command DTOs, operation states, events, frame limits, compatibility rules, and golden NDJSON fixtures.
+2. **Engine seams and service query slice.** Extract DTO-friendly workspace snapshot/status and command-resolution calls; implement private runtime socket, framing, validation, hello, query methods, and integration tests.
+3. **Long-operation model.** Add operation registry, structured progress adapter around existing callbacks/runner, resource locking, cancellation checkpoints, terminal states, reconnect resync, and malformed/slow-client tests.
+4. **Portable core ABI spike.** Implement IDs/models/reducer/RPC state machine and C harness against fixtures. Fail fast to native per-platform models if the ABI adds unacceptable schedule risk.
+5. **Linux lifecycle and navigation shell.** GtkApplication uniqueness, service startup/connect/reconnect, workspace/repo navigation, state persistence, and error/operation presentation without terminals first.
+6. **Pinned libghostty Linux adapter and one terminal.** Prove create/render/input/resize/clipboard/child-exit, then add the client session registry and workspace-bound persistent tabs.
+7. **Named commands and attention vertical slice.** Resolve launch specs through the service, own PTYs in the client, route structured attention to workspace/repo/surface, and validate no output scraping.
+8. **Linux packaging/lifecycle hardening.** User systemd socket activation plus app-managed fallback, desktop metadata, dependency/runtime checks, crash/restart and shutdown-job behavior.
+9. **macOS architectural proof.** Reuse protocol fixtures and Zig ABI, implement SwiftUI state binding and one libghostty surface, verify service lifecycle and attention routing; defer polish and parity.
 
-**What people do:** Rollback closures call real side effects directly with production imports rather than through the injectable `_exec` object.
+This order establishes the authority and compatibility boundary before UI work, tests portable state before it becomes expensive to change, and validates the riskiest embedding API on Linux before multiplying it across platforms.
 
-**Why it's wrong:** Rollback steps become impossible to test in isolation without real filesystem/git state.
+## Modified Versus New Components
 
-**Do this instead:** Rollback closures capture the same `_exec` object the forward step used. They are testable by the same mock substitution as the forward step.
-
----
-
-## Integration Points Summary
-
-| Boundary | Direction | Notes |
-|----------|-----------|-------|
-| `operation-runner.ts` ← `workspace-lifecycle.ts` | lifecycle calls runner | Runner is a pure utility with no domain imports |
-| `config-index.ts` ← `config.ts` | config.ts delegates | Index has no knowledge of Zod schemas; config.ts owns parsing |
-| `integrations/types.ts` ← all 10 plugins | plugins implement interface | Additive — existing plugins need capabilities and isolatedFailure added |
-| `integrations/runner.ts` uses `isolatedFailure` | runner reads plugin property | No new dependency; runner already imports Integration interface |
-| `doctor.ts` ← `integrations/types.ts` | doctor reads `capabilities` | Reduces ad-hoc binary checks to a loop over declared capabilities |
-| `label.ts` ← `config.ts` | label command reads/writes templates | `readTemplate()`/`writeTemplate()` already exist; label command needs template-path variant |
-| `workspace-clone.ts` ← `config.ts` | clone reads source labels | `source.labels` is already present in parsed Workspace; one-line addition |
-
----
+| Kind | Components |
+|---|---|
+| Modified | TypeScript workspace query/status functions for DTO-safe reads; workspace command resolution for launch specs; operation callbacks/runner for structured progress and cooperative cancellation checkpoints; messages/agent hooks for structured attention; CLI program to expose service mode; packaging/build scripts |
+| New | Protocol v1 schemas/fixtures; Bun Unix-socket service/router/connection/operation/event modules; portable Zig core and C ABI; GTK4/libadwaita app; platform libghostty adapters; client terminal session registry; Linux user service/desktop packaging; SwiftUI proof |
+| Explicitly unchanged in authority | YAML config/index and schemas, CLI commands, OpenTUI dashboard, workspace lifecycle/git/files semantics, external integration ownership outside the new embedded client |
 
 ## Sources
 
-- `/home/nnex/dev/prj/git-stacks/src/lib/config.ts` — Zod schemas and scan-based I/O (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/types.ts` — Integration interface (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/integrations/runner.ts` — orchestration logic (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/workspace-lifecycle.ts` — lifecycle step composition (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/lib/observability.ts` — logtape wrapper (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/tui/workspace-wizard.ts` — existing label propagation at lines 390-391 (direct read)
-- `/home/nnex/dev/prj/git-stacks/src/commands/label.ts` — current workspace-only label commands (direct read)
-- `/home/nnex/dev/prj/git-stacks/PROJECT-DIRECTION.md` — author architectural intent (direct read)
-- `/home/nnex/dev/prj/git-stacks/.planning/PROJECT.md` — v0.17.0 milestone requirements (direct read)
+- [JSON-RPC 2.0 Specification](https://www.jsonrpc.org/specification) — transport independence, IDs, errors, notifications, and response ordering (HIGH)
+- [Ghostty repository and libghostty status](https://github.com/ghostty-org/ghostty) — shared Zig core, native GTK/SwiftUI shells, embeddable C/Zig API, examples, and untagged/in-flux libghostty API (HIGH)
+- [Ghostty 1.3 release notes](https://ghostty.org/docs/install/release-notes/1-3-0) — standalone libghostty extraction and independent, not-yet-versioned release status (HIGH)
+- [Ghostling](https://github.com/ghostty-org/ghostling) — official minimal C consumer illustrating the narrow embedding boundary (HIGH)
+- [Gio.Application](https://docs.gtk.org/gio/class.Application.html) and [Gtk.Application](https://docs.gtk.org/gtk4/class.Application.html) — primary-instance routing, lifecycle, windows, and state saving (HIGH)
+- [systemd.socket](https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html) and [systemd service activation](https://www.freedesktop.org/software/systemd/man/latest/daemon.html) — user socket activation and descriptor-based daemon startup (HIGH)
+- [Apple `launch_activate_socket`](https://developer.apple.com/documentation/xpc/launch_activate_socket) — launchd-provided listening descriptors (HIGH)
+- [Zig language reference: exporting a C library](https://ziglang.org/documentation/master/#Exporting-a-C-Library) — C ABI export and shared/static library support (HIGH)
+- Repo evidence: `.planning/spikes/003-tmux-control-plane/README.md`, `src/lib/messages.ts`, `src/tui/dashboard/run.tsx`, `src/lib/workspace-command.ts`, and `src/lib/operation-runner.ts` — validated structured-attention direction and reusable local framing, command-resolution, and rollback seams (HIGH)
 
 ---
-
-*Architecture research for: git-stacks v0.17.0 Engine Hardening & Template Labels*
-*Researched: 2026-04-05*
+*Architecture research for: git-stacks v0.20.0 Native Workspace Client*
+*Researched: 2026-07-11*
