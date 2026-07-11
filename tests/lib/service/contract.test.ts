@@ -3,6 +3,7 @@ import { readFileSync } from "fs"
 import { join } from "path"
 import {
   DiscoveryResponseSchema,
+  ErrorCodeSchema,
   ErrorEnvelopeSchema,
   ServiceEventSchema,
   WorkspaceSnapshotResponseSchema,
@@ -34,5 +35,15 @@ describe("service v1 contract", () => {
     expect(ErrorEnvelopeSchema.parse(base)).toEqual(base)
     expect(() => ErrorEnvelopeSchema.parse({ ...base, stack: "secret" })).toThrow()
     expect(() => ErrorEnvelopeSchema.parse({ ...base, error: { ...base.error, credential: "bearer" } })).toThrow()
+  })
+
+  test("closes request timeout errors over the strict golden envelope", () => {
+    const timeout = fixture("request-timeout-error.json")
+    expect(ErrorEnvelopeSchema.parse(timeout)).toEqual(timeout)
+    expect(ErrorCodeSchema.parse("request_timeout")).toBe("request_timeout")
+    expect(() => ErrorEnvelopeSchema.parse({ ...(timeout as object), details: "late adapter text" })).toThrow()
+    const envelope = timeout as { error: Record<string, unknown> }
+    expect(() => ErrorEnvelopeSchema.parse({ ...envelope, error: { ...envelope.error, code: "handler_timeout" } })).toThrow()
+    expect(() => ErrorEnvelopeSchema.parse({ ...envelope, error: { ...envelope.error, stack: "secret" } })).toThrow()
   })
 })

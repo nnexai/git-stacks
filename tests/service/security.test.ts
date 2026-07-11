@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { rmSync } from "fs"
+import { readFileSync, rmSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
 import {
@@ -8,6 +8,8 @@ import {
   revokeCredential,
   UNAUTHENTICATED_RESPONSE,
 } from "../../src/lib/service/credentials"
+import { ErrorEnvelopeSchema } from "../../src/lib/service/contract"
+import { startServiceServer } from "../../src/service/server"
 
 const roots: string[] = []
 function root(): string {
@@ -71,5 +73,79 @@ describe("service authentication admission", () => {
       client: { clientId: "linux", capabilities: ["service:v1"] },
     })
     expect(JSON.stringify(authenticateAdmission(`Bearer ${issued.token}`, { serviceRoot }))).not.toContain(issued.token)
+  })
+
+  test("times out stalled ordinary handlers, contains late work, and recovers", async () => {
+    const serviceRoot = root()
+    const credential = provisionOfficialClient("deadline-client", { serviceRoot })
+    let calls = 0
+    let release!: () => void
+    const stalled = new Promise<void>((resolve) => { release = resolve })
+    const service = startServiceServer({
+      serviceRoot,
+      handlerTimeoutMs: 20,
+      snapshot: {
+        buildAll: async () => {
+          calls += 1
+          if (calls === 1) await stalled
+          return []
+        },
+        buildWorkspace: async () => { throw new Error("unused adapter secret") },
+      },
+    })
+    try {
+      const headers = { authorization: `Bearer ${credential.token}` }
+      const response = await fetch(new URL("/v1/snapshot", service.url), { headers, signal: AbortSignal.timeout(1_000) })
+      expect(response.status).toBe(504)
+      const received = await response.json()
+      expect(ErrorEnvelopeSchema.parse(received)).toEqual(received)
+      const golden = JSON.parse(readFileSync(join(import.meta.dir, "../fixtures/service-v1/request-timeout-error.json"), "utf8"))
+      expect(received).toEqual({ ...golden, request_id: received.request_id })
+      expect(JSON.stringify(received)).not.toContain("adapter secret")
+
+      release()
+      await Bun.sleep(5)
+      const discovery = await fetch(new URL("/v1", service.url), { headers })
+      expect(discovery.status).toBe(200)
+      const recovered = await fetch(new URL("/v1/snapshot", service.url), { headers })
+      expect(recovered.status).toBe(200)
+      expect(await recovered.json()).toMatchObject({ ok: true, data: [] })
+    } finally {
+      release()
+      await service.stop()
+    }
+  })
+
+  test("keeps SSE exempt from the ordinary handler deadline", async () => {
+    const serviceRoot = root()
+    const credential = provisionOfficialClient("sse-deadline-client", { serviceRoot })
+    let closed = false
+    const subscription = {
+      diagnostics: { queuedEvents: 0, queuedBytes: 0, reservedEvents: 0, reservedBytes: 0, combinedEvents: 0, combinedBytes: 0, closed: false },
+      peek: () => undefined,
+      reserve: () => undefined,
+      ack: () => {},
+      waitForAvailable: () => new Promise<void>(() => {}),
+      onClosed: () => () => {},
+      close: () => { closed = true },
+    }
+    const service = startServiceServer({
+      serviceRoot,
+      handlerTimeoutMs: 20,
+      heartbeatMs: 10,
+      snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
+      broker: { subscribe: async () => subscription, close: () => {} } as never,
+    })
+    try {
+      const response = await fetch(new URL("/v1/events?cursor=0", service.url), { headers: { authorization: `Bearer ${credential.token}` } })
+      expect(response.status).toBe(200)
+      const reader = response.body!.getReader()
+      await Bun.sleep(50)
+      expect((await reader.read()).done).toBe(false)
+      expect(closed).toBe(false)
+      await reader.cancel()
+    } finally {
+      await service.stop()
+    }
   })
 })
