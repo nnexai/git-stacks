@@ -26,7 +26,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
   4. A reconnecting client receives ordered operation and attention events from retained history, or detects a replay gap and rebuilds from an authoritative snapshot.
   5. Existing CLI and OpenTUI workflows remain compatible, and slow or disconnected event consumers cannot grow service memory without bound.
 
-**Plans**: 8/9 plans executed
+**Plans**: 9/9 plans complete
 
 - [x] 104-01-PLAN.md
 - [x] 104-02-PLAN.md
@@ -36,7 +36,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 - [x] 104-06-PLAN.md
 - [x] 104-07-PLAN.md
 - [x] 104-08-PLAN.md
-- [ ] 104-09-PLAN.md
+- [x] 104-09-PLAN.md
 
 Wave 1:
 
@@ -59,8 +59,8 @@ Wave 4 *(blocked on Wave 3 completion)*:
 Wave 5 *(verification gap closure)*:
 
 - [x] 104-07 — Compose attention publication and authoritative replay revisions
-- [ ] 104-08 — Enforce bounded SSE transport backpressure
-- [ ] 104-09 — Enforce ordinary request execution deadlines
+- [x] 104-08 — Enforce bounded SSE transport backpressure
+- [x] 104-09 — Enforce ordinary request execution deadlines
 
 ### Phase 105: Shared Native Model and Terminal Foundation
 
@@ -116,7 +116,7 @@ Wave 5 *(verification gap closure)*:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 104. Workspace Service and Event Contract | 8/9 | In Progress | - |
+| 104. Workspace Service and Event Contract | 9/9 | Complete   | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 0/TBD | Not started | - |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |

@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 104
 current_phase_name: Workspace Service and Event Contract
 status: executing
-stopped_at: Completed 104-08-PLAN.md
-last_updated: "2026-07-11T12:53:39.401Z"
+stopped_at: Completed 104-09-PLAN.md
+last_updated: "2026-07-11T12:58:15.905Z"
 last_activity: 2026-07-11
-last_activity_desc: Enforced bounded exactly-once SSE transport accounting
+last_activity_desc: Enforced ordinary handler execution deadlines
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 14
-  completed_plans: 8
-  percent: 57
+  completed_plans: 9
+  percent: 64
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 104 (Workspace Service and Event Contract) — VERIFYING
-Plan: 8 of 9
-Status: Verification gap closure in progress
-Last activity: 2026-07-11 — Enforced bounded exactly-once SSE transport accounting
+Phase: 104 (Workspace Service and Event Contract) — COMPLETE
+Plan: 9 of 9
+Status: Verification gaps closed; ready for final phase verification
+Last activity: 2026-07-11 — Enforced ordinary handler execution deadlines
 
-Progress: [██████░░░░] 57%
+Progress: [██████░░░░] 64%
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████░░░░] 57%
 | Phase 104 P06 | 10min | 2 tasks | 9 files |
 | Phase 104 P07 | 2min | 2 tasks | 7 files |
 | Phase 104 P08 | 8min | 2 tasks | 4 files |
+| Phase 104 P09 | 2min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Service descriptors carry endpoint and instance metadata plus a credential lookup identity, never bearer secrets. — Enables automatic protected discovery without secret duplication.
 - [Phase 104]: Service commands register through the shared live Commander tree. — Keeps completion and release inventory aligned with the executable CLI.
 - [Phase 104]: Managed attention publication uses ownership-aware disposal and snapshot-owned revision callbacks. — Prevents one service from detaching another and makes replay-gap rebuild metadata authoritative.
+- [Phase 104]: Only the private ordinary execution-deadline sentinel maps to request_timeout; SSE remains exempt. — Preserves generic adapter failures and long-lived event streams while enforcing SVC-05.
 
 ### Pending Todos
 
@@ -98,6 +100,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T12:53:39.392Z
-Stopped at: Completed 104-08-PLAN.md
+Last session: 2026-07-11T12:58:15.886Z
+Stopped at: Completed 104-09-PLAN.md
 Resume file: None
