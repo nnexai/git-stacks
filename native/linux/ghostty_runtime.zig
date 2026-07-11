@@ -1,4 +1,5 @@
 const std = @import("std");
+const clipboard = @import("ghostty_clipboard");
 const c = @cImport({
     @cInclude("ghostty.h");
     @cInclude("glib.h");
@@ -28,6 +29,13 @@ pub const Runtime = struct {
     tick_source: c.guint = 0,
     wakeup_pending: bool = false,
     shutting_down: bool = false,
+    next_surface_number: u64 = 1,
+
+    pub fn allocateSurfaceNumber(self: *Runtime) u64 {
+        const value = self.next_surface_number;
+        self.next_surface_number +%= 1;
+        return value;
+    }
 
     pub fn init(allocator: std.mem.Allocator) !*Runtime {
         const self = try allocator.create(Runtime);
@@ -131,12 +139,20 @@ fn action(app: c.ghostty_app_t, target: c.ghostty_target_s, value: c.ghostty_act
     return true;
 }
 
-fn clipboardHasText(_: ?*anyopaque, _: c.ghostty_clipboard_e) callconv(.c) bool {
-    return false;
+fn clipboardHasText(userdata: ?*anyopaque, kind: c.ghostty_clipboard_e) callconv(.c) bool {
+    return clipboard.hasText(userdata, @intCast(kind));
 }
-fn readClipboard(_: ?*anyopaque, _: c.ghostty_clipboard_e, _: ?*anyopaque) callconv(.c) void {}
-fn confirmReadClipboard(_: ?*anyopaque, _: ?[*:0]const u8, _: ?*anyopaque, _: c.ghostty_clipboard_request_e) callconv(.c) void {}
-fn writeClipboard(_: ?*anyopaque, _: c.ghostty_clipboard_e, _: [*c]const c.ghostty_clipboard_content_s, _: usize, _: bool) callconv(.c) void {}
+fn readClipboard(userdata: ?*anyopaque, kind: c.ghostty_clipboard_e, state: ?*anyopaque) callconv(.c) void {
+    clipboard.read(userdata, @intCast(kind), state);
+}
+fn confirmReadClipboard(userdata: ?*anyopaque, text: ?[*:0]const u8, state: ?*anyopaque, request: c.ghostty_clipboard_request_e) callconv(.c) void {
+    clipboard.confirm(userdata, text, state, @intCast(request));
+}
+fn writeClipboard(userdata: ?*anyopaque, kind: c.ghostty_clipboard_e, contents: [*c]const c.ghostty_clipboard_content_s, count: usize, _: bool) callconv(.c) void {
+    if (count == 0 or contents == null) return;
+    clipboard.write(userdata, @intCast(kind), contents[0].data);
+}
+
 fn closeSurface(data: ?*anyopaque, _: bool) callconv(.c) void {
     // Surface userdata is generation-tagged and remains allocated until the
     // GTK destroy path detaches it, making a late close request harmless.

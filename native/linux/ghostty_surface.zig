@@ -1,5 +1,7 @@
 const std = @import("std");
 const runtime_mod = @import("ghostty_runtime");
+const clipboard = @import("ghostty_clipboard");
+const input_mod = @import("ghostty_input");
 const process_control = @import("ghostty_process_control");
 const guard = @import("guard");
 const c = @cImport({
@@ -19,12 +21,30 @@ pub const Surface = struct {
     controller: ?process_control.Controller = null,
     registry: *guard.Registry,
     registration_source: c.guint = 0,
+    clipboard_context: *clipboard.Context,
+    input: input_mod.Input,
+    surface_id: [36]u8,
 
     pub fn create(runtime: *runtime_mod.Runtime, registry: *guard.Registry) !*Surface {
         const self = try runtime.allocator.create(Surface);
         errdefer runtime.allocator.destroy(self);
         const area = c.gtk_gl_area_new() orelse return error.GtkGlAreaFailed;
-        self.* = .{ .runtime = runtime, .area = @ptrCast(area), .registry = registry };
+        self.* = undefined;
+        self.runtime = runtime;
+        self.area = @ptrCast(area);
+        self.surface = null;
+        self.generation = 1;
+        self.realized = false;
+        self.destroyed = false;
+        self.draw_count = 0;
+        self.controller = null;
+        self.registry = registry;
+        self.registration_source = 0;
+        _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
+        self.clipboard_context = try clipboard.Context.create(runtime.allocator, @ptrCast(self.area), self.generation);
+        errdefer runtime.allocator.destroy(self.clipboard_context);
+        self.input = try input_mod.Input.install(self.clipboard_context);
+        c.g_object_set_data(@ptrCast(self.area), "git-stacks-ime", self.input.ime);
         c.gtk_gl_area_set_required_version(self.area, 3, 3);
         c.gtk_gl_area_set_has_depth_buffer(self.area, 1);
         c.gtk_gl_area_set_has_stencil_buffer(self.area, 1);
@@ -50,11 +70,18 @@ pub const Surface = struct {
     pub fn size(self: *Surface) c.ghostty_surface_size_s {
         return if (self.surface) |surface| c.ghostty_surface_size(surface) else std.mem.zeroes(c.ghostty_surface_size_s);
     }
+    pub fn sendText(self: *Surface, text: []const u8) void {
+        if (self.surface) |surface| c.ghostty_surface_text(surface, text.ptr, text.len);
+    }
+    pub fn isLive(self: *Surface) bool {
+        return !self.destroyed and self.surface != null and self.controller != null and self.controller.?.registration != null;
+    }
 
     pub fn destroy(self: *Surface) void {
         if (self.destroyed) return;
         self.destroyed = true;
         self.teardownSurface();
+        self.input.deinit();
         const allocator = self.runtime.allocator;
         allocator.destroy(self);
     }
@@ -72,7 +99,7 @@ pub const Surface = struct {
         // pointer-sized payload.
         cfg.platform_tag = 3;
         cfg.platform = std.mem.zeroes(c.ghostty_platform_u);
-        cfg.userdata = self;
+        cfg.userdata = self.clipboard_context;
         cfg.scale_factor = @floatFromInt(c.gtk_widget_get_scale_factor(@ptrCast(self.area)));
         cfg.context = c.GHOSTTY_SURFACE_CONTEXT_WINDOW;
         self.surface = c.ghostty_surface_new(self.runtime.app, &cfg);
@@ -80,11 +107,14 @@ pub const Surface = struct {
             std.debug.print("native Ghostty surface creation failed\n", .{});
             return;
         };
+        self.clipboard_context.surface = surface;
+        self.clipboard_context.alive = true;
+        self.clipboard_context.generation = self.generation;
         self.controller = .{
             .api = process_control.productionApi(surface),
             .registry = .{ .context = self.registry, .register_fn = register, .unregister_fn = unregister },
             .clock = .{ .context = self, .sleep_fn = sleep },
-            .surface_id = "00000000-0000-4000-8000-000000000105".*,
+            .surface_id = self.surface_id,
             .generation = self.generation,
             .client_pgid = @intCast(c.getpgrp()),
             .guard_pgid = -1,
@@ -130,6 +160,7 @@ pub const Surface = struct {
         if (self.realized and self.current()) c.ghostty_surface_display_unrealized(surface);
         self.realized = false;
         self.runtime.detach(surface);
+        clipboard.invalidate(self.clipboard_context);
         c.ghostty_surface_free(surface);
         self.surface = null;
         self.generation +%= 1;
@@ -144,6 +175,7 @@ pub const Surface = struct {
         if (!self.current()) return;
         c.ghostty_surface_set_content_scale(surface, @floatFromInt(scale), @floatFromInt(scale));
         c.ghostty_surface_set_size(surface, @intCast(width * @as(c_int, @intCast(scale))), @intCast(height * @as(c_int, @intCast(scale))));
+        self.input.updateImePoint();
     }
 };
 
@@ -214,11 +246,17 @@ fn onUnrealize(_: ?*c.GtkGLArea, data: ?*anyopaque) callconv(.c) void {
 }
 fn onFocusEnter(_: ?*c.GtkEventControllerFocus, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));
-    if (self.surface) |surface| c.ghostty_surface_set_focus(surface, true);
+    if (self.surface) |surface| {
+        c.ghostty_surface_set_focus(surface, true);
+        self.input.focusIn();
+    }
 }
 fn onFocusLeave(_: ?*c.GtkEventControllerFocus, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));
-    if (self.surface) |surface| c.ghostty_surface_set_focus(surface, false);
+    if (self.surface) |surface| {
+        c.ghostty_surface_set_focus(surface, false);
+        self.input.focusOut();
+    }
 }
 fn onDestroy(_: ?*c.GtkWidget, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));

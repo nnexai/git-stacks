@@ -33,13 +33,23 @@ pub fn build(b: *std.Build) void {
     app_module.addRPath(library_dir);
     app_module.addCSourceFile(.{ .file = .{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "src", "gl.c" }) }, .flags = &.{} });
     app_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "include" }) });
+    const clipboard_module = b.createModule(.{ .root_source_file = b.path("linux/ghostty_clipboard.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
+    clipboard_module.addIncludePath(include_dir);
+    clipboard_module.linkSystemLibrary("gtk4", .{ .use_pkg_config = .force });
+    const input_module = b.createModule(.{ .root_source_file = b.path("linux/ghostty_input.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
+    input_module.addImport("ghostty_clipboard", clipboard_module);
+    input_module.addIncludePath(include_dir);
+    input_module.linkSystemLibrary("gtk4", .{ .use_pkg_config = .force });
     const runtime_module = b.createModule(.{ .root_source_file = b.path("linux/ghostty_runtime.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
+    runtime_module.addImport("ghostty_clipboard", clipboard_module);
     runtime_module.addIncludePath(include_dir);
     runtime_module.addLibraryPath(library_dir);
     runtime_module.addRPath(library_dir);
     runtime_module.linkSystemLibrary("gtk4", .{ .use_pkg_config = .force });
     const surface_module = b.createModule(.{ .root_source_file = b.path("linux/ghostty_surface.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
     surface_module.addImport("ghostty_runtime", runtime_module);
+    surface_module.addImport("ghostty_clipboard", clipboard_module);
+    surface_module.addImport("ghostty_input", input_module);
     const app_guard_module = b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") });
     const app_reducer_module = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
     const app_process_module = b.createModule(.{ .root_source_file = b.path("terminal/ghostty_process_control.zig") });
@@ -72,6 +82,18 @@ pub fn build(b: *std.Build) void {
     surface_tests.linkSystemLibrary("gtk4");
     const surface_step = b.step("surface-test", "Run embedded Ghostty runtime and surface lifecycle tests");
     surface_step.dependOn(&b.addRunArtifact(surface_tests).step);
+
+    const interaction_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_interaction_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    interaction_test_module.addImport("ghostty_clipboard", clipboard_module);
+    interaction_test_module.addIncludePath(include_dir);
+    interaction_test_module.addLibraryPath(library_dir);
+    interaction_test_module.addRPath(library_dir);
+    const interaction_tests = b.addTest(.{ .root_module = interaction_test_module });
+    interaction_tests.linkLibC();
+    interaction_tests.linkSystemLibrary("ghostty");
+    interaction_tests.linkSystemLibrary("gtk4");
+    const interaction_step = b.step("interaction-test", "Run Ghostty interaction and generation-isolation tests");
+    interaction_step.dependOn(&b.addRunArtifact(interaction_tests).step);
 
     const model = b.addLibrary(.{
         .name = "git_stacks_native_v1",
