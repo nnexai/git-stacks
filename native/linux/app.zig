@@ -277,6 +277,16 @@ fn reduceReplayFrame(data: ?*anyopaque) callconv(.c) c.gboolean {
     refreshProjection(dispatch.state);
     return c.G_SOURCE_REMOVE;
 }
+fn refreshSnapshotIdle(data: ?*anyopaque) callconv(.c) c.gboolean {
+    const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
+    if (state.cleaned) return c.G_SOURCE_REMOVE;
+    state.graph.refreshSnapshot() catch |err| {
+        std.debug.print("native workspace refresh failed: {s}\n", .{@errorName(err)});
+        return c.G_SOURCE_REMOVE;
+    };
+    refreshProjection(state);
+    return c.G_SOURCE_REMOVE;
+}
 fn replayWorker(state: *State) void {
     var transport = @import("service_client").HttpTransport.init(state.graph.allocator);
     defer {
@@ -286,6 +296,7 @@ fn replayWorker(state: *State) void {
     client.begin();
     client.revision = state.graph.service.revision;
     client.sequence = state.graph.service.sequence;
+    var leases: u8 = 0;
     while (!state.replay_cancel.load(.acquire)) {
         var cursor: [20]u8 = undefined;
         const request = client.eventsRequest(&cursor) catch break;
@@ -325,6 +336,12 @@ fn replayWorker(state: *State) void {
             _ = c.g_main_context_invoke(null, @ptrCast(&reduceReplayFrame), dispatch);
         }
         client.attempt = 0;
+        leases +%= 1;
+        // TUI/CLI workspace mutations can bypass the service journal. A
+        // bounded authoritative refresh reconciles them promptly and also
+        // recovers missed invalidation events.
+        if (leases % 5 == 0 and !state.replay_cancel.load(.acquire))
+            _ = c.g_main_context_invoke(null, @ptrCast(&refreshSnapshotIdle), state);
     }
 }
 
@@ -355,14 +372,18 @@ fn terminalTeardown(context: *anyopaque, _: i32, _: u64) !void {
     scheduleTerminalDestroy(surface);
 }
 fn terminalExited(context: *anyopaque, _: i32, _: u64) !void {
-    const surface: *surface_mod.Surface = @ptrCast(@alignCast(context));
-    scheduleTerminalDestroy(surface);
+    // A naturally exited process no longer owns a registry entry, but its
+    // Ghostty surface remains attached so the user can read scrollback and
+    // explicitly relaunch or remove the ended session.
+    _ = context;
 }
 fn terminalDestroy(_: *anyopaque) void {}
 fn surfaceExited(context:*anyopaque,id:model.Id)void{
     const state:*State=@ptrCast(@alignCast(context));
     const loc=model.surfaceLocation(&state.graph.state,id) orelse return;
     state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle=.ended;
+    state.graph.terminals.childExited(id) catch |err| if (err != error.UnknownSurface)
+        std.debug.print("native terminal exit detach failed: {s}\n", .{@errorName(err)});
     savePresentation(state);refreshProjection(state);
 }
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
@@ -470,11 +491,19 @@ fn refreshProjection(state: *State) void {
     }
     if (state.workspace_list) |list| {
         clearList(list);
+        for (0..2) |section| {
+        if (section == 0 and state.graph.state.pin_count > 0) {
+            const pinned_heading = c.gtk_label_new("Pinned") orelse continue;
+            c.gtk_label_set_xalign(@ptrCast(pinned_heading), 0);
+            c.gtk_widget_add_css_class(pinned_heading, "caption-heading");
+            c.gtk_list_box_append(list, pinned_heading);
+        }
         for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |ws| {
             const pinned = blk: {
                 for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, &ws.id)) break :blk true;
                 break :blk false;
             };
+            if ((section == 0) != pinned) continue;
             var heading: [96:0]u8 = [_:0]u8{0} ** 96;
             const title = std.fmt.bufPrintZ(&heading, "{s}{s}", .{ if (pinned) "★ " else "", if(ws.name_len>0)ws.name[0..ws.name_len] else ws.id[0..8] }) catch continue;
             const header = c.gtk_label_new(title.ptr) orelse continue;
@@ -523,6 +552,7 @@ fn refreshProjection(state: *State) void {
                 c.gtk_list_box_append(list, row);
             }
         }
+        }
     }
     if (state.tab_view) |tabs| {
         const view = workspace_view.View{ .state = &state.graph.state };
@@ -546,11 +576,11 @@ fn refreshProjection(state: *State) void {
                     const relaunch = c.gtk_button_new_with_label("Relaunch") orelse continue;
                     var action: [96:0]u8 = [_:0]u8{0} ** 96;
                     const detailed = std.fmt.bufPrintZ(&action, "win.relaunch-tab('{s}')", .{surface.id}) catch continue;
-                    c.gtk_actionable_set_action_name(@ptrCast(relaunch), detailed.ptr); c.gtk_box_append(@ptrCast(ended), relaunch);
+                    c.gtk_actionable_set_detailed_action_name(@ptrCast(relaunch), detailed.ptr); c.gtk_box_append(@ptrCast(ended), relaunch);
                     const remove = c.gtk_button_new_with_label("Remove") orelse continue;
                     var remove_action: [96:0]u8 = [_:0]u8{0} ** 96;
                     const remove_detailed = std.fmt.bufPrintZ(&remove_action, "win.remove-tab('{s}')", .{surface.id}) catch continue;
-                    c.gtk_actionable_set_action_name(@ptrCast(remove), remove_detailed.ptr); c.gtk_widget_add_css_class(remove, "destructive-action"); c.gtk_box_append(@ptrCast(ended), remove);
+                    c.gtk_actionable_set_detailed_action_name(@ptrCast(remove), remove_detailed.ptr); c.gtk_widget_add_css_class(remove, "destructive-action"); c.gtk_box_append(@ptrCast(ended), remove);
                     const sid = std.heap.c_allocator.create(model.Id) catch continue; sid.* = surface.id;
                     c.g_object_set_data_full(@ptrCast(ended), "git-stacks-surface", sid, @ptrCast(&freeId));
                     page = c.adw_tab_view_append(tabs, ended);
@@ -642,17 +672,18 @@ fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyop
     const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse return 0;
     const id: *model.Id = @ptrCast(@alignCast(ptr));
     const loc = model.surfaceLocation(&state.graph.state, id.*) orelse return 0;
-    if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle == .ended) {
-        (workspace_view.View{ .state = &state.graph.state }).removeTab(id.*) catch return 1;
-        savePresentation(state); return 0;
+    const lifecycle = state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle;
+    // Every explicit UI close means remove the tab. Natural child exit is the
+    // only transition that retains an ended presentation and its scrollback.
+    if (lifecycle == .live) state.graph.terminals.close(id.*) catch |err| if (err != error.UnknownSurface)
+        std.debug.print("native terminal close failed: {s}\n", .{@errorName(err)});
+    if (lifecycle == .ended) {
+        // Natural exit retained the Surface outside the process registry.
+        for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |terminal|
+            if (std.mem.eql(u8, &terminal.surface_id, id)) scheduleTerminalDestroy(terminal);
     }
-    // This callback is already inside close_page; recursively requesting the
-    // same close is ignored by libadwaita and leaves the page permanently in
-    // "waiting for finish" state. Complete the model/process transaction and
-    // explicitly finish this pending close instead.
-    (workspace_view.View{ .state = &state.graph.state }).closeTab(id.*) catch return 1;
     forgetTerminal(state, id.*);
-    state.graph.terminals.close(id.*) catch {};
+    (workspace_view.View{ .state = &state.graph.state }).removeTab(id.*) catch return 1;
     savePresentation(state);
     c.adw_tab_view_close_page_finish(view, selected_page, 1);
     refreshProjection(state);
@@ -864,6 +895,9 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
                 break;
             }
         }
+        for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |old_surface|
+            if (std.mem.eql(u8, &old_surface.surface_id, &old_id)) scheduleTerminalDestroy(old_surface);
+        forgetTerminal(state, old_id);
     }
     c.adw_tab_page_set_loading(provisional, 0);
     refreshProjection(state);
@@ -948,16 +982,12 @@ fn forgetTerminal(state: *State, id: model.Id) void {
     };
 }
 fn closeTerminal(state: *State, id: model.Id) void {
-    (workspace_view.View{ .state = &state.graph.state }).closeTab(id) catch return;
     if (state.tab_view) |tabs| for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
         const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
         const child = c.adw_tab_page_get_child(page) orelse continue;
         const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
-        if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { state.programmatic_tab_close = true; c.adw_tab_view_close_page(tabs, page); state.programmatic_tab_close = false; break; }
+        if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_close_page(tabs, page); break; }
     };
-    forgetTerminal(state, id);
-    state.graph.terminals.close(id) catch {};
-    savePresentation(state);
 }
 fn focusTerminal(state: *State, requested: ?model.Id) void {
     var target = requested;
@@ -1013,20 +1043,16 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
         if (state.graph.state.surface) |s| closeTerminal(state, s.id);
     } else if (std.mem.eql(u8, name, "remove-tab")) {
         if (variantId(parameter)) |id| {
-            view.removeTab(id) catch return;
             if (state.tab_view) |tabs| for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
                 const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
                 const child = c.adw_tab_page_get_child(page) orelse continue;
                 const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
                 if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_close_page(tabs, page); break; }
             };
-            savePresentation(state); refreshProjection(state);
         }
     } else if (std.mem.eql(u8, name, "remove-current")) {
-        if (state.graph.state.surface) |surface| {
-            view.removeTab(surface.id) catch return;
+        if (state.graph.state.surface != null) {
             if(state.tab_view)|tabs|if(c.adw_tab_view_get_selected_page(tabs))|page|c.adw_tab_view_close_page(tabs,page);
-            savePresentation(state); refreshProjection(state);
         }
     } else if (std.mem.eql(u8, name, "relaunch-tab")) {
         if (variantId(parameter)) |id| _ = createTerminal(state, null, id);
@@ -1055,7 +1081,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
             if (id_str.len == 36) {
                 var id: model.Id = undefined;
                 @memcpy(&id, id_str);
-                view.pin(id) catch {};
+                view.pin(id) catch |err| { showLauncherError(state, @errorName(err)); return; };
                 savePresentation(state);
             }
         }
@@ -1344,7 +1370,7 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             return 1;
         },
         2 => {
-            if (state.terminal_count < 3 or state.graph.terminals.hosts.items.len < 3) return 1;
+            if (state.terminal_count < 3) return 1;
             const second = state.ui_smoke_ids[1] orelse return c.G_SOURCE_REMOVE;
             var select_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(select_text[0..36], &second);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(select_text[0..36 :0].ptr));
@@ -1369,54 +1395,50 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             state.ui_smoke_stage = 3; return 1;
         },
         3 => {
-            if (state.terminal_count < 4 or state.graph.terminals.hosts.items.len < 4) return 1;
-            const closed = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
+            if (state.terminal_count < 4) return 1;
+            const naturally_ended = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
+            const ended_loc = model.surfaceLocation(&state.graph.state, naturally_ended) orelse return 1;
+            if (state.graph.state.pairs[ended_loc.pair].surfaces[ended_loc.surface].lifecycle != .ended) return 1;
+            var ended_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(ended_text[0..36], &naturally_ended);
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "remove-tab", c.g_variant_new_string(ended_text[0..36 :0].ptr));
+            if (model.surfaceLocation(&state.graph.state, naturally_ended) != null) return 1;
+            const closed = state.ui_smoke_ids[1] orelse return c.G_SOURCE_REMOVE;
             var selected_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(selected_text[0..36], &closed);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(selected_text[0..36 :0].ptr));
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "close-tab", null);
+            if (model.surfaceLocation(&state.graph.state, closed) != null) return 1;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT close=user-remove x-keyboard-identical=true child-terminated=true natural-exit=ended-visible remove-enabled=true\n", .{});
             state.ui_smoke_stage = 4; return 1;
         },
         4 => {
-            const closed = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
-            const loc = model.surfaceLocation(&state.graph.state, closed) orelse return c.G_SOURCE_REMOVE;
+            const ended = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
+            const loc = model.surfaceLocation(&state.graph.state, ended) orelse return 1;
             if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle != .ended) return 1;
-            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT close=live-safe ended-page=true child-terminated=true\n", .{});
-            var id_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(id_text[0..36], &closed);
+            var id_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(id_text[0..36], &ended);
             state.ui_smoke_stage = 24;
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "relaunch-tab", c.g_variant_new_string(id_text[0..36 :0].ptr));
             state.ui_smoke_ids[4] = if (state.graph.state.surface) |surface| surface.id else return 1;
             state.ui_smoke_stage = 5; return 1;
         },
         5 => {
-            const closed = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
+            const closed = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
             const relaunched = state.ui_smoke_ids[4] orelse return c.G_SOURCE_REMOVE;
             if (std.mem.eql(u8, &closed, &relaunched)) return c.G_SOURCE_REMOVE;
             const relaunch_loc = model.surfaceLocation(&state.graph.state, relaunched) orelse return 1;
             if (state.graph.state.pairs[relaunch_loc.pair].surfaces[relaunch_loc.surface].lifecycle != .live or state.graph.terminals.find(relaunched) == null) return 1;
-            const removable = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
-            const removable_loc = model.surfaceLocation(&state.graph.state, removable) orelse return c.G_SOURCE_REMOVE;
-            if (state.graph.state.pairs[removable_loc.pair].surfaces[removable_loc.surface].lifecycle == .live) {
-                var select_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(select_text[0..36], &removable);
-                c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(select_text[0..36 :0].ptr));
-                c.g_action_group_activate_action(@ptrCast(state.action_group.?), "close-tab", null);
-            }
-            state.ui_smoke_stage = 6; return 1;
+            state.ui_smoke_stage = 7; state.ui_smoke_wait = 0; return 1;
         },
         6 => {
-            const removable = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
-            const loc = model.surfaceLocation(&state.graph.state, removable) orelse return c.G_SOURCE_REMOVE;
-            if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle != .ended) return 1;
-            var id_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(id_text[0..36], &removable);
-            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "remove-tab", c.g_variant_new_string(id_text[0..36 :0].ptr));
-            if (model.surfaceLocation(&state.graph.state, removable) != null) return 1;
-            state.ui_smoke_stage = 7;
-            state.ui_smoke_wait = 0;
             return 1;
         },
         7 => {
             const pages = if(state.tab_view)|tabs|c.adw_tab_view_get_n_pages(tabs) else 0;
             if (pages > 3 or state.ui_smoke_wait < 20) return 1;
-            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed\n", .{pages});
+            const workspace = state.graph.state.workspaces[0];
+            var workspace_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(workspace_text[0..36], &workspace.id);
+            c.g_action_group_activate_action(@ptrCast(state.action_group.?), "pin-workspace", c.g_variant_new_string(workspace_text[0..36 :0].ptr));
+            if (state.graph.state.pin_count != 1) return 1;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed pin=ordered-persisted\n", .{pages});
             std.debug.print("GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered={d} pages={d} launcher=dialog context_menus=true split=paned\n", .{state.graph.terminals.hosts.items.len,pages});
             state.ui_smoke_stage = 8;
             if(state.window)|window|c.gtk_window_close(window);

@@ -18,7 +18,8 @@ test "production application owns background replay and authoritative launch ord
 test "production GTK shell registers widgets actions callbacks and non-presenting replay projection" {
     const source = @embedFile("app.zig");
     const required = [_][]const u8{
-        "adw_navigation_split_view_new",
+        "gtk_paned_new",
+        "adw_tab_view_new",
         "gtk_stack_add_named",
         "gtk_list_box_new",
         "g_simple_action_new",
@@ -30,7 +31,7 @@ test "production GTK shell registers widgets actions callbacks and non-presentin
         "tabClicked",
         "launcherActivated",
         "gtk_search_entry_new",
-        "gtk_popover_popup",
+        "adw_dialog_present",
         "gtk_accessible_update_property",
         "refreshProjection(dispatch.state)",
     };
@@ -51,7 +52,7 @@ pub fn verifyCallbacks() !void {
     }
     const required = [_][]const u8{
         "createTerminal(state, command.id",
-        "state.graph.terminals.close(id)",
+        "state.graph.terminals.close(id.*)",
         "publishRelaunch(old_id, surface.surface_id)",
         "promptRename(state, id)",
         "launchVscode(state)",

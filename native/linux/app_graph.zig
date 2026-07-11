@@ -55,7 +55,23 @@ pub const ProductionGraph = struct {
         const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);
         if(response.status!=200)return error.SnapshotRejected;
         const action=try self.service.decodeAggregateSnapshot(response.body);
+        const previous = self.state;
         self.state=reducer.reduce(self.state,action).state;
+        // Service snapshots own workspace/repository/command truth. Native
+        // presentation (pins, selection and terminal history) is reconciled
+        // by stable identities instead of being erased by every refresh.
+        for (previous.pins[0..previous.pin_count]) |id| if (model.workspaceValid(&self.state, id) and self.state.pin_count < self.state.pins.len) {
+            self.state.pins[self.state.pin_count] = id;
+            self.state.pin_count += 1;
+        };
+        for (previous.pairs[0..previous.pair_count]) |old_pair| if (model.pairIndex(&self.state, old_pair.key)) |index| {
+            self.state.pairs[index].surface_count = old_pair.surface_count;
+            @memcpy(self.state.pairs[index].surfaces[0..old_pair.surface_count], old_pair.surfaces[0..old_pair.surface_count]);
+        };
+        if (previous.selected_pair) |pair| { if (model.pairValid(&self.state, pair)) self.state.selected_pair = pair; }
+        if (previous.last_pair) |pair| { if (model.pairValid(&self.state, pair)) self.state.last_pair = pair; }
+        if (previous.surface) |surface| { if (model.surfaceLocation(&self.state, surface.id) != null) self.state.surface = surface; }
+        self.state.organization_mode = previous.organization_mode;
     }
     pub fn replayOnce(self:*ProductionGraph)!void {
         var cursor:[20]u8=undefined;const request=try self.service.eventsRequest(&cursor);
@@ -64,11 +80,31 @@ pub const ProductionGraph = struct {
     }
 
     pub fn resolveLaunch(self:*ProductionGraph, pair:model.PairKey, command_id:?[]const u8)!service_client.Launch {
-        const request=try self.service.launchRequestAlloc(self.allocator,&pair.workspace_id,&pair.repository_id,command_id);
-        defer self.allocator.free(request.body);
-        const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);
-        const outcome=try self.service.resolveLaunch(response.status,response.body);
-        return switch(outcome){.launch=>|launch|launch,.failure=>error.LaunchRejected,else=>error.InvalidLaunchResponse};
+        for (0..2) |attempt| {
+            var workspace_revision: ?u64 = null;
+            for (self.state.workspaces[0..self.state.workspace_count]) |workspace| if (std.mem.eql(u8, &workspace.id, &pair.workspace_id)) {
+                workspace_revision = workspace.revision;
+                break;
+            };
+            const request=try self.service.launchRequestAlloc(self.allocator,&pair.workspace_id,&pair.repository_id,command_id,workspace_revision orelse return error.UnknownWorkspace);
+            defer self.allocator.free(request.body);
+            const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);
+            const outcome=try self.service.resolveLaunch(response.status,response.body);
+            switch (outcome) {
+                .launch => |launch| return launch,
+                .failure => {
+                    if (attempt == 0 and std.mem.indexOf(u8, response.body, "\"code\":\"conflict\"") != null) {
+                        try self.refreshSnapshot();
+                        continue;
+                    }
+                    if (std.mem.indexOf(u8, response.body, "\"code\":\"not_found\"") != null) return error.LaunchTargetNotFound;
+                    if (std.mem.indexOf(u8, response.body, "\"code\":\"operation_failed\"") != null) return error.LaunchOperationFailed;
+                    return error.LaunchRejected;
+                },
+                else => return error.InvalidLaunchResponse,
+            }
+        }
+        return error.LaunchConflict;
     }
 
     pub fn synchronizeDiscovery(self:*ProductionGraph)!void {

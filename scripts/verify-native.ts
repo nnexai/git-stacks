@@ -466,7 +466,8 @@ async function runInteractiveApp(): Promise<void> {
 async function smokeApp(): Promise<void> {
   const artifact = await buildApp()
   if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable: set DISPLAY/WAYLAND_DISPLAY or install a supported virtual display")
-  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1" } })
+  const configRoot = mkdtempSync(join(tmpdir(), "git-stacks-native-renderer-"))
+  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot, GIT_STACKS_NATIVE_SMOKE: "1" } })
   let timer: ReturnType<typeof setTimeout>
   const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 30_000) })
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout])
@@ -475,29 +476,34 @@ async function smokeApp(): Promise<void> {
   const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
   if (outcome.code !== 0) throw new Error(`production GTK smoke exited ${outcome.code}: ${stderr || stdout}`)
   if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("composition=ghostty-surface") || !stderr.includes("input=ghostty") || !/rows=[1-9]\d* columns=[1-9]\d*/.test(stderr) || !/draws=[1-9]\d*/.test(stderr)) throw new Error(`production Ghostty surface evidence missing: ${stderr || stdout}`)
+  rmSync(configRoot, { recursive: true, force: true })
   console.log(`native GTK smoke passed: backend=${process.env.GDK_BACKEND ?? "auto"} display=${process.env.WAYLAND_DISPLAY ?? process.env.DISPLAY} clean-exit=true`)
 }
 async function smokeTerminal(): Promise<void> {
   const artifact = await buildApp()
   if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable for terminal roundtrip")
-  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_TERMINAL_SMOKE: "1" } })
+  const configRoot = mkdtempSync(join(tmpdir(), "git-stacks-native-terminal-"))
+  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_TERMINAL_SMOKE: "1" } })
   let timer: ReturnType<typeof setTimeout>; const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 45_000) })
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
   if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("renderer=ghostty") || !stderr.includes("input=gtk-controller") || !stderr.includes("ime=gtk-im-context") || !stderr.includes("clipboard=system+primary") || !stderr.includes("alternate_screen=true") || !stderr.includes("unicode=true") || !stderr.includes("term_ghostty=true") || !stderr.includes("truecolor=true") || !stderr.includes("terminfo=true") || !stderr.includes("no_color=false") || !/draws=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible Ghostty interaction/capability roundtrip failed (${outcome.code}): ${stderr}`)
+  rmSync(configRoot, { recursive: true, force: true })
   console.log("native terminal smoke passed: Ghostty PTY/render path accepted input, alternate-screen, Unicode, query, resize, and clean exit")
 }
 
 async function smokeMultisurface(): Promise<void> {
   const artifact = await buildApp()
   if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable for multisurface smoke")
-  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_MULTISURFACE_SMOKE: "1" } })
+  const configRoot = mkdtempSync(join(tmpdir(), "git-stacks-native-multisurface-"))
+  const child = Bun.spawn([artifact], { stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_MULTISURFACE_SMOKE: "1" } })
   let timer: ReturnType<typeof setTimeout>; const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 45_000) })
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("multisurface smoke timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
   if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_MULTISURFACE_READY surfaces=2") || !stderr.includes("ids_distinct=true") || !/left_rows=[1-9]\d* left_columns=[1-9]\d* right_rows=[1-9]\d* right_columns=[1-9]\d*/.test(stderr) || !/left_draws=[1-9]\d* right_draws=[1-9]\d*/.test(stderr) || !stderr.includes("registrations=2")) throw new Error(`independent Ghostty surface evidence missing (${outcome.code}): ${stderr}`)
+  rmSync(configRoot, { recursive: true, force: true })
   console.log("native multisurface smoke passed: two independently identified, sized, rendered, registered Ghostty leaves")
 }
 async function smokeWorkspaceLifecycle(): Promise<void> {
@@ -534,7 +540,7 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
         return {
           resolved: true as const, revision: "1",
           launch: {
-            argv: ["/usr/bin/fish"], cwd: ROOT,
+            argv: request.command_id ? ["/bin/sh", "-lc", "printf 'CONFIGURED_COMMAND_OK\\n'; printf 'CONFIGURED_COMMAND_ERR\\n' >&2; exit 0"] : ["/usr/bin/fish"], cwd: ROOT,
             environment: request.command_id ? { GIT_STACKS_SMOKE_COMMAND: "1" } : {}, ports: {},
             configuration: request.command_id ? { shell: false, command_id: request.command_id } : { shell: true }, redacted: [],
           },
@@ -557,8 +563,9 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
       "action=configured-command distinct=true registered=true tab=true",
       "tabs=select,reorder,rename",
       "launcher=open,search,activate result=true",
-      "close=live-safe ended-page=true child-terminated=true",
+      "close=user-remove x-keyboard-identical=true child-terminated=true natural-exit=ended-visible remove-enabled=true",
       "relaunch=distinct-lineage remove-ended=persisted",
+      "pin=ordered-persisted",
       "context-menu=constructed",
     ]
     if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_WORKSPACE_LIFECYCLE") || checkpoints.some((checkpoint) => !stderr.includes(checkpoint))) throw new Error(`workspace lifecycle evidence missing (${outcome.code}): ${stderr}`)

@@ -317,7 +317,8 @@ fn requestClose(data: *anyopaque, generation: u64) void {
 }
 fn childExit(data: *anyopaque, generation: u64) void {
     const self:*Surface=@ptrCast(@alignCast(data));
-    requestClose(data, generation);
+    // Keep the realized surface visible after process exit so command output
+    // and scrollback remain inspectable on the retained ended page.
     if(!self.destroyed and self.generation==generation)if(self.exit_handler)|handler|handler(self.exit_context orelse return,self.surface_id);
 }
 fn onRealize(_: ?*c.GtkGLArea, data: ?*anyopaque) callconv(.c) void {

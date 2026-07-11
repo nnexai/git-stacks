@@ -126,10 +126,10 @@ pub const Client = struct {
         // shutdown; the worker reconnects with Last-Event-ID after every frame.
         var req = try self.request(.GET, "/v1/events?finite=1", ""); req.last_event_id = cursor; return req;
     }
-    pub fn launchRequestAlloc(self: *Client, allocator: std.mem.Allocator, workspace_id: []const u8, repository_id: []const u8, command_id: ?[]const u8) !Request {
+    pub fn launchRequestAlloc(self: *Client, allocator: std.mem.Allocator, workspace_id: []const u8, repository_id: []const u8, command_id: ?[]const u8, workspace_revision: u64) !Request {
         if (!uuid(workspace_id) or !uuid(repository_id)) return error.InvalidIdentity;
         if (command_id) |id| if (!prefixed(id, "cmd_")) return error.InvalidIdentity;
-        const body = if (command_id) |id| try std.fmt.allocPrint(allocator, "{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\",\"command_id\":\"{s}\",\"expected_revision\":\"{d}\"}}", .{workspace_id,repository_id,id,self.revision}) else try std.fmt.allocPrint(allocator, "{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\",\"expected_revision\":\"{d}\"}}", .{workspace_id,repository_id,self.revision});
+        const body = if (command_id) |id| try std.fmt.allocPrint(allocator, "{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\",\"command_id\":\"{s}\",\"expected_revision\":\"{d}\"}}", .{workspace_id,repository_id,id,workspace_revision}) else try std.fmt.allocPrint(allocator, "{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\",\"expected_revision\":\"{d}\"}}", .{workspace_id,repository_id,workspace_revision});
         return self.request(.POST, "/v1/native-launch", body);
     }
     pub fn acceptDiscovery(self: *Client, status: u16, body: []const u8) !Outcome {
@@ -180,9 +180,9 @@ fn aggregateState(body:[]const u8)!model.State {
     const data=root.get("data") orelse return error.Invalid;if(data!=.array or data.array.items.len>16)return error.Capacity;
     var state:model.State=.{.connection=.ready,.has_snapshot=true};
     for(data.array.items,0..) |entry,wi| {
-        if(entry!=.object)return error.Invalid;const eo=entry.object;state.revision=@max(state.revision,uintString(eo,"revision") orelse return error.Invalid);
+        if(entry!=.object)return error.Invalid;const eo=entry.object;const workspace_revision=uintString(eo,"revision") orelse return error.Invalid;state.revision=@max(state.revision,workspace_revision);
         const workspace=eo.get("workspace") orelse return error.Invalid;if(workspace!=.object)return error.Invalid;const wo=workspace.object;
-        const wid=string(wo,"id") orelse return error.Invalid;const wname=string(wo,"name") orelse return error.Invalid;if(!uuid(wid) or wname.len==0 or wname.len>96)return error.Invalid;var ws:model.Workspace=.{.id=undefined};@memcpy(&ws.id,wid);@memcpy(ws.name[0..wname.len],wname);ws.name_len=@intCast(wname.len);
+        const wid=string(wo,"id") orelse return error.Invalid;const wname=string(wo,"name") orelse return error.Invalid;if(!uuid(wid) or wname.len==0 or wname.len>96)return error.Invalid;var ws:model.Workspace=.{.id=undefined,.revision=workspace_revision};@memcpy(&ws.id,wid);@memcpy(ws.name[0..wname.len],wname);ws.name_len=@intCast(wname.len);
         const repos=wo.get("repositories") orelse return error.Invalid;if(repos!=.array or repos.array.items.len>8)return error.Capacity;
         for(repos.array.items,0..) |repo,ri| {if(repo!=.object)return error.Invalid;const rid=string(repo.object,"id") orelse return error.Invalid;const rname=string(repo.object,"name") orelse return error.Invalid;if(!uuid(rid) or rname.len==0 or rname.len>96)return error.Invalid;@memcpy(&ws.repository_ids[ri],rid);ws.repositories[ri].id=ws.repository_ids[ri];@memcpy(ws.repositories[ri].name[0..rname.len],rname);ws.repositories[ri].name_len=@intCast(rname.len);ws.repository_count+=1;state.pairs[state.pair_count]=.{.key=.{.workspace_id=ws.id,.repository_id=ws.repository_ids[ri]},.surfaces=undefined};state.pair_count+=1;}
         if(wo.get("launch"))|launch| if(launch==.object) if(launch.object.get("named"))|named| if(named==.array) for(named.array.items)|value| {if(value!=.object or state.command_count>=state.commands.len)return error.Invalid;const cid=string(value.object,"id") orelse return error.Invalid;const name=string(value.object,"name") orelse return error.Invalid;if(!prefixed(cid,"cmd_") or cid.len>64 or name.len==0 or name.len>96)return error.Invalid;var command:model.Command=.{.workspace_id=ws.id};@memcpy(command.id[0..cid.len],cid);command.id_len=@intCast(cid.len);@memcpy(command.name[0..name.len],name);command.name_len=@intCast(name.len);if(value.object.get("repository_id"))|r|{if(r!=.string or !uuid(r.string))return error.Invalid;var rid:model.Id=undefined;@memcpy(&rid,r.string);command.repository_id=rid;}state.commands[state.command_count]=command;state.command_count+=1;};

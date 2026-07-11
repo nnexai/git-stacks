@@ -18,6 +18,7 @@ pub const PairKey = struct {
 pub const NamedRepository = struct { id: Id = [_]u8{0} ** 36, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
 pub const Workspace = struct {
     id: Id,
+    revision: u64 = 0,
     name: [96]u8 = [_]u8{0} ** 96,
     name_len: u8 = 0,
     repositories: [8]NamedRepository = [_]NamedRepository{.{}} ** 8,

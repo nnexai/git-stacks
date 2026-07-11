@@ -26,7 +26,7 @@ test "requests carry bearer credential revision identities and replay cursor" {
     var cursor: [20]u8 = undefined;
     const events = try c.eventsRequest(&cursor);
     try std.testing.expectEqualStrings("42", events.last_event_id.?);
-    const launch = try c.launchRequestAlloc(std.testing.allocator, "118f47f4-5ab1-7c2d-8e90-123456789abc", "218f47f4-5ab1-7c2d-8e90-123456789abc", null);
+    const launch = try c.launchRequestAlloc(std.testing.allocator, "118f47f4-5ab1-7c2d-8e90-123456789abc", "218f47f4-5ab1-7c2d-8e90-123456789abc", null, 19);
     defer std.testing.allocator.free(launch.body);
     try std.testing.expect(std.mem.indexOf(u8, launch.body, "\"expected_revision\":\"19\"") != null);
     try std.testing.expectEqual(service.Method.POST, launch.method);
