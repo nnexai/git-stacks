@@ -16,7 +16,7 @@ export const TimestampSchema = z.string().datetime({ offset: true })
 
 export const ErrorCodeSchema = z.enum([
   "invalid_request", "unauthorized", "not_found", "conflict", "rate_limited",
-  "capability_unavailable", "replay_gap", "internal_error", "operation_failed",
+  "capability_unavailable", "replay_gap", "snapshot_busy", "internal_error", "operation_failed",
 ])
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>
 export const ApiErrorSchema = z.strictObject({
@@ -62,10 +62,21 @@ export const LaunchSpecificationSchema = z.strictObject({
   environment: z.record(z.string(), z.string()),
   redacted: z.array(z.string()),
   references: z.record(z.string(), z.string()),
+  cwd: z.string().min(1).optional(),
+  ports: z.record(z.string(), z.number().int()).optional(),
 })
 export type LaunchSpecification = z.infer<typeof LaunchSpecificationSchema>
 export const WorkspaceSnapshotSchema = z.strictObject({
   id: EntityIdSchema, name: z.string().min(1), branch: z.string(), repositories: z.array(RepositorySnapshotSchema), launch: LaunchSpecificationSchema,
+  commands: z.array(z.string()).optional(),
+  status: z.array(z.strictObject({
+    name: z.string().min(1), exists: z.boolean(), dirty: z.boolean(), branch: z.string(),
+    mode: z.enum(["worktree", "trunk", "dir"]), ahead: z.number().int().nonnegative(), behind: z.number().int().nonnegative(),
+  })).optional(),
+  file_status: z.strictObject({
+    total: z.number().int().nonnegative(), ok: z.number().int().nonnegative(), warnings: z.number().int().nonnegative(),
+    errors: z.number().int().nonnegative(), attention: z.number().int().nonnegative(),
+  }).optional(),
 })
 export type WorkspaceSnapshot = z.infer<typeof WorkspaceSnapshotSchema>
 export const WorkspaceSnapshotResponseSchema = z.strictObject({

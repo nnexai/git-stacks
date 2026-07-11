@@ -68,7 +68,7 @@ describe("authoritative service snapshots", () => {
 
     const result = await builder.buildWorkspace("alpha", "req_0123456789abcdef")
     expect(statusReads).toBe(2)
-    expect(result.workspace.status[0]?.dirty).toBe(false)
+    expect(result.workspace.status?.[0]?.dirty).toBe(false)
   })
 
   test("fails with structured snapshot_busy after three raced attempts", async () => {
