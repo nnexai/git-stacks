@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { rmSync } from "node:fs"
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { provisionOfficialClient } from "../../src/lib/service/credentials"
 import { startServiceServer } from "../../src/service/server"
-import { createIdleLifecycle, serviceDescriptorPath } from "../../src/service/main"
+import { createIdleLifecycle, serviceDescriptorPath, startManagedService } from "../../src/service/main"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
@@ -34,5 +34,22 @@ describe("v1 discovery", () => {
     const response = await fetch(new URL("/v1", service.url), { headers: { authorization: `Bearer ${credential.token}` } })
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ ok: true, protocol: "v1", data: { service_version: expect.any(String) } })
+  })
+
+  test("publishes one owner-only secret-free descriptor and removes only its instance", async () => {
+    const root = join(tmpdir(), `git-stacks-managed-${crypto.randomUUID()}`)
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const snapshot = { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } }
+    const first = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })
+    cleanup.push(() => first.stop())
+    const second = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })
+    expect(second.existing).toBe(true)
+    expect(second.descriptor.instance_id).toBe(first.descriptor.instance_id)
+    const path = serviceDescriptorPath(root)
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+    const raw = readFileSync(path, "utf8")
+    expect(raw).not.toContain(provisionOfficialClient("native-test", { serviceRoot: root }).token)
+    await first.stop()
+    expect(existsSync(path)).toBe(false)
   })
 })

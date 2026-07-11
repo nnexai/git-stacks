@@ -5,7 +5,7 @@ describe("v1 operations transport", () => {
     const callbacks: Array<() => void> = []
     let exited = 0
     const { createIdleLifecycle } = await import("../../src/service/main")
-    const lifecycle = createIdleLifecycle({ idleMs: 5, setTimer: (fn) => { callbacks.push(fn); return callbacks.length as never }, clearTimer: () => {}, onIdle: () => { exited += 1 } })
+    const lifecycle = createIdleLifecycle({ idleMs: 5, setTimer: (fn: () => void) => { callbacks.push(fn); return callbacks.length as never }, clearTimer: () => {}, onIdle: () => { exited += 1 } })
     lifecycle.setConnectedClients(1)
     callbacks.at(-1)?.()
     expect(exited).toBe(0)
