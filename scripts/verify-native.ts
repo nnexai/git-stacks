@@ -118,7 +118,7 @@ async function collectProblems(): Promise<string[]> {
   return problems
 }
 
-async function verify(): Promise<void> {
+async function verify(target = "terminal-api-smoke"): Promise<void> {
   const problems = await collectProblems()
   if (problems.length) {
     console.error("native verification failed before compilation:")
@@ -126,17 +126,20 @@ async function verify(): Promise<void> {
     process.exit(1)
   }
   const output = await requireSuccess([
-    zigExe, "build", "terminal-api-smoke", `-Dghostty-source=${ghosttyDir}`,
+    zigExe, "build", target, `-Dghostty-source=${ghosttyDir}`,
     "--build-file", join(NATIVE, "build.zig"),
     "--cache-dir", join(CACHE, "zig-local-cache"),
     "--global-cache-dir", join(CACHE, "zig-global-cache"),
     "--summary", "all",
   ], NATIVE)
   if (output) console.log(output)
-  console.log(`native feasibility verified: Zig ${lock.zig.version}; Ghostty tag ${lock.tag_object}; peeled ${lock.peeled_commit}; full surface API seams present`)
+  console.log(target === "model-test"
+    ? `native model verified: Zig ${lock.zig.version}; opaque ABI lifecycle and validation passed`
+    : `native feasibility verified: Zig ${lock.zig.version}; Ghostty tag ${lock.tag_object}; peeled ${lock.peeled_commit}; full surface API seams present`)
 }
 
 const mode = process.argv[2] ?? "verify"
 if (mode === "setup") await setup()
+else if (mode === "model") await verify("model-test")
 else if (mode === "verify" || mode === "quick" || mode === "terminal-build") await verify()
 else throw new Error(`unknown native verification mode: ${mode}`)

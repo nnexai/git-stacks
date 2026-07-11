@@ -43,4 +43,41 @@ pub fn build(b: *std.Build) void {
 
     const step = b.step("terminal-api-smoke", "Compile and test the pinned full libghostty C surface API");
     step.dependOn(&smoke.step);
+
+    const model = b.addLibrary(.{
+        .name = "git_stacks_native_v1",
+        .linkage = .static,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/abi.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
+    });
+    model.linkLibC();
+
+    const model_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/contract.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
+    });
+    const run_model_tests = b.addRunArtifact(model_tests);
+
+    const harness = b.addExecutable(.{
+        .name = "abi-harness",
+        .root_module = b.createModule(.{
+            .target = b.graph.host,
+            .optimize = .Debug,
+        }),
+    });
+    harness.root_module.addCSourceFile(.{ .file = b.path("tests/abi_harness.c"), .flags = &.{ "-std=c11", "-Wall", "-Wextra", "-Werror" } });
+    harness.root_module.addIncludePath(b.path("include"));
+    harness.linkLibrary(model);
+    harness.linkLibC();
+    const run_harness = b.addRunArtifact(harness);
+
+    const model_step = b.step("model-test", "Run native model and public ABI tests");
+    model_step.dependOn(&run_model_tests.step);
+    model_step.dependOn(&run_harness.step);
 }

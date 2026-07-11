@@ -44,6 +44,7 @@
     "verify:functional": "bun run scripts/functional-coverage-readiness.ts",
     "native:setup": "bun run scripts/verify-native.ts setup",
     "native:test:quick": "bun run scripts/verify-native.ts quick",
+    "native:test:model": "bun run scripts/verify-native.ts model",
     "native:test:terminal-build": "bun run scripts/verify-native.ts terminal-build",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",
