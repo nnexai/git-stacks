@@ -48,10 +48,10 @@ pub const HttpTransport = struct {
     http: std.http.Client,
     cancelled: bool = false,
     pub fn init(allocator:std.mem.Allocator)HttpTransport{return .{.allocator=allocator,.http=.{.allocator=allocator}};}
-    pub fn deinit(self:*HttpTransport)void{if(!self.cancelled)self.http.deinit();}
-    /// Cancellation closes pooled and active sockets so a persistent SSE read
-    /// wakes promptly; the owning worker must then join before this value dies.
-    pub fn cancel(self:*HttpTransport)void{if(self.cancelled)return;self.cancelled=true;self.http.deinit();}
+    pub fn deinit(self:*HttpTransport)void{self.http.deinit();}
+    /// Cooperative cancellation only. The owner that is executing requests is
+    /// solely responsible for deinitializing std.http.Client.
+    pub fn cancel(self:*HttpTransport)void{self.cancelled=true;}
     pub fn execute(self:*HttpTransport, endpoint:[]const u8, request_value:Request)!Response {
         if(self.cancelled)return error.Cancelled;
         if(!loopbackEndpoint(endpoint))return error.NonLoopbackEndpoint;

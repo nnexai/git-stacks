@@ -29,6 +29,18 @@ pub const View = struct {
     pub fn reorderTab(self:View,id:model.Id,to:usize)!void { const p=self.pair() orelse return error.UnknownPair;if(to>=p.surface_count)return error.InvalidOrder;var from:?usize=null;for(p.surfaces[0..p.surface_count],0..)|s,i|if(std.mem.eql(u8,&s.id,&id)){from=i;break;};const f=from orelse return error.UnknownSurface;const item=p.surfaces[f];if(f<to)std.mem.copyForwards(model.Surface,p.surfaces[f..to],p.surfaces[f+1..to+1])else if(f>to)std.mem.copyBackwards(model.Surface,p.surfaces[to+1..f+1],p.surfaces[to..f]);p.surfaces[to]=item;for(p.surfaces[0..p.surface_count],0..)|*s,i|s.order=@intCast(i); }
     pub fn renameTab(self:View,id:model.Id,title:[]const u8)!void { const loc=model.surfaceLocation(self.state,id) orelse return error.UnknownSurface;var s=&self.state.pairs[loc.pair].surfaces[loc.surface];s.title_len=@intCast(@min(title.len,s.title.len));@memcpy(s.title[0..s.title_len],title[0..s.title_len]); }
     pub fn closeTab(self:View,id:model.Id)!void { const loc=model.surfaceLocation(self.state,id) orelse return error.UnknownSurface;var p=&self.state.pairs[loc.pair];if(p.surfaces[loc.surface].lifecycle==.live)p.surfaces[loc.surface].lifecycle=.ended;if(self.state.surface)|selected| { if(std.mem.eql(u8,&selected.id,&id))self.state.surface=p.surfaces[loc.surface]; } }
+    pub fn removeTab(self:View,id:model.Id)!void {
+        const loc=model.surfaceLocation(self.state,id) orelse return error.UnknownSurface;
+        var p=&self.state.pairs[loc.pair];
+        if(p.surfaces[loc.surface].lifecycle==.live)return error.SurfaceLive;
+        var i=loc.surface;
+        while(i+1<p.surface_count):(i+=1)p.surfaces[i]=p.surfaces[i+1];
+        p.surface_count-=1;
+        for(p.surfaces[0..p.surface_count],0..)|*s,index|s.order=@intCast(index);
+        if(self.state.surface)|selected| {
+            if(std.mem.eql(u8,&selected.id,&id)) self.state.surface=if(p.surface_count>0)p.surfaces[0] else null;
+        }
+    }
     pub fn publishRelaunch(self:View,predecessor:model.Id,replacement:model.Id)!void { const loc=model.surfaceLocation(self.state,predecessor) orelse return error.UnknownSurface;var p=&self.state.pairs[loc.pair];if(p.surfaces[loc.surface].lifecycle!=.ended or model.surfaceLocation(self.state,replacement)!=null)return error.InvalidRelaunch;var s=p.surfaces[loc.surface];s.id=replacement;s.predecessor_surface_id=predecessor;s.generation+=1;s.lifecycle=.live;p.surfaces[loc.surface]=s;self.state.surface=s; }
 };
 

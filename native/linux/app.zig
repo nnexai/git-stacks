@@ -29,12 +29,11 @@ const State = struct {
     cleaned: bool = false,
     injected: bool = false,
     replay_cancel: std.atomic.Value(bool) = .init(false),
-    replay_transport: std.atomic.Value(?*@import("service_client").HttpTransport) = .init(null),
     replay_thread: ?std.Thread = null,
     content_stack: ?*c.GtkStack = null,
     workspace_list: ?*c.GtkListBox = null,
-    tab_bar: ?*c.GtkBox = null,
-    terminal_stack: ?*c.GtkStack = null,
+    tab_view: ?*c.AdwTabView = null,
+    tab_bar: ?*c.AdwTabBar = null,
     launcher: ?*c.GtkPopover = null,
     launcher_entry: ?*c.GtkSearchEntry = null,
     launcher_results: ?*c.GtkListBox = null,
@@ -44,6 +43,7 @@ const State = struct {
     action_group: ?*c.GSimpleActionGroup = null,
     launcher_model: ?command_launcher.Launcher = null,
     focus_before_launcher: ?*c.GtkWidget = null,
+    programmatic_tab_close: bool = false,
 };
 var active: ?*State = null;
 
@@ -170,7 +170,6 @@ fn cleanup(state: *State) void {
     if (state.cleaned) return;
     state.cleaned = true;
     state.replay_cancel.store(true, .release);
-    if (state.replay_transport.load(.acquire)) |transport| transport.cancel();
     if (state.replay_thread) |thread| {
         thread.join();
         state.replay_thread = null;
@@ -235,9 +234,7 @@ fn reduceReplayFrame(data: ?*anyopaque) callconv(.c) c.gboolean {
 }
 fn replayWorker(state: *State) void {
     var transport = @import("service_client").HttpTransport.init(state.graph.allocator);
-    state.replay_transport.store(&transport, .release);
     defer {
-        state.replay_transport.store(null, .release);
         transport.deinit();
     }
     var client = @import("service_client").Client.init(state.graph.authorization);
@@ -424,15 +421,6 @@ fn refreshProjection(state: *State) void {
             const heading_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
             c.gtk_widget_set_hexpand(header, 1);
             c.gtk_box_append(@ptrCast(heading_box), header);
-            const workspace_menu = c.gtk_menu_button_new() orelse continue;
-            c.gtk_menu_button_set_icon_name(@ptrCast(workspace_menu), "view-more-symbolic");
-            const workspace_actions = c.g_menu_new() orelse continue;
-            var detailed_buffer: [96:0]u8 = [_:0]u8{0} ** 96;
-            const detailed = std.fmt.bufPrintZ(&detailed_buffer, "win.{s}-workspace('{s}')", .{ if (pinned) "unpin" else "pin", ws.id }) catch continue;
-            c.g_menu_append(workspace_actions, if (pinned) "Unpin workspace" else "Pin workspace", detailed.ptr);
-            c.gtk_menu_button_set_menu_model(@ptrCast(workspace_menu), @ptrCast(@alignCast(workspace_actions)));
-            c.g_object_unref(workspace_actions);
-            c.gtk_box_append(@ptrCast(heading_box), workspace_menu);
             const workspace_id = std.heap.c_allocator.create(model.Id) catch continue;
             workspace_id.* = ws.id;
             c.g_object_set_data_full(@ptrCast(heading_box), "git-stacks-workspace", workspace_id, @ptrCast(&freeId));
@@ -450,7 +438,7 @@ fn refreshProjection(state: *State) void {
                 var row_text: [128:0]u8 = [_:0]u8{0} ** 128;
                 const selected = if (state.graph.state.selected_pair) |pair| model.PairKey.eql(pair, .{ .workspace_id = ws.id, .repository_id = repository_id }) else false;
                 const repository=ws.repositories[repository_index];
-                const rendered = std.fmt.bufPrintZ(&row_text, "{s}{s}", .{ if (selected) "● " else "", if (ws.repository_count == 1) "Workspace terminal" else if(repository.name_len>0)repository.name[0..repository.name_len] else repository_id[0..8] }) catch continue;
+                const rendered = std.fmt.bufPrintZ(&row_text, "{s}{s}", .{ if (selected) "● " else "", if(repository.name_len>0)repository.name[0..repository.name_len] else if(ws.name_len>0)ws.name[0..ws.name_len] else repository_id[0..8] }) catch continue;
                 const row = c.gtk_list_box_row_new() orelse continue;
                 const label = c.gtk_label_new(rendered.ptr) orelse continue;
                 c.gtk_label_set_xalign(@ptrCast(label), 0);
@@ -460,68 +448,43 @@ fn refreshProjection(state: *State) void {
                 (@as(*model.PairKey, @ptrCast(@alignCast(c.g_object_get_data(@ptrCast(row), "git-stacks-pair"))))).* = .{ .workspace_id = ws.id, .repository_id = repository_id };
                 const row_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
                 c.gtk_box_append(@ptrCast(row_box), label);
-                const repository_menu = c.gtk_menu_button_new() orelse continue;
-                c.gtk_menu_button_set_icon_name(@ptrCast(repository_menu), "view-more-symbolic");
-                const repository_actions = c.g_menu_new() orelse continue;
-                c.g_menu_append(repository_actions, "New shell", "win.new-shell");
-                c.g_menu_append(repository_actions, "Configured commands…", "win.launch-command");
-                c.g_menu_append(repository_actions, "Open in VS Code", "win.open-vscode");
-                c.gtk_menu_button_set_menu_model(@ptrCast(repository_menu), @ptrCast(@alignCast(repository_actions)));
-                c.g_object_unref(repository_actions);
-                const repository_pair = std.heap.c_allocator.create(model.PairKey) catch continue;
-                repository_pair.* = .{ .workspace_id = ws.id, .repository_id = repository_id };
-                c.g_object_set_data_full(@ptrCast(repository_menu), "git-stacks-pair", repository_pair, @ptrCast(&freePair));
-                const menu_click = c.gtk_gesture_click_new() orelse continue;
-                _ = c.g_signal_connect_data(menu_click, "pressed", @ptrCast(&repositoryMenuPressed), state, null, 0);
-                c.gtk_widget_add_controller(repository_menu, @ptrCast(menu_click));
-                c.gtk_box_append(@ptrCast(row_box), repository_menu);
                 c.gtk_list_box_row_set_child(@ptrCast(row), row_box);
                 c.gtk_list_box_append(list, row);
             }
         }
     }
-    if (state.tab_bar) |bar| {
-        clearBox(bar);
+    if (state.tab_view) |tabs| {
         const view = workspace_view.View{ .state = &state.graph.state };
         if (view.pair()) |pair| {
             for (pair.surfaces[0..pair.surface_count]) |surface| {
                 var title: [128:0]u8 = [_:0]u8{0} ** 128;
                 const p = attention_view.present(&state.graph.state, pair.key.workspace_id, pair.key.repository_id, surface.id);
                 const rendered = std.fmt.bufPrintZ(&title, "{s}{s}{s}", .{ if (surface.title_len > 0) surface.title[0..surface.title_len] else surface.id[0..8], if (surface.lifecycle == .ended) " (ended)" else "", if (p.unread > 0) " •" else "" }) catch continue;
-                const button = c.gtk_button_new_with_label(rendered.ptr) orelse continue;
-                setAccessible(button, c.GTK_ACCESSIBLE_ROLE_TAB, rendered.ptr, "Terminal tab; supports select, rename, reorder, close, and relaunch actions");
-                const sid = std.heap.c_allocator.create(model.Id) catch continue;
-                sid.* = surface.id;
-                c.g_object_set_data_full(@ptrCast(button), "git-stacks-surface", sid, @ptrCast(&freeId));
-                const drag = c.gtk_drag_source_new() orelse continue;
-                c.gtk_drag_source_set_actions(drag, c.GDK_ACTION_MOVE);
-                _ = c.g_signal_connect_data(drag, "prepare", @ptrCast(&dragPrepare), state, null, 0);
-                c.gtk_widget_add_controller(button, @ptrCast(drag));
-                const drop = c.gtk_drop_target_new(c.g_type_from_name("gchararray"), c.GDK_ACTION_MOVE) orelse continue;
-                _ = c.g_signal_connect_data(drop, "drop", @ptrCast(&tabDropped), state, null, 0);
-                c.gtk_widget_add_controller(button, @ptrCast(drop));
-                _ = c.g_signal_connect_data(button, "clicked", @ptrCast(&tabClicked), state, null, 0);
-                c.gtk_box_append(bar, button);
-                const tab_menu = c.gtk_menu_button_new() orelse continue;
-                c.gtk_menu_button_set_icon_name(@ptrCast(tab_menu), "view-more-symbolic");
-                const menu = c.g_menu_new() orelse continue;
-                var rename_action: [96:0]u8 = [_:0]u8{0} ** 96;
-                const rename = std.fmt.bufPrintZ(&rename_action, "win.rename-tab('{s}')", .{surface.id}) catch continue;
-                c.g_menu_append(menu, "Rename…", rename.ptr);
-                if (surface.lifecycle == .ended) {
-                    var relaunch_action: [96:0]u8 = [_:0]u8{0} ** 96;
-                    const relaunch = std.fmt.bufPrintZ(&relaunch_action, "win.relaunch-tab('{s}')", .{surface.id}) catch continue;
-                    c.g_menu_append(menu, "Relaunch", relaunch.ptr);
-                } else c.g_menu_append(menu, "Close", "win.close-tab");
-                c.gtk_menu_button_set_menu_model(@ptrCast(tab_menu), @ptrCast(@alignCast(menu)));
-                c.g_object_unref(menu);
-                const menu_id = std.heap.c_allocator.create(model.Id) catch continue;
-                menu_id.* = surface.id;
-                c.g_object_set_data_full(@ptrCast(tab_menu), "git-stacks-surface", menu_id, @ptrCast(&freeId));
-                const menu_click = c.gtk_gesture_click_new() orelse continue;
-                _ = c.g_signal_connect_data(menu_click, "pressed", @ptrCast(&tabMenuPressed), state, null, 0);
-                c.gtk_widget_add_controller(tab_menu, @ptrCast(menu_click));
-                c.gtk_box_append(bar, tab_menu);
+                var page: ?*c.AdwTabPage = null;
+                for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
+                    const candidate = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
+                    const child = c.adw_tab_page_get_child(candidate) orelse continue;
+                    const id_ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
+                    if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(id_ptr))), &surface.id)) { page = candidate; break; }
+                }
+                if (page == null and surface.lifecycle == .ended) {
+                    const ended = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 12) orelse continue;
+                    c.gtk_widget_set_halign(ended, c.GTK_ALIGN_CENTER); c.gtk_widget_set_valign(ended, c.GTK_ALIGN_CENTER);
+                    const message = c.gtk_label_new("This terminal has ended") orelse continue;
+                    c.gtk_widget_add_css_class(message, "title-2"); c.gtk_box_append(@ptrCast(ended), message);
+                    const relaunch = c.gtk_button_new_with_label("Relaunch") orelse continue;
+                    var action: [96:0]u8 = [_:0]u8{0} ** 96;
+                    const detailed = std.fmt.bufPrintZ(&action, "win.relaunch-tab('{s}')", .{surface.id}) catch continue;
+                    c.gtk_actionable_set_action_name(@ptrCast(relaunch), detailed.ptr); c.gtk_box_append(@ptrCast(ended), relaunch);
+                    const remove = c.gtk_button_new_with_label("Remove") orelse continue;
+                    var remove_action: [96:0]u8 = [_:0]u8{0} ** 96;
+                    const remove_detailed = std.fmt.bufPrintZ(&remove_action, "win.remove-tab('{s}')", .{surface.id}) catch continue;
+                    c.gtk_actionable_set_action_name(@ptrCast(remove), remove_detailed.ptr); c.gtk_widget_add_css_class(remove, "destructive-action"); c.gtk_box_append(@ptrCast(ended), remove);
+                    const sid = std.heap.c_allocator.create(model.Id) catch continue; sid.* = surface.id;
+                    c.g_object_set_data_full(@ptrCast(ended), "git-stacks-surface", sid, @ptrCast(&freeId));
+                    page = c.adw_tab_view_append(tabs, ended);
+                }
+                if (page) |p_page| { c.adw_tab_page_set_title(p_page, rendered.ptr); c.adw_tab_page_set_needs_attention(p_page, @intFromBool(p.unread > 0)); }
             }
         }
     }
@@ -535,7 +498,8 @@ fn refreshProjection(state: *State) void {
     if (state.attention_label) |label| {
         var text: [96:0]u8 = [_:0]u8{0} ** 96;
         const rendered = std.fmt.bufPrintZ(&text, "Attention: {d} unread ({s})", .{ unread, @tagName(severity) }) catch "Attention";
-        c.gtk_label_set_text(label, rendered.ptr);
+        c.gtk_label_set_text(label, if (unread > 0) rendered.ptr else "");
+        c.gtk_widget_set_visible(@ptrCast(@alignCast(label)), @intFromBool(unread > 0));
         setAccessible(label, c.GTK_ACCESSIBLE_ROLE_STATUS, rendered.ptr, "Hierarchical workspace, repository, and terminal attention status");
     }
     refreshLauncher(state);
@@ -546,6 +510,39 @@ fn freePair(data: ?*anyopaque) callconv(.c) void {
 }
 fn freeId(data: ?*anyopaque) callconv(.c) void {
     if (data) |p| std.heap.c_allocator.destroy(@as(*model.Id, @ptrCast(@alignCast(p))));
+}
+fn selectNativePage(state: *State, id: model.Id) void {
+    const tabs = state.tab_view orelse return;
+    for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
+        const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
+        const child = c.adw_tab_page_get_child(page) orelse continue;
+        const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
+        if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_set_selected_page(tabs, page); return; }
+    }
+}
+fn selectedPageChanged(view: ?*c.AdwTabView, _: ?*c.GParamSpec, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const page = c.adw_tab_view_get_selected_page(view orelse return) orelse return;
+    const child = c.adw_tab_page_get_child(page) orelse return;
+    const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse return;
+    const id: *model.Id = @ptrCast(@alignCast(ptr));
+    _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id.*);
+}
+fn nativeClosePage(_: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyopaque) callconv(.c) c.gboolean {
+    const state: *State = @ptrCast(@alignCast(data orelse return 0));
+    if (state.programmatic_tab_close) return 0;
+    const child = c.adw_tab_page_get_child(page orelse return 0) orelse return 0;
+    const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse return 0;
+    const id: *model.Id = @ptrCast(@alignCast(ptr));
+    const loc = model.surfaceLocation(&state.graph.state, id.*) orelse return 0;
+    if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle == .ended) {
+        (workspace_view.View{ .state = &state.graph.state }).removeTab(id.*) catch return 1;
+        savePresentation(state); return 0;
+    }
+    state.programmatic_tab_close = true;
+    closeTerminal(state, id.*);
+    state.programmatic_tab_close = false;
+    return 1;
 }
 fn dragPrepare(source: ?*c.GtkDragSource, _: f64, _: f64, _: ?*anyopaque) callconv(.c) ?*c.GdkContentProvider {
     const controller = source orelse return null;
@@ -624,8 +621,7 @@ fn tabClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
     const ptr = c.g_object_get_data(@ptrCast(b), "git-stacks-surface") orelse return;
     const sid: *model.Id = @ptrCast(@alignCast(ptr));
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(sid.*);
-    var name: [37]u8 = undefined;
-    if (state.terminal_stack) |stack| c.gtk_stack_set_visible_child_name(stack, idText(sid.*, &name).ptr);
+    selectNativePage(state, sid.*);
     refreshProjection(state);
 }
 fn tabMenuPressed(gesture: ?*c.GtkGestureClick, _: c_int, _: f64, _: f64, data: ?*anyopaque) callconv(.c) void {
@@ -634,8 +630,7 @@ fn tabMenuPressed(gesture: ?*c.GtkGestureClick, _: c_int, _: f64, _: f64, data: 
     const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-surface") orelse return;
     const sid: *model.Id = @ptrCast(@alignCast(ptr));
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(sid.*);
-    var name: [37]u8 = undefined;
-    if (state.terminal_stack) |stack| c.gtk_stack_set_visible_child_name(stack, idText(sid.*, &name).ptr);
+    selectNativePage(state, sid.*);
 }
 const RenameContext = struct { state: *State, id: model.Id, entry: *c.GtkEntry };
 fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) callconv(.c) void {
@@ -684,18 +679,41 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     state.terminals[state.terminal_count] = surface;
     surface.setExitHandler(state,surfaceExited);
     state.terminal_count += 1;
-    const identity = surface.ownershipIdentity() orelse {
+    // Ghostty does not create/register the child until its widget belongs to a
+    // realized GTK hierarchy.  The page is provisional until that handshake
+    // succeeds; it is never published to the presentation model early.
+    const tabs = state.tab_view orelse { surface.destroy(); state.terminal_count -= 1; return null; };
+    const child: *c.GtkWidget = @ptrCast(@alignCast(surface.widget()));
+    const sid = std.heap.c_allocator.create(model.Id) catch { surface.destroy(); state.terminal_count -= 1; return null; };
+    sid.* = surface.surface_id;
+    c.g_object_set_data_full(@ptrCast(child), "git-stacks-surface", sid, @ptrCast(&freeId));
+    const provisional = c.adw_tab_view_append(tabs, child) orelse { surface.destroy(); state.terminal_count -= 1; return null; };
+    c.adw_tab_page_set_title(provisional, "Starting…");
+    c.adw_tab_page_set_loading(provisional, 1);
+    c.adw_tab_view_set_selected_page(tabs, provisional);
+    if (c.gtk_widget_get_realized(child) == 0) c.gtk_widget_realize(child);
+    var identity = surface.ownershipIdentity();
+    for (0..100) |_| {
+        identity = surface.ownershipIdentity();
+        if (identity != null) break;
+        while (c.g_main_context_iteration(null, 0) != 0) {}
+        std.Thread.sleep(5 * std.time.ns_per_ms);
+    }
+    const ownership = identity orelse {
+        c.adw_tab_view_close_page(tabs, provisional);
         surface.destroy();
+        state.terminals[state.terminal_count - 1] = null;
         state.terminal_count -= 1;
+        showLauncherError(state, "Terminal process did not start");
         return null;
     };
     const generation = if (predecessor) |old_id| blk: {
         const old = model.surfaceLocation(&state.graph.state, old_id) orelse return null;
         break :blk state.graph.state.pairs[old.pair].surfaces[old.surface].generation +% 1;
     } else surface.generation;
-    const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = generation, .child_pid = identity.pid, .pgid = identity.pgid, .birth_token = identity.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
+    const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = generation, .child_pid = ownership.pid, .pgid = ownership.pgid, .birth_token = ownership.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
     tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| {
-        surface.destroy();
+        c.adw_tab_view_close_page(tabs, provisional); surface.destroy();
         state.terminals[state.terminal_count - 1] = null;
         state.terminal_count -= 1;
         showLauncherError(state, @errorName(err));
@@ -718,11 +736,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
             return null;
         };
     }
-    if (state.terminal_stack) |stack| {
-        var name: [37]u8 = undefined;
-        _ = c.gtk_stack_add_named(stack, @ptrCast(@alignCast(surface.widget())), idText(surface.surface_id, &name).ptr);
-        c.gtk_stack_set_visible_child_name(stack, name[0..36 :0].ptr);
-    }
+    c.adw_tab_page_set_loading(provisional, 0);
     refreshProjection(state);
     savePresentation(state);
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
@@ -799,6 +813,12 @@ fn forgetTerminal(state: *State, id: model.Id) void {
 }
 fn closeTerminal(state: *State, id: model.Id) void {
     (workspace_view.View{ .state = &state.graph.state }).closeTab(id) catch return;
+    if (state.tab_view) |tabs| for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
+        const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
+        const child = c.adw_tab_page_get_child(page) orelse continue;
+        const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
+        if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { state.programmatic_tab_close = true; c.adw_tab_view_close_page(tabs, page); state.programmatic_tab_close = false; break; }
+    };
     forgetTerminal(state, id);
     state.graph.terminals.close(id) catch {};
     savePresentation(state);
@@ -810,8 +830,7 @@ fn focusTerminal(state: *State, requested: ?model.Id) void {
     };
     const id = target orelse return;
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id);
-    var name: [37]u8 = undefined;
-    if (state.terminal_stack) |stack| c.gtk_stack_set_visible_child_name(stack, idText(id, &name).ptr);
+    selectNativePage(state, id);
     for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |surface| if (std.mem.eql(u8, &surface.surface_id, &id)) {
         _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
         break;
@@ -854,6 +873,17 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
         if (variantId(parameter)) |id| promptRename(state, id);
     } else if (std.mem.eql(u8, name, "close-tab")) {
         if (state.graph.state.surface) |s| closeTerminal(state, s.id);
+    } else if (std.mem.eql(u8, name, "remove-tab")) {
+        if (variantId(parameter)) |id| {
+            view.removeTab(id) catch return;
+            if (state.tab_view) |tabs| for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
+                const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
+                const child = c.adw_tab_page_get_child(page) orelse continue;
+                const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
+                if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_close_page(tabs, page); break; }
+            };
+            savePresentation(state); refreshProjection(state);
+        }
     } else if (std.mem.eql(u8, name, "relaunch-tab")) {
         if (variantId(parameter)) |id| _ = createTerminal(state, null, id);
     } else if (std.mem.eql(u8, name, "open-vscode")) {
@@ -912,7 +942,7 @@ fn registerActions(state: *State, window: *c.GtkWindow) void {
         const bare = spec.name[4..];
         var bare_buffer: [64:0]u8 = [_:0]u8{0} ** 64;
         const bare_z = std.fmt.bufPrintZ(&bare_buffer, "{s}", .{bare}) catch continue;
-        const parameter_type = if (std.mem.eql(u8, bare, "focus-attention") or std.mem.eql(u8, bare, "activate-command") or std.mem.eql(u8, bare, "select-tab") or std.mem.eql(u8, bare, "reorder-tab") or std.mem.eql(u8, bare, "rename-tab") or std.mem.eql(u8, bare, "relaunch-tab") or std.mem.eql(u8, bare, "pin-workspace") or std.mem.eql(u8, bare, "unpin-workspace") or std.mem.eql(u8, bare, "reorder-pin")) string_type else null;
+        const parameter_type = if (std.mem.eql(u8, bare, "focus-attention") or std.mem.eql(u8, bare, "activate-command") or std.mem.eql(u8, bare, "select-tab") or std.mem.eql(u8, bare, "reorder-tab") or std.mem.eql(u8, bare, "rename-tab") or std.mem.eql(u8, bare, "remove-tab") or std.mem.eql(u8, bare, "relaunch-tab") or std.mem.eql(u8, bare, "pin-workspace") or std.mem.eql(u8, bare, "unpin-workspace") or std.mem.eql(u8, bare, "reorder-pin")) string_type else null;
         const action = c.g_simple_action_new(bare_z.ptr, parameter_type) orelse continue;
         c.g_simple_action_set_enabled(action, @intFromBool(application.enabled(&state.graph.state, spec)));
         _ = c.g_signal_connect_data(action, "activate", @ptrCast(&actionActivate), state, null, 0);
@@ -932,7 +962,7 @@ fn registerActions(state: *State, window: *c.GtkWindow) void {
 fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.Surface) ?*c.GtkWidget {
     const root = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
     const header = c.adw_header_bar_new() orelse return null;
-    const attention = c.gtk_label_new("Attention: 0 unread") orelse return null;
+    const attention = c.gtk_label_new("") orelse return null;
     state.attention_label = @ptrCast(attention);
     c.adw_header_bar_pack_start(@ptrCast(header), attention);
     const launcher_button = c.gtk_button_new_from_icon_name("system-search-symbolic") orelse return null;
@@ -951,12 +981,9 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.adw_header_bar_pack_end(@ptrCast(header), menu_button);
     c.gtk_box_append(@ptrCast(root), header);
     const overlay = c.gtk_overlay_new() orelse return null;
-    const split = c.adw_navigation_split_view_new() orelse return null;
+    const split = c.gtk_paned_new(c.GTK_ORIENTATION_HORIZONTAL) orelse return null;
     const sidebar_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 6) orelse return null;
-    c.gtk_widget_set_size_request(sidebar_box, 240, -1);
-    const side_title = c.gtk_label_new("Pinned and grouped workspaces") orelse return null;
-    c.gtk_widget_add_css_class(side_title, "title-3");
-    c.gtk_box_append(@ptrCast(sidebar_box), side_title);
+    c.gtk_widget_set_size_request(sidebar_box, 190, -1);
     const workspace_list = c.gtk_list_box_new() orelse return null;
     state.workspace_list = @ptrCast(workspace_list);
     c.gtk_list_box_set_selection_mode(@ptrCast(workspace_list), c.GTK_SELECTION_SINGLE);
@@ -965,7 +992,6 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.gtk_scrolled_window_set_child(@ptrCast(scroll), workspace_list);
     c.gtk_widget_set_vexpand(scroll, 1);
     c.gtk_box_append(@ptrCast(sidebar_box), scroll);
-    const sidebar_page = c.adw_navigation_page_new(sidebar_box, "Workspaces") orelse return null;
     const content_stack = c.gtk_stack_new() orelse return null;
     state.content_stack = @ptrCast(content_stack);
     const status = c.gtk_label_new("Loading authoritative workspaces…") orelse return null;
@@ -974,31 +1000,41 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     setAccessible(status, c.GTK_ACCESSIBLE_ROLE_STATUS, "Connection state", "Explicit loading, empty, disconnected, stale, incompatible, refresh-required, or failure state");
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), status, "connection");
     const workspace = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
-    const tabs = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return null;
-    state.tab_bar = @ptrCast(tabs);
+    const tabs = c.adw_tab_view_new() orelse return null;
+    state.tab_view = @ptrCast(tabs);
+    _ = c.g_signal_connect_data(tabs, "notify::selected-page", @ptrCast(&selectedPageChanged), state, null, 0);
+    _ = c.g_signal_connect_data(tabs, "close-page", @ptrCast(&nativeClosePage), state, null, 0);
+    const tab_bar = c.adw_tab_bar_new() orelse return null;
+    state.tab_bar = @ptrCast(tab_bar);
+    c.adw_tab_bar_set_view(@ptrCast(tab_bar), @ptrCast(tabs));
+    c.adw_tab_bar_set_autohide(@ptrCast(tab_bar), 0);
+    c.adw_tab_bar_set_expand_tabs(@ptrCast(tab_bar), 0);
+    const new_tab = c.gtk_button_new_from_icon_name("tab-new-symbolic") orelse return null;
+    c.gtk_actionable_set_action_name(@ptrCast(new_tab), "win.new-shell");
+    c.gtk_widget_set_tooltip_text(new_tab, "New terminal");
+    c.adw_tab_bar_set_end_action_widget(@ptrCast(tab_bar), new_tab);
     const tab_click = c.gtk_gesture_click_new() orelse return null;
     c.gtk_gesture_single_set_button(@ptrCast(tab_click), 1);
     _ = c.g_signal_connect_data(tab_click, "pressed", @ptrCast(&tabBarPressed), state, null, 0);
-    c.gtk_widget_add_controller(tabs, @ptrCast(tab_click));
-    setAccessible(tabs, c.GTK_ACCESSIBLE_ROLE_TAB_LIST, "Terminal tabs", "Persistent terminals for the selected workspace and repository");
-    c.gtk_box_append(@ptrCast(workspace), tabs);
-    const terminals = c.gtk_stack_new() orelse return null;
-    state.terminal_stack = @ptrCast(terminals);
-    c.gtk_stack_set_transition_type(@ptrCast(terminals), c.GTK_STACK_TRANSITION_TYPE_CROSSFADE);
-    var initial_name: [37]u8 = undefined;
-    _ = c.gtk_stack_add_named(@ptrCast(terminals), @ptrCast(@alignCast(terminal.widget())), idText(terminal.surface_id, &initial_name).ptr);
-    c.gtk_widget_set_vexpand(terminals, 1);
-    c.gtk_box_append(@ptrCast(workspace), terminals);
+    c.gtk_widget_add_controller(@ptrCast(@alignCast(tab_bar)), @ptrCast(tab_click));
+    setAccessible(tab_bar, c.GTK_ACCESSIBLE_ROLE_TAB_LIST, "Terminal tabs", "Terminals for the selected repository");
+    c.gtk_box_append(@ptrCast(workspace), @ptrCast(@alignCast(tab_bar)));
+    const initial_child: *c.GtkWidget = @ptrCast(@alignCast(terminal.widget()));
+    const initial_id = std.heap.c_allocator.create(model.Id) catch return null; initial_id.* = terminal.surface_id;
+    c.g_object_set_data_full(@ptrCast(initial_child), "git-stacks-surface", initial_id, @ptrCast(&freeId));
+    const initial_page = c.adw_tab_view_append(@ptrCast(tabs), initial_child) orelse return null;
+    c.adw_tab_page_set_title(initial_page, "Terminal");
+    c.gtk_widget_set_vexpand(@ptrCast(@alignCast(tabs)), 1);
+    c.gtk_box_append(@ptrCast(workspace), @ptrCast(@alignCast(tabs)));
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), workspace, "workspace");
-    const content_page = c.adw_navigation_page_new(content_stack, "Terminal workspace") orelse return null;
-    c.adw_navigation_split_view_set_sidebar(@ptrCast(split), @ptrCast(sidebar_page));
-    c.adw_navigation_split_view_set_content(@ptrCast(split), @ptrCast(content_page));
-    c.adw_navigation_split_view_set_min_sidebar_width(@ptrCast(split), 220);
-    c.adw_navigation_split_view_set_max_sidebar_width(@ptrCast(split), 360);
+    c.gtk_paned_set_start_child(@ptrCast(split), sidebar_box);
+    c.gtk_paned_set_end_child(@ptrCast(split), content_stack);
+    c.gtk_paned_set_position(@ptrCast(split), 220);
+    c.gtk_paned_set_resize_start_child(@ptrCast(split), 0);
+    c.gtk_paned_set_shrink_start_child(@ptrCast(split), 0);
     c.gtk_overlay_set_child(@ptrCast(overlay), split);
     const popover = c.gtk_popover_new() orelse return null;
     state.launcher = @ptrCast(popover);
-    c.gtk_widget_set_parent(popover, overlay);
     c.gtk_popover_set_position(@ptrCast(popover), c.GTK_POS_TOP);
     const launcher_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 8) orelse return null;
     c.gtk_widget_set_size_request(launcher_box, 520, 360);
