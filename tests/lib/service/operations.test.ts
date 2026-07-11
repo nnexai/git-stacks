@@ -52,11 +52,17 @@ describe("OperationRegistry lifecycle", () => {
     })
 
     const accepting = registry.accept(execution([]))
-    await Bun.sleep(10)
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        const persisted = JSON.parse(await readFile(join(dir, "operations.json"), "utf8"))
+        if (persisted.operations.length > 0) break
+      } catch {}
+      await Bun.sleep(1)
+    }
     expect(scheduled).toBe(false)
     const persisted = JSON.parse(await readFile(join(dir, "operations.json"), "utf8"))
     expect(persisted.operations[0].state).toBe("accepted")
-    expect(registry.get("op_1234567890abcdef")?.state).toBe("accepted")
+    expect(registry.get("op_1234567890abcdef")).toBeUndefined()
     expect(observed).toHaveLength(0)
 
     gate.resolve()

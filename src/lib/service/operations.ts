@@ -5,8 +5,11 @@ import {
   OperationSchema,
   type ApiError,
   type Operation,
+  type OperationProgress,
 } from "./contract"
 import type { OperationEventPublisher } from "./event-journal"
+import { openWorkspace as openWorkspaceDirect } from "../workspace-ops"
+import { closeWorkspace as closeWorkspaceDirect } from "../workspace-lifecycle"
 
 export const DEFAULT_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_OPERATION_TERMINAL_LIMIT = 10_000
@@ -15,13 +18,28 @@ export interface OperationStep {
   name: string
   stage: "preparing" | "executing"
   message: string
-  run: () => Promise<void>
+  run: (report: (progress: OperationProgressInput) => void | Promise<void>) => Promise<void>
   rollback?: () => Promise<void>
 }
+
+export type OperationProgressInput = Omit<OperationProgress, "stage"> & { stage?: OperationProgress["stage"] }
 
 export interface OperationExecution {
   steps: OperationStep[]
   result?: Record<string, unknown>
+}
+
+export interface SubmitOperationInput {
+  clientId: string
+  endpoint: string
+  idempotencyKey: string
+  request: unknown
+  execution: OperationExecution
+}
+
+export class IdempotencyConflictError extends Error {
+  readonly code = "idempotency_conflict"
+  constructor(readonly operationId: string) { super("Idempotency key was already used with different input") }
 }
 
 type PersistedReservation = {
@@ -66,6 +84,7 @@ export class OperationRegistry {
   private queue: Promise<unknown> = Promise.resolve()
   private initialized = false
   private store: Store = { operations: [], reservations: [] }
+  private readonly visibleOperations = new Map<string, Operation>()
   private readonly executions = new Map<string, Promise<void>>()
   private readonly cancellations = new Set<string>()
 
@@ -108,6 +127,7 @@ export class OperationRegistry {
     const retainedIds = new Set([...active, ...terminal].map((item) => item.operation_id))
     this.store.operations = [...active, ...terminal]
     this.store.reservations = this.store.reservations.filter((item) => retainedIds.has(item.operation_id))
+    for (const id of this.visibleOperations.keys()) if (!retainedIds.has(id)) this.visibleOperations.delete(id)
   }
 
   async initialize(): Promise<void> {
@@ -124,6 +144,9 @@ export class OperationRegistry {
         if ((caught as NodeJS.ErrnoException).code !== "ENOENT") throw caught
       }
       this.initialized = true
+      for (const item of this.store.operations) {
+        if (item.state !== "accepted" && item.state !== "running") this.visibleOperations.set(item.operation_id, item)
+      }
       const interrupted = this.store.operations.filter((item) => item.state === "accepted" || item.state === "running")
       for (const item of interrupted) {
         const failed: Operation = OperationSchema.parse({
@@ -141,6 +164,7 @@ export class OperationRegistry {
         this.replace(failed)
         await this.persist()
         await this.publish(failed)
+        this.visibleOperations.set(failed.operation_id, failed)
         await this.observe?.(structuredClone(failed))
       }
       this.prune()
@@ -155,7 +179,7 @@ export class OperationRegistry {
   }
 
   get(id: string): Operation | undefined {
-    const found = this.store.operations.find((item) => item.operation_id === id)
+    const found = this.visibleOperations.get(id)
     return found ? structuredClone(found) : undefined
   }
 
@@ -170,6 +194,7 @@ export class OperationRegistry {
         await this.persist()
         throw caught
       }
+      this.visibleOperations.set(operation.operation_id, operation)
       await this.observe?.(structuredClone(operation))
       return operation
     })
@@ -179,6 +204,53 @@ export class OperationRegistry {
       void running.finally(() => this.executions.delete(accepted.operation_id))
     })
     return structuredClone(accepted)
+  }
+
+  async submit(input: SubmitOperationInput): Promise<Operation> {
+    await this.initialize()
+    let shouldSchedule = false
+    const operation = await this.serialized(async () => {
+      this.prune()
+      const existing = this.store.reservations.find((item) =>
+        item.client_id === input.clientId && item.endpoint === input.endpoint && item.idempotency_key === input.idempotencyKey)
+      const requestHash = canonicalRequestHash(input.request)
+      if (existing) {
+        if (existing.request_hash !== requestHash) throw new IdempotencyConflictError(existing.operation_id)
+        const original = this.store.operations.find((item) => item.operation_id === existing.operation_id)
+        if (!original) throw new Error(`idempotency reservation references missing operation: ${existing.operation_id}`)
+        return original
+      }
+      const accepted = OperationSchema.parse({ operation_id: this.id(), state: "accepted", accepted_at: this.timestamp() })
+      const reservation: PersistedReservation = {
+        client_id: input.clientId,
+        endpoint: input.endpoint,
+        idempotency_key: input.idempotencyKey,
+        request_hash: requestHash,
+        operation_id: accepted.operation_id,
+        created_at: accepted.accepted_at,
+      }
+      this.store.operations.push(accepted)
+      this.store.reservations.push(reservation)
+      await this.persist()
+      try { await this.publish(accepted) } catch (caught) {
+        this.store.operations = this.store.operations.filter((item) => item.operation_id !== accepted.operation_id)
+        this.store.reservations = this.store.reservations.filter((item) => item !== reservation)
+        await this.persist()
+        throw caught
+      }
+      this.visibleOperations.set(accepted.operation_id, accepted)
+      await this.observe?.(structuredClone(accepted))
+      shouldSchedule = true
+      return accepted
+    })
+    if (shouldSchedule) {
+      this.schedule(() => {
+        const running = this.execute(operation, input.execution)
+        this.executions.set(operation.operation_id, running)
+        void running.finally(() => this.executions.delete(operation.operation_id))
+      })
+    }
+    return structuredClone(operation)
   }
 
   async cancel(id: string): Promise<Operation> {
@@ -200,6 +272,7 @@ export class OperationRegistry {
       this.prune()
       await this.persist()
       await this.publish(operation)
+      this.visibleOperations.set(operation.operation_id, operation)
       await this.observe?.(structuredClone(operation))
     })
   }
@@ -225,7 +298,13 @@ export class OperationRegistry {
           progress: { stage: step.stage, message: step.message, completed: index, total: execution.steps.length },
         })
         await this.visible(current)
-        await step.run()
+        await step.run(async (reported) => {
+          current = OperationSchema.parse({
+            operation_id: accepted.operation_id, state: "running", accepted_at: accepted.accepted_at, started_at: startedAt,
+            progress: { ...reported, stage: reported.stage ?? step.stage },
+          })
+          await this.visible(current)
+        })
         completed.push(step)
       }
       if (this.cancellations.has(accepted.operation_id)) {
@@ -286,4 +365,34 @@ export function canonicalRequestHash(value: unknown): string {
     return input
   }
   return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex")
+}
+
+type WorkspaceMutationRequest = { workspace: string; options?: Record<string, unknown> }
+type WorkspaceMutation = (request: WorkspaceMutationRequest) => OperationExecution
+type WorkspaceFunction = (workspace: string, options: any, progress?: (message: string) => void) => Promise<{ ok: boolean; error?: string }>
+
+export function createWorkspaceMutationAdapters(dependencies: {
+  openWorkspace?: WorkspaceFunction
+  closeWorkspace?: WorkspaceFunction
+} = {}): Record<"workspace.open" | "workspace.close", WorkspaceMutation> {
+  const adapt = (name: "open" | "close", invoke: WorkspaceFunction): WorkspaceMutation => (request) => ({
+    steps: [{
+      name: `workspace.${name}`,
+      stage: "executing",
+      message: `${name === "open" ? "Opening" : "Closing"} workspace`,
+      run: async (report) => {
+        let progressQueue = Promise.resolve()
+        const result = await invoke(request.workspace, { ...request.options, captured: true }, (message) => {
+          progressQueue = progressQueue.then(() => report({ message })).then(() => undefined)
+        })
+        await progressQueue
+        if (!result.ok) throw new Error(result.error ?? `Workspace ${name} failed`)
+      },
+    }],
+    result: { workspace: request.workspace },
+  })
+  return {
+    "workspace.open": adapt("open", dependencies.openWorkspace ?? openWorkspaceDirect),
+    "workspace.close": adapt("close", dependencies.closeWorkspace ?? closeWorkspaceDirect),
+  }
 }

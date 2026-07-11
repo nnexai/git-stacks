@@ -73,8 +73,8 @@ describe("operation idempotency", () => {
     const dir = await root()
     let now = Date.UTC(2026, 0, 1)
     let id = 0
-    const registry = new OperationRegistry({ root: dir, now: () => now, id: () => `op_retention12345${id++}`, publishOperationEvent: publisher, retentionMs: 100 })
-    const input = { clientId: "client-a", endpoint: "workspace.close", idempotencyKey: "key", request: { workspace: "demo" }, execution: { steps: [] } } as const
+    const registry = new OperationRegistry({ root: dir, now: () => now, id: () => `op_retention123456${id++}`, publishOperationEvent: publisher, retentionMs: 100 })
+    const input = { clientId: "client-a", endpoint: "workspace.close", idempotencyKey: "key", request: { workspace: "demo" }, execution: { steps: [] } }
     const first = await registry.submit(input)
     await registry.wait(first.operation_id)
     now += 101
@@ -91,7 +91,7 @@ describe("workspace mutation adapters", () => {
     expect(Object.keys(adapters).sort()).toEqual(["workspace.close", "workspace.open"])
     const reports: string[] = []
     const operation = adapters["workspace.open"]({ workspace: "demo", options: { captured: true } })
-    await operation.steps[0]!.run((progress) => reports.push(progress.message ?? ""))
+    await operation.steps[0]!.run((progress) => { reports.push(progress.message ?? "") })
     expect(open).toHaveBeenCalledTimes(1)
     expect(reports).toEqual(["Opened repo 1"])
   })
