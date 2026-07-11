@@ -21,6 +21,14 @@ afterEach(() => {
 })
 
 describe("service authentication admission", () => {
+  test("publishes exact HTTP resource bounds", async () => {
+    const server = await import("../../src/service/server")
+    expect(server.MAX_BODY_BYTES).toBe(256 * 1024)
+    expect(server.RATE_LIMIT_PER_MINUTE).toBe(60)
+    expect(server.RATE_LIMIT_BURST).toBe(20)
+    expect(server.REQUEST_TIMEOUT_SECONDS).toBe(30)
+  })
+
   test("returns one generic rejection for every unauthenticated bearer shape", () => {
     const serviceRoot = root()
     const issued = provisionOfficialClient("linux", { serviceRoot, randomBytes: () => Buffer.alloc(32, 4) })
