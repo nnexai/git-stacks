@@ -342,6 +342,14 @@ fn replayWorker(state: *State) void {
         // recovers missed invalidation events.
         if (leases % 5 == 0 and !state.replay_cancel.load(.acquire))
             _ = c.g_main_context_invoke(null, @ptrCast(&refreshSnapshotIdle), state);
+        // A finite SSE lease exists to make shutdown interruptible, not to
+        // busy-poll the service. Pace successful leases below the authenticated
+        // request budget while checking cancellation often enough to keep
+        // window shutdown responsive.
+        for (0..40) |_| {
+            if (state.replay_cancel.load(.acquire)) break;
+            std.Thread.sleep(50 * std.time.ns_per_ms);
+        }
     }
 }
 
