@@ -89,6 +89,14 @@ pub fn build(b: *std.Build) void {
     application_module.addImport("model", app_model_module);
     application_module.addImport("workspace_view", workspace_module);
     app_module.addImport("application", application_module);
+    app_module.addImport("workspace_view", workspace_module);
+    const command_launcher_module = b.createModule(.{ .root_source_file = b.path("linux/command_launcher.zig") });
+    command_launcher_module.addImport("model", app_model_module);
+    app_module.addImport("command_launcher", command_launcher_module);
+    const attention_view_module = b.createModule(.{ .root_source_file = b.path("linux/attention_view.zig") });
+    attention_view_module.addImport("model", app_model_module);
+    attention_view_module.addImport("reducer", app_reducer_module);
+    app_module.addImport("attention_view", attention_view_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
     app.linkSystemLibrary("ghostty");
@@ -130,8 +138,11 @@ pub fn build(b: *std.Build) void {
 
     const accessibility_test_module = b.createModule(.{ .root_source_file = b.path("tests/accessibility_test.zig"), .target = b.graph.host, .optimize = .Debug });
     accessibility_test_module.addImport("ghostty_surface", surface_module);
-    const ax_attention=b.createModule(.{.root_source_file=b.path("linux/attention_view.zig")});ax_attention.addImport("model",app_model_module);ax_attention.addImport("reducer",app_reducer_module);
-    accessibility_test_module.addImport("model",app_model_module);accessibility_test_module.addImport("attention_view",ax_attention);
+    const ax_attention = b.createModule(.{ .root_source_file = b.path("linux/attention_view.zig") });
+    ax_attention.addImport("model", app_model_module);
+    ax_attention.addImport("reducer", app_reducer_module);
+    accessibility_test_module.addImport("model", app_model_module);
+    accessibility_test_module.addImport("attention_view", ax_attention);
     accessibility_test_module.addIncludePath(include_dir);
     accessibility_test_module.addCSourceFile(.{ .file = .{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "src", "gl.c" }) }, .flags = &.{} });
     accessibility_test_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "include" }) });
@@ -181,18 +192,36 @@ pub fn build(b: *std.Build) void {
     const attention_step = b.step("attention-test", "Run structured attention derivation and focus routing tests");
     attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = attention_test_module })).step);
 
-    const wu_model=b.createModule(.{.root_source_file=b.path("core/model.zig")});
-    const wu_view=b.createModule(.{.root_source_file=b.path("linux/workspace_view.zig")});wu_view.addImport("model",wu_model);
-    const wu_test=b.createModule(.{.root_source_file=b.path("tests/workspace_ui_test.zig"),.target=b.graph.host,.optimize=.Debug});wu_test.addImport("model",wu_model);wu_test.addImport("workspace_view",wu_view);
-    const workspace_ui_step=b.step("workspace-ui-test","Run adaptive workspace and pair tab projection tests");workspace_ui_step.dependOn(&b.addRunArtifact(b.addTest(.{.root_module=wu_test})).step);
+    const wu_model = b.createModule(.{ .root_source_file = b.path("core/model.zig") });
+    const wu_view = b.createModule(.{ .root_source_file = b.path("linux/workspace_view.zig") });
+    wu_view.addImport("model", wu_model);
+    const wu_test = b.createModule(.{ .root_source_file = b.path("tests/workspace_ui_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    wu_test.addImport("model", wu_model);
+    wu_test.addImport("workspace_view", wu_view);
+    const workspace_ui_step = b.step("workspace-ui-test", "Run adaptive workspace and pair tab projection tests");
+    workspace_ui_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = wu_test })).step);
 
-    const aa_model=b.createModule(.{.root_source_file=b.path("core/model.zig")});const aa_reducer=b.createModule(.{.root_source_file=b.path("core/reducer.zig")});aa_reducer.addImport("model",aa_model);
-    const aa_workspace=b.createModule(.{.root_source_file=b.path("linux/workspace_view.zig")});aa_workspace.addImport("model",aa_model);
-    const aa_app=b.createModule(.{.root_source_file=b.path("linux/application.zig")});aa_app.addImport("model",aa_model);aa_app.addImport("workspace_view",aa_workspace);
-    const aa_launcher=b.createModule(.{.root_source_file=b.path("linux/command_launcher.zig")});aa_launcher.addImport("model",aa_model);
-    const aa_attention=b.createModule(.{.root_source_file=b.path("linux/attention_view.zig")});aa_attention.addImport("model",aa_model);aa_attention.addImport("reducer",aa_reducer);
-    const aa_test=b.createModule(.{.root_source_file=b.path("tests/application_actions_test.zig"),.target=b.graph.host,.optimize=.Debug});aa_test.addImport("model",aa_model);aa_test.addImport("application",aa_app);aa_test.addImport("command_launcher",aa_launcher);aa_test.addImport("attention_view",aa_attention);
-    const application_actions_step=b.step("application-actions-test","Run scoped application command and attention action tests");application_actions_step.dependOn(&b.addRunArtifact(b.addTest(.{.root_module=aa_test})).step);
+    const aa_model = b.createModule(.{ .root_source_file = b.path("core/model.zig") });
+    const aa_reducer = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
+    aa_reducer.addImport("model", aa_model);
+    const aa_workspace = b.createModule(.{ .root_source_file = b.path("linux/workspace_view.zig") });
+    aa_workspace.addImport("model", aa_model);
+    const aa_app = b.createModule(.{ .root_source_file = b.path("linux/application.zig") });
+    aa_app.addImport("model", aa_model);
+    aa_app.addImport("workspace_view", aa_workspace);
+    const aa_launcher = b.createModule(.{ .root_source_file = b.path("linux/command_launcher.zig") });
+    aa_launcher.addImport("model", aa_model);
+    const aa_attention = b.createModule(.{ .root_source_file = b.path("linux/attention_view.zig") });
+    aa_attention.addImport("model", aa_model);
+    aa_attention.addImport("reducer", aa_reducer);
+    const aa_test = b.createModule(.{ .root_source_file = b.path("tests/application_actions_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    aa_test.addImport("model", aa_model);
+    aa_test.addImport("application", aa_app);
+    aa_test.addImport("command_launcher", aa_launcher);
+    aa_test.addImport("attention_view", aa_attention);
+    aa_test.addImport("production_app_contract", b.createModule(.{ .root_source_file = b.path("linux/app_contract_test.zig") }));
+    const application_actions_step = b.step("application-actions-test", "Run scoped application command and attention action tests");
+    application_actions_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = aa_test })).step);
 
     const tabs_module = b.createModule(.{ .root_source_file = b.path("tests/tab_registry_test.zig"), .target = b.graph.host, .optimize = .Debug });
     const tabs_model = b.createModule(.{ .root_source_file = b.path("core/model.zig") });

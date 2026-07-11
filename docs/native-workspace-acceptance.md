@@ -29,7 +29,11 @@ Automated model/action tests do not fill this blocking Phase 106 graphical check
 ## Runbook
 
 1. Run `bun run native:verify && bun run test && bun run typecheck && bun run test:deps && bun run verify:gates`.
-2. Start the authoritative service and export its discovery/authentication environment.
-3. Run `bun run native:run` in a real Wayland session and X11 where supported.
+2. Start the authoritative service and export the discovery endpoint and bearer authorization expected by `native/linux/app_graph.zig`. Confirm the snapshot contains at least one workspace/repository pair and configured command.
+3. Launch the production executable with `bun run native:run` in a real Wayland session. Repeat under X11 with `GDK_BACKEND=x11 bun run native:run` where an X server is available.
 4. Exercise every row, including continuous typing in another app while replay events arrive.
 5. Record concrete observations, versions, failures and evidence paths; replace `PENDING` only from observation.
+
+The executable uses `AdwNavigationSplitView`, an identity-backed workspace/repository list, a persistent `GtkStack` of Ghostty hosts, registered `win.*` GActions, and a searchable configured-command popover. Do not use `native:smoke-app` as graphical acceptance evidence: its isolated fixture lifecycle is intended for automated startup/teardown checks, not the authenticated multi-workspace checkpoint.
+
+If launch fails before the window appears, first verify that the authoritative discovery/authentication environment resolves a ready snapshot. A missing selected pair is reported as `native launch requires an authoritative workspace/repository selection`; this is an environment/data precondition rather than a completed graphical observation.

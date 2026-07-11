@@ -14,3 +14,28 @@ test "production application owns background replay and authoritative launch ord
     try std.testing.expect(std.mem.indexOf(u8, source, "GIT_STACKS_WORKSPACE_ID") != null);
     try std.testing.expect(std.mem.indexOf(u8, source, "GIT_STACKS_REPOSITORY_ID") != null);
 }
+
+test "production GTK shell registers widgets actions callbacks and non-presenting replay projection" {
+    const source = @embedFile("app.zig");
+    const required = [_][]const u8{
+        "adw_navigation_split_view_new",
+        "gtk_stack_add_named",
+        "gtk_list_box_new",
+        "g_simple_action_new",
+        "g_action_map_add_action",
+        "gtk_application_set_accels_for_action",
+        "g_menu_append",
+        "actionActivate",
+        "workspaceActivated",
+        "tabClicked",
+        "launcherActivated",
+        "gtk_search_entry_new",
+        "gtk_popover_popup",
+        "gtk_accessible_update_property",
+        "refreshProjection(dispatch.state)",
+    };
+    for (required) |needle| try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
+    const replay_refresh = std.mem.indexOf(u8, source, "refreshProjection(dispatch.state)").?;
+    const replay_worker = std.mem.indexOfPos(u8, source, replay_refresh, "fn replayWorker").?;
+    try std.testing.expect(std.mem.indexOf(u8, source[replay_refresh..replay_worker], "gtk_window_present") == null);
+}
