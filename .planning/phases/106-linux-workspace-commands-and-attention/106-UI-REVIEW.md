@@ -261,3 +261,48 @@ The synthetic button/kebab terminal strip has been replaced by native `AdwTabVie
 This is an implementation checkpoint, not approval. Native right-click menus, centered dialog treatment for the launcher, responsive narrow-window behavior, and recorded end-to-end interaction evidence remain open for the next UAT pass.
 
 Follow-up remediation `4f9c7cf8` replaces the launcher popover with a centered owned `AdwDialog`, preserving search focus, filtered command rows, activation, and structured error display. Workspace and repository rows now use secondary-click context popovers, and `AdwTabView` supplies the tab context menu for rename/close/relaunch/remove without permanent ellipsis controls. A managed-service GTK lifecycle smoke seam was added for real create/realize/register/page/dialog/window-close evidence; its service-start orchestration still needs hardening before its evidence can be accepted.
+
+## Product UX audit — 2026-07-12
+
+This review is source-backed and read-only with respect to production. The latest UAT remains authoritative: the shell is structurally closer to a desktop terminal, but it still does not communicate a Supacode-like workspace model clearly enough and several visible affordances do not prove or expose their state changes.
+
+### P0 — interaction language and truthful state
+
+1. **The left rail is a flat rebuilt list, not a workspace/repository navigator.** `refreshProjection` destroys and recreates every row on each refresh (`app.zig:471-526`). Workspace headings are plain labels, repositories are plain text prefixed with a Unicode dot, and hierarchy is expressed only through iteration order (`app.zig:478-523`). There are no stable row models, icons, disclosure, branch/worktree metadata, status badges, hover/selected treatment, or pinned/unpinned sections. Target: a compact stable rail with explicit workspace groups, repository/worktree rows, selected-row styling, branch/status metadata, and pinned ordering comparable to the reference—content hierarchy first, decoration second.
+
+2. **Pinning has no legible product outcome.** The context action mutates `state.pins` and saves it (`workspace_view.zig:23-25`, `app.zig:596-605`, `app.zig:1052-1074`), but rendering merely prepends `★` and changes a generic CSS class (`app.zig:474-483`). All workspaces remain in the same flat order; there is no pinned section, no immediate explanatory feedback, and drag/drop exists only after a row is already pinned (`app.zig:494-502`). Target: a visible Pinned section followed by Workspaces, immediate row movement, checked/contextual pin state, persisted order, and a toast or equivalent confirmation on failure.
+
+3. **There is no user refresh/reconnect affordance.** Connection states include stale, refresh-required, and failure copy (`app.zig:451-469`), but the registered action set contains no refresh action (`application.zig:2-5`) and the header/menu exposes only New shell, Configured commands, and VS Code (`app.zig:1108-1128`). Target: contextual Refresh/Reconnect in the rail/header and in connection empty states, backed by the authoritative snapshot refresh path with loading, success, and structured failure feedback.
+
+4. **Ended-page controls can appear inert without explaining why.** Ended pages always render Relaunch and Remove buttons (`app.zig:541-556`), while action enablement is global and Relaunch additionally requires connection `.ready` (`application.zig:4-5`, `app.zig:436-449`). Thus a stale/disconnected restored page can present a disabled-looking or nonfunctional Relaunch without inline cause. Remove should remain available offline, while Relaunch should state “Reconnect to relaunch” or expose recovery. The ended page should include terminal title, working directory, exit status/time, and a compact primary Relaunch / secondary Remove hierarchy rather than a generic sentence.
+
+5. **Persistence flattens every saved surface into ended history.** `recordsFromState` serializes all live and ended surfaces as `.ended` (`persistence.zig:174-183`), and restore appends them back as ended records (`persistence.zig:186-203`). This is safe for process ownership, but the UI must call them previous sessions/history—not imply that live terminals can be resumed. Target: bounded, deduplicated “Previous terminals” history separated from current tabs, with clear relaunch lineage and bulk clear; current tab presentation should not be polluted by every historical record.
+
+### P1 — actual tab and command affordances
+
+6. **The content uses real `AdwTabView`/`AdwTabBar`, but the product contract is incomplete.** The native tab bar, page selection, close-page signal, context menu, and plus button now exist (`app.zig:1149-1181`). However reorder persistence is still wired through legacy custom drag callbacks rather than the tab view’s page-reorder signal, and the visible tab context menu lists mutually exclusive Close, Relaunch, and Remove together then relies on global action disabling (`app.zig:1153-1159`, `app.zig:442-448`). Target: native reorder -> model order -> persistence, hover close for live pages, lifecycle-specific context menus, overflow behavior, and selected-tab actions that never depend on stale global `state.surface`.
+
+7. **Repository labels can collapse to duplicate workspace names.** When repository metadata lacks a name, every repository falls back to the workspace name (`app.zig:504-508`). This makes multiple rows indistinguishable and does not match the reference’s repo/worktree language. Target: authoritative repository/worktree display name, branch beneath or alongside it, path only as tooltip/secondary copy, and short identity only as a last-resort diagnostic fallback.
+
+8. **The command launcher is a real owned dialog, but its states are underspecified.** The `AdwDialog` correctly owns search focus and a result list (`app.zig:1189-1220`); search filtering and activation use the production command path (`app.zig:888-920`). Yet `openLauncher` silently returns unless connection is ready (`app.zig:888-896`), the list has no explicit loading/empty/recent sections, keyboard selection/default activation is not configured, and failures are raw `@errorName` strings prefixed “Launch failed” (`app.zig:875-886`). Target: always open the launcher; show Loading, No configured commands, Reconnect required, and structured launch failure states; preselect the first result, support arrows/Enter/Escape, group Recent and workspace/repository commands, and keep technical error identifiers behind expandable details.
+
+9. **Secondary-click menus exist but are not discoverable or complete.** Workspace context offers only Pin/Unpin (`app.zig:596-605`); repository context offers New terminal, Run command, and VS Code (`app.zig:607-614`). There is no refresh, reveal/copy path, rename, close-all, or keyboard/menu-key equivalent, and no hover cue. Target: concise lifecycle-aware menus available through right click and keyboard, with the most common action also present visibly where appropriate; avoid restoring permanent ellipsis buttons.
+
+### P2 — Supacode-like composition target
+
+10. **The frame still reads as a toolkit scaffold.** The composition is one generic `AdwHeaderBar`, a fixed-minimum `GtkPaned`, a bare list, and tabs (`app.zig:1108-1188`). The divider is draggable, but its 220 px position is not persisted and no breakpoint/adaptive behavior is applied. Target: narrow dark rail with persisted width, compact workspace title/branch context, low-height native tab strip integrated with the content edge, content-first terminal canvas, restrained plus/search controls, and a narrow-window mode that collapses the rail without hiding terminal actions.
+
+11. **Attention copy still exposes internal severity language when nonzero.** Zero state is hidden, but nonzero text remains `Attention: N unread (severity-enum)` (`app.zig:562-575`). Target: a subtle bell/badge with accessible count; selecting it opens actionable items. Never render internal enum names in primary UI.
+
+### Acceptance required before visual sign-off
+
+- Pin and unpin visibly move a workspace between persisted sections without restarting.
+- Refresh/reconnect is available in every recoverable connection state and reports a visible outcome.
+- Every visible tab selects a real page; native reorder survives restart; live and ended context menus contain only relevant actions.
+- Ended pages explain title/cwd/exit and keep Remove usable offline; Relaunch gives a recovery explanation when unavailable.
+- Launcher always opens and demonstrates loading, empty, results, keyboard activation, command failure, and reconnect-required states.
+- Rail hierarchy remains understandable with one workspace/one repo and with multiple workspaces/repos; no duplicate fallback labels.
+- Divider width persists and narrow layouts provide an intentional collapsed rail.
+- Nonzero attention uses product copy and routes to an actionable item without focus theft.
+
+Until these observations pass against the actual app, the sidebar and top-level product UX should be treated as functionally incomplete rather than cosmetically unfinished.
