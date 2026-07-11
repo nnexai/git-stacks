@@ -4,16 +4,16 @@ milestone: v0.20.0
 milestone_name: milestone
 current_phase: 104
 current_phase_name: Workspace Service and Event Contract
-status: verifying
-stopped_at: Phase 105 context gathered
-last_updated: "2026-07-11T12:31:49.802Z"
+status: executing
+stopped_at: Completed 104-07-PLAN.md
+last_updated: "2026-07-11T12:42:23.000Z"
 last_activity: 2026-07-11
 last_activity_desc: Completed authenticated loopback service transport and lifecycle
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 104 (Workspace Service and Event Contract) — VERIFYING
-Plan: 6 of 6
-Status: Phase complete — ready for verification
-Last activity: 2026-07-11 — Completed authenticated loopback service transport and lifecycle
+Plan: 7 of 9
+Status: Verification gap closure in progress
+Last activity: 2026-07-11 — Wired production attention events and authoritative replay revisions
 
 Progress: [███░░░░░░░] 25%
 
@@ -39,15 +39,15 @@ Progress: [███░░░░░░░] 25%
 
 **Velocity:**
 
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 7min
-- Total execution time: 44min
+- Total execution time: 46min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| Phase 104 | 6 | 44min | 7min |
+| Phase 104 | 7 | 46min | 7min |
 
 **Recent Trend:** Phase 104 complete and ready for verification.
 | Phase 104 P01 | 11min | 2 tasks | 7 files |
@@ -56,6 +56,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 104 P05 | 3min | 2 tasks | 6 files |
 | Phase 104 P04 | 6min | 2 tasks | 4 files |
 | Phase 104 P06 | 10min | 2 tasks | 9 files |
+| Phase 104 P07 | 2min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Every v1 request authenticates before route lookup, body parsing, capability checks, or rate-state evaluation. — Prevents admission oracles and isolates rate state by credential.
 - [Phase 104]: Service descriptors carry endpoint and instance metadata plus a credential lookup identity, never bearer secrets. — Enables automatic protected discovery without secret duplication.
 - [Phase 104]: Service commands register through the shared live Commander tree. — Keeps completion and release inventory aligned with the executable CLI.
+- [Phase 104]: Managed attention publication uses ownership-aware disposal and snapshot-owned revision callbacks. — Prevents one service from detaching another and makes replay-gap rebuild metadata authoritative.
 
 ### Pending Todos
 
@@ -95,6 +97,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T12:31:49.783Z
-Stopped at: Phase 105 context gathered
-Resume file: .planning/phases/105-shared-native-model-and-terminal-foundation/105-CONTEXT.md
+Last session: 2026-07-11T12:42:23.000Z
+Stopped at: Completed 104-07-PLAN.md
+Resume file: None
