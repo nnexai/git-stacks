@@ -1,0 +1,38 @@
+const std = @import("std");
+const vt = @import("vt_adapter");
+const c = @cImport({
+    @cInclude("gtk/gtk.h");
+    @cInclude("pango/pango.h");
+});
+
+pub const Metrics = struct { cell_width: f32 = 9, cell_height: f32 = 18 };
+pub const Renderer = struct {
+    metrics: Metrics = .{},
+
+    pub fn render(self: Renderer, raw_snapshot: *anyopaque, frame: vt.RenderFrame, focused: bool) void {
+        const snapshot: *c.GtkSnapshot = @ptrCast(@alignCast(raw_snapshot));
+        const width: f32 = @floatFromInt(frame.columns);
+        const height: f32 = @floatFromInt(frame.rows);
+        const background = c.GdkRGBA{ .red = 0.035, .green = 0.043, .blue = 0.055, .alpha = 1 };
+        const bounds = c.graphene_rect_t{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = width * self.metrics.cell_width, .height = height * self.metrics.cell_height } };
+        c.gtk_snapshot_append_color(snapshot, &background, &bounds);
+        const context = c.pango_context_new();
+        defer c.g_object_unref(context);
+        const layout = c.pango_layout_new(context);
+        defer c.g_object_unref(layout);
+        const description = c.pango_font_description_from_string("Monospace 12");
+        defer c.pango_font_description_free(description);
+        c.pango_layout_set_font_description(layout, description);
+        var buffer: [4]u8 = undefined;
+        for (frame.cells) |cell| {
+            const len = std.unicode.utf8Encode(cell.codepoint, &buffer) catch continue;
+            c.pango_layout_set_text(layout, &buffer, @intCast(len));
+            c.gtk_snapshot_save(snapshot);
+            c.gtk_snapshot_translate(snapshot, &.{ .x = @as(f32, @floatFromInt(cell.column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(cell.row)) * self.metrics.cell_height });
+            c.gtk_snapshot_append_layout(snapshot, layout, &.{ .red = 0.82, .green = 0.86, .blue = 0.92, .alpha = 1 });
+            c.gtk_snapshot_restore(snapshot);
+        }
+        const cursor = c.graphene_rect_t{ .origin = .{ .x = @as(f32, @floatFromInt(frame.cursor_column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(frame.cursor_row)) * self.metrics.cell_height + self.metrics.cell_height - 2 }, .size = .{ .width = self.metrics.cell_width, .height = 2 } };
+        c.gtk_snapshot_append_color(snapshot, if (focused) &c.GdkRGBA{ .red = 0.35, .green = 0.75, .blue = 1, .alpha = 1 } else &c.GdkRGBA{ .red = 0.4, .green = 0.4, .blue = 0.4, .alpha = 1 }, &cursor);
+    }
+};

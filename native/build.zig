@@ -34,6 +34,33 @@ pub fn build(b: *std.Build) void {
     const vt_step = b.step("vt-test", "Run exact-pin ghostty-vt adapter tests");
     vt_step.dependOn(&run_vt_tests.step);
 
+    const renderer_module = b.createModule(.{ .root_source_file = b.path("linux/renderer.zig") });
+    renderer_module.addImport("vt_adapter", vt_adapter);
+    addGtkIncludes(renderer_module);
+    const widget_module = b.createModule(.{ .root_source_file = b.path("linux/terminal_widget.zig") });
+    widget_module.addImport("vt_adapter", vt_adapter);
+    widget_module.addImport("renderer", renderer_module);
+    addGtkIncludes(widget_module);
+    const renderer_test_module = b.createModule(.{ .root_source_file = b.path("tests/renderer_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    renderer_test_module.addImport("vt_adapter", vt_adapter);
+    renderer_test_module.addImport("renderer", renderer_module);
+    addGtkIncludes(renderer_test_module);
+    const renderer_tests = b.addTest(.{ .root_module = renderer_test_module });
+    linkGtk(renderer_tests);
+    const run_renderer_tests = b.addRunArtifact(renderer_tests);
+    const renderer_step = b.step("renderer-test", "Run GTK snapshot renderer tests");
+    renderer_step.dependOn(&run_renderer_tests.step);
+
+    const widget_test_module = b.createModule(.{ .root_source_file = b.path("tests/terminal_widget_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    widget_test_module.addImport("vt_adapter", vt_adapter);
+    widget_test_module.addImport("terminal_widget", widget_module);
+    addGtkIncludes(widget_test_module);
+    const widget_tests = b.addTest(.{ .root_module = widget_test_module });
+    linkGtk(widget_tests);
+    const run_widget_tests = b.addRunArtifact(widget_tests);
+    const widget_step = b.step("widget-test", "Run production GTK widget lifecycle tests");
+    widget_step.dependOn(&run_widget_tests.step);
+
     const generated = b.addWriteFiles();
     const smoke_source = generated.add("ghostty_api_smoke.zig",
         \\const ghostty = @cImport({ @cInclude("ghostty.h"); });
@@ -133,22 +160,8 @@ pub fn build(b: *std.Build) void {
     const stress_step = b.step("lifecycle-stress", "Run bounded terminal lifecycle resource stress");
     stress_step.dependOn(&run_stress_tests.step);
 
-    const host_test_module = b.createModule(.{
-        .root_source_file = b.path("tests/terminal_host_test.zig"), .target = b.graph.host, .optimize = .Debug,
-    });
-    const adapter_module = vt_adapter;
-    const host_ownership_module = b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") });
-    const terminal_host_module = b.createModule(.{ .root_source_file = b.path("linux/terminal_host.zig") });
-    terminal_host_module.addImport("adapter", adapter_module);
-    terminal_host_module.addImport("ownership", host_ownership_module);
-    host_test_module.addImport("adapter", adapter_module);
-    host_test_module.addImport("terminal_host", terminal_host_module);
-    host_test_module.addImport("ownership", host_ownership_module);
-    const host_tests = b.addTest(.{ .root_module = host_test_module });
-    host_tests.linkLibC();
-    const run_host_tests = b.addRunArtifact(host_tests);
     const host_step = b.step("terminal-host-test", "Run terminal host lifecycle and input tests");
-    host_step.dependOn(&run_host_tests.step);
+    host_step.dependOn(&run_widget_tests.step);
 
     const harness = b.addExecutable(.{
         .name = "abi-harness",
@@ -167,4 +180,13 @@ pub fn build(b: *std.Build) void {
     model_step.dependOn(&run_model_tests.step);
     model_step.dependOn(&run_reducer_tests.step);
     model_step.dependOn(&run_harness.step);
+}
+
+fn addGtkIncludes(module: *std.Build.Module) void {
+    inline for (.{ "/usr/include/gtk-4.0", "/usr/include/pango-1.0", "/usr/include/glib-2.0", "/usr/lib64/glib-2.0/include", "/usr/include/harfbuzz", "/usr/include/cairo", "/usr/include/graphene-1.0", "/usr/lib64/graphene-1.0/include", "/usr/include/gdk-pixbuf-2.0", "/usr/include/gio-unix-2.0", "/usr/include/freetype2", "/usr/include/libpng16", "/usr/include/pixman-1", "/usr/include/fribidi" }) |path| module.addSystemIncludePath(.{ .cwd_relative = path });
+}
+
+fn linkGtk(artifact: *std.Build.Step.Compile) void {
+    artifact.linkLibC();
+    inline for (.{ "gtk-4", "gdk_pixbuf-2.0", "graphene-1.0", "pangocairo-1.0", "pango-1.0", "cairo-gobject", "cairo", "gio-2.0", "gobject-2.0", "glib-2.0" }) |lib| artifact.linkSystemLibrary(lib);
 }

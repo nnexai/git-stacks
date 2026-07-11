@@ -219,6 +219,34 @@ async function verifyVt(): Promise<void> {
   await verify("vt-test")
 }
 
+async function verifyGraphical(target: "renderer-test" | "widget-test"): Promise<void> {
+  if (process.env.DISPLAY || process.env.WAYLAND_DISPLAY) {
+    await verify(target)
+    return
+  }
+  const runtime = join(CACHE, `wayland-${process.pid}`)
+  mkdirSync(runtime, { recursive: true, mode: 0o700 })
+  const socket = `git-stacks-${process.pid}`
+  const westonLog = join(runtime, "weston.log")
+  const compositor = Bun.spawn(["weston", "--backend=headless-backend.so", `--socket=${socket}`, "--idle-time=0", `--log=${westonLog}`], { stdout: "pipe", stderr: "pipe", env: { ...process.env, XDG_RUNTIME_DIR: runtime } })
+  await Bun.sleep(750)
+  try {
+    if (compositor.exitCode !== null) throw new Error(`display prerequisite failed: ${readFileSync(westonLog, "utf8")}`)
+    const previousRuntime = process.env.XDG_RUNTIME_DIR
+    const previousDisplay = process.env.WAYLAND_DISPLAY
+    process.env.XDG_RUNTIME_DIR = runtime
+    process.env.WAYLAND_DISPLAY = socket
+    try { await verify(target) } finally {
+      if (previousRuntime === undefined) delete process.env.XDG_RUNTIME_DIR; else process.env.XDG_RUNTIME_DIR = previousRuntime
+      if (previousDisplay === undefined) delete process.env.WAYLAND_DISPLAY; else process.env.WAYLAND_DISPLAY = previousDisplay
+    }
+  } finally {
+    compositor.kill("SIGTERM")
+    await Promise.race([compositor.exited, Bun.sleep(3000)])
+    rmSync(runtime, { recursive: true, force: true })
+  }
+}
+
 function verifyAccessibilityContract(): void {
   const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
   const accessibilityPath = join(ROOT, "docs", "native-terminal-accessibility.md")
@@ -247,6 +275,8 @@ else if (mode === "restore") await verifyRestore()
 else if (mode === "lifecycle") await verifyLifecycle()
 else if (mode === "terminal-host") await verifyTerminalHost()
 else if (mode === "vt") await verifyVt()
+else if (mode === "renderer") await verifyGraphical("renderer-test")
+else if (mode === "widget") await verifyGraphical("widget-test")
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "quick" || mode === "verify") await verifyQuick()
 else if (mode === "terminal-build") await verify()

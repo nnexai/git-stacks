@@ -50,6 +50,8 @@
     "native:test:terminal-build": "bun run scripts/verify-native.ts terminal-build",
     "native:test:terminal-host": "bun run scripts/verify-native.ts terminal-host",
     "native:test:vt": "bun run scripts/verify-native.ts vt",
+    "native:test:renderer": "bun run scripts/verify-native.ts renderer",
+    "native:test:widget": "bun run scripts/verify-native.ts widget",
     "native:test:accessibility": "bun run scripts/verify-native.ts accessibility",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",
