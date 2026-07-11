@@ -3,6 +3,13 @@ const std = @import("std");
 pub const Connection = enum { disconnected, discovering, snapshot_loading, replaying, ready, refresh_required, incompatible, failed, shutting_down };
 pub const Method = enum { GET, POST };
 pub const Request = struct { method: Method, path: []const u8, authorization: []const u8, body: []const u8 = "", last_event_id: ?[]const u8 = null };
+pub const Response = struct { status: u16, body: []u8, pub fn deinit(self:Response,a:std.mem.Allocator)void{a.free(self.body);} };
+pub const ServiceAccess = struct {
+    endpoint: [256]u8 = [_]u8{0} ** 256, endpoint_len: u16 = 0,
+    authorization: [256]u8 = [_]u8{0} ** 256, authorization_len: u16 = 0,
+    pub fn endpointSlice(self:*const ServiceAccess)[]const u8{return self.endpoint[0..self.endpoint_len];}
+    pub fn authorizationSlice(self:*const ServiceAccess)[]const u8{return self.authorization[0..self.authorization_len];}
+};
 pub const Snapshot = struct { revision: u64, sequence: u64, workspace_id: [36]u8 };
 pub const Event = struct { sequence: u64, kind: enum { attention, operation, heartbeat } };
 pub const Outcome = union(enum) { none, snapshot: Snapshot, event: Event, duplicate, gap_refresh, incompatible, failure: []const u8, launch: Launch };
@@ -21,6 +28,57 @@ pub const Launch = struct {
     pub fn cwdSlice(self: *const Launch) []const u8 { return self.cwd[0..self.cwd_len]; }
     pub fn arg(self: *const Launch, index: usize) []const u8 { return self.argv[index][0..self.argv_lens[index]]; }
 };
+
+pub const HttpTransport = struct {
+    allocator: std.mem.Allocator,
+    http: std.http.Client,
+    cancelled: bool = false,
+    pub fn init(allocator:std.mem.Allocator)HttpTransport{return .{.allocator=allocator,.http=.{.allocator=allocator}};}
+    pub fn deinit(self:*HttpTransport)void{self.http.deinit();}
+    pub fn cancel(self:*HttpTransport)void{self.cancelled=true;}
+    pub fn execute(self:*HttpTransport, endpoint:[]const u8, request_value:Request)!Response {
+        if(self.cancelled)return error.Cancelled;
+        if(!loopbackEndpoint(endpoint))return error.NonLoopbackEndpoint;
+        const url=try std.fmt.allocPrint(self.allocator,"{s}{s}",.{std.mem.trimRight(u8,endpoint,"/"),request_value.path});defer self.allocator.free(url);
+        var output:std.Io.Writer.Allocating=.init(self.allocator);defer output.deinit();
+        const auth=std.http.Header{.name="authorization",.value=request_value.authorization};
+        const last=std.http.Header{.name="last-event-id",.value=request_value.last_event_id orelse ""};
+        const headers=if(request_value.last_event_id!=null) &[_]std.http.Header{auth,last} else &[_]std.http.Header{auth};
+        const result=try self.http.fetch(.{.location=.{.url=url},.method=if(request_value.method==.GET).GET else .POST,.payload=if(request_value.body.len==0)null else request_value.body,.extra_headers=headers,.response_writer=&output.writer,.keep_alive=false});
+        return .{.status=@intFromEnum(result.status),.body=try self.allocator.dupe(u8,output.written())};
+    }
+};
+
+pub fn discoverAccess(service_root:[]const u8)!ServiceAccess {
+    try protectedDirectory(service_root);
+    var descriptor_path:[std.fs.max_path_bytes]u8=undefined;
+    const path=try std.fmt.bufPrint(&descriptor_path,"{s}/descriptor.json",.{std.mem.trimRight(u8,service_root,"/")});
+    const descriptor_bytes=try readProtected(path,0o600,64*1024);defer std.heap.page_allocator.free(descriptor_bytes);
+    const parsed=try std.json.parseFromSlice(std.json.Value,std.heap.page_allocator,descriptor_bytes,.{});defer parsed.deinit();
+    if(parsed.value!=.object or !exactKeys(parsed.value.object,&.{"protocol","endpoint","pid","instance_id","server_id","credential_lookup","started_at"}))return error.InvalidDescriptor;
+    const o=parsed.value.object;
+    if(!std.mem.eql(u8,string(o,"protocol") orelse return error.InvalidDescriptor,"v1"))return error.InvalidDescriptor;
+    const endpoint=string(o,"endpoint") orelse return error.InvalidDescriptor;if(!loopbackEndpoint(endpoint) or endpoint.len>256)return error.InvalidDescriptor;
+    const lookup=string(o,"credential_lookup") orelse return error.InvalidDescriptor;if(!safeClientId(lookup))return error.InvalidDescriptor;
+    const pid=o.get("pid") orelse return error.InvalidDescriptor;if(pid!=.integer or pid.integer<=0)return error.InvalidDescriptor;
+    var credential_path:[std.fs.max_path_bytes]u8=undefined;
+    var credentials_path:[std.fs.max_path_bytes]u8=undefined;
+    const credentials_dir=try std.fmt.bufPrint(&credentials_path,"{s}/credentials",.{std.mem.trimRight(u8,service_root,"/")});
+    try protectedDirectory(credentials_dir);
+    const cp=try std.fmt.bufPrint(&credential_path,"{s}/credentials/{s}.json",.{std.mem.trimRight(u8,service_root,"/"),lookup});
+    const credential_bytes=try readProtected(cp,0o600,64*1024);defer std.heap.page_allocator.free(credential_bytes);
+    const cred=try std.json.parseFromSlice(std.json.Value,std.heap.page_allocator,credential_bytes,.{});defer cred.deinit();
+    if(cred.value!=.object or !exactKeys(cred.value.object,&.{"clientId","token","createdAt"}) and !exactKeys(cred.value.object,&.{"clientId","token","createdAt","revokedAt"}))return error.InvalidCredential;
+    if(cred.value.object.get("revokedAt")!=null)return error.RevokedCredential;
+    const cid=string(cred.value.object,"clientId") orelse return error.InvalidCredential;if(!std.mem.eql(u8,cid,lookup))return error.InvalidCredential;
+    const token=string(cred.value.object,"token") orelse return error.InvalidCredential;if(token.len==0 or token.len+7>256)return error.InvalidCredential;
+    var result:ServiceAccess=.{.endpoint_len=@intCast(endpoint.len),.authorization_len=@intCast(token.len+7)};@memcpy(result.endpoint[0..endpoint.len],endpoint);@memcpy(result.authorization[0..7],"Bearer ");@memcpy(result.authorization[7..token.len+7],token);return result;
+}
+
+fn readProtected(path:[]const u8,mode:u32,limit:usize)![]u8 { const file=try std.fs.openFileAbsolute(path,.{});defer file.close();const st=try std.posix.fstat(file.handle);if((st.mode&0o777)!=mode or st.uid!=std.posix.getuid() or (st.mode&std.posix.S.IFMT)!=std.posix.S.IFREG)return error.UnsafeFile;return try file.readToEndAlloc(std.heap.page_allocator,limit); }
+fn protectedDirectory(path:[]const u8)!void{var dir=try std.fs.openDirAbsolute(path,.{.no_follow=true});defer dir.close();const st=try std.posix.fstat(dir.fd);if((st.mode&0o777)!=0o700 or st.uid!=std.posix.getuid() or (st.mode&std.posix.S.IFMT)!=std.posix.S.IFDIR)return error.UnsafeDirectory;}
+fn safeClientId(v:[]const u8)bool{if(v.len==0 or v.len>128 or !std.ascii.isAlphanumeric(v[0]))return false;for(v[1..])|c|if(!std.ascii.isAlphanumeric(c) and c!='.' and c!='_' and c!='-')return false;return true;}
+fn loopbackEndpoint(v:[]const u8)bool{return std.mem.startsWith(u8,v,"http://127.0.0.1:") or std.mem.startsWith(u8,v,"http://localhost:") or std.mem.startsWith(u8,v,"http://[::1]:");}
 
 pub const Client = struct {
     state: Connection = .disconnected,
