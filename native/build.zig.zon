@@ -1,0 +1,7 @@
+.{
+    .name = .git_stacks_native,
+    .version = "0.20.0",
+    .fingerprint = 0x50db690f20e99b6d,
+    .minimum_zig_version = "0.15.2",
+    .paths = .{ "build.zig", "build.zig.zon" },
+}
