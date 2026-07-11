@@ -75,7 +75,28 @@ Wave 5 *(verification gap closure)*:
   4. Closing, exiting, quitting, or crashing a terminal surface cleans up its exclusive PTY and process group, and repeated create/resize/destroy cycles leave no orphaned processes or leaked surfaces.
   5. The pinned libghostty/Zig pair is reproducible behind the product adapter, upgrade smoke tests detect incompatibility, and the terminal exposes an honest documented native accessibility contract.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Wave 1:
+
+- [ ] 105-01 — Prove exact-pin feasibility and freeze native provenance
+
+Wave 2 *(blocked on Wave 1 completion)*:
+
+- [ ] 105-02 — Establish the portable opaque ABI and Linux golden parity harness
+
+Wave 3 *(blocked on Wave 2 completion)*:
+
+- [ ] 105-03 — Build the deterministic shared reducer and truthful session persistence
+
+Wave 4 *(blocked on Wave 3 completion)*:
+
+- [ ] 105-04 — Enforce exclusive PTY/process-group ownership and crash cleanup
+
+Wave 5 *(blocked on Wave 4 completion)*:
+
+- [ ] 105-05 — Host the full Linux libghostty surface and prove interaction, stress, and accessibility
+
 **UI hint**: yes
 
 ### Phase 106: Linux Workspace, Commands, and Attention

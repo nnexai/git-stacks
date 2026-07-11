@@ -68,7 +68,7 @@ None — discussion stayed within the Phase 105 boundary.
 
 Build the native foundation as a separate `native/` tree with two product-owned boundaries: a portable Zig model library exported through a versioned opaque C ABI, and a Linux terminal adapter that is the only code allowed to import libghostty/GTK details. The existing Bun/TypeScript service remains authoritative; Phase 104's `/v1` schemas and golden fixtures are inputs, not code to port. [VERIFIED: Phase 104 implementation and repository architecture]
 
-Pin Ghostty to the peeled commit for annotated tag `v1.3.1`, **`332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28`**, and pin Zig **`0.15.2`**. The tag object itself is `22efb0be…`; it is not the source commit and must not be recorded as one. [VERIFIED: `git ls-remote` and local checkout] The checked-out upstream manifest declares version `1.3.1` and `minimum_zig_version = "0.15.2"`; Ghostty's official build matrix maps all 1.3.x releases to Zig 0.15.2. [VERIFIED: upstream `build.zig.zon`] [CITED: https://ghostty.org/docs/install/build]
+Pin Ghostty to the peeled commit for annotated tag `v1.3.1`, **`332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28`**, and pin Zig **`0.15.2`**. The complete tag object is `22efb0be2bbea73e5339f5426fa3b20edabcaa11`; it is not the source commit and must not be recorded as one. [VERIFIED: `git ls-remote` and local checkout] The checked-out upstream manifest declares version `1.3.1` and `minimum_zig_version = "0.15.2"`; Ghostty's official build matrix maps all 1.3.x releases to Zig 0.15.2. [VERIFIED: upstream `build.zig.zon`] [CITED: https://ghostty.org/docs/install/build]
 
 Use the full libghostty surface API, not `libghostty-vt` alone. The pinned `include/ghostty.h` exposes surface creation/free, focus, size/content scale, draw, key/text/preedit, mouse, IME-point, clipboard callbacks, process-exited, close-confirmation, selection, and child-exit messaging. [VERIFIED: pinned upstream source inspection] `libghostty-vt` deliberately supplies terminal state and renderer state but leaves renderer/windowing, clipboard integration, tabs, splits, session management, and accessibility to the consumer. [CITED: https://github.com/ghostty-org/ghostling] Therefore the Phase 105 GTK adapter must own the GL/view lifecycle and every native interaction seam; a successful draw is not terminal acceptance.
 
@@ -151,7 +151,7 @@ void gs_bytes_free_v1(gs_bytes_v1);
 void gs_model_destroy_v1(gs_model_v1 *);
 ```
 
-The C harness must compile and run on Linux now. A macOS harness/CI compile must consume the same header and fixtures for CORE-01/04, but Phase 105 must not implement the macOS libghostty host.
+The C harness must compile and run on Linux now. By explicit user scope decision, Phase 105 keeps the header/harness portable and performs Clang compatibility checks, but actual macOS execution and parity proof are deferred to Phase 107; Phase 105 must not claim macOS runtime proof or implement the macOS libghostty host.
 
 ### Pattern 3: Truthful session restoration
 
@@ -192,7 +192,7 @@ Clipboard read/write must flow through host callbacks with explicit selection-cl
 ## Common Pitfalls
 
 ### 1. Pinning the annotated tag object
-`v1.3.1` resolves to tag object `22efb0be…` but source commit `332b2aef…`. A downloader/build expecting a commit may fail or fetch an unintended object. Record both and verify HEAD equals the peeled commit.
+`v1.3.1` resolves to tag object `22efb0be2bbea73e5339f5426fa3b20edabcaa11` but source commit `332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28`. A downloader/build expecting a commit may fail or fetch an unintended object. Record both and verify HEAD equals the peeled commit.
 
 ### 2. Treating libghostty-vt as a ready GTK terminal
 It intentionally excludes renderer/windowing and consumer UI. Use the full pinned surface path and isolate churn behind the adapter.
@@ -265,7 +265,7 @@ Threat cases to test: malformed/oversized ABI JSON, use-after-destroy/double-fre
 ### Test layers
 
 1. **Pure Zig model tests:** every connection/loading/failure/operation/tab/attention transition, stale/frozen/incompatible semantics, unknown optionals, deterministic serialization.
-2. **Golden parity:** Bun-generated Phase 104 fixtures consumed by Zig; C ABI harness compares canonical snapshots byte-for-byte or structurally. A macOS compile/test lane runs the same C header and fixture corpus for CORE-01/04.
+2. **Golden parity:** Bun-generated Phase 104 fixtures consumed by Zig; the Linux C ABI harness compares canonical snapshots byte-for-byte or structurally. Strict C/Clang portability checks keep the same header/corpus ready for Phase 107, where actual macOS execution/parity is proved.
 3. **Persistence tests:** valid/corrupt mixed entries, missing identities, atomic crash points, permissions, ended-only restoration, relaunch lineage, secret-negative assertions.
 4. **PTY/guard integration:** real process groups for exit, idle/active confirmation, close, quit, SIGKILL crash, escalation, descendant processes, rapid-close-before-setsid, and failed-cleanup injection.
 5. **GTK/libghostty integration:** xvfb/headless where meaningful for create/resize/destroy and callbacks, but never use it as the sole interaction proof.
@@ -277,7 +277,7 @@ Threat cases to test: malformed/oversized ABI JSON, use-after-destroy/double-fre
 |-----|-----------------|----------------|
 | CORE-01/02 | reducer identity/transition suites | Same fixture/actions yield same canonical state independent of UI. |
 | CORE-03 | C ABI compile, ownership, fuzz/negative suite | Version mismatch, null/length errors, create/destroy, allocation/free. |
-| CORE-04 | fixture drift gate in Bun + Zig + macOS-compatible C harness | Canonical Phase 104 corpus cannot diverge silently. |
+| CORE-04 | fixture drift gate in Bun + Zig + Linux C, plus public-header portability checks | Canonical Phase 104 corpus cannot diverge silently; actual macOS execution is a Phase 107 gate. |
 | CORE-05 | persistence and relaunch tests | Every disk-restored entry is ended; new surface ID links predecessor. |
 | TERM-01 | adapter integration plus documented real session | Full interaction matrix, not screenshot/render-only. |
 | TERM-02 | process group/guard matrix | Zero descendants on close/exit/quit/crash; failed proof remains visible. |
