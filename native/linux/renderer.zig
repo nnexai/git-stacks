@@ -18,7 +18,8 @@ pub const Renderer = struct {
         const background = c.GdkRGBA{ .red = 0.035, .green = 0.043, .blue = 0.055, .alpha = 1 };
         const bounds = c.graphene_rect_t{ .origin = .{ .x = 0, .y = 0 }, .size = .{ .width = width * self.metrics.cell_width, .height = height * self.metrics.cell_height } };
         c.gtk_snapshot_append_color(snapshot, &background, &bounds);
-        const context = c.pango_context_new();
+        const font_map = c.pango_cairo_font_map_get_default();
+        const context = c.pango_font_map_create_context(font_map);
         defer c.g_object_unref(context);
         const layout = c.pango_layout_new(context);
         defer c.g_object_unref(layout);

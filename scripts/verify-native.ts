@@ -266,7 +266,7 @@ async function smokeApp(): Promise<void> {
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("production GTK smoke timed out after 30 seconds") }
   const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
   if (outcome.code !== 0) throw new Error(`production GTK smoke exited ${outcome.code}: ${stderr || stdout}`)
-  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("text=git-stacks-native-terminal-ready")) throw new Error(`production GTK readiness evidence missing: ${stderr || stdout}`)
+  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("text=git-stacks-native-terminal-ready") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`production GTK visible-content evidence missing: ${stderr || stdout}`)
   console.log(`native GTK smoke passed: backend=${process.env.GDK_BACKEND ?? "auto"} display=${process.env.WAYLAND_DISPLAY ?? process.env.DISPLAY} clean-exit=true`)
 }
 async function smokeTerminal(): Promise<void> {
@@ -277,7 +277,7 @@ async function smokeTerminal(): Promise<void> {
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
-  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("SHELL_RESULT_UNIQUE")) throw new Error(`terminal roundtrip failed (${outcome.code}): ${stderr}`)
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("SHELL_RESULT_UNIQUE") || !/draws=[1-9]\d* painted_cells=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible roundtrip failed (${outcome.code}): ${stderr}`)
   console.log("native terminal smoke passed: PTY input/output, alternate-screen parsing, resize/reflow, and clean exit verified")
 }
 

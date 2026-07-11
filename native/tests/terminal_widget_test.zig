@@ -13,6 +13,9 @@ test "production widget focuses resizes snapshots and invalidates callbacks" {
     defer c.g_object_unref(window);
     c.gtk_window_set_child(@ptrCast(window), @ptrCast(@alignCast(widget.widget)));
     c.gtk_window_present(@ptrCast(window));
+    var iterations: usize = 0; while (iterations < 20 and widget.drawCount() == 0) : (iterations += 1) _ = c.g_main_context_iteration(null, 0);
+    try std.testing.expect(widget.drawCount() > 0);
+    try std.testing.expect(widget.paintedCellCount() > 0);
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(widget.widget)));
     try widget.resize(900, 540);
     const snapshot = try widget.snapshot();

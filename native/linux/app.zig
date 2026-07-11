@@ -42,15 +42,17 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     c.gtk_window_set_child(@ptrCast(window), @ptrCast(@alignCast(state.widget.widget)));
     c.gtk_window_present(@ptrCast(window));
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(state.widget.widget)));
-    const snapshot = state.widget.snapshot() catch return;
-    c.g_object_unref(snapshot);
-    std.debug.print("GIT_STACKS_NATIVE_READY text=git-stacks-native-terminal-ready focused={d}\n", .{c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget)))});
+    c.gtk_widget_queue_draw(@ptrCast(@alignCast(state.widget.widget)));
+    var iterations: usize = 0; while (iterations < 30 and state.widget.drawCount() == 0) : (iterations += 1) _ = c.g_main_context_iteration(null, 0);
+    if (state.widget.drawCount() == 0 or state.widget.paintedCellCount() == 0) { std.debug.print("GIT_STACKS_NATIVE_BLANK draws={d} cells={d}\n", .{ state.widget.drawCount(), state.widget.paintedCellCount() }); return; }
+    std.debug.print("GIT_STACKS_NATIVE_READY text=git-stacks-native-terminal-ready focused={d} draws={d} painted_cells={d}\n", .{c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget))), state.widget.drawCount(), state.widget.paintedCellCount()});
     if (state.runtime != null) std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP marker=SHELL_RESULT_UNIQUE resources=owned\n", .{});
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) _ = c.g_timeout_add(250, quitTimer, @ptrCast(app));
 }
 
 pub fn main() u8 {
-    const app = c.gtk_application_new("dev.nnex.git-stacks.terminal", c.G_APPLICATION_DEFAULT_FLAGS) orelse return 2;
+    const flags: c.GApplicationFlags = @intCast(if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) c.G_APPLICATION_NON_UNIQUE else c.G_APPLICATION_DEFAULT_FLAGS);
+    const app = c.gtk_application_new("dev.nnex.git-stacks.terminal", flags) orelse return 2;
     defer c.g_object_unref(app);
     _ = c.g_signal_connect_data(app, "activate", @ptrCast(&activate), null, null, 0);
     const code = c.g_application_run(@ptrCast(app), 0, null);
