@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 105 (shared-native-model-and-terminal-foundation) — PLANNED
-Plan: 4 of 8 complete; next 105-05
+Plan: 4 of 9 complete; next 105-05
 Status: Replan complete; ready for execution
 Last activity: 2026-07-11 — Full Ghostty plans validated with production cleanup/guard path
 

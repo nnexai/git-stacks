@@ -26,14 +26,13 @@ updated: 2026-07-11
 | 105-01..04 | 1-4 | ABI/model/restore and ownership algorithms | `bun run native:test:model && bun run native:test:restore && bun run native:test:lifecycle` | retained, green |
 | 105-05-01 | 5 | exact immutable base/Zig, hashed repo patch, derived tree, surface plus process-control ABI, upstream drift | `bun run native:setup && bun run native:audit-ghostty && bun run native:test:surface-abi` | lock, patch, ABI test, verifier |
 | 105-05-02 | 5 | app-runtime=none build/link and no competing production stack | `bun run native:build-app && bun run native:audit-production-graph` | build/verifier |
-| 105-06-01 | 6 | Ghostty config/app lifecycle and callbacks | `bun run native:test:surface` | runtime/surface tests |
-| 105-06-02 | 6 | production PID/PGID/birth-token registration, D-09..12 close/guard/absence truth | `bun run native:test:lifecycle && bun run native:test:surface` | process-control adapter/tests |
-| 105-06-03 | 6 | GL realize/draw/resize/scale/focus/unrealize and real shell output | `bun run native:test:surface && bun run native:smoke-app` | surface/app smoke |
-| 105-07-01 | 7 | rich keys, text, IME, mouse, selection and clipboard | `bun run native:test:interaction && bun run native:smoke-terminal` | interaction suite |
-| 105-07-02 | 7 | two-surface focus/input/clipboard/resize/destroy-order isolation while ownership regression stays green | `bun run native:test:lifecycle && bun run native:smoke-multisurface` | multisurface production smoke |
-| 105-08-01 | 8 | production single/two-surface lifecycle and bounded resources | `bun run native:test:stress` | stress suite |
-| 105-08-02 | 8 | honest GTK/Ghostty accessibility and full gate composition | `bun run native:test:accessibility && bun run native:verify` | accessibility suite/verifier |
-| 105-08-03 | 8 | exact-artifact human acceptance and closeout | `bun run native:verify && bun run test && bun run typecheck && bun run test:deps && bun run verify:gates` | evidence matrices |
+| 105-06-01..02 | 6 | production identity registration, D-09..12 cleanup/guard/absence and reducer truth | `bun run native:test:lifecycle && bun run native:test:model` | process-control tests |
+| 105-07-01..02 | 7 | config/app callbacks, GL lifecycle, cleanup wiring and real shell output | `bun run native:test:surface && bun run native:test:lifecycle && bun run native:smoke-app` | surface/app smoke |
+| 105-08-01 | 8 | rich keys, text, IME, mouse, selection and clipboard | `bun run native:test:interaction && bun run native:smoke-terminal` | interaction suite |
+| 105-08-02 | 8 | two-surface focus/input/clipboard/resize/destroy-order isolation | `bun run native:test:lifecycle && bun run native:smoke-multisurface` | multisurface smoke |
+| 105-09-01 | 9 | production single/two-surface lifecycle and bounded resources | `bun run native:test:stress` | stress suite |
+| 105-09-02 | 9 | honest accessibility and full gate composition | `bun run native:test:accessibility && bun run native:verify` | accessibility suite |
+| 105-09-03 | 9 | exact-artifact human acceptance and closeout | `bun run native:verify && bun run test && bun run typecheck && bun run test:deps && bun run verify:gates` | evidence matrices |
 
 ## Mandatory ownership cases
 

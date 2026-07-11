@@ -42,8 +42,9 @@ Multiple leaves share only app/config. Handles, GL areas, focus/input, clipboard
 ## Verification pattern
 
 1. 105-05: exact source/toolchain, surface/process ABI, full library build and production-graph audit.
-2. 105-06: config/app callbacks, production ownership/guard cleanup, and GtkGLArea realize/draw/resize/focus/unrealize lifecycle.
-3. 105-07: input/IME/mouse/clipboard, real shell/TUI behavior and two-surface isolation.
-4. 105-08: production resource stress, honest accessibility, complete automated gate, then real compositor evidence.
+2. 105-06: production ownership/guard cleanup adapter and reducer truth.
+3. 105-07: config/app callbacks and GtkGLArea lifecycle wired to cleanup.
+4. 105-08: input/IME/mouse/clipboard, real shell/TUI behavior and two-surface isolation.
+5. 105-09: production resource stress, honest accessibility, complete automated gate, then real compositor evidence.
 
 No human checkpoint is valid before the exact production executable passes terminal, multisurface, cleanup and accessibility preflight gates.

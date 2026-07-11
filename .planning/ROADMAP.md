@@ -75,7 +75,7 @@ Wave 5 *(verification gap closure)*:
   4. Closing, exiting, quitting, or crashing a terminal surface cleans up its exclusive PTY and process group, and repeated create/resize/destroy cycles leave no orphaned processes or leaked surfaces.
   5. The pinned libghostty/Zig pair is reproducible behind the product adapter, upgrade smoke tests detect incompatibility, and the terminal exposes an honest documented native accessibility contract.
 
-**Plans**: 4/8 plans executed
+**Plans**: 4/9 plans executed
 
 - [x] 105-01-PLAN.md
 - [x] 105-02-PLAN.md
@@ -85,6 +85,7 @@ Wave 5 *(verification gap closure)*:
 - [ ] 105-06-PLAN.md
 - [ ] 105-07-PLAN.md
 - [ ] 105-08-PLAN.md
+- [ ] 105-09-PLAN.md
 
 Wave 1:
 
@@ -108,15 +109,19 @@ Wave 5 *(blocked on Wave 4 completion)*:
 
 Wave 6 *(blocked on Wave 5 completion)*:
 
-- [ ] 105-06 — Host a Ghostty-owned rendered terminal leaf in GtkGLArea with delegated configuration
+- [ ] 105-06 — Bind Ghostty-owned children to exclusive cleanup and crash-guard truth
 
 Wave 7 *(blocked on Wave 6 completion)*:
 
-- [ ] 105-07 — Complete Ghostty-native interaction, lifecycle observation, and multi-surface isolation
+- [ ] 105-07 — Host a Ghostty-owned rendered terminal leaf in GtkGLArea with delegated configuration
 
-Wave 8 *(blocked on Wave 7 completion; final human evidence)*:
+Wave 8 *(blocked on Wave 7 completion)*:
 
-- [ ] 105-08 — Prove production full-surface stress, accessibility, and real-session acceptance
+- [ ] 105-08 — Complete Ghostty-native interaction and multi-surface isolation
+
+Wave 9 *(blocked on Wave 8 completion; final human evidence)*:
+
+- [ ] 105-09 — Prove production full-surface stress, accessibility, and real-session acceptance
 
 **UI hint**: yes
 
@@ -176,6 +181,6 @@ Wave 3 *(blocked on Wave 2 completion)*:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
-| 105. Shared Native Model and Terminal Foundation | 4/8 | Planned |  |
+| 105. Shared Native Model and Terminal Foundation | 4/9 | Planned |  |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
