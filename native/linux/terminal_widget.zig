@@ -2,7 +2,8 @@ const std = @import("std");
 const vt = @import("vt_adapter");
 const renderer_mod = @import("renderer");
 const c = @cImport({ @cInclude("gtk/gtk.h"); @cInclude("pango/pangocairo.h"); });
-const DrawContext = struct { terminal: *vt.VtAdapter, draws: usize = 0, painted_cells: usize = 0, selection_start: ?vt.GridPoint = null, selection_end: ?vt.GridPoint = null };
+const DrawContext = struct { terminal: *vt.VtAdapter, draws: usize = 0, painted_cells: usize = 0, cursor_draws: usize = 0, selection_start: ?vt.GridPoint = null, selection_end: ?vt.GridPoint = null };
+pub const cursor_color: u32 = 0x59c2ff;
 fn selected(ctx: *const DrawContext, cell: vt.Cell) bool {
     const a = ctx.selection_start orelse return false; const b = ctx.selection_end orelse return false;
     const first, const last = if (a.row < b.row or (a.row == b.row and a.column <= b.column)) .{ a, b } else .{ b, a };
@@ -24,6 +25,12 @@ fn draw(widget: ?*c.GtkDrawingArea, cr: ?*c.cairo_t, width: c_int, height: c_int
         c.cairo_move_to(cairo, @as(f64, @floatFromInt(cell.column)) * 9, @as(f64, @floatFromInt(cell.row)) * 18); c.cairo_set_source_rgba(cairo, @as(f64, @floatFromInt((fg >> 16) & 255)) / 255, @as(f64, @floatFromInt((fg >> 8) & 255)) / 255, @as(f64, @floatFromInt(fg & 255)) / 255, if (style.faint) 0.62 else 1.0); c.pango_cairo_show_layout(cairo, layout);
         if (style.underline) { c.cairo_set_line_width(cairo, 1); c.cairo_move_to(cairo, @as(f64, @floatFromInt(cell.column)) * 9, @as(f64, @floatFromInt(cell.row + 1)) * 18 - 2); c.cairo_line_to(cairo, @as(f64, @floatFromInt(cell.column + cell.width)) * 9, @as(f64, @floatFromInt(cell.row + 1)) * 18 - 2); c.cairo_stroke(cairo); }
         ctx.painted_cells += 1;
+    }
+    ctx.cursor_draws = 0;
+    if (frame.cursor_visible and frame.cursor_column < frame.columns and frame.cursor_row < frame.rows) {
+        const cursor_x = @as(f64, @floatFromInt(frame.cursor_column)) * 9; const cursor_y = @as(f64, @floatFromInt(frame.cursor_row)) * 18;
+        c.cairo_set_source_rgb(cairo, @as(f64, @floatFromInt((cursor_color >> 16) & 255)) / 255, @as(f64, @floatFromInt((cursor_color >> 8) & 255)) / 255, @as(f64, @floatFromInt(cursor_color & 255)) / 255);
+        c.cairo_rectangle(cairo, cursor_x, cursor_y + 15, 9, 3); c.cairo_fill(cairo); ctx.cursor_draws = 1;
     }
 }
 
@@ -49,6 +56,7 @@ pub const TerminalWidget = struct {
     pub fn callbackToken(self: TerminalWidget) u64 { return self.generation; }
     pub fn drawCount(self: TerminalWidget) usize { return self.draw_context.draws; }
     pub fn paintedCellCount(self: TerminalWidget) usize { return self.draw_context.painted_cells; }
+    pub fn cursorDrawCount(self: TerminalWidget) usize { return self.draw_context.cursor_draws; }
     pub fn selectionBegin(self: *TerminalWidget, point: vt.GridPoint) void { if (!self.live) return; self.draw_context.selection_start = point; self.draw_context.selection_end = point; _ = self.queueRedraw(self.generation); }
     pub fn selectionUpdate(self: *TerminalWidget, point: vt.GridPoint) void { if (!self.live or self.draw_context.selection_start == null) return; self.draw_context.selection_end = point; _ = self.queueRedraw(self.generation); }
     pub fn selectionText(self: *TerminalWidget, allocator: std.mem.Allocator) !?[]u8 { return try self.terminal.extractText(allocator, self.draw_context.selection_start orelse return null, self.draw_context.selection_end orelse return null); }

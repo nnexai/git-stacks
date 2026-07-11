@@ -41,7 +41,9 @@ pub const Renderer = struct {
             c.gtk_snapshot_append_layout(snapshot, layout, &.{ .red = @as(f32, @floatFromInt((fg >> 16) & 255)) / 255, .green = @as(f32, @floatFromInt((fg >> 8) & 255)) / 255, .blue = @as(f32, @floatFromInt(fg & 255)) / 255, .alpha = if (cell.style.faint) 0.62 else 1 });
             c.gtk_snapshot_restore(snapshot);
         }
-        const cursor = c.graphene_rect_t{ .origin = .{ .x = @as(f32, @floatFromInt(frame.cursor_column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(frame.cursor_row)) * self.metrics.cell_height + self.metrics.cell_height - 2 }, .size = .{ .width = self.metrics.cell_width, .height = 2 } };
-        c.gtk_snapshot_append_color(snapshot, if (focused) &c.GdkRGBA{ .red = 0.35, .green = 0.75, .blue = 1, .alpha = 1 } else &c.GdkRGBA{ .red = 0.4, .green = 0.4, .blue = 0.4, .alpha = 1 }, &cursor);
+        if (frame.cursor_visible) {
+            const cursor = c.graphene_rect_t{ .origin = .{ .x = @as(f32, @floatFromInt(frame.cursor_column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(frame.cursor_row)) * self.metrics.cell_height + self.metrics.cell_height - 3 }, .size = .{ .width = self.metrics.cell_width, .height = 3 } };
+            c.gtk_snapshot_append_color(snapshot, if (focused) &c.GdkRGBA{ .red = 0.35, .green = 0.76, .blue = 1, .alpha = 1 } else &c.GdkRGBA{ .red = 0.55, .green = 0.6, .blue = 0.65, .alpha = 1 }, &cursor);
+        }
     }
 };

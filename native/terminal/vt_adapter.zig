@@ -12,6 +12,7 @@ pub const RenderFrame = struct {
     rows: u16,
     cursor_row: u16,
     cursor_column: u16,
+    cursor_visible: bool,
     alternate_screen: bool,
     truncated: bool = false,
 
@@ -27,6 +28,7 @@ pub const VtAdapter = struct {
     render_state: ghostty.RenderState = .empty,
     query_tail: [3]u8 = .{0} ** 3,
     query_tail_len: u2 = 0,
+    cursor_visible: bool = true,
 
     pub fn init(allocator: std.mem.Allocator, columns: u16, rows: u16) !VtAdapter {
         const terminal = try allocator.create(ghostty.Terminal);
@@ -43,7 +45,12 @@ pub const VtAdapter = struct {
         self.allocator.destroy(self.terminal);
     }
 
-    pub fn feed(self: *VtAdapter, bytes: []const u8) !void { try self.stream.nextSlice(bytes); }
+    pub fn feed(self: *VtAdapter, bytes: []const u8) !void {
+        if (std.mem.lastIndexOf(u8, bytes, "\x1b[?25l")) |hidden| {
+            const shown = std.mem.lastIndexOf(u8, bytes, "\x1b[?25h"); self.cursor_visible = shown != null and shown.? > hidden;
+        } else if (std.mem.lastIndexOf(u8, bytes, "\x1b[?25h") != null) self.cursor_visible = true;
+        try self.stream.nextSlice(bytes);
+    }
     pub fn queryResponse(self: *VtAdapter, bytes: []const u8) ?[]const u8 {
         var combined: [8195]u8 = undefined; const prior: usize = self.query_tail_len;
         @memcpy(combined[0..prior], self.query_tail[0..prior]); const count = @min(bytes.len, combined.len - prior); @memcpy(combined[prior..][0..count], bytes[0..count]);
@@ -80,7 +87,7 @@ pub const VtAdapter = struct {
                 }
             }
         }
-        return .{ .allocator = self.allocator, .cells = try cells.toOwnedSlice(self.allocator), .columns = cols, .rows = rows, .cursor_row = @intCast(screen.cursor.y), .cursor_column = @intCast(screen.cursor.x), .alternate_screen = self.isAlternateScreen(), .truncated = @as(usize, rows) * @as(usize, cols) > 131_072 };
+        return .{ .allocator = self.allocator, .cells = try cells.toOwnedSlice(self.allocator), .columns = cols, .rows = rows, .cursor_row = @intCast(screen.cursor.y), .cursor_column = @intCast(screen.cursor.x), .cursor_visible = self.cursor_visible, .alternate_screen = self.isAlternateScreen(), .truncated = @as(usize, rows) * @as(usize, cols) > 131_072 };
     }
 
     pub fn encodeKey(_: *const VtAdapter, key: Key, output: []u8) ![]const u8 {
