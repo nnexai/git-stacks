@@ -43,6 +43,16 @@ export interface AuthenticatedClient {
   capabilities: ["service:v1"]
 }
 
+export const UNAUTHENTICATED_RESPONSE = Object.freeze({
+  ok: false as const,
+  status: 401 as const,
+  body: Object.freeze({ error: "unauthenticated" as const }),
+})
+
+export type AdmissionResult =
+  | typeof UNAUTHENTICATED_RESPONSE
+  | { ok: true; client: AuthenticatedClient }
+
 function root(options: CredentialOptions): string {
   return options.serviceRoot ?? join(WS_CONFIG_DIR, "service")
 }
@@ -172,4 +182,15 @@ export function verifyCredential(token: string, options: CredentialOptions = {})
     }
   }
   return null
+}
+
+/** Authenticate a request before routing or parsing any other request data. */
+export function authenticateAdmission(
+  authorization: string | null | undefined,
+  options: CredentialOptions = {},
+): AdmissionResult {
+  const match = typeof authorization === "string" ? /^Bearer ([^\s]+)$/.exec(authorization) : null
+  if (!match) return UNAUTHENTICATED_RESPONSE
+  const client = verifyCredential(match[1]!, options)
+  return client ? { ok: true, client } : UNAUTHENTICATED_RESPONSE
 }
