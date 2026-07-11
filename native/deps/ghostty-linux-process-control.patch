@@ -1,0 +1,160 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 80372e9ba..b5f36ce42 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -31,6 +31,12 @@ typedef void* ghostty_config_t;
+ typedef void* ghostty_surface_t;
+ typedef void* ghostty_inspector_t;
+ 
++typedef struct {
++  int32_t pid;
++  int32_t pgid;
++  uint64_t linux_birth_token;
++} ghostty_process_identity_s;
++
+ // All the types below are fully defined and must be kept in sync with
+ // their Zig counterparts. Any changes to these types MUST have an associated
+ // Zig change.
+@@ -1085,8 +1091,21 @@ ghostty_surface_config_s ghostty_surface_inherited_config(ghostty_surface_t, gho
+ void ghostty_surface_update_config(ghostty_surface_t, ghostty_config_t);
+ bool ghostty_surface_needs_confirm_quit(ghostty_surface_t);
+ bool ghostty_surface_process_exited(ghostty_surface_t);
++bool ghostty_surface_process_identity(ghostty_surface_t,
++                                     ghostty_process_identity_s*);
++bool ghostty_surface_process_graceful_close(ghostty_surface_t,
++                                            ghostty_process_identity_s);
++bool ghostty_surface_process_signal_group(ghostty_surface_t,
++                                          ghostty_process_identity_s,
++                                          int32_t);
++bool ghostty_surface_process_reap(ghostty_surface_t,
++                                  ghostty_process_identity_s);
++bool ghostty_surface_process_absent(ghostty_surface_t,
++                                    ghostty_process_identity_s);
+ void ghostty_surface_refresh(ghostty_surface_t);
+ void ghostty_surface_draw(ghostty_surface_t);
++void ghostty_surface_display_realized(ghostty_surface_t);
++void ghostty_surface_display_unrealized(ghostty_surface_t);
+ void ghostty_surface_set_content_scale(ghostty_surface_t, double, double);
+ void ghostty_surface_set_focus(ghostty_surface_t, bool);
+ void ghostty_surface_set_occlusion(ghostty_surface_t, bool);
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 0a6e47ed4..7db071ea6 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1663,6 +1663,46 @@ pub const CAPI = struct {
+         return surface.core_surface.child_exited;
+     }
+ 
++    pub const ProcessIdentity = @import("../termio/Exec.zig").ProcessIdentity;
++
++    export fn ghostty_surface_process_identity(surface: *Surface, result: *ProcessIdentity) bool {
++        const identity = switch (surface.core_surface.io.backend) {
++            .exec => |*exec| exec.processIdentity() orelse return false,
++            .manual => return false,
++        };
++        result.* = identity;
++        return true;
++    }
++
++    export fn ghostty_surface_process_graceful_close(surface: *Surface, identity: ProcessIdentity) bool {
++        return switch (surface.core_surface.io.backend) {
++            .exec => |*exec| exec.signalProcessGroup(identity, 1),
++            .manual => false,
++        };
++    }
++
++    export fn ghostty_surface_process_signal_group(surface: *Surface, identity: ProcessIdentity, signal: i32) bool {
++        return switch (surface.core_surface.io.backend) {
++            .exec => |*exec| exec.signalProcessGroup(identity, signal),
++            .manual => false,
++        };
++    }
++
++    export fn ghostty_surface_process_reap(surface: *Surface, identity: ProcessIdentity) bool {
++        if (!surface.core_surface.child_exited) return false;
++        return switch (surface.core_surface.io.backend) {
++            .exec => |*exec| exec.processAbsent(identity),
++            .manual => false,
++        };
++    }
++
++    export fn ghostty_surface_process_absent(surface: *Surface, identity: ProcessIdentity) bool {
++        return switch (surface.core_surface.io.backend) {
++            .exec => |*exec| exec.processAbsent(identity),
++            .manual => true,
++        };
++    }
++
+     /// Returns true if the surface has a selection.
+     export fn ghostty_surface_has_selection(surface: *Surface) bool {
+         return surface.core_surface.hasSelection();
+diff --git a/src/termio/Exec.zig b/src/termio/Exec.zig
+index af4df3fef..db6206374 100644
+--- a/src/termio/Exec.zig
++++ b/src/termio/Exec.zig
+@@ -30,6 +30,12 @@ const windows = internal_os.windows;
+ 
+ const log = std.log.scoped(.io_exec);
+ 
++pub const ProcessIdentity = extern struct {
++    pid: i32,
++    pgid: i32,
++    linux_birth_token: u64,
++};
++
+ /// The termios poll rate in milliseconds.
+ const TERMIOS_POLL_MS = 200;
+ 
+@@ -58,6 +64,51 @@ pub fn deinit(self: *Exec) void {
+     self.subprocess.deinit();
+ }
+ 
++/// Return a reuse-resistant identity for the direct child. Linux start time
++/// from /proc is scoped with PID and process group so embedders never control
++/// a process by PID alone.
++pub fn processIdentity(self: *Exec) ?ProcessIdentity {
++    if (comptime builtin.os.tag != .linux) return null;
++    const command = switch (self.subprocess.process orelse return null) {
++        .fork_exec => |*value| value,
++        .flatpak => return null,
++    };
++    const pid = command.pid orelse return null;
++    const pgid = Subprocess.c.getpgid(pid);
++    if (pid <= 1 or pgid <= 1 or pgid == Subprocess.c.getpgid(0)) return null;
++    const birth = linuxBirthToken(pid) orelse return null;
++    return .{ .pid = @intCast(pid), .pgid = @intCast(pgid), .linux_birth_token = birth };
++}
++
++pub fn signalProcessGroup(self: *Exec, identity: ProcessIdentity, signal: i32) bool {
++    const current = self.processIdentity() orelse return false;
++    if (!std.meta.eql(current, identity)) return false;
++    if (signal != Subprocess.c.SIGHUP and signal != Subprocess.c.SIGTERM and signal != Subprocess.c.SIGKILL) return false;
++    return posix.errno(Subprocess.c.killpg(@intCast(identity.pgid), signal)) == .SUCCESS;
++}
++
++pub fn processAbsent(self: *Exec, identity: ProcessIdentity) bool {
++    const current = self.processIdentity() orelse return true;
++    if (!std.meta.eql(current, identity)) return false;
++    return posix.errno(Subprocess.c.kill(@intCast(identity.pid), 0)) == .SRCH;
++}
++
++fn linuxBirthToken(pid: std.posix.pid_t) ?u64 {
++    var path_buf: [64]u8 = undefined;
++    const path = std.fmt.bufPrint(&path_buf, "/proc/{d}/stat", .{pid}) catch return null;
++    const file = std.fs.openFileAbsolute(path, .{}) catch return null;
++    defer file.close();
++    var buf: [4096]u8 = undefined;
++    const stat = file.readAll(&buf) catch return null;
++    const close_paren = std.mem.lastIndexOfScalar(u8, buf[0..stat], ')') orelse return null;
++    var fields = std.mem.tokenizeScalar(u8, buf[close_paren + 1 .. stat], ' ');
++    var index: usize = 3;
++    while (fields.next()) |field| : (index += 1) {
++        if (index == 22) return std.fmt.parseUnsigned(u64, field, 10) catch null;
++    }
++    return null;
++}
++
+ /// Call to initialize the terminal state as necessary for this backend.
+ /// This is called before any termio begins. This should not be called
+ /// after termio begins because it may put the internal terminal state
+

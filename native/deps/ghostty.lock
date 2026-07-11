@@ -1,31 +1,34 @@
 {
-  "schema": 1,
-  "repository": "https://github.com/ghostty-org/ghostty.git",
-  "version": "1.3.1",
-  "annotated_tag": "v1.3.1",
-  "tag_object": "22efb0be2bbea73e5339f5426fa3b20edabcaa11",
-  "peeled_commit": "332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28",
-  "source_tree_sha256": "42976bcbdaae86b4e3186dfb095da01646acce3a7b504d4a61f431dfbcde9c92",
+  "schema": 2,
+  "repository": "https://github.com/am-will/ghostty.git",
+  "upstream_repository": "https://github.com/ghostty-org/ghostty.git",
+  "version": "1.3.0-dev",
+  "base_commit": "81ab8ffa90185221782baf785e85387321e16f8d",
+  "base_git_tree": "ae85b313090e5b7e7c14bb0bd9dc2d470151a7e3",
+  "base_source_tree_sha256": "3d24a332b9d9a26cbdcef9c9afc4393fe62cb6c0d4a141680ca97cc2786beca4",
+  "patch_path": "native/deps/ghostty-linux-process-control.patch",
+  "patch_sha256": "581a77479ec62fc55d7e6822766a6a68db4e9a5d3655388f95b08aac84ff055b",
+  "derived_source_tree_sha256": "7726f288f740ce32134eefa3b0cc6ab84814c3c43bfb13f80ce60ba53c59bcd0",
+  "upstream_merge_base": "a3aa9fa1362d9b7ecb2b05b13789df1ac083cff0",
+  "recorded_fork_head": "b9989c1011883290393564c2aea340ba526c3fc3",
+  "recorded_ahead": 24,
+  "recorded_behind": 2069,
   "minimum_zig_version": "0.15.2",
+  "expected_symbols": [
+    "ghostty_app_new", "ghostty_app_free", "ghostty_app_tick",
+    "ghostty_config_new", "ghostty_config_free", "ghostty_config_load_default_files", "ghostty_config_load_recursive_files", "ghostty_config_finalize", "ghostty_config_get",
+    "ghostty_surface_new", "ghostty_surface_free", "ghostty_surface_draw", "ghostty_surface_set_size", "ghostty_surface_set_content_scale", "ghostty_surface_set_focus",
+    "ghostty_surface_key", "ghostty_surface_text", "ghostty_surface_preedit", "ghostty_surface_mouse_button", "ghostty_surface_mouse_pos", "ghostty_surface_mouse_scroll", "ghostty_surface_ime_point",
+    "ghostty_surface_complete_clipboard_request", "ghostty_surface_process_exited", "ghostty_surface_request_close", "ghostty_surface_display_realized", "ghostty_surface_display_unrealized",
+    "ghostty_surface_process_identity", "ghostty_surface_process_graceful_close", "ghostty_surface_process_signal_group", "ghostty_surface_process_reap", "ghostty_surface_process_absent"
+  ],
   "zig": {
     "version": "0.15.2",
     "artifacts": {
-      "linux-x86_64": {
-        "url": "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz",
-        "sha256": "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239"
-      },
-      "linux-aarch64": {
-        "url": "https://ziglang.org/download/0.15.2/zig-aarch64-linux-0.15.2.tar.xz",
-        "sha256": "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f"
-      },
-      "darwin-x86_64": {
-        "url": "https://ziglang.org/download/0.15.2/zig-x86_64-macos-0.15.2.tar.xz",
-        "sha256": "375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f"
-      },
-      "darwin-aarch64": {
-        "url": "https://ziglang.org/download/0.15.2/zig-aarch64-macos-0.15.2.tar.xz",
-        "sha256": "3cc2bab367e185cdfb27501c4b30b1b0653c28d9f73df8dc91488e66ece5fa6b"
-      }
+      "linux-x86_64": { "url": "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz", "sha256": "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239" },
+      "linux-aarch64": { "url": "https://ziglang.org/download/0.15.2/zig-aarch64-linux-0.15.2.tar.xz", "sha256": "958ed7d1e00d0ea76590d27666efbf7a932281b3d7ba0c6b01b0ff26498f667f" },
+      "darwin-x86_64": { "url": "https://ziglang.org/download/0.15.2/zig-x86_64-macos-0.15.2.tar.xz", "sha256": "375b6909fc1495d16fc2c7db9538f707456bfc3373b14ee83fdd3e22b3d43f7f" },
+      "darwin-aarch64": { "url": "https://ziglang.org/download/0.15.2/zig-aarch64-macos-0.15.2.tar.xz", "sha256": "3cc2bab367e185cdfb27501c4b30b1b0653c28d9f73df8dc91488e66ece5fa6b" }
     }
   }
 }

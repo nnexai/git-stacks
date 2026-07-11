@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, mkdirSync, readFileSync, rmSync } from "fs"
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "fs"
 import { arch, homedir, platform } from "os"
 import { basename, join } from "path"
 
@@ -12,11 +12,19 @@ type Artifact = { url: string; sha256: string }
 type NativeLock = {
   schema: number
   repository: string
+  upstream_repository: string
   version: string
-  annotated_tag: string
-  tag_object: string
-  peeled_commit: string
-  source_tree_sha256: string
+  base_commit: string
+  base_git_tree: string
+  base_source_tree_sha256: string
+  patch_path: string
+  patch_sha256: string
+  derived_source_tree_sha256: string
+  upstream_merge_base: string
+  recorded_fork_head: string
+  recorded_ahead: number
+  recorded_behind: number
+  expected_symbols: string[]
   minimum_zig_version: string
   zig: { version: string; artifacts: Record<string, Artifact> }
 }
@@ -25,7 +33,9 @@ const lock = JSON.parse(readFileSync(LOCK_PATH, "utf8")) as NativeLock
 const hostArch = arch() === "arm64" ? "aarch64" : arch() === "x64" ? "x86_64" : arch()
 const platformKey = `${platform() === "darwin" ? "darwin" : platform()}-${hostArch}`
 const artifact = lock.zig.artifacts[platformKey]
-const ghosttyDir = process.env.GIT_STACKS_GHOSTTY_SOURCE ?? join(CACHE, `ghostty-${lock.peeled_commit}`)
+const baseDir = join(CACHE, `ghostty-base-${lock.base_commit}`)
+const ghosttyDir = process.env.GIT_STACKS_GHOSTTY_SOURCE ?? join(CACHE, `ghostty-derived-${lock.base_commit}-${lock.patch_sha256.slice(0, 12)}`)
+const patchPath = join(ROOT, lock.patch_path)
 const zigDir = join(CACHE, `zig-${platformKey}-${lock.zig.version}`)
 const zigExe = process.env.GIT_STACKS_ZIG ?? join(zigDir, "zig")
 const zigArchive = artifact ? join(CACHE, basename(new URL(artifact.url).pathname)) : ""
@@ -49,6 +59,18 @@ async function requireSuccess(command: string[], cwd = ROOT): Promise<string> {
 
 async function sha256(path: string): Promise<string> {
   return new Bun.CryptoHasher("sha256").update(await Bun.file(path).arrayBuffer()).digest("hex")
+}
+
+async function sourceTreeSha(path: string): Promise<string> {
+  const files = (await requireSuccess(["git", "ls-files", "-z"], path)).split("\0").filter(Boolean).sort()
+  let manifest = ""
+  for (const file of files) manifest += `${await sha256(join(path, file))}  ${file}\n`
+  return new Bun.CryptoHasher("sha256").update(manifest).digest("hex")
+}
+
+async function pristineTreeSha(path: string): Promise<string> {
+  const tree = await requireSuccess(["git", "ls-tree", "-r", "--full-tree", "HEAD"], path)
+  return new Bun.CryptoHasher("sha256").update(tree + "\n").digest("hex")
 }
 
 const fixtureSource = join(ROOT, "tests", "fixtures", "service-v1")
@@ -137,23 +159,57 @@ async function setup(): Promise<void> {
     await requireSuccess(["mv", unpack, zigDir])
   }
 
-  if (!existsSync(join(ghosttyDir, ".git"))) {
-    const temporary = `${ghosttyDir}.tmp-${process.pid}`
+  if (!existsSync(join(baseDir, ".git"))) {
+    const temporary = `${baseDir}.tmp-${process.pid}`
     rmSync(temporary, { recursive: true, force: true })
     await requireSuccess(["git", "clone", "--no-checkout", "--filter=blob:none", lock.repository, temporary])
-    await requireSuccess(["git", "checkout", "--detach", lock.peeled_commit], temporary)
+    await requireSuccess(["git", "checkout", "--detach", lock.base_commit], temporary)
+    await requireSuccess(["mv", temporary, baseDir])
+  }
+  const baseProblems = await collectBaseProblems()
+  if (baseProblems.length) throw new Error(`immutable Ghostty base rejected:\n  - ${baseProblems.join("\n  - ")}`)
+  if (await sha256(patchPath) !== lock.patch_sha256) throw new Error("repository Ghostty patch digest differs from lock")
+
+  if (!process.env.GIT_STACKS_GHOSTTY_SOURCE) {
+    const temporary = `${ghosttyDir}.tmp-${process.pid}`
+    rmSync(temporary, { recursive: true, force: true })
+    cpSync(baseDir, temporary, { recursive: true, dereference: false })
+    await requireSuccess(["git", "apply", "--check", "--whitespace=error-all", patchPath], temporary)
+    await requireSuccess(["git", "apply", "--whitespace=error-all", patchPath], temporary)
+    const derived = await sourceTreeSha(temporary)
+    if (derived !== lock.derived_source_tree_sha256) {
+      rmSync(temporary, { recursive: true, force: true })
+      throw new Error(`derived Ghostty tree checksum mismatch: expected ${lock.derived_source_tree_sha256}, got ${derived}`)
+    }
+    rmSync(ghosttyDir, { recursive: true, force: true })
     await requireSuccess(["mv", temporary, ghosttyDir])
   }
-  console.log(`native setup ready: ${platformKey}, Zig ${lock.zig.version}, Ghostty ${lock.peeled_commit}`)
+  console.log(`native setup ready: ${platformKey}, Zig ${lock.zig.version}, Ghostty base ${lock.base_commit}, patch ${lock.patch_sha256}`)
+}
+
+async function collectBaseProblems(): Promise<string[]> {
+  const problems: string[] = []
+  if (!existsSync(join(baseDir, ".git"))) return ["missing immutable base checkout"]
+  const origin = await run(["git", "remote", "get-url", "origin"], baseDir)
+  if (origin.stdout !== lock.repository) problems.push(`base origin must be ${lock.repository}, got ${origin.stdout}`)
+  const head = await run(["git", "rev-parse", "HEAD"], baseDir)
+  if (head.stdout !== lock.base_commit) problems.push(`base HEAD must be ${lock.base_commit}, got ${head.stdout}`)
+  const treeObject = await run(["git", "rev-parse", "HEAD^{tree}"], baseDir)
+  if (treeObject.stdout !== lock.base_git_tree) problems.push(`base Git tree must be ${lock.base_git_tree}, got ${treeObject.stdout}`)
+  const dirty = await run(["git", "status", "--porcelain", "--untracked-files=all"], baseDir)
+  if (dirty.stdout) problems.push("immutable base checkout is dirty")
+  const digest = await pristineTreeSha(baseDir)
+  if (digest !== lock.base_source_tree_sha256) problems.push(`base source tree checksum mismatch: expected ${lock.base_source_tree_sha256}, got ${digest}`)
+  return problems
 }
 
 async function collectProblems(): Promise<string[]> {
   const problems: string[] = []
-  if (lock.schema !== 1) problems.push(`unsupported lock schema ${lock.schema}`)
+  if (lock.schema !== 2) problems.push(`unsupported lock schema ${lock.schema}`)
   if (!artifact) problems.push(`no Zig artifact pin for ${platformKey}`)
   if (!existsSync(zigExe)) problems.push(`missing repo-provisioned Zig ${lock.zig.version}; run bun run native:setup`)
   if (!process.env.GIT_STACKS_ZIG && artifact && !existsSync(zigArchive)) problems.push(`missing pinned Zig artifact provenance: ${zigArchive}`)
-  if (!existsSync(join(ghosttyDir, ".git"))) problems.push(`missing pinned Ghostty checkout; run bun run native:setup`)
+  if (!existsSync(join(baseDir, ".git")) || !existsSync(join(ghosttyDir, ".git"))) problems.push(`missing pinned Ghostty base/derived checkout; run bun run native:setup`)
   if (problems.length) return problems
 
   const zigVersion = await run([zigExe, "version"])
@@ -163,19 +219,12 @@ async function collectProblems(): Promise<string[]> {
     if (actual !== artifact.sha256) problems.push(`Zig artifact checksum mismatch: expected ${artifact.sha256}, got ${actual}`)
   }
 
-  const origin = await run(["git", "remote", "get-url", "origin"], ghosttyDir)
-  if (origin.stdout !== lock.repository) problems.push(`Ghostty origin must be ${lock.repository}, got ${origin.stdout}`)
+  problems.push(...await collectBaseProblems())
+  if (await sha256(patchPath) !== lock.patch_sha256) problems.push("repository Ghostty patch digest differs from lock")
   const head = await run(["git", "rev-parse", "HEAD"], ghosttyDir)
-  if (head.stdout !== lock.peeled_commit) problems.push(`Ghostty HEAD must be ${lock.peeled_commit}, got ${head.stdout}`)
-  const dirty = await run(["git", "status", "--porcelain", "--untracked-files=no"], ghosttyDir)
-  if (dirty.stdout) problems.push("Ghostty tracked source differs from the pinned commit")
-  const tag = await run(["git", "rev-parse", lock.annotated_tag], ghosttyDir)
-  if (tag.stdout !== lock.tag_object) problems.push(`Ghostty tag object must be ${lock.tag_object}, got ${tag.stdout}`)
-  const peeled = await run(["git", "rev-parse", `${lock.annotated_tag}^{}`], ghosttyDir)
-  if (peeled.stdout !== lock.peeled_commit) problems.push(`Ghostty peeled tag must be ${lock.peeled_commit}, got ${peeled.stdout}`)
-  const tree = await run(["git", "ls-tree", "-r", "--full-tree", "HEAD"], ghosttyDir)
-  const treeHash = new Bun.CryptoHasher("sha256").update(tree.stdout + "\n").digest("hex")
-  if (treeHash !== lock.source_tree_sha256) problems.push(`Ghostty source tree checksum mismatch: expected ${lock.source_tree_sha256}, got ${treeHash}`)
+  if (head.stdout !== lock.base_commit) problems.push(`derived HEAD must remain at base ${lock.base_commit}, got ${head.stdout}`)
+  const derived = await sourceTreeSha(ghosttyDir)
+  if (derived !== lock.derived_source_tree_sha256) problems.push(`derived source tree checksum mismatch: expected ${lock.derived_source_tree_sha256}, got ${derived}`)
 
   const zonPath = join(ghosttyDir, "build.zig.zon")
   if (!existsSync(zonPath)) {
@@ -205,7 +254,40 @@ async function verify(target = "terminal-api-smoke"): Promise<void> {
   if (output) console.log(output)
   console.log(target === "model-test"
     ? `native model verified: Zig ${lock.zig.version}; opaque ABI lifecycle and validation passed`
-    : `native feasibility verified: Zig ${lock.zig.version}; Ghostty tag ${lock.tag_object}; peeled ${lock.peeled_commit}; full surface API seams present`)
+    : `native feasibility verified: Zig ${lock.zig.version}; Ghostty base ${lock.base_commit}; full surface API seams present`)
+}
+
+async function buildGhostty(): Promise<void> {
+  const problems = await collectProblems()
+  if (problems.length) throw new Error(`Ghostty provenance rejected before build:\n  - ${problems.join("\n  - ")}`)
+  await requireSuccess([
+    zigExe, "build", "-Dapp-runtime=none", "-Doptimize=ReleaseFast",
+    "-Demit-terminfo=false", "-Demit-termcap=false", "-Demit-themes=false",
+    "-Demit-helpgen=false", "-Demit-docs=false", "--summary", "failures",
+  ], ghosttyDir)
+  const library = join(ghosttyDir, "zig-out", "lib", "libghostty.so")
+  if (!existsSync(library)) throw new Error(`full libghostty build artifact missing: ${library}`)
+  const symbols = await requireSuccess(["nm", "-D", "--defined-only", library])
+  for (const symbol of lock.expected_symbols) {
+    if (!new RegExp(`\\b${symbol}$`, "m").test(symbols)) throw new Error(`full libghostty ABI missing expected export: ${symbol}`)
+  }
+}
+
+async function auditGhostty(): Promise<void> {
+  const problems = await collectProblems()
+  if (problems.length) throw new Error(`Ghostty audit failed:\n  - ${problems.join("\n  - ")}`)
+  const central = await requireSuccess(["git", "diff", "--stat", `${lock.upstream_merge_base}..${lock.base_commit}`, "--", "include/ghostty.h", "src/apprt/embedded.zig"], baseDir)
+  const counts = await requireSuccess(["git", "rev-list", "--left-right", "--count", `${lock.base_commit}...upstream/main`], baseDir).catch(() => `${lock.recorded_ahead}\t${lock.recorded_behind} (recorded; upstream remote unavailable)`)
+  console.log(`Ghostty drift audit: base=${lock.base_commit} merge_base=${lock.upstream_merge_base} ahead/behind=${counts}\n${central}`)
+  await buildGhostty()
+}
+
+function auditProductionGraph(): void {
+  const build = readFileSync(join(NATIVE, "build.zig"), "utf8")
+  const forbidden = ["lib_vt.zig", "vt_adapter", "terminal/pty.zig", "terminal/runtime.zig", "linux/renderer.zig", "terminal_widget", "appearance_config", "linux/input.zig"]
+  for (const seam of forbidden) if (build.includes(seam)) throw new Error(`production build graph retains competing terminal module: ${seam}`)
+  for (const required of ["ghostty", "ghostty_surface_abi.zig"]) if (!build.includes(required)) throw new Error(`production build graph missing full Ghostty seam: ${required}`)
+  console.log("production graph audit passed: Ghostty is sole renderer/configuration/PTY owner")
 }
 
 async function verifyModel(): Promise<void> {
@@ -336,6 +418,9 @@ async function verifyAll(): Promise<void> {
 
 const mode = process.argv[2] ?? "verify"
 if (mode === "setup") await setup()
+else if (mode === "audit-ghostty") await auditGhostty()
+else if (mode === "surface-abi") { await buildGhostty(); await verify("surface-abi") }
+else if (mode === "audit-production-graph") auditProductionGraph()
 else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()
 else if (mode === "lifecycle") await verifyLifecycle()
