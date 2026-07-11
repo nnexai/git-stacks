@@ -8,23 +8,20 @@
 
 One command should take you from "I need to work on feature X" to a fully running dev environment — the right repos checked out, the right branches created, the right IDE/terminal open, hooks run — without manual steps.
 
-## Active RC Follow-up: v0.19.0 Operator Control Center
+## Current Milestone: v0.20.0 Native Workspace Client
 
-**Goal:** Make `git-stacks` better at managing workspaces from the CLI and TUI through notes, manual commands, richer dashboard status, and useful workspace actions.
+**Goal:** Establish the architecture and first usable vertical slice of a native companion application powered by libghostty and git-stacks workspace services.
 
 **Target features:**
-- Improve `git-stacks manage` using the grounded TUI reset direction: denser list/detail layout, better grouping/filtering, clearer detail sections, and snapshot-covered terminal behavior.
-- Add a repo edit action in the Repos tab.
-- Add lightweight workspace notes stored outside project repos.
-- Add named manual workspace commands that reuse existing hook/env/cwd execution machinery.
-- Add linked issue opening from the workspace action menu.
-- Surface file config/status in the TUI, especially v0.18.0 `files.sync` status and drift from the `git-stacks files status` work.
-- Fix manager TUI command output containment so stdout/stderr from TUI-launched commands is buffered in a bounded viewer and the UI restores cleanly afterward.
-- Repair incomplete shell completions before final v0.19.0 release.
-- Extend workspace auto-detection to work from the workspace root directory, not only from inside an individual repo.
-- Keep dashboard rollback progress visibility deferred; Phase 99 explicitly excluded that work.
+- Add a versioned machine/API boundary for workspace queries, mutations, long-running progress, and structured events.
+- Define a shared application model for workspaces, repositories, terminal surfaces, named commands, and agent attention.
+- Build a Linux-first GTK4/libadwaita client with embedded libghostty terminal surfaces.
+- Navigate git-stacks workspaces and repositories and open persistent, workspace-bound terminal tabs.
+- Launch named commands using git-stacks-resolved paths, environment, ports, and configuration.
+- Route structured agent-attention events to the relevant workspace and terminal surface.
+- Prove a thin macOS SwiftUI/libghostty frontend against the same shared model and protocol; polished macOS parity is deferred.
 
-**Release candidate:** `0.19.0-rc.1` exposed RC follow-up defects on 2026-05-25. Final `0.19.0` tagging remains separate until the manager output, completion, and workspace-root detection fixes are complete.
+**Architecture boundary:** git-stacks remains the authoritative workspace engine and the existing CLI/TUI remain supported. The native client owns terminal processes, tabs, splits, and session state, and never parses or mutates git-stacks YAML directly. libghostty is pinned behind a narrow adapter while its embedding API remains unstable.
 
 ## Recent State (2026-05-17)
 
@@ -334,7 +331,9 @@ One command should take you from "I need to work on feature X" to a fully runnin
 | Feature | Reason |
 |---------|--------|
 | Remote/cloud workspace sharing | Local-machine focus; no server component planned |
-| GUI application | TUI and CLI only |
+| Replacing the CLI or OpenTUI dashboard | The native client is additive; existing interfaces remain supported |
+| Polished macOS feature parity in v0.20.0 | Linux proves the vertical slice first; macOS receives an architectural integration proof |
+| A second command palette abstraction | Named workspace commands already provide the composable command model |
 | Built-in package/tool version management | Delegate to mise/asdf via hooks |
 | AI-triggered conflict resolution | Secondary priority; requires stable API first |
 | Nix/devenv as first-class dependency | Out of domain; composable via hooks |
@@ -533,4 +532,4 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full archive.
 </details>
 
 ---
-*Last updated: 2026-05-25 for v0.19.0 RC follow-up planning*
+*Last updated: 2026-07-11 for v0.20.0 Native Workspace Client milestone start*

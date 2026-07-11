@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.19.0
-milestone_name: Operator Control Center
-status: completed
-stopped_at: Completed 103-01-PLAN.md
-last_updated: "2026-05-25T17:11:26.960Z"
-last_activity: 2026-05-25 -- Phase 103 marked complete
+milestone: v0.20.0
+milestone_name: Native Workspace Client
+status: planning
+last_updated: "2026-07-11T10:26:28.464Z"
+last_activity: 2026-07-11
 progress:
-  total_phases: 38
-  completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
-  percent: 11
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-25)
 
 ## Current Position
 
-Phase: 103 — COMPLETE
-Plan: 1 of 1
-Status: Phase 103 complete
-Last activity: 2026-05-25 -- Phase 103 marked complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-11 — Milestone v0.20.0 started
 
 ## Deferred Items
 
