@@ -2,6 +2,8 @@
 
 Status: NOT YET OBSERVED
 
+The widget inherits the supported Ghostty `font-family` and `font-size` subset described in `native-terminal-acceptance.md`; accessibility observations must be made using the resolved font reported by readiness evidence. Other Ghostty configuration remains unsupported.
+
 This D-16 contract must describe only behavior observed on the exact pinned stack. Cell-level screen-reader output remains **unsupported/unverified** unless the attached inspection demonstrates otherwise. Misleading claims or broken core focus/input behavior fail acceptance.
 
 ## Observation identity

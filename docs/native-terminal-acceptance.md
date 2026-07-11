@@ -6,7 +6,7 @@ This template records the required D-13/D-14 real-session evidence. An unchecked
 
 ## Configuration boundary
 
-This application embeds the pinned `ghostty-vt` parser/state library, not the Ghostty application or its configuration loader. It therefore does **not** inherit `~/.config/ghostty/config`, Ghostty themes, fonts, shaders, keybindings, or other arbitrary Ghostty settings. Phase 105 uses product-owned terminal defaults and the VT-provided ANSI/256/truecolor/style state. Full Ghostty application-configuration parity is not claimed by this foundation.
+This application embeds pinned `ghostty-vt`, not GhosttyKit/full libghostty. A product-owned compatibility reader inherits the regular `font-family` fallback list and `font-size` from `$XDG_CONFIG_HOME/ghostty/config.ghostty` (falling back to the pre-1.3 `config`; `$HOME/.config` when XDG is unset). It follows Ghostty's whitespace, comment, quoting, repeat, and empty-reset semantics for those keys. `config-file` includes and all other Ghostty keys—including themes, shaders, adjustments, keybindings, and dynamic reload—remain unsupported. Invalid values fall back safely and are counted without logging configuration contents. This is intentionally not full Ghostty configuration parity.
 
 ## Observation identity
 
@@ -23,6 +23,7 @@ This application embeds the pinned `ghostty-vt` parser/state library, not the Gh
 - IME framework and input method:
 - Command/build identifier:
 - Launch command: `bun run native:run`
+- Resolved font family / size from readiness evidence:
 
 ## Interaction matrix
 
