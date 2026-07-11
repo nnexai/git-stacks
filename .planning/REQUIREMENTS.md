@@ -1,58 +1,93 @@
 # Requirements: git-stacks
 
-**Defined:** 2026-05-25
+**Defined:** 2026-07-11
 **Core Value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
 
-## v0.19.0 RC Follow-up Requirements
+## v0.20.0 Native Workspace Client Requirements
 
-These requirements extend the unreleased v0.19.0 Operator Control Center after `0.19.0-rc.1` validation found manager/TUI and CLI ergonomics issues.
+### Workspace Service Contract
 
-### Manager TUI Output Containment
+- [ ] **SVC-01**: Native clients can negotiate a versioned `/v1` protocol and discover supported capabilities.
+- [ ] **SVC-02**: Native clients can query workspace, repository, and named-command snapshots using stable opaque identities.
+- [ ] **SVC-03**: Native clients receive git-stacks-resolved launch specifications without reading workspace YAML.
+- [ ] **SVC-04**: Existing CLI and OpenTUI behavior remains compatible with the extracted service boundary.
+- [ ] **SVC-05**: The local service accepts authenticated requests only from the paired native client and enforces bounded request, rate, and timeout policies.
 
-- [x] **TOUT-01**: Commands launched from `git-stacks manage` that write stdout or stderr do not corrupt, scroll, or displace the OpenTUI screen.
-- [x] **TOUT-02**: TUI-launched command output is captured into a bounded viewer or modal that preserves command ordering, exit status, and enough recent output for diagnosis.
-- [x] **TOUT-03**: When the output viewer closes, the manager UI restores cleanly, including focus, selected tab/list item, footer hints, and alternate-screen state.
-- [x] **TOUT-04**: Long-running, failing, noisy, and no-output commands all produce predictable TUI states without leaking raw process output behind the dashboard.
+### Operations and Events
 
-### Completion Completeness
+- [ ] **EVT-01**: Long-running workspace mutations return operation identities and structured progress without blocking ordinary queries.
+- [ ] **EVT-02**: Retried mutations use idempotency keys so destructive work is not duplicated.
+- [ ] **EVT-03**: Native clients receive ordered operation and agent-attention events over SSE.
+- [ ] **EVT-04**: A reconnecting client can replay retained events or detect a gap and rebuild state from an authoritative snapshot.
+- [ ] **EVT-05**: Slow or disconnected clients cannot create unbounded service memory or event queues.
 
-- [x] **COMP-01**: Shell completions cover the current command tree, including v0.18/v0.19 command families and nested subcommands.
-- [x] **COMP-02**: Dynamic completions for workspace, template, repo, command, integration, issue/forge surfaces, and option enums remain position-aware and do not repeat already-satisfied positional args.
-- [x] **COMP-03**: Completion generation has focused regression coverage for bash, zsh, and fish so future command additions do not silently ship incomplete completion entries.
+### Shared Native Model
 
-### Workspace Root Auto-detection
+- [ ] **CORE-01**: Linux and macOS clients share stable workspace, repository, command, operation, surface, and attention identities.
+- [ ] **CORE-02**: A shared state reducer models connection, loading, failure, operation, tab, and attention transitions independently of platform UI types.
+- [ ] **CORE-03**: Native shells access shared behavior through an opaque, versioned product-owned ABI.
+- [ ] **CORE-04**: Cross-language golden fixtures verify native decoding and state transitions against the TypeScript contract.
+- [ ] **CORE-05**: Restored session metadata never represents terminated processes as still running.
 
-- [x] **WDET-01**: Workspace auto-detection works when the current directory is the workspace root directory, not only when inside an individual repo worktree.
-- [x] **WDET-02**: Workspace auto-detection keeps existing deepest-repo matching behavior for nested repo paths, trunk paths, dir repos, and prefix-collision cases.
-- [x] **WDET-03**: Commands that accept optional `[workspace]` arguments share one documented resolution order across explicit arg, cwd detection, and `GS_WORKSPACE_NAME`.
+### Linux Terminal Foundation
 
-### Final Release Readiness
+- [ ] **TERM-01**: The Linux client embeds one interactive libghostty terminal with correct keyboard, mouse, Unicode, resize, reflow, alternate-screen, clipboard, and IME behavior.
+- [ ] **TERM-02**: Each terminal surface exclusively owns one PTY and process group with explicit exit, close, application-quit, and crash cleanup semantics.
+- [ ] **TERM-03**: libghostty and its compatible Zig toolchain are exactly pinned behind a narrow adapter with upgrade smoke tests.
+- [ ] **TERM-04**: Repeated terminal creation, resize, destruction, and GPU view lifecycle do not leak surfaces or leave orphaned processes.
+- [ ] **TERM-05**: The terminal host exposes an honest native accessibility contract and documents any upstream limitations.
 
-- [x] **REL-01**: v0.19.0 final release notes and package metadata include the RC follow-up fixes and do not describe unresolved RC defects as shipped behavior.
-- [x] **REL-02**: Final verification includes focused manager/TUI output smoke coverage, completion generation checks, workspace-root detection tests, and the existing release gate.
+### Linux Workspace Client
+
+- [ ] **LNX-01**: Users can browse git-stacks workspaces and their repositories in a GTK4/libadwaita application.
+- [ ] **LNX-02**: Users see explicit loading, empty, disconnected, incompatible, and failure states.
+- [ ] **LNX-03**: Users can open multiple independent terminal tabs bound to selected workspace repositories.
+- [ ] **LNX-04**: Live terminal tabs survive workspace navigation without recreation.
+- [ ] **LNX-05**: Restarted clients restore tab metadata and clearly distinguish surfaces whose processes are no longer alive.
+- [ ] **LNX-06**: Keyboard navigation, focus movement, IME interaction, and native accessibility work across the sidebar and terminal surfaces.
+
+### Commands and Attention
+
+- [ ] **ACT-01**: Users can launch a shell using a service-resolved workspace/repository context.
+- [ ] **ACT-02**: Users can launch a named workspace command in a new terminal tab using resolved cwd, environment, ports, and configuration.
+- [ ] **ACT-03**: Agent hooks publish structured working, waiting, completed, failed, and idle states associated with workspace and surface identities.
+- [ ] **ACT-04**: Users can see unread attention aggregated at workspace, repository, and terminal-tab levels.
+- [ ] **ACT-05**: Selecting an attention item focuses the exact surviving surface or a documented nearest surviving context.
+- [ ] **ACT-06**: Attention events never steal focus automatically and do not depend on scraping terminal output.
+
+### Linux Delivery
+
+- [ ] **PKG-01**: Users can install and launch the Linux client outside the source checkout with all service, native, and libghostty assets discoverable.
+- [ ] **PKG-02**: The supported Linux package passes clean-install smoke tests on the selected GTK/libadwaita distro floor.
+- [ ] **PKG-03**: The client passes Wayland and X11 terminal lifecycle, input, shutdown, and crash-cleanup acceptance checks.
+- [ ] **PKG-04**: Installed artifacts record pinned native dependency provenance and fail clearly on incompatible runtime dependencies.
+
+### macOS Architectural Proof
+
+- [ ] **MAC-01**: A SwiftUI client connects to the same authenticated service protocol and consumes the shared workspace model.
+- [ ] **MAC-02**: The macOS proof embeds one interactive libghostty surface through an AppKit/Metal host.
+- [ ] **MAC-03**: Users can select a workspace repository and launch one service-resolved terminal on macOS.
+- [ ] **MAC-04**: The macOS proof handles native keyboard, IME, resize, exit, attention, and teardown behavior.
+- [ ] **MAC-05**: Protocol and shared-model conformance tests run against both Linux and macOS clients.
+- [ ] **MAC-06**: macOS proof requirements are compiled and verified on a macOS CI runner or physical macOS host; Linux-only source inspection is not accepted as proof.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Dashboard rollback progress visibility | Still explicitly deferred unless re-promoted separately. |
-| New stale-workspace advisory workflow | Related to operator UX but separate from the RC defects reported on 2026-05-25. |
-| Broad TUI redesign beyond command-output containment | The current issue is screen corruption during command execution, not another layout reset. |
-| New command schema or lifecycle hooks | Manual command behavior already shipped in v0.19.0-rc.1; this follow-up fixes TUI execution/display. |
+| Split panes, terminal search, advanced layout persistence | Defer until the tab-based vertical slice is validated. |
+| Built-in editor, diff browser, PR/CI dashboard, merge automation | Separate product breadth; not required to validate the native workspace client. |
+| Agent prompt orchestration, fan-out, AI naming | git-stacks supplies neutral attention and workspace context, not agent policy. |
+| tmux/cmux session inventory and control | External-session control is distinct from the native client's owned terminals. |
+| New command palette or configuration language | Existing named workspace commands already provide the composable command model. |
+| Polished macOS parity, signing, distribution, and updates | v0.20.0 proves architecture and one terminal on an actual macOS execution environment. |
+| Windows support | Linux-first with macOS architectural proof. |
+| Replacing the CLI or OpenTUI dashboard | The native client is additive. |
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| TOUT-01 | Phase 100 | Complete |
-| TOUT-02 | Phase 100 | Complete |
-| TOUT-03 | Phase 100 | Complete |
-| TOUT-04 | Phase 100 | Complete |
-| COMP-01 | Phase 101 | Complete |
-| COMP-02 | Phase 101 | Complete |
-| COMP-03 | Phase 101 | Complete |
-| WDET-01 | Phase 102 | Planned |
-| WDET-02 | Phase 102 | Planned |
-| WDET-03 | Phase 102 | Planned |
-| REL-01 | Phase 103 | Planned |
-| REL-02 | Phase 103 | Planned |
+Populated during roadmap creation. Every v0.20.0 requirement must map to exactly one phase.
+
+---
+*Requirements defined: 2026-07-11*
+*Last updated: 2026-07-11 after milestone research and scope confirmation*
