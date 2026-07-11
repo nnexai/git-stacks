@@ -2,7 +2,8 @@ const std = @import("std");
 const vt = @import("vt_adapter");
 const renderer_mod = @import("renderer");
 const c = @cImport({ @cInclude("gtk/gtk.h"); @cInclude("pango/pangocairo.h"); });
-const DrawContext = struct { terminal: *vt.VtAdapter, font_family: [:0]const u8 = "Monospace", font_size: f32 = 12, cell_width: f64 = 9, cell_height: f64 = 18, draws: usize = 0, painted_cells: usize = 0, cursor_draws: usize = 0, selection_start: ?vt.GridPoint = null, selection_end: ?vt.GridPoint = null };
+const DrawContext = struct { terminal: *vt.VtAdapter, font_family: [:0]const u8 = "Monospace", actual_family: [:0]u8, font_size: f32 = 12, cell_width: f64 = 9, cell_height: f64 = 18, baseline: f64 = 14, background_width: i32 = 0, background_height: i32 = 0, draws: usize = 0, painted_cells: usize = 0, cursor_draws: usize = 0, selection_start: ?vt.GridPoint = null, selection_end: ?vt.GridPoint = null };
+pub const Grid = struct { columns: u16, rows: u16 };
 pub const cursor_color: u32 = 0x59c2ff;
 fn selected(ctx: *const DrawContext, cell: vt.Cell) bool {
     const a = ctx.selection_start orelse return false; const b = ctx.selection_end orelse return false;
@@ -11,6 +12,7 @@ fn selected(ctx: *const DrawContext, cell: vt.Cell) bool {
 }
 fn draw(widget: ?*c.GtkDrawingArea, cr: ?*c.cairo_t, width: c_int, height: c_int, data: ?*anyopaque) callconv(.c) void {
     _ = widget; const ctx: *DrawContext = @ptrCast(@alignCast(data.?)); const cairo = cr orelse return;
+    ctx.background_width = width; ctx.background_height = height;
     c.cairo_set_source_rgb(cairo, 0.035, 0.043, 0.055); c.cairo_rectangle(cairo, 0, 0, @floatFromInt(width), @floatFromInt(height)); c.cairo_fill(cairo);
     var frame = ctx.terminal.snapshot() catch return; defer frame.deinit(); ctx.draws += 1; ctx.painted_cells = 0;
     const layout = c.pango_cairo_create_layout(cairo) orelse return; defer c.g_object_unref(layout);
@@ -54,10 +56,14 @@ pub const TerminalWidget = struct {
         const context = c.gtk_widget_get_pango_context(widget) orelse return error.FontMetricsUnavailable;
         const desc = c.pango_font_description_new() orelse return error.FontMetricsUnavailable; defer c.pango_font_description_free(desc);
         c.pango_font_description_set_family(desc, family.ptr); c.pango_font_description_set_size(desc, @intFromFloat(size * c.PANGO_SCALE));
-        const metrics = c.pango_context_get_metrics(context, desc, null) orelse return error.FontMetricsUnavailable; defer c.pango_font_metrics_unref(metrics);
-        const cell_width = @max(1, @as(f64, @floatFromInt(c.pango_font_metrics_get_approximate_digit_width(metrics))) / c.PANGO_SCALE);
+        const resolved_font = c.pango_context_load_font(context, desc) orelse return error.FontUnavailable; defer c.g_object_unref(resolved_font);
+        const resolved_desc = c.pango_font_describe(resolved_font) orelse return error.FontUnavailable; defer c.pango_font_description_free(resolved_desc);
+        const actual_family_ptr = c.pango_font_description_get_family(resolved_desc); const actual_family = try terminal.allocator.dupeZ(u8, if (actual_family_ptr != null) std.mem.span(@as([*:0]const u8, @ptrCast(actual_family_ptr))) else "Monospace"); errdefer terminal.allocator.free(actual_family);
+        const metrics = c.pango_context_get_metrics(context, resolved_desc, null) orelse return error.FontMetricsUnavailable; defer c.pango_font_metrics_unref(metrics);
+        const cell_width = @max(1, @as(f64, @floatFromInt(c.pango_font_metrics_get_approximate_char_width(metrics))) / c.PANGO_SCALE);
         const cell_height = @max(1, @as(f64, @floatFromInt(c.pango_font_metrics_get_ascent(metrics) + c.pango_font_metrics_get_descent(metrics))) / c.PANGO_SCALE);
-        const draw_context = try terminal.allocator.create(DrawContext); draw_context.* = .{ .terminal = terminal, .font_family = family, .font_size = size, .cell_width = cell_width, .cell_height = cell_height };
+        const baseline_value = @as(f64, @floatFromInt(c.pango_font_metrics_get_ascent(metrics))) / c.PANGO_SCALE;
+        const draw_context = try terminal.allocator.create(DrawContext); draw_context.* = .{ .terminal = terminal, .font_family = family, .actual_family = actual_family, .font_size = size, .cell_width = cell_width, .cell_height = cell_height, .baseline = baseline_value };
         c.gtk_drawing_area_set_draw_func(@ptrCast(widget), draw, draw_context, null);
         var result = TerminalWidget{ .terminal = terminal, .widget = @ptrCast(widget), .draw_context = draw_context };
         result.renderer.configure(family, size, .{ .cell_width = @floatCast(cell_width), .cell_height = @floatCast(cell_height) });
@@ -69,7 +75,13 @@ pub const TerminalWidget = struct {
     pub fn paintedCellCount(self: TerminalWidget) usize { return self.draw_context.painted_cells; }
     pub fn cursorDrawCount(self: TerminalWidget) usize { return self.draw_context.cursor_draws; }
     pub fn fontFamily(self: TerminalWidget) []const u8 { return self.draw_context.font_family; }
+    pub fn actualFontFamily(self: TerminalWidget) []const u8 { return self.draw_context.actual_family; }
     pub fn fontSize(self: TerminalWidget) f32 { return self.draw_context.font_size; }
+    pub fn cellWidth(self: TerminalWidget) f64 { return self.draw_context.cell_width; }
+    pub fn cellHeight(self: TerminalWidget) f64 { return self.draw_context.cell_height; }
+    pub fn baseline(self: TerminalWidget) f64 { return self.draw_context.baseline; }
+    pub fn backgroundWidth(self: TerminalWidget) i32 { return self.draw_context.background_width; }
+    pub fn gridForAllocation(self: TerminalWidget, width: i32, height: i32) Grid { return .{ .columns = @intCast(@max(1, @as(i32, @intFromFloat(@as(f64, @floatFromInt(width)) / self.draw_context.cell_width)))), .rows = @intCast(@max(1, @as(i32, @intFromFloat(@as(f64, @floatFromInt(height)) / self.draw_context.cell_height)))) }; }
     pub fn pointFromPixels(self: TerminalWidget, x: f64, y: f64) vt.GridPoint { return .{ .column = @intCast(@min(65535, @as(u64, @intFromFloat(@max(0, x) / self.draw_context.cell_width)))), .row = @intCast(@min(65535, @as(u64, @intFromFloat(@max(0, y) / self.draw_context.cell_height)))) }; }
     pub fn selectionBegin(self: *TerminalWidget, point: vt.GridPoint) void { if (!self.live) return; self.draw_context.selection_start = point; self.draw_context.selection_end = point; _ = self.queueRedraw(self.generation); }
     pub fn selectionUpdate(self: *TerminalWidget, point: vt.GridPoint) void { if (!self.live or self.draw_context.selection_start == null) return; self.draw_context.selection_end = point; _ = self.queueRedraw(self.generation); }
@@ -80,9 +92,7 @@ pub const TerminalWidget = struct {
         return true;
     }
     pub fn resize(self: *TerminalWidget, width: i32, height: i32) !void {
-        const cols: u16 = @intCast(@max(1, @as(i32, @intFromFloat(@as(f64, @floatFromInt(width)) / self.draw_context.cell_width))));
-        const rows: u16 = @intCast(@max(1, @as(i32, @intFromFloat(@as(f64, @floatFromInt(height)) / self.draw_context.cell_height))));
-        try self.terminal.resize(cols, rows);
+        const grid = self.gridForAllocation(width, height); try self.terminal.resize(grid.columns, grid.rows);
     }
     pub fn snapshot(self: *TerminalWidget) !*c.GtkSnapshot {
         var frame = try self.terminal.snapshot();
@@ -97,6 +107,7 @@ pub const TerminalWidget = struct {
         self.generation +%= 1;
         c.gtk_drawing_area_set_draw_func(@ptrCast(@alignCast(self.widget)), null, null, null);
         c.gtk_widget_unparent(@ptrCast(@alignCast(self.widget)));
+        self.terminal.allocator.free(self.draw_context.actual_family);
         self.terminal.allocator.destroy(self.draw_context);
     }
 };

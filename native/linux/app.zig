@@ -128,7 +128,7 @@ fn focusLeave(_: ?*c.GtkEventControllerFocus, data: ?*anyopaque) callconv(.c) vo
 }
 fn resized(_: ?*c.GtkDrawingArea, width: c_int, height: c_int, data: ?*anyopaque) callconv(.c) void {
     const state: *AppState = @ptrCast(@alignCast(data orelse return));
-    if (width > 0 and height > 0) state.widget.resize(width, height) catch {};
+    if (width > 0 and height > 0) { const grid = state.widget.gridForAllocation(width, height); state.runtime.resizeViewport(grid.columns, grid.rows, @intCast(@min(width, 65535)), @intCast(@min(height, 65535))) catch return; _ = state.widget.queueRedraw(state.widget.callbackToken()); }
 }
 
 fn cleanup(state: *AppState) void {
@@ -220,7 +220,7 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         std.Thread.sleep(5 * std.time.ns_per_ms);
     }
     if (state.widget.drawCount() == 0 or state.widget.paintedCellCount() == 0 or state.widget.cursorDrawCount() == 0) { std.debug.print("GIT_STACKS_NATIVE_BLANK draws={d} cells={d} cursor={d}\n", .{ state.widget.drawCount(), state.widget.paintedCellCount(), state.widget.cursorDrawCount() }); return; }
-    std.debug.print("GIT_STACKS_NATIVE_READY composition=pty-runtime input=gtk-controller text=git-stacks-native-terminal-ready font_family={s} font_size={d:.2} config_diagnostics={d} focused={d} draws={d} painted_cells={d} cursor_draws={d}\n", .{ state.appearance.primaryFamily(), state.appearance.font_size, state.appearance.diagnostics, c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget))), state.widget.drawCount(), state.widget.paintedCellCount(), state.widget.cursorDrawCount() });
+    std.debug.print("GIT_STACKS_NATIVE_READY composition=pty-runtime input=gtk-controller text=git-stacks-native-terminal-ready font_family={s} actual_font_family={s} font_size={d:.2} cell={d:.2}x{d:.2} baseline={d:.2} config_diagnostics={d} focused={d} draws={d} painted_cells={d} cursor_draws={d}\n", .{ state.appearance.primaryFamily(), state.widget.actualFontFamily(), state.appearance.font_size, state.widget.cellWidth(), state.widget.cellHeight(), state.widget.baseline(), state.appearance.diagnostics, c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget))), state.widget.drawCount(), state.widget.paintedCellCount(), state.widget.cursorDrawCount() });
     if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null and state.runtime.frameContains("SHELL_RESULT_UNIQUE:widget-input-path") catch false)
         std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP marker=SHELL_RESULT_UNIQUE query=DA_RESPONSE_OK input=gtk-commit-path resources=owned\n", .{});
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) _ = c.g_timeout_add(250, quitTimer, @ptrCast(app));

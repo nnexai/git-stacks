@@ -21,7 +21,8 @@ pub const Pty = struct {
         _ = c.fcntl(master, c.F_SETFL, c.O_NONBLOCK);
         return .{ .master = master, .child_pid = pid, .pgid = pid };
     }
-    pub fn resize(self: *Pty, columns: u16, rows: u16) !void { var ws = c.winsize{ .ws_row = rows, .ws_col = columns, .ws_xpixel = 0, .ws_ypixel = 0 }; if (c.ioctl(self.master, c.TIOCSWINSZ, &ws) < 0) return error.ResizeFailed; }
+    pub fn resize(self: *Pty, columns: u16, rows: u16) !void { return self.resizeViewport(columns, rows, 0, 0); }
+    pub fn resizeViewport(self: *Pty, columns: u16, rows: u16, width: u16, height: u16) !void { var ws = c.winsize{ .ws_row = rows, .ws_col = columns, .ws_xpixel = width, .ws_ypixel = height }; if (c.ioctl(self.master, c.TIOCSWINSZ, &ws) < 0) return error.ResizeFailed; }
     pub fn write(self: *Pty, bytes: []const u8) !usize { const n = c.write(self.master, bytes.ptr, bytes.len); if (n < 0) return if (std.posix.errno(n) == .AGAIN) 0 else error.WriteFailed; return @intCast(n); }
     pub fn read(self: *Pty, output: []u8) !usize { const n = c.read(self.master, output.ptr, output.len); if (n < 0) return if (std.posix.errno(n) == .AGAIN) 0 else error.ReadFailed; return @intCast(n); }
     pub fn wait(self: *Pty) !u8 { var status: c_int = 0; if (c.waitpid(self.child_pid, &status, 0) < 0) return error.WaitFailed; return @intCast((status >> 8) & 0xff); }
