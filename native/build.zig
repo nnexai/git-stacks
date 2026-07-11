@@ -43,6 +43,9 @@ pub fn build(b: *std.Build) void {
     const runtime_tests = b.addTest(.{ .root_module = runtime_test_module }); runtime_tests.linkLibC(); runtime_tests.linkSystemLibrary("util");
     const run_runtime_tests = b.addRunArtifact(runtime_tests); const runtime_step = b.step("runtime-test", "Run PTY VT runtime integration"); runtime_step.dependOn(&run_runtime_tests.step);
     const input_module = b.createModule(.{ .root_source_file = b.path("linux/input.zig") }); input_module.addImport("runtime", runtime_module); input_module.addImport("vt_adapter", vt_adapter);
+    const ghostty_config_module = b.createModule(.{ .root_source_file = b.path("linux/ghostty_config.zig") });
+    const config_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_config_test.zig"), .target = b.graph.host, .optimize = .Debug }); config_test_module.addImport("ghostty_config", ghostty_config_module);
+    const config_tests = b.addTest(.{ .root_module = config_test_module }); const run_config_tests = b.addRunArtifact(config_tests); const config_step = b.step("config-test", "Verify Ghostty appearance config compatibility"); config_step.dependOn(&run_config_tests.step);
     inline for (.{ .{ "input-test", "tests/input_test.zig" }, .{ "interaction-test", "tests/interaction_test.zig" } }) |spec| { const m = b.createModule(.{ .root_source_file = b.path(spec[1]), .target = b.graph.host, .optimize = .Debug }); m.addImport("runtime", runtime_module); m.addImport("input", input_module); const t = b.addTest(.{ .root_module = m }); t.linkLibC(); t.linkSystemLibrary("util"); const run = b.addRunArtifact(t); const step = b.step(spec[0], spec[0]); step.dependOn(&run.step); }
 
     const renderer_module = b.createModule(.{ .root_source_file = b.path("linux/renderer.zig") });
@@ -79,6 +82,7 @@ pub fn build(b: *std.Build) void {
     app_module.addImport("terminal_widget", widget_module);
     app_module.addImport("runtime", runtime_module);
     app_module.addImport("input", input_module);
+    app_module.addImport("ghostty_config", ghostty_config_module);
     addGtkIncludes(app_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     linkGtk(app); app.linkSystemLibrary("util");

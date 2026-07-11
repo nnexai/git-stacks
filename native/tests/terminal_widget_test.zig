@@ -33,3 +33,12 @@ test "production widget focuses resizes snapshots and invalidates callbacks" {
     widget.unrealize();
     try std.testing.expect(!widget.queueRedraw(token));
 }
+
+test "production Cairo widget applies configured font and recomputes metrics" {
+    if (c.gtk_init_check() == 0) return error.GtkDisplayUnavailable;
+    var terminal = try vt.VtAdapter.init(std.testing.allocator, 20, 4); defer terminal.deinit();
+    var widget = try widget_mod.TerminalWidget.initAppearance(&terminal, "DejaVu Sans Mono", 15.5);
+    const window = c.gtk_window_new() orelse return error.WindowCreationFailed; defer c.g_object_unref(window); c.gtk_window_set_child(@ptrCast(window), @ptrCast(@alignCast(widget.widget)));
+    try std.testing.expectEqualStrings("DejaVu Sans Mono", widget.fontFamily()); try std.testing.expectEqual(@as(f32, 15.5), widget.fontSize());
+    try widget.resize(900, 540); widget.unrealize();
+}

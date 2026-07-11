@@ -21,3 +21,8 @@ test "renderer bounds unusually large frames and resets scale cache" {
     var subject = renderer.Renderer{}; subject.rendered_cells = 42; subject.resetScale(.{ .cell_width = 10, .cell_height = 20 });
     try std.testing.expectEqual(@as(usize, 0), subject.rendered_cells);
 }
+
+test "snapshot renderer receives the resolved font family size and metrics" {
+    var subject = renderer.Renderer{}; subject.configure("DejaVu Sans Mono", 15.5, .{ .cell_width = 11, .cell_height = 22 });
+    try std.testing.expectEqualStrings("DejaVu Sans Mono", subject.font_family); try std.testing.expectEqual(@as(f32, 15.5), subject.font_size); try std.testing.expectEqual(@as(f32, 11), subject.metrics.cell_width);
+}
