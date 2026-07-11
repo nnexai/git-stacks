@@ -106,7 +106,7 @@ describe("authoritative service snapshots", () => {
 
   test("projects one or every identity-complete workspace from one generation", async () => {
     const builder = createSnapshotBuilder(dependencies({
-      listWorkspaceNames: () => ["alpha", "beta"],
+      listWorkspaceNames: () => ["beta", "alpha"],
       ensureWorkspaceIdentity: (name: string) => workspace(name),
     }))
     expect((await builder.buildAll()).map((entry) => entry.workspace.name)).toEqual(["alpha", "beta"])

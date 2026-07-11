@@ -170,7 +170,7 @@ function defaultFingerprint(workspace: IdentityWorkspace): string {
 function defaultDependencies(): SnapshotDependencies {
   const config = readGlobalConfig()
   return {
-    listWorkspaceNames: () => listWorkspaces().map((workspace) => workspace.name),
+    listWorkspaceNames: () => listWorkspaces().map((workspace) => workspace.name).sort((a, b) => a.localeCompare(b)),
     ensureWorkspaceIdentity,
     fingerprint: defaultFingerprint,
     getWorkspaceStatus,
@@ -278,7 +278,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
   }
 
   async function buildAll(): Promise<WorkspaceSnapshotResponse[]> {
-    const names = dependencies.listWorkspaceNames()
+    const names = [...dependencies.listWorkspaceNames()].sort((a, b) => a.localeCompare(b))
     // One aggregate generation owns one revision. Per-workspace concurrent
     // writes to a shared revision store made revision depend on build order.
     const projections = []
