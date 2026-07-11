@@ -166,6 +166,7 @@ const WorkspaceRepoHooksSchema = z.object({
 })
 
 const WorkspaceRepoBaseSchema = z.object({
+  id: z.string().uuid().optional(),
   name: z.string(),
   repo: z.string(),           // registry name — replaces 'stack'
   type: RepoTypeSchema,
@@ -238,6 +239,7 @@ const WorkspaceHooksSchema = z.object({
 })
 
 export const WorkspaceSchema = z.object({
+  id: z.string().uuid().optional(),
   name: NameSchema,
   // Migration strategy: bump default when schema changes; read-time migration functions keyed by version
   schema_version: z.string().default("1"),
@@ -387,10 +389,19 @@ export function readWorkspace(name: string): Workspace {
 }
 
 export function writeWorkspace(workspace: Workspace) {
+  const parsed = WorkspaceSchema.safeParse(workspace)
+  if (!parsed.success) throw new Error(`Invalid workspace: ${formatZodError(parsed.error)}`)
   ensureDir(WORKSPACES_DIR)
-  writeYaml(workspacePath(workspace.name), workspace)
-  workspaceIndex.set(workspace.name, workspace)
+  writeYaml(workspacePath(parsed.data.name), parsed.data)
+  workspaceIndex.set(parsed.data.name, parsed.data)
   workspaceListPopulated = false
+}
+
+/** Locate the persisted file backing a name-based workspace lookup. */
+export function workspaceFilePath(name: string): string {
+  const found = findWorkspaceFile(name)
+  if (!found) throw new Error(`Workspace '${name}' not found.`)
+  return found.filePath
 }
 
 export function deleteWorkspace(name: string): void {
