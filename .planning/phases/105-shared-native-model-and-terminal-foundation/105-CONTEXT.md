@@ -37,8 +37,17 @@ Define deterministic, platform-neutral native-client state semantics and prove o
 - **D-15:** libghostty and its compatible Zig toolchain use immutable exact pins. Advancing either is dedicated compatibility work that reruns the full terminal smoke suite.
 - **D-16:** Expose only verified native accessibility semantics, document upstream gaps, and fail acceptance for misleading or broken core focus/input behavior. Complete upstream screen-reader parity is not an unconditional Phase 105 blocker.
 
+### Full Ghostty Linux Surface Replan
+- **D-17:** A terminal leaf must be a full Ghostty rendered surface hosted in GTK. `libghostty-vt` plus a git-stacks-owned renderer is superseded and must not remain the production terminal path.
+- **D-18:** Git-stacks owns workspace, pane, split, and tab layout. Ghostty owns each terminal leaf's PTY, renderer, font stack, configuration, input protocol, clipboard/selection behavior, and terminal compatibility lifecycle.
+- **D-19:** Use the Linux embedded-surface architecture proven by Limux: a host-provided current `GtkGLArea` context plus `ghostty_app_*`, `ghostty_config_*`, and `ghostty_surface_*` lifecycle calls. Do not import the standalone Ghostty GTK application graph or compose a separate terminal window.
+- **D-20:** Pin the initial Linux surface integration to the exact validated Limux Ghostty fork commit `81ab8ffa90185221782baf785e85387321e16f8d`, with automated build, exported-ABI, source-integrity, and upstream-rebase drift checks. Collaborate/upstream the bounded Linux surface patch rather than creating an untracked third fork.
+- **D-21:** Load Ghostty configuration through Ghostty's configuration API and pass it to every surface. Font family, font size, cursor, palette, shell integration, key behavior, and terminal feature behavior must not be re-parsed or approximated by git-stacks.
+- **D-22:** Existing shared model and presentation-only restoration remain product-owned. Existing product-owned PTY/process-group implementation may be retained for non-terminal infrastructure evidence, but production Ghostty terminal processes follow Ghostty surface ownership; lifecycle observations must be adapted into the shared model without competing ownership.
+- **D-23:** Acceptance requires production-path evidence for cursor, selection/copy/paste, IME, mouse, rich keyboard protocol, Ghostty config/font fidelity, resize/reflow, alternate-screen and full-screen TUIs, focus, shell initialization queries, clean exit/close/quit, and multiple independently resizable surfaces.
+
 ### the agent's Discretion
-- Choose concrete reducer representation, ABI encoding, persistence format, timeout values, activity-detection mechanism, ownership-guard implementation, stress-cycle count, bounded resource thresholds, and test harnesses while preserving the locked semantics above.
+- Choose concrete reducer representation, ABI encoding, persistence format, Ghostty callback adapter structure, timeout values, activity-detection mechanism, stress-cycle count, bounded resource thresholds, and test harnesses while preserving the locked semantics above.
 
 </decisions>
 
@@ -58,7 +67,12 @@ Define deterministic, platform-neutral native-client state semantics and prove o
 - `.planning/codebase/ARCHITECTURE.md` — Documents the authoritative engine boundary and current service-facing integration points.
 - `.planning/codebase/CONVENTIONS.md` — Defines type, module, validation, error, and testing conventions relevant to the TypeScript contract side.
 
-No external libghostty embedding specification or project ADR was referenced during discussion. Research must identify the exact upstream embedding API, supported revision, compatible Zig version, and known accessibility constraints before planning.
+### Corrective Linux Embedding Evidence
+- `.planning/spikes/005-libghostty-ecosystem-survey/README.md` — Establishes Limux as working full-surface Linux prior art and invalidates the product-renderer path.
+- `.planning/spikes/006-full-ghostty-gtk-runtime/README.md` — Records the locally successful exact-fork build and exported surface ABI.
+- `.planning/spikes/007-reusable-linux-surface-extraction/README.md` — Bounds the downstream patch and records upstream/rebase risk.
+- `.planning/spikes/008-multi-pane-ghostty-integration/README.md` — Establishes the host-layout/Ghostty-leaf ownership pattern for tabs and splits.
+- `.planning/spikes/009-mature-widget-fallback/README.md` — Defines VTE as fallback only if the maintained Ghostty surface patch becomes unacceptable.
 
 </canonical_refs>
 
@@ -79,7 +93,7 @@ No external libghostty embedding specification or project ADR was referenced dur
 ### Integration Points
 - Consume the Phase 104 `/v1` snapshots, operations, capability negotiation, and event/replay semantics through golden fixtures shared with native harnesses.
 - Add a product-owned opaque ABI between platform shells and the shared reducer without exposing platform UI types or libghostty embedding details.
-- Put libghostty behind a narrow adapter so terminal surface, PTY/process-group ownership, input, resize, rendering, accessibility, and teardown can be tested independently of the later workspace UI.
+- Put the full Ghostty surface behind a narrow Linux host adapter; GTK owns layout and GL context delivery while Ghostty owns terminal-leaf behavior.
 - Persist presentation-only session metadata separately from process ownership and runtime liveness.
 
 </code_context>
@@ -91,6 +105,8 @@ No external libghostty embedding specification or project ADR was referenced dur
 - Preserve useful context during failures while freezing only actions whose correctness depends on refreshed authoritative state.
 - Model relaunch as lineage between distinct surface lifetimes rather than identity reuse.
 - Treat crash cleanup as a structural ownership guarantee, not a best-effort shutdown callback.
+- Treat Ghostty configuration and rendering as delegated product behavior, not settings to duplicate in git-stacks.
+- Use Limux's embedded surface topology as the Linux reference implementation and Supacode/GhosttyKit as the configuration-delegation precedent.
 
 </specifics>
 

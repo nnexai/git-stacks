@@ -75,15 +75,15 @@ Wave 5 *(verification gap closure)*:
   4. Closing, exiting, quitting, or crashing a terminal surface cleans up its exclusive PTY and process group, and repeated create/resize/destroy cycles leave no orphaned processes or leaked surfaces.
   5. The pinned libghostty/Zig pair is reproducible behind the product adapter, upgrade smoke tests detect incompatibility, and the terminal exposes an honest documented native accessibility contract.
 
-**Plans**: 7/8 plans executed
+**Plans**: 4/8 plans executed
 
 - [x] 105-01-PLAN.md
 - [x] 105-02-PLAN.md
 - [x] 105-03-PLAN.md
 - [x] 105-04-PLAN.md
-- [x] 105-05-PLAN.md
-- [x] 105-06-PLAN.md
-- [x] 105-07-PLAN.md
+- [ ] 105-05-PLAN.md
+- [ ] 105-06-PLAN.md
+- [ ] 105-07-PLAN.md
 - [ ] 105-08-PLAN.md
 
 Wave 1:
@@ -104,19 +104,19 @@ Wave 4 *(blocked on Wave 3 completion)*:
 
 Wave 5 *(blocked on Wave 4 completion)*:
 
-- [x] 105-05 — Pivot to pinned ghostty-vt and ship a runnable GTK frame
+- [ ] 105-05 — Pin, build, and drift-audit the validated full Linux Ghostty surface runtime
 
 Wave 6 *(blocked on Wave 5 completion)*:
 
-- [x] 105-06 — Connect the product-owned PTY terminal runtime and real shell roundtrip
+- [ ] 105-06 — Host a Ghostty-owned rendered terminal leaf in GtkGLArea with delegated configuration
 
 Wave 7 *(blocked on Wave 6 completion)*:
 
-- [ ] 105-07 — Complete renderer and interaction fidelity
+- [ ] 105-07 — Complete Ghostty-native interaction, lifecycle observation, and multi-surface isolation
 
 Wave 8 *(blocked on Wave 7 completion; final human evidence)*:
 
-- [ ] 105-08 — Prove real lifecycle/accessibility evidence and close Phase 105
+- [ ] 105-08 — Prove production full-surface stress, accessibility, and real-session acceptance
 
 **UI hint**: yes
 

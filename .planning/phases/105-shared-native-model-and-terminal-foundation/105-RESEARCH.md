@@ -1,8 +1,18 @@
 # Phase 105: Shared Native Model and Terminal Foundation - Research
 
-**Researched:** 2026-07-11 (forced refresh after Spike 004)
-**Domain:** Product-owned GTK terminal built on pinned `libghostty-vt`, PTY/process ownership, rendering, input, and accessibility
-**Confidence:** HIGH for the invalidated full-surface conclusion, pin/toolchain, existing-code disposition, and ownership boundary; MEDIUM for the detailed GTK renderer plan until its first real graphical vertical slice runs
+**Researched:** 2026-07-11 (corrective refresh after Spikes 005-009)
+**Domain:** Full Ghostty-owned rendered Linux surfaces hosted in GTK panes
+**Confidence:** HIGH for build feasibility, exported ABI, GTK host topology, multi-pane behavior, and replacement of the custom renderer; MEDIUM for long-term upstream/fork maintenance
+
+> **Corrective authority:** The findings in Spikes 005-009 supersede every recommendation below that prescribes `libghostty-vt`, Pango rendering, or git-stacks-owned terminal PTYs. Those sections are retained only as investigation history.
+
+## Corrective executive conclusion
+
+The production terminal must use the complete `ghostty_app_*`, `ghostty_config_*`, and `ghostty_surface_*` runtime from the exact validated Limux Ghostty fork commit `81ab8ffa90185221782baf785e85387321e16f8d`. The GTK application supplies a current `GtkGLArea` OpenGL context and forwards lifecycle/input/display events; Ghostty owns the terminal renderer, font stack, configuration, PTY, protocol handling, cursor, selection, clipboard behavior, and terminal compatibility.
+
+Limux is direct working Linux prior art for multiple tabs and split panes. The custom `ghostty-vt`/Pango implementation must be removed from the production path rather than refined. Existing shared reducer, ABI, restoration, and presentation-state work remains valid, but production process ownership must observe Ghostty surface lifecycle instead of competing with it.
+
+The Linux extension is a bounded patch to the embedded C header/runtime, but the inspected fork carries meaningful upstream drift. The integration therefore requires an immutable source pin, exported-symbol and source-integrity probes, automated upstream-drift reporting, production-path graphical smoke tests, and a documented upstream/collaboration strategy. GNOME VTE remains fallback-only and is not part of the primary Phase 105 plan.
 
 ## User Constraints
 
@@ -45,7 +55,9 @@ None — discussion stayed within the Phase 105 boundary.
 - **Add workspace notes** — separate product capability unrelated to the shared reducer and terminal ownership.
 - **Plan broader code quality improvement run** — prior planning stream unrelated to the v0.20.0 Phase 105 boundary.
 
-### Locked corrective decisions (post-context)
+### Superseded pre-spike decisions (investigation history only)
+
+The following bullets document the assumptions that produced the failed custom-renderer attempt. Spikes 005-009 and D-17 through D-23 explicitly invalidate them; they are not planning constraints:
 
 - Phase 105 must produce a genuinely runnable, interactive Linux GTK terminal surface.
 - A maintained Ghostty fork and standalone Ghostty process composition are out of scope.
