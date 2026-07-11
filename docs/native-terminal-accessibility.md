@@ -2,6 +2,8 @@
 
 Status: PASS WITH DOCUMENTED UPSTREAM LIMITATIONS — approved 2026-07-11
 
+Phase 106 workspace-shell observations remain pending in `docs/native-workspace-acceptance.md`: hierarchical attention descriptions, keyboard traversal, visible focus, launcher/terminal IME isolation, explicit focus routing, and asynchronous no-focus behavior.
+
 This D-16 contract describes the production Ghostty `GtkGLArea`, not the removed custom renderer. Automated inspection confirms only the GTK properties that the leaf actually exposes. Human GTK Inspector/AT-SPI/Orca evidence is required before stronger claims.
 
 ## Automated contract

@@ -1,0 +1,5 @@
+const std=@import("std");const model=@import("model");const reducer=@import("reducer");
+pub const Presentation=struct{icon:[]const u8,label:[96]u8=[_]u8{0}**96,label_len:u8=0,unread:u32,severity:model.Severity};
+pub fn present(state:*const model.State,workspace:model.Id,repository:?model.Id,surface:?model.Id)Presentation{const a=model.aggregate(state,workspace,repository,surface);var p:Presentation=.{.icon=if(a.severity==.primary)"dialog-warning-symbolic" else if(a.severity==.secondary)"emblem-ok-symbolic" else "media-record-symbolic",.unread=a.unread,.severity=a.severity};const text=std.fmt.bufPrint(&p.label,"{d} unread, {s} priority",.{a.unread,@tagName(a.severity)}) catch "attention";p.label_len=@intCast(text.len);return p;}
+pub fn activate(state:model.State,id:model.Id)reducer.Result{return reducer.reduce(state,.{.select_attention=.{.attention_id=id}});}
+pub fn asynchronous(state:model.State,item:model.Attention)reducer.Result{const result=reducer.reduce(state,.{.attention_received=item});std.debug.assert(result.effect==.none);return result;}

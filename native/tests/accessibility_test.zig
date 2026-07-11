@@ -1,5 +1,7 @@
 const std = @import("std");
 const surface = @import("ghostty_surface");
+const attention = @import("attention_view");
+const model = @import("model");
 const c = @cImport({ @cInclude("gtk/gtk.h"); });
 
 test "production GtkGLArea exposes only its truthful accessibility contract" {
@@ -15,4 +17,14 @@ test "production GtkGLArea exposes only its truthful accessibility contract" {
     try std.testing.expect(!surface.AccessibilityContract.caret);
     try std.testing.expect(!surface.AccessibilityContract.selection);
     try std.testing.expect(!surface.AccessibilityContract.actions);
+}
+
+test "hierarchical attention has redundant icon text count and accessible description" {
+    const id = [_]u8{'a'} ** 36;
+    var state:model.State=.{.attention_count=1};
+    state.attention[0]=.{.id=id,.workspace_id=id,.status=.waiting};
+    const p=attention.present(&state,id,null,null);
+    try std.testing.expectEqual(@as(u32,1),p.unread);
+    try std.testing.expect(p.icon.len>0 and p.label_len>0);
+    try std.testing.expect(std.mem.indexOf(u8,p.label[0..p.label_len],"unread")!=null);
 }

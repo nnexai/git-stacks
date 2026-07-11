@@ -9,6 +9,7 @@ const app_graph = @import("app_graph");
 const model = @import("model");
 const c = @cImport({
     @cInclude("gtk/gtk.h");
+    @cInclude("adwaita.h");
     @cInclude("unistd.h");
 });
 
@@ -266,13 +267,13 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     if (state.graph.authorization.len != 0 and state.graph.endpoint.len != 0) state.replay_thread=std.Thread.spawn(.{},replayWorker,.{state}) catch |err| blk:{std.debug.print("native replay worker start failed: {s}\n",.{@errorName(err)});break :blk null;};
     _ = c.g_timeout_add(10, adoptHosts, state);
 
-    const window = c.gtk_application_window_new(app) orelse {
+    const window = c.adw_application_window_new(app) orelse {
         cleanup(state);
         return;
     };
     state.window = @ptrCast(window);
     state.close_handler = c.g_signal_connect_data(window, "close-request", @ptrCast(&closeRequested), state, null, 0);
-    c.gtk_window_set_title(@ptrCast(window), "git-stacks terminal");
+    c.gtk_window_set_title(@ptrCast(window), "git-stacks workspace");
     const stress_cycle = parseStressCycle() orelse 0;
     c.gtk_window_set_default_size(@ptrCast(window), @intCast(800 + stress_cycle % 7 * 31), @intCast(480 + stress_cycle % 5 * 29));
     if (std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null) {
@@ -290,7 +291,20 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         c.gtk_paned_set_start_child(@ptrCast(paned), @ptrCast(@alignCast(terminal.widget())));
         c.gtk_paned_set_end_child(@ptrCast(paned), @ptrCast(@alignCast(second.widget())));
         c.gtk_window_set_child(@ptrCast(window), paned);
-    } else c.gtk_window_set_child(@ptrCast(window), @ptrCast(@alignCast(terminal.widget())));
+    } else {
+        const shell=c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL,0) orelse {cleanup(state);return;};
+        const header=c.adw_header_bar_new() orelse {cleanup(state);return;};
+        const menu=c.gtk_menu_button_new() orelse {cleanup(state);return;};
+        c.gtk_menu_button_set_icon_name(@ptrCast(menu),"open-menu-symbolic");
+        c.gtk_widget_set_tooltip_text(menu,"Workspace and repository actions: new shell, configured commands, Open in VS Code");
+        c.adw_header_bar_pack_end(@ptrCast(header),menu);c.gtk_box_append(@ptrCast(shell),header);
+        const split=c.gtk_paned_new(c.GTK_ORIENTATION_HORIZONTAL) orelse {cleanup(state);return;};c.gtk_paned_set_position(@ptrCast(split),260);
+        const sidebar=c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL,8) orelse {cleanup(state);return;};c.gtk_widget_set_size_request(sidebar,220,-1);
+        const title=c.gtk_label_new("Workspaces") orelse {cleanup(state);return;};c.gtk_widget_add_css_class(title,"title-3");c.gtk_box_append(@ptrCast(sidebar),title);
+        const status_text=switch(@import("application").page(&state.graph.state)){.loading=>"Loading authoritative workspaces…",.empty=>"No workspaces",.disconnected=>"Disconnected — no snapshot",.stale=>"Disconnected — showing stale snapshot",.incompatible=>"Service version incompatible",.refresh_required=>"Refresh required",.failure=>"Workspace service failed",.workspace=>"Pinned and grouped workspaces"};
+        const status=c.gtk_label_new(status_text.ptr) orelse {cleanup(state);return;};c.gtk_label_set_wrap(@ptrCast(status),1);c.gtk_box_append(@ptrCast(sidebar),status);
+        c.gtk_paned_set_start_child(@ptrCast(split),sidebar);c.gtk_paned_set_end_child(@ptrCast(split),@ptrCast(@alignCast(terminal.widget())));c.gtk_widget_set_vexpand(split,1);c.gtk_box_append(@ptrCast(shell),split);c.gtk_window_set_child(@ptrCast(window),shell);
+    }
     c.gtk_window_present(@ptrCast(window));
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(terminal.widget())));
 
@@ -308,7 +322,8 @@ pub fn main() u8 {
     terminal_environment.sanitize();
     const isolated = std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null or std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null;
     const flags: c.GApplicationFlags = @intCast(if (isolated) c.G_APPLICATION_NON_UNIQUE else c.G_APPLICATION_DEFAULT_FLAGS);
-    const app = c.gtk_application_new("dev.nnex.git-stacks.terminal", flags) orelse return 2;
+    c.adw_init();
+    const app = c.adw_application_new("dev.nnex.git-stacks.workspace", flags) orelse return 2;
     defer c.g_object_unref(app);
     _ = c.g_signal_connect_data(app, "activate", @ptrCast(&activate), null, null, 0);
     _ = c.g_signal_connect_data(app, "shutdown", @ptrCast(&shutdown), null, null, 0);

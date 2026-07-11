@@ -130,10 +130,8 @@ pub fn build(b: *std.Build) void {
 
     const accessibility_test_module = b.createModule(.{ .root_source_file = b.path("tests/accessibility_test.zig"), .target = b.graph.host, .optimize = .Debug });
     accessibility_test_module.addImport("ghostty_surface", surface_module);
-    const ax_model=b.createModule(.{.root_source_file=b.path("core/model.zig")});
-    const ax_reducer=b.createModule(.{.root_source_file=b.path("core/reducer.zig")});ax_reducer.addImport("model",ax_model);
-    const ax_attention=b.createModule(.{.root_source_file=b.path("linux/attention_view.zig")});ax_attention.addImport("model",ax_model);ax_attention.addImport("reducer",ax_reducer);
-    accessibility_test_module.addImport("model",ax_model);accessibility_test_module.addImport("attention_view",ax_attention);
+    const ax_attention=b.createModule(.{.root_source_file=b.path("linux/attention_view.zig")});ax_attention.addImport("model",app_model_module);ax_attention.addImport("reducer",app_reducer_module);
+    accessibility_test_module.addImport("model",app_model_module);accessibility_test_module.addImport("attention_view",ax_attention);
     accessibility_test_module.addIncludePath(include_dir);
     accessibility_test_module.addCSourceFile(.{ .file = .{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "src", "gl.c" }) }, .flags = &.{} });
     accessibility_test_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "include" }) });
