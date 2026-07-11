@@ -2,6 +2,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "fs"
 import { arch, homedir, platform } from "os"
 import { basename, join } from "path"
+import { startManagedService } from "../src/service/main"
 
 const ROOT = join(import.meta.dir, "..")
 const NATIVE = join(ROOT, "native")
@@ -443,9 +444,14 @@ async function buildApp(): Promise<string> {
 
 async function runInteractiveApp(): Promise<void> {
   const artifact = await buildApp()
-  const child = Bun.spawn([artifact], { cwd: ROOT, stdin: "inherit", stdout: "inherit", stderr: "inherit", env: process.env })
-  const code = await child.exited
-  if (code !== 0) throw new Error(`production native executable exited ${code}`)
+  const service = await startManagedService()
+  try {
+    const child = Bun.spawn([artifact], { cwd: ROOT, stdin: "inherit", stdout: "inherit", stderr: "inherit", env: process.env })
+    const code = await child.exited
+    if (code !== 0) throw new Error(`production native executable exited ${code}`)
+  } finally {
+    await service.stop()
+  }
 }
 
 async function smokeApp(): Promise<void> {
