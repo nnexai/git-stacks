@@ -1,0 +1,78 @@
+import { afterEach, describe, expect, test } from "bun:test"
+import { connect } from "node:net"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { provisionOfficialClient } from "../../src/lib/service/credentials"
+import { EventBroker } from "../../src/lib/service/event-broker"
+import { EventJournal } from "../../src/lib/service/event-journal"
+import { startServiceServer } from "../../src/service/server"
+
+const cleanup: Array<() => void | Promise<void>> = []
+afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
+const workspaceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+async function harness(limits: { maxEvents: number; maxBytes: number }) {
+  const root = await mkdtemp(join(tmpdir(), "git-stacks-pressure-"))
+  cleanup.push(() => rm(root, { recursive: true, force: true }))
+  const journal = new EventJournal({ root })
+  const broker = new EventBroker(journal, limits)
+  const client = provisionOfficialClient("pressure-client", { serviceRoot: root })
+  const service = startServiceServer({
+    serviceRoot: root, broker,
+    snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
+    heartbeatMs: 60_000,
+  })
+  cleanup.push(() => service.stop())
+  const socket = connect({ host: "127.0.0.1", port: service.url.port })
+  socket.write(`GET /v1/events?cursor=0 HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer ${client.token}\r\nConnection: keep-alive\r\n\r\n`)
+  await Bun.sleep(20)
+  socket.pause()
+  cleanup.push(() => socket.destroy())
+  return { root, journal, broker, service, socket }
+}
+
+async function publishUntilClosed(input: Awaited<ReturnType<typeof harness>>, payloadBytes: number, max = 2000) {
+  const start = performance.now()
+  for (let index = 0; index < max && input.broker.subscriberCount; index++) {
+    const event = await input.journal.appendAttention({ workspace_id: workspaceId, code: "message", message: `${index}:${"x".repeat(payloadBytes)}` })
+    input.broker.publish(event)
+    const bridge = input.service.sseDiagnostics[0]
+    if (bridge) {
+      expect(bridge.combinedPendingEvents).toBeLessThanOrEqual(bridge.maxEvents)
+      expect(bridge.combinedPendingBytes).toBeLessThanOrEqual(bridge.maxBytes)
+    }
+  }
+  expect(performance.now() - start).toBeLessThan(10_000)
+}
+
+describe("real loopback SSE backpressure", () => {
+  test("stalled reader remains charged and overflows the shared event cap", async () => {
+    const input = await harness({ maxEvents: 4, maxBytes: 16 * 1024 * 1024 })
+    await publishUntilClosed(input, 256 * 1024)
+    expect(input.broker.subscriberCount).toBe(0)
+    expect(input.service.connectedClients).toBe(0)
+    expect(input.service.sseDiagnostics).toHaveLength(0)
+  }, 20_000)
+
+  test("stalled reader overflows shared encoded bytes while a draining reader progresses", async () => {
+    const input = await harness({ maxEvents: 256, maxBytes: 700 * 1024 })
+    const client = provisionOfficialClient("healthy-client", { serviceRoot: input.root })
+    const response = await fetch(new URL("/v1/events?cursor=0", input.service.url), { headers: { authorization: `Bearer ${client.token}` } })
+    const reader = response.body!.getReader()
+    const draining = (async () => {
+      let streamed = ""
+      while (!streamed.includes('"sequence":"2"')) {
+        const chunk = await reader.read()
+        if (chunk.done) break
+        streamed += new TextDecoder().decode(chunk.value)
+      }
+      return streamed
+    })()
+    await publishUntilClosed(input, 256 * 1024)
+    expect(await draining).toContain('"sequence":"2"')
+    await reader.cancel()
+    expect(input.broker.subscriberCount).toBe(0)
+    expect(input.service.connectedClients).toBe(0)
+  }, 20_000)
+})

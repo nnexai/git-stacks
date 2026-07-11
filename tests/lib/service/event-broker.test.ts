@@ -56,4 +56,46 @@ describe("EventBroker", () => {
     expect(performance.now() - start).toBeLessThan(10)
     expect((await healthy.next()).value?.sequence).toBe(event.sequence)
   })
+
+  test("transfers one shared charge from queue through reservation and acknowledgement", async () => {
+    const store = await journal()
+    const broker = new EventBroker(store, { maxEvents: 2, maxBytes: 1_000_000 })
+    const subscriber = await broker.subscribe("0")
+    const event = await store.appendAttention(attention("reserved"))
+    broker.publish(event)
+    const queuedBytes = subscriber.pendingBytes
+
+    expect(subscriber.diagnostics).toMatchObject({ queuedEvents: 1, reservedEvents: 0, combinedEvents: 1 })
+    expect(subscriber.peek()?.event.sequence).toBe(event.sequence)
+    expect(subscriber.pendingBytes).toBe(queuedBytes)
+
+    const reservation = subscriber.reserve()
+    expect(reservation?.event.sequence).toBe(event.sequence)
+    expect(subscriber.diagnostics).toEqual(expect.objectContaining({
+      queuedEvents: 0, reservedEvents: 1, combinedEvents: 1,
+      queuedBytes: 0, reservedBytes: queuedBytes, combinedBytes: queuedBytes,
+      lastTransportAcceptedCursor: "0",
+    }))
+    expect(subscriber.reserve()).toBe(reservation)
+    expect(subscriber.diagnostics.combinedEvents).toBe(1)
+
+    subscriber.ack(reservation!)
+    subscriber.ack(reservation!)
+    expect(subscriber.diagnostics).toMatchObject({ combinedEvents: 0, combinedBytes: 0, lastTransportAcceptedCursor: event.sequence })
+    subscriber.close()
+  })
+
+  test("keeps failed transport reservations charged and closes both ownership buckets", async () => {
+    const store = await journal()
+    const broker = new EventBroker(store, { maxEvents: 2, maxBytes: 1_000_000 })
+    const subscriber = await broker.subscribe("0")
+    broker.publish(await store.appendAttention(attention("one")))
+    const reservation = subscriber.reserve()!
+    broker.publish(await store.appendAttention(attention("two")))
+    expect(subscriber.diagnostics).toMatchObject({ queuedEvents: 1, reservedEvents: 1, combinedEvents: 2, lastTransportAcceptedCursor: "0" })
+    broker.publish(await store.appendAttention(attention("three")))
+    expect(subscriber.disconnect).toEqual({ reason: "slow_consumer", last_delivered_cursor: "0" })
+    expect(subscriber.diagnostics).toMatchObject({ combinedEvents: 0, combinedBytes: 0, closed: true })
+    expect(() => subscriber.ack(reservation)).not.toThrow()
+  })
 })
