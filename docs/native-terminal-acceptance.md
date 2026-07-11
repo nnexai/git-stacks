@@ -24,6 +24,7 @@ This application embeds pinned `ghostty-vt`, not GhosttyKit/full libghostty. A p
 - Command/build identifier:
 - Launch command: `bun run native:run`
 - Resolved font family / size from readiness evidence:
+- Actual Pango family / cell width / cell height / baseline from readiness evidence:
 
 ## Interaction matrix
 

@@ -65,6 +65,8 @@ The initial renderer uses GtkSnapshot/GSK/Pango behind a replaceable renderer in
 
 By explicit user-approved Phase 105 expansion, the Linux host reads a narrow Ghostty-compatible appearance subset (`font-family`, `font-size`) from the pinned version's preferred XDG path and legacy fallback. Supacode's full semantics come from GhosttyKit's `ghostty_config_*` API; that API is not exposed by this phase's `ghostty-vt` boundary, so this host does not claim equivalent full-config parsing, recursive includes, themes, or reload.
 
+Allocation follows the pinned Ghostty pipeline in `apprt/gtk/class/surface.zig::glareaResize`, `Surface.zig::sizeCallback/resize`, and `termio/Exec.zig::Subprocess.resize`: one GTK allocation computes cell and pixel dimensions, updates VT plus `TIOCSWINSZ`, then redraws. Font rendering remains GTK/Pango rather than Ghostty's fontconfig/FreeType/HarfBuzz renderer; the host resolves the actual Pango family, uses widget-context metrics and shapes contiguous style runs, but does not claim pixel identity.
+
 ### Rich input and IME
 
 Arbitration order is product/window shortcuts, GtkIMContext filtering, rich key encoding, then committed text when appropriate. Preserve physical/logical key, action, repeat, modifiers, consumed modifiers and composing state. Preedit is a host overlay and reaches the PTY only on commit. Async clipboard completion carries a generation token and clipboard bytes never enter diagnostics.
