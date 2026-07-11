@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: milestone
 current_phase: 106
-current_phase_name: linux-workspace-commands-and-attention
-status: planned
-stopped_at: Phase 105 complete; ready for Phase 106
-last_updated: "2026-07-11T19:00:00.000Z"
+current_phase_name: Linux Workspace, Commands, and Attention
+status: Full Ghostty terminal foundation approved
+stopped_at: Phase 105 complete; Phase 106 ready
+last_updated: "2026-07-11T19:09:15.278Z"
 last_activity: 2026-07-11
-last_activity_desc: Completed and human-approved the full Ghostty terminal foundation
+last_activity_desc: Phase 105 complete, transitioned to Phase 106
 progress:
   total_phases: 4
   completed_phases: 2
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 
 ## Current Position
 
-Phase: 106 (linux-workspace-commands-and-attention) — PLANNED
-Plan: Phase 105 complete; Phase 106 planning in progress
+Phase: 106 — Linux Workspace, Commands, and Attention
+Plan: Not started
 Status: Full Ghostty terminal foundation approved
-Last activity: 2026-07-11 — Phase 105 production interaction, stress, accessibility, and configuration acceptance passed
+Last activity: 2026-07-11 — Phase 105 complete, transitioned to Phase 106
 
 Progress: [█████░░░░░] 50%
 
@@ -39,7 +39,7 @@ Progress: [█████░░░░░] 50%
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 25
 - Average duration: 7min
 - Total execution time: 46min
 
@@ -49,6 +49,7 @@ Progress: [█████░░░░░] 50%
 |-------|-------|-------|----------|
 | Phase 104 | 7 | 46min | 7min |
 | 104 | 9 | - | - |
+| 105 | 9 | - | - |
 
 **Recent Trend:** Phase 104 complete and ready for verification.
 | Phase 104 P01 | 11min | 2 tasks | 7 files |
