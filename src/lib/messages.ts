@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { isAbsolute, relative, resolve, sep } from "node:path"
 import { NameSchema } from "./config"
 import { MESSAGES_DIR } from "./paths"
+import type { AttentionEventPayload } from "./service/event-journal"
 
 export interface MessageRecord {
   workspace: string
@@ -13,6 +14,17 @@ export interface MessageRecord {
 
 const SOCKET_PATH = "/tmp/git-stacks.sock"
 const IPC_TIMEOUT_MS = 500
+
+export interface AttentionPublication {
+  workspaceId: (workspace: string) => string | Promise<string>
+  publish: (attention: AttentionEventPayload) => void | Promise<void>
+}
+
+let attentionPublication: AttentionPublication | undefined
+
+export function configureAttentionPublication(publication: AttentionPublication | undefined): void {
+  attentionPublication = publication
+}
 
 function messagePath(workspace: string): string {
   const parsed = NameSchema.safeParse(workspace)
@@ -42,6 +54,14 @@ export async function appendMessage(
   }
   const line = JSON.stringify(record) + "\n"
   await appendFile(messagePath(workspace), line, "utf8")
+  if (attentionPublication) {
+    try {
+      const workspaceId = await attentionPublication.workspaceId(workspace)
+      await attentionPublication.publish({ workspace_id: workspaceId, code: "message", message: text })
+    } catch {
+      // Structured attention delivery is additive; legacy message persistence stays authoritative.
+    }
+  }
   return record
 }
 
