@@ -51,6 +51,7 @@
     "native:test:terminal-host": "bun run scripts/verify-native.ts terminal-host",
     "native:test:vt": "bun run scripts/verify-native.ts vt",
     "native:test:pty": "bun run scripts/verify-native.ts pty",
+    "native:test:runtime": "bun run scripts/verify-native.ts runtime",
     "native:test:renderer": "bun run scripts/verify-native.ts renderer",
     "native:test:widget": "bun run scripts/verify-native.ts widget",
     "native:build-app": "bun run scripts/verify-native.ts build-app",

@@ -38,6 +38,10 @@ pub fn build(b: *std.Build) void {
     pty_test_module.addImport("pty", pty_module);
     const pty_tests = b.addTest(.{ .root_module = pty_test_module }); pty_tests.linkLibC(); pty_tests.linkSystemLibrary("util");
     const run_pty_tests = b.addRunArtifact(pty_tests); const pty_step = b.step("pty-test", "Run real PTY tests"); pty_step.dependOn(&run_pty_tests.step);
+    const runtime_module = b.createModule(.{ .root_source_file = b.path("terminal/runtime.zig") }); runtime_module.addImport("pty", pty_module); runtime_module.addImport("vt_adapter", vt_adapter);
+    const runtime_test_module = b.createModule(.{ .root_source_file = b.path("tests/terminal_runtime_test.zig"), .target = b.graph.host, .optimize = .Debug }); runtime_test_module.addImport("runtime", runtime_module);
+    const runtime_tests = b.addTest(.{ .root_module = runtime_test_module }); runtime_tests.linkLibC(); runtime_tests.linkSystemLibrary("util");
+    const run_runtime_tests = b.addRunArtifact(runtime_tests); const runtime_step = b.step("runtime-test", "Run PTY VT runtime integration"); runtime_step.dependOn(&run_runtime_tests.step);
 
     const renderer_module = b.createModule(.{ .root_source_file = b.path("linux/renderer.zig") });
     renderer_module.addImport("vt_adapter", vt_adapter);
