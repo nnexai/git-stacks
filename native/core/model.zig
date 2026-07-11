@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const Connection = enum { disconnected_no_snapshot, connecting, ready, stale, refresh_required, incompatible, failed };
-pub const Lifecycle = enum { live, ended };
+pub const Lifecycle = enum { live, ended, failed_cleanup };
 
 pub const Surface = struct {
     id: [36]u8,

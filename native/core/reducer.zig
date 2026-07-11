@@ -9,6 +9,8 @@ pub const Action = union(enum) {
     incompatible,
     unknown_optional,
     relaunch: struct { new_surface_id: [36]u8 },
+    terminal_ended: struct { surface_id: [36]u8 },
+    terminal_failed_cleanup: struct { surface_id: [36]u8 },
 };
 
 pub const Effect = union(enum) { none, refresh_service, persist, terminal_create: struct { id: [36]u8, predecessor: [36]u8 }, platform_focus: [36]u8 };
@@ -36,6 +38,18 @@ pub fn reduce(before: model.State, action: Action) Result {
             if (old.lifecycle == .ended and !std.mem.eql(u8, &a.new_surface_id, &old.id)) {
                 state.surface = .{ .id = a.new_surface_id, .predecessor_surface_id = old.id, .lifecycle = .live, .order = old.order };
                 effect = .{ .terminal_create = .{ .id = a.new_surface_id, .predecessor = old.id } };
+            }
+        },
+        .terminal_ended => |a| if (state.surface) |*surface| {
+            if (std.mem.eql(u8, &a.surface_id, &surface.id) and surface.lifecycle == .live) {
+                surface.lifecycle = .ended;
+                effect = .persist;
+            }
+        },
+        .terminal_failed_cleanup => |a| if (state.surface) |*surface| {
+            if (std.mem.eql(u8, &a.surface_id, &surface.id) and surface.lifecycle != .ended) {
+                surface.lifecycle = .failed_cleanup;
+                effect = .persist;
             }
         },
     }

@@ -88,6 +88,7 @@ pub fn build(b: *std.Build) void {
     ownership_test_module.addImport("guard", b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") }));
     ownership_test_module.addImport("diagnostics", b.createModule(.{ .root_source_file = b.path("terminal/diagnostics.zig") }));
     const ownership_tests = b.addTest(.{ .root_module = ownership_test_module });
+    ownership_tests.linkLibC();
     const run_ownership_tests = b.addRunArtifact(ownership_tests);
     const lifecycle_step = b.step("lifecycle-test", "Run terminal ownership and guard lifecycle tests");
     lifecycle_step.dependOn(&run_ownership_tests.step);
