@@ -45,6 +45,7 @@ export interface ServiceServerOptions {
   setTimeoutFn?: typeof setTimeout
   clearTimeoutFn?: typeof clearTimeout
   onConnectionChange?: (count: number) => void
+  onActivity?: () => void
 }
 
 export interface RunningServiceServer {
@@ -277,6 +278,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
     async fetch(request, server) {
       const admission = authenticateAdmission(request.headers.get("authorization"), { serviceRoot: options.serviceRoot })
       if (!admission.ok) return json(admission.body, admission.status)
+      options.onActivity?.()
       const id = requestId()
       if (!consume(admission.client.clientId)) return failure(id, "rate_limited", "Request rate limit exceeded", 429)
       const url = new URL(request.url)

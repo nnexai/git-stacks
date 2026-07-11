@@ -159,10 +159,12 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     })
     await operations.initialize()
     let running: RunningServiceServer
-    lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: async () => running.stop() })
+    let stopManaged: () => Promise<void> = async () => { await running.stop() }
+    lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: () => stopManaged() })
     running = startServiceServer({
       serviceRoot, snapshot, operations, broker, mutations: createWorkspaceMutationAdapters(),
       onConnectionChange: (count) => lifecycle.setConnectedClients(count),
+      onActivity: () => lifecycle.touch(),
     })
     const instanceId = crypto.randomUUID()
     const descriptor: ServiceDescriptor = {
@@ -184,6 +186,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
         if (current?.instance_id === instanceId) unlinkSync(serviceDescriptorPath(serviceRoot))
       }
     }
+    stopManaged = stop
     return { descriptor, server: running, existing: false, stop }
   } finally {
     closeSync(lock)
