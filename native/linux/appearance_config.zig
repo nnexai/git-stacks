@@ -61,9 +61,17 @@ pub fn discoverPath(allocator: std.mem.Allocator) ![]u8 {
 }
 
 pub fn load(allocator: std.mem.Allocator) !Appearance {
-    const path = discoverPath(allocator) catch return Appearance.init(allocator);
-    defer allocator.free(path);
-    const file = std.fs.cwd().openFile(path, .{}) catch return Appearance.init(allocator); defer file.close();
-    const text = file.readToEndAlloc(allocator, 1024 * 1024) catch return Appearance.init(allocator); defer allocator.free(text);
-    var result = try parseText(allocator, text); result.source = try allocator.dupe(u8, path); return result;
+    const base = if (std.posix.getenv("XDG_CONFIG_HOME")) |xdg| try allocator.dupe(u8, xdg) else blk: { const home = std.posix.getenv("HOME") orelse return Appearance.init(allocator); break :blk try std.fs.path.join(allocator, &.{ home, ".config" }); };
+    defer allocator.free(base); return loadAt(allocator, base);
+}
+pub fn loadAt(allocator: std.mem.Allocator, base: []const u8) !Appearance {
+    const legacy = try std.fs.path.join(allocator, &.{ base, "ghostty", "config" }); defer allocator.free(legacy);
+    const current = try std.fs.path.join(allocator, &.{ base, "ghostty", "config.ghostty" }); defer allocator.free(current);
+    var combined: std.ArrayList(u8) = .empty; defer combined.deinit(allocator); var source: ?[]const u8 = null;
+    const paths = [_][]const u8{ legacy, current }; for (paths) |path| {
+        const file = std.fs.cwd().openFile(path, .{}) catch continue; defer file.close();
+        const text = file.readToEndAlloc(allocator, 1024 * 1024) catch continue; defer allocator.free(text);
+        try combined.appendSlice(allocator, text); try combined.append(allocator, '\n'); source = path;
+    }
+    var result = try parseText(allocator, combined.items); if (source) |path| result.source = try allocator.dupe(u8, path); return result;
 }

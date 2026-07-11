@@ -6,7 +6,7 @@ This template records the required D-13/D-14 real-session evidence. An unchecked
 
 ## Configuration boundary
 
-This application embeds pinned `ghostty-vt`, not GhosttyKit/full libghostty. A product-owned compatibility reader inherits the regular `font-family` fallback list and `font-size` from `$XDG_CONFIG_HOME/ghostty/config.ghostty` (falling back to the pre-1.3 `config`; `$HOME/.config` when XDG is unset). It follows Ghostty's whitespace, comment, quoting, repeat, and empty-reset semantics for those keys. `config-file` includes and all other Ghostty keys—including themes, shaders, adjustments, keybindings, and dynamic reload—remain unsupported. Invalid values fall back safely and are counted without logging configuration contents. This is intentionally not full Ghostty configuration parity.
+This application embeds pinned `ghostty-vt`, not GhosttyKit/full libghostty. A product-owned compatibility reader inherits the regular `font-family` fallback list and `font-size` from `$XDG_CONFIG_HOME/ghostty/config` followed by `config.ghostty` (the newer file overrides later; `$HOME/.config` when XDG is unset). It follows Ghostty's whitespace, comment, quoting, repeat, and empty-reset semantics for those keys. `config-file` includes and all other Ghostty keys—including themes, shaders, adjustments, keybindings, and dynamic reload—remain unsupported. Invalid values fall back safely and are counted without logging configuration contents. This is intentionally not full Ghostty configuration parity.
 
 ## Observation identity
 
