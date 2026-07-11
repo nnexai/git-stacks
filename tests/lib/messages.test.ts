@@ -42,6 +42,29 @@ afterEach(() => {
 })
 
 describe("appendMessage", () => {
+  test("an older attention owner cannot dispose a newer publication", async () => {
+    const first: unknown[] = []
+    const second: unknown[] = []
+    const disposeFirst = configureAttentionPublication({
+      workspaceId: async () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      publish: async (attention) => { first.push(attention) },
+    })
+    const disposeSecond = configureAttentionPublication({
+      workspaceId: async () => "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      publish: async (attention) => { second.push(attention) },
+    })
+
+    disposeFirst()
+    await appendMessage(uniqueWs(), "new owner remains")
+    expect(first).toHaveLength(0)
+    expect(second).toHaveLength(1)
+
+    disposeSecond()
+    disposeSecond()
+    await appendMessage(uniqueWs(), "disposed")
+    expect(second).toHaveLength(1)
+  })
+
   test("emits additive structured attention after legacy persistence", async () => {
     const ws = uniqueWs()
     const published: unknown[] = []
