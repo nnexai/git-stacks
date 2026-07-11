@@ -39,7 +39,7 @@ describe("v1 discovery", () => {
   test("publishes one owner-only secret-free descriptor and removes only its instance", async () => {
     const root = join(tmpdir(), `git-stacks-managed-${crypto.randomUUID()}`)
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-    const snapshot = { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } }
+    const snapshot = { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") }, currentRevision: async () => "0" }
     const first = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })
     cleanup.push(() => first.stop())
     const second = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })

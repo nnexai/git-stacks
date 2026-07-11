@@ -262,5 +262,10 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     return Promise.all(names.map((name) => buildWorkspace(name)))
   }
 
-  return { buildWorkspace, buildAll }
+  async function currentRevision(): Promise<string> {
+    const snapshots = await buildAll()
+    return snapshots.reduce((greatest, snapshot) => BigInt(snapshot.revision) > BigInt(greatest) ? snapshot.revision : greatest, "0")
+  }
+
+  return { buildWorkspace, buildAll, currentRevision }
 }

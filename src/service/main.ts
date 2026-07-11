@@ -2,6 +2,7 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, re
 import { join } from "node:path"
 import { z } from "zod"
 import { WS_CONFIG_DIR } from "../lib/paths"
+import { configureAttentionPublication } from "../lib/messages"
 import { provisionOfficialClient, readOfficialClientCredential } from "../lib/service/credentials"
 import { createSnapshotBuilder } from "../lib/service/snapshot"
 import { EventJournal, publishOperationEvent } from "../lib/service/event-journal"
@@ -136,8 +137,15 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
 
     provisionOfficialClient(clientId, { serviceRoot })
     const snapshot = options.snapshot ?? createSnapshotBuilder()
-    const journal = new EventJournal({ root: serviceRoot })
+    const journal = new EventJournal({ root: serviceRoot, snapshotRevision: () => snapshot.currentRevision() })
     const broker = new EventBroker(journal)
+    const disposeAttentionPublication = configureAttentionPublication({
+      workspaceId: async (workspace) => (await snapshot.buildWorkspace(workspace)).workspace.id,
+      publish: async (attention) => {
+        const event = await journal.appendAttention(attention)
+        broker.publish(event)
+      },
+    })
     const active = new Set<string>()
     let lifecycle: ReturnType<typeof createIdleLifecycle>
     const operations = new OperationRegistry({
@@ -168,9 +176,13 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       if (stopped) return
       stopped = true
       lifecycle.dispose()
-      await running.stop()
-      const current = readServiceDescriptor(serviceRoot)
-      if (current?.instance_id === instanceId) unlinkSync(serviceDescriptorPath(serviceRoot))
+      disposeAttentionPublication()
+      try {
+        await running.stop()
+      } finally {
+        const current = readServiceDescriptor(serviceRoot)
+        if (current?.instance_id === instanceId) unlinkSync(serviceDescriptorPath(serviceRoot))
+      }
     }
     return { descriptor, server: running, existing: false, stop }
   } finally {

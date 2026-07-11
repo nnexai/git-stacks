@@ -22,8 +22,14 @@ export interface AttentionPublication {
 
 let attentionPublication: AttentionPublication | undefined
 
-export function configureAttentionPublication(publication: AttentionPublication | undefined): void {
+export function configureAttentionPublication(publication: AttentionPublication | undefined): () => void {
   attentionPublication = publication
+  let disposed = false
+  return () => {
+    if (disposed) return
+    disposed = true
+    if (attentionPublication === publication) attentionPublication = undefined
+  }
 }
 
 function messagePath(workspace: string): string {
@@ -54,10 +60,11 @@ export async function appendMessage(
   }
   const line = JSON.stringify(record) + "\n"
   await appendFile(messagePath(workspace), line, "utf8")
-  if (attentionPublication) {
+  const publication = attentionPublication
+  if (publication) {
     try {
-      const workspaceId = await attentionPublication.workspaceId(workspace)
-      await attentionPublication.publish({ workspace_id: workspaceId, code: "message", message: text })
+      const workspaceId = await publication.workspaceId(workspace)
+      await publication.publish({ workspace_id: workspaceId, code: "message", message: text })
     } catch {
       // Structured attention delivery is additive; legacy message persistence stays authoritative.
     }
