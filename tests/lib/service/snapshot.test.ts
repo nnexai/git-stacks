@@ -115,13 +115,13 @@ describe("authoritative service snapshots", () => {
     expect(one.workspace.commands).toEqual(["dev"])
   })
 
-  test("reports the greatest revision from a current authoritative build", async () => {
+  test("reports one aggregate revision for a current authoritative build", async () => {
     const builder = createSnapshotBuilder(dependencies({
       listWorkspaceNames: () => ["alpha", "beta"],
       ensureWorkspaceIdentity: (name: string) => workspace(name),
       getWorkspaceStatus: async (entry: Workspace) => [{ name: "git-stacks", exists: true, dirty: entry.name === "beta", branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0 }],
     }))
-    expect(await builder.currentRevision()).toBe("2")
+    expect(await builder.currentRevision()).toBe("1")
   })
 
   test("does not invent a snapshot revision when no workspaces exist", async () => {

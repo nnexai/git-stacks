@@ -261,7 +261,9 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
       if (remaining) sseByClient.set(client.clientId, remaining); else sseByClient.delete(client.clientId)
       options.onConnectionChange?.(sseTotal)
     }
-    const bridge = new SseTransportBridge(subscription, heartbeat, () => { bridges.delete(bridge); release() }, finite ? 1 : undefined)
+    // Native finite leases are intentionally short: application shutdown must
+    // never wait for the ordinary 15s SSE heartbeat.
+    const bridge = new SseTransportBridge(subscription, finite ? Math.min(heartbeat, 200) : heartbeat, () => { bridges.delete(bridge); release() }, finite ? 1 : undefined)
     bridges.add(bridge)
     const stream = bridge.stream()
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" } })

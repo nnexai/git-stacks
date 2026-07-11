@@ -259,29 +259,36 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     }
   }
 
-  async function buildWorkspace(name: string, requestId = `req_${randomUUID().replaceAll("-", "")}`): Promise<WorkspaceSnapshotResponse> {
+  async function projectStable(name: string): Promise<Awaited<ReturnType<typeof project>>> {
     for (let attempt = 1; attempt <= 3; attempt++) {
       const workspace = dependencies.ensureWorkspaceIdentity(name)
       const before = await dependencies.fingerprint(workspace)
       const projection = await project(workspace)
       const after = await dependencies.fingerprint(workspace)
       if (before !== after) continue
-      const revision = await dependencies.revisionStore.update(digest(projection))
-      return WorkspaceSnapshotResponseSchema.parse({
-        protocol: "v1",
-        request_id: requestId,
-        ok: true,
-        revision,
-        generated_at: dependencies.clock().toISOString(),
-        workspace: projection,
-      })
+      return projection
     }
     throw new SnapshotBusyError(3)
   }
 
+  async function buildWorkspace(name: string, requestId = `req_${randomUUID().replaceAll("-", "")}`): Promise<WorkspaceSnapshotResponse> {
+    const projection = await projectStable(name)
+    const revision = await dependencies.revisionStore.update(digest(projection))
+    return WorkspaceSnapshotResponseSchema.parse({ protocol: "v1", request_id: requestId, ok: true, revision, generated_at: dependencies.clock().toISOString(), workspace: projection })
+  }
+
   async function buildAll(): Promise<WorkspaceSnapshotResponse[]> {
     const names = dependencies.listWorkspaceNames()
-    return Promise.all(names.map((name) => buildWorkspace(name)))
+    // One aggregate generation owns one revision. Per-workspace concurrent
+    // writes to a shared revision store made revision depend on build order.
+    const projections = []
+    for (const name of names) projections.push(await projectStable(name))
+    if (projections.length === 0) return []
+    const revision = await dependencies.revisionStore.update(digest(projections))
+    const generated_at = dependencies.clock().toISOString()
+    return projections.map((workspace) => WorkspaceSnapshotResponseSchema.parse({
+      protocol: "v1", request_id: `req_${randomUUID().replaceAll("-", "")}`, ok: true, revision, generated_at, workspace,
+    }))
   }
 
   async function currentRevision(): Promise<string> {
