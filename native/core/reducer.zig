@@ -71,29 +71,48 @@ pub fn reduce(before: model.State, action: Action) Result {
             }
         },
         .attention_received => |item| {
-            var duplicate=false; for(state.attention[0..state.attention_count])|existing| if(std.mem.eql(u8,&existing.id,&item.id)){ duplicate=true; break; };
-            if (duplicate) state.duplicate_count += 1 else if(state.attention_count < state.attention.len) { var received=item; received.resolved=model.pairValid(&state,.{.workspace_id=item.workspace_id,.repository_id=item.repository_id orelse [_]u8{0}**36}); state.attention[state.attention_count]=received; state.attention_count+=1; }
+            var duplicate = false;
+            for (state.attention[0..state.attention_count]) |existing| if (std.mem.eql(u8, &existing.id, &item.id)) {
+                duplicate = true;
+                break;
+            };
+            if (duplicate) state.duplicate_count += 1 else if (state.attention_count < state.attention.len) {
+                var received = item;
+                received.resolved = model.pairValid(&state, .{ .workspace_id = item.workspace_id, .repository_id = item.repository_id orelse [_]u8{0} ** 36 });
+                state.attention[state.attention_count] = received;
+                state.attention_count += 1;
+            }
         },
         .select_attention => |a| {
-            for(state.attention[0..state.attention_count])|*item| if(std.mem.eql(u8,&item.id,&a.attention_id)) {
-                item.read=true;
-                var route:model.FocusRoute=.{.workspace_id=item.workspace_id,.repository_id=item.repository_id,.reason=.workspace};
+            for (state.attention[0..state.attention_count]) |*item| if (std.mem.eql(u8, &item.id, &a.attention_id)) {
+                item.read = true;
+                var route: model.FocusRoute = .{ .workspace_id = item.workspace_id, .repository_id = item.repository_id, .reason = .workspace };
                 if (item.surface_id) |sid| {
                     if (model.surfaceLocation(&state, sid)) |loc| {
-                        const surface=state.pairs[loc.pair].surfaces[loc.surface]; route.surface_id=sid;
-                        route.reason=if(surface.lifecycle==.live) .exact_surface else .ended_predecessor;
+                        const surface = state.pairs[loc.pair].surfaces[loc.surface];
+                        route.surface_id = sid;
+                        route.reason = if (surface.lifecycle == .live) .exact_surface else .ended_predecessor;
                     } else if (item.predecessor_surface_id) |pred| {
-                        if(model.surfaceLocation(&state,pred)!=null){route.surface_id=pred;route.reason=.ended_predecessor;} else if(item.repository_id != null) route.reason=.repository;
-                    } else if(item.repository_id != null) route.reason=.repository;
-                } else if(item.repository_id != null) route.reason=.repository;
-                if(!item.resolved) route.reason=.unresolved;
-                effect=.{.platform_focus=route}; break;
+                        if (model.surfaceLocation(&state, pred) != null) {
+                            route.surface_id = pred;
+                            route.reason = .ended_predecessor;
+                        } else if (item.repository_id != null) route.reason = .repository;
+                    } else if (item.repository_id != null) route.reason = .repository;
+                } else if (item.repository_id != null) route.reason = .repository;
+                if (!item.resolved) route.reason = .unresolved;
+                effect = .{ .platform_focus = route };
+                break;
             };
         },
         .exact_tab_visible => |a| {
-            for(state.attention[0..state.attention_count])|*item| if(item.surface_id)|sid| { if(std.mem.eql(u8,&sid,&a.surface_id)) item.read=true; };
+            for (state.attention[0..state.attention_count]) |*item| if (item.surface_id) |sid| {
+                if (std.mem.eql(u8, &sid, &a.surface_id)) item.read = true;
+            };
         },
-        .navigate_pair => |key| { state.selected_pair=key; state.last_pair=key; },
+        .navigate_pair => |key| {
+            state.selected_pair = key;
+            state.last_pair = key;
+        },
     }
     return .{ .state = state, .effect = effect };
 }

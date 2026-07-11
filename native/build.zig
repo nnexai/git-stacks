@@ -150,6 +150,19 @@ pub fn build(b: *std.Build) void {
     const attention_step = b.step("attention-test", "Run structured attention derivation and focus routing tests");
     attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = attention_test_module })).step);
 
+    const tabs_module = b.createModule(.{ .root_source_file = b.path("tests/tab_registry_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    const tabs_model = b.createModule(.{ .root_source_file = b.path("core/model.zig") });
+    const tabs_registry = b.createModule(.{ .root_source_file = b.path("linux/tab_registry.zig") });
+    tabs_registry.addImport("model", tabs_model);
+    tabs_module.addImport("model", tabs_model);
+    tabs_module.addImport("tab_registry", tabs_registry);
+    const tabs_step = b.step("tabs-test", "Run navigation-independent terminal host registry tests");
+    tabs_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = tabs_module })).step);
+    const service_module = b.createModule(.{ .root_source_file = b.path("tests/service_client_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    service_module.addImport("service_client", b.createModule(.{ .root_source_file = b.path("linux/service_client.zig") }));
+    const service_step = b.step("service-client-test", "Run authenticated service replay and launch decoding tests");
+    service_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = service_module })).step);
+
     const ownership_test_module = b.createModule(.{ .root_source_file = b.path("tests/ownership_test.zig"), .target = b.graph.host, .optimize = .Debug });
     ownership_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));
     ownership_test_module.addImport("guard", b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") }));

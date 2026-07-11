@@ -14,6 +14,6 @@
       "mode": "worktree",
       "path": "/work/feature-one/git-stacks"
     }],
-    "launch": { "commands": ["bun test"], "environment": { "NODE_ENV": "development" }, "redacted": ["API_TOKEN"], "references": { "API_TOKEN": "secret://api-token" } }
+    "launch": { "commands": ["bun test"], "environment": { "NODE_ENV": "development" }, "redacted": ["API_TOKEN"], "references": { "API_TOKEN": "secret://api-token" }, "named": [{ "id": "cmd_0123456789abcdef", "name": "test", "scope": "workspace", "steps": [] }] }
   }
 }

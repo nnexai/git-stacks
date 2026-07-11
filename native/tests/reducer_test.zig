@@ -55,17 +55,43 @@ test "cleanup outcomes require matching stable identity and generation" {
 }
 
 test "pair selection restores last valid then pinned then first" {
-    const ws1=id("118f47f4-5ab1-7c2d-8e90-123456789abc"); const ws2=id("218f47f4-5ab1-7c2d-8e90-123456789abc");
-    const r1=id("318f47f4-5ab1-7c2d-8e90-123456789abc"); const r2=id("418f47f4-5ab1-7c2d-8e90-123456789abc");
-    var state:model.State=.{}; state.workspace_count=2; state.workspaces[0]=.{.id=ws1,.repository_ids=undefined,.repository_count=1}; state.workspaces[0].repository_ids[0]=r1; state.workspaces[1]=.{.id=ws2,.repository_ids=undefined,.repository_count=1}; state.workspaces[1].repository_ids[0]=r2;
-    state.pin_count=1; state.pins[0]=ws2; state.last_pair=.{.workspace_id=ws1,.repository_id=r1}; model.reconcile(&state); try std.testing.expect(model.PairKey.eql(state.selected_pair.?,state.last_pair.?));
-    state.last_pair=.{.workspace_id=ws1,.repository_id=id("518f47f4-5ab1-7c2d-8e90-123456789abc")}; model.reconcile(&state); try std.testing.expectEqual(ws2,state.selected_pair.?.workspace_id);
-    state.workspace_count=1; model.reconcile(&state); try std.testing.expectEqual(@as(u8,0),state.pin_count); try std.testing.expectEqual(@as(u32,1),state.vanished_pin_notice_count); try std.testing.expectEqual(ws1,state.selected_pair.?.workspace_id);
-    model.reconcile(&state); try std.testing.expectEqual(@as(u32,1),state.vanished_pin_notice_count);
+    const ws1 = id("118f47f4-5ab1-7c2d-8e90-123456789abc");
+    const ws2 = id("218f47f4-5ab1-7c2d-8e90-123456789abc");
+    const r1 = id("318f47f4-5ab1-7c2d-8e90-123456789abc");
+    const r2 = id("418f47f4-5ab1-7c2d-8e90-123456789abc");
+    var state: model.State = .{};
+    state.workspace_count = 2;
+    state.workspaces[0] = .{ .id = ws1, .repository_ids = undefined, .repository_count = 1 };
+    state.workspaces[0].repository_ids[0] = r1;
+    state.workspaces[1] = .{ .id = ws2, .repository_ids = undefined, .repository_count = 1 };
+    state.workspaces[1].repository_ids[0] = r2;
+    state.pin_count = 1;
+    state.pins[0] = ws2;
+    state.last_pair = .{ .workspace_id = ws1, .repository_id = r1 };
+    model.reconcile(&state);
+    try std.testing.expect(model.PairKey.eql(state.selected_pair.?, state.last_pair.?));
+    state.last_pair = .{ .workspace_id = ws1, .repository_id = id("518f47f4-5ab1-7c2d-8e90-123456789abc") };
+    model.reconcile(&state);
+    try std.testing.expectEqual(ws2, state.selected_pair.?.workspace_id);
+    state.workspace_count = 1;
+    model.reconcile(&state);
+    try std.testing.expectEqual(@as(u8, 0), state.pin_count);
+    try std.testing.expectEqual(@as(u32, 1), state.vanished_pin_notice_count);
+    try std.testing.expectEqual(ws1, state.selected_pair.?.workspace_id);
+    model.reconcile(&state);
+    try std.testing.expectEqual(@as(u32, 1), state.vanished_pin_notice_count);
 }
 
 test "exact pairs retain independent ordered surface collections" {
-    var state:model.State=.{}; const ws=id("118f47f4-5ab1-7c2d-8e90-123456789abc"); const r1=id("218f47f4-5ab1-7c2d-8e90-123456789abc"); const r2=id("318f47f4-5ab1-7c2d-8e90-123456789abc");
-    state.pair_count=2; state.pairs[0]=.{.key=.{.workspace_id=ws,.repository_id=r1},.surfaces=undefined,.surface_count=1}; state.pairs[1]=.{.key=.{.workspace_id=ws,.repository_id=r2},.surfaces=undefined,.surface_count=1}; state.pairs[0].surfaces[0]=.{.id=id("418f47f4-5ab1-7c2d-8e90-123456789abc"),.order=8}; state.pairs[1].surfaces[0]=.{.id=id("518f47f4-5ab1-7c2d-8e90-123456789abc"),.order=2};
-    try std.testing.expectEqual(@as(u32,8),state.pairs[0].surfaces[0].order); try std.testing.expectEqual(@as(u32,2),state.pairs[1].surfaces[0].order);
+    var state: model.State = .{};
+    const ws = id("118f47f4-5ab1-7c2d-8e90-123456789abc");
+    const r1 = id("218f47f4-5ab1-7c2d-8e90-123456789abc");
+    const r2 = id("318f47f4-5ab1-7c2d-8e90-123456789abc");
+    state.pair_count = 2;
+    state.pairs[0] = .{ .key = .{ .workspace_id = ws, .repository_id = r1 }, .surfaces = undefined, .surface_count = 1 };
+    state.pairs[1] = .{ .key = .{ .workspace_id = ws, .repository_id = r2 }, .surfaces = undefined, .surface_count = 1 };
+    state.pairs[0].surfaces[0] = .{ .id = id("418f47f4-5ab1-7c2d-8e90-123456789abc"), .order = 8 };
+    state.pairs[1].surfaces[0] = .{ .id = id("518f47f4-5ab1-7c2d-8e90-123456789abc"), .order = 2 };
+    try std.testing.expectEqual(@as(u32, 8), state.pairs[0].surfaces[0].order);
+    try std.testing.expectEqual(@as(u32, 2), state.pairs[1].surfaces[0].order);
 }
