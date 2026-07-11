@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, rmSync, mkdirSync, writeFileSync, rmdirSync } from "fs"
 import { join } from "path"
-import type { AgentHookPlugin, HookEntry } from "./types"
+import { structuredAttentionCommand, type AgentHookPlugin, type HookEntry } from "./types"
 
 // --- Internal Copilot JSON types ---
 
@@ -29,6 +29,7 @@ const EVENT_MAP: Record<string, string> = {
   PreToolUse: "preToolUse",
   PostToolUse: "postToolUse",
   UserPromptSubmit: "userPromptSubmitted",
+  PostToolUseFailure: "errorOccurred",
 }
 
 /**
@@ -82,21 +83,25 @@ export const copilotPlugin: AgentHookPlugin = {
     return [
       {
         event: "Stop",
-        command: `git-stacks message send "Copilot has finished and may need your attention" --workspace ${workspaceName} --from copilot`,
+        command: structuredAttentionCommand("copilot", "completed", workspaceName),
+      },
+      {
+        event: "PostToolUseFailure",
+        command: structuredAttentionCommand("copilot", "failed", workspaceName),
       },
       {
         event: "PreToolUse",
         matcher: "AskUserQuestion",
-        command: `git-stacks message send "Copilot is asking a question — input needed" --workspace ${workspaceName} --from copilot`,
+        command: structuredAttentionCommand("copilot", "waiting", workspaceName),
       },
       {
         event: "UserPromptSubmit",
-        command: `git-stacks message clear --workspace ${workspaceName} --from copilot`,
+        command: structuredAttentionCommand("copilot", "working", workspaceName),
       },
       {
         event: "PostToolUse",
         matcher: "AskUserQuestion",
-        command: `git-stacks message clear --workspace ${workspaceName} --from copilot`,
+        command: structuredAttentionCommand("copilot", "idle", workspaceName),
       },
     ]
   },

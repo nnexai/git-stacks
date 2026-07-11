@@ -28,6 +28,9 @@ import { getWorkspaceFileStatusView, type WorkspaceFileStatusView } from "../wor
 import { getWorkspaceStatus, type RepoStatus } from "../workspace-status"
 import { ensureWorkspaceIdentity } from "./identity"
 import {
+  NativeLaunchResolutionSchema,
+  type NativeLaunchResolution,
+  type NativeLaunchResolutionRequest,
   WorkspaceSnapshotResponseSchema,
   type WorkspaceSnapshotResponse,
 } from "./contract"
@@ -128,6 +131,10 @@ function digest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(stable(value))).digest("hex")
 }
 
+function commandId(workspaceId: string, name: string, repositoryId?: string): string {
+  return `cmd_${createHash("sha256").update(`${workspaceId}\0${repositoryId ?? "workspace"}\0${name}`).digest("base64url").slice(0, 22)}`
+}
+
 function fileStamp(path: string): string {
   try {
     const stat = statSync(path)
@@ -198,9 +205,19 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     redacted.sort()
     const environment = Object.fromEntries(Object.entries(resolvedEnvironment).filter(([key]) => !redacted.includes(key)))
     const repoByName = new Map(workspace.repos.map((repo) => [repo.name, repo]))
-    const named = commands.map((name) => ({
+    const named = commands.map((name) => {
+      const steps = dependencies.planManualCommand(workspace, name, dependencies.config)
+      const repositoryIds = [...new Set(steps.flatMap((step) => {
+        const repo = step.repo ?? (step.repoName ? repoByName.get(step.repoName) : undefined)
+        return step.scope === "repo" && repo?.id ? [repo.id] : []
+      }))]
+      const repositoryId = repositoryIds.length === 1 && steps.every((step) => step.scope === "repo") ? repositoryIds[0] : undefined
+      return {
+      id: commandId(workspace.id, name, repositoryId),
       name,
-      steps: dependencies.planManualCommand(workspace, name, dependencies.config).map((step) => {
+      scope: repositoryId ? "repository" as const : "workspace" as const,
+      ...(repositoryId ? { repository_id: repositoryId } : {}),
+      steps: steps.map((step) => {
         const repo = step.repo ?? (step.repoName ? repoByName.get(step.repoName) : undefined)
         const stepEnvironment = step.scope === "repo" && repo ? {
           ...environment,
@@ -217,7 +234,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
           environment: stepEnvironment,
         }
       }),
-    }))
+    }})
     const ports = Object.fromEntries(Object.entries(workspace.ports ?? {}).filter((entry): entry is [string, number] => typeof entry[1] === "number"))
     return {
       id: workspace.id,
@@ -267,5 +284,32 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     return snapshots.reduce((greatest, snapshot) => BigInt(snapshot.revision) > BigInt(greatest) ? snapshot.revision : greatest, "0")
   }
 
-  return { buildWorkspace, buildAll, currentRevision }
+  async function resolveNativeLaunch(request: NativeLaunchResolutionRequest): Promise<NativeLaunchResolution> {
+    const snapshots = await buildAll()
+    const snapshot = snapshots.find((entry) => entry.workspace.id === request.workspace_id)
+    const fail = (code: "not_found" | "conflict" | "operation_failed", message: string): NativeLaunchResolution =>
+      NativeLaunchResolutionSchema.parse({ resolved: false, error: { code, message } })
+    if (!snapshot) return fail("not_found", "Workspace not found")
+    if (snapshot.revision !== request.expected_revision) return fail("conflict", "Authoritative snapshot revision is stale")
+    const repository = snapshot.workspace.repositories.find((entry) => entry.id === request.repository_id)
+    if (!repository) return fail("not_found", "Repository not found in workspace")
+    const base = snapshot.workspace.launch
+    if (!request.command_id) {
+      const shell = process.env.SHELL || "/bin/sh"
+      return NativeLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
+        argv: [shell], cwd: repository.path, environment: base.environment, ports: base.ports ?? {},
+        configuration: { shell: true }, redacted: base.redacted,
+      } })
+    }
+    const command = base.named?.find((entry) => entry.id === request.command_id)
+    if (!command || (command.scope === "repository" && command.repository_id !== repository.id)) return fail("not_found", "Command not found in repository scope")
+    if (command.steps.length !== 1) return fail("operation_failed", "Native launch requires exactly one configured command step")
+    const step = command.steps[0]!
+    return NativeLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
+      argv: [process.env.SHELL || "/bin/sh", "-lc", step.command], cwd: step.cwd,
+      environment: step.environment, ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
+    } })
+  }
+
+  return { buildWorkspace, buildAll, currentRevision, resolveNativeLaunch }
 }

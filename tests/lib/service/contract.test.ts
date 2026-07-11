@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "fs"
 import { join } from "path"
 import {
+  NativeLaunchResolutionRequestSchema,
+  NativeLaunchResolutionSchema,
+  StructuredAttentionEventSchema,
   DiscoveryResponseSchema,
   ErrorCodeSchema,
   ErrorEnvelopeSchema,
@@ -45,5 +48,30 @@ describe("service v1 contract", () => {
     const envelope = timeout as { error: Record<string, unknown> }
     expect(() => ErrorEnvelopeSchema.parse({ ...envelope, error: { ...envelope.error, code: "handler_timeout" } })).toThrow()
     expect(() => ErrorEnvelopeSchema.parse({ ...envelope, error: { ...envelope.error, stack: "secret" } })).toThrow()
+  })
+
+  test("disambiguates duplicate command labels with stable identities and scope", () => {
+    const named = (fixture("workspace-snapshot.json") as any).workspace.launch.named[0]
+    expect(named.id).toBe("cmd_0123456789abcdef")
+    expect(() => WorkspaceSnapshotResponseSchema.parse({
+      ...(fixture("workspace-snapshot.json") as object),
+      workspace: { ...(fixture("workspace-snapshot.json") as any).workspace, launch: { ...(fixture("workspace-snapshot.json") as any).workspace.launch, named: [named, { ...named, id: "cmd_fedcba9876543210", scope: "repository", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345" }] } },
+    })).not.toThrow()
+    expect(() => WorkspaceSnapshotResponseSchema.parse({ ...(fixture("workspace-snapshot.json") as object), workspace: { ...(fixture("workspace-snapshot.json") as any).workspace, launch: { ...(fixture("workspace-snapshot.json") as any).workspace.launch, named: [{ ...named, id: "test" }] } } })).toThrow()
+  })
+
+  test("validates fresh native launch requests and forbids secret-bearing resolutions", () => {
+    const request = { workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", command_id: "cmd_0123456789abcdef", expected_revision: "7" }
+    expect(NativeLaunchResolutionRequestSchema.parse(request)).toEqual(request)
+    const resolution = { resolved: true, revision: "7", launch: { argv: ["bun", "test"], cwd: "/work", environment: { NODE_ENV: "test" }, ports: {}, configuration: { command_id: request.command_id, shell: false }, redacted: ["TOKEN"] } } as const
+    expect(NativeLaunchResolutionSchema.parse(resolution)).toEqual(JSON.parse(JSON.stringify(resolution)))
+    expect(() => NativeLaunchResolutionSchema.parse({ ...resolution, launch: { ...resolution.launch, references: { TOKEN: "secret://token" } } })).toThrow()
+  })
+
+  test("validates all structured attention states and identity nesting", () => {
+    for (const state of ["working", "waiting", "completed", "failed", "idle"] as const) {
+      expect(StructuredAttentionEventSchema.parse({ id: `att_0123456789abcde${state.length}`, state, workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", source: "claude", title: state, occurred_at: "2026-07-11T00:00:00.000Z", journal_sequence: "1" }).state).toBe(state)
+    }
+    expect(() => StructuredAttentionEventSchema.parse({ id: "att_0123456789abcdef", state: "waiting", workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", source: "claude", title: "question", occurred_at: "2026-07-11T00:00:00.000Z", journal_sequence: "1" })).toThrow()
   })
 })

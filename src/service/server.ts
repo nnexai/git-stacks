@@ -4,6 +4,7 @@ import { authenticateAdmission, type AuthenticatedClient } from "../lib/service/
 import { IdempotencyConflictError, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
 import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
 import type { WorkspaceSnapshotResponse } from "../lib/service/contract"
+import { NativeLaunchResolutionRequestSchema, type NativeLaunchResolution } from "../lib/service/contract"
 
 export const MAX_BODY_BYTES = 256 * 1024
 export const RATE_LIMIT_PER_MINUTE = 60
@@ -18,9 +19,11 @@ const MutationRequestSchema = z.strictObject({
   options: z.record(z.string(), z.unknown()).optional(),
 })
 
-type SnapshotAdapter = {
+export type SnapshotAdapter = {
   buildAll(signal?: AbortSignal): Promise<WorkspaceSnapshotResponse[]>
   buildWorkspace(name: string, requestId?: string, signal?: AbortSignal): Promise<WorkspaceSnapshotResponse>
+  resolveNativeLaunch?(request: z.infer<typeof NativeLaunchResolutionRequestSchema>, signal?: AbortSignal): Promise<NativeLaunchResolution>
+  currentRevision?(): Promise<string>
 }
 
 export interface ServiceServerOptions {
@@ -279,10 +282,19 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
             workspace_snapshots: { available: true },
             operations: { available: Boolean(options.operations) },
             attention_events: { available: Boolean(options.broker) },
+            native_launch_resolution: { available: Boolean(options.snapshot.resolveNativeLaunch) },
+            structured_attention: { available: Boolean(options.broker) },
           },
           limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024 },
         }))
         if (request.method === "GET" && url.pathname === "/v1/snapshot") return json(success(id, await options.snapshot.buildAll(signal)))
+        if (request.method === "POST" && url.pathname === "/v1/native-launch") {
+          if (!options.snapshot.resolveNativeLaunch) return failure(id, "capability_unavailable", "Native launch resolution is unavailable", 409)
+          const parsed = NativeLaunchResolutionRequestSchema.safeParse(await readBody(request))
+          if (!parsed.success) return failure(id, "invalid_request", "Invalid native launch request", 400)
+          const resolution = await options.snapshot.resolveNativeLaunch(parsed.data, signal)
+          return resolution.resolved ? json(success(id, resolution)) : failure(id, resolution.error.code, resolution.error.message, resolution.error.code === "not_found" ? 404 : 409)
+        }
         const workspaceMatch = /^\/v1\/workspaces\/([^/]+)$/.exec(url.pathname)
         if (request.method === "GET" && workspaceMatch) {
           const all = await options.snapshot.buildAll(signal)

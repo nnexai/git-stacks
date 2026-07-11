@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs"
 import { join } from "path"
-import type { AgentHookPlugin, HookEntry, HooksConfig, MatcherGroup } from "./types"
+import { structuredAttentionCommand, type AgentHookPlugin, type HookEntry, type HooksConfig, type MatcherGroup } from "./types"
 
 const GIT_STACKS_MARKER = "git-stacks"
 
@@ -52,21 +52,25 @@ export const claudeCodePlugin: AgentHookPlugin = {
     return [
       {
         event: "Stop",
-        command: `git-stacks message send "Claude has finished and may need your attention" --workspace ${workspaceName} --from claude`,
+        command: structuredAttentionCommand("claude", "completed", workspaceName),
+      },
+      {
+        event: "PostToolUseFailure",
+        command: structuredAttentionCommand("claude", "failed", workspaceName),
       },
       {
         event: "PreToolUse",
         matcher: "AskUserQuestion",
-        command: `git-stacks message send "Claude is asking a question — input needed" --workspace ${workspaceName} --from claude`,
+        command: structuredAttentionCommand("claude", "waiting", workspaceName),
       },
       {
         event: "UserPromptSubmit",
-        command: `git-stacks message clear --workspace ${workspaceName} --from claude`,
+        command: structuredAttentionCommand("claude", "working", workspaceName),
       },
       {
         event: "PostToolUse",
         matcher: "AskUserQuestion",
-        command: `git-stacks message clear --workspace ${workspaceName} --from claude`,
+        command: structuredAttentionCommand("claude", "idle", workspaceName),
       },
     ]
   },

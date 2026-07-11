@@ -7,7 +7,9 @@
     "capabilities": {
       "workspace_snapshots": { "available": true },
       "operations": { "available": true },
-      "attention_events": { "available": false, "reason": "capability_unavailable" }
+      "attention_events": { "available": false, "reason": "capability_unavailable" },
+      "native_launch_resolution": { "available": true },
+      "structured_attention": { "available": true }
     },
     "limits": { "request_body_bytes": 262144, "subscriber_events": 1024, "subscriber_bytes": 1048576 }
   }

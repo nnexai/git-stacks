@@ -33,3 +33,14 @@ export interface AgentHookPlugin {
   /** Remove this plugin's hooks from a repo worktree directory */
   remove(repoWorktreePath: string): void
 }
+
+export type AgentLifecycleState = "working" | "waiting" | "completed" | "failed" | "idle"
+export interface StructuredHookContext {
+  workspaceId: string
+  repositoryId?: string
+  surfaceId?: string
+}
+
+export function structuredAttentionCommand(source: "claude" | "copilot", state: AgentLifecycleState, workspaceName: string): string {
+  return `git-stacks service attention publish --state ${state} --source ${source} --workspace ${workspaceName} --workspace-id \"$GS_WORKSPACE_ID\" --repository-id \"$GS_REPOSITORY_ID\" --surface-id \"$GS_SURFACE_ID\"`
+}

@@ -1,6 +1,6 @@
 import { mkdir, open, readFile, rename, stat, truncate, unlink, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { OperationSchema, ServiceEventSchema, type Operation, type ServiceEvent } from "./contract"
+import { OperationSchema, ServiceEventSchema, StructuredAttentionEventSchema, type Operation, type ServiceEvent, type StructuredAttentionEvent } from "./contract"
 
 export const DEFAULT_EVENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000
 export const DEFAULT_EVENT_MAX_BYTES = 64 * 1024 * 1024
@@ -15,7 +15,7 @@ export interface EventJournalOptions {
 }
 
 export type OperationEventPayload = Operation
-export type AttentionEventPayload = ServiceEvent extends infer _T ? { workspace_id: string; code: string; message: string } : never
+export type AttentionEventPayload = { workspace_id: string; code: string; message: string } | Omit<StructuredAttentionEvent, "journal_sequence">
 export type ReplayResult =
   | { kind: "events"; events: ServiceEvent[] }
   | { kind: "replay_gap"; requested: string; earliest_cursor: string; latest_cursor: string; snapshot_revision: string }
@@ -107,7 +107,8 @@ export class EventJournal {
   }
 
   appendAttention(attention: AttentionEventPayload): Promise<ServiceEvent> {
-    return this.append((sequence, timestamp) => ({ protocol: "v1", sequence, timestamp, type: "attention", attention }))
+    return this.append((sequence, timestamp) => ({ protocol: "v1", sequence, timestamp, type: "attention", attention:
+      "state" in attention ? StructuredAttentionEventSchema.parse({ ...attention, journal_sequence: sequence }) : attention }))
   }
 
   async highWaterCursor(): Promise<string> {

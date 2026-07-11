@@ -8,6 +8,10 @@ export const EntityIdSchema = z.string().uuid()
 export type EntityId = z.infer<typeof EntityIdSchema>
 export const OperationIdSchema = z.string().regex(/^op_[A-Za-z0-9_-]{16,}$/)
 export type OperationId = z.infer<typeof OperationIdSchema>
+export const CommandIdSchema = z.string().regex(/^cmd_[A-Za-z0-9_-]{16,}$/)
+export type CommandId = z.infer<typeof CommandIdSchema>
+export const AttentionIdSchema = z.string().regex(/^att_[A-Za-z0-9_-]{16,}$/)
+export type AttentionId = z.infer<typeof AttentionIdSchema>
 export const CursorSchema = z.string().regex(/^(0|[1-9][0-9]*)$/)
 export type Cursor = z.infer<typeof CursorSchema>
 export const RevisionSchema = CursorSchema
@@ -42,6 +46,8 @@ export const CapabilitiesSchema = z.strictObject({
   workspace_snapshots: CapabilityAvailabilitySchema,
   operations: CapabilityAvailabilitySchema,
   attention_events: CapabilityAvailabilitySchema,
+  native_launch_resolution: CapabilityAvailabilitySchema,
+  structured_attention: CapabilityAvailabilitySchema,
 })
 export type Capabilities = z.infer<typeof CapabilitiesSchema>
 export const ServiceLimitsSchema = z.strictObject({
@@ -70,8 +76,13 @@ export const LaunchStepSchema = z.strictObject({
   message: "repository identity is required only for repository-scoped steps",
 })
 export const NamedLaunchSpecificationSchema = z.strictObject({
+  id: CommandIdSchema,
   name: z.string().min(1),
+  scope: z.enum(["workspace", "repository"]),
+  repository_id: EntityIdSchema.optional(),
   steps: z.array(LaunchStepSchema),
+}).refine((command) => command.scope === "repository" ? Boolean(command.repository_id) : command.repository_id === undefined, {
+  message: "repository identity is required only for repository-scoped commands",
 })
 export const LaunchSpecificationSchema = z.strictObject({
   commands: z.array(z.string()),
@@ -101,6 +112,44 @@ export const WorkspaceSnapshotResponseSchema = z.strictObject({
 })
 export type WorkspaceSnapshotResponse = z.infer<typeof WorkspaceSnapshotResponseSchema>
 
+export const NativeLaunchResolutionRequestSchema = z.strictObject({
+  workspace_id: EntityIdSchema,
+  repository_id: EntityIdSchema,
+  command_id: CommandIdSchema.optional(),
+  expected_revision: RevisionSchema,
+})
+export type NativeLaunchResolutionRequest = z.infer<typeof NativeLaunchResolutionRequestSchema>
+export const NativeLaunchSpecificationSchema = z.strictObject({
+  argv: z.array(z.string()).min(1),
+  cwd: z.string().min(1),
+  environment: z.record(z.string(), z.string()),
+  ports: z.record(z.string(), z.number().int()),
+  configuration: z.strictObject({ command_id: CommandIdSchema.optional(), shell: z.boolean() }),
+  redacted: z.array(z.string()),
+})
+export const NativeLaunchResolutionSchema = z.discriminatedUnion("resolved", [
+  z.strictObject({ resolved: z.literal(true), revision: RevisionSchema, launch: NativeLaunchSpecificationSchema }),
+  z.strictObject({ resolved: z.literal(false), error: ApiErrorSchema }),
+])
+export type NativeLaunchResolution = z.infer<typeof NativeLaunchResolutionSchema>
+
+export const AttentionStateSchema = z.enum(["working", "waiting", "completed", "failed", "idle"])
+export const StructuredAttentionEventSchema = z.strictObject({
+  id: AttentionIdSchema,
+  state: AttentionStateSchema,
+  workspace_id: EntityIdSchema,
+  repository_id: EntityIdSchema.optional(),
+  surface_id: EntityIdSchema.optional(),
+  source: z.enum(["claude", "copilot", "codex", "other"]),
+  title: z.string().min(1).max(160),
+  detail: z.string().max(500).optional(),
+  occurred_at: TimestampSchema,
+  journal_sequence: CursorSchema,
+}).refine((attention) => attention.surface_id === undefined || attention.repository_id !== undefined, {
+  message: "surface-scoped attention requires a repository identity",
+})
+export type StructuredAttentionEvent = z.infer<typeof StructuredAttentionEventSchema>
+
 export const OperationStageSchema = z.enum(["accepted", "preparing", "executing", "rolling_back", "completed"])
 export const OperationStateSchema = z.enum(["accepted", "running", "succeeded", "failed", "cancelled"])
 export const OperationProgressSchema = z.strictObject({
@@ -129,7 +178,10 @@ export type ReplayGap = z.infer<typeof ReplayGapSchema>
 const EventBase = { protocol: ProtocolVersionSchema, sequence: CursorSchema, timestamp: TimestampSchema }
 export const ServiceEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...EventBase, type: z.literal("operation"), operation: OperationSchema }),
-  z.strictObject({ ...EventBase, type: z.literal("attention"), attention: z.strictObject({ workspace_id: EntityIdSchema, code: z.string().min(1), message: z.string().min(1) }) }),
+  z.strictObject({ ...EventBase, type: z.literal("attention"), attention: z.union([
+    z.strictObject({ workspace_id: EntityIdSchema, code: z.string().min(1), message: z.string().min(1) }),
+    StructuredAttentionEventSchema,
+  ]) }),
   z.strictObject({ ...EventBase, type: z.literal("control"), control: z.discriminatedUnion("kind", [
     z.strictObject({ kind: z.literal("heartbeat") }),
     z.strictObject({ kind: z.literal("replay_gap"), gap: ReplayGapSchema }),

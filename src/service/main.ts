@@ -94,7 +94,7 @@ export interface ManagedServiceOptions {
   serviceRoot?: string
   clientId?: string
   idleMs?: number
-  snapshot?: ReturnType<typeof createSnapshotBuilder>
+  snapshot?: import("./server").SnapshotAdapter & { currentRevision(): Promise<string> }
 }
 
 export interface ManagedService {
