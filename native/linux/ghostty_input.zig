@@ -1,8 +1,11 @@
+const std = @import("std");
 const c = @cImport({
     @cInclude("ghostty.h");
     @cInclude("gtk/gtk.h");
 });
 const clipboard = @import("ghostty_clipboard");
+
+pub const ime_commit_uses_text = true;
 
 pub const Input = struct {
     context: *clipboard.Context,
@@ -117,7 +120,7 @@ fn imeCommit(_: ?*c.GtkIMContext, text: ?[*:0]const u8, data: ?*anyopaque) callc
     const context: *clipboard.Context = @ptrCast(@alignCast(data orelse return));
     const surface = live(context) orelse return;
     const value = text orelse return;
-    _ = c.ghostty_surface_key(surface, .{ .action = c.GHOSTTY_ACTION_PRESS, .mods = c.GHOSTTY_MODS_NONE, .consumed_mods = c.GHOSTTY_MODS_NONE, .keycode = 0, .text = value, .unshifted_codepoint = 0, .composing = true });
+    c.ghostty_surface_text(surface, value, std.mem.len(value));
 }
 fn preeditChanged(ime: ?*c.GtkIMContext, data: ?*anyopaque) callconv(.c) void {
     const context: *clipboard.Context = @ptrCast(@alignCast(data orelse return));
