@@ -4,16 +4,16 @@ milestone: v0.20.0
 milestone_name: milestone
 current_phase: 105
 current_phase_name: Shared Native Model and Terminal Foundation
-status: verifying
+status: executing
 stopped_at: Completed 104-09-PLAN.md
-last_updated: "2026-07-11T13:02:14.200Z"
+last_updated: "2026-07-11T13:12:32.157Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 104 complete, transitioned to Phase 105
+last_activity_desc: Phase 105 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 14
-  completed_plans: 9
+  completed_plans: 10
   percent: 25
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** One command takes a user from feature intent to a fully running development environment without manual setup.
-**Current focus:** Phase 104 — Workspace Service and Event Contract
+**Current focus:** Phase 105 — Shared Native Model and Terminal Foundation
 
 ## Current Position
 
-Phase: 105 — Shared Native Model and Terminal Foundation
-Plan: Not started
-Status: Verification gaps closed; ready for final phase verification
-Last activity: 2026-07-11 — Phase 104 complete, transitioned to Phase 105
+Phase: 105 (Shared Native Model and Terminal Foundation) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-07-11 — Phase 105 execution started
 
 Progress: [██████░░░░] 64%
 
@@ -60,6 +60,7 @@ Progress: [██████░░░░] 64%
 | Phase 104 P07 | 2min | 2 tasks | 7 files |
 | Phase 104 P08 | 8min | 2 tasks | 4 files |
 | Phase 104 P09 | 2min | 2 tasks | 5 files |
+| Phase 105 P01 | 8min | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Service commands register through the shared live Commander tree. — Keeps completion and release inventory aligned with the executable CLI.
 - [Phase 104]: Managed attention publication uses ownership-aware disposal and snapshot-owned revision callbacks. — Prevents one service from detaching another and makes replay-gap rebuild metadata authoritative.
 - [Phase 104]: Only the private ordinary execution-deadline sentinel maps to request_timeout; SSE remains exempt. — Preserves generic adapter failures and long-lived event streams while enforcing SVC-05.
+- [Phase 105]: Ordinary native verification is offline and consumes a setup-populated user cache whose artifact and checkout identities are revalidated before every compile. — Preserves reproducibility without vendoring large upstream payloads or using network during ordinary verification.
+- [Phase 105]: The feasibility spike imports the pinned full ghostty.h surface into a Zig object, proving API declarations without prematurely implementing or linking the later GTK host. — Retires API availability risk while leaving terminal lifecycle implementation in its planned slice.
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T12:58:15.886Z
+Last session: 2026-07-11T13:11:53.267Z
 Stopped at: Completed 104-09-PLAN.md
 Resume file: None
