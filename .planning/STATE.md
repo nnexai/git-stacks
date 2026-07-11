@@ -12,7 +12,7 @@ last_activity_desc: Phase 105 execution started
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 14
+  total_plans: 17
   completed_plans: 13
   percent: 25
 ---
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 105 (Shared Native Model and Terminal Foundation) — EXECUTING
-Plan: 5 of 5
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-07-11 — Phase 105 execution started
 

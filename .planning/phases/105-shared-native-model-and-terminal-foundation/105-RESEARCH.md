@@ -1,10 +1,9 @@
 # Phase 105: Shared Native Model and Terminal Foundation - Research
 
-**Researched:** 2026-07-11
-**Domain:** Portable Zig reducer/C ABI, pinned libghostty GTK embedding, PTY ownership, restoration, and lifecycle verification
-**Confidence:** HIGH for the state/ownership architecture and exact source/toolchain pin; MEDIUM for the complete embedded GTK accessibility contract until the real host spike runs
+**Researched:** 2026-07-11 (forced refresh after Spike 004)
+**Domain:** Product-owned GTK terminal built on pinned `libghostty-vt`, PTY/process ownership, rendering, input, and accessibility
+**Confidence:** HIGH for the invalidated full-surface conclusion, pin/toolchain, existing-code disposition, and ownership boundary; MEDIUM for the detailed GTK renderer plan until its first real graphical vertical slice runs
 
-<user_constraints>
 ## User Constraints
 
 ### Shared State Semantics
@@ -43,308 +42,400 @@ None — discussion stayed within the Phase 105 boundary.
 - **Add manual workspace commands** — command authoring/product breadth is outside this phase; later clients consume the existing command model.
 - **Create workspace from forge source** — workspace creation breadth is outside this foundation phase.
 - **Improve template composition understanding** — template UX and documentation are outside the native foundation.
-- **Add workspace notes** — separate product capability unrelated to shared reducer and terminal ownership.
+- **Add workspace notes** — separate product capability unrelated to the shared reducer and terminal ownership.
 - **Plan broader code quality improvement run** — prior planning stream unrelated to the v0.20.0 Phase 105 boundary.
-</user_constraints>
 
-<phase_requirements>
-## Phase Requirements
+### Locked corrective decisions (post-context)
 
-| ID | Description | Research Support |
-|----|-------------|------------------|
-| CORE-01 | Linux and macOS clients share stable workspace, repository, command, operation, surface, and attention identities. | Recommends tagged opaque ID domains in one portable core and fixture-driven ABI tests. |
-| CORE-02 | A shared state reducer models connection, loading, failure, operation, tab, and attention transitions independently of platform UI types. | Defines a pure reducer with normalized state and explicit effects. |
-| CORE-03 | Native shells access shared behavior through an opaque, versioned product-owned ABI. | Defines an opaque-handle C ABI with explicit buffer ownership and version negotiation. |
-| CORE-04 | Cross-language golden fixtures verify native decoding and state transitions against the TypeScript contract. | Reuses Phase 104 fixtures and adds C/Zig plus macOS-compatible harness parity. |
-| CORE-05 | Restored session metadata never represents terminated processes as still running. | Defines presentation-only persistence, independent quarantine, and lineage on relaunch. |
-| TERM-01 | Linux embeds one fully interactive libghostty terminal. | Pins the upstream source/toolchain and makes GTK input/render/IME/clipboard a real-session gate. |
-| TERM-02 | Every surface exclusively owns one PTY/process group with explicit cleanup. | Defines a surface registry, bounded close escalation, group verification, and crash guard. |
-| TERM-03 | libghostty and Zig are exactly pinned behind an adapter with upgrade tests. | Identifies the immutable commit and Zig version and isolates all upstream symbols. |
-| TERM-04 | Repeated surface/GPU lifecycle does not leak or orphan. | Defines stress-cycle accounting, subprocess assertions, and resource trend thresholds. |
-| TERM-05 | Host exposes an honest native accessibility contract. | Requires focus/input semantics and documentation of unverified cell-level AT behavior. |
-</phase_requirements>
+- Phase 105 must produce a genuinely runnable, interactive Linux GTK terminal surface.
+- A maintained Ghostty fork and standalone Ghostty process composition are out of scope.
+- The full `ghostty_surface_*` API is not a Linux embedding API, and Ghostty's private GTK application runtime cannot cross the product-owned PTY/process boundary.
+- Replan remaining work around pinned `libghostty-vt` plus a git-stacks-owned GTK widget, renderer, PTY, process group, and guard.
+- Preserve completed Plans 105-01 through 105-04.
 
-## Summary
+## Executive conclusion
 
-Build the native foundation as a separate `native/` tree with two product-owned boundaries: a portable Zig model library exported through a versioned opaque C ABI, and a Linux terminal adapter that is the only code allowed to import libghostty/GTK details. The existing Bun/TypeScript service remains authoritative; Phase 104's `/v1` schemas and golden fixtures are inputs, not code to port. [VERIFIED: Phase 104 implementation and repository architecture]
+Plan 105-05 must be replaced, not patched. Its automated tests prove only a synthetic event recorder: `native/linux/app.zig` has no `main`, `native/linux/terminal_host.zig` owns no GTK object, and `native/terminal/adapter.zig` never creates a surface or terminal. The human gate correctly exposed that no executable interface existed. [VERIFIED: repository source inspection]
 
-Pin Ghostty to the peeled commit for annotated tag `v1.3.1`, **`332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28`**, and pin Zig **`0.15.2`**. The complete tag object is `22efb0be2bbea73e5339f5426fa3b20edabcaa11`; it is not the source commit and must not be recorded as one. [VERIFIED: `git ls-remote` and local checkout] The checked-out upstream manifest declares version `1.3.1` and `minimum_zig_version = "0.15.2"`; Ghostty's official build matrix maps all 1.3.x releases to Zig 0.15.2. [VERIFIED: upstream `build.zig.zon`] [CITED: https://ghostty.org/docs/install/build]
+Use the pinned Ghostty **Zig `ghostty-vt` module**, not the full-surface C header. At the pinned `v1.3.1` peeled commit, `src/lib_vt.zig` publicly exports `Terminal`, `Stream`, `RenderState`, selection/page primitives, and terminal input encoding. Its own header warns that API signatures are unstable; exact pinning and adapter-only imports are therefore mandatory. [VERIFIED: pinned `src/lib_vt.zig`] The pinned C library exports parsers and key/paste helpers but does not expose the complete `Terminal`/`RenderState` object graph required by this host, so the Zig module is the correct boundary at this revision. [VERIFIED: pinned `src/lib_vt.zig` and `include/ghostty/vt*.h`]
 
-Use the full libghostty surface API, not `libghostty-vt` alone. The pinned `include/ghostty.h` exposes surface creation/free, focus, size/content scale, draw, key/text/preedit, mouse, IME-point, clipboard callbacks, process-exited, close-confirmation, selection, and child-exit messaging. [VERIFIED: pinned upstream source inspection] `libghostty-vt` deliberately supplies terminal state and renderer state but leaves renderer/windowing, clipboard integration, tabs, splits, session management, and accessibility to the consumer. [CITED: https://github.com/ghostty-org/ghostling] Therefore the Phase 105 GTK adapter must own the GL/view lifecycle and every native interaction seam; a successful draw is not terminal acceptance.
+Implement a custom focusable GTK4 widget whose snapshot uses GTK/GSK/Pango rendering. GTK owns compositor/GPU backend selection; git-stacks owns terminal state, cell-to-glyph conversion, PTY I/O, input encoding, clipboard/IME integration, and lifecycle. This is the shortest in-scope route to a real terminal: it avoids a custom OpenGL renderer in the first slice while still using GTK's accelerated render pipeline where available. A later measured optimization may replace the snapshot renderer behind the product renderer interface without changing PTY or VT architecture. [CITED: https://docs.gtk.org/gtk4/class.Snapshot.html]
 
-The highest-risk mismatch is lifecycle ownership. Upstream surfaces create and own a PTY session, and upstream termination sends SIGHUP to an owned process group, repeatedly checking until the direct child is reaped. [VERIFIED: pinned `src/Surface.zig` and `src/termio/Exec.zig`] That is useful implementation evidence, but it does not satisfy D-09 through D-12 by itself: git-stacks must track the owned PGID independently, implement graceful-then-force policy and a separate guard process, and retain `failed_cleanup` until `/proc`/`kill(pid, 0)`-style verification proves the group is absent.
+Do **not** call this a reusable full Ghostty surface. `libghostty-vt` supplies VT parsing/state, reflow, selection primitives, render state, and key/paste encoding; it deliberately supplies neither windowing nor drawing. The official Ghostling example demonstrates the same consumer-owned boundary and explicitly warns that incomplete native key events break Kitty keyboard protocol. [CITED: https://github.com/ghostty-org/ghostling]
 
-**Primary recommendation:** plan four executable slices: (1) fixture-driven portable model and ABI; (2) truth-preserving session persistence; (3) exact-pinned Linux GTK/libghostty surface; (4) process/crash ownership plus automated and real-session acceptance. Do not broaden the phase into workspace navigation, tabs UI, packaging, or the macOS terminal host.
+## Requirement coverage and current truth
 
-## Standard Stack
+| ID | Current truth | Replan consequence |
+|---|---|---|
+| CORE-01 | Implemented by 105-02 identity domains and fixtures. | Retain; rerun model/ABI tests. |
+| CORE-02 | Implemented by 105-02 and extended by 105-04 cleanup states. | Retain; terminal runtime emits reducer actions only, never GTK types. |
+| CORE-03 | Implemented by 105-02 opaque C ABI. | Retain; VT/GTK stay out of public ABI. |
+| CORE-04 | Implemented by 105-02 cross-language fixtures. | Retain; keep full gate in closeout. |
+| CORE-05 | Implemented by 105-03/04 persistence and lifecycle truth. | Retain; real child exit/cleanup must now drive these states. |
+| TERM-01 | **Not met.** Existing host is synthetic and non-runnable. | New executable, real GTK widget, PTY I/O, VT stream, rendering, keyboard/mouse/Unicode/resize/alternate-screen/clipboard/IME. |
+| TERM-02 | Ownership state machine/guard exist, but no real terminal runtime uses them. | Connect PTY spawn registration-before-live, reads/writes, close/exit/quit/crash to retained ownership code. |
+| TERM-03 | Exact source/toolchain lock exists, but it audits the wrong API. | Keep pin machinery; replace full-surface smoke with `ghostty-vt` module/API compatibility tests. |
+| TERM-04 | Synthetic counter/resource stress exists. | Retain threshold logic as a harness pattern; replace lifecycle body with real GTK widget + VT + PTY cycles and separate real-compositor lane. |
+| TERM-05 | Evidence template exists, no actual GTK widget exists. | Add truthful focusable custom-widget semantics; verify AT-SPI observations, without claiming cell-level text parity. |
 
-| Technology | Exact version/pin | Purpose | Evidence |
-|------------|-------------------|---------|----------|
-| Zig | `0.15.2` exact compiler artifact + checksum | Portable reducer, C ABI, Linux adapter build | Required by Ghostty 1.3.x. [CITED: https://ghostty.org/docs/install/build] |
-| Ghostty/libghostty | commit `332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28` (peeled `v1.3.1`) | Terminal surface, emulation, renderer, PTY | Upstream tag/source verified; libghostty is not independently versioned yet. [CITED: https://ghostty.org/docs/install/release-notes/1-3-0] |
-| GTK | installed `4.22.4`; support floor `>=4.14,<5` | Linux native host, input, IM context, clipboard, GL lifecycle | Ghostty 1.3 declares GTK 4.14 floor. [CITED: https://ghostty.org/docs/install/release-notes/1-3-0] |
-| libadwaita | installed `1.9.2`; support floor `>=1.5,<2` | Minimal native application/window shell | Ghostty 1.3 declares libadwaita 1.5 floor. [CITED: https://ghostty.org/docs/install/release-notes/1-3-0] |
-| Bun/TypeScript | existing repository stack | Canonical `/v1` fixtures and fixture generation | Existing Phase 104 contract remains authoritative. [VERIFIED: codebase inspection] |
-| POSIX process APIs | Linux libc/kernel | sessions/groups, signals, reaping, guard IPC | No external package is required. |
+## Standard stack
 
-The host currently has Zig `0.16.0`, not the required `0.15.2`; the plan must provision a repo-controlled exact compiler rather than use ambient `zig`. [VERIFIED: local CLI] GTK/libadwaita exceed the declared floor, so CI also needs a minimum-version build lane rather than proving only the developer machine.
+| Component | Exact choice | Purpose and evidence |
+|---|---|---|
+| Zig | `0.15.2`, repo-controlled artifact/checksum | Pinned Ghostty 1.3.x toolchain. [CITED: https://ghostty.org/docs/install/build] |
+| Ghostty | peeled commit `332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28` | Keep existing immutable source lock; import `src/lib_vt.zig` as a Zig module. Upgrades are compatibility phases. [VERIFIED: `native/deps/ghostty.lock`, pinned source] |
+| GTK | GTK4, current repo floor `>=4.14,<5` | Application/window, custom focusable widget, controllers, IME, clipboard, snapshot rendering, accessibility. [CITED: https://docs.gtk.org/gtk4/] |
+| Pango + Cairo/GSK | GTK-distributed platform stack | Font discovery/shaping and drawing into `GtkSnapshot`; do not create a new package dependency. [CITED: https://docs.gtk.org/gtk4/class.Snapshot.html] |
+| POSIX PTY | `posix_openpt`/`grantpt`/`unlockpt` + fork/session/group/exec, or a small libc shim | Product-owned PTY master, child session, winsize, nonblocking I/O, signals. Keep argv/env launch policy outside persistence and diagnostics. [VERIFIED: existing ownership boundary] |
+| GLib main context | GTK runtime | Watch PTY master, child exit, redraw scheduling, and main-thread widget mutation. |
+| Bun/TypeScript | existing repository stack | Setup, pin audit, build/test orchestration, and Phase 104 fixtures. |
 
-## Package Legitimacy Audit
+No new third-party language package is recommended; package legitimacy audit is therefore not applicable.
 
-No registry package installation is recommended. Ghostty is a source dependency pinned by full Git commit; Zig is an official compiler artifact pinned by version and checksum. The planner must add provenance/checksum verification and must not introduce an npm package named `libghostty` or download tools through `npx`.
+## Public API/version realities
 
-## Architecture Patterns
+1. Ghostty 1.3.1's release is pinned to Zig 0.15.2. Ghostty documents that each release line is guaranteed only for its specified Zig compiler. [CITED: https://ghostty.org/docs/install/build]
+2. Ghostty says `libghostty-vt` is cross-platform and usable, but API signatures remain in flux and it has not yet received an independent versioned release. Exact source pin plus compile probes are a requirement, not optional hardening. [CITED: https://github.com/ghostty-org/ghostty] [CITED: https://ghostty.org/docs/install/release-notes/1-3-0]
+3. The pinned Zig module publicly exports the complete terminal-side primitives needed here: terminal, stream, render state, input encoding, selection, page/screen, colors/styles, and search primitives. [VERIFIED: pinned `src/lib_vt.zig`]
+4. `RenderState.update` is the supported terminal-to-renderer snapshot seam. It retains allocation capacity, and upstream recommends periodically deinitializing it after unusually large frames; lifecycle/resource tests must account for this explicit retention. [VERIFIED: pinned `src/terminal/render.zig`]
+5. `ghostty_surface_*` symbol presence in `include/ghostty.h` proves compilation only, not Linux constructibility. Current upstream's embedded platform payloads remain Apple-only; Spike 004-A invalidated pin advancement as a solution. [VERIFIED: `.planning/spikes/004-a-upstream-linux-embedding-api/README.md` and official upstream source]
+6. Ghostty's private GTK surface owns/initializes its own core surface and terminal I/O graph and is not exported as a standalone module. Importing it would be application-sized private coupling and violate D-09/D-12 ownership. [VERIFIED: `.planning/spikes/004-b-pinned-internal-gtk-integration/README.md` and pinned source]
 
-### Recommended project structure
-
-```text
-native/
-├── build.zig
-├── build.zig.zon
-├── deps/
-│   └── ghostty.lock             # repo URL, tag object, peeled commit, source checksum, Zig checksum
-├── include/
-│   └── git_stacks_native_v1.h   # product ABI only
-├── core/
-│   ├── identity.zig
-│   ├── contract.zig
-│   ├── model.zig
-│   ├── reducer.zig
-│   ├── persistence.zig
-│   └── abi.zig
-├── terminal/
-│   ├── adapter.zig              # only libghostty import boundary
-│   ├── ownership.zig
-│   ├── guard.zig
-│   └── diagnostics.zig
-├── linux/
-│   ├── app.zig
-│   └── terminal_host.zig        # GTK widget/input/IME/clipboard/GL lifecycle
-└── tests/
-    ├── fixtures/                # copied/generated from canonical Phase 104 fixtures
-    ├── abi_harness.c
-    ├── reducer_test.zig
-    ├── persistence_test.zig
-    ├── ownership_test.zig
-    └── lifecycle_stress.zig
-```
-
-### Pattern 1: Functional core with typed effects
-
-The reducer is `reduce(state, action) -> { state, effects }`. State contains only product IDs, negotiated contract values, presentation/session metadata, and explicit lifecycle variants. Effects are tagged (`service_refresh`, `service_mutation`, `terminal_create`, `terminal_close`, `persist_session`, `platform_focus`) and performed by adapters. GTK pointers, libghostty handles, PIDs/FDs, clocks, and filesystem handles never enter reducer state.
-
-Recommended connection variants: `disconnected_no_snapshot`, `connecting`, `ready`, `stale`, `refresh_required`, `incompatible`, and `failed`. Keep last snapshot only in `stale`/`refresh_required`; `incompatible` retains presentation metadata but clears service-derived authoritative entities. Unknown optional data lives in a diagnostic bag keyed by capability/schema identity and cannot produce effects.
-
-### Pattern 2: Opaque ABI with caller-owned copies
-
-Export only opaque handles and fixed-width scalar/status types. Use UTF-8 JSON bytes for versioned action/snapshot interchange in Phase 105 because it preserves exact Phase 104 fixture semantics and keeps Zig layout out of the ABI. Every returned allocation has a matching product-owned free function; errors are structured data, not thread-local strings.
-
-```c
-typedef struct gs_model_v1 gs_model_v1;
-typedef struct { const uint8_t *ptr; size_t len; } gs_bytes_v1;
-
-uint32_t gs_native_abi_version(void);
-gs_model_v1 *gs_model_create_v1(gs_bytes_v1 initial_json);
-int32_t gs_model_dispatch_v1(gs_model_v1 *, gs_bytes_v1 action_json);
-int32_t gs_model_snapshot_v1(gs_model_v1 *, gs_bytes_v1 *out);
-void gs_bytes_free_v1(gs_bytes_v1);
-void gs_model_destroy_v1(gs_model_v1 *);
-```
-
-The C harness must compile and run on Linux now. By explicit user scope decision, Phase 105 keeps the header/harness portable and performs Clang compatibility checks, but actual macOS execution and parity proof are deferred to Phase 107; Phase 105 must not claim macOS runtime proof or implement the macOS libghostty host.
-
-### Pattern 3: Truthful session restoration
-
-Persist a versioned document containing presentation-only records. Each entry includes `surface_id`, optional binding IDs, title/order/cwd label, last exit status, and lifecycle `ended`; it contains no PID, PTY path, environment, argv, bearer token, or proof of liveness. Parse entries independently, collect quarantine diagnostics with original index/hash and error code, and atomically write the valid next generation. Relaunch allocates a new surface ID and records `predecessor_surface_id`.
-
-### Pattern 4: Explicit surface ownership state machine
+## Target architecture
 
 ```text
-creating -> live -> graceful_close_requested -> terminating -> ended
-                  \-> failed_cleanup
-live -> child_exited -> ended
-live -> client_crashed -> guard_terminating -> ended | failed_cleanup
+GtkApplication / GtkWindow
+  -> GitStacksTerminalWidget (focus, snapshot, controllers, AT-SPI metadata)
+       -> gtk_input.zig (key, text, IM context, mouse, clipboard)
+       -> renderer.zig (RenderState -> shaped runs -> GtkSnapshot)
+       -> runtime.zig (generation/liveness, redraw scheduling)
+            -> vt_adapter.zig (only ghostty-vt import)
+            -> pty.zig (master FD, winsize, read/write, child PID/PGID)
+            -> existing ownership.zig + guard.zig
+            -> existing reducer/persistence through product events
 ```
 
-Creation is not committed to `live` until the adapter, PTY, child PID/PGID, and guard registration all succeed. Destruction is idempotent and ordered: stop new input/render callbacks, request graceful exit, wait an injected timeout, signal the entire PGID, reap, destroy libghostty surface, unrealize/free GPU host, unregister guard ownership, then remove the record. Any unproven process cleanup stops in `failed_cleanup` with diagnostics.
+Recommended source layout:
 
-Use a small sibling guard process with a private inherited pipe/socket and an in-memory registry of `(surface_id, pgid, birth token/start time)`. The client registers before exposing a live surface and unregisters only after cleanup proof. EOF on the control channel means client death: the guard signals registered groups, verifies absence, writes bounded diagnostics, and exits. Authenticate commands structurally through the inherited private channel; never accept arbitrary external PIDs over a public socket.
+- `native/terminal/vt_adapter.zig`: sole import of pinned `ghostty-vt`; owns `Terminal`, `Stream`, `RenderState`, key/paste encoding, selection commands, mode/event extraction. No GTK.
+- `native/terminal/pty.zig`: allocate PTY, create session/process group, spawn shell through explicit safe launch configuration, nonblocking master reads/writes, `TIOCSWINSZ`, child reaping. No Ghostty or GTK.
+- `native/terminal/runtime.zig`: binds PTY bytes to VT stream; binds encoded user input to PTY; owns thread/main-loop synchronization, generation, dirty/redraw, title/bell/clipboard/working-directory events; connects lifecycle to ownership/guard/reducer.
+- `native/linux/terminal_widget.zig`: custom GTK type, measure/size-allocate/snapshot/focus and controller wiring.
+- `native/linux/renderer.zig`: converts immutable/copied render state to cell backgrounds, shaped glyph runs, decorations, selection, cursor, and visible focus through GTK snapshot/Pango.
+- `native/linux/input.zig`: `GtkEventControllerKey`, `GtkIMContext`, focus, click/motion/scroll, shortcuts, selection, system clipboard and primary selection.
+- `native/linux/app.zig`: actual `pub fn main`, `GtkApplication`, one window/one widget, clean application shutdown.
+- `native/tests/`: adapter stream fixtures, PTY integration, renderer snapshots/semantic frames, GTK event/lifecycle tests, and real lifecycle stress.
 
-### Pattern 5: Native terminal host contract
+Keep the platform-neutral runtime free of Gtk/Gdk/Pango types. Keep the public product C ABI free of both Ghostty and GTK. Permit Ghostty symbols only in `vt_adapter.zig`, the build module declaration, and named compatibility tests.
 
-The GTK host translates widget lifecycle and input into the pinned adapter: realize creates graphics resources, resize updates content scale and pixel/cell dimensions, render/draw occurs only with a valid context, focus calls both GTK IM focus and libghostty focus, committed text calls `ghostty_surface_text`, preedit calls `ghostty_surface_preedit`, cursor rectangle comes from `ghostty_surface_ime_point`, and unrealize makes callbacks inert before surface/GPU destruction. [VERIFIED: pinned `ghostty.h` API]
+## Vertical slicing: plan runnable software first
 
-Clipboard read/write must flow through host callbacks with explicit selection-clipboard support and paste confirmation policy. Keyboard shortcuts must first honor product/native actions and then deliver sufficiently rich key events; Ghostling demonstrates that impoverished host events break Kitty keyboard behavior even though libghostty supports it. [CITED: https://github.com/ghostty-org/ghostling]
+The old plan deferred reality to a human checkpoint. The new plan must produce an executable in its first remaining slice and grow fidelity incrementally:
 
-## Don't Hand-Roll
+### Slice A — pinned VT compatibility and real executable skeleton
 
-| Problem | Don't Build | Use Instead |
-|---------|-------------|-------------|
-| Terminal parser/emulator/reflow | Custom VT parser/grid | Pinned full libghostty surface API. |
-| Renderer | A second text renderer or `libghostty-vt` demo renderer | Pinned libghostty renderer through GTK/OpenGL host. |
-| Contract source | A manually divergent Zig schema | Phase 104 golden JSON fixtures plus strict Zig decoding. |
-| Cross-language ABI layout | Exported Zig structs/slices/enums by layout | Opaque handles, fixed-width values, byte buffers, explicit frees. |
-| Process ownership | Shelling out to `ps`/`pkill` by command name | POSIX PID/PGID/session APIs and direct child reaping. |
-| Crash cleanup | Parent shutdown callback or Linux parent-death signal alone | Separate ownership guard with inherited private channel. |
-| Session resurrection | Persisted PID/PTY/environment and optimistic `running` | Presentation-only ended records and explicit lineage relaunch. |
-| Accessibility claims | A generic `role=terminal` claim without AT evidence | Verified GTK focus/input semantics and an explicit limitation document. |
+- Replace `terminal-api-smoke` with a compile/run test against the pinned Zig `ghostty-vt` module: initialize a terminal/stream, feed printable text plus resize/alternate-screen sequences, update render state, assert cells/modes.
+- Add a native executable build target and `bun run native:run` (or equivalent) that opens a GTK window containing a focusable terminal widget.
+- Render a deterministic in-memory VT frame before PTY integration. Human observable gate: a real window displays known text and responds to resize/focus.
 
-## Common Pitfalls
+### Slice B — product-owned PTY and shell interaction
 
-### 1. Pinning the annotated tag object
-`v1.3.1` resolves to tag object `22efb0be2bbea73e5339f5426fa3b20edabcaa11` but source commit `332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28`. A downloader/build expecting a commit may fail or fetch an unintended object. Record both and verify HEAD equals the peeled commit.
+- Spawn exactly one shell in a new owned session/process group, obtain PID/PGID/birth token, register guard before `live`, and watch the PTY master.
+- Feed PTY output through VT stream; encode key/text/paste through VT adapter; write to PTY with bounded buffering/backpressure.
+- Route resize to both terminal grid and `TIOCSWINSZ`; route EOF/`SIGCHLD` through child-exit and ownership/reducer state.
+- Human observable gate: user types a command and sees output in the GTK terminal.
 
-### 2. Treating libghostty-vt as a ready GTK terminal
-It intentionally excludes renderer/windowing and consumer UI. Use the full pinned surface path and isolate churn behind the adapter.
+### Slice C — correct rendering and interaction
 
-### 3. Letting upstream surface teardown define product policy
-Upstream's SIGHUP/group behavior does not encode D-09 confirmation, timeout/escalation, failed-cleanup visibility, or crash-guard guarantees. Wrap it with product ownership state and verification.
+- Cell metrics derive rows/columns from allocated pixels and selected monospace font metrics. Shape contiguous style/font runs with Pango; clip every row/cell region so wide/combining glyphs cannot corrupt adjacent rows.
+- Render background runs, glyphs, underline/strikethrough, selection, cursor, and focus ring. Respect wide cells, grapheme clusters, combining marks, fallback fonts, bold/italic, inverse, palette/truecolor, and cursor styles.
+- Map native key event plus consumed modifiers/composition status to Ghostty input encoder; do not synthesize key identity from text alone. Implement mouse reporting versus local selection based on terminal modes and modifiers.
+- Add system clipboard and Linux primary selection; sanitize/bracket paste through Ghostty paste/input facilities. Add IM context filter, preedit overlay, commit, surrounding cursor rectangle.
+- Human observable gate: D-13 interaction subset passes on one compositor before adding long stress.
 
-### 4. PGID reuse or self-group signaling
-If the child has not completed `setsid`, its PGID may still equal the client's group; a naive `killpg` can terminate the app. Registration must validate PGID differs from client/guard groups and include a birth token/start-time check where Linux exposes it. The pinned upstream implementation explicitly loops while the child still reports the caller's PGID. [VERIFIED: pinned `Exec.zig`]
+### Slice D — lifecycle, accessibility, and evidence closure
 
-### 5. Callbacks after unrealize/free
-GTK/libghostty/render threads can enqueue invalidation or clipboard/exit callbacks while teardown proceeds. Introduce a generation/liveness token, disconnect GTK controllers first, reject late callbacks, join relevant work, then free.
+- Connect window close, child exit, application quit, and guard EOF/crash to retained ownership semantics. Make callback sources inert and remove GLib watches before freeing runtime/widget data.
+- Replace synthetic lifecycle cycles with real VT/runtime/PTY/widget creation. Add headless/display-server CI lane and a real-compositor 25-cycle lane.
+- Publish only observed accessibility role/name/description/focus state and keyboard input behavior; inspect AT-SPI. Then complete Wayland/X11 evidence where supported.
 
-### 6. IME reduced to committed text
-Preedit, commit, focus in/out, cursor rectangle, surrounding behavior, and shortcut arbitration must be tested. `ghostty_surface_preedit` and `ghostty_surface_ime_point` exist at the pin; omitting them makes the visual demo falsely pass.
+Do not create a human checkpoint until Slice B has produced an executable command a human can actually use.
 
-### 7. Restoration infers liveness from stale OS identifiers
-Never probe a persisted PID and call it the old surface: PID reuse and lost ownership make that untrustworthy. All disk-restored surfaces are ended by definition in Phase 105.
+## Rendering and font architecture
 
-### 8. Leak tests demand exact RSS equality
-GTK, GL drivers, font caches, and allocators retain bounded caches. Assert object/process counters return to zero and use warm-up plus trend/plateau thresholds for RSS/FD/thread measurements.
+- Prefer a custom `GtkWidgetClass.snapshot` renderer over `GtkGLArea` for the initial proof. `GtkSnapshot` creates GSK render nodes and allows GTK to choose GL/Vulkan/Cairo; this materially reduces bespoke GPU lifetime and shader work. [CITED: https://docs.gtk.org/gtk4/class.Snapshot.html]
+- Maintain one `RenderFrame` value detached from mutable VT state. Update it on the owning runtime synchronization point, then queue a draw on the GTK main thread. Never let GTK snapshot traverse terminal state while the PTY parser mutates it.
+- Cache fonts and shaped runs by font face/size/style/text/features. Bound the cache and clear it on scale/font changes. Cache ownership must be included in stress accounting.
+- Compute cell width/height from the selected monospace face but allow fallback glyphs to shape; position runs on the cell grid and clip. Test ASCII, CJK wide cells, emoji, combining accents, RTL/complex scripts, ligatures, and missing-glyph fallback. Ghostty 1.3 notes improved complex shaping, but that benefit belongs to the Ghostty GUI renderer; a consumer renderer must independently prove its shaping. [CITED: https://ghostty.org/docs/install/release-notes/1-3-0]
+- Treat images/advanced graphics protocols as explicit unsupported/deferred behavior unless the pinned RenderState exposes enough data and Phase 105 requirements demand it. Do not silently claim full Ghostty GUI renderer parity.
 
-### 9. Accessibility overclaim
-The pinned source exposes selection/text reads but no clear general GTK screen-reader cell model was found in this research. [VERIFIED: pinned source search] Treat cell-level screen-reader output as unverified; verify focus, keyboard/IME, selection/clipboard, visible focus, and native host semantics, then document the gap rather than advertising full parity.
+## Input, IME, mouse, and clipboard architecture
 
-## Recommended Defaults
+- Shortcut arbitration order: product/window action first; if unhandled, IM context filtering; then rich key encoding; committed text only when appropriate. Preserve physical/logical key, modifiers, consumed modifiers, repeat, press/release, and composing state.
+- `GtkIMContext` must receive focus-in/out, client widget, key filtering, surrounding cursor rectangle, preedit start/change/end, and commit. Render preedit as a host overlay at the VT cursor without feeding it to the PTY until commit. [CITED: https://docs.gtk.org/gtk4/class.IMContext.html]
+- Convert pointer coordinates to clamped terminal cells. When terminal mouse reporting is enabled, encode press/release/motion/scroll; otherwise manage local selection and autoscroll. Modifier override must allow selection in mouse-reporting applications.
+- Use `GdkClipboard` for the system clipboard and the display's primary clipboard where available. Clipboard reads are asynchronous and must carry generation tokens so completion after teardown is ignored.
+- Treat pasted/clipboard bytes as untrusted terminal input. Use bracketed paste mode and Ghostty paste safety primitives; never include clipboard contents in diagnostics. Ghostty 1.3 fixed a control-character paste vulnerability, so pin compatibility tests must cover control bytes and safe paste behavior. [CITED: https://ghostty.org/docs/install/release-notes/1-3-0]
 
-| Policy | Default | Rationale |
-|--------|---------|-----------|
-| Graceful close window | 2 seconds | Interactive shell gets a bounded exit opportunity; fake-clock tests avoid slow suites. |
-| Forced group termination | SIGHUP, then SIGTERM after 500 ms, then SIGKILL after 2 seconds | Escalates while bounding shutdown. Exact stages remain product-owned and injectable. |
-| Cleanup verification | poll every 25 ms up to 2 seconds after final signal | Short deterministic bound; retain failed state if absence is unproven. |
-| Stress cycles | 100 in headless/process CI; 500 nightly; 25 documented real-GPU cycles | Enough to expose monotonic lifecycle drift without making every commit GPU-heavy. |
-| Resource trend | after 10-cycle warm-up, zero live surfaces/children/PGIDs each cycle; FD/thread counts return to baseline; RSS slope over final 50 cycles <= 64 KiB/cycle and final median <= warm median + 16 MiB | A tunable bounded baseline, not a claim of exact deallocation. |
-| Persistence | versioned JSON, owner-only directory/file, atomic temp+fsync+rename | Cross-language inspectability and existing project atomic-write convention. |
+## Accessibility contract
 
-These numeric values are researched defaults, not external standards. Export/inject them so tests cover boundaries and later profiling can tune them without changing lifecycle semantics.
+GTK custom widgets must provide their own accessible properties and virtual behavior; ordinary GTK controls get semantics automatically, custom terminal widgets do not. GTK maps its accessibility context to AT-SPI on Linux and provides Inspector support for examining attributes. [CITED: https://docs.gtk.org/gtk4/section-accessibility.html]
 
-## Runtime State Inventory
+Phase 105 should guarantee only:
 
-This is an additive native foundation, not a rename/refactor phase.
+- focusability, visible focus, stable terminal role/name/description/help text;
+- correct focus state changes and keyboard/IME operability;
+- discoverable copy/paste/select-all actions where actually implemented;
+- no misleading claim that terminal cell contents or selection are exposed as a fully navigable text document.
 
-| Category | Inventory | Required handling |
-|----------|-----------|-------------------|
-| Stored data | No native session store exists. Phase 104 owns service identities/fixtures. | Create versioned presentation-only session file; quarantine per entry; never migrate process liveness. |
-| Live service config | Phase 104 service descriptor/credential and `/v1` snapshots/events are authoritative. | Native reducer consumes contract only; incompatible state discards service-derived truth. |
-| OS-registered state | No native packaging/service-manager registration belongs in Phase 105. | Guard is child/sibling runtime state only; Phase 108 owns installation. |
-| Secrets/env | Phase 104 launch context omits resolved secrets; terminal process environment may still be sensitive. | Never persist argv/env/credentials in session or guard diagnostics. Redact cwd details beyond the locked label contract where needed. |
-| Build artifacts | No native build tree exists; ambient Zig is 0.16.0. | Add exact compiler/source manifests and reproducible build entrypoint; do not depend on global Zig. |
+Cell-level text, caret, selection ranges, line navigation, and live-region events require a substantial AT-SPI text-provider design. D-16 explicitly permits documenting these as unsupported/unverified. Do not fake them with a stale accessible label containing the screen buffer. The acceptance matrix must record GTK Inspector and an AT such as Orca observations on the exact executable.
 
-## Security Domain
+## PTY, ownership, and concurrency details
 
-### Applicable ASVS categories
+- Spawn flow: open PTY -> fork -> child `setsid`/controlling terminal/dup stdio/set process group/exec -> parent validates child, PGID and Linux birth token -> registers guard -> exposes runtime live. Any failure unwinds in reverse order and proves the group absent.
+- One runtime owns one master FD, child PID, PGID, birth token, VT terminal/stream/render state, write queue, and widget generation.
+- The GTK main thread owns widget and clipboard/IME objects. PTY parsing may run on a worker only if VT state has one clear owner and render frames/events cross a queue. A GLib nonblocking FD source on the main context is acceptable for the first slice and simpler to prove.
+- Backpressure: cap pending PTY writes and terminal event queues. Handle partial reads/writes, `EINTR`, `EAGAIN`, EOF, HUP, and child exit in any order.
+- Close: stop accepting input -> request graceful shell exit -> wait bounded interval -> retained ownership escalation for whole group -> reap/absence proof -> unregister guard -> mark ended. Failure remains `failed_cleanup`.
+- Crash: guard owns only validated registered PGIDs and cleans on private channel EOF. Do not persist or reconnect live PTYs.
+- Security: terminal bytes, OSC payloads, titles, hyperlinks, clipboard requests, and child exit timing are untrusted. Bound titles/URLs/event payloads, validate schemes before later activation, and never interpret terminal output as workflow instructions.
 
-| Category | Applies | Control |
-|----------|---------|---------|
-| V1 Architecture | yes | Product ABI, reducer, platform adapter, and process guard have explicit trust/ownership boundaries. |
-| V2 Authentication | inherited | Phase 104 owns service credentials; Phase 105 must not persist or log them. |
-| V5 Validation | yes | Strictly decode service fixtures/actions/session documents; quarantine corrupt entries and inert unknown optionals. |
-| V7 Error/Logging | yes | Structured diagnostics are bounded and redact argv/env/tokens; failed cleanup remains visible. |
-| V8 Data Protection | yes | Owner-only session storage; no sensitive launch details or false liveness. |
-| V10 Malicious Code | yes | Verify exact source/compiler hashes; forbid floating dependencies and unverified package executors. |
-| V12 File/Resource | yes | Atomic persistence, symlink-safe owner-only paths, FD/thread/surface cleanup. |
-| V13 API | yes | Versioned opaque ABI validates lengths, nulls, versions, and ownership on every call. |
+## Existing code: retain, replace, remove
 
-Threat cases to test: malformed/oversized ABI JSON, use-after-destroy/double-free, callback after teardown, symlinked/corrupt session files, PGID equal to app/guard group, PID/PGID reuse, forged guard commands, client SIGKILL, guard SIGKILL (reported limitation/recovery), secrets in diagnostics, and clipboard/terminal escape content treated only as data.
+### Retain unchanged unless integration reveals a real defect
+
+- All completed 105-01 through 105-04 artifacts: `native/core/**`, `native/include/git_stacks_native_v1.h`, fixtures, `native/terminal/{ownership,guard,diagnostics}.zig`, their tests, lock/setup code, and summaries.
+- `native/deps/ghostty.lock` exact commit/toolchain pin.
+- `scripts/verify-native.ts` pin/source integrity machinery and public-boundary audits.
+- `native/tests/lifecycle_stress.zig` threshold math and evidence vocabulary only; its synthetic lifecycle body is not acceptance evidence.
+- `docs/native-terminal-{acceptance,accessibility}.md` as uncompleted templates; revise commands and architecture claims.
+
+### Replace
+
+- `native/terminal/adapter.zig`: replace `ghostty.h`/nullable `ghostty_surface_t` event recorder with a real pinned `ghostty-vt` Zig adapter. Rename to `vt_adapter.zig` if practical so audits state the boundary honestly.
+- `native/linux/terminal_host.zig`: replace synthetic booleans and recorded events with runtime/widget integration; split into widget, renderer, input, and runtime modules.
+- `native/linux/app.zig`: replace factory-only helper with a runnable `main` and real GTK application/window.
+- `native/tests/terminal_host_test.zig`: replace assertions over recorded events with VT state/render frames, real PTY integration, and GTK controller/lifecycle behavior.
+- `native/build.zig`: replace the full `ghostty_surface_*` compile smoke; declare/import the pinned `ghostty-vt` module, GTK executable, and new tests.
+- `scripts/verify-native.ts`: change allowlist/audit vocabulary from full surface API to `ghostty-vt`; verify an executable artifact and expose a launch command.
+- `native/tests/lifecycle_stress.zig`: keep resource thresholds but cycle actual runtime/widget/PTY resources.
+
+### Remove
+
+- Every compile assertion and production reference to `ghostty_surface_*`, `ghostty_runtime_*`, and `ghostty.h` full-surface hosting.
+- Synthetic `Adapter.events`, fake `surface = null`, fake `graphics_ready`, and tests that equate event recording with interaction.
+- Documentation wording that calls current code a hosted libghostty surface or implies human approval is possible before a runnable GTK executable exists.
+
+Use `git diff dc71c8d9^..HEAD` plus commit `69507e14`/`b79e3241` when implementing the deletion map; do not revert 105-01..04 or their state/requirement evidence.
+
+## Testing and acceptance strategy
+
+### Fast deterministic tests
+
+- VT adapter: feed recorded bytes, resize, alternate-screen enter/exit, colors, Unicode/graphemes, scrollback, title/clipboard events, render-state updates, key protocol modes, safe paste.
+- Renderer: convert known RenderState fixtures to a semantic draw list; assert cells/runs/colors/cursor/selection/clipping without pixel brittleness. Add a small set of image snapshots under a deterministic font/display environment.
+- PTY: spawn a deterministic fixture child, verify stdout/input/resize/exit, group identity, partial I/O and EOF races.
+- Input: table tests from GTK-like normalized events to Ghostty key encoding and PTY bytes; include Kitty keyboard cases, compose/IME, modifiers, repeat/release, mouse modes, bracketed paste.
+- Lifecycle: late FD/clipboard/timeout/draw callbacks rejected by generation; every error injection unwinds resources; ownership register-before-live and absence-before-unregister.
+
+### Graphical integration
+
+- Run the executable under a virtual display where possible and assert window/widget realization, focus, snapshot, resize, PTY command roundtrip, and clean quit.
+- Run real Wayland and X11 sessions where supported. Capture compositor, GTK, Pango/font, locale/IME, renderer backend, GPU/driver, Zig, and peeled Ghostty commit.
+- D-13 matrix: modifiers/rich keys, mouse selection/reporting, ASCII/Unicode/graphemes/complex scripts, resize/reflow, alternate-screen app, system/primary clipboard, IME preedit/commit/cursor, focus, child exit, graceful/forced close, quit, crash cleanup.
+- D-14: 100 automated real-runtime cycles after warmup; exact zero owned surface/child/PGID/watch counters each cycle; bounded FD/thread/RSS trends. Retain the existing documented thresholds unless measurement shows they are invalid, then record evidence and change explicitly. Add 25 real-compositor create/type/resize/destroy cycles and optional 500-cycle extended lane.
+- D-16: inspect GTK accessibility tree and Orca behavior; fail for missing focus/input, misleading labels, or claimed-but-absent semantics.
+
+Phase close must run `bun run native:verify`, the real terminal executable smoke, focused native suites, `bun run test`, `bun run typecheck`, `bun run test:deps`, and `bun run verify:gates`. Passing synthetic unit tests is never sufficient proof of TERM-01/04/05.
 
 ## Validation Architecture
 
-### Test layers
+Validation follows the proposed 105-05 through 105-08 dependency sequence and moves from deterministic library seams to a real graphical shell. Every implementation task must have a focused automated command that fails before its production change and returns quickly enough for TDD. Human observation is a final evidence gate, never a substitute for an executable smoke or automated integration coverage.
 
-1. **Pure Zig model tests:** every connection/loading/failure/operation/tab/attention transition, stale/frozen/incompatible semantics, unknown optionals, deterministic serialization.
-2. **Golden parity:** Bun-generated Phase 104 fixtures consumed by Zig; the Linux C ABI harness compares canonical snapshots byte-for-byte or structurally. Strict C/Clang portability checks keep the same header/corpus ready for Phase 107, where actual macOS execution/parity is proved.
-3. **Persistence tests:** valid/corrupt mixed entries, missing identities, atomic crash points, permissions, ended-only restoration, relaunch lineage, secret-negative assertions.
-4. **PTY/guard integration:** real process groups for exit, idle/active confirmation, close, quit, SIGKILL crash, escalation, descendant processes, rapid-close-before-setsid, and failed-cleanup injection.
-5. **GTK/libghostty integration:** xvfb/headless where meaningful for create/resize/destroy and callbacks, but never use it as the sole interaction proof.
-6. **Real-session UAT:** Wayland and X11 if supported, keyboard modifiers/Kitty protocol, mouse selection/reporting, Unicode/graphemes, resize/reflow, alternate-screen app, primary/system clipboard, IME preedit/commit/cursor, focus, exit, repeated GPU lifecycle, and accessibility inspection.
+### Harness ownership
 
-### Requirements-to-test map
+| Harness | Owner | Proves | Must not claim |
+|---|---|---|---|
+| `native/tests/vt_adapter_test.zig` | `native/terminal/vt_adapter.zig` | Pinned VT construction, stream parsing, resize/reflow, alternate screen, Unicode, render state, key/paste encoding | GTK rendering, PTY ownership, or human usability |
+| `native/tests/renderer_test.zig` | `native/linux/renderer.zig` | RenderState-to-semantic-draw-list conversion, colors, styles, wide/combining cells, cursor, selection, clipping | Real compositor/GPU behavior from semantic assertions alone |
+| `native/tests/input_test.zig` | `native/linux/input.zig` | Normalized key/modifier/action mapping, IME state transitions, mouse modes, clipboard/paste policy | Native toolkit delivery without GTK integration tests |
+| `native/tests/pty_test.zig` | `native/terminal/pty.zig` | Real PTY child roundtrip, winsize, partial I/O, EOF/exit races, PID/PGID identity | GTK or render correctness |
+| `native/tests/terminal_runtime_test.zig` | `native/terminal/runtime.zig` | Real PTY bytes -> VT -> frame and input -> encoded bytes -> child, register-before-live, reducer exit truth | Native event delivery or compositor fidelity |
+| `native/tests/terminal_widget_test.zig` | `native/linux/terminal_widget.zig` | GTK realize/focus/snapshot/resize/controller wiring and teardown under a display harness | Wayland/X11/IME/AT behavior on every real desktop |
+| `native/tests/lifecycle_stress.zig` | runtime/widget/ownership integration | Actual widget, VT, PTY, GLib source and process resource return across repeated cycles | Leak freedom if it cycles synthetic counters only |
+| `scripts/verify-native.ts` | repository integration | Exact pin/toolchain/source integrity, source-boundary allowlist, target orchestration, executable existence | Interaction acceptance merely because compilation passes |
+| `docs/native-terminal-acceptance.md` and `docs/native-terminal-accessibility.md` | human verification | Exact-environment real-session behavior and observed AT-SPI semantics | Any unobserved behavior or cell-level accessibility parity |
 
-| Req | Automated owner | Required proof |
-|-----|-----------------|----------------|
-| CORE-01/02 | reducer identity/transition suites | Same fixture/actions yield same canonical state independent of UI. |
-| CORE-03 | C ABI compile, ownership, fuzz/negative suite | Version mismatch, null/length errors, create/destroy, allocation/free. |
-| CORE-04 | fixture drift gate in Bun + Zig + Linux C, plus public-header portability checks | Canonical Phase 104 corpus cannot diverge silently; actual macOS execution is a Phase 107 gate. |
-| CORE-05 | persistence and relaunch tests | Every disk-restored entry is ended; new surface ID links predecessor. |
-| TERM-01 | adapter integration plus documented real session | Full interaction matrix, not screenshot/render-only. |
-| TERM-02 | process group/guard matrix | Zero descendants on close/exit/quit/crash; failed proof remains visible. |
-| TERM-03 | clean exact-pin build and intentional pin-bump smoke | Wrong Zig or changed API fails at adapter boundary. |
-| TERM-04 | counters plus resource-trend stress | Zero live objects/processes each cycle and bounded plateau. |
-| TERM-05 | automated focus/input semantics plus AT inspection document | Honest verified features and explicit upstream gaps. |
+Tests may use normalized adapter values at narrow unit seams, but the runtime, widget, and lifecycle harnesses must construct the real production types they claim to verify. The source audit must reject a test-only parallel terminal implementation.
 
-### Phase gate
+### 105-05 validation: pinned VT pivot and runnable GTK frame
 
-The phase is not complete until all native unit/integration tests pass, the existing Bun suite/typecheck/dependency/release gates remain green, a clean build uses only the declared Zig/Ghostty pins, the crash guard test proves cleanup after `SIGKILL` of the client, and the real-session checklist is checked with captured environment/version evidence. Existing project commands remain `bun run test`, `bun run typecheck`, `bun run test:deps`, and `bun run verify:gates`; add a single repo-native `bun run native:verify` wrapper for the pinned native build/test/stress gates.
+Focused commands to establish during this plan:
 
-## State of the Art
+```bash
+bun run native:test:vt
+bun run native:test:renderer
+bun run native:test:widget
+bun run native:build-app
+bun run native:smoke-app
+```
 
-| Previous assumption | Verified current state | Planning impact |
-|---------------------|------------------------|-----------------|
-| libghostty is only an internal unstable core | 1.3 extracted a standalone full Zig module and WIP C API, but no versioned libghostty release exists yet. [CITED: https://ghostty.org/docs/install/release-notes/1-3-0] | Exact commit remains mandatory; Linux should use Zig/full surface behind adapter. |
-| `libghostty-vt` is enough for embedding | It supplies terminal/render state while consumer owns actual renderer/windowing and GUI features. [CITED: https://github.com/ghostty-org/ghostling] | Use full surface API for Phase 105 acceptance. |
-| Tag hash is source commit | `v1.3.1` is annotated; peeled source is `332b2aef…`. [VERIFIED: upstream Git] | Lock peeled commit and source checksum. |
-| Ambient Zig can build the pin | Host is 0.16.0; upstream requires 0.15.2. [VERIFIED: local CLI and upstream manifest] | Provision exact toolchain in the build. |
-| Terminal accessibility follows automatically from GTK | No complete cell-level native accessibility contract was found in the pinned surface/GTK code search. [VERIFIED: pinned source inspection] | Make truthful limitation documentation an acceptance artifact. |
+- `native:test:vt` compiles the exact pinned Zig module and feeds deterministic printable, Unicode, resize/reflow, and alternate-screen streams through a real `Terminal`/`Stream`/`RenderState` lifecycle.
+- `native:test:renderer` checks semantic drawing primitives with a deterministic bundled test font or controlled font fixture; pixel snapshots are secondary.
+- `native:test:widget` runs GTK realize, focus, allocation, snapshot, resize and unrealize under the repository's selected display harness.
+- `native:build-app` must create a named executable artifact; `native:smoke-app` launches it with deterministic in-memory terminal content, waits for window/widget readiness through a test hook, captures a frame or semantic readiness assertion, requests clean quit, and fails on crash, timeout, or leftover process.
+- The plan cannot complete if `native:smoke-app` only instantiates a headless struct. It must execute the same `main`/GTK application target a human will later launch.
 
-## Assumptions Log
+Target feedback latency: VT/renderer unit commands under 10 seconds each; widget and graphical smoke under 30 seconds each; the combined 105-05 focused gate under 60 seconds on a warm cache. If graphical startup cannot complete within 30 seconds, fail with captured stderr/environment diagnostics rather than wait indefinitely.
 
-| # | Claim | Risk if wrong / planner action |
-|---|-------|--------------------------------|
-| A1 | A sibling guard using an inherited private channel is acceptable as the D-12 implementation. | If packaging later forbids a second executable, keep the protocol/registry separable and revisit in Phase 108; do not weaken crash cleanup. |
-| A2 | JSON bytes are acceptable for the product ABI in Phase 105. | If performance profiling disproves this, retain opaque handles/ownership and add a later binary ABI version; fixture determinism matters more now. |
-| A3 | The proposed timeout/resource numbers fit typical local shells. | They are injectable defaults and require real-session tuning before lock-in. |
-| A4 | A macOS-compatible C harness/CI lane is available for CORE parity even though the macOS terminal host is deferred. | If no runner exists, record the Phase 107 hardware/CI dependency and at minimum compile the header with Clang cross checks; do not falsely claim runtime macOS proof. |
-| A5 | Full cell-level screen-reader exposure is absent or incomplete at the pin. | This is MEDIUM confidence; the implementation spike must inspect actual GTK accessibility nodes and document observed behavior rather than encode the assumption as fact. |
+### 105-06 validation: product-owned PTY terminal runtime
 
-## Open Questions (resolved for planning)
+Focused commands to establish during this plan:
 
-1. **Exact libghostty/Zig pair:** use peeled Ghostty `v1.3.1` commit `332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28` plus Zig `0.15.2`, both checksum-locked.
-2. **Linux embedding API:** use the full Zig/libghostty surface path with a GTK host; use `ghostty.h` as capability evidence/C-harness reference, not as permission to leak its symbols through the product ABI.
-3. **Persistence encoding:** versioned JSON with independent entry validation/quarantine and atomic owner-only writes.
-4. **Crash ownership:** sibling guard with inherited private channel and independently tracked PGIDs; no reconnection semantics.
-5. **Accessibility acceptance:** verified focus/input/IME/selection/clipboard/native host behavior plus an explicit limitations document; do not claim screen-reader cell parity without observed AT evidence.
+```bash
+bun run native:test:pty
+bun run native:test:runtime
+bun run native:smoke-terminal
+bun run native:test:lifecycle
+```
+
+- `native:test:pty` spawns a repository fixture child in a real PTY/session/process group and proves input/output, `TIOCSWINSZ`, partial nonblocking I/O, EOF, signal, reaping, descriptor inheritance allowlist, and absence proof.
+- `native:test:runtime` proves PTY output changes real VT/render state and normalized user input produces expected child bytes; it injects failures at every spawn/register/watch stage and asserts reverse-order unwind.
+- `native:smoke-terminal` launches the production GTK executable with a deterministic fixture shell command, waits for a unique prompt, sends input through the widget's production input path, observes expected rendered output, then quits and asserts zero owned children/PGIDs/GLib watches.
+- `native:test:lifecycle` retains the completed 105-04 real group/guard tests and adds real runtime close, child-exit, application-quit, and simulated client-crash paths.
+
+Target feedback latency: PTY and runtime tests under 20 seconds each; graphical command roundtrip under 45 seconds; focused plan gate under 90 seconds. All waits and close escalation use explicit bounded test-time durations.
+
+### 105-07 validation: rendering and interaction fidelity
+
+Focused commands to establish during this plan:
+
+```bash
+bun run native:test:renderer
+bun run native:test:input
+bun run native:test:interaction
+bun run native:smoke-terminal
+```
+
+- Renderer fixtures cover ASCII, CJK width, emoji, combining accents, fallback fonts, bold/italic, inverse, underline/strikethrough, palette/truecolor, cursor styles, selection, clipping, resize/reflow, and alternate-screen frames.
+- Input tables cover press/release/repeat, physical/logical key, consumed modifiers, Kitty protocol mode changes, shortcut arbitration, committed text, IME preedit/commit/cursor, local selection versus mouse reporting, scroll, system clipboard, primary selection, safe/bracketed paste, and async completion after teardown.
+- `native:test:interaction` realizes the real widget and drives GTK controllers/IM context/clipboard through a display harness wherever those APIs permit deterministic injection. It proves callbacks reach the production input adapter and late asynchronous completions are rejected by generation.
+- `native:smoke-terminal` remains in the plan gate so renderer/input unit success cannot regress actual command interaction.
+
+Target feedback latency: renderer/input unit suites under 15 seconds each; graphical interaction under 45 seconds; focused plan gate under 90 seconds. Large font matrices and optional image snapshots may have a separate extended lane, but the core complex-text cases remain in the fast suite.
+
+### 105-08 validation: real lifecycle, accessibility, and phase close
+
+Automated commands to establish or update:
+
+```bash
+bun run native:test:stress
+bun run native:test:accessibility
+bun run native:verify
+bun run native:smoke-terminal
+```
+
+- `native:test:stress` performs 100 real runtime/widget/PTY cycles after warmup and asserts zero production counters for surfaces/widgets, children, PGIDs, PTY FDs, GLib sources, and outstanding async operations after every cycle. It measures FD/thread/RSS trends using the documented thresholds. `GIT_STACKS_NATIVE_EXTENDED_STRESS=1` runs the 500-cycle lane.
+- `native:test:accessibility` verifies declared GTK role/name/description/help/focus/actions through GTK's test accessibility backend or tree inspection APIs and rejects claims absent from the implementation. It does not fabricate a cell text provider.
+- `native:verify` composes pin/source audit, core/ABI/restoration/ownership suites, VT/PTy/render/input/widget/runtime/lifecycle/accessibility suites, app build, and graphical terminal smoke.
+- Automated 105-08 feedback target: ordinary stress and verification under 5 minutes; fast non-stress native verification remains separately runnable under 2 minutes; extended stress is explicitly outside the inner loop and must report periodic progress.
+
+After all automated commands pass, run the human gates in this order:
+
+1. Launch the exact production artifact using the documented `native:run` command and record exact pin, distro, session, compositor, GTK/Pango/font stack, locale/IME, renderer backend, GPU/driver.
+2. Complete one primary real-session interaction matrix on the current graphical session: keyboard/rich protocol, mouse selection/reporting, Unicode/complex scripts, resize/reflow, alternate screen, system/primary clipboard, IME, focus, child exit, close, quit, and crash cleanup.
+3. Complete 25 real-compositor create/type/resize/destroy cycles and attach resource/process evidence. Do not ask for approval before this executable interaction is possible.
+4. Repeat on Wayland and X11 where each is supported; mark an unavailable backend with environment evidence rather than inventing a pass.
+5. Inspect GTK accessibility data with GTK Inspector/AT-SPI tooling and an assistive technology such as Orca. Record observed focus/input/actions and explicitly mark cell text/caret/selection semantics unsupported or unverified when absent.
+6. Only then request the blocking human approval signal. Any failed observation returns to the owning automated harness or creates a focused reproduction before another approval request.
+
+Final phase closure after human approval:
+
+```bash
+bun run native:verify
+bun run test
+bun run typecheck
+bun run test:deps
+bun run verify:gates
+```
+
+The validation artifact generated from this research must replace stale references to the invalidated old 105-05 full-surface host. Traceability must map CORE-01..05 to the retained model suites and TERM-01..05 to the new VT/PTy/render/input/widget/runtime/lifecycle/manual evidence above.
+
+## Threat model
+
+| Threat | Severity | Required mitigation/test |
+|---|---:|---|
+| Signaling unrelated/reused PGID | Critical | Retain birth-token/session validation and guard exclusions; race tests. |
+| Terminal output drives unsafe host action | High | Parse as data; bound OSC/title/URI/clipboard events; explicit allow/prompt policy. |
+| Paste control bytes execute commands | High | Ghostty safe-paste/bracketed-paste path, control-byte tests, no diagnostic content. |
+| Late GTK/GLib async callback uses freed runtime | High | Generation token, remove sources/controllers first, asynchronous clipboard tests. |
+| Parser/render race corrupts state | High | Single VT owner or locked immutable render-frame transfer; sanitizer/stress tests. |
+| Unbounded scrollback/render/write queue exhausts memory | High | Explicit caps/backpressure and resource trend tests. |
+| Child inherits privileged/unintended descriptors or environment | High | Close-on-exec allowlist, explicit environment construction, tests via fixture child. |
+| Accessibility claims mislead users | Medium | Observed matrix, exact pin/environment, unsupported semantics stated plainly. |
+
+ASVS web-auth categories are not applicable to this native terminal slice. Applicable security domains are process isolation, native memory/lifecycle safety, untrusted terminal protocol input, clipboard/input confidentiality, and trustworthy diagnostics.
+
+## Do not hand-roll
+
+- Do not hand-write VT parsing, terminal state, reflow, grapheme width, key protocol, or paste encoding; use pinned `ghostty-vt`.
+- Do not write a custom OpenGL/Vulkan renderer for the initial proof; use GTK snapshot/GSK/Pango behind a replaceable renderer seam.
+- Do not import Ghostty's private GTK application graph.
+- Do not duplicate ownership/guard/reducer/persistence work completed in 105-01..04.
+- Do not emulate IME by concatenating key text; use GTK's IM context lifecycle.
+- Do not represent accessibility by dumping the screen into a label.
+
+## Common pitfalls and planner checks
+
+1. **Compile-time API presence mistaken for runtime platform support:** delete the old full-surface smoke and test actual VT construction/stream/render state.
+2. **A window mistaken for a terminal:** first human gate requires command roundtrip through a real owned PTY.
+3. **Ghostling treated as production code:** it is an official architectural example but self-described MVP; use it to understand API flow, not as an acceptance bar. [CITED: https://github.com/ghostty-org/ghostling]
+4. **Text input mistaken for rich key input:** Kitty protocol needs native key/modifier/action fidelity.
+5. **Complex text assumed inherited from Ghostty:** product renderer must shape and test it itself.
+6. **GTK objects touched off-main-thread:** isolate parsing and transfer immutable frames/events.
+7. **Synthetic counters accepted as leak proof:** count real FDs, watches, processes, VT/render allocations, widgets, and resource trends.
+8. **PTY child visible before guard registration:** retain 105-04 registration-before-live invariant.
+9. **Cleanup outcome discarded when UI closes:** reducer must retain failed-cleanup even after widget destruction.
+10. **Human checkpoint has no runnable command:** planner must put executable construction before checkpoint.
+
+## Planning recommendation
+
+Preserve plans 105-01..04 as completed and replace 105-05 with at least four independently verifiable plans/waves:
+
+1. **105-05: VT pivot and runnable GTK frame** — delete full-surface assumptions, wire pinned Zig module, build executable, deterministic VT frame, real window/focus/resize.
+2. **105-06: Product-owned PTY terminal runtime** — spawn/guard/stream/input/resize/exit, shell command roundtrip, reducer integration.
+3. **105-07: Renderer and interaction fidelity** — Pango/GSK cell renderer, Unicode, selection/mouse, rich keys, clipboard, IME, alternate screen.
+4. **105-08: Lifecycle/accessibility evidence and closeout** — real-resource stress, compositor matrices, AT-SPI inspection, final gates and state/requirements reconciliation.
+
+Dependencies are sequential at the architecture boundary, but tests/docs within each plan may run in parallel. Mark only 105-08 non-autonomous. The executable must exist after 105-05 and a usable shell after 105-06, so failures are discovered before polishing and human evidence.
 
 ## Sources
 
-- [Ghostty 1.3 release notes](https://ghostty.org/docs/install/release-notes/1-3-0) — standalone Zig module, WIP C API, independent/unversioned libghostty release status, GTK/libadwaita floors.
-- [Ghostty source build documentation](https://ghostty.org/docs/install/build) — Ghostty 1.3.x requires Zig 0.15.2.
-- [Ghostty 1.3.1 release notes](https://ghostty.org/docs/install/release-notes/1-3-1) — selected stable desktop patch release and date.
-- [Ghostty repository](https://github.com/ghostty-org/ghostty) — current libghostty scope/status and official examples direction.
-- [Ghostling](https://github.com/ghostty-org/ghostling) — official minimum C consumer, libghostty-vt responsibilities, host input limitations, and consumer-owned GUI features.
-- Pinned Ghostty source at `332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28`: `build.zig.zon`, `include/ghostty.h`, `src/Surface.zig`, `src/termio/Exec.zig` — exact toolchain, surface API, PTY ownership, group teardown behavior. [VERIFIED: local source checkout]
-- Repository `.planning/research/{STACK,ARCHITECTURE,PITFALLS,SUMMARY}.md`, Phase 104 fixtures/implementation, and Phase 105 context — product boundary and local conventions. [VERIFIED: codebase inspection]
+- Ghostty repository/libghostty status: https://github.com/ghostty-org/ghostty
+- Ghostty 1.3 release/libghostty lifecycle: https://ghostty.org/docs/install/release-notes/1-3-0
+- Ghostty exact Zig compatibility: https://ghostty.org/docs/install/build
+- Official Ghostling VT consumer example: https://github.com/ghostty-org/ghostling
+- GTK custom rendering: https://docs.gtk.org/gtk4/class.Snapshot.html
+- GTK accessibility: https://docs.gtk.org/gtk4/section-accessibility.html
+- GTK IM context: https://docs.gtk.org/gtk4/class.IMContext.html
+- Pinned source: `$HOME/.cache/git-stacks/native/ghostty-332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28/src/lib_vt.zig`, `src/terminal/render.zig`, and `include/ghostty/vt*.h`
+- Local invalidation evidence: `.planning/spikes/004-a-upstream-linux-embedding-api/README.md`, `.planning/spikes/004-b-pinned-internal-gtk-integration/README.md`
 
-## Research Confidence
+## Research confidence and open validation
 
-| Area | Confidence | Reason |
-|------|------------|--------|
-| Exact source/toolchain | HIGH | Tag object, peeled commit, manifest, official build matrix, and local environment verified. |
-| Reducer/ABI architecture | HIGH | Locked decisions and existing Phase 104 fixture contract support a pure opaque boundary. |
-| PTY/process ownership | HIGH | Locked semantics plus pinned upstream implementation and POSIX primitives establish the required design; guard still needs implementation proof. |
-| GTK interaction surface | MEDIUM-HIGH | Pinned API exposes required seams, but real GTK/libghostty host has not yet been built in this repo. |
-| Accessibility | MEDIUM | Honest gap is verified by source search, but observed AT behavior must come from the implementation spike. |
+- **HIGH:** full `ghostty_surface_*` Linux route invalid; private GTK route rejected; `ghostty-vt` Zig module available at exact pin; completed core/ownership work is reusable.
+- **HIGH:** an actual executable and PTY roundtrip are prerequisites to human approval.
+- **MEDIUM:** GTK snapshot/Pango is the best initial renderer. It is based on official GTK architecture and minimizes implementation scope, but must be validated for terminal-scale performance and complex shaping during 105-05/07.
+- **MEDIUM:** precise pinned `Terminal`/`Stream` construction calls and build-module wiring should be codified by a compile spike in the first task because upstream explicitly says API signatures are unstable.
+- **Open validation:** GTK Zig binding strategy/build linkage, exact Pango run segmentation, and whether the pinned render state exposes every desired decoration/event without a narrow adapter extension. These are implementation questions, not reasons to return to full-surface or private-GTK approaches.
 
-## What Might Have Been Missed
+## What might have been missed
 
-- The pinned full libghostty Zig module may require build integration patches not visible from header/source inspection; the first native task must be a clean compile spike and preserve patches explicitly if unavoidable.
-- GPU behavior differs across Wayland/X11/drivers; headless tests cannot establish real interaction or leak acceptance.
-- Descendants that deliberately escape the session/process group cannot be proven owned by PGID alone. The implementation must document whether such daemonization is out of ownership scope or add cgroup/subreaper controls without silently overstating cleanup.
-- The exact GTK accessibility tree may be created dynamically by runtime code not found through the source term search; inspect it with platform tools before finalizing TERM-05 documentation.
+- Advanced image protocols, hyperlinks, and shell-integration events are not explicit Phase 105 acceptance items; the plan should record their support truth rather than silently expand scope.
+- Locale/font availability makes pixel snapshots nondeterministic; semantic draw-list tests are the primary renderer gate.
+- Wayland may be the only supported session on some hosts. D-13 requires X11 only where supported; record unavailable lanes honestly.
+- A fully navigable terminal accessibility text model is larger than this phase and remains explicitly non-blocking under D-16, but focus/input semantics are blocking.
 
 ---
-
 *Phase: 105-shared-native-model-and-terminal-foundation*
-*Research completed: 2026-07-11*
+*Research refreshed: 2026-07-11 after Spike 004 invalidation*

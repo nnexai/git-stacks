@@ -33,7 +33,7 @@
 
 - [ ] **TERM-01**: The Linux client embeds one interactive libghostty terminal with correct keyboard, mouse, Unicode, resize, reflow, alternate-screen, clipboard, and IME behavior.
 - [ ] **TERM-02**: Each terminal surface exclusively owns one PTY and process group with explicit exit, close, application-quit, and crash cleanup semantics.
-- [x] **TERM-03**: libghostty and its compatible Zig toolchain are exactly pinned behind a narrow adapter with upgrade smoke tests.
+- [ ] **TERM-03**: libghostty and its compatible Zig toolchain are exactly pinned behind a narrow adapter with upgrade smoke tests.
 - [ ] **TERM-04**: Repeated terminal creation, resize, destruction, and GPU view lifecycle do not leak surfaces or leave orphaned processes.
 - [ ] **TERM-05**: The terminal host exposes an honest native accessibility contract and documents any upstream limitations.
 
@@ -105,7 +105,7 @@
 | CORE-05 | Phase 105 | Complete |
 | TERM-01 | Phase 105 | Pending |
 | TERM-02 | Phase 105 | Pending |
-| TERM-03 | Phase 105 | Complete |
+| TERM-03 | Phase 105 | Pending |
 | TERM-04 | Phase 105 | Pending |
 | TERM-05 | Phase 105 | Pending |
 | LNX-01 | Phase 106 | Pending |

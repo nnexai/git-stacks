@@ -75,13 +75,16 @@ Wave 5 *(verification gap closure)*:
   4. Closing, exiting, quitting, or crashing a terminal surface cleans up its exclusive PTY and process group, and repeated create/resize/destroy cycles leave no orphaned processes or leaked surfaces.
   5. The pinned libghostty/Zig pair is reproducible behind the product adapter, upgrade smoke tests detect incompatibility, and the terminal exposes an honest documented native accessibility contract.
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/8 plans executed
 
 - [x] 105-01-PLAN.md
 - [x] 105-02-PLAN.md
 - [x] 105-03-PLAN.md
-- [ ] 105-04-PLAN.md
+- [x] 105-04-PLAN.md
 - [ ] 105-05-PLAN.md
+- [ ] 105-06-PLAN.md
+- [ ] 105-07-PLAN.md
+- [ ] 105-08-PLAN.md
 
 Wave 1:
 
@@ -93,15 +96,27 @@ Wave 2 *(blocked on Wave 1 completion)*:
 
 Wave 3 *(blocked on Wave 2 completion)*:
 
-- [ ] 105-03 — Build the deterministic shared reducer and truthful session persistence
+- [x] 105-03 — Build the deterministic shared reducer and truthful session persistence
 
 Wave 4 *(blocked on Wave 3 completion)*:
 
-- [ ] 105-04 — Enforce exclusive PTY/process-group ownership and crash cleanup
+- [x] 105-04 — Enforce exclusive PTY/process-group ownership and crash cleanup
 
 Wave 5 *(blocked on Wave 4 completion)*:
 
-- [ ] 105-05 — Host the full Linux libghostty surface and prove interaction, stress, and accessibility
+- [ ] 105-05 — Pivot to pinned ghostty-vt and ship a runnable GTK frame
+
+Wave 6 *(blocked on Wave 5 completion)*:
+
+- [ ] 105-06 — Connect the product-owned PTY terminal runtime and real shell roundtrip
+
+Wave 7 *(blocked on Wave 6 completion)*:
+
+- [ ] 105-07 — Complete renderer and interaction fidelity
+
+Wave 8 *(blocked on Wave 7 completion; final human evidence)*:
+
+- [ ] 105-08 — Prove real lifecycle/accessibility evidence and close Phase 105
 
 **UI hint**: yes
 
@@ -161,6 +176,6 @@ Wave 3 *(blocked on Wave 2 completion)*:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
-| 105. Shared Native Model and Terminal Foundation | 3/5 | In Progress|  |
+| 105. Shared Native Model and Terminal Foundation | 4/8 | In Progress|  |
 | 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
 | 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |

@@ -1,317 +1,113 @@
-# Phase 105: Shared Native Model and Terminal Foundation - Pattern Map
+# Phase 105: Shared Native Model and Terminal Foundation — Corrective Pattern Map
 
-**Mapped:** 2026-07-11
-**Files analyzed:** 24 new/modified files or file groups
-**Analogs found:** 20 / 24 (the GTK/libghostty host, C ABI, Zig build, and guard process have no repo-native implementation analog)
+**Refreshed:** 2026-07-11
+**Authority:** Use with refreshed `105-RESEARCH.md`, `105-VALIDATION.md`, and Spikes 004a/004b. This file supersedes the invalid full-surface Linux pattern map.
+
+## Corrected Architecture
+
+```text
+GtkApplication / GtkWindow
+  -> terminal_widget.zig (custom focusable widget, snapshot, controllers, accessibility)
+       -> renderer.zig (detached RenderFrame -> Pango/GSK/GtkSnapshot)
+       -> input.zig (keys, IM context, mouse, selection, clipboards)
+       -> runtime.zig (generation, redraw, event and lifecycle composition)
+            -> vt_adapter.zig (sole pinned ghostty-vt import)
+            -> pty.zig (product-owned PTY, child session and process group)
+            -> ownership.zig + guard.zig (retained registration and cleanup truth)
+            -> reducer.zig + persistence.zig (retained product state only)
+```
+
+The pinned Zig `ghostty-vt` module supplies terminal parsing/state, resize/reflow, RenderState, selection primitives, and key/paste encoding. It does not supply GTK windowing, drawing, PTY ownership, IME, clipboard, or accessibility. The product owns those layers.
 
 ## File Classification
 
-| New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
-|---|---|---|---|---|
-| `native/build.zig`, `native/build.zig.zon` | config | batch | `package.json` | role-match |
-| `native/deps/ghostty.lock` | config | file-I/O | `scripts/verify-prereqs.ts` | role/data-flow match |
-| `native/include/git_stacks_native_v1.h` | provider | request-response | `src/lib/service/contract.ts` | boundary-match; language differs |
-| `native/core/identity.zig` | model | transform | `src/lib/service/contract.ts`, `src/lib/service/identity.ts` | exact domain match |
-| `native/core/contract.zig` | model | transform | `src/lib/service/contract.ts` | exact domain match |
-| `native/core/model.zig`, `native/core/reducer.zig` | model/service | event-driven | `src/lib/service/event-broker.ts`, `src/lib/service/event-journal.ts` | data-flow match |
-| `native/core/persistence.zig` | store | file-I/O | `src/lib/service/snapshot.ts`, `src/lib/service/identity.ts` | exact persistence match |
-| `native/core/abi.zig` | provider | request-response | `src/lib/service/contract.ts` | boundary-match; no FFI analog |
-| `native/terminal/adapter.zig` | service | streaming/event-driven | none local; pinned `ghostty.h` from research | external exact API |
-| `native/terminal/ownership.zig` | service | event-driven | `src/lib/operation-runner.ts`, `src/lib/lifecycle.ts` | lifecycle/cleanup match |
-| `native/terminal/guard.zig` | service | streaming/event-driven | `src/service/main.ts`, `src/lib/lifecycle.ts` | partial; separate guard is new |
-| `native/terminal/diagnostics.zig` | utility | event-driven | `src/lib/platform-exec.ts`, `src/lib/service/contract.ts` | error-contract match |
-| `native/linux/app.zig`, `native/linux/terminal_host.zig` | component/provider | streaming/event-driven | none local; pinned `ghostty.h` from research | external exact API |
-| `native/tests/fixtures/**` | test fixture | file-I/O | `tests/fixtures/service-v1/*.json` | exact source-of-truth match |
-| `native/tests/abi_harness.c` | test | request-response | `tests/service/security.test.ts` | boundary-negative-test match |
-| `native/tests/reducer_test.zig` | test | event-driven | `tests/service/events.test.ts` | data-flow match |
-| `native/tests/persistence_test.zig` | test | file-I/O | `tests/service/security.test.ts`, service store tests | role/data-flow match |
-| `native/tests/ownership_test.zig`, `native/tests/lifecycle_stress.zig` | test | event-driven/batch | `tests/service/operations.test.ts`, `tests/service/events.test.ts` | lifecycle-test match |
-| `scripts/verify-native.ts` (implied) | utility/gate | batch | `scripts/verify-prereqs.ts`, `scripts/verify-gates.ts` | exact gate pattern |
-| `package.json` | config | batch | existing `package.json` scripts | exact |
-| `.github/workflows/*` native CI lane (implied) | config | batch | existing repository CI workflows | role-match |
-| Phase 105 real-session runbook (implied) | test/documentation | manual event-driven | no product analog | new proof artifact |
-| Phase 105 accessibility limitation note (implied) | documentation | transform | no product analog | new contract artifact |
+| File or group | Pattern and responsibility |
+|---|---|
+| `native/terminal/vt_adapter.zig` | Sole production Ghostty import; owns Terminal, Stream, RenderState, encoding and bounded product frames. |
+| `native/terminal/pty.zig` | POSIX PTY/session/process-group acquisition, bounded nonblocking I/O, winsize, reap and absence proof. |
+| `native/terminal/runtime.zig` | One-owner PTY↔VT composition, immutable frame transfer, generation-safe GLib sources, reducer events. |
+| `native/terminal/{ownership,guard,diagnostics}.zig` | Retained Phase 105-04 exclusive ownership, birth-token validation, crash cleanup, redacted diagnostics. |
+| `native/linux/terminal_widget.zig` | Real custom GTK type: focus, measure/allocation, snapshot, controllers, accessible properties, teardown. |
+| `native/linux/renderer.zig` | Replaceable renderer seam; initial GtkSnapshot/GSK/Pango implementation with bounded caches. |
+| `native/linux/input.zig` | Shortcut arbitration, native key identity, GtkIMContext, mouse modes/selection, system/primary clipboards. |
+| `native/linux/app.zig` | Production `main`, GtkApplication, one window and widget; shared by `native:run` and graphical smokes. |
+| `native/build.zig` | Exact pinned Zig module declaration, production executable, and focused test targets. |
+| `scripts/verify-native.ts` | Exact-pin/source audit, graphical prerequisite diagnostics, bounded production smokes and gate composition. |
+| `native/tests/**` | Focused VT, PTY, runtime, renderer, input, widget, stress and accessibility evidence using production types. |
 
-## Pattern Assignments
+## Patterns to Preserve from Completed Plans
 
-### `native/core/identity.zig` and `native/core/contract.zig` (model, transform)
-
-**Analog:** `src/lib/service/contract.ts`
-
-**Strict versioned contract pattern** (lines 3-15, 22-33):
-
-```typescript
-export const ProtocolVersionSchema = z.literal("v1")
-export const RequestIdSchema = z.string().regex(/^req_[A-Za-z0-9_-]{16,}$/)
-export const EntityIdSchema = z.string().uuid()
-export const RevisionSchema = CursorSchema
-
-export const ApiErrorSchema = z.strictObject({
-  code: ErrorCodeSchema,
-  message: z.string().min(1),
-  retryable: z.boolean().optional(),
-  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
-})
-const EnvelopeBase = { protocol: ProtocolVersionSchema, request_id: RequestIdSchema }
-```
-
-Copy the semantics, not Zod: validate the literal protocol version, opaque identity shapes, decimal revision strings, strict known fields, and structured errors at the Zig boundary. Preserve Phase 104 JSON field names so fixture drift is mechanically detectable.
-
-**Tagged-state pattern** (lines 119-136):
-
-```typescript
-export const OperationSchema = z.discriminatedUnion("state", [
-  z.strictObject({ operation_id: OperationIdSchema, state: z.literal("accepted"), accepted_at: TimestampSchema }),
-  z.strictObject({ operation_id: OperationIdSchema, state: z.literal("running"), accepted_at: TimestampSchema, started_at: TimestampSchema, progress: OperationProgressSchema }),
-  OperationResultSchema, OperationFailureSchema,
-])
-export const ServiceEventSchema = z.discriminatedUnion("type", [
-  z.strictObject({ ...EventBase, type: z.literal("operation"), operation: OperationSchema }),
-  // ... attention and control variants
-])
-```
-
-Represent connection, restoration, and surface lifecycle as tagged unions. Invalid combinations must be unrepresentable or rejected, rather than normalized into an apparently healthy state.
-
----
-
-### `native/core/model.zig` and `native/core/reducer.zig` (model/service, event-driven)
-
-**Analogs:** `src/lib/service/event-broker.ts`, `src/lib/service/event-journal.ts`
-
-**Ordered, idempotent event admission** (`event-broker.ts` lines 27-44):
-
-```typescript
-enqueue(event: ServiceEvent): boolean {
-  if (this.closed || BigInt(event.sequence) <= BigInt(this.lastDelivered)) return true
-  if (this.queue.some((item) => item.event.sequence === event.sequence)) return true
-  // bounded admission, then deliver or enqueue
-}
-```
-
-Reducer actions that carry revisions/sequences should be deterministic, reject or inertly diagnose duplicates/old data, and never synthesize missing authoritative state.
-
-**Explicit replay-gap outcome** (`event-journal.ts` lines 19-21, 125-134):
-
-```typescript
-export type ReplayResult =
-  | { kind: "events"; events: ServiceEvent[] }
-  | { kind: "replay_gap"; requested: string; earliest_cursor: string; latest_cursor: string; snapshot_revision: string }
+### Product boundary and deterministic state
 
-if (this.records.length && requested < earliest - 1n) {
-  return { kind: "replay_gap", requested: after, earliest_cursor: earliest.toString(), latest_cursor: latest.toString(), snapshot_revision: await this.snapshotRevision() }
-}
-```
+Keep `native/core/**` and `native/include/git_stacks_native_v1.h` platform-neutral. The public ABI exchanges versioned JSON bytes and opaque product handles; no Ghostty, GTK, Pango, PID/PGID, FD, or platform layout crosses it. The reducer remains pure `{ state, effects }`; adapters perform I/O. Retain explicit stale, refresh-required, incompatible, ended, quarantined, and failed-cleanup outcomes.
 
-Use the same explicit-outcome style for `stale`, `refresh_required`, `incompatible`, quarantined restoration entries, and failed cleanup. Reducer output should be `{ state, effects }`; effects are tagged data and adapters alone perform I/O.
-
----
-
-### `native/include/git_stacks_native_v1.h` and `native/core/abi.zig` (provider, request-response)
+### Atomic presentation-only persistence
 
-**Analog:** `src/lib/service/contract.ts` (product boundary); no local FFI analog.
+Retain the owner-only `0700` directory, `0600` file, symlink refusal, exclusive temporary file, validation, fsync and atomic rename pattern. Persist presentation context only. Restored entries are ended; relaunch creates a new identity and predecessor lineage.
 
-Apply the contract conventions above to an opaque C ABI: version-suffixed symbols, opaque model handles, fixed-width status/scalar types, UTF-8 byte slices, explicit length validation, structured returned error bytes, and a matching product-owned free for every returned allocation. Do not export Zig structs, enums, allocators, GTK types, or libghostty handles.
+### Acquisition and teardown truth
 
-Use Phase 104's success/error envelope separation (`contract.ts` lines 30-33) as the response model:
+Acquire forward and release in reverse. A terminal becomes live only after PTY, child PID/PGID/birth token, guard registration, VT/runtime, and event source setup succeed. Close stops input, requests graceful exit, performs bounded whole-group escalation, reaps and proves absence, unregisters the guard, then emits ended. Unproven absence emits `failed_cleanup` and keeps visible state.
 
-```typescript
-export const ErrorEnvelopeSchema = z.strictObject({ ...EnvelopeBase, ok: z.literal(false), error: ApiErrorSchema })
-export const successEnvelope = <T extends z.ZodType>(data: T) => z.strictObject({ ...EnvelopeBase, ok: z.literal(true), data })
-```
+### Exact dependency provenance
 
-The C harness must cover null handle, null pointer/nonzero length, oversized input, invalid UTF-8/JSON, ABI mismatch, double-destroy policy, allocation/free, and post-destroy rejection.
+Retain Zig 0.15.2 and peeled Ghostty commit `332b2aefc6e72d363aa93ab6ecfc86eeeeb5ed28`, including tag/source/checksum verification and ordinary offline builds. Replace the obsolete C full-surface compile probe with a construction/run probe over the pinned Zig VT module. Pin advancement is dedicated D-15 compatibility work.
 
----
+## New Native Patterns
 
-### `native/core/persistence.zig` (store, file-I/O)
+### Detached render frames
 
-**Analogs:** `src/lib/service/snapshot.ts`, `src/lib/service/identity.ts`
+The VT owner updates RenderState and produces a bounded product `RenderFrame`. GTK snapshot consumes only that detached frame; it never traverses mutable terminal state. Reset unusually retained RenderState capacity and renderer caches under explicit thresholds.
 
-**Owner-only atomic replacement** (`snapshot.ts` lines 63-87):
+### GTK snapshot rendering
 
-```typescript
-mkdirSync(join(this.path, ".."), { recursive: true, mode: 0o700 })
-const release = acquireFileLock(this.path)
-try {
-  // validate current content
-  const temporary = `${this.path}.${process.pid}-${randomUUID()}.tmp`
-  const fd = openSync(temporary, "wx", 0o600)
-  try {
-    writeFileSync(fd, `${JSON.stringify(next)}\n`, "utf8")
-    fsyncSync(fd)
-  } finally { closeSync(fd) }
-  renameSync(temporary, this.path)
-} finally { release() }
-```
+The initial renderer uses GtkSnapshot/GSK/Pango behind a replaceable renderer interface. Derive grid size from allocation and monospace metrics; shape contiguous style/font runs with fallback, place them on the cell grid, and clip rows/cells. Render backgrounds, glyphs, decorations, selection, cursor and visible focus. Measure performance before considering a lower-level renderer.
 
-**Symlink refusal and validate-before/after-write** (`identity.ts` lines 30-56):
+### Rich input and IME
 
-```typescript
-if (lstatSync(path).isSymbolicLink()) throw new Error(`Refusing identity migration through symlink: ${path}`)
-const current = validatedWorkspace(path)
-// construct and validate next value
-renameSync(tmp, path)
-return validatedWorkspace(path)
-```
+Arbitration order is product/window shortcuts, GtkIMContext filtering, rich key encoding, then committed text when appropriate. Preserve physical/logical key, action, repeat, modifiers, consumed modifiers and composing state. Preedit is a host overlay and reaches the PTY only on commit. Async clipboard completion carries a generation token and clipboard bytes never enter diagnostics.
 
-Persist only the presentation fields allowed by D-05. Parse entries independently; valid entries continue, while invalid/missing-identity entries produce bounded quarantine records containing index/hash/error code. Never persist PID, PGID, PTY path, argv, environment, token, or liveness. Every restored entry is `ended`; relaunch allocates a new ID and records predecessor lineage.
+### Production executable as test subject
 
----
+`native:run`, `native:smoke-app`, and `native:smoke-terminal` use the same `app.zig` production main. Smokes may inject narrow fixture configuration/readiness hooks, but cannot construct a parallel headless app. All graphical waits are bounded and missing display/GTK/renderer prerequisites fail with captured diagnostics.
 
-### `native/terminal/ownership.zig` and `native/terminal/guard.zig` (service, event-driven)
+### Real resource evidence
 
-**Analogs:** `src/lib/operation-runner.ts`, `src/lib/lifecycle.ts`; the independent sibling guard itself is new.
+Stress cycles the production widget, VT, PTY, child/group, FDs, GLib sources, callbacks and caches. Synthetic counters may instrument those objects but cannot replace them. Exact ownership counters return to zero every cycle; FD/thread/RSS use documented bounded trend checks.
 
-**Commit ownership only after success** (`operation-runner.ts` lines 88-105):
+### Honest accessibility
 
-```typescript
-try {
-  await forward()
-} catch (err) {
-  forwardError = err instanceof Error ? err.message : String(err)
-  await rollback()
-  throw err
-}
-stack.push({ name, undo })
-```
+Expose only implemented custom-widget role, name, description/help, focus and actions. Do not synthesize a screen-buffer accessible label or claim cell text/caret/selection semantics without a real provider. Automated declaration checks precede GTK Inspector/AT-SPI/assistive-technology observation.
 
-Creation must not enter `live` until surface, PTY, child PID/PGID, and guard registration succeed. Teardown must be idempotent and preserve the original failure while collecting cleanup diagnostics; unlike generic best-effort rollback, unproven process absence must become visible `failed_cleanup`.
+## Retain / Replace / Remove
 
-**Injectable process seam** (`lifecycle.ts` lines 21-56):
+### Retain
 
-```typescript
-export type SpawnHandle = {
-  exited: Promise<number>
-  stdout: ReadableStream<Uint8Array> | null
-  stderr: ReadableStream<Uint8Array> | null
-}
-export const _exec = { spawn: (args: { cmd: string[]; cwd: string; env: Record<string, string>; stdout: "inherit" | "pipe"; stderr: "inherit" | "pipe" }): SpawnHandle => { /* ... */ } }
-```
+- Completed 105-01 through 105-04 plans, summaries, core/ABI/model/persistence, lock/setup, ownership/guard/diagnostics, and their tests.
+- `scripts/verify-native.ts` provenance and public-boundary machinery.
+- Stress threshold math and evidence vocabulary only.
+- Acceptance/accessibility documents as uncompleted templates until real observation.
 
-Make clock, sleep/polling, signal, reap, `/proc` birth-token lookup, spawn, and guard-channel operations injectable. Validate that a candidate PGID differs from client and guard groups before registration/signaling. The guard receives registrations only through a private inherited channel; EOF means client death and triggers bounded group teardown.
+### Replace
 
----
+- `native/terminal/adapter.zig` with `native/terminal/vt_adapter.zig` and remove the old file when imports migrate.
+- Synthetic `native/linux/{app,terminal_host}.zig` with production app/widget/renderer/input/runtime modules.
+- Recorded-event `terminal_host_test.zig` with real VT, PTY, runtime and GTK production-type tests.
+- Full-surface build/audit vocabulary with exact pinned VT module construction and compatibility checks.
+- Synthetic stress body with production resource cycles.
 
-### `native/terminal/diagnostics.zig` (utility, event-driven)
+### Remove
 
-**Analogs:** `src/lib/platform-exec.ts`, `src/lib/service/contract.ts`
+- All production/test hosting assumptions based on the Apple-only rendered-surface C API.
+- Fake nullable surface state, fake graphics readiness, event recorders treated as interaction, and parallel headless terminal implementations.
+- Private Ghostty GTK imports, maintained forks, and standalone Ghostty process composition.
+- Documentation implying a hosted terminal or human approval before the production executable and real PTY smoke pass.
 
-**Typed failure carrying result evidence** (`platform-exec.ts` lines 1-12):
+## Verification Pattern
 
-```typescript
-export class PlatformCommandError extends Error {
-  constructor(readonly command: string, readonly result: PlatformCommandResult) {
-    super(`${command} failed (exit ${result.exitCode})${result.stderr ? `: ${result.stderr.trim()}` : ""}`)
-  }
-}
-```
+1. 105-05: `native:test:vt`, renderer/widget tests, `native:build-app`, and `native:smoke-app` against production main.
+2. 105-06: real PTY and runtime tests, retained lifecycle tests, and `native:smoke-terminal` command roundtrip.
+3. 105-07: renderer/input/interaction suites while retaining the real terminal smoke.
+4. 105-08: production-resource stress, accessibility declarations, complete native gate, then real Wayland/X11 where supported and AT evidence.
 
-Diagnostics should retain stable codes plus bounded, redacted details. Never include argv, environment, bearer tokens, clipboard content, or unrestricted terminal bytes. Unknown negotiated optionals are stored as inert diagnostic data and cannot emit effects.
-
----
-
-### `native/terminal/adapter.zig` and `native/linux/terminal_host.zig` (service/component, streaming)
-
-**Analog:** none in this repository. Use the exact pinned `include/ghostty.h` API identified by `105-RESEARCH.md`; keep it behind `adapter.zig`, the only file allowed to import libghostty details.
-
-The host lifecycle must follow: realize graphics resources; create only after host prerequisites exist; resize with content scale and dimensions; route focus to GTK IM plus libghostty; route key/text/preedit/mouse/clipboard through explicit adapter calls; derive IME cursor location from the surface; make callbacks inert via generation/liveness token; disconnect controllers; join/stop work; free surface/GPU resources during unrealize. Product/native shortcuts get first arbitration, then sufficiently rich terminal key events are forwarded.
-
-Do not copy OpenTUI patterns here: it is a separate adapter and cannot establish GTK/libghostty lifecycle correctness.
-
----
-
-### `native/build.zig`, `native/build.zig.zon`, and `native/deps/ghostty.lock` (config, batch/file-I/O)
-
-**Analogs:** `package.json`, `scripts/verify-prereqs.ts`
-
-**Fail-closed prerequisite audit** (`verify-prereqs.ts` lines 19-57, 81-95):
-
-```typescript
-function collectPrereqProblems(): PrereqProblem[] {
-  const problems: PrereqProblem[] = []
-  if (!existsSync(join(ROOT, "tests/e2e-inventory.ts"))) {
-    problems.push({ surface: "inventory", message: "missing tests/e2e-inventory.ts" })
-  }
-  return problems
-}
-// print all scoped problems, then exit nonzero; otherwise run validation tests
-```
-
-Record Ghostty tag object and peeled source commit separately, enforce HEAD/source checksum, and provision Zig 0.15.2 from a repo-controlled version+checksum path. Ambient Zig 0.16.0 must fail the native prerequisite check rather than silently build. Add minimum GTK/libadwaita CI as well as the current-host lane.
-
----
-
-### `native/tests/**`, `scripts/verify-native.ts`, and package/CI wiring (tests/gate, batch)
-
-**Analogs:** `tests/service/events.test.ts`, `tests/service/security.test.ts`, `scripts/verify-gates.ts`, `package.json`
-
-**Deterministic injected lifecycle tests** (`tests/service/operations.test.ts` lines 4-19):
-
-```typescript
-const callbacks: Array<() => void> = []
-let exited = 0
-const lifecycle = createIdleLifecycle({
-  idleMs: 5,
-  setTimer: (fn: () => void) => { callbacks.push(fn); return callbacks.length as never },
-  clearTimer: () => {},
-  onIdle: () => { exited += 1 },
-})
-```
-
-**Reverse-order cleanup for integration tests** (`tests/service/events.test.ts` lines 10-11):
-
-```typescript
-const cleanup: Array<() => void | Promise<void>> = []
-afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
-```
-
-**Security-negative assertions** (`tests/service/security.test.ts` lines 32-49, 66-74): enumerate malformed shapes, assert one stable rejection, and assert serialized contexts contain no secret.
-
-Use Phase 104 fixtures in `tests/fixtures/service-v1/` as the canonical corpus; generate/copy them through one checked workflow and consume the same bytes from Bun, Zig, and Linux C, with strict public-header C/Clang portability checks for later Phase 107 macOS execution. Add the native gate as an explicit `package.json` script beside `verify:gates` (lines 32-46), and make the release gate report missing/invalid artifacts using the collected-report style in `scripts/verify-gates.ts` lines 17-43 and 179-208.
-
-Automated layers must include reducer transitions, ABI negatives/ownership, mixed-entry persistence, real process-group/guard crash paths, GTK lifecycle, and warm-up/trend stress checks. The documented real-session artifact must cover Wayland/X11 where supported, keyboard, mouse, Unicode/graphemes, resize/reflow, alternate screen, both clipboards, IME preedit/commit/cursor, focus, exit, repeated GPU lifecycle, and accessibility inspection.
-
-## Shared Patterns
-
-### Trust-boundary validation
-
-**Source:** `src/lib/service/contract.ts` lines 22-33 and 85-101.
-
-Apply strict validation before state mutation at JSON fixture, ABI, persistence, and guard-command boundaries. Return structured, versioned errors. Unknown optional negotiated data is the one deliberate exception to strict rejection: preserve it inertly with degraded-compatibility diagnostics, but never execute it.
-
-### Explicit outcomes over coercion
-
-**Source:** `src/lib/service/event-journal.ts` lines 19-21 and 125-134; `src/lib/operation-runner.ts` lines 32-35.
-
-Use tagged outcomes for replay gaps, stale/refetch-required state, incompatible protocol, quarantined restoration entries, ended surfaces, and failed cleanup. Preserve last valid snapshot only for stale/refresh-required; incompatible state clears service-derived truth while retaining local presentation metadata.
-
-### Atomic owner-only persistence
-
-**Source:** `src/lib/service/snapshot.ts` lines 63-87; `src/lib/service/identity.ts` lines 34-56.
-
-Use mode `0700` directories, `0600` files, exclusive temporary creation, fsync, atomic rename, symlink refusal, and validation. Add directory fsync where needed for the native implementation's crash contract.
-
-### Injectable lifecycle boundaries
-
-**Source:** `src/lib/lifecycle.ts` lines 21-56; `tests/service/operations.test.ts` lines 4-19.
-
-All time, process, signal, polling, and callback behavior needs deterministic seams. Production defaults remain bounded; tests advance fake time and inject failures without sleeping.
-
-### Cleanup ordering and truth
-
-**Source:** `src/lib/operation-runner.ts` lines 70-105; `tests/service/events.test.ts` lines 10-11.
-
-Acquire resources forward, release in reverse order, continue collecting cleanup errors, and preserve the primary failure. For owned processes, cleanup is not complete until absence is proved; otherwise retain `failed_cleanup` and diagnostics.
-
-### Boundary isolation
-
-Phase 104 remains the canonical service contract. The Zig reducer consumes its fixtures; it does not port workspace business logic. `terminal/adapter.zig` alone imports libghostty; GTK/libadwaita types stay in `native/linux`; the exported C header exposes neither. Phase 105 proves Linux execution and compile portability only; Phase 107 proves actual macOS ABI/model parity and native integration.
-
-## Planner Warnings
-
-- There is no existing native tree, Zig convention, GTK component, libghostty adapter, C ABI, or crash guard to imitate. Treat the research pin/API and these product boundaries as specifications, not optional suggestions.
-- Do not use `libghostty-vt` as the terminal foundation, do not float the Ghostty/Zig versions, and do not record the annotated tag object as the source commit.
-- Do not infer restored liveness from persisted OS identifiers, reuse a surface identity for relaunch, or delete a surface record when process cleanup is unproven.
-- Headless draw/create tests are necessary but cannot replace the required real-session interaction and accessibility proof.
-- RSS need only return to a bounded warmed baseline/trend; owned surface/process/PGID counters must return exactly to zero.
+No human checkpoint is valid until `native:run` exists and both graphical production smokes pass.
