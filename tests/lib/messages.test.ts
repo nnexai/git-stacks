@@ -5,7 +5,7 @@ import { useIsolatedConfig } from "../helpers"
 
 const isolated = useIsolatedConfig("messages-test")
 
-const { appendMessage, listMessages, listMessagesSync, clearMessages, pushToSocket } = await import("@/lib/messages")
+const { appendMessage, listMessages, listMessagesSync, clearMessages, pushToSocket, configureAttentionPublication } = await import("@/lib/messages")
 
 afterAll(() => isolated.cleanup())
 
@@ -26,6 +26,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  configureAttentionPublication(undefined)
   // clean up only test-prefixed files
   const { readdirSync } = require("node:fs")
   const messagesDir = join(isolated.configDir, "messages")
@@ -41,6 +42,30 @@ afterEach(() => {
 })
 
 describe("appendMessage", () => {
+  test("emits additive structured attention after legacy persistence", async () => {
+    const ws = uniqueWs()
+    const published: unknown[] = []
+    configureAttentionPublication({
+      workspaceId: async () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      publish: async (attention) => {
+        expect(existsSync(wsFile(ws))).toBe(true)
+        published.push(attention)
+      },
+    })
+    const record = await appendMessage(ws, "build done", "ci-agent")
+    expect(record.text).toBe("build done")
+    expect(published).toEqual([{ workspace_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", code: "message", message: "build done" }])
+  })
+
+  test("keeps legacy append successful when optional attention publication fails", async () => {
+    const ws = uniqueWs()
+    configureAttentionPublication({
+      workspaceId: async () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      publish: async () => { throw new Error("journal unavailable") },
+    })
+    await expect(appendMessage(ws, "still stored")).resolves.toMatchObject({ text: "still stored" })
+    expect((await listMessages(ws))[0].text).toBe("still stored")
+  })
   test("creates JSONL file at MESSAGES_DIR/{workspace}.jsonl", async () => {
     const ws = uniqueWs()
     await appendMessage(ws, "hello")
