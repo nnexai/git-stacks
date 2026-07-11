@@ -80,6 +80,9 @@ pub fn build(b: *std.Build) void {
     app_graph_module.addImport("reducer", app_reducer_module);
     app_module.addImport("app_graph", app_graph_module);
     app_module.addImport("tab_registry", app_tab_registry_module);
+    app_module.addImport("model", app_model_module);
+    app_module.addImport("reducer", app_reducer_module);
+    app_module.addImport("service_client", app_service_client_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
     app.linkSystemLibrary("ghostty");
@@ -192,6 +195,8 @@ pub fn build(b: *std.Build) void {
     graph_test_module.addImport("app_graph", app_graph_module);
     const graph_step = b.step("app-graph-test", "Assert the production service and terminal registry composition");
     graph_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = graph_test_module })).step);
+    const app_contract_tests = b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("linux/app_contract_test.zig"), .target = b.graph.host, .optimize = .Debug }) });
+    graph_step.dependOn(&b.addRunArtifact(app_contract_tests).step);
 
     const ownership_test_module = b.createModule(.{ .root_source_file = b.path("tests/ownership_test.zig"), .target = b.graph.host, .optimize = .Debug });
     ownership_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));

@@ -29,6 +29,18 @@ pub const AccessibilityContract = struct {
 
 pub const AccessibilitySnapshot = struct { role: c.GtkAccessibleRole, focusable: bool };
 
+pub const LaunchSpec = struct {
+    surface_id: [36]u8,
+    workspace_id: [36]u8,
+    repository_id: [36]u8,
+    revision: u64,
+    cwd: [513]u8 = [_]u8{0} ** 513,
+    command: [8193]u8 = [_]u8{0} ** 8193,
+    environment_keys: [128][129]u8 = undefined,
+    environment_values: [128][513]u8 = undefined,
+    environment_count: u8 = 0,
+};
+
 pub fn configureAccessibility(area: *c.GtkGLArea) void {
     c.gtk_widget_set_focusable(@ptrCast(area), 1);
     c.gtk_accessible_update_property(@ptrCast(area),
@@ -58,8 +70,13 @@ pub const Surface = struct {
     clipboard_context: *clipboard.Context,
     input: input_mod.Input,
     surface_id: [36]u8,
+    launch: ?LaunchSpec = null,
 
     pub fn create(runtime: *runtime_mod.Runtime, registry: *guard.Registry) !*Surface {
+        return createWithLaunch(runtime, registry, null);
+    }
+
+    pub fn createWithLaunch(runtime: *runtime_mod.Runtime, registry: *guard.Registry, launch: ?LaunchSpec) !*Surface {
         const self = try runtime.allocator.create(Surface);
         errdefer runtime.allocator.destroy(self);
         const area = c.gtk_gl_area_new() orelse return error.GtkGlAreaFailed;
@@ -76,7 +93,9 @@ pub const Surface = struct {
         self.controller = null;
         self.registry = registry;
         self.registration_source = 0;
-        _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
+        self.launch = launch;
+        if (launch) |spec| self.surface_id = spec.surface_id else
+            _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
         self.clipboard_context = try clipboard.Context.create(runtime.allocator, @ptrCast(self.area), self.generation);
         errdefer runtime.allocator.destroy(self.clipboard_context);
         try input_mod.Input.install(self.clipboard_context, &self.input);
@@ -142,6 +161,17 @@ pub const Surface = struct {
         cfg.userdata = self.clipboard_context;
         cfg.scale_factor = @floatFromInt(c.gtk_widget_get_scale_factor(@ptrCast(self.area)));
         cfg.context = c.GHOSTTY_SURFACE_CONTEXT_WINDOW;
+        var environment: [128]c.ghostty_env_var_s = undefined;
+        if (self.launch) |*launch| {
+            cfg.working_directory = @ptrCast(&launch.cwd);
+            cfg.command = @ptrCast(&launch.command);
+            for (0..launch.environment_count) |i| environment[i] = .{
+                .key = @ptrCast(&launch.environment_keys[i]),
+                .value = @ptrCast(&launch.environment_values[i]),
+            };
+            cfg.env_vars = &environment;
+            cfg.env_var_count = launch.environment_count;
+        }
         self.surface = c.ghostty_surface_new(self.runtime.app, &cfg);
         const surface = self.surface orelse {
             std.debug.print("native Ghostty surface creation failed\n", .{});

@@ -63,6 +63,14 @@ pub const ProductionGraph = struct {
         var frames=std.mem.splitSequence(u8,response.body,"\n\n");while(frames.next())|frame|{if(frame.len==0)continue;const action=self.service.decodeSseReducerAction(frame) catch |err| switch(err){error.Duplicate=>continue,error.ReplayGap=>{try self.refreshSnapshot();return;},else=>return err};self.state=reducer.reduce(self.state,action).state;}
     }
 
+    pub fn resolveLaunch(self:*ProductionGraph, pair:model.PairKey, command_id:?[]const u8)!service_client.Launch {
+        const request=try self.service.launchRequestAlloc(self.allocator,&pair.workspace_id,&pair.repository_id,command_id);
+        defer self.allocator.free(request.body);
+        const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);
+        const outcome=try self.service.resolveLaunch(response.status,response.body);
+        return switch(outcome){.launch=>|launch|launch,.failure=>error.LaunchRejected,else=>error.InvalidLaunchResponse};
+    }
+
     pub fn synchronizeDiscovery(self:*ProductionGraph)!void {
         const request=try self.service.discoveryRequest();
         const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);

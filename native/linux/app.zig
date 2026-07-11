@@ -6,6 +6,7 @@ const terminal_environment = @import("terminal_environment");
 const tab_registry = @import("tab_registry");
 const guard = @import("guard");
 const app_graph = @import("app_graph");
+const model = @import("model");
 const c = @cImport({
     @cInclude("gtk/gtk.h");
     @cInclude("unistd.h");
@@ -21,12 +22,44 @@ const State = struct {
     close_handler: c.gulong = 0,
     cleaned: bool = false,
     injected: bool = false,
+    replay_cancel: std.atomic.Value(bool) = .init(false),
+    replay_transport: std.atomic.Value(?*@import("service_client").HttpTransport) = .init(null),
+    replay_thread: ?std.Thread = null,
 };
 var active: ?*State = null;
+
+fn appendQuoted(buffer: []u8, offset: *usize, value: []const u8) !void {
+    if (offset.* != 0) { if (offset.* >= buffer.len) return error.CommandTooLong; buffer[offset.*] = ' '; offset.* += 1; }
+    if (offset.* >= buffer.len) return error.CommandTooLong; buffer[offset.*] = '\''; offset.* += 1;
+    for (value) |byte| if (byte == '\'') {
+        const escaped = "'\\''"; if (offset.* + escaped.len > buffer.len) return error.CommandTooLong;
+        @memcpy(buffer[offset.*..][0..escaped.len], escaped); offset.* += escaped.len;
+    } else { if (offset.* >= buffer.len) return error.CommandTooLong; buffer[offset.*] = byte; offset.* += 1; };
+    if (offset.* >= buffer.len) return error.CommandTooLong; buffer[offset.*] = '\''; offset.* += 1;
+}
+
+fn resolvedLaunchSpec(state:*State, pair:model.PairKey)!surface_mod.LaunchSpec {
+    const launch=try state.graph.resolveLaunch(pair,null);
+    var spec:surface_mod.LaunchSpec=.{.surface_id=undefined,.workspace_id=pair.workspace_id,.repository_id=pair.repository_id,.revision=launch.revision};
+    _=try std.fmt.bufPrint(&spec.surface_id,"00000000-0000-4000-8000-{d:0>12}",.{state.runtime.allocateSurfaceNumber()});
+    @memcpy(spec.cwd[0..launch.cwd_len],launch.cwdSlice());
+    var command_len:usize=0;for(0..launch.argv_count)|i|try appendQuoted(spec.command[0..spec.command.len-1],&command_len,launch.arg(i));
+    for(0..launch.environment_count)|i|{@memcpy(spec.environment_keys[i][0..launch.environment_key_lens[i]],launch.environmentKey(i));@memcpy(spec.environment_values[i][0..launch.environment_value_lens[i]],launch.environmentValue(i));}
+    spec.environment_count=launch.environment_count;
+    for(0..launch.port_count)|port_index|{const i=spec.environment_count;if(i>=spec.environment_keys.len)return error.EnvironmentCapacity;const prefix="GIT_STACKS_PORT_";@memcpy(spec.environment_keys[i][0..prefix.len],prefix);var key_len=prefix.len;for(launch.portKey(port_index))|byte|{if(key_len>=128)return error.EnvironmentCapacity;spec.environment_keys[i][key_len]=if(std.ascii.isAlphanumeric(byte))std.ascii.toUpper(byte)else '_';key_len+=1;}const value=try std.fmt.bufPrint(&spec.environment_values[i],"{d}",.{launch.port_values[port_index]});_ = value;spec.environment_count+=1;}
+    {const i=spec.environment_count;const key="GIT_STACKS_LAUNCH_KIND";const value=if(launch.shell)"shell" else "command";@memcpy(spec.environment_keys[i][0..key.len],key);@memcpy(spec.environment_values[i][0..value.len],value);spec.environment_count+=1;}
+    if(launch.command_id_len>0){const i=spec.environment_count;const key="GIT_STACKS_COMMAND_ID";@memcpy(spec.environment_keys[i][0..key.len],key);@memcpy(spec.environment_values[i][0..launch.command_id_len],launch.command_id[0..launch.command_id_len]);spec.environment_count+=1;}
+    const reserved=&[_]struct{k:[]const u8,v:[]const u8}{.{.k="GIT_STACKS_SURFACE_ID",.v=&spec.surface_id},.{.k="GIT_STACKS_WORKSPACE_ID",.v=&spec.workspace_id},.{.k="GIT_STACKS_REPOSITORY_ID",.v=&spec.repository_id}};
+    for(reserved)|entry|{const i=spec.environment_count;if(i>=spec.environment_keys.len)return error.EnvironmentCapacity;@memcpy(spec.environment_keys[i][0..entry.k.len],entry.k);@memcpy(spec.environment_values[i][0..entry.v.len],entry.v);spec.environment_count+=1;}
+    return spec;
+}
 
 fn cleanup(state: *State) void {
     if (state.cleaned) return;
     state.cleaned = true;
+    state.replay_cancel.store(true, .release);
+    if(state.replay_transport.load(.acquire))|transport|transport.cancel();
+    if (state.replay_thread) |thread| { thread.join(); state.replay_thread = null; }
     active = null;
     if (state.window) |window| if (state.close_handler != 0) {
         c.g_signal_handler_disconnect(window, state.close_handler);
@@ -56,6 +89,41 @@ fn cleanup(state: *State) void {
     state.runtime.deinit();
     if (stress_cycle) |cycle| reportStressSample(cycle, surfaces, clipboard_pending, gl_areas, gl_contexts, children);
     std.heap.c_allocator.destroy(state);
+}
+
+const ReplayDispatch = struct { state:*State, frame:[]u8 };
+fn reduceReplayFrame(data:?*anyopaque) callconv(.c) c.gboolean {
+    const dispatch:*ReplayDispatch=@ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));defer {dispatch.state.graph.allocator.free(dispatch.frame);dispatch.state.graph.allocator.destroy(dispatch);}
+    if(dispatch.state.cleaned)return c.G_SOURCE_REMOVE;
+    const action=dispatch.state.graph.service.decodeSseReducerAction(dispatch.frame) catch |err| switch(err){error.Duplicate=>return c.G_SOURCE_REMOVE,error.ReplayGap=>{dispatch.state.graph.refreshSnapshot() catch |refresh_err| std.debug.print("native replay gap refresh failed: {s}\n",.{@errorName(refresh_err)});return c.G_SOURCE_REMOVE;},else=>{std.debug.print("native replay decode failed: {s}\n",.{@errorName(err)});return c.G_SOURCE_REMOVE;}};
+    dispatch.state.graph.state=@import("reducer").reduce(dispatch.state.graph.state,action).state;
+    return c.G_SOURCE_REMOVE;
+}
+fn replayWorker(state:*State)void {
+    var transport=@import("service_client").HttpTransport.init(state.graph.allocator);
+    state.replay_transport.store(&transport,.release);
+    defer {state.replay_transport.store(null,.release);transport.deinit();}
+    var client=@import("service_client").Client.init(state.graph.authorization);client.begin();client.revision=state.graph.service.revision;client.sequence=state.graph.service.sequence;
+    while(!state.replay_cancel.load(.acquire)) {
+        var cursor:[20]u8=undefined;const request=client.eventsRequest(&cursor) catch break;
+        const response=transport.execute(state.graph.endpoint,request) catch |err| {if(state.replay_cancel.load(.acquire))break;std.debug.print("native replay reconnect after {s}\n",.{@errorName(err)});std.Thread.sleep(client.backoffMs()*std.time.ns_per_ms);continue;};defer response.deinit(state.graph.allocator);
+        if(response.status!=200){if(state.replay_cancel.load(.acquire))break;std.Thread.sleep(client.backoffMs()*std.time.ns_per_ms);continue;}
+        var frames=std.mem.splitSequence(u8,response.body,"\n\n");
+        while(frames.next())|frame| {
+            if(frame.len==0 or state.replay_cancel.load(.acquire))continue;
+            const outcome=client.acceptSse(frame);
+            switch(outcome) {
+                .duplicate => { continue; },
+                .gap_refresh => { client.sequence=state.graph.service.sequence; },
+                .failure => |_| { continue; },
+                else => {},
+            }
+            const dispatch=state.graph.allocator.create(ReplayDispatch) catch continue;
+            dispatch.*=.{.state=state,.frame=state.graph.allocator.dupe(u8,frame) catch {state.graph.allocator.destroy(dispatch);continue;}};
+            _ = c.g_main_context_invoke(null,@ptrCast(&reduceReplayFrame),dispatch);
+        }
+        client.attempt=0;
+    }
 }
 
 fn terminalRegister(context:*anyopaque,pgid:i32,birth:u64)!void {const surface:*surface_mod.Surface=@ptrCast(@alignCast(context));const identity=surface.ownershipIdentity() orelse return error.IdentityUnavailable;if(identity.pgid!=pgid or identity.linux_birth_token!=birth)return error.IdentityMismatch;}
@@ -177,7 +245,14 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         allocator.destroy(state);
         return;
     };
-    const terminal = surface_mod.Surface.create(runtime, &state.registry) catch |err| {
+    const launch_spec = if (state.graph.state.selected_pair) |pair| resolvedLaunchSpec(state,pair) catch |err| {
+        std.debug.print("native authoritative launch resolution failed: {s}\n", .{@errorName(err)});
+        state.registry.deinit(); state.graph.deinit(); runtime.deinit(); allocator.destroy(state); return;
+    } else if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) null else {
+        std.debug.print("native launch requires an authoritative workspace/repository selection\n", .{});
+        state.registry.deinit(); state.graph.deinit(); runtime.deinit(); allocator.destroy(state); return;
+    };
+    const terminal = surface_mod.Surface.createWithLaunch(runtime, &state.registry, launch_spec) catch |err| {
         std.debug.print("native surface init failed: {s}\n", .{@errorName(err)});
         state.registry.deinit();
         state.graph.deinit();
@@ -188,6 +263,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     state.terminals[0] = terminal;
     state.terminal_count = 1;
     active = state;
+    if (state.graph.authorization.len != 0 and state.graph.endpoint.len != 0) state.replay_thread=std.Thread.spawn(.{},replayWorker,.{state}) catch |err| blk:{std.debug.print("native replay worker start failed: {s}\n",.{@errorName(err)});break :blk null;};
     _ = c.g_timeout_add(10, adoptHosts, state);
 
     const window = c.gtk_application_window_new(app) orelse {

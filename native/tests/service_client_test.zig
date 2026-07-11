@@ -90,10 +90,13 @@ test "incompatible and authentication states stay explicit" {
 }
 test "launch decoding is strict and failure contains no executable context" {
     var c = service.Client.init("Bearer secret");
-    const ok = try c.resolveLaunch(200, "{\"resolved\":true,\"revision\":\"4\",\"launch\":{\"argv\":[\"sh\",\"-l\"],\"cwd\":\"/repo\",\"environment\":{},\"ports\":{},\"configuration\":{\"shell\":true},\"redacted\":[]}}");
+    const ok = try c.resolveLaunch(200, "{\"resolved\":true,\"revision\":\"4\",\"launch\":{\"argv\":[\"sh\",\"-l\"],\"cwd\":\"/repo\",\"environment\":{\"TERM\":\"xterm-ghostty\"},\"ports\":{\"dev\":4173},\"configuration\":{\"shell\":true},\"redacted\":[]}}");
     try std.testing.expectEqual(@as(u8, 2), ok.launch.argv_count);
     try std.testing.expectEqualStrings("/repo", ok.launch.cwdSlice());
     try std.testing.expectEqualStrings("sh", ok.launch.arg(0));
+    try std.testing.expectEqualStrings("TERM", ok.launch.environmentKey(0));
+    try std.testing.expectEqualStrings("xterm-ghostty", ok.launch.environmentValue(0));
+    try std.testing.expectEqual(@as(u16,4173),ok.launch.port_values[0]);
     const failed = try c.resolveLaunch(200, "{\"resolved\":false,\"error\":{\"code\":\"not_found\"}}");
     try std.testing.expect(failed == .failure);
 }
