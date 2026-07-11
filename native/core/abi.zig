@@ -1,9 +1,11 @@
 const std = @import("std");
 const contract = @import("contract.zig");
+const state_model = @import("model.zig");
+const reducer = @import("reducer.zig");
 
 const allocator = std.heap.c_allocator;
 const Bytes = extern struct { ptr: ?[*]const u8, len: usize };
-const Model = struct { magic: u64 = live_magic, alive: bool = true, json: []u8 };
+const Model = struct { magic: u64 = live_magic, alive: bool = true, json: []u8, state: state_model.State = .{} };
 const live_magic: u64 = 0x47535441434b5331;
 
 const ok: c_int = 0;
@@ -75,6 +77,25 @@ export fn gs_model_snapshot_v1(model: ?*Model, out_json: ?*Bytes, out_error: ?*B
     clear(out_json); clear(out_error);
     const value = model orelse return fail(invalid_argument, "invalid_request", out_error);
     if (value.magic != live_magic or !value.alive) return fail(invalid_lifetime, "invalid_request", out_error);
+    const out = out_json orelse return fail(invalid_argument, "invalid_request", out_error);
+    return allocateBytes(value.json, out);
+}
+
+export fn gs_model_dispatch_v1(model: ?*Model, input: Bytes, out_json: ?*Bytes, out_error: ?*Bytes) c_int {
+    clear(out_json); clear(out_error);
+    const value = model orelse return fail(invalid_argument, "invalid_request", out_error);
+    if (value.magic != live_magic or !value.alive) return fail(invalid_lifetime, "invalid_request", out_error);
+    const bytes = slice(input) orelse return fail(invalid_argument, "invalid_request", out_error);
+    if (bytes.len == 0 or bytes.len > contract.max_input_bytes) return fail(input_too_large, "invalid_request", out_error);
+    const parsed = std.json.parseFromSlice(std.json.Value, allocator, bytes, .{}) catch return fail(invalid_json, "invalid_request", out_error);
+    defer parsed.deinit();
+    if (parsed.value != .object) return fail(invalid_json, "invalid_request", out_error);
+    const kind = parsed.value.object.get("type") orelse return fail(invalid_json, "invalid_request", out_error);
+    if (kind != .string) return fail(invalid_json, "invalid_request", out_error);
+    const action: reducer.Action = if (std.mem.eql(u8, kind.string, "disconnected")) .disconnected else if (std.mem.eql(u8, kind.string, "unknown_optional")) .unknown_optional else return fail(invalid_json, "invalid_request", out_error);
+    value.state = reducer.reduce(value.state, action).state;
+    const canonical = state_model.canonicalAlloc(allocator, value.state) catch return fail(out_of_memory, "internal_error", out_error);
+    allocator.free(value.json); value.json = canonical;
     const out = out_json orelse return fail(invalid_argument, "invalid_request", out_error);
     return allocateBytes(value.json, out);
 }

@@ -28,3 +28,10 @@ test "duplicates gaps and relaunch identity are explicit" {
     try std.testing.expectEqual(prior, relaunched.state.surface.?.predecessor_surface_id.?);
     try std.testing.expect(relaunched.effect == .terminal_create);
 }
+
+test "direct canonical snapshot matches the ABI canonical vocabulary" {
+    const result = reducer.reduce(.{}, .unknown_optional);
+    const bytes = try model.canonicalAlloc(std.testing.allocator, result.state);
+    defer std.testing.allocator.free(bytes);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "\"degraded_optional_count\":1") != null);
+}

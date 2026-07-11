@@ -33,6 +33,8 @@ gs_status_v1 gs_model_create_v1(uint32_t abi_version, gs_bytes_v1 initial_json,
                                 gs_model_v1 **out_model, gs_bytes_v1 *out_error);
 gs_status_v1 gs_model_snapshot_v1(gs_model_v1 *model, gs_bytes_v1 *out_json,
                                   gs_bytes_v1 *out_error);
+gs_status_v1 gs_model_dispatch_v1(gs_model_v1 *model, gs_bytes_v1 action_json,
+                                  gs_bytes_v1 *out_snapshot, gs_bytes_v1 *out_error);
 gs_status_v1 gs_model_destroy_v1(gs_model_v1 *model, gs_bytes_v1 *out_error);
 gs_status_v1 gs_bytes_free_v1(gs_bytes_v1 bytes);
 

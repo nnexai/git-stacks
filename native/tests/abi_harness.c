@@ -4,6 +4,11 @@
 #include <string.h>
 
 static gs_bytes_v1 bytes(const void *ptr, size_t len) { gs_bytes_v1 b = {(const uint8_t *)ptr, len}; return b; }
+static int contains(gs_bytes_v1 haystack, const char *needle) {
+  size_t n = strlen(needle);
+  for (size_t i = 0; i + n <= haystack.len; i++) if (memcmp(haystack.ptr + i, needle, n) == 0) return 1;
+  return 0;
+}
 
 static void roundtrip_file(const char *path) {
   FILE *fixture = fopen(path, "rb");
@@ -37,6 +42,10 @@ int main(int argc, char **argv) {
   assert(gs_model_snapshot_v1(model, &output, &error) == GS_OK_V1);
   assert(output.len == len && memcmp(output.ptr, json, len) == 0);
   gs_bytes_v1 saved = output;
+  assert(gs_bytes_free_v1(output) == GS_OK_V1);
+  const char *action = "{\"type\":\"unknown_optional\"}";
+  assert(gs_model_dispatch_v1(model, bytes(action, strlen(action)), &output, &error) == GS_OK_V1);
+  assert(contains(output, "\"degraded_optional_count\":1"));
   assert(gs_bytes_free_v1(output) == GS_OK_V1);
   assert(gs_bytes_free_v1(saved) == GS_ALLOCATION_MISUSE_V1);
   assert(gs_model_destroy_v1(model, &error) == GS_OK_V1);
