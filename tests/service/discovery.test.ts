@@ -4,11 +4,20 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { provisionOfficialClient } from "../../src/lib/service/credentials"
 import { startServiceServer } from "../../src/service/server"
+import { createIdleLifecycle, serviceDescriptorPath } from "../../src/service/main"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
 
 describe("v1 discovery", () => {
+  test("exposes descriptor and idle lifecycle primitives", () => {
+    expect(serviceDescriptorPath("/tmp/example")).toBe("/tmp/example/descriptor.json")
+    const lifecycle = createIdleLifecycle({ idleMs: 300_000, onIdle: () => {} })
+    expect(lifecycle.activeOperations).toBe(0)
+    expect(lifecycle.connectedClients).toBe(0)
+    lifecycle.dispose()
+  })
+
   test("binds a random loopback port and authenticates before routing", async () => {
     const root = join(tmpdir(), `git-stacks-http-${crypto.randomUUID()}`)
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
