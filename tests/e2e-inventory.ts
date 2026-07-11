@@ -3,7 +3,7 @@ export type E2EFlowType = "command" | "user-flow" | "library-backed-flow"
 
 export type E2EInventoryItem = {
   id: string
-  family: "workspace" | "template" | "repo" | "label" | "message" | "notes" | "files" | "support" | "exclude"
+  family: "workspace" | "template" | "repo" | "label" | "message" | "notes" | "files" | "service" | "support" | "exclude"
   flowType: E2EFlowType
   title: string
   commands: readonly string[]
@@ -98,6 +98,16 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     scopeStatus: "in-scope",
     mappedTests: ["tests/commands/files.test.ts", "tests/commands/release-rc.test.ts"],
     rationale: "Files status/pull/push behavior is covered through dedicated command tests and the RC smoke path for conservative explicit sync behavior.",
+  },
+  {
+    id: "service.lifecycle",
+    family: "service",
+    flowType: "command",
+    title: "Native-client service lifecycle",
+    commands: ["service start", "service status"],
+    scopeStatus: "in-scope",
+    mappedTests: ["tests/service/discovery.test.ts", "tests/service/operations.test.ts"],
+    rationale: "Protected discovery, convergent startup, and idle lifecycle are covered through real loopback and injected lifecycle tests.",
   },
   {
     id: "workspace.paths",
