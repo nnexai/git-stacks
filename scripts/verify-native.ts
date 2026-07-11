@@ -110,6 +110,7 @@ function verifyProductionTerminalComposition(): void {
     "gdk_display_get_primary_clipboard",
     '"preedit-changed"',
     '"resize"',
+    "state.runtime.resizeViewport(grid.columns, grid.rows",
     "g_timeout_add(8, pumpTimer",
   ]
   for (const seam of required) {
@@ -289,7 +290,7 @@ async function smokeApp(): Promise<void> {
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("production GTK smoke timed out after 30 seconds") }
   const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
   if (outcome.code !== 0) throw new Error(`production GTK smoke exited ${outcome.code}: ${stderr || stdout}`)
-  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("composition=pty-runtime") || !stderr.includes("input=gtk-controller") || !/font_family=.+ font_size=\d+\.\d{2}/.test(stderr) || !/draws=[1-9]\d* painted_cells=[1-9]\d* cursor_draws=[1-9]\d*/.test(stderr)) throw new Error(`production GTK PTY composition/font/cursor evidence missing: ${stderr || stdout}`)
+  if (!stderr.includes("GIT_STACKS_NATIVE_READY") || !stderr.includes("composition=pty-runtime") || !stderr.includes("input=gtk-controller") || !/font_family=.+ actual_font_family=.+ font_size=\d+\.\d{2} cell=\d+\.\d{2}x\d+\.\d{2}/.test(stderr) || !/draws=[1-9]\d* painted_cells=[1-9]\d* cursor_draws=[1-9]\d*/.test(stderr)) throw new Error(`production GTK PTY composition/font/cursor evidence missing: ${stderr || stdout}`)
   console.log(`native GTK smoke passed: backend=${process.env.GDK_BACKEND ?? "auto"} display=${process.env.WAYLAND_DISPLAY ?? process.env.DISPLAY} clean-exit=true`)
 }
 async function smokeTerminal(): Promise<void> {
@@ -300,7 +301,7 @@ async function smokeTerminal(): Promise<void> {
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
-  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("DA_RESPONSE_OK") || !stderr.includes("input=gtk-commit-path") || !stderr.includes("composition=pty-runtime") || !/font_family=.+ font_size=\d+\.\d{2}/.test(stderr) || !/draws=[1-9]\d* painted_cells=[1-9]\d* cursor_draws=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible production-input/query/font/cursor roundtrip failed (${outcome.code}): ${stderr}`)
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("DA_RESPONSE_OK") || !stderr.includes("input=gtk-commit-path") || !stderr.includes("composition=pty-runtime") || !/font_family=.+ actual_font_family=.+ font_size=\d+\.\d{2} cell=\d+\.\d{2}x\d+\.\d{2}/.test(stderr) || !/draws=[1-9]\d* painted_cells=[1-9]\d* cursor_draws=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible production-input/query/font/cursor roundtrip failed (${outcome.code}): ${stderr}`)
   console.log("native terminal smoke passed: PTY input/output, alternate-screen parsing, resize/reflow, and clean exit verified")
 }
 

@@ -40,5 +40,6 @@ test "production Cairo widget applies configured font and recomputes metrics" {
     var widget = try widget_mod.TerminalWidget.initAppearance(&terminal, "DejaVu Sans Mono", 15.5);
     const window = c.gtk_window_new() orelse return error.WindowCreationFailed; defer c.g_object_unref(window); c.gtk_window_set_child(@ptrCast(window), @ptrCast(@alignCast(widget.widget)));
     try std.testing.expectEqualStrings("DejaVu Sans Mono", widget.fontFamily()); try std.testing.expectEqual(@as(f32, 15.5), widget.fontSize());
-    try widget.resize(900, 540); widget.unrealize();
+    const grid = widget.gridForAllocation(900, 540); try std.testing.expect(grid.columns > 20); try std.testing.expect(grid.rows > 4);
+    try widget.resize(900, 540); try std.testing.expect(widget.backgroundWidth() >= 900 or widget.drawCount() == 0); widget.unrealize();
 }

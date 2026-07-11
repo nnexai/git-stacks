@@ -12,3 +12,8 @@ test "primary device attributes query receives a timely PTY response" {
     defer subject.close();
     try std.testing.expect(try subject.waitFor("DA_RESPONSE_OK", 200));
 }
+test "PTY child observes resized rows columns and pixel viewport" {
+    var subject = try runtime.TerminalRuntime.init(std.testing.allocator, "read trigger; stty size", 80, 24); defer subject.close();
+    try subject.resizeViewport(120, 40, 1080, 720); try subject.send("report\n");
+    try std.testing.expect(try subject.waitFor("40 120", 200));
+}
