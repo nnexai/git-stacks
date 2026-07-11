@@ -96,10 +96,17 @@ pub fn build(b: *std.Build) void {
     const host_test_module = b.createModule(.{
         .root_source_file = b.path("tests/terminal_host_test.zig"), .target = b.graph.host, .optimize = .Debug,
     });
-    host_test_module.addImport("adapter", b.createModule(.{ .root_source_file = b.path("terminal/adapter.zig") }));
-    host_test_module.addImport("terminal_host", b.createModule(.{ .root_source_file = b.path("linux/terminal_host.zig") }));
-    host_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));
+    const adapter_module = b.createModule(.{ .root_source_file = b.path("terminal/adapter.zig") });
+    adapter_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "include" }) });
+    const host_ownership_module = b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") });
+    const terminal_host_module = b.createModule(.{ .root_source_file = b.path("linux/terminal_host.zig") });
+    terminal_host_module.addImport("adapter", adapter_module);
+    terminal_host_module.addImport("ownership", host_ownership_module);
+    host_test_module.addImport("adapter", adapter_module);
+    host_test_module.addImport("terminal_host", terminal_host_module);
+    host_test_module.addImport("ownership", host_ownership_module);
     const host_tests = b.addTest(.{ .root_module = host_test_module });
+    host_tests.linkLibC();
     const run_host_tests = b.addRunArtifact(host_tests);
     const host_step = b.step("terminal-host-test", "Run terminal host lifecycle and input tests");
     host_step.dependOn(&run_host_tests.step);

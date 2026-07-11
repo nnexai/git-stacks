@@ -76,6 +76,28 @@ async function verifyHeaderPortability(): Promise<void> {
   if (result.code !== 0) throw new Error(`public ABI portability diagnostics failed with ${compiler}: ${result.stderr || result.stdout}`)
 }
 
+function verifyNativeSourceBoundaries(): void {
+  const productionAllowlist = new Set(["native/terminal/adapter.zig", "native/build.zig"])
+  const upstreamPattern = /(?:@cInclude\(["<]ghostty\.h[">]\)|\bghostty_(?:surface|app|runtime|config|input|clipboard)\w*|\blibghostty\b)/i
+  const platformPattern = /\b(?:Gtk|Gdk|Adw)[A-Z]\w*|@cInclude\(["<](?:gtk|adwaita)\//
+  const violations: string[] = []
+  const files = Array.from(new Bun.Glob("native/**/*.{zig,h,c}").scanSync(ROOT)).sort()
+  for (const relative of files) {
+    const normalized = relative.replaceAll("\\", "/")
+    const source = readFileSync(join(ROOT, relative), "utf8")
+    if (upstreamPattern.test(source) && !productionAllowlist.has(normalized)) {
+      violations.push(`${normalized}: unclassified pinned-terminal API reference`)
+    }
+    if ((normalized.startsWith("native/core/") || normalized === "native/include/git_stacks_native_v1.h") && platformPattern.test(source)) {
+      violations.push(`${normalized}: platform toolkit type leaked into product ABI/core`)
+    }
+    if ((normalized.startsWith("native/core/") || normalized === "native/include/git_stacks_native_v1.h") && upstreamPattern.test(source)) {
+      violations.push(`${normalized}: terminal implementation type leaked into product ABI/core`)
+    }
+  }
+  if (violations.length) throw new Error(`native source boundary audit failed:\n  - ${violations.join("\n  - ")}`)
+}
+
 async function setup(): Promise<void> {
   if (!artifact) throw new Error(`unsupported native platform ${platformKey}; no pinned Zig artifact`)
   mkdirSync(CACHE, { recursive: true })
@@ -171,8 +193,10 @@ async function verifyModel(): Promise<void> {
 }
 
 async function verifyQuick(): Promise<void> {
+  verifyNativeSourceBoundaries()
   await verifyModel()
   await verify("terminal-api-smoke")
+  await verify("terminal-host-test")
 }
 
 async function verifyRestore(): Promise<void> {
@@ -184,6 +208,7 @@ async function verifyLifecycle(): Promise<void> {
 }
 
 async function verifyTerminalHost(): Promise<void> {
+  verifyNativeSourceBoundaries()
   await verify("terminal-host-test")
 }
 

@@ -42,12 +42,14 @@ test "native shortcuts arbitrate and stale callbacks are inert after reverse tea
 }
 
 test "close child-exit quit and crash stay ownership mediated" {
-    inline for (.{ host.ExitPath.close, .child_exit, .quit, .client_crash }) |path| {
+    inline for ([_]host.ExitPath{ .close, .child_exit, .quit, .client_crash }) |path| {
         var backend = ownership.TestBackend.init();
         defer backend.deinit();
         var terminal = adapter.Adapter.init(std.testing.allocator);
         defer terminal.deinit();
-        var window = host.TerminalHost.init(&terminal, ownership.Owner.init(50 + @intFromEnum(path), 2100 + @as(i32, @intCast(@intFromEnum(path))), 2100 + @as(i32, @intCast(@intFromEnum(path))), 600 + @intFromEnum(path)));
+        const ordinal: u64 = @intFromEnum(path);
+        const pid: i32 = 2100 + @as(i32, @intCast(ordinal));
+        var window = host.TerminalHost.init(&terminal, ownership.Owner.init(50 + ordinal, pid, pid, 600 + ordinal));
         try window.realize(&backend, 7, 8);
         try window.exit(path, &backend);
         try std.testing.expectEqual(ownership.Lifecycle.ended, window.owner.lifecycle);
