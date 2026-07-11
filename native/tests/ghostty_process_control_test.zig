@@ -2,6 +2,11 @@ const std = @import("std");
 const control = @import("ghostty_process_control");
 const guard = @import("guard");
 const reducer = @import("reducer");
+const c = @cImport({
+    @cInclude("signal.h");
+    @cInclude("sys/wait.h");
+    @cInclude("unistd.h");
+});
 
 fn id(comptime value: []const u8) [36]u8 {
     return value[0..36].*;
@@ -140,4 +145,23 @@ test "guard EOF reverse-unwinds and retains entries without absence proof" {
     try registry.controlEof(&backend);
     try std.testing.expectEqual(@as(usize, 1), backend.calls);
     try std.testing.expectEqual(@as(usize, 1), registry.entries.items.len);
+}
+
+test "sibling guard backend cleans a real registered Ghostty child group" {
+    const leader = c.fork();
+    try std.testing.expect(leader >= 0);
+    if (leader == 0) {
+        if (c.setsid() < 0) c._exit(120);
+        while (true) _ = c.pause();
+    }
+    _ = c.usleep(20_000);
+    const token = guard.linuxBirthToken(leader) orelse return error.BirthTokenUnavailable;
+    var registry = guard.Registry.init(std.testing.allocator, c.getpgrp(), -1);
+    defer registry.deinit();
+    try registry.register(.{ .pid = leader, .pgid = leader, .birth_token = token });
+    var backend = guard.LinuxCleanupBackend{};
+    try registry.controlEof(&backend);
+    try std.testing.expectEqual(@as(usize, 0), registry.entries.items.len);
+    var status: c_int = 0;
+    try std.testing.expectEqual(leader, c.waitpid(leader, &status, 0));
 }
