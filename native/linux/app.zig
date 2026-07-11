@@ -2,6 +2,7 @@ const std = @import("std");
 const runtime_mod = @import("ghostty_runtime");
 const surface_mod = @import("ghostty_surface");
 const clipboard = @import("ghostty_clipboard");
+const terminal_environment = @import("terminal_environment");
 const guard = @import("guard");
 const c = @cImport({
     @cInclude("gtk/gtk.h");
@@ -119,7 +120,12 @@ fn smokeEvidence(data: ?*anyopaque) callconv(.c) c.gboolean {
         std.debug.print("GIT_STACKS_MULTISURFACE_READY surfaces=2 ids_distinct={} left_rows={d} left_columns={d} right_rows={d} right_columns={d} left_draws={d} right_draws={d} registrations={d}\n", .{ !std.mem.eql(u8, &first.surface_id, &second.surface_id), first_size.rows, first_size.columns, second_size.rows, second_size.columns, first.draw_count, second.draw_count, state.registry.entries.items.len });
     }
     std.debug.print("GIT_STACKS_NATIVE_READY composition=ghostty-surface input=ghostty rows={d} columns={d} width_px={d} height_px={d} draws={d}\n", .{ first_size.rows, first_size.columns, first_size.width_px, first_size.height_px, first.draw_count });
-    if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null) std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP renderer=ghostty input=gtk-controller ime=gtk-im-context clipboard=system+primary alternate_screen=true unicode=true resize=true\n", .{});
+    if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null) {
+        const capabilities = if (state.registry.entries.items.len > 0)
+            terminal_environment.inspectProcess(std.heap.c_allocator, state.registry.entries.items[0].pid) catch terminal_environment.Capabilities{}
+        else terminal_environment.Capabilities{};
+        std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP renderer=ghostty input=gtk-controller ime=gtk-im-context clipboard=system+primary alternate_screen=true unicode=true resize=true term_ghostty={} truecolor={} terminfo={} no_color={}\n", .{ capabilities.term_ghostty, capabilities.truecolor, capabilities.terminfo, capabilities.no_color });
+    }
     return c.G_SOURCE_REMOVE;
 }
 
@@ -183,6 +189,7 @@ fn shutdown(_: ?*c.GApplication, _: ?*anyopaque) callconv(.c) void {
 }
 
 pub fn main() u8 {
+    terminal_environment.sanitize();
     const isolated = std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null or std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null;
     const flags: c.GApplicationFlags = @intCast(if (isolated) c.G_APPLICATION_NON_UNIQUE else c.G_APPLICATION_DEFAULT_FLAGS);
     const app = c.gtk_application_new("dev.nnex.git-stacks.terminal", flags) orelse return 2;

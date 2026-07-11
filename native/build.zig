@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
         @panic("-Dghostty-source is required; run through scripts/verify-native.ts");
     const include_dir: std.Build.LazyPath = .{ .cwd_relative = b.pathJoin(&.{ source, "zig-out", "include" }) };
     const library_dir: std.Build.LazyPath = .{ .cwd_relative = b.pathJoin(&.{ source, "zig-out", "lib" }) };
+    const terminal_environment_module = b.createModule(.{ .root_source_file = b.path("linux/terminal_environment.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
 
     const surface_abi_module = b.createModule(.{
         .root_source_file = b.path("tests/ghostty_surface_abi.zig"),
@@ -63,6 +64,7 @@ pub fn build(b: *std.Build) void {
     app_module.addImport("ghostty_runtime", runtime_module);
     app_module.addImport("ghostty_surface", surface_module);
     app_module.addImport("ghostty_clipboard", clipboard_module);
+    app_module.addImport("terminal_environment", terminal_environment_module);
     app_module.addImport("guard", app_guard_module);
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
@@ -87,7 +89,6 @@ pub fn build(b: *std.Build) void {
     const interaction_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_interaction_test.zig"), .target = b.graph.host, .optimize = .Debug });
     interaction_test_module.addImport("ghostty_clipboard", clipboard_module);
     interaction_test_module.addImport("ghostty_input", input_module);
-    const terminal_environment_module = b.createModule(.{ .root_source_file = b.path("linux/terminal_environment.zig"), .target = b.graph.host, .optimize = .ReleaseSafe });
     interaction_test_module.addImport("terminal_environment", terminal_environment_module);
     interaction_test_module.addIncludePath(include_dir);
     interaction_test_module.addLibraryPath(library_dir);

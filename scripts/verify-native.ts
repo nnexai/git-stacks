@@ -468,7 +468,7 @@ async function smokeTerminal(): Promise<void> {
   const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
   if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("terminal shell roundtrip timed out after 45 seconds") }
   const stderr = await new Response(child.stderr).text()
-  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("renderer=ghostty") || !stderr.includes("input=gtk-controller") || !stderr.includes("ime=gtk-im-context") || !stderr.includes("clipboard=system+primary") || !stderr.includes("alternate_screen=true") || !stderr.includes("unicode=true") || !/draws=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible Ghostty interaction roundtrip failed (${outcome.code}): ${stderr}`)
+  if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_TERMINAL_ROUNDTRIP") || !stderr.includes("renderer=ghostty") || !stderr.includes("input=gtk-controller") || !stderr.includes("ime=gtk-im-context") || !stderr.includes("clipboard=system+primary") || !stderr.includes("alternate_screen=true") || !stderr.includes("unicode=true") || !stderr.includes("term_ghostty=true") || !stderr.includes("truecolor=true") || !stderr.includes("terminfo=true") || !stderr.includes("no_color=false") || !/draws=[1-9]\d*/.test(stderr)) throw new Error(`terminal visible Ghostty interaction/capability roundtrip failed (${outcome.code}): ${stderr}`)
   console.log("native terminal smoke passed: Ghostty PTY/render path accepted input, alternate-screen, Unicode, query, resize, and clean exit")
 }
 

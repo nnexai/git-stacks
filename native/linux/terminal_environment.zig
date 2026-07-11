@@ -1,4 +1,5 @@
 const std = @import("std");
+const c = @cImport({ @cInclude("stdlib.h"); });
 
 pub const Capabilities = struct {
     term_ghostty: bool = false,
@@ -19,4 +20,17 @@ pub fn inspect(bytes: []const u8) Capabilities {
     return result;
 }
 
-pub fn sanitize() void {}
+pub fn inspectProcess(allocator: std.mem.Allocator, pid: i32) !Capabilities {
+    var path_buffer: [64]u8 = undefined;
+    const path = try std.fmt.bufPrint(&path_buffer, "/proc/{d}/environ", .{pid});
+    const bytes = try std.fs.cwd().readFileAlloc(allocator, path, 1024 * 1024);
+    defer allocator.free(bytes);
+    return inspect(bytes);
+}
+
+/// NO_COLOR belongs to a launcher/UI process and must not silently suppress
+/// capabilities in every future shell spawned by this terminal application.
+/// Ghostty remains responsible for TERM, COLORTERM, TERMINFO, and resources.
+pub fn sanitize() void {
+    _ = c.unsetenv("NO_COLOR");
+}
