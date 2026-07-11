@@ -37,6 +37,13 @@ Ghostty loads its normal default and recursive configuration files through `ghos
 - Effective Ghostty configuration paths/includes:
 - Launch command: `bun run native:run`
 
+## Checkpoint history
+
+- Initial full-surface observation: `FAIL` — normal printable keys produced no text, while shortcuts, Enter, arrows, focus/cursor, selection, and paste worked.
+- Root cause: `GtkIMContext` commit bytes were sent as a synthetic composing key event with keycode zero.
+- Remediation: commit `7dffab90` forwards committed UTF-8 through `ghostty_surface_text`; automated interaction and full native verification pass.
+- Human result for the remediated artifact: NOT YET OBSERVED.
+
 ## Standalone Ghostty fidelity
 
 Use the same shell, working directory, environment, and Ghostty configuration on both sides.
