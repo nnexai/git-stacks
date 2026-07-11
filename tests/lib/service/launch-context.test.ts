@@ -67,13 +67,13 @@ describe("service launch context projection", () => {
     })
     const response = await instance.buildWorkspace("alpha", "req_0123456789abcdef")
     expect(planned).toBe(1)
-    expect(response.workspace.launch.named?.[0]).toEqual({
-      name: "dev",
-      steps: [
-        { bucket: "main", scope: "workspace", command: "bun dev", cwd: "/tasks/alpha", environment: expect.any(Object) },
-        { bucket: "main", scope: "repo", command: "bun test --watch", cwd: "/tasks/alpha/git-stacks", repository_id: ws.repos[0]!.id, repository_name: "git-stacks", environment: expect.objectContaining({ GS_REPO_NAME: "git-stacks", GS_REPO_PATH: "/tasks/alpha/git-stacks" }) },
-      ],
-    })
+    const launch = response.workspace.launch.named?.[0]
+    expect(launch?.name).toBe("dev")
+    expect(launch?.steps.map(({ environment: _, ...step }) => step)).toEqual([
+      { bucket: "main", scope: "workspace", command: "bun dev", cwd: "/tasks/alpha" },
+      { bucket: "main", scope: "repo", command: "bun test --watch", cwd: "/tasks/alpha/git-stacks", repository_id: ws.repos[0]!.id, repository_name: "git-stacks" },
+    ])
+    expect(launch?.steps[1]?.environment).toEqual(expect.objectContaining({ GS_REPO_NAME: "git-stacks", GS_REPO_PATH: "/tasks/alpha/git-stacks" }))
     expect(WorkspaceSnapshotResponseSchema.parse(response)).toEqual(response)
   })
 

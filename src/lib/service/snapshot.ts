@@ -21,6 +21,7 @@ import {
   type Workspace,
 } from "../config"
 import { getTasksDir, WS_CONFIG_DIR } from "../paths"
+import { parseSecretRef } from "../secrets"
 import { listManualCommands, planManualCommand, type ManualCommandStep } from "../workspace-command"
 import { buildWorkspaceEnv } from "../workspace-env"
 import { getWorkspaceFileStatusView, type WorkspaceFileStatusView } from "../workspace-file-status"
@@ -172,11 +173,43 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     const root = join(getTasksDir(dependencies.config.workspace_root), workspace.name)
     const fileStatus = dependencies.getWorkspaceFileStatus(workspace, root)
     const commands = dependencies.listManualCommands(workspace)
-    const environment = await dependencies.buildWorkspaceEnv(workspace, {
+    const resolvedEnvironment = await dependencies.buildWorkspaceEnv(workspace, {
       triggeredBy: "service:snapshot",
       config: dependencies.config,
       skipSecrets: true,
     })
+    const redacted: string[] = []
+    const references: Record<string, string> = {}
+    for (const [key, value] of Object.entries(workspace.env ?? {})) {
+      const reference = parseSecretRef(value)
+      if (!reference) continue
+      redacted.push(key)
+      references[key] = `${reference.id}:${reference.path}`
+    }
+    redacted.sort()
+    const environment = Object.fromEntries(Object.entries(resolvedEnvironment).filter(([key]) => !redacted.includes(key)))
+    const repoByName = new Map(workspace.repos.map((repo) => [repo.name, repo]))
+    const named = commands.map((name) => ({
+      name,
+      steps: dependencies.planManualCommand(workspace, name, dependencies.config).map((step) => {
+        const repo = step.repo ?? (step.repoName ? repoByName.get(step.repoName) : undefined)
+        const stepEnvironment = step.scope === "repo" && repo ? {
+          ...environment,
+          GS_REPO_NAME: repo.name,
+          GS_REPO_PATH: getRepoPath(repo),
+          GS_REPO_CLONE_PATH: repo.main_path,
+        } : environment
+        return {
+          bucket: step.bucket,
+          scope: step.scope,
+          command: step.shell,
+          cwd: step.cwd,
+          ...(step.scope === "repo" && repo ? { repository_id: repo.id, repository_name: repo.name } : {}),
+          environment: stepEnvironment,
+        }
+      }),
+    }))
+    const ports = Object.fromEntries(Object.entries(workspace.ports ?? {}).filter((entry): entry is [string, number] => typeof entry[1] === "number"))
     return {
       id: workspace.id,
       name: workspace.name,
@@ -191,7 +224,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
         errors: fileStatus.summary.errors,
         attention: fileStatus.summary.attention,
       },
-      launch: { commands, environment, redacted: [] as string[], references: {} as Record<string, string>, cwd: root },
+      launch: { commands, environment, redacted, references, cwd: root, ports, named },
     }
   }
 

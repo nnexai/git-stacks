@@ -57,6 +57,21 @@ export const RepositorySnapshotSchema = z.strictObject({
   id: EntityIdSchema, name: z.string().min(1), mode: z.enum(["worktree", "trunk", "dir"]), path: z.string().min(1),
 })
 export type RepositorySnapshot = z.infer<typeof RepositorySnapshotSchema>
+export const LaunchStepSchema = z.strictObject({
+  bucket: z.enum(["pre", "main", "post"]),
+  scope: z.enum(["workspace", "repo"]),
+  command: z.string().min(1),
+  cwd: z.string().min(1),
+  repository_id: EntityIdSchema.optional(),
+  repository_name: z.string().min(1).optional(),
+  environment: z.record(z.string(), z.string()),
+}).refine((step) => step.scope === "repo" ? Boolean(step.repository_id && step.repository_name) : !step.repository_id && !step.repository_name, {
+  message: "repository identity is required only for repository-scoped steps",
+})
+export const NamedLaunchSpecificationSchema = z.strictObject({
+  name: z.string().min(1),
+  steps: z.array(LaunchStepSchema),
+})
 export const LaunchSpecificationSchema = z.strictObject({
   commands: z.array(z.string()),
   environment: z.record(z.string(), z.string()),
@@ -64,6 +79,7 @@ export const LaunchSpecificationSchema = z.strictObject({
   references: z.record(z.string(), z.string()),
   cwd: z.string().min(1).optional(),
   ports: z.record(z.string(), z.number().int()).optional(),
+  named: z.array(NamedLaunchSpecificationSchema).optional(),
 })
 export type LaunchSpecification = z.infer<typeof LaunchSpecificationSchema>
 export const WorkspaceSnapshotSchema = z.strictObject({
