@@ -19,7 +19,7 @@ Git-stacks owns workspace, split, tab, surface identity, restoration metadata, c
 
 ## Exact dependency pattern
 
-Pin `am-will/ghostty` commit `81ab8ffa90185221782baf785e85387321e16f8d` and Zig 0.15.2 by artifact/source-tree digest. Build `libghostty.so` with `-Dapp-runtime=none`. Audit exported symbols, the Linux payload in `include/ghostty.h`, `src/apprt/embedded.zig`, upstream merge base/ahead/behind state, and the bounded process-control patch. Advancing any pin is dedicated compatibility work.
+Pin immutable `am-will/ghostty` base commit `81ab8ffa90185221782baf785e85387321e16f8d` and Zig 0.15.2 by artifact/base-tree digest. Keep the base cache pristine. Hash the repo-owned `native/deps/ghostty-linux-process-control.patch`, apply it without fuzz to a disposable copy, verify the deterministic derived-tree digest, and build only that derived tree with `-Dapp-runtime=none`. Audit base, patch, derived tree, exported symbols, upstream merge base/ahead/behind state, and the bounded process-control seam independently. Advancing base or patch is dedicated compatibility work.
 
 ## GTK surface pattern
 
@@ -42,8 +42,8 @@ Multiple leaves share only app/config. Handles, GL areas, focus/input, clipboard
 ## Verification pattern
 
 1. 105-05: exact source/toolchain, surface/process ABI, full library build and production-graph audit.
-2. 105-06: config/app callbacks and GtkGLArea realize/draw/resize/focus/unrealize lifecycle.
-3. 105-07: input/IME/mouse/clipboard, real shell/TUI behavior, production ownership/guard cleanup and two-surface isolation.
+2. 105-06: config/app callbacks, production ownership/guard cleanup, and GtkGLArea realize/draw/resize/focus/unrealize lifecycle.
+3. 105-07: input/IME/mouse/clipboard, real shell/TUI behavior and two-surface isolation.
 4. 105-08: production resource stress, honest accessibility, complete automated gate, then real compositor evidence.
 
 No human checkpoint is valid before the exact production executable passes terminal, multisurface, cleanup and accessibility preflight gates.
