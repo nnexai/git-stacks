@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: milestone
 current_phase: 105
-current_phase_name: Shared Native Model and Terminal Foundation
+current_phase_name: shared-native-model-and-terminal-foundation
 status: executing
 stopped_at: Phase 106 context gathered
-last_updated: "2026-07-11T13:30:19.148Z"
+last_updated: "2026-07-11T14:36:03.285Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 105 execution started
+last_activity_desc: Completed Phase 105 Plan 05 pinned VT and GTK terminal frame
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 17
-  completed_plans: 13
+  total_plans: 20
+  completed_plans: 14
   percent: 25
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** One command takes a user from feature intent to a fully running development environment without manual setup.
-**Current focus:** Phase 105 — Shared Native Model and Terminal Foundation
+**Current focus:** Phase 105 — shared-native-model-and-terminal-foundation
 
 ## Current Position
 
-Phase: 105 (Shared Native Model and Terminal Foundation) — EXECUTING
-Plan: 5 of 8
+Phase: 105 (shared-native-model-and-terminal-foundation) — EXECUTING
+Plan: 6 of 8
 Status: Ready to execute
-Last activity: 2026-07-11 — Phase 105 execution started
+Last activity: 2026-07-11 — Completed Phase 105 Plan 05 pinned VT and GTK terminal frame
 
 Progress: [██████░░░░] 64%
 
@@ -63,6 +63,7 @@ Progress: [██████░░░░] 64%
 | Phase 105 P01 | 8min | 1 tasks | 5 files |
 | Phase 105 P02 | 10min | 2 tasks | 12 files |
 | Phase 105 P03 | 6min | 3 tasks | 12 files |
+| Phase 105 P05 | 32min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
