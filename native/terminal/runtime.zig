@@ -16,7 +16,7 @@ pub const TerminalRuntime = struct {
         counters.pty_fds += 1; counters.children += 1; counters.groups += 1;
         return .{ .allocator = allocator, .pty = pty, .terminal = try vt.VtAdapter.init(allocator, columns, rows) };
     }
-    pub fn pump(self: *TerminalRuntime) !usize { var buf: [8192]u8 = undefined; const n = try self.pty.read(&buf); if (n > 0) try self.terminal.feed(buf[0..n]); return n; }
+    pub fn pump(self: *TerminalRuntime) !usize { var buf: [8192]u8 = undefined; const n = try self.pty.read(&buf); if (n > 0) { try self.terminal.feed(buf[0..n]); if (self.terminal.queryResponse(buf[0..n])) |response| try self.send(response); } return n; }
     pub fn send(self: *TerminalRuntime, bytes: []const u8) !void { var offset: usize = 0; while (offset < bytes.len) { const n = try self.pty.write(bytes[offset..]); if (n == 0) { std.Thread.sleep(std.time.ns_per_ms); continue; } offset += n; } }
     pub fn resize(self: *TerminalRuntime, columns: u16, rows: u16) !void { try self.pty.resize(columns, rows); try self.terminal.resize(columns, rows); }
     pub fn frameContains(self: *TerminalRuntime, needle: []const u8) !bool { var frame = try self.terminal.snapshot(); defer frame.deinit(); var bytes: std.ArrayList(u8) = .empty; defer bytes.deinit(self.allocator); for (frame.cells) |cell| { var b: [4]u8 = undefined; const n = try std.unicode.utf8Encode(cell.codepoint, &b); try bytes.appendSlice(self.allocator, b[0..n]); } return std.mem.indexOf(u8, bytes.items, needle) != null; }

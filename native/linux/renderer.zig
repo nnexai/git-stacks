@@ -32,10 +32,13 @@ pub const Renderer = struct {
             self.rendered_cells += 1;
             const len = std.unicode.utf8Encode(cell.codepoint, &buffer) catch continue;
             c.pango_layout_set_text(layout, &buffer, @intCast(len));
+            const bg = if (cell.selected) @as(u32, 0x315b7d) else if (cell.style.inverse) cell.style.foreground else cell.style.background;
+            const cell_bounds = c.graphene_rect_t{ .origin = .{ .x = @as(f32, @floatFromInt(cell.column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(cell.row)) * self.metrics.cell_height }, .size = .{ .width = @as(f32, @floatFromInt(cell.width)) * self.metrics.cell_width, .height = self.metrics.cell_height } };
+            c.gtk_snapshot_append_color(snapshot, &.{ .red = @as(f32, @floatFromInt((bg >> 16) & 255)) / 255, .green = @as(f32, @floatFromInt((bg >> 8) & 255)) / 255, .blue = @as(f32, @floatFromInt(bg & 255)) / 255, .alpha = 1 }, &cell_bounds);
             c.gtk_snapshot_save(snapshot);
             c.gtk_snapshot_translate(snapshot, &.{ .x = @as(f32, @floatFromInt(cell.column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(cell.row)) * self.metrics.cell_height });
-            const fg = if (cell.style.inverse) cell.style.background else cell.style.foreground;
-            c.gtk_snapshot_append_layout(snapshot, layout, &.{ .red = @as(f32, @floatFromInt((fg >> 16) & 255)) / 255, .green = @as(f32, @floatFromInt((fg >> 8) & 255)) / 255, .blue = @as(f32, @floatFromInt(fg & 255)) / 255, .alpha = 1 });
+            const fg = if (cell.selected) @as(u32, 0xffffff) else if (cell.style.inverse) cell.style.background else cell.style.foreground;
+            c.gtk_snapshot_append_layout(snapshot, layout, &.{ .red = @as(f32, @floatFromInt((fg >> 16) & 255)) / 255, .green = @as(f32, @floatFromInt((fg >> 8) & 255)) / 255, .blue = @as(f32, @floatFromInt(fg & 255)) / 255, .alpha = if (cell.style.faint) 0.62 else 1 });
             c.gtk_snapshot_restore(snapshot);
         }
         const cursor = c.graphene_rect_t{ .origin = .{ .x = @as(f32, @floatFromInt(frame.cursor_column)) * self.metrics.cell_width, .y = @as(f32, @floatFromInt(frame.cursor_row)) * self.metrics.cell_height + self.metrics.cell_height - 2 }, .size = .{ .width = self.metrics.cell_width, .height = 2 } };
