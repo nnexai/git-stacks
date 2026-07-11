@@ -49,7 +49,7 @@ pub const VtAdapter = struct {
         @memcpy(combined[0..prior], self.query_tail[0..prior]); const count = @min(bytes.len, combined.len - prior); @memcpy(combined[prior..][0..count], bytes[0..count]);
         const all = combined[0 .. prior + count];
         const tail_len = @min(@as(usize, 3), all.len); @memcpy(self.query_tail[0..tail_len], all[all.len - tail_len ..]); self.query_tail_len = @intCast(tail_len);
-        if (std.mem.indexOf(u8, all, "\x1b[c") != null or std.mem.indexOf(u8, all, "\x1b[0c") != null) return "\x1b[?62;22c";
+        if (std.mem.indexOf(u8, all, "\x1b[c") != null or std.mem.indexOf(u8, all, "\x1b[0c") != null) { self.query_tail_len = 0; return "\x1b[?62;22c"; }
         return null;
     }
     pub fn resize(self: *VtAdapter, columns: u16, rows: u16) !void { try self.terminal.resize(self.allocator, columns, rows); }
