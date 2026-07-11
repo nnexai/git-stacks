@@ -52,6 +52,17 @@ fn slice(bytes: Bytes) ?[]const u8 {
     const ptr = bytes.ptr orelse return null;
     return ptr[0..bytes.len];
 }
+fn jsonId(object: std.json.ObjectMap, key: []const u8) ?state_model.Id {
+    const value = object.get(key) orelse return null;
+    if (value != .string or value.string.len != 36) return null;
+    var id: state_model.Id = undefined;
+    @memcpy(&id, value.string);
+    return id;
+}
+fn jsonU64(object: std.json.ObjectMap, key: []const u8) ?u64 {
+    const value = object.get(key) orelse return null;
+    return if (value == .integer and value.integer >= 0) @intCast(value.integer) else null;
+}
 
 export fn gs_model_create_v1(version: u32, input: Bytes, out_model: ?*?*Model, out_error: ?*Bytes) c_int {
     clear(out_error);
@@ -92,12 +103,27 @@ export fn gs_model_dispatch_v1(model: ?*Model, input: Bytes, out_json: ?*Bytes, 
     if (parsed.value != .object) return fail(invalid_json, "invalid_request", out_error);
     const kind = parsed.value.object.get("type") orelse return fail(invalid_json, "invalid_request", out_error);
     if (kind != .string) return fail(invalid_json, "invalid_request", out_error);
-    const action: reducer.Action = if (std.mem.eql(u8, kind.string, "disconnected")) .disconnected else if (std.mem.eql(u8, kind.string, "unknown_optional")) .unknown_optional else return fail(invalid_json, "invalid_request", out_error);
-    value.state = reducer.reduce(value.state, action).state;
+    const object = parsed.value.object;
+    const action: reducer.Action = if (std.mem.eql(u8, kind.string, "disconnected")) .disconnected
+        else if (std.mem.eql(u8, kind.string, "unknown_optional")) .unknown_optional
+        else if (std.mem.eql(u8, kind.string, "incompatible")) .incompatible
+        else if (std.mem.eql(u8, kind.string, "connected")) .{ .connected = .{ .revision = jsonU64(object,"revision") orelse return fail(invalid_json,"invalid_request",out_error), .sequence = jsonU64(object,"sequence") orelse return fail(invalid_json,"invalid_request",out_error) } }
+        else if (std.mem.eql(u8, kind.string, "event")) .{ .event = .{ .revision = jsonU64(object,"revision") orelse return fail(invalid_json,"invalid_request",out_error), .sequence = jsonU64(object,"sequence") orelse return fail(invalid_json,"invalid_request",out_error) } }
+        else if (std.mem.eql(u8, kind.string, "refreshed")) .{ .refreshed = .{ .revision = jsonU64(object,"revision") orelse return fail(invalid_json,"invalid_request",out_error), .sequence = jsonU64(object,"sequence") orelse return fail(invalid_json,"invalid_request",out_error) } }
+        else if (std.mem.eql(u8, kind.string, "select_attention")) .{ .select_attention = .{ .attention_id = jsonId(object,"attention_id") orelse return fail(invalid_identity,"invalid_request",out_error) } }
+        else if (std.mem.eql(u8, kind.string, "exact_tab_visible")) .{ .exact_tab_visible = .{ .surface_id = jsonId(object,"surface_id") orelse return fail(invalid_identity,"invalid_request",out_error) } }
+        else if (std.mem.eql(u8, kind.string, "remove_attention")) .{ .remove_attention = .{ .attention_id = jsonId(object,"attention_id") orelse return fail(invalid_identity,"invalid_request",out_error) } }
+        else if (std.mem.eql(u8, kind.string, "navigate_pair")) .{ .navigate_pair = .{ .workspace_id = jsonId(object,"workspace_id") orelse return fail(invalid_identity,"invalid_request",out_error), .repository_id = jsonId(object,"repository_id") orelse return fail(invalid_identity,"invalid_request",out_error) } }
+        else return fail(invalid_json, "invalid_request", out_error);
+    const reduced = reducer.reduce(value.state, action);
+    value.state = reduced.state;
     const canonical = state_model.canonicalAlloc(allocator, value.state) catch return fail(out_of_memory, "internal_error", out_error);
     allocator.free(value.json); value.json = canonical;
     const out = out_json orelse return fail(invalid_argument, "invalid_request", out_error);
-    return allocateBytes(value.json, out);
+    const effect_name = @tagName(reduced.effect);
+    const response = std.fmt.allocPrint(allocator, "{{\"protocol\":\"v1\",\"state\":{s},\"effect\":\"{s}\"}}", .{value.json,effect_name}) catch return fail(out_of_memory,"internal_error",out_error);
+    defer allocator.free(response);
+    return allocateBytes(response, out);
 }
 
 export fn gs_model_destroy_v1(model: ?*Model, out_error: ?*Bytes) c_int {

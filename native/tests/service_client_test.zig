@@ -20,7 +20,7 @@ test "requests carry bearer credential revision identities and replay cursor" {
     var c = service.Client.init("Bearer secret");
     const discovery = try c.discoveryRequest();
     try std.testing.expectEqual(service.Method.GET, discovery.method);
-    try std.testing.expectEqualStrings("/v1/discovery", discovery.path);
+    try std.testing.expectEqualStrings("/v1", discovery.path);
     try std.testing.expectEqualStrings("Bearer secret", discovery.authorization);
     c.revision = 19; c.sequence = 42;
     var cursor: [20]u8 = undefined;

@@ -63,6 +63,23 @@ pub fn encodeAlloc(allocator: std.mem.Allocator, records: []const Record) ![]u8 
     return out.toOwnedSlice(allocator);
 }
 
+pub fn encodePresentationAlloc(allocator: std.mem.Allocator, presentation: Presentation) ![]u8 {
+    for (presentation.pinned_workspace_ids) |id| if (!identity.isUuid(&id)) return error.InvalidRecord;
+    if (presentation.last_pair) |pair| if (!identity.isUuid(&pair.workspace_id) or !identity.isUuid(&pair.repository_id)) return error.InvalidRecord;
+    const entries = try encodeAlloc(allocator, presentation.records);
+    defer allocator.free(entries);
+    const start = std.mem.indexOf(u8, entries, "\"entries\":") orelse return error.InvalidRecord;
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    try out.writer(allocator).print("{{\"protocol\":\"v1\",\"organization_mode\":\"{s}\",\"pinned_workspace_ids\":[", .{@tagName(presentation.organization_mode)});
+    for (presentation.pinned_workspace_ids, 0..) |pin, i| { if (i != 0) try out.append(allocator, ','); try out.writer(allocator).print("\"{s}\"", .{pin}); }
+    try out.appendSlice(allocator, "],\"last_pair\":");
+    if (presentation.last_pair) |pair| try out.writer(allocator).print("{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\"}}", .{pair.workspace_id,pair.repository_id}) else try out.appendSlice(allocator,"null");
+    try out.append(allocator, ',');
+    try out.appendSlice(allocator, entries[start..]);
+    return out.toOwnedSlice(allocator);
+}
+
 pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
     var result = RestoreResult{ .records = .empty, .diagnostics = .empty, .arena = std.heap.ArenaAllocator.init(allocator) };
     errdefer result.deinit();
@@ -94,7 +111,7 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
         const cwd_value = object.get("cwd_label");
         const cwd = if (cwd_value != null and cwd_value.? == .string) cwd_value.?.string else "";
         const order_value = object.get("order");
-        const order: u32 = if (order_value != null and order_value.? == .integer and order_value.?.integer >= 0) @intCast(order_value.?.integer) else 0;
+        const order: u32 = if (order_value != null and order_value.? == .integer and order_value.?.integer >= 0 and order_value.?.integer <= std.math.maxInt(u32)) @intCast(order_value.?.integer) else 0;
         var ws: ?model.Id = null;
         if (object.get("workspace_id")) |v| if (v == .string and identity.isUuid(v.string)) {
             var x: model.Id = undefined;
@@ -114,7 +131,7 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
             predecessor = x;
         };
         const exit_value = object.get("last_exit_status");
-        const exit: ?i32 = if (exit_value != null and exit_value.? == .integer) @intCast(exit_value.?.integer) else null;
+        const exit: ?i32 = if (exit_value != null and exit_value.? == .integer and exit_value.?.integer >= std.math.minInt(i32) and exit_value.?.integer <= std.math.maxInt(i32)) @intCast(exit_value.?.integer) else null;
         try result.records.append(a, .{ .surface_id = id, .workspace_id = ws, .repository_id = repo, .title = title, .order = order, .cwd_label = cwd, .last_exit_status = exit, .predecessor_surface_id = predecessor, .lifecycle = .ended });
     }
     return result;

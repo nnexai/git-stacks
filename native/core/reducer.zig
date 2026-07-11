@@ -14,6 +14,7 @@ pub const Action = union(enum) {
     attention_received: model.Attention,
     select_attention: struct { attention_id: model.Id },
     exact_tab_visible: struct { surface_id: model.Id },
+    remove_attention: struct { attention_id: model.Id },
     navigate_pair: model.PairKey,
 };
 
@@ -78,7 +79,7 @@ pub fn reduce(before: model.State, action: Action) Result {
             };
             if (duplicate) state.duplicate_count += 1 else if (state.attention_count < state.attention.len) {
                 var received = item;
-                received.resolved = model.pairValid(&state, .{ .workspace_id = item.workspace_id, .repository_id = item.repository_id orelse [_]u8{0} ** 36 });
+                received.resolved = if (item.repository_id) |rid| model.pairValid(&state, .{ .workspace_id = item.workspace_id, .repository_id = rid }) else model.workspaceValid(&state, item.workspace_id);
                 state.attention[state.attention_count] = received;
                 state.attention_count += 1;
             }
@@ -109,9 +110,19 @@ pub fn reduce(before: model.State, action: Action) Result {
                 if (std.mem.eql(u8, &sid, &a.surface_id)) item.read = true;
             };
         },
+        .remove_attention => |a| {
+            var write: usize = 0;
+            for (state.attention[0..state.attention_count]) |item| if (!std.mem.eql(u8, &item.id, &a.attention_id)) {
+                state.attention[write] = item;
+                write += 1;
+            };
+            state.attention_count = @intCast(write);
+        },
         .navigate_pair => |key| {
-            state.selected_pair = key;
-            state.last_pair = key;
+            if (model.pairValid(&state, key)) {
+                state.selected_pair = key;
+                state.last_pair = key;
+            }
         },
     }
     return .{ .state = state, .effect = effect };

@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
   const char *action = "{\"type\":\"unknown_optional\"}";
   assert(gs_model_dispatch_v1(model, bytes(action, strlen(action)), &output, &error) == GS_OK_V1);
   assert(contains(output, "\"degraded_optional_count\":1"));
+  assert(contains(output, "\"effect\":\"none\""));
   assert(gs_bytes_free_v1(output) == GS_OK_V1);
   assert(gs_bytes_free_v1(saved) == GS_ALLOCATION_MISUSE_V1);
   assert(gs_model_destroy_v1(model, &error) == GS_OK_V1);

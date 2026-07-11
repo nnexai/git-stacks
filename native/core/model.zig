@@ -81,6 +81,10 @@ pub fn pairValid(state: *const State, key: PairKey) bool {
     for (state.workspaces[0..state.workspace_count]) |ws| if (std.mem.eql(u8, &ws.id, &key.workspace_id)) for (ws.repository_ids[0..ws.repository_count]) |rid| if (std.mem.eql(u8, &rid, &key.repository_id)) return true;
     return false;
 }
+pub fn workspaceValid(state: *const State, id: Id) bool {
+    for (state.workspaces[0..state.workspace_count]) |ws| if (std.mem.eql(u8, &ws.id, &id)) return true;
+    return false;
+}
 pub fn reconcile(state: *State) void {
     var write: usize = 0;
     var removed: u32 = 0;
