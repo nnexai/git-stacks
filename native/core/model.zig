@@ -114,5 +114,45 @@ pub fn reconcile(state: *State) void {
 pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
     const surface_id = if (state.surface) |s| s.id[0..] else "";
     const predecessor = if (state.surface) |s| if (s.predecessor_surface_id) |id| id[0..] else "" else "";
-    return std.fmt.allocPrint(allocator, "{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"surface_id\":\"{s}\",\"predecessor_surface_id\":\"{s}\",\"pair_count\":{d},\"attention_count\":{d}}}", .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, surface_id, predecessor, state.pair_count, state.attention_count });
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    const w = out.writer(allocator);
+    try w.print("{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"surface_id\":\"{s}\",\"predecessor_surface_id\":\"{s}\",\"workspaces\":[", .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, surface_id, predecessor });
+    for (state.workspaces[0..state.workspace_count], 0..) |ws, i| {
+        if (i != 0) try w.writeByte(',');
+        const summary = aggregate(&state, ws.id, null, null);
+        try w.print("{{\"id\":\"{s}\",\"unread\":{d},\"severity\":\"{s}\",\"repository_ids\":[", .{ ws.id, summary.unread, @tagName(summary.severity) });
+        for (ws.repository_ids[0..ws.repository_count], 0..) |rid, j| {
+            if (j != 0) try w.writeByte(',');
+            try w.print("\"{s}\"", .{rid});
+        }
+        try w.writeAll("]}");
+    }
+    try w.writeAll("],\"pairs\":[");
+    for (state.pairs[0..state.pair_count], 0..) |pair, i| {
+        if (i != 0) try w.writeByte(',');
+        const summary = aggregate(&state, pair.key.workspace_id, pair.key.repository_id, null);
+        try w.print("{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\",\"unread\":{d},\"severity\":\"{s}\",\"surfaces\":[", .{ pair.key.workspace_id, pair.key.repository_id, summary.unread, @tagName(summary.severity) });
+        for (pair.surfaces[0..pair.surface_count], 0..) |s, j| {
+            if (j != 0) try w.writeByte(',');
+            const surface_summary = aggregate(&state, pair.key.workspace_id, pair.key.repository_id, s.id);
+            try w.print("{{\"id\":\"{s}\",\"generation\":{d},\"lifecycle\":\"{s}\",\"order\":{d},\"unread\":{d},\"severity\":\"{s}\",\"title\":", .{ s.id, s.generation, @tagName(s.lifecycle), s.order, surface_summary.unread, @tagName(surface_summary.severity) });
+            try w.print("{f}", .{std.json.fmt(s.title[0..s.title_len], .{})});
+            try w.writeAll(",\"cwd\":");
+            try w.print("{f}", .{std.json.fmt(s.cwd[0..s.cwd_len], .{})});
+            try w.writeByte('}');
+        }
+        try w.writeAll("]}");
+    }
+    try w.writeAll("],\"attention\":[");
+    for (state.attention[0..state.attention_count], 0..) |item, i| {
+        if (i != 0) try w.writeByte(',');
+        try w.print("{{\"id\":\"{s}\",\"workspace_id\":\"{s}\",\"repository_id\":", .{ item.id, item.workspace_id });
+        if (item.repository_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
+        try w.writeAll(",\"surface_id\":");
+        if (item.surface_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
+        try w.print(",\"status\":\"{s}\",\"read\":{},\"resolved\":{}}}", .{ @tagName(item.status), item.read, item.resolved });
+    }
+    try w.print("],\"pair_count\":{d},\"attention_count\":{d}}}", .{ state.pair_count, state.attention_count });
+    return out.toOwnedSlice(allocator);
 }

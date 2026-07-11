@@ -21,6 +21,18 @@ static void roundtrip_file(const char *path) {
   assert(gs_model_snapshot_v1(model, &output, &error) == GS_OK_V1);
   assert(output.len == len && memcmp(output.ptr, corpus, len) == 0);
   assert(gs_bytes_free_v1(output) == GS_OK_V1);
+  const char *snapshot = "{\"type\":\"snapshot\",\"revision\":7,\"sequence\":11,\"workspaces\":[{\"id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_ids\":[\"218f47f4-5ab1-7c2d-8e90-123456789abc\"]}],\"pairs\":[{\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"surfaces\":[{\"id\":\"318f47f4-5ab1-7c2d-8e90-123456789abc\",\"generation\":2,\"order\":4,\"title\":\"build\",\"cwd\":\"~/src\"}]}],\"attention\":[]}";
+  assert(gs_model_dispatch_v1(model, bytes(snapshot, strlen(snapshot)), &output, &error) == GS_OK_V1);
+  assert(contains(output, "\"pair_count\":1") && contains(output, "\"title\":\"build\""));
+  assert(gs_bytes_free_v1(output) == GS_OK_V1);
+  const char *attention = "{\"type\":\"attention_received\",\"id\":\"418f47f4-5ab1-7c2d-8e90-123456789abc\",\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"surface_id\":\"318f47f4-5ab1-7c2d-8e90-123456789abc\",\"status\":\"waiting\"}";
+  assert(gs_model_dispatch_v1(model, bytes(attention, strlen(attention)), &output, &error) == GS_OK_V1);
+  assert(contains(output, "\"attention_count\":1") && contains(output, "\"read\":false") && contains(output, "\"unread\":1") && contains(output, "\"severity\":\"primary\""));
+  assert(gs_bytes_free_v1(output) == GS_OK_V1);
+  const char *select = "{\"type\":\"select_attention\",\"attention_id\":\"418f47f4-5ab1-7c2d-8e90-123456789abc\"}";
+  assert(gs_model_dispatch_v1(model, bytes(select, strlen(select)), &output, &error) == GS_OK_V1);
+  assert(contains(output, "\"effect\":\"platform_focus\"") && contains(output, "\"reason\":\"exact_surface\"") && contains(output, "\"read\":true"));
+  assert(gs_bytes_free_v1(output) == GS_OK_V1);
   assert(gs_model_destroy_v1(model, &error) == GS_OK_V1);
 }
 

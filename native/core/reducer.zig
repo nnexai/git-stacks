@@ -1,7 +1,8 @@
 const std = @import("std");
-pub const model = @import("model.zig");
+pub const model = @import("model");
 
 pub const Action = union(enum) {
+    snapshot: model.State,
     connected: struct { revision: u64, sequence: u64 },
     disconnected,
     event: struct { revision: u64, sequence: u64 },
@@ -25,6 +26,10 @@ pub fn reduce(before: model.State, action: Action) Result {
     var state = before;
     var effect: Effect = .none;
     switch (action) {
+        .snapshot => |snapshot| {
+            state = snapshot;
+            model.reconcile(&state);
+        },
         .connected => |a| {
             if (a.sequence <= state.sequence) state.duplicate_count += 1 else {
                 state.connection = .ready;
