@@ -71,6 +71,16 @@ pub fn build(b: *std.Build) void {
     const reducer_tests = b.addTest(.{ .root_module = reducer_test_module });
     const run_reducer_tests = b.addRunArtifact(reducer_tests);
 
+    const persistence_test_module = b.createModule(.{
+        .root_source_file = b.path("tests/persistence_test.zig"), .target = b.graph.host, .optimize = .Debug,
+    });
+    persistence_test_module.addImport("persistence", b.createModule(.{ .root_source_file = b.path("core/persistence.zig") }));
+    const persistence_tests = b.addTest(.{ .root_module = persistence_test_module });
+    const run_persistence_tests = b.addRunArtifact(persistence_tests);
+
+    const restore_step = b.step("restore-test", "Run presentation restoration and quarantine tests");
+    restore_step.dependOn(&run_persistence_tests.step);
+
     const harness = b.addExecutable(.{
         .name = "abi-harness",
         .root_module = b.createModule(.{

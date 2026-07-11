@@ -45,6 +45,7 @@
     "native:setup": "bun run scripts/verify-native.ts setup",
     "native:test:quick": "bun run scripts/verify-native.ts quick",
     "native:test:model": "bun run scripts/verify-native.ts model",
+    "native:test:restore": "bun run scripts/verify-native.ts restore",
     "native:test:terminal-build": "bun run scripts/verify-native.ts terminal-build",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",
