@@ -9,7 +9,10 @@ pub const Metrics = struct { cell_width: f32 = 9, cell_height: f32 = 18 };
 pub const Renderer = struct {
     metrics: Metrics = .{},
     rendered_cells: usize = 0,
+    font_family: [:0]const u8 = "Monospace",
+    font_size: f32 = 12,
     pub fn resetScale(self: *Renderer, metrics: Metrics) void { self.metrics = metrics; self.rendered_cells = 0; }
+    pub fn configure(self: *Renderer, family: [:0]const u8, size: f32, metrics: Metrics) void { self.font_family = family; self.font_size = size; self.resetScale(metrics); }
 
     pub fn render(self: *Renderer, raw_snapshot: *anyopaque, frame: vt.RenderFrame, focused: bool) void {
         const snapshot: *c.GtkSnapshot = @ptrCast(@alignCast(raw_snapshot));
@@ -23,8 +26,10 @@ pub const Renderer = struct {
         defer c.g_object_unref(context);
         const layout = c.pango_layout_new(context);
         defer c.g_object_unref(layout);
-        const description = c.pango_font_description_from_string("Monospace 12");
+        const description = c.pango_font_description_new();
         defer c.pango_font_description_free(description);
+        c.pango_font_description_set_family(description, self.font_family.ptr);
+        c.pango_font_description_set_size(description, @intFromFloat(self.font_size * c.PANGO_SCALE));
         c.pango_layout_set_font_description(layout, description);
         var buffer: [4]u8 = undefined;
         for (frame.cells) |cell| {

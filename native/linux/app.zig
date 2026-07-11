@@ -2,6 +2,7 @@ const std = @import("std");
 const widget_mod = @import("terminal_widget");
 const runtime_mod = @import("runtime");
 const input_mod = @import("input");
+const ghostty_config = @import("ghostty_config");
 const vt = @import("vt_adapter");
 const c = @cImport({ @cInclude("gtk/gtk.h"); });
 
@@ -13,6 +14,7 @@ const AppState = struct {
     im: *c.GtkIMContext,
     pump_source: c.guint = 0,
     cleaned: bool = false,
+    appearance: ghostty_config.Appearance,
     drag_origin_x: f64 = 0,
     drag_origin_y: f64 = 0,
 };
@@ -74,7 +76,6 @@ fn keyPressed(controller: ?*c.GtkEventControllerKey, keyval: c.guint, _: c.guint
     return @intFromBool(sendCommitted(state, bytes[0..length]));
 }
 
-fn gridPoint(x: f64, y: f64) vt.GridPoint { return .{ .column = @intCast(@min(65535, @as(u64, @intFromFloat(@max(0, x) / 9)))), .row = @intCast(@min(65535, @as(u64, @intFromFloat(@max(0, y) / 18)))) }; }
 fn copySelection(state: *AppState) void {
     const text_value = state.widget.selectionText(state.allocator) catch return orelse return; defer state.allocator.free(text_value);
     const terminated = state.allocator.dupeZ(u8, text_value) catch return; defer state.allocator.free(terminated);
@@ -96,9 +97,9 @@ fn requestPaste(state: *AppState, primary: bool) void {
     const clipboard = if (primary) c.gdk_display_get_primary_clipboard(display) else c.gdk_display_get_clipboard(display);
     c.gdk_clipboard_read_text_async(clipboard, null, pasteReady, request);
 }
-fn dragBegin(_: ?*c.GtkGestureDrag, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.drag_origin_x = x; state.drag_origin_y = y; state.widget.selectionBegin(gridPoint(x, y)); }
-fn dragUpdate(_: ?*c.GtkGestureDrag, dx: f64, dy: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.widget.selectionUpdate(gridPoint(state.drag_origin_x + dx, state.drag_origin_y + dy)); }
-fn dragEnd(_: ?*c.GtkGestureDrag, dx: f64, dy: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.widget.selectionUpdate(gridPoint(state.drag_origin_x + dx, state.drag_origin_y + dy)); copySelection(state); }
+fn dragBegin(_: ?*c.GtkGestureDrag, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.drag_origin_x = x; state.drag_origin_y = y; state.widget.selectionBegin(state.widget.pointFromPixels(x, y)); }
+fn dragUpdate(_: ?*c.GtkGestureDrag, dx: f64, dy: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.widget.selectionUpdate(state.widget.pointFromPixels(state.drag_origin_x + dx, state.drag_origin_y + dy)); }
+fn dragEnd(_: ?*c.GtkGestureDrag, dx: f64, dy: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); state.widget.selectionUpdate(state.widget.pointFromPixels(state.drag_origin_x + dx, state.drag_origin_y + dy)); copySelection(state); }
 fn middlePressed(_: ?*c.GtkGestureClick, _: c_int, _: f64, _: f64, data: ?*anyopaque) callconv(.c) void { const state: *AppState = @ptrCast(@alignCast(data orelse return)); requestPaste(state, true); }
 
 fn imCommit(_: ?*c.GtkIMContext, text: ?[*:0]const u8, data: ?*anyopaque) callconv(.c) void {
@@ -127,7 +128,7 @@ fn focusLeave(_: ?*c.GtkEventControllerFocus, data: ?*anyopaque) callconv(.c) vo
 }
 fn resized(_: ?*c.GtkDrawingArea, width: c_int, height: c_int, data: ?*anyopaque) callconv(.c) void {
     const state: *AppState = @ptrCast(@alignCast(data orelse return));
-    if (width > 0 and height > 0) state.runtime.resize(@intCast(@max(1, @divTrunc(width, 9))), @intCast(@max(1, @divTrunc(height, 18)))) catch {};
+    if (width > 0 and height > 0) state.widget.resize(width, height) catch {};
 }
 
 fn cleanup(state: *AppState) void {
@@ -136,7 +137,7 @@ fn cleanup(state: *AppState) void {
     if (state.pump_source != 0) { _ = c.g_source_remove(state.pump_source); state.pump_source = 0; }
     c.gtk_im_context_focus_out(state.im);
     state.input.deinit();
-    state.runtime.close();
+    state.runtime.close(); state.appearance.deinit();
     c.g_object_unref(state.im);
 }
 
@@ -159,9 +160,10 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     var runtime = runtime_mod.TerminalRuntime.init(allocator, commandForLaunch(), 80, 24) catch { allocator.destroy(state); return; };
     errdefer runtime.close();
     state.allocator = allocator;
+    state.appearance = ghostty_config.load(allocator) catch ghostty_config.Appearance.init(allocator) catch { runtime.close(); allocator.destroy(state); return; };
     state.runtime = runtime;
     state.input = input_mod.Input.init(&state.runtime);
-    state.widget = widget_mod.TerminalWidget.init(&state.runtime.terminal) catch { state.input.deinit(); state.runtime.close(); allocator.destroy(state); return; };
+    state.widget = widget_mod.TerminalWidget.initAppearance(&state.runtime.terminal, state.appearance.primaryFamily(), state.appearance.font_size) catch { state.input.deinit(); state.runtime.close(); state.appearance.deinit(); allocator.destroy(state); return; };
     state.im = c.gtk_im_multicontext_new() orelse return;
     state.pump_source = 0;
     state.cleaned = false;
@@ -218,7 +220,7 @@ fn activate(raw_app: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         std.Thread.sleep(5 * std.time.ns_per_ms);
     }
     if (state.widget.drawCount() == 0 or state.widget.paintedCellCount() == 0 or state.widget.cursorDrawCount() == 0) { std.debug.print("GIT_STACKS_NATIVE_BLANK draws={d} cells={d} cursor={d}\n", .{ state.widget.drawCount(), state.widget.paintedCellCount(), state.widget.cursorDrawCount() }); return; }
-    std.debug.print("GIT_STACKS_NATIVE_READY composition=pty-runtime input=gtk-controller text=git-stacks-native-terminal-ready focused={d} draws={d} painted_cells={d} cursor_draws={d}\n", .{ c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget))), state.widget.drawCount(), state.widget.paintedCellCount(), state.widget.cursorDrawCount() });
+    std.debug.print("GIT_STACKS_NATIVE_READY composition=pty-runtime input=gtk-controller text=git-stacks-native-terminal-ready font_family={s} font_size={d:.2} config_diagnostics={d} focused={d} draws={d} painted_cells={d} cursor_draws={d}\n", .{ state.appearance.primaryFamily(), state.appearance.font_size, state.appearance.diagnostics, c.gtk_widget_has_focus(@ptrCast(@alignCast(state.widget.widget))), state.widget.drawCount(), state.widget.paintedCellCount(), state.widget.cursorDrawCount() });
     if (std.posix.getenv("GIT_STACKS_NATIVE_TERMINAL_SMOKE") != null and state.runtime.frameContains("SHELL_RESULT_UNIQUE:widget-input-path") catch false)
         std.debug.print("GIT_STACKS_TERMINAL_ROUNDTRIP marker=SHELL_RESULT_UNIQUE query=DA_RESPONSE_OK input=gtk-commit-path resources=owned\n", .{});
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) _ = c.g_timeout_add(250, quitTimer, @ptrCast(app));
