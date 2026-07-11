@@ -1,5 +1,7 @@
 # Native Linux Workspace Acceptance
 
+Implementation note (2026-07-11): the workspace now uses `AdwTabView`/`AdwTabBar`, a draggable `GtkPaned`, secondary-click row/tab menus, and an owned centered `AdwDialog` command launcher. Re-run every observation below; evidence from the former synthetic tab/kebab UI is obsolete.
+
 Status: NOT YET OBSERVED
 
 Observer:
