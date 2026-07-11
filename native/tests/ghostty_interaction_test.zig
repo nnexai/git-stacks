@@ -1,6 +1,8 @@
 const std = @import("std");
 const clipboard = @import("ghostty_clipboard");
 const input = @import("ghostty_input");
+const terminal_environment = @import("terminal_environment");
+const c = @cImport({ @cInclude("stdlib.h"); });
 
 test "clipboard userdata invalidation advances generation before late completion" {
     var byte: u8 = 0;
@@ -63,4 +65,13 @@ test "IME compose is consumed and committed once outside plain key forwarding" {
     state.finishKeyEvent();
     try std.testing.expectEqual(input.CommitRoute.commit_directly, state.commit("界"));
     try std.testing.expectEqual(input.FilterRoute.consume_for_ime, state.filterRoute(true));
+}
+
+test "Ghostty child capabilities preserve truecolor and discard launcher NO_COLOR" {
+    const observed = terminal_environment.inspect("TERM=xterm-ghostty\x00COLORTERM=truecolor\x00TERMINFO=/usr/share/terminfo\x00");
+    try std.testing.expect(observed.term_ghostty and observed.truecolor and observed.terminfo and !observed.no_color);
+    try std.testing.expectEqual(@as(c_int, 0), c.setenv("NO_COLOR", "1", 1));
+    defer _ = c.unsetenv("NO_COLOR");
+    terminal_environment.sanitize();
+    try std.testing.expect(c.getenv("NO_COLOR") == null);
 }
