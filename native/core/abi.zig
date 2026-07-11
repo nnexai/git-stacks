@@ -122,6 +122,8 @@ fn parseSnapshot(object: std.json.ObjectMap) ?state_model.State {
             if (surface_value != .object) return null;
             const so = surface_value.object;
             var surface: state_model.Surface = .{ .id = jsonId(so,"id") orelse return null, .generation = jsonU64(so,"generation") orelse 0, .order = jsonU32(so,"order",0) orelse return null, .lifecycle = if (so.get("lifecycle")) |v| lifecycle(v) orelse return null else .live };
+            if(so.get("kind"))|v|{if(v!=.string)return null;surface.kind=if(std.mem.eql(u8,v.string,"configured_command")) .configured_command else if(std.mem.eql(u8,v.string,"shell")) .shell else return null;}
+            if(so.get("command_id"))|v|{if(v!=.string or v.string.len>surface.command_id.len)return null;@memcpy(surface.command_id[0..v.string.len],v.string);surface.command_id_len=@intCast(v.string.len);}
             if (so.get("predecessor_surface_id")) |v| surface.predecessor_surface_id = if (v == .null) null else jsonId(so,"predecessor_surface_id") orelse return null;
             if (so.get("title")) |title| { if (title != .string or title.string.len > surface.title.len) return null; @memcpy(surface.title[0..title.string.len], title.string); surface.title_len = @intCast(title.string.len); }
             if (so.get("cwd")) |cwd| { if (cwd != .string or cwd.string.len > surface.cwd.len) return null; @memcpy(surface.cwd[0..cwd.string.len], cwd.string); surface.cwd_len = @intCast(cwd.string.len); }

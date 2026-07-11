@@ -14,6 +14,8 @@ pub const Record = struct {
     last_exit_status: ?i32 = null,
     predecessor_surface_id: ?[36]u8 = null,
     lifecycle: model.Lifecycle = .ended,
+    kind: model.TerminalKind = .shell,
+    command_id: []const u8 = "",
 };
 pub const Presentation = struct {
     organization_mode: model.OrganizationMode = .simple,
@@ -63,7 +65,7 @@ pub fn encodeAlloc(allocator: std.mem.Allocator, records: []const Record) ![]u8 
         try out.writer(allocator).print(",\"last_exit_status\":{s},", .{status_text});
         try out.appendSlice(allocator, "\"predecessor_surface_id\":");
         if (record.predecessor_surface_id) |v| try out.writer(allocator).print("\"{s}\"", .{v}) else try out.appendSlice(allocator, "null");
-        try out.appendSlice(allocator, ",\"lifecycle\":\"ended\"}");
+        try out.writer(allocator).print(",\"lifecycle\":\"ended\",\"kind\":\"{s}\",\"command_id\":{f}}}", .{@tagName(record.kind), std.json.fmt(record.command_id, .{})});
     }
     try out.appendSlice(allocator, "]}");
     return out.toOwnedSlice(allocator);
@@ -137,12 +139,15 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
         const predecessor_value = object.get("predecessor_surface_id");
         const workspace_value = object.get("workspace_id");
         const repository_value = object.get("repository_id");
+        const command_value = object.get("command_id");
+        const kind_value = object.get("kind");
         const malformed = (title_value != null and title_value.? != .string) or (cwd_value != null and cwd_value.? != .string) or
             (order_value != null and (order_value.? != .integer or order_value.?.integer < 0 or order_value.?.integer > std.math.maxInt(u32))) or
             (exit_value != null and exit_value.? != .null and (exit_value.? != .integer or exit_value.?.integer < std.math.minInt(i32) or exit_value.?.integer > std.math.maxInt(i32))) or
             (workspace_value != null and workspace_value.? != .null and (workspace_value.? != .string or !identity.isUuid(workspace_value.?.string))) or
             (repository_value != null and repository_value.? != .null and (repository_value.? != .string or !identity.isUuid(repository_value.?.string))) or
-            (predecessor_value != null and predecessor_value.? != .null and (predecessor_value.? != .string or !identity.isUuid(predecessor_value.?.string)));
+            (predecessor_value != null and predecessor_value.? != .null and (predecessor_value.? != .string or !identity.isUuid(predecessor_value.?.string))) or
+            (command_value != null and command_value.? != .string) or (kind_value != null and (kind_value.? != .string or !(std.mem.eql(u8,kind_value.?.string,"shell") or std.mem.eql(u8,kind_value.?.string,"configured_command"))));
         if (malformed) { try result.diagnostics.append(a, .{ .index=index,.hash=shortHash(rendered),.code="invalid_record" }); continue; }
         const title = if (title_value != null) title_value.?.string else "";
         const cwd = if (cwd_value != null) cwd_value.?.string else "";
@@ -166,7 +171,9 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
             predecessor = x;
         };
         const exit: ?i32 = if (exit_value != null and exit_value.? == .integer and exit_value.?.integer >= std.math.minInt(i32) and exit_value.?.integer <= std.math.maxInt(i32)) @intCast(exit_value.?.integer) else null;
-        try result.records.append(a, .{ .surface_id = id, .workspace_id = ws, .repository_id = repo, .title = title, .order = order, .cwd_label = cwd, .last_exit_status = exit, .predecessor_surface_id = predecessor, .lifecycle = .ended });
+        const command_id = if(command_value)|v|v.string else "";
+        const kind:model.TerminalKind=if(kind_value)|v|if(std.mem.eql(u8,v.string,"configured_command")) .configured_command else .shell else if(command_id.len>0) .configured_command else .shell;
+        try result.records.append(a, .{ .surface_id = id, .workspace_id = ws, .repository_id = repo, .title = title, .order = order, .cwd_label = cwd, .last_exit_status = exit, .predecessor_surface_id = predecessor, .lifecycle = .ended, .kind=kind, .command_id=command_id });
     }
     return result;
 }
@@ -177,7 +184,7 @@ pub fn recordsFromState(state: *const State, out: []Record) !usize {
         if (count == out.len) return error.Capacity;
         out[count] = .{ .surface_id=surface.id,.workspace_id=pair.key.workspace_id,.repository_id=pair.key.repository_id,
             .title=surface.title[0..surface.title_len],.order=surface.order,.cwd_label=surface.cwd[0..surface.cwd_len],
-            .last_exit_status=surface.last_exit_status,.predecessor_surface_id=surface.predecessor_surface_id,.lifecycle=.ended };
+            .last_exit_status=surface.last_exit_status,.predecessor_surface_id=surface.predecessor_surface_id,.lifecycle=.ended,.kind=surface.kind,.command_id=surface.command_id[0..surface.command_id_len] };
         count += 1;
     };
     return count;
@@ -189,12 +196,16 @@ pub fn applyToState(restored: *const RestoreResult, state: *State) void {
     for (restored.pinned_workspace_ids.items) |pin| if (state.pin_count < state.pins.len) { state.pins[state.pin_count]=pin; state.pin_count+=1; };
     state.last_pair = restored.last_pair;
     for (restored.records.items) |record| {
+        // Legacy records had no kind/command identity and represented shells.
+        // Ended shells are not durable history and are pruned during migration.
+        if(record.kind==.shell)continue;
         const ws=record.workspace_id orelse continue; const repo=record.repository_id orelse continue;
         const key:model.PairKey=.{.workspace_id=ws,.repository_id=repo};
         if (!model.pairValid(state,key)) continue;
         const pi=model.pairIndex(state,key) orelse continue; var pair=&state.pairs[pi];
         if(pair.surface_count==pair.surfaces.len)continue;
-        var surface:model.Surface=.{.id=record.surface_id,.lifecycle=.ended,.order=record.order,.last_exit_status=record.last_exit_status,.predecessor_surface_id=record.predecessor_surface_id};
+        var surface:model.Surface=.{.id=record.surface_id,.lifecycle=.ended,.kind=record.kind,.order=record.order,.last_exit_status=record.last_exit_status,.predecessor_surface_id=record.predecessor_surface_id};
+        surface.command_id_len=@intCast(@min(record.command_id.len,surface.command_id.len));@memcpy(surface.command_id[0..surface.command_id_len],record.command_id[0..surface.command_id_len]);
         surface.title_len=@intCast(@min(record.title.len,surface.title.len));@memcpy(surface.title[0..surface.title_len],record.title[0..surface.title_len]);
         surface.cwd_len=@intCast(@min(record.cwd_label.len,surface.cwd.len));@memcpy(surface.cwd[0..surface.cwd_len],record.cwd_label[0..surface.cwd_len]);
         pair.surfaces[pair.surface_count]=surface;pair.surface_count+=1;

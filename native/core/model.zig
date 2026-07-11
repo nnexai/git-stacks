@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Id = [36]u8;
 pub const Connection = enum { disconnected_no_snapshot, connecting, ready, stale, refresh_required, incompatible, failed };
 pub const Lifecycle = enum { live, ended, failed_cleanup };
+pub const TerminalKind = enum { shell, configured_command };
 pub const OrganizationMode = enum { simple, label, repository };
 pub const AttentionStatus = enum { failed, waiting, completed, working, idle };
 pub const Severity = enum(u8) { none, secondary, primary };
@@ -26,7 +27,7 @@ pub const Workspace = struct {
     repository_count: u8 = 0,
 };
 pub const Command = struct { id: [64]u8 = [_]u8{0} ** 64, id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
-pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
+pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, kind: TerminalKind = .shell, command_id: [64]u8 = [_]u8{0} ** 64, command_id_len: u8 = 0, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
 pub const PairCollection = struct { key: PairKey, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
 pub const Attention = struct { id: Id, service_id: [64]u8 = [_]u8{0} ** 64, service_id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: AttentionStatus, read: bool = false, resolved: bool = true };
 pub const Aggregate = struct { unread: u32 = 0, severity: Severity = .none };
@@ -154,7 +155,7 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
         for (pair.surfaces[0..pair.surface_count], 0..) |s, j| {
             if (j != 0) try w.writeByte(',');
             const surface_summary = aggregate(&state, pair.key.workspace_id, pair.key.repository_id, s.id);
-            try w.print("{{\"id\":\"{s}\",\"generation\":{d},\"lifecycle\":\"{s}\",\"order\":{d},\"unread\":{d},\"severity\":\"{s}\",\"title\":", .{ s.id, s.generation, @tagName(s.lifecycle), s.order, surface_summary.unread, @tagName(surface_summary.severity) });
+            try w.print("{{\"id\":\"{s}\",\"generation\":{d},\"lifecycle\":\"{s}\",\"kind\":\"{s}\",\"command_id\":{f},\"order\":{d},\"unread\":{d},\"severity\":\"{s}\",\"title\":", .{ s.id, s.generation, @tagName(s.lifecycle), @tagName(s.kind), std.json.fmt(s.command_id[0..s.command_id_len],.{}), s.order, surface_summary.unread, @tagName(surface_summary.severity) });
             try w.print("{f}", .{std.json.fmt(s.title[0..s.title_len], .{})});
             try w.writeAll(",\"cwd\":");
             try w.print("{f}", .{std.json.fmt(s.cwd[0..s.cwd_len], .{})});

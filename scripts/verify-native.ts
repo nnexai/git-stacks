@@ -529,11 +529,15 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
       },
     },
   }
+  const secondSnapshot = {
+    ...snapshot, request_id: "req_workspace_smoke_0002", revision: "1",
+    workspace: { ...snapshot.workspace, id: "10000000-0000-4000-8000-000000000003", name: "Second worktree", repositories: [{ ...snapshot.workspace.repositories[0]!, id: "20000000-0000-4000-8000-000000000004", name: "Smoke repository worktree" }], launch: { ...snapshot.workspace.launch, named: [] } },
+  }
   const serviceKeepalive = setInterval(() => {}, 1_000)
   const service = await startManagedService({
     serviceRoot: join(configRoot, "service"), idleMs: 60_000,
     snapshot: {
-      async buildAll() { return [snapshot] },
+      async buildAll() { return [snapshot, secondSnapshot] },
       async buildWorkspace(_name: string, requestId?: string) { return { ...snapshot, request_id: requestId ?? snapshot.request_id } },
       async currentRevision() { return "1" },
       async resolveNativeLaunch(request) {
@@ -566,6 +570,7 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
       "close=user-remove x-keyboard-identical=true child-terminated=true natural-exit=ended-visible remove-enabled=true",
       "relaunch=distinct-lineage remove-ended=persisted",
       "pin=ordered-persisted",
+      "pair-isolation=switch-50 hosts-unchanged=true tabs-exact=true",
       "context-menu=constructed",
     ]
     if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_WORKSPACE_LIFECYCLE") || checkpoints.some((checkpoint) => !stderr.includes(checkpoint))) throw new Error(`workspace lifecycle evidence missing (${outcome.code}): ${stderr}`)

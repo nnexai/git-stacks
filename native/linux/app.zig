@@ -20,7 +20,7 @@ const c = @cImport({
 
 const State = struct {
     runtime: *runtime_mod.Runtime,
-    terminals: [16]?*surface_mod.Surface = [_]?*surface_mod.Surface{null} ** 16,
+    terminals: [128]?*surface_mod.Surface = [_]?*surface_mod.Surface{null} ** 128,
     terminal_count: usize = 0,
     registry: guard.Registry,
     graph: app_graph.ProductionGraph,
@@ -34,6 +34,9 @@ const State = struct {
     workspace_list: ?*c.GtkListBox = null,
     tab_view: ?*c.AdwTabView = null,
     tab_bar: ?*c.AdwTabBar = null,
+    pair_stack: ?*c.GtkStack = null,
+    pair_uis: [32]PairUi = undefined,
+    pair_ui_count: u8 = 0,
     launcher: ?*c.AdwDialog = null,
     launcher_entry: ?*c.GtkSearchEntry = null,
     launcher_results: ?*c.GtkListBox = null,
@@ -45,10 +48,13 @@ const State = struct {
     launcher_model: ?command_launcher.Launcher = null,
     focus_before_launcher: ?*c.GtkWidget = null,
     programmatic_tab_close: bool = false,
+    creating_terminal: bool = false,
+    pending_exit: ?model.Id = null,
     ui_smoke_stage: u8 = 0,
     ui_smoke_wait: u16 = 0,
     ui_smoke_ids: [6]?model.Id = [_]?model.Id{null} ** 6,
 };
+const PairUi = struct { key:model.PairKey, container:*c.GtkWidget, tabs:*c.AdwTabView, bar:*c.AdwTabBar, name:[74:0]u8 };
 var active: ?*State = null;
 
 fn presentationPath(buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
@@ -386,13 +392,18 @@ fn terminalExited(context: *anyopaque, _: i32, _: u64) !void {
     _ = context;
 }
 fn terminalDestroy(_: *anyopaque) void {}
-fn surfaceExited(context:*anyopaque,id:model.Id)void{
-    const state:*State=@ptrCast(@alignCast(context));
+fn handleSurfaceExited(state:*State,id:model.Id)void{
     const loc=model.surfaceLocation(&state.graph.state,id) orelse return;
+    if(state.graph.state.pairs[loc.pair].surfaces[loc.surface].kind==.shell){closeTerminal(state,id);return;}
     state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle=.ended;
     state.graph.terminals.childExited(id) catch |err| if (err != error.UnknownSurface)
         std.debug.print("native terminal exit detach failed: {s}\n", .{@errorName(err)});
     savePresentation(state);refreshProjection(state);
+}
+fn surfaceExited(context:*anyopaque,id:model.Id)void{
+    const state:*State=@ptrCast(@alignCast(context));
+    if(state.creating_terminal){state.pending_exit=id;return;}
+    handleSurfaceExited(state,id);
 }
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
@@ -463,6 +474,7 @@ fn refreshLauncher(state: *State) void {
 }
 
 fn refreshProjection(state: *State) void {
+    selectPairUi(state);
     if (state.action_group) |group| for (application.actions) |spec| {
         const bare = spec.name[4..];
         var name: [64:0]u8 = [_:0]u8{0} ** 64;
@@ -612,6 +624,30 @@ fn refreshProjection(state: *State) void {
         setAccessible(label, c.GTK_ACCESSIBLE_ROLE_STATUS, rendered.ptr, "Hierarchical workspace, repository, and terminal attention status");
     }
     refreshLauncher(state);
+}
+
+fn findPairUi(state:*State,key:model.PairKey)?*PairUi{for(state.pair_uis[0..state.pair_ui_count])|*ui|if(model.PairKey.eql(ui.key,key))return ui;return null;}
+fn ensurePairUi(state:*State,key:model.PairKey)?*PairUi{
+    if(findPairUi(state,key))|ui|return ui;
+    if(state.pair_ui_count>=state.pair_uis.len)return null;
+    const stack=state.pair_stack orelse return null;
+    const box=c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL,0) orelse return null;
+    const tabs=c.adw_tab_view_new() orelse return null;
+    _=c.g_signal_connect_data(tabs,"notify::selected-page",@ptrCast(&selectedPageChanged),state,null,0);
+    _=c.g_signal_connect_data(tabs,"close-page",@ptrCast(&nativeClosePage),state,null,0);
+    const menu=c.g_menu_new() orelse return null;
+    c.g_menu_append(menu,"Rename…","win.rename-current");c.g_menu_append(menu,"Close","win.close-tab");c.g_menu_append(menu,"Relaunch","win.relaunch-current");c.g_menu_append(menu,"Remove","win.remove-current");
+    c.adw_tab_view_set_menu_model(@ptrCast(tabs),@ptrCast(@alignCast(menu)));c.g_object_unref(menu);
+    const bar=c.adw_tab_bar_new() orelse return null;c.adw_tab_bar_set_view(@ptrCast(bar),@ptrCast(tabs));c.adw_tab_bar_set_autohide(@ptrCast(bar),0);c.adw_tab_bar_set_expand_tabs(@ptrCast(bar),0);
+    const add=c.gtk_button_new_from_icon_name("tab-new-symbolic") orelse return null;c.gtk_actionable_set_action_name(@ptrCast(add),"win.new-shell");c.adw_tab_bar_set_end_action_widget(@ptrCast(bar),add);
+    c.gtk_box_append(@ptrCast(box),@ptrCast(@alignCast(bar)));c.gtk_widget_set_vexpand(@ptrCast(@alignCast(tabs)),1);c.gtk_box_append(@ptrCast(box),@ptrCast(@alignCast(tabs)));
+    const index=state.pair_ui_count;var ui=&state.pair_uis[index];ui.*=.{.key=key,.container=box,.tabs=@ptrCast(tabs),.bar=@ptrCast(bar),.name=undefined};
+    _=std.fmt.bufPrintZ(&ui.name,"{s}:{s}",.{key.workspace_id,key.repository_id}) catch return null;
+    _=c.gtk_stack_add_named(stack,box,&ui.name);state.pair_ui_count+=1;return ui;
+}
+fn selectPairUi(state:*State)void{
+    const key=state.graph.state.selected_pair orelse return;const ui=ensurePairUi(state,key) orelse return;
+    state.tab_view=ui.tabs;state.tab_bar=ui.bar;if(state.pair_stack)|stack|c.gtk_stack_set_visible_child_name(stack,&ui.name);
 }
 
 fn freePair(data: ?*anyopaque) callconv(.c) void {
@@ -829,18 +865,23 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         showLauncherError(state, @errorName(err));
         return null;
     };
+    state.creating_terminal=true;
+    defer {
+        state.creating_terminal=false;
+        if(state.pending_exit)|ended| { state.pending_exit=null; handleSurfaceExited(state,ended); }
+    }
     state.terminals[state.terminal_count] = surface;
     surface.setExitHandler(state,surfaceExited);
     state.terminal_count += 1;
     // Ghostty does not create/register the child until its widget belongs to a
     // realized GTK hierarchy.  The page is provisional until that handshake
     // succeeds; it is never published to the presentation model early.
-    const tabs = state.tab_view orelse { surface.destroy(); state.terminal_count -= 1; return null; };
+    const tabs = state.tab_view orelse { forgetTerminal(state,surface.surface_id); surface.destroy(); return null; };
     const child: *c.GtkWidget = @ptrCast(@alignCast(surface.widget()));
-    const sid = std.heap.c_allocator.create(model.Id) catch { surface.destroy(); state.terminal_count -= 1; return null; };
+    const sid = std.heap.c_allocator.create(model.Id) catch { forgetTerminal(state,surface.surface_id); surface.destroy(); return null; };
     sid.* = surface.surface_id;
     c.g_object_set_data_full(@ptrCast(child), "git-stacks-surface", sid, @ptrCast(&freeId));
-    const provisional = c.adw_tab_view_append(tabs, child) orelse { surface.destroy(); state.terminal_count -= 1; return null; };
+    const provisional = c.adw_tab_view_append(tabs, child) orelse { forgetTerminal(state,surface.surface_id); surface.destroy(); return null; };
     c.adw_tab_page_set_title(provisional, "Starting…");
     c.adw_tab_page_set_loading(provisional, 1);
     c.adw_tab_view_set_selected_page(tabs, provisional);
@@ -855,8 +896,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     const ownership = identity orelse {
         c.adw_tab_view_close_page(tabs, provisional);
         surface.destroy();
-        state.terminals[state.terminal_count - 1] = null;
-        state.terminal_count -= 1;
+        forgetTerminal(state,surface.surface_id);
         showLauncherError(state, "Terminal process did not start");
         return null;
     };
@@ -867,13 +907,14 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = generation, .child_pid = ownership.pid, .pgid = ownership.pgid, .birth_token = ownership.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
     tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| {
         c.adw_tab_view_close_page(tabs, provisional); surface.destroy();
-        state.terminals[state.terminal_count - 1] = null;
-        state.terminal_count -= 1;
+        forgetTerminal(state,surface.surface_id);
         showLauncherError(state, @errorName(err));
         return null;
     };
     if(model.surfaceLocation(&state.graph.state,surface.surface_id))|location|{
         var entry=&state.graph.state.pairs[location.pair].surfaces[location.surface];
+        entry.kind=if(command_id==null).shell else .configured_command;
+        if(command_id)|requested|{entry.command_id_len=@intCast(@min(requested.len,entry.command_id.len));@memcpy(entry.command_id[0..entry.command_id_len],requested[0..entry.command_id_len]);}
         const cwd=spec.cwd[0..std.mem.indexOfScalar(u8,&spec.cwd,0).?];entry.cwd_len=@intCast(@min(cwd.len,entry.cwd.len));@memcpy(entry.cwd[0..entry.cwd_len],cwd[0..entry.cwd_len]);
         var title:[]const u8="shell";
         if(command_id)|requested|for(state.graph.state.commands[0..state.graph.state.command_count])|command|if(std.mem.eql(u8,requested,command.id[0..command.id_len])){title=command.name[0..command.name_len];break;};
@@ -884,8 +925,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         state.graph.state.pairs[loc.pair].surface_count -= 1;
         (workspace_view.View{ .state = &state.graph.state }).publishRelaunch(old_id, surface.surface_id) catch {
             state.graph.terminals.close(surface.surface_id) catch {};
-            state.terminals[state.terminal_count - 1] = null;
-            state.terminal_count -= 1;
+            forgetTerminal(state,surface.surface_id);
             return null;
         };
         // The replacement owns a new Ghostty widget/page. Remove the retained
@@ -990,12 +1030,12 @@ fn forgetTerminal(state: *State, id: model.Id) void {
     };
 }
 fn closeTerminal(state: *State, id: model.Id) void {
-    if (state.tab_view) |tabs| for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
+    for(state.pair_uis[0..state.pair_ui_count])|*ui| { const tabs=ui.tabs; for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
         const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
         const child = c.adw_tab_page_get_child(page) orelse continue;
         const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
         if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_close_page(tabs, page); break; }
-    };
+    }}
 }
 fn focusTerminal(state: *State, requested: ?model.Id) void {
     var target = requested;
@@ -1180,39 +1220,14 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     setAccessible(status, c.GTK_ACCESSIBLE_ROLE_STATUS, "Connection state", "Explicit loading, empty, disconnected, stale, incompatible, refresh-required, or failure state");
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), status, "connection");
     const workspace = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
-    const tabs = c.adw_tab_view_new() orelse return null;
-    state.tab_view = @ptrCast(tabs);
-    _ = c.g_signal_connect_data(tabs, "notify::selected-page", @ptrCast(&selectedPageChanged), state, null, 0);
-    _ = c.g_signal_connect_data(tabs, "close-page", @ptrCast(&nativeClosePage), state, null, 0);
-    const tab_menu = c.g_menu_new() orelse return null;
-    c.g_menu_append(tab_menu, "Rename…", "win.rename-current");
-    c.g_menu_append(tab_menu, "Close", "win.close-tab");
-    c.g_menu_append(tab_menu, "Relaunch", "win.relaunch-current");
-    c.g_menu_append(tab_menu, "Remove", "win.remove-current");
-    c.adw_tab_view_set_menu_model(@ptrCast(tabs), @ptrCast(@alignCast(tab_menu)));
-    c.g_object_unref(tab_menu);
-    const tab_bar = c.adw_tab_bar_new() orelse return null;
-    state.tab_bar = @ptrCast(tab_bar);
-    c.adw_tab_bar_set_view(@ptrCast(tab_bar), @ptrCast(tabs));
-    c.adw_tab_bar_set_autohide(@ptrCast(tab_bar), 0);
-    c.adw_tab_bar_set_expand_tabs(@ptrCast(tab_bar), 0);
-    const new_tab = c.gtk_button_new_from_icon_name("tab-new-symbolic") orelse return null;
-    c.gtk_actionable_set_action_name(@ptrCast(new_tab), "win.new-shell");
-    c.gtk_widget_set_tooltip_text(new_tab, "New terminal");
-    c.adw_tab_bar_set_end_action_widget(@ptrCast(tab_bar), new_tab);
-    const tab_click = c.gtk_gesture_click_new() orelse return null;
-    c.gtk_gesture_single_set_button(@ptrCast(tab_click), 1);
-    _ = c.g_signal_connect_data(tab_click, "pressed", @ptrCast(&tabBarPressed), state, null, 0);
-    c.gtk_widget_add_controller(@ptrCast(@alignCast(tab_bar)), @ptrCast(tab_click));
-    setAccessible(tab_bar, c.GTK_ACCESSIBLE_ROLE_TAB_LIST, "Terminal tabs", "Terminals for the selected repository");
-    c.gtk_box_append(@ptrCast(workspace), @ptrCast(@alignCast(tab_bar)));
+    const pair_stack=c.gtk_stack_new() orelse return null;state.pair_stack=@ptrCast(pair_stack);c.gtk_widget_set_vexpand(pair_stack,1);c.gtk_box_append(@ptrCast(workspace),pair_stack);
+    selectPairUi(state);
+    const tabs=state.tab_view orelse return null;
     const initial_child: *c.GtkWidget = @ptrCast(@alignCast(terminal.widget()));
     const initial_id = std.heap.c_allocator.create(model.Id) catch return null; initial_id.* = terminal.surface_id;
     c.g_object_set_data_full(@ptrCast(initial_child), "git-stacks-surface", initial_id, @ptrCast(&freeId));
-    const initial_page = c.adw_tab_view_append(@ptrCast(tabs), initial_child) orelse return null;
+    const initial_page = c.adw_tab_view_append(tabs, initial_child) orelse return null;
     c.adw_tab_page_set_title(initial_page, "Terminal");
-    c.gtk_widget_set_vexpand(@ptrCast(@alignCast(tabs)), 1);
-    c.gtk_box_append(@ptrCast(workspace), @ptrCast(@alignCast(tabs)));
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), workspace, "workspace");
     c.gtk_paned_set_start_child(@ptrCast(split), sidebar_box);
     c.gtk_paned_set_end_child(@ptrCast(split), content_stack);
@@ -1446,7 +1461,14 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             var workspace_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(workspace_text[0..36], &workspace.id);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "pin-workspace", c.g_variant_new_string(workspace_text[0..36 :0].ptr));
             if (state.graph.state.pin_count != 1) return 1;
-            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed pin=ordered-persisted\n", .{pages});
+            if(state.graph.state.pair_count<2)return 1;
+            const first_pair=state.graph.state.pairs[0].key;const second_pair=state.graph.state.pairs[1].key;
+            const hosts_before=state.graph.terminals.hosts.items.len;
+            for(0..50)|i|{state.graph.state.selected_pair=if(i%2==0)second_pair else first_pair;refreshProjection(state);}
+            state.graph.state.selected_pair=first_pair;refreshProjection(state);
+            const first_ui=findPairUi(state,first_pair) orelse return 1;const second_ui=findPairUi(state,second_pair) orelse return 1;
+            if(first_ui.tabs==second_ui.tabs or state.graph.terminals.hosts.items.len!=hosts_before or c.adw_tab_view_get_n_pages(first_ui.tabs)!=pages or c.adw_tab_view_get_n_pages(second_ui.tabs)!=0)return 1;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed pin=ordered-persisted pair-isolation=switch-50 hosts-unchanged=true tabs-exact=true\n", .{pages});
             std.debug.print("GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered={d} pages={d} launcher=dialog context_menus=true split=paned\n", .{state.graph.terminals.hosts.items.len,pages});
             state.ui_smoke_stage = 8;
             if(state.window)|window|c.gtk_window_close(window);

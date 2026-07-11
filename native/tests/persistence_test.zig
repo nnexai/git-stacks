@@ -48,7 +48,8 @@ test "atomic process restart restores pair-local presentation ended and quaranti
     var before:persistence.State=.{.workspace_count=1,.pair_count=1,.pin_count=1,.organization_mode=.repository};
     before.workspaces[0]=.{.id=id("118f47f4-5ab1-7c2d-8e90-123456789abc"),.repository_count=1};before.workspaces[0].repository_ids[0]=id("218f47f4-5ab1-7c2d-8e90-123456789abc");before.pins[0]=before.workspaces[0].id;
     before.pairs[0]=.{.key=.{.workspace_id=before.workspaces[0].id,.repository_id=before.workspaces[0].repository_ids[0]},.surface_count=1};before.last_pair=before.pairs[0].key;
-    before.pairs[0].surfaces[0]=.{.id=id("018f47f4-5ab1-7c2d-8e90-123456789abc"),.lifecycle=.live,.order=4,.last_exit_status=7,.predecessor_surface_id=id("318f47f4-5ab1-7c2d-8e90-123456789abc")};
+    before.pairs[0].surfaces[0]=.{.id=id("018f47f4-5ab1-7c2d-8e90-123456789abc"),.lifecycle=.live,.kind=.configured_command,.command_id_len=20,.order=4,.last_exit_status=7,.predecessor_surface_id=id("318f47f4-5ab1-7c2d-8e90-123456789abc")};
+    @memcpy(before.pairs[0].surfaces[0].command_id[0..20],"cmd_persistence_test");
     @memcpy(before.pairs[0].surfaces[0].title[0..7],"renamed");before.pairs[0].surfaces[0].title_len=7;@memcpy(before.pairs[0].surfaces[0].cwd[0..4],"repo");before.pairs[0].surfaces[0].cwd_len=4;
     try persistence.writeStateAtomic(std.testing.allocator,path,&before);
     var after:persistence.State=.{.workspace_count=1,.pair_count=1};after.workspaces[0]=before.workspaces[0];after.pairs[0]=.{.key=before.pairs[0].key};
