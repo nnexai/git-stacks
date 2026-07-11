@@ -25,6 +25,9 @@ static void roundtrip_file(const char *path) {
   assert(gs_model_dispatch_v1(model, bytes(snapshot, strlen(snapshot)), &output, &error) == GS_OK_V1);
   assert(contains(output, "\"pair_count\":1") && contains(output, "\"title\":\"build\""));
   assert(gs_bytes_free_v1(output) == GS_OK_V1);
+  const char *oversize = "{\"type\":\"snapshot\",\"revision\":7,\"sequence\":11,\"workspaces\":[],\"pairs\":[{\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"surfaces\":[{\"id\":\"318f47f4-5ab1-7c2d-8e90-123456789abc\",\"title\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]}]}";
+  assert(gs_model_dispatch_v1(model, bytes(oversize, strlen(oversize)), &output, &error) == GS_INVALID_JSON_V1);
+  assert(gs_bytes_free_v1(error) == GS_OK_V1);
   const char *attention = "{\"type\":\"attention_received\",\"id\":\"418f47f4-5ab1-7c2d-8e90-123456789abc\",\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"surface_id\":\"318f47f4-5ab1-7c2d-8e90-123456789abc\",\"status\":\"waiting\"}";
   assert(gs_model_dispatch_v1(model, bytes(attention, strlen(attention)), &output, &error) == GS_OK_V1);
   assert(contains(output, "\"attention_count\":1") && contains(output, "\"read\":false") && contains(output, "\"unread\":1") && contains(output, "\"severity\":\"primary\""));

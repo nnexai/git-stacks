@@ -15,12 +15,12 @@ pub const PairKey = struct {
         return std.mem.eql(u8, &a.workspace_id, &b.workspace_id) and std.mem.eql(u8, &a.repository_id, &b.repository_id);
     }
 };
-pub const NamedRepository = struct { id: Id, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
+pub const NamedRepository = struct { id: Id = [_]u8{0} ** 36, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
 pub const Workspace = struct {
     id: Id,
     name: [96]u8 = [_]u8{0} ** 96,
     name_len: u8 = 0,
-    repositories: [8]NamedRepository = undefined,
+    repositories: [8]NamedRepository = [_]NamedRepository{.{}} ** 8,
     repository_ids: [8]Id = undefined,
     repository_count: u8 = 0,
 };
@@ -123,6 +123,12 @@ pub fn reconcile(state: *State) void {
     if (state.workspace_count > 0 and state.workspaces[0].repository_count > 0) state.selected_pair = .{ .workspace_id = state.workspaces[0].id, .repository_id = state.workspaces[0].repository_ids[0] } else state.selected_pair = null;
 }
 pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
+    if (state.workspace_count > state.workspaces.len or state.pair_count > state.pairs.len or state.command_count > state.commands.len) return error.InvalidState;
+    for (state.workspaces[0..state.workspace_count]) |ws| {
+        if (ws.name_len > ws.name.len or ws.repository_count > ws.repository_ids.len) return error.InvalidState;
+        for (ws.repositories[0..ws.repository_count]) |repo| if (repo.name_len > repo.name.len) return error.InvalidState;
+    }
+    for (state.commands[0..state.command_count]) |command| if (command.id_len > command.id.len or command.name_len > command.name.len) return error.InvalidState;
     const surface_id = if (state.surface) |s| s.id[0..] else "";
     const predecessor = if (state.surface) |s| if (s.predecessor_surface_id) |id| id[0..] else "" else "";
     var out: std.ArrayList(u8) = .empty;

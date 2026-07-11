@@ -444,7 +444,8 @@ async function buildApp(): Promise<string> {
 
 async function runInteractiveApp(): Promise<void> {
   const artifact = await buildApp()
-  const service = await startManagedService()
+  const keepalive = setInterval(() => {}, 1_000)
+  const service = await startManagedService().finally(() => clearInterval(keepalive))
   try {
     const child = Bun.spawn([artifact], { cwd: ROOT, stdin: "inherit", stdout: "inherit", stderr: "inherit", env: process.env })
     const code = await child.exited
@@ -491,6 +492,23 @@ async function smokeMultisurface(): Promise<void> {
   if (outcome.code !== 0 || !stderr.includes("GIT_STACKS_MULTISURFACE_READY surfaces=2") || !stderr.includes("ids_distinct=true") || !/left_rows=[1-9]\d* left_columns=[1-9]\d* right_rows=[1-9]\d* right_columns=[1-9]\d*/.test(stderr) || !/left_draws=[1-9]\d* right_draws=[1-9]\d*/.test(stderr) || !stderr.includes("registrations=2")) throw new Error(`independent Ghostty surface evidence missing (${outcome.code}): ${stderr}`)
   console.log("native multisurface smoke passed: two independently identified, sized, rendered, registered Ghostty leaves")
 }
+async function smokeWorkspaceLifecycle(): Promise<void> {
+  const artifact = await buildApp()
+  console.log("native workspace lifecycle smoke: starting managed service")
+  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable for workspace lifecycle smoke")
+  const serviceKeepalive = setInterval(() => {}, 1_000)
+  const service = await startManagedService()
+  try {
+    const child = Bun.spawn([artifact], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_NATIVE_SMOKE: "1", GIT_STACKS_NATIVE_WORKSPACE_SMOKE: "1" } })
+    let timer: ReturnType<typeof setTimeout>; const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 45_000) })
+    const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout]); clearTimeout(timer!)
+    if (outcome === "timeout") { child.kill("SIGKILL"); throw new Error("workspace lifecycle smoke timed out after 45 seconds") }
+    const stderr = await new Response(child.stderr).text()
+    if (outcome.code !== 0 || !/GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered=2 pages=2 launcher=dialog context_menus=true split=paned/.test(stderr)) throw new Error(`workspace lifecycle evidence missing (${outcome.code}): ${stderr}`)
+    if (/Gtk-(CRITICAL|WARNING)|panic:|missing.*page|Child name .* not found/.test(stderr)) throw new Error(`workspace lifecycle emitted GTK/panic diagnostics: ${stderr}`)
+    console.log("native workspace lifecycle smoke passed: create/realize/register/tab/dialog/context/split/close")
+  } finally { clearInterval(serviceKeepalive); await service.stop() }
+}
 
 function verifyAccessibilityContract(): void {
   const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
@@ -534,6 +552,7 @@ async function verifyAll(): Promise<void> {
     await smokeApp()
     await smokeTerminal()
     await smokeMultisurface()
+    await smokeWorkspaceLifecycle()
   })
 }
 
@@ -566,6 +585,7 @@ else if (mode === "run-app") await runInteractiveApp()
 else if (mode === "smoke-app") await smokeApp()
 else if (mode === "smoke-terminal") await smokeTerminal()
 else if (mode === "smoke-multisurface") await smokeMultisurface()
+else if (mode === "smoke-workspace") await smokeWorkspaceLifecycle()
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "config") throw new Error("Ghostty configuration is verified through the production runtime; use native:verify")
 else if (mode === "quick") await verifyQuick()
