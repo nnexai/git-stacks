@@ -277,3 +277,11 @@ Required acceptance: all close entry points converge; natural exit retains visib
 - Final command output remains inspectable after exit.
 - Persist only after the complete transaction, never between ownership mutations.
 - Shutdown never waits synchronously on an unbounded network operation on the GTK thread.
+
+## Pair ownership and terminal-kind remediation — 2026-07-12
+
+Production commit `5e0b4339` replaces the shared selected-pair tab surface with persistent identity-keyed `AdwTabView`/`AdwTabBar` containers inside a `GtkStack`. Switching repositories changes only the visible pair container; hidden Ghostty pages remain parented and realized. The graphical fixture now supplies two worktree pairs and proves 50 rapid switches preserve exact pair-local page sets and unchanged host ownership.
+
+The native model, canonical ABI, and presentation persistence now carry terminal kind (`shell` or `configured_command`) plus configured-command identity. Shell termination and every explicit close remove the page and presentation. Only configured-command natural exit retains visible output and ended actions. Migration infers configured-command history only from a legacy command identity and prunes old ended shell records, including synthetic zero-ID debris.
+
+Creation now queues child-exit notification while a provisional terminal is being realized/registered and removes terminal slots strictly by stable surface ID on rollback. Slot capacity was widened for burst tolerance, and no creation rollback relies on `terminal_count - 1` ownership assumptions.
