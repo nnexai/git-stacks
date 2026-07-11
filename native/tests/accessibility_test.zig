@@ -1,0 +1,2 @@
+const std = @import("std"); const widget = @import("terminal_widget");
+test "production terminal declares honest implemented accessibility semantics" { try std.testing.expectEqualStrings("terminal", widget.AccessibilityContract.role); try std.testing.expect(widget.AccessibilityContract.focusable); try std.testing.expect(widget.AccessibilityContract.name.len > 0); try std.testing.expect(widget.AccessibilityContract.description.len > 0); try std.testing.expect(!widget.AccessibilityContract.cell_text_provider); }

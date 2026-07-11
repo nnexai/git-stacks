@@ -17,7 +17,7 @@ This D-16 contract must describe only behavior observed on the exact pinned stac
 
 ## Inspection procedure
 
-1. Launch the native terminal in the real graphical session recorded above.
+1. Launch the exact production terminal with `bun run native:run` in the real graphical session recorded above.
 2. Inspect the GTK accessibility tree with Accerciser, GTK Inspector, or the named equivalent.
 3. Navigate into and away from the terminal using keyboard and assistive technology.
 4. Exercise IME preedit/commit, selection, both clipboard paths, and visible focus.

@@ -18,6 +18,7 @@ This template records the required D-13/D-14 real-session evidence. An unchecked
 - Locale:
 - IME framework and input method:
 - Command/build identifier:
+- Launch command: `bun run native:run`
 
 ## Interaction matrix
 

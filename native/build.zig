@@ -71,6 +71,8 @@ pub fn build(b: *std.Build) void {
     const run_widget_tests = b.addRunArtifact(widget_tests);
     const widget_step = b.step("widget-test", "Run production GTK widget lifecycle tests");
     widget_step.dependOn(&run_widget_tests.step);
+    const accessibility_test_module = b.createModule(.{ .root_source_file = b.path("tests/accessibility_test.zig"), .target = b.graph.host, .optimize = .Debug }); accessibility_test_module.addImport("terminal_widget", widget_module);
+    const accessibility_tests = b.addTest(.{ .root_module = accessibility_test_module }); linkGtk(accessibility_tests); const run_accessibility_tests = b.addRunArtifact(accessibility_tests); const accessibility_step = b.step("accessibility-test", "Verify honest GTK accessibility declarations"); accessibility_step.dependOn(&run_accessibility_tests.step);
 
     const app_module = b.createModule(.{ .root_source_file = b.path("linux/app.zig"), .target = b.graph.host, .optimize = .Debug });
     app_module.addImport("vt_adapter", vt_adapter);

@@ -44,3 +44,4 @@ pub const TerminalWidget = struct {
         c.gtk_widget_unparent(@ptrCast(@alignCast(self.widget)));
     }
 };
+pub const AccessibilityContract = struct { pub const role = "terminal"; pub const name = "git-stacks terminal"; pub const description = "Focusable terminal output"; pub const focusable = true; pub const cell_text_provider = false; };

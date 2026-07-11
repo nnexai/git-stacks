@@ -299,7 +299,14 @@ function verifyAccessibilityContract(): void {
 
 async function verifyAccessibility(): Promise<void> {
   verifyAccessibilityContract()
+  await verify("accessibility-test")
   console.log("native accessibility evidence templates verified; human observations remain required")
+}
+async function verifyAll(): Promise<void> {
+  await verifyQuick(); await verify("vt-test"); await verify("pty-test");
+  await verifyGraphical("renderer-test"); await verifyGraphical("widget-test");
+  await verify("input-test"); await verify("interaction-test"); await verify("runtime-test"); await verifyStress();
+  await verifyAccessibility(); await buildApp(); await smokeApp(); await smokeTerminal();
 }
 
 const mode = process.argv[2] ?? "verify"
@@ -321,6 +328,7 @@ else if (mode === "run-app") await verify("run-app")
 else if (mode === "smoke-app") await smokeApp()
 else if (mode === "smoke-terminal") await smokeTerminal()
 else if (mode === "accessibility") await verifyAccessibility()
-else if (mode === "quick" || mode === "verify") await verifyQuick()
+else if (mode === "quick") await verifyQuick()
+else if (mode === "verify") await verifyAll()
 else if (mode === "terminal-build") await verify()
 else throw new Error(`unknown native verification mode: ${mode}`)
