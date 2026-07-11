@@ -8,13 +8,13 @@ status: executing
 stopped_at: Completed 104-04-PLAN.md; next sequential incomplete plan is 104-06
 last_updated: "2026-07-11T12:02:04.562Z"
 last_activity: 2026-07-11
-last_activity_desc: Completed durable event journal and bounded broker plan
+last_activity_desc: Completed durable operation lifecycle and idempotency plan
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 6
   completed_plans: 5
-  percent: 0
+  percent: 83
 ---
 
 # Project State
@@ -29,25 +29,25 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 104 (Workspace Service and Event Contract) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
-Last activity: 2026-07-11 — Completed durable event journal and bounded broker plan
+Last activity: 2026-07-11 — Completed durable operation lifecycle and idempotency plan
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 7min
-- Total execution time: 28min
+- Total execution time: 34min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| Phase 104 | 4 | 28min | 7min |
+| Phase 104 | 5 | 34min | 7min |
 
 **Recent Trend:** No v0.20.0 plans completed yet.
 | Phase 104 P01 | 11min | 2 tasks | 7 files |
@@ -73,6 +73,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Launch contexts omit resolved secret values and expose only resolver reference metadata. — Service authentication does not imply access to workspace credentials.
 - [Phase 104]: Journal sequence allocation, fsynced append, compaction, and subscriber registration share one serialization boundary. — Prevents replay/live races and active-generation compaction loss.
 - [Phase 104]: Legacy message JSONL persistence remains authoritative and structured attention publication is additive and failure-isolated. — Preserves SVC-04 compatibility when the journal is unavailable.
+- [Phase 104]: Operation state is persisted before journal append but becomes query/observer-visible only after append succeeds. — Prevents clients from observing unreplayable lifecycle transitions.
+- [Phase 104]: Idempotency reservations are scoped by client, endpoint, and key with canonical request hashes. — Prevents retries and restarts from duplicating destructive workspace work.
 
 ### Pending Todos
 
