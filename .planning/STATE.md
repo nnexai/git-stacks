@@ -5,8 +5,8 @@ milestone_name: milestone
 current_phase: 105
 current_phase_name: Shared Native Model and Terminal Foundation
 status: executing
-stopped_at: Completed 105-02-PLAN.md
-last_updated: "2026-07-11T13:25:34.712Z"
+stopped_at: Phase 106 context gathered
+last_updated: "2026-07-11T13:29:43.626Z"
 last_activity: 2026-07-11
 last_activity_desc: Phase 105 execution started
 progress:
@@ -112,6 +112,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T13:25:15.298Z
-Stopped at: Completed 105-02-PLAN.md
-Resume file: None
+Last session: 2026-07-11T13:29:43.608Z
+Stopped at: Phase 106 context gathered
+Resume file: .planning/phases/106-linux-workspace-commands-and-attention/106-CONTEXT.md
