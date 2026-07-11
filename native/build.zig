@@ -33,6 +33,11 @@ pub fn build(b: *std.Build) void {
     const run_vt_tests = b.addRunArtifact(vt_tests);
     const vt_step = b.step("vt-test", "Run exact-pin ghostty-vt adapter tests");
     vt_step.dependOn(&run_vt_tests.step);
+    const pty_module = b.createModule(.{ .root_source_file = b.path("terminal/pty.zig") });
+    const pty_test_module = b.createModule(.{ .root_source_file = b.path("tests/pty_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    pty_test_module.addImport("pty", pty_module);
+    const pty_tests = b.addTest(.{ .root_module = pty_test_module }); pty_tests.linkLibC(); pty_tests.linkSystemLibrary("util");
+    const run_pty_tests = b.addRunArtifact(pty_tests); const pty_step = b.step("pty-test", "Run real PTY tests"); pty_step.dependOn(&run_pty_tests.step);
 
     const renderer_module = b.createModule(.{ .root_source_file = b.path("linux/renderer.zig") });
     renderer_module.addImport("vt_adapter", vt_adapter);
