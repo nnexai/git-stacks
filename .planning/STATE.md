@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 104
 current_phase_name: Workspace Service and Event Contract
 status: executing
-stopped_at: Completed 104-03-PLAN.md; next sequential incomplete plan is 104-02
-last_updated: "2026-07-11T11:36:56.890Z"
+stopped_at: Completed 104-02-PLAN.md; next sequential incomplete plan is 104-04
+last_updated: "2026-07-11T11:45:57.477Z"
 last_activity: 2026-07-11
-last_activity_desc: Phase 104 execution started
+last_activity_desc: Completed aggregate snapshot and launch-context plan
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
-  percent: 33
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -29,29 +29,30 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 104 (Workspace Service and Event Contract) — EXECUTING
-Plan: 2 of 6
+Plan: 4 of 6
 Status: Ready to execute
-Last activity: 2026-07-11 — Phase 104 execution started
+Last activity: 2026-07-11 — Completed aggregate snapshot and launch-context plan
 
-Progress: [███░░░░░░░] 33%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+- Total plans completed: 3
+- Average duration: 8min
+- Total execution time: 25min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| Phase 104 | 3 | 25min | 8min |
 
 **Recent Trend:** No v0.20.0 plans completed yet.
 | Phase 104 P01 | 11min | 2 tasks | 7 files |
 | Phase 104 P03 | 8min | 2 tasks | 3 files |
+| Phase 104 P02 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Identity migration is service-only, lock-serialized, validated, fsynced, and atomically renamed. — Preserves CLI compatibility and prevents competing committed identities.
 - [Phase 104]: Official client IDs are path-safe stable identifiers with independently revocable 256-bit credentials. — Prevents path traversal and limits credential compromise to one installed client.
 - [Phase 104]: Authentication accepts only exact Bearer syntax and returns one rejection before downstream request evaluation. — Closes route, schema, capability, and rate-state admission oracles.
+- [Phase 104]: Snapshot revisions derive from canonical contract-visible content and exclude diagnostic timestamps. — Prevents false revision churn while retaining a timestamp on every response.
+- [Phase 104]: Launch contexts omit resolved secret values and expose only resolver reference metadata. — Service authentication does not imply access to workspace credentials.
 
 ### Pending Todos
 
@@ -82,6 +85,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T11:36:56.872Z
-Stopped at: Completed 104-03-PLAN.md; next sequential incomplete plan is 104-02
+Last session: 2026-07-11T11:45:57.458Z
+Stopped at: Completed 104-02-PLAN.md; next sequential incomplete plan is 104-04
 Resume file: None
