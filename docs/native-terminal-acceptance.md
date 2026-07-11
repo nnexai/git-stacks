@@ -43,6 +43,10 @@ Ghostty loads its normal default and recursive configuration files through `ghos
 - Root cause: `GtkIMContext` commit bytes were sent as a synthetic composing key event with keycode zero.
 - Remediation: commit `7dffab90` forwards committed UTF-8 through `ghostty_surface_text`; automated interaction and full native verification pass.
 - Human result for the remediated artifact: NOT YET OBSERVED.
+- Second full-surface observation: `FAIL` — cooked-shell typing worked, but raw-mode TUI commands such as `q`, `?`, and digits were swallowed; lazygit also honored an inherited `NO_COLOR=1` and rendered a simplified palette.
+- Raw-key remediation: commit `c43c30cf` implements Limux/Ghostty-style IM arbitration, buffering a synchronous plain commit into the original physical `ghostty_surface_key` event while committing true composition only once.
+- Capability remediation: commit `462d3deb` removes launcher-scoped `NO_COLOR` before Ghostty initializes while verifying live children retain `TERM=xterm-ghostty`, `COLORTERM=truecolor`, and a nonempty `TERMINFO`.
+- Human result for the second remediated artifact: NOT YET OBSERVED.
 
 ## Standalone Ghostty fidelity
 
