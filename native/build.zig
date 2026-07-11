@@ -64,6 +64,13 @@ pub fn build(b: *std.Build) void {
     });
     const run_model_tests = b.addRunArtifact(model_tests);
 
+    const reducer_test_module = b.createModule(.{
+        .root_source_file = b.path("tests/reducer_test.zig"), .target = b.graph.host, .optimize = .Debug,
+    });
+    reducer_test_module.addImport("reducer", b.createModule(.{ .root_source_file = b.path("core/reducer.zig") }));
+    const reducer_tests = b.addTest(.{ .root_module = reducer_test_module });
+    const run_reducer_tests = b.addRunArtifact(reducer_tests);
+
     const harness = b.addExecutable(.{
         .name = "abi-harness",
         .root_module = b.createModule(.{
@@ -79,5 +86,6 @@ pub fn build(b: *std.Build) void {
 
     const model_step = b.step("model-test", "Run native model and public ABI tests");
     model_step.dependOn(&run_model_tests.step);
+    model_step.dependOn(&run_reducer_tests.step);
     model_step.dependOn(&run_harness.step);
 }
