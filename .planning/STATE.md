@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 104
 current_phase_name: Workspace Service and Event Contract
 status: executing
-stopped_at: Completed 104-02-PLAN.md; next sequential incomplete plan is 104-04
-last_updated: "2026-07-11T11:45:57.477Z"
+stopped_at: Completed 104-05-PLAN.md; next sequential incomplete plan is 104-04
+last_updated: "2026-07-11T11:51:52.913Z"
 last_activity: 2026-07-11
-last_activity_desc: Completed aggregate snapshot and launch-context plan
+last_activity_desc: Completed durable event journal and bounded broker plan
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
-  percent: 50
+  completed_plans: 4
+  percent: 67
 ---
 
 # Project State
@@ -31,28 +31,29 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 Phase: 104 (Workspace Service and Event Contract) — EXECUTING
 Plan: 4 of 6
 Status: Ready to execute
-Last activity: 2026-07-11 — Completed aggregate snapshot and launch-context plan
+Last activity: 2026-07-11 — Completed durable event journal and bounded broker plan
 
-Progress: [█████░░░░░] 50%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3
-- Average duration: 8min
-- Total execution time: 25min
+- Total plans completed: 4
+- Average duration: 7min
+- Total execution time: 28min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| Phase 104 | 3 | 25min | 8min |
+| Phase 104 | 4 | 28min | 7min |
 
 **Recent Trend:** No v0.20.0 plans completed yet.
 | Phase 104 P01 | 11min | 2 tasks | 7 files |
 | Phase 104 P03 | 8min | 2 tasks | 3 files |
 | Phase 104 P02 | 6min | 2 tasks | 4 files |
+| Phase 104 P05 | 3min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 104]: Authentication accepts only exact Bearer syntax and returns one rejection before downstream request evaluation. — Closes route, schema, capability, and rate-state admission oracles.
 - [Phase 104]: Snapshot revisions derive from canonical contract-visible content and exclude diagnostic timestamps. — Prevents false revision churn while retaining a timestamp on every response.
 - [Phase 104]: Launch contexts omit resolved secret values and expose only resolver reference metadata. — Service authentication does not imply access to workspace credentials.
+- [Phase 104]: Journal sequence allocation, fsynced append, compaction, and subscriber registration share one serialization boundary. — Prevents replay/live races and active-generation compaction loss.
+- [Phase 104]: Legacy message JSONL persistence remains authoritative and structured attention publication is additive and failure-isolated. — Preserves SVC-04 compatibility when the journal is unavailable.
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-11T11:45:57.458Z
-Stopped at: Completed 104-02-PLAN.md; next sequential incomplete plan is 104-04
+Last session: 2026-07-11T11:51:52.892Z
+Stopped at: Completed 104-05-PLAN.md; next sequential incomplete plan is 104-04
 Resume file: None
