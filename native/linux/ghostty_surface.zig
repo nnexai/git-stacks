@@ -79,7 +79,7 @@ pub const Surface = struct {
         _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
         self.clipboard_context = try clipboard.Context.create(runtime.allocator, @ptrCast(self.area), self.generation);
         errdefer runtime.allocator.destroy(self.clipboard_context);
-        self.input = try input_mod.Input.install(self.clipboard_context);
+        try input_mod.Input.install(self.clipboard_context, &self.input);
         c.g_object_set_data(@ptrCast(self.area), "git-stacks-ime", self.input.ime);
         c.gtk_gl_area_set_required_version(self.area, 3, 3);
         c.gtk_gl_area_set_has_depth_buffer(self.area, 1);

@@ -5,22 +5,67 @@ const c = @cImport({
 });
 const clipboard = @import("ghostty_clipboard");
 
-pub const ime_commit_uses_text = true;
+pub const CommitRoute = enum { buffer_for_key, commit_directly };
+pub const FilterRoute = enum { forward_to_ghostty, consume_for_ime };
+
+pub const ImeState = struct {
+    const Phase = enum { idle, not_composing, composing };
+    composing: bool = false,
+    phase: Phase = .idle,
+    pending: [64]u8 = @splat(0),
+    pending_len: usize = 0,
+
+    pub fn beginKeyEvent(self: *ImeState) void {
+        self.phase = if (self.composing) .composing else .not_composing;
+        self.pending_len = 0;
+    }
+    pub fn finishKeyEvent(self: *ImeState) void {
+        self.phase = .idle;
+        self.pending_len = 0;
+    }
+    pub fn preeditStarted(self: *ImeState) void { self.composing = true; }
+    pub fn preeditEnded(self: *ImeState) void { self.composing = false; }
+    pub fn commit(self: *ImeState, text: []const u8) CommitRoute {
+        if (self.phase == .not_composing and text.len < self.pending.len) {
+            @memcpy(self.pending[0..text.len], text);
+            self.pending[text.len] = 0;
+            self.pending_len = text.len;
+            return .buffer_for_key;
+        }
+        self.composing = false;
+        return .commit_directly;
+    }
+    pub fn filterRoute(self: *const ImeState, handled: bool) FilterRoute {
+        if (!handled) return .forward_to_ghostty;
+        if (self.composing or self.phase == .composing or self.pending_len == 0) return .consume_for_ime;
+        return .forward_to_ghostty;
+    }
+    pub fn pendingText(self: *const ImeState) []const u8 { return self.pending[0..self.pending_len]; }
+    pub fn takePendingText(self: *ImeState) []const u8 {
+        const result = self.pending[0..self.pending_len];
+        self.pending_len = 0;
+        return result;
+    }
+};
 
 pub const Input = struct {
     context: *clipboard.Context,
     ime: *c.GtkIMContext,
+    state: ImeState = .{},
 
-    pub fn install(context: *clipboard.Context) !Input {
+    pub fn install(context: *clipboard.Context, self: *Input) !void {
         const widget: *c.GtkWidget = @ptrCast(@alignCast(context.widget));
         const ime = c.gtk_im_multicontext_new() orelse return error.ImContextFailed;
         c.gtk_im_context_set_client_widget(ime, widget);
-        _ = c.g_signal_connect_data(ime, "commit", @ptrCast(&imeCommit), context, null, 0);
-        _ = c.g_signal_connect_data(ime, "preedit-changed", @ptrCast(&preeditChanged), context, null, 0);
+        self.* = .{ .context = context, .ime = ime };
+        _ = c.g_signal_connect_data(ime, "commit", @ptrCast(&imeCommit), self, null, 0);
+        _ = c.g_signal_connect_data(ime, "preedit-start", @ptrCast(&preeditStart), self, null, 0);
+        _ = c.g_signal_connect_data(ime, "preedit-changed", @ptrCast(&preeditChanged), self, null, 0);
+        _ = c.g_signal_connect_data(ime, "preedit-end", @ptrCast(&preeditEnd), self, null, 0);
 
         const keys = c.gtk_event_controller_key_new() orelse return error.KeyControllerFailed;
-        _ = c.g_signal_connect_data(keys, "key-pressed", @ptrCast(&keyPressed), context, null, 0);
-        _ = c.g_signal_connect_data(keys, "key-released", @ptrCast(&keyReleased), context, null, 0);
+        _ = c.g_signal_connect_data(keys, "key-pressed", @ptrCast(&keyPressed), self, null, 0);
+        _ = c.g_signal_connect_data(keys, "key-released", @ptrCast(&keyReleased), self, null, 0);
         c.gtk_widget_add_controller(widget, keys);
 
         const motion = c.gtk_event_controller_motion_new() orelse return error.MotionControllerFailed;
@@ -38,7 +83,7 @@ pub const Input = struct {
         const scroll = c.gtk_event_controller_scroll_new(c.GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES | c.GTK_EVENT_CONTROLLER_SCROLL_DISCRETE) orelse return error.ScrollControllerFailed;
         _ = c.g_signal_connect_data(scroll, "scroll", @ptrCast(&scrolled), context, null, 0);
         c.gtk_widget_add_controller(widget, scroll);
-        return .{ .context = context, .ime = ime };
+        return;
     }
 
     pub fn deinit(self: *Input) void {
@@ -83,19 +128,24 @@ fn live(context: *clipboard.Context) c.ghostty_surface_t {
 }
 
 fn keyPressed(controller: ?*c.GtkEventControllerKey, keyval: c.guint, keycode: c.guint, state: c.GdkModifierType, data: ?*anyopaque) callconv(.c) c.gboolean {
-    const context: *clipboard.Context = @ptrCast(@alignCast(data orelse return 0));
+    const self: *Input = @ptrCast(@alignCast(data orelse return 0));
+    const context = self.context;
     const surface = live(context) orelse return 0;
     const current = c.gtk_event_controller_get_current_event(@ptrCast(controller orelse return 0));
-    if (current != null and c.gtk_im_context_filter_keypress(imFor(context), current) != 0) return 1;
+    self.state.beginKeyEvent();
+    defer self.state.finishKeyEvent();
+    const handled = current != null and c.gtk_im_context_filter_keypress(self.ime, current) != 0;
+    if (self.state.filterRoute(handled) == .consume_for_ime) return 1;
     const cp = c.gdk_keyval_to_unicode(keyval);
     var utf8: [8]u8 = @splat(0);
     const len = if (cp != 0) c.g_unichar_to_utf8(cp, &utf8) else 0;
+    const pending = self.state.pendingText();
     var input = c.ghostty_input_key_s{
         .action = c.GHOSTTY_ACTION_PRESS,
         .mods = mods(state),
         .consumed_mods = if (current) |ev| mods(c.gdk_key_event_get_consumed_modifiers(ev)) else c.GHOSTTY_MODS_NONE,
         .keycode = keycode,
-        .text = if (len > 0) &utf8 else null,
+        .text = if (pending.len > 0) pending.ptr else if (len > 0) &utf8 else null,
         .unshifted_codepoint = cp,
         .composing = false,
     };
@@ -104,10 +154,14 @@ fn keyPressed(controller: ?*c.GtkEventControllerKey, keyval: c.guint, keycode: c
 }
 
 fn keyReleased(controller: ?*c.GtkEventControllerKey, keyval: c.guint, keycode: c.guint, state: c.GdkModifierType, data: ?*anyopaque) callconv(.c) void {
-    const context: *clipboard.Context = @ptrCast(@alignCast(data orelse return));
+    const self: *Input = @ptrCast(@alignCast(data orelse return));
+    const context = self.context;
     const surface = live(context) orelse return;
     const current = c.gtk_event_controller_get_current_event(@ptrCast(controller orelse return));
-    if (current != null and c.gtk_im_context_filter_keypress(imFor(context), current) != 0) return;
+    self.state.beginKeyEvent();
+    defer self.state.finishKeyEvent();
+    const handled = current != null and c.gtk_im_context_filter_keypress(self.ime, current) != 0;
+    if (self.state.filterRoute(handled) == .consume_for_ime) return;
     _ = c.ghostty_surface_key(surface, .{ .action = c.GHOSTTY_ACTION_RELEASE, .mods = mods(state), .consumed_mods = if (current) |ev| mods(c.gdk_key_event_get_consumed_modifiers(ev)) else c.GHOSTTY_MODS_NONE, .keycode = keycode, .text = null, .unshifted_codepoint = c.gdk_keyval_to_unicode(keyval), .composing = false });
 }
 
@@ -117,19 +171,33 @@ fn imFor(context: *clipboard.Context) *c.GtkIMContext {
     return @ptrCast(@alignCast(c.g_object_get_data(@ptrCast(@alignCast(context.widget)), "git-stacks-ime") orelse unreachable));
 }
 fn imeCommit(_: ?*c.GtkIMContext, text: ?[*:0]const u8, data: ?*anyopaque) callconv(.c) void {
-    const context: *clipboard.Context = @ptrCast(@alignCast(data orelse return));
+    const self: *Input = @ptrCast(@alignCast(data orelse return));
+    const context = self.context;
     const surface = live(context) orelse return;
     const value = text orelse return;
-    c.ghostty_surface_text(surface, value, std.mem.len(value));
+    const bytes = std.mem.span(value);
+    if (self.state.commit(bytes) == .buffer_for_key) return;
+    _ = c.ghostty_surface_key(surface, .{ .action = c.GHOSTTY_ACTION_PRESS, .mods = c.GHOSTTY_MODS_NONE, .consumed_mods = c.GHOSTTY_MODS_NONE, .keycode = 0, .text = value, .unshifted_codepoint = 0, .composing = false });
+}
+fn preeditStart(_: ?*c.GtkIMContext, data: ?*anyopaque) callconv(.c) void {
+    const self: *Input = @ptrCast(@alignCast(data orelse return));
+    self.state.preeditStarted();
 }
 fn preeditChanged(ime: ?*c.GtkIMContext, data: ?*anyopaque) callconv(.c) void {
-    const context: *clipboard.Context = @ptrCast(@alignCast(data orelse return));
+    const self: *Input = @ptrCast(@alignCast(data orelse return));
+    const context = self.context;
+    self.state.preeditStarted();
     const surface = live(context) orelse return;
     var text: [*c]u8 = null;
     var cursor: c_int = 0;
     c.gtk_im_context_get_preedit_string(ime orelse return, &text, null, &cursor);
     defer if (text != null) c.g_free(text);
     c.ghostty_surface_preedit(surface, text, @intCast(@max(0, cursor)));
+}
+fn preeditEnd(_: ?*c.GtkIMContext, data: ?*anyopaque) callconv(.c) void {
+    const self: *Input = @ptrCast(@alignCast(data orelse return));
+    self.state.preeditEnded();
+    if (live(self.context)) |surface| c.ghostty_surface_preedit(surface, null, 0);
 }
 
 fn pointerEnter(controller: ?*c.GtkEventControllerMotion, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void {
