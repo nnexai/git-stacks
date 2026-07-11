@@ -183,7 +183,8 @@ fn shutdown(_: ?*c.GApplication, _: ?*anyopaque) callconv(.c) void {
 }
 
 pub fn main() u8 {
-    const flags: c.GApplicationFlags = @intCast(if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) c.G_APPLICATION_NON_UNIQUE else c.G_APPLICATION_DEFAULT_FLAGS);
+    const isolated = std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null or std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null;
+    const flags: c.GApplicationFlags = @intCast(if (isolated) c.G_APPLICATION_NON_UNIQUE else c.G_APPLICATION_DEFAULT_FLAGS);
     const app = c.gtk_application_new("dev.nnex.git-stacks.terminal", flags) orelse return 2;
     defer c.g_object_unref(app);
     _ = c.g_signal_connect_data(app, "activate", @ptrCast(&activate), null, null, 0);
