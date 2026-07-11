@@ -24,18 +24,24 @@ async function harness(limits: { maxEvents: number; maxBytes: number }) {
     heartbeatMs: 60_000,
   })
   cleanup.push(() => service.stop())
-  const socket = connect({ host: "127.0.0.1", port: service.url.port })
+  const socket = connect({ host: "127.0.0.1", port: Number(service.url.port) })
   socket.write(`GET /v1/events?cursor=0 HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer ${client.token}\r\nConnection: keep-alive\r\n\r\n`)
   await Bun.sleep(20)
   socket.pause()
-  cleanup.push(() => socket.destroy())
+  cleanup.push(() => { socket.destroy() })
   return { root, journal, broker, service, socket }
 }
 
-async function publishUntilClosed(input: Awaited<ReturnType<typeof harness>>, payloadBytes: number, max = 2000) {
+async function publishUntilConnections(input: Awaited<ReturnType<typeof harness>>, targetConnections: number, payloadBytes: number, max = 2000, firstSequence = 1) {
   const start = performance.now()
-  for (let index = 0; index < max && input.broker.subscriberCount; index++) {
-    const event = await input.journal.appendAttention({ workspace_id: workspaceId, code: "message", message: `${index}:${"x".repeat(payloadBytes)}` })
+  for (let index = 0; index < max && input.service.connectedClients > targetConnections; index++) {
+    const event = {
+      protocol: "v1" as const,
+      sequence: String(index + firstSequence),
+      timestamp: new Date().toISOString(),
+      type: "attention" as const,
+      attention: { workspace_id: workspaceId, code: "message", message: `${index}:${"x".repeat(payloadBytes)}` },
+    }
     input.broker.publish(event)
     const bridge = input.service.sseDiagnostics[0]
     if (bridge) {
@@ -49,7 +55,7 @@ async function publishUntilClosed(input: Awaited<ReturnType<typeof harness>>, pa
 describe("real loopback SSE backpressure", () => {
   test("stalled reader remains charged and overflows the shared event cap", async () => {
     const input = await harness({ maxEvents: 4, maxBytes: 16 * 1024 * 1024 })
-    await publishUntilClosed(input, 256 * 1024)
+    await publishUntilConnections(input, 0, 1024 * 1024)
     expect(input.broker.subscriberCount).toBe(0)
     expect(input.service.connectedClients).toBe(0)
     expect(input.service.sseDiagnostics).toHaveLength(0)
@@ -58,20 +64,24 @@ describe("real loopback SSE backpressure", () => {
   test("stalled reader overflows shared encoded bytes while a draining reader progresses", async () => {
     const input = await harness({ maxEvents: 256, maxBytes: 700 * 1024 })
     const client = provisionOfficialClient("healthy-client", { serviceRoot: input.root })
-    const response = await fetch(new URL("/v1/events?cursor=0", input.service.url), { headers: { authorization: `Bearer ${client.token}` } })
+    const responsePending = fetch(new URL("/v1/events?cursor=0", input.service.url), { headers: { authorization: `Bearer ${client.token}` } })
+    await Bun.sleep(20)
+    input.broker.publish({ protocol: "v1", sequence: "1", timestamp: new Date().toISOString(), type: "attention", attention: { workspace_id: workspaceId, code: "message", message: "ready" } })
+    const response = await responsePending
     const reader = response.body!.getReader()
     const draining = (async () => {
       let streamed = ""
-      while (!streamed.includes('"sequence":"2"')) {
+      while (!streamed.includes('"sequence":"1"')) {
         const chunk = await reader.read()
         if (chunk.done) break
         streamed += new TextDecoder().decode(chunk.value)
       }
       return streamed
     })()
-    await publishUntilClosed(input, 256 * 1024)
-    expect(await draining).toContain('"sequence":"2"')
+    expect(await draining).toContain('"sequence":"1"')
     await reader.cancel()
+    await Bun.sleep(20)
+    await publishUntilConnections(input, 0, 300 * 1024, 2000, 2)
     expect(input.broker.subscriberCount).toBe(0)
     expect(input.service.connectedClients).toBe(0)
   }, 20_000)

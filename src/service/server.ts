@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto"
 import { z } from "zod"
 import { authenticateAdmission, type AuthenticatedClient } from "../lib/service/credentials"
 import { IdempotencyConflictError, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
-import type { EventBroker, EventSubscription } from "../lib/service/event-broker"
+import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
 import type { WorkspaceSnapshotResponse } from "../lib/service/contract"
 
 export const MAX_BODY_BYTES = 256 * 1024
@@ -45,7 +45,113 @@ export interface RunningServiceServer {
   server: Bun.Server<undefined>
   url: URL
   get connectedClients(): number
+  get sseDiagnostics(): readonly SseTransportDiagnostics[]
   stop(): Promise<void>
+}
+
+export interface SseTransportDiagnostics extends EventSubscriptionDiagnostics {
+  bridgeReservedEvents: number
+  bridgeReservedBytes: number
+  combinedPendingEvents: number
+  combinedPendingBytes: number
+  heartbeatActive: boolean
+}
+
+export class SseTransportBridge {
+  private reservation?: EventReservation
+  private timer?: ReturnType<typeof setTimeout>
+  private released = false
+  private heartbeatActive = false
+  private removeCloseListener: () => void
+
+  constructor(
+    private readonly subscription: EventSubscription,
+    private readonly heartbeatMs: number,
+    private readonly onRelease: () => void,
+  ) { this.removeCloseListener = subscription.onClosed(() => this.release()) }
+
+  get diagnostics(): SseTransportDiagnostics {
+    const subscription = this.subscription.diagnostics
+    return {
+      ...subscription,
+      bridgeReservedEvents: this.reservation ? 1 : 0,
+      bridgeReservedBytes: this.reservation?.bytes ?? 0,
+      combinedPendingEvents: subscription.combinedEvents,
+      combinedPendingBytes: subscription.combinedBytes,
+      heartbeatActive: this.heartbeatActive,
+    }
+  }
+
+  stream(): ReadableStream<Uint8Array> {
+    const source: Bun.DirectUnderlyingSource<Uint8Array> = {
+      type: "direct",
+      pull: async (controller) => {
+        try {
+          while (!this.released) {
+            const available = await this.awaitEventOrHeartbeat()
+            if (available === "heartbeat") {
+              await controller.write(": heartbeat\n\n")
+              await controller.flush()
+              continue
+            }
+            this.reservation = this.subscription.reserve()
+            if (this.reservation) {
+              const event = this.reservation.event
+              await controller.write(`id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+              await controller.flush()
+              this.subscription.ack(this.reservation)
+              this.reservation = undefined
+              continue
+            }
+            if (this.subscription.disconnect) {
+              await controller.write(`event: disconnect\ndata: ${JSON.stringify(this.subscription.disconnect)}\n\n`)
+              await controller.flush()
+            }
+            controller.close()
+            this.release()
+            return
+          }
+        } catch (error) {
+          controller.close(error instanceof Error ? error : new Error(String(error)))
+          this.release()
+        }
+      },
+      cancel: () => this.release(),
+    }
+    return new ReadableStream(source as unknown as UnderlyingSource<Uint8Array>)
+  }
+
+  close(): void { this.release() }
+
+  private async awaitEventOrHeartbeat(): Promise<"event" | "heartbeat"> {
+    if (this.subscription.peek() || this.subscription.diagnostics.closed) return "event"
+    this.heartbeatActive = true
+    return new Promise((resolve) => {
+      let settled = false
+      const finish = (value: "event" | "heartbeat") => {
+        if (settled) return
+        settled = true
+        if (this.timer) clearTimeout(this.timer)
+        this.timer = undefined
+        this.heartbeatActive = false
+        resolve(value)
+      }
+      this.timer = setTimeout(() => finish("heartbeat"), this.heartbeatMs)
+      void this.subscription.waitForAvailable().then(() => finish("event"))
+    })
+  }
+
+  private release(): void {
+    if (this.released) return
+    this.released = true
+    this.removeCloseListener()
+    if (this.timer) clearTimeout(this.timer)
+    this.timer = undefined
+    this.heartbeatActive = false
+    this.reservation = undefined
+    this.subscription.close()
+    this.onRelease()
+  }
 }
 
 type Bucket = { tokens: number; updatedAt: number }
@@ -64,6 +170,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
   const buckets = new Map<string, Bucket>()
   const sseByClient = new Map<string, number>()
   let sseTotal = 0
+  const bridges = new Set<SseTransportBridge>()
   const maxBody = options.maxBodyBytes ?? MAX_BODY_BYTES
   const rate = options.rateLimitPerMinute ?? RATE_LIMIT_PER_MINUTE
   const burst = options.rateLimitBurst ?? RATE_LIMIT_BURST
@@ -108,34 +215,18 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
     sseByClient.set(client.clientId, (sseByClient.get(client.clientId) ?? 0) + 1)
     options.onConnectionChange?.(sseTotal)
     server.timeout(request, 0)
-    const encoder = new TextEncoder()
-    let timer: ReturnType<typeof setInterval> | undefined
     let closed = false
     const release = () => {
       if (closed) return
       closed = true
-      if (timer) clearInterval(timer)
-      subscription.close()
       sseTotal -= 1
       const remaining = (sseByClient.get(client.clientId) ?? 1) - 1
       if (remaining) sseByClient.set(client.clientId, remaining); else sseByClient.delete(client.clientId)
       options.onConnectionChange?.(sseTotal)
     }
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        timer = setInterval(() => controller.enqueue(encoder.encode(": heartbeat\n\n")), heartbeat)
-        void (async () => {
-          try {
-            for await (const event of subscription) {
-              controller.enqueue(encoder.encode(`id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`))
-            }
-            if (subscription.disconnect) controller.enqueue(encoder.encode(`event: disconnect\ndata: ${JSON.stringify(subscription.disconnect)}\n\n`))
-            controller.close()
-          } catch (error) { controller.error(error) } finally { release() }
-        })()
-      },
-      cancel() { release() },
-    })
+    const bridge = new SseTransportBridge(subscription, heartbeat, () => { bridges.delete(bridge); release() })
+    bridges.add(bridge)
+    const stream = bridge.stream()
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" } })
   }
 
@@ -207,6 +298,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
     server,
     url,
     get connectedClients() { return sseTotal },
-    async stop() { options.broker?.close(); await server.stop(true) },
+    get sseDiagnostics() { return [...bridges].map((bridge) => bridge.diagnostics) },
+    async stop() { for (const bridge of [...bridges]) bridge.close(); options.broker?.close(); await server.stop(true) },
   }
 }
