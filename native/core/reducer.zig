@@ -11,9 +11,13 @@ pub const Action = union(enum) {
     relaunch: struct { new_surface_id: [36]u8 },
     terminal_ended: struct { surface_id: [36]u8, generation: u64 },
     terminal_failed_cleanup: struct { surface_id: [36]u8, generation: u64 },
+    attention_received: model.Attention,
+    select_attention: struct { attention_id: model.Id },
+    exact_tab_visible: struct { surface_id: model.Id },
+    navigate_pair: model.PairKey,
 };
 
-pub const Effect = union(enum) { none, refresh_service, persist, terminal_create: struct { id: [36]u8, predecessor: [36]u8 }, platform_focus: [36]u8 };
+pub const Effect = union(enum) { none, refresh_service, persist, terminal_create: struct { id: [36]u8, predecessor: [36]u8 }, platform_focus: model.FocusRoute };
 pub const Result = struct { state: model.State, effect: Effect = .none };
 
 pub fn reduce(before: model.State, action: Action) Result {
@@ -66,6 +70,30 @@ pub fn reduce(before: model.State, action: Action) Result {
                 effect = .persist;
             }
         },
+        .attention_received => |item| {
+            var duplicate=false; for(state.attention[0..state.attention_count])|existing| if(std.mem.eql(u8,&existing.id,&item.id)){ duplicate=true; break; };
+            if (duplicate) state.duplicate_count += 1 else if(state.attention_count < state.attention.len) { var received=item; received.resolved=model.pairValid(&state,.{.workspace_id=item.workspace_id,.repository_id=item.repository_id orelse [_]u8{0}**36}); state.attention[state.attention_count]=received; state.attention_count+=1; }
+        },
+        .select_attention => |a| {
+            for(state.attention[0..state.attention_count])|*item| if(std.mem.eql(u8,&item.id,&a.attention_id)) {
+                item.read=true;
+                var route:model.FocusRoute=.{.workspace_id=item.workspace_id,.repository_id=item.repository_id,.reason=.workspace};
+                if (item.surface_id) |sid| {
+                    if (model.surfaceLocation(&state, sid)) |loc| {
+                        const surface=state.pairs[loc.pair].surfaces[loc.surface]; route.surface_id=sid;
+                        route.reason=if(surface.lifecycle==.live) .exact_surface else .ended_predecessor;
+                    } else if (item.predecessor_surface_id) |pred| {
+                        if(model.surfaceLocation(&state,pred)!=null){route.surface_id=pred;route.reason=.ended_predecessor;} else if(item.repository_id != null) route.reason=.repository;
+                    } else if(item.repository_id != null) route.reason=.repository;
+                } else if(item.repository_id != null) route.reason=.repository;
+                if(!item.resolved) route.reason=.unresolved;
+                effect=.{.platform_focus=route}; break;
+            };
+        },
+        .exact_tab_visible => |a| {
+            for(state.attention[0..state.attention_count])|*item| if(item.surface_id)|sid| { if(std.mem.eql(u8,&sid,&a.surface_id)) item.read=true; };
+        },
+        .navigate_pair => |key| { state.selected_pair=key; state.last_pair=key; },
     }
     return .{ .state = state, .effect = effect };
 }

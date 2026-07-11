@@ -36,6 +36,8 @@ int main(int argc, char **argv) {
     json = corpus;
   }
   assert(gs_native_abi_version_v1() == GS_NATIVE_ABI_V1);
+  assert(GS_ATTENTION_FAILED_V1 != GS_ATTENTION_COMPLETED_V1);
+  assert(GS_FOCUS_EXACT_SURFACE_V1 != GS_FOCUS_UNRESOLVED_V1);
   gs_model_v1 *model = NULL; gs_bytes_v1 error = {0};
   assert(gs_model_create_v1(GS_NATIVE_ABI_V1, bytes(json, len), &model, &error) == GS_OK_V1);
   gs_bytes_v1 output = {0};

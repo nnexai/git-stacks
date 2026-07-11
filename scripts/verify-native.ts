@@ -537,6 +537,7 @@ else if (mode === "surface") { await buildGhostty(); await verify("surface-test"
 else if (mode === "audit-production-graph") auditProductionGraph()
 else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()
+else if (mode === "attention") await verify("attention-test")
 else if (mode === "lifecycle") await verifyLifecycle()
 else if (mode === "stress") await verifyStress()
 else if (mode === "terminal-host") await verifyTerminalHost()

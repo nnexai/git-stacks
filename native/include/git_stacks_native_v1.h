@@ -14,6 +14,8 @@ extern "C" {
 typedef struct gs_model_v1 gs_model_v1;
 typedef struct { const uint8_t *ptr; size_t len; } gs_bytes_v1;
 typedef int32_t gs_status_v1;
+typedef enum { GS_ATTENTION_FAILED_V1, GS_ATTENTION_WAITING_V1, GS_ATTENTION_COMPLETED_V1, GS_ATTENTION_WORKING_V1, GS_ATTENTION_IDLE_V1 } gs_attention_status_v1;
+typedef enum { GS_FOCUS_EXACT_SURFACE_V1, GS_FOCUS_ENDED_PREDECESSOR_V1, GS_FOCUS_REPOSITORY_V1, GS_FOCUS_WORKSPACE_V1, GS_FOCUS_UNRESOLVED_V1 } gs_focus_reason_v1;
 
 enum {
   GS_OK_V1 = 0,

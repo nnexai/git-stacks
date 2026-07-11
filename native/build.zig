@@ -145,6 +145,11 @@ pub fn build(b: *std.Build) void {
     const restore_step = b.step("restore-test", "Run presentation restoration and quarantine tests");
     restore_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = persistence_test_module })).step);
 
+    const attention_test_module = b.createModule(.{ .root_source_file = b.path("tests/attention_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    attention_test_module.addImport("reducer", b.createModule(.{ .root_source_file = b.path("core/reducer.zig") }));
+    const attention_step = b.step("attention-test", "Run structured attention derivation and focus routing tests");
+    attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = attention_test_module })).step);
+
     const ownership_test_module = b.createModule(.{ .root_source_file = b.path("tests/ownership_test.zig"), .target = b.graph.host, .optimize = .Debug });
     ownership_test_module.addImport("ownership", b.createModule(.{ .root_source_file = b.path("terminal/ownership.zig") }));
     ownership_test_module.addImport("guard", b.createModule(.{ .root_source_file = b.path("terminal/guard.zig") }));
