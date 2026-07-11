@@ -38,5 +38,29 @@ test "safe paste permits user paste and denies terminal initiated OSC 52" {
 }
 
 test "GTK IM commit forwards committed UTF-8 through Ghostty text input" {
-    try std.testing.expect(input.ime_commit_uses_text);
+    var state = input.ImeState{};
+    state.beginKeyEvent();
+    try std.testing.expectEqual(input.CommitRoute.buffer_for_key, state.commit("q"));
+    try std.testing.expectEqual(input.FilterRoute.forward_to_ghostty, state.filterRoute(true));
+    try std.testing.expectEqualStrings("q", state.pendingText());
+    state.finishKeyEvent();
+}
+
+test "raw-mode printable keeps physical key while cooked text is not duplicated" {
+    var state = input.ImeState{};
+    state.beginKeyEvent();
+    try std.testing.expectEqual(input.CommitRoute.buffer_for_key, state.commit("1"));
+    try std.testing.expectEqual(input.FilterRoute.forward_to_ghostty, state.filterRoute(true));
+    try std.testing.expectEqualStrings("1", state.takePendingText());
+    try std.testing.expectEqualStrings("", state.takePendingText());
+}
+
+test "IME compose is consumed and committed once outside plain key forwarding" {
+    var state = input.ImeState{};
+    state.preeditStarted();
+    state.beginKeyEvent();
+    try std.testing.expectEqual(input.FilterRoute.consume_for_ime, state.filterRoute(true));
+    state.finishKeyEvent();
+    try std.testing.expectEqual(input.CommitRoute.commit_directly, state.commit("界"));
+    try std.testing.expectEqual(input.FilterRoute.consume_for_ime, state.filterRoute(true));
 }
