@@ -1,0 +1,2 @@
+const std = @import("std"); const runtime = @import("runtime"); const input_mod = @import("input");
+test "production interaction sends committed text through real PTY" { var rt = try runtime.TerminalRuntime.init(std.testing.allocator, "read line; printf 'INTERACTION:%s\\n' \"$line\"", 80, 24); var input = input_mod.Input.init(&rt); defer input.deinit(); try input.commit("real-widget-path\n"); try std.testing.expect(try rt.waitFor("INTERACTION:real-widget-path", 300)); rt.close(); }

@@ -42,6 +42,8 @@ pub fn build(b: *std.Build) void {
     const runtime_test_module = b.createModule(.{ .root_source_file = b.path("tests/terminal_runtime_test.zig"), .target = b.graph.host, .optimize = .Debug }); runtime_test_module.addImport("runtime", runtime_module);
     const runtime_tests = b.addTest(.{ .root_module = runtime_test_module }); runtime_tests.linkLibC(); runtime_tests.linkSystemLibrary("util");
     const run_runtime_tests = b.addRunArtifact(runtime_tests); const runtime_step = b.step("runtime-test", "Run PTY VT runtime integration"); runtime_step.dependOn(&run_runtime_tests.step);
+    const input_module = b.createModule(.{ .root_source_file = b.path("linux/input.zig") }); input_module.addImport("runtime", runtime_module); input_module.addImport("vt_adapter", vt_adapter);
+    inline for (.{ .{ "input-test", "tests/input_test.zig" }, .{ "interaction-test", "tests/interaction_test.zig" } }) |spec| { const m = b.createModule(.{ .root_source_file = b.path(spec[1]), .target = b.graph.host, .optimize = .Debug }); m.addImport("runtime", runtime_module); m.addImport("input", input_module); const t = b.addTest(.{ .root_module = m }); t.linkLibC(); t.linkSystemLibrary("util"); const run = b.addRunArtifact(t); const step = b.step(spec[0], spec[0]); step.dependOn(&run.step); }
 
     const renderer_module = b.createModule(.{ .root_source_file = b.path("linux/renderer.zig") });
     renderer_module.addImport("vt_adapter", vt_adapter);
