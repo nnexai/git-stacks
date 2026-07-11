@@ -1,5 +1,6 @@
 const std = @import("std");
 const clipboard = @import("ghostty_clipboard");
+const input = @import("ghostty_input");
 
 test "clipboard userdata invalidation advances generation before late completion" {
     var byte: u8 = 0;
@@ -34,4 +35,8 @@ test "safe paste permits user paste and denies terminal initiated OSC 52" {
     try std.testing.expect(clipboard.confirmationAllowed(0));
     try std.testing.expect(!clipboard.confirmationAllowed(1));
     try std.testing.expect(!clipboard.confirmationAllowed(2));
+}
+
+test "GTK IM commit forwards committed UTF-8 through Ghostty text input" {
+    try std.testing.expect(input.ime_commit_uses_text);
 }

@@ -86,6 +86,7 @@ pub fn build(b: *std.Build) void {
 
     const interaction_test_module = b.createModule(.{ .root_source_file = b.path("tests/ghostty_interaction_test.zig"), .target = b.graph.host, .optimize = .Debug });
     interaction_test_module.addImport("ghostty_clipboard", clipboard_module);
+    interaction_test_module.addImport("ghostty_input", input_module);
     interaction_test_module.addIncludePath(include_dir);
     interaction_test_module.addLibraryPath(library_dir);
     interaction_test_module.addRPath(library_dir);
