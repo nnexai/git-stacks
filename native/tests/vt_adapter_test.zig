@@ -42,3 +42,15 @@ test "query replies styles selection and bracketed paste remain product owned" {
     defer std.testing.allocator.free(pasted);
     try std.testing.expectEqualStrings("\x1b[200~two\nlines\x1b[201~", pasted);
 }
+
+test "cursor visibility follows DEC private mode" {
+    var terminal = try vt.VtAdapter.init(std.testing.allocator, 8, 2); defer terminal.deinit();
+    var visible = try terminal.snapshot(); defer visible.deinit();
+    try std.testing.expect(visible.cursor_visible);
+    try terminal.feed("\x1b[?25l");
+    var hidden = try terminal.snapshot(); defer hidden.deinit();
+    try std.testing.expect(!hidden.cursor_visible);
+    try terminal.feed("\x1b[?25h");
+    var shown = try terminal.snapshot(); defer shown.deinit();
+    try std.testing.expect(shown.cursor_visible);
+}

@@ -16,6 +16,10 @@ test "production widget focuses resizes snapshots and invalidates callbacks" {
     var iterations: usize = 0; while (iterations < 20 and widget.drawCount() == 0) : (iterations += 1) _ = c.g_main_context_iteration(null, 0);
     try std.testing.expect(widget.drawCount() > 0);
     try std.testing.expect(widget.paintedCellCount() > 0);
+    try std.testing.expect(widget.cursorDrawCount() > 0);
+    const cursor = widget_mod.cursor_color;
+    const cursor_luma = ((cursor >> 16) & 255) + ((cursor >> 8) & 255) + (cursor & 255);
+    try std.testing.expect(cursor_luma > 400);
     widget.selectionBegin(.{ .column = 0, .row = 0 });
     widget.selectionUpdate(.{ .column = 4, .row = 0 });
     const selected = (try widget.selectionText(std.testing.allocator)).?;
