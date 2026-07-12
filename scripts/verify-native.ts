@@ -77,6 +77,7 @@ async function pristineTreeSha(path: string): Promise<string> {
 const fixtureSource = join(ROOT, "tests", "fixtures", "service-v1")
 const fixtureExport = join(NATIVE, "tests", "fixtures")
 const fixtureNames = ["discovery.json", "request-timeout-error.json", "workspace-snapshot.json"]
+const nativeOnlyFixtureNames = ["abi-v1-attention-legacy.json"]
 
 async function verifyFixtureExport(): Promise<void> {
   for (const name of fixtureNames) {
@@ -86,7 +87,7 @@ async function verifyFixtureExport(): Promise<void> {
     const [sourceHash, exportHash] = await Promise.all([sha256(source), sha256(exported)])
     if (sourceHash !== exportHash) throw new Error(`native fixture drift: ${name} differs from tests/fixtures/service-v1/${name}`)
   }
-  const extras = Array.from(new Bun.Glob("*.json").scanSync(fixtureExport)).filter((name) => !fixtureNames.includes(name))
+  const extras = Array.from(new Bun.Glob("*.json").scanSync(fixtureExport)).filter((name) => !fixtureNames.includes(name) && !nativeOnlyFixtureNames.includes(name))
   if (extras.length) throw new Error(`native fixture export has non-canonical files: ${extras.join(", ")}`)
 }
 
