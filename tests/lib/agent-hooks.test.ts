@@ -303,9 +303,9 @@ describe("agentHookPlugins registry", () => {
     expect(found).toBe(claudeCodePlugin)
   })
 
-  it("exports array containing both claude-code and copilot plugins", async () => {
-    const { agentHookPlugins, claudeCodePlugin, copilotPlugin } = await import("../../src/lib/agent-hooks/index")
-    expect(agentHookPlugins).toHaveLength(2)
+  it("exports exactly one registered plugin for each supported provider", async () => {
+    const { agentHookPlugins, claudeCodePlugin, copilotPlugin, codexPlugin } = await import("../../src/lib/agent-hooks/index")
+    expect(agentHookPlugins).toHaveLength(3)
 
     const foundCopilot = agentHookPlugins.find((p: { id: string }) => p.id === "copilot")
     expect(foundCopilot).toBeDefined()
@@ -313,5 +313,7 @@ describe("agentHookPlugins registry", () => {
 
     const foundClaude = agentHookPlugins.find((p: { id: string }) => p.id === "claude-code")
     expect(foundClaude).toBe(claudeCodePlugin)
+    expect(agentHookPlugins).toContain(codexPlugin)
+    expect(agentHookPlugins.filter((plugin) => plugin.id === "codex")).toHaveLength(1)
   })
 })
