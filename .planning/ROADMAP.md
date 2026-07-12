@@ -164,7 +164,7 @@ Wave 3 *(blocked on Wave 2 completion)*:
 **Goal:** Deliver a coherent Supacode-quality native workspace interface after lifecycle stability is complete.
 **Requirements**: LNX-07, LNX-08, LNX-09, ACT-07
 **Depends on:** Phase 106
-**Plans:** 6/13 plans executed
+**Plans:** 7/13 plans executed
 
 **Success Criteria** (what must be TRUE):
 
@@ -186,7 +186,7 @@ Plans:
 - [x] 107-04-PLAN.md
 - [x] 107-05-PLAN.md
 - [x] 107-06-PLAN.md
-- [ ] 107-07-PLAN.md
+- [x] 107-07-PLAN.md
 - [ ] 107-08-PLAN.md
 - [ ] 107-09-PLAN.md
 - [ ] 107-10-PLAN.md
@@ -210,7 +210,7 @@ Wave 3 *(creation service contract; blocked on Wave 2)*:
 
 Wave 4 *(durable monitor plus native model contract; blocked on Wave 3)*:
 
-- [ ] 107-05 — Publish durable replayable snapshot invalidations and own monitor lifecycle
+- [x] 107-05 — Publish durable replayable snapshot invalidations and own monitor lifecycle
 - [ ] 107-07 — Preserve provider-aware attention and enforce truthful native capacity behavior
 
 Wave 5 *(blocked on durable service and shared native contracts)*:
@@ -262,5 +262,5 @@ Wave 10 *(blocked on all implementation; final production and human evidence)*:
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 9/9 | Complete    | 2026-07-11 |
 | 106. Linux Workspace, Commands, and Attention | 3/3 | Complete | 2026-07-12 |
-| 107. Native workspace UI beautification and UX finalization | 6/13 | In Progress|  |
+| 107. Native workspace UI beautification and UX finalization | 7/13 | In Progress|  |
 | 108. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
