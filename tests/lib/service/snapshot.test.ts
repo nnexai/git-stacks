@@ -115,6 +115,13 @@ describe("authoritative service snapshots", () => {
     expect(one.workspace.commands).toEqual(["dev"])
   })
 
+  test("projects workspace labels for native sidebar grouping", async () => {
+    const labeled = { ...workspace(), labels: ["client", "urgent"] }
+    const builder = createSnapshotBuilder(dependencies({ ensureWorkspaceIdentity: () => labeled }))
+    const snapshot = await builder.buildWorkspace("alpha", "req_labels_0123456789")
+    expect(snapshot.workspace.labels).toEqual(["client", "urgent"])
+  })
+
   test("reports one aggregate revision for a current authoritative build", async () => {
     const builder = createSnapshotBuilder(dependencies({
       listWorkspaceNames: () => ["alpha", "beta"],

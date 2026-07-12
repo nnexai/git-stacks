@@ -22,12 +22,15 @@ pub const Workspace = struct {
     revision: u64 = 0,
     name: [96]u8 = [_]u8{0} ** 96,
     name_len: u8 = 0,
+    labels: [16][64]u8 = [_][64]u8{[_]u8{0} ** 64} ** 16,
+    label_lens: [16]u8 = [_]u8{0} ** 16,
+    label_count: u8 = 0,
     repositories: [8]NamedRepository = [_]NamedRepository{.{}} ** 8,
     repository_ids: [8]Id = undefined,
     repository_count: u8 = 0,
 };
 pub const Command = struct { id: [64]u8 = [_]u8{0} ** 64, id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
-pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, kind: TerminalKind = .shell, command_id: [64]u8 = [_]u8{0} ** 64, command_id_len: u8 = 0, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
+pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, kind: TerminalKind = .shell, command_id: [64]u8 = [_]u8{0} ** 64, command_id_len: u8 = 0, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, title_pinned: bool = false, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
 pub const PairCollection = struct { key: PairKey, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
 pub const Attention = struct { id: Id, service_id: [64]u8 = [_]u8{0} ** 64, service_id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: AttentionStatus, read: bool = false, resolved: bool = true };
 pub const Aggregate = struct { unread: u32 = 0, severity: Severity = .none };
@@ -42,7 +45,7 @@ pub const State = struct {
     duplicate_count: u32 = 0,
     surface: ?Surface = null,
     attention_id: ?Id = null,
-    organization_mode: OrganizationMode = .simple,
+    organization_mode: OrganizationMode = .label,
     workspaces: [16]Workspace = undefined,
     workspace_count: u8 = 0,
     pins: [16]Id = undefined,
@@ -143,7 +146,7 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
         try w.print("{{\"id\":\"{s}\",\"name\":{f},\"unread\":{d},\"severity\":\"{s}\",\"repositories\":[", .{ ws.id, std.json.fmt(ws.name[0..ws.name_len], .{}), summary.unread, @tagName(summary.severity) });
         for (ws.repository_ids[0..ws.repository_count], 0..) |rid, j| {
             if (j != 0) try w.writeByte(',');
-            try w.print("{{\"id\":\"{s}\",\"name\":{f}}}", .{rid, std.json.fmt(ws.repositories[j].name[0..ws.repositories[j].name_len], .{})});
+            try w.print("{{\"id\":\"{s}\",\"name\":{f}}}", .{ rid, std.json.fmt(ws.repositories[j].name[0..ws.repositories[j].name_len], .{}) });
         }
         try w.writeAll("]}");
     }
@@ -155,7 +158,7 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
         for (pair.surfaces[0..pair.surface_count], 0..) |s, j| {
             if (j != 0) try w.writeByte(',');
             const surface_summary = aggregate(&state, pair.key.workspace_id, pair.key.repository_id, s.id);
-            try w.print("{{\"id\":\"{s}\",\"generation\":{d},\"lifecycle\":\"{s}\",\"kind\":\"{s}\",\"command_id\":{f},\"order\":{d},\"unread\":{d},\"severity\":\"{s}\",\"title\":", .{ s.id, s.generation, @tagName(s.lifecycle), @tagName(s.kind), std.json.fmt(s.command_id[0..s.command_id_len],.{}), s.order, surface_summary.unread, @tagName(surface_summary.severity) });
+            try w.print("{{\"id\":\"{s}\",\"generation\":{d},\"lifecycle\":\"{s}\",\"kind\":\"{s}\",\"command_id\":{f},\"order\":{d},\"unread\":{d},\"severity\":\"{s}\",\"title\":", .{ s.id, s.generation, @tagName(s.lifecycle), @tagName(s.kind), std.json.fmt(s.command_id[0..s.command_id_len], .{}), s.order, surface_summary.unread, @tagName(surface_summary.severity) });
             try w.print("{f}", .{std.json.fmt(s.title[0..s.title_len], .{})});
             try w.writeAll(",\"cwd\":");
             try w.print("{f}", .{std.json.fmt(s.cwd[0..s.cwd_len], .{})});

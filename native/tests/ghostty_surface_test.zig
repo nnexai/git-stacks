@@ -9,8 +9,9 @@ test "generation tagged callbacks reject stale generations" {
         }
         fn close(_: *anyopaque, _: u64) void {}
         fn exit(_: *anyopaque, _: u64, _: u32, _: u64) void {}
+        fn title(_: *anyopaque, _: u64, _: []const u8) void {}
     };
-    const callbacks: runtime.SurfaceCallbacks = .{ .context = &queued, .generation = 7, .queue_render = Probe.queue, .close = Probe.close, .child_exit = Probe.exit };
+    const callbacks: runtime.SurfaceCallbacks = .{ .context = &queued, .generation = 7, .queue_render = Probe.queue, .close = Probe.close, .child_exit = Probe.exit, .title = Probe.title };
     callbacks.queue_render(callbacks.context, callbacks.generation);
     try std.testing.expectEqual(@as(usize, 1), queued);
 }

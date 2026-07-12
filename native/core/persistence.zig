@@ -9,6 +9,7 @@ pub const Record = struct {
     workspace_id: ?[36]u8 = null,
     repository_id: ?[36]u8 = null,
     title: []const u8 = "",
+    title_pinned: bool = false,
     order: u32 = 0,
     cwd_label: []const u8 = "",
     last_exit_status: ?i32 = null,
@@ -18,7 +19,7 @@ pub const Record = struct {
     command_id: []const u8 = "",
 };
 pub const Presentation = struct {
-    organization_mode: model.OrganizationMode = .simple,
+    organization_mode: model.OrganizationMode = .label,
     pinned_workspace_ids: []const [36]u8 = &.{},
     last_pair: ?model.PairKey = null,
     records: []const Record = &.{},
@@ -26,7 +27,7 @@ pub const Presentation = struct {
 
 pub const Diagnostic = struct { index: usize, hash: [16]u8, code: []const u8 };
 pub const RestoreResult = struct {
-    organization_mode: model.OrganizationMode = .simple,
+    organization_mode: model.OrganizationMode = .label,
     pinned_workspace_ids: std.ArrayList(model.Id),
     last_pair: ?model.PairKey = null,
     records: std.ArrayList(Record),
@@ -60,12 +61,12 @@ pub fn encodeAlloc(allocator: std.mem.Allocator, records: []const Record) ![]u8 
         if (record.workspace_id) |v| try out.writer(allocator).print("\"{s}\"", .{v}) else try out.appendSlice(allocator, "null");
         try out.appendSlice(allocator, ",\"repository_id\":");
         if (record.repository_id) |v| try out.writer(allocator).print("\"{s}\"", .{v}) else try out.appendSlice(allocator, "null");
-        try out.writer(allocator).print(",\"title\":{f}", .{std.json.fmt(record.title, .{})});
+        try out.writer(allocator).print(",\"title\":{f},\"title_pinned\":{}", .{ std.json.fmt(record.title, .{}), record.title_pinned });
         try out.writer(allocator).print(",\"order\":{d},\"cwd_label\":{f}", .{ record.order, std.json.fmt(record.cwd_label, .{}) });
         try out.writer(allocator).print(",\"last_exit_status\":{s},", .{status_text});
         try out.appendSlice(allocator, "\"predecessor_surface_id\":");
         if (record.predecessor_surface_id) |v| try out.writer(allocator).print("\"{s}\"", .{v}) else try out.appendSlice(allocator, "null");
-        try out.writer(allocator).print(",\"lifecycle\":\"ended\",\"kind\":\"{s}\",\"command_id\":{f}}}", .{@tagName(record.kind), std.json.fmt(record.command_id, .{})});
+        try out.writer(allocator).print(",\"lifecycle\":\"ended\",\"kind\":\"{s}\",\"command_id\":{f}}}", .{ @tagName(record.kind), std.json.fmt(record.command_id, .{}) });
     }
     try out.appendSlice(allocator, "]}");
     return out.toOwnedSlice(allocator);
@@ -80,9 +81,12 @@ pub fn encodePresentationAlloc(allocator: std.mem.Allocator, presentation: Prese
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     try out.writer(allocator).print("{{\"protocol\":\"v1\",\"organization_mode\":\"{s}\",\"pinned_workspace_ids\":[", .{@tagName(presentation.organization_mode)});
-    for (presentation.pinned_workspace_ids, 0..) |pin, i| { if (i != 0) try out.append(allocator, ','); try out.writer(allocator).print("\"{s}\"", .{pin}); }
+    for (presentation.pinned_workspace_ids, 0..) |pin, i| {
+        if (i != 0) try out.append(allocator, ',');
+        try out.writer(allocator).print("\"{s}\"", .{pin});
+    }
     try out.appendSlice(allocator, "],\"last_pair\":");
-    if (presentation.last_pair) |pair| try out.writer(allocator).print("{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\"}}", .{pair.workspace_id,pair.repository_id}) else try out.appendSlice(allocator,"null");
+    if (presentation.last_pair) |pair| try out.writer(allocator).print("{{\"workspace_id\":\"{s}\",\"repository_id\":\"{s}\"}}", .{ pair.workspace_id, pair.repository_id }) else try out.appendSlice(allocator, "null");
     try out.append(allocator, ',');
     try out.appendSlice(allocator, entries[start..]);
     return out.toOwnedSlice(allocator);
@@ -98,13 +102,15 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
     if (protocol != .string or !std.mem.eql(u8, protocol.string, "v1")) return error.InvalidDocument;
     if (root.get("organization_mode")) |mode| {
         if (mode != .string) return error.InvalidDocument;
-        result.organization_mode = if (std.mem.eql(u8, mode.string, "simple")) .simple else if (std.mem.eql(u8, mode.string, "label")) .label else if (std.mem.eql(u8, mode.string, "repository")) .repository else return error.InvalidDocument;
+        result.organization_mode = if (std.mem.eql(u8, mode.string, "simple")) .label else if (std.mem.eql(u8, mode.string, "label")) .label else if (std.mem.eql(u8, mode.string, "repository")) .repository else return error.InvalidDocument;
     }
     if (root.get("pinned_workspace_ids") orelse root.get("pins")) |pins| {
         if (pins != .array) return error.InvalidDocument;
         for (pins.array.items) |pin| {
             if (pin != .string or !identity.isUuid(pin.string)) continue;
-            var id: model.Id = undefined; @memcpy(&id, pin.string); try result.pinned_workspace_ids.append(a, id);
+            var id: model.Id = undefined;
+            @memcpy(&id, pin.string);
+            try result.pinned_workspace_ids.append(a, id);
         }
     }
     if (root.get("last_pair")) |pair| if (pair != .null) {
@@ -112,7 +118,10 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
         const w = pair.object.get("workspace_id") orelse return error.InvalidDocument;
         const r = pair.object.get("repository_id") orelse return error.InvalidDocument;
         if (w != .string or r != .string or !identity.isUuid(w.string) or !identity.isUuid(r.string)) return error.InvalidDocument;
-        var key: model.PairKey = undefined; @memcpy(&key.workspace_id, w.string); @memcpy(&key.repository_id, r.string); result.last_pair = key;
+        var key: model.PairKey = undefined;
+        @memcpy(&key.workspace_id, w.string);
+        @memcpy(&key.repository_id, r.string);
+        result.last_pair = key;
     };
     const entries = root.get("entries") orelse return error.InvalidDocument;
     if (entries != .array) return error.InvalidDocument;
@@ -133,6 +142,7 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
         var id: [36]u8 = undefined;
         @memcpy(&id, sid.string);
         const title_value = object.get("title");
+        const title_pinned_value = object.get("title_pinned");
         const cwd_value = object.get("cwd_label");
         const order_value = object.get("order");
         const exit_value = object.get("last_exit_status");
@@ -141,14 +151,17 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
         const repository_value = object.get("repository_id");
         const command_value = object.get("command_id");
         const kind_value = object.get("kind");
-        const malformed = (title_value != null and title_value.? != .string) or (cwd_value != null and cwd_value.? != .string) or
+        const malformed = (title_value != null and title_value.? != .string) or (title_pinned_value != null and title_pinned_value.? != .bool) or (cwd_value != null and cwd_value.? != .string) or
             (order_value != null and (order_value.? != .integer or order_value.?.integer < 0 or order_value.?.integer > std.math.maxInt(u32))) or
             (exit_value != null and exit_value.? != .null and (exit_value.? != .integer or exit_value.?.integer < std.math.minInt(i32) or exit_value.?.integer > std.math.maxInt(i32))) or
             (workspace_value != null and workspace_value.? != .null and (workspace_value.? != .string or !identity.isUuid(workspace_value.?.string))) or
             (repository_value != null and repository_value.? != .null and (repository_value.? != .string or !identity.isUuid(repository_value.?.string))) or
             (predecessor_value != null and predecessor_value.? != .null and (predecessor_value.? != .string or !identity.isUuid(predecessor_value.?.string))) or
-            (command_value != null and command_value.? != .string) or (kind_value != null and (kind_value.? != .string or !(std.mem.eql(u8,kind_value.?.string,"shell") or std.mem.eql(u8,kind_value.?.string,"configured_command"))));
-        if (malformed) { try result.diagnostics.append(a, .{ .index=index,.hash=shortHash(rendered),.code="invalid_record" }); continue; }
+            (command_value != null and command_value.? != .string) or (kind_value != null and (kind_value.? != .string or !(std.mem.eql(u8, kind_value.?.string, "shell") or std.mem.eql(u8, kind_value.?.string, "configured_command"))));
+        if (malformed) {
+            try result.diagnostics.append(a, .{ .index = index, .hash = shortHash(rendered), .code = "invalid_record" });
+            continue;
+        }
         const title = if (title_value != null) title_value.?.string else "";
         const cwd = if (cwd_value != null) cwd_value.?.string else "";
         const order: u32 = if (order_value != null and order_value.? == .integer and order_value.?.integer >= 0 and order_value.?.integer <= std.math.maxInt(u32)) @intCast(order_value.?.integer) else 0;
@@ -171,9 +184,9 @@ pub fn restore(allocator: std.mem.Allocator, bytes: []const u8) !RestoreResult {
             predecessor = x;
         };
         const exit: ?i32 = if (exit_value != null and exit_value.? == .integer and exit_value.?.integer >= std.math.minInt(i32) and exit_value.?.integer <= std.math.maxInt(i32)) @intCast(exit_value.?.integer) else null;
-        const command_id = if(command_value)|v|v.string else "";
-        const kind:model.TerminalKind=if(kind_value)|v|if(std.mem.eql(u8,v.string,"configured_command")) .configured_command else .shell else if(command_id.len>0) .configured_command else .shell;
-        try result.records.append(a, .{ .surface_id = id, .workspace_id = ws, .repository_id = repo, .title = title, .order = order, .cwd_label = cwd, .last_exit_status = exit, .predecessor_surface_id = predecessor, .lifecycle = .ended, .kind=kind, .command_id=command_id });
+        const command_id = if (command_value) |v| v.string else "";
+        const kind: model.TerminalKind = if (kind_value) |v| if (std.mem.eql(u8, v.string, "configured_command")) .configured_command else .shell else if (command_id.len > 0) .configured_command else .shell;
+        try result.records.append(a, .{ .surface_id = id, .workspace_id = ws, .repository_id = repo, .title = title, .title_pinned = if (title_pinned_value) |v| v.bool else false, .order = order, .cwd_label = cwd, .last_exit_status = exit, .predecessor_surface_id = predecessor, .lifecycle = .ended, .kind = kind, .command_id = command_id });
     }
     return result;
 }
@@ -182,9 +195,7 @@ pub fn recordsFromState(state: *const State, out: []Record) !usize {
     var count: usize = 0;
     for (state.pairs[0..state.pair_count]) |pair| for (pair.surfaces[0..pair.surface_count]) |surface| {
         if (count == out.len) return error.Capacity;
-        out[count] = .{ .surface_id=surface.id,.workspace_id=pair.key.workspace_id,.repository_id=pair.key.repository_id,
-            .title=surface.title[0..surface.title_len],.order=surface.order,.cwd_label=surface.cwd[0..surface.cwd_len],
-            .last_exit_status=surface.last_exit_status,.predecessor_surface_id=surface.predecessor_surface_id,.lifecycle=.ended,.kind=surface.kind,.command_id=surface.command_id[0..surface.command_id_len] };
+        out[count] = .{ .surface_id = surface.id, .workspace_id = pair.key.workspace_id, .repository_id = pair.key.repository_id, .title = surface.title[0..surface.title_len], .title_pinned = surface.title_pinned, .order = surface.order, .cwd_label = surface.cwd[0..surface.cwd_len], .last_exit_status = surface.last_exit_status, .predecessor_surface_id = surface.predecessor_surface_id, .lifecycle = .ended, .kind = surface.kind, .command_id = surface.command_id[0..surface.command_id_len] };
         count += 1;
     };
     return count;
@@ -193,43 +204,72 @@ pub fn recordsFromState(state: *const State, out: []Record) !usize {
 pub fn applyToState(restored: *const RestoreResult, state: *State) void {
     state.organization_mode = restored.organization_mode;
     state.pin_count = 0;
-    for (restored.pinned_workspace_ids.items) |pin| if (state.pin_count < state.pins.len) { state.pins[state.pin_count]=pin; state.pin_count+=1; };
+    for (restored.pinned_workspace_ids.items) |pin| if (state.pin_count < state.pins.len) {
+        state.pins[state.pin_count] = pin;
+        state.pin_count += 1;
+    };
     state.last_pair = restored.last_pair;
     for (restored.records.items) |record| {
         // Legacy records had no kind/command identity and represented shells.
         // Ended shells are not durable history and are pruned during migration.
-        if(record.kind==.shell)continue;
-        const ws=record.workspace_id orelse continue; const repo=record.repository_id orelse continue;
-        const key:model.PairKey=.{.workspace_id=ws,.repository_id=repo};
-        if (!model.pairValid(state,key)) continue;
-        const pi=model.pairIndex(state,key) orelse continue; var pair=&state.pairs[pi];
-        if(pair.surface_count==pair.surfaces.len)continue;
-        var surface:model.Surface=.{.id=record.surface_id,.lifecycle=.ended,.kind=record.kind,.order=record.order,.last_exit_status=record.last_exit_status,.predecessor_surface_id=record.predecessor_surface_id};
-        surface.command_id_len=@intCast(@min(record.command_id.len,surface.command_id.len));@memcpy(surface.command_id[0..surface.command_id_len],record.command_id[0..surface.command_id_len]);
-        surface.title_len=@intCast(@min(record.title.len,surface.title.len));@memcpy(surface.title[0..surface.title_len],record.title[0..surface.title_len]);
-        surface.cwd_len=@intCast(@min(record.cwd_label.len,surface.cwd.len));@memcpy(surface.cwd[0..surface.cwd_len],record.cwd_label[0..surface.cwd_len]);
-        pair.surfaces[pair.surface_count]=surface;pair.surface_count+=1;
+        if (record.kind == .shell) continue;
+        const ws = record.workspace_id orelse continue;
+        const repo = record.repository_id orelse continue;
+        const key: model.PairKey = .{ .workspace_id = ws, .repository_id = repo };
+        if (!model.pairValid(state, key)) continue;
+        const pi = model.pairIndex(state, key) orelse continue;
+        var pair = &state.pairs[pi];
+        if (pair.surface_count == pair.surfaces.len) continue;
+        var surface: model.Surface = .{ .id = record.surface_id, .lifecycle = .ended, .kind = record.kind, .order = record.order, .last_exit_status = record.last_exit_status, .predecessor_surface_id = record.predecessor_surface_id };
+        surface.command_id_len = @intCast(@min(record.command_id.len, surface.command_id.len));
+        @memcpy(surface.command_id[0..surface.command_id_len], record.command_id[0..surface.command_id_len]);
+        surface.title_len = @intCast(@min(record.title.len, surface.title.len));
+        @memcpy(surface.title[0..surface.title_len], record.title[0..surface.title_len]);
+        surface.title_pinned = record.title_pinned;
+        surface.cwd_len = @intCast(@min(record.cwd_label.len, surface.cwd.len));
+        @memcpy(surface.cwd[0..surface.cwd_len], record.cwd_label[0..surface.cwd_len]);
+        pair.surfaces[pair.surface_count] = surface;
+        pair.surface_count += 1;
     }
-    for(state.pairs[0..state.pair_count])|*pair|std.mem.sort(model.Surface,pair.surfaces[0..pair.surface_count],{},struct{fn less(_:void,a:model.Surface,b:model.Surface)bool{return a.order<b.order;}}.less);
+    for (state.pairs[0..state.pair_count]) |*pair| std.mem.sort(model.Surface, pair.surfaces[0..pair.surface_count], {}, struct {
+        fn less(_: void, a: model.Surface, b: model.Surface) bool {
+            return a.order < b.order;
+        }
+    }.less);
     model.reconcile(state);
 }
 
-pub fn writeStateAtomic(allocator:std.mem.Allocator,path:[]const u8,state:*const State)!void {
-    var records:[512]Record=undefined;const count=try recordsFromState(state,&records);
-    const bytes=try encodePresentationAlloc(allocator,.{.organization_mode=state.organization_mode,.pinned_workspace_ids=state.pins[0..state.pin_count],.last_pair=state.last_pair,.records=records[0..count]});defer allocator.free(bytes);
-    const directory=std.fs.path.dirname(path) orelse return error.InvalidPath;try std.fs.cwd().makePath(directory);
-    try std.posix.fchmodat(std.posix.AT.FDCWD,directory,0o700,0);
-    var tmp_buf:[std.fs.max_path_bytes]u8=undefined;const tmp=try std.fmt.bufPrint(&tmp_buf,"{s}.tmp",.{path});
-    std.fs.deleteFileAbsolute(tmp) catch |err| if(err!=error.FileNotFound)return err;
-    const file=try std.fs.createFileAbsolute(tmp,.{.exclusive=true,.mode=0o600});errdefer std.fs.deleteFileAbsolute(tmp) catch {};defer file.close();
-    try file.writeAll(bytes);try file.sync();try std.fs.renameAbsolute(tmp,path);
+pub fn writeStateAtomic(allocator: std.mem.Allocator, path: []const u8, state: *const State) !void {
+    var records: [512]Record = undefined;
+    const count = try recordsFromState(state, &records);
+    const bytes = try encodePresentationAlloc(allocator, .{ .organization_mode = state.organization_mode, .pinned_workspace_ids = state.pins[0..state.pin_count], .last_pair = state.last_pair, .records = records[0..count] });
+    defer allocator.free(bytes);
+    const directory = std.fs.path.dirname(path) orelse return error.InvalidPath;
+    try std.fs.cwd().makePath(directory);
+    try std.posix.fchmodat(std.posix.AT.FDCWD, directory, 0o700, 0);
+    var tmp_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp = try std.fmt.bufPrint(&tmp_buf, "{s}.tmp", .{path});
+    std.fs.deleteFileAbsolute(tmp) catch |err| if (err != error.FileNotFound) return err;
+    const file = try std.fs.createFileAbsolute(tmp, .{ .exclusive = true, .mode = 0o600 });
+    errdefer std.fs.deleteFileAbsolute(tmp) catch {};
+    defer file.close();
+    try file.writeAll(bytes);
+    try file.sync();
+    try std.fs.renameAbsolute(tmp, path);
 }
 
-pub fn restoreStateFile(allocator:std.mem.Allocator,path:[]const u8,state:*State)!usize {
-    const file=try std.fs.openFileAbsolute(path,.{});defer file.close();
-    const stat=try file.stat();if(!isSafeMode(@intCast(stat.mode),false))return error.UnsafePermissions;
-    const bytes=try file.readToEndAlloc(allocator,1024*1024);defer allocator.free(bytes);
-    var restored=try restore(allocator,bytes);defer restored.deinit();const quarantined=restored.diagnostics.items.len;applyToState(&restored,state);return quarantined;
+pub fn restoreStateFile(allocator: std.mem.Allocator, path: []const u8, state: *State) !usize {
+    const file = try std.fs.openFileAbsolute(path, .{});
+    defer file.close();
+    const stat = try file.stat();
+    if (!isSafeMode(@intCast(stat.mode), false)) return error.UnsafePermissions;
+    const bytes = try file.readToEndAlloc(allocator, 1024 * 1024);
+    defer allocator.free(bytes);
+    var restored = try restore(allocator, bytes);
+    defer restored.deinit();
+    const quarantined = restored.diagnostics.items.len;
+    applyToState(&restored, state);
+    return quarantined;
 }
 
 pub fn isSafeMode(mode: u32, directory: bool) bool {

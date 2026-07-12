@@ -245,6 +245,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
       id: workspace.id,
       name: workspace.name,
       branch: workspace.branch,
+      labels: workspace.labels ?? [],
       repositories: workspace.repos.map((repo) => ({ id: repo.id!, name: repo.name, mode: repo.mode, path: repositoryPath(repo) })),
       commands,
       status,

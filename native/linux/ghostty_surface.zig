@@ -14,9 +14,15 @@ var live_surfaces: usize = 0;
 var live_areas: usize = 0;
 var live_gl_contexts: usize = 0;
 
-pub fn liveSurfaceCount() usize { return live_surfaces; }
-pub fn liveAreaCount() usize { return live_areas; }
-pub fn liveGlContextCount() usize { return live_gl_contexts; }
+pub fn liveSurfaceCount() usize {
+    return live_surfaces;
+}
+pub fn liveAreaCount() usize {
+    return live_areas;
+}
+pub fn liveGlContextCount() usize {
+    return live_gl_contexts;
+}
 
 pub const AccessibilityContract = struct {
     pub const name = "git-stacks Ghostty terminal";
@@ -43,10 +49,7 @@ pub const LaunchSpec = struct {
 
 pub fn configureAccessibility(area: *c.GtkGLArea) void {
     c.gtk_widget_set_focusable(@ptrCast(area), 1);
-    c.gtk_accessible_update_property(@ptrCast(area),
-        c.GTK_ACCESSIBLE_PROPERTY_LABEL, AccessibilityContract.name,
-        c.GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, AccessibilityContract.description,
-        @as(c_int, -1));
+    c.gtk_accessible_update_property(@ptrCast(area), c.GTK_ACCESSIBLE_PROPERTY_LABEL, AccessibilityContract.name, c.GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, AccessibilityContract.description, @as(c_int, -1));
 }
 
 pub fn inspectAccessibility(area: *c.GtkGLArea) AccessibilitySnapshot {
@@ -75,9 +78,16 @@ pub const Surface = struct {
     surface_id: [36]u8,
     launch: ?LaunchSpec = null,
     exit_context: ?*anyopaque = null,
-    exit_handler: ?*const fn(*anyopaque,[36]u8,u32,u64)void = null,
+    exit_handler: ?*const fn (*anyopaque, [36]u8, u32, u64) void = null,
+    title_handler: ?*const fn (*anyopaque, [36]u8, []const u8) void = null,
 
-    pub fn setExitHandler(self:*Surface,context:*anyopaque,handler:*const fn(*anyopaque,[36]u8,u32,u64)void)void{self.exit_context=context;self.exit_handler=handler;}
+    pub fn setExitHandler(self: *Surface, context: *anyopaque, handler: *const fn (*anyopaque, [36]u8, u32, u64) void) void {
+        self.exit_context = context;
+        self.exit_handler = handler;
+    }
+    pub fn setTitleHandler(self: *Surface, handler: *const fn (*anyopaque, [36]u8, []const u8) void) void {
+        self.title_handler = handler;
+    }
 
     pub fn create(runtime: *runtime_mod.Runtime, registry: *guard.Registry) !*Surface {
         return createWithLaunch(runtime, registry, null);
@@ -101,8 +111,10 @@ pub const Surface = struct {
         self.registry = registry;
         self.registration_source = 0;
         self.launch = launch;
-        if (launch) |spec| self.surface_id = spec.surface_id else
-            _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
+        self.exit_context = null;
+        self.exit_handler = null;
+        self.title_handler = null;
+        if (launch) |spec| self.surface_id = spec.surface_id else _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
         self.clipboard_context = try clipboard.Context.create(runtime.allocator, @ptrCast(self.area), self.generation);
         self.clipboard_invalidated = false;
         self.deferred_widget_ref = false;
@@ -127,7 +139,11 @@ pub const Surface = struct {
         c.gtk_widget_add_controller(@ptrCast(self.area), focus);
         return self;
     }
-    pub fn ownershipIdentity(self:*Surface)?process_control.Identity { const controller=self.controller orelse return null;const value=controller.registration orelse return null;return .{.pid=value.pid,.pgid=value.pgid,.linux_birth_token=value.birth_token}; }
+    pub fn ownershipIdentity(self: *Surface) ?process_control.Identity {
+        const controller = self.controller orelse return null;
+        const value = controller.registration orelse return null;
+        return .{ .pid = value.pid, .pgid = value.pgid, .linux_birth_token = value.birth_token };
+    }
 
     pub fn widget(self: *Surface) *anyopaque {
         return @ptrCast(self.area);
@@ -247,6 +263,7 @@ pub const Surface = struct {
             .queue_render = queueRender,
             .close = requestClose,
             .child_exit = childExit,
+            .title = titleChanged,
         }) catch {
             self.teardownSurface();
             return true;
@@ -325,10 +342,14 @@ fn requestClose(data: *anyopaque, generation: u64) void {
     if (!self.destroyed and self.generation == generation) c.gtk_widget_set_visible(@ptrCast(self.area), 0);
 }
 fn childExit(data: *anyopaque, generation: u64, exit_code: u32, elapsed_ms: u64) void {
-    const self:*Surface=@ptrCast(@alignCast(data));
+    const self: *Surface = @ptrCast(@alignCast(data));
     // Keep the realized surface visible after process exit so command output
     // and scrollback remain inspectable on the retained ended page.
-    if(!self.destroyed and self.generation==generation)if(self.exit_handler)|handler|handler(self.exit_context orelse return,self.surface_id,exit_code,elapsed_ms);
+    if (!self.destroyed and self.generation == generation) if (self.exit_handler) |handler| handler(self.exit_context orelse return, self.surface_id, exit_code, elapsed_ms);
+}
+fn titleChanged(data: *anyopaque, generation: u64, title: []const u8) void {
+    const self: *Surface = @ptrCast(@alignCast(data));
+    if (!self.destroyed and self.generation == generation) if (self.title_handler) |handler| handler(self.exit_context orelse return, self.surface_id, title);
 }
 fn onRealize(_: ?*c.GtkGLArea, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));

@@ -17,6 +17,27 @@ const c = @cImport({
     @cInclude("adwaita.h");
     @cInclude("unistd.h");
 });
+const product_css =
+    ".git-stacks-sidebar { background: alpha(@window_fg_color, 0.035); padding: 8px; }" ++
+    ".git-stacks-group-switch { margin: 2px 0 6px 0; }" ++
+    ".git-stacks-group-switch button { padding: 7px 12px; border-radius: 7px; }" ++
+    ".git-stacks-group-switch button.active-group { background: alpha(@window_fg_color, 0.12); }" ++
+    ".git-stacks-sidebar button.workspace-row { padding: 8px 10px; border-radius: 8px; min-height: 38px; }" ++
+    ".git-stacks-sidebar button.workspace-row:hover { background: alpha(@window_fg_color, 0.08); }" ++
+    ".git-stacks-sidebar button.workspace-row.selected-workspace { background: alpha(@accent_color, 0.24); color: @window_fg_color; }" ++
+    ".git-stacks-sidebar expander { padding: 5px 0; font-weight: 600; }" ++
+    ".git-stacks-sidebar expander > title { color: alpha(@window_fg_color, 0.62); }" ++
+    ".git-stacks-sidebar .title-4 { margin: 8px 6px 4px 6px; }";
+fn installProductCss() void {
+    const provider = c.gtk_css_provider_new() orelse return;
+    c.gtk_css_provider_load_from_string(provider, product_css);
+    const display = c.gdk_display_get_default() orelse {
+        c.g_object_unref(provider);
+        return;
+    };
+    c.gtk_style_context_add_provider_for_display(display, @ptrCast(provider), c.GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    c.g_object_unref(provider);
+}
 
 const State = struct {
     runtime: *runtime_mod.Runtime,
@@ -56,7 +77,7 @@ const State = struct {
     ui_smoke_wait: u16 = 0,
     ui_smoke_ids: [6]?model.Id = [_]?model.Id{null} ** 6,
 };
-const PairUi = struct { key:model.PairKey, container:*c.GtkWidget, tabs:*c.AdwTabView, bar:*c.AdwTabBar, name:[74:0]u8 };
+const PairUi = struct { key: model.PairKey, container: *c.GtkWidget, tabs: *c.AdwTabView, bar: *c.AdwTabBar, name: [74:0]u8 };
 var active: ?*State = null;
 
 fn presentationPath(buffer: *[std.fs.max_path_bytes]u8) ?[]const u8 {
@@ -80,14 +101,14 @@ fn executableAvailable(name: []const u8) bool {
 fn savePresentation(state: *State) void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = presentationPath(&path_buffer) orelse return;
-    persistence.writeStateAtomic(state.graph.allocator,path,&state.graph.state) catch |err| std.debug.print("native presentation save failed: {s}\n",.{@errorName(err)});
+    persistence.writeStateAtomic(state.graph.allocator, path, &state.graph.state) catch |err| std.debug.print("native presentation save failed: {s}\n", .{@errorName(err)});
 }
 
 fn restorePresentation(state: *State) void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = presentationPath(&path_buffer) orelse return;
-    const quarantined=persistence.restoreStateFile(state.graph.allocator,path,&state.graph.state) catch return;
-    if(quarantined>0)std.debug.print("native presentation quarantined {d} corrupt records\n",.{quarantined});
+    const quarantined = persistence.restoreStateFile(state.graph.allocator, path, &state.graph.state) catch return;
+    if (quarantined > 0) std.debug.print("native presentation quarantined {d} corrupt records\n", .{quarantined});
     savePresentation(state);
 }
 
@@ -123,7 +144,7 @@ fn launchSpec(state: *State, pair: model.PairKey, command_id: ?[]const u8) !surf
     random[6] = (random[6] & 0x0f) | 0x40;
     random[8] = (random[8] & 0x3f) | 0x80;
     _ = try std.fmt.bufPrint(&spec.surface_id, "{x:0>2}{x:0>2}{x:0>2}{x:0>2}-{x:0>2}{x:0>2}-{x:0>2}{x:0>2}-{x:0>2}{x:0>2}-{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{
-        random[0], random[1], random[2], random[3], random[4], random[5], random[6], random[7],
+        random[0], random[1], random[2],  random[3],  random[4],  random[5],  random[6],  random[7],
         random[8], random[9], random[10], random[11], random[12], random[13], random[14], random[15],
     });
     @memcpy(spec.cwd[0..launch.cwd_len], launch.cwdSlice());
@@ -399,21 +420,47 @@ fn terminalExited(context: *anyopaque, _: i32, _: u64) !void {
     _ = context;
 }
 fn terminalDestroy(_: *anyopaque) void {}
-fn handleSurfaceExited(state:*State,id:model.Id,exit_code:u32,elapsed_ms:u64)void{
-    const loc=model.surfaceLocation(&state.graph.state,id) orelse return;
-    if(state.graph.state.pairs[loc.pair].surfaces[loc.surface].kind==.shell){closeTerminal(state,id);return;}
-    var surface=&state.graph.state.pairs[loc.pair].surfaces[loc.surface];
-    surface.last_exit_status=@intCast(@min(exit_code,@as(u32,std.math.maxInt(i32))));
-    if(exit_code==127 and elapsed_ms<2_000){closeTerminal(state,id);return;}
-    surface.lifecycle=.ended;
+fn handleSurfaceExited(state: *State, id: model.Id, exit_code: u32, elapsed_ms: u64) void {
+    const loc = model.surfaceLocation(&state.graph.state, id) orelse return;
+    if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].kind == .shell) {
+        closeTerminal(state, id);
+        return;
+    }
+    var surface = &state.graph.state.pairs[loc.pair].surfaces[loc.surface];
+    surface.last_exit_status = @intCast(@min(exit_code, @as(u32, std.math.maxInt(i32))));
+    if (exit_code == 127 and elapsed_ms < 2_000) {
+        closeTerminal(state, id);
+        return;
+    }
+    surface.lifecycle = .ended;
     state.graph.terminals.childExited(id) catch |err| if (err != error.UnknownSurface)
         std.debug.print("native terminal exit detach failed: {s}\n", .{@errorName(err)});
-    savePresentation(state);refreshProjection(state);
+    savePresentation(state);
+    refreshProjection(state);
 }
-fn surfaceExited(context:*anyopaque,id:model.Id,exit_code:u32,elapsed_ms:u64)void{
-    const state:*State=@ptrCast(@alignCast(context));
-    if(state.creating_terminal){state.pending_exit=id;state.pending_exit_code=exit_code;state.pending_exit_elapsed_ms=elapsed_ms;return;}
-    handleSurfaceExited(state,id,exit_code,elapsed_ms);
+fn surfaceExited(context: *anyopaque, id: model.Id, exit_code: u32, elapsed_ms: u64) void {
+    const state: *State = @ptrCast(@alignCast(context));
+    if (state.creating_terminal) {
+        state.pending_exit = id;
+        state.pending_exit_code = exit_code;
+        state.pending_exit_elapsed_ms = elapsed_ms;
+        return;
+    }
+    handleSurfaceExited(state, id, exit_code, elapsed_ms);
+}
+fn surfaceTitleChanged(context: *anyopaque, id: model.Id, title: []const u8) void {
+    const state: *State = @ptrCast(@alignCast(context));
+    const loc = model.surfaceLocation(&state.graph.state, id) orelse return;
+    var surface = &state.graph.state.pairs[loc.pair].surfaces[loc.surface];
+    if (surface.title_pinned) return;
+    const trimmed = std.mem.trim(u8, title, " \t\r\n");
+    if (trimmed.len == 0) return;
+    surface.title_len = @intCast(@min(trimmed.len, surface.title.len));
+    @memcpy(surface.title[0..surface.title_len], trimmed[0..surface.title_len]);
+    if (state.graph.state.surface) |selected| {
+        if (std.mem.eql(u8, &selected.id, &id)) state.graph.state.surface = surface.*;
+    }
+    refreshProjection(state);
 }
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
@@ -429,7 +476,16 @@ fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
         if (model.surfaceLocation(&state.graph.state, surface.surface_id) != null) continue;
         const identity = surface.ownershipIdentity() orelse continue;
         const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = surface.generation, .child_pid = identity.pid, .pgid = identity.pgid, .birth_token = identity.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
-        tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| std.debug.print("native terminal adoption failed: {s}\n", .{@errorName(err)});
+        tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| {
+            std.debug.print("native terminal adoption failed: {s}\n", .{@errorName(err)});
+            continue;
+        };
+        if (model.surfaceLocation(&state.graph.state, surface.surface_id)) |loc| {
+            var entry = &state.graph.state.pairs[loc.pair].surfaces[loc.surface];
+            const title = "Terminal";
+            entry.title_len = title.len;
+            @memcpy(entry.title[0..title.len], title);
+        }
     };
     return 1;
 }
@@ -489,6 +545,86 @@ fn refreshLauncher(state: *State) void {
     }
 }
 
+fn pairButtonClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const ptr = c.g_object_get_data(@ptrCast(button orelse return), "git-stacks-pair") orelse return;
+    if ((workspace_view.View{ .state = &state.graph.state }).select(@as(*model.PairKey, @ptrCast(@alignCast(ptr))).*)) refreshProjection(state);
+}
+fn appendPairButton(parent: *c.GtkBox, state: *State, key: model.PairKey, label: []const u8) void {
+    var text: [160:0]u8 = [_:0]u8{0} ** 160;
+    const z = std.fmt.bufPrintZ(&text, "{s}", .{label}) catch return;
+    const button = c.gtk_button_new() orelse return;
+    c.gtk_widget_add_css_class(button, "flat");
+    c.gtk_widget_add_css_class(button, "workspace-row");
+    c.gtk_widget_set_halign(button, c.GTK_ALIGN_FILL);
+    c.gtk_widget_set_hexpand(button, 1);
+    const row = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 9) orelse return;
+    const icon = c.gtk_image_new_from_icon_name("vcs-branch-symbolic") orelse return;
+    c.gtk_widget_add_css_class(icon, "dim-label");
+    c.gtk_box_append(@ptrCast(row), icon);
+    const title = c.gtk_label_new(z.ptr) orelse return;
+    c.gtk_label_set_xalign(@ptrCast(title), 0);
+    c.gtk_widget_set_hexpand(title, 1);
+    c.gtk_box_append(@ptrCast(row), title);
+    c.gtk_button_set_child(@ptrCast(button), row);
+    if (state.graph.state.selected_pair) |selected| {
+        if (model.PairKey.eql(selected, key)) {
+            c.gtk_widget_add_css_class(button, "selected-workspace");
+            c.gtk_widget_remove_css_class(icon, "dim-label");
+        }
+    }
+    const stored = std.heap.c_allocator.create(model.PairKey) catch return;
+    stored.* = key;
+    c.g_object_set_data_full(@ptrCast(button), "git-stacks-pair", stored, @ptrCast(&freePair));
+    const workspace_id = std.heap.c_allocator.create(model.Id) catch return;
+    workspace_id.* = key.workspace_id;
+    c.g_object_set_data_full(@ptrCast(button), "git-stacks-workspace", workspace_id, @ptrCast(&freeId));
+    _ = c.g_signal_connect_data(button, "clicked", @ptrCast(&pairButtonClicked), state, null, 0);
+    const context = c.gtk_gesture_click_new() orelse return;
+    c.gtk_gesture_single_set_button(@ptrCast(context), c.GDK_BUTTON_SECONDARY);
+    _ = c.g_signal_connect_data(context, "pressed", @ptrCast(&workspaceContext), state, null, 0);
+    c.gtk_widget_add_controller(button, @ptrCast(context));
+    c.gtk_box_append(parent, button);
+}
+fn appendWorkspaceEntry(parent: *c.GtkBox, state: *State, ws: model.Workspace, only_repo: ?model.Id, pinned: bool) void {
+    if (ws.repository_count == 1) {
+        const rid = ws.repository_ids[0];
+        if (only_repo == null or std.mem.eql(u8, &only_repo.?, &rid)) appendPairButton(parent, state, .{ .workspace_id = ws.id, .repository_id = rid }, if (ws.name_len > 0) ws.name[0..ws.name_len] else ws.id[0..8]);
+        return;
+    }
+    var heading: [128:0]u8 = [_:0]u8{0} ** 128;
+    const title = std.fmt.bufPrintZ(&heading, "{s}{s}", .{ if (pinned) "★ " else "", if (ws.name_len > 0) ws.name[0..ws.name_len] else ws.id[0..8] }) catch return;
+    const label = c.gtk_label_new(title.ptr) orelse return;
+    c.gtk_label_set_xalign(@ptrCast(label), 0);
+    c.gtk_widget_add_css_class(label, "caption-heading");
+    c.gtk_box_append(parent, label);
+    for (ws.repository_ids[0..ws.repository_count], 0..) |rid, i| {
+        if (only_repo != null and !std.mem.eql(u8, &only_repo.?, &rid)) continue;
+        const repo = ws.repositories[i];
+        appendPairButton(parent, state, .{ .workspace_id = ws.id, .repository_id = rid }, if (repo.name_len > 0) repo.name[0..repo.name_len] else rid[0..8]);
+    }
+}
+fn groupingClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const selected: *c.GtkWidget = @ptrCast(button orelse return);
+    const raw = c.g_object_get_data(@ptrCast(selected), "git-stacks-group-mode") orelse return;
+    state.graph.state.organization_mode = if (@intFromPtr(raw) == 1) .label else .repository;
+    if (c.gtk_widget_get_parent(selected)) |switcher| {
+        var child = c.gtk_widget_get_first_child(switcher);
+        while (child) |candidate| : (child = c.gtk_widget_get_next_sibling(candidate))
+            c.gtk_widget_remove_css_class(candidate, "active-group");
+    }
+    c.gtk_widget_add_css_class(selected, "active-group");
+    savePresentation(state);
+    refreshProjection(state);
+}
+fn compactTitle(buffer: []u8, value: []const u8) ![]const u8 {
+    if (value.len <= 40) return value;
+    var start = value.len - 37;
+    while (start < value.len and (value[start] & 0xc0) == 0x80) start += 1;
+    return try std.fmt.bufPrint(buffer, "…{s}", .{value[start..]});
+}
+
 fn refreshProjection(state: *State) void {
     selectPairUi(state);
     if (state.action_group) |group| for (application.actions) |spec| {
@@ -525,69 +661,149 @@ fn refreshProjection(state: *State) void {
         };
         c.gtk_stack_set_visible_child_name(stack, name);
     }
-    if (state.workspace_list) |list| {
+    if (false) if (state.workspace_list) |list| {
         clearList(list);
         for (0..2) |section| {
-        if (section == 0 and state.graph.state.pin_count > 0) {
-            const pinned_heading = c.gtk_label_new("Pinned") orelse continue;
-            c.gtk_label_set_xalign(@ptrCast(pinned_heading), 0);
-            c.gtk_widget_add_css_class(pinned_heading, "caption-heading");
-            c.gtk_list_box_append(list, pinned_heading);
+            if (section == 0 and state.graph.state.pin_count > 0) {
+                const pinned_heading = c.gtk_label_new("Pinned") orelse continue;
+                c.gtk_label_set_xalign(@ptrCast(pinned_heading), 0);
+                c.gtk_widget_add_css_class(pinned_heading, "caption-heading");
+                c.gtk_list_box_append(list, pinned_heading);
+            }
+            for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |ws| {
+                const pinned = blk: {
+                    for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, &ws.id)) break :blk true;
+                    break :blk false;
+                };
+                if ((section == 0) != pinned) continue;
+                var heading: [96:0]u8 = [_:0]u8{0} ** 96;
+                const title = std.fmt.bufPrintZ(&heading, "{s}{s}", .{ if (pinned) "★ " else "", if (ws.name_len > 0) ws.name[0..ws.name_len] else ws.id[0..8] }) catch continue;
+                const header = c.gtk_label_new(title.ptr) orelse continue;
+                c.gtk_label_set_xalign(@ptrCast(header), 0);
+                c.gtk_widget_add_css_class(header, if (pinned) "heading" else "dim-label");
+                setAccessible(header, c.GTK_ACCESSIBLE_ROLE_HEADING, title.ptr, "Workspace identity and pin state");
+                const heading_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
+                c.gtk_widget_set_hexpand(header, 1);
+                c.gtk_box_append(@ptrCast(heading_box), header);
+                const workspace_id = std.heap.c_allocator.create(model.Id) catch continue;
+                workspace_id.* = ws.id;
+                c.g_object_set_data_full(@ptrCast(heading_box), "git-stacks-workspace", workspace_id, @ptrCast(&freeId));
+                const workspace_click = c.gtk_gesture_click_new() orelse continue;
+                c.gtk_gesture_single_set_button(@ptrCast(workspace_click), c.GDK_BUTTON_SECONDARY);
+                _ = c.g_signal_connect_data(workspace_click, "pressed", @ptrCast(&workspaceContext), state, null, 0);
+                c.gtk_widget_add_controller(heading_box, @ptrCast(workspace_click));
+                if (pinned) {
+                    const drag = c.gtk_drag_source_new() orelse continue;
+                    c.gtk_drag_source_set_actions(drag, c.GDK_ACTION_MOVE);
+                    _ = c.g_signal_connect_data(drag, "prepare", @ptrCast(&pinDragPrepare), state, null, 0);
+                    c.gtk_widget_add_controller(heading_box, @ptrCast(drag));
+                    const drop = c.gtk_drop_target_new(c.g_type_from_name("gchararray"), c.GDK_ACTION_MOVE) orelse continue;
+                    _ = c.g_signal_connect_data(drop, "drop", @ptrCast(&pinDropped), state, null, 0);
+                    c.gtk_widget_add_controller(heading_box, @ptrCast(drop));
+                }
+                c.gtk_list_box_append(list, heading_box);
+                for (ws.repository_ids[0..ws.repository_count], 0..) |repository_id, repository_index| {
+                    var row_text: [128:0]u8 = [_:0]u8{0} ** 128;
+                    const selected = if (state.graph.state.selected_pair) |pair| model.PairKey.eql(pair, .{ .workspace_id = ws.id, .repository_id = repository_id }) else false;
+                    const repository = ws.repositories[repository_index];
+                    const rendered = std.fmt.bufPrintZ(&row_text, "{s}{s}", .{ if (selected) "● " else "", if (repository.name_len > 0) repository.name[0..repository.name_len] else if (ws.name_len > 0) ws.name[0..ws.name_len] else repository_id[0..8] }) catch continue;
+                    const row = c.gtk_list_box_row_new() orelse continue;
+                    const label = c.gtk_label_new(rendered.ptr) orelse continue;
+                    c.gtk_label_set_xalign(@ptrCast(label), 0);
+                    c.gtk_widget_set_hexpand(label, 1);
+                    setAccessible(label, c.GTK_ACCESSIBLE_ROLE_LABEL, rendered.ptr, "Repository; activate to show its persistent terminal tabs");
+                    c.g_object_set_data_full(@ptrCast(row), "git-stacks-pair", std.heap.c_allocator.create(model.PairKey) catch continue, @ptrCast(&freePair));
+                    (@as(*model.PairKey, @ptrCast(@alignCast(c.g_object_get_data(@ptrCast(row), "git-stacks-pair"))))).* = .{ .workspace_id = ws.id, .repository_id = repository_id };
+                    const repository_click = c.gtk_gesture_click_new() orelse continue;
+                    c.gtk_gesture_single_set_button(@ptrCast(repository_click), c.GDK_BUTTON_SECONDARY);
+                    _ = c.g_signal_connect_data(repository_click, "pressed", @ptrCast(&repositoryContext), state, null, 0);
+                    c.gtk_widget_add_controller(row, @ptrCast(repository_click));
+                    const row_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
+                    c.gtk_box_append(@ptrCast(row_box), label);
+                    c.gtk_list_box_row_set_child(@ptrCast(row), row_box);
+                    c.gtk_list_box_append(list, row);
+                }
+            }
         }
-        for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |ws| {
-            const pinned = blk: {
-                for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, &ws.id)) break :blk true;
-                break :blk false;
+    };
+    if (state.workspace_list) |list| {
+        clearList(list);
+        if (state.graph.state.pin_count > 0) {
+            const heading = c.gtk_label_new("Pinned") orelse return;
+            c.gtk_label_set_xalign(@ptrCast(heading), 0);
+            c.gtk_widget_add_css_class(heading, "title-4");
+            c.gtk_list_box_append(list, heading);
+            const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 2) orelse return;
+            for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |ws| {
+                var pinned = false;
+                for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, &ws.id)) {
+                    pinned = true;
+                    break;
+                };
+                if (pinned) appendWorkspaceEntry(@ptrCast(box), state, ws, null, true);
+            }
+            c.gtk_list_box_append(list, box);
+        }
+        const mode = state.graph.state.organization_mode;
+        if (mode == .label) {
+            for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |source| for (0..@max(@as(usize, 1), source.label_count)) |li| {
+                const group = if (source.label_count == 0) "Unlabelled" else source.labels[li][0..source.label_lens[li]];
+                var seen = false;
+                for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |prior| {
+                    if (std.mem.eql(u8, &prior.id, &source.id)) break;
+                    for (0..@max(@as(usize, 1), prior.label_count)) |pi| {
+                        const candidate = if (prior.label_count == 0) "Unlabelled" else prior.labels[pi][0..prior.label_lens[pi]];
+                        if (std.mem.eql(u8, candidate, group)) {
+                            seen = true;
+                            break;
+                        }
+                    }
+                    if (seen) break;
+                }
+                if (seen) continue;
+                var name: [65:0]u8 = [_:0]u8{0} ** 65;
+                const z = std.fmt.bufPrintZ(&name, "{s}", .{group}) catch continue;
+                const expander = c.gtk_expander_new(z.ptr) orelse continue;
+                c.gtk_expander_set_expanded(@ptrCast(expander), 1);
+                const content = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 2) orelse continue;
+                for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |ws| {
+                    var pinned = false;
+                    for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, &ws.id)) {
+                        pinned = true;
+                        break;
+                    };
+                    if (pinned) continue;
+                    var matches = ws.label_count == 0 and std.mem.eql(u8, group, "Unlabelled");
+                    for (0..ws.label_count) |wi| if (std.mem.eql(u8, ws.labels[wi][0..ws.label_lens[wi]], group)) {
+                        matches = true;
+                        break;
+                    };
+                    if (matches) appendWorkspaceEntry(@ptrCast(content), state, ws, null, false);
+                }
+                c.gtk_expander_set_child(@ptrCast(expander), content);
+                c.gtk_list_box_append(list, expander);
             };
-            if ((section == 0) != pinned) continue;
-            var heading: [96:0]u8 = [_:0]u8{0} ** 96;
-            const title = std.fmt.bufPrintZ(&heading, "{s}{s}", .{ if (pinned) "★ " else "", if(ws.name_len>0)ws.name[0..ws.name_len] else ws.id[0..8] }) catch continue;
-            const header = c.gtk_label_new(title.ptr) orelse continue;
-            c.gtk_label_set_xalign(@ptrCast(header), 0);
-            c.gtk_widget_add_css_class(header, if (pinned) "heading" else "dim-label");
-            setAccessible(header, c.GTK_ACCESSIBLE_ROLE_HEADING, title.ptr, "Workspace identity and pin state");
-            const heading_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
-            c.gtk_widget_set_hexpand(header, 1);
-            c.gtk_box_append(@ptrCast(heading_box), header);
-            const workspace_id = std.heap.c_allocator.create(model.Id) catch continue;
-            workspace_id.* = ws.id;
-            c.g_object_set_data_full(@ptrCast(heading_box), "git-stacks-workspace", workspace_id, @ptrCast(&freeId));
-            const workspace_click = c.gtk_gesture_click_new() orelse continue;
-            c.gtk_gesture_single_set_button(@ptrCast(workspace_click), c.GDK_BUTTON_SECONDARY);
-            _ = c.g_signal_connect_data(workspace_click, "pressed", @ptrCast(&workspaceContext), state, null, 0);
-            c.gtk_widget_add_controller(heading_box, @ptrCast(workspace_click));
-            if (pinned) {
-                const drag = c.gtk_drag_source_new() orelse continue;
-                c.gtk_drag_source_set_actions(drag, c.GDK_ACTION_MOVE);
-                _ = c.g_signal_connect_data(drag, "prepare", @ptrCast(&pinDragPrepare), state, null, 0);
-                c.gtk_widget_add_controller(heading_box, @ptrCast(drag));
-                const drop = c.gtk_drop_target_new(c.g_type_from_name("gchararray"), c.GDK_ACTION_MOVE) orelse continue;
-                _ = c.g_signal_connect_data(drop, "drop", @ptrCast(&pinDropped), state, null, 0);
-                c.gtk_widget_add_controller(heading_box, @ptrCast(drop));
-            }
-            c.gtk_list_box_append(list, heading_box);
-            for (ws.repository_ids[0..ws.repository_count],0..) |repository_id,repository_index| {
-                var row_text: [128:0]u8 = [_:0]u8{0} ** 128;
-                const selected = if (state.graph.state.selected_pair) |pair| model.PairKey.eql(pair, .{ .workspace_id = ws.id, .repository_id = repository_id }) else false;
-                const repository=ws.repositories[repository_index];
-                const rendered = std.fmt.bufPrintZ(&row_text, "{s}{s}", .{ if (selected) "● " else "", if(repository.name_len>0)repository.name[0..repository.name_len] else if(ws.name_len>0)ws.name[0..ws.name_len] else repository_id[0..8] }) catch continue;
-                const row = c.gtk_list_box_row_new() orelse continue;
-                const label = c.gtk_label_new(rendered.ptr) orelse continue;
-                c.gtk_label_set_xalign(@ptrCast(label), 0);
-                c.gtk_widget_set_hexpand(label, 1);
-                setAccessible(label, c.GTK_ACCESSIBLE_ROLE_LABEL, rendered.ptr, "Repository; activate to show its persistent terminal tabs");
-                c.g_object_set_data_full(@ptrCast(row), "git-stacks-pair", std.heap.c_allocator.create(model.PairKey) catch continue, @ptrCast(&freePair));
-                (@as(*model.PairKey, @ptrCast(@alignCast(c.g_object_get_data(@ptrCast(row), "git-stacks-pair"))))).* = .{ .workspace_id = ws.id, .repository_id = repository_id };
-                const repository_click = c.gtk_gesture_click_new() orelse continue;
-                c.gtk_gesture_single_set_button(@ptrCast(repository_click), c.GDK_BUTTON_SECONDARY);
-                _ = c.g_signal_connect_data(repository_click, "pressed", @ptrCast(&repositoryContext), state, null, 0);
-                c.gtk_widget_add_controller(row, @ptrCast(repository_click));
-                const row_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
-                c.gtk_box_append(@ptrCast(row_box), label);
-                c.gtk_list_box_row_set_child(@ptrCast(row), row_box);
-                c.gtk_list_box_append(list, row);
-            }
-        }
+        } else {
+            for (state.graph.state.workspaces[0..state.graph.state.workspace_count], 0..) |source, source_index| for (source.repositories[0..source.repository_count], 0..) |source_repo, repo_index| {
+                const group = source_repo.name[0..source_repo.name_len];
+                if (!workspace_view.firstRepositoryNameOccurrence(&state.graph.state, source_index, repo_index)) continue;
+                var name: [97:0]u8 = [_:0]u8{0} ** 97;
+                const z = std.fmt.bufPrintZ(&name, "{s}", .{group}) catch continue;
+                const expander = c.gtk_expander_new(z.ptr) orelse continue;
+                c.gtk_expander_set_expanded(@ptrCast(expander), 1);
+                const content = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 2) orelse continue;
+                for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |ws| {
+                    var pinned = false;
+                    for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, &ws.id)) {
+                        pinned = true;
+                        break;
+                    };
+                    if (pinned) continue;
+                    for (ws.repositories[0..ws.repository_count], 0..) |repo, ri| if (std.mem.eql(u8, repo.name[0..repo.name_len], group)) appendWorkspaceEntry(@ptrCast(content), state, ws, ws.repository_ids[ri], false);
+                }
+                c.gtk_expander_set_child(@ptrCast(expander), content);
+                c.gtk_list_box_append(list, expander);
+            };
         }
     }
     if (state.tab_view) |tabs| {
@@ -596,32 +812,46 @@ fn refreshProjection(state: *State) void {
             for (pair.surfaces[0..pair.surface_count]) |surface| {
                 var title: [128:0]u8 = [_:0]u8{0} ** 128;
                 const p = attention_view.present(&state.graph.state, pair.key.workspace_id, pair.key.repository_id, surface.id);
-                const rendered = std.fmt.bufPrintZ(&title, "{s}{s}{s}", .{ if (surface.title_len > 0) surface.title[0..surface.title_len] else surface.id[0..8], if (surface.lifecycle == .ended) " (ended)" else "", if (p.unread > 0) " •" else "" }) catch continue;
+                var compact: [64]u8 = undefined;
+                const base = compactTitle(&compact, if (surface.title_len > 0) surface.title[0..surface.title_len] else "Terminal") catch continue;
+                const rendered = std.fmt.bufPrintZ(&title, "{s}{s}{s}", .{ base, if (surface.lifecycle == .ended) " (ended)" else "", if (p.unread > 0) " •" else "" }) catch continue;
                 var page: ?*c.AdwTabPage = null;
                 for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
                     const candidate = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
                     const child = c.adw_tab_page_get_child(candidate) orelse continue;
                     const id_ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
-                    if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(id_ptr))), &surface.id)) { page = candidate; break; }
+                    if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(id_ptr))), &surface.id)) {
+                        page = candidate;
+                        break;
+                    }
                 }
                 if (page == null and surface.lifecycle == .ended) {
                     const ended = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 12) orelse continue;
-                    c.gtk_widget_set_halign(ended, c.GTK_ALIGN_CENTER); c.gtk_widget_set_valign(ended, c.GTK_ALIGN_CENTER);
+                    c.gtk_widget_set_halign(ended, c.GTK_ALIGN_CENTER);
+                    c.gtk_widget_set_valign(ended, c.GTK_ALIGN_CENTER);
                     const message = c.gtk_label_new("This terminal has ended") orelse continue;
-                    c.gtk_widget_add_css_class(message, "title-2"); c.gtk_box_append(@ptrCast(ended), message);
+                    c.gtk_widget_add_css_class(message, "title-2");
+                    c.gtk_box_append(@ptrCast(ended), message);
                     const relaunch = c.gtk_button_new_with_label("Relaunch") orelse continue;
                     var action: [96:0]u8 = [_:0]u8{0} ** 96;
                     const detailed = std.fmt.bufPrintZ(&action, "win.relaunch-tab('{s}')", .{surface.id}) catch continue;
-                    c.gtk_actionable_set_detailed_action_name(@ptrCast(relaunch), detailed.ptr); c.gtk_box_append(@ptrCast(ended), relaunch);
+                    c.gtk_actionable_set_detailed_action_name(@ptrCast(relaunch), detailed.ptr);
+                    c.gtk_box_append(@ptrCast(ended), relaunch);
                     const remove = c.gtk_button_new_with_label("Remove") orelse continue;
                     var remove_action: [96:0]u8 = [_:0]u8{0} ** 96;
                     const remove_detailed = std.fmt.bufPrintZ(&remove_action, "win.remove-tab('{s}')", .{surface.id}) catch continue;
-                    c.gtk_actionable_set_detailed_action_name(@ptrCast(remove), remove_detailed.ptr); c.gtk_widget_add_css_class(remove, "destructive-action"); c.gtk_box_append(@ptrCast(ended), remove);
-                    const sid = std.heap.c_allocator.create(model.Id) catch continue; sid.* = surface.id;
+                    c.gtk_actionable_set_detailed_action_name(@ptrCast(remove), remove_detailed.ptr);
+                    c.gtk_widget_add_css_class(remove, "destructive-action");
+                    c.gtk_box_append(@ptrCast(ended), remove);
+                    const sid = std.heap.c_allocator.create(model.Id) catch continue;
+                    sid.* = surface.id;
                     c.g_object_set_data_full(@ptrCast(ended), "git-stacks-surface", sid, @ptrCast(&freeId));
                     page = c.adw_tab_view_append(tabs, ended);
                 }
-                if (page) |p_page| { c.adw_tab_page_set_title(p_page, rendered.ptr); c.adw_tab_page_set_needs_attention(p_page, @intFromBool(p.unread > 0)); }
+                if (page) |p_page| {
+                    c.adw_tab_page_set_title(p_page, rendered.ptr);
+                    c.adw_tab_page_set_needs_attention(p_page, @intFromBool(p.unread > 0));
+                }
             }
         }
     }
@@ -642,32 +872,53 @@ fn refreshProjection(state: *State) void {
     refreshLauncher(state);
 }
 
-fn findPairUi(state:*State,key:model.PairKey)?*PairUi{for(state.pair_uis[0..state.pair_ui_count])|*ui|if(model.PairKey.eql(ui.key,key))return ui;return null;}
-fn ensurePairUi(state:*State,key:model.PairKey)?*PairUi{
-    if(findPairUi(state,key))|ui|return ui;
-    if(state.pair_ui_count>=state.pair_uis.len)return null;
-    const stack=state.pair_stack orelse return null;
-    const box=c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL,0) orelse return null;
-    const tabs=c.adw_tab_view_new() orelse return null;
-    _=c.g_signal_connect_data(tabs,"notify::selected-page",@ptrCast(&selectedPageChanged),state,null,0);
-    _=c.g_signal_connect_data(tabs,"close-page",@ptrCast(&nativeClosePage),state,null,0);
-    const menu=c.g_menu_new() orelse return null;
-    c.g_menu_append(menu,"Rename…","win.rename-current");c.g_menu_append(menu,"Close","win.close-tab");c.g_menu_append(menu,"Relaunch","win.relaunch-current");c.g_menu_append(menu,"Remove","win.remove-current");
-    c.adw_tab_view_set_menu_model(@ptrCast(tabs),@ptrCast(@alignCast(menu)));c.g_object_unref(menu);
-    const bar=c.adw_tab_bar_new() orelse return null;c.adw_tab_bar_set_view(@ptrCast(bar),@ptrCast(tabs));c.adw_tab_bar_set_autohide(@ptrCast(bar),0);c.adw_tab_bar_set_expand_tabs(@ptrCast(bar),0);
-    const bar_click=c.gtk_gesture_click_new() orelse return null;
-    c.gtk_gesture_single_set_button(@ptrCast(bar_click),c.GDK_BUTTON_PRIMARY);
-    _=c.g_signal_connect_data(bar_click,"pressed",@ptrCast(&tabBarPressed),state,null,0);
-    c.gtk_widget_add_controller(@ptrCast(@alignCast(bar)),@ptrCast(bar_click));
-    const add=c.gtk_button_new_from_icon_name("tab-new-symbolic") orelse return null;c.gtk_actionable_set_action_name(@ptrCast(add),"win.new-shell");c.adw_tab_bar_set_end_action_widget(@ptrCast(bar),add);
-    c.gtk_box_append(@ptrCast(box),@ptrCast(@alignCast(bar)));c.gtk_widget_set_vexpand(@ptrCast(@alignCast(tabs)),1);c.gtk_box_append(@ptrCast(box),@ptrCast(@alignCast(tabs)));
-    const index=state.pair_ui_count;var ui=&state.pair_uis[index];ui.*=.{.key=key,.container=box,.tabs=@ptrCast(tabs),.bar=@ptrCast(bar),.name=undefined};
-    _=std.fmt.bufPrintZ(&ui.name,"{s}:{s}",.{key.workspace_id,key.repository_id}) catch return null;
-    _=c.gtk_stack_add_named(stack,box,&ui.name);state.pair_ui_count+=1;return ui;
+fn findPairUi(state: *State, key: model.PairKey) ?*PairUi {
+    for (state.pair_uis[0..state.pair_ui_count]) |*ui| if (model.PairKey.eql(ui.key, key)) return ui;
+    return null;
 }
-fn selectPairUi(state:*State)void{
-    const key=state.graph.state.selected_pair orelse return;const ui=ensurePairUi(state,key) orelse return;
-    state.tab_view=ui.tabs;state.tab_bar=ui.bar;if(state.pair_stack)|stack|c.gtk_stack_set_visible_child_name(stack,&ui.name);
+fn ensurePairUi(state: *State, key: model.PairKey) ?*PairUi {
+    if (findPairUi(state, key)) |ui| return ui;
+    if (state.pair_ui_count >= state.pair_uis.len) return null;
+    const stack = state.pair_stack orelse return null;
+    const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
+    const tabs = c.adw_tab_view_new() orelse return null;
+    _ = c.g_signal_connect_data(tabs, "notify::selected-page", @ptrCast(&selectedPageChanged), state, null, 0);
+    _ = c.g_signal_connect_data(tabs, "close-page", @ptrCast(&nativeClosePage), state, null, 0);
+    const menu = c.g_menu_new() orelse return null;
+    c.g_menu_append(menu, "Rename…", "win.rename-current");
+    c.g_menu_append(menu, "Close", "win.close-tab");
+    c.g_menu_append(menu, "Relaunch", "win.relaunch-current");
+    c.g_menu_append(menu, "Remove", "win.remove-current");
+    c.adw_tab_view_set_menu_model(@ptrCast(tabs), @ptrCast(@alignCast(menu)));
+    c.g_object_unref(menu);
+    const bar = c.adw_tab_bar_new() orelse return null;
+    c.adw_tab_bar_set_view(@ptrCast(bar), @ptrCast(tabs));
+    c.adw_tab_bar_set_autohide(@ptrCast(bar), 0);
+    c.adw_tab_bar_set_expand_tabs(@ptrCast(bar), 0);
+    const bar_click = c.gtk_gesture_click_new() orelse return null;
+    c.gtk_gesture_single_set_button(@ptrCast(bar_click), c.GDK_BUTTON_PRIMARY);
+    _ = c.g_signal_connect_data(bar_click, "pressed", @ptrCast(&tabBarPressed), state, null, 0);
+    c.gtk_widget_add_controller(@ptrCast(@alignCast(bar)), @ptrCast(bar_click));
+    const add = c.gtk_button_new_from_icon_name("tab-new-symbolic") orelse return null;
+    c.gtk_actionable_set_action_name(@ptrCast(add), "win.new-shell");
+    c.adw_tab_bar_set_end_action_widget(@ptrCast(bar), add);
+    c.gtk_box_append(@ptrCast(box), @ptrCast(@alignCast(bar)));
+    c.gtk_widget_set_vexpand(@ptrCast(@alignCast(tabs)), 1);
+    c.gtk_box_append(@ptrCast(box), @ptrCast(@alignCast(tabs)));
+    const index = state.pair_ui_count;
+    var ui = &state.pair_uis[index];
+    ui.* = .{ .key = key, .container = box, .tabs = @ptrCast(tabs), .bar = @ptrCast(bar), .name = undefined };
+    _ = std.fmt.bufPrintZ(&ui.name, "{s}:{s}", .{ key.workspace_id, key.repository_id }) catch return null;
+    _ = c.gtk_stack_add_named(stack, box, &ui.name);
+    state.pair_ui_count += 1;
+    return ui;
+}
+fn selectPairUi(state: *State) void {
+    const key = state.graph.state.selected_pair orelse return;
+    const ui = ensurePairUi(state, key) orelse return;
+    state.tab_view = ui.tabs;
+    state.tab_bar = ui.bar;
+    if (state.pair_stack) |stack| c.gtk_stack_set_visible_child_name(stack, &ui.name);
 }
 
 fn freePair(data: ?*anyopaque) callconv(.c) void {
@@ -692,19 +943,28 @@ fn workspaceContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data
     const widget = c.gtk_event_controller_get_widget(@ptrCast(gesture orelse return)) orelse return;
     const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-workspace") orelse return;
     const id: *model.Id = @ptrCast(@alignCast(ptr));
-    var pinned=false; for(state.graph.state.pins[0..state.graph.state.pin_count])|pin|if(std.mem.eql(u8,&pin,id)){pinned=true;break;};
-    const menu = c.g_menu_new() orelse return; defer c.g_object_unref(menu);
+    var pinned = false;
+    for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, id)) {
+        pinned = true;
+        break;
+    };
+    const menu = c.g_menu_new() orelse return;
+    defer c.g_object_unref(menu);
     var action: [96:0]u8 = [_:0]u8{0} ** 96;
-    const detailed = std.fmt.bufPrintZ(&action, "win.{s}-workspace('{s}')", .{if(pinned)"unpin" else "pin",id.*}) catch return;
-    c.g_menu_append(menu, if(pinned)"Unpin workspace" else "Pin workspace", detailed.ptr); presentContext(widget, menu, x, y);
+    const detailed = std.fmt.bufPrintZ(&action, "win.{s}-workspace('{s}')", .{ if (pinned) "unpin" else "pin", id.* }) catch return;
+    c.g_menu_append(menu, if (pinned) "Unpin workspace" else "Pin workspace", detailed.ptr);
+    presentContext(widget, menu, x, y);
 }
 fn repositoryContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
     const widget = c.gtk_event_controller_get_widget(@ptrCast(gesture orelse return)) orelse return;
     const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-pair") orelse return;
     _ = (workspace_view.View{ .state = &state.graph.state }).select(@as(*model.PairKey, @ptrCast(@alignCast(ptr))).*);
-    const menu = c.g_menu_new() orelse return; defer c.g_object_unref(menu);
-    c.g_menu_append(menu, "New terminal", "win.new-shell"); c.g_menu_append(menu, "Run command…", "win.launch-command"); c.g_menu_append(menu, "Open in VS Code", "win.open-vscode");
+    const menu = c.g_menu_new() orelse return;
+    defer c.g_object_unref(menu);
+    c.g_menu_append(menu, "New terminal", "win.new-shell");
+    c.g_menu_append(menu, "Run command…", "win.launch-command");
+    c.g_menu_append(menu, "Open in VS Code", "win.open-vscode");
     presentContext(widget, menu, x, y);
 }
 fn selectNativePage(state: *State, id: model.Id) void {
@@ -713,7 +973,10 @@ fn selectNativePage(state: *State, id: model.Id) void {
         const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
         const child = c.adw_tab_page_get_child(page) orelse continue;
         const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
-        if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_set_selected_page(tabs, page); return; }
+        if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) {
+            c.adw_tab_view_set_selected_page(tabs, page);
+            return;
+        }
     }
 }
 fn selectedPageChanged(view: ?*c.AdwTabView, _: ?*c.GParamSpec, data: ?*anyopaque) callconv(.c) void {
@@ -815,7 +1078,10 @@ fn pinDropped(target: ?*c.GtkDropTarget, value: ?*const c.GValue, _: f64, _: f64
     @memcpy(&source_id, source);
     const target_id: *model.Id = @ptrCast(@alignCast(target_ptr));
     var index: ?usize = null;
-    for (state.graph.state.pins[0..state.graph.state.pin_count], 0..) |pin, i| if (std.mem.eql(u8, &pin, target_id)) { index = i; break; };
+    for (state.graph.state.pins[0..state.graph.state.pin_count], 0..) |pin, i| if (std.mem.eql(u8, &pin, target_id)) {
+        index = i;
+        break;
+    };
     (workspace_view.View{ .state = &state.graph.state }).reorderPin(source_id, index orelse return 0) catch return 0;
     savePresentation(state);
     refreshProjection(state);
@@ -862,6 +1128,7 @@ fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) cal
     if (response == c.GTK_RESPONSE_ACCEPT) {
         const title = std.mem.span(c.gtk_editable_get_text(@ptrCast(context.entry)));
         (workspace_view.View{ .state = &context.state.graph.state }).renameTab(context.id, title) catch {};
+        if (model.surfaceLocation(&context.state.graph.state, context.id)) |loc| context.state.graph.state.pairs[loc.pair].surfaces[loc.surface].title_pinned = title.len > 0;
         savePresentation(context.state);
         refreshProjection(context.state);
     }
@@ -869,8 +1136,14 @@ fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) cal
 }
 fn promptRename(state: *State, id: model.Id) void {
     const dialog = c.gtk_dialog_new_with_buttons("Rename terminal tab", state.window, c.GTK_DIALOG_MODAL, "Cancel", c.GTK_RESPONSE_CANCEL, "Rename", c.GTK_RESPONSE_ACCEPT, @as(?*anyopaque, null)) orelse return;
-    const entry = c.gtk_entry_new() orelse { c.gtk_window_destroy(@ptrCast(dialog)); return; };
-    const loc = model.surfaceLocation(&state.graph.state, id) orelse { c.gtk_window_destroy(@ptrCast(dialog)); return; };
+    const entry = c.gtk_entry_new() orelse {
+        c.gtk_window_destroy(@ptrCast(dialog));
+        return;
+    };
+    const loc = model.surfaceLocation(&state.graph.state, id) orelse {
+        c.gtk_window_destroy(@ptrCast(dialog));
+        return;
+    };
     const surface = state.graph.state.pairs[loc.pair].surfaces[loc.surface];
     if (surface.title_len > 0) {
         var title: [129:0]u8 = [_:0]u8{0} ** 129;
@@ -878,7 +1151,10 @@ fn promptRename(state: *State, id: model.Id) void {
         c.gtk_editable_set_text(@ptrCast(entry), title[0..surface.title_len :0].ptr);
     }
     c.gtk_box_append(@ptrCast(c.gtk_dialog_get_content_area(@ptrCast(dialog))), entry);
-    const context = std.heap.c_allocator.create(RenameContext) catch { c.gtk_window_destroy(@ptrCast(dialog)); return; };
+    const context = std.heap.c_allocator.create(RenameContext) catch {
+        c.gtk_window_destroy(@ptrCast(dialog));
+        return;
+    };
     context.* = .{ .state = state, .id = id, .entry = @ptrCast(entry) };
     _ = c.g_signal_connect_data(dialog, "response", @ptrCast(&renameResponse), context, null, 0);
     c.gtk_window_present(@ptrCast(dialog));
@@ -901,23 +1177,41 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         showLauncherError(state, @errorName(err));
         return null;
     };
-    state.creating_terminal=true;
+    state.creating_terminal = true;
     defer {
-        state.creating_terminal=false;
-        if(state.pending_exit)|ended| { const code=state.pending_exit_code;const elapsed=state.pending_exit_elapsed_ms;state.pending_exit=null;handleSurfaceExited(state,ended,code,elapsed); }
+        state.creating_terminal = false;
+        if (state.pending_exit) |ended| {
+            const code = state.pending_exit_code;
+            const elapsed = state.pending_exit_elapsed_ms;
+            state.pending_exit = null;
+            handleSurfaceExited(state, ended, code, elapsed);
+        }
     }
     state.terminals[state.terminal_count] = surface;
-    surface.setExitHandler(state,surfaceExited);
+    surface.setExitHandler(state, surfaceExited);
+    surface.setTitleHandler(surfaceTitleChanged);
     state.terminal_count += 1;
     // Ghostty does not create/register the child until its widget belongs to a
     // realized GTK hierarchy.  The page is provisional until that handshake
     // succeeds; it is never published to the presentation model early.
-    const tabs = state.tab_view orelse { forgetTerminal(state,surface.surface_id); surface.destroy(); return null; };
+    const tabs = state.tab_view orelse {
+        forgetTerminal(state, surface.surface_id);
+        surface.destroy();
+        return null;
+    };
     const child: *c.GtkWidget = @ptrCast(@alignCast(surface.widget()));
-    const sid = std.heap.c_allocator.create(model.Id) catch { forgetTerminal(state,surface.surface_id); surface.destroy(); return null; };
+    const sid = std.heap.c_allocator.create(model.Id) catch {
+        forgetTerminal(state, surface.surface_id);
+        surface.destroy();
+        return null;
+    };
     sid.* = surface.surface_id;
     c.g_object_set_data_full(@ptrCast(child), "git-stacks-surface", sid, @ptrCast(&freeId));
-    const provisional = c.adw_tab_view_append(tabs, child) orelse { forgetTerminal(state,surface.surface_id); surface.destroy(); return null; };
+    const provisional = c.adw_tab_view_append(tabs, child) orelse {
+        forgetTerminal(state, surface.surface_id);
+        surface.destroy();
+        return null;
+    };
     c.adw_tab_page_set_title(provisional, "Starting…");
     c.adw_tab_page_set_loading(provisional, 1);
     c.adw_tab_view_set_selected_page(tabs, provisional);
@@ -938,7 +1232,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         std.debug.print("native terminal process identity timed out for {s}\n", .{surface.surface_id});
         c.adw_tab_view_close_page(tabs, provisional);
         surface.destroy();
-        forgetTerminal(state,surface.surface_id);
+        forgetTerminal(state, surface.surface_id);
         showLauncherError(state, "Terminal process did not start");
         return null;
     };
@@ -949,26 +1243,36 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = generation, .child_pid = ownership.pid, .pgid = ownership.pgid, .birth_token = ownership.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
     tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| {
         std.debug.print("native terminal registration failed: {s}\n", .{@errorName(err)});
-        c.adw_tab_view_close_page(tabs, provisional); surface.destroy();
-        forgetTerminal(state,surface.surface_id);
+        c.adw_tab_view_close_page(tabs, provisional);
+        surface.destroy();
+        forgetTerminal(state, surface.surface_id);
         showLauncherError(state, @errorName(err));
         return null;
     };
-    if(model.surfaceLocation(&state.graph.state,surface.surface_id))|location|{
-        var entry=&state.graph.state.pairs[location.pair].surfaces[location.surface];
-        entry.kind=if(command_id==null).shell else .configured_command;
-        if(command_id)|requested|{entry.command_id_len=@intCast(@min(requested.len,entry.command_id.len));@memcpy(entry.command_id[0..entry.command_id_len],requested[0..entry.command_id_len]);}
-        const cwd=spec.cwd[0..std.mem.indexOfScalar(u8,&spec.cwd,0).?];entry.cwd_len=@intCast(@min(cwd.len,entry.cwd.len));@memcpy(entry.cwd[0..entry.cwd_len],cwd[0..entry.cwd_len]);
-        var title:[]const u8="shell";
-        if(command_id)|requested|for(state.graph.state.commands[0..state.graph.state.command_count])|command|if(std.mem.eql(u8,requested,command.id[0..command.id_len])){title=command.name[0..command.name_len];break;};
-        entry.title_len=@intCast(@min(title.len,entry.title.len));@memcpy(entry.title[0..entry.title_len],title[0..entry.title_len]);
+    if (model.surfaceLocation(&state.graph.state, surface.surface_id)) |location| {
+        var entry = &state.graph.state.pairs[location.pair].surfaces[location.surface];
+        entry.kind = if (command_id == null) .shell else .configured_command;
+        if (command_id) |requested| {
+            entry.command_id_len = @intCast(@min(requested.len, entry.command_id.len));
+            @memcpy(entry.command_id[0..entry.command_id_len], requested[0..entry.command_id_len]);
+        }
+        const cwd = spec.cwd[0..std.mem.indexOfScalar(u8, &spec.cwd, 0).?];
+        entry.cwd_len = @intCast(@min(cwd.len, entry.cwd.len));
+        @memcpy(entry.cwd[0..entry.cwd_len], cwd[0..entry.cwd_len]);
+        var title: []const u8 = "shell";
+        if (command_id) |requested| for (state.graph.state.commands[0..state.graph.state.command_count]) |command| if (std.mem.eql(u8, requested, command.id[0..command.id_len])) {
+            title = command.name[0..command.name_len];
+            break;
+        };
+        entry.title_len = @intCast(@min(title.len, entry.title.len));
+        @memcpy(entry.title[0..entry.title_len], title[0..entry.title_len]);
     }
     if (predecessor) |old_id| {
         const loc = model.surfaceLocation(&state.graph.state, surface.surface_id) orelse return null;
         state.graph.state.pairs[loc.pair].surface_count -= 1;
         (workspace_view.View{ .state = &state.graph.state }).publishRelaunch(old_id, surface.surface_id) catch {
             state.graph.terminals.close(surface.surface_id) catch {};
-            forgetTerminal(state,surface.surface_id);
+            forgetTerminal(state, surface.surface_id);
             return null;
         };
         // The replacement owns a new Ghostty widget/page. Remove the retained
@@ -996,7 +1300,9 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
     return surface.surface_id;
 }
-fn createShell(state: *State) void { _ = createTerminal(state, null, null); }
+fn createShell(state: *State) void {
+    _ = createTerminal(state, null, null);
+}
 fn showLauncherError(state: *State, message: []const u8) void {
     if (state.launcher_model) |*launcher| launcher.fail(message);
     if (state.launcher_error) |label| {
@@ -1087,17 +1393,26 @@ fn forgetTerminal(state: *State, id: model.Id) void {
     };
 }
 fn closeTerminal(state: *State, id: model.Id) void {
-    for(state.pair_uis[0..state.pair_ui_count])|*ui| { const tabs=ui.tabs; for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
-        const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
-        const child = c.adw_tab_page_get_child(page) orelse continue;
-        const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
-        if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_close_page(tabs, page); break; }
-    }}
+    for (state.pair_uis[0..state.pair_ui_count]) |*ui| {
+        const tabs = ui.tabs;
+        for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
+            const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
+            const child = c.adw_tab_page_get_child(page) orelse continue;
+            const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
+            if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) {
+                c.adw_tab_view_close_page(tabs, page);
+                break;
+            }
+        }
+    }
 }
 fn focusTerminal(state: *State, requested: ?model.Id) void {
     var target = requested;
     if (target == null) if ((workspace_view.View{ .state = &state.graph.state }).pair()) |pair| {
-        for (pair.surfaces[0..pair.surface_count]) |surface| if (surface.lifecycle == .live) { target = surface.id; break; };
+        for (pair.surfaces[0..pair.surface_count]) |surface| if (surface.lifecycle == .live) {
+            target = surface.id;
+            break;
+        };
     };
     const id = target orelse return;
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id);
@@ -1110,7 +1425,10 @@ fn focusTerminal(state: *State, requested: ?model.Id) void {
 }
 fn launchVscode(state: *State) void {
     const pair = state.graph.state.selected_pair orelse return;
-    const invocation=application.vscodeInvocation(&state.graph.state,pair,"git-stacks") catch |err| {showLauncherError(state,@errorName(err));return;};
+    const invocation = application.vscodeInvocation(&state.graph.state, pair, "git-stacks") catch |err| {
+        showLauncherError(state, @errorName(err));
+        return;
+    };
     var child = std.process.Child.init(invocation.argv[0..invocation.len], state.graph.allocator);
     child.stdin_behavior = .Ignore;
     child.stdout_behavior = .Ignore;
@@ -1153,12 +1471,15 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
                 const page = c.adw_tab_view_get_nth_page(tabs, @intCast(i)) orelse continue;
                 const child = c.adw_tab_page_get_child(page) orelse continue;
                 const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
-                if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) { c.adw_tab_view_close_page(tabs, page); break; }
+                if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) {
+                    c.adw_tab_view_close_page(tabs, page);
+                    break;
+                }
             };
         }
     } else if (std.mem.eql(u8, name, "remove-current")) {
         if (state.graph.state.surface != null) {
-            if(state.tab_view)|tabs|if(c.adw_tab_view_get_selected_page(tabs))|page|c.adw_tab_view_close_page(tabs,page);
+            if (state.tab_view) |tabs| if (c.adw_tab_view_get_selected_page(tabs)) |page| c.adw_tab_view_close_page(tabs, page);
         }
     } else if (std.mem.eql(u8, name, "relaunch-tab")) {
         if (variantId(parameter)) |id| _ = createTerminal(state, null, id);
@@ -1187,7 +1508,10 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
             if (id_str.len == 36) {
                 var id: model.Id = undefined;
                 @memcpy(&id, id_str);
-                view.pin(id) catch |err| { showLauncherError(state, @errorName(err)); return; };
+                view.pin(id) catch |err| {
+                    showLauncherError(state, @errorName(err));
+                    return;
+                };
                 savePresentation(state);
             }
         }
@@ -1261,7 +1585,22 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     const overlay = c.gtk_overlay_new() orelse return null;
     const split = c.gtk_paned_new(c.GTK_ORIENTATION_HORIZONTAL) orelse return null;
     const sidebar_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 6) orelse return null;
+    c.gtk_widget_add_css_class(sidebar_box, "git-stacks-sidebar");
     c.gtk_widget_set_size_request(sidebar_box, 190, -1);
+    const group_switch = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return null;
+    c.gtk_widget_add_css_class(group_switch, "git-stacks-group-switch");
+    const by_label = c.gtk_button_new_with_label("Labels") orelse return null;
+    c.g_object_set_data(@ptrCast(by_label), "git-stacks-group-mode", @ptrFromInt(1));
+    _ = c.g_signal_connect_data(by_label, "clicked", @ptrCast(&groupingClicked), state, null, 0);
+    c.gtk_widget_add_css_class(by_label, "flat");
+    c.gtk_box_append(@ptrCast(group_switch), by_label);
+    const by_repo = c.gtk_button_new_with_label("Repositories") orelse return null;
+    c.g_object_set_data(@ptrCast(by_repo), "git-stacks-group-mode", @ptrFromInt(2));
+    _ = c.g_signal_connect_data(by_repo, "clicked", @ptrCast(&groupingClicked), state, null, 0);
+    c.gtk_widget_add_css_class(by_repo, "flat");
+    c.gtk_box_append(@ptrCast(group_switch), by_repo);
+    c.gtk_widget_add_css_class(if (state.graph.state.organization_mode == .label) by_label else by_repo, "active-group");
+    c.gtk_box_append(@ptrCast(sidebar_box), group_switch);
     const workspace_list = c.gtk_list_box_new() orelse return null;
     state.workspace_list = @ptrCast(workspace_list);
     c.gtk_list_box_set_selection_mode(@ptrCast(workspace_list), c.GTK_SELECTION_SINGLE);
@@ -1277,11 +1616,15 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     setAccessible(status, c.GTK_ACCESSIBLE_ROLE_STATUS, "Connection state", "Explicit loading, empty, disconnected, stale, incompatible, refresh-required, or failure state");
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), status, "connection");
     const workspace = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
-    const pair_stack=c.gtk_stack_new() orelse return null;state.pair_stack=@ptrCast(pair_stack);c.gtk_widget_set_vexpand(pair_stack,1);c.gtk_box_append(@ptrCast(workspace),pair_stack);
+    const pair_stack = c.gtk_stack_new() orelse return null;
+    state.pair_stack = @ptrCast(pair_stack);
+    c.gtk_widget_set_vexpand(pair_stack, 1);
+    c.gtk_box_append(@ptrCast(workspace), pair_stack);
     selectPairUi(state);
-    const tabs=state.tab_view orelse return null;
+    const tabs = state.tab_view orelse return null;
     const initial_child: *c.GtkWidget = @ptrCast(@alignCast(terminal.widget()));
-    const initial_id = std.heap.c_allocator.create(model.Id) catch return null; initial_id.* = terminal.surface_id;
+    const initial_id = std.heap.c_allocator.create(model.Id) catch return null;
+    initial_id.* = terminal.surface_id;
     c.g_object_set_data_full(@ptrCast(initial_child), "git-stacks-surface", initial_id, @ptrCast(&freeId));
     const initial_page = c.adw_tab_view_append(tabs, initial_child) orelse return null;
     c.adw_tab_page_set_title(initial_page, "Terminal");
@@ -1436,14 +1779,21 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             state.ui_smoke_stage = 20;
             c.g_action_group_activate_action(@ptrCast(group), "new-shell", null);
             const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
-            if (pair.surface_count < 2) { std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=create-terminal\n", .{}); return c.G_SOURCE_REMOVE; }
+            if (pair.surface_count < 2) {
+                std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=create-terminal\n", .{});
+                return c.G_SOURCE_REMOVE;
+            }
             state.ui_smoke_ids[1] = pair.surfaces[pair.surface_count - 1].id;
             std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT action=new-shell realized=true registered=true tab=true\n", .{});
-            state.ui_smoke_stage = 1; return 1;
+            state.ui_smoke_stage = 1;
+            return 1;
         },
         1 => {
             if (state.terminal_count < 2 or state.graph.terminals.hosts.items.len < 2) return 1;
-            if (state.graph.state.command_count == 0) { std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=no-configured-command\n", .{}); return c.G_SOURCE_REMOVE; }
+            if (state.graph.state.command_count == 0) {
+                std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=no-configured-command\n", .{});
+                return c.G_SOURCE_REMOVE;
+            }
             const command = state.graph.state.commands[0];
             const command_id = command.id[0..command.id_len];
             const parameter = c.g_variant_new_string(@ptrCast(command_id.ptr));
@@ -1459,53 +1809,64 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
         2 => {
             if (state.terminal_count < 3) return 1;
             const second = state.ui_smoke_ids[1] orelse return c.G_SOURCE_REMOVE;
-            var select_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(select_text[0..36], &second);
+            var select_text: [37:0]u8 = [_:0]u8{0} ** 37;
+            @memcpy(select_text[0..36], &second);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(select_text[0..36 :0].ptr));
             var reorder_text: [40:0]u8 = [_:0]u8{0} ** 40;
             const reordered = std.fmt.bufPrintZ(&reorder_text, "{s}:0", .{second}) catch return c.G_SOURCE_REMOVE;
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "reorder-tab", c.g_variant_new_string(reordered.ptr));
             (workspace_view.View{ .state = &state.graph.state }).renameTab(second, "Renamed shell") catch return c.G_SOURCE_REMOVE;
-            refreshProjection(state); savePresentation(state);
+            refreshProjection(state);
+            savePresentation(state);
             std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT tabs=select,reorder,rename title=Renamed-shell\n", .{});
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "launch-command", null);
             const entry = state.launcher_entry orelse return c.G_SOURCE_REMOVE;
             c.gtk_editable_set_text(@ptrCast(entry), "Smoke");
             const list = state.launcher_results orelse return c.G_SOURCE_REMOVE;
             const row: ?*c.GtkListBoxRow = @ptrCast(c.gtk_widget_get_first_child(@ptrCast(@alignCast(list))));
-            if (row == null) { std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=launcher-search\n", .{}); return c.G_SOURCE_REMOVE; }
+            if (row == null) {
+                std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=launcher-search\n", .{});
+                return c.G_SOURCE_REMOVE;
+            }
             state.ui_smoke_stage = 22;
             launcherActivated(list, row, state);
             const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
             if (pair.surface_count < 4) return 1;
             state.ui_smoke_ids[3] = pair.surfaces[pair.surface_count - 1].id;
             std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT launcher=open,search,activate result=true\n", .{});
-            state.ui_smoke_stage = 3; return 1;
+            state.ui_smoke_stage = 3;
+            return 1;
         },
         3 => {
             if (state.terminal_count < 4) return 1;
             const naturally_ended = state.ui_smoke_ids[3] orelse return c.G_SOURCE_REMOVE;
             const ended_loc = model.surfaceLocation(&state.graph.state, naturally_ended) orelse return 1;
             if (state.graph.state.pairs[ended_loc.pair].surfaces[ended_loc.surface].lifecycle != .ended) return 1;
-            var ended_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(ended_text[0..36], &naturally_ended);
+            var ended_text: [37:0]u8 = [_:0]u8{0} ** 37;
+            @memcpy(ended_text[0..36], &naturally_ended);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "remove-tab", c.g_variant_new_string(ended_text[0..36 :0].ptr));
             if (model.surfaceLocation(&state.graph.state, naturally_ended) != null) return 1;
             const closed = state.ui_smoke_ids[1] orelse return c.G_SOURCE_REMOVE;
-            var selected_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(selected_text[0..36], &closed);
+            var selected_text: [37:0]u8 = [_:0]u8{0} ** 37;
+            @memcpy(selected_text[0..36], &closed);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "select-tab", c.g_variant_new_string(selected_text[0..36 :0].ptr));
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "close-tab", null);
             if (model.surfaceLocation(&state.graph.state, closed) != null) return 1;
             std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT close=user-remove x-keyboard-identical=true child-terminated=true natural-exit=ended-visible remove-enabled=true\n", .{});
-            state.ui_smoke_stage = 4; return 1;
+            state.ui_smoke_stage = 4;
+            return 1;
         },
         4 => {
             const ended = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
             const loc = model.surfaceLocation(&state.graph.state, ended) orelse return 1;
             if (state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle != .ended) return 1;
-            var id_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(id_text[0..36], &ended);
+            var id_text: [37:0]u8 = [_:0]u8{0} ** 37;
+            @memcpy(id_text[0..36], &ended);
             state.ui_smoke_stage = 24;
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "relaunch-tab", c.g_variant_new_string(id_text[0..36 :0].ptr));
             state.ui_smoke_ids[4] = if (state.graph.state.surface) |surface| surface.id else return 1;
-            state.ui_smoke_stage = 5; return 1;
+            state.ui_smoke_stage = 5;
+            return 1;
         },
         5 => {
             const closed = state.ui_smoke_ids[2] orelse return c.G_SOURCE_REMOVE;
@@ -1513,29 +1874,38 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             if (std.mem.eql(u8, &closed, &relaunched)) return c.G_SOURCE_REMOVE;
             const relaunch_loc = model.surfaceLocation(&state.graph.state, relaunched) orelse return 1;
             if (state.graph.state.pairs[relaunch_loc.pair].surfaces[relaunch_loc.surface].lifecycle != .live or state.graph.terminals.find(relaunched) == null) return 1;
-            state.ui_smoke_stage = 7; state.ui_smoke_wait = 0; return 1;
+            state.ui_smoke_stage = 7;
+            state.ui_smoke_wait = 0;
+            return 1;
         },
         6 => {
             return 1;
         },
         7 => {
-            const pages = if(state.tab_view)|tabs|c.adw_tab_view_get_n_pages(tabs) else 0;
+            const pages = if (state.tab_view) |tabs| c.adw_tab_view_get_n_pages(tabs) else 0;
             if (pages > 3 or state.ui_smoke_wait < 20) return 1;
             const workspace = state.graph.state.workspaces[0];
-            var workspace_text: [37:0]u8 = [_:0]u8{0} ** 37; @memcpy(workspace_text[0..36], &workspace.id);
+            var workspace_text: [37:0]u8 = [_:0]u8{0} ** 37;
+            @memcpy(workspace_text[0..36], &workspace.id);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "pin-workspace", c.g_variant_new_string(workspace_text[0..36 :0].ptr));
             if (state.graph.state.pin_count != 1) return 1;
-            if(state.graph.state.pair_count<2)return 1;
-            const first_pair=state.graph.state.pairs[0].key;const second_pair=state.graph.state.pairs[1].key;
-            const hosts_before=state.graph.terminals.hosts.items.len;
-            for(0..50)|i|{state.graph.state.selected_pair=if(i%2==0)second_pair else first_pair;refreshProjection(state);}
-            state.graph.state.selected_pair=first_pair;refreshProjection(state);
-            const first_ui=findPairUi(state,first_pair) orelse return 1;const second_ui=findPairUi(state,second_pair) orelse return 1;
-            if(first_ui.tabs==second_ui.tabs or state.graph.terminals.hosts.items.len!=hosts_before or c.adw_tab_view_get_n_pages(first_ui.tabs)!=pages or c.adw_tab_view_get_n_pages(second_ui.tabs)!=0)return 1;
+            if (state.graph.state.pair_count < 2) return 1;
+            const first_pair = state.graph.state.pairs[0].key;
+            const second_pair = state.graph.state.pairs[1].key;
+            const hosts_before = state.graph.terminals.hosts.items.len;
+            for (0..50) |i| {
+                state.graph.state.selected_pair = if (i % 2 == 0) second_pair else first_pair;
+                refreshProjection(state);
+            }
+            state.graph.state.selected_pair = first_pair;
+            refreshProjection(state);
+            const first_ui = findPairUi(state, first_pair) orelse return 1;
+            const second_ui = findPairUi(state, second_pair) orelse return 1;
+            if (first_ui.tabs == second_ui.tabs or state.graph.terminals.hosts.items.len != hosts_before or c.adw_tab_view_get_n_pages(first_ui.tabs) != pages or c.adw_tab_view_get_n_pages(second_ui.tabs) != 0) return 1;
             std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed pin=ordered-persisted pair-isolation=switch-50 hosts-unchanged=true tabs-exact=true\n", .{pages});
-            std.debug.print("GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered={d} pages={d} launcher=dialog context_menus=true split=paned\n", .{state.graph.terminals.hosts.items.len,pages});
+            std.debug.print("GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered={d} pages={d} launcher=dialog context_menus=true split=paned\n", .{ state.graph.terminals.hosts.items.len, pages });
             state.ui_smoke_stage = 8;
-            if(state.window)|window|c.gtk_window_close(window);
+            if (state.window) |window| c.gtk_window_close(window);
             return c.G_SOURCE_REMOVE;
         },
         20, 21, 22, 24 => return 1,
@@ -1603,7 +1973,8 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         return;
     };
     state.terminals[0] = terminal;
-    terminal.setExitHandler(state,surfaceExited);
+    terminal.setExitHandler(state, surfaceExited);
+    terminal.setTitleHandler(surfaceTitleChanged);
     state.terminal_count = 1;
     active = state;
     if (state.graph.authorization.len != 0 and state.graph.endpoint.len != 0) state.replay_thread = std.Thread.spawn(.{}, replayWorker, .{state}) catch |err| blk: {
@@ -1617,6 +1988,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         return;
     };
     state.window = @ptrCast(window);
+    installProductCss();
     state.close_handler = c.g_signal_connect_data(window, "close-request", @ptrCast(&closeRequested), state, null, 0);
     c.gtk_window_set_title(@ptrCast(window), "git-stacks workspace");
     const stress_cycle = parseStressCycle() orelse 0;
@@ -1652,8 +2024,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
 
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) {
         _ = c.g_timeout_add(20, smokeEvidence, state);
-        if(std.posix.getenv("GIT_STACKS_NATIVE_WORKSPACE_SMOKE")!=null) _=c.g_timeout_add(25,workspaceLifecycleSmoke,state)
-        else _ = c.g_timeout_add(if (parseStressCycle() != null) 500 else 1500, quitTimer, @ptrCast(app));
+        if (std.posix.getenv("GIT_STACKS_NATIVE_WORKSPACE_SMOKE") != null) _ = c.g_timeout_add(25, workspaceLifecycleSmoke, state) else _ = c.g_timeout_add(if (parseStressCycle() != null) 500 else 1500, quitTimer, @ptrCast(app));
     }
 }
 
