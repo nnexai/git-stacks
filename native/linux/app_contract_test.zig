@@ -8,11 +8,29 @@ test "production application owns background replay and authoritative launch ord
     try std.testing.expect(std.mem.indexOf(u8, source, "thread.join()") != null);
     const resolve = std.mem.indexOf(u8, source, "resolvedLaunchSpec(state, pair)").?;
     const create = std.mem.indexOfPos(u8, source, resolve, "Surface.createWithLaunch").?;
-    const publish = std.mem.indexOfPos(u8, source, create, "state.terminals[0] = terminal").?;
+    const publish = std.mem.indexOfPos(u8, source, create, "state.terminals[0] = initial_terminal").?;
     try std.testing.expect(resolve < create and create < publish);
     try std.testing.expect(std.mem.indexOf(u8, source, "GIT_STACKS_SURFACE_ID") != null);
     try std.testing.expect(std.mem.indexOf(u8, source, "GIT_STACKS_WORKSPACE_ID") != null);
     try std.testing.expect(std.mem.indexOf(u8, source, "GIT_STACKS_REPOSITORY_ID") != null);
+}
+
+test "workspace creation and synchronization stay on worker owned transports" {
+    const source = @embedFile("app.zig");
+    const required = [_][]const u8{
+        "win.new-workspace", "openWorkspaceDialog", "workspace_creation.Controller",
+        "std.Thread.spawn(.{}, createWorkspaceWorker", "std.Thread.spawn(.{}, snapshotWorker",
+        "service_sync.Coordinator", "snapshotRecoveryTimer", "g_main_context_invoke",
+        "applyAuthoritativeSnapshot", "commitAfterRegistration", "createTerminal",
+    };
+    for (required) |needle| try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
+    const timer = std.mem.indexOf(u8, source, "fn snapshotRecoveryTimer").?;
+    const worker = std.mem.indexOfPos(u8, source, timer, "fn snapshotWorker").?;
+    try std.testing.expect(std.mem.indexOf(u8, source[timer..worker], ".execute(") == null);
+    const cancel = std.mem.indexOf(u8, source, "state.sync_cancel = true").?;
+    const join = std.mem.indexOfPos(u8, source, cancel, "thread.join()").?;
+    const destroy = std.mem.indexOfPos(u8, source, join, "gtk_window_destroy").?;
+    try std.testing.expect(cancel < join and join < destroy);
 }
 
 test "production GTK shell registers widgets actions callbacks and non-presenting replay projection" {

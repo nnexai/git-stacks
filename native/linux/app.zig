@@ -56,6 +56,11 @@ const State = struct {
     replay_thread: ?std.Thread = null,
     create_cancel: std.atomic.Value(bool) = .init(false),
     create_thread: ?std.Thread = null,
+    sync_cancel: bool = false,
+    sync_mutex: std.Thread.Mutex = .{},
+    sync_condition: std.Thread.Condition = .{},
+    sync_thread: ?std.Thread = null,
+    recovery_source: c.guint = 0,
     content_stack: ?*c.GtkStack = null,
     workspace_list: ?*c.GtkListBox = null,
     tab_view: ?*c.AdwTabView = null,
@@ -218,6 +223,7 @@ fn cleanup(state: *State) void {
     state.cleaned = true;
     state.replay_cancel.store(true, .release);
     state.create_cancel.store(true, .release);
+    state.sync_mutex.lock(); state.sync_cancel = true; state.sync.cancel(); state.sync_condition.broadcast(); state.sync_mutex.unlock();
     if (state.replay_thread) |thread| {
         thread.join();
         state.replay_thread = null;
@@ -226,6 +232,8 @@ fn cleanup(state: *State) void {
         thread.join();
         state.create_thread = null;
     }
+    if (state.sync_thread) |thread| { thread.join(); state.sync_thread = null; }
+    if (state.recovery_source != 0) { _ = c.g_source_remove(state.recovery_source); state.recovery_source = 0; }
     active = null;
     if (state.window) |window| if (state.close_handler != 0) {
         c.g_signal_handler_disconnect(window, state.close_handler);
@@ -322,7 +330,7 @@ fn reduceReplayFrame(data: ?*anyopaque) callconv(.c) c.gboolean {
     const action = dispatch.state.graph.service.decodeSseReducerAction(dispatch.frame) catch |err| switch (err) {
         error.Duplicate => return c.G_SOURCE_REMOVE,
         error.ReplayGap => {
-            dispatch.state.graph.refreshSnapshot() catch |refresh_err| std.debug.print("native replay gap refresh failed: {s}\n", .{@errorName(refresh_err)});
+            requestSnapshotRefresh(dispatch.state, .replay_gap, dispatch.state.graph.service.revision + 1, null);
             return c.G_SOURCE_REMOVE;
         },
         else => {
@@ -334,15 +342,47 @@ fn reduceReplayFrame(data: ?*anyopaque) callconv(.c) c.gboolean {
     refreshProjection(dispatch.state);
     return c.G_SOURCE_REMOVE;
 }
-fn refreshSnapshotIdle(data: ?*anyopaque) callconv(.c) c.gboolean {
+const SnapshotDispatch = struct { state: *State, generation: u64, authoritative: ?model.State = null };
+fn applySnapshotDispatch(data: ?*anyopaque) callconv(.c) c.gboolean {
+    const dispatch: *SnapshotDispatch = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
+    defer dispatch.state.graph.allocator.destroy(dispatch);
+    if (dispatch.state.cleaned) return c.G_SOURCE_REMOVE;
+    dispatch.state.sync_mutex.lock();
+    if (dispatch.authoritative) |snapshot| {
+        const revision = snapshot.revision;
+        if (dispatch.state.sync.succeed(dispatch.generation, revision)) dispatch.state.graph.applyAuthoritativeSnapshot(snapshot) catch {};
+    } else _ = dispatch.state.sync.fail(dispatch.generation, error.SnapshotRejected);
+    dispatch.state.sync_condition.signal();
+    dispatch.state.sync_mutex.unlock();
+    refreshProjection(dispatch.state);
+    return c.G_SOURCE_REMOVE;
+}
+fn requestSnapshotRefresh(state: *State, reason: service_sync.RefreshReason, revision: u64, cursor: ?u64) void {
+    state.sync_mutex.lock(); defer state.sync_mutex.unlock();
+    if (state.sync.request(.{ .reason = reason, .revision = revision, .cursor = cursor })) state.sync_condition.signal();
+}
+fn snapshotRecoveryTimer(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
     if (state.cleaned) return c.G_SOURCE_REMOVE;
-    state.graph.refreshSnapshot() catch |err| {
-        std.debug.print("native workspace refresh failed: {s}\n", .{@errorName(err)});
-        return c.G_SOURCE_REMOVE;
-    };
-    refreshProjection(state);
-    return c.G_SOURCE_REMOVE;
+    requestSnapshotRefresh(state, .periodic, state.graph.service.revision + 1, null);
+    return c.G_SOURCE_CONTINUE;
+}
+fn snapshotWorker(state: *State) void {
+    var transport = @import("service_client").HttpTransport.init(state.graph.allocator); defer transport.deinit();
+    var client = @import("service_client").Client.init(state.graph.authorization); client.begin();
+    while (true) {
+        state.sync_mutex.lock();
+        while (!state.sync_cancel and state.sync.begin() == null) state.sync_condition.wait(&state.sync_mutex);
+        if (state.sync_cancel) { state.sync_mutex.unlock(); break; }
+        const completion = service_sync.RefreshCompletion{ .generation = state.sync.generation, .revision = state.sync.requested_revision };
+        state.sync_mutex.unlock();
+        const dispatch = state.graph.allocator.create(SnapshotDispatch) catch continue; dispatch.* = .{ .state = state, .generation = completion.generation };
+        const request = client.aggregateSnapshotRequest() catch { _ = c.g_main_context_invoke(null, @ptrCast(&applySnapshotDispatch), dispatch); continue; };
+        const response = transport.execute(state.graph.endpoint, request) catch { _ = c.g_main_context_invoke(null, @ptrCast(&applySnapshotDispatch), dispatch); continue; };
+        if (response.status == 200) if (client.decodeAggregateSnapshot(response.body)) |action| dispatch.authoritative = @import("reducer").reduce(.{}, action).state else |_| {};
+        response.deinit(state.graph.allocator);
+        _ = c.g_main_context_invoke(null, @ptrCast(&applySnapshotDispatch), dispatch);
+    }
 }
 fn replayWorker(state: *State) void {
     var transport = @import("service_client").HttpTransport.init(state.graph.allocator);
@@ -398,7 +438,7 @@ fn replayWorker(state: *State) void {
         // bounded authoritative refresh reconciles them promptly and also
         // recovers missed invalidation events.
         if (leases % 5 == 0 and !state.replay_cancel.load(.acquire))
-            _ = c.g_main_context_invoke(null, @ptrCast(&refreshSnapshotIdle), state);
+            requestSnapshotRefresh(state, .periodic, state.graph.service.revision + 1, null);
         // A finite SSE lease exists to make shutdown interruptible, not to
         // busy-poll the service. Pace successful leases below the authenticated
         // request budget while checking cancellation often enough to keep
@@ -2149,6 +2189,10 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         std.debug.print("native replay worker start failed: {s}\n", .{@errorName(err)});
         break :blk null;
     };
+    if (state.graph.authorization.len != 0 and state.graph.endpoint.len != 0) {
+        state.sync_thread = std.Thread.spawn(.{}, snapshotWorker, .{state}) catch |err| blk: { std.debug.print("native snapshot worker start failed: {s}\n", .{@errorName(err)}); break :blk null; };
+        state.recovery_source = c.g_timeout_add(30000, snapshotRecoveryTimer, state);
+    }
     _ = c.g_timeout_add(10, adoptHosts, state);
 
     const window = c.adw_application_window_new(app) orelse {
