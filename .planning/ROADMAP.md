@@ -9,7 +9,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 - [x] **Phase 104: Workspace Service and Event Contract** - Native clients can securely query authoritative workspace state, launch context, operations, and replayable events without changing existing CLI or OpenTUI behavior. (completed 2026-07-11)
 - [x] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface. (completed 2026-07-11)
 - [x] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention. (completed 2026-07-12)
-- [ ] **Phase 107: Beautify Native Workspace UI and Finalize UX** - The stable Linux client receives its Supacode-quality sidebar, tabs, titles, interaction language, accessibility, and visual finish.
+- [x] **Phase 107: Beautify Native Workspace UI and Finalize UX** - The stable Linux client receives its Supacode-quality sidebar, tabs, titles, interaction language, accessibility, and visual finish. (completed 2026-07-12)
 - [ ] **Phase 108: Native Delivery and Cross-Platform Proof** - The finished Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
 
 ## Phase Details
@@ -176,7 +176,7 @@ Wave 3 *(blocked on Wave 2 completion)*:
 
 Plans:
 
-- [ ] 107-01 — Beautify workspace navigation, repository targeting, terminal titles, and native interaction language *(implementation and automated verification complete; final human visual UAT pending)*
+- [x] 107-01 — Beautify workspace navigation, repository targeting, terminal titles, and native interaction language
 
 ### Phase 108: Native Delivery and Cross-Platform Proof
 
@@ -203,5 +203,5 @@ Plans:
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 9/9 | Complete    | 2026-07-11 |
 | 106. Linux Workspace, Commands, and Attention | 3/3 | Complete | 2026-07-12 |
-| 107. Native workspace UI beautification and UX finalization | 0/1 | Human UAT | - |
+| 107. Native workspace UI beautification and UX finalization | 1/1 | Complete | 2026-07-12 |
 | 108. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |

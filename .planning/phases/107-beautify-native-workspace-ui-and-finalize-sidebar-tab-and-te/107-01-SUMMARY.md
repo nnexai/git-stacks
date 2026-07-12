@@ -8,6 +8,8 @@
 - Preserves and visibly highlights the selected workspace-repository pair.
 - Uses Ghostty title events for live terminal titles, compacts long automatic titles, and supports pinned manual overrides.
 - Applies native sidebar hierarchy, icons, spacing, hover/selection states, and active grouping controls.
+- Publishes provider-specific, surface-addressed agent notifications through a real authenticated CLI/service path and shows unread sidebar badges.
+- Guarantees null-terminated native launch environment identity values for hook routing.
 
 ## Verification
 
@@ -18,7 +20,8 @@
 - `bun run test:deps` — passed.
 - `bun run verify:gates` — passed.
 - `bun run test` — 769 unit tests passed; integration runner completed without a reported failure.
+- Final post-UAT `bun run native:verify`, `bun run typecheck`, `bun run test:deps`, and `bun run verify:gates` — passed.
 
-## Remaining acceptance evidence
+## Human acceptance
 
-Final human visual UAT is intentionally still open. Phase 107 must not be marked complete until the real GTK client is inspected for the selected row, grouping hierarchy, pinned section, repository targeting, tab titles, and overall Supacode-quality presentation.
+Human GTK UAT confirmed the final environment and notification flow looked correct after the selected-row, grouping, pinning, title-update, close-target, provider-copy, and identity-routing repairs.
