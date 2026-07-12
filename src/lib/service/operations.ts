@@ -10,6 +10,9 @@ import {
 import type { OperationEventPublisher } from "./event-journal"
 import { openWorkspace as openWorkspaceDirect } from "../workspace-ops"
 import { closeWorkspace as closeWorkspaceDirect } from "../workspace-lifecycle"
+import { createWorkspaceFromRequest, planWorkspaceCreation, type WorkspaceCreationRequest } from "../workspace-creation"
+import { listWorkspacesUncached } from "../config"
+import { NATIVE_MODEL_LIMITS } from "./contract"
 
 export const DEFAULT_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_OPERATION_TERMINAL_LIMIT = 10_000
@@ -369,12 +372,16 @@ export function canonicalRequestHash(value: unknown): string {
 
 type WorkspaceMutationRequest = { workspace: string; options?: Record<string, unknown> }
 type WorkspaceMutation = (request: WorkspaceMutationRequest) => OperationExecution
+export type WorkspaceCreateMutation = (request: WorkspaceCreationRequest, signal?: AbortSignal) => OperationExecution
 type WorkspaceFunction = (workspace: string, options: any, progress?: (message: string) => void) => Promise<{ ok: boolean; error?: string }>
 
 export function createWorkspaceMutationAdapters(dependencies: {
   openWorkspace?: WorkspaceFunction
   closeWorkspace?: WorkspaceFunction
-} = {}): Record<"workspace.open" | "workspace.close", WorkspaceMutation> {
+  createWorkspace?: typeof createWorkspaceFromRequest
+  planWorkspace?: typeof planWorkspaceCreation
+  listWorkspaces?: typeof listWorkspacesUncached
+} = {}): Record<"workspace.open" | "workspace.close", WorkspaceMutation> & { "workspace.create": WorkspaceCreateMutation } {
   const adapt = (name: "open" | "close", invoke: WorkspaceFunction): WorkspaceMutation => (request) => ({
     steps: [{
       name: `workspace.${name}`,
@@ -391,8 +398,35 @@ export function createWorkspaceMutationAdapters(dependencies: {
     }],
     result: { workspace: request.workspace },
   })
+  const create: WorkspaceCreateMutation = (request) => ({
+    steps: [{
+      name: "workspace.create", stage: "preparing", message: "Preparing workspace",
+      run: async (report) => {
+        const plan = await (dependencies.planWorkspace ?? planWorkspaceCreation)(request)
+        if (!plan.ok) throw new Error(plan.error)
+        const current = (dependencies.listWorkspaces ?? listWorkspacesUncached)()
+        const repositories = current.reduce((sum, workspace) => sum + workspace.repos.length, 0) + plan.plan.inputs.repos.length
+        const commands = current.reduce((sum, workspace) => sum + Object.keys(workspace.commands ?? {}).length + workspace.repos.reduce((nested, repo) => nested + Object.keys(repo.commands ?? {}).length, 0), 0)
+          + Object.keys(plan.plan.inputs.wsCommands ?? {}).length + plan.plan.inputs.repos.reduce((sum, repo) => sum + Object.keys(repo.commands ?? {}).length, 0)
+        if (current.length + 1 > NATIVE_MODEL_LIMITS.workspaces) throw new Error("capacity_exceeded: workspaces")
+        if (plan.plan.inputs.repos.length > NATIVE_MODEL_LIMITS.repositories_per_workspace || repositories > NATIVE_MODEL_LIMITS.authoritative_pairs) throw new Error("capacity_exceeded: repositories")
+        if (commands > NATIVE_MODEL_LIMITS.commands) throw new Error("capacity_exceeded: commands")
+        let progressQueue = Promise.resolve()
+        const result = await (dependencies.createWorkspace ?? createWorkspaceFromRequest)(request, (message) => {
+          progressQueue = progressQueue.then(() => report({ stage: "executing", message })).then(() => undefined)
+        })
+        await progressQueue
+        if (!result.ok) {
+          const rollback = result.rollbackErrors.length ? `; rollback errors: ${result.rollbackErrors.join("; ")}` : ""
+          throw new Error(`${result.error}${rollback}`)
+        }
+      },
+    }],
+    result: { workspace_name: request.name, snapshot_changed: true },
+  })
   return {
     "workspace.open": adapt("open", dependencies.openWorkspace ?? openWorkspaceDirect),
     "workspace.close": adapt("close", dependencies.closeWorkspace ?? closeWorkspaceDirect),
+    "workspace.create": create,
   }
 }

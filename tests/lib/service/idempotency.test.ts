@@ -88,7 +88,7 @@ describe("workspace mutation adapters", () => {
     const open = mock(async (_workspace: string, _options: Record<string, unknown>, progress?: (message: string) => void) => { progress?.("Opened repo 1"); return { ok: true } })
     const close = mock(async (_workspace: string, _options: Record<string, unknown>, progress?: (message: string) => void) => { progress?.("Closed repo 1"); return { ok: true } })
     const adapters = createWorkspaceMutationAdapters({ openWorkspace: open, closeWorkspace: close })
-    expect(Object.keys(adapters).sort()).toEqual(["workspace.close", "workspace.open"])
+    expect(Object.keys(adapters).sort()).toEqual(["workspace.close", "workspace.create", "workspace.open"])
     const reports: string[] = []
     const operation = adapters["workspace.open"]({ workspace: "demo", options: { captured: true } })
     await operation.steps[0]!.run((progress) => { reports.push(progress.message ?? "") })
