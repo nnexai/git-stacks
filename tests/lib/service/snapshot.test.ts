@@ -147,8 +147,17 @@ describe("authoritative service snapshots", () => {
     if (resolution.resolved) expect(resolution.launch.argv).toEqual(["/bin/sh", "-lc", "for i in 1 2; do echo $i; done"])
   })
 
-  test("does not invent a snapshot revision when no workspaces exist", async () => {
-    const builder = createSnapshotBuilder(dependencies({ listWorkspaceNames: () => [] }))
-    expect(await builder.currentRevision()).toBe("0")
+  test("assigns stable positive revisions to empty state and advances through A -> empty -> A", async () => {
+    const store = new MemoryStore()
+    let names: string[] = []
+    const builder = createSnapshotBuilder(dependencies({ revisionStore: store, listWorkspaceNames: () => names }))
+    expect(await builder.currentRevision()).toBe("1")
+    expect(await builder.currentRevision()).toBe("1")
+    names = ["alpha"]
+    expect(await builder.currentRevision()).toBe("2")
+    names = []
+    expect(await builder.currentRevision()).toBe("3")
+    names = ["alpha"]
+    expect(await builder.currentRevision()).toBe("4")
   })
 })

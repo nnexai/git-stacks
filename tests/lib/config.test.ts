@@ -14,7 +14,7 @@ import {
 } from "../../src/lib/config"
 import {
   makeTmpDir, cleanup, useIsolatedConfig,
-  realWriteWorkspace, realReadWorkspace, realListWorkspaces,
+  realWriteWorkspace, realReadWorkspace, realListWorkspaces, realListWorkspacesUncached,
   realWorkspaceExists, realTemplateExists, realReadTemplate,
   realWriteTemplate, realListTemplates,
   realCache, realDeleteWorkspace, realDeleteTemplate, realInvalidateConfigCache,
@@ -1352,5 +1352,28 @@ describe("in-memory index", () => {
 
     expect(realListWorkspaces().map((w: { name: string }) => w.name)).not.toContain("external-delete-ws")
     expect(realListTemplates().map((t: { name: string }) => t.name)).not.toContain("external-delete-tpl")
+  })
+
+  test("uncached enumeration reconciles external additions, edits, renames, and deletions", () => {
+    const baseline = realListWorkspaces().map((workspace: { name: string }) => workspace.name).sort()
+    const original = join(wsDir(), "external.yml")
+    writeFileSync(original, `${makeWsYaml("external")}description: before\n`)
+    expect(realListWorkspaces().map((workspace: { name: string }) => workspace.name).sort()).toEqual(baseline)
+    expect(realListWorkspacesUncached().map((workspace: { name: string }) => workspace.name)).toContain("external")
+
+    writeFileSync(original, `${makeWsYaml("external")}description: after\n`)
+    expect(realListWorkspacesUncached()[0]?.description).toBe("after")
+
+    const renamed = join(wsDir(), "renamed.yml")
+    writeFileSync(renamed, `${makeWsYaml("renamed")}description: renamed\n`)
+    const { unlinkSync } = require("fs")
+    unlinkSync(original)
+    const renamedNames = realListWorkspacesUncached().map((workspace: { name: string }) => workspace.name)
+    expect(renamedNames).toContain("renamed")
+    expect(renamedNames).not.toContain("external")
+
+    unlinkSync(renamed)
+    expect(realListWorkspacesUncached().map((workspace: { name: string }) => workspace.name).sort()).toEqual(baseline)
+    expect(realListWorkspaces().map((workspace: { name: string }) => workspace.name).sort()).toEqual(baseline)
   })
 })

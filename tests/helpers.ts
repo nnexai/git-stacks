@@ -888,6 +888,7 @@ export const {
 
 export const {
   listWorkspaces: realListWorkspaces,
+  listWorkspacesUncached: realListWorkspacesUncached,
   workspaceExists: realWorkspaceExists,
   workspacePath: realWorkspacePath,
   writeWorkspace: realWriteWorkspace,
