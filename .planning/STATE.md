@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 107
 current_phase_name: Beautify Native Workspace UI and Finalize UX
 status: Phase 107 hardening execution in progress; 107-02 and 107-04 complete
-stopped_at: Completed 107-04-PLAN.md
-last_updated: "2026-07-12T10:56:33.149Z"
+stopped_at: Completed 107-06-PLAN.md
+last_updated: "2026-07-12T11:03:44.113Z"
 last_activity: 2026-07-12
-last_activity_desc: completed the prompt-free, race-safe workspace creation engine and TUI adapter
+last_activity_desc: completed authoritative workspace snapshot reconciliation and change monitoring
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 34
-  completed_plans: 24
+  completed_plans: 25
   percent: 60
 ---
 
@@ -69,6 +69,7 @@ Progress: [███████░░░] 68%
 | Phase 105 P07 | 6min | 3 tasks | 10 files |
 | Phase 107 P02 | 24min | 2 tasks | 5 files |
 | Phase 107 P04 | 18min | 2 tasks | 7 files |
+| Phase 107 P06 | 12min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 105]: The initial Linux surface integration may use the exact Limux Ghostty fork commit while an upstreamable patch and automated rebase/ABI audit are established. — Current upstream does not expose the rendered surface on Linux, but working multi-pane prior art exists.
 - [Phase 105]: Plain GTK IM commits are buffered into the original Ghostty key event while true composition commits directly. — Preserves raw-mode TUI keys without duplicating cooked input.
 - [Phase 105]: Launcher-scoped NO_COLOR is removed before Ghostty initializes while TERM, COLORTERM, TERMINFO, resources, and user configuration remain Ghostty-owned. — Prevents an embedding launcher from suppressing terminal child color capabilities.
+- [Phase 107]: Codex hook mutation validates the complete hook collection and atomically replaces only after a safe merge.
+- [Phase 107]: Hook-triggered publication uses a 1500ms abort deadline and suppresses publication-path failures while manual publication stays strict.
 
 ### Pending Todos
 
@@ -131,6 +134,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-12T10:56:33.126Z
-Stopped at: Completed 107-02-PLAN.md
+Last session: 2026-07-12T11:03:44.091Z
+Stopped at: Completed 107-06-PLAN.md
 Resume file: None

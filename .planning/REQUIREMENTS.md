@@ -57,7 +57,7 @@
 - [x] **ACT-04**: Users can see unread attention aggregated at workspace, repository, and terminal-tab levels.
 - [x] **ACT-05**: Selecting an attention item focuses the exact surviving surface or a documented nearest surviving context.
 - [x] **ACT-06**: Attention events never steal focus automatically and do not depend on scraping terminal output.
-- [ ] **ACT-07**: Codex hooks publish the lifecycle states Codex exposes, and the native client preserves and renders provider, title, detail, unread state, and exact focus routing across snapshot refreshes.
+- [x] **ACT-07**: Codex hooks publish the lifecycle states Codex exposes, and the native client preserves and renders provider, title, detail, unread state, and exact focus routing across snapshot refreshes.
 
 ### Linux Delivery
 
@@ -127,7 +127,7 @@
 | ACT-04 | Phase 106 | Complete |
 | ACT-05 | Phase 106 | Complete |
 | ACT-06 | Phase 106 | Complete |
-| ACT-07 | Phase 107 | Pending |
+| ACT-07 | Phase 107 | Complete |
 | PKG-01 | Phase 108 | Pending |
 | PKG-02 | Phase 108 | Pending |
 | PKG-03 | Phase 108 | Pending |
