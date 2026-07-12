@@ -373,7 +373,7 @@ fn destroyTerminalIdle(data: ?*anyopaque) callconv(.c) c.gboolean {
     return c.G_SOURCE_REMOVE;
 }
 fn scheduleTerminalDestroy(surface: *surface_mod.Surface) void {
-    surface.retainForDeferredDestroy();
+    if (!surface.scheduleDestroyOnce()) return;
     // A close-page transaction may be followed immediately by relaunch. Give
     // GTK/Ghostty one event-loop turn to finish the old page before tearing
     // down its process/surface; shutdown itself uses idle priority because no

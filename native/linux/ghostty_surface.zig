@@ -70,6 +70,7 @@ pub const Surface = struct {
     clipboard_context: *clipboard.Context,
     clipboard_invalidated: bool = false,
     deferred_widget_ref: bool = false,
+    destroy_scheduled: bool = false,
     input: input_mod.Input,
     surface_id: [36]u8,
     launch: ?LaunchSpec = null,
@@ -105,6 +106,7 @@ pub const Surface = struct {
         self.clipboard_context = try clipboard.Context.create(runtime.allocator, @ptrCast(self.area), self.generation);
         self.clipboard_invalidated = false;
         self.deferred_widget_ref = false;
+        self.destroy_scheduled = false;
         errdefer runtime.allocator.destroy(self.clipboard_context);
         try input_mod.Input.install(self.clipboard_context, &self.input);
         c.g_object_set_data(@ptrCast(self.area), "git-stacks-ime", self.input.ime);
@@ -144,6 +146,13 @@ pub const Surface = struct {
         if (self.destroyed or self.deferred_widget_ref) return;
         _ = c.g_object_ref(self.area);
         self.deferred_widget_ref = true;
+    }
+
+    pub fn scheduleDestroyOnce(self: *Surface) bool {
+        if (self.destroyed or self.destroy_scheduled) return false;
+        self.destroy_scheduled = true;
+        self.retainForDeferredDestroy();
+        return true;
     }
 
     pub fn destroy(self: *Surface) void {
