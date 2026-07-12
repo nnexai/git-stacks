@@ -1145,6 +1145,20 @@ fn presentContext(widget: *c.GtkWidget, menu: *c.GMenu, x: f64, y: f64) void {
     _ = c.g_signal_connect_data(popover, "closed", @ptrCast(&contextClosed), null, null, 0);
     c.gtk_popover_popup(@ptrCast(popover));
 }
+const PinContext = struct { state: *State, workspace_id: model.Id, pinned: bool };
+fn freePinContext(data: ?*anyopaque) callconv(.c) void {
+    if (data) |p| std.heap.c_allocator.destroy(@as(*PinContext, @ptrCast(@alignCast(p))));
+}
+fn pinContextClicked(_: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
+    const context: *PinContext = @ptrCast(@alignCast(data orelse return));
+    const view = workspace_view.View{ .state = &context.state.graph.state };
+    if (context.pinned) view.unpin(context.workspace_id) else view.pin(context.workspace_id) catch |err| {
+        showLauncherError(context.state, @errorName(err));
+        return;
+    };
+    savePresentation(context.state);
+    refreshProjection(context.state);
+}
 fn workspaceContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
     const widget = c.gtk_event_controller_get_widget(@ptrCast(gesture orelse return)) orelse return;
@@ -1157,12 +1171,18 @@ fn workspaceContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data
         pinned = true;
         break;
     };
-    const menu = c.g_menu_new() orelse return;
-    defer c.g_object_unref(menu);
-    var action: [96:0]u8 = [_:0]u8{0} ** 96;
-    const detailed = std.fmt.bufPrintZ(&action, "win.{s}-workspace('{s}')", .{ if (pinned) "unpin" else "pin", id }) catch return;
-    c.g_menu_append(menu, if (pinned) "Unpin workspace" else "Pin workspace", detailed.ptr);
-    presentContext(widget, menu, x, y);
+    const popover = c.gtk_popover_new() orelse return;
+    c.gtk_widget_set_parent(popover, widget);
+    const rect: c.GdkRectangle = .{ .x = @intFromFloat(x), .y = @intFromFloat(y), .width = 1, .height = 1 };
+    c.gtk_popover_set_pointing_to(@ptrCast(popover), &rect);
+    const button = c.gtk_button_new_with_label(if (pinned) "Unpin workspace" else "Pin workspace") orelse return;
+    c.gtk_widget_add_css_class(button, "flat");
+    c.gtk_popover_set_child(@ptrCast(popover), button);
+    const context = std.heap.c_allocator.create(PinContext) catch return;
+    context.* = .{ .state = state, .workspace_id = id.*, .pinned = pinned };
+    _ = c.g_signal_connect_data(button, "clicked", @ptrCast(&pinContextClicked), context, @ptrCast(&freePinContext), 0);
+    _ = c.g_signal_connect_data(popover, "closed", @ptrCast(&contextClosed), null, null, 0);
+    c.gtk_popover_popup(@ptrCast(popover));
 }
 fn repositoryContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
