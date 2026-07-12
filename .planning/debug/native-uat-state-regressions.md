@@ -48,6 +48,10 @@ updated: 2026-07-12
   finding: generated hooks referenced nonexistent `GS_*` identity variables while native terminals export `GIT_STACKS_WORKSPACE_ID`, `GIT_STACKS_REPOSITORY_ID`, and `GIT_STACKS_SURFACE_ID`.
 - timestamp: 2026-07-12
   finding: Limux/cmux use a real local notify command plus auto-exported terminal identity; Supacode keeps unread notification state attached to worktree and terminal surface. The repaired path follows those boundaries.
+- timestamp: 2026-07-12
+  finding: native `LaunchSpec` environment key/value buffers were uninitialized even though Ghostty consumes them as null-terminated C strings, corrupting all three exported identity UUIDs and causing HTTP 400.
+- timestamp: 2026-07-12
+  finding: environment storage is now zero-initialized; the CLI also resolves workspace identity through the authenticated snapshot when invoked outside a native terminal.
 
 ## Eliminated
 

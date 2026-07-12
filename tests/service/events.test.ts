@@ -14,7 +14,7 @@ afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn()
 const workspaceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 function snapshot(revision = "7") {
   return {
-    buildAll: async () => [],
+    buildAll: async () => [{ workspace: { id: workspaceId, name: "alpha" } }],
     buildWorkspace: async (name: string) => ({ workspace: { id: workspaceId, name } }),
     currentRevision: async () => revision,
   }
@@ -112,7 +112,6 @@ describe("v1 event transport", () => {
     const child = Bun.spawn([
       process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "attention", "publish",
       "--state", "completed", "--source", "copilot", "--workspace", "alpha",
-      "--workspace-id", workspaceId,
     ], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
     const exitCode = await child.exited
     expect(exitCode).toBe(0)

@@ -44,26 +44,37 @@ serviceCommand.command("attention")
   .requiredOption("--state <state>")
   .requiredOption("--source <source>")
   .requiredOption("--workspace <name>")
-  .requiredOption("--workspace-id <id>")
+  .option("--workspace-id <id>")
   .option("--repository-id <id>")
   .option("--surface-id <id>")
   .option("--title <title>")
   .option("--detail <detail>")
-  .action(async (options: { state: string; source: string; workspace: string; workspaceId: string; repositoryId?: string; surfaceId?: string; title?: string; detail?: string }) => {
+  .action(async (options: { state: string; source: string; workspace: string; workspaceId?: string; repositoryId?: string; surfaceId?: string; title?: string; detail?: string }) => {
     const descriptor = readServiceDescriptor()
     if (!descriptor) throw new Error("git-stacks service is not running")
     const serviceRoot = join(WS_CONFIG_DIR, "service")
     const credential = readOfficialClientCredential(descriptor.credential_lookup, { serviceRoot })
     if (!credential) throw new Error("git-stacks service credential is unavailable")
-    const identity = `${options.source}:${options.workspaceId}:${options.repositoryId ?? ""}:${options.surfaceId ?? ""}`
+    const headers = { authorization: `Bearer ${credential.token}`, "content-type": "application/json" }
+    let workspaceId = options.workspaceId?.trim()
+    if (!workspaceId) {
+      const snapshotResponse = await fetch(new URL("/v1/snapshot", descriptor.endpoint), { headers })
+      if (!snapshotResponse.ok) throw new Error(`workspace identity resolution failed (${snapshotResponse.status})`)
+      const envelope = await snapshotResponse.json() as { data?: Array<{ workspace?: { id?: string; name?: string } }> }
+      workspaceId = envelope.data?.find((entry) => entry.workspace?.name === options.workspace)?.workspace?.id
+      if (!workspaceId) throw new Error(`workspace '${options.workspace}' was not found by the native service`)
+    }
+    const repositoryId = options.repositoryId?.trim() || undefined
+    const surfaceId = options.surfaceId?.trim() || undefined
+    const identity = `${options.source}:${workspaceId}:${repositoryId ?? ""}:${surfaceId ?? ""}`
     const id = `att_${createHash("sha256").update(identity).digest("hex").slice(0, 32)}`
     const response = await fetch(new URL("/v1/attention", descriptor.endpoint), {
       method: "POST",
-      headers: { authorization: `Bearer ${credential.token}`, "content-type": "application/json" },
+      headers,
       body: JSON.stringify({
-        id, state: options.state, source: options.source, workspace_id: options.workspaceId,
-        ...(options.repositoryId ? { repository_id: options.repositoryId } : {}),
-        ...(options.surfaceId ? { surface_id: options.surfaceId } : {}),
+        id, state: options.state, source: options.source, workspace_id: workspaceId,
+        ...(repositoryId ? { repository_id: repositoryId } : {}),
+        ...(surfaceId ? { surface_id: surfaceId } : {}),
         title: options.title ?? stateTitle(options.source, options.state),
         ...(options.detail ? { detail: options.detail } : {}), occurred_at: new Date().toISOString(),
       }),
