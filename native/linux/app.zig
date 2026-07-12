@@ -259,7 +259,10 @@ fn cleanup(state: *State) void {
     }
     if (state.sync_thread) |thread| { thread.join(); state.sync_thread = null; }
     if (state.recovery_source != 0) {
-        if (c.g_main_context_find_source_by_id(null, state.recovery_source) != null) _ = c.g_source_remove(state.recovery_source);
+        // Destroy the source object returned by the context instead of looking
+        // it up and then removing by id. An already-dispatched timeout can
+        // invalidate that id between the two GLib operations during shutdown.
+        if (c.g_main_context_find_source_by_id(null, state.recovery_source)) |source| c.g_source_destroy(source);
         state.recovery_source = 0;
     }
     active = null;
