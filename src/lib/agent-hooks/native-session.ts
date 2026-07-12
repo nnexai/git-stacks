@@ -83,7 +83,11 @@ export function prepareNativeAgentEnvironment(
   wrapperDir: string,
   resolveExecutable: (command: string, path: string) => string | null = (command, path) => Bun.which(command, { PATH: path }),
 ): Record<string, string> {
-  for (const provider of ["codex", "claude", "copilot"] as const) ensureNativeAgentAttention(repoPath, workspaceName, [], provider)
+  // Provider integrations are user-level, app-owned assets. Never dirty a
+  // workspace merely because the native client opened a terminal. Until the
+  // owned installer has prepared richer hooks, command wrappers remain the
+  // zero-preparation lifecycle floor.
+  void repoPath
   mkdirSync(wrapperDir, { recursive: true, mode: 0o700 })
   const lookupPath = basePath.split(delimiter).filter((entry) => entry && entry !== wrapperDir).join(delimiter)
   for (const { provider, command } of wrapperCommands) {
@@ -98,5 +102,5 @@ export function prepareNativeAgentEnvironment(
     chmodSync(temporary, 0o700)
     renameSync(temporary, target)
   }
-  return { PATH: `${wrapperDir}${delimiter}${lookupPath}`, GIT_STACKS_AGENT_ATTENTION: "hooks+process" }
+  return { PATH: `${wrapperDir}${delimiter}${lookupPath}`, GIT_STACKS_AGENT_ATTENTION: "process" }
 }

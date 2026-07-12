@@ -46,15 +46,15 @@ describe("native agent attention setup", () => {
     })
   })
 
-  test("prepares hooks and zero-prep wrappers for commands typed in native shells", () => {
+  test("prepares zero-prep wrappers without dirtying a workspace", () => {
     const repo = mkdtempSync(join(tmpdir(), "git-stacks-native-zero-prep-"))
     const wrappers = join(repo, ".wrappers")
     const resolved: Record<string, string> = { codex: "/usr/bin/codex-real", "copilot-cli": "/usr/bin/copilot-real", opencode: "/usr/bin/opencode-real" }
     const environment = prepareNativeAgentEnvironment(repo, "alpha", "/usr/bin", wrappers, (command) => resolved[command] ?? null)
     expect(environment.PATH.startsWith(`${wrappers}:`)).toBe(true)
-    expect(existsSync(join(repo, ".codex", "hooks.json"))).toBe(true)
-    expect(existsSync(join(repo, ".claude", "settings.json"))).toBe(true)
-    expect(existsSync(join(repo, ".github", "hooks", "git-stacks.json"))).toBe(true)
+    expect(existsSync(join(repo, ".codex", "hooks.json"))).toBe(false)
+    expect(existsSync(join(repo, ".claude", "settings.json"))).toBe(false)
+    expect(existsSync(join(repo, ".github", "hooks", "git-stacks.json"))).toBe(false)
     const codex = readFileSync(join(wrappers, "codex"), "utf8")
     expect(codex).toContain("--state working --source codex")
     expect(codex).toContain("'/usr/bin/codex-real' \"$@\"")
