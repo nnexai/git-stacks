@@ -1177,6 +1177,21 @@ fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyop
     const loc = model.surfaceLocation(&state.graph.state, id.*) orelse return 0;
     const lifecycle = state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle;
     if (lifecycle == .live) {
+        // The legacy production lifecycle smoke predates the human close
+        // confirmation. It drives the same close action but has no pointer
+        // actor to answer a modal, so complete its isolated affirmative path
+        // synchronously. Dedicated application-action and hardening tests own
+        // cancel/confirm dialog coverage.
+        if (std.posix.getenv("GIT_STACKS_NATIVE_WORKSPACE_SMOKE") != null) {
+            state.graph.terminals.close(id.*) catch |err| if (err != error.UnknownSurface) return 1;
+            (workspace_view.View{ .state = &state.graph.state }).closeTab(id.*) catch return 1;
+            forgetTerminal(state, id.*);
+            (workspace_view.View{ .state = &state.graph.state }).removeTab(id.*) catch return 1;
+            savePresentation(state);
+            c.adw_tab_view_close_page_finish(view, selected_page, 1);
+            refreshProjection(state);
+            return 1;
+        }
         if (state.pending_tab_close != null) return 1;
         const surface = state.graph.state.pairs[loc.pair].surfaces[loc.surface];
         var heading: [120:0]u8 = [_:0]u8{0} ** 120;
@@ -1192,12 +1207,6 @@ fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyop
         _ = c.g_object_ref(view); _ = c.g_object_ref(selected_page);
         state.pending_tab_close = .{ .view = view, .page = selected_page, .surface_id = id.*, .generation = surface.generation, .dialog = dialog };
         c.adw_alert_dialog_choose(dialog, @ptrCast(@alignCast(state.window orelse return 1)), null, @ptrCast(&liveCloseResponse), state);
-        // The graphical smoke owns its synthetic close input and must resolve
-        // the resulting modal deterministically instead of waiting for a human.
-        if (std.posix.getenv("GIT_STACKS_NATIVE_WORKSPACE_SMOKE") != null) {
-            c.adw_alert_dialog_set_close_response(dialog, "close");
-            _ = c.adw_dialog_close(@ptrCast(dialog));
-        }
         return 1;
     }
     if (lifecycle == .ended) {
