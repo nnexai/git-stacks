@@ -7,6 +7,7 @@ import type { StructuredAttentionEvent, WorkspaceSnapshotResponse } from "../lib
 import { NativeLaunchResolutionRequestSchema, type NativeLaunchResolution } from "../lib/service/contract"
 import { NATIVE_MODEL_LIMITS, WorkspaceCreationRequestSchema, type WorkspaceCreationCatalog } from "../lib/service/contract"
 import type { WorkspaceCreateMutation } from "../lib/service/operations"
+import { SnapshotBusyError } from "../lib/service/snapshot"
 
 export const MAX_BODY_BYTES = 256 * 1024
 export const RATE_LIMIT_PER_MINUTE = 60
@@ -190,8 +191,8 @@ function json(body: unknown, status = 200, headers?: HeadersInit): Response {
   return Response.json(body, { status, headers })
 }
 function success(id: string, data: unknown): unknown { return { protocol: "v1", request_id: id, ok: true, data } }
-function failure(id: string, code: string, message: string, status: number, details?: Record<string, unknown>): Response {
-  return json({ protocol: "v1", request_id: id, ok: false, error: { code, message, ...(details ? { details } : {}) } }, status)
+function failure(id: string, code: string, message: string, status: number, details?: Record<string, unknown>, retryable?: boolean): Response {
+  return json({ protocol: "v1", request_id: id, ok: false, error: { code, message, ...(retryable === undefined ? {} : { retryable }), ...(details ? { details } : {}) } }, status)
 }
 
 export function startServiceServer(options: ServiceServerOptions): RunningServiceServer {
@@ -374,6 +375,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
         })
       } catch (caught) {
         if (caught instanceof RequestTimeoutError) return failure(id, "request_timeout", "Service request timed out", 504)
+        if (caught instanceof SnapshotBusyError) return failure(id, "snapshot_busy", "Workspace snapshot is temporarily busy", 409, { attempts: caught.attempts }, true)
         if (caught instanceof IdempotencyConflictError) return failure(id, "idempotency_conflict", caught.message, 409, { operation_id: caught.operationId })
         const status = (caught as { status?: number }).status
         if (status === 400 || status === 413) return failure(id, "invalid_request", (caught as Error).message, status)
