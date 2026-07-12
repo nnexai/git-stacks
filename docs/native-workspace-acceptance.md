@@ -18,6 +18,14 @@ Automated references identify reproducible checks only. `PENDING HUMAN` may be
 changed only after observing the production app; screenshots and smoke markers
 do not certify keyboard feel, hierarchy, contrast, or assistive technology.
 
+Automated preflight at `51efe9df` / final tree: `native:smoke-hardening`,
+`native:verify`, `test`, `typecheck`, `test:deps`, and `verify:gates` — PASS.
+The hardening smoke completed in 81.816 seconds. Human cells remain pending.
+
+UAT gap fixes awaiting re-observation: empty-start catalog creation and owned
+operation IDs (`4bbfb404`), clean selection/launcher/pin/tab-menu interaction
+(`67219a06`), and bounded process/GLib cleanup (`13dc7c57`, `51efe9df`).
+
 | Observation | Automated reference | Human result | Notes / app-window evidence |
 | --- | --- | --- | --- |
 | Empty start and Name/Branch/Source creation | `native:smoke-hardening` create-sync checkpoint | PENDING HUMAN | |

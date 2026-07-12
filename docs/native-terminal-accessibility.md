@@ -9,6 +9,11 @@ Phase 106 workspace-shell observations remain pending in `docs/native-workspace-
 Automated properties do not replace an AT-SPI/Orca observation. Every row below
 remains `PENDING HUMAN` until inspected on the production GTK widget tree.
 
+Automated preflight at the final Phase 107 tree passed `native:test:accessibility`,
+`native:smoke-hardening`, and `native:verify`. This records properties and
+production checkpoints only; every announcement/result below still requires
+the human AT pass.
+
 | Workspace-shell area | Expected role/name/state | Automated reference | Human result / exact announcement |
 | --- | --- | --- | --- |
 | Workspace and repository rows | named controls; selected pair exposed | `native:test:accessibility` | PENDING HUMAN |
