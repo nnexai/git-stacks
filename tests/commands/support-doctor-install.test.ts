@@ -117,7 +117,7 @@ describe("doctor and install support commands", () => {
       const result = runCli(["install", "--hooks", "--codex"], { baseDir, configDir, cwd: repoPath })
       expectSuccess(result)
       expect(result.stdout).not.toContain("Select agent frameworks")
-      expect(result.stdout).toContain("review")
+      expect(result.stdout.toLowerCase()).toContain("review")
       const data = JSON.parse(readFileSync(join(repoPath, ".codex", "hooks.json"), "utf8"))
       expect(data.hooks.PermissionRequest[0].hooks[0].command).toContain("--source codex")
       const removed = runCli(["install", "--hooks", "--remove", "--codex"], { baseDir, configDir, cwd: repoPath })

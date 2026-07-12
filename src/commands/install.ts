@@ -28,13 +28,14 @@ function detectWorkspaceFromCwd(): string | null {
 }
 
 function resolvePlugins(
-  opts: { copilot?: boolean; claude?: boolean },
+  opts: { copilot?: boolean; claude?: boolean; codex?: boolean },
   allPlugins: AgentHookPlugin[]
 ): AgentHookPlugin[] {
   const hasCopilot = opts.copilot === true
   const hasClaude = opts.claude === true
+  const hasCodex = opts.codex === true
 
-  if (!hasCopilot && !hasClaude) {
+  if (!hasCopilot && !hasClaude && !hasCodex) {
     // No flags — return empty to signal "use interactive prompt"
     return []
   }
@@ -48,6 +49,10 @@ function resolvePlugins(
     const copilot = allPlugins.find(p => p.id === "copilot")
     if (copilot) selected.push(copilot)
   }
+  if (hasCodex) {
+    const codex = allPlugins.find(p => p.id === "codex")
+    if (codex) selected.push(codex)
+  }
   return selected
 }
 
@@ -57,7 +62,8 @@ export const installCommand = new Command("install")
   .option("--remove", "Remove installed hooks instead of installing")
   .option("--copilot", "Install GitHub Copilot hooks")
   .option("--claude", "Install Claude Code hooks")
-  .action(async (opts: { hooks?: boolean; remove?: boolean; copilot?: boolean; claude?: boolean }) => {
+  .option("--codex", "Install Codex hooks")
+  .action(async (opts: { hooks?: boolean; remove?: boolean; copilot?: boolean; claude?: boolean; codex?: boolean }) => {
     if (!opts.hooks) {
       installCommand.help()
       return
@@ -141,6 +147,9 @@ export const installCommand = new Command("install")
       p.log.success(
         `Installed ${selectedPlugins.map((p) => p.label).join(", ")} hooks into ${targetDir} (workspace: ${workspace.name})`
       )
+      if (selectedPlugins.some((plugin) => plugin.id === "codex")) {
+        p.log.info("Review and trust the project hooks in Codex before relying on attention updates.")
+      }
     }
 
     p.outro("Done.")
