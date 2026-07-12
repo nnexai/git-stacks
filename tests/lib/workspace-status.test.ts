@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
-import { mkdirSync } from "fs"
+import { mkdirSync, rmSync } from "fs"
 import { join } from "path"
 import type { Workspace, WorkspaceRepo } from "@/lib/config"
 import { cleanup, makeConfigMock, makeGitMock, makeTmpDir } from "../helpers"
@@ -204,5 +204,20 @@ describe("workspace-status", () => {
     expect(getCommitsAheadMock).toHaveBeenCalledWith(worktreePath(worktreeRepo), "origin/develop", "HEAD")
     expect(getCommitsAheadMock).toHaveBeenCalledWith(trunkRepo.main_path, "origin/release/1.2", "HEAD")
     expect(isRepoDirtyMock).toHaveBeenCalledTimes(2)
+  })
+
+  test("treats a worktree deleted during Git status as an expected missing repository", async () => {
+    const repo = makeRepo("raced", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "raced"),
+    })
+    mkdirSync(worktreePath(repo), { recursive: true })
+    isRepoDirtyMock.mockImplementation(async (path: string) => {
+      rmSync(path, { recursive: true, force: true })
+      throw new Error("git status exited 128: not a git repository")
+    })
+
+    expect(await getWorkspaceStatus(makeWorkspace([repo]))).toEqual([{
+      name: "raced", exists: false, dirty: false, branch: "—", mode: "worktree", ahead: 0, behind: 0,
+    }])
   })
 })
