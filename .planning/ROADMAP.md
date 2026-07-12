@@ -164,7 +164,7 @@ Wave 3 *(blocked on Wave 2 completion)*:
 **Goal:** Deliver a coherent Supacode-quality native workspace interface after lifecycle stability is complete.
 **Requirements**: LNX-07, LNX-08, LNX-09, ACT-07
 **Depends on:** Phase 106
-**Plans:** 4/13 plans executed
+**Plans:** 5/13 plans executed
 
 **Success Criteria** (what must be TRUE):
 
@@ -182,7 +182,7 @@ Plans:
 
 - [x] 107-01-PLAN.md
 - [x] 107-02-PLAN.md
-- [ ] 107-03-PLAN.md
+- [x] 107-03-PLAN.md
 - [x] 107-04-PLAN.md
 - [ ] 107-05-PLAN.md
 - [x] 107-06-PLAN.md
@@ -202,7 +202,7 @@ Wave 2 *(independent engine/monitor/provider contracts; blocked on completed bas
 
 - [x] 107-02 — Extract prompt-free, race-safe workspace creation and migrate the TUI adapter
 - [x] 107-04 — Make snapshots uncached/empty-revisioned and build the watched/fingerprint monitor
-- [ ] 107-06 — Install merge-safe Codex hooks and add quiet best-effort publication
+- [x] 107-06 — Install merge-safe Codex hooks and add quiet best-effort publication
 
 Wave 3 *(creation service contract; blocked on Wave 2)*:
 
@@ -262,5 +262,5 @@ Wave 10 *(blocked on all implementation; final production and human evidence)*:
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 9/9 | Complete    | 2026-07-11 |
 | 106. Linux Workspace, Commands, and Attention | 3/3 | Complete | 2026-07-12 |
-| 107. Native workspace UI beautification and UX finalization | 4/13 | In Progress|  |
+| 107. Native workspace UI beautification and UX finalization | 5/13 | In Progress|  |
 | 108. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
