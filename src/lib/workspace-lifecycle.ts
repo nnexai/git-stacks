@@ -127,6 +127,7 @@ async function runWorkspaceHooksCaptured(
 }
 
 type ProgressCallback = (message: string) => void
+const activeWorkspaceCreations = new Set<string>()
 
 type LifecycleOptions = { captured?: boolean; triggeredBy: string }
 
@@ -587,11 +588,22 @@ export async function createWorkspace(
   inputs: CreateWorkspaceInputs,
   onProgress?: ProgressCallback
 ): Promise<CreateWorkspaceResult> {
-  return timeOperation(OBS_CATEGORY, "createWorkspace", async () => {
+  if (activeWorkspaceCreations.has(inputs.wsName)) {
+    return { ok: false, error: `Workspace '${inputs.wsName}' creation is already in progress.`, rollbackErrors: [] }
+  }
+  activeWorkspaceCreations.add(inputs.wsName)
+  try {
+    return await timeOperation(OBS_CATEGORY, "createWorkspace", async () => {
     const config = readGlobalConfig()
     const tasksDir = getTasksDir(config.workspace_root)
     const wsDir = join(tasksDir, inputs.wsName)
     const worktreeRepos = inputs.repos.filter(isWorktreeRepo)
+
+    // The final existence check is intentionally inside the same-name lease and
+    // immediately precedes the first filesystem mutation.
+    if (workspaceExists(inputs.wsName) || existsSync(workspacePath(inputs.wsName))) {
+      return { ok: false, error: `Workspace '${inputs.wsName}' already exists.`, rollbackErrors: [] }
+    }
 
     // mkdir -p the workspace dir before tracked steps push artifacts into it.
     if (!existsSync(wsDir)) mkdirSync(wsDir, { recursive: true })
@@ -818,5 +830,8 @@ export async function createWorkspace(
     }
 
     return { ok: true, workspace: workspaceObj }
-  })
+    })
+  } finally {
+    activeWorkspaceCreations.delete(inputs.wsName)
+  }
 }

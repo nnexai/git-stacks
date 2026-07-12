@@ -24,6 +24,7 @@ import { integrations, resolveEnabledGlobally } from "../lib/integrations"
 import { promptIntegrationOverrides } from "../lib/integrations/wizard-helpers"
 import { openWorkspace } from "../lib/workspace-ops"
 import { createWorkspace } from "../lib/workspace-lifecycle"
+import { createWorkspaceFromRequest } from "../lib/workspace-creation"
 import { composeTemplates } from "../lib/composition"
 import { mergePorts } from "../lib/ports"
 import { prepareWorkspaceSource, formatWorkspaceSourceError, _source } from "../lib/workspace-source"
@@ -339,11 +340,6 @@ export async function runWorkspaceNew(
 
   let repos: WorkspaceRepo[] = []
   let templateName: string | undefined
-  let wsHooks: Workspace["hooks"] | undefined
-  let wsCommands: Workspace["commands"] | undefined
-  let wsEnv: Record<string, string> | undefined
-  let wsEnvFile: string | undefined
-  let wsFiles: Workspace["files"]
   let wsIntegrationSettings: Record<string, unknown> | undefined
   let wsPorts: Record<string, number | null> | undefined
   let template: Template | undefined
@@ -365,11 +361,6 @@ export async function runWorkspaceNew(
     }
     templateName = templateNames[templateNames.length - 1] // top-level template name for metadata
     repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
-    wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
-    wsCommands = template.commands ? { ...template.commands } : undefined
-    wsEnv = template.env ? { ...template.env } : undefined
-    wsEnvFile = template.env_file
-    wsFiles = template.files
     wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
     wsPorts = template.ports ? { ...template.ports } : undefined
   } else if (fromSource) {
@@ -434,11 +425,6 @@ export async function runWorkspaceNew(
       repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
 
       // Snapshot template config into workspace
-      wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
-      wsCommands = template.commands ? { ...template.commands } : undefined
-      wsEnv = template.env ? { ...template.env } : undefined
-      wsEnvFile = template.env_file
-      wsFiles = template.files
       wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
       wsPorts = template.ports ? { ...template.ports } : undefined
     } else {
@@ -500,11 +486,6 @@ export async function runWorkspaceNew(
       repos = buildReposFromTemplate(template, registry, wsName, "", tasksDir)
 
       // Snapshot template config
-      wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
-      wsCommands = template.commands ? { ...template.commands } : undefined
-      wsEnv = template.env ? { ...template.env } : undefined
-      wsEnvFile = template.env_file
-      wsFiles = template.files
       wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
       wsPorts = template.ports ? { ...template.ports } : undefined
     } else {
@@ -647,24 +628,27 @@ export async function runWorkspaceNew(
   // Delegate the entire creation side-effect block to the shared createWorkspace() function.
   // All rollback, hook execution, file ops, env files, post_create, writeWorkspace commit, and
   // runIntegrationGenerate are handled inside that function (D-01, D-02, D-12).
-  const result = await createWorkspace(
+  const result = await createWorkspaceFromRequest(
     {
-      wsName,
+      name: wsName,
       branch,
-      ...(description ? { description } : {}),
-      ...(templateName ? { templateName } : {}),
-      ...(template?.labels?.length ? { templateLabels: template.labels } : {}),
-      repos,
-      ...(wsHooks ? { wsHooks } : {}),
-      ...(wsCommands ? { wsCommands } : {}),
-      ...(wsEnv ? { wsEnv } : {}),
-      ...(wsEnvFile ? { wsEnvFile } : {}),
-      ...(wsFiles ? { wsFiles } : {}),
-      ...(wsIntegrationSettings ? { wsIntegrationSettings } : {}),
-      ...(wsPorts ? { wsPorts } : {}),
-      ...(labels.length > 0 ? { labels } : {}),
+      source: templateName
+        ? { kind: "template", template: templateName }
+        : { kind: "repositories", repositories: repos.map(repo => repo.repo) },
     },
     (msg) => p.log.info(msg),
+    {
+      // Preserve CLI-only metadata while keeping the creation request boundary
+      // limited to name, branch, and source. Repository/template resolution is
+      // still owned by the shared planner.
+      createWorkspace: (inputs, onProgress) => createWorkspace({
+        ...inputs,
+        ...(description ? { description } : {}),
+        ...(wsIntegrationSettings ? { wsIntegrationSettings } : {}),
+        ...(wsPorts ? { wsPorts } : {}),
+        ...(labels.length > 0 ? { labels } : {}),
+      }, onProgress),
+    },
   )
 
   if (!result.ok) {

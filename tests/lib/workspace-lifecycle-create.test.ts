@@ -192,6 +192,25 @@ afterAll(() => {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("createWorkspace", () => {
+  test("serializes concurrent creation attempts for the same workspace name", async () => {
+    let release!: () => void
+    const blocked = new Promise<void>((resolve) => { release = resolve })
+    createWorktreeMock.mockImplementationOnce(async () => {
+      await blocked
+      return { createdWorktree: true, createdBranch: true }
+    })
+
+    const first = createWorkspace({ wsName: "test-ws", branch: "feature/test", repos: makeRepos(["a"]) })
+    await Promise.resolve()
+    const second = await createWorkspace({ wsName: "test-ws", branch: "feature/test", repos: makeRepos(["a"]) })
+    release()
+    const firstResult = await first
+
+    expect(firstResult.ok).toBe(true)
+    expect(second).toMatchObject({ ok: false, error: expect.stringContaining("already in progress") })
+    expect(writeWorkspaceMock).toHaveBeenCalledTimes(1)
+  })
+
   describe("happy path (Behavior 1)", () => {
     test("commits workspace YAML and runs integration generate when all steps succeed", async () => {
       const messages: string[] = []
