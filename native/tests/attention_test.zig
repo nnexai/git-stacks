@@ -71,3 +71,55 @@ test "navigation and asynchronous receipt have zero focus effects; fallback is d
     const selected = reducer.reduce(s, .{ .select_attention = .{ .attention_id = aid } });
     try std.testing.expectEqual(model.FallbackReason.repository, selected.effect.platform_focus.reason);
 }
+
+test "provider presentation survives canonical encoding and duplicate service ids update" {
+    var s = base();
+    var first: model.Attention = .{ .id = id("918f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = s.workspaces[0].id, .status = .working, .provider = .codex };
+    const service = "att_codex_1234567890";
+    @memcpy(first.service_id[0..service.len], service);
+    first.service_id_len = service.len;
+    const title = "Codex needs attention";
+    @memcpy(first.title[0..title.len], title);
+    first.title_len = title.len;
+    const detail = "Unicode detail: ✓";
+    @memcpy(first.detail[0..detail.len], detail);
+    first.detail_len = detail.len;
+    s = reducer.reduce(s, .{ .attention_received = first }).state;
+    var update = first;
+    update.id = id("a18f47f4-5ab1-7c2d-8e90-123456789abc");
+    update.status = .waiting;
+    s = reducer.reduce(s, .{ .attention_received = update }).state;
+    try std.testing.expectEqual(@as(u8, 1), s.attention_count);
+    try std.testing.expectEqual(model.AttentionStatus.waiting, s.attention[0].status);
+    const bytes = try model.canonicalAlloc(std.testing.allocator, s);
+    defer std.testing.allocator.free(bytes);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "\"provider\":\"codex\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bytes, "Unicode detail") != null);
+}
+
+test "attention overflow evicts safe items and otherwise reports loss" {
+    var s = base();
+    s.attention_count = model.NativeModelLimits.attention_items;
+    for (s.attention[0..s.attention_count], 0..) |*item, i| {
+        var aid = id("b18f47f4-5ab1-7c2d-8e90-123456789abc");
+        aid[0] +%= @intCast(i);
+        item.* = .{ .id = aid, .workspace_id = s.workspaces[0].id, .status = .waiting };
+    }
+    const incoming: model.Attention = .{ .id = id("c18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = s.workspaces[0].id, .status = .failed };
+    s = reducer.reduce(s, .{ .attention_received = incoming }).state;
+    try std.testing.expectEqual(@as(u32, 1), s.attention_overflow_count);
+    s.attention[0].read = true;
+    s = reducer.reduce(s, .{ .attention_received = incoming }).state;
+    try std.testing.expectEqual(incoming.id, s.attention[0].id);
+}
+
+test "exact visibility does not clear broader attention" {
+    var s = base();
+    const ws = s.workspaces[0].id;
+    const surface = s.pairs[0].surfaces[0].id;
+    s = reducer.reduce(s, .{ .attention_received = .{ .id = id("d18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = ws, .status = .waiting } }).state;
+    s = reducer.reduce(s, .{ .attention_received = .{ .id = id("e18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = ws, .surface_id = surface, .status = .waiting } }).state;
+    s = reducer.reduce(s, .{ .exact_tab_visible = .{ .surface_id = surface } }).state;
+    try std.testing.expect(!s.attention[0].read);
+    try std.testing.expect(s.attention[1].read);
+}
