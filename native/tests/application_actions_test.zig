@@ -26,6 +26,24 @@ test "all activation sources converge on scoped action names and readiness" {
     try std.testing.expectEqualStrings("win.new-workspace", app.actions[0].name);
     try std.testing.expectEqualStrings("<Primary><Shift>n", app.actions[0].accelerator.?);
 }
+test "adaptive thresholds spacing and recovery actions are centralized" {
+    const breakpoint: app.Breakpoint = .{};
+    try std.testing.expect(breakpoint.collapsed(719));
+    try std.testing.expect(!breakpoint.collapsed(720));
+    try std.testing.expect(breakpoint.wide(1080));
+    try std.testing.expectEqual(@as(i32, 4), app.Spacing.inline_control);
+    try std.testing.expectEqual(@as(i32, 6), app.Spacing.row);
+    try std.testing.expectEqual(@as(i32, 12), app.Spacing.section);
+    try std.testing.expectEqual(@as(i32, 18), app.Spacing.content);
+    const required = [_][]const u8{"win.retry-service", "win.refresh-service", "win.connection-details", "win.toggle-current-pin", "win.move-current-pin-up", "win.move-current-pin-down"};
+    for (required) |name| {
+        var found = false;
+        for (app.actions) |spec| {
+            if (std.mem.eql(u8, spec.name, name)) found = true;
+        }
+        try std.testing.expect(found);
+    }
+}
 test "configured command launcher filters scope orders recents and preserves structured failure" {
     var s: model.State = .{ .connection = .ready, .command_count = 4 };
     s.commands[0] = cmd('a', "Test", id('r'));

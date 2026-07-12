@@ -2,6 +2,8 @@ const std = @import("std");
 const model = @import("model");
 
 pub const Page = enum { loading, empty, disconnected, stale, incompatible, refresh_required, failure, workspace };
+pub const StatusAction = enum { none, create_workspace, retry_connection, refresh, details };
+pub const StatusPresentation = struct { page: Page, action: StatusAction, title: []const u8, description: []const u8, retain_workspace: bool = false, mutations_enabled: bool = false };
 pub const Organization = model.OrganizationMode;
 pub const OrphanRow = struct { key: model.PairKey, workspace_name: []const u8, repository_name: []const u8, orphan: bool = true, actions_enabled: bool = false };
 pub fn orphanRow(state: *const model.State, index: usize) ?OrphanRow {
@@ -30,6 +32,18 @@ pub const View = struct {
             .refresh_required => .refresh_required,
             .failed => .failure,
             .ready => if (self.state.workspace_count == 0) .empty else .workspace,
+        };
+    }
+    pub fn status(self: View) StatusPresentation {
+        return switch (self.page()) {
+            .loading => .{ .page = .loading, .action = .none, .title = "Connecting", .description = "Loading authoritative workspaces..." },
+            .empty => .{ .page = .empty, .action = .create_workspace, .title = "Create your first workspace", .description = "Start from a template or one or more repositories.", .mutations_enabled = true },
+            .disconnected => .{ .page = .disconnected, .action = .retry_connection, .title = "Service unavailable", .description = "Check the local service and try connecting again." },
+            .stale => .{ .page = .stale, .action = .refresh, .title = "Workspace data may be out of date", .description = "You can keep reading existing terminals while changes are disabled.", .retain_workspace = true },
+            .incompatible => .{ .page = .incompatible, .action = .details, .title = "Update required", .description = "The native client and local service use incompatible protocols." },
+            .refresh_required => .{ .page = .refresh_required, .action = .refresh, .title = "Refresh required", .description = "The event history changed; reload authoritative workspace data." },
+            .failure => .{ .page = .failure, .action = .retry_connection, .title = "Could not load workspaces", .description = "Review connection details or try again." },
+            .workspace => .{ .page = .workspace, .action = .none, .title = "Workspaces", .description = "Authoritative workspace data is current.", .mutations_enabled = true },
         };
     }
     pub fn repositoryLevelVisible(self: View, workspace: usize) bool {

@@ -23,6 +23,29 @@ test "explicit connection pages never coerce to empty" {
         try std.testing.expectEqual(x.p, v.page());
     }
 }
+test "every connection page exposes the exact safe recovery action" {
+    var s = base();
+    var v = view.View{ .state = &s };
+    const cases = [_]struct { c: model.Connection, p: view.Page, action: view.StatusAction }{
+        .{ .c = .connecting, .p = .loading, .action = .none },
+        .{ .c = .disconnected_no_snapshot, .p = .disconnected, .action = .retry_connection },
+        .{ .c = .stale, .p = .stale, .action = .refresh },
+        .{ .c = .incompatible, .p = .incompatible, .action = .details },
+        .{ .c = .refresh_required, .p = .refresh_required, .action = .refresh },
+        .{ .c = .failed, .p = .failure, .action = .retry_connection },
+    };
+    for (cases) |x| {
+        s.connection = x.c;
+        const presentation = v.status();
+        try std.testing.expectEqual(x.p, presentation.page);
+        try std.testing.expectEqual(x.action, presentation.action);
+        try std.testing.expectEqual(x.c == .stale, presentation.retain_workspace);
+        try std.testing.expectEqual(x.c == .ready, presentation.mutations_enabled);
+    }
+    s.connection = .ready;
+    s.workspace_count = 0;
+    try std.testing.expectEqual(view.StatusAction.create_workspace, v.status().action);
+}
 test "single repository is shallow and stable selection pins persist" {
     var s = base();
     var v = view.View{ .state = &s };

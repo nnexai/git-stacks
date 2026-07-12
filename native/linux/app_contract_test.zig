@@ -36,7 +36,8 @@ test "workspace creation and synchronization stay on worker owned transports" {
 test "production GTK shell registers widgets actions callbacks and non-presenting replay projection" {
     const source = @embedFile("app.zig");
     const required = [_][]const u8{
-        "gtk_paned_new",
+        "adw_overlay_split_view_new",
+        "adw_breakpoint_new",
         "adw_tab_view_new",
         "gtk_stack_add_named",
         "gtk_list_box_new",

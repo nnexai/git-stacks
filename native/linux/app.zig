@@ -83,6 +83,8 @@ const State = struct {
     workspace_controller: workspace_creation.Controller = .{},
     sync: service_sync.Coordinator = .{},
     connection_label: ?*c.GtkLabel = null,
+    connection_action: ?*c.GtkButton = null,
+    stale_banner: ?*c.GtkWidget = null,
     attention_label: ?*c.GtkLabel = null,
     attention_button: ?*c.GtkMenuButton = null,
     attention_list: ?*c.GtkListBox = null,
@@ -758,6 +760,10 @@ fn groupingClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
     savePresentation(state);
     refreshProjection(state);
 }
+fn staleBannerClicked(_: ?*c.AdwBanner, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    requestSnapshotRefresh(state, .manual_retry, state.graph.service.revision + 1, null);
+}
 fn compactTitle(buffer: []u8, value: []const u8) ![]const u8 {
     if (value.len <= 40) return value;
     var start = value.len - 37;
@@ -782,21 +788,22 @@ fn refreshProjection(state: *State) void {
         c.g_simple_action_set_enabled(@ptrCast(action), @intFromBool(enabled));
     };
     if (state.connection_label) |label| {
-        const text = switch (application.page(&state.graph.state)) {
-            .loading => "Loading authoritative workspaces…",
-            .empty => "No workspaces configured",
-            .disconnected => "Disconnected — no snapshot",
-            .stale => "Disconnected — showing stale snapshot",
-            .incompatible => "Service version incompatible",
-            .refresh_required => "Refresh required before launching",
-            .failure => "Workspace service failed",
-            .workspace => "Connected",
-        };
-        c.gtk_label_set_text(label, text);
+        const presentation = (workspace_view.View{ .state = &state.graph.state }).status();
+        var copy: [360:0]u8 = [_:0]u8{0} ** 360;
+        const rendered = std.fmt.bufPrintZ(&copy, "{s}\n{s}", .{ presentation.title, presentation.description }) catch "Workspace status";
+        c.gtk_label_set_text(label, rendered.ptr);
+        if (state.connection_action) |button| {
+            const action_name: ?[*:0]const u8 = switch (presentation.action) { .none => null, .create_workspace => "win.new-workspace", .retry_connection => "win.retry-service", .refresh => "win.refresh-service", .details => "win.connection-details" };
+            const action_label: [*:0]const u8 = switch (presentation.action) { .none => "", .create_workspace => "Create workspace", .retry_connection => "Retry connection", .refresh => "Refresh", .details => "Details" };
+            c.gtk_button_set_label(button, action_label);
+            c.gtk_actionable_set_action_name(@ptrCast(button), action_name);
+            c.gtk_widget_set_visible(@ptrCast(@alignCast(button)), @intFromBool(presentation.action != .none));
+        }
     }
+    if (state.stale_banner) |banner| c.gtk_widget_set_visible(banner, @intFromBool(state.graph.state.connection == .stale));
     if (state.content_stack) |stack| {
         const name = switch (application.page(&state.graph.state)) {
-            .workspace => "workspace",
+            .workspace, .stale => "workspace",
             else => "connection",
         };
         c.gtk_stack_set_visible_child_name(stack, name);
@@ -1864,6 +1871,25 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
             view.reorderPin(value.id, value.index) catch {};
             savePresentation(state);
         }
+    } else if (std.mem.eql(u8, name, "retry-service") or std.mem.eql(u8, name, "refresh-service")) {
+        requestSnapshotRefresh(state, .manual_retry, state.graph.service.revision + 1, null);
+    } else if (std.mem.eql(u8, name, "connection-details")) {
+        showLauncherError(state, "The local workspace service is unavailable or incompatible. Check service logs, then retry.");
+    } else if (std.mem.eql(u8, name, "toggle-current-pin")) {
+        if (state.graph.state.selected_pair) |pair| {
+            var pinned = false;
+            for (state.graph.state.pins[0..state.graph.state.pin_count]) |id| if (std.mem.eql(u8, &id, &pair.workspace_id)) { pinned = true; break; };
+            if (pinned) view.unpin(pair.workspace_id) else view.pin(pair.workspace_id) catch {};
+            savePresentation(state);
+        }
+    } else if (std.mem.eql(u8, name, "move-current-pin-up") or std.mem.eql(u8, name, "move-current-pin-down")) {
+        if (state.graph.state.selected_pair) |pair| for (state.graph.state.pins[0..state.graph.state.pin_count], 0..) |id, index| {
+            if (!std.mem.eql(u8, &id, &pair.workspace_id)) continue;
+            const target: ?usize = if (std.mem.eql(u8, name, "move-current-pin-up")) (if (index > 0) index - 1 else null) else (if (index + 1 < state.graph.state.pin_count) index + 1 else null);
+            if (target) |to| view.reorderPin(pair.workspace_id, to) catch {};
+            savePresentation(state);
+            break;
+        };
     }
     refreshProjection(state);
 }
@@ -1934,11 +1960,9 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     c.g_object_unref(menu);
     c.adw_header_bar_pack_end(@ptrCast(header), menu_button);
     c.gtk_box_append(@ptrCast(root), header);
-    const overlay = c.gtk_overlay_new() orelse return null;
-    const split = c.gtk_paned_new(c.GTK_ORIENTATION_HORIZONTAL) orelse return null;
+    const split = c.adw_overlay_split_view_new() orelse return null;
     const sidebar_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 6) orelse return null;
     c.gtk_widget_add_css_class(sidebar_box, "git-stacks-sidebar");
-    c.gtk_widget_set_size_request(sidebar_box, 190, -1);
     const group_switch = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return null;
     c.gtk_widget_add_css_class(group_switch, "git-stacks-group-switch");
     const by_label = c.gtk_button_new_with_label("Labels") orelse return null;
@@ -1969,9 +1993,15 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     c.gtk_widget_set_halign(status_box, c.GTK_ALIGN_CENTER); c.gtk_widget_set_valign(status_box, c.GTK_ALIGN_CENTER);
     const status = c.gtk_label_new("Loading authoritative workspaces…") orelse return null; state.connection_label = @ptrCast(status);
     c.gtk_label_set_wrap(@ptrCast(status), 1); setAccessible(status, c.GTK_ACCESSIBLE_ROLE_STATUS, "Connection state", "Explicit loading, empty, disconnected, stale, incompatible, refresh-required, or failure state"); c.gtk_box_append(@ptrCast(status_box), status);
-    const create_empty = c.gtk_button_new_with_label("Create workspace") orelse return null; c.gtk_actionable_set_action_name(@ptrCast(create_empty), "win.new-workspace"); c.gtk_widget_add_css_class(create_empty, "suggested-action"); c.gtk_box_append(@ptrCast(status_box), create_empty);
+    const status_action = c.gtk_button_new_with_label("Create workspace") orelse return null; state.connection_action = @ptrCast(status_action); c.gtk_actionable_set_action_name(@ptrCast(status_action), "win.new-workspace"); c.gtk_widget_add_css_class(status_action, "suggested-action"); c.gtk_box_append(@ptrCast(status_box), status_action);
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), status_box, "connection");
     const workspace = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
+    const stale_banner = c.adw_banner_new("Workspace data may be out of date — terminals remain readable; changes are disabled.") orelse return null;
+    state.stale_banner = stale_banner;
+    c.adw_banner_set_button_label(@ptrCast(stale_banner), "Refresh");
+    _ = c.g_signal_connect_data(stale_banner, "button-clicked", @ptrCast(&staleBannerClicked), state, null, 0);
+    c.gtk_widget_set_visible(stale_banner, 0);
+    c.gtk_box_append(@ptrCast(workspace), stale_banner);
     const pair_stack = c.gtk_stack_new() orelse return null;
     state.pair_stack = @ptrCast(pair_stack);
     c.gtk_widget_set_vexpand(pair_stack, 1);
@@ -1988,12 +2018,20 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     // Publish only after every named child exists; replay/snapshot callbacks
     // may refresh concurrently with UI construction.
     state.content_stack = @ptrCast(content_stack);
-    c.gtk_paned_set_start_child(@ptrCast(split), sidebar_box);
-    c.gtk_paned_set_end_child(@ptrCast(split), content_stack);
-    c.gtk_paned_set_position(@ptrCast(split), 220);
-    c.gtk_paned_set_resize_start_child(@ptrCast(split), 0);
-    c.gtk_paned_set_shrink_start_child(@ptrCast(split), 0);
-    c.gtk_overlay_set_child(@ptrCast(overlay), split);
+    c.adw_overlay_split_view_set_sidebar(@ptrCast(split), sidebar_box);
+    c.adw_overlay_split_view_set_content(@ptrCast(split), content_stack);
+    c.adw_overlay_split_view_set_min_sidebar_width(@ptrCast(split), 180);
+    c.adw_overlay_split_view_set_max_sidebar_width(@ptrCast(split), 320);
+    c.adw_overlay_split_view_set_sidebar_width_fraction(@ptrCast(split), 0.28);
+    const adaptive: application.Breakpoint = .{};
+    const condition = c.adw_breakpoint_condition_new_length(c.ADW_BREAKPOINT_CONDITION_MAX_WIDTH, @floatFromInt(adaptive.sidebar_collapsed_below), c.ADW_LENGTH_UNIT_PX) orelse return null;
+    const breakpoint = c.adw_breakpoint_new(condition) orelse return null;
+    var collapsed_value: c.GValue = std.mem.zeroes(c.GValue);
+    _ = c.g_value_init(&collapsed_value, c.G_TYPE_BOOLEAN);
+    c.g_value_set_boolean(&collapsed_value, 1);
+    c.adw_breakpoint_add_setter(breakpoint, @ptrCast(split), "collapsed", &collapsed_value);
+    c.g_value_unset(&collapsed_value);
+    c.adw_application_window_add_breakpoint(@ptrCast(window), breakpoint);
     const dialog = c.adw_dialog_new() orelse return null;
     // AdwDialog removes itself from the presentation host when closed. Keep a
     // state-owned reference so the command launcher and its child pointers are
@@ -2001,10 +2039,9 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     _ = c.g_object_ref_sink(dialog);
     state.launcher = @ptrCast(dialog);
     c.adw_dialog_set_title(@ptrCast(dialog), "Run command");
-    c.adw_dialog_set_content_width(@ptrCast(dialog), 560);
-    c.adw_dialog_set_content_height(@ptrCast(dialog), 400);
-    const launcher_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 8) orelse return null;
-    c.gtk_widget_set_size_request(launcher_box, 520, 360);
+    c.adw_dialog_set_content_width(@ptrCast(dialog), 480);
+    c.adw_dialog_set_content_height(@ptrCast(dialog), 360);
+    const launcher_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, application.Spacing.section) orelse return null;
     const search = c.gtk_search_entry_new() orelse return null;
     state.launcher_entry = @ptrCast(search);
     c.gtk_search_entry_set_placeholder_text(@ptrCast(search), "Search configured commands…");
@@ -2029,8 +2066,8 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     c.adw_dialog_set_child(@ptrCast(dialog), launcher_box);
     c.adw_dialog_set_focus(@ptrCast(dialog), search);
     _ = c.g_signal_connect_data(dialog, "closed", @ptrCast(&launcherClosed), state, null, 0);
-    c.gtk_widget_set_vexpand(overlay, 1);
-    c.gtk_box_append(@ptrCast(root), overlay);
+    c.gtk_widget_set_vexpand(split, 1);
+    c.gtk_box_append(@ptrCast(root), split);
     registerActions(state, window);
     refreshProjection(state);
     return root;
