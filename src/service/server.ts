@@ -5,6 +5,8 @@ import { IdempotencyConflictError, type OperationRegistry, type OperationExecuti
 import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
 import type { StructuredAttentionEvent, WorkspaceSnapshotResponse } from "../lib/service/contract"
 import { NativeLaunchResolutionRequestSchema, type NativeLaunchResolution } from "../lib/service/contract"
+import { NATIVE_MODEL_LIMITS, WorkspaceCreationRequestSchema, type WorkspaceCreationCatalog } from "../lib/service/contract"
+import type { WorkspaceCreateMutation } from "../lib/service/operations"
 
 export const MAX_BODY_BYTES = 256 * 1024
 export const RATE_LIMIT_PER_MINUTE = 60
@@ -40,6 +42,8 @@ export interface ServiceServerOptions {
   broker?: EventBroker
   publishAttention?: (attention: Omit<StructuredAttentionEvent, "journal_sequence">) => Promise<void>
   mutations?: Record<string, (request: z.infer<typeof MutationRequestSchema>, signal?: AbortSignal) => OperationExecution>
+  workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
+  workspaceCreate?: WorkspaceCreateMutation
   hostname?: "127.0.0.1"
   port?: number
   now?: () => number
@@ -303,8 +307,12 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
             native_launch_resolution: { available: Boolean(options.snapshot.resolveNativeLaunch) },
             structured_attention: { available: Boolean(options.broker) },
           },
-          limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024 },
+          limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024, native_model: NATIVE_MODEL_LIMITS },
         }))
+        if (request.method === "GET" && url.pathname === "/v1/workspace-creation/catalog") {
+          if (!options.workspaceCreationCatalog) return failure(id, "capability_unavailable", "Workspace creation catalog is unavailable", 409)
+          return json(success(id, await options.workspaceCreationCatalog()))
+        }
         if (request.method === "GET" && url.pathname === "/v1/snapshot") return json(success(id, await options.snapshot.buildAll(signal)))
         if (request.method === "POST" && url.pathname === "/v1/native-launch") {
           if (!options.snapshot.resolveNativeLaunch) return failure(id, "capability_unavailable", "Native launch resolution is unavailable", 409)
@@ -330,13 +338,25 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
         const mutationMatch = /^\/v1\/operations\/([^/]+)$/.exec(url.pathname)
         if (request.method === "POST" && mutationMatch && mutationMatch[1] !== "cancel") {
           const mutation = decodeURIComponent(mutationMatch[1]!)
-          const adapter = options.mutations?.[mutation]
+          const adapter = mutation === "workspace.create" ? options.workspaceCreate : options.mutations?.[mutation]
           if (!adapter || !options.operations) return failure(id, "capability_unavailable", "Mutation capability is unavailable", 409, { capability: mutation })
-          const parsed = MutationRequestSchema.safeParse(await readBody(request))
-          if (!parsed.success) return failure(id, "invalid_request", "Invalid mutation request", 400)
+          const body = await readBody(request)
           const key = request.headers.get("idempotency-key")
           if (!key || key.length > 256) return failure(id, "invalid_request", "A valid Idempotency-Key header is required", 400)
-          const operation = await options.operations.submit({ clientId: admission.client.clientId, endpoint: mutation, idempotencyKey: key, request: parsed.data, execution: adapter(parsed.data, signal) })
+          let parsedRequest: unknown
+          let execution: OperationExecution
+          if (mutation === "workspace.create") {
+            const parsed = WorkspaceCreationRequestSchema.safeParse(body)
+            if (!parsed.success || !options.workspaceCreate) return failure(id, "invalid_request", "Invalid mutation request", 400)
+            parsedRequest = parsed.data
+            execution = options.workspaceCreate(parsed.data, signal)
+          } else {
+            const parsed = MutationRequestSchema.safeParse(body)
+            if (!parsed.success) return failure(id, "invalid_request", "Invalid mutation request", 400)
+            parsedRequest = parsed.data
+            execution = (adapter as (request: z.infer<typeof MutationRequestSchema>, signal?: AbortSignal) => OperationExecution)(parsed.data, signal)
+          }
+          const operation = await options.operations.submit({ clientId: admission.client.clientId, endpoint: mutation, idempotencyKey: key, request: parsedRequest, execution })
           return json(success(id, operation), 202)
         }
         const operationMatch = /^\/v1\/operations\/(op_[A-Za-z0-9_-]{16,})$/.exec(url.pathname)

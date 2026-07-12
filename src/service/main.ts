@@ -9,6 +9,7 @@ import { EventJournal, publishOperationEvent } from "../lib/service/event-journa
 import { EventBroker } from "../lib/service/event-broker"
 import { createWorkspaceMutationAdapters, OperationRegistry } from "../lib/service/operations"
 import type { Operation } from "../lib/service/contract"
+import { getWorkspaceCreationCatalog } from "../lib/workspace-creation"
 import { startServiceServer, type RunningServiceServer } from "./server"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
@@ -161,8 +162,11 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     let running: RunningServiceServer
     let stopManaged: () => Promise<void> = async () => { await running.stop() }
     lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: () => stopManaged() })
+    const mutationAdapters = createWorkspaceMutationAdapters()
     running = startServiceServer({
-      serviceRoot, snapshot, operations, broker, mutations: createWorkspaceMutationAdapters(),
+      serviceRoot, snapshot, operations, broker,
+      mutations: { "workspace.open": mutationAdapters["workspace.open"], "workspace.close": mutationAdapters["workspace.close"] },
+      workspaceCreate: mutationAdapters["workspace.create"], workspaceCreationCatalog: getWorkspaceCreationCatalog,
       publishAttention: async (attention) => {
         const event = await journal.appendAttention(attention)
         broker.publish(event)
