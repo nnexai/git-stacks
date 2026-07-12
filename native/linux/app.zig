@@ -7,6 +7,7 @@ const tab_registry = @import("tab_registry");
 const guard = @import("guard");
 const app_graph = @import("app_graph");
 const model = @import("model");
+const reducer = @import("reducer");
 const persistence = @import("persistence");
 const application = @import("application");
 const workspace_view = @import("workspace_view");
@@ -616,6 +617,18 @@ fn refreshLauncher(state: *State) void {
     const query = std.mem.span(query_ptr);
     var items: [64]command_launcher.Item = undefined;
     const count = state.launcher_model.?.collect(query, &items);
+    if (count == 0) {
+        const empty = state.launcher_model.?.emptyState(query, count);
+        const message = if (empty == .no_configured_commands) "No configured commands for this workspace" else "No commands match this search — clear the search to see configured commands";
+        const row = c.gtk_list_box_row_new() orelse return;
+        const label = c.gtk_label_new(message.ptr) orelse return;
+        c.gtk_widget_add_css_class(label, "dim-label");
+        c.gtk_list_box_row_set_activatable(@ptrCast(row), 0);
+        c.gtk_list_box_row_set_selectable(@ptrCast(row), 0);
+        c.gtk_list_box_row_set_child(@ptrCast(row), label);
+        c.gtk_list_box_append(list, row);
+        return;
+    }
     for (items[0..count]) |item| {
         const command = state.graph.state.commands[item.command_index];
         var text: [180:0]u8 = [_:0]u8{0} ** 180;
@@ -630,6 +643,8 @@ fn refreshLauncher(state: *State) void {
         c.gtk_list_box_row_set_child(@ptrCast(row), label);
         c.gtk_list_box_append(list, row);
     }
+    const selected = state.launcher_model.?.selectAfterRefresh(items[0..count]);
+    if (c.gtk_list_box_get_row_at_index(list, @intCast(selected))) |row| c.gtk_list_box_select_row(list, row);
 }
 
 fn refreshAttentionRows(state: *State) void {
@@ -1458,9 +1473,25 @@ fn launcherClosed(_: ?*c.AdwDialog, data: ?*anyopaque) callconv(.c) void {
     state.focus_before_launcher = null;
 }
 fn launcherKeyPressed(_: ?*c.GtkEventControllerKey, keyval: c.guint, _: c.guint, _: c.GdkModifierType, data: ?*anyopaque) callconv(.c) c.gboolean {
-    if (keyval != c.GDK_KEY_Escape) return 0;
     const state: *State = @ptrCast(@alignCast(data orelse return 0));
-    if (state.launcher) |dialog| _ = c.adw_dialog_close(dialog);
+    if (keyval == c.GDK_KEY_Escape) { if (state.launcher) |dialog| _ = c.adw_dialog_close(dialog); return 1; }
+    const list = state.launcher_results orelse return 0;
+    if (keyval == c.GDK_KEY_Return or keyval == c.GDK_KEY_KP_Enter) {
+        const row = c.gtk_list_box_get_selected_row(list) orelse c.gtk_list_box_get_row_at_index(list, 0) orelse return 1;
+        launcherActivated(list, row, state); return 1;
+    }
+    if (keyval != c.GDK_KEY_Down and keyval != c.GDK_KEY_Up) return 0;
+    const pair = state.graph.state.selected_pair orelse return 1;
+    state.launcher_model.?.pair = pair;
+    const entry = state.launcher_entry orelse return 1;
+    const query = std.mem.span(c.gtk_editable_get_text(@ptrCast(entry)));
+    var items: [64]command_launcher.Item = undefined;
+    const count = state.launcher_model.?.collect(query, &items);
+    if (count == 0) return 1;
+    const current_row = c.gtk_list_box_get_selected_row(list);
+    const current: usize = if (current_row) |row| @intCast(c.gtk_list_box_row_get_index(row)) else 0;
+    const next = state.launcher_model.?.moveSelection(items[0..count], current, if (keyval == c.GDK_KEY_Down) 1 else -1);
+    if (c.gtk_list_box_get_row_at_index(list, @intCast(next))) |row| c.gtk_list_box_select_row(list, row);
     return 1;
 }
 fn launcherChanged(_: ?*c.GtkEditable, data: ?*anyopaque) callconv(.c) void {

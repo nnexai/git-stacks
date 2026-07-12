@@ -39,9 +39,22 @@ test "configured command launcher filters scope orders recents and preserves str
     try std.testing.expectEqual(@as(usize, 3), n);
     try std.testing.expectEqual(@as(usize, 2), out[0].command_index);
     try std.testing.expect(out[0].duplicate_name and out[0].scope == .workspace);
+    try std.testing.expectEqual(@as(usize,0),l.selectAfterRefresh(out[0..n]));
+    try std.testing.expectEqual(@as(usize,1),l.moveSelection(out[0..n],0,1));
+    try std.testing.expectEqual(@as(usize,1),l.selectAfterRefresh(out[0..n]));
     l.fail("resolution: repository stale");
     try std.testing.expect(l.open);
     try std.testing.expectEqualStrings("resolution: repository stale", l.error_message[0..l.error_len]);
+}
+test "launcher distinguishes empty catalog from no matches and wraps selection" {
+    var s:model.State=.{.connection=.ready,.command_count=1}; s.commands[0]=cmd('a',"Build",id('r'));
+    var l=launcher.Launcher{.state=&s,.pair=.{.workspace_id=id('w'),.repository_id=id('r')}};
+    var out:[4]launcher.Item=undefined;
+    try std.testing.expectEqual(launcher.EmptyState.no_matches,l.emptyState("zzz",l.collect("zzz",&out)));
+    try std.testing.expectEqual(@as(usize,0),l.selectAfterRefresh(out[0..l.collect("",&out)]));
+    try std.testing.expectEqual(@as(usize,0),l.moveSelection(out[0..1],0,-1));
+    l.pair.repository_id=id('x');
+    try std.testing.expectEqual(launcher.EmptyState.no_configured_commands,l.emptyState("",l.collect("",&out)));
 }
 test "incoming attention has no focus effect and explicit activation explains fallback" {
     var s: model.State = .{ .connection = .ready, .workspace_count = 1 };
