@@ -79,9 +79,9 @@ describe("doctor and install support commands", () => {
       const settingsPath = join(repoPath, ".claude", "settings.json")
       const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as { hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string }> }>> }
       expect(settings.hooks.Stop[0].hooks[0].command).toContain("--workspace install-ws")
-      expect(settings.hooks.Stop[0].hooks[0].command).toContain("--from claude")
+      expect(settings.hooks.Stop[0].hooks[0].command).toContain("--source claude")
       expect(settings.hooks.PreToolUse[0].matcher).toBe("AskUserQuestion")
-      expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain("--from claude")
+      expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain("--source claude")
     } finally {
       cleanup(baseDir)
     }

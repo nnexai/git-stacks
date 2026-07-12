@@ -20,30 +20,19 @@ describe("claudeCodePlugin", () => {
     expect(claudeCodePlugin.label).toBe("Claude Code")
   })
 
-  it("generateHookEntries returns 4 entries with workspace name interpolated", async () => {
+  it("generateHookEntries returns all five attention states with workspace name interpolated", async () => {
     const { claudeCodePlugin } = await import("../../src/lib/agent-hooks/claude-code")
     const entries = claudeCodePlugin.generateHookEntries("my-workspace")
-    expect(entries).toHaveLength(4)
+    expect(entries).toHaveLength(5)
 
     expect(entries[0].event).toBe("Stop")
     expect(entries[0].matcher).toBeUndefined()
     expect(entries[0].command).toContain("my-workspace")
-    expect(entries[0].command).toContain("git-stacks message send")
-
-    expect(entries[1].event).toBe("PreToolUse")
-    expect(entries[1].matcher).toBe("AskUserQuestion")
-    expect(entries[1].command).toContain("my-workspace")
-    expect(entries[1].command).toContain("git-stacks message send")
-
-    expect(entries[2].event).toBe("UserPromptSubmit")
-    expect(entries[2].matcher).toBeUndefined()
-    expect(entries[2].command).toContain("my-workspace")
-    expect(entries[2].command).toContain("git-stacks message clear")
-
-    expect(entries[3].event).toBe("PostToolUse")
-    expect(entries[3].matcher).toBe("AskUserQuestion")
-    expect(entries[3].command).toContain("my-workspace")
-    expect(entries[3].command).toContain("git-stacks message clear")
+    expect(entries.map((entry) => entry.event)).toEqual(["Stop", "PostToolUseFailure", "PreToolUse", "UserPromptSubmit", "PostToolUse"])
+    expect(entries.map((entry) => entry.command.match(/--state (\w+)/)?.[1])).toEqual(["completed", "failed", "waiting", "working", "idle"])
+    for (const entry of entries) expect(entry.command).toContain("git-stacks service attention publish")
+    expect(entries[2].matcher).toBe("AskUserQuestion")
+    expect(entries[4].matcher).toBe("AskUserQuestion")
   })
 
   it("install creates .claude/settings.json with nested hooks format", async () => {
@@ -174,30 +163,21 @@ describe("copilotPlugin", () => {
     expect(copilotPlugin.label).toBe("GitHub Copilot")
   })
 
-  it("generateHookEntries returns 4 entries with workspace name interpolated", async () => {
+  it("generateHookEntries returns all five attention states with workspace name interpolated", async () => {
     const { copilotPlugin } = await import("../../src/lib/agent-hooks/copilot")
     const entries = copilotPlugin.generateHookEntries("my-workspace")
-    expect(entries).toHaveLength(4)
+    expect(entries).toHaveLength(5)
 
     expect(entries[0].event).toBe("Stop")
     expect(entries[0].matcher).toBeUndefined()
     expect(entries[0].command).toContain("my-workspace")
     expect(entries[0].command).toContain("copilot")
 
-    expect(entries[1].event).toBe("PreToolUse")
-    expect(entries[1].matcher).toBe("AskUserQuestion")
-    expect(entries[1].command).toContain("my-workspace")
-    expect(entries[1].command).toContain("copilot")
-
-    expect(entries[2].event).toBe("UserPromptSubmit")
-    expect(entries[2].matcher).toBeUndefined()
-    expect(entries[2].command).toContain("my-workspace")
-    expect(entries[2].command).toContain("copilot")
-
-    expect(entries[3].event).toBe("PostToolUse")
-    expect(entries[3].matcher).toBe("AskUserQuestion")
-    expect(entries[3].command).toContain("my-workspace")
-    expect(entries[3].command).toContain("copilot")
+    expect(entries.map((entry) => entry.event)).toEqual(["Stop", "PostToolUseFailure", "PreToolUse", "UserPromptSubmit", "PostToolUse"])
+    expect(entries.map((entry) => entry.command.match(/--state (\w+)/)?.[1])).toEqual(["completed", "failed", "waiting", "working", "idle"])
+    for (const entry of entries) expect(entry.command).toContain("--source copilot")
+    expect(entries[2].matcher).toBe("AskUserQuestion")
+    expect(entries[4].matcher).toBe("AskUserQuestion")
   })
 
   it("install creates .github/hooks/git-stacks.json with Copilot format", async () => {

@@ -201,6 +201,10 @@ fn cleanup(state: *State) void {
         state.launcher_results = null;
         state.launcher_error = null;
     }
+    if (state.window) |window| {
+        c.gtk_window_destroy(window);
+        state.window = null;
+    }
     var adopted: [16]bool = [_]bool{false} ** 16;
     for (0..state.terminal_count) |i| {
         if (state.terminals[i]) |terminal| adopted[i] = state.graph.terminals.find(terminal.surface_id) != null;
@@ -1371,9 +1375,10 @@ fn reportStressSample(cycle: usize, surfaces: usize, clipboard_pending: usize, g
     std.debug.print("GIT_STACKS_STRESS_SAMPLE cycle={d} surfaces={d} callbacks=0 clipboard={d} gl_areas={d} gl_contexts={d} children={d} rss_bytes={d} fd_count={d} thread_count={d}\n", .{ cycle, surfaces, clipboard_pending, gl_areas, gl_contexts, children, resources.rss_bytes, resources.fd_count, resources.thread_count });
 }
 
-fn closeRequested(_: ?*c.GtkWindow, data: ?*anyopaque) callconv(.c) c.gboolean {
+fn closeRequested(window: ?*c.GtkWindow, data: ?*anyopaque) callconv(.c) c.gboolean {
+    _ = window;
     cleanup(@ptrCast(@alignCast(data orelse return 0)));
-    return 0;
+    return 1;
 }
 fn quitTimer(data: ?*anyopaque) callconv(.c) c.gboolean {
     c.g_application_quit(@ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE)));
@@ -1632,11 +1637,15 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         c.gtk_paned_set_end_child(@ptrCast(paned), @ptrCast(@alignCast(second.widget())));
         c.adw_application_window_set_content(@ptrCast(window), paned);
     } else {
-        const shell = buildWorkspaceUi(state, @ptrCast(window), terminal) orelse {
-            cleanup(state);
-            return;
-        };
-        c.adw_application_window_set_content(@ptrCast(window), shell);
+        if (state.graph.state.selected_pair == null and std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) {
+            c.adw_application_window_set_content(@ptrCast(window), @ptrCast(@alignCast(terminal.widget())));
+        } else {
+            const shell = buildWorkspaceUi(state, @ptrCast(window), terminal) orelse {
+                cleanup(state);
+                return;
+            };
+            c.adw_application_window_set_content(@ptrCast(window), shell);
+        }
     }
     c.gtk_window_present(@ptrCast(window));
     _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(terminal.widget())));
