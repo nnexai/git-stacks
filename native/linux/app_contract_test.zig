@@ -59,6 +59,19 @@ test "production GTK shell registers widgets actions callbacks and non-presentin
     try std.testing.expect(std.mem.indexOf(u8, source[replay_refresh..replay_worker], "gtk_window_present") == null);
 }
 
+test "live tab close is deferred behind one generation-validated destructive confirmation" {
+    const source = @embedFile("app.zig");
+    const pending = std.mem.indexOf(u8, source, "pending_tab_close: ?PendingTabClose").?;
+    const choose = std.mem.indexOfPos(u8, source, pending, "adw_alert_dialog_choose").?;
+    const callback = std.mem.indexOfPos(u8, source, choose, "fn liveCloseResponse").?;
+    const teardown = std.mem.indexOfPos(u8, source, callback, "graph.terminals.close").?;
+    const finish = std.mem.indexOfPos(u8, source, teardown, "close_page_finish(pending.view, pending.page, 1)").?;
+    try std.testing.expect(pending < choose and choose < callback and callback < teardown and teardown < finish);
+    try std.testing.expect(std.mem.indexOf(u8, source[choose..callback], "graph.terminals.close") == null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "surface.generation != pending.generation") != null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "Close terminal") != null);
+}
+
 pub fn verifyCallbacks() !void {
     const source = @embedFile("app.zig");
     const actions = @import("application").actions;
@@ -70,7 +83,7 @@ pub fn verifyCallbacks() !void {
     }
     const required = [_][]const u8{
         "createTerminal(state, command.id",
-        "state.graph.terminals.close(id.*)",
+        "state.graph.terminals.close(pending.surface_id)",
         "publishRelaunch(old_id, surface.surface_id)",
         "promptRename(state, id)",
         "launchVscode(state)",

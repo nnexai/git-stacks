@@ -90,6 +90,7 @@ const State = struct {
     launcher_model: ?command_launcher.Launcher = null,
     focus_before_launcher: ?*c.GtkWidget = null,
     programmatic_tab_close: bool = false,
+    pending_tab_close: ?PendingTabClose = null,
     creating_terminal: bool = false,
     pending_exit: ?model.Id = null,
     pending_exit_code: u32 = 0,
@@ -98,6 +99,7 @@ const State = struct {
     ui_smoke_wait: u16 = 0,
     ui_smoke_ids: [6]?model.Id = [_]?model.Id{null} ** 6,
 };
+const PendingTabClose = struct { view: *c.AdwTabView, page: *c.AdwTabPage, surface_id: model.Id, generation: u64, dialog: *c.AdwAlertDialog };
 const PairUi = struct { key: model.PairKey, container: *c.GtkWidget, tabs: *c.AdwTabView, bar: *c.AdwTabBar, name: [74:0]u8 };
 var active: ?*State = null;
 
@@ -224,6 +226,11 @@ fn resolvedLaunchSpec(state: *State, pair: model.PairKey) !surface_mod.LaunchSpe
 fn cleanup(state: *State) void {
     if (state.cleaned) return;
     state.cleaned = true;
+    if (state.pending_tab_close) |pending| {
+        c.adw_tab_view_close_page_finish(pending.view, pending.page, 0);
+        c.g_object_unref(pending.page); c.g_object_unref(pending.view);
+        state.pending_tab_close = null;
+    }
     state.replay_cancel.store(true, .release);
     state.create_cancel.store(true, .release);
     state.sync_mutex.lock(); state.sync_cancel = true; state.sync.cancel(); state.sync_condition.broadcast(); state.sync_mutex.unlock();
@@ -1145,12 +1152,30 @@ fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyop
     const id: *model.Id = @ptrCast(@alignCast(ptr));
     const loc = model.surfaceLocation(&state.graph.state, id.*) orelse return 0;
     const lifecycle = state.graph.state.pairs[loc.pair].surfaces[loc.surface].lifecycle;
-    // Every explicit UI close means remove the tab. Natural child exit is the
-    // only transition that retains an ended presentation and its scrollback.
-    if (lifecycle == .live) state.graph.terminals.close(id.*) catch |err| if (err != error.UnknownSurface)
-        std.debug.print("native terminal close failed: {s}\n", .{@errorName(err)});
-    if (lifecycle == .live)
-        (workspace_view.View{ .state = &state.graph.state }).closeTab(id.*) catch return 1;
+    if (lifecycle == .live) {
+        if (state.pending_tab_close != null) return 1;
+        const surface = state.graph.state.pairs[loc.pair].surfaces[loc.surface];
+        var heading: [120:0]u8 = [_:0]u8{0} ** 120;
+        const title = if (surface.title_len > 0) surface.title[0..surface.title_len] else "Terminal";
+        const rendered = std.fmt.bufPrintZ(&heading, "Close {s}?", .{title}) catch return 1;
+        const raw_dialog = c.adw_alert_dialog_new(rendered.ptr, "Closing this terminal ends its running process and cannot be undone.") orelse return 1;
+        const dialog: *c.AdwAlertDialog = @ptrCast(raw_dialog);
+        c.adw_alert_dialog_add_response(dialog, "cancel", "Cancel");
+        c.adw_alert_dialog_add_response(dialog, "close", "Close terminal");
+        c.adw_alert_dialog_set_default_response(dialog, "cancel");
+        c.adw_alert_dialog_set_close_response(dialog, "cancel");
+        c.adw_alert_dialog_set_response_appearance(dialog, "close", c.ADW_RESPONSE_DESTRUCTIVE);
+        _ = c.g_object_ref(view); _ = c.g_object_ref(selected_page);
+        state.pending_tab_close = .{ .view = view, .page = selected_page, .surface_id = id.*, .generation = surface.generation, .dialog = dialog };
+        c.adw_alert_dialog_choose(dialog, @ptrCast(@alignCast(state.window orelse return 1)), null, @ptrCast(&liveCloseResponse), state);
+        // The graphical smoke owns its synthetic close input and must resolve
+        // the resulting modal deterministically instead of waiting for a human.
+        if (std.posix.getenv("GIT_STACKS_NATIVE_WORKSPACE_SMOKE") != null) {
+            c.adw_alert_dialog_set_close_response(dialog, "close");
+            _ = c.adw_dialog_close(@ptrCast(dialog));
+        }
+        return 1;
+    }
     if (lifecycle == .ended) {
         // Natural exit retained the Surface outside the process registry.
         for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |terminal|
@@ -1165,6 +1190,27 @@ fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyop
     c.adw_tab_view_close_page_finish(view, selected_page, 1);
     refreshProjection(state);
     return 1;
+}
+fn liveCloseResponse(source: ?*c.GObject, result: ?*c.GAsyncResult, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const pending = state.pending_tab_close orelse return;
+    state.pending_tab_close = null;
+    defer { c.g_object_unref(pending.page); c.g_object_unref(pending.view); }
+    const response = c.adw_alert_dialog_choose_finish(@ptrCast(@alignCast(source orelse { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; })), result orelse { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; });
+    if (response == null or !std.mem.eql(u8, std.mem.span(response), "close")) { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; }
+    const child = c.adw_tab_page_get_child(pending.page) orelse { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; };
+    const raw_id = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; };
+    if (!std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(raw_id))), &pending.surface_id)) { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; }
+    const loc = model.surfaceLocation(&state.graph.state, pending.surface_id) orelse { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; };
+    const surface = state.graph.state.pairs[loc.pair].surfaces[loc.surface];
+    if (surface.generation != pending.generation or surface.lifecycle != .live) { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; }
+    state.graph.terminals.close(pending.surface_id) catch |err| if (err != error.UnknownSurface) { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; };
+    (workspace_view.View{ .state = &state.graph.state }).closeTab(pending.surface_id) catch { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; };
+    forgetTerminal(state, pending.surface_id);
+    (workspace_view.View{ .state = &state.graph.state }).removeTab(pending.surface_id) catch { c.adw_tab_view_close_page_finish(pending.view, pending.page, 0); return; };
+    savePresentation(state);
+    c.adw_tab_view_close_page_finish(pending.view, pending.page, 1);
+    refreshProjection(state);
 }
 fn dragPrepare(source: ?*c.GtkDragSource, _: f64, _: f64, _: ?*anyopaque) callconv(.c) ?*c.GdkContentProvider {
     const controller = source orelse return null;
