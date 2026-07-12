@@ -193,9 +193,14 @@ pub fn build(b: *std.Build) void {
     restore_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = persistence_test_module })).step);
 
     const attention_test_module = b.createModule(.{ .root_source_file = b.path("tests/attention_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    const attention_model = b.createModule(.{ .root_source_file = b.path("core/model.zig") });
     const attention_reducer = b.createModule(.{ .root_source_file = b.path("core/reducer.zig") });
-    attention_reducer.addImport("model", b.createModule(.{ .root_source_file = b.path("core/model.zig") }));
+    attention_reducer.addImport("model", attention_model);
     attention_test_module.addImport("reducer", attention_reducer);
+    const attention_view_test_module = b.createModule(.{ .root_source_file = b.path("linux/attention_view.zig") });
+    attention_view_test_module.addImport("model", attention_model);
+    attention_view_test_module.addImport("reducer", attention_reducer);
+    attention_test_module.addImport("attention_view", attention_view_test_module);
     const attention_step = b.step("attention-test", "Run structured attention derivation and focus routing tests");
     attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = attention_test_module })).step);
 

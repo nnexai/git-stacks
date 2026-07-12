@@ -1,5 +1,6 @@
 const std = @import("std");
 const reducer = @import("reducer");
+const view = @import("attention_view");
 const model = reducer.model;
 fn id(comptime v: []const u8) model.Id {
     return v[0..36].*;
@@ -124,4 +125,26 @@ test "exact visibility does not clear broader attention" {
     s = reducer.reduce(s, .{ .exact_tab_visible = .{ .surface_id = surface } }).state;
     try std.testing.expect(!s.attention[0].read);
     try std.testing.expect(s.attention[1].read);
+}
+
+test "provider-aware row projects Codex detail location unread and fallback" {
+    const ws = id("a18f47f4-5ab1-7c2d-8e90-123456789abc");
+    const repo = id("b18f47f4-5ab1-7c2d-8e90-123456789abc");
+    const missing = id("c18f47f4-5ab1-7c2d-8e90-123456789abc");
+    var s: model.State = .{ .workspace_count = 1 };
+    s.workspaces[0] = .{ .id = ws, .repository_count = 1 };
+    s.workspaces[0].repository_ids[0] = repo;
+    s.workspaces[0].repositories[0].id = repo;
+    @memcpy(s.workspaces[0].name[0..4], "Demo"); s.workspaces[0].name_len = 4;
+    @memcpy(s.workspaces[0].repositories[0].name[0..3], "api"); s.workspaces[0].repositories[0].name_len = 3;
+    var item: model.Attention = .{ .id = id("d18f47f4-5ab1-7c2d-8e90-123456789abc"), .provider = .codex, .workspace_id = ws, .repository_id = repo, .surface_id = missing, .status = .waiting };
+    @memcpy(item.title[0..15], "Approval needed"); item.title_len = 15;
+    @memcpy(item.detail[0..13], "Run the tests"); item.detail_len = 13;
+    const row = view.project(&s, item);
+    try std.testing.expectEqualStrings("Codex", row.provider);
+    try std.testing.expectEqualStrings("Approval needed", row.title[0..row.title_len]);
+    try std.testing.expectEqualStrings("Run the tests", row.detail[0..row.detail_len]);
+    try std.testing.expectEqualStrings("Demo / api", row.location[0..row.location_len]);
+    try std.testing.expect(row.unread);
+    try std.testing.expect(std.mem.indexOf(u8, row.fallback, "repository") != null);
 }

@@ -83,6 +83,8 @@ const State = struct {
     sync: service_sync.Coordinator = .{},
     connection_label: ?*c.GtkLabel = null,
     attention_label: ?*c.GtkLabel = null,
+    attention_button: ?*c.GtkMenuButton = null,
+    attention_list: ?*c.GtkListBox = null,
     action_group: ?*c.GSimpleActionGroup = null,
     launcher_model: ?command_launcher.Launcher = null,
     focus_before_launcher: ?*c.GtkWidget = null,
@@ -630,6 +632,29 @@ fn refreshLauncher(state: *State) void {
     }
 }
 
+fn refreshAttentionRows(state: *State) void {
+    const list = state.attention_list orelse return;
+    clearList(list);
+    for (state.graph.state.attention[0..state.graph.state.attention_count]) |item| {
+        const projected = attention_view.project(&state.graph.state, item);
+        var title_buffer: [220:0]u8 = [_:0]u8{0} ** 220;
+        const title = std.fmt.bufPrintZ(&title_buffer, "{s} · {s}{s}", .{ projected.provider, projected.title[0..projected.title_len], if (projected.unread) " · Unread" else "" }) catch continue;
+        var detail_buffer: [900:0]u8 = [_:0]u8{0} ** 900;
+        const detail = std.fmt.bufPrintZ(&detail_buffer, "{s}\n{s}{s}{s}\n{s}", .{ projected.location[0..projected.location_len], projected.detail[0..projected.detail_len], if (projected.detail_len > 0 and projected.occurred_len > 0) " · " else "", projected.occurred[0..projected.occurred_len], projected.fallback }) catch continue;
+        const button = c.gtk_button_new() orelse continue;
+        c.gtk_widget_add_css_class(button, "flat");
+        const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 3) orelse continue;
+        const heading = c.gtk_label_new(title.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(heading), 0); c.gtk_box_append(@ptrCast(box), heading);
+        const body = c.gtk_label_new(detail.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(body), 0); c.gtk_label_set_wrap(@ptrCast(body), 1); c.gtk_widget_add_css_class(body, "dim-label"); c.gtk_box_append(@ptrCast(box), body);
+        c.gtk_button_set_child(@ptrCast(button), box);
+        var action: [96:0]u8 = [_:0]u8{0} ** 96;
+        const detailed = std.fmt.bufPrintZ(&action, "win.focus-attention('{s}')", .{projected.id}) catch continue;
+        c.gtk_actionable_set_detailed_action_name(@ptrCast(button), detailed.ptr);
+        setAccessible(button, c.GTK_ACCESSIBLE_ROLE_BUTTON, title.ptr, detail.ptr);
+        c.gtk_list_box_append(list, button);
+    }
+}
+
 fn pairButtonClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
     const ptr = c.g_object_get_data(@ptrCast(button orelse return), "git-stacks-pair") orelse return;
@@ -962,6 +987,8 @@ fn refreshProjection(state: *State) void {
         c.gtk_widget_set_visible(@ptrCast(@alignCast(label)), @intFromBool(unread > 0));
         setAccessible(label, c.GTK_ACCESSIBLE_ROLE_STATUS, rendered.ptr, "Hierarchical workspace, repository, and terminal attention status");
     }
+    if (state.attention_button) |button| c.gtk_widget_set_visible(@ptrCast(@alignCast(button)), @intFromBool(state.graph.state.attention_count > 0));
+    refreshAttentionRows(state);
     refreshLauncher(state);
 }
 
@@ -1079,6 +1106,7 @@ fn selectedPageChanged(view: ?*c.AdwTabView, _: ?*c.GParamSpec, data: ?*anyopaqu
     const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse return;
     const id: *model.Id = @ptrCast(@alignCast(ptr));
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id.*);
+    state.graph.state = reducer.reduce(state.graph.state, .{ .exact_tab_visible = .{ .surface_id = id.* } }).state;
     // A real tab click moves GTK focus to the tab bar. Keep action enablement
     // in sync with the newly selected model surface and return input to its
     // Ghostty widget, matching keyboard/action-based tab selection.
@@ -1795,6 +1823,19 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     const header = c.adw_header_bar_new() orelse return null;
     const attention = c.gtk_label_new("") orelse return null;
     state.attention_label = @ptrCast(attention);
+    const attention_button = c.gtk_menu_button_new() orelse return null;
+    state.attention_button = @ptrCast(attention_button);
+    c.gtk_menu_button_set_icon_name(@ptrCast(attention_button), "dialog-warning-symbolic");
+    c.gtk_widget_set_tooltip_text(attention_button, "Open attention inbox");
+    const attention_popover = c.gtk_popover_new() orelse return null;
+    const attention_scroll = c.gtk_scrolled_window_new() orelse return null;
+    c.gtk_widget_set_size_request(attention_scroll, 420, 300);
+    const attention_list = c.gtk_list_box_new() orelse return null;
+    state.attention_list = @ptrCast(attention_list);
+    c.gtk_scrolled_window_set_child(@ptrCast(attention_scroll), attention_list);
+    c.gtk_popover_set_child(@ptrCast(attention_popover), attention_scroll);
+    c.gtk_menu_button_set_popover(@ptrCast(attention_button), attention_popover);
+    c.adw_header_bar_pack_start(@ptrCast(header), attention_button);
     c.adw_header_bar_pack_start(@ptrCast(header), attention);
     const create_header = c.gtk_button_new_from_icon_name("list-add-symbolic") orelse return null;
     c.gtk_actionable_set_action_name(@ptrCast(create_header), "win.new-workspace");
