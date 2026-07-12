@@ -14,7 +14,7 @@ import {
 import { join } from "path"
 import {
   getRepoPath,
-  listWorkspaces,
+  listWorkspacesUncached,
   readGlobalConfig,
   workspaceFilePath,
   type GlobalConfig,
@@ -170,7 +170,7 @@ function defaultFingerprint(workspace: IdentityWorkspace): string {
 function defaultDependencies(): SnapshotDependencies {
   const config = readGlobalConfig()
   return {
-    listWorkspaceNames: () => listWorkspaces().map((workspace) => workspace.name).sort((a, b) => a.localeCompare(b)),
+    listWorkspaceNames: () => listWorkspacesUncached().map((workspace) => workspace.name).sort((a, b) => a.localeCompare(b)),
     ensureWorkspaceIdentity,
     fingerprint: defaultFingerprint,
     getWorkspaceStatus,
@@ -189,6 +189,7 @@ function repositoryPath(repo: Workspace["repos"][number]): string {
 }
 
 export function createSnapshotBuilder(dependencies: SnapshotDependencies = defaultDependencies()) {
+  let aggregateRevision = "0"
   async function project(workspace: IdentityWorkspace) {
     const status = await dependencies.getWorkspaceStatus(workspace)
     const root = join(getTasksDir(dependencies.config.workspace_root), workspace.name)
@@ -284,8 +285,9 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     // writes to a shared revision store made revision depend on build order.
     const projections = []
     for (const name of names) projections.push(await projectStable(name))
-    if (projections.length === 0) return []
     const revision = await dependencies.revisionStore.update(digest(projections))
+    aggregateRevision = revision
+    if (projections.length === 0) return []
     const generated_at = dependencies.clock().toISOString()
     return projections.map((workspace) => WorkspaceSnapshotResponseSchema.parse({
       protocol: "v1", request_id: `req_${randomUUID().replaceAll("-", "")}`, ok: true, revision, generated_at, workspace,
@@ -293,8 +295,8 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
   }
 
   async function currentRevision(): Promise<string> {
-    const snapshots = await buildAll()
-    return snapshots.reduce((greatest, snapshot) => BigInt(snapshot.revision) > BigInt(greatest) ? snapshot.revision : greatest, "0")
+    await buildAll()
+    return aggregateRevision
   }
 
   async function resolveNativeLaunch(request: NativeLaunchResolutionRequest): Promise<NativeLaunchResolution> {

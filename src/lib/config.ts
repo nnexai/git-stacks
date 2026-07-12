@@ -410,9 +410,12 @@ export function deleteWorkspace(name: string): void {
   workspaceListPopulated = false
 }
 
-export function listWorkspaces(): Workspace[] {
-  if (workspaceListPopulated) return Array.from(workspaceIndex.values())
-  if (!existsSync(WORKSPACES_DIR)) return []
+function scanWorkspaces(): Workspace[] {
+  workspaceIndex.clear()
+  if (!existsSync(WORKSPACES_DIR)) {
+    workspaceListPopulated = true
+    return []
+  }
   for (const f of readdirSync(WORKSPACES_DIR).filter((f) => f.endsWith(".yml"))) {
     const filePath = join(WORKSPACES_DIR, f)
     try {
@@ -429,6 +432,17 @@ export function listWorkspaces(): Workspace[] {
   }
   workspaceListPopulated = true
   return Array.from(workspaceIndex.values())
+}
+
+export function listWorkspaces(): Workspace[] {
+  if (workspaceListPopulated) return Array.from(workspaceIndex.values())
+  return scanWorkspaces()
+}
+
+/** Rebuild the workspace index from disk for authoritative service projections. */
+export function listWorkspacesUncached(): Workspace[] {
+  workspaceListPopulated = false
+  return scanWorkspaces()
 }
 
 // --- Registry ---
