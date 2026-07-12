@@ -3,6 +3,12 @@ const model = @import("model");
 
 pub const Page = enum { loading, empty, disconnected, stale, incompatible, refresh_required, failure, workspace };
 pub const Organization = model.OrganizationMode;
+pub const OrphanRow = struct { key: model.PairKey, workspace_name: []const u8, repository_name: []const u8, orphan: bool = true, actions_enabled: bool = false };
+pub fn orphanRow(state: *const model.State, index: usize) ?OrphanRow {
+    if (index >= state.orphan_tombstone_count) return null;
+    const item = &state.orphan_tombstones[index];
+    return .{ .key = item.key, .workspace_name = item.workspace_name[0..item.workspace_name_len], .repository_name = item.repository_name[0..item.repository_name_len] };
+}
 pub fn firstRepositoryNameOccurrence(state: *const model.State, workspace_index: usize, repository_index: usize) bool {
     const target = state.workspaces[workspace_index].repositories[repository_index];
     const name = target.name[0..target.name_len];

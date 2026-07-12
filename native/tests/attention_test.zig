@@ -105,7 +105,9 @@ test "attention overflow evicts safe items and otherwise reports loss" {
         aid[0] +%= @intCast(i);
         item.* = .{ .id = aid, .workspace_id = s.workspaces[0].id, .status = .waiting };
     }
-    const incoming: model.Attention = .{ .id = id("c18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = s.workspaces[0].id, .status = .failed };
+    // Keep this identity outside the generated b.. range so this exercises
+    // capacity handling instead of the reducer's intentional update path.
+    const incoming: model.Attention = .{ .id = id("018f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = s.workspaces[0].id, .status = .failed };
     s = reducer.reduce(s, .{ .attention_received = incoming }).state;
     try std.testing.expectEqual(@as(u32, 1), s.attention_overflow_count);
     s.attention[0].read = true;
