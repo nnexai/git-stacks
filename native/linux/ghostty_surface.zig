@@ -47,7 +47,7 @@ pub const LaunchSpec = struct {
     // terminator after every copied key/value and prevents adjacent storage
     // from leaking into the child environment.
     environment_keys: [128][129]u8 = [_][129]u8{[_]u8{0} ** 129} ** 128,
-    environment_values: [128][513]u8 = [_][513]u8{[_]u8{0} ** 513} ** 128,
+    environment_values: [128][4097]u8 = [_][4097]u8{[_]u8{0} ** 4097} ** 128,
     environment_count: u8 = 0,
 };
 

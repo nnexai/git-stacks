@@ -91,7 +91,10 @@ export function prepareNativeAgentEnvironment(
   // zero-preparation lifecycle floor.
   void repoPath
   mkdirSync(wrapperDir, { recursive: true, mode: 0o700 })
-  const lookupPath = basePath.split(delimiter).filter((entry) => entry && entry !== wrapperDir).join(delimiter)
+  // Preserve lookup order while removing repeated toolchain entries. Real
+  // developer shells frequently accumulate the same PATH fragments many
+  // times through nested version managers and terminal startup scripts.
+  const lookupPath = [...new Set(basePath.split(delimiter).filter((entry) => entry && entry !== wrapperDir))].join(delimiter)
   const report = options.installIntegrations ? installAgentIntegrations({ ...(options.integrationHome ? { home: options.integrationHome } : {}) }) : null
   const failedProviders = new Set(report?.providers.filter((entry) => entry.state === "failed").map((entry) => entry.provider) ?? wrapperCommands.map((entry) => entry.provider))
   for (const { provider, command } of wrapperCommands) {

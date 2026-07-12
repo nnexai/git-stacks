@@ -37,7 +37,7 @@ pub const Launch = struct {
     cwd_len: u16 = 0,
     environment_keys: [64][128]u8 = undefined,
     environment_key_lens: [64]u8 = [_]u8{0} ** 64,
-    environment_values: [64][512]u8 = undefined,
+    environment_values: [64][4096]u8 = undefined,
     environment_value_lens: [64]u16 = [_]u16{0} ** 64,
     environment_count: u8 = 0,
     port_keys: [32][128]u8 = undefined,
@@ -451,7 +451,7 @@ fn decodeLaunch(body: []const u8) !Launch {
     if (env != .object or env.object.count() > 64 or ports != .object or ports.object.count() > 32 or red != .array or cfg != .object or !exactKeys(cfg.object, &.{"shell"}) and !exactKeys(cfg.object, &.{ "command_id", "shell" })) return error.Invalid;
     for (env.object.keys(), 0..) |key, i| {
         const value = env.object.get(key).?;
-        if (key.len == 0 or key.len > 128 or value != .string or value.string.len > 512) return error.Invalid;
+        if (key.len == 0 or key.len > 128 or value != .string or value.string.len > 4096) return error.Invalid;
         @memcpy(out.environment_keys[i][0..key.len], key);
         out.environment_key_lens[i] = @intCast(key.len);
         @memcpy(out.environment_values[i][0..value.string.len], value.string);

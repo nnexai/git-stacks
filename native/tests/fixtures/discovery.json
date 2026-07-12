@@ -21,7 +21,8 @@
           "workspace_name": 96, "workspace_label": 64, "repository_name": 96,
           "command_id": 64, "command_name": 96, "surface_command_id": 64,
           "surface_title": 64, "surface_cwd": 128, "attention_id": 64,
-          "attention_title": 160, "attention_detail": 500, "attention_occurred_at": 40
+          "attention_title": 160, "attention_detail": 500, "attention_occurred_at": 40,
+          "launch_environment_value": 4096
         }
       }
     }

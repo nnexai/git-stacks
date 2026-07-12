@@ -62,4 +62,16 @@ describe("native agent attention setup", () => {
     expect(readFileSync(join(wrappers, "copilot-cli"), "utf8")).toContain("--source copilot")
     expect(readFileSync(join(wrappers, "opencode"), "utf8")).toContain("--source opencode")
   })
+
+  test("deduplicates a long developer PATH without dropping lookup order", () => {
+    const repo = mkdtempSync(join(tmpdir(), "git-stacks-native-long-path-"))
+    const wrappers = join(repo, ".wrappers")
+    const entries = Array.from({ length: 90 }, (_, index) => `/opt/toolchains/tool-${index}`)
+    const duplicateRich = [...entries, ...entries, ...entries].join(":")
+    expect(duplicateRich.length).toBeGreaterThan(4096)
+    const environment = prepareNativeAgentEnvironment(repo, "alpha", duplicateRich, wrappers, () => null)
+    expect(environment.PATH).toBe(`${wrappers}:${entries.join(":")}`)
+    expect(environment.PATH.length).toBeGreaterThan(512)
+    expect(environment.PATH.length).toBeLessThan(4096)
+  })
 })

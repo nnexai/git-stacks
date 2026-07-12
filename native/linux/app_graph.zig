@@ -113,7 +113,8 @@ pub const ProductionGraph = struct {
             const outcome=try self.service.resolveLaunch(response.status,response.body);
             switch (outcome) {
                 .launch => |launch| return launch,
-                .failure => {
+                .failure => |reason| {
+                    if (response.status == 200 and std.mem.eql(u8, reason, "invalid_payload")) return error.InvalidLaunchResponse;
                     if (attempt == 0 and std.mem.indexOf(u8, response.body, "\"code\":\"conflict\"") != null) {
                         try self.refreshSnapshot();
                         continue;

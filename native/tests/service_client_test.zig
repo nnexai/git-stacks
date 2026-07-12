@@ -156,3 +156,12 @@ test "launch decoding is strict and failure contains no executable context" {
     const failed = try c.resolveLaunch(200, "{\"resolved\":false,\"error\":{\"code\":\"not_found\"}}");
     try std.testing.expect(failed == .failure);
 }
+test "launch decoding accepts negotiated developer environment values beyond 512 bytes" {
+    var c = service.Client.init("Bearer secret");
+    const value = "x" ** 700;
+    const body = try std.fmt.allocPrint(std.testing.allocator, "{{\"resolved\":true,\"revision\":\"4\",\"launch\":{{\"argv\":[\"sh\"],\"cwd\":\"/repo\",\"environment\":{{\"PATH\":\"{s}\"}},\"ports\":{{}},\"configuration\":{{\"shell\":true}},\"redacted\":[]}}}}", .{value});
+    defer std.testing.allocator.free(body);
+    const outcome = try c.resolveLaunch(200, body);
+    try std.testing.expect(outcome == .launch);
+    try std.testing.expectEqual(@as(usize, 700), outcome.launch.environmentValue(0).len);
+}

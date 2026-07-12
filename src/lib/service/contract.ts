@@ -31,6 +31,7 @@ export const NativeModelStringByteLimitsSchema = z.strictObject({
   command_id: z.literal(64), command_name: z.literal(96), surface_command_id: z.literal(64),
   surface_title: z.literal(64), surface_cwd: z.literal(128), attention_id: z.literal(64),
   attention_title: z.literal(160), attention_detail: z.literal(500), attention_occurred_at: z.literal(40),
+  launch_environment_value: z.literal(4096),
 })
 export const NativeModelLimitsSchema = z.strictObject({
   workspaces: z.literal(16), labels_per_workspace: z.literal(16), repositories_per_workspace: z.literal(8),
@@ -43,7 +44,7 @@ export const NATIVE_MODEL_LIMITS = Object.freeze(NativeModelLimitsSchema.parse({
   live_pair_identities: 32, reserved_orphan_tombstones: 32, surfaces_per_pair: 16, commands: 64, attention_items: 64,
   string_bytes: { workspace_name: 96, workspace_label: 64, repository_name: 96, command_id: 64, command_name: 96,
     surface_command_id: 64, surface_title: 64, surface_cwd: 128, attention_id: 64, attention_title: 160,
-    attention_detail: 500, attention_occurred_at: 40 },
+    attention_detail: 500, attention_occurred_at: 40, launch_environment_value: 4096 },
 }))
 
 export const ErrorCodeSchema = z.enum([
