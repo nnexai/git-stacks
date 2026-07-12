@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { WS_CONFIG_DIR } from "../lib/paths"
 import { readOfficialClientCredential } from "../lib/service/credentials"
 import { readServiceDescriptor, startManagedService } from "../service/main"
+import { installAgentIntegrations, integrationStatus, uninstallAgentIntegrations } from "../lib/agent-hooks/integration-manager"
 
 export const serviceCommand = new Command("service")
   .description("Manage the internal native-client service")
@@ -78,9 +79,20 @@ async function publishAttention(options: AttentionPublishOptions, signal: AbortS
   }
 }
 
-serviceCommand.command("attention")
-  .description("Publish native workspace attention")
-  .command("publish")
+const attentionCommand = serviceCommand.command("attention")
+  .description("Manage native workspace attention")
+
+attentionCommand.command("integrations")
+  .description("Show app-owned coding-agent integration health")
+  .option("--install", "Install or update app-owned user integrations")
+  .option("--uninstall", "Remove only app-owned user integrations")
+  .action((options: { install?: boolean; uninstall?: boolean }) => {
+    const report = options.uninstall ? uninstallAgentIntegrations() : options.install ? installAgentIntegrations() : integrationStatus()
+    console.log(JSON.stringify(report, null, 2))
+    if (report.providers.some((entry) => entry.state === "failed")) process.exitCode = 1
+  })
+
+attentionCommand.command("publish")
   .requiredOption("--state <state>")
   .requiredOption("--source <source>")
   .requiredOption("--workspace <name>")

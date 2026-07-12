@@ -109,7 +109,9 @@ function copilotSource(): string {
   const hooks = { version: 1, _git_stacks: OWNERSHIP_MARKER, hooks: {
     sessionStart: [{ type: "command", bash: command("copilot", "working"), timeoutSec: 5 }],
     userPromptSubmitted: [{ type: "command", bash: command("copilot", "working"), timeoutSec: 5 }],
-    preToolUse: [{ type: "command", bash: command("copilot", "waiting"), timeoutSec: 5 }],
+    preToolUse: [{ type: "command", bash: command("copilot", "working"), timeoutSec: 5 }],
+    agentStop: [{ type: "command", bash: command("copilot", "completed"), timeoutSec: 5 }],
+    notification: [{ type: "command", bash: command("copilot", "waiting"), timeoutSec: 5 }],
     sessionEnd: [{ type: "command", bash: command("copilot", "completed"), timeoutSec: 5 }],
     errorOccurred: [{ type: "command", bash: command("copilot", "failed"), timeoutSec: 5 }],
   } }
