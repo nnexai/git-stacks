@@ -645,6 +645,19 @@ async function smokeNativeCreateSync(): Promise<void> {
   }
 }
 
+async function smokeNativeHardening(): Promise<void> {
+  const started = Date.now()
+  await smokeNativeCreateSync()
+  await smokeWorkspaceLifecycle()
+  await verify("service-sync-test")
+  await verify("attention-test")
+  await verify("workspace-creation-test")
+  await verify("app-graph-test")
+  const elapsed = Date.now() - started
+  if (elapsed > 90_000) throw new Error(`native hardening smoke exceeded 90 second budget (${elapsed}ms)`)
+  console.log(`native hardening smoke passed: production creation, external sync, terminal lifecycle, attention, replay, capacity, and orphan contracts (${elapsed}ms)`)
+}
+
 function verifyAccessibilityContract(): void {
   const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
   const accessibilityPath = join(ROOT, "docs", "native-terminal-accessibility.md")
@@ -726,6 +739,7 @@ else if (mode === "smoke-terminal") await smokeTerminal()
 else if (mode === "smoke-multisurface") await smokeMultisurface()
 else if (mode === "smoke-workspace") await smokeWorkspaceLifecycle()
 else if (mode === "smoke-create-sync") await smokeNativeCreateSync()
+else if (mode === "smoke-hardening") await smokeNativeHardening()
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "config") throw new Error("Ghostty configuration is verified through the production runtime; use native:verify")
 else if (mode === "quick") await verifyQuick()

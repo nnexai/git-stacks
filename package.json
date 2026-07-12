@@ -68,6 +68,7 @@
     "native:smoke-multisurface": "bun run scripts/verify-native.ts smoke-multisurface",
     "native:smoke-workspace": "bun run scripts/verify-native.ts smoke-workspace",
     "native:smoke-create-sync": "bun run scripts/verify-native.ts smoke-create-sync",
+    "native:smoke-hardening": "bun run scripts/verify-native.ts smoke-hardening",
     "native:test:accessibility": "bun run scripts/verify-native.ts accessibility",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",

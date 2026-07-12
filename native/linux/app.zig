@@ -254,7 +254,10 @@ fn cleanup(state: *State) void {
         state.create_thread = null;
     }
     if (state.sync_thread) |thread| { thread.join(); state.sync_thread = null; }
-    if (state.recovery_source != 0) { _ = c.g_source_remove(state.recovery_source); state.recovery_source = 0; }
+    if (state.recovery_source != 0) {
+        if (c.g_main_context_find_source_by_id(null, state.recovery_source) != null) _ = c.g_source_remove(state.recovery_source);
+        state.recovery_source = 0;
+    }
     active = null;
     if (state.window) |window| if (state.close_handler != 0) {
         c.g_signal_handler_disconnect(window, state.close_handler);
