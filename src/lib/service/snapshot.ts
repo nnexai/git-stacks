@@ -341,7 +341,14 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
       const agentEnvironment = dependencies.prepareAgentAttention?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
       Object.assign(base.environment, agentEnvironment)
     } catch (error) {
-      return fail("operation_failed", `Could not configure Codex attention for this workspace: ${error instanceof Error ? error.message : String(error)}`)
+      // Agent integrations are optional launch enrichment. A malformed,
+      // unowned, or unwritable user-level provider config must never make the
+      // authoritative repository shell unavailable.
+      Object.assign(base.environment, {
+        GIT_STACKS_AGENT_ATTENTION: "degraded",
+        GIT_STACKS_AGENT_INTEGRATION_HEALTH: "setup-failed",
+        GIT_STACKS_AGENT_INTEGRATION_ERROR: error instanceof Error ? error.message : String(error),
+      })
     }
     if (!request.command_id) {
       const shell = process.env.SHELL || "/bin/sh"

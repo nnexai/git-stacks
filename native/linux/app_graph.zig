@@ -120,6 +120,7 @@ pub const ProductionGraph = struct {
                     }
                     if (std.mem.indexOf(u8, response.body, "\"code\":\"not_found\"") != null) return error.LaunchTargetNotFound;
                     if (std.mem.indexOf(u8, response.body, "\"code\":\"operation_failed\"") != null) return error.LaunchOperationFailed;
+                    std.debug.print("native launch service rejected request (HTTP {d}): {s}\n", .{ response.status, response.body });
                     return error.LaunchRejected;
                 },
                 else => return error.InvalidLaunchResponse,

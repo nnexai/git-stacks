@@ -165,7 +165,7 @@ describe("authoritative service snapshots", () => {
     expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
   })
 
-  test("configures Codex attention for shells and reports unsafe hook files without launching", async () => {
+  test("configures agent attention for shells and degrades safely when setup fails", async () => {
     const installs: Array<[string, string]> = []
     const builder = createSnapshotBuilder(dependencies({
       ensureAgentAttention: (path: string, name: string) => installs.push([path, name]),
@@ -183,10 +183,12 @@ describe("authoritative service snapshots", () => {
       ensureAgentAttention: () => { throw new Error("Cannot safely update .codex/hooks.json") },
     }))
     const brokenSnapshot = (await broken.buildAll())[0]!
-    const rejected = await broken.resolveNativeLaunch({ ...request, expected_revision: brokenSnapshot.revision })
-    expect(rejected).toEqual({
-      resolved: false,
-      error: { code: "operation_failed", message: "Could not configure Codex attention for this workspace: Cannot safely update .codex/hooks.json" },
+    const degraded = await broken.resolveNativeLaunch({ ...request, expected_revision: brokenSnapshot.revision })
+    expect(degraded.resolved).toBe(true)
+    if (degraded.resolved) expect(degraded.launch.environment).toMatchObject({
+      GIT_STACKS_AGENT_ATTENTION: "degraded",
+      GIT_STACKS_AGENT_INTEGRATION_HEALTH: "setup-failed",
+      GIT_STACKS_AGENT_INTEGRATION_ERROR: "Cannot safely update .codex/hooks.json",
     })
   })
 
