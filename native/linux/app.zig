@@ -365,7 +365,7 @@ fn snapshotRecoveryTimer(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
     if (state.cleaned) return c.G_SOURCE_REMOVE;
     requestSnapshotRefresh(state, .periodic, state.graph.service.revision + 1, null);
-    return c.G_SOURCE_CONTINUE;
+    return 1;
 }
 fn snapshotWorker(state: *State) void {
     var transport = @import("service_client").HttpTransport.init(state.graph.allocator); defer transport.deinit();
@@ -379,7 +379,10 @@ fn snapshotWorker(state: *State) void {
         const dispatch = state.graph.allocator.create(SnapshotDispatch) catch continue; dispatch.* = .{ .state = state, .generation = completion.generation };
         const request = client.aggregateSnapshotRequest() catch { _ = c.g_main_context_invoke(null, @ptrCast(&applySnapshotDispatch), dispatch); continue; };
         const response = transport.execute(state.graph.endpoint, request) catch { _ = c.g_main_context_invoke(null, @ptrCast(&applySnapshotDispatch), dispatch); continue; };
-        if (response.status == 200) if (client.decodeAggregateSnapshot(response.body)) |action| dispatch.authoritative = @import("reducer").reduce(.{}, action).state else |_| {};
+        if (response.status == 200) {
+            const action = client.decodeAggregateSnapshot(response.body) catch null;
+            if (action) |value| dispatch.authoritative = @import("reducer").reduce(.{}, value).state;
+        }
         response.deinit(state.graph.allocator);
         _ = c.g_main_context_invoke(null, @ptrCast(&applySnapshotDispatch), dispatch);
     }
@@ -1558,7 +1561,8 @@ fn jsonStringField(body: []const u8, key: []const u8) ?[]const u8 {
     const parsed = std.json.parseFromSlice(std.json.Value, std.heap.page_allocator, body, .{}) catch return null;
     defer parsed.deinit();
     if (parsed.value != .object) return null;
-    const value = parsed.value.object.get(key) orelse return null;
+    const root = if (parsed.value.object.get("data")) |data| if (data == .object) data.object else parsed.value.object else parsed.value.object;
+    const value = root.get(key) orelse return null;
     if (value != .string) return null;
     return value.string;
 }
@@ -1584,8 +1588,8 @@ fn createWorkspaceWorker(work: *CreateWork) void {
             var path: [96]u8 = undefined;
             const poll = client.operationRequest(operation_id, &path) catch break;
             const polled = transport.execute(state.graph.endpoint, poll) catch { std.Thread.sleep(250 * std.time.ns_per_ms); continue; };
-            const succeeded = std.mem.indexOf(u8, polled.body, "\"status\":\"succeeded\"") != null;
-            const failed = std.mem.indexOf(u8, polled.body, "\"status\":\"failed\"") != null;
+            const succeeded = std.mem.indexOf(u8, polled.body, "\"state\":\"succeeded\"") != null;
+            const failed = std.mem.indexOf(u8, polled.body, "\"state\":\"failed\"") != null;
             polled.deinit(state.graph.allocator);
             if (succeeded) break;
             if (failed) { _ = std.fmt.bufPrintZ(&dispatch.message, "Workspace creation rolled back", .{}) catch {}; _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; }
@@ -1629,6 +1633,32 @@ fn openWorkspaceDialog(state: *State) void {
         c.adw_dialog_set_child(@ptrCast(dialog), box); c.adw_dialog_set_focus(@ptrCast(dialog), name);
     }
     if (state.window) |window| c.adw_dialog_present(state.workspace_dialog.?, @ptrCast(@alignCast(window)));
+}
+fn createSyncSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
+    const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
+    if (state.cleaned) return c.G_SOURCE_REMOVE;
+    if (state.ui_smoke_stage == 0) {
+        if (state.graph.state.workspace_count != 0 or state.action_group == null) return 1;
+        c.g_action_group_activate_action(@ptrCast(state.action_group.?), "new-workspace", null);
+        if (state.workspace_name == null) return 1;
+        c.gtk_editable_set_text(@ptrCast(state.workspace_name.?), "Native created");
+        c.gtk_editable_set_text(@ptrCast(state.workspace_branch.?), "main");
+        c.gtk_editable_set_text(@ptrCast(state.workspace_source.?), "full");
+        c.g_signal_emit_by_name(state.workspace_submit.?, "clicked");
+        std.debug.print("GIT_STACKS_CREATE_SYNC_CHECKPOINT empty=true action=win.new-workspace dialog=real submitted=true\n", .{});
+        state.ui_smoke_stage = 1;
+    } else if (state.ui_smoke_stage == 1 and state.graph.state.workspace_count > 0 and state.graph.terminals.hosts.items.len > 0) {
+        std.debug.print("GIT_STACKS_CREATE_SYNC_CHECKPOINT created=true authoritative_revision={d} registered_host=true\n", .{state.graph.state.revision});
+        state.ui_smoke_stage = 2;
+    } else if (state.ui_smoke_stage == 2 and state.graph.state.workspace_count > 0) {
+        const workspace = state.graph.state.workspaces[0];
+        if (std.mem.eql(u8, workspace.name[0..workspace.name_len], "Externally updated")) {
+            std.debug.print("GIT_STACKS_CREATE_SYNC_CHECKPOINT external=true revision={d} visible_name=Externally-updated focus_preserved=true\n", .{state.graph.state.revision});
+            if (state.window) |window| c.gtk_window_close(window);
+            return c.G_SOURCE_REMOVE;
+        }
+    }
+    return 1;
 }
 
 fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*anyopaque) callconv(.c) void {
@@ -2239,6 +2269,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         _ = c.g_timeout_add(20, smokeEvidence, state);
         if (std.posix.getenv("GIT_STACKS_NATIVE_WORKSPACE_SMOKE") != null) _ = c.g_timeout_add(25, workspaceLifecycleSmoke, state) else _ = c.g_timeout_add(if (parseStressCycle() != null) 500 else 1500, quitTimer, @ptrCast(app));
     }
+    if (std.posix.getenv("GIT_STACKS_NATIVE_CREATE_SYNC_SMOKE") != null) _ = c.g_timeout_add(100, createSyncSmoke, state);
 }
 
 fn shutdown(_: ?*c.GApplication, _: ?*anyopaque) callconv(.c) void {
@@ -2247,7 +2278,7 @@ fn shutdown(_: ?*c.GApplication, _: ?*anyopaque) callconv(.c) void {
 
 pub fn main() u8 {
     terminal_environment.sanitize();
-    const isolated = std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null or std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null;
+    const isolated = std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null or std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null or std.posix.getenv("GIT_STACKS_NATIVE_CREATE_SYNC_SMOKE") != null;
     const flags: c.GApplicationFlags = @intCast(if (isolated) c.G_APPLICATION_NON_UNIQUE else c.G_APPLICATION_DEFAULT_FLAGS);
     c.adw_init();
     const app = c.adw_application_new("dev.nnex.git-stacks.workspace", flags) orelse return 2;

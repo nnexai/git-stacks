@@ -39,6 +39,7 @@ test "creation requests carry explicit JSON and idempotency headers" {
     const catalog = try c.creationCatalogRequest();
     try std.testing.expectEqualStrings("/v1/workspace-creation/catalog", catalog.path);
     const create = try c.workspaceCreateRequest("{}", "idem_1234567890123456");
+    try std.testing.expectEqualStrings("/v1/operations/workspace.create", create.path);
     try std.testing.expectEqualStrings("application/json", create.content_type.?);
     try std.testing.expectEqualStrings("idem_1234567890123456", create.idempotency_key.?);
     var path: [96]u8 = undefined;

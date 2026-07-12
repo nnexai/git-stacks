@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "fs"
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { arch, homedir, platform, tmpdir } from "os"
 import { basename, join } from "path"
 import { startManagedService } from "../src/service/main"
+import { NATIVE_MODEL_LIMITS } from "../src/lib/service/contract"
 
 const ROOT = join(import.meta.dir, "..")
 const NATIVE = join(ROOT, "native")
@@ -584,6 +585,46 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
   } finally { clearInterval(serviceKeepalive); await service.stop(); rmSync(configRoot, { recursive: true, force: true }) }
 }
 
+async function smokeNativeCreateSync(): Promise<void> {
+  const artifact = await buildApp()
+  if (!process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) throw new Error("display prerequisite unavailable for create/sync smoke")
+  const configRoot = mkdtempSync(join(tmpdir(), "git-stacks-native-create-sync-"))
+  const marker = join(configRoot, "external-update")
+  let created = false
+  const snapshot = () => ({
+    protocol: "v1" as const, request_id: `req_create_sync_${existsSync(marker) ? 2 : 1}`, revision: existsSync(marker) ? "2" : "1", generated_at: new Date().toISOString(),
+    workspace: { id: "30000000-0000-4000-8000-000000000001", name: existsSync(marker) ? "Externally updated" : "Native created", branch: "main",
+      repositories: [{ id: "40000000-0000-4000-8000-000000000002", name: "fixture", mode: "dir" as const, path: ROOT }],
+      launch: { commands: [], environment: {}, redacted: [], references: {}, cwd: ROOT, named: [] },
+    },
+  })
+  const service = await startManagedService({
+    serviceRoot: join(configRoot, "service"), idleMs: 60_000,
+    snapshot: { async buildAll() { return created ? [snapshot()] : [] }, async buildWorkspace() { return snapshot() }, async currentRevision() { return existsSync(marker) ? "2" : "1" },
+      async resolveNativeLaunch() { return { resolved: true as const, revision: existsSync(marker) ? "2" : "1", launch: { argv: ["/usr/bin/fish"], cwd: ROOT, environment: {}, ports: {}, configuration: { shell: true }, redacted: [] } } } },
+    workspaceCreationCatalog: () => ({ templates: [{ name: "full", repository_count: 1, command_count: 0, labels: [] }], repositories: [{ name: "fixture", type: "git", default_branch: "main" }], native_model: NATIVE_MODEL_LIMITS }),
+    workspaceCreate: (request) => ({ steps: [{ name: "workspace.create", stage: "executing", message: "Creating", run: async (report) => { created = true; await report({ message: "Created" }) } }], result: { workspace_name: request.name, snapshot_changed: true } }),
+  })
+  let child: ReturnType<typeof Bun.spawn> | undefined
+  let mutation: ReturnType<typeof Bun.spawn> | undefined
+  try {
+    child = Bun.spawn([artifact], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot, GIT_STACKS_NATIVE_CREATE_SYNC_SMOKE: "1" } })
+    await Bun.sleep(5_000)
+    mutation = Bun.spawn([process.execPath, "-e", `require('fs').writeFileSync(${JSON.stringify(marker)}, 'external')`], { cwd: ROOT, stdout: "pipe", stderr: "pipe" })
+    if (await mutation.exited !== 0) throw new Error("outside-process workspace mutation failed")
+    const outcome = await Promise.race([child.exited.then((code) => ({ code })), Bun.sleep(60_000).then(() => "timeout" as const)])
+    if (outcome === "timeout") throw new Error("production create/sync smoke timed out after 60 seconds")
+    const stderr = await new Response(child.stderr).text()
+    const required = ["empty=true action=win.new-workspace dialog=real submitted=true", "created=true", "registered_host=true", "external=true", "visible_name=Externally-updated", "focus_preserved=true"]
+    if (outcome.code !== 0 || required.some((value) => !stderr.includes(value)) || /(?:Gtk|Adwaita|GLib|GObject)-(?:CRITICAL|WARNING)|panic:|Segmentation fault/.test(stderr)) throw new Error(`production create/sync evidence missing (${outcome.code}): ${stderr}`)
+    console.log("native create/sync smoke passed: empty GTK creation and outside-process authoritative refresh remained live")
+  } finally {
+    if (child && child.exitCode === null) child.kill("SIGKILL")
+    if (mutation && mutation.exitCode === null) mutation.kill("SIGKILL")
+    await service.stop(); rmSync(configRoot, { recursive: true, force: true })
+  }
+}
+
 function verifyAccessibilityContract(): void {
   const acceptancePath = join(ROOT, "docs", "native-terminal-acceptance.md")
   const accessibilityPath = join(ROOT, "docs", "native-terminal-accessibility.md")
@@ -664,6 +705,7 @@ else if (mode === "smoke-app") await smokeApp()
 else if (mode === "smoke-terminal") await smokeTerminal()
 else if (mode === "smoke-multisurface") await smokeMultisurface()
 else if (mode === "smoke-workspace") await smokeWorkspaceLifecycle()
+else if (mode === "smoke-create-sync") await smokeNativeCreateSync()
 else if (mode === "accessibility") await verifyAccessibility()
 else if (mode === "config") throw new Error("Ghostty configuration is verified through the production runtime; use native:verify")
 else if (mode === "quick") await verifyQuick()

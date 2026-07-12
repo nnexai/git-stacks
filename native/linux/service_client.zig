@@ -202,7 +202,7 @@ pub const Client = struct {
     }
     pub fn workspaceCreateRequest(self: *Client, body: []const u8, idempotency_key: []const u8) !Request {
         if (!prefixed(idempotency_key, "idem_")) return error.InvalidIdentity;
-        var result = try self.request(.POST, "/v1/workspaces", body);
+        var result = try self.request(.POST, "/v1/operations/workspace.create", body);
         result.content_type = "application/json";
         result.idempotency_key = idempotency_key;
         return result;
