@@ -28,7 +28,7 @@ serviceCommand.command("status")
     console.log(JSON.stringify(descriptor))
   })
 
-const sourceLabel: Record<string, string> = { claude: "Claude", copilot: "GitHub Copilot", codex: "Codex", other: "Agent" }
+const sourceLabel: Record<string, string> = { claude: "Claude", copilot: "GitHub Copilot", codex: "Codex", opencode: "OpenCode", other: "Agent" }
 function stateTitle(source: string, state: string): string {
   const label = sourceLabel[source] ?? "Agent"
   if (state === "waiting") return `${label} needs your input`

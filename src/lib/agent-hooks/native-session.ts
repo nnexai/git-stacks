@@ -1,6 +1,8 @@
 import { codexPlugin } from "./codex"
 import { claudeCodePlugin } from "./claude-code"
 import { copilotPlugin } from "./copilot"
+import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "fs"
+import { delimiter, join } from "path"
 import type { AgentLifecycleState, AgentHookPlugin } from "./types"
 
 export type NativeAgentProvider = "codex" | "claude" | "copilot" | "opencode"
@@ -56,4 +58,45 @@ export function ensureNativeAgentAttention(
   if (!fallback) return { transport: "unavailable", provider, reason: "No ACP transport or project-hook fallback is available" }
   fallback.install(repoPath, workspaceName)
   return { transport: "hooks", provider }
+}
+
+const wrapperCommands = [
+  { provider: "codex", command: "codex" },
+  { provider: "copilot", command: "copilot-cli" },
+  { provider: "copilot", command: "copilot" },
+  { provider: "claude", command: "claude" },
+  { provider: "opencode", command: "opencode" },
+] as const
+
+function shellQuote(value: string): string { return `'${value.replaceAll("'", `'\\''`)}'` }
+
+/**
+ * Prepare ordinary provider commands typed in a native terminal. Project hooks
+ * provide rich lifecycle states when a provider supports them; these wrappers
+ * are the provider-neutral zero-preparation floor and observe start/exit even
+ * when no hook or ACP client is active.
+ */
+export function prepareNativeAgentEnvironment(
+  repoPath: string,
+  workspaceName: string,
+  basePath: string,
+  wrapperDir: string,
+  resolveExecutable: (command: string, path: string) => string | null = (command, path) => Bun.which(command, { PATH: path }),
+): Record<string, string> {
+  for (const provider of ["codex", "claude", "copilot"] as const) ensureNativeAgentAttention(repoPath, workspaceName, [], provider)
+  mkdirSync(wrapperDir, { recursive: true, mode: 0o700 })
+  const lookupPath = basePath.split(delimiter).filter((entry) => entry && entry !== wrapperDir).join(delimiter)
+  for (const { provider, command } of wrapperCommands) {
+    const executable = resolveExecutable(command, lookupPath)
+    const target = join(wrapperDir, command)
+    if (!executable) { if (existsSync(target)) rmSync(target); continue }
+    const publish = (state: "working" | "completed" | "failed") =>
+      `git-stacks service attention publish --state ${state} --source ${provider} --workspace ${shellQuote(workspaceName)} --workspace-id "$GIT_STACKS_WORKSPACE_ID" --repository-id "$GIT_STACKS_REPOSITORY_ID" --surface-id "$GIT_STACKS_SURFACE_ID" --best-effort >/dev/null 2>&1 || true`
+    const script = `#!/bin/sh\n${publish("working")}\n${shellQuote(executable)} "$@"\nstatus=$?\nif [ "$status" -eq 0 ]; then\n  ${publish("completed")}\nelse\n  ${publish("failed")}\nfi\nexit "$status"\n`
+    const temporary = `${target}.tmp-${process.pid}`
+    writeFileSync(temporary, script, { mode: 0o700 })
+    chmodSync(temporary, 0o700)
+    renameSync(temporary, target)
+  }
+  return { PATH: `${wrapperDir}${delimiter}${lookupPath}`, GIT_STACKS_AGENT_ATTENTION: "hooks+process" }
 }

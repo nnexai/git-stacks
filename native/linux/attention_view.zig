@@ -42,7 +42,7 @@ fn surfaceTitle(state: *const model.State, id: model.Id) ?[]const u8 {
     return if (surface.title_len > 0) surface.title[0..surface.title_len] else "Terminal";
 }
 pub fn project(state: *const model.State, item: model.Attention) AttentionRow {
-    var row: AttentionRow = .{ .id = item.id, .provider = switch (item.provider) { .claude => "Claude", .copilot => "GitHub Copilot", .codex => "Codex", .other => "Other" }, .fallback = "Exact terminal", .unread = !item.read };
+    var row: AttentionRow = .{ .id = item.id, .provider = switch (item.provider) { .claude => "Claude", .copilot => "GitHub Copilot", .codex => "Codex", .opencode => "OpenCode", .other => "Other" }, .fallback = "Exact terminal", .unread = !item.read };
     const title = if (item.title_len > 0) item.title[0..item.title_len] else @tagName(item.status);
     @memcpy(row.title[0..title.len], title); row.title_len = @intCast(title.len);
     @memcpy(row.detail[0..item.detail_len], item.detail[0..item.detail_len]); row.detail_len = item.detail_len;

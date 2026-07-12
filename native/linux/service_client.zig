@@ -599,8 +599,9 @@ fn decodeReducerEvent(sequence: u64, body: []const u8, revision: u64) !reducer.A
     const title = string(a, "title") orelse return error.Invalid;
     const occurred = string(a, "occurred_at") orelse return error.Invalid;
     const journal = uintString(a, "journal_sequence") orelse return error.Invalid;
-    if (journal != sequence or title.len == 0 or title.len > 160 or occurred.len < 20 or !(std.mem.eql(u8, source, "claude") or std.mem.eql(u8, source, "copilot") or std.mem.eql(u8, source, "codex") or std.mem.eql(u8, source, "other"))) return error.Invalid;
+    if (journal != sequence or title.len == 0 or title.len > 160 or occurred.len < 20 or !(std.mem.eql(u8, source, "claude") or std.mem.eql(u8, source, "copilot") or std.mem.eql(u8, source, "codex") or std.mem.eql(u8, source, "opencode") or std.mem.eql(u8, source, "other"))) return error.Invalid;
     var item: model.Attention = .{ .id = attentionKey(aid), .workspace_id = undefined, .status = if (std.mem.eql(u8, status, "failed")) .failed else if (std.mem.eql(u8, status, "waiting")) .waiting else if (std.mem.eql(u8, status, "completed")) .completed else if (std.mem.eql(u8, status, "working")) .working else if (std.mem.eql(u8, status, "idle")) .idle else return error.Invalid };
+    item.provider = if (std.mem.eql(u8, source, "claude")) .claude else if (std.mem.eql(u8, source, "copilot")) .copilot else if (std.mem.eql(u8, source, "codex")) .codex else if (std.mem.eql(u8, source, "opencode")) .opencode else .other;
     @memcpy(item.service_id[0..aid.len], aid);
     item.service_id_len = @intCast(aid.len);
     @memcpy(&item.workspace_id, wid);

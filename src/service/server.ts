@@ -25,7 +25,7 @@ const AttentionPublishSchema = z.strictObject({
   id: z.string().regex(/^att_[A-Za-z0-9_-]{16,60}$/),
   state: z.enum(["working", "waiting", "completed", "failed", "idle"]),
   workspace_id: z.string().uuid(), repository_id: z.string().uuid().optional(), surface_id: z.string().uuid().optional(),
-  source: z.enum(["claude", "copilot", "codex", "other"]), title: z.string().min(1).max(160),
+  source: z.enum(["claude", "copilot", "codex", "opencode", "other"]), title: z.string().min(1).max(160),
   detail: z.string().max(500).optional(), occurred_at: z.string().datetime(),
 }).refine((attention) => attention.surface_id === undefined || attention.repository_id !== undefined)
 

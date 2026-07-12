@@ -189,7 +189,7 @@ export const StructuredAttentionEventSchema = z.strictObject({
   workspace_id: EntityIdSchema,
   repository_id: EntityIdSchema.optional(),
   surface_id: EntityIdSchema.optional(),
-  source: z.enum(["claude", "copilot", "codex", "other"]),
+  source: z.enum(["claude", "copilot", "codex", "opencode", "other"]),
   title: z.string().min(1).max(160),
   detail: z.string().max(500).optional(),
   occurred_at: TimestampSchema,

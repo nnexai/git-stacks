@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync } from "fs"
+import { existsSync, mkdtempSync, readFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
-import { ensureNativeAgentAttention, nativeAgentProviders, normalizeAgentSessionUpdate } from "../../../src/lib/agent-hooks/native-session"
+import { ensureNativeAgentAttention, nativeAgentProviders, normalizeAgentSessionUpdate, prepareNativeAgentEnvironment } from "../../../src/lib/agent-hooks/native-session"
 
 describe("native agent attention setup", () => {
   test("prefers a provider-neutral ACP adapter when one claims the session", () => {
@@ -44,5 +44,22 @@ describe("native agent attention setup", () => {
     expect(ensureNativeAgentAttention("/repo", "alpha", [], "opencode")).toEqual({
       transport: "unavailable", provider: "opencode", reason: "No ACP transport or project-hook fallback is available",
     })
+  })
+
+  test("prepares hooks and zero-prep wrappers for commands typed in native shells", () => {
+    const repo = mkdtempSync(join(tmpdir(), "git-stacks-native-zero-prep-"))
+    const wrappers = join(repo, ".wrappers")
+    const resolved: Record<string, string> = { codex: "/usr/bin/codex-real", "copilot-cli": "/usr/bin/copilot-real", opencode: "/usr/bin/opencode-real" }
+    const environment = prepareNativeAgentEnvironment(repo, "alpha", "/usr/bin", wrappers, (command) => resolved[command] ?? null)
+    expect(environment.PATH.startsWith(`${wrappers}:`)).toBe(true)
+    expect(existsSync(join(repo, ".codex", "hooks.json"))).toBe(true)
+    expect(existsSync(join(repo, ".claude", "settings.json"))).toBe(true)
+    expect(existsSync(join(repo, ".github", "hooks", "git-stacks.json"))).toBe(true)
+    const codex = readFileSync(join(wrappers, "codex"), "utf8")
+    expect(codex).toContain("--state working --source codex")
+    expect(codex).toContain("'/usr/bin/codex-real' \"$@\"")
+    expect(codex).toContain("--state completed --source codex")
+    expect(readFileSync(join(wrappers, "copilot-cli"), "utf8")).toContain("--source copilot")
+    expect(readFileSync(join(wrappers, "opencode"), "utf8")).toContain("--source opencode")
   })
 })

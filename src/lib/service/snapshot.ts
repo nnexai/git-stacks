@@ -27,7 +27,7 @@ import { buildWorkspaceEnv } from "../workspace-env"
 import { getWorkspaceFileStatusView, type WorkspaceFileStatusView } from "../workspace-file-status"
 import { getWorkspaceStatus, type RepoStatus } from "../workspace-status"
 import { ensureWorkspaceIdentity } from "./identity"
-import { ensureNativeAgentAttention } from "../agent-hooks/native-session"
+import { prepareNativeAgentEnvironment } from "../agent-hooks/native-session"
 import {
   NativeLaunchResolutionSchema,
   type NativeLaunchResolution,
@@ -115,6 +115,8 @@ export interface SnapshotDependencies {
   listManualCommands(workspace: Workspace): string[]
   planManualCommand(workspace: Workspace, targetName: string, config?: GlobalConfig): ManualCommandStep[]
   buildWorkspaceEnv(workspace: Workspace, options: { triggeredBy: string; config: GlobalConfig; skipSecrets: boolean }): Promise<Record<string, string>>
+  prepareAgentAttention?(repoPath: string, workspaceName: string, environment: Record<string, string>): Record<string, string>
+  /** @deprecated test/embedding compatibility; production uses prepareAgentAttention. */
   ensureAgentAttention?(repoPath: string, workspaceName: string): void
   config: GlobalConfig
   revisionStore: SnapshotRevisionStore
@@ -180,7 +182,12 @@ function defaultDependencies(): SnapshotDependencies {
     listManualCommands,
     planManualCommand,
     buildWorkspaceEnv,
-    ensureAgentAttention: (repoPath, workspaceName) => { ensureNativeAgentAttention(repoPath, workspaceName) },
+    prepareAgentAttention: (repoPath, workspaceName, environment) => prepareNativeAgentEnvironment(
+      repoPath,
+      workspaceName,
+      environment.PATH ?? process.env.PATH ?? "",
+      join(WS_CONFIG_DIR, "native-agent-bin"),
+    ),
     config,
     revisionStore: new FileSnapshotRevisionStore(),
     clock: () => new Date(),
@@ -326,12 +333,14 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     if (snapshot.revision !== request.expected_revision) return fail("conflict", "Authoritative snapshot revision is stale")
     const repository = snapshot.workspace.repositories.find((entry) => entry.id === request.repository_id)
     if (!repository) return fail("not_found", "Repository not found in workspace")
+    const base = snapshot.workspace.launch
     try {
       dependencies.ensureAgentAttention?.(repository.path, snapshot.workspace.name)
+      const agentEnvironment = dependencies.prepareAgentAttention?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
+      Object.assign(base.environment, agentEnvironment)
     } catch (error) {
       return fail("operation_failed", `Could not configure Codex attention for this workspace: ${error instanceof Error ? error.message : String(error)}`)
     }
-    const base = snapshot.workspace.launch
     if (!request.command_id) {
       const shell = process.env.SHELL || "/bin/sh"
       return NativeLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
