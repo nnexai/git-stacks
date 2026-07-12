@@ -13,6 +13,7 @@ const application = @import("application");
 const workspace_view = @import("workspace_view");
 const command_launcher = @import("command_launcher");
 const attention_view = @import("attention_view");
+const attention_osc = @import("attention_osc");
 const workspace_creation = @import("workspace_creation");
 const service_sync = @import("service_sync");
 const c = @cImport({
@@ -185,6 +186,8 @@ fn launchSpec(state: *State, pair: model.PairKey, command_id: ?[]const u8) !surf
         random[0], random[1], random[2],  random[3],  random[4],  random[5],  random[6],  random[7],
         random[8], random[9], random[10], random[11], random[12], random[13], random[14], random[15],
     });
+    std.crypto.random.bytes(&random);
+    _ = try std.fmt.bufPrint(&spec.attention_token, "{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ random[0], random[1], random[2], random[3], random[4], random[5], random[6], random[7], random[8], random[9], random[10], random[11], random[12], random[13], random[14], random[15] });
     @memcpy(spec.cwd[0..launch.cwd_len], launch.cwdSlice());
     var command_len: usize = 0;
     for (0..launch.argv_count) |i| try appendQuoted(spec.command[0 .. spec.command.len - 1], &command_len, launch.arg(i));
@@ -223,7 +226,7 @@ fn launchSpec(state: *State, pair: model.PairKey, command_id: ?[]const u8) !surf
         @memcpy(spec.environment_values[i][0..launch.command_id_len], launch.command_id[0..launch.command_id_len]);
         spec.environment_count += 1;
     }
-    const reserved = &[_]struct { k: []const u8, v: []const u8 }{ .{ .k = "GIT_STACKS_SURFACE_ID", .v = &spec.surface_id }, .{ .k = "GIT_STACKS_WORKSPACE_ID", .v = &spec.workspace_id }, .{ .k = "GIT_STACKS_REPOSITORY_ID", .v = &spec.repository_id } };
+    const reserved = &[_]struct { k: []const u8, v: []const u8 }{ .{ .k = "GIT_STACKS_SURFACE_ID", .v = &spec.surface_id }, .{ .k = "GIT_STACKS_TAB_ID", .v = &spec.surface_id }, .{ .k = "GIT_STACKS_WORKSPACE_ID", .v = &spec.workspace_id }, .{ .k = "GIT_STACKS_REPOSITORY_ID", .v = &spec.repository_id }, .{ .k = "GIT_STACKS_ATTENTION_TOKEN", .v = &spec.attention_token }, .{ .k = "GIT_STACKS_ATTENTION_TRANSPORT", .v = "osc9" } };
     for (reserved) |entry| {
         const i = spec.environment_count;
         if (i >= spec.environment_keys.len) return error.EnvironmentCapacity;
@@ -578,6 +581,30 @@ fn surfaceTitleChanged(context: *anyopaque, id: model.Id, title: []const u8) voi
             }
         }
     }
+}
+fn surfaceAttentionReceived(context: *anyopaque, id: model.Id, token: []const u8, _: []const u8, body: []const u8) void {
+    const state: *State = @ptrCast(@alignCast(context));
+    const event = attention_osc.parse(body, token) orelse return;
+    const loc = model.surfaceLocation(&state.graph.state, id) orelse return;
+    const pair = state.graph.state.pairs[loc.pair].key;
+    var attention_id = id;
+    attention_id[0] = switch (event.provider) { .codex => 'a', .claude => 'b', .copilot => 'c', .opencode => 'd' };
+    var item: model.Attention = .{
+        .id = attention_id,
+        .workspace_id = pair.workspace_id,
+        .repository_id = pair.repository_id,
+        .surface_id = id,
+        .provider = switch (event.provider) { .codex => .codex, .claude => .claude, .copilot => .copilot, .opencode => .opencode },
+        .status = switch (event.state) { .working => .working, .waiting => .waiting, .completed => .completed, .failed => .failed, .idle => .idle },
+    };
+    const provider = @tagName(event.provider);
+    const status = @tagName(event.state);
+    const service_id = std.fmt.bufPrint(&item.service_id, "osc:{s}:{s}", .{ &id, provider }) catch return;
+    item.service_id_len = @intCast(service_id.len);
+    const title = std.fmt.bufPrint(&item.title, "{s}: {s}", .{ provider, status }) catch return;
+    item.title_len = @intCast(title.len);
+    state.graph.state = reducer.reduce(state.graph.state, .{ .attention_received = item }).state;
+    refreshProjection(state);
 }
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
@@ -1483,6 +1510,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     state.terminals[state.terminal_count] = surface;
     surface.setExitHandler(state, surfaceExited);
     surface.setTitleHandler(surfaceTitleChanged);
+    surface.setAttentionHandler(surfaceAttentionReceived);
     state.terminal_count += 1;
     // Ghostty does not create/register the child until its widget belongs to a
     // realized GTK hierarchy.  The page is provisional until that handshake
@@ -2549,6 +2577,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         state.terminals[0] = initial_terminal;
         initial_terminal.setExitHandler(state, surfaceExited);
         initial_terminal.setTitleHandler(surfaceTitleChanged);
+        initial_terminal.setAttentionHandler(surfaceAttentionReceived);
         state.terminal_count = 1;
     }
     active = state;

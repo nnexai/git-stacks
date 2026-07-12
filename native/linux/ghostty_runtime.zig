@@ -13,6 +13,7 @@ pub const SurfaceCallbacks = struct {
     close: *const fn (*anyopaque, u64) void,
     child_exit: *const fn (*anyopaque, u64, u32, u64) void,
     title: *const fn (*anyopaque, u64, []const u8) void,
+    notification: *const fn (*anyopaque, u64, []const u8, []const u8) void,
 };
 
 const Entry = struct {
@@ -145,7 +146,8 @@ fn action(app: c.ghostty_app_t, target: c.ghostty_target_s, value: c.ghostty_act
         // Title, cwd, bell, notification and config actions are accepted here;
         // product observers are added without taking terminal ownership.
         c.GHOSTTY_ACTION_SET_TITLE => if (value.action.set_title.title) |raw| cb.title(cb.context, cb.generation, std.mem.span(raw)),
-        c.GHOSTTY_ACTION_PWD, c.GHOSTTY_ACTION_RING_BELL, c.GHOSTTY_ACTION_DESKTOP_NOTIFICATION, c.GHOSTTY_ACTION_RELOAD_CONFIG, c.GHOSTTY_ACTION_CONFIG_CHANGE => {},
+        c.GHOSTTY_ACTION_DESKTOP_NOTIFICATION => cb.notification(cb.context, cb.generation, if (value.action.desktop_notification.title) |raw| std.mem.span(raw) else "", if (value.action.desktop_notification.body) |raw| std.mem.span(raw) else ""),
+        c.GHOSTTY_ACTION_PWD, c.GHOSTTY_ACTION_RING_BELL, c.GHOSTTY_ACTION_RELOAD_CONFIG, c.GHOSTTY_ACTION_CONFIG_CHANGE => {},
         else => return false,
     }
     return true;

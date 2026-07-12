@@ -39,6 +39,7 @@ pub const LaunchSpec = struct {
     surface_id: [36]u8,
     workspace_id: [36]u8,
     repository_id: [36]u8,
+    attention_token: [32]u8 = [_]u8{0} ** 32,
     revision: u64,
     cwd: [513]u8 = [_]u8{0} ** 513,
     command: [8193]u8 = [_]u8{0} ** 8193,
@@ -83,6 +84,7 @@ pub const Surface = struct {
     exit_context: ?*anyopaque = null,
     exit_handler: ?*const fn (*anyopaque, [36]u8, u32, u64) void = null,
     title_handler: ?*const fn (*anyopaque, [36]u8, []const u8) void = null,
+    attention_handler: ?*const fn (*anyopaque, [36]u8, []const u8, []const u8, []const u8) void = null,
 
     pub fn setExitHandler(self: *Surface, context: *anyopaque, handler: *const fn (*anyopaque, [36]u8, u32, u64) void) void {
         self.exit_context = context;
@@ -91,6 +93,7 @@ pub const Surface = struct {
     pub fn setTitleHandler(self: *Surface, handler: *const fn (*anyopaque, [36]u8, []const u8) void) void {
         self.title_handler = handler;
     }
+    pub fn setAttentionHandler(self: *Surface, handler: *const fn (*anyopaque, [36]u8, []const u8, []const u8, []const u8) void) void { self.attention_handler = handler; }
 
     pub fn create(runtime: *runtime_mod.Runtime, registry: *guard.Registry) !*Surface {
         return createWithLaunch(runtime, registry, null);
@@ -117,6 +120,7 @@ pub const Surface = struct {
         self.exit_context = null;
         self.exit_handler = null;
         self.title_handler = null;
+        self.attention_handler = null;
         if (launch) |spec| self.surface_id = spec.surface_id else _ = std.fmt.bufPrint(&self.surface_id, "00000000-0000-4000-8000-{d:0>12}", .{runtime.allocateSurfaceNumber()}) catch unreachable;
         self.clipboard_context = try clipboard.Context.create(runtime.allocator, @ptrCast(self.area), self.generation);
         self.clipboard_invalidated = false;
@@ -267,6 +271,7 @@ pub const Surface = struct {
             .close = requestClose,
             .child_exit = childExit,
             .title = titleChanged,
+            .notification = notificationReceived,
         }) catch {
             self.teardownSurface();
             return true;
@@ -353,6 +358,10 @@ fn childExit(data: *anyopaque, generation: u64, exit_code: u32, elapsed_ms: u64)
 fn titleChanged(data: *anyopaque, generation: u64, title: []const u8) void {
     const self: *Surface = @ptrCast(@alignCast(data));
     if (!self.destroyed and self.generation == generation) if (self.title_handler) |handler| handler(self.exit_context orelse return, self.surface_id, title);
+}
+fn notificationReceived(data: *anyopaque, generation: u64, title: []const u8, body: []const u8) void {
+    const self: *Surface = @ptrCast(@alignCast(data));
+    if (!self.destroyed and self.generation == generation) if (self.attention_handler) |handler| if (self.launch) |*launch| handler(self.exit_context orelse return, self.surface_id, &launch.attention_token, title, body);
 }
 fn onRealize(_: ?*c.GtkGLArea, data: ?*anyopaque) callconv(.c) void {
     const self: *Surface = @ptrCast(@alignCast(data orelse return));
