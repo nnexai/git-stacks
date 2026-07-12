@@ -248,6 +248,10 @@ pub fn build(b: *std.Build) void {
     service_module.addImport("service_client", tested_service_client);
     const service_step = b.step("service-client-test", "Run authenticated service replay and launch decoding tests");
     service_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = service_module })).step);
+    const sync_test_module = b.createModule(.{ .root_source_file = b.path("tests/service_sync_test.zig"), .target = b.graph.host, .optimize = .Debug });
+    sync_test_module.addImport("service_sync", b.createModule(.{ .root_source_file = b.path("linux/service_sync.zig") }));
+    const sync_step = b.step("service-sync-test", "Run refresh coalescing and replay cursor tests");
+    sync_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = sync_test_module })).step);
     const creation_test_module = b.createModule(.{ .root_source_file = b.path("tests/workspace_creation_test.zig"), .target = b.graph.host, .optimize = .Debug });
     creation_test_module.addImport("workspace_creation", b.createModule(.{ .root_source_file = b.path("linux/workspace_creation.zig") }));
     const creation_step = b.step("workspace-creation-test", "Run the GTK-free workspace creation controller tests");
