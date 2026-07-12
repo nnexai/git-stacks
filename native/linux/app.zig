@@ -610,8 +610,17 @@ fn clearList(list: *c.GtkListBox) void {
 }
 
 fn setAccessible(widget: anytype, role: c.GtkAccessibleRole, label: [*:0]const u8, description: [*:0]const u8) void {
+    // GTK derives the immutable role from the concrete widget class. Keep the
+    // expected role beside each call site and publish mutable semantics through
+    // GtkAccessible properties/states rather than CSS-only classes.
     _ = role;
     c.gtk_accessible_update_property(@ptrCast(@alignCast(widget)), c.GTK_ACCESSIBLE_PROPERTY_LABEL, label, c.GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, description, @as(c_int, -1));
+}
+fn setAccessibleSelected(widget: anytype, selected: bool) void {
+    c.gtk_accessible_update_state(@ptrCast(@alignCast(widget)), c.GTK_ACCESSIBLE_STATE_SELECTED, @as(c_int, @intFromBool(selected)), @as(c_int, -1));
+}
+fn setAccessibleChecked(widget: anytype, checked: bool) void {
+    c.gtk_accessible_update_state(@ptrCast(@alignCast(widget)), c.GTK_ACCESSIBLE_STATE_CHECKED, @as(c_int, if (checked) c.GTK_ACCESSIBLE_TRISTATE_TRUE else c.GTK_ACCESSIBLE_TRISTATE_FALSE), @as(c_int, -1));
 }
 
 fn refreshLauncher(state: *State) void {
@@ -709,12 +718,16 @@ fn appendPairButton(parent: *c.GtkBox, state: *State, key: model.PairKey, label:
         c.gtk_box_append(@ptrCast(row), badge);
     }
     c.gtk_button_set_child(@ptrCast(button), row);
+    var selected_semantic = false;
     if (state.graph.state.selected_pair) |selected| {
         if (model.PairKey.eql(selected, key)) {
+            selected_semantic = true;
             c.gtk_widget_add_css_class(button, "selected-workspace");
             c.gtk_widget_remove_css_class(icon, "dim-label");
         }
     }
+    setAccessible(button, c.GTK_ACCESSIBLE_ROLE_BUTTON, z.ptr, "Workspace and repository; activate to show its terminal tabs");
+    setAccessibleSelected(button, selected_semantic);
     const stored = std.heap.c_allocator.create(model.PairKey) catch return;
     stored.* = key;
     c.g_object_set_data_full(@ptrCast(button), "git-stacks-pair", stored, @ptrCast(&freePair));
@@ -1930,6 +1943,7 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     state.attention_button = @ptrCast(attention_button);
     c.gtk_menu_button_set_icon_name(@ptrCast(attention_button), "dialog-warning-symbolic");
     c.gtk_widget_set_tooltip_text(attention_button, "Open attention inbox");
+    setAccessible(attention_button, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Attention inbox", "Review terminals that need input, failed, completed, or are working");
     const attention_popover = c.gtk_popover_new() orelse return null;
     const attention_scroll = c.gtk_scrolled_window_new() orelse return null;
     c.gtk_widget_set_size_request(attention_scroll, 420, 300);
@@ -1943,6 +1957,7 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     const create_header = c.gtk_button_new_from_icon_name("list-add-symbolic") orelse return null;
     c.gtk_actionable_set_action_name(@ptrCast(create_header), "win.new-workspace");
     c.gtk_widget_set_tooltip_text(create_header, "Create workspace (Ctrl+Shift+N)");
+    setAccessible(create_header, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Create workspace", "Create a workspace from a template or repositories");
     c.adw_header_bar_pack_start(@ptrCast(header), create_header);
     const launcher_button = c.gtk_button_new_from_icon_name("system-search-symbolic") orelse return null;
     c.gtk_actionable_set_action_name(@ptrCast(launcher_button), "win.launch-command");
@@ -1951,6 +1966,8 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     c.adw_header_bar_pack_end(@ptrCast(header), launcher_button);
     const menu_button = c.gtk_menu_button_new() orelse return null;
     c.gtk_menu_button_set_icon_name(@ptrCast(menu_button), "open-menu-symbolic");
+    c.gtk_widget_set_tooltip_text(menu_button, "Workspace actions");
+    setAccessible(menu_button, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Workspace actions", "Create a workspace, open a terminal, run a configured command, or open VS Code");
     const menu = c.g_menu_new() orelse return null;
     c.g_menu_append(menu, "Create workspace…", "win.new-workspace");
     c.g_menu_append(menu, "New shell", "win.new-shell");
@@ -1976,6 +1993,8 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     c.gtk_widget_add_css_class(by_repo, "flat");
     c.gtk_box_append(@ptrCast(group_switch), by_repo);
     c.gtk_widget_add_css_class(if (state.graph.state.organization_mode == .label) by_label else by_repo, "active-group");
+    setAccessibleChecked(by_label, state.graph.state.organization_mode == .label);
+    setAccessibleChecked(by_repo, state.graph.state.organization_mode == .repository);
     c.gtk_box_append(@ptrCast(sidebar_box), group_switch);
     const create_sidebar = c.gtk_button_new_with_label("＋ Create workspace") orelse return null;
     c.gtk_actionable_set_action_name(@ptrCast(create_sidebar), "win.new-workspace");
