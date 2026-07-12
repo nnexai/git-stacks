@@ -110,6 +110,22 @@ describe("doctor and install support commands", () => {
     }
   })
 
+  test("install --hooks --codex writes reviewable project hooks without prompting", () => {
+    const baseDir = makeTmpDir("support-install-codex")
+    try {
+      const { configDir, repoPath } = setupInstallFixture(baseDir)
+      const result = runCli(["install", "--hooks", "--codex"], { baseDir, configDir, cwd: repoPath })
+      expectSuccess(result)
+      expect(result.stdout).not.toContain("Select agent frameworks")
+      expect(result.stdout).toContain("review")
+      const data = JSON.parse(readFileSync(join(repoPath, ".codex", "hooks.json"), "utf8"))
+      expect(data.hooks.PermissionRequest[0].hooks[0].command).toContain("--source codex")
+      const removed = runCli(["install", "--hooks", "--remove", "--codex"], { baseDir, configDir, cwd: repoPath })
+      expectSuccess(removed)
+      expect(JSON.parse(readFileSync(join(repoPath, ".codex", "hooks.json"), "utf8")).hooks).toBeUndefined()
+    } finally { cleanup(baseDir) }
+  })
+
   test("install --hooks --remove --claude removes only Claude hook settings", () => {
     const baseDir = makeTmpDir("support-install-remove")
     try {
