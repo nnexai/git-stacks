@@ -156,6 +156,43 @@ describe("claudeCodePlugin", () => {
   })
 })
 
+describe("codexPlugin", () => {
+  it("merges idempotently and removes only Codex publisher commands", async () => {
+    const { codexPlugin } = await import("../../src/lib/agent-hooks/codex")
+    const dir = join(tmpDir, ".codex")
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, "hooks.json"), JSON.stringify({ custom: true, hooks: {
+      Stop: [{ hooks: [
+        { type: "command", command: "echo user" },
+        { type: "command", command: "git-stacks service attention publish --source claude" },
+        { type: "command", command: "git-stacks service attention publish --source codex --state idle" },
+      ] }],
+      SessionStart: [{ hooks: [{ type: "command", command: "echo gsd" }] }],
+    } }, null, 2))
+    codexPlugin.install(tmpDir, "alpha")
+    codexPlugin.install(tmpDir, "alpha")
+    let data = JSON.parse(readFileSync(join(dir, "hooks.json"), "utf-8"))
+    expect(data.custom).toBe(true)
+    expect(data.hooks.SessionStart).toHaveLength(1)
+    expect(data.hooks.Stop.flatMap((g: any) => g.hooks).filter((h: any) => h.command.includes("--source codex"))).toHaveLength(1)
+    expect(data.hooks.Stop.flatMap((g: any) => g.hooks).some((h: any) => h.command.includes("--source claude"))).toBe(true)
+    codexPlugin.remove(tmpDir)
+    data = JSON.parse(readFileSync(join(dir, "hooks.json"), "utf-8"))
+    expect(data.hooks.Stop.flatMap((g: any) => g.hooks).map((h: any) => h.command)).toEqual(["echo user", "git-stacks service attention publish --source claude"])
+  })
+
+  it("creates missing files, tolerates remove-before-install, and preserves malformed bytes", async () => {
+    const { codexPlugin } = await import("../../src/lib/agent-hooks/codex")
+    expect(() => codexPlugin.remove(tmpDir)).not.toThrow()
+    codexPlugin.install(tmpDir, "alpha")
+    expect(existsSync(join(tmpDir, ".codex", "hooks.json"))).toBe(true)
+    const malformed = "{ definitely-not-json\n"
+    writeFileSync(join(tmpDir, ".codex", "hooks.json"), malformed)
+    expect(() => codexPlugin.install(tmpDir, "alpha")).toThrow(".codex/hooks.json")
+    expect(readFileSync(join(tmpDir, ".codex", "hooks.json"), "utf-8")).toBe(malformed)
+  })
+})
+
 describe("copilotPlugin", () => {
   it("has correct id and label", async () => {
     const { copilotPlugin } = await import("../../src/lib/agent-hooks/copilot")

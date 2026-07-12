@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { claudeCodePlugin } from "../../../src/lib/agent-hooks/claude-code"
 import { copilotPlugin } from "../../../src/lib/agent-hooks/copilot"
+import { codexPlugin } from "../../../src/lib/agent-hooks/codex"
 
 describe("structured lifecycle attention hooks", () => {
   test("Claude and Copilot emit typed identity-addressed lifecycle commands", () => {
@@ -17,5 +18,24 @@ describe("structured lifecycle attention hooks", () => {
         expect.stringContaining("--state failed"),
       ]))
     }
+  })
+
+  test("Codex emits only its supported lifecycle mappings in best-effort mode", () => {
+    const entries = codexPlugin.generateHookEntries("alpha")
+    expect(entries.map(({ event, command }) => [event, command.match(/--state (\w+)/)?.[1]])).toEqual([
+      ["UserPromptSubmit", "working"],
+      ["PermissionRequest", "waiting"],
+      ["PostToolUse", "working"],
+      ["Stop", "completed"],
+    ])
+    for (const { command } of entries) {
+      expect(command).toContain("--source codex")
+      expect(command).toContain("--best-effort")
+      expect(command).toContain("--workspace \"alpha\"")
+      expect(command).toContain("$GIT_STACKS_WORKSPACE_ID")
+      expect(command).toContain("$GIT_STACKS_REPOSITORY_ID")
+      expect(command).toContain("$GIT_STACKS_SURFACE_ID")
+    }
+    expect(entries.map((entry) => entry.event)).not.toContain("PostToolUseFailure")
   })
 })
