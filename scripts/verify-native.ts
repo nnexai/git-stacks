@@ -616,7 +616,10 @@ async function smokeNativeCreateSync(): Promise<void> {
     await Bun.sleep(15_000)
     mutation = Bun.spawn([process.execPath, "-e", `require('fs').writeFileSync(${JSON.stringify(marker)}, 'external')`], { cwd: ROOT, stdout: "pipe", stderr: "pipe" })
     if (await mutation.exited !== 0) throw new Error("outside-process workspace mutation failed")
-    const outcome = await Promise.race([child.exited.then((code) => ({ code })), Bun.sleep(60_000).then(() => "timeout" as const)])
+    let timer: ReturnType<typeof setTimeout>
+    const timeout = new Promise<"timeout">((resolve) => { timer = setTimeout(() => resolve("timeout"), 60_000) })
+    const outcome = await Promise.race([child.exited.then((code) => ({ code })), timeout])
+    clearTimeout(timer!)
     if (outcome === "timeout") {
       child.kill("SIGKILL"); await child.exited
       const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
@@ -630,7 +633,15 @@ async function smokeNativeCreateSync(): Promise<void> {
   } finally {
     if (child && child.exitCode === null) child.kill("SIGKILL")
     if (mutation && mutation.exitCode === null) mutation.kill("SIGKILL")
-    await service.stop(); rmSync(configRoot, { recursive: true, force: true })
+    let stopTimer: ReturnType<typeof setTimeout>
+    const stopTimeout = new Promise<false>((resolve) => { stopTimer = setTimeout(() => resolve(false), 5_000) })
+    const stopped = await Promise.race([service.stop().then(() => true), stopTimeout])
+    clearTimeout(stopTimer!)
+    if (!stopped) {
+      await service.server?.stop()
+      throw new Error("managed create/sync fixture did not stop within 5 seconds")
+    }
+    rmSync(configRoot, { recursive: true, force: true })
   }
 }
 
