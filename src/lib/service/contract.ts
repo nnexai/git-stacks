@@ -234,6 +234,7 @@ export const ServiceEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...EventBase, type: z.literal("control"), control: z.discriminatedUnion("kind", [
     z.strictObject({ kind: z.literal("heartbeat") }),
     z.strictObject({ kind: z.literal("replay_gap"), gap: ReplayGapSchema }),
+    z.strictObject({ kind: z.literal("snapshot_invalidated"), revision: RevisionSchema }),
   ]) }),
 ])
 export type ServiceEvent = z.infer<typeof ServiceEventSchema>

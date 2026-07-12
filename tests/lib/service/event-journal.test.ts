@@ -28,6 +28,18 @@ describe("EventJournal", () => {
     expect((await restarted.appendOperation(operation("restart"))).sequence).toBe("21")
   })
 
+  test("orders and replays durable snapshot invalidations", async () => {
+    const path = await root()
+    const journal = new EventJournal({ root: path })
+    await Promise.all([journal.appendOperation(operation("before")), journal.appendSnapshotInvalidated("7"), journal.appendOperation(operation("after"))])
+    const replay = await journal.replay("0")
+    expect(replay.kind).toBe("events")
+    if (replay.kind === "events") {
+      expect(replay.events.map((event) => event.sequence)).toEqual(["1", "2", "3"])
+      expect(replay.events[1]).toMatchObject({ type: "control", control: { kind: "snapshot_invalidated", revision: "7" } })
+    }
+  })
+
   test("publishes only after the allocated record is durable", async () => {
     const path = await root()
     const journal = new EventJournal({ root: path })

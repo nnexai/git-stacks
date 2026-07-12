@@ -16,6 +16,7 @@ export interface EventJournalOptions {
 
 export type OperationEventPayload = Operation
 export type AttentionEventPayload = { workspace_id: string; code: string; message: string } | Omit<StructuredAttentionEvent, "journal_sequence">
+export type SnapshotInvalidationEventPayload = { kind: "snapshot_invalidated"; revision: string }
 export type ReplayResult =
   | { kind: "events"; events: ServiceEvent[] }
   | { kind: "replay_gap"; requested: string; earliest_cursor: string; latest_cursor: string; snapshot_revision: string }
@@ -109,6 +110,13 @@ export class EventJournal {
   appendAttention(attention: AttentionEventPayload): Promise<ServiceEvent> {
     return this.append((sequence, timestamp) => ({ protocol: "v1", sequence, timestamp, type: "attention", attention:
       "state" in attention ? StructuredAttentionEventSchema.parse({ ...attention, journal_sequence: sequence }) : attention }))
+  }
+
+  appendSnapshotInvalidated(revision: string): Promise<ServiceEvent> {
+    return this.append((sequence, timestamp) => ({
+      protocol: "v1", sequence, timestamp, type: "control",
+      control: { kind: "snapshot_invalidated", revision },
+    }))
   }
 
   async highWaterCursor(): Promise<string> {
