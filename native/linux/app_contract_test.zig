@@ -108,3 +108,14 @@ test "workspace controls publish native accessible state labels and tooltips" {
     for ([_][]const u8{"<Alt>p", "<Alt><Shift>Up", "<Alt><Shift>Down"}) |needle|
         try std.testing.expect(std.mem.indexOf(u8, actions, needle) != null);
 }
+test "UAT interaction gaps stay wired to production GTK controls" {
+    const source = @embedFile("app.zig");
+    for ([_][]const u8{
+        "selected-workspace:focus-visible",
+        "win.toggle-current-pin",
+        "setup-menu",
+        "tabSetupMenu",
+        "git-stacks-launcher",
+    }) |needle| try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "outline: 2px solid @accent_color") == null);
+}

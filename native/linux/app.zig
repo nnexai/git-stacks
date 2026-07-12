@@ -27,7 +27,10 @@ const product_css =
     ".git-stacks-group-switch button:checked { background: @accent_bg_color; color: @accent_fg_color; }" ++
     ".git-stacks-sidebar button.workspace-row { padding: 6px 12px; min-height: 36px; }" ++
     ".git-stacks-sidebar button.workspace-row:hover { background: @view_bg_color; }" ++
-    ".git-stacks-sidebar button.workspace-row.selected-workspace { background: @accent_bg_color; color: @accent_fg_color; outline: 2px solid @accent_color; }" ++
+    ".git-stacks-sidebar button.workspace-row.selected-workspace { background: @accent_bg_color; color: @accent_fg_color; }" ++
+    ".git-stacks-sidebar button.workspace-row.selected-workspace:focus-visible { outline: 2px solid @accent_fg_color; outline-offset: -3px; }" ++
+    ".git-stacks-launcher { background: @window_bg_color; padding: 12px; }" ++
+    ".git-stacks-launcher row { padding: 8px 10px; border-radius: 8px; }" ++
     ".git-stacks-sidebar .attention-badge { background: @accent_bg_color; color: @accent_fg_color; border-radius: 999px; padding: 1px 7px; font-weight: 700; }" ++
     ".git-stacks-sidebar expander { padding: 6px 0; }" ++
     ".git-stacks-sidebar expander > title { font-weight: 600; color: @window_fg_color; }" ++
@@ -1057,6 +1060,7 @@ fn ensurePairUi(state: *State, key: model.PairKey) ?*PairUi {
     const tabs = c.adw_tab_view_new() orelse return null;
     _ = c.g_signal_connect_data(tabs, "notify::selected-page", @ptrCast(&selectedPageChanged), state, null, 0);
     _ = c.g_signal_connect_data(tabs, "close-page", @ptrCast(&nativeClosePage), state, null, 0);
+    _ = c.g_signal_connect_data(tabs, "setup-menu", @ptrCast(&tabSetupMenu), state, null, 0);
     const menu = c.g_menu_new() orelse return null;
     c.g_menu_append(menu, "Rename…", "win.rename-current");
     c.g_menu_append(menu, "Close", "win.close-tab");
@@ -1114,8 +1118,10 @@ fn presentContext(widget: *c.GtkWidget, menu: *c.GMenu, x: f64, y: f64) void {
 fn workspaceContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
     const widget = c.gtk_event_controller_get_widget(@ptrCast(gesture orelse return)) orelse return;
-    const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-workspace") orelse return;
-    const id: *model.Id = @ptrCast(@alignCast(ptr));
+    const ptr = c.g_object_get_data(@ptrCast(widget), "git-stacks-pair") orelse return;
+    const pair: *model.PairKey = @ptrCast(@alignCast(ptr));
+    _ = (workspace_view.View{ .state = &state.graph.state }).select(pair.*);
+    const id = &pair.workspace_id;
     var pinned = false;
     for (state.graph.state.pins[0..state.graph.state.pin_count]) |pin| if (std.mem.eql(u8, &pin, id)) {
         pinned = true;
@@ -1123,9 +1129,7 @@ fn workspaceContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data
     };
     const menu = c.g_menu_new() orelse return;
     defer c.g_object_unref(menu);
-    var action: [96:0]u8 = [_:0]u8{0} ** 96;
-    const detailed = std.fmt.bufPrintZ(&action, "win.{s}-workspace('{s}')", .{ if (pinned) "unpin" else "pin", id.* }) catch return;
-    c.g_menu_append(menu, if (pinned) "Unpin workspace" else "Pin workspace", detailed.ptr);
+    c.g_menu_append(menu, if (pinned) "Unpin workspace" else "Pin workspace", "win.toggle-current-pin");
     presentContext(widget, menu, x, y);
 }
 fn repositoryContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void {
@@ -1342,6 +1346,17 @@ fn tabMenuPressed(gesture: ?*c.GtkGestureClick, _: c_int, _: f64, _: f64, data: 
     const sid: *model.Id = @ptrCast(@alignCast(ptr));
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(sid.*);
     selectNativePage(state, sid.*);
+}
+fn tabSetupMenu(view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const tabs = view orelse return;
+    const selected = page orelse return;
+    c.adw_tab_view_set_selected_page(tabs, selected);
+    const child = c.adw_tab_page_get_child(selected) orelse return;
+    const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse return;
+    const id: *model.Id = @ptrCast(@alignCast(ptr));
+    _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id.*);
+    refreshProjection(state);
 }
 const RenameContext = struct { state: *State, id: model.Id, entry: *c.GtkEntry };
 fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) callconv(.c) void {
@@ -2145,9 +2160,10 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     _ = c.g_object_ref_sink(dialog);
     state.launcher = @ptrCast(dialog);
     c.adw_dialog_set_title(@ptrCast(dialog), "Run command");
-    c.adw_dialog_set_content_width(@ptrCast(dialog), 480);
-    c.adw_dialog_set_content_height(@ptrCast(dialog), 360);
+    c.adw_dialog_set_content_width(@ptrCast(dialog), 440);
+    c.adw_dialog_set_content_height(@ptrCast(dialog), 300);
     const launcher_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, application.Spacing.section) orelse return null;
+    c.gtk_widget_add_css_class(launcher_box, "git-stacks-launcher");
     const search = c.gtk_search_entry_new() orelse return null;
     state.launcher_entry = @ptrCast(search);
     c.gtk_search_entry_set_placeholder_text(@ptrCast(search), "Search configured commands…");

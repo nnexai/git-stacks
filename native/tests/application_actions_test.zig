@@ -74,6 +74,16 @@ test "launcher distinguishes empty catalog from no matches and wraps selection" 
     l.pair.repository_id=id('x');
     try std.testing.expectEqual(launcher.EmptyState.no_configured_commands,l.emptyState("",l.collect("",&out)));
 }
+test "production launcher excludes internal TUI smoke command" {
+    var s: model.State = .{ .connection = .ready, .command_count = 2 };
+    s.commands[0] = cmd('a', "tui-output-smoke", id('r'));
+    s.commands[1] = cmd('b', "Build", id('r'));
+    var l = launcher.Launcher{ .state = &s, .pair = .{ .workspace_id = id('w'), .repository_id = id('r') } };
+    var out: [4]launcher.Item = undefined;
+    const count = l.collect("", &out);
+    try std.testing.expectEqual(@as(usize, 1), count);
+    try std.testing.expectEqualStrings("Build", s.commands[out[0].command_index].name[0..s.commands[out[0].command_index].name_len]);
+}
 test "incoming attention has no focus effect and explicit activation explains fallback" {
     var s: model.State = .{ .connection = .ready, .workspace_count = 1 };
     s.workspaces[0] = .{ .id = id('w'), .repository_count = 1 };
