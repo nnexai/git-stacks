@@ -48,4 +48,20 @@ describe("user-level native agent integrations", () => {
     expect(report.providers.every((entry) => entry.state === "disabled")).toBe(true)
     expect(existsSync(join(home, ".codex"))).toBe(false)
   })
+
+  test("ordinary inherited hook context emits authenticated OSC to its parent tty", async () => {
+    if (!Bun.which("script")) return
+    const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-tty-"))
+    installAgentIntegrations({ home })
+    const codex = JSON.parse(readFileSync(join(home, ".codex/hooks.json"), "utf8"))
+    const hook = codex.hooks.UserPromptSubmit[0].hooks[0].command as string
+    const token = "0123456789abcdef0123456789abcdef"
+    const child = Bun.spawn(["script", "-qec", hook, "/dev/null"], {
+      env: { ...process.env, GIT_STACKS_ATTENTION_TOKEN: token, GIT_STACKS_SURFACE_ID: "surface-test" },
+      stdout: "pipe", stderr: "pipe",
+    })
+    const output = await new Response(child.stdout).text()
+    expect(await child.exited).toBe(0)
+    expect(output).toContain(`]9;git-stacks-attention:${token}:codex:working`)
+  })
 })
