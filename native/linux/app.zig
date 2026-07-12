@@ -12,6 +12,8 @@ const application = @import("application");
 const workspace_view = @import("workspace_view");
 const command_launcher = @import("command_launcher");
 const attention_view = @import("attention_view");
+const workspace_creation = @import("workspace_creation");
+const service_sync = @import("service_sync");
 const c = @cImport({
     @cInclude("gtk/gtk.h");
     @cInclude("adwaita.h");
@@ -52,6 +54,8 @@ const State = struct {
     injected: bool = false,
     replay_cancel: std.atomic.Value(bool) = .init(false),
     replay_thread: ?std.Thread = null,
+    create_cancel: std.atomic.Value(bool) = .init(false),
+    create_thread: ?std.Thread = null,
     content_stack: ?*c.GtkStack = null,
     workspace_list: ?*c.GtkListBox = null,
     tab_view: ?*c.AdwTabView = null,
@@ -64,6 +68,14 @@ const State = struct {
     launcher_results: ?*c.GtkListBox = null,
     launcher_error: ?*c.GtkLabel = null,
     launcher_presented: bool = false,
+    workspace_dialog: ?*c.AdwDialog = null,
+    workspace_name: ?*c.GtkEntry = null,
+    workspace_branch: ?*c.GtkEntry = null,
+    workspace_source: ?*c.GtkEntry = null,
+    workspace_submit: ?*c.GtkButton = null,
+    workspace_status: ?*c.GtkLabel = null,
+    workspace_controller: workspace_creation.Controller = .{},
+    sync: service_sync.Coordinator = .{},
     connection_label: ?*c.GtkLabel = null,
     attention_label: ?*c.GtkLabel = null,
     action_group: ?*c.GSimpleActionGroup = null,
@@ -205,9 +217,14 @@ fn cleanup(state: *State) void {
     if (state.cleaned) return;
     state.cleaned = true;
     state.replay_cancel.store(true, .release);
+    state.create_cancel.store(true, .release);
     if (state.replay_thread) |thread| {
         thread.join();
         state.replay_thread = null;
+    }
+    if (state.create_thread) |thread| {
+        thread.join();
+        state.create_thread = null;
     }
     active = null;
     if (state.window) |window| if (state.close_handler != 0) {
@@ -222,6 +239,11 @@ fn cleanup(state: *State) void {
         state.launcher_entry = null;
         state.launcher_results = null;
         state.launcher_error = null;
+    }
+    if (state.workspace_dialog) |dialog| {
+        _ = c.adw_dialog_close(dialog);
+        c.g_object_unref(dialog);
+        state.workspace_dialog = null;
     }
     if (state.window) |window| {
         c.gtk_window_destroy(window);
@@ -1469,9 +1491,113 @@ fn launchVscode(state: *State) void {
     child.spawn() catch |err| showLauncherError(state, @errorName(err));
 }
 
+const CreateDispatch = struct { state: *State, authoritative: ?model.State = null, message: [160:0]u8 = [_:0]u8{0} ** 160 };
+fn finishWorkspaceCreate(data: ?*anyopaque) callconv(.c) c.gboolean {
+    const result: *CreateDispatch = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
+    defer result.state.graph.allocator.destroy(result);
+    if (result.state.cleaned) return c.G_SOURCE_REMOVE;
+    result.state.create_thread = null;
+    if (result.authoritative) |snapshot| {
+        result.state.graph.applyAuthoritativeSnapshot(snapshot) catch {};
+        for (result.state.graph.state.workspaces[0..result.state.graph.state.workspace_count]) |workspace| {
+            if (std.mem.eql(u8, workspace.name[0..workspace.name_len], result.state.workspace_controller.name[0..result.state.workspace_controller.name_len]) and workspace.repository_count > 0) {
+                result.state.graph.state.selected_pair = .{ .workspace_id = workspace.id, .repository_id = workspace.repository_ids[0] };
+                refreshProjection(result.state);
+                _ = createTerminal(result.state, null, null);
+                if (result.state.workspace_dialog) |dialog| _ = c.adw_dialog_close(dialog);
+                return c.G_SOURCE_REMOVE;
+            }
+        }
+    }
+    result.state.workspace_controller.finish(.failed) catch {};
+    if (result.state.workspace_status) |label| c.gtk_label_set_text(label, &result.message);
+    if (result.state.workspace_submit) |button| c.gtk_widget_set_sensitive(@ptrCast(button), 1);
+    return c.G_SOURCE_REMOVE;
+}
+fn jsonStringField(body: []const u8, key: []const u8) ?[]const u8 {
+    const parsed = std.json.parseFromSlice(std.json.Value, std.heap.page_allocator, body, .{}) catch return null;
+    defer parsed.deinit();
+    if (parsed.value != .object) return null;
+    const value = parsed.value.object.get(key) orelse return null;
+    if (value != .string) return null;
+    return value.string;
+}
+const CreateWork = struct { state: *State, submission: workspace_creation.Submission };
+fn fillCreationRandom(bytes: []u8) !void { std.crypto.random.bytes(bytes); }
+fn createWorkspaceWorker(work: *CreateWork) void {
+    const state = work.state;
+    defer { work.submission.deinit(state.graph.allocator); state.graph.allocator.destroy(work); }
+    const dispatch = state.graph.allocator.create(CreateDispatch) catch return;
+    dispatch.* = .{ .state = state };
+    var transport = @import("service_client").HttpTransport.init(state.graph.allocator); defer transport.deinit();
+    var client = @import("service_client").Client.init(state.graph.authorization); client.begin();
+    const request = client.workspaceCreateRequest(work.submission.body, work.submission.key()) catch { _ = std.fmt.bufPrintZ(&dispatch.message, "Could not prepare workspace creation", .{}) catch {}; _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; };
+    const response = transport.execute(state.graph.endpoint, request) catch |err| { _ = std.fmt.bufPrintZ(&dispatch.message, "Creation failed: {s}", .{@errorName(err)}) catch {}; _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; };
+    defer response.deinit(state.graph.allocator);
+    if (response.status != 202 and response.status != 200) { _ = std.fmt.bufPrintZ(&dispatch.message, "Creation rejected ({d})", .{response.status}) catch {}; _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; }
+    // Operation completion is also announced by replay; polling keeps creation
+    // deterministic when an SSE lease reconnects.
+    if (jsonStringField(response.body, "operation_id")) |operation_id| {
+        state.workspace_controller.bindOperation(operation_id) catch {};
+        for (0..120) |_| {
+            if (state.create_cancel.load(.acquire)) break;
+            var path: [96]u8 = undefined;
+            const poll = client.operationRequest(operation_id, &path) catch break;
+            const polled = transport.execute(state.graph.endpoint, poll) catch { std.Thread.sleep(250 * std.time.ns_per_ms); continue; };
+            const succeeded = std.mem.indexOf(u8, polled.body, "\"status\":\"succeeded\"") != null;
+            const failed = std.mem.indexOf(u8, polled.body, "\"status\":\"failed\"") != null;
+            polled.deinit(state.graph.allocator);
+            if (succeeded) break;
+            if (failed) { _ = std.fmt.bufPrintZ(&dispatch.message, "Workspace creation rolled back", .{}) catch {}; _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; }
+            std.Thread.sleep(250 * std.time.ns_per_ms);
+        }
+    }
+    const snapshot_request = client.aggregateSnapshotRequest() catch { _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; };
+    const snapshot_response = transport.execute(state.graph.endpoint, snapshot_request) catch { _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; };
+    defer snapshot_response.deinit(state.graph.allocator);
+    const action = client.decodeAggregateSnapshot(snapshot_response.body) catch { _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch); return; };
+    dispatch.authoritative = @import("reducer").reduce(.{}, action).state;
+    _ = c.g_main_context_invoke(null, @ptrCast(&finishWorkspaceCreate), dispatch);
+}
+fn workspaceSubmit(_: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
+    const state: *State = @ptrCast(@alignCast(data orelse return));
+    const name = std.mem.span(c.gtk_editable_get_text(@ptrCast(state.workspace_name orelse return)));
+    const branch = std.mem.span(c.gtk_editable_get_text(@ptrCast(state.workspace_branch orelse return)));
+    const source = std.mem.span(c.gtk_editable_get_text(@ptrCast(state.workspace_source orelse return)));
+    state.workspace_controller.setName(name) catch return;
+    state.workspace_controller.setBranch(branch) catch return;
+    state.workspace_controller.connected = state.graph.state.connection == .ready;
+    state.workspace_controller.catalog_loaded = true;
+    state.workspace_controller.selectTemplate(source, null) catch return;
+    const submission = state.workspace_controller.beginSubmission(state.graph.allocator, fillCreationRandom) catch return;
+    c.gtk_widget_set_sensitive(@ptrCast(state.workspace_submit.?), 0);
+    if (state.workspace_status) |label| c.gtk_label_set_text(label, "Creating workspace…");
+    const work = state.graph.allocator.create(CreateWork) catch { submission.deinit(state.graph.allocator); return; };
+    work.* = .{ .state = state, .submission = submission };
+    state.create_thread = std.Thread.spawn(.{}, createWorkspaceWorker, .{work}) catch { submission.deinit(state.graph.allocator); state.graph.allocator.destroy(work); return; };
+}
+fn openWorkspaceDialog(state: *State) void {
+    if (state.workspace_dialog == null) {
+        const dialog = c.adw_dialog_new() orelse return; _ = c.g_object_ref_sink(dialog); state.workspace_dialog = @ptrCast(dialog);
+        c.adw_dialog_set_title(@ptrCast(dialog), "Create workspace"); c.adw_dialog_set_content_width(@ptrCast(dialog), 480);
+        const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 10) orelse return; c.gtk_widget_set_margin_top(box, 20); c.gtk_widget_set_margin_bottom(box, 20); c.gtk_widget_set_margin_start(box, 20); c.gtk_widget_set_margin_end(box, 20);
+        const name = c.gtk_entry_new() orelse return; c.gtk_entry_set_placeholder_text(@ptrCast(name), "Name"); state.workspace_name = @ptrCast(name); c.gtk_box_append(@ptrCast(box), name);
+        const branch = c.gtk_entry_new() orelse return; c.gtk_entry_set_placeholder_text(@ptrCast(branch), "Branch"); state.workspace_branch = @ptrCast(branch); c.gtk_box_append(@ptrCast(box), branch);
+        const source = c.gtk_entry_new() orelse return; c.gtk_entry_set_placeholder_text(@ptrCast(source), "Source template or registered repositories"); state.workspace_source = @ptrCast(source); c.gtk_box_append(@ptrCast(box), source);
+        const status = c.gtk_label_new("") orelse return; state.workspace_status = @ptrCast(status); c.gtk_box_append(@ptrCast(box), status);
+        const submit = c.gtk_button_new_with_label("Create workspace") orelse return; state.workspace_submit = @ptrCast(submit); c.gtk_widget_add_css_class(submit, "suggested-action"); c.gtk_actionable_set_action_name(@ptrCast(submit), null); _ = c.g_signal_connect_data(submit, "clicked", @ptrCast(&workspaceSubmit), state, null, 0); c.gtk_box_append(@ptrCast(box), submit);
+        c.adw_dialog_set_child(@ptrCast(dialog), box); c.adw_dialog_set_focus(@ptrCast(dialog), name);
+    }
+    if (state.window) |window| c.adw_dialog_present(state.workspace_dialog.?, @ptrCast(@alignCast(window)));
+}
+
 fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
     const name = std.mem.span(c.g_action_get_name(@ptrCast(action orelse return)));
+    if (std.mem.eql(u8, name, "new-workspace")) {
+        openWorkspaceDialog(state);
+        return;
+    }
     if (std.mem.eql(u8, name, "new-shell")) {
         createShell(state);
         return;
@@ -1594,12 +1720,16 @@ fn registerActions(state: *State, window: *c.GtkWindow) void {
     }
 }
 
-fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.Surface) ?*c.GtkWidget {
+fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod.Surface) ?*c.GtkWidget {
     const root = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
     const header = c.adw_header_bar_new() orelse return null;
     const attention = c.gtk_label_new("") orelse return null;
     state.attention_label = @ptrCast(attention);
     c.adw_header_bar_pack_start(@ptrCast(header), attention);
+    const create_header = c.gtk_button_new_from_icon_name("list-add-symbolic") orelse return null;
+    c.gtk_actionable_set_action_name(@ptrCast(create_header), "win.new-workspace");
+    c.gtk_widget_set_tooltip_text(create_header, "Create workspace (Ctrl+Shift+N)");
+    c.adw_header_bar_pack_start(@ptrCast(header), create_header);
     const launcher_button = c.gtk_button_new_from_icon_name("system-search-symbolic") orelse return null;
     c.gtk_actionable_set_action_name(@ptrCast(launcher_button), "win.launch-command");
     c.gtk_widget_set_tooltip_text(launcher_button, "Search configured commands (Ctrl+Shift+P)");
@@ -1608,6 +1738,7 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     const menu_button = c.gtk_menu_button_new() orelse return null;
     c.gtk_menu_button_set_icon_name(@ptrCast(menu_button), "open-menu-symbolic");
     const menu = c.g_menu_new() orelse return null;
+    c.g_menu_append(menu, "Create workspace…", "win.new-workspace");
     c.g_menu_append(menu, "New shell", "win.new-shell");
     c.g_menu_append(menu, "Configured commands…", "win.launch-command");
     c.g_menu_append(menu, "Open in VS Code", "win.open-vscode");
@@ -1634,6 +1765,9 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.gtk_box_append(@ptrCast(group_switch), by_repo);
     c.gtk_widget_add_css_class(if (state.graph.state.organization_mode == .label) by_label else by_repo, "active-group");
     c.gtk_box_append(@ptrCast(sidebar_box), group_switch);
+    const create_sidebar = c.gtk_button_new_with_label("＋ Create workspace") orelse return null;
+    c.gtk_actionable_set_action_name(@ptrCast(create_sidebar), "win.new-workspace");
+    c.gtk_box_append(@ptrCast(sidebar_box), create_sidebar);
     const workspace_list = c.gtk_list_box_new() orelse return null;
     state.workspace_list = @ptrCast(workspace_list);
     c.gtk_list_box_set_selection_mode(@ptrCast(workspace_list), c.GTK_SELECTION_SINGLE);
@@ -1643,11 +1777,12 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.gtk_widget_set_vexpand(scroll, 1);
     c.gtk_box_append(@ptrCast(sidebar_box), scroll);
     const content_stack = c.gtk_stack_new() orelse return null;
-    const status = c.gtk_label_new("Loading authoritative workspaces…") orelse return null;
-    state.connection_label = @ptrCast(status);
-    c.gtk_label_set_wrap(@ptrCast(status), 1);
-    setAccessible(status, c.GTK_ACCESSIBLE_ROLE_STATUS, "Connection state", "Explicit loading, empty, disconnected, stale, incompatible, refresh-required, or failure state");
-    _ = c.gtk_stack_add_named(@ptrCast(content_stack), status, "connection");
+    const status_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 12) orelse return null;
+    c.gtk_widget_set_halign(status_box, c.GTK_ALIGN_CENTER); c.gtk_widget_set_valign(status_box, c.GTK_ALIGN_CENTER);
+    const status = c.gtk_label_new("Loading authoritative workspaces…") orelse return null; state.connection_label = @ptrCast(status);
+    c.gtk_label_set_wrap(@ptrCast(status), 1); setAccessible(status, c.GTK_ACCESSIBLE_ROLE_STATUS, "Connection state", "Explicit loading, empty, disconnected, stale, incompatible, refresh-required, or failure state"); c.gtk_box_append(@ptrCast(status_box), status);
+    const create_empty = c.gtk_button_new_with_label("Create workspace") orelse return null; c.gtk_actionable_set_action_name(@ptrCast(create_empty), "win.new-workspace"); c.gtk_widget_add_css_class(create_empty, "suggested-action"); c.gtk_box_append(@ptrCast(status_box), create_empty);
+    _ = c.gtk_stack_add_named(@ptrCast(content_stack), status_box, "connection");
     const workspace = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
     const pair_stack = c.gtk_stack_new() orelse return null;
     state.pair_stack = @ptrCast(pair_stack);
@@ -1655,12 +1790,12 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.gtk_box_append(@ptrCast(workspace), pair_stack);
     selectPairUi(state);
     const tabs = state.tab_view orelse return null;
-    const initial_child: *c.GtkWidget = @ptrCast(@alignCast(terminal.widget()));
-    const initial_id = std.heap.c_allocator.create(model.Id) catch return null;
-    initial_id.* = terminal.surface_id;
-    c.g_object_set_data_full(@ptrCast(initial_child), "git-stacks-surface", initial_id, @ptrCast(&freeId));
-    const initial_page = c.adw_tab_view_append(tabs, initial_child) orelse return null;
-    c.adw_tab_page_set_title(initial_page, "Terminal");
+    if (terminal) |initial_terminal| {
+        const initial_child: *c.GtkWidget = @ptrCast(@alignCast(initial_terminal.widget()));
+        const initial_id = std.heap.c_allocator.create(model.Id) catch return null; initial_id.* = initial_terminal.surface_id;
+        c.g_object_set_data_full(@ptrCast(initial_child), "git-stacks-surface", initial_id, @ptrCast(&freeId));
+        const initial_page = c.adw_tab_view_append(tabs, initial_child) orelse return null; c.adw_tab_page_set_title(initial_page, "Terminal");
+    }
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), workspace, "workspace");
     // Publish only after every named child exists; replay/snapshot callbacks
     // may refresh concurrently with UI construction.
@@ -1994,26 +2129,21 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         runtime.deinit();
         allocator.destroy(state);
         return;
-    } else if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) null else {
-        std.debug.print("native launch requires an authoritative workspace/repository selection\n", .{});
-        state.registry.deinit();
-        state.graph.deinit();
-        runtime.deinit();
-        allocator.destroy(state);
-        return;
-    };
-    const terminal = surface_mod.Surface.createWithLaunch(runtime, &state.registry, launch_spec) catch |err| {
+    } else null;
+    const terminal = if (launch_spec) |spec| surface_mod.Surface.createWithLaunch(runtime, &state.registry, spec) catch |err| {
         std.debug.print("native surface init failed: {s}\n", .{@errorName(err)});
         state.registry.deinit();
         state.graph.deinit();
         runtime.deinit();
         allocator.destroy(state);
         return;
-    };
-    state.terminals[0] = terminal;
-    terminal.setExitHandler(state, surfaceExited);
-    terminal.setTitleHandler(surfaceTitleChanged);
-    state.terminal_count = 1;
+    } else null;
+    if (terminal) |initial_terminal| {
+        state.terminals[0] = initial_terminal;
+        initial_terminal.setExitHandler(state, surfaceExited);
+        initial_terminal.setTitleHandler(surfaceTitleChanged);
+        state.terminal_count = 1;
+    }
     active = state;
     if (state.graph.authorization.len != 0 and state.graph.endpoint.len != 0) state.replay_thread = std.Thread.spawn(.{}, replayWorker, .{state}) catch |err| blk: {
         std.debug.print("native replay worker start failed: {s}\n", .{@errorName(err)});
@@ -2032,6 +2162,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
     const stress_cycle = parseStressCycle() orelse 0;
     c.gtk_window_set_default_size(@ptrCast(window), @intCast(800 + stress_cycle % 7 * 31), @intCast(480 + stress_cycle % 5 * 29));
     if (std.posix.getenv("GIT_STACKS_NATIVE_MULTISURFACE_SMOKE") != null) {
+        const initial_terminal = terminal orelse { cleanup(state); return; };
         const second = surface_mod.Surface.create(runtime, &state.registry) catch |err| {
             std.debug.print("native second surface init failed: {s}\n", .{@errorName(err)});
             cleanup(state);
@@ -2043,12 +2174,12 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
             cleanup(state);
             return;
         };
-        c.gtk_paned_set_start_child(@ptrCast(paned), @ptrCast(@alignCast(terminal.widget())));
+        c.gtk_paned_set_start_child(@ptrCast(paned), @ptrCast(@alignCast(initial_terminal.widget())));
         c.gtk_paned_set_end_child(@ptrCast(paned), @ptrCast(@alignCast(second.widget())));
         c.adw_application_window_set_content(@ptrCast(window), paned);
     } else {
         if (state.graph.state.selected_pair == null and std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) {
-            c.adw_application_window_set_content(@ptrCast(window), @ptrCast(@alignCast(terminal.widget())));
+            if (terminal) |initial_terminal| c.adw_application_window_set_content(@ptrCast(window), @ptrCast(@alignCast(initial_terminal.widget()))) else c.adw_application_window_set_content(@ptrCast(window), c.gtk_label_new("No workspaces configured"));
         } else {
             const shell = buildWorkspaceUi(state, @ptrCast(window), terminal) orelse {
                 cleanup(state);
@@ -2058,7 +2189,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         }
     }
     c.gtk_window_present(@ptrCast(window));
-    _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(terminal.widget())));
+    if (terminal) |initial_terminal| _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(initial_terminal.widget())));
 
     if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null) {
         _ = c.g_timeout_add(20, smokeEvidence, state);

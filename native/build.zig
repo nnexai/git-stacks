@@ -100,6 +100,8 @@ pub fn build(b: *std.Build) void {
     attention_view_module.addImport("model", app_model_module);
     attention_view_module.addImport("reducer", app_reducer_module);
     app_module.addImport("attention_view", attention_view_module);
+    app_module.addImport("workspace_creation", b.createModule(.{ .root_source_file = b.path("linux/workspace_creation.zig") }));
+    app_module.addImport("service_sync", b.createModule(.{ .root_source_file = b.path("linux/service_sync.zig") }));
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
     app.linkLibC();
     app.linkSystemLibrary("ghostty");

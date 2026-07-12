@@ -23,7 +23,8 @@ test "all activation sources converge on scoped action names and readiness" {
     for (app.actions) |a| if (a.requires_ready) try std.testing.expect(!app.enabled(&stale, a));
     stale.connection = .ready;
     for (app.actions) |a| try std.testing.expect(app.enabled(&stale, a));
-    try std.testing.expectEqualStrings("win.new-shell", app.actions[0].name);
+    try std.testing.expectEqualStrings("win.new-workspace", app.actions[0].name);
+    try std.testing.expectEqualStrings("<Primary><Shift>n", app.actions[0].accelerator.?);
 }
 test "configured command launcher filters scope orders recents and preserves structured failure" {
     var s: model.State = .{ .connection = .ready, .command_count = 4 };
