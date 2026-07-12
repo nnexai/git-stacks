@@ -8,6 +8,7 @@ import { createSnapshotBuilder } from "../lib/service/snapshot"
 import { EventJournal, publishOperationEvent } from "../lib/service/event-journal"
 import { EventBroker } from "../lib/service/event-broker"
 import { createWorkspaceMutationAdapters, OperationRegistry } from "../lib/service/operations"
+import { createWorkspaceChangeMonitor } from "../lib/service/workspace-change-monitor"
 import type { Operation } from "../lib/service/contract"
 import { getWorkspaceCreationCatalog } from "../lib/workspace-creation"
 import { startServiceServer, type RunningServiceServer } from "./server"
@@ -148,14 +149,22 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       },
     })
     const active = new Set<string>()
+    const monitor = createWorkspaceChangeMonitor({
+      rebuild: () => snapshot.currentRevision(),
+      onInvalidated: async (revision) => {
+        const event = await journal.appendSnapshotInvalidated(revision)
+        broker.publish(event)
+      },
+    })
     let lifecycle: ReturnType<typeof createIdleLifecycle>
     const operations = new OperationRegistry({
       root: serviceRoot,
       publishOperationEvent: (operation) => publishOperationEvent(journal, operation, (event) => broker.publish(event)),
-      onOperation: (operation: Operation) => {
+      onOperation: async (operation: Operation) => {
         if (operation.state === "accepted" || operation.state === "running") active.add(operation.operation_id)
         else active.delete(operation.operation_id)
         lifecycle?.setActiveOperations(active.size)
+        if (operation.state === "succeeded" && operation.result?.snapshot_changed === true) await monitor.invalidate()
       },
     })
     await operations.initialize()
@@ -174,6 +183,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       onConnectionChange: (count) => lifecycle.setConnectedClients(count),
       onActivity: () => lifecycle.touch(),
     })
+    monitor.start()
     const instanceId = crypto.randomUUID()
     const descriptor: ServiceDescriptor = {
       protocol: "v1", endpoint: running.url.toString(), pid: process.pid,
@@ -186,6 +196,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       if (stopped) return
       stopped = true
       lifecycle.dispose()
+      await monitor.dispose()
       disposeAttentionPublication()
       try {
         await running.stop()

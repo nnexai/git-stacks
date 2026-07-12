@@ -27,7 +27,7 @@ export interface WorkspaceChangeMonitorOptions {
 export interface WorkspaceChangeMonitor {
   start(): void
   invalidate(): Promise<void>
-  dispose(): void
+  dispose(): Promise<void>
 }
 
 function directoryFingerprint(path: string): string {
@@ -96,8 +96,13 @@ export function createWorkspaceChangeMonitor(options: WorkspaceChangeMonitorOpti
           clearCache()
           const revision = await rebuild()
           if (!disposed && revision !== lastRevision) {
-            lastRevision = revision
-            await options.onInvalidated(revision)
+            try {
+              await options.onInvalidated(revision)
+              lastRevision = revision
+            } catch {
+              // Keep the previous baseline so a later filesystem signal retries.
+              break
+            }
           }
         }
       })().finally(() => { running = undefined })
@@ -121,8 +126,8 @@ export function createWorkspaceChangeMonitor(options: WorkspaceChangeMonitorOpti
       }, options.fingerprintMs ?? DEFAULT_WORKSPACE_FINGERPRINT_MS)
     },
     invalidate,
-    dispose() {
-      if (disposed) return
+    async dispose() {
+      if (disposed) { await running; return }
       disposed = true
       pending = false
       rootWatcher?.close()
@@ -133,6 +138,7 @@ export function createWorkspaceChangeMonitor(options: WorkspaceChangeMonitorOpti
       if (fingerprintTimer !== undefined) clearPeriodic(fingerprintTimer)
       debounceTimer = undefined
       fingerprintTimer = undefined
+      await running
     },
   }
 }

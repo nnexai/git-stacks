@@ -83,7 +83,7 @@ describe("workspace change monitor", () => {
     h.setFingerprint("changed")
     await flush(h.intervals)
     expect(emitted).toEqual(["1", "2"])
-    h.monitor.dispose()
+    await h.monitor.dispose()
   })
 
   test("single-flights rebuilds, schedules one trailing pass, and disposes idempotently", async () => {
@@ -97,8 +97,8 @@ describe("workspace change monitor", () => {
     await Promise.all([first, second, third])
     expect(h.maxActive).toBe(1)
     expect(h.invalidations).toBe(2)
-    h.monitor.dispose()
-    h.monitor.dispose()
+    await h.monitor.dispose()
+    await h.monitor.dispose()
     expect(h.closed.filter((path) => path === "/config")).toHaveLength(1)
     expect(h.intervals).toHaveLength(0)
   })
