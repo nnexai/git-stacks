@@ -90,15 +90,16 @@ function enableCodexHooks(home: string): void {
 
 function uninstallMerged(home: string, provider: "codex" | "claude"): void {
   const path = join(home, provider === "codex" ? ".codex/hooks.json" : ".claude/settings.json")
-  if (!existsSync(path)) return
-  const document = readJson(path)
-  const hooks: Record<string, unknown[]> = {}
-  for (const [event, value] of Object.entries((document.hooks ?? {}) as JsonObject)) {
-    if (!Array.isArray(value)) throw new Error(`hooks.${event} must be an array`)
-    const kept = value.filter((entry) => !managed(entry)); if (kept.length) hooks[event] = kept
+  if (existsSync(path)) {
+    const document = readJson(path)
+    const hooks: Record<string, unknown[]> = {}
+    for (const [event, value] of Object.entries((document.hooks ?? {}) as JsonObject)) {
+      if (!Array.isArray(value)) throw new Error(`hooks.${event} must be an array`)
+      const kept = value.filter((entry) => !managed(entry)); if (kept.length) hooks[event] = kept
+    }
+    if (Object.keys(hooks).length) document.hooks = hooks; else delete document.hooks
+    atomicWrite(path, `${JSON.stringify(document, null, 2)}\n`)
   }
-  if (Object.keys(hooks).length) document.hooks = hooks; else delete document.hooks
-  atomicWrite(path, `${JSON.stringify(document, null, 2)}\n`)
   if (provider === "codex") {
     const config = join(home, ".codex/config.toml")
     if (existsSync(config)) atomicWrite(config, readFileSync(config, "utf8").split("\n").filter((line) => !(line.includes(OWNERSHIP_MARKER) && /^\s*hooks\s*=/.test(line))).join("\n"))
@@ -136,7 +137,12 @@ function providerState(home: string, provider: IntegrationProvider): Integration
     const path = join(home, provider === "codex" ? ".codex/hooks.json" : ".claude/settings.json")
     if (!existsSync(path)) return "not-installed"
     const bytes = readFileSync(path, "utf8")
-    return bytes.includes(OWNERSHIP_MARKER) ? "installed" : "not-installed"
+    if (!bytes.includes(OWNERSHIP_MARKER)) return "not-installed"
+    if (provider === "codex") {
+      const config = join(home, ".codex/config.toml")
+      if (!existsSync(config) || !/^\s*hooks\s*=\s*true\b/m.test(readFileSync(config, "utf8"))) return "outdated"
+    }
+    return "installed"
   }
   const path = dedicatedPath(home, provider)
   if (!existsSync(path)) return "not-installed"
@@ -155,6 +161,7 @@ export function installAgentIntegrations(options: IntegrationOptions = {}): Inte
   if (!enabled) return integrationStatus({ home, enabled })
   const health: IntegrationHealth[] = []
   for (const provider of ["codex", "claude", "copilot", "opencode"] as const) try {
+    if (providerState(home, provider) === "installed") { health.push({ provider, state: "installed" }); continue }
     if (provider === "codex" || provider === "claude") installMerged(home, provider)
     else ownedWrite(dedicatedPath(home, provider), provider === "copilot" ? copilotSource() : openCodeSource())
     health.push({ provider, state: "installed" })
