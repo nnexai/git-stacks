@@ -9,7 +9,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 - [x] **Phase 104: Workspace Service and Event Contract** - Native clients can securely query authoritative workspace state, launch context, operations, and replayable events without changing existing CLI or OpenTUI behavior. (completed 2026-07-11)
 - [x] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface. (completed 2026-07-11)
 - [x] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention. (completed 2026-07-12)
-- [x] **Phase 107: Beautify Native Workspace UI and Finalize UX** - The stable Linux client receives its Supacode-quality sidebar, tabs, titles, interaction language, accessibility, and visual finish. (completed 2026-07-12)
+- [ ] **Phase 107: Beautify Native Workspace UI and Finalize UX** - Reopened to finish workspace creation, external synchronization, Codex attention, and release-quality interaction polish before delivery work.
 - [ ] **Phase 108: Native Delivery and Cross-Platform Proof** - The finished Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
 
 ## Phase Details
@@ -162,9 +162,9 @@ Wave 3 *(blocked on Wave 2 completion)*:
 ### Phase 107: Beautify Native Workspace UI and Finalize Sidebar, Tab, and Terminal UX
 
 **Goal:** Deliver a coherent Supacode-quality native workspace interface after lifecycle stability is complete.
-**Requirements**: Phase-local UX acceptance criteria
+**Requirements**: LNX-07, LNX-08, LNX-09, ACT-07
 **Depends on:** Phase 106
-**Plans:** 1 plan
+**Plans:** 13 plans (1 complete, 12 hardening plans pending)
 
 **Success Criteria** (what must be TRUE):
 
@@ -173,10 +173,55 @@ Wave 3 *(blocked on Wave 2 completion)*:
   3. Live terminal tabs use shortened Ghostty-provided titles, never internal surface IDs; configured commands have meaningful names, and manual rename pins an override until explicitly cleared.
   4. Sidebar, tab strip, split layout, context menus, launcher, empty/error states, spacing, typography, icons, and interaction language receive a cohesive visual and accessibility pass against the Supacode reference.
   5. Representative single-repository, multi-repository, pinned, grouped, collapsed, title-update, and manual-title flows pass automated interaction checks plus final human visual UAT.
+  6. From an empty or populated client, a user can create a workspace by supplying a name, branch, and either one template or selected registered repositories; progress and failures remain actionable.
+  7. Workspace additions, updates, renames, and removals made outside the native client reconcile automatically through the authoritative service while live terminals, presentation state, and unread attention remain coherent.
+  8. Codex hooks are installable and publish truthful lifecycle attention that the native client identifies by provider and routes to the exact surviving context.
+  9. The Phase 107 UI review's priority keyboard, accessibility, live-close safety, adaptive-layout, and actionable-state findings are closed with automated interaction evidence and final native visual UAT.
 
 Plans:
 
+Wave 1 *(completed baseline)*:
+
 - [x] 107-01 — Beautify workspace navigation, repository targeting, terminal titles, and native interaction language
+
+Wave 2 *(independent engine/monitor/provider contracts; blocked on completed baseline)*:
+
+- [ ] 107-02 — Extract prompt-free, race-safe workspace creation and migrate the TUI adapter
+- [ ] 107-04 — Make snapshots uncached/empty-revisioned and build the watched/fingerprint monitor
+- [ ] 107-06 — Install merge-safe Codex hooks and add quiet best-effort publication
+
+Wave 3 *(creation service contract; blocked on Wave 2)*:
+
+- [ ] 107-03 — Expose authenticated catalog and idempotent capacity-safe workspace creation
+
+Wave 4 *(durable monitor plus native model contract; blocked on Wave 3)*:
+
+- [ ] 107-05 — Publish durable replayable snapshot invalidations and own monitor lifecycle
+- [ ] 107-07 — Preserve provider-aware attention and enforce truthful native capacity behavior
+
+Wave 5 *(blocked on durable service and shared native contracts)*:
+
+- [ ] 107-08 — Decode creation/invalidation/gap contracts and build the GTK-free creation controller
+
+Wave 6 *(blocked on native protocol/controller)*:
+
+- [ ] 107-09 — Reconcile authoritative snapshots, retain live orphans, and coalesce refresh/cursor recovery
+
+Wave 7 *(blocked on reconciliation and refresh coordination)*:
+
+- [ ] 107-10 — Compose empty-start workspace creation and worker-owned synchronization in GTK
+
+Wave 8 *(blocked on feature-complete GTK composition)*:
+
+- [ ] 107-11 — Render actionable provider attention, complete launcher keyboard flow, and guard live close
+
+Wave 9 *(blocked on interaction safety)*:
+
+- [ ] 107-12 — Apply adaptive, actionable, accessible, and coherent native visual polish
+
+Wave 10 *(blocked on all implementation; final production and human evidence)*:
+
+- [ ] 107-13 — Prove empty creation, external sync, Codex, capacity, themes, keyboard, and AT in production UAT
 
 ### Phase 108: Native Delivery and Cross-Platform Proof
 
@@ -203,5 +248,5 @@ Plans:
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 9/9 | Complete    | 2026-07-11 |
 | 106. Linux Workspace, Commands, and Attention | 3/3 | Complete | 2026-07-12 |
-| 107. Native workspace UI beautification and UX finalization | 1/1 | Complete | 2026-07-12 |
+| 107. Native workspace UI beautification and UX finalization | 1/13 | In progress | - |
 | 108. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |

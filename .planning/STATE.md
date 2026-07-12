@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: milestone
-current_phase: 108
-current_phase_name: Native Delivery and Cross-Platform Proof
-status: Phase 107 complete; Phase 108 ready for planning
-stopped_at: Phase 107 verified complete; Phase 108 next
-last_updated: "2026-07-12T05:00:00.000Z"
+current_phase: 107
+current_phase_name: Beautify Native Workspace UI and Finalize UX
+status: Phase 107 hardening planned; ready to execute 107-02 through 107-13
+stopped_at: Phase 107 hardening planning complete; execute Wave 2 next
+last_updated: "2026-07-12T08:27:04+02:00"
 last_activity: 2026-07-12
-last_activity_desc: Phase 107 completed after human GTK UAT and full native verification
+last_activity_desc: Added 12 validated Phase 107 hardening plans for creation, external sync, Codex attention, UI polish, and production UAT
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 22
+  total_phases: 5
+  completed_phases: 3
+  total_plans: 34
   completed_plans: 22
-  percent: 80
+  percent: 60
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** One command takes a user from feature intent to a fully running development environment without manual setup.
-**Current focus:** Phase 108 — native delivery and cross-platform proof
+**Current focus:** Phase 107 — native-client feature completion and polish before delivery work
 
 ## Current Position
 
-Phase: 108 — Native Delivery and Cross-Platform Proof
-Plan: Not planned
-Status: Phase 107 complete; Phase 108 ready for planning
-Last activity: 2026-07-12 — Phase 107 completed after human GTK UAT and full native verification
+Phase: 107 — Beautify Native Workspace UI and Finalize UX
+Plan: 13 plans total — 107-01 complete; 107-02 through 107-13 pending
+Status: Phase 107 hardening planned; ready to execute Wave 2
+Last activity: 2026-07-12 — created and validated 12 dependency-waved hardening plans covering all reopened requirements and UI-review findings
 
-Progress: [████████░░] 80%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [████████░░] 80%
 ### Roadmap Evolution
 
 - Phase 107 added: Beautify native workspace UI and finalize sidebar, tab, and terminal UX after stability work; native delivery and cross-platform proof moved to Phase 108.
+- Phase 107 reopened before Phase 108: the prior acceptance did not cover native workspace creation, reliable outside-client synchronization, Codex attention presentation/routing, or the release-critical UI review findings.
 
 ### Decisions
 
@@ -80,6 +81,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 - The Bun/TypeScript engine remains authoritative; native clients do not read or mutate workspace YAML.
 - The MVP transport is authenticated loopback HTTP/JSON plus replayable SSE.
+- Workspace configuration monitoring remains service-owned; native clients never watch or mutate YAML directly.
+- External snapshot reconciliation preserves native presentation, live-terminal ownership, and unread attention; vanished authoritative pairs remain explicit while owned terminals are live.
 - Linux is the primary deliverable; macOS is a thin architectural proof that must be built and verified on macOS hardware or CI.
 - [Phase 104]: Wire identifiers are UUIDs while request and operation IDs use explicitly prefixed opaque strings. — Prevents identifier-domain confusion at the wire boundary.
 - [Phase 104]: Identity migration is service-only, lock-serialized, validated, fsynced, and atomically renamed. — Preserves CLI compatibility and prevents competing committed identities.
@@ -125,5 +128,5 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 ## Session Continuity
 
 Last session: 2026-07-11T13:29:43.608Z
-Stopped at: Phase 105 complete; Phase 106 ready
-Resume file: .planning/phases/106-linux-workspace-commands-and-attention/106-01-PLAN.md
+Stopped at: Phase 107 hardening planning complete; Wave 2 ready
+Resume file: .planning/phases/107-beautify-native-workspace-ui-and-finalize-sidebar-tab-and-te/107-02-PLAN.md

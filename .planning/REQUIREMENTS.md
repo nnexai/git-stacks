@@ -45,6 +45,9 @@
 - [x] **LNX-04**: Live terminal tabs survive workspace navigation without recreation.
 - [x] **LNX-05**: Restarted clients restore tab metadata and clearly distinguish surfaces whose processes are no longer alive.
 - [x] **LNX-06**: Keyboard navigation, focus movement, IME interaction, and native accessibility work across the sidebar and terminal surfaces.
+- [ ] **LNX-07**: Users can create a workspace from the native client by entering a name and branch and choosing either one template or one-or-more registered repositories.
+- [ ] **LNX-08**: A running native client automatically reconciles workspace additions, updates, renames, and removals made by the CLI, TUI, or another process without reading workspace YAML or requiring restart.
+- [ ] **LNX-09**: The native shell has keyboard-complete launcher and navigation behavior, truthful accessibility semantics, protected live-terminal close, adaptive layout, and actionable empty, error, and no-result states.
 
 ### Commands and Attention
 
@@ -54,6 +57,7 @@
 - [x] **ACT-04**: Users can see unread attention aggregated at workspace, repository, and terminal-tab levels.
 - [x] **ACT-05**: Selecting an attention item focuses the exact surviving surface or a documented nearest surviving context.
 - [x] **ACT-06**: Attention events never steal focus automatically and do not depend on scraping terminal output.
+- [ ] **ACT-07**: Codex hooks publish the lifecycle states Codex exposes, and the native client preserves and renders provider, title, detail, unread state, and exact focus routing across snapshot refreshes.
 
 ### Linux Delivery
 
@@ -114,12 +118,16 @@
 | LNX-04 | Phase 106 | Complete |
 | LNX-05 | Phase 106 | Complete |
 | LNX-06 | Phase 106 | Complete |
+| LNX-07 | Phase 107 | Pending |
+| LNX-08 | Phase 107 | Pending |
+| LNX-09 | Phase 107 | Pending |
 | ACT-01 | Phase 106 | Complete |
 | ACT-02 | Phase 106 | Complete |
 | ACT-03 | Phase 106 | Complete |
 | ACT-04 | Phase 106 | Complete |
 | ACT-05 | Phase 106 | Complete |
 | ACT-06 | Phase 106 | Complete |
+| ACT-07 | Phase 107 | Pending |
 | PKG-01 | Phase 108 | Pending |
 | PKG-02 | Phase 108 | Pending |
 | PKG-03 | Phase 108 | Pending |
@@ -131,8 +139,8 @@
 | MAC-05 | Phase 108 | Pending |
 | MAC-06 | Phase 108 | Pending |
 
-**Coverage:** 42/42 requirements mapped exactly once.
+**Coverage:** 46/46 requirements mapped exactly once.
 
 ---
 *Requirements defined: 2026-07-11*
-*Last updated: 2026-07-11 after milestone research and scope confirmation*
+*Last updated: 2026-07-12 after reopening Phase 107 for native-client hardening*
