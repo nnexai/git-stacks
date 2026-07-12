@@ -569,7 +569,7 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
       "launcher=open,search,activate result=true",
       "close=user-remove x-keyboard-identical=true child-terminated=true natural-exit=ended-visible remove-enabled=true",
       "relaunch=distinct-lineage remove-ended=persisted",
-      "pin=ordered-persisted",
+      "pin=ordered-persisted title-updates=50",
       "pair-isolation=switch-50 hosts-unchanged=true tabs-exact=true",
       "context-menu=constructed",
     ]

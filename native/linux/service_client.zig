@@ -537,6 +537,19 @@ fn decodeReducerEvent(sequence: u64, body: []const u8, revision: u64) !reducer.A
     const value = root.get("attention") orelse return error.Invalid;
     if (value != .object) return error.Invalid;
     const a = value.object;
+    // `message send` deliberately retains the additive legacy attention
+    // envelope. It is still a first-class unread workspace notification.
+    if (a.get("id") == null) {
+        const wid = string(a, "workspace_id") orelse return error.Invalid;
+        const code = string(a, "code") orelse return error.Invalid;
+        const message = string(a, "message") orelse return error.Invalid;
+        if (!uuid(wid) or code.len == 0 or message.len == 0) return error.Invalid;
+        var source_buffer: [96]u8 = undefined;
+        const source = std.fmt.bufPrint(&source_buffer, "legacy:{d}:{s}", .{ sequence, code }) catch return error.Invalid;
+        var item: model.Attention = .{ .id = attentionKey(source), .workspace_id = undefined, .status = .waiting };
+        @memcpy(&item.workspace_id, wid);
+        return .{ .attention_received = item };
+    }
     const aid = string(a, "id") orelse return error.Invalid;
     if (!prefixed(aid, "att_") or aid.len > 64) return error.Invalid;
     const wid = string(a, "workspace_id") orelse return error.Invalid;

@@ -77,14 +77,18 @@ pub fn reduce(before: model.State, action: Action) Result {
             }
         },
         .attention_received => |item| {
-            var duplicate = false;
-            for (state.attention[0..state.attention_count]) |existing| if (std.mem.eql(u8, &existing.id, &item.id)) {
-                duplicate = true;
+            var received = item;
+            received.resolved = if (item.repository_id) |rid| model.pairValid(&state, .{ .workspace_id = item.workspace_id, .repository_id = rid }) else model.workspaceValid(&state, item.workspace_id);
+            var updated = false;
+            for (state.attention[0..state.attention_count]) |*existing| if (std.mem.eql(u8, &existing.id, &item.id)) {
+                // Structured lifecycle hooks intentionally reuse one identity
+                // as they move from working to waiting/completed/failed.
+                received.read = existing.read and model.severity(received.status) == .none;
+                existing.* = received;
+                updated = true;
                 break;
             };
-            if (duplicate) state.duplicate_count += 1 else if (state.attention_count < state.attention.len) {
-                var received = item;
-                received.resolved = if (item.repository_id) |rid| model.pairValid(&state, .{ .workspace_id = item.workspace_id, .repository_id = rid }) else model.workspaceValid(&state, item.workspace_id);
+            if (!updated and state.attention_count < state.attention.len) {
                 state.attention[state.attention_count] = received;
                 state.attention_count += 1;
             }

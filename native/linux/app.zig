@@ -460,7 +460,26 @@ fn surfaceTitleChanged(context: *anyopaque, id: model.Id, title: []const u8) voi
     if (state.graph.state.surface) |selected| {
         if (std.mem.eql(u8, &selected.id, &id)) state.graph.state.surface = surface.*;
     }
-    refreshProjection(state);
+    // Title changes can arrive for every prompt or progress update. Rebuilding
+    // the whole projection here destroys the sidebar controls underneath an
+    // in-flight click and makes workspace switching/pinning appear disabled.
+    // Update only the owning native tab page.
+    var compact: [64]u8 = undefined;
+    const base = compactTitle(&compact, surface.title[0..surface.title_len]) catch return;
+    var rendered_buffer: [96:0]u8 = [_:0]u8{0} ** 96;
+    const attention = attention_view.present(&state.graph.state, state.graph.state.pairs[loc.pair].key.workspace_id, state.graph.state.pairs[loc.pair].key.repository_id, id);
+    const rendered = std.fmt.bufPrintZ(&rendered_buffer, "{s}{s}", .{ base, if (attention.unread > 0) " •" else "" }) catch return;
+    for (state.pair_uis[0..state.pair_ui_count]) |ui| {
+        for (0..@intCast(c.adw_tab_view_get_n_pages(ui.tabs))) |i| {
+            const page = c.adw_tab_view_get_nth_page(ui.tabs, @intCast(i)) orelse continue;
+            const child = c.adw_tab_page_get_child(page) orelse continue;
+            const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse continue;
+            if (std.mem.eql(u8, @as(*model.Id, @ptrCast(@alignCast(ptr))), &id)) {
+                c.adw_tab_page_set_title(page, rendered.ptr);
+                return;
+            }
+        }
+    }
 }
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
@@ -1406,6 +1425,11 @@ fn closeTerminal(state: *State, id: model.Id) void {
         }
     }
 }
+fn closeSelectedTerminal(state: *State) void {
+    const tabs = state.tab_view orelse return;
+    const page = c.adw_tab_view_get_selected_page(tabs) orelse return;
+    c.adw_tab_view_close_page(tabs, page);
+}
 fn focusTerminal(state: *State, requested: ?model.Id) void {
     var target = requested;
     if (target == null) if ((workspace_view.View{ .state = &state.graph.state }).pair()) |pair| {
@@ -1464,7 +1488,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
     } else if (std.mem.eql(u8, name, "rename-current")) {
         if (state.graph.state.surface) |surface| promptRename(state, surface.id);
     } else if (std.mem.eql(u8, name, "close-tab")) {
-        if (state.graph.state.surface) |s| closeTerminal(state, s.id);
+        closeSelectedTerminal(state);
     } else if (std.mem.eql(u8, name, "remove-tab")) {
         if (variantId(parameter)) |id| {
             if (state.tab_view) |tabs| for (0..@intCast(c.adw_tab_view_get_n_pages(tabs))) |i| {
@@ -1885,6 +1909,11 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             const pages = if (state.tab_view) |tabs| c.adw_tab_view_get_n_pages(tabs) else 0;
             if (pages > 3 or state.ui_smoke_wait < 20) return 1;
             const workspace = state.graph.state.workspaces[0];
+            if (state.graph.state.surface) |selected_surface| for (0..50) |i| {
+                var title_buffer: [64]u8 = undefined;
+                const title = std.fmt.bufPrint(&title_buffer, "working title {d}", .{i}) catch return 1;
+                surfaceTitleChanged(state, selected_surface.id, title);
+            };
             var workspace_text: [37:0]u8 = [_:0]u8{0} ** 37;
             @memcpy(workspace_text[0..36], &workspace.id);
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "pin-workspace", c.g_variant_new_string(workspace_text[0..36 :0].ptr));
@@ -1902,7 +1931,7 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             const first_ui = findPairUi(state, first_pair) orelse return 1;
             const second_ui = findPairUi(state, second_pair) orelse return 1;
             if (first_ui.tabs == second_ui.tabs or state.graph.terminals.hosts.items.len != hosts_before or c.adw_tab_view_get_n_pages(first_ui.tabs) != pages or c.adw_tab_view_get_n_pages(second_ui.tabs) != 0) return 1;
-            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed pin=ordered-persisted pair-isolation=switch-50 hosts-unchanged=true tabs-exact=true\n", .{pages});
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT relaunch=distinct-lineage remove-ended=persisted pages={d} context-menu=constructed pin=ordered-persisted title-updates=50 pair-isolation=switch-50 hosts-unchanged=true tabs-exact=true\n", .{pages});
             std.debug.print("GIT_STACKS_WORKSPACE_LIFECYCLE new_shell=true registered={d} pages={d} launcher=dialog context_menus=true split=paned\n", .{ state.graph.terminals.hosts.items.len, pages });
             state.ui_smoke_stage = 8;
             if (state.window) |window| c.gtk_window_close(window);

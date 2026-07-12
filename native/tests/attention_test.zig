@@ -39,6 +39,18 @@ test "working and idle are status-only while completed is secondary" {
     try std.testing.expectEqual(@as(u32, 1), a.unread);
     try std.testing.expectEqual(model.Severity.secondary, a.severity);
 }
+test "one structured attention identity advances lifecycle and becomes unread" {
+    var s = base();
+    const aid = id("818f47f4-5ab1-7c2d-8e90-123456789abc");
+    const ws = s.workspaces[0].id;
+    s = reducer.reduce(s, .{ .attention_received = .{ .id = aid, .workspace_id = ws, .status = .working } }).state;
+    try std.testing.expectEqual(@as(u8, 1), s.attention_count);
+    try std.testing.expectEqual(@as(u32, 0), model.aggregate(&s, ws, null, null).unread);
+    s = reducer.reduce(s, .{ .attention_received = .{ .id = aid, .workspace_id = ws, .status = .completed } }).state;
+    try std.testing.expectEqual(@as(u8, 1), s.attention_count);
+    try std.testing.expectEqual(model.AttentionStatus.completed, s.attention[0].status);
+    try std.testing.expectEqual(@as(u32, 1), model.aggregate(&s, ws, null, null).unread);
+}
 test "explicit selection focuses exact live surface and visible focus clears current tab" {
     var s = base();
     const aid = id("418f47f4-5ab1-7c2d-8e90-123456789abc");

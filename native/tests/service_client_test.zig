@@ -108,6 +108,14 @@ test "structured SSE attention retains service identity and produces reducer act
     try std.testing.expect(action == .attention_received);
     try std.testing.expectEqualStrings("att_1234567890123456", action.attention_received.service_id[0..action.attention_received.service_id_len]);
 }
+test "legacy message attention becomes unread workspace notification" {
+    var c = service.Client.init("Bearer secret");
+    c.sequence = 20;
+    const action = try c.decodeSseReducerAction("id: 21\ndata: {\"protocol\":\"v1\",\"sequence\":\"21\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"attention\",\"attention\":{\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"code\":\"message\",\"message\":\"Agent finished\"}}\n\n");
+    try std.testing.expect(action == .attention_received);
+    try std.testing.expect(action.attention_received.status == .waiting);
+    try std.testing.expectEqualStrings("118f47f4-5ab1-7c2d-8e90-123456789abc", &action.attention_received.workspace_id);
+}
 test "incompatible and authentication states stay explicit" {
     var c = service.Client.init("Bearer secret");
     try std.testing.expect((try c.acceptDiscovery(401, "{}")) == .failure);
