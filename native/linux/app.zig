@@ -422,6 +422,7 @@ fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const pair = state.graph.state.selected_pair orelse return 1;
     for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |surface| {
         if (state.graph.terminals.find(surface.surface_id) != null) continue;
+        if (model.surfaceLocation(&state.graph.state, surface.surface_id) != null) continue;
         const identity = surface.ownershipIdentity() orelse continue;
         const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = surface.generation, .child_pid = identity.pid, .pgid = identity.pgid, .birth_token = identity.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
         tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| std.debug.print("native terminal adoption failed: {s}\n", .{@errorName(err)});
@@ -493,7 +494,7 @@ fn refreshProjection(state: *State) void {
         const action = c.g_action_map_lookup_action(@ptrCast(group), z.ptr) orelse continue;
         var enabled = application.enabled(&state.graph.state, spec);
         const selected = state.graph.state.surface;
-        if (std.mem.eql(u8, bare, "close-tab")) enabled = enabled and selected != null and selected.?.lifecycle == .live;
+        if (std.mem.eql(u8, bare, "close-tab")) enabled = enabled and selected != null;
         if (std.mem.eql(u8, bare, "rename-tab") or std.mem.eql(u8, bare, "rename-current")) enabled = enabled and selected != null;
         if (std.mem.eql(u8, bare, "remove-current") or std.mem.eql(u8, bare, "relaunch-current")) enabled = enabled and selected != null and selected.?.lifecycle == .ended;
         if (std.mem.eql(u8, bare, "open-vscode")) enabled = enabled and executableAvailable("git-stacks") and state.graph.state.selected_pair != null;
@@ -745,13 +746,18 @@ fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyop
     // only transition that retains an ended presentation and its scrollback.
     if (lifecycle == .live) state.graph.terminals.close(id.*) catch |err| if (err != error.UnknownSurface)
         std.debug.print("native terminal close failed: {s}\n", .{@errorName(err)});
+    if (lifecycle == .live)
+        (workspace_view.View{ .state = &state.graph.state }).closeTab(id.*) catch return 1;
     if (lifecycle == .ended) {
         // Natural exit retained the Surface outside the process registry.
         for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |terminal|
             if (std.mem.eql(u8, &terminal.surface_id, id)) scheduleTerminalDestroy(terminal);
     }
     forgetTerminal(state, id.*);
-    (workspace_view.View{ .state = &state.graph.state }).removeTab(id.*) catch return 1;
+    (workspace_view.View{ .state = &state.graph.state }).removeTab(id.*) catch |err| {
+        std.debug.print("native tab model removal failed: {s}\n", .{@errorName(err)});
+        return 1;
+    };
     savePresentation(state);
     c.adw_tab_view_close_page_finish(view, selected_page, 1);
     refreshProjection(state);
@@ -882,10 +888,12 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     const pair = state.graph.state.selected_pair orelse return null;
     if (state.terminal_count >= state.terminals.len) return null;
     const spec = launchSpec(state, pair, command_id) catch |err| {
+        std.debug.print("native terminal launch resolution failed: {s}\n", .{@errorName(err)});
         showLauncherError(state, @errorName(err));
         return null;
     };
     const surface = surface_mod.Surface.createWithLaunch(state.runtime, &state.registry, spec) catch |err| {
+        std.debug.print("native terminal surface creation failed: {s}\n", .{@errorName(err)});
         showLauncherError(state, @errorName(err));
         return null;
     };
@@ -911,13 +919,19 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     c.adw_tab_view_set_selected_page(tabs, provisional);
     if (c.gtk_widget_get_realized(child) == 0) c.gtk_widget_realize(child);
     var identity = surface.ownershipIdentity();
-    for (0..100) |_| {
+    // Process identity arrives asynchronously after realization. Half a second
+    // is routinely insufficient under shader compilation, loaded CI, or a
+    // second concurrent surface; rejecting then leaves a visually provisional
+    // page and makes creation appear random. Keep the UI responsive while
+    // allowing the same two-second readiness budget used by native startup.
+    for (0..400) |_| {
         identity = surface.ownershipIdentity();
         if (identity != null) break;
         while (c.g_main_context_iteration(null, 0) != 0) {}
         std.Thread.sleep(5 * std.time.ns_per_ms);
     }
     const ownership = identity orelse {
+        std.debug.print("native terminal process identity timed out for {s}\n", .{surface.surface_id});
         c.adw_tab_view_close_page(tabs, provisional);
         surface.destroy();
         forgetTerminal(state,surface.surface_id);
@@ -930,6 +944,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     } else surface.generation;
     const host: tab_registry.Host = .{ .surface_id = surface.surface_id, .pair = pair, .generation = generation, .child_pid = ownership.pid, .pgid = ownership.pgid, .birth_token = ownership.linux_birth_token, .terminal = .{ .context = surface, .registerOwnership = terminalRegister, .teardown = terminalTeardown, .childExited = terminalExited, .destroy = terminalDestroy } };
     tab_registry.commitAfterRegistration(&state.graph.state, &state.graph.terminals, host) catch |err| {
+        std.debug.print("native terminal registration failed: {s}\n", .{@errorName(err)});
         c.adw_tab_view_close_page(tabs, provisional); surface.destroy();
         forgetTerminal(state,surface.surface_id);
         showLauncherError(state, @errorName(err));
@@ -1083,6 +1098,7 @@ fn focusTerminal(state: *State, requested: ?model.Id) void {
     const id = target orelse return;
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id);
     selectNativePage(state, id);
+    refreshProjection(state);
     for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |surface| if (std.mem.eql(u8, &surface.surface_id, &id)) {
         _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
         break;
@@ -1251,7 +1267,6 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     c.gtk_widget_set_vexpand(scroll, 1);
     c.gtk_box_append(@ptrCast(sidebar_box), scroll);
     const content_stack = c.gtk_stack_new() orelse return null;
-    state.content_stack = @ptrCast(content_stack);
     const status = c.gtk_label_new("Loading authoritative workspaces…") orelse return null;
     state.connection_label = @ptrCast(status);
     c.gtk_label_set_wrap(@ptrCast(status), 1);
@@ -1267,6 +1282,9 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: *surface_mod.
     const initial_page = c.adw_tab_view_append(tabs, initial_child) orelse return null;
     c.adw_tab_page_set_title(initial_page, "Terminal");
     _ = c.gtk_stack_add_named(@ptrCast(content_stack), workspace, "workspace");
+    // Publish only after every named child exists; replay/snapshot callbacks
+    // may refresh concurrently with UI construction.
+    state.content_stack = @ptrCast(content_stack);
     c.gtk_paned_set_start_child(@ptrCast(split), sidebar_box);
     c.gtk_paned_set_end_child(@ptrCast(split), content_stack);
     c.gtk_paned_set_position(@ptrCast(split), 220);

@@ -32,10 +32,10 @@ pub const View = struct {
     pub fn removeTab(self:View,id:model.Id)!void {
         const loc=model.surfaceLocation(self.state,id) orelse return error.UnknownSurface;
         var p=&self.state.pairs[loc.pair];
-        if(p.surfaces[loc.surface].lifecycle==.live)return error.SurfaceLive;
-        var i=loc.surface;
-        while(i+1<p.surface_count):(i+=1)p.surfaces[i]=p.surfaces[i+1];
-        p.surface_count-=1;
+        for(p.surfaces[0..p.surface_count])|surface|if(std.mem.eql(u8,&surface.id,&id) and surface.lifecycle==.live)return error.SurfaceLive;
+        var write:usize=0;
+        for(p.surfaces[0..p.surface_count])|surface|if(!std.mem.eql(u8,&surface.id,&id)){p.surfaces[write]=surface;write+=1;};
+        p.surface_count=@intCast(write);
         for(p.surfaces[0..p.surface_count],0..)|*s,index|s.order=@intCast(index);
         if(self.state.surface)|selected| {
             if(std.mem.eql(u8,&selected.id,&id)) self.state.surface=if(p.surface_count>0)p.surfaces[0] else null;
