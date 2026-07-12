@@ -95,3 +95,21 @@ test "exact pairs retain independent ordered surface collections" {
     try std.testing.expectEqual(@as(u32, 8), state.pairs[0].surfaces[0].order);
     try std.testing.expectEqual(@as(u32, 2), state.pairs[1].surfaces[0].order);
 }
+
+test "capacity failure keeps safe product state and records diagnostics" {
+    var state: model.State = .{ .connection = .ready, .workspace_count = 1 };
+    state.workspaces[0] = .{ .id = id("118f47f4-5ab1-7c2d-8e90-123456789abc") };
+    const result = reducer.reduce(state, .{ .capacity_exceeded = .{ .kind = .workspaces, .maximum = 16, .attempted = 17 } });
+    try std.testing.expectEqual(model.Connection.incompatible, result.state.connection);
+    try std.testing.expectEqual(@as(u8, 1), result.state.workspace_count);
+    try std.testing.expectEqual(@as(u32, 17), result.state.capacity_failure.?.attempted);
+    try std.testing.expect(result.effect == .none);
+}
+
+test "orphan tombstone capacity is independent from authoritative pairs" {
+    var state: model.State = .{};
+    state.pair_count = model.NativeModelLimits.authoritative_pairs;
+    state.orphan_tombstone_count = 1;
+    try std.testing.expectEqual(@as(u8, 32), state.pair_count);
+    try std.testing.expectEqual(@as(u8, 1), state.orphan_tombstone_count);
+}

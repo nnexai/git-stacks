@@ -6,8 +6,35 @@ pub const Lifecycle = enum { live, ended, failed_cleanup };
 pub const TerminalKind = enum { shell, configured_command };
 pub const OrganizationMode = enum { simple, label, repository };
 pub const AttentionStatus = enum { failed, waiting, completed, working, idle };
+pub const AttentionProvider = enum { claude, copilot, codex, other };
 pub const Severity = enum(u8) { none, secondary, primary };
 pub const FallbackReason = enum { exact_surface, ended_predecessor, repository, workspace, unresolved };
+pub const CapacityKind = enum { workspaces, repositories, authoritative_pairs, live_pair_identities, orphan_tombstones, surfaces, commands, attention_items, string_bytes };
+pub const CapacityFailure = struct { kind: CapacityKind, maximum: u32, attempted: u32 };
+
+pub const NativeModelLimits = struct {
+    pub const workspaces = 16;
+    pub const labels_per_workspace = 16;
+    pub const repositories_per_workspace = 8;
+    pub const authoritative_pairs = 32;
+    pub const live_pair_identities = 32;
+    pub const reserved_orphan_tombstones = 32;
+    pub const surfaces_per_pair = 16;
+    pub const commands = 64;
+    pub const attention_items = 64;
+    pub const workspace_name_bytes = 96;
+    pub const workspace_label_bytes = 64;
+    pub const repository_name_bytes = 96;
+    pub const command_id_bytes = 64;
+    pub const command_name_bytes = 96;
+    pub const surface_command_id_bytes = 64;
+    pub const surface_title_bytes = 64;
+    pub const surface_cwd_bytes = 128;
+    pub const attention_id_bytes = 64;
+    pub const attention_title_bytes = 160;
+    pub const attention_detail_bytes = 500;
+    pub const attention_occurred_at_bytes = 40;
+};
 
 pub const PairKey = struct {
     workspace_id: Id,
@@ -32,7 +59,8 @@ pub const Workspace = struct {
 pub const Command = struct { id: [64]u8 = [_]u8{0} ** 64, id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
 pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, kind: TerminalKind = .shell, command_id: [64]u8 = [_]u8{0} ** 64, command_id_len: u8 = 0, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, title_pinned: bool = false, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
 pub const PairCollection = struct { key: PairKey, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
-pub const Attention = struct { id: Id, service_id: [64]u8 = [_]u8{0} ** 64, service_id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: AttentionStatus, read: bool = false, resolved: bool = true };
+pub const Attention = struct { id: Id, service_id: [64]u8 = [_]u8{0} ** 64, service_id_len: u8 = 0, provider: AttentionProvider = .other, title: [160]u8 = [_]u8{0} ** 160, title_len: u8 = 0, detail: [500]u8 = [_]u8{0} ** 500, detail_len: u16 = 0, occurred_at: [40]u8 = [_]u8{0} ** 40, occurred_at_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: AttentionStatus, read: bool = false, resolved: bool = true };
+pub const OrphanPairTombstone = struct { key: PairKey, workspace_name: [96]u8 = [_]u8{0} ** 96, workspace_name_len: u8 = 0, repository_name: [96]u8 = [_]u8{0} ** 96, repository_name_len: u8 = 0, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
 pub const Aggregate = struct { unread: u32 = 0, severity: Severity = .none };
 pub const FocusRoute = struct { workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, reason: FallbackReason };
 
@@ -55,11 +83,25 @@ pub const State = struct {
     last_pair: ?PairKey = null,
     pairs: [32]PairCollection = undefined,
     pair_count: u8 = 0,
+    live_pair_identities: [32]PairKey = undefined,
+    live_pair_identity_count: u8 = 0,
+    orphan_tombstones: [32]OrphanPairTombstone = undefined,
+    orphan_tombstone_count: u8 = 0,
     commands: [64]Command = undefined,
     command_count: u8 = 0,
     attention: [64]Attention = undefined,
     attention_count: u8 = 0,
+    attention_overflow_count: u32 = 0,
+    capacity_failure: ?CapacityFailure = null,
 };
+
+comptime {
+    const s: State = .{};
+    if (s.workspaces.len != NativeModelLimits.workspaces or s.pairs.len != NativeModelLimits.authoritative_pairs or s.live_pair_identities.len != NativeModelLimits.live_pair_identities or s.orphan_tombstones.len != NativeModelLimits.reserved_orphan_tombstones or s.commands.len != NativeModelLimits.commands or s.attention.len != NativeModelLimits.attention_items) @compileError("native model limit drift");
+    const ws: Workspace = undefined;
+    const pair: PairCollection = undefined;
+    if (ws.labels.len != NativeModelLimits.labels_per_workspace or ws.repositories.len != NativeModelLimits.repositories_per_workspace or pair.surfaces.len != NativeModelLimits.surfaces_per_pair) @compileError("native nested limit drift");
+}
 
 pub fn severity(status: AttentionStatus) Severity {
     return switch (status) {
@@ -139,7 +181,9 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     const w = out.writer(allocator);
-    try w.print("{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"surface_id\":\"{s}\",\"predecessor_surface_id\":\"{s}\",\"workspaces\":[", .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, surface_id, predecessor });
+    try w.print("{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"attention_overflow_count\":{d},\"capacity_failure\":", .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, state.attention_overflow_count });
+    if (state.capacity_failure) |failure| try w.print("{{\"kind\":\"{s}\",\"maximum\":{d},\"attempted\":{d}}}", .{ @tagName(failure.kind), failure.maximum, failure.attempted }) else try w.writeAll("null");
+    try w.print(",\"surface_id\":\"{s}\",\"predecessor_surface_id\":\"{s}\",\"workspaces\":[", .{ surface_id, predecessor });
     for (state.workspaces[0..state.workspace_count], 0..) |ws, i| {
         if (i != 0) try w.writeByte(',');
         const summary = aggregate(&state, ws.id, null, null);
@@ -177,7 +221,7 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
     for (state.attention[0..state.attention_count], 0..) |item, i| {
         if (i != 0) try w.writeByte(',');
         const attention_id = if (item.service_id_len > 0) item.service_id[0..item.service_id_len] else item.id[0..];
-        try w.print("{{\"id\":\"{s}\",\"workspace_id\":\"{s}\",\"repository_id\":", .{ attention_id, item.workspace_id });
+        try w.print("{{\"id\":\"{s}\",\"provider\":\"{s}\",\"title\":{f},\"detail\":{f},\"occurred_at\":{f},\"workspace_id\":\"{s}\",\"repository_id\":", .{ attention_id, @tagName(item.provider), std.json.fmt(item.title[0..item.title_len], .{}), std.json.fmt(item.detail[0..item.detail_len], .{}), std.json.fmt(item.occurred_at[0..item.occurred_at_len], .{}), item.workspace_id });
         if (item.repository_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
         try w.writeAll(",\"surface_id\":");
         if (item.surface_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");

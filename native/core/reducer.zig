@@ -8,6 +8,7 @@ pub const Action = union(enum) {
     event: struct { revision: u64, sequence: u64 },
     refreshed: struct { revision: u64, sequence: u64 },
     incompatible,
+    capacity_exceeded: model.CapacityFailure,
     unknown_optional,
     relaunch: struct { new_surface_id: [36]u8 },
     terminal_ended: struct { surface_id: [36]u8, generation: u64 },
@@ -57,6 +58,10 @@ pub fn reduce(before: model.State, action: Action) Result {
             state.revision = 0;
             state.sequence = 0;
         },
+        .capacity_exceeded => |failure| {
+            state.connection = .incompatible;
+            state.capacity_failure = failure;
+        },
         .unknown_optional => state.degraded_optional_count += 1,
         .relaunch => |a| if (state.surface) |old| {
             if (old.lifecycle == .ended and !std.mem.eql(u8, &a.new_surface_id, &old.id)) {
@@ -80,7 +85,7 @@ pub fn reduce(before: model.State, action: Action) Result {
             var received = item;
             received.resolved = if (item.repository_id) |rid| model.pairValid(&state, .{ .workspace_id = item.workspace_id, .repository_id = rid }) else model.workspaceValid(&state, item.workspace_id);
             var updated = false;
-            for (state.attention[0..state.attention_count]) |*existing| if (std.mem.eql(u8, &existing.id, &item.id)) {
+            for (state.attention[0..state.attention_count]) |*existing| if ((item.service_id_len > 0 and existing.service_id_len == item.service_id_len and std.mem.eql(u8, existing.service_id[0..existing.service_id_len], item.service_id[0..item.service_id_len])) or std.mem.eql(u8, &existing.id, &item.id)) {
                 // Structured lifecycle hooks intentionally reuse one identity
                 // as they move from working to waiting/completed/failed.
                 received.read = existing.read and model.severity(received.status) == .none;
@@ -91,6 +96,17 @@ pub fn reduce(before: model.State, action: Action) Result {
             if (!updated and state.attention_count < state.attention.len) {
                 state.attention[state.attention_count] = received;
                 state.attention_count += 1;
+            } else if (!updated) {
+                var victim: ?usize = null;
+                for (state.attention[0..state.attention_count], 0..) |existing, i| if (existing.read) {
+                    victim = i;
+                    break;
+                };
+                if (victim == null) for (state.attention[0..state.attention_count], 0..) |existing, i| if (existing.status == .working or existing.status == .idle) {
+                    victim = i;
+                    break;
+                };
+                if (victim) |i| state.attention[i] = received else state.attention_overflow_count +%= 1;
             }
         },
         .select_attention => |a| {
