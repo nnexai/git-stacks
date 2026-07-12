@@ -2,7 +2,10 @@ import { availableParallelism } from "node:os"
 import { mapLimited } from "../src/lib/concurrency"
 
 export function defaultIntegrationWorkers(coreCount = availableParallelism()): number {
-  return Math.min(16, Math.max(1, coreCount - 2))
+  // Integration files each spawn a Bun/CLI process tree. Beyond eight workers
+  // CPU-count scaling increases per-test latency enough to trip otherwise
+  // healthy five-second subprocess contracts on developer machines and CI.
+  return Math.min(8, Math.max(1, coreCount - 2))
 }
 
 export const DEFAULT_INTEGRATION_WORKERS = defaultIntegrationWorkers()

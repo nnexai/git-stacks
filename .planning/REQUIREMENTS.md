@@ -39,21 +39,21 @@
 
 ### Linux Workspace Client
 
-- [ ] **LNX-01**: Users can browse git-stacks workspaces and their repositories in a GTK4/libadwaita application.
-- [ ] **LNX-02**: Users see explicit loading, empty, disconnected, incompatible, and failure states.
-- [ ] **LNX-03**: Users can open multiple independent terminal tabs bound to selected workspace repositories.
-- [ ] **LNX-04**: Live terminal tabs survive workspace navigation without recreation.
-- [ ] **LNX-05**: Restarted clients restore tab metadata and clearly distinguish surfaces whose processes are no longer alive.
-- [ ] **LNX-06**: Keyboard navigation, focus movement, IME interaction, and native accessibility work across the sidebar and terminal surfaces.
+- [x] **LNX-01**: Users can browse git-stacks workspaces and their repositories in a GTK4/libadwaita application.
+- [x] **LNX-02**: Users see explicit loading, empty, disconnected, incompatible, and failure states.
+- [x] **LNX-03**: Users can open multiple independent terminal tabs bound to selected workspace repositories.
+- [x] **LNX-04**: Live terminal tabs survive workspace navigation without recreation.
+- [x] **LNX-05**: Restarted clients restore tab metadata and clearly distinguish surfaces whose processes are no longer alive.
+- [x] **LNX-06**: Keyboard navigation, focus movement, IME interaction, and native accessibility work across the sidebar and terminal surfaces.
 
 ### Commands and Attention
 
-- [ ] **ACT-01**: Users can launch a shell using a service-resolved workspace/repository context.
-- [ ] **ACT-02**: Users can launch a named workspace command in a new terminal tab using resolved cwd, environment, ports, and configuration.
-- [ ] **ACT-03**: Agent hooks publish structured working, waiting, completed, failed, and idle states associated with workspace and surface identities.
-- [ ] **ACT-04**: Users can see unread attention aggregated at workspace, repository, and terminal-tab levels.
-- [ ] **ACT-05**: Selecting an attention item focuses the exact surviving surface or a documented nearest surviving context.
-- [ ] **ACT-06**: Attention events never steal focus automatically and do not depend on scraping terminal output.
+- [x] **ACT-01**: Users can launch a shell using a service-resolved workspace/repository context.
+- [x] **ACT-02**: Users can launch a named workspace command in a new terminal tab using resolved cwd, environment, ports, and configuration.
+- [x] **ACT-03**: Agent hooks publish structured working, waiting, completed, failed, and idle states associated with workspace and surface identities.
+- [x] **ACT-04**: Users can see unread attention aggregated at workspace, repository, and terminal-tab levels.
+- [x] **ACT-05**: Selecting an attention item focuses the exact surviving surface or a documented nearest surviving context.
+- [x] **ACT-06**: Attention events never steal focus automatically and do not depend on scraping terminal output.
 
 ### Linux Delivery
 
@@ -108,28 +108,28 @@
 | TERM-03 | Phase 105 | Complete |
 | TERM-04 | Phase 105 | Complete |
 | TERM-05 | Phase 105 | Complete |
-| LNX-01 | Phase 106 | Pending |
-| LNX-02 | Phase 106 | Pending |
-| LNX-03 | Phase 106 | Pending |
-| LNX-04 | Phase 106 | Pending |
-| LNX-05 | Phase 106 | Pending |
-| LNX-06 | Phase 106 | Pending |
-| ACT-01 | Phase 106 | Pending |
-| ACT-02 | Phase 106 | Pending |
-| ACT-03 | Phase 106 | Pending |
-| ACT-04 | Phase 106 | Pending |
-| ACT-05 | Phase 106 | Pending |
-| ACT-06 | Phase 106 | Pending |
-| PKG-01 | Phase 107 | Pending |
-| PKG-02 | Phase 107 | Pending |
-| PKG-03 | Phase 107 | Pending |
-| PKG-04 | Phase 107 | Pending |
-| MAC-01 | Phase 107 | Pending |
-| MAC-02 | Phase 107 | Pending |
-| MAC-03 | Phase 107 | Pending |
-| MAC-04 | Phase 107 | Pending |
-| MAC-05 | Phase 107 | Pending |
-| MAC-06 | Phase 107 | Pending |
+| LNX-01 | Phase 106 | Complete |
+| LNX-02 | Phase 106 | Complete |
+| LNX-03 | Phase 106 | Complete |
+| LNX-04 | Phase 106 | Complete |
+| LNX-05 | Phase 106 | Complete |
+| LNX-06 | Phase 106 | Complete |
+| ACT-01 | Phase 106 | Complete |
+| ACT-02 | Phase 106 | Complete |
+| ACT-03 | Phase 106 | Complete |
+| ACT-04 | Phase 106 | Complete |
+| ACT-05 | Phase 106 | Complete |
+| ACT-06 | Phase 106 | Complete |
+| PKG-01 | Phase 108 | Pending |
+| PKG-02 | Phase 108 | Pending |
+| PKG-03 | Phase 108 | Pending |
+| PKG-04 | Phase 108 | Pending |
+| MAC-01 | Phase 108 | Pending |
+| MAC-02 | Phase 108 | Pending |
+| MAC-03 | Phase 108 | Pending |
+| MAC-04 | Phase 108 | Pending |
+| MAC-05 | Phase 108 | Pending |
+| MAC-06 | Phase 108 | Pending |
 
 **Coverage:** 42/42 requirements mapped exactly once.
 

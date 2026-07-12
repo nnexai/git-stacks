@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: milestone
-current_phase: 106
-current_phase_name: Linux Workspace, Commands, and Attention
-status: Full Ghostty terminal foundation approved
-stopped_at: Phase 105 complete; Phase 106 ready
-last_updated: "2026-07-11T19:09:15.278Z"
-last_activity: 2026-07-11
-last_activity_desc: Phase 105 complete, transitioned to Phase 106
+current_phase: 107
+current_phase_name: Beautify Native Workspace UI and Finalize UX
+status: Phase 106 complete; Phase 107 ready for planning and execution
+stopped_at: Phase 106 verified complete; Phase 107 next
+last_updated: "2026-07-12T03:00:00.000Z"
+last_activity: 2026-07-12
+last_activity_desc: Phase 106 completed with full native and repository gates green
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 21
-  completed_plans: 18
-  percent: 50
+  completed_plans: 21
+  percent: 75
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** One command takes a user from feature intent to a fully running development environment without manual setup.
-**Current focus:** Phase 106 — linux-workspace-commands-and-attention
+**Current focus:** Phase 107 — beautify native workspace UI and finalize UX
 
 ## Current Position
 
-Phase: 106 — Linux Workspace, Commands, and Attention
-Plan: Not started
-Status: Full Ghostty terminal foundation approved
-Last activity: 2026-07-11 — Phase 105 complete, transitioned to Phase 106
+Phase: 107 — Beautify Native Workspace UI and Finalize UX
+Plan: Not planned
+Status: Phase 106 complete; Phase 107 ready
+Last activity: 2026-07-12 — Phase 106 completed with all automated gates green
 
 Progress: [█████░░░░░] 50%
 
@@ -70,6 +70,10 @@ Progress: [█████░░░░░] 50%
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 107 added: Beautify native workspace UI and finalize sidebar, tab, and terminal UX after stability work; native delivery and cross-platform proof moved to Phase 108.
+
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table.
@@ -96,7 +100,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 105]: The feasibility spike imports the pinned full ghostty.h surface into a Zig object, proving API declarations without prematurely implementing or linking the later GTK host. — Retires API availability risk while leaving terminal lifecycle implementation in its planned slice.
 - [Phase 105]: ABI interchange preserves canonical v1 JSON bytes behind opaque handles; no Zig or platform layout crosses the header. — Keeps both native shells on one product-owned contract.
 - [Phase 105]: Destroyed handles retain a bounded tombstone while owned payload bytes are released immediately. — Makes double-destroy and post-destroy calls deterministic.
-- [Phase 105]: Header portability is proven in Phase 105, while actual macOS execution and byte parity remain Phase 107 work. — Avoids a false runtime claim.
+- [Phase 105]: Header portability is proven in Phase 105, while actual macOS execution and byte parity remain Phase 108 work. — Avoids a false runtime claim.
 - [Phase 105]: Service disconnection retains an explicitly stale snapshot; revision drift and replay gaps enter refresh_required and emit only a refresh effect. — Preserve useful context while freezing mutations until authoritative refresh.
 - [Phase 105]: Restoration accepts valid records independently and always materializes them as ended presentation state. — Presentation continuity must never spoof process liveness.
 - [Phase 105]: Relaunch creates a distinct live surface with predecessor lineage and never rewrites the ended predecessor identity. — A new process lifetime cannot masquerade as the old surface.
@@ -112,7 +116,7 @@ None yet.
 ### Blockers/Concerns
 
 - The Limux Ghostty fork is materially behind current upstream and requires a pinned patch, ABI/build verification, and an upstream/rebase strategy.
-- Phase 107 requires access to a macOS CI runner or physical macOS host; Linux-only inspection cannot complete MAC-06.
+- Phase 108 requires access to a macOS CI runner or physical macOS host; Linux-only inspection cannot complete MAC-06.
 
 ## Deferred Items
 

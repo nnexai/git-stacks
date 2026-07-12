@@ -8,8 +8,9 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 
 - [x] **Phase 104: Workspace Service and Event Contract** - Native clients can securely query authoritative workspace state, launch context, operations, and replayable events without changing existing CLI or OpenTUI behavior. (completed 2026-07-11)
 - [x] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface. (completed 2026-07-11)
-- [ ] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention.
-- [ ] **Phase 107: Native Delivery and Cross-Platform Proof** - The Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
+- [x] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention. (completed 2026-07-12)
+- [ ] **Phase 107: Beautify Native Workspace UI and Finalize UX** - The stable Linux client receives its Supacode-quality sidebar, tabs, titles, interaction language, accessibility, and visual finish.
+- [ ] **Phase 108: Native Delivery and Cross-Platform Proof** - The finished Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
 
 ## Phase Details
 
@@ -138,30 +139,49 @@ Wave 9 *(blocked on Wave 8 completion; final human evidence)*:
   4. Structured agent hooks report working, waiting, completed, failed, and idle states; unread attention is visible at workspace, repository, and tab levels.
   5. Selecting attention focuses the exact surviving surface or documented nearest context, never steals focus automatically, and keyboard, focus, IME, and accessibility navigation remain usable across sidebar and terminals.
 
-**Plans**: 0/3 plans complete
+**Plans**: 3/3 plans complete — full-featured Supacode-style workspace interaction on the git-stacks/Limux/Ghostty architecture (not MVP)
 
-- [ ] 106-01-PLAN.md — Freeze authoritative native launch and structured attention contracts
-- [ ] 106-02-PLAN.md — Build normalized pair tabs, attention routing, and navigation-independent host ownership
-- [ ] 106-03-PLAN.md — Compose the GTK workspace client and prove real-session interaction
+- [x] 106-01-PLAN.md — Freeze authoritative native launch and structured attention contracts
+- [x] 106-02-PLAN.md — Build normalized pair tabs, authenticated service synchronization, attention routing, and navigation-independent host ownership
+- [x] 106-03-PLAN.md — Compose the GTK workspace client and prove real-session interaction
 
 Wave 1:
 
-- [ ] 106-01 — Extend stable command/attention identities, fresh launch resolution, and structured hooks
+- [x] 106-01 — Extend stable command/attention identities, fresh launch resolution, and structured hooks
 
 Wave 2 *(blocked on Wave 1 completion)*:
 
-- [ ] 106-02 — Extend native state/persistence/ABI and own multiple live hosts outside navigation
+- [x] 106-02 — Extend native state/persistence/ABI, synchronize the authenticated service, and own multiple live hosts outside navigation
 
 Wave 3 *(blocked on Wave 2 completion)*:
 
-- [ ] 106-03 — Build the adaptive GTK UI, scoped actions, launcher, attention presentation, and acceptance evidence
+- [x] 106-03 — Build the adaptive GTK UI, scoped actions, launcher, attention presentation, and acceptance evidence
 
 **UI hint**: yes
 
-### Phase 107: Native Delivery and Cross-Platform Proof
+### Phase 107: Beautify Native Workspace UI and Finalize Sidebar, Tab, and Terminal UX
+
+**Goal:** Deliver a coherent Supacode-quality native workspace interface after lifecycle stability is complete.
+**Requirements**: TBD
+**Depends on:** Phase 106
+**Plans:** 0 plans
+
+**Success Criteria** (what must be TRUE):
+
+  1. Pinned workspaces appear in a separate, always-expanded section; all remaining workspaces are grouped by the selected label-or-repository organization and those groups are collapsible.
+  2. A workspace containing exactly one repository behaves like Supacode's direct workspace entry, while a multi-repository workspace exposes an unambiguous repository target before opening a terminal or running a command.
+  3. Live terminal tabs use shortened Ghostty-provided titles, never internal surface IDs; configured commands have meaningful names, and manual rename pins an override until explicitly cleared.
+  4. Sidebar, tab strip, split layout, context menus, launcher, empty/error states, spacing, typography, icons, and interaction language receive a cohesive visual and accessibility pass against the Supacode reference.
+  5. Representative single-repository, multi-repository, pinned, grouped, collapsed, title-update, and manual-title flows pass automated interaction checks plus final human visual UAT.
+
+Plans:
+
+- [ ] TBD (run $gsd-plan-phase 107 to break down)
+
+### Phase 108: Native Delivery and Cross-Platform Proof
 
 **Goal**: Users can install and trust the Linux vertical slice, while an actual macOS build proves the shared protocol, model, and libghostty host are portable.
-**Depends on**: Phase 106
+**Depends on**: Phase 107
 **Requirements**: PKG-01, PKG-02, PKG-03, PKG-04, MAC-01, MAC-02, MAC-03, MAC-04, MAC-05, MAC-06
 **Success Criteria** (what must be TRUE):
 
@@ -176,11 +196,12 @@ Wave 3 *(blocked on Wave 2 completion)*:
 
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 104 → 105 → 106 → 107.
+**Execution Order:** Phases execute in numeric order: 104 → 105 → 106 → 107 → 108.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 9/9 | Complete    | 2026-07-11 |
-| 106. Linux Workspace, Commands, and Attention | 0/TBD | Not started | - |
-| 107. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
+| 106. Linux Workspace, Commands, and Attention | 3/3 | Complete | 2026-07-12 |
+| 107. Native workspace UI beautification and UX finalization | 0/TBD | Not started | - |
+| 108. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |

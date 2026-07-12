@@ -15,9 +15,9 @@ describe("test runner worker contract", () => {
     expect(defaultIntegrationWorkers(1)).toBe(1)
     expect(defaultIntegrationWorkers(2)).toBe(1)
     expect(defaultIntegrationWorkers(4)).toBe(2)
-    expect(defaultIntegrationWorkers(16)).toBe(14)
-    expect(defaultIntegrationWorkers(18)).toBe(16)
-    expect(defaultIntegrationWorkers(64)).toBe(16)
+    expect(defaultIntegrationWorkers(16)).toBe(8)
+    expect(defaultIntegrationWorkers(18)).toBe(8)
+    expect(defaultIntegrationWorkers(64)).toBe(8)
   })
 
   test("parses worker defaults, serial override, and invalid counts", () => {

@@ -138,6 +138,7 @@ shared Zig action decoder -> pure reducer -> normalized state + explicit effects
 src/lib/service/                 # extended v1 launch + structured attention schemas/adapters
 src/lib/agent-hooks/             # hook-to-structured-state publication
 native/core/                     # normalized state, reducer, routing, persistence, ABI
+native/linux/service_client.zig  # authenticated snapshot/launch/SSE transport adapter
 native/linux/application.zig     # AdwApplication/window/action composition
 native/linux/workspace_view.zig  # sidebar and explicit connection pages
 native/linux/tab_registry.zig    # pair-keyed tab collections and host ownership
@@ -277,23 +278,23 @@ GTK recommends connecting menus/widgets and accelerators to scoped actions inste
 | A2 | A backward-compatible optional extension of the `/v1` attention payload is preferable to a `/v2` contract. | Summary | Strict older schemas may reject fields; planner must decide from the compatibility fixtures/capability negotiation and may need a new negotiated capability/schema. |
 | A3 | A recent-command limit of 10 per selected pair is sufficient. | Launcher UX | This is discretion; keep configurable/testable and do not let it affect command validity. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **How should the structured attention schema version?**
+1. **RESOLVED — How should the structured attention schema version?**
    - What we know: current Zod schemas are strict and current payload lacks required identities/state. [VERIFIED: `src/lib/service/contract.ts`]
-   - Recommendation: make Plan 1 explicitly test old/new fixture behavior and capability negotiation; choose additive `/v1` only if older official clients safely ignore or negotiate it, otherwise introduce a clearly versioned capability/event shape.
+   - Decision: keep the `/v1` envelope, add explicit `native_launch` and `structured_attention` capability tokens, and emit the extended event shape only after the client negotiates `structured_attention`. Legacy clients retain the existing strict message shape. A missing capability is an incompatible/feature-unavailable state, never permissive parsing.
 
-2. **What is the stable identity for duplicate named commands?**
+2. **RESOLVED — What is the stable identity for duplicate named commands?**
    - What we know: snapshots expose command names and named step arrays, but not a dedicated command ID/scope identity. [VERIFIED: `LaunchSpecificationSchema`]
-   - Recommendation: derive/persist an authoritative opaque command identity in the service contract; do not use display name as identity.
+   - Decision: the authoritative service emits an opaque `cmd_` identity derived from the command's stable workspace/repository scope and canonical configuration key, not its display label or list position. Launch requests carry that ID plus workspace/repository IDs and expected revision; duplicate labels therefore remain independently selectable and stale IDs fail resolution.
 
-3. **How do hooks learn the exact surface identity?**
+3. **RESOLVED — How do hooks learn the exact surface identity?**
    - What we know: hooks are installed per repository/worktree before a particular terminal surface necessarily exists. [VERIFIED: hook installers]
-   - Recommendation: inject workspace/repository/surface IDs into the launched terminal environment and make the structured hook CLI validate them; events from sessions without a surface ID remain workspace/repository status, never guessed onto a tab.
+   - Decision: after fresh resolution, the native launch path injects service-reserved `GIT_STACKS_WORKSPACE_ID`, `GIT_STACKS_REPOSITORY_ID`, and newly allocated `GIT_STACKS_SURFACE_ID` values into the child environment before startup. Hook publication validates all present domains and nesting. Hooks without a surface value publish only at repository/workspace scope; no tab identity is inferred.
 
-4. **Can Phase 105's GTK host be safely hidden/reparented without unrealize?**
+4. **RESOLVED — Can Phase 105's GTK host be safely hidden/reparented without unrealize?**
    - What we know: current `TerminalHost.unrealize()` owns teardown. [VERIFIED: `native/linux/terminal_host.zig`]
-   - Recommendation: retire this risk with a small multi-host navigation spike/test before full tab UI; prove navigation does not call teardown or change host generation/PGID.
+   - Decision: the registry permanently owns each live `TerminalHost`; navigation hides/shows an already attached pair container and never reparents the host widget or calls `unrealize`. Explicit close, child exit, application quit, and crash are the only teardown paths. A fake-host navigation test must prove stable generation, PGID, ownership registration, and live count before GTK tab composition proceeds.
 
 ## Environment Availability
 
