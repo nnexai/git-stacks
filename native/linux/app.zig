@@ -1050,6 +1050,14 @@ fn orderedId(parameter: ?*c.GVariant) ?struct { id: model.Id, index: usize } {
     return .{ .id = id, .index = std.fmt.parseInt(usize, value[37..], 10) catch return null };
 }
 fn forgetTerminal(state: *State, id: model.Id) void {
+    // A Surface must never disappear from the GTK/runtime collection while a
+    // registry host still owns its process identity. Several close/error paths
+    // converge here, so make this the final invariant boundary as well as the
+    // array compaction helper. UnknownSurface means the normal close/exit path
+    // already revoked it.
+    if (state.graph.terminals.find(id) != null)
+        state.graph.terminals.close(id) catch |err| if (err != error.UnknownSurface)
+            std.debug.print("native terminal ownership revoke failed: {s}\n", .{@errorName(err)});
     for (state.terminals[0..state.terminal_count], 0..) |candidate, index| if (candidate) |surface| {
         if (!std.mem.eql(u8, &surface.surface_id, &id)) continue;
         var i = index;
