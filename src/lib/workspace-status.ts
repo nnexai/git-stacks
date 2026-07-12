@@ -150,7 +150,14 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
           let behind = 0
 
           if (exists && isGitRepo(repo)) {
-            [dirty, branch] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath)])
+            try {
+              ;[dirty, branch] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath)])
+            } catch (error) {
+              // A concurrently removed worktree is an expected status
+              // transition. Preserve real Git failures while the path exists.
+              if (existsSync(repoPath)) throw error
+              return { name: repo.name, exists: false, dirty: false, branch: "—", mode: repo.mode, ahead: 0, behind: 0 }
+            }
 
             let baseRef: string
             if (repo.mode === "worktree") {

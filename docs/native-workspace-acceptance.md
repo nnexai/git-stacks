@@ -92,3 +92,13 @@ Last combined Plan 03 preflight: `bun run native:test:restore && bun run native:
 The executable uses `AdwNavigationSplitView`, an identity-backed workspace/repository list, a persistent `GtkStack` of Ghostty hosts, registered `win.*` GActions, and a searchable configured-command popover. Do not use `native:smoke-app` as graphical acceptance evidence: its isolated fixture lifecycle is intended for automated startup/teardown checks, not the authenticated multi-workspace checkpoint.
 
 If launch fails before the window appears, first verify that the authoritative discovery/authentication environment resolves a ready snapshot. A missing selected pair is reported as `native launch requires an authoritative workspace/repository selection`; this is an environment/data precondition rather than a completed graphical observation.
+# Agent session integration boundary
+
+Native-launched agent sessions use a provider-neutral preparation seam. Agent
+Client Protocol (ACP) adapters are preferred when an agent transport can claim
+the session; ordinary terminal CLIs fall back to merge-safe, idempotent
+project-local hooks. The current Codex fallback updates only
+`.codex/hooks.json`, preserves unrelated hooks and top-level keys, never mutates
+global configuration, and blocks launch with a visible error rather than
+overwriting malformed or unwritable configuration. The native UI consumes the
+shared structured-attention model and is not coupled to Codex hook JSON.

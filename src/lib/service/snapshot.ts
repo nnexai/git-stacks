@@ -27,6 +27,7 @@ import { buildWorkspaceEnv } from "../workspace-env"
 import { getWorkspaceFileStatusView, type WorkspaceFileStatusView } from "../workspace-file-status"
 import { getWorkspaceStatus, type RepoStatus } from "../workspace-status"
 import { ensureWorkspaceIdentity } from "./identity"
+import { ensureNativeAgentAttention } from "../agent-hooks/native-session"
 import {
   NativeLaunchResolutionSchema,
   type NativeLaunchResolution,
@@ -114,6 +115,7 @@ export interface SnapshotDependencies {
   listManualCommands(workspace: Workspace): string[]
   planManualCommand(workspace: Workspace, targetName: string, config?: GlobalConfig): ManualCommandStep[]
   buildWorkspaceEnv(workspace: Workspace, options: { triggeredBy: string; config: GlobalConfig; skipSecrets: boolean }): Promise<Record<string, string>>
+  ensureAgentAttention?(repoPath: string, workspaceName: string): void
   config: GlobalConfig
   revisionStore: SnapshotRevisionStore
   clock(): Date
@@ -178,6 +180,7 @@ function defaultDependencies(): SnapshotDependencies {
     listManualCommands,
     planManualCommand,
     buildWorkspaceEnv,
+    ensureAgentAttention: (repoPath, workspaceName) => { ensureNativeAgentAttention(repoPath, workspaceName) },
     config,
     revisionStore: new FileSnapshotRevisionStore(),
     clock: () => new Date(),
@@ -186,6 +189,10 @@ function defaultDependencies(): SnapshotDependencies {
 
 function repositoryPath(repo: Workspace["repos"][number]): string {
   return getRepoPath(repo)
+}
+
+function workspaceDefinitionExists(name: string): boolean {
+  try { return existsSync(workspaceFilePath(name)) } catch { return false }
 }
 
 export function createSnapshotBuilder(dependencies: SnapshotDependencies = defaultDependencies()) {
@@ -261,20 +268,28 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     }
   }
 
-  async function projectStable(name: string): Promise<Awaited<ReturnType<typeof project>>> {
+  async function projectStable(name: string): Promise<Awaited<ReturnType<typeof project>> | null> {
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const workspace = dependencies.ensureWorkspaceIdentity(name)
-      const before = await dependencies.fingerprint(workspace)
-      const projection = await project(workspace)
-      const after = await dependencies.fingerprint(workspace)
-      if (before !== after) continue
-      return projection
+      try {
+        const workspace = dependencies.ensureWorkspaceIdentity(name)
+        const before = await dependencies.fingerprint(workspace)
+        const projection = await project(workspace)
+        const after = await dependencies.fingerprint(workspace)
+        if (before !== after) continue
+        return projection
+      } catch (error) {
+        // External removal can race any projection stage. Once the authoritative
+        // YAML is gone, omission is the correct snapshot rather than an error.
+        if (!workspaceDefinitionExists(name)) return null
+        throw error
+      }
     }
     throw new SnapshotBusyError(3)
   }
 
   async function buildWorkspace(name: string, requestId = `req_${randomUUID().replaceAll("-", "")}`): Promise<WorkspaceSnapshotResponse> {
     const projection = await projectStable(name)
+    if (!projection) throw new Error(`Workspace '${name}' not found.`)
     const revision = await dependencies.revisionStore.update(digest(projection))
     return WorkspaceSnapshotResponseSchema.parse({ protocol: "v1", request_id: requestId, ok: true, revision, generated_at: dependencies.clock().toISOString(), workspace: projection })
   }
@@ -284,7 +299,10 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     // One aggregate generation owns one revision. Per-workspace concurrent
     // writes to a shared revision store made revision depend on build order.
     const projections = []
-    for (const name of names) projections.push(await projectStable(name))
+    for (const name of names) {
+      const projection = await projectStable(name)
+      if (projection) projections.push(projection)
+    }
     const revision = await dependencies.revisionStore.update(digest(projections))
     aggregateRevision = revision
     if (projections.length === 0) return []
@@ -308,6 +326,11 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     if (snapshot.revision !== request.expected_revision) return fail("conflict", "Authoritative snapshot revision is stale")
     const repository = snapshot.workspace.repositories.find((entry) => entry.id === request.repository_id)
     if (!repository) return fail("not_found", "Repository not found in workspace")
+    try {
+      dependencies.ensureAgentAttention?.(repository.path, snapshot.workspace.name)
+    } catch (error) {
+      return fail("operation_failed", `Could not configure Codex attention for this workspace: ${error instanceof Error ? error.message : String(error)}`)
+    }
     const base = snapshot.workspace.launch
     if (!request.command_id) {
       const shell = process.env.SHELL || "/bin/sh"

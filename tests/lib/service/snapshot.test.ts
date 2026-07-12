@@ -47,6 +47,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     listManualCommands: () => ["dev"],
     planManualCommand: () => [],
     buildWorkspaceEnv: async () => ({}),
+    ensureAgentAttention: () => {},
     config: { workspace_root: "/tasks", integrations: {}, ports: { range_start: 10000, range_end: 65000 } },
     revisionStore: new MemoryStore(),
     clock: () => new Date("2026-07-11T10:00:00.000Z"),
@@ -115,6 +116,20 @@ describe("authoritative service snapshots", () => {
     expect(one.workspace.commands).toEqual(["dev"])
   })
 
+  test("omits a workspace deleted during aggregate projection", async () => {
+    const name = `missing-${Date.now()}`
+    const builder = createSnapshotBuilder(dependencies({
+      listWorkspaceNames: () => [name],
+      ensureWorkspaceIdentity: () => {
+        throw new Error(`Workspace '${name}' not found.`)
+      },
+    }))
+    // The production disappearance classification uses the authoritative file.
+    // This dependency-level test exercises the same aggregate omission through
+    // a name that has no backing YAML.
+    expect(await builder.buildAll()).toEqual([])
+  })
+
   test("projects workspace labels for native sidebar grouping", async () => {
     const labeled = { ...workspace(), labels: ["client", "urgent"] }
     const builder = createSnapshotBuilder(dependencies({ ensureWorkspaceIdentity: () => labeled }))
@@ -132,8 +147,10 @@ describe("authoritative service snapshots", () => {
   })
 
   test("resolves configured commands through the POSIX shell contract", async () => {
+    const installs: Array<[string, string]> = []
     const builder = createSnapshotBuilder(dependencies({
       planManualCommand: () => [{ bucket: "main", scope: "workspace", shell: "for i in 1 2; do echo $i; done", cwd: "/tasks/alpha", environment: {} }],
+      ensureAgentAttention: (path: string, name: string) => installs.push([path, name]),
     }))
     const snapshot = (await builder.buildAll())[0]!
     const command = snapshot.workspace.launch.named![0]!
@@ -145,6 +162,32 @@ describe("authoritative service snapshots", () => {
     })
     expect(resolution.resolved).toBe(true)
     if (resolution.resolved) expect(resolution.launch.argv).toEqual(["/bin/sh", "-lc", "for i in 1 2; do echo $i; done"])
+    expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
+  })
+
+  test("configures Codex attention for shells and reports unsafe hook files without launching", async () => {
+    const installs: Array<[string, string]> = []
+    const builder = createSnapshotBuilder(dependencies({
+      ensureAgentAttention: (path: string, name: string) => installs.push([path, name]),
+    }))
+    const snapshot = (await builder.buildAll())[0]!
+    const request = {
+      workspace_id: snapshot.workspace.id,
+      repository_id: snapshot.workspace.repositories[0]!.id,
+      expected_revision: snapshot.revision,
+    }
+    expect((await builder.resolveNativeLaunch(request)).resolved).toBe(true)
+    expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
+
+    const broken = createSnapshotBuilder(dependencies({
+      ensureAgentAttention: () => { throw new Error("Cannot safely update .codex/hooks.json") },
+    }))
+    const brokenSnapshot = (await broken.buildAll())[0]!
+    const rejected = await broken.resolveNativeLaunch({ ...request, expected_revision: brokenSnapshot.revision })
+    expect(rejected).toEqual({
+      resolved: false,
+      error: { code: "operation_failed", message: "Could not configure Codex attention for this workspace: Cannot safely update .codex/hooks.json" },
+    })
   })
 
   test("assigns stable positive revisions to empty state and advances through A -> empty -> A", async () => {

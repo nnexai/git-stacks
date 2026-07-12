@@ -31,6 +31,10 @@ const product_css =
     ".git-stacks-sidebar button.workspace-row.selected-workspace:focus-visible { outline: 2px solid @accent_fg_color; outline-offset: -3px; }" ++
     ".git-stacks-launcher { background: @window_bg_color; padding: 12px; }" ++
     ".git-stacks-launcher row { padding: 8px 10px; border-radius: 8px; }" ++
+    ".git-stacks-attention-row { padding: 10px 12px; border-radius: 10px; }" ++
+    ".git-stacks-attention-row:hover { background: @view_bg_color; }" ++
+    ".git-stacks-provider-chip { background: alpha(@accent_bg_color, .18); color: @accent_color; border-radius: 999px; padding: 2px 7px; font-weight: 700; }" ++
+    ".git-stacks-status-chip { border-radius: 999px; padding: 2px 7px; font-weight: 600; }" ++
     ".git-stacks-sidebar .attention-badge { background: @accent_bg_color; color: @accent_fg_color; border-radius: 999px; padding: 1px 7px; font-weight: 700; }" ++
     ".git-stacks-sidebar expander { padding: 6px 0; }" ++
     ".git-stacks-sidebar expander > title { font-weight: 600; color: @window_fg_color; }" ++
@@ -684,13 +688,29 @@ fn refreshAttentionRows(state: *State) void {
     for (state.graph.state.attention[0..state.graph.state.attention_count]) |item| {
         const projected = attention_view.project(&state.graph.state, item);
         var title_buffer: [220:0]u8 = [_:0]u8{0} ** 220;
-        const title = std.fmt.bufPrintZ(&title_buffer, "{s} · {s}{s}", .{ projected.provider, projected.title[0..projected.title_len], if (projected.unread) " · Unread" else "" }) catch continue;
+        const title = std.fmt.bufPrintZ(&title_buffer, "{s}{s}", .{ projected.title[0..projected.title_len], if (projected.unread) " · Unread" else "" }) catch continue;
         var detail_buffer: [900:0]u8 = [_:0]u8{0} ** 900;
         const detail = std.fmt.bufPrintZ(&detail_buffer, "{s}\n{s}{s}{s}\n{s}", .{ projected.location[0..projected.location_len], projected.detail[0..projected.detail_len], if (projected.detail_len > 0 and projected.occurred_len > 0) " · " else "", projected.occurred[0..projected.occurred_len], projected.fallback }) catch continue;
         const button = c.gtk_button_new() orelse continue;
         c.gtk_widget_add_css_class(button, "flat");
+        c.gtk_widget_add_css_class(button, "git-stacks-attention-row");
         const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 3) orelse continue;
-        const heading = c.gtk_label_new(title.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(heading), 0); c.gtk_box_append(@ptrCast(box), heading);
+        const header = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 7) orelse continue;
+        const provider = c.gtk_label_new(projected.provider.ptr) orelse continue;
+        c.gtk_widget_add_css_class(provider, "git-stacks-provider-chip");
+        c.gtk_box_append(@ptrCast(header), provider);
+        const heading = c.gtk_label_new(title.ptr) orelse continue;
+        c.gtk_label_set_xalign(@ptrCast(heading), 0);
+        c.gtk_label_set_ellipsize(@ptrCast(heading), c.PANGO_ELLIPSIZE_END);
+        c.gtk_widget_set_hexpand(heading, 1);
+        c.gtk_box_append(@ptrCast(header), heading);
+        const status_text: [*:0]const u8 = switch (item.status) { .waiting => "Needs input", .failed => "Failed", .completed => "Completed", .working => "Working", .idle => "Idle" };
+        const status = c.gtk_label_new(status_text) orelse continue;
+        c.gtk_widget_add_css_class(status, "git-stacks-status-chip");
+        if (item.status == .failed) c.gtk_widget_add_css_class(status, "error");
+        if (item.status == .waiting) c.gtk_widget_add_css_class(status, "warning");
+        c.gtk_box_append(@ptrCast(header), status);
+        c.gtk_box_append(@ptrCast(box), header);
         const body = c.gtk_label_new(detail.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(body), 0); c.gtk_label_set_wrap(@ptrCast(body), 1); c.gtk_widget_add_css_class(body, "dim-label"); c.gtk_box_append(@ptrCast(box), body);
         c.gtk_button_set_child(@ptrCast(button), box);
         var action: [96:0]u8 = [_:0]u8{0} ** 96;
@@ -759,7 +779,11 @@ fn appendPairButton(parent: *c.GtkBox, state: *State, key: model.PairKey, label:
 fn appendWorkspaceEntry(parent: *c.GtkBox, state: *State, ws: model.Workspace, only_repo: ?model.Id, pinned: bool) void {
     if (ws.repository_count == 1) {
         const rid = ws.repository_ids[0];
-        if (only_repo == null or std.mem.eql(u8, &only_repo.?, &rid)) appendPairButton(parent, state, .{ .workspace_id = ws.id, .repository_id = rid }, if (ws.name_len > 0) ws.name[0..ws.name_len] else ws.id[0..8]);
+        if (only_repo == null or std.mem.eql(u8, &only_repo.?, &rid)) {
+            var pinned_label: [160]u8 = undefined;
+            const label = if (pinned) std.fmt.bufPrint(&pinned_label, "★ {s}", .{if (ws.name_len > 0) ws.name[0..ws.name_len] else ws.id[0..8]}) catch return else if (ws.name_len > 0) ws.name[0..ws.name_len] else ws.id[0..8];
+            appendPairButton(parent, state, .{ .workspace_id = ws.id, .repository_id = rid }, label);
+        }
         return;
     }
     var heading: [128:0]u8 = [_:0]u8{0} ** 128;
@@ -1132,7 +1156,9 @@ fn workspaceContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data
     };
     const menu = c.g_menu_new() orelse return;
     defer c.g_object_unref(menu);
-    c.g_menu_append(menu, if (pinned) "Unpin workspace" else "Pin workspace", "win.toggle-current-pin");
+    var action: [96:0]u8 = [_:0]u8{0} ** 96;
+    const detailed = std.fmt.bufPrintZ(&action, "win.{s}-workspace('{s}')", .{ if (pinned) "unpin" else "pin", id }) catch return;
+    c.g_menu_append(menu, if (pinned) "Unpin workspace" else "Pin workspace", detailed.ptr);
     presentContext(widget, menu, x, y);
 }
 fn repositoryContext(gesture: ?*c.GtkGestureClick, _: c_int, x: f64, y: f64, data: ?*anyopaque) callconv(.c) void {
@@ -1967,6 +1993,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
                     return;
                 };
                 savePresentation(state);
+                refreshProjection(state);
             }
         }
     } else if (std.mem.eql(u8, name, "unpin-workspace")) {
@@ -1977,6 +2004,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
                 @memcpy(&id, id_str);
                 view.unpin(id);
                 savePresentation(state);
+                refreshProjection(state);
             }
         }
     } else if (std.mem.eql(u8, name, "reorder-pin")) {
@@ -1994,6 +2022,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
             for (state.graph.state.pins[0..state.graph.state.pin_count]) |id| if (std.mem.eql(u8, &id, &pair.workspace_id)) { pinned = true; break; };
             if (pinned) view.unpin(pair.workspace_id) else view.pin(pair.workspace_id) catch {};
             savePresentation(state);
+            refreshProjection(state);
         }
     } else if (std.mem.eql(u8, name, "move-current-pin-up") or std.mem.eql(u8, name, "move-current-pin-down")) {
         if (state.graph.state.selected_pair) |pair| for (state.graph.state.pins[0..state.graph.state.pin_count], 0..) |id, index| {
