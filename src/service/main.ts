@@ -1,5 +1,5 @@
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, fsyncSync, chmodSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { z } from "zod"
 import { WS_CONFIG_DIR } from "../lib/paths"
 import { configureAttentionPublication } from "../lib/messages"
@@ -7,9 +7,9 @@ import { provisionOfficialClient, readOfficialClientCredential } from "../lib/se
 import { createSnapshotBuilder } from "../lib/service/snapshot"
 import { EventJournal, publishOperationEvent } from "../lib/service/event-journal"
 import { EventBroker } from "../lib/service/event-broker"
-import { createWorkspaceMutationAdapters, OperationRegistry } from "../lib/service/operations"
+import { createWorkspaceMutationAdapters, OperationRegistry, type WorkspaceCreateMutation } from "../lib/service/operations"
 import { createWorkspaceChangeMonitor } from "../lib/service/workspace-change-monitor"
-import type { Operation } from "../lib/service/contract"
+import type { Operation, WorkspaceCreationCatalog } from "../lib/service/contract"
 import { getWorkspaceCreationCatalog } from "../lib/workspace-creation"
 import { startServiceServer, type RunningServiceServer } from "./server"
 
@@ -97,6 +97,8 @@ export interface ManagedServiceOptions {
   clientId?: string
   idleMs?: number
   snapshot?: import("./server").SnapshotAdapter & { currentRevision(): Promise<string> }
+  workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
+  workspaceCreate?: WorkspaceCreateMutation
 }
 
 export interface ManagedService {
@@ -150,6 +152,8 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     })
     const active = new Set<string>()
     const monitor = createWorkspaceChangeMonitor({
+      configRoot: dirname(serviceRoot),
+      workspaceDir: join(dirname(serviceRoot), "workspaces"),
       rebuild: () => snapshot.currentRevision(),
       onInvalidated: async (revision) => {
         const event = await journal.appendSnapshotInvalidated(revision)
@@ -175,7 +179,8 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     running = startServiceServer({
       serviceRoot, snapshot, operations, broker,
       mutations: { "workspace.open": mutationAdapters["workspace.open"], "workspace.close": mutationAdapters["workspace.close"] },
-      workspaceCreate: mutationAdapters["workspace.create"], workspaceCreationCatalog: getWorkspaceCreationCatalog,
+      workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
+      workspaceCreationCatalog: options.workspaceCreationCatalog ?? getWorkspaceCreationCatalog,
       publishAttention: async (attention) => {
         const event = await journal.appendAttention(attention)
         broker.publish(event)
@@ -196,11 +201,11 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       if (stopped) return
       stopped = true
       lifecycle.dispose()
-      await monitor.dispose()
       disposeAttentionPublication()
       try {
         await running.stop()
       } finally {
+        await monitor.dispose()
         const current = readServiceDescriptor(serviceRoot)
         if (current?.instance_id === instanceId) unlinkSync(serviceDescriptorPath(serviceRoot))
       }

@@ -44,3 +44,16 @@ pub const Controller = struct {
     pub fn finish(self: *Controller, state: OperationState) !void { if (state != .succeeded and state != .failed and state != .cancelled) return error.InvalidState; self.state = state; }
 };
 fn set(buffer: anytype, length: *u8, value: []const u8) !void { if (value.len == 0 or value.len > buffer.len or !std.unicode.utf8ValidateSlice(value)) return error.InvalidValue; @memcpy(buffer[0..value.len], value); length.* = @intCast(value.len); }
+
+/// Parses a response string into caller-owned storage. Never return a slice
+/// backed by std.json's temporary arena: creation polling outlives that arena.
+pub fn copyJsonStringField(body: []const u8, key: []const u8, output: []u8) ?[]const u8 {
+    const parsed = std.json.parseFromSlice(std.json.Value, std.heap.page_allocator, body, .{}) catch return null;
+    defer parsed.deinit();
+    if (parsed.value != .object) return null;
+    const root = if (parsed.value.object.get("data")) |data| if (data == .object) data.object else parsed.value.object else parsed.value.object;
+    const value = root.get(key) orelse return null;
+    if (value != .string or value.string.len == 0 or value.string.len > output.len) return null;
+    @memcpy(output[0..value.string.len], value.string);
+    return output[0..value.string.len];
+}

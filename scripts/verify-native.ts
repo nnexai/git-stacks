@@ -566,7 +566,7 @@ async function smokeWorkspaceLifecycle(): Promise<void> {
       const stderr = await new Response(child.stderr).text()
       throw new Error(`workspace lifecycle smoke timed out after 45 seconds: ${stderr}`)
     }
-    const stderr = await new Response(child.stderr).text()
+    const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
     const checkpoints = [
       "action=new-shell realized=true registered=true tab=true",
       "action=configured-command distinct=true registered=true tab=true",
@@ -609,14 +609,23 @@ async function smokeNativeCreateSync(): Promise<void> {
   let mutation: ReturnType<typeof Bun.spawn> | undefined
   try {
     child = Bun.spawn([artifact], { cwd: ROOT, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot, GIT_STACKS_NATIVE_CREATE_SYNC_SMOKE: "1" } })
-    await Bun.sleep(5_000)
+    // Leave the production dialog/operation/snapshot/terminal pipeline enough
+    // time to publish its created checkpoint before the independent mutation;
+    // racing the marker could rename the only snapshot before finishCreate
+    // selected it, falsely turning synchronization coverage into a timeout.
+    await Bun.sleep(15_000)
     mutation = Bun.spawn([process.execPath, "-e", `require('fs').writeFileSync(${JSON.stringify(marker)}, 'external')`], { cwd: ROOT, stdout: "pipe", stderr: "pipe" })
     if (await mutation.exited !== 0) throw new Error("outside-process workspace mutation failed")
     const outcome = await Promise.race([child.exited.then((code) => ({ code })), Bun.sleep(60_000).then(() => "timeout" as const)])
-    if (outcome === "timeout") throw new Error("production create/sync smoke timed out after 60 seconds")
-    const stderr = await new Response(child.stderr).text()
+    if (outcome === "timeout") {
+      child.kill("SIGKILL"); await child.exited
+      const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
+      throw new Error(`production create/sync smoke timed out after 60 seconds: ${stdout}\n${stderr}`)
+    }
+    const [stdout, stderr] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text()])
     const required = ["empty=true action=win.new-workspace dialog=real submitted=true", "created=true", "registered_host=true", "external=true", "visible_name=Externally-updated", "focus_preserved=true"]
-    if (outcome.code !== 0 || required.some((value) => !stderr.includes(value)) || /(?:Gtk|Adwaita|GLib|GObject)-(?:CRITICAL|WARNING)|panic:|Segmentation fault/.test(stderr)) throw new Error(`production create/sync evidence missing (${outcome.code}): ${stderr}`)
+    const evidence = `${stdout}\n${stderr}`
+    if (outcome.code !== 0 || required.some((value) => !evidence.includes(value)) || /(?:Gtk|Adwaita|GLib|GObject)-(?:CRITICAL|WARNING)|panic:|Segmentation fault/.test(evidence)) throw new Error(`production create/sync evidence missing (${outcome.code}): ${evidence}`)
     console.log("native create/sync smoke passed: empty GTK creation and outside-process authoritative refresh remained live")
   } finally {
     if (child && child.exitCode === null) child.kill("SIGKILL")

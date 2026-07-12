@@ -32,3 +32,14 @@ test "operation progress is ordered and terminal failure retains form" {
     try std.testing.expectEqual(@as(u32, 2), controller.completed);
     try std.testing.expectEqualStrings("demo", controller.name[0..controller.name_len]);
 }
+
+test "operation id is copied out of temporary JSON storage" {
+    var owned: [64]u8 = undefined;
+    const id = creation.copyJsonStringField("{\"data\":{\"operation_id\":\"op_1234567890123456\"}}", "operation_id", &owned) orelse return error.MissingOperation;
+    // Churn the page allocator after parsing has deinitialized its tree. The
+    // returned bytes must remain caller-owned and valid for polling.
+    const churn = try std.heap.page_allocator.alloc(u8, 4096);
+    defer std.heap.page_allocator.free(churn);
+    @memset(churn, 0xa5);
+    try std.testing.expectEqualStrings("op_1234567890123456", id);
+}
