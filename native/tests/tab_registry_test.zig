@@ -65,7 +65,7 @@ test "registry limits distinct live pair identities before ownership mutation" {
         try r.register(host(&fakes[i], surface, .{ .workspace_id = workspace, .repository_id = repository }, i + 1, @intCast(500 + i)));
     }
     try std.testing.expectEqual(@as(usize, 32), r.livePairCount());
-    var extra_pair: model.PairKey = .{ .workspace_id = id("z18f47f4-5ab1-7c2d-8e90-123456789abc"), .repository_id = id("z28f47f4-5ab1-7c2d-8e90-123456789abc") };
+    const extra_pair: model.PairKey = .{ .workspace_id = id("z18f47f4-5ab1-7c2d-8e90-123456789abc"), .repository_id = id("z28f47f4-5ab1-7c2d-8e90-123456789abc") };
     try std.testing.expectError(error.LivePairCapacity, r.register(host(&fakes[32], id("z38f47f4-5ab1-7c2d-8e90-123456789abc"), extra_pair, 40, 900)));
     try std.testing.expect(!fakes[32].registered);
     try std.testing.expect(r.hasLivePair(extra_pair) == false);

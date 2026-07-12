@@ -55,8 +55,12 @@ pub const ProductionGraph = struct {
         const response=try self.transport.execute(self.endpoint,request);defer response.deinit(self.allocator);
         if(response.status!=200)return error.SnapshotRejected;
         const action=try self.service.decodeAggregateSnapshot(response.body);
+        const authoritative=reducer.reduce(self.state,action).state;
+        try self.applyAuthoritativeSnapshot(authoritative);
+    }
+    pub fn applyAuthoritativeSnapshot(self:*ProductionGraph, authoritative:model.State)!void {
         const previous = self.state;
-        self.state=reducer.reduce(self.state,action).state;
+        self.state = authoritative;
         // Service snapshots own workspace/repository/command truth. Native
         // presentation (pins, selection and terminal history) is reconciled
         // by stable identities instead of being erased by every refresh.
@@ -67,11 +71,28 @@ pub const ProductionGraph = struct {
         for (previous.pairs[0..previous.pair_count]) |old_pair| if (model.pairIndex(&self.state, old_pair.key)) |index| {
             self.state.pairs[index].surface_count = old_pair.surface_count;
             @memcpy(self.state.pairs[index].surfaces[0..old_pair.surface_count], old_pair.surfaces[0..old_pair.surface_count]);
+        } else if (self.terminals.hasLivePair(old_pair.key)) {
+            if (self.state.orphan_tombstone_count >= self.state.orphan_tombstones.len) return error.OrphanCapacity;
+            const index = self.state.orphan_tombstone_count;
+            var tombstone:model.OrphanPairTombstone=.{ .key=old_pair.key, .surfaces=undefined, .surface_count=old_pair.surface_count };
+            @memcpy(tombstone.surfaces[0..old_pair.surface_count], old_pair.surfaces[0..old_pair.surface_count]);
+            for (previous.workspaces[0..previous.workspace_count]) |workspace| if (std.mem.eql(u8,&workspace.id,&old_pair.key.workspace_id)) {
+                tombstone.workspace_name_len=workspace.name_len; @memcpy(tombstone.workspace_name[0..workspace.name_len],workspace.name[0..workspace.name_len]);
+                for(workspace.repositories[0..workspace.repository_count]) |repository| if(std.mem.eql(u8,&repository.id,&old_pair.key.repository_id)){ tombstone.repository_name_len=repository.name_len; @memcpy(tombstone.repository_name[0..repository.name_len],repository.name[0..repository.name_len]); break; };
+                break;
+            };
+            self.state.orphan_tombstones[index]=tombstone; self.state.orphan_tombstone_count+=1;
         };
-        if (previous.selected_pair) |pair| { if (model.pairValid(&self.state, pair)) self.state.selected_pair = pair; }
-        if (previous.last_pair) |pair| { if (model.pairValid(&self.state, pair)) self.state.last_pair = pair; }
+        for(previous.orphan_tombstones[0..previous.orphan_tombstone_count]) |old| if(self.terminals.hasLivePair(old.key) and model.pairIndex(&self.state,old.key)==null and model.orphanIndex(&self.state,old.key)==null){ if(self.state.orphan_tombstone_count>=self.state.orphan_tombstones.len)return error.OrphanCapacity; self.state.orphan_tombstones[self.state.orphan_tombstone_count]=old;self.state.orphan_tombstone_count+=1; };
+        if (previous.selected_pair) |pair| { if (model.pairOrOrphanValid(&self.state, pair)) self.state.selected_pair = pair; }
+        if (previous.last_pair) |pair| { if (model.pairOrOrphanValid(&self.state, pair)) self.state.last_pair = pair; }
         if (previous.surface) |surface| { if (model.surfaceLocation(&self.state, surface.id) != null) self.state.surface = surface; }
         self.state.organization_mode = previous.organization_mode;
+        for(previous.attention[0..previous.attention_count]) |old| for(self.state.attention[0..self.state.attention_count]) |*item| if(std.mem.eql(u8,old.service_id[0..old.service_id_len],item.service_id[0..item.service_id_len])) { item.read=old.read; break; };
+    }
+    pub fn releaseOrphanIfEnded(self:*ProductionGraph,key:model.PairKey)void{
+        if(self.terminals.hasLivePair(key))return;
+        var write:usize=0;for(self.state.orphan_tombstones[0..self.state.orphan_tombstone_count])|entry|if(!model.PairKey.eql(entry.key,key)){self.state.orphan_tombstones[write]=entry;write+=1;};self.state.orphan_tombstone_count=@intCast(write);
     }
     pub fn replayOnce(self:*ProductionGraph)!void {
         var cursor:[20]u8=undefined;const request=try self.service.eventsRequest(&cursor);

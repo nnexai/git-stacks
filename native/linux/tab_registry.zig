@@ -30,11 +30,32 @@ pub const Registry = struct {
     pub fn register(self: *Registry, proposed: Host) !void {
         if (proposed.child_pid <= 1 or proposed.pgid <= 1 or proposed.birth_token == 0) return error.InvalidOwnership;
         if (self.find(proposed.surface_id) != null) return error.DuplicateSurface;
+        if (!self.hasLivePair(proposed.pair) and self.livePairCount() >= model.NativeModelLimits.live_pair_identities) return error.LivePairCapacity;
         var host = proposed; host.registered = false;
         try host.terminal.registerOwnership(host.terminal.context,host.pgid,host.birth_token);
         errdefer host.terminal.teardown(host.terminal.context,host.pgid,host.birth_token) catch {};
         host.registered = true;
         try self.hosts.append(self.allocator,host);
+    }
+    pub fn hasLivePair(self: *const Registry, pair: model.PairKey) bool {
+        for (self.hosts.items) |host| if (model.PairKey.eql(host.pair, pair)) return true;
+        return false;
+    }
+    pub fn liveSurfaceCount(self: *const Registry, pair: model.PairKey) usize {
+        var count: usize = 0;
+        for (self.hosts.items) |host| {
+            if (model.PairKey.eql(host.pair, pair)) count += 1;
+        }
+        return count;
+    }
+    pub fn livePairCount(self: *const Registry) usize {
+        var count: usize = 0;
+        for (self.hosts.items, 0..) |host, i| {
+            var seen = false;
+            for (self.hosts.items[0..i]) |prior| if (model.PairKey.eql(prior.pair, host.pair)) { seen = true; break; };
+            if (!seen) count += 1;
+        }
+        return count;
     }
     pub fn find(self:*Registry,id:model.Id)?*Host { for(self.hosts.items)|*h| if(std.mem.eql(u8,&h.surface_id,&id))return h; return null; }
     pub fn attach(self:*Registry,id:model.Id)!void { (self.find(id) orelse return error.UnknownSurface).attached=true; }

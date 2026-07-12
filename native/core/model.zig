@@ -131,6 +131,11 @@ pub fn pairIndex(state: *const State, key: PairKey) ?usize {
     for (state.pairs[0..state.pair_count], 0..) |pair, i| if (PairKey.eql(pair.key, key)) return i;
     return null;
 }
+pub fn orphanIndex(state: *const State, key: PairKey) ?usize {
+    for (state.orphan_tombstones[0..state.orphan_tombstone_count], 0..) |pair, i| if (PairKey.eql(pair.key, key)) return i;
+    return null;
+}
+pub fn pairOrOrphanValid(state: *const State, key: PairKey) bool { return pairValid(state, key) or orphanIndex(state, key) != null; }
 pub fn surfaceLocation(state: *const State, id: Id) ?struct { pair: usize, surface: usize } {
     for (state.pairs[0..state.pair_count], 0..) |pair, p| for (pair.surfaces[0..pair.surface_count], 0..) |s, i| if (std.mem.eql(u8, &s.id, &id)) return .{ .pair = p, .surface = i };
     return null;
