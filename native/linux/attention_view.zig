@@ -21,7 +21,8 @@ pub const AttentionRow = struct {
 pub fn present(state: *const model.State, workspace: model.Id, repository: ?model.Id, surface: ?model.Id) Presentation {
     const a = model.aggregate(state, workspace, repository, surface);
     var p: Presentation = .{ .icon = if (a.severity == .primary) "dialog-warning-symbolic" else if (a.severity == .secondary) "emblem-ok-symbolic" else "media-record-symbolic", .unread = a.unread, .severity = a.severity };
-    const rendered = std.fmt.bufPrint(&p.label, "{d} unread, {s} priority", .{ a.unread, @tagName(a.severity) }) catch "attention";
+    const status = switch (a.severity) { .primary => "Needs input", .secondary => "Completed", .none => "Idle" };
+    const rendered = std.fmt.bufPrint(&p.label, "{d} unread · {s}", .{ a.unread, status }) catch "Attention";
     p.label_len = @intCast(rendered.len);
     return p;
 }

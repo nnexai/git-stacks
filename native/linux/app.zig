@@ -21,17 +21,17 @@ const c = @cImport({
     @cInclude("unistd.h");
 });
 const product_css =
-    ".git-stacks-sidebar { background: alpha(@window_fg_color, 0.035); padding: 8px; }" ++
-    ".git-stacks-group-switch { margin: 2px 0 6px 0; }" ++
-    ".git-stacks-group-switch button { padding: 7px 12px; border-radius: 7px; }" ++
-    ".git-stacks-group-switch button.active-group { background: alpha(@window_fg_color, 0.12); }" ++
-    ".git-stacks-sidebar button.workspace-row { padding: 8px 10px; border-radius: 8px; min-height: 38px; }" ++
-    ".git-stacks-sidebar button.workspace-row:hover { background: alpha(@window_fg_color, 0.08); }" ++
-    ".git-stacks-sidebar button.workspace-row.selected-workspace { background: alpha(@accent_color, 0.24); color: @window_fg_color; }" ++
+    ".git-stacks-sidebar { background: @sidebar_bg_color; padding: 12px; }" ++
+    ".git-stacks-group-switch { margin: 4px 0 6px 0; }" ++
+    ".git-stacks-group-switch button { padding: 6px 12px; }" ++
+    ".git-stacks-group-switch button:checked { background: @accent_bg_color; color: @accent_fg_color; }" ++
+    ".git-stacks-sidebar button.workspace-row { padding: 6px 12px; min-height: 36px; }" ++
+    ".git-stacks-sidebar button.workspace-row:hover { background: @view_bg_color; }" ++
+    ".git-stacks-sidebar button.workspace-row.selected-workspace { background: @accent_bg_color; color: @accent_fg_color; outline: 2px solid @accent_color; }" ++
     ".git-stacks-sidebar .attention-badge { background: @accent_bg_color; color: @accent_fg_color; border-radius: 999px; padding: 1px 7px; font-weight: 700; }" ++
-    ".git-stacks-sidebar expander { padding: 5px 0; font-weight: 600; }" ++
-    ".git-stacks-sidebar expander > title { color: alpha(@window_fg_color, 0.62); }" ++
-    ".git-stacks-sidebar .title-4 { margin: 8px 6px 4px 6px; }";
+    ".git-stacks-sidebar expander { padding: 6px 0; }" ++
+    ".git-stacks-sidebar expander > title { font-weight: 600; color: @window_fg_color; }" ++
+    ".git-stacks-sidebar .title-4 { margin: 12px 6px 4px 6px; }";
 fn installProductCss() void {
     const provider = c.gtk_css_provider_new() orelse return;
     c.gtk_css_provider_load_from_string(provider, product_css);
@@ -702,7 +702,9 @@ fn appendPairButton(parent: *c.GtkBox, state: *State, key: model.PairKey, label:
     c.gtk_widget_set_halign(button, c.GTK_ALIGN_FILL);
     c.gtk_widget_set_hexpand(button, 1);
     const row = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 9) orelse return;
-    const icon = c.gtk_image_new_from_icon_name("vcs-branch-symbolic") orelse return;
+    var repository_count: u8 = 0;
+    for (state.graph.state.workspaces[0..state.graph.state.workspace_count]) |ws| if (std.mem.eql(u8, &ws.id, &key.workspace_id)) { repository_count = ws.repository_count; break; };
+    const icon = c.gtk_image_new_from_icon_name(if (repository_count > 1) "vcs-branch-symbolic" else "folder-symbolic") orelse return;
     c.gtk_widget_add_css_class(icon, "dim-label");
     c.gtk_box_append(@ptrCast(row), icon);
     const title = c.gtk_label_new(z.ptr) orelse return;
@@ -1024,8 +1026,10 @@ fn refreshProjection(state: *State) void {
     }
     if (state.attention_label) |label| {
         var text: [96:0]u8 = [_:0]u8{0} ** 96;
-        const rendered = std.fmt.bufPrintZ(&text, "Attention: {d} unread ({s})", .{ unread, @tagName(severity) }) catch "Attention";
+        const status = switch (severity) { .primary => "Needs input", .secondary => "Completed", .none => "Idle" };
+        const rendered = std.fmt.bufPrintZ(&text, "Attention: {d} unread · {s}", .{ unread, status }) catch "Attention";
         c.gtk_label_set_text(label, if (unread > 0) rendered.ptr else "");
+        c.gtk_widget_set_tooltip_text(@ptrCast(@alignCast(label)), if (unread > 0) rendered.ptr else null);
         c.gtk_widget_set_visible(@ptrCast(@alignCast(label)), @intFromBool(unread > 0));
         setAccessible(label, c.GTK_ACCESSIBLE_ROLE_STATUS, rendered.ptr, "Hierarchical workspace, repository, and terminal attention status");
     }
@@ -1337,7 +1341,7 @@ fn renameResponse(dialog: ?*c.GtkDialog, response: c_int, data: ?*anyopaque) cal
     c.gtk_window_destroy(@ptrCast(dialog orelse return));
 }
 fn promptRename(state: *State, id: model.Id) void {
-    const dialog = c.gtk_dialog_new_with_buttons("Rename terminal tab", state.window, c.GTK_DIALOG_MODAL, "Cancel", c.GTK_RESPONSE_CANCEL, "Rename", c.GTK_RESPONSE_ACCEPT, @as(?*anyopaque, null)) orelse return;
+    const dialog = c.gtk_dialog_new_with_buttons("Rename terminal", state.window, c.GTK_DIALOG_MODAL, "Cancel", c.GTK_RESPONSE_CANCEL, "Rename", c.GTK_RESPONSE_ACCEPT, @as(?*anyopaque, null)) orelse return;
     const entry = c.gtk_entry_new() orelse {
         c.gtk_window_destroy(@ptrCast(dialog));
         return;
@@ -1352,7 +1356,11 @@ fn promptRename(state: *State, id: model.Id) void {
         @memcpy(title[0..surface.title_len], surface.title[0..surface.title_len]);
         c.gtk_editable_set_text(@ptrCast(entry), title[0..surface.title_len :0].ptr);
     }
+    const guidance = c.gtk_label_new("Leave the title empty to restore automatic Ghostty terminal titles.") orelse { c.gtk_window_destroy(@ptrCast(dialog)); return; };
+    c.gtk_label_set_wrap(@ptrCast(guidance), 1);
+    c.gtk_widget_add_css_class(guidance, "dim-label");
     c.gtk_box_append(@ptrCast(c.gtk_dialog_get_content_area(@ptrCast(dialog))), entry);
+    c.gtk_box_append(@ptrCast(c.gtk_dialog_get_content_area(@ptrCast(dialog))), guidance);
     const context = std.heap.c_allocator.create(RenameContext) catch {
         c.gtk_window_destroy(@ptrCast(dialog));
         return;
@@ -1461,7 +1469,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
         const cwd = spec.cwd[0..std.mem.indexOfScalar(u8, &spec.cwd, 0).?];
         entry.cwd_len = @intCast(@min(cwd.len, entry.cwd.len));
         @memcpy(entry.cwd[0..entry.cwd_len], cwd[0..entry.cwd_len]);
-        var title: []const u8 = "shell";
+        var title: []const u8 = "Terminal";
         if (command_id) |requested| for (state.graph.state.commands[0..state.graph.state.command_count]) |command| if (std.mem.eql(u8, requested, command.id[0..command.id_len])) {
             title = command.name[0..command.name_len];
             break;
@@ -1939,6 +1947,9 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     const header = c.adw_header_bar_new() orelse return null;
     const attention = c.gtk_label_new("") orelse return null;
     state.attention_label = @ptrCast(attention);
+    c.gtk_label_set_ellipsize(@ptrCast(attention), c.PANGO_ELLIPSIZE_END);
+    c.gtk_label_set_max_width_chars(@ptrCast(attention), 28);
+    c.gtk_widget_add_css_class(attention, "caption");
     const attention_button = c.gtk_menu_button_new() orelse return null;
     state.attention_button = @ptrCast(attention_button);
     c.gtk_menu_button_set_icon_name(@ptrCast(attention_button), "dialog-warning-symbolic");
@@ -1970,7 +1981,7 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     setAccessible(menu_button, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Workspace actions", "Create a workspace, open a terminal, run a configured command, or open VS Code");
     const menu = c.g_menu_new() orelse return null;
     c.g_menu_append(menu, "Create workspace…", "win.new-workspace");
-    c.g_menu_append(menu, "New shell", "win.new-shell");
+    c.g_menu_append(menu, "New terminal", "win.new-shell");
     c.g_menu_append(menu, "Configured commands…", "win.launch-command");
     c.g_menu_append(menu, "Open in VS Code", "win.open-vscode");
     c.gtk_menu_button_set_menu_model(@ptrCast(menu_button), @ptrCast(@alignCast(menu)));
@@ -1982,17 +1993,19 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     c.gtk_widget_add_css_class(sidebar_box, "git-stacks-sidebar");
     const group_switch = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return null;
     c.gtk_widget_add_css_class(group_switch, "git-stacks-group-switch");
-    const by_label = c.gtk_button_new_with_label("Labels") orelse return null;
+    const by_label = c.gtk_toggle_button_new_with_label("Labels") orelse return null;
     c.g_object_set_data(@ptrCast(by_label), "git-stacks-group-mode", @ptrFromInt(1));
     _ = c.g_signal_connect_data(by_label, "clicked", @ptrCast(&groupingClicked), state, null, 0);
     c.gtk_widget_add_css_class(by_label, "flat");
     c.gtk_box_append(@ptrCast(group_switch), by_label);
-    const by_repo = c.gtk_button_new_with_label("Repositories") orelse return null;
+    const by_repo = c.gtk_toggle_button_new_with_label("Repositories") orelse return null;
+    c.gtk_toggle_button_set_group(@ptrCast(by_repo), @ptrCast(by_label));
     c.g_object_set_data(@ptrCast(by_repo), "git-stacks-group-mode", @ptrFromInt(2));
     _ = c.g_signal_connect_data(by_repo, "clicked", @ptrCast(&groupingClicked), state, null, 0);
     c.gtk_widget_add_css_class(by_repo, "flat");
     c.gtk_box_append(@ptrCast(group_switch), by_repo);
     c.gtk_widget_add_css_class(if (state.graph.state.organization_mode == .label) by_label else by_repo, "active-group");
+    c.gtk_toggle_button_set_active(@ptrCast(if (state.graph.state.organization_mode == .label) by_label else by_repo), 1);
     setAccessibleChecked(by_label, state.graph.state.organization_mode == .label);
     setAccessibleChecked(by_repo, state.graph.state.organization_mode == .repository);
     c.gtk_box_append(@ptrCast(sidebar_box), group_switch);
