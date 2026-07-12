@@ -3,6 +3,7 @@ import { readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { startManagedService } from "../../src/service/main"
+import { readOfficialClientCredential } from "../../src/lib/service/credentials"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
@@ -31,10 +32,22 @@ describe("Codex attention publication", () => {
     cleanup.push(() => rmSync(configRoot, { recursive: true, force: true }))
     const service = await startManagedService({ serviceRoot: root, snapshot: snapshot as never })
     cleanup.push(() => service.stop())
-    const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "attention", "publish", "--state", "waiting", "--source", "codex", "--workspace", "alpha", "--workspace-id", workspaceId, "--repository-id", repositoryId, "--surface-id", surfaceId, "--title", "Codex blocked", "--detail", "Approve the command", "--best-effort"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
+    const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "attention", "publish", "--state", "waiting", "--source", "codex", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--title", "Codex blocked", "--detail", "Approve the command", "--best-effort"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
     expect(await child.exited).toBe(0)
     expect(await new Response(child.stderr).text()).toBe("")
     const record = JSON.parse(readFileSync(join(root, "events.jsonl"), "utf8").trim())
     expect(record).toMatchObject({ type: "attention", attention: { source: "codex", state: "waiting", workspace_id: workspaceId, repository_id: repositoryId, surface_id: surfaceId, title: "Codex blocked", detail: "Approve the command" } })
+    const credential = readOfficialClientCredential(service.descriptor.credential_lookup, { serviceRoot: root })!
+    const replay = await fetch(new URL("/v1/events?cursor=0", service.descriptor.endpoint), { headers: { authorization: `Bearer ${credential.token}` } })
+    const reader = replay.body!.getReader()
+    let streamed = ""
+    while (!streamed.includes('"source":"codex"')) {
+      const next = await reader.read()
+      if (next.done) break
+      streamed += new TextDecoder().decode(next.value)
+    }
+    await reader.cancel()
+    expect(streamed).toContain('"title":"Codex blocked"')
+    expect(streamed).toContain(`"workspace_id":"${workspaceId}"`)
   })
 })
