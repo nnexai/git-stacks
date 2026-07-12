@@ -4,6 +4,25 @@ Status: PASS WITH DOCUMENTED UPSTREAM LIMITATIONS — approved 2026-07-11
 
 Phase 106 workspace-shell observations remain pending in `docs/native-workspace-acceptance.md`: hierarchical attention descriptions, keyboard traversal, visible focus, launcher/terminal IME isolation, explicit focus routing, and asynchronous no-focus behavior.
 
+## Phase 107 workspace-shell AT matrix
+
+Automated properties do not replace an AT-SPI/Orca observation. Every row below
+remains `PENDING HUMAN` until inspected on the production GTK widget tree.
+
+| Workspace-shell area | Expected role/name/state | Automated reference | Human result / exact announcement |
+| --- | --- | --- | --- |
+| Workspace and repository rows | named controls; selected pair exposed | `native:test:accessibility` | PENDING HUMAN |
+| Pin control | labeled toggle; pressed state | `native:test:accessibility` | PENDING HUMAN |
+| Group expander | named control; expanded state | `native:test:accessibility` | PENDING HUMAN |
+| Connection/operation pages | status semantics and actionable control | `native:test:accessibility` | PENDING HUMAN |
+| Icon-only controls | accessible label plus tooltip | `native:test:accessibility` | PENDING HUMAN |
+| Codex attention | provider, title, detail and unread in redundant text | `native:test:attention` | PENDING HUMAN |
+| Command launcher | named dialog/search/results; logical focus | `native:test:application-actions` | PENDING HUMAN |
+| Workspace creation | named dialog and Name/Branch/Source fields | `native:test:workspace-creation` | PENDING HUMAN |
+| Narrow sidebar overlay | labeled reveal/dismiss controls | `native:test:accessibility` | PENDING HUMAN |
+| Live-terminal close | named alert; Cancel default; destructive Close terminal | `native:test:application-actions` | PENDING HUMAN |
+| Keyboard focus order | sidebar, tabs, terminal, dialogs in logical order | production app | PENDING HUMAN |
+
 This D-16 contract describes the production Ghostty `GtkGLArea`, not the removed custom renderer. Automated inspection confirms only the GTK properties that the leaf actually exposes. Human GTK Inspector/AT-SPI/Orca evidence is required before stronger claims.
 
 ## Automated contract

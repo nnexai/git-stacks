@@ -12,6 +12,35 @@ Session/compositor:
 Locale and IME:
 Assistive technology:
 
+## Phase 107 hardening evidence matrix (2026-07-12)
+
+Automated references identify reproducible checks only. `PENDING HUMAN` may be
+changed only after observing the production app; screenshots and smoke markers
+do not certify keyboard feel, hierarchy, contrast, or assistive technology.
+
+| Observation | Automated reference | Human result | Notes / app-window evidence |
+| --- | --- | --- | --- |
+| Empty start and Name/Branch/Source creation | `native:smoke-hardening` create-sync checkpoint | PENDING HUMAN | |
+| External add/edit/rename/remove without restart | `native:test:service-sync` | PENDING HUMAN | |
+| Replay gap and monotonic cursor recovery | `native:test:service-sync` | PENDING HUMAN | |
+| Codex provider/title/detail, no focus theft, exact routing | `native:test:attention` | PENDING HUMAN | |
+| Orphan retained; live-close cancel then confirm | `native:test:app-graph`, `native:test:application-actions` | PENDING HUMAN | |
+| Count and UTF-8 byte capacity boundaries | `native:test:model`, `native:test:service-client` | PENDING HUMAN | |
+| Launcher empty/no-match and Up/Down/Enter/Escape | `native:test:application-actions` | PENDING HUMAN | |
+| Keyboard navigation, pin and reorder | `native:test:workspace-ui` | PENDING HUMAN | |
+| Actionable empty/error/no-result states and friendly copy | `native:test:accessibility` | PENDING HUMAN | |
+| Workspace/repository glyphs, grouping, icon tooltips | `native:test:accessibility` | PENDING HUMAN | |
+| Selected/unread/destructive/status hierarchy and non-color cues | `native:test:accessibility` | PENDING HUMAN | |
+| Typography, truncation, title reset help and spacing scale | `native:test:accessibility` | PENDING HUMAN | |
+| Default light 800x480 | production app | PENDING HUMAN | capture app window only under `.planning/ui-reviews/` |
+| Default dark 800x480 | production app | PENDING HUMAN | capture app window only under `.planning/ui-reviews/` |
+| High contrast 800x480 | production app | PENDING HUMAN | capture app window only under `.planning/ui-reviews/` |
+| Light narrow 700px | production app | PENDING HUMAN | overlay sidebar and dialog clamp |
+| Dark narrow 700px | production app | PENDING HUMAN | overlay sidebar and terminal visibility |
+| High contrast narrow 700px | production app | PENDING HUMAN | no alpha-only state dependency |
+| 200% text at default and narrow widths | production app | PENDING HUMAN | focus order and clipping |
+| Live-close destructive wording and safe default | `native:test:application-actions` | PENDING HUMAN | cancel first, then confirm |
+
 Automated model/action tests do not fill this blocking Phase 106 graphical checkpoint.
 
 ## Automated preflight (implementation checkpoint)
