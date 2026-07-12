@@ -11,6 +11,19 @@
       "native_launch_resolution": { "available": true },
       "structured_attention": { "available": true }
     },
-    "limits": { "request_body_bytes": 262144, "subscriber_events": 1024, "subscriber_bytes": 1048576 }
+    "limits": {
+      "request_body_bytes": 262144, "subscriber_events": 1024, "subscriber_bytes": 1048576,
+      "native_model": {
+        "workspaces": 16, "labels_per_workspace": 16, "repositories_per_workspace": 8,
+        "authoritative_pairs": 32, "live_pair_identities": 32, "reserved_orphan_tombstones": 32,
+        "surfaces_per_pair": 16, "commands": 64, "attention_items": 64,
+        "string_bytes": {
+          "workspace_name": 96, "workspace_label": 64, "repository_name": 96,
+          "command_id": 64, "command_name": 96, "surface_command_id": 64,
+          "surface_title": 64, "surface_cwd": 128, "attention_id": 64,
+          "attention_title": 160, "attention_detail": 500, "attention_occurred_at": 40
+        }
+      }
+    }
   }
 }

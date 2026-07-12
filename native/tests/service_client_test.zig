@@ -4,7 +4,9 @@ test "authenticated discovery snapshot replay duplicates gaps reconnect and shut
     var c = service.Client.init("Bearer secret");
     c.begin();
     try std.testing.expectEqual(service.Connection.discovering, c.state);
-    _ = try c.acceptDiscovery(200, "{\"protocol\":\"v1\",\"request_id\":\"req_1234567890123456\",\"ok\":true,\"data\":{\"service_version\":\"1\",\"capabilities\":{\"workspace_snapshots\":{},\"operations\":{},\"attention_events\":{},\"native_launch_resolution\":{},\"structured_attention\":{}},\"limits\":{\"request_body_bytes\":1,\"subscriber_events\":1,\"subscriber_bytes\":1}}}");
+    const discovery = try std.fs.cwd().readFileAlloc(std.testing.allocator, "tests/fixtures/discovery.json", 64 * 1024);
+    defer std.testing.allocator.free(discovery);
+    _ = try c.acceptDiscovery(200, discovery);
     try std.testing.expectEqual(service.Connection.snapshot_loading, c.state);
     _ = c.acceptSnapshot(4, 8);
     try std.testing.expect(c.acceptEvent(8) == .duplicate);
@@ -31,6 +33,25 @@ test "requests carry bearer credential revision identities and replay cursor" {
     defer std.testing.allocator.free(launch.body);
     try std.testing.expect(std.mem.indexOf(u8, launch.body, "\"expected_revision\":\"19\"") != null);
     try std.testing.expectEqual(service.Method.POST, launch.method);
+}
+test "creation requests carry explicit JSON and idempotency headers" {
+    var c = service.Client.init("Bearer secret");
+    const catalog = try c.creationCatalogRequest();
+    try std.testing.expectEqualStrings("/v1/workspace-creation/catalog", catalog.path);
+    const create = try c.workspaceCreateRequest("{}", "idem_1234567890123456");
+    try std.testing.expectEqualStrings("application/json", create.content_type.?);
+    try std.testing.expectEqualStrings("idem_1234567890123456", create.idempotency_key.?);
+    var path: [96]u8 = undefined;
+    const operation = try c.operationRequest("op_1234567890123456", &path);
+    try std.testing.expectEqualStrings("/v1/operations/op_1234567890123456", operation.path);
+}
+test "replay gap adopts server cursor only after recovery" {
+    var c = service.Client.init("Bearer secret"); c.sequence = 7;
+    const recovery = try service.Client.decodeReplayGap(409, "{\"error\":{\"code\":\"replay_gap\",\"details\":{\"requested\":\"7\",\"oldest_available\":\"10\",\"newest_available\":\"20\",\"latest_cursor\":\"20\",\"snapshot_revision\":\"9\"}}}");
+    try std.testing.expectEqual(@as(u64, 7), c.sequence);
+    c.adoptReplayGap(recovery);
+    try std.testing.expectEqual(@as(u64, 20), c.sequence);
+    try std.testing.expectEqual(@as(u64, 9), c.revision);
 }
 test "SSE validates cursor and enforces ordering" {
     var c = service.Client.init("Bearer secret");

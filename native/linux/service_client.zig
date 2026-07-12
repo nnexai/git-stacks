@@ -4,7 +4,8 @@ const reducer = @import("reducer");
 
 pub const Connection = enum { disconnected, discovering, snapshot_loading, replaying, ready, refresh_required, incompatible, failed, shutting_down };
 pub const Method = enum { GET, POST };
-pub const Request = struct { method: Method, path: []const u8, authorization: []const u8, body: []const u8 = "", last_event_id: ?[]const u8 = null };
+pub const Request = struct { method: Method, path: []const u8, authorization: []const u8, body: []const u8 = "", last_event_id: ?[]const u8 = null, content_type: ?[]const u8 = null, idempotency_key: ?[]const u8 = null };
+pub const ReplayGapRecovery = struct { requested: u64, oldest_available: u64, newest_available: u64, latest_cursor: u64, snapshot_revision: u64 };
 pub const Response = struct {
     status: u16,
     body: []u8,
@@ -88,9 +89,13 @@ pub const HttpTransport = struct {
         var output: std.Io.Writer.Allocating = .init(self.allocator);
         defer output.deinit();
         const auth = std.http.Header{ .name = "authorization", .value = request_value.authorization };
-        const last = std.http.Header{ .name = "last-event-id", .value = request_value.last_event_id orelse "" };
-        const headers = if (request_value.last_event_id != null) &[_]std.http.Header{ auth, last } else &[_]std.http.Header{auth};
-        const result = try self.http.fetch(.{ .location = .{ .url = url }, .method = if (request_value.method == .GET) .GET else .POST, .payload = if (request_value.body.len == 0) null else request_value.body, .extra_headers = headers, .response_writer = &output.writer, .keep_alive = false });
+        var headers: [4]std.http.Header = undefined;
+        var count: usize = 0;
+        headers[count] = auth; count += 1;
+        if (request_value.last_event_id) |value| { headers[count] = .{ .name = "last-event-id", .value = value }; count += 1; }
+        if (request_value.content_type) |value| { headers[count] = .{ .name = "content-type", .value = value }; count += 1; }
+        if (request_value.idempotency_key) |value| { headers[count] = .{ .name = "idempotency-key", .value = value }; count += 1; }
+        const result = try self.http.fetch(.{ .location = .{ .url = url }, .method = if (request_value.method == .GET) .GET else .POST, .payload = if (request_value.body.len == 0) null else request_value.body, .extra_headers = headers[0..count], .response_writer = &output.writer, .keep_alive = false });
         return .{ .status = @intFromEnum(result.status), .body = try self.allocator.dupe(u8, output.written()) };
     }
 };
@@ -189,6 +194,35 @@ pub const Client = struct {
     }
     pub fn aggregateSnapshotRequest(self: *Client) !Request {
         return self.request(.GET, "/v1/snapshot", "");
+    }
+    pub fn creationCatalogRequest(self: *Client) !Request { return self.request(.GET, "/v1/workspace-creation/catalog", ""); }
+    pub fn operationRequest(self: *Client, operation_id: []const u8, path: *[96]u8) !Request {
+        if (!prefixed(operation_id, "op_")) return error.InvalidIdentity;
+        return self.request(.GET, try std.fmt.bufPrint(path, "/v1/operations/{s}", .{operation_id}), "");
+    }
+    pub fn workspaceCreateRequest(self: *Client, body: []const u8, idempotency_key: []const u8) !Request {
+        if (!prefixed(idempotency_key, "idem_")) return error.InvalidIdentity;
+        var result = try self.request(.POST, "/v1/workspaces", body);
+        result.content_type = "application/json";
+        result.idempotency_key = idempotency_key;
+        return result;
+    }
+    pub fn adoptReplayGap(self: *Client, recovery: ReplayGapRecovery) void {
+        self.sequence = recovery.latest_cursor;
+        self.revision = recovery.snapshot_revision;
+        self.state = .replaying;
+    }
+    pub fn decodeReplayGap(status: u16, body: []const u8) !ReplayGapRecovery {
+        if (status != 409) return error.UnexpectedStatus;
+        const parsed = try std.json.parseFromSlice(std.json.Value, std.heap.page_allocator, body, .{});
+        defer parsed.deinit();
+        if (parsed.value != .object) return error.Invalid;
+        const root = parsed.value.object;
+        const err = root.get("error") orelse return error.Invalid;
+        if (err != .object or !std.mem.eql(u8, string(err.object, "code") orelse return error.Invalid, "replay_gap")) return error.Invalid;
+        const details = err.object.get("details") orelse return error.Invalid;
+        if (details != .object) return error.Invalid;
+        return .{ .requested = uintString(details.object, "requested") orelse return error.Invalid, .oldest_available = uintString(details.object, "oldest_available") orelse return error.Invalid, .newest_available = uintString(details.object, "newest_available") orelse return error.Invalid, .latest_cursor = uintString(details.object, "latest_cursor") orelse return error.Invalid, .snapshot_revision = uintString(details.object, "snapshot_revision") orelse return error.Invalid };
     }
     pub fn snapshotRequest(self: *Client, workspace_id: []const u8, path: *[80]u8) !Request {
         if (!uuid(workspace_id)) return error.InvalidIdentity;
@@ -335,7 +369,13 @@ fn validDiscovery(body: []const u8) bool {
     if (d != .object or !exactKeys(d.object, &.{ "service_version", "capabilities", "limits" }) or (string(d.object, "service_version") orelse "").len == 0) return false;
     const caps = d.object.get("capabilities") orelse return false;
     const limits = d.object.get("limits") orelse return false;
-    return caps == .object and caps.object.count() == 5 and limits == .object and limits.object.count() == 3;
+    if (caps != .object or caps.object.count() != 5 or limits != .object or !exactKeys(limits.object, &.{ "request_body_bytes", "subscriber_events", "subscriber_bytes", "native_model" })) return false;
+    const native = limits.object.get("native_model") orelse return false;
+    if (native != .object or !exactKeys(native.object, &.{ "workspaces", "labels_per_workspace", "repositories_per_workspace", "authoritative_pairs", "live_pair_identities", "reserved_orphan_tombstones", "surfaces_per_pair", "commands", "attention_items", "string_bytes" })) return false;
+    const expected = [_]struct { []const u8, i64 }{ .{ "workspaces", 16 }, .{ "labels_per_workspace", 16 }, .{ "repositories_per_workspace", 8 }, .{ "authoritative_pairs", 32 }, .{ "live_pair_identities", 32 }, .{ "reserved_orphan_tombstones", 32 }, .{ "surfaces_per_pair", 16 }, .{ "commands", 64 }, .{ "attention_items", 64 } };
+    for (expected) |pair| { const value = native.object.get(pair[0]) orelse return false; if (value != .integer or value.integer != pair[1]) return false; }
+    const string_bytes = native.object.get("string_bytes") orelse return false;
+    return string_bytes == .object;
 }
 fn decodeSnapshot(body: []const u8) !Snapshot {
     const p = try std.json.parseFromSlice(std.json.Value, std.heap.page_allocator, body, .{});
