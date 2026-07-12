@@ -162,9 +162,9 @@ Wave 3 *(blocked on Wave 2 completion)*:
 ### Phase 107: Beautify Native Workspace UI and Finalize Sidebar, Tab, and Terminal UX
 
 **Goal:** Deliver a coherent Supacode-quality native workspace interface after lifecycle stability is complete.
-**Requirements**: TBD
+**Requirements**: Phase-local UX acceptance criteria
 **Depends on:** Phase 106
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 **Success Criteria** (what must be TRUE):
 
@@ -176,7 +176,7 @@ Wave 3 *(blocked on Wave 2 completion)*:
 
 Plans:
 
-- [ ] TBD (run $gsd-plan-phase 107 to break down)
+- [ ] 107-01 — Beautify workspace navigation, repository targeting, terminal titles, and native interaction language *(implementation and automated verification complete; final human visual UAT pending)*
 
 ### Phase 108: Native Delivery and Cross-Platform Proof
 
@@ -203,5 +203,5 @@ Plans:
 | 104. Workspace Service and Event Contract | 9/9 | Complete    | 2026-07-11 |
 | 105. Shared Native Model and Terminal Foundation | 9/9 | Complete    | 2026-07-11 |
 | 106. Linux Workspace, Commands, and Attention | 3/3 | Complete | 2026-07-12 |
-| 107. Native workspace UI beautification and UX finalization | 0/TBD | Not started | - |
+| 107. Native workspace UI beautification and UX finalization | 0/1 | Human UAT | - |
 | 108. Native Delivery and Cross-Platform Proof | 0/TBD | Not started | - |
