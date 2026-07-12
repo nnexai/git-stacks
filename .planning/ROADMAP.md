@@ -190,7 +190,7 @@ Plans:
 - [x] 107-08-PLAN.md
 - [x] 107-09-PLAN.md
 - [x] 107-10-PLAN.md
-- [ ] 107-11-PLAN.md
+- [x] 107-11-PLAN.md
 - [ ] 107-12-PLAN.md
 - [ ] 107-13-PLAN.md
 
@@ -227,7 +227,7 @@ Wave 7 *(blocked on reconciliation and refresh coordination)*:
 
 Wave 8 *(blocked on feature-complete GTK composition)*:
 
-- [ ] 107-11 — Render actionable provider attention, complete launcher keyboard flow, and guard live close
+- [x] 107-11 — Render actionable provider attention, complete launcher keyboard flow, and guard live close
 
 Wave 9 *(blocked on interaction safety)*:
 
