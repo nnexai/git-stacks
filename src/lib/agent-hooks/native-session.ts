@@ -4,6 +4,7 @@ import { copilotPlugin } from "./copilot"
 import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "fs"
 import { delimiter, join } from "path"
 import type { AgentLifecycleState, AgentHookPlugin } from "./types"
+import { installAgentIntegrations } from "./integration-manager"
 
 export type NativeAgentProvider = "codex" | "claude" | "copilot" | "opencode"
 
@@ -82,6 +83,7 @@ export function prepareNativeAgentEnvironment(
   basePath: string,
   wrapperDir: string,
   resolveExecutable: (command: string, path: string) => string | null = (command, path) => Bun.which(command, { PATH: path }),
+  options: { installIntegrations?: boolean; integrationHome?: string } = {},
 ): Record<string, string> {
   // Provider integrations are user-level, app-owned assets. Never dirty a
   // workspace merely because the native client opened a terminal. Until the
@@ -90,10 +92,12 @@ export function prepareNativeAgentEnvironment(
   void repoPath
   mkdirSync(wrapperDir, { recursive: true, mode: 0o700 })
   const lookupPath = basePath.split(delimiter).filter((entry) => entry && entry !== wrapperDir).join(delimiter)
+  const report = options.installIntegrations ? installAgentIntegrations({ ...(options.integrationHome ? { home: options.integrationHome } : {}) }) : null
+  const failedProviders = new Set(report?.providers.filter((entry) => entry.state === "failed").map((entry) => entry.provider) ?? wrapperCommands.map((entry) => entry.provider))
   for (const { provider, command } of wrapperCommands) {
     const executable = resolveExecutable(command, lookupPath)
     const target = join(wrapperDir, command)
-    if (!executable) { if (existsSync(target)) rmSync(target); continue }
+    if (!executable || !failedProviders.has(provider)) { if (existsSync(target)) rmSync(target); continue }
     const publish = (state: "working" | "completed" | "failed") =>
       `git-stacks service attention publish --state ${state} --source ${provider} --workspace ${shellQuote(workspaceName)} --workspace-id "$GIT_STACKS_WORKSPACE_ID" --repository-id "$GIT_STACKS_REPOSITORY_ID" --surface-id "$GIT_STACKS_SURFACE_ID" --best-effort >/dev/null 2>&1 || true`
     const script = `#!/bin/sh\n${publish("working")}\n${shellQuote(executable)} "$@"\nstatus=$?\nif [ "$status" -eq 0 ]; then\n  ${publish("completed")}\nelse\n  ${publish("failed")}\nfi\nexit "$status"\n`
@@ -102,5 +106,10 @@ export function prepareNativeAgentEnvironment(
     chmodSync(temporary, 0o700)
     renameSync(temporary, target)
   }
-  return { PATH: `${wrapperDir}${delimiter}${lookupPath}`, GIT_STACKS_AGENT_ATTENTION: "process" }
+  const failed = report?.providers.filter((entry) => entry.state === "failed") ?? []
+  return {
+    PATH: `${wrapperDir}${delimiter}${lookupPath}`,
+    GIT_STACKS_AGENT_ATTENTION: report ? (failed.length ? "hooks-degraded+process-fallback" : "hooks+osc") : "process",
+    ...(report ? { GIT_STACKS_AGENT_INTEGRATION_HEALTH: failed.length ? failed.map((entry) => entry.provider).join(",") : "healthy" } : {}),
+  }
 }
