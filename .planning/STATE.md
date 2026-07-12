@@ -4,17 +4,17 @@ milestone: v0.20.0
 milestone_name: milestone
 current_phase: 107
 current_phase_name: Beautify Native Workspace UI and Finalize UX
-status: Phase 107 hardening execution in progress; 107-02 complete
-stopped_at: Completed 107-02-PLAN.md
-last_updated: "2026-07-12T10:51:37.894Z"
+status: Phase 107 hardening execution in progress; 107-02 and 107-04 complete
+stopped_at: Completed 107-04-PLAN.md
+last_updated: "2026-07-12T10:56:33.149Z"
 last_activity: 2026-07-12
 last_activity_desc: completed the prompt-free, race-safe workspace creation engine and TUI adapter
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 34
-  completed_plans: 23
-  percent: 68
+  completed_plans: 24
+  percent: 60
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-11)
 ## Current Position
 
 Phase: 107 — Beautify Native Workspace UI and Finalize UX
-Plan: 13 plans total — 107-01 and 107-02 complete; 107-03 through 107-13 pending
+Plan: 13 plans total — 107-01, 107-02, and 107-04 complete; remaining plans pending
 Status: Phase 107 hardening execution in progress
-Last activity: 2026-07-12 — completed the prompt-free, race-safe workspace creation engine and TUI adapter
+Last activity: 2026-07-12 — completed authoritative workspace snapshot reconciliation and change monitoring
 
 Progress: [███████░░░] 68%
 
@@ -68,6 +68,7 @@ Progress: [███████░░░] 68%
 | Phase 105 P06 | 8min | 3 tasks | 9 files |
 | Phase 105 P07 | 6min | 3 tasks | 10 files |
 | Phase 107 P02 | 24min | 2 tasks | 5 files |
+| Phase 107 P04 | 18min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - Workspace configuration monitoring remains service-owned; native clients never watch or mutate YAML directly.
 - External snapshot reconciliation preserves native presentation, live-terminal ownership, and unread attention; vanished authoritative pairs remain explicit while owned terminals are live.
 - Linux is the primary deliverable; macOS is a thin architectural proof that must be built and verified on macOS hardware or CI.
+- [Phase 107]: Keep ordinary config reads cached while service projections use explicit authoritative disk enumeration.
+- [Phase 107]: Coalesce watcher and fingerprint triggers through one revision-comparing single-flight rebuild.
 - [Phase 104]: Wire identifiers are UUIDs while request and operation IDs use explicitly prefixed opaque strings. — Prevents identifier-domain confusion at the wire boundary.
 - [Phase 104]: Identity migration is service-only, lock-serialized, validated, fsynced, and atomically renamed. — Preserves CLI compatibility and prevents competing committed identities.
 - [Phase 104]: Official client IDs are path-safe stable identifiers with independently revocable 256-bit credentials. — Prevents path traversal and limits credential compromise to one installed client.
@@ -128,6 +131,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-12T10:51:37.872Z
+Last session: 2026-07-12T10:56:33.126Z
 Stopped at: Completed 107-02-PLAN.md
 Resume file: None
