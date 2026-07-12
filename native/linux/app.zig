@@ -2394,7 +2394,12 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         runtime.deinit();
         allocator.destroy(state);
         return;
-    } else null;
+    } else if (std.posix.getenv("GIT_STACKS_NATIVE_SMOKE") != null and std.posix.getenv("GIT_STACKS_NATIVE_WORKSPACE_SMOKE") == null)
+        surface_mod.Surface.create(runtime, &state.registry) catch |err| {
+            std.debug.print("native isolated smoke surface init failed: {s}\n", .{@errorName(err)});
+            state.registry.deinit(); state.graph.deinit(); runtime.deinit(); allocator.destroy(state); return;
+        }
+    else null;
     if (terminal) |initial_terminal| {
         state.terminals[0] = initial_terminal;
         initial_terminal.setExitHandler(state, surfaceExited);
