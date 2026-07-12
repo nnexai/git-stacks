@@ -83,6 +83,43 @@ describe("v1 event transport", () => {
     expect(replayed).toContain('"sequence":"2"')
   })
 
+  test("authenticated hook publication writes provider-specific structured attention", async () => {
+    const root = join(tmpdir(), `git-stacks-hook-attention-${crypto.randomUUID()}`)
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const service = await startManagedService({ serviceRoot: root, clientId: "events-client", snapshot: snapshot() as never })
+    cleanup.push(() => service.stop())
+    const credential = readOfficialClientCredential("events-client", { serviceRoot: root })!
+    const attention = {
+      id: "att_12345678901234567890123456789012", state: "completed", workspace_id: workspaceId,
+      source: "copilot", title: "GitHub Copilot finished and may need your attention",
+      occurred_at: new Date().toISOString(),
+    }
+    const response = await fetch(new URL("/v1/attention", service.descriptor.endpoint), {
+      method: "POST", headers: { authorization: `Bearer ${credential.token}`, "content-type": "application/json" },
+      body: JSON.stringify(attention),
+    })
+    expect(response.status).toBe(202)
+    const records = readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    expect(records[0]).toMatchObject({ type: "attention", attention: { source: "copilot", title: attention.title, journal_sequence: "1" } })
+  })
+
+  test("installed hook command publishes end to end with native terminal identity", async () => {
+    const configRoot = join(tmpdir(), `git-stacks-hook-command-${crypto.randomUUID()}`)
+    const root = join(configRoot, "service")
+    cleanup.push(() => rmSync(configRoot, { recursive: true, force: true }))
+    const service = await startManagedService({ serviceRoot: root, snapshot: snapshot() as never })
+    cleanup.push(() => service.stop())
+    const child = Bun.spawn([
+      process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "attention", "publish",
+      "--state", "completed", "--source", "copilot", "--workspace", "alpha",
+      "--workspace-id", workspaceId,
+    ], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
+    const exitCode = await child.exited
+    expect(exitCode).toBe(0)
+    const records = readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    expect(records[0]).toMatchObject({ type: "attention", attention: { source: "copilot", title: "GitHub Copilot finished and may need your attention" } })
+  })
+
   test("managed replay gaps expose the authoritative snapshot revision", async () => {
     const root = join(tmpdir(), `git-stacks-gap-${crypto.randomUUID()}`)
     mkdirSync(root, { recursive: true })

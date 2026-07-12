@@ -42,6 +42,12 @@ updated: 2026-07-12
   finding: Ctrl+Shift+W used cached model surface state while the close button used the actual AdwTabPage.
 - timestamp: 2026-07-12
   finding: focused attention, service-client, and workspace lifecycle checks pass after fixes; lifecycle smoke now injects 50 title updates before pin and pair switching.
+- timestamp: 2026-07-12
+  finding: human retest showed no attention because generated hooks invoked `git-stacks service attention publish`, but the CLI had no such command or authenticated publication endpoint.
+- timestamp: 2026-07-12
+  finding: generated hooks referenced nonexistent `GS_*` identity variables while native terminals export `GIT_STACKS_WORKSPACE_ID`, `GIT_STACKS_REPOSITORY_ID`, and `GIT_STACKS_SURFACE_ID`.
+- timestamp: 2026-07-12
+  finding: Limux/cmux use a real local notify command plus auto-exported terminal identity; Supacode keeps unread notification state attached to worktree and terminal surface. The repaired path follows those boundaries.
 
 ## Eliminated
 

@@ -78,7 +78,7 @@ describe("doctor and install support commands", () => {
       expect(result.stdout).not.toContain("Select agent frameworks")
       const settingsPath = join(repoPath, ".claude", "settings.json")
       const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as { hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string }> }>> }
-      expect(settings.hooks.Stop[0].hooks[0].command).toContain("--workspace install-ws")
+      expect(settings.hooks.Stop[0].hooks[0].command).toContain('--workspace "install-ws"')
       expect(settings.hooks.Stop[0].hooks[0].command).toContain("--source claude")
       expect(settings.hooks.PreToolUse[0].matcher).toBe("AskUserQuestion")
       expect(settings.hooks.PreToolUse[0].hooks[0].command).toContain("--source claude")
@@ -102,7 +102,7 @@ describe("doctor and install support commands", () => {
       const hooksPath = join(repoPath, ".github", "hooks", "git-stacks.json")
       const hooks = JSON.parse(readFileSync(hooksPath, "utf8")) as { version: number; hooks: Record<string, Array<{ bash: string; env: Record<string, string> }>> }
       expect(hooks.version).toBe(1)
-      expect(hooks.hooks.sessionEnd[0].bash).toContain("--workspace install-ws")
+      expect(hooks.hooks.sessionEnd[0].bash).toContain('--workspace "install-ws"')
       expect(hooks.hooks.sessionEnd[0].env.GS_WORKSPACE_NAME).toBe("install-ws")
       expect(hooks.hooks.sessionEnd[0].env.GS_FROM).toBe("copilot")
     } finally {

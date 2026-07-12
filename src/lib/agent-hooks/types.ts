@@ -42,5 +42,5 @@ export interface StructuredHookContext {
 }
 
 export function structuredAttentionCommand(source: "claude" | "copilot", state: AgentLifecycleState, workspaceName: string): string {
-  return `git-stacks service attention publish --state ${state} --source ${source} --workspace ${workspaceName} --workspace-id \"$GS_WORKSPACE_ID\" --repository-id \"$GS_REPOSITORY_ID\" --surface-id \"$GS_SURFACE_ID\"`
+  return `git-stacks service attention publish --state ${state} --source ${source} --workspace ${JSON.stringify(workspaceName)} --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\"`
 }

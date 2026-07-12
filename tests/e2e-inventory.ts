@@ -104,7 +104,7 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     family: "service",
     flowType: "command",
     title: "Native-client service lifecycle",
-    commands: ["service start", "service status"],
+    commands: ["service start", "service status", "service attention publish"],
     scopeStatus: "in-scope",
     mappedTests: ["tests/service/discovery.test.ts", "tests/service/operations.test.ts"],
     rationale: "Protected discovery, convergent startup, and idle lifecycle are covered through real loopback and injected lifecycle tests.",

@@ -3,7 +3,7 @@ import { z } from "zod"
 import { authenticateAdmission, type AuthenticatedClient } from "../lib/service/credentials"
 import { IdempotencyConflictError, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
 import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
-import type { WorkspaceSnapshotResponse } from "../lib/service/contract"
+import type { StructuredAttentionEvent, WorkspaceSnapshotResponse } from "../lib/service/contract"
 import { NativeLaunchResolutionRequestSchema, type NativeLaunchResolution } from "../lib/service/contract"
 
 export const MAX_BODY_BYTES = 256 * 1024
@@ -18,6 +18,13 @@ const MutationRequestSchema = z.strictObject({
   workspace: z.string().min(1),
   options: z.record(z.string(), z.unknown()).optional(),
 })
+const AttentionPublishSchema = z.strictObject({
+  id: z.string().regex(/^att_[A-Za-z0-9_-]{16,60}$/),
+  state: z.enum(["working", "waiting", "completed", "failed", "idle"]),
+  workspace_id: z.string().uuid(), repository_id: z.string().uuid().optional(), surface_id: z.string().uuid().optional(),
+  source: z.enum(["claude", "copilot", "codex", "other"]), title: z.string().min(1).max(160),
+  detail: z.string().max(500).optional(), occurred_at: z.string().datetime(),
+}).refine((attention) => attention.surface_id === undefined || attention.repository_id !== undefined)
 
 export type SnapshotAdapter = {
   buildAll(signal?: AbortSignal): Promise<WorkspaceSnapshotResponse[]>
@@ -31,6 +38,7 @@ export interface ServiceServerOptions {
   snapshot: SnapshotAdapter
   operations?: OperationRegistry
   broker?: EventBroker
+  publishAttention?: (attention: Omit<StructuredAttentionEvent, "journal_sequence">) => Promise<void>
   mutations?: Record<string, (request: z.infer<typeof MutationRequestSchema>, signal?: AbortSignal) => OperationExecution>
   hostname?: "127.0.0.1"
   port?: number
@@ -304,6 +312,13 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           if (!parsed.success) return failure(id, "invalid_request", "Invalid native launch request", 400)
           const resolution = await options.snapshot.resolveNativeLaunch(parsed.data, signal)
           return resolution.resolved ? json(success(id, resolution)) : failure(id, resolution.error.code, resolution.error.message, resolution.error.code === "not_found" ? 404 : 409)
+        }
+        if (request.method === "POST" && url.pathname === "/v1/attention") {
+          if (!options.publishAttention) return failure(id, "capability_unavailable", "Attention publication is unavailable", 409)
+          const parsed = AttentionPublishSchema.safeParse(await readBody(request))
+          if (!parsed.success) return failure(id, "invalid_request", "Invalid attention publication", 400)
+          await options.publishAttention(parsed.data)
+          return json(success(id, { published: true }), 202)
         }
         const workspaceMatch = /^\/v1\/workspaces\/([^/]+)$/.exec(url.pathname)
         if (request.method === "GET" && workspaceMatch) {

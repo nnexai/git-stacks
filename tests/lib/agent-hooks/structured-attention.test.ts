@@ -8,9 +8,9 @@ describe("structured lifecycle attention hooks", () => {
       const commands = plugin.generateHookEntries("alpha").map((entry) => entry.command)
       expect(commands.join("\n")).toContain("service attention publish")
       expect(commands.join("\n")).toContain(`--source ${source}`)
-      expect(commands.join("\n")).toContain("$GS_WORKSPACE_ID")
-      expect(commands.join("\n")).toContain("$GS_REPOSITORY_ID")
-      expect(commands.join("\n")).toContain("$GS_SURFACE_ID")
+      expect(commands.join("\n")).toContain("$GIT_STACKS_WORKSPACE_ID")
+      expect(commands.join("\n")).toContain("$GIT_STACKS_REPOSITORY_ID")
+      expect(commands.join("\n")).toContain("$GIT_STACKS_SURFACE_ID")
       expect(commands).toEqual(expect.arrayContaining([
         expect.stringContaining("--state working"), expect.stringContaining("--state waiting"),
         expect.stringContaining("--state completed"), expect.stringContaining("--state idle"),

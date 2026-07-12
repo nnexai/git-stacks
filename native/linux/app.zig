@@ -25,6 +25,7 @@ const product_css =
     ".git-stacks-sidebar button.workspace-row { padding: 8px 10px; border-radius: 8px; min-height: 38px; }" ++
     ".git-stacks-sidebar button.workspace-row:hover { background: alpha(@window_fg_color, 0.08); }" ++
     ".git-stacks-sidebar button.workspace-row.selected-workspace { background: alpha(@accent_color, 0.24); color: @window_fg_color; }" ++
+    ".git-stacks-sidebar .attention-badge { background: @accent_bg_color; color: @accent_fg_color; border-radius: 999px; padding: 1px 7px; font-weight: 700; }" ++
     ".git-stacks-sidebar expander { padding: 5px 0; font-weight: 600; }" ++
     ".git-stacks-sidebar expander > title { color: alpha(@window_fg_color, 0.62); }" ++
     ".git-stacks-sidebar .title-4 { margin: 8px 6px 4px 6px; }";
@@ -585,6 +586,14 @@ fn appendPairButton(parent: *c.GtkBox, state: *State, key: model.PairKey, label:
     c.gtk_label_set_xalign(@ptrCast(title), 0);
     c.gtk_widget_set_hexpand(title, 1);
     c.gtk_box_append(@ptrCast(row), title);
+    const attention = model.aggregate(&state.graph.state, key.workspace_id, key.repository_id, null);
+    if (attention.unread > 0) {
+        var count_buffer: [12:0]u8 = [_:0]u8{0} ** 12;
+        const count = std.fmt.bufPrintZ(&count_buffer, "{d}", .{attention.unread}) catch return;
+        const badge = c.gtk_label_new(count.ptr) orelse return;
+        c.gtk_widget_add_css_class(badge, "attention-badge");
+        c.gtk_box_append(@ptrCast(row), badge);
+    }
     c.gtk_button_set_child(@ptrCast(button), row);
     if (state.graph.state.selected_pair) |selected| {
         if (model.PairKey.eql(selected, key)) {

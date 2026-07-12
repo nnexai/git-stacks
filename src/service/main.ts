@@ -163,6 +163,10 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: () => stopManaged() })
     running = startServiceServer({
       serviceRoot, snapshot, operations, broker, mutations: createWorkspaceMutationAdapters(),
+      publishAttention: async (attention) => {
+        const event = await journal.appendAttention(attention)
+        broker.publish(event)
+      },
       onConnectionChange: (count) => lifecycle.setConnectedClients(count),
       onActivity: () => lifecycle.touch(),
     })
