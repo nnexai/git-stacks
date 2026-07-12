@@ -18,24 +18,27 @@ Automated references identify reproducible checks only. `PENDING HUMAN` may be
 changed only after observing the production app; screenshots and smoke markers
 do not certify keyboard feel, hierarchy, contrast, or assistive technology.
 
-Automated preflight at `51efe9df` / final tree: `native:smoke-hardening`,
+Automated preflight at `7dfde2a3` / final tree: `native:smoke-hardening`,
 `native:verify`, `test`, `typecheck`, `test:deps`, and `verify:gates` — PASS.
 The hardening smoke completed in 81.816 seconds. Human cells remain pending.
 
-UAT gap fixes awaiting re-observation: empty-start catalog creation and owned
-operation IDs (`4bbfb404`), clean selection/launcher/pin/tab-menu interaction
-(`67219a06`), and bounded process/GLib cleanup (`13dc7c57`, `51efe9df`).
+Latest UAT observations accepted creation, external synchronization, tab menus,
+keyboard/accessibility behavior, and the cleaned selection/launcher hierarchy.
+Re-observation remains blocking for restored all-command launcher behavior,
+UUID-targeted pin/unpin (`a5401556`), automatic ACP-first agent attention and
+its project-hook fallback (`a5401556`), and idempotent GLib cleanup
+(`7dfde2a3`).
 
 | Observation | Automated reference | Human result | Notes / app-window evidence |
 | --- | --- | --- | --- |
-| Empty start and Name/Branch/Source creation | `native:smoke-hardening` create-sync checkpoint | PENDING HUMAN | |
-| External add/edit/rename/remove without restart | `native:test:service-sync` | PENDING HUMAN | |
+| Empty start and Name/Branch/Source creation | `native:smoke-hardening` create-sync checkpoint | PASS 2026-07-13 | User reported source selection and creation flow okay after prior crash fix. |
+| External add/edit/rename/remove without restart | `native:test:service-sync` | PASS 2026-07-13 | User reported external synchronization okay; deletion race fix awaits quiet-log recheck. |
 | Replay gap and monotonic cursor recovery | `native:test:service-sync` | PENDING HUMAN | |
 | Codex provider/title/detail, no focus theft, exact routing | `native:test:attention` | PENDING HUMAN | |
-| Orphan retained; live-close cancel then confirm | `native:test:app-graph`, `native:test:application-actions` | PENDING HUMAN | |
+| Orphan retained; live-close cancel then confirm | `native:test:app-graph`, `native:test:application-actions` | PASS 2026-07-13 | Tab context menu was mouse-operable. |
 | Count and UTF-8 byte capacity boundaries | `native:test:model`, `native:test:service-client` | PENDING HUMAN | |
-| Launcher empty/no-match and Up/Down/Enter/Escape | `native:test:application-actions` | PENDING HUMAN | |
-| Keyboard navigation, pin and reorder | `native:test:workspace-ui` | PENDING HUMAN | |
+| Launcher empty/no-match and Up/Down/Enter/Escape | `native:test:application-actions` | RECHECK | Visual hierarchy improved; `tui-output-smoke` must now remain visible as a legitimate configured command. |
+| Keyboard navigation, pin and reorder | `native:test:workspace-ui` | RECHECK | Prior Pin workspace action had no visible result; menu now targets clicked UUID and redraws immediately. |
 | Actionable empty/error/no-result states and friendly copy | `native:test:accessibility` | PENDING HUMAN | |
 | Workspace/repository glyphs, grouping, icon tooltips | `native:test:accessibility` | PENDING HUMAN | |
 | Selected/unread/destructive/status hierarchy and non-color cues | `native:test:accessibility` | PENDING HUMAN | |
@@ -102,3 +105,17 @@ project-local hooks. The current Codex fallback updates only
 global configuration, and blocks launch with a visible error rather than
 overwriting malformed or unwritable configuration. The native UI consumes the
 shared structured-attention model and is not coupled to Codex hook JSON.
+
+| Provider | Preferred automatic transport | Terminal fallback |
+| --- | --- | --- |
+| Codex | maintained/community ACP adapter | merge-safe `.codex/hooks.json` |
+| Claude Code | maintained Agent SDK ACP adapter | merge-safe project settings hooks |
+| GitHub Copilot | native `--acp` | merge-safe project hooks |
+| OpenCode | native `opencode acp` | none; report unavailable transport without mutating config |
+
+ACP `session/update` notifications are normalized into the shared
+working/waiting/completed/failed/idle lifecycle. Permission/input requests map
+to waiting, tool/plan/message progress maps to working, and unknown extension
+updates are ignored. Adapter executables are external capabilities: git-stacks
+detects/uses them through the session seam and does not vendor or silently
+install them.
