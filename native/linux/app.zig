@@ -414,6 +414,11 @@ fn surfaceExited(context:*anyopaque,id:model.Id,exit_code:u32,elapsed_ms:u64)voi
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
     if (state.cleaned) return c.G_SOURCE_REMOVE;
+    // createTerminal pumps the GTK context while waiting for Ghostty process
+    // identity. Do not let this periodic adopter register that provisional
+    // surface inside the nested loop; createTerminal publishes it atomically
+    // with its correct kind, command metadata, and pair immediately after.
+    if (state.creating_terminal) return 1;
     const pair = state.graph.state.selected_pair orelse return 1;
     for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |surface| {
         if (state.graph.terminals.find(surface.surface_id) != null) continue;
@@ -713,6 +718,15 @@ fn selectedPageChanged(view: ?*c.AdwTabView, _: ?*c.GParamSpec, data: ?*anyopaqu
     const ptr = c.g_object_get_data(@ptrCast(child), "git-stacks-surface") orelse return;
     const id: *model.Id = @ptrCast(@alignCast(ptr));
     _ = (workspace_view.View{ .state = &state.graph.state }).selectTab(id.*);
+    // A real tab click moves GTK focus to the tab bar. Keep action enablement
+    // in sync with the newly selected model surface and return input to its
+    // Ghostty widget, matching keyboard/action-based tab selection.
+    refreshProjection(state);
+    for (state.terminals[0..state.terminal_count]) |candidate| if (candidate) |surface|
+        if (std.mem.eql(u8, &surface.surface_id, id)) {
+            _ = c.gtk_widget_grab_focus(@ptrCast(@alignCast(surface.widget())));
+            break;
+        };
 }
 fn nativeClosePage(raw_view: ?*c.AdwTabView, page: ?*c.AdwTabPage, data: ?*anyopaque) callconv(.c) c.gboolean {
     const state: *State = @ptrCast(@alignCast(data orelse return 0));
