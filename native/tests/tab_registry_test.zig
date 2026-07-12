@@ -51,3 +51,22 @@ test "close and quit remove ownership while view detach does not" {
     try std.testing.expectEqual(@as(usize, 0), r.hosts.items.len);
     try std.testing.expectEqual(@as(u8,1),f.teardowns);
 }
+test "registry limits distinct live pair identities before ownership mutation" {
+    var r = registry.Registry.init(std.testing.allocator);
+    defer r.deinit();
+    var fakes: [33]Fake = [_]Fake{.{}} ** 33;
+    for (0..32) |i| {
+        var workspace = id("118f47f4-5ab1-7c2d-8e90-123456789abc");
+        var repository = id("218f47f4-5ab1-7c2d-8e90-123456789abc");
+        var surface = id("318f47f4-5ab1-7c2d-8e90-123456789abc");
+        workspace[0] = @intCast('A' + i);
+        repository[0] = @intCast('A' + i);
+        surface[0] = @intCast('A' + i);
+        try r.register(host(&fakes[i], surface, .{ .workspace_id = workspace, .repository_id = repository }, i + 1, @intCast(500 + i)));
+    }
+    try std.testing.expectEqual(@as(usize, 32), r.livePairCount());
+    var extra_pair: model.PairKey = .{ .workspace_id = id("z18f47f4-5ab1-7c2d-8e90-123456789abc"), .repository_id = id("z28f47f4-5ab1-7c2d-8e90-123456789abc") };
+    try std.testing.expectError(error.LivePairCapacity, r.register(host(&fakes[32], id("z38f47f4-5ab1-7c2d-8e90-123456789abc"), extra_pair, 40, 900)));
+    try std.testing.expect(!fakes[32].registered);
+    try std.testing.expect(r.hasLivePair(extra_pair) == false);
+}
