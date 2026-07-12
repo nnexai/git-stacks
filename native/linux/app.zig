@@ -645,6 +645,10 @@ fn ensurePairUi(state:*State,key:model.PairKey)?*PairUi{
     c.g_menu_append(menu,"Rename…","win.rename-current");c.g_menu_append(menu,"Close","win.close-tab");c.g_menu_append(menu,"Relaunch","win.relaunch-current");c.g_menu_append(menu,"Remove","win.remove-current");
     c.adw_tab_view_set_menu_model(@ptrCast(tabs),@ptrCast(@alignCast(menu)));c.g_object_unref(menu);
     const bar=c.adw_tab_bar_new() orelse return null;c.adw_tab_bar_set_view(@ptrCast(bar),@ptrCast(tabs));c.adw_tab_bar_set_autohide(@ptrCast(bar),0);c.adw_tab_bar_set_expand_tabs(@ptrCast(bar),0);
+    const bar_click=c.gtk_gesture_click_new() orelse return null;
+    c.gtk_gesture_single_set_button(@ptrCast(bar_click),c.GDK_BUTTON_PRIMARY);
+    _=c.g_signal_connect_data(bar_click,"pressed",@ptrCast(&tabBarPressed),state,null,0);
+    c.gtk_widget_add_controller(@ptrCast(@alignCast(bar)),@ptrCast(bar_click));
     const add=c.gtk_button_new_from_icon_name("tab-new-symbolic") orelse return null;c.gtk_actionable_set_action_name(@ptrCast(add),"win.new-shell");c.adw_tab_bar_set_end_action_widget(@ptrCast(bar),add);
     c.gtk_box_append(@ptrCast(box),@ptrCast(@alignCast(bar)));c.gtk_widget_set_vexpand(@ptrCast(@alignCast(tabs)),1);c.gtk_box_append(@ptrCast(box),@ptrCast(@alignCast(tabs)));
     const index=state.pair_ui_count;var ui=&state.pair_uis[index];ui.*=.{.key=key,.container=box,.tabs=@ptrCast(tabs),.bar=@ptrCast(bar),.name=undefined};
