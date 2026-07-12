@@ -45,7 +45,7 @@
 - [x] **LNX-04**: Live terminal tabs survive workspace navigation without recreation.
 - [x] **LNX-05**: Restarted clients restore tab metadata and clearly distinguish surfaces whose processes are no longer alive.
 - [x] **LNX-06**: Keyboard navigation, focus movement, IME interaction, and native accessibility work across the sidebar and terminal surfaces.
-- [ ] **LNX-07**: Users can create a workspace from the native client by entering a name and branch and choosing either one template or one-or-more registered repositories.
+- [x] **LNX-07**: Users can create a workspace from the native client by entering a name and branch and choosing either one template or one-or-more registered repositories.
 - [ ] **LNX-08**: A running native client automatically reconciles workspace additions, updates, renames, and removals made by the CLI, TUI, or another process without reading workspace YAML or requiring restart.
 - [ ] **LNX-09**: The native shell has keyboard-complete launcher and navigation behavior, truthful accessibility semantics, protected live-terminal close, adaptive layout, and actionable empty, error, and no-result states.
 
@@ -118,7 +118,7 @@
 | LNX-04 | Phase 106 | Complete |
 | LNX-05 | Phase 106 | Complete |
 | LNX-06 | Phase 106 | Complete |
-| LNX-07 | Phase 107 | Pending |
+| LNX-07 | Phase 107 | Complete |
 | LNX-08 | Phase 107 | Pending |
 | LNX-09 | Phase 107 | Pending |
 | ACT-01 | Phase 106 | Complete |
