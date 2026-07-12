@@ -18,10 +18,39 @@ export const RevisionSchema = CursorSchema
 export type Revision = z.infer<typeof RevisionSchema>
 export const TimestampSchema = z.string().datetime({ offset: true })
 
+const utf8 = new TextEncoder()
+export function utf8BoundedString(maximum: number, minimum = 0) {
+  return z.string().refine((value) => {
+    if (value.length > 0 && !value.toWellFormed) return false
+    return value === value.toWellFormed() && utf8.encode(value).byteLength >= minimum && utf8.encode(value).byteLength <= maximum
+  }, { message: `String must contain between ${minimum} and ${maximum} UTF-8 bytes` })
+}
+
+export const NativeModelStringByteLimitsSchema = z.strictObject({
+  workspace_name: z.literal(96), workspace_label: z.literal(64), repository_name: z.literal(96),
+  command_id: z.literal(64), command_name: z.literal(96), surface_command_id: z.literal(64),
+  surface_title: z.literal(64), surface_cwd: z.literal(128), attention_id: z.literal(64),
+  attention_title: z.literal(160), attention_detail: z.literal(500), attention_occurred_at: z.literal(40),
+})
+export const NativeModelLimitsSchema = z.strictObject({
+  workspaces: z.literal(16), labels_per_workspace: z.literal(16), repositories_per_workspace: z.literal(8),
+  authoritative_pairs: z.literal(32), live_pair_identities: z.literal(32), reserved_orphan_tombstones: z.literal(32),
+  surfaces_per_pair: z.literal(16), commands: z.literal(64), attention_items: z.literal(64),
+  string_bytes: NativeModelStringByteLimitsSchema,
+})
+export const NATIVE_MODEL_LIMITS = Object.freeze(NativeModelLimitsSchema.parse({
+  workspaces: 16, labels_per_workspace: 16, repositories_per_workspace: 8, authoritative_pairs: 32,
+  live_pair_identities: 32, reserved_orphan_tombstones: 32, surfaces_per_pair: 16, commands: 64, attention_items: 64,
+  string_bytes: { workspace_name: 96, workspace_label: 64, repository_name: 96, command_id: 64, command_name: 96,
+    surface_command_id: 64, surface_title: 64, surface_cwd: 128, attention_id: 64, attention_title: 160,
+    attention_detail: 500, attention_occurred_at: 40 },
+}))
+
 export const ErrorCodeSchema = z.enum([
   "invalid_request", "unauthorized", "not_found", "conflict", "rate_limited",
   "capability_unavailable", "replay_gap", "snapshot_busy", "internal_error", "operation_failed", "idempotency_conflict",
   "request_timeout",
+  "capacity_exceeded",
 ])
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>
 export const ApiErrorSchema = z.strictObject({
@@ -54,11 +83,30 @@ export const ServiceLimitsSchema = z.strictObject({
   request_body_bytes: z.number().int().positive(),
   subscriber_events: z.number().int().positive(),
   subscriber_bytes: z.number().int().positive(),
+  native_model: NativeModelLimitsSchema,
 })
 export type ServiceLimits = z.infer<typeof ServiceLimitsSchema>
 export const DiscoverySchema = z.strictObject({ service_version: z.string().min(1), capabilities: CapabilitiesSchema, limits: ServiceLimitsSchema })
 export const DiscoveryResponseSchema = successEnvelope(DiscoverySchema)
 export type DiscoveryResponse = z.infer<typeof DiscoveryResponseSchema>
+
+export const WorkspaceCreationTemplateSchema = z.strictObject({
+  name: utf8BoundedString(96, 1), description: utf8BoundedString(160).optional(), repository_count: z.number().int().nonnegative(),
+  command_count: z.number().int().nonnegative(), labels: z.array(utf8BoundedString(64, 1)).max(16),
+})
+export const WorkspaceCreationRepositorySchema = z.strictObject({
+  name: utf8BoundedString(96, 1), type: utf8BoundedString(64, 1), default_branch: utf8BoundedString(96, 1),
+})
+export const WorkspaceCreationCatalogSchema = z.strictObject({
+  templates: z.array(WorkspaceCreationTemplateSchema), repositories: z.array(WorkspaceCreationRepositorySchema), native_model: NativeModelLimitsSchema,
+})
+const WorkspaceCreationBase = { name: utf8BoundedString(96, 1), branch: utf8BoundedString(96, 1) }
+export const WorkspaceCreationRequestSchema = z.union([
+  z.strictObject({ ...WorkspaceCreationBase, source: z.strictObject({ kind: z.literal("template"), template: utf8BoundedString(96, 1) }) }),
+  z.strictObject({ ...WorkspaceCreationBase, source: z.strictObject({ kind: z.literal("repositories"), repositories: z.array(utf8BoundedString(96, 1)).min(1).max(8).refine((v) => new Set(v).size === v.length) }) }),
+])
+export type WorkspaceCreationCatalog = z.infer<typeof WorkspaceCreationCatalogSchema>
+export type WorkspaceCreationRequest = z.infer<typeof WorkspaceCreationRequestSchema>
 
 export const RepositorySnapshotSchema = z.strictObject({
   id: EntityIdSchema, name: z.string().min(1), mode: z.enum(["worktree", "trunk", "dir"]), path: z.string().min(1),

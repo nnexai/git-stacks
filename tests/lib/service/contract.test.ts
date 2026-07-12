@@ -10,6 +10,9 @@ import {
   ErrorEnvelopeSchema,
   ServiceEventSchema,
   WorkspaceSnapshotResponseSchema,
+  WorkspaceCreationRequestSchema,
+  WorkspaceCreationCatalogSchema,
+  NATIVE_MODEL_LIMITS,
 } from "../../../src/lib/service/contract"
 
 const fixtures = join(import.meta.dir, "../../fixtures/service-v1")
@@ -73,5 +76,21 @@ describe("service v1 contract", () => {
       expect(StructuredAttentionEventSchema.parse({ id: `att_0123456789abcde${state.length}`, state, workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", source: "claude", title: state, occurred_at: "2026-07-11T00:00:00.000Z", journal_sequence: "1" }).state).toBe(state)
     }
     expect(() => StructuredAttentionEventSchema.parse({ id: "att_0123456789abcdef", state: "waiting", workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", source: "claude", title: "question", occurred_at: "2026-07-11T00:00:00.000Z", journal_sequence: "1" })).toThrow()
+  })
+
+  test("locks workspace creation sources and native capacity", () => {
+    expect(WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "template", template: "full" } }).source.kind).toBe("template")
+    expect(WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "repositories", repositories: ["app"] } }).source.kind).toBe("repositories")
+    expect(() => WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "repositories", repositories: [] } })).toThrow()
+    expect(() => WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "repositories", repositories: ["app", "app"] } })).toThrow()
+    expect(() => WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "template", template: "full", local_path: "/secret" } })).toThrow()
+    expect(WorkspaceCreationCatalogSchema.parse({ templates: [], repositories: [], native_model: NATIVE_MODEL_LIMITS }).native_model).toEqual(NATIVE_MODEL_LIMITS)
+  })
+
+  test("measures workspace names by well-formed UTF-8 bytes", () => {
+    const request = (name: string) => ({ name, branch: "topic", source: { kind: "repositories", repositories: ["app"] } })
+    expect(() => WorkspaceCreationRequestSchema.parse(request("😀".repeat(24)))).not.toThrow()
+    expect(() => WorkspaceCreationRequestSchema.parse(request("😀".repeat(24) + "a"))).toThrow()
+    expect(() => WorkspaceCreationRequestSchema.parse(request("\ud800"))).toThrow()
   })
 })

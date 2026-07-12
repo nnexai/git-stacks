@@ -3,6 +3,7 @@ import {
   NameSchema,
   readGlobalConfig,
   readRegistry,
+  listTemplates,
   workspaceExists,
   type RepoRegistryEntry,
   type Template,
@@ -15,6 +16,7 @@ import {
   createWorkspace,
   type CreateWorkspaceInputs,
 } from "./workspace-lifecycle"
+import { NATIVE_MODEL_LIMITS, WorkspaceCreationCatalogSchema, type WorkspaceCreationCatalog } from "./service/contract"
 
 export type WorkspaceCreationSource =
   | { kind: "template"; template: string }
@@ -65,6 +67,30 @@ export type WorkspaceCreationDependencies = {
 }
 
 export type ProgressCallback = (message: string) => void
+
+export type WorkspaceCreationCatalogDependencies = {
+  listTemplates: () => Template[]
+  readRegistry: () => RepoRegistryEntry[]
+}
+
+export function getWorkspaceCreationCatalog(
+  dependencies: Partial<WorkspaceCreationCatalogDependencies> = {},
+): WorkspaceCreationCatalog {
+  const deps = { listTemplates, readRegistry, ...dependencies }
+  return WorkspaceCreationCatalogSchema.parse({
+    templates: deps.listTemplates().map((template) => ({
+      name: template.name,
+      ...(template.description ? { description: template.description } : {}),
+      repository_count: template.repos.length,
+      command_count: Object.keys(template.commands ?? {}).length + template.repos.reduce((sum, repo) => sum + Object.keys(repo.commands ?? {}).length, 0),
+      labels: [...(template.labels ?? [])],
+    })).sort((a, b) => a.name.localeCompare(b.name)),
+    repositories: deps.readRegistry().map((repository) => ({
+      name: repository.name, type: repository.type, default_branch: repository.default_branch,
+    })).sort((a, b) => a.name.localeCompare(b.name)),
+    native_model: NATIVE_MODEL_LIMITS,
+  })
+}
 
 async function validateBranchWithGit(branch: string): Promise<boolean> {
   const proc = Bun.spawn(["git", "check-ref-format", "--branch", branch], {

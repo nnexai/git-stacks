@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
 import type { RepoRegistryEntry, Template } from "@/lib/config"
-import { createWorkspaceFromRequest, planWorkspaceCreation } from "@/lib/workspace-creation"
+import { createWorkspaceFromRequest, getWorkspaceCreationCatalog, planWorkspaceCreation } from "@/lib/workspace-creation"
 
 const registry: RepoRegistryEntry[] = [
   { name: "app", schema_version: "1", local_path: "/repos/app", default_branch: "main", type: "typescript", is_dir: false },
@@ -77,5 +77,16 @@ describe("createWorkspaceFromRequest", () => {
       deps({ createWorkspace: async () => ({ ok: false, error: "hook failed", rollbackErrors: ["remove failed"] }) }),
     )
     expect(result).toEqual({ ok: false, code: "creation_failed", error: "hook failed", rollbackErrors: ["remove failed"] })
+  })
+})
+
+describe("getWorkspaceCreationCatalog", () => {
+  test("projects sorted display metadata without paths or executable configuration", () => {
+    const catalog = getWorkspaceCreationCatalog({ listTemplates: () => [template], readRegistry: () => registry })
+    expect(catalog.templates).toEqual([{ name: "full", repository_count: 1, command_count: 2, labels: ["team:app"] }])
+    expect(catalog.repositories.map((repo) => repo.name)).toEqual(["app", "docs"])
+    expect(JSON.stringify(catalog)).not.toContain("/repos/")
+    expect(JSON.stringify(catalog)).not.toContain("prepare")
+    expect(JSON.stringify(catalog)).not.toContain("MODE")
   })
 })
