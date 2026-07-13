@@ -5,6 +5,9 @@ pub const Connection = enum { disconnected_no_snapshot, connecting, ready, stale
 pub const Lifecycle = enum { live, ended, failed_cleanup };
 pub const TerminalKind = enum { shell, configured_command };
 pub const OrganizationMode = enum { simple, label, repository };
+pub const RepositoryRemote = enum { available, missing, not_applicable };
+pub const PullRequestState = enum { open, draft, merged, closed };
+pub const CheckState = enum { pending, passing, failing };
 pub const SignalState = enum { failed, waiting, completed, working, idle };
 pub const SignalSource = enum { claude, copilot, codex, opencode, automation, acp, user, other };
 pub const SignalKind = enum { activity, notification };
@@ -44,7 +47,15 @@ pub const PairKey = struct {
         return std.mem.eql(u8, &a.workspace_id, &b.workspace_id) and std.mem.eql(u8, &a.repository_id, &b.repository_id);
     }
 };
-pub const NamedRepository = struct { id: Id = [_]u8{0} ** 36, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
+pub const PullRequestPresentation = struct { number: u32, state: PullRequestState, checks: ?CheckState = null };
+pub const RepositoryPresentation = struct {
+    branch: [96]u8 = [_]u8{0} ** 96, branch_len: u8 = 0,
+    default_branch: [96]u8 = [_]u8{0} ** 96, default_branch_len: u8 = 0,
+    exists: bool = true, dirty: bool = false, ahead: u32 = 0, behind: u32 = 0,
+    additions: u64 = 0, removals: u64 = 0, remote: RepositoryRemote = .available,
+    degraded: bool = false, pull_request: ?PullRequestPresentation = null,
+};
+pub const NamedRepository = struct { id: Id = [_]u8{0} ** 36, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0, presentation: ?RepositoryPresentation = null };
 pub const Workspace = struct {
     id: Id,
     revision: u64 = 0,

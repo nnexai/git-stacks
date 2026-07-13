@@ -526,6 +526,46 @@ fn aggregateState(body: []const u8) !model.State {
             state.pairs[state.pair_count] = .{ .key = .{ .workspace_id = ws.id, .repository_id = ws.repository_ids[ri] }, .surfaces = undefined };
             state.pair_count += 1;
         }
+        if (wo.get("status")) |statuses| {
+            if (statuses != .array or statuses.array.items.len > repos.array.items.len) return error.Capacity;
+            for (statuses.array.items) |status| {
+                if (status != .object) return error.Invalid;
+                const so = status.object;
+                const rid = string(so, "repository_id") orelse return error.Invalid;
+                const branch = string(so, "branch") orelse return error.Invalid;
+                const default_branch = string(so, "default_branch") orelse return error.Invalid;
+                if (!uuid(rid) or branch.len > 96 or default_branch.len == 0 or default_branch.len > 96) return error.Invalid;
+                var ri: ?usize = null;
+                for (ws.repository_ids[0..ws.repository_count], 0..) |candidate, index| if (std.mem.eql(u8, &candidate, rid)) { ri = index; break; };
+                const index = ri orelse return error.Invalid;
+                var p: model.RepositoryPresentation = .{};
+                @memcpy(p.branch[0..branch.len], branch); p.branch_len = @intCast(branch.len);
+                @memcpy(p.default_branch[0..default_branch.len], default_branch); p.default_branch_len = @intCast(default_branch.len);
+                const exists = so.get("exists") orelse return error.Invalid; const dirty = so.get("dirty") orelse return error.Invalid;
+                const degraded = so.get("degraded") orelse return error.Invalid;
+                if (exists != .bool or dirty != .bool or degraded != .bool) return error.Invalid;
+                p.exists = exists.bool; p.dirty = dirty.bool; p.degraded = degraded.bool;
+                inline for (.{ "ahead", "behind", "additions", "removals" }) |field| {
+                    const value = so.get(field) orelse return error.Invalid;
+                    if (value != .integer or value.integer < 0) return error.Invalid;
+                    if (std.mem.eql(u8, field, "ahead")) p.ahead = std.math.cast(u32, value.integer) orelse return error.Capacity
+                    else if (std.mem.eql(u8, field, "behind")) p.behind = std.math.cast(u32, value.integer) orelse return error.Capacity
+                    else if (std.mem.eql(u8, field, "additions")) p.additions = @intCast(value.integer)
+                    else p.removals = @intCast(value.integer);
+                }
+                const remote = string(so, "remote") orelse return error.Invalid;
+                p.remote = if (std.mem.eql(u8, remote, "available")) .available else if (std.mem.eql(u8, remote, "missing")) .missing else if (std.mem.eql(u8, remote, "not_applicable")) .not_applicable else return error.Invalid;
+                if (so.get("pull_request")) |pr| {
+                    if (pr != .object) return error.Invalid;
+                    const number = pr.object.get("number") orelse return error.Invalid; const state_name = string(pr.object, "state") orelse return error.Invalid;
+                    if (number != .integer or number.integer <= 0) return error.Invalid;
+                    var value: model.PullRequestPresentation = .{ .number = std.math.cast(u32, number.integer) orelse return error.Capacity, .state = if (std.mem.eql(u8, state_name, "open")) .open else if (std.mem.eql(u8, state_name, "draft")) .draft else if (std.mem.eql(u8, state_name, "merged")) .merged else if (std.mem.eql(u8, state_name, "closed")) .closed else return error.Invalid };
+                    if (string(pr.object, "checks")) |checks| value.checks = if (std.mem.eql(u8, checks, "pending")) .pending else if (std.mem.eql(u8, checks, "passing")) .passing else if (std.mem.eql(u8, checks, "failing")) .failing else return error.Invalid;
+                    p.pull_request = value;
+                }
+                ws.repositories[index].presentation = p;
+            }
+        }
         if (wo.get("launch")) |launch| if (launch == .object) if (launch.object.get("named")) |named| if (named == .array) for (named.array.items) |value| {
             if (value != .object or state.command_count >= state.commands.len) return error.Invalid;
             const cid = string(value.object, "id") orelse return error.Invalid;

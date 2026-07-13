@@ -29,6 +29,13 @@ describe("service v1 contract", () => {
     }
   })
 
+  test("round-trips the native workspace presentation fixture", () => {
+    const value = JSON.parse(readFileSync(join(import.meta.dir, "../../../native/tests/fixtures/workspace-snapshot.json"), "utf8"))
+    expect(WorkspaceSnapshotResponseSchema.parse(value)).toEqual(value)
+    expect(value.workspace.status[0]).toMatchObject({ repository_id: value.workspace.repositories[0].id, additions: 12, removals: 4, default_branch: "main" })
+    expect(value.workspace.status[1].pull_request).toBeUndefined()
+  })
+
   test("rejects unknown fields and malformed opaque values", () => {
     expect(() => DiscoveryResponseSchema.parse({ ...(fixture("discovery.json") as object), extra: true })).toThrow()
     const snapshot = fixture("workspace-snapshot.json") as Record<string, unknown>

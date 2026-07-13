@@ -123,6 +123,21 @@ test "aggregate snapshot decodes normalized workspace repository pairs into redu
     try std.testing.expectEqual(@as(u8, 1), action.snapshot.workspaces[0].label_count);
     try std.testing.expectEqualStrings("client", action.snapshot.workspaces[0].labels[0][0..action.snapshot.workspaces[0].label_lens[0]]);
 }
+test "aggregate snapshot decodes bounded repository presentation by stable identity" {
+    var c = service.Client.init("Bearer secret");
+    const body = "{\"protocol\":\"v1\",\"request_id\":\"req_1234567890123456\",\"ok\":true,\"data\":[{\"revision\":\"9\",\"workspace\":{\"id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"feature\",\"repositories\":[{\"id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"repo\"}],\"status\":[{\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"branch\":\"topic\",\"default_branch\":\"main\",\"exists\":true,\"dirty\":true,\"degraded\":false,\"ahead\":2,\"behind\":1,\"additions\":12,\"removals\":4,\"remote\":\"available\",\"pull_request\":{\"number\":42,\"state\":\"open\",\"checks\":\"passing\"}}]}}]}";
+    const action = try c.decodeAggregateSnapshot(body);
+    const repo = action.snapshot.workspaces[0].repositories[0];
+    const p = repo.presentation.?;
+    try std.testing.expectEqualStrings("topic", p.branch[0..p.branch_len]);
+    try std.testing.expectEqual(@as(u64, 12), p.additions);
+    try std.testing.expectEqual(@as(u32, 42), p.pull_request.?.number);
+    try std.testing.expect(p.pull_request.?.checks.? == .passing);
+
+    const bad = std.mem.replaceOwned(u8, std.testing.allocator, body, "\"available\"", "\"unknown\"") catch unreachable;
+    defer std.testing.allocator.free(bad);
+    try std.testing.expectError(error.Invalid, c.decodeAggregateSnapshot(bad));
+}
 test "activity SSE signal retains service identity and valid UTF-8 content" {
     var c = service.Client.init("Bearer secret");
     c.sequence = 10;
