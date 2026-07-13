@@ -848,9 +848,9 @@ fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_vi
         if (projected.visibility.git and (p.additions > 0 or p.removals > 0)) {
             var git_z: [48:0]u8 = [_:0]u8{0} ** 48; const git = std.fmt.bufPrintZ(&git_z, "+{d} -{d}", .{ p.additions, p.removals }) catch return; const git_label = c.gtk_label_new(git.ptr) orelse return; c.gtk_widget_add_css_class(git_label, "git-additions"); c.gtk_widget_add_css_class(git_label, "git-removals"); c.gtk_widget_set_tooltip_text(git_label, "Git line additions and removals"); c.gtk_box_append(@ptrCast(status), git_label);
         }
-        if (p.pull_request) |pr| { var pr_z: [48:0]u8 = [_:0]u8{0} ** 48; const pr_text = std.fmt.bufPrintZ(&pr_z, if (projected.visibility.pr_expanded) "PR #{d} {s}" else "PR", .{ pr.number, @tagName(pr.state) }) catch return; const badge = c.gtk_label_new(pr_text.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-status-chip"); c.gtk_widget_set_tooltip_text(badge, "Pull request and checks"); c.gtk_box_append(@ptrCast(status), badge); }
+        if (p.pull_request) |pr| { var pr_z: [48:0]u8 = [_:0]u8{0} ** 48; const pr_text = if (projected.visibility.pr_expanded) std.fmt.bufPrintZ(&pr_z, "PR #{d} {s}", .{ pr.number, @tagName(pr.state) }) catch return else std.fmt.bufPrintZ(&pr_z, "PR", .{}) catch return; const badge = c.gtk_label_new(pr_text.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-status-chip"); c.gtk_widget_set_tooltip_text(badge, "Pull request and checks"); c.gtk_box_append(@ptrCast(status), badge); }
     }
-    if (projected.agent_count > 0) { var agent_z: [24:0]u8 = [_:0]u8{0} ** 24; const agent = std.fmt.bufPrintZ(&agent_z, if (projected.agent_count > projected.visibility.agent_limit) "A +{d}" else "A {d}", .{if (projected.agent_count > projected.visibility.agent_limit) projected.agent_count - projected.visibility.agent_limit else projected.agent_count}) catch return; const badge = c.gtk_label_new(agent.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-provider-chip"); c.gtk_widget_set_tooltip_text(badge, "Active agent sessions"); c.gtk_box_append(@ptrCast(status), badge); }
+    if (projected.agent_count > 0) { var agent_z: [24:0]u8 = [_:0]u8{0} ** 24; const agent = if (projected.agent_count > projected.visibility.agent_limit) std.fmt.bufPrintZ(&agent_z, "A +{d}", .{projected.agent_count - projected.visibility.agent_limit}) catch return else std.fmt.bufPrintZ(&agent_z, "A {d}", .{projected.agent_count}) catch return; const badge = c.gtk_label_new(agent.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-provider-chip"); c.gtk_widget_set_tooltip_text(badge, "Active agent sessions"); c.gtk_box_append(@ptrCast(status), badge); }
     if (projected.activity) { const activity = c.gtk_image_new_from_icon_name("media-playback-start-symbolic") orelse return; c.gtk_widget_add_css_class(activity, "workspace-activity"); c.gtk_widget_add_css_class(activity, if (animationsEnabled()) "workspace-activity-animated" else "workspace-activity-static"); c.gtk_widget_set_tooltip_text(activity, if (animationsEnabled()) "Background activity" else "Background activity (animation disabled)"); c.gtk_box_append(@ptrCast(status), activity); }
     if (projected.awaiting) { const awaiting = c.gtk_image_new_from_icon_name("dialog-question-symbolic") orelse return; c.gtk_widget_add_css_class(awaiting, "workspace-awaiting"); c.gtk_widget_set_tooltip_text(awaiting, "Awaiting input"); c.gtk_box_append(@ptrCast(status), awaiting); }
     if (projected.unread) { const unread = c.gtk_image_new_from_icon_name("mail-unread-symbolic") orelse return; c.gtk_widget_add_css_class(unread, "workspace-unread"); c.gtk_widget_set_tooltip_text(unread, "Unread notification"); c.gtk_box_append(@ptrCast(status), unread); }
@@ -864,7 +864,7 @@ fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_vi
 fn animationsEnabled() bool {
     const settings = c.gtk_settings_get_default() orelse return false;
     var enabled: c.gboolean = 0;
-    c.g_object_get(settings, "gtk-enable-animations", &enabled, null);
+    c.g_object_get(settings, "gtk-enable-animations", &enabled, @as(?*anyopaque, null));
     return enabled != 0;
 }
 fn appendWorkspaceEntry(parent: *c.GtkBox, state: *State, ws: model.Workspace, only_repo: ?model.Id, pinned: bool) void {
@@ -1116,7 +1116,7 @@ fn refreshProjection(state: *State) void {
                 c.gtk_list_box_append(list, expander);
             };
         }
-    }
+    };
     if (state.tab_view) |tabs| {
         const view = workspace_view.View{ .state = &state.graph.state };
         if (view.pair()) |pair| {
