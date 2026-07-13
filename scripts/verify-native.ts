@@ -386,11 +386,14 @@ async function verifyStress(): Promise<void> {
   const cycles = extended ? 250 : 25
   const samples: StressSample[] = []
   await withGraphicalSession(async () => {
+    const configRoot = mkdtempSync(join(tmpdir(), "git-stacks-native-stress-"))
+    try {
     for (let cycle = 1; cycle <= cycles; cycle++) {
       const child = Bun.spawn([artifact], {
         stdout: "pipe", stderr: "pipe",
         env: {
           ...process.env,
+          GIT_STACKS_CONFIG_DIR: configRoot,
           GIT_STACKS_NATIVE_SMOKE: "1",
           GIT_STACKS_NATIVE_STRESS_CYCLE: String(cycle),
           ...(cycle % 2 === 0 ? { GIT_STACKS_NATIVE_MULTISURFACE_SMOKE: "1" } : {}),
@@ -412,6 +415,7 @@ async function verifyStress(): Promise<void> {
       if (fields.cycle !== cycle || fields.rss_bytes <= 0 || fields.fd_count <= 0 || fields.thread_count <= 0) throw new Error(`invalid production stress metadata: ${line}`)
       samples.push(fields)
     }
+    } finally { rmSync(configRoot, { recursive: true, force: true }) }
   })
   const warmup = Math.min(5, samples.length - 2)
   const measured = samples.slice(warmup)
