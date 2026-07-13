@@ -3,6 +3,7 @@ const surface = @import("ghostty_surface");
 const attention = @import("attention_view");
 const model = @import("model");
 const c = @cImport({ @cInclude("gtk/gtk.h"); });
+const workspace = @import("workspace_view");
 
 test "production GtkGLArea exposes only its truthful accessibility contract" {
     c.gtk_init();
@@ -40,4 +41,21 @@ test "attention row redundant text contains provider title and location" {
     try std.testing.expectEqualStrings("Codex",row.provider);
     try std.testing.expectEqualStrings("Approval",row.title[0..row.title_len]);
     try std.testing.expectEqualStrings("Demo",row.location[0..row.location_len]);
+}
+
+test "workspace compression never removes awaiting unread or accessible meaning" {
+    var state: model.State = .{ .connection = .ready, .workspace_count = 1, .pair_count = 1, .signal_count = 1 };
+    const wid = [_]u8{'w'} ** 36; const rid = [_]u8{'r'} ** 36;
+    state.workspaces[0] = .{ .id = wid, .repository_count = 1 }; state.workspaces[0].repository_ids[0] = rid;
+    @memcpy(state.workspaces[0].name[0..4], "Demo"); state.workspaces[0].name_len = 4;
+    @memcpy(state.workspaces[0].repositories[0].name[0..4], "Repo"); state.workspaces[0].repositories[0].name_len = 4;
+    state.pairs[0] = .{ .key = .{ .workspace_id = wid, .repository_id = rid } };
+    state.signals[0] = .{ .id = [_]u8{'s'} ** 36, .workspace_id = wid, .repository_id = rid, .status = .waiting, .read = false };
+    for ([_]workspace.WorkspaceCompressionTier{ .wide, .medium, .narrow, .text_200 }) |tier| {
+        const row = workspace.project(&state, tier).rows[0];
+        try std.testing.expect(row.awaiting and row.unread);
+        const description = row.accessible[0..row.accessible_len];
+        try std.testing.expect(std.mem.indexOf(u8, description, "awaiting input") != null);
+        try std.testing.expect(std.mem.indexOf(u8, description, "unread") != null);
+    }
 }

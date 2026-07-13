@@ -15,6 +15,16 @@ pub fn compression(tier: WorkspaceCompressionTier) CompressionVisibility {
         .narrow, .text_200 => .{ .secondary = false, .git = false, .pr_expanded = false, .agent_limit = 1 },
     };
 }
+pub fn compressionForAllocation(width: i32, text_percent: u16) WorkspaceCompressionTier {
+    if (text_percent >= 200) return .text_200;
+    if (width < 360) return .narrow;
+    if (width < 520) return .medium;
+    return .wide;
+}
+pub const InteractionSemantics = struct { selected_class: []const u8, focus_class: []const u8, preserve_unread_error: bool = true };
+pub fn interaction(selected: bool, window_active: bool, keyboard_focus: bool) InteractionSemantics {
+    return .{ .selected_class = if (!selected) "" else if (window_active) "selected-workspace" else "selected-workspace-inactive", .focus_class = if (keyboard_focus) "keyboard-focus" else "" };
+}
 pub fn activePriority(unread: bool, awaiting: bool, agent: bool, running: bool) ?u8 {
     if (unread and awaiting and running) return 1;
     if (unread and awaiting) return 2;

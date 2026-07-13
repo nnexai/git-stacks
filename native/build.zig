@@ -149,6 +149,7 @@ pub fn build(b: *std.Build) void {
     ax_attention.addImport("reducer", app_reducer_module);
     accessibility_test_module.addImport("model", app_model_module);
     accessibility_test_module.addImport("attention_view", ax_attention);
+    accessibility_test_module.addImport("workspace_view", workspace_module);
     accessibility_test_module.addIncludePath(include_dir);
     accessibility_test_module.addCSourceFile(.{ .file = .{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "src", "gl.c" }) }, .flags = &.{} });
     accessibility_test_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ source, "vendor", "glad", "include" }) });

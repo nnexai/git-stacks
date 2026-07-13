@@ -715,7 +715,7 @@ else if (mode === "audit-production-graph") auditProductionGraph()
 else if (mode === "model") await verifyModel()
 else if (mode === "restore") await verifyRestore()
 else if (mode === "attention") await verify("attention-test")
-else if (mode === "workspace-ui") await verify("workspace-ui-test")
+else if (mode === "workspace-ui") { await verify("workspace-ui-test"); await verify("app-graph-test") }
 else if (mode === "application-actions") await verify("application-actions-test")
 else if (mode === "tabs") await verify("tabs-test")
 else if (mode === "service-client") await verify("service-client-test")

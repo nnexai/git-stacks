@@ -135,3 +135,20 @@ test "compression tiers keep semantic markers while collapsing detail" {
     try std.testing.expect(!medium.secondary and medium.git and medium.pr_expanded);
     for ([_]view.CompressionVisibility{ narrow, scaled }) |tier| try std.testing.expect(!tier.secondary and !tier.git and !tier.pr_expanded and tier.agent_limit == 1);
 }
+test "measured allocation and 200 percent text choose deterministic tiers" {
+    try std.testing.expectEqual(view.WorkspaceCompressionTier.wide, view.compressionForAllocation(800, 100));
+    try std.testing.expectEqual(view.WorkspaceCompressionTier.medium, view.compressionForAllocation(500, 100));
+    try std.testing.expectEqual(view.WorkspaceCompressionTier.narrow, view.compressionForAllocation(320, 100));
+    try std.testing.expectEqual(view.WorkspaceCompressionTier.text_200, view.compressionForAllocation(800, 200));
+    for ([_]view.WorkspaceCompressionTier{ .narrow, .text_200 }) |tier| {
+        const visible = view.compression(tier);
+        try std.testing.expect(!visible.secondary and !visible.git and visible.agent_limit == 1);
+    }
+}
+test "selection and focus semantics remain distinct across active and inactive windows" {
+    const active = view.interaction(true, true, true); const inactive = view.interaction(true, false, true); const ordinary = view.interaction(false, true, false);
+    try std.testing.expectEqualStrings("selected-workspace", active.selected_class);
+    try std.testing.expectEqualStrings("selected-workspace-inactive", inactive.selected_class);
+    try std.testing.expectEqualStrings("keyboard-focus", active.focus_class);
+    try std.testing.expect(ordinary.selected_class.len == 0 and ordinary.focus_class.len == 0 and active.preserve_unread_error);
+}

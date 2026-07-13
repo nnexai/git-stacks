@@ -35,6 +35,9 @@ const product_css =
     ".git-stacks-sidebar .git-removals { color: @error_color; font-family: monospace; }" ++
     ".git-stacks-sidebar .workspace-awaiting, .git-stacks-sidebar .workspace-unread { color: @warning_color; }" ++
     ".git-stacks-sidebar .workspace-activity { color: @accent_color; }" ++
+    "@keyframes workspace-ping { from { opacity: 1; } to { opacity: .35; } }" ++
+    ".git-stacks-sidebar .workspace-activity-animated { animation: workspace-ping 1s ease-out infinite; }" ++
+    ".git-stacks-sidebar .workspace-activity-static { outline: 1px solid currentColor; border-radius: 999px; }" ++
     ".git-stacks-sidebar .workspace-section { margin: 16px 8px 4px 8px; font-weight: 600; }" ++
     ".git-stacks-sidebar .origin-summary { margin: 4px 8px; color: @accent_color; }" ++
     ".git-stacks-sidebar button.workspace-row:hover { background: @view_bg_color; }" ++
@@ -848,7 +851,7 @@ fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_vi
         if (p.pull_request) |pr| { var pr_z: [48:0]u8 = [_:0]u8{0} ** 48; const pr_text = std.fmt.bufPrintZ(&pr_z, if (projected.visibility.pr_expanded) "PR #{d} {s}" else "PR", .{ pr.number, @tagName(pr.state) }) catch return; const badge = c.gtk_label_new(pr_text.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-status-chip"); c.gtk_widget_set_tooltip_text(badge, "Pull request and checks"); c.gtk_box_append(@ptrCast(status), badge); }
     }
     if (projected.agent_count > 0) { var agent_z: [24:0]u8 = [_:0]u8{0} ** 24; const agent = std.fmt.bufPrintZ(&agent_z, if (projected.agent_count > projected.visibility.agent_limit) "A +{d}" else "A {d}", .{if (projected.agent_count > projected.visibility.agent_limit) projected.agent_count - projected.visibility.agent_limit else projected.agent_count}) catch return; const badge = c.gtk_label_new(agent.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-provider-chip"); c.gtk_widget_set_tooltip_text(badge, "Active agent sessions"); c.gtk_box_append(@ptrCast(status), badge); }
-    if (projected.activity) { const activity = c.gtk_image_new_from_icon_name("media-playback-start-symbolic") orelse return; c.gtk_widget_add_css_class(activity, "workspace-activity"); c.gtk_widget_set_tooltip_text(activity, "Background activity"); c.gtk_box_append(@ptrCast(status), activity); }
+    if (projected.activity) { const activity = c.gtk_image_new_from_icon_name("media-playback-start-symbolic") orelse return; c.gtk_widget_add_css_class(activity, "workspace-activity"); c.gtk_widget_add_css_class(activity, if (animationsEnabled()) "workspace-activity-animated" else "workspace-activity-static"); c.gtk_widget_set_tooltip_text(activity, if (animationsEnabled()) "Background activity" else "Background activity (animation disabled)"); c.gtk_box_append(@ptrCast(status), activity); }
     if (projected.awaiting) { const awaiting = c.gtk_image_new_from_icon_name("dialog-question-symbolic") orelse return; c.gtk_widget_add_css_class(awaiting, "workspace-awaiting"); c.gtk_widget_set_tooltip_text(awaiting, "Awaiting input"); c.gtk_box_append(@ptrCast(status), awaiting); }
     if (projected.unread) { const unread = c.gtk_image_new_from_icon_name("mail-unread-symbolic") orelse return; c.gtk_widget_add_css_class(unread, "workspace-unread"); c.gtk_widget_set_tooltip_text(unread, "Unread notification"); c.gtk_box_append(@ptrCast(status), unread); }
     c.gtk_box_append(@ptrCast(row), status); c.gtk_button_set_child(@ptrCast(button), row);
@@ -857,6 +860,12 @@ fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_vi
     setAccessible(button, c.GTK_ACCESSIBLE_ROLE_BUTTON, title.ptr, &accessible_z); setAccessibleSelected(button, projected.selected); c.gtk_widget_set_tooltip_text(button, &accessible_z);
     const stored = std.heap.c_allocator.create(model.PairKey) catch return; stored.* = projected.key; c.g_object_set_data_full(@ptrCast(button), "git-stacks-pair", stored, @ptrCast(&freePair));
     _ = c.g_signal_connect_data(button, "clicked", @ptrCast(&pairButtonClicked), state, null, 0); c.gtk_box_append(parent, button);
+}
+fn animationsEnabled() bool {
+    const settings = c.gtk_settings_get_default() orelse return false;
+    var enabled: c.gboolean = 0;
+    c.g_object_get(settings, "gtk-enable-animations", &enabled, null);
+    return enabled != 0;
 }
 fn appendWorkspaceEntry(parent: *c.GtkBox, state: *State, ws: model.Workspace, only_repo: ?model.Id, pinned: bool) void {
     if (ws.repository_count == 1) {
@@ -1010,7 +1019,8 @@ fn refreshProjection(state: *State) void {
     if (state.workspace_list) |list| {
         clearList(list);
         const allocated = if (state.window) |window| c.gtk_widget_get_allocated_width(@ptrCast(window)) else 1080;
-        const tier: workspace_view.WorkspaceCompressionTier = if (allocated < 360) .narrow else if (allocated < 520) .medium else .wide;
+        const scale = if (state.window) |window| @as(u16, @intCast(@max(1, c.gtk_widget_get_scale_factor(@ptrCast(window))))) * 100 else 100;
+        const tier = workspace_view.compressionForAllocation(allocated, scale);
         const projection = workspace_view.project(&state.graph.state, tier);
         const sections = [_]workspace_view.WorkspaceSection{ .pinned, .active, .ordinary };
         for (sections) |section| {

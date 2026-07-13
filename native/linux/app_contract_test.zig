@@ -120,6 +120,11 @@ test "workspace sidebar binds canonical projection hierarchy and stable identity
     try std.testing.expect(std.mem.indexOf(u8, source, "NSColor") == null);
     try std.testing.expect(std.mem.indexOf(u8, source, "row_index") == null);
 }
+test "sidebar themes motion RTL and accessibility use native redundant contracts" {
+    const source = @embedFile("app.zig");
+    for ([_][]const u8{ "@success_color", "@error_color", "@warning_color", "@accent_color", "@borders", "margin-inline-start", "gtk-enable-animations", "workspace-activity-animated", "workspace-activity-static", "gtk_widget_get_scale_factor", "GTK_ACCESSIBLE_STATE_SELECTED", "gtk_widget_set_tooltip_text" }) |needle|
+        try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
+}
 test "UAT interaction gaps stay wired to production GTK controls" {
     const source = @embedFile("app.zig");
     for ([_][]const u8{
