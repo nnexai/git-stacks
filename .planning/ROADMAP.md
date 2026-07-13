@@ -10,7 +10,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 - [x] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface. (completed 2026-07-11)
 - [x] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention. (completed 2026-07-12)
 - [ ] **Phase 107: Beautify Native Workspace UI and Finalize UX** - Reopened to finish workspace creation, external synchronization, Codex attention, and release-quality interaction polish before delivery work.
-- [ ] **Phase 107.1: Unify Workspace Signals and Retire Legacy Messages** - Consolidate hooks, OSC, ACP, automation notifications, and agent lifecycle state behind one provider-neutral signal contract before packaging.
+- [x] **Phase 107.1: Unify Workspace Signals and Retire Legacy Messages** - Consolidate hooks, OSC, ACP, automation notifications, and agent lifecycle state behind one provider-neutral signal contract before packaging.
 - [ ] **Phase 107.2: Beautify Workspace and Signal Presence** - Turn unified workspace, Git, agent, and notification state into a dense, accessible Supacode-inspired sidebar and attention experience across dark and light themes.
 - [ ] **Phase 108: Native Delivery and Cross-Platform Proof** - The finished Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
 
@@ -248,13 +248,13 @@ Wave 10 *(blocked on all implementation; final production and human evidence)*:
 
 Plans:
 
-- [ ] 107.1-01-PLAN.md — Define the strict signal schema and reference coalescing/dismissal state machine
-- [ ] 107.1-02-PLAN.md — Establish red pre-cutover service/native protocol and replay tests
-- [ ] 107.1-03-PLAN.md — Atomically cut service, journal, SSE, CLI, providers, native ABI/model/decoder, and projection to signals
-- [ ] 107.1-04-PLAN.md — Normalize provider, owned ACP, automation, and secure OSC ingress
-- [ ] 107.1-05-PLAN.md — Replace TUI message polling with service signals, then delete the legacy store/socket/command
-- [ ] 107.1-06-PLAN.md — Clean docs/help/completion and enforce forbidden-symbol release gates
-- [ ] 107.1-07-PLAN.md — Run full verification and complete production Linux UAT
+- [x] 107.1-01-PLAN.md — Define the strict signal schema and reference coalescing/dismissal state machine
+- [x] 107.1-02-PLAN.md — Establish red pre-cutover service/native protocol and replay tests
+- [x] 107.1-03-PLAN.md — Atomically cut service, journal, SSE, CLI, providers, native ABI/model/decoder, and projection to signals
+- [x] 107.1-04-PLAN.md — Normalize provider, owned ACP, automation, and secure OSC ingress
+- [x] 107.1-05-PLAN.md — Replace TUI message polling with service signals, then delete the legacy store/socket/command
+- [x] 107.1-06-PLAN.md — Clean docs/help/completion and enforce forbidden-symbol release gates
+- [x] 107.1-07-PLAN.md — Run full verification and complete production Linux UAT
 
 **Success Criteria** (what must be TRUE):
 

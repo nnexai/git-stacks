@@ -78,6 +78,7 @@ Progress: [█████████░] 94%
 
 - Phase 107 added: Beautify native workspace UI and finalize sidebar, tab, and terminal UX after stability work; native delivery and cross-platform proof moved to Phase 108.
 - Phase 107 reopened before Phase 108: the prior acceptance did not cover native workspace creation, reliable outside-client synchronization, Codex attention presentation/routing, or the release-critical UI review findings.
+- Phase 107.1 completed on 2026-07-13: unified service-authoritative workspace signals replaced legacy messages/structured-attention transport, and production Linux UAT was approved after UTF-8/NUL inbox hardening.
 
 ### Decisions
 

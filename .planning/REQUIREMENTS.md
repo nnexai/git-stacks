@@ -61,11 +61,11 @@
 
 ### Unified Workspace Signals
 
-- [ ] **SIG-01**: Hooks, terminal OSC, app-owned ACP sessions, and CLI automation publish one versioned provider-neutral signal envelope with explicit kind, source, scope, lifecycle, content, and occurrence time.
-- [ ] **SIG-02**: Activity signals coalesce by provider session and exact terminal surface while discrete notifications remain independently dismissible and replayable.
-- [ ] **SIG-03**: The unused legacy message store and CLI plus the duplicate structured-attention publication contract are removed with no compatibility layer.
-- [ ] **SIG-04**: The service journal, SSE stream, shared native ABI/model, and Linux client consume one signal contract, with attention implemented only as a UI projection.
-- [ ] **SIG-05**: Automated and production-native verification proves hook, OSC, ACP, automation, replay, reconnect, capacity, dismissal, and exact-surface behavior without duplicate or lost signals.
+- [x] **SIG-01**: Hooks, terminal OSC, app-owned ACP sessions, and CLI automation publish one versioned provider-neutral signal envelope with explicit kind, source, scope, lifecycle, content, and occurrence time.
+- [x] **SIG-02**: Activity signals coalesce by provider session and exact terminal surface while discrete notifications remain independently dismissible and replayable.
+- [x] **SIG-03**: The unused legacy message store and CLI plus the duplicate structured-attention publication contract are removed with no compatibility layer.
+- [x] **SIG-04**: The service journal, SSE stream, shared native ABI/model, and Linux client consume one signal contract, with attention implemented only as a UI projection.
+- [x] **SIG-05**: Automated and production-native verification proves hook, OSC, ACP, automation, replay, reconnect, capacity, dismissal, and exact-surface behavior without duplicate or lost signals.
 
 ### Workspace and Signal Presentation
 
@@ -144,11 +144,11 @@
 | ACT-05 | Phase 106 | Complete |
 | ACT-06 | Phase 106 | Complete |
 | ACT-07 | Phase 107 | Complete |
-| SIG-01 | Phase 107.1 | Pending |
-| SIG-02 | Phase 107.1 | Pending |
-| SIG-03 | Phase 107.1 | Pending |
-| SIG-04 | Phase 107.1 | Pending |
-| SIG-05 | Phase 107.1 | Pending |
+| SIG-01 | Phase 107.1 | Complete |
+| SIG-02 | Phase 107.1 | Complete |
+| SIG-03 | Phase 107.1 | Complete |
+| SIG-04 | Phase 107.1 | Complete |
+| SIG-05 | Phase 107.1 | Complete |
 | VIS-01 | Phase 107.2 | Pending |
 | VIS-02 | Phase 107.2 | Pending |
 | VIS-03 | Phase 107.2 | Pending |
