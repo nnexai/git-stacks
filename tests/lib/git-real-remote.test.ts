@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
-import { existsSync, utimesSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, utimesSync, writeFileSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
 import {
@@ -193,5 +193,14 @@ describe("git real remote push and pull", () => {
     writeFileSync(join(mainPath, "dirty.txt"), "dirty\n")
 
     expect(await isRepoDirty(mainPath)).toBe(true)
+  })
+
+  test("dirty status preserves invalid repository failures for callers to classify", async () => {
+    const invalidPath = join(tmpDir, "not-a-repository")
+    mkdirSync(invalidPath, { recursive: true })
+
+    await expect(isRepoDirty(invalidPath)).rejects.toThrow(
+      `Failed to read repository status at '${invalidPath}': fatal: not a git repository`,
+    )
   })
 })

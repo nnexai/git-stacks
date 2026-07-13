@@ -173,8 +173,16 @@ export async function isWorktreeRegistered(repoPath: string, worktreePath: strin
 }
 
 export async function isRepoDirty(repoPath: string): Promise<boolean> {
-  const result = await $`git -C ${repoPath} status --porcelain`.text()
-  return result.trim().length > 0
+  // Capture failures instead of letting Bun's throwing `.text()` path print a
+  // ShellError before callers can classify a concurrent worktree deletion.
+  // The error still propagates for authoritative repositories that remain on
+  // disk, so corrupt or invalid repositories are not silently accepted.
+  const result = await $`git -C ${repoPath} status --porcelain`.quiet().nothrow()
+  if (result.exitCode !== 0) {
+    const detail = result.stderr.toString().trim() || `git exited ${result.exitCode}`
+    throw new Error(`Failed to read repository status at '${repoPath}': ${detail}`)
+  }
+  return result.stdout.toString().trim().length > 0
 }
 
 export async function getCurrentBranch(repoPath: string): Promise<string> {
