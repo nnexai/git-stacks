@@ -32,7 +32,7 @@ static void roundtrip_file(const char *path) {
   assert(gs_model_dispatch_v1(model, bytes(signal, strlen(signal)), &output, &error) == GS_OK_V1);
   assert(contains(output, "\"signal_count\":1") && contains(output, "\"read\":false") && contains(output, "\"unread\":1") && contains(output, "\"severity\":\"primary\""));
   assert(gs_bytes_free_v1(output) == GS_OK_V1);
-  const char *select = "{\"type\":\"select_attention\",\"attention_id\":\"418f47f4-5ab1-7c2d-8e90-123456789abc\"}";
+  const char *select = "{\"type\":\"focus_signal\",\"signal_key\":\"418f47f4-5ab1-7c2d-8e90-123456789abc\"}";
   assert(gs_model_dispatch_v1(model, bytes(select, strlen(select)), &output, &error) == GS_OK_V1);
   assert(contains(output, "\"effect\":\"platform_focus\"") && contains(output, "\"reason\":\"exact_surface\"") && contains(output, "\"read\":true"));
   assert(gs_bytes_free_v1(output) == GS_OK_V1);
