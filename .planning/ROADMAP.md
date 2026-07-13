@@ -10,6 +10,8 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 - [x] **Phase 105: Shared Native Model and Terminal Foundation** - Platform shells share stable state semantics while Linux proves one correct, leak-free libghostty terminal surface. (completed 2026-07-11)
 - [x] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention. (completed 2026-07-12)
 - [ ] **Phase 107: Beautify Native Workspace UI and Finalize UX** - Reopened to finish workspace creation, external synchronization, Codex attention, and release-quality interaction polish before delivery work.
+- [ ] **Phase 107.1: Unify Workspace Signals and Retire Legacy Messages** - Consolidate hooks, OSC, ACP, automation notifications, and agent lifecycle state behind one provider-neutral signal contract before packaging.
+- [ ] **Phase 107.2: Beautify Workspace and Signal Presence** - Turn unified workspace, Git, agent, and notification state into a dense, accessible Supacode-inspired sidebar and attention experience across dark and light themes.
 - [ ] **Phase 108: Native Delivery and Cross-Platform Proof** - The finished Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
 
 ## Phase Details
@@ -237,10 +239,70 @@ Wave 10 *(blocked on all implementation; final production and human evidence)*:
 
 - [ ] 107-13 — Prove empty creation, external sync, Codex, capacity, themes, keyboard, and AT in production UAT
 
+### Phase 107.1: Unify Workspace Signals and Retire Legacy Messages
+
+**Goal:** Replace the unused legacy message system and parallel structured-attention transport with one slim, versioned signal contract shared by hooks, OSC, ACP, CLI automation, the service journal, and native clients.
+**Requirements:** SIG-01, SIG-02, SIG-03, SIG-04, SIG-05
+**Depends on:** Phase 107
+**Plans:** 7 plans
+
+Plans:
+
+- [ ] 107.1-01-PLAN.md — Define the strict signal schema and reference coalescing/dismissal state machine
+- [ ] 107.1-02-PLAN.md — Establish red pre-cutover service/native protocol and replay tests
+- [ ] 107.1-03-PLAN.md — Atomically cut service, journal, SSE, CLI, providers, native ABI/model/decoder, and projection to signals
+- [ ] 107.1-04-PLAN.md — Normalize provider, owned ACP, automation, and secure OSC ingress
+- [ ] 107.1-05-PLAN.md — Replace TUI message polling with service signals, then delete the legacy store/socket/command
+- [ ] 107.1-06-PLAN.md — Clean docs/help/completion and enforce forbidden-symbol release gates
+- [ ] 107.1-07-PLAN.md — Run full verification and complete production Linux UAT
+
+**Success Criteria** (what must be TRUE):
+
+  1. Hooks, terminal-scoped OSC, app-owned ACP sessions, and CLI automation publish one validated signal envelope with explicit kind, source, scope, lifecycle, content, and occurrence time.
+  2. Activity signals coalesce by provider session and exact terminal surface, while discrete notifications remain independently dismissible; completed activity never clears an unrelated notification.
+  3. The legacy workspace-message store, message CLI, legacy journal payload, duplicate attention endpoint/schema, and their obsolete adapters/tests are removed rather than retained as compatibility paths.
+  4. The service exposes one authenticated signal publication/replay contract and the native model consumes one decoder/reducer input; the attention inbox is a projection over signals rather than a transport type.
+  5. Migration verification proves provider hooks, OSC exact-surface routing, ACP normalization, automation notifications, replay/reconnect, capacity behavior, and the native inbox without duplicate or lost signals.
+
+**UI hint:** yes
+
+### Phase 107.2: Beautify Workspace and Signal Presence
+
+**Goal:** Present unified workspace, Git, agent, and notification state through a compact, calm, accessible sidebar and signal inbox inspired by Supacode while remaining native to GTK/libadwaita.
+**Requirements:** VIS-01, VIS-02, VIS-03, VIS-04, VIS-05
+**Depends on:** Phase 107.1
+**Plans:** 4 plans
+**Wave 1**
+
+- [ ] 107.2-01-PLAN.md — Extend authoritative repository-pair metadata and build pure row, section, ordering, compression, and accessibility projections
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 107.2-02-PLAN.md — Render the projection as a themed, responsive, accessible GTK sidebar
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 107.2-03-PLAN.md — Bind final 107.1 provider sessions and signals to workspace presence and the grouped inbox
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 107.2-04-PLAN.md — Run full verification and complete blocking production GTK UAT
+
+**Success Criteria** (what must be TRUE):
+
+  1. Every workspace row communicates default/main branch, pinned state, Git additions/removals, agent/provider presence, awaiting input, running work, unread notifications, and remote/missing state without requiring a details view.
+  2. Pinned and Active sections use deterministic relevance ordering while ordinary label/repository grouping and exact selection remain stable.
+  3. Default/main, pinned, ordinary, selected, unfocused, error, remote, and missing states use a restrained icon/accent hierarchy that survives dark, light, and high-contrast themes.
+  4. Provider badges, reduced-motion-safe activity pings, distinct unread markers, monospaced Git counters, accessible labels, and tooltips never rely on color alone.
+  5. The signal inbox clearly separates activity from notifications and exposes provider, lifecycle, time, exact workspace/repository/terminal location, focus, and dismissal with compact readable hierarchy.
+  6. Representative dense, empty, narrow, 200%-text, keyboard-only, screen-reader, reduced-motion, dark, and light scenarios pass automated contracts and blocking production GTK UAT.
+
+**UI hint:** yes
+
 ### Phase 108: Native Delivery and Cross-Platform Proof
 
 **Goal**: Users can install and trust the Linux vertical slice, while an actual macOS build proves the shared protocol, model, and libghostty host are portable.
-**Depends on**: Phase 107
+**Depends on**: Phase 107.2
 **Requirements**: PKG-01, PKG-02, PKG-03, PKG-04, MAC-01, MAC-02, MAC-03, MAC-04, MAC-05, MAC-06
 **Success Criteria** (what must be TRUE):
 
@@ -255,7 +317,7 @@ Wave 10 *(blocked on all implementation; final production and human evidence)*:
 
 ## Progress
 
-**Execution Order:** Phases execute in numeric order: 104 → 105 → 106 → 107 → 108.
+**Execution Order:** Phases execute in numeric order: 104 → 105 → 106 → 107 → 107.1 → 107.2 → 108.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
