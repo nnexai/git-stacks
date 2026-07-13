@@ -108,11 +108,23 @@ test "workspace controls publish native accessible state labels and tooltips" {
     for ([_][]const u8{"<Alt>p", "<Alt><Shift>Up", "<Alt><Shift>Down"}) |needle|
         try std.testing.expect(std.mem.indexOf(u8, actions, needle) != null);
 }
+test "workspace sidebar binds canonical projection hierarchy and stable identity" {
+    const source = @embedFile("app.zig");
+    for ([_][]const u8{
+        "workspace_view.project", "WorkspaceSection{ .pinned, .active, .ordinary }",
+        "appendProjectedPair", "git-stacks-pair", "GTK_ALIGN_END",
+        "vcs-branch-symbolic", "folder-missing-symbolic", "mail-unread-symbolic",
+        "Git line additions and removals", "Pull request and checks", "Active agent sessions",
+        "Go to global Pinned section", "Go to global Active section",
+    }) |needle| try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "NSColor") == null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "row_index") == null);
+}
 test "UAT interaction gaps stay wired to production GTK controls" {
     const source = @embedFile("app.zig");
     for ([_][]const u8{
         "selected-workspace:focus-visible",
-        "win.toggle-current-pin",
+        "toggle-current-pin",
         "setup-menu",
         "tabSetupMenu",
         "git-stacks-launcher",

@@ -39,6 +39,8 @@ pub const WorkspaceProjection = struct {
 };
 fn pinned(state: *const model.State, wid: model.Id) bool { for (state.pins[0..state.pin_count]) |value| if (std.mem.eql(u8, &value, &wid)) return true; return false; }
 fn workspaceIndex(state: *const model.State, wid: model.Id) ?usize { for (state.workspaces[0..state.workspace_count], 0..) |ws, i| if (std.mem.eql(u8, &ws.id, &wid)) return i; return null; }
+pub fn workspaceIndexForKey(state: *const model.State, key: model.PairKey) ?usize { return workspaceIndex(state, key.workspace_id); }
+pub fn repositoryIndexForKey(ws: *const model.Workspace, repository_id: model.Id) ?usize { for (ws.repository_ids[0..ws.repository_count], 0..) |rid, i| if (std.mem.eql(u8, &rid, &repository_id)) return i; return null; }
 fn lessRow(state: *const model.State, a: WorkspaceRowProjection, b: WorkspaceRowProjection) bool {
     if (@intFromEnum(a.section) != @intFromEnum(b.section)) return @intFromEnum(a.section) < @intFromEnum(b.section);
     if (a.section == .active and a.relevance.? != b.relevance.?) return a.relevance.? < b.relevance.?;
