@@ -19,6 +19,7 @@ import { WebTerminalManager, type WebSocketData } from "./terminal-manager"
 const WEB_BODY_BYTES = 256 * 1024
 const WEB_SSE_PER_PRINCIPAL = 4
 const WEB_SSE_TOTAL = 16
+const WEB_SSE_HEARTBEAT_MS = 15_000
 
 type Mutation = (request: { workspace: string; options?: Record<string, unknown> }, signal?: AbortSignal) => import("../../lib/service/operations").OperationExecution
 
@@ -35,6 +36,7 @@ export interface WebApplicationOptions {
   signalProjection?: () => Promise<{ signals: Signal[]; dismissed: string[]; sequence: string }>
   onConnectionChange?: (count: number) => void
   onActivity?: () => void
+  eventHeartbeatMs?: number
 }
 
 function securityHeaders(contentType?: string): Headers {
@@ -83,6 +85,7 @@ class BrowserEventStream {
     readonly principalId: string,
     private readonly operations: OperationRegistry | undefined,
     private readonly release: () => void,
+    private readonly heartbeatMs: number,
   ) {}
 
   stream(): ReadableStream<Uint8Array> {
@@ -91,13 +94,13 @@ class BrowserEventStream {
       pull: async (controller) => {
         try {
           while (!this.closed) {
-            if (!this.subscription.peek()) await Promise.race([this.subscription.waitForAvailable(), Bun.sleep(15_000)])
+            if (!this.subscription.peek()) await Promise.race([this.subscription.waitForAvailable(), Bun.sleep(this.heartbeatMs)])
             const reservation = this.subscription.reserve()
             if (!reservation) {
               if (this.subscription.diagnostics.closed) { controller.close(); this.close(); return }
               await controller.write(": heartbeat\n\n")
               await controller.flush()
-              return
+              continue
             }
             const event = reservation.event
             const visible = event.type !== "operation" || this.operations?.ownerOf(event.operation.operation_id) === this.principalId
@@ -108,7 +111,7 @@ class BrowserEventStream {
               : event.type === "signal" ? { ...event, signal: projectWebSignal(event.signal) } : event
             await controller.write(`id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(projected)}\n\n`)
             await controller.flush()
-            return
+            continue
           }
         } catch (error) {
           controller.close(error instanceof Error ? error : new Error(String(error)))
@@ -336,7 +339,7 @@ export class WebApplication {
       if (remaining) this.sseByPrincipal.set(principal.id, remaining); else this.sseByPrincipal.delete(principal.id)
       this.notifyConnections()
     }
-    stream = new BrowserEventStream(subscription, principal.id, this.options.operations, release)
+    stream = new BrowserEventStream(subscription, principal.id, this.options.operations, release, this.options.eventHeartbeatMs ?? WEB_SSE_HEARTBEAT_MS)
     this.streams.add(stream)
     this.notifyConnections()
     const headers = securityHeaders("text/event-stream")

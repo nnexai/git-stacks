@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
+import { isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup } from "./presentation"
 
 type Repository = { id: string; name: string; mode: string; exists: boolean; dirty: boolean; branch: string; ahead: number; behind: number; additions: number; removals: number; degraded: boolean }
 type Command = { id: string; name: string; scope: "workspace" | "repository"; repository_id?: string }
@@ -13,7 +14,7 @@ type Signal = { kind: "activity" | "notification"; id: string; source: string; w
 type Catalog = { templates: Array<{ name: string; description?: string }>; repositories: Array<{ name: string; type: string; default_branch: string }> }
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 type Pair = { workspaceId: string; repositoryId: string }
-type Organization = "simple" | "label" | "repository"
+type Organization = "label" | "repository"
 
 class ApiRequestError extends Error {
   constructor(readonly code: string, message: string, readonly status: number) { super(message) }
@@ -41,10 +42,10 @@ const preferences = {
   recent: stored<string[]>("git-stacks.web.recent", []),
   tabOrder: stored<string[]>("git-stacks.web.tab-order", []),
   theme: localStorage.getItem("git-stacks.web.theme") ?? "system",
-  organization: (localStorage.getItem("git-stacks.web.organization") ?? "simple") as Organization,
+  organization: (localStorage.getItem("git-stacks.web.organization") ?? "label") as Organization,
   lastPair: stored<Pair | undefined>("git-stacks.web.last-pair", undefined),
 }
-if (!["simple", "label", "repository"].includes(preferences.organization)) preferences.organization = "simple"
+if (!["label", "repository"].includes(preferences.organization)) preferences.organization = "label"
 if (preferences.theme !== "system") document.documentElement.dataset.theme = preferences.theme
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -300,13 +301,15 @@ let signals: Signal[] = []
 let eventCursor = sessionStorage.getItem("git-stacks.web.cursor") ?? "0"
 const terminalViews = new Map<string, TerminalView>()
 
-app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button" id="theme">Theme</button><button class="button" id="create"><span aria-hidden="true">＋</span><span class="wide">Workspace</span></button><button class="button primary" id="launcher"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="section-head"><span>Workspaces</span><span class="section-actions"><button class="organize" id="organization"></button><span id="workspace-count"></span></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main><aside class="inbox" aria-label="Attention inbox"><div class="section-head"><span>Attention</span><span id="signal-count"></span></div><ul class="signal-list" id="signals"></ul></aside></div></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
+app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="toast-region" id="toasts" aria-live="polite"></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
 const nav = document.querySelector<HTMLUListElement>("#nav")!
 const scope = document.querySelector<HTMLElement>("#scope")!
 const tabs = document.querySelector<HTMLElement>("#tabs")!
 const terminalDeck = document.querySelector<HTMLElement>("#terminal-deck")!
-const signalsNode = document.querySelector<HTMLUListElement>("#signals")!
+const signalsNode = document.querySelector<HTMLElement>("#signals")!
+const signalInbox = document.querySelector<HTMLElement>("#signal-inbox")!
+const signalToggle = document.querySelector<HTMLButtonElement>("#signal-toggle")!
 const toastRegion = document.querySelector<HTMLElement>("#toasts")!
 
 function selectedWorkspace(): Workspace | undefined { return snapshot.workspaces.find((item) => item.id === selectedPair?.workspaceId) }
@@ -330,10 +333,11 @@ function selectPair(pair: Pair): void {
 }
 
 function attentionCount(workspaceId: string, repositoryId?: string, surfaceId?: string): number {
-  return signals.filter((signal) => signal.workspace_id === workspaceId && (!repositoryId || !signal.repository_id || signal.repository_id === repositoryId) && (!surfaceId || signal.surface_id === surfaceId)).length
+  return signals.filter((signal) => matchesSignalScope(signal, workspaceId, repositoryId, surfaceId) && signalGroup(signal) === "needs-attention").length
 }
-function workspaceActive(workspace: Workspace): boolean {
-  return [...terminalViews.values()].some((view) => view.meta.workspace_id === workspace.id && view.meta.state !== "ended") || signals.some((signal) => signal.workspace_id === workspace.id && ["working", "waiting", "failed"].includes(signal.state ?? ""))
+function pairActive(workspaceId: string, repositoryId: string): boolean {
+  const commandRunning = [...terminalViews.values()].some((view) => view.meta.workspace_id === workspaceId && view.meta.repository_id === repositoryId && Boolean(view.meta.command_id) && view.meta.state !== "ended")
+  return commandRunning || signals.some((signal) => matchesSignalScope(signal, workspaceId, repositoryId) && isBackgroundActivity(signal))
 }
 function movePin(source: string, target: string): void {
   const order = [...preferences.pins]
@@ -343,71 +347,113 @@ function movePin(source: string, target: string): void {
   preferences.pins.clear(); for (const id of order) preferences.pins.add(id)
   savePreferences(); renderNav()
 }
-function workspaceItem(workspace: Workspace, repositories: Repository[], pinned: boolean): HTMLLIElement {
+type SidebarEntry = { workspace: Workspace; repository: Repository }
+type SidebarGroupKind = "pinned" | "active" | "label" | "repository"
+
+function openSignalInbox(): void {
+  signalInbox.hidden = false
+  signalToggle.setAttribute("aria-expanded", "true")
+  document.querySelector<HTMLButtonElement>("#signal-close")?.focus()
+}
+function closeSignalInbox(restoreFocus = true): void {
+  signalInbox.hidden = true
+  signalToggle.setAttribute("aria-expanded", "false")
+  if (restoreFocus) signalToggle.focus()
+}
+function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarGroupKind): HTMLLIElement {
+  const { workspace, repository } = entry
   const item = element("li", "workspace")
-  const heading = element("div", "workspace-heading")
-  const pin = button(pinned ? "◆" : "◇", `pin-button${pinned ? " pin" : ""}`)
+  const container = element("div", `workspace-row-container${pinned ? " pinned" : ""}`)
+  const pairSignals = signals.filter((signal) => matchesSignalScope(signal, workspace.id, repository.id))
+  const sessions = pairSignals.filter(isActiveSession).sort((left, right) => Number(right.state === "waiting") - Number(left.state === "waiting") || left.source.localeCompare(right.source))
+  const notifications = pairSignals.filter((signal) => signal.kind === "notification").length
+  const working = pairSignals.some(isBackgroundActivity)
+  const running = [...terminalViews.values()].some((view) => view.meta.workspace_id === workspace.id && view.meta.repository_id === repository.id && Boolean(view.meta.command_id) && view.meta.state !== "ended")
+  const selected = selectedPair?.workspaceId === workspace.id && selectedPair.repositoryId === repository.id
+  const row = button("", `workspace-row${selected ? " active" : ""}${repository.degraded || !repository.exists ? " degraded" : ""}`)
+  const title = groupKind === "repository" || workspace.repositories.length === 1 ? workspace.name : `${workspace.name} / ${repository.name}`
+  row.setAttribute("aria-label", `${title}, repository ${repository.name}, branch ${repository.branch || workspace.branch}${pinned ? ", pinned" : ""}${sessions.length ? `, ${sessions.length} active agent sessions` : ""}${notifications ? `, ${notifications} unread notifications` : ""}`)
+  const icon = element("span", `workspace-icon${repository.degraded || !repository.exists ? " warning" : ""}`)
+  icon.setAttribute("aria-hidden", "true")
+  icon.innerHTML = repository.degraded || !repository.exists
+    ? `<svg viewBox="0 0 16 16"><path d="M8 2 14 14H2Z"/><path d="M8 6v4M8 12v.1"/></svg>`
+    : `<svg viewBox="0 0 16 16"><path d="M2 4.5h4l1.2 1.5H14v7.5H2Z"/></svg>`
+  const text = element("span", "workspace-text")
+  text.append(element("span", "workspace-primary", title))
+  const secondaryParts = [repository.branch || workspace.branch]
+  if (repository.ahead) secondaryParts.push(`↑${repository.ahead}`)
+  if (repository.behind) secondaryParts.push(`↓${repository.behind}`)
+  text.append(element("span", "workspace-secondary", secondaryParts.filter(Boolean).join(" · ")))
+  const status = element("span", "workspace-status")
+  if (repository.additions) status.append(element("span", "git-additions", `+${repository.additions}`))
+  if (repository.removals) status.append(element("span", "git-removals", `-${repository.removals}`))
+  for (const signal of sessions.slice(0, 3)) {
+    const provider = element("span", `provider-chip${signal.state === "waiting" ? " awaiting" : ""}${signal.state === "failed" ? " failed" : ""}`, providerLetter(signal.source))
+    provider.title = `${providerName(signal.source)} · ${lifecycleLabel(signal)}`
+    status.append(provider)
+  }
+  if (sessions.length > 3) status.append(element("span", "provider-chip overflow", `+${sessions.length - 3}`))
+  if (working || running) {
+    const activity = element("span", "activity-marker")
+    activity.title = working ? "Agent working" : "Configured command running"
+    activity.setAttribute("aria-label", activity.title)
+    status.append(activity)
+  }
+  if (notifications) {
+    const unread = button("", "unread-marker")
+    unread.title = `${notifications} unread notification${notifications === 1 ? "" : "s"}`
+    unread.setAttribute("aria-label", `${unread.title}; open signal inbox`)
+    unread.addEventListener("click", (event) => { event.stopPropagation(); openSignalInbox() })
+    status.append(unread)
+  }
+  row.append(icon, text, status)
+  row.addEventListener("click", () => selectPair({ workspaceId: workspace.id, repositoryId: repository.id }))
+  const pin = button(pinned ? "★" : "☆", `pin-button${pinned ? " pin" : ""}`)
   pin.setAttribute("aria-label", `${pinned ? "Unpin" : "Pin"} workspace ${workspace.name}`)
   pin.addEventListener("click", () => {
     pinned ? preferences.pins.delete(workspace.id) : preferences.pins.add(workspace.id)
     savePreferences(); renderNav()
   })
-  const row = button("", `workspace-row${repositories.length === 1 && selectedPair?.workspaceId === workspace.id && selectedPair.repositoryId === repositories[0]?.id ? " active" : ""}`)
-  const repository = repositories[0]
-  row.setAttribute("aria-label", repositories.length === 1 && repository ? `${workspace.name}, ${repository.name}, branch ${repository.branch || workspace.branch}` : workspace.name)
-  const marker = element("span", "workspace-marker", repositories.length === 1 ? "•" : "◇")
-  const name = element("span", "row-name", workspace.name)
-  const attention = workspace.file_status.attention + attentionCount(workspace.id)
-  row.append(marker, name, attention ? element("span", "badge", String(attention)) : element("span"))
-  row.addEventListener("click", () => { if (repository) selectPair({ workspaceId: workspace.id, repositoryId: repository.id }) })
-  heading.append(pin, row); item.append(heading)
+  container.append(row, pin); item.append(container)
   if (pinned) {
-    heading.draggable = true
-    heading.addEventListener("dragstart", (event) => event.dataTransfer?.setData("application/x-git-stacks-workspace", workspace.id))
-    heading.addEventListener("dragover", (event) => event.preventDefault())
-    heading.addEventListener("drop", (event) => { event.preventDefault(); const source = event.dataTransfer?.getData("application/x-git-stacks-workspace"); if (source) movePin(source, workspace.id) })
-  }
-  if (repositories.length > 1) for (const repoData of repositories) {
-    const repo = button("", `repo-row${selectedPair?.workspaceId === workspace.id && selectedPair.repositoryId === repoData.id ? " active" : ""}`)
-    const state = element("span", `state-dot${repoData.degraded || !repoData.exists ? " failed" : repoData.dirty ? "" : " ended"}`)
-    const repoName = element("span", "row-name", repoData.name)
-    const meta = element("span", "git-meta", `${repoData.dirty ? "●" : "○"}${repoData.ahead ? ` ↑${repoData.ahead}` : ""}${repoData.behind ? ` ↓${repoData.behind}` : ""}`)
-    const attention = attentionCount(workspace.id, repoData.id)
-    if (attention) meta.append(element("span", "badge", String(attention)))
-    repo.append(state, repoName, meta)
-    repo.addEventListener("click", () => selectPair({ workspaceId: workspace.id, repositoryId: repoData.id }))
-    item.append(repo)
+    container.draggable = true
+    container.addEventListener("dragstart", (event) => event.dataTransfer?.setData("application/x-git-stacks-workspace", workspace.id))
+    container.addEventListener("dragover", (event) => event.preventDefault())
+    container.addEventListener("drop", (event) => { event.preventDefault(); const source = event.dataTransfer?.getData("application/x-git-stacks-workspace"); if (source) movePin(source, workspace.id) })
   }
   return item
 }
-function navGroup(title: string, entries: Array<{ workspace: Workspace; repositories: Repository[] }>, pinned = false): void {
+function navGroup(title: string, entries: SidebarEntry[], groupKind: SidebarGroupKind): void {
   if (!entries.length) return
-  if (title) { const heading = element("li", "nav-group", title); heading.setAttribute("role", "heading"); heading.setAttribute("aria-level", "2"); nav.append(heading) }
-  for (const entry of entries) nav.append(workspaceItem(entry.workspace, entry.repositories, pinned))
+  const heading = element("li", `nav-group ${groupKind}`, title)
+  heading.setAttribute("role", "heading"); heading.setAttribute("aria-level", "2"); nav.append(heading)
+  for (const entry of entries) nav.append(workspaceItem(entry, groupKind === "pinned", groupKind))
 }
 function renderNav(): void {
   nav.replaceChildren()
   document.querySelector("#workspace-count")!.textContent = String(snapshot.workspaces.length)
-  const organization = document.querySelector<HTMLButtonElement>("#organization")!
-  const organizationLabels: Record<Organization, string> = { simple: "A–Z", label: "Labels", repository: "Repos" }
-  organization.textContent = organizationLabels[preferences.organization]
-  organization.setAttribute("aria-label", `Organization: ${preferences.organization}. Activate to change.`)
-  const byName = (a: Workspace, b: Workspace) => a.name.localeCompare(b.name)
-  const pinned = [...preferences.pins].map((id) => snapshot.workspaces.find((workspace) => workspace.id === id)).filter((workspace): workspace is Workspace => Boolean(workspace))
-  const unpinned = snapshot.workspaces.filter((workspace) => !preferences.pins.has(workspace.id))
-  const active = unpinned.filter(workspaceActive).sort(byName)
-  const ordinary = unpinned.filter((workspace) => !workspaceActive(workspace)).sort(byName)
-  navGroup("Pinned", pinned.map((workspace) => ({ workspace, repositories: workspace.repositories })), true)
-  navGroup("Active", active.map((workspace) => ({ workspace, repositories: workspace.repositories })))
-  if (preferences.organization === "simple") navGroup("", ordinary.map((workspace) => ({ workspace, repositories: workspace.repositories })))
-  else if (preferences.organization === "label") {
-    const groups = new Map<string, Workspace[]>()
-    for (const workspace of ordinary) for (const label of workspace.labels.length ? workspace.labels : ["Unlabelled"]) groups.set(label, [...(groups.get(label) ?? []), workspace])
-    for (const [label, workspaces] of [...groups].sort(([a], [b]) => a.localeCompare(b))) navGroup(label, workspaces.map((workspace) => ({ workspace, repositories: workspace.repositories })))
+  for (const control of document.querySelectorAll<HTMLButtonElement>("[data-organization]")) {
+    const active = control.dataset.organization === preferences.organization
+    control.classList.toggle("active", active)
+    control.setAttribute("aria-pressed", String(active))
+  }
+  const byName = (left: SidebarEntry, right: SidebarEntry) => left.workspace.name.localeCompare(right.workspace.name) || left.repository.name.localeCompare(right.repository.name)
+  const pairs = snapshot.workspaces.flatMap((workspace) => workspace.repositories.map((repository) => ({ workspace, repository })))
+  const pinnedOrder = [...preferences.pins]
+  const pinned = pairs.filter(({ workspace }) => preferences.pins.has(workspace.id)).sort((left, right) => pinnedOrder.indexOf(left.workspace.id) - pinnedOrder.indexOf(right.workspace.id) || byName(left, right))
+  const unpinned = pairs.filter(({ workspace }) => !preferences.pins.has(workspace.id))
+  const active = unpinned.filter(({ workspace, repository }) => pairActive(workspace.id, repository.id)).sort(byName)
+  const ordinary = unpinned.filter(({ workspace, repository }) => !pairActive(workspace.id, repository.id)).sort(byName)
+  navGroup("Pinned", pinned, "pinned")
+  navGroup("Active", active, "active")
+  if (preferences.organization === "label") {
+    const groups = new Map<string, SidebarEntry[]>()
+    for (const entry of ordinary) for (const label of entry.workspace.labels.length ? entry.workspace.labels : ["Unlabelled"]) groups.set(label, [...(groups.get(label) ?? []), entry])
+    for (const [label, entries] of [...groups].sort(([left], [right]) => left.localeCompare(right))) navGroup(label, entries, "label")
   } else {
-    const groups = new Map<string, Array<{ workspace: Workspace; repositories: Repository[] }>>()
-    for (const workspace of ordinary) for (const repository of workspace.repositories) groups.set(repository.name, [...(groups.get(repository.name) ?? []), { workspace, repositories: [repository] }])
-    for (const [repository, entries] of [...groups].sort(([a], [b]) => a.localeCompare(b))) navGroup(repository, entries)
+    const groups = new Map<string, SidebarEntry[]>()
+    for (const entry of ordinary) groups.set(entry.repository.name, [...(groups.get(entry.repository.name) ?? []), entry])
+    for (const [repository, entries] of [...groups].sort(([left], [right]) => left.localeCompare(right))) navGroup(repository, entries, "repository")
   }
   if (!nav.children.length) nav.append(element("li", "empty-nav", "No workspaces"))
 }
@@ -420,18 +466,25 @@ function renderScope(): void {
   else title.textContent = "Select a repository"
   scope.append(title)
   if (workspace && repository) {
-    const openClose = button("Open", "button")
-    openClose.title = "Open this workspace in configured integrations"
-    openClose.addEventListener("click", () => void workspaceOperation("workspace.open", workspace))
-    const closeWorkspace = button("Close", "button")
-    closeWorkspace.title = "Close this workspace through configured integrations"
-    closeWorkspace.addEventListener("click", () => void workspaceOperation("workspace.close", workspace))
     const shell = button("New shell", "button primary")
     shell.addEventListener("click", () => void createTerminal())
-    const copy = button("Copy", "button")
-    copy.title = "Copy active terminal selection"
-    copy.addEventListener("click", () => activeTerminalId && terminalViews.get(activeTerminalId)?.copySelection())
-    scope.append(copy, openClose, closeWorkspace, shell)
+    const actions = element("div", "scope-actions")
+    const toggle = button("•••", "button icon")
+    toggle.setAttribute("aria-label", "Workspace actions")
+    toggle.setAttribute("aria-expanded", "false")
+    const menu = element("div", "scope-menu")
+    menu.hidden = true
+    const menuAction = (label: string, action: () => void) => {
+      const control = button(label, "scope-menu-item")
+      control.addEventListener("click", () => { menu.hidden = true; toggle.setAttribute("aria-expanded", "false"); action() })
+      menu.append(control)
+    }
+    menuAction("Copy terminal selection", () => { if (activeTerminalId) terminalViews.get(activeTerminalId)?.copySelection() })
+    menuAction("Open workspace", () => void workspaceOperation("workspace.open", workspace))
+    menuAction("Close workspace", () => void workspaceOperation("workspace.close", workspace))
+    toggle.addEventListener("click", () => { menu.hidden = !menu.hidden; toggle.setAttribute("aria-expanded", String(!menu.hidden)) })
+    actions.append(toggle, menu)
+    scope.append(shell, actions)
   }
   renderTabs()
 }
@@ -507,32 +560,71 @@ function selectTerminal(id: string): void {
 
 function renderSignals(): void {
   signalsNode.replaceChildren()
-  document.querySelector("#signal-count")!.textContent = String(signals.length)
-  for (const signal of signals.slice().reverse()) {
-    const item = element("li", "signal")
-    item.tabIndex = 0
-    item.append(element("div", "signal-title", signal.title ?? `${signal.source} ${signal.state ?? "notification"}`))
+  const needsAttention = signals.filter((signal) => signalGroup(signal) === "needs-attention").slice().reverse()
+  const recentActivity = signals.filter((signal) => signalGroup(signal) === "recent-activity")
+  const unread = signals.filter((signal) => signal.kind === "notification").length
+  const count = document.querySelector<HTMLElement>("#signal-count")!
+  count.textContent = String(needsAttention.length)
+  count.hidden = needsAttention.length === 0
+  document.querySelector("#signal-label")!.textContent = unread ? `Signal: ${unread} unread · Needs input` : "Signals"
+  signalToggle.classList.toggle("attention", needsAttention.length > 0)
+  signalToggle.setAttribute("aria-label", needsAttention.length ? `Signal inbox: ${needsAttention.length} need attention` : "Signal inbox")
+
+  const appendHeading = (title: string, amount?: number) => {
+    const heading = element("div", "signal-group-head")
+    heading.append(element("span", "", title))
+    if (amount !== undefined) heading.append(element("span", "signal-group-count", String(amount)))
+    signalsNode.append(heading)
+  }
+  appendHeading("Needs attention", needsAttention.length)
+  if (!needsAttention.length) {
+    const empty = element("div", "signal-empty")
+    empty.append(element("strong", "", "No signals need attention"), element("span", "", "Waiting and failed agent sessions and unread notifications will appear here."))
+    signalsNode.append(empty)
+  }
+  for (const signal of needsAttention) {
+    const item = element("article", "signal")
+    const header = element("div", "signal-header")
+    const provider = element("span", "provider-chip signal-provider", providerLetter(signal.source))
+    provider.title = providerName(signal.source)
+    const signalTitle = element("div", "signal-title", signal.title ?? `${providerName(signal.source)} ${lifecycleLabel(signal).toLowerCase()}`)
+    const lifecycle = element("span", `lifecycle-chip ${signal.state ?? signal.kind}`, lifecycleLabel(signal))
+    header.append(provider, signalTitle, lifecycle)
+    item.append(header)
     if (signal.detail) item.append(element("div", "signal-detail", signal.detail))
-    item.append(element("div", "signal-time", `${signal.source} · ${new Date(signal.occurred_at).toLocaleTimeString()}`))
+    const workspace = snapshot.workspaces.find((entry) => entry.id === signal.workspace_id)
+    const repository = workspace?.repositories.find((entry) => entry.id === signal.repository_id)
+    const terminal = [...terminalViews.values()].find((view) => view.meta.surface_id === signal.surface_id)
+    const location = [workspace?.name ?? signal.workspace_id.slice(0, 8), repository?.name, terminal?.meta.title].filter(Boolean).join(" / ")
+    const when = relativeTime(signal.occurred_at)
+    item.append(element("div", "signal-location", `${location}${when ? ` · ${when}` : ""}`))
     const actions = element("div", "signal-actions")
-    const dismiss = button("Dismiss", "button")
-    dismiss.addEventListener("click", (event) => { event.stopPropagation(); void dismissSignal(signal.id) })
-    actions.append(dismiss); item.append(actions)
-    const focus = () => {
+    const focus = button(terminal ? "Focus terminal" : repository ? "Open repository" : "Open workspace", "button primary")
+    focus.addEventListener("click", () => {
       const workspace = snapshot.workspaces.find((entry) => entry.id === signal.workspace_id)
       const repository = workspace?.repositories.find((entry) => entry.id === signal.repository_id) ?? workspace?.repositories[0]
       if (workspace && repository) {
+        closeSignalInbox(false)
         selectPair({ workspaceId: workspace.id, repositoryId: repository.id })
         const terminal = [...terminalViews.values()].find((view) => view.meta.surface_id === signal.surface_id)
         if (terminal) selectTerminal(terminal.meta.id)
         else if (signal.surface_id) toast("The original terminal is no longer available; focused its repository instead.")
       }
-      void dismissSignal(signal.id)
+    })
+    actions.append(focus)
+    if (signal.kind === "notification") {
+      const dismiss = button("Dismiss notification", "button")
+      dismiss.addEventListener("click", () => void dismissSignal(signal.id))
+      actions.append(dismiss)
     }
-    item.addEventListener("click", focus)
-    item.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") focus() })
+    item.append(actions)
     signalsNode.append(item)
   }
+  appendHeading("Recent activity", recentActivity.length)
+  const recent = element("div", "signal-empty compact")
+  if (recentActivity.length) recent.append(element("span", "", "Working and completed sessions stay summarized on their workspace rows."))
+  else recent.append(element("strong", "", "No recent activity"), element("span", "", "Agent and automation activity for this workspace will appear here."))
+  signalsNode.append(recent)
 }
 function connectionSummary(): string { return `${snapshot.workspaces.length} workspaces · revision ${snapshot.revision} · ${terminalViews.size} browser terminals` }
 function renderAll(): void { renderNav(); renderScope(); renderSignals(); statusNode.textContent = connectionSummary() }
@@ -708,10 +800,12 @@ async function pairFromFragment(): Promise<void> {
 
 document.querySelector("#launcher")!.addEventListener("click", showLauncher)
 document.querySelector("#create")!.addEventListener("click", () => void showCreation())
-document.querySelector("#organization")!.addEventListener("click", () => {
-  preferences.organization = preferences.organization === "simple" ? "label" : preferences.organization === "label" ? "repository" : "simple"
+for (const control of document.querySelectorAll<HTMLButtonElement>("[data-organization]")) control.addEventListener("click", () => {
+  preferences.organization = control.dataset.organization as Organization
   savePreferences(); renderNav()
 })
+signalToggle.addEventListener("click", () => signalInbox.hidden ? openSignalInbox() : closeSignalInbox())
+document.querySelector("#signal-close")!.addEventListener("click", () => closeSignalInbox())
 tabs.addEventListener("dblclick", (event) => { if (event.target === tabs) void createTerminal() })
 document.querySelector("#theme")!.addEventListener("click", () => {
   preferences.theme = preferences.theme === "system" ? "dark" : preferences.theme === "dark" ? "light" : "system"
@@ -720,6 +814,7 @@ document.querySelector("#theme")!.addEventListener("click", () => {
   toast(`Theme: ${preferences.theme}`)
 })
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !signalInbox.hidden) { closeSignalInbox(); event.preventDefault(); return }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); showLauncher() }
   if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "t") { event.preventDefault(); void createTerminal() }
   if (event.ctrlKey && (event.key === "PageDown" || event.key === "PageUp")) {

@@ -4,6 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { WorkspaceSnapshotResponse } from "../../src/lib/service/contract"
 import { provisionOfficialClient } from "../../src/lib/service/credentials"
+import { EventBroker } from "../../src/lib/service/event-broker"
+import { EventJournal } from "../../src/lib/service/event-journal"
 import { startServiceServer } from "../../src/service/server"
 import { WebApplication } from "../../src/service/web/routes"
 
@@ -73,5 +75,53 @@ describe("web request security boundary", () => {
     expect(wrongHost.status).toBe(403)
     const noCors = await fetch(new URL("/web/api/snapshot", service.url), { headers: { cookie, origin: "https://evil.example" } })
     expect(noCors.headers.get("access-control-allow-origin")).toBeNull()
+  })
+
+  test("keeps browser events connected across a heartbeat", async () => {
+    const root = join(tmpdir(), `git-stacks-web-events-${crypto.randomUUID()}`)
+    const assets = join(root, "assets")
+    mkdirSync(root, { recursive: true, mode: 0o700 })
+    mkdirSync(assets, { mode: 0o700 })
+    writeFileSync(join(assets, "index.html"), "<!doctype html><title>test</title>")
+    writeFileSync(join(assets, "manifest.json"), JSON.stringify({ assets: ["index.html"] }))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+
+    const credential = provisionOfficialClient("web-events", { serviceRoot: root })
+    const broker = new EventBroker(new EventJournal({ root }))
+    const snapshot = { buildAll: async () => fixture(), buildWorkspace: async () => fixture()[0]! }
+    const web = new WebApplication({ assetsRoot: assets, snapshot, broker, eventHeartbeatMs: 10 })
+    const service = startServiceServer({ serviceRoot: root, snapshot, broker, web })
+    cleanup.push(() => service.stop())
+    const origin = service.url.origin
+    const official = { authorization: `Bearer ${credential.token}`, "content-type": "application/json" }
+
+    const issuedResponse = await fetch(new URL("/v1/web-pairings", service.url), { method: "POST", headers: official, body: "{}" })
+    const issued = await issuedResponse.json() as { data: { url: string } }
+    const code = new URL(issued.data.url).hash.slice("#pair=".length)
+    const exchange = await fetch(new URL("/web/api/pair", service.url), {
+      method: "POST",
+      headers: { origin, "content-type": "application/json", "sec-fetch-site": "same-origin" },
+      body: JSON.stringify({ code }),
+    })
+    const cookie = exchange.headers.get("set-cookie")!.split(";")[0]!
+    const response = await fetch(new URL("/web/api/events?cursor=0", service.url), { headers: { cookie, "sec-fetch-site": "same-origin" } })
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+
+    const heartbeat = await reader.read()
+    expect(heartbeat.done).toBe(false)
+    expect(decoder.decode(heartbeat.value)).toContain(": heartbeat")
+
+    broker.publish({
+      protocol: "v1",
+      sequence: "1",
+      timestamp: new Date().toISOString(),
+      type: "control",
+      control: { kind: "heartbeat" },
+    })
+    const event = await reader.read()
+    expect(event.done).toBe(false)
+    expect(decoder.decode(event.value)).toContain("id: 1")
+    await reader.cancel()
   })
 })
