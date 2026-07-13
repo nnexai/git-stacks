@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: milestone
-current_phase: 107.2
-current_phase_name: Beautify Workspace and Signal Presence
-status: Phase 107.2 execution in progress; plans 01-03 complete
-stopped_at: Completed 107.2-03-PLAN.md
-last_updated: "2026-07-13T04:27:12.347Z"
+current_phase: 107
+current_phase_name: Beautify Native Workspace UI and Finalize UX
+status: Phase 107.2 complete after production GTK UAT; Phase 107 final closure remains
+stopped_at: Completed 107.2-04-PLAN.md
+last_updated: "2026-07-13T09:20:00.000Z"
 last_activity: 2026-07-13
-last_activity_desc: bound final provider signals and the grouped authoritative inbox
+last_activity_desc: approved the repaired workspace hierarchy, Git presence, agent status, and scoped signal experience
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 45
-  completed_plans: 43
-  percent: 57
+  completed_plans: 44
+  percent: 71
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** One command takes a user from feature intent to a fully running development environment without manual setup.
-**Current focus:** Phase 107.2 — dense, accessible workspace and signal presence
+**Current focus:** Phase 107 — final closure after the completed 107.2 workspace/signal polish slice
 
 ## Current Position
 
-Phase: 107.2 — Beautify Workspace and Signal Presence
-Plan: 4 plans total — 3 complete; 107.2-04 pending
-Status: Phase 107.2 execution in progress
-Last activity: 2026-07-13 — bound final provider signals and the grouped authoritative inbox
+Phase: 107 — Beautify Native Workspace UI and Finalize UX
+Plan: Phase 107.2 complete; Phase 107 final closure remains
+Status: Phase 107.2 approved in production GTK
+Last activity: 2026-07-13 — approved repaired workspace hierarchy, Git presence, agent status, and scoped signal experience
 
-Progress: [██████████] 96%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
@@ -82,6 +82,8 @@ Progress: [██████████] 96%
 - Phase 107 added: Beautify native workspace UI and finalize sidebar, tab, and terminal UX after stability work; native delivery and cross-platform proof moved to Phase 108.
 - Phase 107 reopened before Phase 108: the prior acceptance did not cover native workspace creation, reliable outside-client synchronization, Codex attention presentation/routing, or the release-critical UI review findings.
 - Phase 107.1 completed on 2026-07-13: unified service-authoritative workspace signals replaced legacy messages/structured-attention transport, and production Linux UAT was approved after UTF-8/NUL inbox hardening.
+- Phase 107.2 completed on 2026-07-13 after screenshot-driven UAT repaired the production GTK hierarchy path, visible pinning, branch/Git counters, Active lifecycle semantics, and inbox density.
+- Phase 107.2 accepted limitation: completed agent turns are not yet distinguished from provider-process exit for every provider; the user explicitly deferred process-lifetime clearing.
 
 ### Decisions
 

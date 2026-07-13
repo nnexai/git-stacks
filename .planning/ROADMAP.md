@@ -11,7 +11,7 @@ v0.20.0 establishes a secure, engine-owned native-client boundary, proves the sh
 - [x] **Phase 106: Linux Workspace, Commands, and Attention** - Users can navigate workspaces, keep multiple terminal tabs alive, launch resolved shells and commands, and act on structured attention. (completed 2026-07-12)
 - [ ] **Phase 107: Beautify Native Workspace UI and Finalize UX** - Reopened to finish workspace creation, external synchronization, Codex attention, and release-quality interaction polish before delivery work.
 - [x] **Phase 107.1: Unify Workspace Signals and Retire Legacy Messages** - Consolidate hooks, OSC, ACP, automation notifications, and agent lifecycle state behind one provider-neutral signal contract before packaging.
-- [ ] **Phase 107.2: Beautify Workspace and Signal Presence** - Turn unified workspace, Git, agent, and notification state into a dense, accessible Supacode-inspired sidebar and attention experience across dark and light themes.
+- [x] **Phase 107.2: Beautify Workspace and Signal Presence** - Turn unified workspace, Git, agent, and notification state into a dense, accessible Supacode-inspired sidebar and attention experience across dark and light themes. (completed 2026-07-13)
 - [ ] **Phase 108: Native Delivery and Cross-Platform Proof** - The finished Linux client installs and passes platform acceptance, and the same architecture is compiled and exercised on an actual macOS environment.
 
 ## Phase Details
@@ -271,7 +271,7 @@ Plans:
 **Goal:** Present unified workspace, Git, agent, and notification state through a compact, calm, accessible sidebar and signal inbox inspired by Supacode while remaining native to GTK/libadwaita.
 **Requirements:** VIS-01, VIS-02, VIS-03, VIS-04, VIS-05
 **Depends on:** Phase 107.1
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed
 **Wave 1**
 
 - [x] 107.2-01-PLAN.md — Extend authoritative repository-pair metadata and build pure row, section, ordering, compression, and accessibility projections
@@ -286,7 +286,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 107.2-04-PLAN.md — Run full verification and complete blocking production GTK UAT
+- [x] 107.2-04-PLAN.md — Run full verification and complete blocking production GTK UAT
 
 **Success Criteria** (what must be TRUE):
 
