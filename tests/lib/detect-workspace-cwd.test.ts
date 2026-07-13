@@ -1,7 +1,13 @@
 import { describe, test, expect, mock, beforeEach, beforeAll, afterAll } from "bun:test"
 import { join } from "path"
 import { mkdirSync, rmSync, writeFileSync } from "fs"
-import { makeTmpDir, cleanup, makeIssueUtilsMock, realWriteWorkspace } from "../helpers"
+import {
+  makeTmpDir,
+  cleanup,
+  makeIssueUtilsMock,
+  realInvalidateConfigCache,
+  realWriteWorkspace,
+} from "../helpers"
 import type { Workspace } from "@/lib/config"
 
 // ============================================================
@@ -126,6 +132,9 @@ function clearWorkspaces() {
   rmSync(join(configDir, "workspaces"), { recursive: true, force: true })
   mkdirSync(join(configDir, "workspaces"), { recursive: true })
   writeFileSync(join(configDir, "config.yml"), `workspace_root: ${join(configDir, "ws-root")}\n`)
+  // Reset the real config module's process-global index with the filesystem
+  // fixture. Otherwise removed YAML can remain visible to a later test.
+  realInvalidateConfigCache()
 }
 
 // --- detectWorkspaceFromCwd tests ---
