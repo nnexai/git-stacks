@@ -46,6 +46,15 @@ test "creation requests carry explicit JSON and idempotency headers" {
     const operation = try c.operationRequest("op_1234567890123456", &path);
     try std.testing.expectEqualStrings("/v1/operations/op_1234567890123456", operation.path);
 }
+test "notification dismissal carries exact final service signal identity" {
+    var c = service.Client.init("Bearer secret");
+    const request = try c.dismissSignalRequestAlloc(std.testing.allocator, "sig_1234567890123456"); defer std.testing.allocator.free(request.body);
+    try std.testing.expectEqual(service.Method.POST, request.method);
+    try std.testing.expectEqualStrings("/v1/signals/dismiss", request.path);
+    try std.testing.expectEqualStrings("application/json", request.content_type.?);
+    try std.testing.expect(std.mem.indexOf(u8, request.body, "\"signal_id\":\"sig_1234567890123456\"") != null);
+    try std.testing.expectError(error.InvalidIdentity, c.dismissSignalRequestAlloc(std.testing.allocator, "local-id"));
+}
 test "replay gap adopts server cursor only after recovery" {
     var c = service.Client.init("Bearer secret"); c.sequence = 7;
     const recovery = try service.Client.decodeReplayGap(409, "{\"error\":{\"code\":\"replay_gap\",\"details\":{\"requested\":\"7\",\"oldest_available\":\"10\",\"newest_available\":\"20\",\"latest_cursor\":\"20\",\"snapshot_revision\":\"9\"}}}");

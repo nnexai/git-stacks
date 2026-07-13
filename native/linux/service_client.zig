@@ -196,6 +196,11 @@ pub const Client = struct {
         return self.request(.GET, "/v1/snapshot", "");
     }
     pub fn creationCatalogRequest(self: *Client) !Request { return self.request(.GET, "/v1/workspace-creation/catalog", ""); }
+    pub fn dismissSignalRequestAlloc(self: *Client, allocator: std.mem.Allocator, signal_id: []const u8) !Request {
+        if (!prefixed(signal_id, "sig_") or signal_id.len > 64) return error.InvalidIdentity;
+        const body = try std.fmt.allocPrint(allocator, "{{\"kind\":\"dismiss_signal\",\"signal_id\":\"{s}\"}}", .{signal_id});
+        var result = try self.request(.POST, "/v1/signals/dismiss", body); result.content_type = "application/json"; return result;
+    }
     pub fn operationRequest(self: *Client, operation_id: []const u8, path: *[96]u8) !Request {
         if (!prefixed(operation_id, "op_")) return error.InvalidIdentity;
         return self.request(.GET, try std.fmt.bufPrint(path, "/v1/operations/{s}", .{operation_id}), "");

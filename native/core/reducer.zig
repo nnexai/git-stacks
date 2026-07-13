@@ -15,9 +15,9 @@ pub const Action = union(enum) {
     terminal_failed_cleanup: struct { surface_id: [36]u8, generation: u64 },
     signal_received: model.Signal,
     signal_dismissed: struct { signal_id: [64]u8, signal_id_len: u8 },
-    select_attention: struct { attention_id: model.Id },
+    focus_signal: struct { signal_key: model.Id },
     exact_tab_visible: struct { surface_id: model.Id },
-    remove_attention: struct { attention_id: model.Id },
+    remove_signal: struct { signal_key: model.Id },
     navigate_pair: model.PairKey,
 };
 
@@ -115,8 +115,8 @@ pub fn reduce(before: model.State, action: Action) Result {
                 if (item.kind == .notification and item.signal_id_len == dismissal.signal_id_len and std.mem.eql(u8, item.signal_id[0..item.signal_id_len], dismissal.signal_id[0..dismissal.signal_id_len])) item.read = true;
             }
         },
-        .select_attention => |a| {
-            for (state.signals[0..state.signal_count]) |*item| if (std.mem.eql(u8, &item.id, &a.attention_id)) {
+        .focus_signal => |a| {
+            for (state.signals[0..state.signal_count]) |*item| if (std.mem.eql(u8, &item.id, &a.signal_key)) {
                 item.read = true;
                 var route: model.FocusRoute = .{ .workspace_id = item.workspace_id, .repository_id = item.repository_id, .reason = .workspace };
                 if (item.surface_id) |sid| {
@@ -141,9 +141,9 @@ pub fn reduce(before: model.State, action: Action) Result {
                 if (std.mem.eql(u8, &sid, &a.surface_id)) item.read = true;
             };
         },
-        .remove_attention => |a| {
+        .remove_signal => |a| {
             var write: usize = 0;
-            for (state.signals[0..state.signal_count]) |item| if (!std.mem.eql(u8, &item.id, &a.attention_id)) {
+            for (state.signals[0..state.signal_count]) |item| if (!std.mem.eql(u8, &item.id, &a.signal_key)) {
                 state.signals[write] = item;
                 write += 1;
             };

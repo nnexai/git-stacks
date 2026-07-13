@@ -44,6 +44,12 @@ test "adaptive thresholds spacing and recovery actions are centralized" {
         try std.testing.expect(found);
     }
 }
+test "final signal actions are explicit and identity carrying" {
+    for ([_][]const u8{ "win.focus-signal", "win.dismiss-notification", "win.open-signal-inbox", "win.retry-signals", "win.open-integration-health", "win.retry-dismissal" }) |name| {
+        var found = false; for (app.actions) |spec| if (std.mem.eql(u8, spec.name, name)) { found = true; };
+        try std.testing.expect(found);
+    }
+}
 test "configured command launcher filters scope orders recents and preserves structured failure" {
     var s: model.State = .{ .connection = .ready, .command_count = 4 };
     s.commands[0] = cmd('a', "Test", id('r'));

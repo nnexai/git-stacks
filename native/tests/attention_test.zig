@@ -56,7 +56,7 @@ test "explicit selection focuses exact live surface and visible focus clears cur
     var s = base();
     const aid = id("418f47f4-5ab1-7c2d-8e90-123456789abc");
     s = reducer.reduce(s, .{ .signal_received = .{ .id = aid, .workspace_id = s.workspaces[0].id, .repository_id = s.pairs[0].key.repository_id, .surface_id = s.pairs[0].surfaces[0].id, .status = .waiting } }).state;
-    const selected = reducer.reduce(s, .{ .select_attention = .{ .attention_id = aid } });
+    const selected = reducer.reduce(s, .{ .focus_signal = .{ .signal_key = aid } });
     try std.testing.expect(selected.effect == .platform_focus);
     try std.testing.expectEqual(model.FallbackReason.exact_surface, selected.effect.platform_focus.reason);
     try std.testing.expect(selected.state.signals[0].read);
@@ -69,7 +69,7 @@ test "navigation and asynchronous receipt have zero focus effects; fallback is d
     const nav = reducer.reduce(s, .{ .navigate_pair = .{ .workspace_id = ws, .repository_id = repo } });
     try std.testing.expect(nav.effect == .none);
     s = reducer.reduce(nav.state, .{ .signal_received = .{ .id = aid, .workspace_id = ws, .repository_id = repo, .surface_id = id("718f47f4-5ab1-7c2d-8e90-123456789abc"), .status = .failed } }).state;
-    const selected = reducer.reduce(s, .{ .select_attention = .{ .attention_id = aid } });
+    const selected = reducer.reduce(s, .{ .focus_signal = .{ .signal_key = aid } });
     try std.testing.expectEqual(model.FallbackReason.repository, selected.effect.platform_focus.reason);
 }
 
@@ -145,7 +145,7 @@ test "provider-aware row projects Codex detail location unread and fallback" {
     try std.testing.expectEqualStrings("Approval needed", row.title[0..row.title_len]);
     try std.testing.expectEqualStrings("Run the tests", row.detail[0..row.detail_len]);
     try std.testing.expectEqualStrings("Demo / api", row.location[0..row.location_len]);
-    try std.testing.expect(row.unread);
+    try std.testing.expect(!row.unread and row.group == .needs_attention);
     try std.testing.expect(std.mem.indexOf(u8, row.fallback, "repository") != null);
 }
 
@@ -162,4 +162,39 @@ test "UTF-8 prefix truncation never splits a multibyte codepoint" {
     try std.testing.expectEqualStrings("1234567", prefix);
     try std.testing.expect(std.unicode.utf8ValidateSlice(prefix));
     try std.testing.expect(model.utf8Prefix("\xff", 8) == null);
+}
+test "final signals split needs attention from recent activity without rendering mutation" {
+    var s = base(); const ws = s.workspaces[0].id; const repo = s.pairs[0].key.repository_id;
+    s.signal_count = 5;
+    s.signals[0] = .{ .id = id("a18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = ws, .repository_id = repo, .status = .waiting };
+    s.signals[1] = .{ .id = id("b18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = ws, .repository_id = repo, .status = .failed };
+    s.signals[2] = .{ .id = id("c18f47f4-5ab1-7c2d-8e90-123456789abc"), .kind = .notification, .workspace_id = ws, .repository_id = repo, .status = .waiting, .read = false };
+    s.signals[3] = .{ .id = id("d18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = ws, .repository_id = repo, .status = .working };
+    s.signals[4] = .{ .id = id("e18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = ws, .repository_id = repo, .status = .completed };
+    var rows: [8]view.SignalRow = undefined;
+    try std.testing.expectEqual(@as(usize, 3), view.collect(&s, .needs_attention, null, &rows));
+    try std.testing.expectEqual(@as(usize, 2), view.collect(&s, .recent_activity, null, &rows));
+    try std.testing.expect(!s.signals[2].read);
+    const notification = view.project(&s, s.signals[2]); try std.testing.expect(notification.dismissible and notification.unread);
+    const completed = view.project(&s, s.signals[4]); try std.testing.expect(!completed.dismissible and !completed.unread and completed.group == .recent_activity);
+}
+test "scoped inbox and exact recovery copy are deterministic" {
+    var s = base(); s.signal_count = 1; s.signals[0] = .{ .id = id("a18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = s.workspaces[0].id, .repository_id = s.pairs[0].key.repository_id, .status = .waiting };
+    var rows: [4]view.SignalRow = undefined;
+    try std.testing.expectEqual(@as(usize, 1), view.collect(&s, .needs_attention, s.pairs[0].key, &rows));
+    var foreign = s.pairs[0].key; foreign.repository_id = id("f18f47f4-5ab1-7c2d-8e90-123456789abc");
+    try std.testing.expectEqual(@as(usize, 0), view.collect(&s, .needs_attention, foreign, &rows));
+    const cases = [_]struct { mode: view.InboxMode, title: []const u8, action: view.RecoveryAction }{
+        .{ .mode = .empty_attention, .title = "No signals need attention", .action = .none }, .{ .mode = .empty_activity, .title = "No recent activity", .action = .none },
+        .{ .mode = .filtered_empty, .title = "No signals match this filter", .action = .clear_filters }, .{ .mode = .reconnecting, .title = "Signals are reconnecting", .action = .retry_signals },
+        .{ .mode = .integration_degraded, .title = "Some agent integrations need attention", .action = .integration_health }, .{ .mode = .load_failure, .title = "Signals could not be loaded", .action = .connection_details },
+        .{ .mode = .focus_failure, .title = "That terminal is no longer available", .action = .open_workspace }, .{ .mode = .dismiss_failure, .title = "Notification could not be dismissed", .action = .retry_dismissal },
+    };
+    for (cases) |case| { const status = view.inboxStatus(case.mode); try std.testing.expectEqualStrings(case.title, status.title); try std.testing.expectEqual(case.action, status.action); }
+}
+test "signal timestamps project deterministic relative time" {
+    var s = base(); var item: model.Signal = .{ .id = id("a18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = s.workspaces[0].id, .status = .working };
+    const occurred = "2026-07-13T10:00:00Z"; @memcpy(item.occurred_at[0..occurred.len], occurred); item.occurred_at_len = occurred.len;
+    const row = view.projectAt(&s, item, 1783938600);
+    try std.testing.expectEqualStrings("30m ago", row.relative[0..row.relative_len]);
 }

@@ -44,13 +44,14 @@ test "attention row redundant text contains provider title and location" {
 }
 
 test "workspace compression never removes awaiting unread or accessible meaning" {
-    var state: model.State = .{ .connection = .ready, .workspace_count = 1, .pair_count = 1, .signal_count = 1 };
+    var state: model.State = .{ .connection = .ready, .workspace_count = 1, .pair_count = 1, .signal_count = 2 };
     const wid = [_]u8{'w'} ** 36; const rid = [_]u8{'r'} ** 36;
     state.workspaces[0] = .{ .id = wid, .repository_count = 1 }; state.workspaces[0].repository_ids[0] = rid;
     @memcpy(state.workspaces[0].name[0..4], "Demo"); state.workspaces[0].name_len = 4;
     @memcpy(state.workspaces[0].repositories[0].name[0..4], "Repo"); state.workspaces[0].repositories[0].name_len = 4;
     state.pairs[0] = .{ .key = .{ .workspace_id = wid, .repository_id = rid } };
     state.signals[0] = .{ .id = [_]u8{'s'} ** 36, .workspace_id = wid, .repository_id = rid, .status = .waiting, .read = false };
+    state.signals[1] = .{ .id = [_]u8{'n'} ** 36, .kind = .notification, .workspace_id = wid, .repository_id = rid, .status = .waiting, .read = false };
     for ([_]workspace.WorkspaceCompressionTier{ .wide, .medium, .narrow, .text_200 }) |tier| {
         const row = workspace.project(&state, tier).rows[0];
         try std.testing.expect(row.awaiting and row.unread);

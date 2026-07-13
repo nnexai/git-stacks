@@ -80,6 +80,7 @@ const State = struct {
     replay_thread: ?std.Thread = null,
     create_cancel: std.atomic.Value(bool) = .init(false),
     create_thread: ?std.Thread = null,
+    signal_thread: ?std.Thread = null,
     sync_cancel: bool = false,
     sync_mutex: std.Thread.Mutex = .{},
     sync_condition: std.Thread.Condition = .{},
@@ -114,9 +115,10 @@ const State = struct {
     connection_label: ?*c.GtkLabel = null,
     connection_action: ?*c.GtkButton = null,
     stale_banner: ?*c.GtkWidget = null,
-    attention_label: ?*c.GtkLabel = null,
-    attention_button: ?*c.GtkMenuButton = null,
-    attention_list: ?*c.GtkListBox = null,
+    signal_label: ?*c.GtkLabel = null,
+    signal_button: ?*c.GtkMenuButton = null,
+    signal_list: ?*c.GtkListBox = null,
+    signal_scope: ?model.PairKey = null,
     action_group: ?*c.GSimpleActionGroup = null,
     launcher_model: ?command_launcher.Launcher = null,
     focus_before_launcher: ?*c.GtkWidget = null,
@@ -275,6 +277,7 @@ fn cleanup(state: *State) void {
         thread.join();
         state.create_thread = null;
     }
+    if (state.signal_thread) |thread| { thread.join(); state.signal_thread = null; }
     if (state.sync_thread) |thread| { thread.join(); state.sync_thread = null; }
     if (state.recovery_source != 0) {
         // Destroy the source object returned by the context instead of looking
@@ -604,10 +607,10 @@ fn surfaceAttentionReceived(context: *anyopaque, id: model.Id, token: []const u8
     const event = signal_osc.parse(body, token) orelse return;
     const loc = model.surfaceLocation(&state.graph.state, id) orelse return;
     const pair = state.graph.state.pairs[loc.pair].key;
-    var attention_id = id;
-    attention_id[0] = switch (event.provider) { .codex => 'a', .claude => 'b', .copilot => 'c', .opencode => 'd' };
+    var signal_key = id;
+    signal_key[0] = switch (event.provider) { .codex => 'a', .claude => 'b', .copilot => 'c', .opencode => 'd' };
     var item: model.Signal = .{
-        .id = attention_id,
+        .id = signal_key,
         .workspace_id = pair.workspace_id,
         .repository_id = pair.repository_id,
         .surface_id = id,
@@ -729,42 +732,45 @@ fn refreshLauncher(state: *State) void {
     if (c.gtk_list_box_get_row_at_index(list, @intCast(selected))) |row| c.gtk_list_box_select_row(list, row);
 }
 
-fn refreshAttentionRows(state: *State) void {
-    const list = state.attention_list orelse return;
+fn refreshSignalRows(state: *State) void {
+    const list = state.signal_list orelse return;
     clearList(list);
-    for (state.graph.state.signals[0..state.graph.state.signal_count]) |item| {
-        const projected = attention_view.project(&state.graph.state, item);
+    const groups = [_]attention_view.SignalGroup{ .needs_attention, .recent_activity };
+    for (groups) |group| {
+        var rows: [64]attention_view.SignalRow = undefined; const count = attention_view.collect(&state.graph.state, group, state.signal_scope, &rows);
+        const heading_text: [*:0]const u8 = if (group == .needs_attention) "Needs attention" else "Recent activity";
+        const heading = c.gtk_label_new(heading_text) orelse continue; c.gtk_label_set_xalign(@ptrCast(heading), 0); c.gtk_widget_add_css_class(heading, "workspace-section"); setAccessible(heading, c.GTK_ACCESSIBLE_ROLE_HEADING, heading_text, "Signal inbox group"); c.gtk_list_box_append(list, heading);
+        if (count == 0) { const empty = attention_view.inboxStatus(if (group == .needs_attention) .empty_attention else .empty_activity); const label = c.gtk_label_new(empty.title.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(label), 0); c.gtk_widget_set_tooltip_text(label, empty.description.ptr); c.gtk_list_box_append(list, label); continue; }
+        for (rows[0..count]) |projected| {
         var title_buffer: [220:0]u8 = [_:0]u8{0} ** 220;
         const title = std.fmt.bufPrintZ(&title_buffer, "{s}{s}", .{ projected.title[0..projected.title_len], if (projected.unread) " · Unread" else "" }) catch continue;
         var detail_buffer: [900:0]u8 = [_:0]u8{0} ** 900;
-        const detail = std.fmt.bufPrintZ(&detail_buffer, "{s}\n{s}{s}{s}\n{s}", .{ projected.location[0..projected.location_len], projected.detail[0..projected.detail_len], if (projected.detail_len > 0 and projected.occurred_len > 0) " · " else "", projected.occurred[0..projected.occurred_len], projected.fallback }) catch continue;
-        const button = c.gtk_button_new() orelse continue;
-        c.gtk_widget_add_css_class(button, "flat");
-        c.gtk_widget_add_css_class(button, "git-stacks-signal-row");
+        const detail = std.fmt.bufPrintZ(&detail_buffer, "{s}\n{s}{s}{s}\n{s}", .{ projected.location[0..projected.location_len], projected.detail[0..projected.detail_len], if (projected.detail_len > 0 and projected.relative_len > 0) " · " else "", projected.relative[0..projected.relative_len], projected.fallback }) catch continue;
         const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 3) orelse continue;
+        c.gtk_widget_add_css_class(box, "git-stacks-signal-row");
         const header = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 7) orelse continue;
         const provider = c.gtk_label_new(projected.provider.ptr) orelse continue;
         c.gtk_widget_add_css_class(provider, "git-stacks-provider-chip");
         c.gtk_box_append(@ptrCast(header), provider);
-        const heading = c.gtk_label_new(title.ptr) orelse continue;
-        c.gtk_label_set_xalign(@ptrCast(heading), 0);
-        c.gtk_label_set_ellipsize(@ptrCast(heading), c.PANGO_ELLIPSIZE_END);
-        c.gtk_widget_set_hexpand(heading, 1);
-        c.gtk_box_append(@ptrCast(header), heading);
-        const status_text: [*:0]const u8 = switch (item.status) { .waiting => "Needs input", .failed => "Failed", .completed => "Completed", .working => "Working", .idle => "Idle" };
-        const status = c.gtk_label_new(status_text) orelse continue;
+        const signal_title = c.gtk_label_new(title.ptr) orelse continue;
+        c.gtk_label_set_xalign(@ptrCast(signal_title), 0);
+        c.gtk_label_set_ellipsize(@ptrCast(signal_title), c.PANGO_ELLIPSIZE_END);
+        c.gtk_widget_set_hexpand(signal_title, 1);
+        c.gtk_box_append(@ptrCast(header), signal_title);
+        const status = c.gtk_label_new(projected.lifecycle.ptr) orelse continue;
         c.gtk_widget_add_css_class(status, "git-stacks-status-chip");
-        if (item.status == .failed) c.gtk_widget_add_css_class(status, "error");
-        if (item.status == .waiting) c.gtk_widget_add_css_class(status, "warning");
+        if (std.mem.eql(u8, projected.lifecycle, "Failed")) c.gtk_widget_add_css_class(status, "error");
+        if (std.mem.eql(u8, projected.lifecycle, "Needs input")) c.gtk_widget_add_css_class(status, "warning");
         c.gtk_box_append(@ptrCast(header), status);
         c.gtk_box_append(@ptrCast(box), header);
         const body = c.gtk_label_new(detail.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(body), 0); c.gtk_label_set_wrap(@ptrCast(body), 1); c.gtk_widget_add_css_class(body, "dim-label"); c.gtk_box_append(@ptrCast(box), body);
-        c.gtk_button_set_child(@ptrCast(button), box);
+        const actions = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse continue;
+        const focus = c.gtk_button_new_with_label(projected.focus_label.ptr) orelse continue;
         var action: [96:0]u8 = [_:0]u8{0} ** 96;
-        const detailed = std.fmt.bufPrintZ(&action, "win.focus-attention('{s}')", .{projected.id}) catch continue;
-        c.gtk_actionable_set_detailed_action_name(@ptrCast(button), detailed.ptr);
-        setAccessible(button, c.GTK_ACCESSIBLE_ROLE_BUTTON, title.ptr, detail.ptr);
-        c.gtk_list_box_append(list, button);
+        const detailed = std.fmt.bufPrintZ(&action, "win.focus-signal('{s}')", .{projected.id}) catch continue; c.gtk_actionable_set_detailed_action_name(@ptrCast(focus), detailed.ptr); setAccessible(focus, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Focus terminal", detail.ptr); c.gtk_box_append(@ptrCast(actions), focus);
+        if (projected.dismissible) { const dismiss = c.gtk_button_new_with_label(projected.dismiss_label.ptr) orelse continue; var dismiss_action: [112:0]u8 = [_:0]u8{0} ** 112; const dismiss_detailed = std.fmt.bufPrintZ(&dismiss_action, "win.dismiss-notification('{s}')", .{projected.id}) catch continue; c.gtk_actionable_set_detailed_action_name(@ptrCast(dismiss), dismiss_detailed.ptr); setAccessible(dismiss, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Dismiss notification", "Dismiss this service-authoritative notification"); c.gtk_box_append(@ptrCast(actions), dismiss); }
+        c.gtk_box_append(@ptrCast(box), actions); setAccessible(box, c.GTK_ACCESSIBLE_ROLE_GROUP, title.ptr, detail.ptr); c.gtk_list_box_append(list, box);
+        }
     }
 }
 
@@ -854,7 +860,7 @@ fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_vi
     if (projected.agent_overflow > 0) { var overflow_z: [12:0]u8 = [_:0]u8{0} ** 12; const overflow = std.fmt.bufPrintZ(&overflow_z, "+{d}", .{projected.agent_overflow}) catch return; const badge = c.gtk_label_new(overflow.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-provider-chip"); c.gtk_widget_set_tooltip_text(badge, "Additional active agent sessions"); c.gtk_box_append(@ptrCast(status), badge); }
     if (projected.activity) { const activity = c.gtk_image_new_from_icon_name("media-playback-start-symbolic") orelse return; c.gtk_widget_add_css_class(activity, "workspace-activity"); c.gtk_widget_add_css_class(activity, if (animationsEnabled()) "workspace-activity-animated" else "workspace-activity-static"); c.gtk_widget_set_tooltip_text(activity, if (animationsEnabled()) "Background activity" else "Background activity (animation disabled)"); c.gtk_box_append(@ptrCast(status), activity); }
     if (projected.awaiting) { const awaiting = c.gtk_image_new_from_icon_name("dialog-question-symbolic") orelse return; c.gtk_widget_add_css_class(awaiting, "workspace-awaiting"); c.gtk_widget_set_tooltip_text(awaiting, "Awaiting input"); c.gtk_box_append(@ptrCast(status), awaiting); }
-    if (projected.unread) { const unread = c.gtk_image_new_from_icon_name("mail-unread-symbolic") orelse return; c.gtk_widget_add_css_class(unread, "workspace-unread"); c.gtk_widget_set_tooltip_text(unread, "Unread notification"); c.gtk_box_append(@ptrCast(status), unread); }
+    if (projected.unread) { const unread = c.gtk_button_new_from_icon_name("mail-unread-symbolic") orelse return; c.gtk_widget_add_css_class(unread, "flat"); c.gtk_widget_add_css_class(unread, "workspace-unread"); c.gtk_widget_set_tooltip_text(unread, "Open workspace signal inbox"); var inbox_action: [128:0]u8 = [_:0]u8{0} ** 128; const inbox_detailed = std.fmt.bufPrintZ(&inbox_action, "win.open-signal-inbox('{s}/{s}')", .{ projected.key.workspace_id, projected.key.repository_id }) catch return; c.gtk_actionable_set_detailed_action_name(@ptrCast(unread), inbox_detailed.ptr); c.gtk_box_append(@ptrCast(status), unread); }
     c.gtk_box_append(@ptrCast(row), status); c.gtk_button_set_child(@ptrCast(button), row);
     if (projected.selected) c.gtk_widget_add_css_class(button, "selected-workspace");
     var accessible_z: [513:0]u8 = [_:0]u8{0} ** 513; @memcpy(accessible_z[0..projected.accessible_len], projected.accessible[0..projected.accessible_len]);
@@ -1174,7 +1180,7 @@ fn refreshProjection(state: *State) void {
         unread += a.unread;
         severity = @enumFromInt(@max(@intFromEnum(severity), @intFromEnum(a.severity)));
     }
-    if (state.attention_label) |label| {
+    if (state.signal_label) |label| {
         var text: [96:0]u8 = [_:0]u8{0} ** 96;
         const status = switch (severity) { .primary => "Needs input", .secondary => "Completed", .none => "Idle" };
         const rendered = std.fmt.bufPrintZ(&text, "Signal: {d} unread · {s}", .{ unread, status }) catch "Signal";
@@ -1183,8 +1189,8 @@ fn refreshProjection(state: *State) void {
         c.gtk_widget_set_visible(@ptrCast(@alignCast(label)), @intFromBool(unread > 0));
         setAccessible(label, c.GTK_ACCESSIBLE_ROLE_STATUS, rendered.ptr, "Hierarchical workspace, repository, and terminal attention status");
     }
-    if (state.attention_button) |button| c.gtk_widget_set_visible(@ptrCast(@alignCast(button)), @intFromBool(state.graph.state.signal_count > 0));
-    refreshAttentionRows(state);
+    if (state.signal_button) |button| c.gtk_widget_set_visible(@ptrCast(@alignCast(button)), @intFromBool(state.graph.state.signal_count > 0));
+    refreshSignalRows(state);
     refreshLauncher(state);
 }
 
@@ -1861,6 +1867,31 @@ fn launchVscode(state: *State) void {
     child.spawn() catch |err| showLauncherError(state, @errorName(err));
 }
 
+const SignalDismissDispatch = struct { state: *State, signal_key: model.Id, succeeded: bool = false };
+fn finishSignalDismiss(data: ?*anyopaque) callconv(.c) c.gboolean {
+    const dispatch: *SignalDismissDispatch = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE)); defer dispatch.state.graph.allocator.destroy(dispatch);
+    if (dispatch.state.signal_thread) |thread| { thread.join(); dispatch.state.signal_thread = null; }
+    if (dispatch.state.cleaned) return c.G_SOURCE_REMOVE;
+    if (dispatch.succeeded) requestSnapshotRefresh(dispatch.state, .manual_retry, dispatch.state.graph.service.revision + 1, null) else refreshSignalRows(dispatch.state);
+    return c.G_SOURCE_REMOVE;
+}
+fn dismissSignalWorker(dispatch: *SignalDismissDispatch, signal_id: [64]u8, signal_id_len: u8) void {
+    var transport = @import("service_client").HttpTransport.init(dispatch.state.graph.allocator); defer transport.deinit();
+    var client = @import("service_client").Client.init(dispatch.state.graph.authorization); client.begin();
+    const request = client.dismissSignalRequestAlloc(dispatch.state.graph.allocator, signal_id[0..signal_id_len]) catch { _ = c.g_main_context_invoke(null, @ptrCast(&finishSignalDismiss), dispatch); return; }; defer dispatch.state.graph.allocator.free(request.body);
+    const response = transport.execute(dispatch.state.graph.endpoint, request) catch { _ = c.g_main_context_invoke(null, @ptrCast(&finishSignalDismiss), dispatch); return; }; defer response.deinit(dispatch.state.graph.allocator);
+    dispatch.succeeded = response.status >= 200 and response.status < 300;
+    _ = c.g_main_context_invoke(null, @ptrCast(&finishSignalDismiss), dispatch);
+}
+fn dismissNotification(state: *State, key: model.Id) void {
+    if (state.signal_thread != null) return;
+    for (state.graph.state.signals[0..state.graph.state.signal_count]) |item| if (std.mem.eql(u8, &item.id, &key) and item.kind == .notification and item.signal_id_len > 0) {
+        const dispatch = state.graph.allocator.create(SignalDismissDispatch) catch return; dispatch.* = .{ .state = state, .signal_key = key };
+        state.signal_thread = std.Thread.spawn(.{}, dismissSignalWorker, .{ dispatch, item.signal_id, item.signal_id_len }) catch { state.graph.allocator.destroy(dispatch); return; };
+        return;
+    };
+}
+
 const CreateDispatch = struct { state: *State, authoritative: ?model.State = null, message: [160:0]u8 = [_:0]u8{0} ** 160 };
 fn finishWorkspaceCreate(data: ?*anyopaque) callconv(.c) c.gboolean {
     const result: *CreateDispatch = @ptrCast(@alignCast(data orelse return c.G_SOURCE_REMOVE));
@@ -2101,7 +2132,7 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
         if (state.graph.state.surface) |surface| _ = createTerminal(state, null, surface.id);
     } else if (std.mem.eql(u8, name, "open-vscode")) {
         launchVscode(state);
-    } else if (std.mem.eql(u8, name, "focus-attention")) {
+    } else if (std.mem.eql(u8, name, "focus-signal")) {
         if (parameter) |p| {
             const id_str = std.mem.span(c.g_variant_get_string(p, null));
             if (id_str.len == 36) {
@@ -2116,6 +2147,16 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
                 }
             }
         }
+    } else if (std.mem.eql(u8, name, "dismiss-notification") or std.mem.eql(u8, name, "retry-dismissal")) {
+        if (variantId(parameter)) |id| dismissNotification(state, id);
+    } else if (std.mem.eql(u8, name, "open-signal-inbox")) {
+        if (parameter) |p| { const scope = std.mem.span(c.g_variant_get_string(p, null)); if (scope.len == 73 and scope[36] == '/') { var key: model.PairKey = undefined; @memcpy(&key.workspace_id, scope[0..36]); @memcpy(&key.repository_id, scope[37..73]); if (model.pairValid(&state.graph.state, key)) state.signal_scope = key; } }
+        refreshSignalRows(state);
+        if (state.signal_button) |button| c.gtk_menu_button_popup(button);
+    } else if (std.mem.eql(u8, name, "retry-signals")) {
+        requestSnapshotRefresh(state, .manual_retry, state.graph.service.revision + 1, null);
+    } else if (std.mem.eql(u8, name, "open-integration-health")) {
+        showLauncherError(state, "Some agent integrations need attention");
     } else if (std.mem.eql(u8, name, "pin-workspace")) {
         if (parameter) |p| {
             const id_str = std.mem.span(c.g_variant_get_string(p, null));
@@ -2180,7 +2221,7 @@ fn registerActions(state: *State, window: *c.GtkWindow) void {
         const bare = spec.name[4..];
         var bare_buffer: [64:0]u8 = [_:0]u8{0} ** 64;
         const bare_z = std.fmt.bufPrintZ(&bare_buffer, "{s}", .{bare}) catch continue;
-        const parameter_type = if (std.mem.eql(u8, bare, "focus-attention") or std.mem.eql(u8, bare, "activate-command") or std.mem.eql(u8, bare, "select-tab") or std.mem.eql(u8, bare, "reorder-tab") or std.mem.eql(u8, bare, "rename-tab") or std.mem.eql(u8, bare, "remove-tab") or std.mem.eql(u8, bare, "relaunch-tab") or std.mem.eql(u8, bare, "pin-workspace") or std.mem.eql(u8, bare, "unpin-workspace") or std.mem.eql(u8, bare, "reorder-pin")) string_type else null;
+        const parameter_type = if (std.mem.eql(u8, bare, "focus-signal") or std.mem.eql(u8, bare, "dismiss-notification") or std.mem.eql(u8, bare, "retry-dismissal") or std.mem.eql(u8, bare, "open-signal-inbox") or std.mem.eql(u8, bare, "activate-command") or std.mem.eql(u8, bare, "select-tab") or std.mem.eql(u8, bare, "reorder-tab") or std.mem.eql(u8, bare, "rename-tab") or std.mem.eql(u8, bare, "remove-tab") or std.mem.eql(u8, bare, "relaunch-tab") or std.mem.eql(u8, bare, "pin-workspace") or std.mem.eql(u8, bare, "unpin-workspace") or std.mem.eql(u8, bare, "reorder-pin")) string_type else null;
         const action = c.g_simple_action_new(bare_z.ptr, parameter_type) orelse continue;
         c.g_simple_action_set_enabled(action, @intFromBool(application.enabled(&state.graph.state, spec)));
         _ = c.g_signal_connect_data(action, "activate", @ptrCast(&actionActivate), state, null, 0);
@@ -2201,24 +2242,24 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     const root = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return null;
     const header = c.adw_header_bar_new() orelse return null;
     const attention = c.gtk_label_new("") orelse return null;
-    state.attention_label = @ptrCast(attention);
+    state.signal_label = @ptrCast(attention);
     c.gtk_label_set_ellipsize(@ptrCast(attention), c.PANGO_ELLIPSIZE_END);
     c.gtk_label_set_max_width_chars(@ptrCast(attention), 28);
     c.gtk_widget_add_css_class(attention, "caption");
-    const attention_button = c.gtk_menu_button_new() orelse return null;
-    state.attention_button = @ptrCast(attention_button);
-    c.gtk_menu_button_set_icon_name(@ptrCast(attention_button), "dialog-warning-symbolic");
-    c.gtk_widget_set_tooltip_text(attention_button, "Open attention inbox");
-    setAccessible(attention_button, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Signal inbox", "Review terminals that need input, failed, completed, or are working");
+    const signal_button = c.gtk_menu_button_new() orelse return null;
+    state.signal_button = @ptrCast(signal_button);
+    c.gtk_menu_button_set_icon_name(@ptrCast(signal_button), "dialog-warning-symbolic");
+    c.gtk_widget_set_tooltip_text(signal_button, "Open attention inbox");
+    setAccessible(signal_button, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Signal inbox", "Review terminals that need input, failed, completed, or are working");
     const attention_popover = c.gtk_popover_new() orelse return null;
     const attention_scroll = c.gtk_scrolled_window_new() orelse return null;
     c.gtk_widget_set_size_request(attention_scroll, 420, 300);
-    const attention_list = c.gtk_list_box_new() orelse return null;
-    state.attention_list = @ptrCast(attention_list);
-    c.gtk_scrolled_window_set_child(@ptrCast(attention_scroll), attention_list);
+    const signal_list = c.gtk_list_box_new() orelse return null;
+    state.signal_list = @ptrCast(signal_list);
+    c.gtk_scrolled_window_set_child(@ptrCast(attention_scroll), signal_list);
     c.gtk_popover_set_child(@ptrCast(attention_popover), attention_scroll);
-    c.gtk_menu_button_set_popover(@ptrCast(attention_button), attention_popover);
-    c.adw_header_bar_pack_start(@ptrCast(header), attention_button);
+    c.gtk_menu_button_set_popover(@ptrCast(signal_button), attention_popover);
+    c.adw_header_bar_pack_start(@ptrCast(header), signal_button);
     c.adw_header_bar_pack_start(@ptrCast(header), attention);
     const create_header = c.gtk_button_new_from_icon_name("list-add-symbolic") orelse return null;
     c.gtk_actionable_set_action_name(@ptrCast(create_header), "win.new-workspace");
