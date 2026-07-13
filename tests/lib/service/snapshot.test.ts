@@ -42,7 +42,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     listWorkspaceNames: () => ["alpha"],
     ensureWorkspaceIdentity: () => workspace(),
     fingerprint: async () => "stable",
-    getWorkspaceStatus: async () => [{ name: "git-stacks", exists: true, dirty: false, branch: "feature/alpha", mode: "worktree" as const, ahead: 0, behind: 0 }],
+    getWorkspaceStatus: async () => [{ name: "git-stacks", exists: true, dirty: false, branch: "feature/alpha", mode: "worktree" as const, ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }],
     getWorkspaceFileStatus: () => ({ summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 2, byState: {}, byType: {} }, warnings: [], errors: [] }),
     listManualCommands: () => ["dev"],
     planManualCommand: () => [],
@@ -63,7 +63,7 @@ describe("authoritative service snapshots", () => {
       fingerprint: async () => fingerprints.shift()!,
       getWorkspaceStatus: async () => {
         statusReads++
-        return [{ name: "git-stacks", exists: true, dirty: statusReads === 1, branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0 }]
+        return [{ name: "git-stacks", exists: true, dirty: statusReads === 1, branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }]
       },
     }))
 
@@ -91,7 +91,7 @@ describe("authoritative service snapshots", () => {
     const deps = dependencies({
       revisionStore: store,
       clock: () => new Date(now),
-      getWorkspaceStatus: async () => [{ name: "git-stacks", exists: true, dirty, branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0 }],
+      getWorkspaceStatus: async () => [{ name: "git-stacks", exists: true, dirty, branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }],
     })
 
     expect((await createSnapshotBuilder(deps).buildWorkspace("alpha", "req_0123456789abcdef")).revision).toBe("1")
@@ -141,7 +141,7 @@ describe("authoritative service snapshots", () => {
     const builder = createSnapshotBuilder(dependencies({
       listWorkspaceNames: () => ["alpha", "beta"],
       ensureWorkspaceIdentity: (name: string) => workspace(name),
-      getWorkspaceStatus: async (entry: Workspace) => [{ name: "git-stacks", exists: true, dirty: entry.name === "beta", branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0 }],
+      getWorkspaceStatus: async (entry: Workspace) => [{ name: "git-stacks", exists: true, dirty: entry.name === "beta", branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }],
     }))
     expect(await builder.currentRevision()).toBe("1")
   })

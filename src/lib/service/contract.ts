@@ -147,8 +147,11 @@ export const WorkspaceSnapshotSchema = z.strictObject({
   labels: z.array(z.string().min(1).max(64)).max(16).optional(),
   commands: z.array(z.string()).optional(),
   status: z.array(z.strictObject({
-    name: z.string().min(1), exists: z.boolean(), dirty: z.boolean(), branch: z.string(),
-    mode: z.enum(["worktree", "trunk", "dir"]), ahead: z.number().int().nonnegative(), behind: z.number().int().nonnegative(),
+    repository_id: EntityIdSchema, name: utf8BoundedString(96, 1), exists: z.boolean(), dirty: z.boolean(), branch: utf8BoundedString(96),
+    default_branch: utf8BoundedString(96, 1), mode: z.enum(["worktree", "trunk", "dir"]),
+    ahead: z.number().int().nonnegative(), behind: z.number().int().nonnegative(), additions: z.number().int().nonnegative(), removals: z.number().int().nonnegative(),
+    remote: z.enum(["available", "missing", "not_applicable"]), degraded: z.boolean(),
+    pull_request: z.strictObject({ number: z.number().int().positive(), state: z.enum(["open", "draft", "merged", "closed"]), checks: z.enum(["pending", "passing", "failing"]).optional() }).optional(),
   })).optional(),
   file_status: z.strictObject({
     total: z.number().int().nonnegative(), ok: z.number().int().nonnegative(), warnings: z.number().int().nonnegative(),

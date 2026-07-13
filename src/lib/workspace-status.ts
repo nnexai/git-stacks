@@ -1,6 +1,6 @@
 import { existsSync } from "fs"
 import { resolve } from "path"
-import { isRepoDirty, getCurrentBranch, getCommitsAhead, getCommitsBehind, isFetchStale } from "./git"
+import { isRepoDirty, getCurrentBranch, getCommitsAhead, getCommitsBehind, isFetchStale, getGitLineChanges } from "./git"
 import { listWorkspaces, readGlobalConfig, getRepoPath, isGitRepo, isWorktreeRepo, type Workspace } from "./config"
 import { logDebug, timeOperation } from "./observability"
 import { expandHome, getTasksDir } from "./paths"
@@ -132,6 +132,9 @@ export type RepoStatus = {
   mode: "trunk" | "worktree" | "dir"
   ahead: number
   behind: number
+  additions: number
+  removals: number
+  degraded: boolean
 }
 
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
@@ -148,15 +151,18 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
           let branch = "—"
           let ahead = 0
           let behind = 0
+          let additions = 0
+          let removals = 0
 
           if (exists && isGitRepo(repo)) {
             try {
-              ;[dirty, branch] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath)])
+              const [isDirty, currentBranch, lines] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath), getGitLineChanges(repoPath)])
+              dirty = isDirty; branch = currentBranch; additions = lines.additions; removals = lines.removals
             } catch (error) {
               // A concurrently removed worktree is an expected status
               // transition. Preserve real Git failures while the path exists.
               if (existsSync(repoPath)) throw error
-              return { name: repo.name, exists: false, dirty: false, branch: "—", mode: repo.mode, ahead: 0, behind: 0 }
+              return { name: repo.name, exists: false, dirty: false, branch: "—", mode: repo.mode, ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }
             }
 
             let baseRef: string
@@ -173,7 +179,7 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
             ])
           }
 
-          return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind }
+          return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind, additions, removals, degraded: false }
         })
       )
   )

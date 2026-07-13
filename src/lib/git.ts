@@ -185,6 +185,40 @@ export async function isRepoDirty(repoPath: string): Promise<boolean> {
   return result.stdout.toString().trim().length > 0
 }
 
+export type GitLineChanges = { additions: number; removals: number }
+
+/** Count changed text lines across the index, worktree, and untracked files. */
+export async function getGitLineChanges(repoPath: string): Promise<GitLineChanges> {
+  const run = (args: string[]) => Bun.spawnSync(["git", "-C", repoPath, ...args], { stdout: "pipe", stderr: "pipe" })
+  const totals: GitLineChanges = { additions: 0, removals: 0 }
+  const addNumstat = (output: string) => {
+    for (const line of output.split("\n")) {
+      if (!line) continue
+      const [added, removed] = line.split("\t")
+      if (added !== "-" && removed !== "-") {
+        totals.additions += Number.parseInt(added ?? "0", 10) || 0
+        totals.removals += Number.parseInt(removed ?? "0", 10) || 0
+      }
+    }
+  }
+  for (const args of [["diff", "--numstat", "--cached"], ["diff", "--numstat"]]) {
+    const result = run(args)
+    if (result.exitCode !== 0) throw new Error(`Failed to count repository line changes at '${repoPath}': ${result.stderr.toString().trim()}`)
+    addNumstat(result.stdout.toString())
+  }
+  const untracked = run(["ls-files", "--others", "--exclude-standard", "-z"])
+  if (untracked.exitCode !== 0) throw new Error(`Failed to list untracked files at '${repoPath}': ${untracked.stderr.toString().trim()}`)
+  for (const path of untracked.stdout.toString().split("\0").filter(Boolean)) {
+    const result = run(["diff", "--no-index", "--numstat", "--", "/dev/null", path])
+    // git diff --no-index returns 1 when differences were found.
+    if (result.exitCode !== 0 && result.exitCode !== 1) throw new Error(`Failed to count untracked file '${path}'`)
+    addNumstat(result.stdout.toString())
+  }
+  totals.additions = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, totals.additions))
+  totals.removals = Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, totals.removals))
+  return totals
+}
+
 export async function getCurrentBranch(repoPath: string): Promise<string> {
   const result = await $`git -C ${repoPath} rev-parse --abbrev-ref HEAD`.text()
   return result.trim()

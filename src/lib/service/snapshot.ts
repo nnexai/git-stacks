@@ -265,7 +265,11 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
       labels: workspace.labels ?? [],
       repositories: workspace.repos.map((repo) => ({ id: repo.id!, name: repo.name, mode: repo.mode, path: repositoryPath(repo) })),
       commands,
-      status,
+      status: status.map((entry) => {
+        const repo = repoByName.get(entry.name)
+        if (!repo?.id) throw new Error(`Status references unknown repository '${entry.name}'`)
+        return { ...entry, repository_id: repo.id, default_branch: repo.base_branch ?? "main", remote: repo.mode === "dir" ? "not_applicable" as const : entry.exists ? "available" as const : "missing" as const }
+      }),
       file_status: {
         total: fileStatus.summary.total,
         ok: fileStatus.summary.ok,

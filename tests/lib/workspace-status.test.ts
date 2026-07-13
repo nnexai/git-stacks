@@ -14,6 +14,7 @@ const isWorktreeRepoMock = mock((repo: WorkspaceRepo) => repo.mode === "worktree
 const listWorkspacesMock = mock(() => [] as Workspace[])
 
 const isRepoDirtyMock = mock(async (_repoPath: string) => false)
+const getGitLineChangesMock = mock(async (_repoPath: string) => ({ additions: 0, removals: 0 }))
 const getCurrentBranchMock = mock(async (_repoPath: string) => "main")
 const getCommitsAheadMock = mock(async (_repoPath: string, _baseRef: string, _headRef: string) => 0)
 const getCommitsBehindMock = mock(async (_repoPath: string, _baseRef: string, _headRef: string) => 0)
@@ -31,6 +32,7 @@ mock.module("@/lib/config", () =>
 mock.module("@/lib/git", () =>
   makeGitMock({
     isRepoDirty: isRepoDirtyMock,
+    getGitLineChanges: getGitLineChangesMock,
     getCurrentBranch: getCurrentBranchMock,
     getCommitsAhead: getCommitsAheadMock,
     getCommitsBehind: getCommitsBehindMock,
@@ -51,6 +53,7 @@ beforeEach(() => {
   isWorktreeRepoMock.mockReset()
   listWorkspacesMock.mockReset()
   isRepoDirtyMock.mockReset()
+  getGitLineChangesMock.mockReset()
   getCurrentBranchMock.mockReset()
   getCommitsAheadMock.mockReset()
   getCommitsBehindMock.mockReset()
@@ -63,6 +66,7 @@ beforeEach(() => {
   isWorktreeRepoMock.mockImplementation((repo: WorkspaceRepo) => repo.mode === "worktree")
   listWorkspacesMock.mockImplementation(() => [])
   isRepoDirtyMock.mockImplementation(async () => false)
+  getGitLineChangesMock.mockImplementation(async () => ({ additions: 0, removals: 0 }))
   getCurrentBranchMock.mockImplementation(async () => "main")
   getCommitsAheadMock.mockImplementation(async () => 0)
   getCommitsBehindMock.mockImplementation(async () => 0)
@@ -181,6 +185,9 @@ describe("workspace-status", () => {
         mode: "worktree",
         ahead: 4,
         behind: 2,
+        additions: 0,
+        removals: 0,
+        degraded: false,
       },
       {
         name: "web",
@@ -190,6 +197,9 @@ describe("workspace-status", () => {
         mode: "trunk",
         ahead: 1,
         behind: 0,
+        additions: 0,
+        removals: 0,
+        degraded: false,
       },
       {
         name: "missing",
@@ -199,6 +209,9 @@ describe("workspace-status", () => {
         mode: "worktree",
         ahead: 0,
         behind: 0,
+        additions: 0,
+        removals: 0,
+        degraded: false,
       },
     ])
     expect(getCommitsAheadMock).toHaveBeenCalledWith(worktreePath(worktreeRepo), "origin/develop", "HEAD")
@@ -217,7 +230,16 @@ describe("workspace-status", () => {
     })
 
     expect(await getWorkspaceStatus(makeWorkspace([repo]))).toEqual([{
-      name: "raced", exists: false, dirty: false, branch: "—", mode: "worktree", ahead: 0, behind: 0,
+      name: "raced", exists: false, dirty: false, branch: "—", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false,
     }])
+  })
+
+  test("projects staged, unstaged, and untracked line totals from the Git observer", async () => {
+    const repo = makeRepo("lines", "worktree", { task_path: join(tempRoot, "tasks", "feature-ws", "lines") })
+    mkdirSync(worktreePath(repo), { recursive: true })
+    getGitLineChangesMock.mockImplementation(async () => ({ additions: 12, removals: 4 }))
+    const [status] = await getWorkspaceStatus(makeWorkspace([repo]))
+    expect(status).toMatchObject({ additions: 12, removals: 4, dirty: false })
+    expect(getGitLineChangesMock).toHaveBeenCalledTimes(1)
   })
 })

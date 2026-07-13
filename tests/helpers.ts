@@ -745,6 +745,7 @@ export function makeGitMock(overrides: Record<string, unknown> = {}): Record<str
     removeWorktree: mock(async () => {}),
     isWorktreeRegistered: mock(async () => false),
     isRepoDirty: mock(async () => false),
+    getGitLineChanges: mock(async () => ({ additions: 0, removals: 0 })),
     getCurrentBranch: mock(async () => "main"),
     isBranchGoneOnRemote: mock(async () => ({ status: "present" })),
     getMergeConflicts: mock(async () => ({ status: "clean" })),
