@@ -271,14 +271,14 @@ Plans:
 **Goal:** Present unified workspace, Git, agent, and notification state through a compact, calm, accessible sidebar and signal inbox inspired by Supacode while remaining native to GTK/libadwaita.
 **Requirements:** VIS-01, VIS-02, VIS-03, VIS-04, VIS-05
 **Depends on:** Phase 107.1
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 **Wave 1**
 
 - [x] 107.2-01-PLAN.md — Extend authoritative repository-pair metadata and build pure row, section, ordering, compression, and accessibility projections
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 107.2-02-PLAN.md — Render the projection as a themed, responsive, accessible GTK sidebar
+- [x] 107.2-02-PLAN.md — Render the projection as a themed, responsive, accessible GTK sidebar
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
