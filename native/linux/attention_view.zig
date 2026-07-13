@@ -36,10 +36,15 @@ fn repositoryName(state: *const model.State, workspace: model.Id, repository: mo
         for (ws.repositories[0..ws.repository_count]) |*repo| if (std.mem.eql(u8, &repo.id, &repository)) return if (repo.name_len > 0) repo.name[0..repo.name_len] else repo.id[0..8];
     return repository[0..8];
 }
+pub fn displaySurfaceTitle(surface: model.Surface) []const u8 {
+    if (surface.title_len == 0) return "Terminal";
+    const title = surface.title[0..surface.title_len];
+    for (title) |byte| if (byte < 0x20 or byte == 0x7f) return "Terminal";
+    return title;
+}
 fn surfaceTitle(state: *const model.State, id: model.Id) ?[]const u8 {
     const loc = model.surfaceLocation(state, id) orelse return null;
-    const surface = state.pairs[loc.pair].surfaces[loc.surface];
-    return if (surface.title_len > 0) surface.title[0..surface.title_len] else "Terminal";
+    return displaySurfaceTitle(state.pairs[loc.pair].surfaces[loc.surface]);
 }
 pub fn project(state: *const model.State, item: model.Signal) AttentionRow {
     var row: AttentionRow = .{ .id = item.id, .provider = switch (item.provider) { .claude => "Claude", .copilot => "GitHub Copilot", .codex => "Codex", .opencode => "OpenCode", .automation => "Automation", .acp => "ACP", .user => "User", .other => "Other" }, .fallback = "Exact terminal", .unread = !item.read and model.severity(item.status) != .none };

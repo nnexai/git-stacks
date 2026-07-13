@@ -37,7 +37,7 @@ updated: 2026-07-13
 
 ## Resolution
 
-- root_cause: Raw 64-byte terminal-title truncation could split a UTF-8 codepoint used in signal row location and accessibility descriptions. The SSE decoder also omitted owned copies of title, detail, and occurrence time. The workspace smoke synchronously asserted asynchronous terminal creation and then left the app open on failure.
-- fix: Added validated codepoint-safe UTF-8 prefix truncation, copied and validated all SSE display metadata, and made lifecycle smoke stages await asynchronous terminal creation/relaunch.
+- root_cause: Raw 64-byte terminal-title truncation could split a UTF-8 codepoint used in signal row location and accessibility descriptions, and Ghostty title callbacks could retain trailing embedded NUL bytes rendered as placeholder boxes. The SSE decoder also omitted owned copies of title, detail, and occurrence time. The workspace smoke synchronously asserted asynchronous terminal creation and then left the app open on failure.
+- fix: Added validated codepoint-safe UTF-8 prefix truncation, terminated callback titles at the first NUL, defensively replaced control-bearing inbox location titles with `Terminal`, copied and validated all SSE display metadata, and made lifecycle smoke stages await asynchronous terminal creation/relaunch.
 - verification: Targeted attention and service-client tests pass; typecheck and dependency audit pass; full native verification and release gates pass; lifecycle smoke exits cleanly.
 - files_changed: native/core/model.zig, native/linux/app.zig, native/linux/service_client.zig, native/tests/attention_test.zig, native/tests/service_client_test.zig

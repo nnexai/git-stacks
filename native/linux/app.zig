@@ -554,7 +554,8 @@ fn surfaceTitleChanged(context: *anyopaque, id: model.Id, title: []const u8) voi
     const loc = model.surfaceLocation(&state.graph.state, id) orelse return;
     var surface = &state.graph.state.pairs[loc.pair].surfaces[loc.surface];
     if (surface.title_pinned) return;
-    const trimmed = std.mem.trim(u8, title, " \t\r\n");
+    const terminated = title[0..(std.mem.indexOfScalar(u8, title, 0) orelse title.len)];
+    const trimmed = std.mem.trim(u8, terminated, " \t\r\n");
     if (trimmed.len == 0) return;
     const safe = model.utf8Prefix(trimmed, surface.title.len) orelse return;
     surface.title_len = @intCast(safe.len);

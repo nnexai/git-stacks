@@ -149,6 +149,13 @@ test "provider-aware row projects Codex detail location unread and fallback" {
     try std.testing.expect(std.mem.indexOf(u8, row.fallback, "repository") != null);
 }
 
+test "signal location replaces a terminal title containing embedded NUL bytes" {
+    var surface: model.Surface = .{ .id = id("318f47f4-5ab1-7c2d-8e90-123456789abc") };
+    @memcpy(surface.title[0..14], "Terminal\x00\x00\x00\x00\x00\x00");
+    surface.title_len = 14;
+    try std.testing.expectEqualStrings("Terminal", view.displaySurfaceTitle(surface));
+}
+
 test "UTF-8 prefix truncation never splits a multibyte codepoint" {
     const value = "1234567✓suffix";
     const prefix = model.utf8Prefix(value, 9) orelse return error.InvalidUtf8;
