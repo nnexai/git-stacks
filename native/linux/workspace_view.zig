@@ -12,7 +12,8 @@ pub fn compression(tier: WorkspaceCompressionTier) CompressionVisibility {
     return switch (tier) {
         .wide => .{ .secondary = true, .git = true, .pr_expanded = true, .agent_limit = 3 },
         .medium => .{ .secondary = false, .git = true, .pr_expanded = true, .agent_limit = 3 },
-        .narrow, .text_200 => .{ .secondary = false, .git = false, .pr_expanded = false, .agent_limit = 1 },
+        .narrow => .{ .secondary = true, .git = true, .pr_expanded = false, .agent_limit = 1 },
+        .text_200 => .{ .secondary = true, .git = false, .pr_expanded = false, .agent_limit = 1 },
     };
 }
 pub fn compressionForAllocation(width: i32, text_percent: u16) WorkspaceCompressionTier {
@@ -25,22 +26,10 @@ pub const InteractionSemantics = struct { selected_class: []const u8, focus_clas
 pub fn interaction(selected: bool, window_active: bool, keyboard_focus: bool) InteractionSemantics {
     return .{ .selected_class = if (!selected) "" else if (window_active) "selected-workspace" else "selected-workspace-inactive", .focus_class = if (keyboard_focus) "keyboard-focus" else "" };
 }
-pub fn activePriority(unread: bool, awaiting: bool, agent: bool, running: bool) ?u8 {
-    if (unread and awaiting and running) return 1;
-    if (unread and awaiting) return 2;
-    if (unread and agent and running) return 3;
-    if (unread and agent) return 4;
-    if (unread and running) return 5;
-    if (awaiting and running) return 6;
-    if (awaiting) return 7;
-    if (agent and running) return 8;
-    if (agent) return 9;
-    if (running) return 10;
-    return null;
-}
 pub const WorkspaceRowProjection = struct {
-    key: model.PairKey, section: WorkspaceSection, relevance: ?u8, selected: bool,
+    key: model.PairKey, section: WorkspaceSection, selected: bool,
     pinned: bool, unread: bool, awaiting: bool, agent_count: u8, agent_overflow: u8 = 0, provider_badges: [3]ProviderBadge = [_]ProviderBadge{.{}} ** 3, provider_badge_count: u8 = 0, running: bool, activity: bool,
+    completed: bool = false, failed: bool = false,
     visibility: CompressionVisibility, accessible: [512]u8 = [_]u8{0} ** 512, accessible_len: u16 = 0,
 };
 pub const ProviderBadge = struct { provider: model.SignalSource = .other, awaiting: bool = false, signal_id: [64]u8 = [_]u8{0} ** 64, signal_id_len: u8 = 0 };
@@ -52,7 +41,21 @@ fn providerLess(_: void, a: ProviderBadge, b: ProviderBadge) bool {
 pub fn providerLetter(provider: model.SignalSource) []const u8 { return switch (provider) { .claude => "C", .copilot => "G", .codex => "X", .opencode => "O", .automation => "A", .acp => "P", .user => "U", .other => "?" }; }
 pub const WorkspaceProjection = struct {
     rows: [32]WorkspaceRowProjection = undefined, row_count: u8 = 0,
-    pinned_origin_count: u8 = 0, active_origin_count: u8 = 0,
+    pinned_origin_count: u8 = 0,
+};
+pub const SidebarGroupKind = enum { pinned, active, label, repository };
+pub const SidebarGroup = struct {
+    kind: SidebarGroupKind = .label,
+    title: [96]u8 = [_]u8{0} ** 96,
+    title_len: u8 = 0,
+    row_indexes: [32]u8 = [_]u8{0} ** 32,
+    row_count: u8 = 0,
+};
+pub const SidebarProjection = struct {
+    workspace: WorkspaceProjection,
+    groups: [64]SidebarGroup = [_]SidebarGroup{.{}} ** 64,
+    group_count: u8 = 0,
+    group_overflow_count: u16 = 0,
 };
 fn pinned(state: *const model.State, wid: model.Id) bool { for (state.pins[0..state.pin_count]) |value| if (std.mem.eql(u8, &value, &wid)) return true; return false; }
 fn workspaceIndex(state: *const model.State, wid: model.Id) ?usize { for (state.workspaces[0..state.workspace_count], 0..) |ws, i| if (std.mem.eql(u8, &ws.id, &wid)) return i; return null; }
@@ -60,7 +63,6 @@ pub fn workspaceIndexForKey(state: *const model.State, key: model.PairKey) ?usiz
 pub fn repositoryIndexForKey(ws: *const model.Workspace, repository_id: model.Id) ?usize { for (ws.repository_ids[0..ws.repository_count], 0..) |rid, i| if (std.mem.eql(u8, &rid, &repository_id)) return i; return null; }
 fn lessRow(state: *const model.State, a: WorkspaceRowProjection, b: WorkspaceRowProjection) bool {
     if (@intFromEnum(a.section) != @intFromEnum(b.section)) return @intFromEnum(a.section) < @intFromEnum(b.section);
-    if (a.section == .active and a.relevance.? != b.relevance.?) return a.relevance.? < b.relevance.?;
     const aw = &state.workspaces[workspaceIndex(state, a.key.workspace_id).?]; const bw = &state.workspaces[workspaceIndex(state, b.key.workspace_id).?];
     const order = std.ascii.orderIgnoreCase(aw.name[0..aw.name_len], bw.name[0..bw.name_len]);
     if (order != .eq) return order == .lt;
@@ -92,31 +94,89 @@ fn describe(state: *const model.State, row: *WorkspaceRowProjection) void {
     if (row.awaiting) w.writeAll(", awaiting input") catch {};
     if (row.running) w.writeAll(", running") catch {};
     if (row.activity) w.writeAll(", activity") catch {};
+    if (row.completed) w.writeAll(", completed") catch {};
+    if (row.failed) w.writeAll(", failed") catch {};
     if (row.unread) w.writeAll(", unread") catch {};
     row.accessible_len = @intCast(stream.pos);
 }
 pub fn project(state: *const model.State, tier: WorkspaceCompressionTier) WorkspaceProjection {
     var out: WorkspaceProjection = .{};
     for (state.pairs[0..state.pair_count]) |pair| {
-        var unread = false; var awaiting = false; var agents: u8 = 0; var activity = false; var badges: [64]ProviderBadge = [_]ProviderBadge{.{}} ** 64; var badge_count: u8 = 0;
+        var unread = false; var awaiting = false; var agents: u8 = 0; var activity = false; var completed = false; var failed = false; var badges: [64]ProviderBadge = [_]ProviderBadge{.{}} ** 64; var badge_count: u8 = 0;
         for (state.signals[0..state.signal_count]) |signal| if (std.mem.eql(u8, &signal.workspace_id, &pair.key.workspace_id) and (signal.repository_id == null or std.mem.eql(u8, &signal.repository_id.?, &pair.key.repository_id))) {
             if (signal.kind == .notification and !signal.read) unread = true;
             if (signal.kind == .activity and (signal.status == .working or signal.status == .waiting or signal.status == .failed)) {
-                agents +|= 1; if (signal.status == .waiting) awaiting = true; if (signal.status == .working) activity = true;
+                agents +|= 1; if (signal.status == .waiting) awaiting = true; if (signal.status == .working) activity = true; if (signal.status == .failed) failed = true;
                 badges[badge_count] = .{ .provider = signal.provider, .awaiting = signal.status == .waiting, .signal_id_len = signal.signal_id_len };
                 @memcpy(badges[badge_count].signal_id[0..signal.signal_id_len], signal.signal_id[0..signal.signal_id_len]); badge_count += 1;
-            }
+            } else if (signal.kind == .activity and signal.status == .completed) completed = true;
         };
         std.mem.sort(ProviderBadge, badges[0..badge_count], {}, providerLess);
-        var running = false; for (pair.surfaces[0..pair.surface_count]) |surface| if (surface.lifecycle == .live) { running = true; break; };
-        const is_pinned = pinned(state, pair.key.workspace_id); const priority = activePriority(unread, awaiting, agents > 0, running);
-        var row: WorkspaceRowProjection = .{ .key = pair.key, .section = if (is_pinned) .pinned else if (priority != null) .active else .ordinary, .relevance = priority, .selected = if (state.selected_pair) |key| model.PairKey.eql(key, pair.key) else false, .pinned = is_pinned, .unread = unread, .awaiting = awaiting, .agent_count = agents, .agent_overflow = agents -| @min(agents, compression(tier).agent_limit), .running = running, .activity = activity, .visibility = compression(tier) };
+        var running = false; for (pair.surfaces[0..pair.surface_count]) |surface| if (surface.lifecycle == .live and surface.kind == .configured_command) { running = true; break; };
+        const is_pinned = pinned(state, pair.key.workspace_id);
+        var row: WorkspaceRowProjection = .{ .key = pair.key, .section = if (is_pinned) .pinned else if (activity or running) .active else .ordinary, .selected = if (state.selected_pair) |key| model.PairKey.eql(key, pair.key) else false, .pinned = is_pinned, .unread = unread, .awaiting = awaiting, .agent_count = agents, .agent_overflow = agents -| @min(agents, compression(tier).agent_limit), .running = running, .activity = activity, .completed = completed, .failed = failed, .visibility = compression(tier) };
         row.provider_badge_count = @min(@as(u8, 3), @min(badge_count, row.visibility.agent_limit)); for (0..row.provider_badge_count) |i| row.provider_badges[i] = badges[i];
         describe(state, &row); out.rows[out.row_count] = row; out.row_count += 1;
-        if (is_pinned) out.pinned_origin_count += 1 else if (priority != null) out.active_origin_count += 1;
+        if (is_pinned) out.pinned_origin_count += 1;
     }
     std.mem.sort(WorkspaceRowProjection, out.rows[0..out.row_count], state, lessRow);
     return out;
+}
+fn groupLess(_: void, a: SidebarGroup, b: SidebarGroup) bool {
+    if (a.kind == .pinned or b.kind == .pinned) return a.kind == .pinned and b.kind != .pinned;
+    if (a.kind == .active or b.kind == .active) return a.kind == .active and b.kind != .active;
+    const order = std.ascii.orderIgnoreCase(a.title[0..a.title_len], b.title[0..b.title_len]);
+    if (order != .eq) return order == .lt;
+    return @intFromEnum(a.kind) < @intFromEnum(b.kind);
+}
+fn appendGroupRow(sidebar: *SidebarProjection, kind: SidebarGroupKind, title: []const u8, row_index: u8) void {
+    for (sidebar.groups[0..sidebar.group_count]) |*group| {
+        if (group.kind == kind and std.mem.eql(u8, group.title[0..group.title_len], title)) {
+            if (group.row_count < group.row_indexes.len) {
+                group.row_indexes[group.row_count] = row_index;
+                group.row_count += 1;
+            }
+            return;
+        }
+    }
+    if (sidebar.group_count == sidebar.groups.len) {
+        sidebar.group_overflow_count +|= 1;
+        return;
+    }
+    const index = sidebar.group_count;
+    const safe_title = model.utf8Prefix(title, sidebar.groups[index].title.len) orelse return;
+    sidebar.groups[index].kind = kind;
+    sidebar.groups[index].title_len = @intCast(safe_title.len);
+    @memcpy(sidebar.groups[index].title[0..safe_title.len], safe_title);
+    sidebar.groups[index].row_indexes[0] = row_index;
+    sidebar.groups[index].row_count = 1;
+    sidebar.group_count += 1;
+}
+pub fn projectSidebar(state: *const model.State, tier: WorkspaceCompressionTier) SidebarProjection {
+    var sidebar: SidebarProjection = .{ .workspace = project(state, tier) };
+    for (sidebar.workspace.rows[0..sidebar.workspace.row_count], 0..) |row, row_index| {
+        if (row.section == .pinned) {
+            appendGroupRow(&sidebar, .pinned, "Pinned", @intCast(row_index));
+            continue;
+        }
+        if (row.section == .active) {
+            appendGroupRow(&sidebar, .active, "Active", @intCast(row_index));
+            continue;
+        }
+        const wi = workspaceIndexForKey(state, row.key) orelse continue;
+        const ws = &state.workspaces[wi];
+        if (state.organization_mode == .repository) {
+            const ri = repositoryIndexForKey(ws, row.key.repository_id) orelse continue;
+            const repo = &ws.repositories[ri];
+            appendGroupRow(&sidebar, .repository, repo.name[0..repo.name_len], @intCast(row_index));
+        } else if (ws.label_count == 0) {
+            appendGroupRow(&sidebar, .label, "Unlabelled", @intCast(row_index));
+        } else for (0..ws.label_count) |label_index| {
+            appendGroupRow(&sidebar, .label, ws.labels[label_index][0..ws.label_lens[label_index]], @intCast(row_index));
+        }
+    }
+    std.mem.sort(SidebarGroup, sidebar.groups[0..sidebar.group_count], {}, groupLess);
+    return sidebar;
 }
 pub const OrphanRow = struct { key: model.PairKey, workspace_name: []const u8, repository_name: []const u8, orphan: bool = true, actions_enabled: bool = false };
 pub fn orphanRow(state: *const model.State, index: usize) ?OrphanRow {

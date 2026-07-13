@@ -111,18 +111,18 @@ test "workspace controls publish native accessible state labels and tooltips" {
 test "workspace sidebar binds canonical projection hierarchy and stable identity" {
     const source = @embedFile("app.zig");
     for ([_][]const u8{
-        "workspace_view.project", "WorkspaceSection{ .pinned, .active, .ordinary }",
+        "workspace_view.projectSidebar", "SidebarGroupKind",
         "appendProjectedPair", "git-stacks-pair", "GTK_ALIGN_END",
         "vcs-branch-symbolic", "folder-missing-symbolic", "mail-unread-symbolic",
-        "Git line additions and removals", "Pull request and checks", "Active agent sessions",
-        "Go to global Pinned section", "Go to global Active section",
+        "Git line additions", "Git line removals", "git-additions", "git-removals", "Pull request and checks", "Active agent sessions",
+        "Pin workspace", "Unpin workspace", "Workspace label", "Repository group",
     }) |needle| try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
     try std.testing.expect(std.mem.indexOf(u8, source, "NSColor") == null);
-    try std.testing.expect(std.mem.indexOf(u8, source, "row_index") == null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "WorkspaceSection{ .pinned, .active, .ordinary }") == null);
 }
 test "sidebar themes motion RTL and accessibility use native redundant contracts" {
     const source = @embedFile("app.zig");
-    for ([_][]const u8{ "@success_color", "@error_color", "@warning_color", "@accent_color", "@borders", "gtk_widget_set_margin_start", "GTK_ALIGN_END", "gtk-enable-animations", "workspace-activity-animated", "workspace-activity-static", "gtk_widget_get_scale_factor", "GTK_ACCESSIBLE_STATE_SELECTED", "gtk_widget_set_tooltip_text" }) |needle|
+    for ([_][]const u8{ "@success_color", "@error_color", "@warning_color", "@accent_color", "@borders", "gtk_widget_set_margin_start", "GTK_ALIGN_END", "gtk-enable-animations", "workspace-activity-animated", "workspace-activity-static", "compressionForAllocation", "GTK_ACCESSIBLE_STATE_SELECTED", "gtk_widget_set_tooltip_text" }) |needle|
         try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);
 }
 test "UAT interaction gaps stay wired to production GTK controls" {

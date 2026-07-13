@@ -93,6 +93,8 @@ const State = struct {
     pair_stack: ?*c.GtkStack = null,
     pair_uis: [32]PairUi = undefined,
     pair_ui_count: u8 = 0,
+    labels_button: ?*c.GtkToggleButton = null,
+    repositories_button: ?*c.GtkToggleButton = null,
     launcher: ?*c.AdwDialog = null,
     launcher_entry: ?*c.GtkSearchEntry = null,
     launcher_results: ?*c.GtkListBox = null,
@@ -738,14 +740,19 @@ fn refreshSignalRows(state: *State) void {
     const groups = [_]attention_view.SignalGroup{ .needs_attention, .recent_activity };
     for (groups) |group| {
         var rows: [64]attention_view.SignalRow = undefined; const count = attention_view.collect(&state.graph.state, group, state.signal_scope, &rows);
-        const heading_text: [*:0]const u8 = if (group == .needs_attention) "Needs attention" else "Recent activity";
+        var heading_buffer: [64:0]u8 = [_:0]u8{0} ** 64;
+        const heading_text = if (group == .needs_attention) std.fmt.bufPrintZ(&heading_buffer, "Needs attention", .{}) catch continue else std.fmt.bufPrintZ(&heading_buffer, "Recent activity · {d}", .{count}) catch continue;
         const heading = c.gtk_label_new(heading_text) orelse continue; c.gtk_label_set_xalign(@ptrCast(heading), 0); c.gtk_widget_add_css_class(heading, "workspace-section"); setAccessible(heading, c.GTK_ACCESSIBLE_ROLE_HEADING, heading_text, "Signal inbox group"); c.gtk_list_box_append(list, heading);
         if (count == 0) { const empty = attention_view.inboxStatus(if (group == .needs_attention) .empty_attention else .empty_activity); const label = c.gtk_label_new(empty.title.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(label), 0); c.gtk_widget_set_tooltip_text(label, empty.description.ptr); c.gtk_list_box_append(list, label); continue; }
-        for (rows[0..count]) |projected| {
+        if (group == .recent_activity) {
+            const summary = c.gtk_label_new("Working and completed sessions stay summarized on their workspace rows.") orelse continue;
+            c.gtk_label_set_xalign(@ptrCast(summary), 0); c.gtk_label_set_wrap(@ptrCast(summary), 1); c.gtk_widget_add_css_class(summary, "dim-label"); c.gtk_list_box_append(list, summary); continue;
+        }
+        for (rows[0..@min(count, 6)]) |projected| {
         var title_buffer: [220:0]u8 = [_:0]u8{0} ** 220;
         const title = std.fmt.bufPrintZ(&title_buffer, "{s}{s}", .{ projected.title[0..projected.title_len], if (projected.unread) " · Unread" else "" }) catch continue;
         var detail_buffer: [900:0]u8 = [_:0]u8{0} ** 900;
-        const detail = std.fmt.bufPrintZ(&detail_buffer, "{s}\n{s}{s}{s}\n{s}", .{ projected.location[0..projected.location_len], projected.detail[0..projected.detail_len], if (projected.detail_len > 0 and projected.relative_len > 0) " · " else "", projected.relative[0..projected.relative_len], projected.fallback }) catch continue;
+        const detail = std.fmt.bufPrintZ(&detail_buffer, "{s}{s}{s}", .{ projected.location[0..projected.location_len], if (projected.relative_len > 0) " · " else "", projected.relative[0..projected.relative_len] }) catch continue;
         const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 3) orelse continue;
         c.gtk_widget_add_css_class(box, "git-stacks-signal-row");
         const header = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 7) orelse continue;
@@ -771,6 +778,7 @@ fn refreshSignalRows(state: *State) void {
         if (projected.dismissible) { const dismiss = c.gtk_button_new_with_label(projected.dismiss_label.ptr) orelse continue; var dismiss_action: [112:0]u8 = [_:0]u8{0} ** 112; const dismiss_detailed = std.fmt.bufPrintZ(&dismiss_action, "win.dismiss-notification('{s}')", .{projected.id}) catch continue; c.gtk_actionable_set_detailed_action_name(@ptrCast(dismiss), dismiss_detailed.ptr); setAccessible(dismiss, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Dismiss notification", "Dismiss this service-authoritative notification"); c.gtk_box_append(@ptrCast(actions), dismiss); }
         c.gtk_box_append(@ptrCast(box), actions); setAccessible(box, c.GTK_ACCESSIBLE_ROLE_GROUP, title.ptr, detail.ptr); c.gtk_list_box_append(list, box);
         }
+        if (count > 6) { var overflow_buffer: [48:0]u8 = [_:0]u8{0} ** 48; const overflow = std.fmt.bufPrintZ(&overflow_buffer, "+{d} more signals", .{count - 6}) catch continue; const label = c.gtk_label_new(overflow.ptr) orelse continue; c.gtk_label_set_xalign(@ptrCast(label), 0); c.gtk_widget_add_css_class(label, "dim-label"); c.gtk_list_box_append(list, label); }
     }
 }
 
@@ -829,13 +837,18 @@ fn appendPairButton(parent: *c.GtkBox, state: *State, key: model.PairKey, label:
     c.gtk_widget_add_controller(button, @ptrCast(context));
     c.gtk_box_append(parent, button);
 }
-fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_view.WorkspaceRowProjection) void {
+fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_view.WorkspaceRowProjection, group_kind: workspace_view.SidebarGroupKind) void {
     const wi = workspace_view.workspaceIndexForKey(&state.graph.state, projected.key) orelse return;
     const ws = &state.graph.state.workspaces[wi];
     const ri = workspace_view.repositoryIndexForKey(ws, projected.key.repository_id) orelse return;
     const repo = &ws.repositories[ri];
-    const title_text = if (ws.repository_count == 1) ws.name[0..ws.name_len] else repo.name[0..repo.name_len];
-    var title_z: [128:0]u8 = [_:0]u8{0} ** 128; const title = std.fmt.bufPrintZ(&title_z, "{s}", .{title_text}) catch return;
+    var title_z: [224:0]u8 = [_:0]u8{0} ** 224;
+    const title = if (group_kind == .repository or ws.repository_count == 1)
+        std.fmt.bufPrintZ(&title_z, "{s}", .{ws.name[0..ws.name_len]}) catch return
+    else
+        std.fmt.bufPrintZ(&title_z, "{s} / {s}", .{ ws.name[0..ws.name_len], repo.name[0..repo.name_len] }) catch return;
+    const container = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 2) orelse return;
+    c.gtk_widget_add_css_class(container, "workspace-row-container");
     const button = c.gtk_button_new() orelse return;
     c.gtk_widget_add_css_class(button, "flat"); c.gtk_widget_add_css_class(button, "workspace-row");
     c.gtk_widget_set_halign(button, c.GTK_ALIGN_FILL); c.gtk_widget_set_hexpand(button, 1);
@@ -845,28 +858,42 @@ fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_vi
     const text_box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 0) orelse return; c.gtk_widget_set_hexpand(text_box, 1);
     const title_label = c.gtk_label_new(title.ptr) orelse return; c.gtk_label_set_xalign(@ptrCast(title_label), 0); c.gtk_label_set_ellipsize(@ptrCast(title_label), c.PANGO_ELLIPSIZE_END); c.gtk_widget_add_css_class(title_label, "workspace-primary"); c.gtk_box_append(@ptrCast(text_box), title_label);
     if (projected.visibility.secondary) if (repo.presentation) |p| {
-        var secondary_z: [128:0]u8 = [_:0]u8{0} ** 128; const secondary = std.fmt.bufPrintZ(&secondary_z, "{s}{s}", .{ p.branch[0..p.branch_len], if (std.mem.eql(u8, p.branch[0..p.branch_len], p.default_branch[0..p.default_branch_len])) " · Default" else "" }) catch return;
-        const secondary_label = c.gtk_label_new(secondary.ptr) orelse return; c.gtk_label_set_xalign(@ptrCast(secondary_label), 0); c.gtk_label_set_ellipsize(@ptrCast(secondary_label), c.PANGO_ELLIPSIZE_END); c.gtk_widget_add_css_class(secondary_label, "caption"); c.gtk_widget_add_css_class(secondary_label, "dim-label"); c.gtk_widget_add_css_class(secondary_label, "workspace-secondary"); c.gtk_box_append(@ptrCast(text_box), secondary_label); c.gtk_widget_add_css_class(button, "has-secondary");
+        const is_default = std.mem.eql(u8, p.branch[0..p.branch_len], p.default_branch[0..p.default_branch_len]);
+        const secondary_box = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return; c.gtk_widget_add_css_class(secondary_box, "workspace-secondary");
+        var branch_z: [128:0]u8 = [_:0]u8{0} ** 128; const branch = std.fmt.bufPrintZ(&branch_z, "{s}{s}", .{ p.branch[0..p.branch_len], if (is_default) " · Default" else "" }) catch return;
+        const branch_label = c.gtk_label_new(branch.ptr) orelse return; c.gtk_label_set_xalign(@ptrCast(branch_label), 0); c.gtk_label_set_ellipsize(@ptrCast(branch_label), c.PANGO_ELLIPSIZE_END); c.gtk_widget_add_css_class(branch_label, "caption"); c.gtk_widget_add_css_class(branch_label, "dim-label"); c.gtk_widget_set_tooltip_text(branch_label, "Branch"); c.gtk_box_append(@ptrCast(secondary_box), branch_label);
+        if (projected.visibility.git and (p.additions > 0 or p.removals > 0)) {
+            var additions_z: [24:0]u8 = [_:0]u8{0} ** 24; const additions = std.fmt.bufPrintZ(&additions_z, "+{d}", .{p.additions}) catch return; const additions_label = c.gtk_label_new(additions.ptr) orelse return; c.gtk_widget_add_css_class(additions_label, "caption"); c.gtk_widget_add_css_class(additions_label, "git-additions"); c.gtk_widget_set_tooltip_text(additions_label, "Git line additions"); c.gtk_box_append(@ptrCast(secondary_box), additions_label);
+            var removals_z: [24:0]u8 = [_:0]u8{0} ** 24; const removals = std.fmt.bufPrintZ(&removals_z, "-{d}", .{p.removals}) catch return; const removals_label = c.gtk_label_new(removals.ptr) orelse return; c.gtk_widget_add_css_class(removals_label, "caption"); c.gtk_widget_add_css_class(removals_label, "git-removals"); c.gtk_widget_set_tooltip_text(removals_label, "Git line removals"); c.gtk_box_append(@ptrCast(secondary_box), removals_label);
+        }
+        c.gtk_box_append(@ptrCast(text_box), secondary_box); c.gtk_widget_add_css_class(button, "has-secondary");
     };
     c.gtk_box_append(@ptrCast(row), text_box);
     const status = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return; c.gtk_widget_add_css_class(status, "workspace-status-cluster"); c.gtk_widget_set_margin_start(status, 8); c.gtk_widget_set_halign(status, c.GTK_ALIGN_END);
     if (repo.presentation) |p| {
-        if (projected.visibility.git and (p.additions > 0 or p.removals > 0)) {
-            var git_z: [48:0]u8 = [_:0]u8{0} ** 48; const git = std.fmt.bufPrintZ(&git_z, "+{d} -{d}", .{ p.additions, p.removals }) catch return; const git_label = c.gtk_label_new(git.ptr) orelse return; c.gtk_widget_add_css_class(git_label, "git-additions"); c.gtk_widget_add_css_class(git_label, "git-removals"); c.gtk_widget_set_tooltip_text(git_label, "Git line additions and removals"); c.gtk_box_append(@ptrCast(status), git_label);
-        }
         if (p.pull_request) |pr| { var pr_z: [48:0]u8 = [_:0]u8{0} ** 48; const pr_text = if (projected.visibility.pr_expanded) std.fmt.bufPrintZ(&pr_z, "PR #{d} {s}", .{ pr.number, @tagName(pr.state) }) catch return else std.fmt.bufPrintZ(&pr_z, "PR", .{}) catch return; const badge = c.gtk_label_new(pr_text.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-status-chip"); c.gtk_widget_set_tooltip_text(badge, "Pull request and checks"); c.gtk_box_append(@ptrCast(status), badge); }
     }
     for (projected.provider_badges[0..projected.provider_badge_count]) |provider| { const badge = c.gtk_label_new(workspace_view.providerLetter(provider.provider).ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-provider-chip"); if (provider.awaiting) c.gtk_widget_add_css_class(badge, "workspace-awaiting"); c.gtk_widget_set_tooltip_text(badge, if (provider.awaiting) "Active agent sessions: awaiting input" else "Active agent sessions"); c.gtk_box_append(@ptrCast(status), badge); }
     if (projected.agent_overflow > 0) { var overflow_z: [12:0]u8 = [_:0]u8{0} ** 12; const overflow = std.fmt.bufPrintZ(&overflow_z, "+{d}", .{projected.agent_overflow}) catch return; const badge = c.gtk_label_new(overflow.ptr) orelse return; c.gtk_widget_add_css_class(badge, "git-stacks-provider-chip"); c.gtk_widget_set_tooltip_text(badge, "Additional active agent sessions"); c.gtk_box_append(@ptrCast(status), badge); }
-    if (projected.activity) { const activity = c.gtk_image_new_from_icon_name("media-playback-start-symbolic") orelse return; c.gtk_widget_add_css_class(activity, "workspace-activity"); c.gtk_widget_add_css_class(activity, if (animationsEnabled()) "workspace-activity-animated" else "workspace-activity-static"); c.gtk_widget_set_tooltip_text(activity, if (animationsEnabled()) "Background activity" else "Background activity (animation disabled)"); c.gtk_box_append(@ptrCast(status), activity); }
+    if (projected.activity or projected.running) { const activity = c.gtk_image_new_from_icon_name("media-playback-start-symbolic") orelse return; c.gtk_widget_add_css_class(activity, "workspace-activity"); c.gtk_widget_add_css_class(activity, if (animationsEnabled()) "workspace-activity-animated" else "workspace-activity-static"); c.gtk_widget_set_tooltip_text(activity, if (projected.activity) "Agent working" else "Configured command running"); c.gtk_box_append(@ptrCast(status), activity); }
     if (projected.awaiting) { const awaiting = c.gtk_image_new_from_icon_name("dialog-question-symbolic") orelse return; c.gtk_widget_add_css_class(awaiting, "workspace-awaiting"); c.gtk_widget_set_tooltip_text(awaiting, "Awaiting input"); c.gtk_box_append(@ptrCast(status), awaiting); }
+    if (projected.failed) { const failed = c.gtk_image_new_from_icon_name("dialog-error-symbolic") orelse return; c.gtk_widget_add_css_class(failed, "error"); c.gtk_widget_set_tooltip_text(failed, "Agent session failed"); c.gtk_box_append(@ptrCast(status), failed); }
+    if (projected.completed) { const completed = c.gtk_image_new_from_icon_name("emblem-ok-symbolic") orelse return; c.gtk_widget_add_css_class(completed, "success"); c.gtk_widget_set_tooltip_text(completed, "Agent session completed"); c.gtk_box_append(@ptrCast(status), completed); }
     if (projected.unread) { const unread = c.gtk_button_new_from_icon_name("mail-unread-symbolic") orelse return; c.gtk_widget_add_css_class(unread, "flat"); c.gtk_widget_add_css_class(unread, "workspace-unread"); c.gtk_widget_set_tooltip_text(unread, "Open workspace signal inbox"); var inbox_action: [128:0]u8 = [_:0]u8{0} ** 128; const inbox_detailed = std.fmt.bufPrintZ(&inbox_action, "win.open-signal-inbox('{s}/{s}')", .{ projected.key.workspace_id, projected.key.repository_id }) catch return; c.gtk_actionable_set_detailed_action_name(@ptrCast(unread), inbox_detailed.ptr); c.gtk_box_append(@ptrCast(status), unread); }
     c.gtk_box_append(@ptrCast(row), status); c.gtk_button_set_child(@ptrCast(button), row);
     if (projected.selected) c.gtk_widget_add_css_class(button, "selected-workspace");
     var accessible_z: [513:0]u8 = [_:0]u8{0} ** 513; @memcpy(accessible_z[0..projected.accessible_len], projected.accessible[0..projected.accessible_len]);
     setAccessible(button, c.GTK_ACCESSIBLE_ROLE_BUTTON, title.ptr, &accessible_z); setAccessibleSelected(button, projected.selected); c.gtk_widget_set_tooltip_text(button, &accessible_z);
     const stored = std.heap.c_allocator.create(model.PairKey) catch return; stored.* = projected.key; c.g_object_set_data_full(@ptrCast(button), "git-stacks-pair", stored, @ptrCast(&freePair));
-    _ = c.g_signal_connect_data(button, "clicked", @ptrCast(&pairButtonClicked), state, null, 0); c.gtk_box_append(parent, button);
+    const workspace_id = std.heap.c_allocator.create(model.Id) catch return; workspace_id.* = projected.key.workspace_id; c.g_object_set_data_full(@ptrCast(button), "git-stacks-workspace", workspace_id, @ptrCast(&freeId));
+    const context = c.gtk_gesture_click_new() orelse return; c.gtk_gesture_single_set_button(@ptrCast(context), c.GDK_BUTTON_SECONDARY); _ = c.g_signal_connect_data(context, "pressed", @ptrCast(&workspaceContext), state, null, 0); c.gtk_widget_add_controller(button, @ptrCast(context));
+    _ = c.g_signal_connect_data(button, "clicked", @ptrCast(&pairButtonClicked), state, null, 0); c.gtk_box_append(@ptrCast(container), button);
+    const pin = c.gtk_button_new_from_icon_name(if (projected.pinned) "starred-symbolic" else "non-starred-symbolic") orelse return;
+    c.gtk_widget_add_css_class(pin, "flat"); c.gtk_widget_add_css_class(pin, "workspace-pin");
+    const pin_label: [*:0]const u8 = if (projected.pinned) "Unpin workspace" else "Pin workspace";
+    c.gtk_widget_set_tooltip_text(pin, pin_label); setAccessible(pin, c.GTK_ACCESSIBLE_ROLE_BUTTON, pin_label, "Keep this workspace in the global Pinned section");
+    var pin_action: [96:0]u8 = [_:0]u8{0} ** 96; const detailed = std.fmt.bufPrintZ(&pin_action, "win.{s}-workspace('{s}')", .{ if (projected.pinned) "unpin" else "pin", projected.key.workspace_id }) catch return; c.gtk_actionable_set_detailed_action_name(@ptrCast(pin), detailed.ptr);
+    c.gtk_box_append(@ptrCast(container), pin); c.gtk_box_append(parent, container);
 }
 fn animationsEnabled() bool {
     const settings = c.gtk_settings_get_default() orelse return false;
@@ -896,19 +923,28 @@ fn appendWorkspaceEntry(parent: *c.GtkBox, state: *State, ws: model.Workspace, o
         appendPairButton(parent, state, .{ .workspace_id = ws.id, .repository_id = rid }, if (repo.name_len > 0) repo.name[0..repo.name_len] else rid[0..8]);
     }
 }
+fn setOrganization(state: *State, mode: model.OrganizationMode) void {
+    state.graph.state.organization_mode = mode;
+    if (state.labels_button) |button| {
+        const widget: *c.GtkWidget = @ptrCast(@alignCast(button));
+        c.gtk_toggle_button_set_active(button, @intFromBool(mode == .label));
+        if (mode == .label) c.gtk_widget_add_css_class(widget, "active-group") else c.gtk_widget_remove_css_class(widget, "active-group");
+        setAccessibleChecked(widget, mode == .label);
+    }
+    if (state.repositories_button) |button| {
+        const widget: *c.GtkWidget = @ptrCast(@alignCast(button));
+        c.gtk_toggle_button_set_active(button, @intFromBool(mode == .repository));
+        if (mode == .repository) c.gtk_widget_add_css_class(widget, "active-group") else c.gtk_widget_remove_css_class(widget, "active-group");
+        setAccessibleChecked(widget, mode == .repository);
+    }
+    savePresentation(state);
+    refreshProjection(state);
+}
 fn groupingClicked(button: ?*c.GtkButton, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
     const selected: *c.GtkWidget = @ptrCast(button orelse return);
     const raw = c.g_object_get_data(@ptrCast(selected), "git-stacks-group-mode") orelse return;
-    state.graph.state.organization_mode = if (@intFromPtr(raw) == 1) .label else .repository;
-    if (c.gtk_widget_get_parent(selected)) |switcher| {
-        var child = c.gtk_widget_get_first_child(switcher);
-        while (child) |candidate| : (child = c.gtk_widget_get_next_sibling(candidate))
-            c.gtk_widget_remove_css_class(candidate, "active-group");
-    }
-    c.gtk_widget_add_css_class(selected, "active-group");
-    savePresentation(state);
-    refreshProjection(state);
+    setOrganization(state, if (@intFromPtr(raw) == 1) .label else .repository);
 }
 fn staleBannerClicked(_: ?*c.AdwBanner, data: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(data orelse return));
@@ -1025,23 +1061,19 @@ fn refreshProjection(state: *State) void {
     };
     if (state.workspace_list) |list| {
         clearList(list);
-        const allocated = if (state.window) |window| c.gtk_widget_get_allocated_width(@ptrCast(window)) else 1080;
-        const scale = if (state.window) |window| @as(u16, @intCast(@max(1, c.gtk_widget_get_scale_factor(@ptrCast(window))))) * 100 else 100;
-        const tier = workspace_view.compressionForAllocation(allocated, scale);
-        const projection = workspace_view.project(&state.graph.state, tier);
-        const sections = [_]workspace_view.WorkspaceSection{ .pinned, .active, .ordinary };
-        for (sections) |section| {
-            var count: usize = 0; for (projection.rows[0..projection.row_count]) |row| if (row.section == section) { count += 1; };
-            if (count == 0) continue;
-            const heading_text: [*:0]const u8 = switch (section) { .pinned => "Pinned", .active => "Active", .ordinary => "Workspaces" };
-            const heading = c.gtk_label_new(heading_text) orelse continue; c.gtk_label_set_xalign(@ptrCast(heading), 0); c.gtk_widget_add_css_class(heading, "workspace-section"); setAccessible(heading, c.GTK_ACCESSIBLE_ROLE_HEADING, heading_text, "Workspace sidebar section"); c.gtk_list_box_append(list, heading);
+        const list_widget: *c.GtkWidget = @ptrCast(@alignCast(list));
+        const allocated = c.gtk_widget_get_allocated_width(list_widget);
+        // GTK's monitor scale factor is device density, not the user's text
+        // scaling preference. Treating a HiDPI display as 200% text hid Git
+        // metadata on an otherwise normal-width sidebar.
+        const tier = workspace_view.compressionForAllocation(allocated, 100);
+        const sidebar = workspace_view.projectSidebar(&state.graph.state, tier);
+        for (sidebar.groups[0..sidebar.group_count]) |group| {
+            var heading_z: [97:0]u8 = [_:0]u8{0} ** 97; @memcpy(heading_z[0..group.title_len], group.title[0..group.title_len]);
+            const heading = c.gtk_label_new(&heading_z) orelse continue; c.gtk_label_set_xalign(@ptrCast(heading), 0); c.gtk_widget_add_css_class(heading, "workspace-section"); setAccessible(heading, c.GTK_ACCESSIBLE_ROLE_HEADING, &heading_z, switch (group.kind) { .pinned => "Pinned workspaces", .active => "Temporarily active agent or command workspaces", .label => "Workspace label", .repository => "Repository group" }); c.gtk_list_box_append(list, heading);
             const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 4) orelse continue;
-            for (projection.rows[0..projection.row_count]) |row| if (row.section == section) appendProjectedPair(@ptrCast(box), state, row);
+            for (group.row_indexes[0..group.row_count]) |row_index| appendProjectedPair(@ptrCast(box), state, sidebar.workspace.rows[row_index], group.kind);
             c.gtk_list_box_append(list, box);
-            if (section == .pinned and projection.pinned_origin_count > 0 or section == .active and projection.active_origin_count > 0) {
-                var summary_z: [48:0]u8 = [_:0]u8{0} ** 48; const summary = std.fmt.bufPrintZ(&summary_z, "+{d} {s}", .{ if (section == .pinned) projection.pinned_origin_count else projection.active_origin_count, if (section == .pinned) "pinned" else "active" }) catch continue;
-                const origin = c.gtk_button_new_with_label(summary.ptr) orelse continue; c.gtk_widget_add_css_class(origin, "flat"); c.gtk_widget_add_css_class(origin, "origin-summary"); c.gtk_widget_set_tooltip_text(origin, if (section == .pinned) "Go to global Pinned section" else "Go to global Active section"); c.gtk_list_box_append(list, origin);
-            }
         }
     }
     if (false) if (state.workspace_list) |list| {
@@ -2093,7 +2125,11 @@ fn actionActivate(action: ?*c.GSimpleAction, parameter: ?*c.GVariant, data: ?*an
         return;
     }
     var view = workspace_view.View{ .state = &state.graph.state };
-    if (std.mem.eql(u8, name, "next-tab")) {
+    if (std.mem.eql(u8, name, "show-labels")) {
+        setOrganization(state, .label);
+    } else if (std.mem.eql(u8, name, "show-repositories")) {
+        setOrganization(state, .repository);
+    } else if (std.mem.eql(u8, name, "next-tab")) {
         if (view.cycleTab(1)) focusTerminal(state, state.graph.state.surface.?.id);
     } else if (std.mem.eql(u8, name, "previous-tab")) {
         if (view.cycleTab(-1)) focusTerminal(state, state.graph.state.surface.?.id);
@@ -2290,11 +2326,13 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     const group_switch = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return null;
     c.gtk_widget_add_css_class(group_switch, "git-stacks-group-switch");
     const by_label = c.gtk_toggle_button_new_with_label("Labels") orelse return null;
+    state.labels_button = @ptrCast(by_label);
     c.g_object_set_data(@ptrCast(by_label), "git-stacks-group-mode", @ptrFromInt(1));
     _ = c.g_signal_connect_data(by_label, "clicked", @ptrCast(&groupingClicked), state, null, 0);
     c.gtk_widget_add_css_class(by_label, "flat");
     c.gtk_box_append(@ptrCast(group_switch), by_label);
     const by_repo = c.gtk_toggle_button_new_with_label("Repositories") orelse return null;
+    state.repositories_button = @ptrCast(by_repo);
     c.gtk_toggle_button_set_group(@ptrCast(by_repo), @ptrCast(by_label));
     c.g_object_set_data(@ptrCast(by_repo), "git-stacks-group-mode", @ptrFromInt(2));
     _ = c.g_signal_connect_data(by_repo, "clicked", @ptrCast(&groupingClicked), state, null, 0);

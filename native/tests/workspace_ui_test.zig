@@ -95,23 +95,7 @@ test "repository grouping emits one shared repository group" {
     try std.testing.expect(view.firstRepositoryNameOccurrence(&s, 0, 0));
     try std.testing.expect(!view.firstRepositoryNameOccurrence(&s, 1, 0));
 }
-test "active relevance implements all ten normative priorities" {
-    const cases = [_]struct { unread: bool, awaiting: bool, agent: bool, running: bool }{
-        .{ .unread = true, .awaiting = true, .agent = false, .running = true },
-        .{ .unread = true, .awaiting = true, .agent = false, .running = false },
-        .{ .unread = true, .awaiting = false, .agent = true, .running = true },
-        .{ .unread = true, .awaiting = false, .agent = true, .running = false },
-        .{ .unread = true, .awaiting = false, .agent = false, .running = true },
-        .{ .unread = false, .awaiting = true, .agent = false, .running = true },
-        .{ .unread = false, .awaiting = true, .agent = false, .running = false },
-        .{ .unread = false, .awaiting = false, .agent = true, .running = true },
-        .{ .unread = false, .awaiting = false, .agent = true, .running = false },
-        .{ .unread = false, .awaiting = false, .agent = false, .running = true },
-    };
-    for (cases, 1..) |case, priority| try std.testing.expectEqual(@as(?u8, @intCast(priority)), view.activePriority(case.unread, case.awaiting, case.agent, case.running));
-    try std.testing.expect(view.activePriority(false, false, false, false) == null);
-}
-test "projection deduplicates pinned over active and preserves PairKey selection" {
+test "signals decorate stable groups instead of moving rows into Active" {
     var s = base();
     @memcpy(s.workspaces[0].name[0..5], "Alpha"); s.workspaces[0].name_len = 5;
     @memcpy(s.workspaces[0].repositories[0].name[0..4], "repo"); s.workspaces[0].repositories[0].name_len = 4;
@@ -128,7 +112,73 @@ test "projection deduplicates pinned over active and preserves PairKey selection
     try std.testing.expectEqual(@as(u8, 1), p.row_count);
     try std.testing.expect(p.rows[0].section == .pinned and p.rows[0].selected and p.rows[0].awaiting and p.rows[0].activity);
     const description = p.rows[0].accessible[0..p.rows[0].accessible_len];
-    for ([_][]const u8{ "branch main", "default branch", "Git +3 -1", "pinned", "agent sessions", "awaiting input", "running", "activity", "unread" }) |needle| try std.testing.expect(std.mem.indexOf(u8, description, needle) != null);
+    for ([_][]const u8{ "branch main", "default branch", "Git +3 -1", "pinned", "agent sessions", "awaiting input", "activity", "unread" }) |needle| try std.testing.expect(std.mem.indexOf(u8, description, needle) != null);
+}
+test "label and repository modes project genuinely different stable hierarchies" {
+    var s = base();
+    @memcpy(s.workspaces[0].name[0..5], "Alpha"); s.workspaces[0].name_len = 5;
+    @memcpy(s.workspaces[1].name[0..4], "Beta"); s.workspaces[1].name_len = 4;
+    @memcpy(s.workspaces[0].labels[0][0..6], "Client"); s.workspaces[0].label_lens[0] = 6; s.workspaces[0].label_count = 1;
+    @memcpy(s.workspaces[1].labels[0][0..6], "Server"); s.workspaces[1].label_lens[0] = 6; s.workspaces[1].label_count = 1;
+    @memcpy(s.workspaces[0].repositories[0].name[0..4], "repo"); s.workspaces[0].repositories[0].name_len = 4;
+    @memcpy(s.workspaces[1].repositories[0].name[0..4], "repo"); s.workspaces[1].repositories[0].name_len = 4;
+    @memcpy(s.workspaces[1].repositories[1].name[0..5], "tools"); s.workspaces[1].repositories[1].name_len = 5;
+    s.pair_count = 3;
+    s.pairs[0] = .{ .key = .{ .workspace_id = id('a'), .repository_id = id('1') } };
+    s.pairs[1] = .{ .key = .{ .workspace_id = id('b'), .repository_id = id('2') } };
+    s.pairs[2] = .{ .key = .{ .workspace_id = id('b'), .repository_id = id('3') } };
+    s.pin_count = 1; s.pins[0] = id('a');
+
+    s.organization_mode = .label;
+    const labels = view.projectSidebar(&s, .wide);
+    try std.testing.expectEqual(@as(u8, 2), labels.group_count);
+    try std.testing.expectEqual(view.SidebarGroupKind.pinned, labels.groups[0].kind);
+    try std.testing.expectEqualStrings("Server", labels.groups[1].title[0..labels.groups[1].title_len]);
+    try std.testing.expectEqual(@as(u8, 2), labels.groups[1].row_count);
+
+    s.organization_mode = .repository;
+    const repositories = view.projectSidebar(&s, .wide);
+    try std.testing.expectEqual(@as(u8, 3), repositories.group_count);
+    try std.testing.expectEqual(view.SidebarGroupKind.repository, repositories.groups[1].kind);
+    try std.testing.expectEqualStrings("repo", repositories.groups[1].title[0..repositories.groups[1].title_len]);
+    try std.testing.expectEqualStrings("tools", repositories.groups[2].title[0..repositories.groups[2].title_len]);
+}
+test "unpinned signals remain inside the selected organization group" {
+    var s = base();
+    @memcpy(s.workspaces[0].labels[0][0..6], "Client"); s.workspaces[0].label_lens[0] = 6; s.workspaces[0].label_count = 1;
+    s.pair_count = 1; s.pairs[0] = .{ .key = .{ .workspace_id = id('a'), .repository_id = id('1') } };
+    s.signal_count = 1; s.signals[0] = .{ .id = id('s'), .workspace_id = id('a'), .repository_id = id('1'), .status = .waiting };
+    const sidebar = view.projectSidebar(&s, .wide);
+    try std.testing.expectEqual(@as(u8, 1), sidebar.group_count);
+    try std.testing.expectEqual(view.SidebarGroupKind.label, sidebar.groups[0].kind);
+    try std.testing.expect(sidebar.workspace.rows[0].awaiting);
+    try std.testing.expectEqual(view.WorkspaceSection.ordinary, sidebar.workspace.rows[0].section);
+}
+test "Active is temporary for working agents and configured commands while outcomes persist" {
+    var s = base();
+    @memcpy(s.workspaces[0].labels[0][0..6], "Client"); s.workspaces[0].label_lens[0] = 6; s.workspaces[0].label_count = 1;
+    s.pair_count = 1; s.pairs[0] = .{ .key = .{ .workspace_id = id('a'), .repository_id = id('1') }, .surface_count = 1 };
+    s.pairs[0].surfaces[0] = .{ .id = id('x'), .lifecycle = .live, .kind = .shell };
+    s.signal_count = 1; s.signals[0] = .{ .id = id('s'), .workspace_id = id('a'), .repository_id = id('1'), .status = .working };
+    var sidebar = view.projectSidebar(&s, .wide);
+    try std.testing.expectEqual(view.SidebarGroupKind.active, sidebar.groups[0].kind);
+    try std.testing.expect(sidebar.workspace.rows[0].activity and !sidebar.workspace.rows[0].running);
+
+    s.signals[0].status = .waiting;
+    sidebar = view.projectSidebar(&s, .wide);
+    try std.testing.expectEqual(view.SidebarGroupKind.label, sidebar.groups[0].kind);
+    try std.testing.expect(sidebar.workspace.rows[0].awaiting and !sidebar.workspace.rows[0].activity);
+
+    s.signals[0].status = .completed;
+    sidebar = view.projectSidebar(&s, .wide);
+    try std.testing.expectEqual(view.SidebarGroupKind.label, sidebar.groups[0].kind);
+    try std.testing.expect(sidebar.workspace.rows[0].completed and !sidebar.workspace.rows[0].activity);
+
+    s.signals[0].status = .idle;
+    s.pairs[0].surfaces[0].kind = .configured_command;
+    sidebar = view.projectSidebar(&s, .wide);
+    try std.testing.expectEqual(view.SidebarGroupKind.active, sidebar.groups[0].kind);
+    try std.testing.expect(sidebar.workspace.rows[0].running);
 }
 test "provider sessions preserve duplicates sort awaiting first and overflow" {
     var s = base(); s.pair_count = 1; s.pairs[0] = .{ .key = .{ .workspace_id = id('a'), .repository_id = id('1') } }; s.signal_count = 6;
@@ -149,7 +199,8 @@ test "compression tiers keep semantic markers while collapsing detail" {
     const wide = view.compression(.wide); const medium = view.compression(.medium); const narrow = view.compression(.narrow); const scaled = view.compression(.text_200);
     try std.testing.expect(wide.secondary and wide.git and wide.pr_expanded and wide.agent_limit == 3);
     try std.testing.expect(!medium.secondary and medium.git and medium.pr_expanded);
-    for ([_]view.CompressionVisibility{ narrow, scaled }) |tier| try std.testing.expect(!tier.secondary and !tier.git and !tier.pr_expanded and tier.agent_limit == 1);
+    try std.testing.expect(narrow.secondary and narrow.git and !narrow.pr_expanded and narrow.agent_limit == 1);
+    try std.testing.expect(scaled.secondary and !scaled.git and !scaled.pr_expanded and scaled.agent_limit == 1);
 }
 test "measured allocation and 200 percent text choose deterministic tiers" {
     try std.testing.expectEqual(view.WorkspaceCompressionTier.wide, view.compressionForAllocation(800, 100));
@@ -158,7 +209,7 @@ test "measured allocation and 200 percent text choose deterministic tiers" {
     try std.testing.expectEqual(view.WorkspaceCompressionTier.text_200, view.compressionForAllocation(800, 200));
     for ([_]view.WorkspaceCompressionTier{ .narrow, .text_200 }) |tier| {
         const visible = view.compression(tier);
-        try std.testing.expect(!visible.secondary and !visible.git and visible.agent_limit == 1);
+        try std.testing.expect(visible.secondary and visible.agent_limit == 1);
     }
 }
 test "selection and focus semantics remain distinct across active and inactive windows" {
