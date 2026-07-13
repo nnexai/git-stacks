@@ -26,3 +26,11 @@ Patterns and stack choices established across spike sessions.
 - The full `ghostty_surface_*` embedding API is not a supported Linux/GTK surface boundary at that commit.
 - Limux fork commit `81ab8ffa90185221782baf785e85387321e16f8d` proves a full Linux `ghostty_surface_*` host boundary using a current `GtkGLArea` OpenGL context.
 - GNOME VTE GTK4 is the mature non-Ghostty fallback if maintaining the Linux surface patch becomes unacceptable.
+
+## Browser Terminal Patterns
+
+- A web client may use a separate git-stacks-managed Bun PTY broker; native Ghostty sessions remain independent.
+- Browser terminal rendering uses xterm.js, one terminal instance per retained tab, with a WebSocket data plane and a separate HTTP/SSE workspace control plane. Open xterm only in a visible, dimensioned pane.
+- Local browser access is same-origin and loopback-only, with one-use CLI-issued pairing and a scoped HttpOnly principal. Validate Host on every request, exact Origin on unsafe methods and WebSocket upgrades, and Fetch Metadata on browser API reads; same-origin GET/HEAD cannot be assumed to carry Origin.
+- A bounded raw-output ring is only a delta-replay mechanism. Correct reconnect uses cursor/ACK ordering, while reload or a ring gap needs server-side headless serialization or an explicit history-loss state.
+- App-owned OSC signal frames are authenticated and stripped in the service before bytes reach browser replay, headless state, or xterm; signal tokens never cross the browser boundary.

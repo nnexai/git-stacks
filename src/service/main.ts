@@ -11,6 +11,7 @@ import { createWorkspaceChangeMonitor } from "../lib/service/workspace-change-mo
 import type { Operation, WorkspaceCreationCatalog } from "../lib/service/contract"
 import { getWorkspaceCreationCatalog } from "../lib/workspace-creation"
 import { startServiceServer, type RunningServiceServer } from "./server"
+import { WebApplication } from "./web/routes"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
 export const DEFAULT_OFFICIAL_CLIENT_ID = "official-client"
@@ -95,7 +96,7 @@ export interface ManagedServiceOptions {
   serviceRoot?: string
   clientId?: string
   idleMs?: number
-  snapshot?: import("./server").SnapshotAdapter & { currentRevision(): Promise<string> }
+  snapshot?: import("./snapshot-adapter").SnapshotAdapter & { currentRevision(): Promise<string> }
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
 }
@@ -153,6 +154,8 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       },
     })
     let lifecycle: ReturnType<typeof createIdleLifecycle>
+    let nativeConnections = 0
+    let webConnections = 0
     const operations = new OperationRegistry({
       root: serviceRoot,
       publishOperationEvent: (operation) => publishOperationEvent(journal, operation, (event) => broker.publish(event)),
@@ -168,21 +171,37 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     let stopManaged: () => Promise<void> = async () => { await running.stop() }
     lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: () => stopManaged() })
     const mutationAdapters = createWorkspaceMutationAdapters()
-    running = startServiceServer({
-      serviceRoot, snapshot, operations, broker,
+    const publishSignal = async (signal: import("../lib/service/contract").Signal) => {
+      const event = await journal.appendSignal(signal)
+      broker.publish(event)
+    }
+    const dismissSignal = async (dismissal: import("../lib/service/contract").SignalDismissal) => {
+      const event = await journal.appendSignalDismissal(dismissal)
+      broker.publish(event)
+    }
+    const web = new WebApplication({
+      assetsRoot: join(import.meta.dir, "../../dist/web"),
+      snapshot,
+      operations,
+      broker,
       mutations: { "workspace.open": mutationAdapters["workspace.open"], "workspace.close": mutationAdapters["workspace.close"] },
       workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
       workspaceCreationCatalog: options.workspaceCreationCatalog ?? getWorkspaceCreationCatalog,
-      publishSignal: async (signal) => {
-        const event = await journal.appendSignal(signal)
-        broker.publish(event)
-      },
-      dismissSignal: async (dismissal) => {
-        const event = await journal.appendSignalDismissal(dismissal)
-        broker.publish(event)
-      },
+      publishSignal,
+      dismissSignal,
       signalProjection: () => journal.signalProjection(),
-      onConnectionChange: (count) => lifecycle.setConnectedClients(count),
+      onConnectionChange: (count) => { webConnections = count; lifecycle?.setConnectedClients(nativeConnections + webConnections) },
+      onActivity: () => lifecycle?.touch(),
+    })
+    running = startServiceServer({
+      serviceRoot, snapshot, operations, broker, web,
+      mutations: { "workspace.open": mutationAdapters["workspace.open"], "workspace.close": mutationAdapters["workspace.close"] },
+      workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
+      workspaceCreationCatalog: options.workspaceCreationCatalog ?? getWorkspaceCreationCatalog,
+      publishSignal,
+      dismissSignal,
+      signalProjection: () => journal.signalProjection(),
+      onConnectionChange: (count) => { nativeConnections = count; lifecycle.setConnectedClients(nativeConnections + webConnections) },
       onActivity: () => lifecycle.touch(),
     })
     monitor.start()
@@ -198,13 +217,17 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       if (stopped) return
       stopped = true
       lifecycle.dispose()
-      try {
-        await running.stop()
-      } finally {
-        await monitor.dispose()
-        const current = readServiceDescriptor(serviceRoot)
-        if (current?.instance_id === instanceId) unlinkSync(serviceDescriptorPath(serviceRoot))
-      }
+      // Withdraw discovery before potentially slow socket/PTY teardown. An
+      // async SIGINT handler can be interrupted by the runtime while force-
+      // closing browser transports; a dead endpoint must never remain
+      // advertised even if later cleanup is cut short.
+      const current = readServiceDescriptor(serviceRoot)
+      if (current?.instance_id === instanceId) unlinkSync(serviceDescriptorPath(serviceRoot))
+      // Stop filesystem/Git monitoring before closing transports. Otherwise
+      // SIGINT can interrupt an in-flight Git status command and reject the
+      // monitor callback while browser transports are still closing.
+      await monitor.dispose()
+      await running.stop()
     }
     stopManaged = stop
     return { descriptor, server: running, existing: false, stop }

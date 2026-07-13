@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>git-stacks web terminal POC</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/client.css">
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">git-stacks · 107.3 spike</div>
+          <h1>Workspace terminals</h1>
+        </div>
+        <div id="connection-status" class="connection-status">starting</div>
+      </header>
+      <nav id="tabs" class="tabs" aria-label="Terminal tabs">
+        <button id="new-tab" class="new-tab" type="button">＋ New terminal</button>
+      </nav>
+      <div id="panes" class="panes"></div>
+      <footer>
+        <span>Each visible tab is an xterm.js terminal backed by its own Bun PTY.</span>
+        <span>Try <code>printf 'hello\\n'</code>, <code>stty size</code>, or <code>top</code>.</span>
+      </footer>
+    </main>
+    <script type="module" src="/client.js"></script>
+  </body>
+</html>

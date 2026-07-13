@@ -29,9 +29,13 @@ function acquireLock(path: string): () => void {
 
 export function ensureWorkspaceIdentity(name: string, options: IdentityMigrationOptions = {}): Workspace & { id: string } {
   invalidateConfigCache()
-  readWorkspace(name)
   const path = workspaceFilePath(name)
   if (lstatSync(path).isSymbolicLink()) throw new Error(`Refusing identity migration through symlink: ${path}`)
+  const observed = readWorkspace(name)
+  // The overwhelmingly common path is already migrated. Avoid creating a
+  // lock file for a read: doing so mutates the watched workspace directory
+  // and can turn snapshot observation into a filesystem-watch feedback loop.
+  if (observed.id && observed.repos.every((repo) => repo.id)) return observed as Workspace & { id: string }
   const release = acquireLock(path)
   try {
     const current = validatedWorkspace(path)

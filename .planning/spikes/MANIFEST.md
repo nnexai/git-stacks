@@ -13,6 +13,8 @@ Determine how far the git-stacks OpenTUI dashboard can evolve toward a workspace
 - The former Phase 105 prohibition on a maintained Ghostty fork is superseded when a bounded Linux embedded-surface fork is the only path to fully functional Ghostty-owned panes; standalone-process composition remains out of scope.
 - Fully functional embedded terminal panes are the primary requirement; preserving git-stacks-owned PTYs is secondary when it would force terminal emulation, rendering, input, configuration, or compatibility to be reimplemented.
 - Prefer Ghostty-owned terminal surfaces and configuration when a viable Linux integration exists; do not treat `ghostty-vt` plus a product renderer as equivalent to libghostty terminal embedding.
+- The web client may use a separate git-stacks-managed TypeScript/Bun PTY broker; native Ghostty surfaces and external integrations do not need to share those live terminal sessions in the web MVP.
+- The web architecture must keep the workspace control plane separate from the bidirectional terminal data plane, with loopback-only binding, explicit browser pairing, origin validation, bounded scrollback, and backpressure limits.
 
 ## Spikes
 
@@ -28,3 +30,4 @@ Determine how far the git-stacks OpenTUI dashboard can evolve toward a workspace
 | 007 | reusable-linux-surface-extraction | comparison | A bounded upstreamable adapter can expose Ghostty's Linux surface without a long-lived application-sized fork | PARTIAL | ghostty, linux, api, upstream |
 | 008 | multi-pane-ghostty-integration | standard | Multiple full Ghostty surfaces can coexist with correct focus, resize, lifecycle, and pane isolation inside one host | VALIDATED | ghostty, gtk, panes, lifecycle |
 | 009 | mature-widget-fallback | comparison | A mature embeddable terminal widget can deliver complete panes if full Ghostty Linux embedding remains unavailable | VALIDATED | terminal, gtk, vte, fallback |
+| 010 | web-terminal-tabs | standard | A local Bun service can own independent PTYs and expose input, output, resize, tab retention, and basic close to multiple xterm.js browser tabs; production reconnect/auth/pressure remain unvalidated | PARTIAL | web, browser, websocket, xterm, bun, pty, tabs |

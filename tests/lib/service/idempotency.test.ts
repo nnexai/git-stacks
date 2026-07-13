@@ -46,6 +46,16 @@ describe("operation idempotency", () => {
     expect(scheduled).toBe(1)
   })
 
+  test("operation ownership exposes records only to the submitting client", async () => {
+    const dir = await root()
+    const registry = new OperationRegistry({ root: dir, id: () => "op_owned12345678901", publishOperationEvent: publisher, schedule: () => {} })
+    const operation = await registry.submit({ clientId: "web:principal-a", endpoint: "workspace.open", idempotencyKey: "key", request: { workspace: "demo" }, execution: { steps: [] } })
+    expect(registry.ownerOf(operation.operation_id)).toBe("web:principal-a")
+    expect(registry.getForClient(operation.operation_id, "web:principal-a")?.operation_id).toBe(operation.operation_id)
+    expect(registry.getForClient(operation.operation_id, "web:principal-b")).toBeUndefined()
+    expect(registry.getForClient(operation.operation_id, "official-client")).toBeUndefined()
+  })
+
   test("same scoped key with different input conflicts without scheduling", async () => {
     const dir = await root()
     let scheduled = 0

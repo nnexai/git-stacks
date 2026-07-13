@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test"
-import { lstatSync, readFileSync, renameSync, symlinkSync, writeFileSync } from "fs"
+import { lstatSync, readFileSync, renameSync, statSync, symlinkSync, writeFileSync } from "fs"
 import { join } from "path"
 import { parse } from "yaml"
 import { useIsolatedConfig } from "../../helpers"
@@ -25,6 +25,14 @@ describe("service identity migration", () => {
     expect(second.id).toBe(first.id)
     expect(second.repos[0]?.id).toBe(first.repos[0]?.id)
     expect(parse(readFileSync(workspaceFile("legacy"), "utf8")).id).toBe(first.id)
+  })
+
+  test("does not mutate the workspace directory when identity already exists", () => {
+    writeFileSync(workspaceFile("identified"), "id: 018f47f4-5ab1-7c2d-8e90-123456789abc\nname: identified\nbranch: main\ncreated: today\nrepos: []\n")
+    const directory = join(isolated.configDir, "workspaces")
+    const before = statSync(directory, { bigint: true }).mtimeNs
+    expect(ensureWorkspaceIdentity("identified").id).toBe("018f47f4-5ab1-7c2d-8e90-123456789abc")
+    expect(statSync(directory, { bigint: true }).mtimeNs).toBe(before)
   })
 
   test("preserves IDs across rename and path changes", () => {

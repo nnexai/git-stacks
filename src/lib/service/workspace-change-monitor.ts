@@ -82,7 +82,7 @@ export function createWorkspaceChangeMonitor(options: WorkspaceChangeMonitorOpti
     debounceTimer = setTimer(() => {
       debounceTimer = undefined
       bindWorkspaceWatcher()
-      void invalidate()
+      void invalidate().catch(() => {})
     }, options.debounceMs ?? DEFAULT_WORKSPACE_DEBOUNCE_MS)
   }
 
@@ -121,13 +121,13 @@ export function createWorkspaceChangeMonitor(options: WorkspaceChangeMonitorOpti
         void Promise.resolve(readFingerprint(workspaceDir)).then((value) => {
           if (disposed) return
           if (lastFingerprint === undefined) { lastFingerprint = value; return }
-          if (value !== lastFingerprint) { lastFingerprint = value; bindWorkspaceWatcher(); void invalidate() }
+          if (value !== lastFingerprint) { lastFingerprint = value; bindWorkspaceWatcher(); void invalidate().catch(() => {}) }
         })
       }, options.fingerprintMs ?? DEFAULT_WORKSPACE_FINGERPRINT_MS)
     },
     invalidate,
     async dispose() {
-      if (disposed) { await running; return }
+      if (disposed) return
       disposed = true
       pending = false
       rootWatcher?.close()
@@ -138,7 +138,10 @@ export function createWorkspaceChangeMonitor(options: WorkspaceChangeMonitorOpti
       if (fingerprintTimer !== undefined) clearPeriodic(fingerprintTimer)
       debounceTimer = undefined
       fingerprintTimer = undefined
-      await running
+      // A snapshot rebuild may be waiting on an external Git observation.
+      // Once disposed, the loop cannot publish or schedule another pass, so
+      // shutdown must not wait indefinitely for that best-effort observation.
+      if (running) void running.catch(() => {})
     },
   }
 }

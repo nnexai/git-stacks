@@ -12,6 +12,7 @@ import { labelCommand } from "../commands/label"
 import { filesCommand } from "../commands/files"
 import { commandCommand } from "../commands/command"
 import { serviceCommand } from "../commands/service"
+import { webCommand } from "../commands/web"
 import { silenceObservability } from "./observability"
 
 export function buildCliProgram(binName = "git-stacks"): Command {
@@ -46,6 +47,7 @@ export function buildCliProgram(binName = "git-stacks"): Command {
   program.addCommand(filesCommand)
   program.addCommand(commandCommand)
   program.addCommand(serviceCommand)
+  program.addCommand(webCommand)
 
   // Register last: the completion action needs the fully populated program tree.
   program.addCommand(createCompletionCommand(program))

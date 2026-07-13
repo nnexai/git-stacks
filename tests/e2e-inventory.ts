@@ -115,6 +115,20 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     rationale: "Protected discovery, convergent startup, signal publication, integration ownership, and idle lifecycle are covered through real loopback and injected lifecycle tests.",
   },
   {
+    id: "service.web-client",
+    family: "service",
+    flowType: "user-flow",
+    title: "Paired local web client and service-owned terminals",
+    commands: ["web"],
+    scopeStatus: "in-scope",
+    mappedTests: [
+      "tests/service/web-security.test.ts",
+      "tests/service/web-terminal.test.ts",
+      "tests/service/web-signal-filter.test.ts",
+    ],
+    rationale: "One-use browser pairing, browser-safe projections, real PTY lifecycle and resize, and terminal signal filtering are covered by loopback and real-process tests.",
+  },
+  {
     id: "workspace.paths",
     family: "workspace",
     flowType: "command",

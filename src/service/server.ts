@@ -3,11 +3,14 @@ import { z } from "zod"
 import { authenticateAdmission, type AuthenticatedClient } from "../lib/service/credentials"
 import { IdempotencyConflictError, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
 import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
-import { SignalDismissalSchema, SignalSchema, type Signal, type SignalDismissal, type WorkspaceSnapshotResponse } from "../lib/service/contract"
-import { NativeLaunchResolutionRequestSchema, type NativeLaunchResolution } from "../lib/service/contract"
+import { NativeLaunchResolutionRequestSchema, SignalDismissalSchema, SignalSchema, type Signal, type SignalDismissal } from "../lib/service/contract"
 import { NATIVE_MODEL_LIMITS, WorkspaceCreationRequestSchema, type WorkspaceCreationCatalog } from "../lib/service/contract"
 import type { WorkspaceCreateMutation } from "../lib/service/operations"
 import { SnapshotBusyError } from "../lib/service/snapshot"
+import type { WebApplication } from "./web/routes"
+import type { WebSocketData } from "./web/terminal-manager"
+import type { SnapshotAdapter } from "./snapshot-adapter"
+export type { SnapshotAdapter } from "./snapshot-adapter"
 
 export const MAX_BODY_BYTES = 256 * 1024
 export const RATE_LIMIT_PER_MINUTE = 60
@@ -21,13 +24,6 @@ const MutationRequestSchema = z.strictObject({
   workspace: z.string().min(1),
   options: z.record(z.string(), z.unknown()).optional(),
 })
-
-export type SnapshotAdapter = {
-  buildAll(signal?: AbortSignal): Promise<WorkspaceSnapshotResponse[]>
-  buildWorkspace(name: string, requestId?: string, signal?: AbortSignal): Promise<WorkspaceSnapshotResponse>
-  resolveNativeLaunch?(request: z.infer<typeof NativeLaunchResolutionRequestSchema>, signal?: AbortSignal): Promise<NativeLaunchResolution>
-  currentRevision?(): Promise<string>
-}
 
 export interface ServiceServerOptions {
   serviceRoot: string
@@ -54,10 +50,11 @@ export interface ServiceServerOptions {
   clearTimeoutFn?: typeof clearTimeout
   onConnectionChange?: (count: number) => void
   onActivity?: () => void
+  web?: WebApplication
 }
 
 export interface RunningServiceServer {
-  server: Bun.Server<undefined>
+  server: Bun.Server<WebSocketData>
   url: URL
   get connectedClients(): number
   get sseDiagnostics(): readonly SseTransportDiagnostics[]
@@ -244,7 +241,7 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
     try { return JSON.parse(new TextDecoder().decode(bytes)) } catch { throw Object.assign(new Error("Malformed JSON body"), { status: 400 }) }
   }
 
-  const events = async (request: Request, client: AuthenticatedClient, id: string, server: Bun.Server<undefined>, finite = false): Promise<Response> => {
+  const events = async (request: Request, client: AuthenticatedClient, id: string, server: Bun.Server<WebSocketData>, finite = false): Promise<Response> => {
     if (!options.broker) return failure(id, "capability_unavailable", "Event streaming is unavailable", 409)
     if ((sseByClient.get(client.clientId) ?? 0) >= maxPerClient || sseTotal >= maxTotal) {
       return failure(id, "rate_limited", "Event connection limit reached", 429)
@@ -278,18 +275,23 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" } })
   }
 
-  const server = Bun.serve({
+  const server = Bun.serve<WebSocketData>({
     hostname: options.hostname ?? "127.0.0.1",
     port: options.port ?? 0,
     maxRequestBodySize: maxBody,
     idleTimeout: REQUEST_TIMEOUT_SECONDS,
     async fetch(request, server) {
+      const requestUrl = new URL(request.url)
+      if (requestUrl.pathname === "/web" || requestUrl.pathname.startsWith("/web/")) {
+        if (!options.web) return new Response("Not found", { status: 404 })
+        return options.web.handle(request, server)
+      }
       const admission = authenticateAdmission(request.headers.get("authorization"), { serviceRoot: options.serviceRoot })
       if (!admission.ok) return json(admission.body, admission.status)
       options.onActivity?.()
       const id = requestId()
       if (!consume(admission.client.clientId)) return failure(id, "rate_limited", "Request rate limit exceeded", 429)
-      const url = new URL(request.url)
+      const url = requestUrl
       if (request.method === "GET" && url.pathname === "/v1/events") return events(request, admission.client, id, server, url.searchParams.get("finite") === "1")
       server.timeout(request, REQUEST_TIMEOUT_SECONDS)
       try {
@@ -304,6 +306,10 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           },
           limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024, native_model: NATIVE_MODEL_LIMITS },
         }))
+        if (request.method === "POST" && url.pathname === "/v1/web-pairings") {
+          if (!options.web) return failure(id, "capability_unavailable", "Web client is unavailable", 409)
+          return json(success(id, options.web.issuePairing(`http://${server.hostname}:${server.port}`)), 201)
+        }
         if (request.method === "GET" && url.pathname === "/v1/workspace-creation/catalog") {
           if (!options.workspaceCreationCatalog) return failure(id, "capability_unavailable", "Workspace creation catalog is unavailable", 409)
           return json(success(id, await options.workspaceCreationCatalog()))
@@ -387,6 +393,16 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
         return failure(id, "internal_error", "Service request failed", 500)
       }
     },
+    websocket: {
+      open: (socket) => { if (options.web) options.web.websocket.open(socket); else socket.close(1008, "Web client unavailable") },
+      message: (socket, message) => options.web?.websocket.message(socket, message),
+      close: (socket) => options.web?.websocket.close(socket),
+      drain: (socket) => options.web?.websocket.drain(socket),
+      maxPayloadLength: 64 * 1024,
+      idleTimeout: 120,
+      backpressureLimit: 1024 * 1024,
+      closeOnBackpressureLimit: true,
+    },
   })
   const url = new URL(`http://${server.hostname}:${server.port}`)
   return {
@@ -394,6 +410,6 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
     url,
     get connectedClients() { return sseTotal },
     get sseDiagnostics() { return [...bridges].map((bridge) => bridge.diagnostics) },
-    async stop() { for (const bridge of [...bridges]) bridge.close(); options.broker?.close(); await server.stop(true) },
+    async stop() { for (const bridge of [...bridges]) bridge.close(); await options.web?.stop(); options.broker?.close(); await server.stop(true) },
   }
 }

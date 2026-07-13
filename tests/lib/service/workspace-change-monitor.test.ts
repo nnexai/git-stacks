@@ -102,4 +102,20 @@ describe("workspace change monitor", () => {
     expect(h.closed.filter((path) => path === "/config")).toHaveLength(1)
     expect(h.intervals).toHaveLength(0)
   })
+
+  test("dispose detaches promptly while an external rebuild is still blocked", async () => {
+    const emitted: string[] = []
+    const h = harness((revision) => emitted.push(revision))
+    h.monitor.start()
+    h.block()
+    void h.monitor.invalidate()
+    await Promise.resolve()
+    await h.monitor.dispose()
+    expect(h.closed).toContain("/config")
+    expect(emitted).toEqual([])
+    h.unblock()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(emitted).toEqual([])
+  })
 })

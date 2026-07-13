@@ -24,6 +24,7 @@
   },
   "files": [
     "src",
+    "dist/web",
     "bunfig.toml",
     "README.md",
     "CHANGELOG.md",
@@ -41,6 +42,8 @@
     "verify": "bun run scripts/verify.ts",
     "verify:prereqs": "bun run scripts/verify-prereqs.ts",
     "verify:gates": "bun run scripts/verify-gates.ts",
+    "web:build": "bun run scripts/build-web.ts",
+    "web:typecheck": "tsc --noEmit -p tsconfig.web.json",
     "verify:functional": "bun run scripts/functional-coverage-readiness.ts",
     "native:setup": "bun run scripts/verify-native.ts setup",
     "native:audit-ghostty": "bun run scripts/verify-native.ts audit-ghostty",
@@ -72,13 +75,16 @@
     "native:test:accessibility": "bun run scripts/verify-native.ts accessibility",
     "native:verify": "bun run scripts/verify-native.ts verify",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run typecheck && bun run test"
+    "prepublishOnly": "bun run web:build && bun run typecheck && bun run web:typecheck && bun run test"
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
     "@logtape/logtape": "^2.0.5",
     "@opentui/core": "^0.1.96",
     "@opentui/solid": "^0.1.96",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
     "commander": "^14.0.3",
     "opentui-spinner": "^0.0.6",
     "solid-js": "^1.9.12",

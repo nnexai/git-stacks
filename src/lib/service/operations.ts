@@ -186,6 +186,14 @@ export class OperationRegistry {
     return found ? structuredClone(found) : undefined
   }
 
+  ownerOf(id: string): string | undefined {
+    return this.store.reservations.find((item) => item.operation_id === id)?.client_id
+  }
+
+  getForClient(id: string, clientId: string): Operation | undefined {
+    return this.ownerOf(id) === clientId ? this.get(id) : undefined
+  }
+
   async accept(execution: OperationExecution): Promise<Operation> {
     await this.initialize()
     const accepted = await this.serialized(async () => {
