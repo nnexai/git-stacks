@@ -40,9 +40,16 @@ pub fn activePriority(unread: bool, awaiting: bool, agent: bool, running: bool) 
 }
 pub const WorkspaceRowProjection = struct {
     key: model.PairKey, section: WorkspaceSection, relevance: ?u8, selected: bool,
-    pinned: bool, unread: bool, awaiting: bool, agent_count: u8, running: bool, activity: bool,
+    pinned: bool, unread: bool, awaiting: bool, agent_count: u8, agent_overflow: u8 = 0, provider_badges: [3]ProviderBadge = [_]ProviderBadge{.{}} ** 3, provider_badge_count: u8 = 0, running: bool, activity: bool,
     visibility: CompressionVisibility, accessible: [512]u8 = [_]u8{0} ** 512, accessible_len: u16 = 0,
 };
+pub const ProviderBadge = struct { provider: model.SignalSource = .other, awaiting: bool = false, signal_id: [64]u8 = [_]u8{0} ** 64, signal_id_len: u8 = 0 };
+fn providerLess(_: void, a: ProviderBadge, b: ProviderBadge) bool {
+    if (a.awaiting != b.awaiting) return a.awaiting;
+    if (@intFromEnum(a.provider) != @intFromEnum(b.provider)) return @intFromEnum(a.provider) < @intFromEnum(b.provider);
+    return std.mem.order(u8, a.signal_id[0..a.signal_id_len], b.signal_id[0..b.signal_id_len]) == .lt;
+}
+pub fn providerLetter(provider: model.SignalSource) []const u8 { return switch (provider) { .claude => "C", .copilot => "G", .codex => "X", .opencode => "O", .automation => "A", .acp => "P", .user => "U", .other => "?" }; }
 pub const WorkspaceProjection = struct {
     rows: [32]WorkspaceRowProjection = undefined, row_count: u8 = 0,
     pinned_origin_count: u8 = 0, active_origin_count: u8 = 0,
@@ -75,7 +82,13 @@ fn describe(state: *const model.State, row: *WorkspaceRowProjection) void {
         if (p.pull_request) |pr| { w.print(", pull request {d} {s}", .{ pr.number, @tagName(pr.state) }) catch {}; if (pr.checks) |checks| w.print(", checks {s}", .{@tagName(checks)}) catch {}; }
     }
     if (row.pinned) w.writeAll(", pinned") catch {};
-    if (row.agent_count > 0) w.print(", {d} agent sessions", .{row.agent_count}) catch {};
+    if (row.agent_count > 0) {
+        w.print(", {d} agent sessions", .{row.agent_count}) catch {};
+        inline for (.{ model.SignalSource.claude, .copilot, .codex, .opencode, .automation, .acp, .user, .other }) |provider| {
+            var count: u8 = 0; for (state.signals[0..state.signal_count]) |signal| if (signal.kind == .activity and signal.provider == provider and std.mem.eql(u8, &signal.workspace_id, &row.key.workspace_id) and (signal.repository_id == null or std.mem.eql(u8, &signal.repository_id.?, &row.key.repository_id)) and (signal.status == .working or signal.status == .waiting or signal.status == .failed)) { count += 1; };
+            if (count > 0) w.print(", {d} {s}", .{ count, @tagName(provider) }) catch {};
+        }
+    }
     if (row.awaiting) w.writeAll(", awaiting input") catch {};
     if (row.running) w.writeAll(", running") catch {};
     if (row.activity) w.writeAll(", activity") catch {};
@@ -85,14 +98,20 @@ fn describe(state: *const model.State, row: *WorkspaceRowProjection) void {
 pub fn project(state: *const model.State, tier: WorkspaceCompressionTier) WorkspaceProjection {
     var out: WorkspaceProjection = .{};
     for (state.pairs[0..state.pair_count]) |pair| {
-        var unread = false; var awaiting = false; var agents: u8 = 0; var activity = false;
+        var unread = false; var awaiting = false; var agents: u8 = 0; var activity = false; var badges: [64]ProviderBadge = [_]ProviderBadge{.{}} ** 64; var badge_count: u8 = 0;
         for (state.signals[0..state.signal_count]) |signal| if (std.mem.eql(u8, &signal.workspace_id, &pair.key.workspace_id) and (signal.repository_id == null or std.mem.eql(u8, &signal.repository_id.?, &pair.key.repository_id))) {
-            if (!signal.read) unread = true; if (signal.status == .waiting) awaiting = true;
-            if (signal.kind == .activity) { agents +|= 1; if (signal.status == .working) activity = true; }
+            if (signal.kind == .notification and !signal.read) unread = true;
+            if (signal.kind == .activity and (signal.status == .working or signal.status == .waiting or signal.status == .failed)) {
+                agents +|= 1; if (signal.status == .waiting) awaiting = true; if (signal.status == .working) activity = true;
+                badges[badge_count] = .{ .provider = signal.provider, .awaiting = signal.status == .waiting, .signal_id_len = signal.signal_id_len };
+                @memcpy(badges[badge_count].signal_id[0..signal.signal_id_len], signal.signal_id[0..signal.signal_id_len]); badge_count += 1;
+            }
         };
+        std.mem.sort(ProviderBadge, badges[0..badge_count], {}, providerLess);
         var running = false; for (pair.surfaces[0..pair.surface_count]) |surface| if (surface.lifecycle == .live) { running = true; break; };
         const is_pinned = pinned(state, pair.key.workspace_id); const priority = activePriority(unread, awaiting, agents > 0, running);
-        var row: WorkspaceRowProjection = .{ .key = pair.key, .section = if (is_pinned) .pinned else if (priority != null) .active else .ordinary, .relevance = priority, .selected = if (state.selected_pair) |key| model.PairKey.eql(key, pair.key) else false, .pinned = is_pinned, .unread = unread, .awaiting = awaiting, .agent_count = agents, .running = running, .activity = activity, .visibility = compression(tier) };
+        var row: WorkspaceRowProjection = .{ .key = pair.key, .section = if (is_pinned) .pinned else if (priority != null) .active else .ordinary, .relevance = priority, .selected = if (state.selected_pair) |key| model.PairKey.eql(key, pair.key) else false, .pinned = is_pinned, .unread = unread, .awaiting = awaiting, .agent_count = agents, .agent_overflow = agents -| @min(agents, compression(tier).agent_limit), .running = running, .activity = activity, .visibility = compression(tier) };
+        row.provider_badge_count = @min(@as(u8, 3), @min(badge_count, row.visibility.agent_limit)); for (0..row.provider_badge_count) |i| row.provider_badges[i] = badges[i];
         describe(state, &row); out.rows[out.row_count] = row; out.row_count += 1;
         if (is_pinned) out.pinned_origin_count += 1 else if (priority != null) out.active_origin_count += 1;
     }

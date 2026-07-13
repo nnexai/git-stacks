@@ -120,14 +120,30 @@ test "projection deduplicates pinned over active and preserves PairKey selection
     @memcpy(s.workspaces[0].repositories[0].presentation.?.default_branch[0..4], "main");
     s.pair_count = 1; s.pairs[0] = .{ .key = .{ .workspace_id = id('a'), .repository_id = id('1') }, .surface_count = 1 }; s.pairs[0].surfaces[0] = .{ .id = id('x'), .lifecycle = .live };
     s.pin_count = 1; s.pins[0] = id('a'); s.selected_pair = s.pairs[0].key;
-    s.signal_count = 2;
+    s.signal_count = 3;
     s.signals[0] = .{ .id = id('s'), .workspace_id = id('a'), .repository_id = id('1'), .status = .waiting, .resolved = false, .read = false };
     s.signals[1] = .{ .id = id('t'), .workspace_id = id('a'), .repository_id = id('1'), .status = .working, .read = true };
+    s.signals[2] = .{ .id = id('u'), .kind = .notification, .workspace_id = id('a'), .repository_id = id('1'), .status = .waiting, .read = false };
     const p = view.project(&s, .wide);
     try std.testing.expectEqual(@as(u8, 1), p.row_count);
     try std.testing.expect(p.rows[0].section == .pinned and p.rows[0].selected and p.rows[0].awaiting and p.rows[0].activity);
     const description = p.rows[0].accessible[0..p.rows[0].accessible_len];
     for ([_][]const u8{ "branch main", "default branch", "Git +3 -1", "pinned", "agent sessions", "awaiting input", "running", "activity", "unread" }) |needle| try std.testing.expect(std.mem.indexOf(u8, description, needle) != null);
+}
+test "provider sessions preserve duplicates sort awaiting first and overflow" {
+    var s = base(); s.pair_count = 1; s.pairs[0] = .{ .key = .{ .workspace_id = id('a'), .repository_id = id('1') } }; s.signal_count = 6;
+    const providers = [_]model.SignalSource{ .codex, .copilot, .codex, .claude, .automation };
+    for (providers, 0..) |provider, i| { var sid = id('m'); sid[0] +%= @intCast(i); s.signals[i] = .{ .id = sid, .workspace_id = id('a'), .repository_id = id('1'), .provider = provider, .status = if (i == 2) .waiting else .working }; s.signals[i].signal_id[0] = @intCast('a' + i); s.signals[i].signal_id_len = 1; }
+    s.signals[5] = .{ .id = id('z'), .kind = .notification, .workspace_id = id('a'), .repository_id = id('1'), .status = .waiting, .read = false };
+    const row = view.project(&s, .wide).rows[0];
+    try std.testing.expectEqual(@as(u8, 5), row.agent_count);
+    try std.testing.expectEqual(@as(u8, 3), row.provider_badge_count);
+    try std.testing.expectEqual(@as(u8, 2), row.agent_overflow);
+    try std.testing.expect(row.provider_badges[0].awaiting and row.provider_badges[0].provider == .codex);
+    try std.testing.expect(row.activity and row.unread);
+    s.signals[0].status = .completed; s.signals[1].status = .idle;
+    const history = view.project(&s, .wide).rows[0];
+    try std.testing.expectEqual(@as(u8, 3), history.agent_count);
 }
 test "compression tiers keep semantic markers while collapsing detail" {
     const wide = view.compression(.wide); const medium = view.compression(.medium); const narrow = view.compression(.narrow); const scaled = view.compression(.text_200);
