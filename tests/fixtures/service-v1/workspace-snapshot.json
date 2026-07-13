@@ -13,7 +13,14 @@
       "name": "git-stacks",
       "mode": "worktree",
       "path": "/work/feature-one/git-stacks"
+    }, {
+      "id": "018f47f4-5ab1-7c2d-8e90-abcdef012346",
+      "name": "docs", "mode": "trunk", "path": "/work/docs"
     }],
+    "status": [
+      { "repository_id": "018f47f4-5ab1-7c2d-8e90-abcdef012345", "name": "git-stacks", "exists": true, "dirty": true, "branch": "feature/one", "default_branch": "main", "mode": "worktree", "ahead": 2, "behind": 1, "additions": 12, "removals": 4, "remote": "available", "degraded": false, "pull_request": { "number": 42, "state": "open", "checks": "passing" } },
+      { "repository_id": "018f47f4-5ab1-7c2d-8e90-abcdef012346", "name": "docs", "exists": false, "dirty": false, "branch": "", "default_branch": "develop", "mode": "trunk", "ahead": 0, "behind": 0, "additions": 0, "removals": 0, "remote": "missing", "degraded": true }
+    ],
     "launch": { "commands": ["bun test"], "environment": { "NODE_ENV": "development" }, "redacted": ["API_TOKEN"], "references": { "API_TOKEN": "secret://api-token" }, "named": [{ "id": "cmd_0123456789abcdef", "name": "test", "scope": "workspace", "steps": [] }] }
   }
 }
