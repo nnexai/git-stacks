@@ -30,7 +30,7 @@ const product_css =
     ".git-stacks-sidebar button.workspace-row.has-secondary { min-height: 44px; }" ++
     ".git-stacks-sidebar .workspace-primary { font-weight: 600; min-height: 20px; }" ++
     ".git-stacks-sidebar .workspace-secondary { min-height: 16px; }" ++
-    ".git-stacks-sidebar .workspace-status-cluster { margin-inline-start: 8px; }" ++
+    ".git-stacks-sidebar .workspace-status-cluster { }" ++
     ".git-stacks-sidebar .git-additions { color: @success_color; font-family: monospace; }" ++
     ".git-stacks-sidebar .git-removals { color: @error_color; font-family: monospace; }" ++
     ".git-stacks-sidebar .workspace-awaiting, .git-stacks-sidebar .workspace-unread { color: @warning_color; }" ++
@@ -843,7 +843,7 @@ fn appendProjectedPair(parent: *c.GtkBox, state: *State, projected: workspace_vi
         const secondary_label = c.gtk_label_new(secondary.ptr) orelse return; c.gtk_label_set_xalign(@ptrCast(secondary_label), 0); c.gtk_label_set_ellipsize(@ptrCast(secondary_label), c.PANGO_ELLIPSIZE_END); c.gtk_widget_add_css_class(secondary_label, "caption"); c.gtk_widget_add_css_class(secondary_label, "dim-label"); c.gtk_widget_add_css_class(secondary_label, "workspace-secondary"); c.gtk_box_append(@ptrCast(text_box), secondary_label); c.gtk_widget_add_css_class(button, "has-secondary");
     };
     c.gtk_box_append(@ptrCast(row), text_box);
-    const status = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return; c.gtk_widget_add_css_class(status, "workspace-status-cluster"); c.gtk_widget_set_halign(status, c.GTK_ALIGN_END);
+    const status = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 4) orelse return; c.gtk_widget_add_css_class(status, "workspace-status-cluster"); c.gtk_widget_set_margin_start(status, 8); c.gtk_widget_set_halign(status, c.GTK_ALIGN_END);
     if (repo.presentation) |p| {
         if (projected.visibility.git and (p.additions > 0 or p.removals > 0)) {
             var git_z: [48:0]u8 = [_:0]u8{0} ** 48; const git = std.fmt.bufPrintZ(&git_z, "+{d} -{d}", .{ p.additions, p.removals }) catch return; const git_label = c.gtk_label_new(git.ptr) orelse return; c.gtk_widget_add_css_class(git_label, "git-additions"); c.gtk_widget_add_css_class(git_label, "git-removals"); c.gtk_widget_set_tooltip_text(git_label, "Git line additions and removals"); c.gtk_box_append(@ptrCast(status), git_label);
