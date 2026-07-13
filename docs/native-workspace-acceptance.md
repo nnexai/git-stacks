@@ -25,7 +25,7 @@ The hardening smoke completed in 81.816 seconds. Human cells remain pending.
 Latest UAT observations accepted creation, external synchronization, tab menus,
 keyboard/accessibility behavior, and the cleaned selection/launcher hierarchy.
 Re-observation remains blocking for restored all-command launcher behavior,
-UUID-targeted pin/unpin (`a5401556`), automatic ACP-first agent attention and
+UUID-targeted pin/unpin (`a5401556`), automatic ACP-first agent signals and
 its project-hook fallback (`a5401556`), and idempotent GLib cleanup
 (`7dfde2a3`).
 
@@ -104,7 +104,7 @@ project-local hooks. The current Codex fallback updates only
 `.codex/hooks.json`, preserves unrelated hooks and top-level keys, never mutates
 global configuration, and blocks launch with a visible error rather than
 overwriting malformed or unwritable configuration. The native UI consumes the
-shared structured-attention model and is not coupled to Codex hook JSON.
+shared signal model and derives attention as a UI projection; it is not coupled to Codex hook JSON.
 
 | Provider | Preferred automatic transport | Terminal fallback |
 | --- | --- | --- |

@@ -35,7 +35,7 @@ function writeCoverageArtifacts(
   root: string,
   coverageFinal: Record<string, unknown> = {
     "src/index.ts": coverageEntry("src/index.ts"),
-    "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+    "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
     "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
     ...Object.fromEntries(
       FUNCTIONAL_READINESS_AREAS.flatMap((area) => area.sourceTargets).map((path) => [
@@ -180,7 +180,7 @@ describe("verify gate collector", () => {
   test("reports zero-hit regular TypeScript coverage sentinel", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts", 0),
+      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts", 0),
       "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
     })
     writeTest(root, "tests/commands/new.test.ts")
@@ -194,7 +194,7 @@ describe("verify gate collector", () => {
 
     expect(report.ok).toBe(false)
     expect(report.coverageSentinels).toEqual([
-      { path: "src/lib/messages.ts", problem: "zero hits" },
+      { path: "src/lib/service/signal-state.ts", problem: "zero hits" },
     ])
     expect(formatVerifyGateReport(report)).toContain("Coverage sentinel problems:")
   })
@@ -202,7 +202,7 @@ describe("verify gate collector", () => {
   test("reports zero-hit TUI TSX coverage sentinel", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
       "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx", 0),
     })
     writeTest(root, "tests/commands/new.test.ts")
@@ -226,7 +226,7 @@ describe("verify gate collector", () => {
     mkdirSync(coverageDir, { recursive: true })
     writeFileSync(
       join(coverageDir, "coverage-final.json"),
-      JSON.stringify({ "src/lib/messages.ts": coverageEntry("src/lib/messages.ts", 0) })
+      JSON.stringify({ "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts", 0) })
     )
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -243,7 +243,7 @@ describe("verify gate collector", () => {
       { path: ".coverage/lcov.info", problem: "missing" },
     ])
     expect(report.coverageSentinels).toEqual([
-      { path: "src/lib/messages.ts", problem: "zero hits" },
+      { path: "src/lib/service/signal-state.ts", problem: "zero hits" },
       { path: "src/tui/dashboard/ActionMenu.tsx", problem: "missing" },
     ])
   })
@@ -254,7 +254,7 @@ describe("verify gate collector", () => {
       "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts": coverageEntry(
         "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts"
       ),
-      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
       "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
     })
     writeTest(root, "tests/commands/new.test.ts")
@@ -279,7 +279,7 @@ describe("verify gate collector", () => {
   test("aggregates functional readiness must-fix findings with existing gate findings", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
       "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
       "src/lib/git.ts": coverageEntry("src/lib/git.ts", 0),
     })
@@ -314,7 +314,7 @@ describe("verify gate collector", () => {
   test("keeps accepted and deferred functional readiness items visible without failing gates", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/messages.ts": coverageEntry("src/lib/messages.ts"),
+      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
       "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
       "src/lib/git.ts": coverageEntry("src/lib/git.ts"),
     })
@@ -381,5 +381,27 @@ describe("verify gate collector", () => {
     expect(formatted).toContain("command run")
     expect(formatted).toContain("fish:")
     expect(formatted).toContain("notes add")
+  })
+
+  test("blocks retired message and structured-attention transport symbols", () => {
+    const root = makeRoot()
+    writeCoverageArtifacts(root)
+    writeTest(root, "tests/commands/new.test.ts")
+    const sourceDir = join(root, "src")
+    mkdirSync(sourceDir, { recursive: true })
+    writeFileSync(join(sourceDir, "legacy.ts"), "const endpoint = '/v1/attention'\n")
+
+    const report = collectVerifyGateReport({
+      root,
+      liveCommands: ["new"],
+      inventory: [item()],
+      completionCoverage: completionCoverage(),
+    })
+
+    expect(report.ok).toBe(false)
+    expect(report.forbiddenLegacySymbols).toEqual([
+      { path: "src/legacy.ts", line: 1, symbol: "/v1/attention" },
+    ])
+    expect(formatVerifyGateReport(report)).toContain("Forbidden legacy signal/message symbols:")
   })
 })

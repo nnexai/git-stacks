@@ -3,11 +3,11 @@ import { claudeCodePlugin } from "../../../src/lib/agent-hooks/claude-code"
 import { copilotPlugin } from "../../../src/lib/agent-hooks/copilot"
 import { codexPlugin } from "../../../src/lib/agent-hooks/codex"
 
-describe("structured lifecycle attention hooks", () => {
+describe("provider lifecycle signal hooks", () => {
   test("Claude and Copilot emit typed identity-addressed lifecycle commands", () => {
     for (const [plugin, source] of [[claudeCodePlugin, "claude"], [copilotPlugin, "copilot"]] as const) {
       const commands = plugin.generateHookEntries("alpha").map((entry) => entry.command)
-      expect(commands.join("\n")).toContain("service attention publish")
+      expect(commands.join("\n")).toContain("service signal publish")
       expect(commands.join("\n")).toContain(`--source ${source}`)
       expect(commands.join("\n")).toContain("$GIT_STACKS_WORKSPACE_ID")
       expect(commands.join("\n")).toContain("$GIT_STACKS_REPOSITORY_ID")

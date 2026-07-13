@@ -3,7 +3,7 @@ import { dirname, join } from "path"
 import { homedir } from "os"
 
 export const AGENT_INTEGRATION_VERSION = 1
-export const OWNERSHIP_MARKER = "git-stacks-managed-attention-v1"
+export const OWNERSHIP_MARKER = "git-stacks-managed-signal-v1"
 export type IntegrationProvider = "codex" | "claude" | "copilot" | "opencode"
 export type IntegrationState = "installed" | "outdated" | "not-installed" | "disabled" | "failed"
 
@@ -21,9 +21,9 @@ const providerEvents: Record<"codex" | "claude", [string, string, string?][]> = 
 }
 
 function command(provider: IntegrationProvider, state: string): string {
-  const guard = '[ -n "${GIT_STACKS_ATTENTION_TOKEN:-}" ] && [ -n "${GIT_STACKS_SURFACE_ID:-}" ]'
+  const guard = '[ -n "${GIT_STACKS_SIGNAL_TOKEN:-}" ] && [ -n "${GIT_STACKS_SURFACE_ID:-}" ]'
   const tty = '__gs_tty=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d "[:space:]"); case "$__gs_tty" in *[0-9]*) __gs_tty="/dev/${__gs_tty#/dev/}";; *) __gs_tty=/dev/tty;; esac'
-  const emit = `printf '\\033]9;git-stacks-attention:%s:${provider}:${state}\\033\\\\' "$GIT_STACKS_ATTENTION_TOKEN" > "$__gs_tty"`
+  const emit = `printf '\\033]9;git-stacks-signal:%s:${provider}:%s:${state}\\033\\\\' "$GIT_STACKS_SIGNAL_TOKEN" "\${GIT_STACKS_AGENT_SESSION_ID:-$PPID}" > "$__gs_tty"`
   return `${guard} && { ${tty}; ${emit}; } >/dev/null 2>&1 || true # ${OWNERSHIP_MARKER}`
 }
 
@@ -120,7 +120,7 @@ function copilotSource(): string {
 }
 
 function openCodeSource(): string {
-  return `// ${OWNERSHIP_MARKER}\nconst emit=(state)=>{if(!process.env.GIT_STACKS_ATTENTION_TOKEN||!process.env.GIT_STACKS_SURFACE_ID)return;process.stdout.write('\\u001b]9;git-stacks-attention:'+process.env.GIT_STACKS_ATTENTION_TOKEN+':opencode:'+state+'\\u001b\\\\')}\nexport const GitStacksAttention=async()=>({event:async({event})=>{const type=event?.type??'';if(type==='session.created'||type==='message.updated')emit('working');else if(type==='permission.asked'||type==='question.asked')emit('waiting');else if(type==='session.idle')emit('completed');else if(type==='session.error')emit('failed')}})\n`
+  return `// ${OWNERSHIP_MARKER}\nconst session=process.env.GIT_STACKS_AGENT_SESSION_ID??String(process.pid);const emit=(state)=>{if(!process.env.GIT_STACKS_SIGNAL_TOKEN||!process.env.GIT_STACKS_SURFACE_ID)return;process.stdout.write('\\u001b]9;git-stacks-signal:'+process.env.GIT_STACKS_SIGNAL_TOKEN+':opencode:'+session+':'+state+'\\u001b\\\\')}\nexport const GitStacksSignals=async()=>({event:async({event})=>{const type=event?.type??'';if(type==='session.created'||type==='message.updated')emit('working');else if(type==='permission.asked'||type==='question.asked')emit('waiting');else if(type==='session.idle')emit('completed');else if(type==='session.error')emit('failed')}})\n`
 }
 
 function ownedWrite(path: string, source: string): void {
@@ -129,7 +129,7 @@ function ownedWrite(path: string, source: string): void {
 }
 
 function dedicatedPath(home: string, provider: "copilot" | "opencode"): string {
-  return provider === "copilot" ? join(home, ".copilot/hooks/git-stacks.json") : join(home, ".config/opencode/plugins/git-stacks-attention.js")
+  return provider === "copilot" ? join(home, ".copilot/hooks/git-stacks.json") : join(home, ".config/opencode/plugins/git-stacks-signal.js")
 }
 
 function providerState(home: string, provider: IntegrationProvider): IntegrationState {

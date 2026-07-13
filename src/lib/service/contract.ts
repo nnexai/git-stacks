@@ -10,8 +10,8 @@ export const OperationIdSchema = z.string().regex(/^op_[A-Za-z0-9_-]{16,}$/)
 export type OperationId = z.infer<typeof OperationIdSchema>
 export const CommandIdSchema = z.string().regex(/^cmd_[A-Za-z0-9_-]{16,}$/)
 export type CommandId = z.infer<typeof CommandIdSchema>
-export const AttentionIdSchema = z.string().regex(/^att_[A-Za-z0-9_-]{16,}$/)
-export type AttentionId = z.infer<typeof AttentionIdSchema>
+export const SignalIdSchema = z.string().regex(/^sig_[A-Za-z0-9_-]{16,}$/)
+export type SignalId = z.infer<typeof SignalIdSchema>
 export const CursorSchema = z.string().regex(/^(0|[1-9][0-9]*)$/)
 export type Cursor = z.infer<typeof CursorSchema>
 export const RevisionSchema = CursorSchema
@@ -29,22 +29,22 @@ export function utf8BoundedString(maximum: number, minimum = 0) {
 export const NativeModelStringByteLimitsSchema = z.strictObject({
   workspace_name: z.literal(96), workspace_label: z.literal(64), repository_name: z.literal(96),
   command_id: z.literal(64), command_name: z.literal(96), surface_command_id: z.literal(64),
-  surface_title: z.literal(64), surface_cwd: z.literal(128), attention_id: z.literal(64),
-  attention_title: z.literal(160), attention_detail: z.literal(500), attention_occurred_at: z.literal(40),
+  surface_title: z.literal(64), surface_cwd: z.literal(128), signal_id: z.literal(64),
+  signal_title: z.literal(160), signal_detail: z.literal(500), signal_occurred_at: z.literal(40),
   launch_environment_value: z.literal(4096),
 })
 export const NativeModelLimitsSchema = z.strictObject({
   workspaces: z.literal(16), labels_per_workspace: z.literal(16), repositories_per_workspace: z.literal(8),
   authoritative_pairs: z.literal(32), live_pair_identities: z.literal(32), reserved_orphan_tombstones: z.literal(32),
-  surfaces_per_pair: z.literal(16), commands: z.literal(64), attention_items: z.literal(64),
+  surfaces_per_pair: z.literal(16), commands: z.literal(64), signal_items: z.literal(64),
   string_bytes: NativeModelStringByteLimitsSchema,
 })
 export const NATIVE_MODEL_LIMITS = Object.freeze(NativeModelLimitsSchema.parse({
   workspaces: 16, labels_per_workspace: 16, repositories_per_workspace: 8, authoritative_pairs: 32,
-  live_pair_identities: 32, reserved_orphan_tombstones: 32, surfaces_per_pair: 16, commands: 64, attention_items: 64,
+  live_pair_identities: 32, reserved_orphan_tombstones: 32, surfaces_per_pair: 16, commands: 64, signal_items: 64,
   string_bytes: { workspace_name: 96, workspace_label: 64, repository_name: 96, command_id: 64, command_name: 96,
-    surface_command_id: 64, surface_title: 64, surface_cwd: 128, attention_id: 64, attention_title: 160,
-    attention_detail: 500, attention_occurred_at: 40, launch_environment_value: 4096 },
+  surface_command_id: 64, surface_title: 64, surface_cwd: 128, signal_id: 64, signal_title: 160,
+    signal_detail: 500, signal_occurred_at: 40, launch_environment_value: 4096 },
 }))
 
 export const ErrorCodeSchema = z.enum([
@@ -75,9 +75,8 @@ export type CapabilityAvailability = z.infer<typeof CapabilityAvailabilitySchema
 export const CapabilitiesSchema = z.strictObject({
   workspace_snapshots: CapabilityAvailabilitySchema,
   operations: CapabilityAvailabilitySchema,
-  attention_events: CapabilityAvailabilitySchema,
+  signals: CapabilityAvailabilitySchema,
   native_launch_resolution: CapabilityAvailabilitySchema,
-  structured_attention: CapabilityAvailabilitySchema,
 })
 export type Capabilities = z.infer<typeof CapabilitiesSchema>
 export const ServiceLimitsSchema = z.strictObject({
@@ -183,23 +182,28 @@ export const NativeLaunchResolutionSchema = z.discriminatedUnion("resolved", [
 ])
 export type NativeLaunchResolution = z.infer<typeof NativeLaunchResolutionSchema>
 
-export const AttentionStateSchema = z.enum(["working", "waiting", "completed", "failed", "idle"])
-export const StructuredAttentionEventSchema = z.strictObject({
-  id: AttentionIdSchema,
-  state: AttentionStateSchema,
-  workspace_id: EntityIdSchema,
-  repository_id: EntityIdSchema.optional(),
-  surface_id: EntityIdSchema.optional(),
-  source: z.enum(["claude", "copilot", "codex", "opencode", "other"]),
-  title: z.string().min(1).max(160),
-  detail: z.string().max(500).optional(),
-  occurred_at: TimestampSchema,
-  journal_sequence: CursorSchema,
-}).refine((attention) => attention.surface_id === undefined || attention.repository_id !== undefined, {
-  message: "surface-scoped attention requires a repository identity",
+export const SignalActivityStateSchema = z.enum(["working", "waiting", "completed", "failed", "idle"])
+export const SignalSourceSchema = z.enum(["claude", "copilot", "codex", "opencode", "automation", "acp", "user", "other"])
+const SignalCommon = {
+  version: z.literal(1), id: SignalIdSchema, source: SignalSourceSchema, workspace_id: EntityIdSchema,
+  repository_id: EntityIdSchema.optional(), surface_id: EntityIdSchema.optional(), session_id: z.string().min(1).max(160).optional(),
+  title: utf8BoundedString(160, 1).optional(), detail: utf8BoundedString(500).optional(), occurred_at: TimestampSchema,
+}
+export const ActivitySignalSchema = z.strictObject({
+  ...SignalCommon, kind: z.literal("activity"), surface_id: EntityIdSchema, session_id: utf8BoundedString(160, 1),
+  state: SignalActivityStateSchema, title: utf8BoundedString(160, 1).optional(),
+}).refine((signal) => signal.repository_id !== undefined, { message: "surface-scoped activity requires a repository identity" })
+export const NotificationSignalSchema = z.strictObject({
+  ...SignalCommon, kind: z.literal("notification"), title: utf8BoundedString(160, 1),
+  state: z.never().optional(),
 })
-export type StructuredAttentionEvent = z.infer<typeof StructuredAttentionEventSchema>
-
+export const SignalSchema = z.discriminatedUnion("kind", [ActivitySignalSchema, NotificationSignalSchema])
+export type ActivitySignal = z.infer<typeof ActivitySignalSchema>
+export type NotificationSignal = z.infer<typeof NotificationSignalSchema>
+export type Signal = z.infer<typeof SignalSchema>
+export const SignalDismissalSchema = z.strictObject({ kind: z.literal("dismiss_signal"), signal_id: SignalIdSchema })
+export type SignalDismissal = z.infer<typeof SignalDismissalSchema>
+export const SIGNAL_MODEL_LIMITS = Object.freeze({ signal_items: 64, signal_id: 64, signal_title: 160, signal_detail: 500, signal_occurred_at: 40 })
 export const OperationStageSchema = z.enum(["accepted", "preparing", "executing", "rolling_back", "completed"])
 export const OperationStateSchema = z.enum(["accepted", "running", "succeeded", "failed", "cancelled"])
 export const OperationProgressSchema = z.strictObject({
@@ -228,10 +232,7 @@ export type ReplayGap = z.infer<typeof ReplayGapSchema>
 const EventBase = { protocol: ProtocolVersionSchema, sequence: CursorSchema, timestamp: TimestampSchema }
 export const ServiceEventSchema = z.discriminatedUnion("type", [
   z.strictObject({ ...EventBase, type: z.literal("operation"), operation: OperationSchema }),
-  z.strictObject({ ...EventBase, type: z.literal("attention"), attention: z.union([
-    z.strictObject({ workspace_id: EntityIdSchema, code: z.string().min(1), message: z.string().min(1) }),
-    StructuredAttentionEventSchema,
-  ]) }),
+  z.strictObject({ ...EventBase, type: z.literal("signal"), signal: z.union([SignalSchema, SignalDismissalSchema]) }),
   z.strictObject({ ...EventBase, type: z.literal("control"), control: z.discriminatedUnion("kind", [
     z.strictObject({ kind: z.literal("heartbeat") }),
     z.strictObject({ kind: z.literal("replay_gap"), gap: ReplayGapSchema }),

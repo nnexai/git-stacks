@@ -4,7 +4,7 @@ import { join } from "path"
 import {
   NativeLaunchResolutionRequestSchema,
   NativeLaunchResolutionSchema,
-  StructuredAttentionEventSchema,
+  SignalSchema,
   DiscoveryResponseSchema,
   ErrorCodeSchema,
   ErrorEnvelopeSchema,
@@ -71,11 +71,11 @@ describe("service v1 contract", () => {
     expect(() => NativeLaunchResolutionSchema.parse({ ...resolution, launch: { ...resolution.launch, references: { TOKEN: "secret://token" } } })).toThrow()
   })
 
-  test("validates all structured attention states and identity nesting", () => {
+  test("validates activity states and strict signal identity nesting", () => {
     for (const state of ["working", "waiting", "completed", "failed", "idle"] as const) {
-      expect(StructuredAttentionEventSchema.parse({ id: `att_0123456789abcde${state.length}`, state, workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", source: "claude", title: state, occurred_at: "2026-07-11T00:00:00.000Z", journal_sequence: "1" }).state).toBe(state)
+      expect(SignalSchema.parse({ version: 1, kind: "activity", id: `sig_0123456789abcde${state.length}`, state, workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012346", session_id: "session-a", source: "claude", title: state, occurred_at: "2026-07-11T00:00:00.000Z" }).state).toBe(state)
     }
-    expect(() => StructuredAttentionEventSchema.parse({ id: "att_0123456789abcdef", state: "waiting", workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", source: "claude", title: "question", occurred_at: "2026-07-11T00:00:00.000Z", journal_sequence: "1" })).toThrow()
+    expect(() => SignalSchema.parse({ version: 1, kind: "activity", id: "sig_0123456789abcdef", state: "waiting", workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", session_id: "session-a", source: "claude", title: "question", occurred_at: "2026-07-11T00:00:00.000Z" })).toThrow()
   })
 
   test("locks workspace creation sources and native capacity", () => {

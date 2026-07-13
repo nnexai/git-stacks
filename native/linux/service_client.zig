@@ -26,7 +26,7 @@ pub const ServiceAccess = struct {
     }
 };
 pub const Snapshot = struct { revision: u64, sequence: u64, workspace_id: [36]u8 };
-pub const Event = struct { sequence: u64, kind: enum { attention, operation, heartbeat } };
+pub const Event = struct { sequence: u64, kind: enum { signal, operation, heartbeat } };
 pub const Outcome = union(enum) { none, snapshot: Snapshot, event: Event, duplicate, gap_refresh, incompatible, failure: []const u8, launch: Launch };
 
 pub const Launch = struct {
@@ -369,10 +369,10 @@ fn validDiscovery(body: []const u8) bool {
     if (d != .object or !exactKeys(d.object, &.{ "service_version", "capabilities", "limits" }) or (string(d.object, "service_version") orelse "").len == 0) return false;
     const caps = d.object.get("capabilities") orelse return false;
     const limits = d.object.get("limits") orelse return false;
-    if (caps != .object or caps.object.count() != 5 or limits != .object or !exactKeys(limits.object, &.{ "request_body_bytes", "subscriber_events", "subscriber_bytes", "native_model" })) return false;
+    if (caps != .object or !exactKeys(caps.object, &.{ "workspace_snapshots", "operations", "signals", "native_launch_resolution" }) or limits != .object or !exactKeys(limits.object, &.{ "request_body_bytes", "subscriber_events", "subscriber_bytes", "native_model" })) return false;
     const native = limits.object.get("native_model") orelse return false;
-    if (native != .object or !exactKeys(native.object, &.{ "workspaces", "labels_per_workspace", "repositories_per_workspace", "authoritative_pairs", "live_pair_identities", "reserved_orphan_tombstones", "surfaces_per_pair", "commands", "attention_items", "string_bytes" })) return false;
-    const expected = [_]struct { []const u8, i64 }{ .{ "workspaces", 16 }, .{ "labels_per_workspace", 16 }, .{ "repositories_per_workspace", 8 }, .{ "authoritative_pairs", 32 }, .{ "live_pair_identities", 32 }, .{ "reserved_orphan_tombstones", 32 }, .{ "surfaces_per_pair", 16 }, .{ "commands", 64 }, .{ "attention_items", 64 } };
+    if (native != .object or !exactKeys(native.object, &.{ "workspaces", "labels_per_workspace", "repositories_per_workspace", "authoritative_pairs", "live_pair_identities", "reserved_orphan_tombstones", "surfaces_per_pair", "commands", "signal_items", "string_bytes" })) return false;
+    const expected = [_]struct { []const u8, i64 }{ .{ "workspaces", 16 }, .{ "labels_per_workspace", 16 }, .{ "repositories_per_workspace", 8 }, .{ "authoritative_pairs", 32 }, .{ "live_pair_identities", 32 }, .{ "reserved_orphan_tombstones", 32 }, .{ "surfaces_per_pair", 16 }, .{ "commands", 64 }, .{ "signal_items", 64 } };
     for (expected) |pair| { const value = native.object.get(pair[0]) orelse return false; if (value != .integer or value.integer != pair[1]) return false; }
     const string_bytes = native.object.get("string_bytes") orelse return false;
     return string_bytes == .object;
@@ -400,9 +400,9 @@ fn decodeEvent(sse_id: u64, body: []const u8) !Event {
     const seq = uintString(o, "sequence") orelse return error.Invalid;
     if (seq != sse_id or !std.mem.eql(u8, string(o, "protocol") orelse return error.Invalid, "v1")) return error.Invalid;
     const typ = string(o, "type") orelse return error.Invalid;
-    if (std.mem.eql(u8, typ, "attention")) {
-        if (o.get("attention") == null) return error.Invalid;
-        return .{ .sequence = seq, .kind = .attention };
+    if (std.mem.eql(u8, typ, "signal")) {
+        if (o.get("signal") == null) return error.Invalid;
+        return .{ .sequence = seq, .kind = .signal };
     }
     if (std.mem.eql(u8, typ, "operation")) {
         if (o.get("operation") == null) return error.Invalid;
@@ -551,7 +551,7 @@ fn aggregateState(body: []const u8) !model.State {
     return state;
 }
 
-fn attentionKey(source: []const u8) model.Id {
+fn signalKey(source: []const u8) model.Id {
     var digest: [32]u8 = undefined;
     std.crypto.hash.sha2.Sha256.hash(source, &digest, .{});
     const hex = std.fmt.bytesToHex(digest[0..16], .lower);
@@ -573,37 +573,41 @@ fn decodeReducerEvent(sequence: u64, body: []const u8, revision: u64) !reducer.A
     if (parsed.value != .object) return error.Invalid;
     const root = parsed.value.object;
     const typ = string(root, "type") orelse return error.Invalid;
-    if (!std.mem.eql(u8, typ, "attention")) return .{ .event = .{ .revision = revision, .sequence = sequence } };
-    const value = root.get("attention") orelse return error.Invalid;
+    if (!std.mem.eql(u8, typ, "signal")) return .{ .event = .{ .revision = revision, .sequence = sequence } };
+    const value = root.get("signal") orelse return error.Invalid;
     if (value != .object) return error.Invalid;
     const a = value.object;
-    // `message send` deliberately retains the additive legacy attention
-    // envelope. It is still a first-class unread workspace notification.
-    if (a.get("id") == null) {
-        const wid = string(a, "workspace_id") orelse return error.Invalid;
-        const code = string(a, "code") orelse return error.Invalid;
-        const message = string(a, "message") orelse return error.Invalid;
-        if (!uuid(wid) or code.len == 0 or message.len == 0) return error.Invalid;
-        var source_buffer: [96]u8 = undefined;
-        const source = std.fmt.bufPrint(&source_buffer, "legacy:{d}:{s}", .{ sequence, code }) catch return error.Invalid;
-        var item: model.Attention = .{ .id = attentionKey(source), .workspace_id = undefined, .status = .waiting };
-        @memcpy(&item.workspace_id, wid);
-        return .{ .attention_received = item };
+    if (std.mem.eql(u8, string(a, "kind") orelse "", "dismiss_signal")) {
+        const dismissed = string(a, "signal_id") orelse return error.Invalid;
+        if (!prefixed(dismissed, "sig_") or dismissed.len > 64) return error.Invalid;
+        var action: reducer.Action = .{ .signal_dismissed = .{ .signal_id = [_]u8{0} ** 64, .signal_id_len = @intCast(dismissed.len) } };
+        @memcpy(action.signal_dismissed.signal_id[0..dismissed.len], dismissed);
+        return action;
     }
     const aid = string(a, "id") orelse return error.Invalid;
-    if (!prefixed(aid, "att_") or aid.len > 64) return error.Invalid;
+    if (!prefixed(aid, "sig_") or aid.len > 64) return error.Invalid;
     const wid = string(a, "workspace_id") orelse return error.Invalid;
     if (!uuid(wid)) return error.Invalid;
-    const status = string(a, "state") orelse return error.Invalid;
+    const status = string(a, "state") orelse if (std.mem.eql(u8, string(a, "kind") orelse "", "notification")) "waiting" else return error.Invalid;
     const source = string(a, "source") orelse return error.Invalid;
     const title = string(a, "title") orelse return error.Invalid;
     const occurred = string(a, "occurred_at") orelse return error.Invalid;
-    const journal = uintString(a, "journal_sequence") orelse return error.Invalid;
-    if (journal != sequence or title.len == 0 or title.len > 160 or occurred.len < 20 or !(std.mem.eql(u8, source, "claude") or std.mem.eql(u8, source, "copilot") or std.mem.eql(u8, source, "codex") or std.mem.eql(u8, source, "opencode") or std.mem.eql(u8, source, "other"))) return error.Invalid;
-    var item: model.Attention = .{ .id = attentionKey(aid), .workspace_id = undefined, .status = if (std.mem.eql(u8, status, "failed")) .failed else if (std.mem.eql(u8, status, "waiting")) .waiting else if (std.mem.eql(u8, status, "completed")) .completed else if (std.mem.eql(u8, status, "working")) .working else if (std.mem.eql(u8, status, "idle")) .idle else return error.Invalid };
-    item.provider = if (std.mem.eql(u8, source, "claude")) .claude else if (std.mem.eql(u8, source, "copilot")) .copilot else if (std.mem.eql(u8, source, "codex")) .codex else if (std.mem.eql(u8, source, "opencode")) .opencode else .other;
-    @memcpy(item.service_id[0..aid.len], aid);
-    item.service_id_len = @intCast(aid.len);
+    const journal = uintString(a, "journal_sequence") orelse sequence;
+    if (journal != sequence or title.len == 0 or title.len > 160 or !std.unicode.utf8ValidateSlice(title) or occurred.len < 20 or occurred.len > 40 or !std.unicode.utf8ValidateSlice(occurred) or !(std.mem.eql(u8, source, "claude") or std.mem.eql(u8, source, "copilot") or std.mem.eql(u8, source, "codex") or std.mem.eql(u8, source, "opencode") or std.mem.eql(u8, source, "automation") or std.mem.eql(u8, source, "acp") or std.mem.eql(u8, source, "user") or std.mem.eql(u8, source, "other"))) return error.Invalid;
+    const signal_kind = string(a, "kind") orelse return error.Invalid;
+    var item: model.Signal = .{ .id = signalKey(aid), .workspace_id = undefined, .kind = if (std.mem.eql(u8, signal_kind, "notification")) .notification else if (std.mem.eql(u8, signal_kind, "activity")) .activity else return error.Invalid, .status = if (std.mem.eql(u8, status, "failed")) .failed else if (std.mem.eql(u8, status, "waiting")) .waiting else if (std.mem.eql(u8, status, "completed")) .completed else if (std.mem.eql(u8, status, "working")) .working else if (std.mem.eql(u8, status, "idle")) .idle else return error.Invalid };
+    item.provider = if (std.mem.eql(u8, source, "claude")) .claude else if (std.mem.eql(u8, source, "copilot")) .copilot else if (std.mem.eql(u8, source, "codex")) .codex else if (std.mem.eql(u8, source, "opencode")) .opencode else if (std.mem.eql(u8, source, "automation")) .automation else if (std.mem.eql(u8, source, "acp")) .acp else if (std.mem.eql(u8, source, "user")) .user else .other;
+    @memcpy(item.signal_id[0..aid.len], aid);
+    item.signal_id_len = @intCast(aid.len);
+    @memcpy(item.title[0..title.len], title);
+    item.title_len = @intCast(title.len);
+    if (a.get("detail")) |detail| {
+        if (detail != .string or detail.string.len > 500 or !std.unicode.utf8ValidateSlice(detail.string)) return error.Invalid;
+        @memcpy(item.detail[0..detail.string.len], detail.string);
+        item.detail_len = @intCast(detail.string.len);
+    }
+    @memcpy(item.occurred_at[0..occurred.len], occurred);
+    item.occurred_at_len = @intCast(occurred.len);
     @memcpy(&item.workspace_id, wid);
     if (a.get("repository_id")) |r| {
         if (r != .string or !uuid(r.string)) return error.Invalid;
@@ -617,5 +621,5 @@ fn decodeReducerEvent(sequence: u64, body: []const u8, revision: u64) !reducer.A
         @memcpy(&sid, s.string);
         item.surface_id = sid;
     }
-    return .{ .attention_received = item };
+    return .{ .signal_received = item };
 }

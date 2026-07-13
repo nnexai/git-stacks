@@ -2,7 +2,6 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, re
 import { dirname, join } from "node:path"
 import { z } from "zod"
 import { WS_CONFIG_DIR } from "../lib/paths"
-import { configureAttentionPublication } from "../lib/messages"
 import { provisionOfficialClient, readOfficialClientCredential } from "../lib/service/credentials"
 import { createSnapshotBuilder } from "../lib/service/snapshot"
 import { EventJournal, publishOperationEvent } from "../lib/service/event-journal"
@@ -143,13 +142,6 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     const snapshot = options.snapshot ?? createSnapshotBuilder()
     const journal = new EventJournal({ root: serviceRoot, snapshotRevision: () => snapshot.currentRevision() })
     const broker = new EventBroker(journal)
-    const disposeAttentionPublication = configureAttentionPublication({
-      workspaceId: async (workspace) => (await snapshot.buildWorkspace(workspace)).workspace.id,
-      publish: async (attention) => {
-        const event = await journal.appendAttention(attention)
-        broker.publish(event)
-      },
-    })
     const active = new Set<string>()
     const monitor = createWorkspaceChangeMonitor({
       configRoot: dirname(serviceRoot),
@@ -181,10 +173,15 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       mutations: { "workspace.open": mutationAdapters["workspace.open"], "workspace.close": mutationAdapters["workspace.close"] },
       workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
       workspaceCreationCatalog: options.workspaceCreationCatalog ?? getWorkspaceCreationCatalog,
-      publishAttention: async (attention) => {
-        const event = await journal.appendAttention(attention)
+      publishSignal: async (signal) => {
+        const event = await journal.appendSignal(signal)
         broker.publish(event)
       },
+      dismissSignal: async (dismissal) => {
+        const event = await journal.appendSignalDismissal(dismissal)
+        broker.publish(event)
+      },
+      signalProjection: () => journal.signalProjection(),
       onConnectionChange: (count) => lifecycle.setConnectedClients(count),
       onActivity: () => lifecycle.touch(),
     })
@@ -201,7 +198,6 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       if (stopped) return
       stopped = true
       lifecycle.dispose()
-      disposeAttentionPublication()
       try {
         await running.stop()
       } finally {

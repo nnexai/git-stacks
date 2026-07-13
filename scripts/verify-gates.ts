@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, readFileSync } from "fs"
+import { existsSync, readFileSync, readdirSync, statSync } from "fs"
 import { join } from "path"
 import { Command } from "commander"
 import { E2E_INVENTORY, type E2EInventoryItem } from "../tests/e2e-inventory"
@@ -29,6 +29,12 @@ export type CoverageSentinelProblem = {
   problem: "missing" | "zero hits" | "outside source tree"
 }
 
+export type ForbiddenLegacySymbol = {
+  path: string
+  line: number
+  symbol: string
+}
+
 export type VerifyGateReport = {
   ok: boolean
   inventoryDrift: {
@@ -38,6 +44,7 @@ export type VerifyGateReport = {
   missingMappedTests: MissingMappedTest[]
   coverageArtifacts: CoverageArtifactProblem[]
   coverageSentinels: CoverageSentinelProblem[]
+  forbiddenLegacySymbols: ForbiddenLegacySymbol[]
   completionCoverage: CompletionCoverageReport
   functionalReadiness: FunctionalCoverageReadinessReport
 }
@@ -56,8 +63,27 @@ const JSON_COVERAGE_ARTIFACTS = [
   ".coverage/coverage-summary.json",
 ] as const
 const COVERAGE_SENTINELS = [
-  "src/lib/messages.ts",
+  "src/lib/service/signal-state.ts",
   "src/tui/dashboard/ActionMenu.tsx",
+] as const
+const LEGACY_SCAN_ROOTS = ["src", "native", "docs", ".github/hooks", ".claude/settings.json", "README.md"] as const
+const LEGACY_SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".zig", ".c", ".h", ".json", ".md"])
+const FORBIDDEN_LEGACY_SYMBOLS = [
+  "service attention",
+  "/v1/attention",
+  "StructuredAttentionEvent",
+  "appendAttention",
+  "attention_received",
+  "attention_items",
+  "GIT_STACKS_ATTENTION",
+  "git-stacks-attention",
+  "message send",
+  "message list",
+  "message clear",
+  "MESSAGES_DIR",
+  "src/lib/messages",
+  "src/commands/message",
+  "/tmp/git-stacks.sock",
 ] as const
 
 function buildProgram(): Command {
@@ -247,6 +273,32 @@ function collectCoverageSentinelProblems(root: string): CoverageSentinelProblem[
   return problems.sort((a, b) => a.path.localeCompare(b.path))
 }
 
+function collectFiles(path: string): string[] {
+  if (!existsSync(path)) return []
+  if (!statSync(path).isDirectory()) return [path]
+  return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
+    if (entry.name === ".zig-cache" || entry.name === "zig-out" || entry.name === "zig-pkg") return []
+    return collectFiles(join(path, entry.name))
+  })
+}
+
+function collectForbiddenLegacySymbols(root: string): ForbiddenLegacySymbol[] {
+  const findings: ForbiddenLegacySymbol[] = []
+  for (const scanRoot of LEGACY_SCAN_ROOTS) {
+    for (const fullPath of collectFiles(join(root, scanRoot))) {
+      const extension = fullPath.slice(fullPath.lastIndexOf("."))
+      if (!LEGACY_SCAN_EXTENSIONS.has(extension)) continue
+      const relativePath = fullPath.slice(root.length + 1)
+      for (const [lineIndex, line] of readFileSync(fullPath, "utf8").split("\n").entries()) {
+        for (const symbol of FORBIDDEN_LEGACY_SYMBOLS) {
+          if (line.includes(symbol)) findings.push({ path: relativePath, line: lineIndex + 1, symbol })
+        }
+      }
+    }
+  }
+  return findings.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line || a.symbol.localeCompare(b.symbol))
+}
+
 export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGateReport {
   const root = options.root ?? ROOT
   const inventory = options.inventory ?? E2E_INVENTORY
@@ -257,6 +309,7 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
   const missingMappedTests = collectMissingMappedTests(root, inventory)
   const coverageArtifacts = collectCoverageArtifactProblems(root)
   const coverageSentinels = collectCoverageSentinelProblems(root)
+  const forbiddenLegacySymbols = collectForbiddenLegacySymbols(root)
   const completionCoverage = options.completionCoverage ?? auditCompletionCoverage(buildProgram())
   const functionalReadiness = collectFunctionalCoverageReadiness({
     root,
@@ -270,6 +323,7 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
       missingMappedTests.length === 0 &&
       coverageArtifacts.length === 0 &&
       coverageSentinels.length === 0 &&
+      forbiddenLegacySymbols.length === 0 &&
       completionCoverage.ok &&
       functionalReadiness.ok,
     inventoryDrift: {
@@ -279,6 +333,7 @@ export function collectVerifyGateReport(options: CollectOptions = {}): VerifyGat
     missingMappedTests,
     coverageArtifacts,
     coverageSentinels,
+    forbiddenLegacySymbols,
     completionCoverage,
     functionalReadiness,
   }
@@ -323,6 +378,13 @@ export function formatVerifyGateReport(report: VerifyGateReport): string {
     lines.push("", "Coverage sentinel problems:")
     for (const sentinel of report.coverageSentinels) {
       lines.push(`  - ${sentinel.path}: ${sentinel.problem}`)
+    }
+  }
+
+  if (report.forbiddenLegacySymbols.length > 0) {
+    lines.push("", "Forbidden legacy signal/message symbols:")
+    for (const finding of report.forbiddenLegacySymbols) {
+      lines.push(`  - ${finding.path}:${finding.line}: ${finding.symbol}`)
     }
   }
 

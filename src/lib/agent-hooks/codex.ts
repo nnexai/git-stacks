@@ -1,13 +1,13 @@
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "fs"
 import { dirname, join } from "path"
-import { structuredAttentionCommand, type AgentHookPlugin, type HookEntry, type HookHandler, type MatcherGroup } from "./types"
+import { signalPublishCommand, type AgentHookPlugin, type HookEntry, type HookHandler, type MatcherGroup } from "./types"
 
 type CodexHooksDocument = Record<string, unknown> & { hooks?: Record<string, MatcherGroup[]> }
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
 const isHandler = (value: unknown): value is HookHandler => isRecord(value) && value.type === "command" && typeof value.command === "string"
 const isGroup = (value: unknown): value is MatcherGroup => isRecord(value) && (value.matcher === undefined || typeof value.matcher === "string") && Array.isArray(value.hooks) && value.hooks.every(isHandler)
-const isCodexPublisher = (handler: HookHandler): boolean => handler.command.includes("service attention publish") && handler.command.includes("--source codex")
+const isCodexPublisher = (handler: HookHandler): boolean => handler.command.includes("git-stacks service") && handler.command.includes(" publish") && handler.command.includes("--source codex")
 
 function pathFor(repoPath: string): string { return join(repoPath, ".codex", "hooks.json") }
 
@@ -58,7 +58,7 @@ export const codexPlugin: AgentHookPlugin = {
   id: "codex",
   label: "Codex",
   generateHookEntries(workspaceName: string): HookEntry[] {
-    const command = (state: "working" | "waiting" | "completed") => structuredAttentionCommand("codex", state, workspaceName, { bestEffort: true })
+    const command = (state: "working" | "waiting" | "completed") => signalPublishCommand("codex", state, workspaceName, { bestEffort: true })
     return [
       { event: "UserPromptSubmit", command: command("working") },
       { event: "PermissionRequest", command: command("waiting") },

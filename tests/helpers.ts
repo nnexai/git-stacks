@@ -260,7 +260,6 @@ export function createConfigFixture(baseDir: string, workspaceRoot = join(baseDi
   const configDir = join(baseDir, "config")
   mkdirSync(join(configDir, "workspaces"), { recursive: true })
   mkdirSync(join(configDir, "templates"), { recursive: true })
-  mkdirSync(join(configDir, "messages"), { recursive: true })
   mkdirSync(join(configDir, "notes"), { recursive: true })
   mkdirSync(workspaceRoot, { recursive: true })
   writeFileSync(join(configDir, "config.yml"), `workspace_root: ${workspaceRoot}\n`)
@@ -560,7 +559,6 @@ export function useIsolatedConfig(prefix = "isolated-config"): { configDir: stri
   const configDir = makeTmpDir(prefix)
   mkdirSync(join(configDir, "workspaces"), { recursive: true })
   mkdirSync(join(configDir, "templates"), { recursive: true })
-  mkdirSync(join(configDir, "messages"), { recursive: true })
   mkdirSync(join(configDir, "notes"), { recursive: true })
 
   mock.module("@/lib/paths", () => ({
@@ -571,7 +569,6 @@ export function useIsolatedConfig(prefix = "isolated-config"): { configDir: stri
     GLOBAL_CONFIG_FILE: join(configDir, "config.yml"),
     REGISTRY_FILE: join(configDir, "registry.yml"),
     TEMPLATES_DIR: join(configDir, "templates"),
-    MESSAGES_DIR: join(configDir, "messages"),
     NOTES_DIR: join(configDir, "notes"),
     PORTS_LOCK_FILE: join(configDir, ".ports.lock"),
     getMainDir: (wsRoot: string) => join(wsRoot, "main"),
@@ -787,7 +784,6 @@ export function makePathsMock(overrides: Record<string, unknown> = {}): Record<s
     GLOBAL_CONFIG_FILE: `${testHome}/.config/git-stacks/config.yml`,
     REGISTRY_FILE: `${testHome}/.config/git-stacks/registry.yml`,
     TEMPLATES_DIR: `${testHome}/.config/git-stacks/templates`,
-    MESSAGES_DIR: `${testHome}/.config/git-stacks/messages`,
     NOTES_DIR: `${testHome}/.config/git-stacks/notes`,
     PORTS_LOCK_FILE: `${testHome}/.config/git-stacks/.ports.lock`,
     getMainDir: mock((wsRoot: string) => `${wsRoot}/main`),
@@ -928,10 +924,3 @@ export const {
   editGlobalConfigYaml: realEditGlobalConfigYaml,
   editRegistryYaml: realEditRegistryYaml,
 } = await import("@/lib/workspace-yaml") as any
-
-export const {
-  appendMessage: realAppendMessage,
-  listMessages: realListMessages,
-  clearMessages: realClearMessages,
-  pushToSocket: realPushToSocket,
-} = await import("@/lib/messages") as any

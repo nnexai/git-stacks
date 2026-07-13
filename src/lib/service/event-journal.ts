@@ -1,6 +1,7 @@
 import { mkdir, open, readFile, rename, stat, truncate, unlink, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { OperationSchema, ServiceEventSchema, StructuredAttentionEventSchema, type Operation, type ServiceEvent, type StructuredAttentionEvent } from "./contract"
+import { OperationSchema, ServiceEventSchema, SignalDismissalSchema, SignalSchema, type Operation, type ServiceEvent, type Signal, type SignalDismissal } from "./contract"
+import { SignalState } from "./signal-state"
 
 export const DEFAULT_EVENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1_000
 export const DEFAULT_EVENT_MAX_BYTES = 64 * 1024 * 1024
@@ -15,7 +16,7 @@ export interface EventJournalOptions {
 }
 
 export type OperationEventPayload = Operation
-export type AttentionEventPayload = { workspace_id: string; code: string; message: string } | Omit<StructuredAttentionEvent, "journal_sequence">
+export type SignalEventPayload = Signal
 export type SnapshotInvalidationEventPayload = { kind: "snapshot_invalidated"; revision: string }
 export type ReplayResult =
   | { kind: "events"; events: ServiceEvent[] }
@@ -72,18 +73,28 @@ export class EventJournal {
     const parts = raw.split("\n")
     if (!finalNewline) parts.pop()
     const records: ServiceEvent[] = []
+    let highestObservedSequence = 0n
+    let removedLegacyRecords = false
     for (const [index, line] of parts.entries()) {
       if (!line) continue
       let value: unknown
       try { value = JSON.parse(line) } catch { throw new Error(`corrupt journal record at line ${index + 1}`) }
+      if (typeof value === "object" && value !== null && "type" in value && value.type === "attention") {
+        if (!("sequence" in value) || typeof value.sequence !== "string") throw new Error(`corrupt journal record at line ${index + 1}`)
+        highestObservedSequence = highestObservedSequence > cursor(value.sequence) ? highestObservedSequence : cursor(value.sequence)
+        removedLegacyRecords = true
+        continue
+      }
       const parsed = ServiceEventSchema.safeParse(value)
       if (!parsed.success) throw new Error(`corrupt journal record at line ${index + 1}: ${parsed.error.message}`)
       if (records.length && cursor(parsed.data.sequence) <= cursor(records.at(-1)!.sequence)) throw new Error(`corrupt journal ordering at line ${index + 1}`)
+      highestObservedSequence = highestObservedSequence > cursor(parsed.data.sequence) ? highestObservedSequence : cursor(parsed.data.sequence)
       records.push(parsed.data)
     }
-    if (!finalNewline) await truncate(this.path, raw.lastIndexOf("\n") + 1)
+    if (removedLegacyRecords) await writeFile(this.path, records.map((record) => `${JSON.stringify(record)}\n`).join(""), { mode: 0o600 })
+    else if (!finalNewline) await truncate(this.path, raw.lastIndexOf("\n") + 1)
     this.records = records
-    this.nextSequence = records.length ? cursor(records.at(-1)!.sequence) + 1n : 1n
+    this.nextSequence = highestObservedSequence + 1n
     this.initialized = true
   }
 
@@ -107,9 +118,29 @@ export class EventJournal {
     return this.append((sequence, timestamp) => ({ protocol: "v1", sequence, timestamp, type: "operation", operation: validated }))
   }
 
-  appendAttention(attention: AttentionEventPayload): Promise<ServiceEvent> {
-    return this.append((sequence, timestamp) => ({ protocol: "v1", sequence, timestamp, type: "attention", attention:
-      "state" in attention ? StructuredAttentionEventSchema.parse({ ...attention, journal_sequence: sequence }) : attention }))
+  appendSignal(signal: SignalEventPayload): Promise<ServiceEvent> {
+    const validated = SignalSchema.parse(signal)
+    return this.append((sequence, timestamp) => ({ protocol: "v1", sequence, timestamp, type: "signal", signal: validated }))
+  }
+
+  appendSignalDismissal(dismissal: SignalDismissal): Promise<ServiceEvent> {
+    const validated = SignalDismissalSchema.parse(dismissal)
+    return this.append((sequence, timestamp) => ({ protocol: "v1", sequence, timestamp, type: "signal", signal: validated }))
+  }
+
+  async signalProjection(): Promise<{ signals: Signal[]; dismissed: string[]; sequence: string }> {
+    return this.serialized(async () => {
+      await this.initialize()
+      const state = new SignalState()
+      for (const event of this.records) {
+        if (event.type !== "signal") continue
+        if (event.signal.kind === "dismiss_signal") state.apply({ sequence: event.sequence, dismissal: event.signal })
+        else state.apply({ sequence: event.sequence, signal: event.signal })
+      }
+      const projection = state.projection()
+      const signals = projection.signals.map(({ journal_sequence: _, ...signal }) => signal)
+      return { signals, dismissed: projection.dismissed, sequence: (this.nextSequence - 1n).toString() }
+    })
   }
 
   appendSnapshotInvalidated(revision: string): Promise<ServiceEvent> {

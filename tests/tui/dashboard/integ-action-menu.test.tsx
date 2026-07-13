@@ -135,6 +135,7 @@ mock.module("../../../src/lib/workspace-command", () => ({
     const names = Object.keys(workspace.commands ?? {}).sort()
     return opts?.all ? names : names.filter(name => !name.startsWith("pre") && !name.startsWith("post"))
   }),
+  planManualCommand: mock(() => []),
   runManualCommand: runManualCommandMock,
 }))
 

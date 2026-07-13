@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test"
 import { testRender } from "@opentui/solid"
+const compactFrame = (frame: string) => frame.split("\n").map((line) => line.trimEnd()).join("\n").trimEnd()
 
 mock.module("../../../../src/lib/config", () => ({
   readGlobalConfig: mock(() => ({ workspace_root: "/tmp/detail-snap", integrations: { vscode: { enabled: true, cmd: "code" } } })),
@@ -99,29 +100,29 @@ describe("WorkspaceDetail snapshots", () => {
 
   test("renders ordered detail sections with notes and file status", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[{ workspace: "operator-ws", text: "Build failed", from: "ci", timestamp: "2026-01-15T10:00:00Z" }]} tick={0} fileStatus={fileStatus as any} />,
+      () => <WorkspaceDetail entry={entry as any} signals={[{ version: 1, kind: "notification", id: "sig_1234567890123456", source: "automation", workspace_id: "118f47f4-5ab1-7c2d-8e90-123456789abc", title: "Build failed", occurred_at: "2026-01-15T10:00:00Z", unread: true }]} tick={0} fileStatus={fileStatus as any} />,
       { width: 100, height: 28, kittyKeyboard: true }
     )
     await renderOnce()
     await renderOnce()
     const frame = captureCharFrame()
-    expect(frame).toContain("Messages:")
+    expect(frame).toContain("Signals:")
     expect(frame).toContain("Files:")
     expect(frame).toContain(".env.local")
     expect(frame).toContain("Review file sync drift")
-    expect(frame).toMatchSnapshot()
+    expect(compactFrame(frame)).toMatchSnapshot()
   })
 
   test("renders scrolled long detail content", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} fileStatus={fileStatus as any} height={7} scrollOffset={18} />,
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} fileStatus={fileStatus as any} height={7} scrollOffset={18} />,
       { width: 100, height: 10, kittyKeyboard: true }
     )
     await renderOnce()
     await renderOnce()
     const frame = captureCharFrame()
     expect(frame).toContain("Notes:")
-    expect(frame).not.toContain("Messages:")
-    expect(frame).toMatchSnapshot()
+    expect(frame).not.toContain("Signals:")
+    expect(compactFrame(frame)).toMatchSnapshot()
   })
 })

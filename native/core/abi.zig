@@ -76,14 +76,19 @@ fn jsonBool(object: std.json.ObjectMap, key: []const u8, default: bool) ?bool {
     const value = object.get(key) orelse return default;
     return if (value == .bool) value.bool else null;
 }
-fn attentionStatus(value: std.json.Value) ?state_model.AttentionStatus {
+fn signalState(value: std.json.Value) ?state_model.SignalState {
     if (value != .string) return null;
-    inline for (std.meta.fields(state_model.AttentionStatus)) |field| if (std.mem.eql(u8, value.string, field.name)) return @enumFromInt(field.value);
+    inline for (std.meta.fields(state_model.SignalState)) |field| if (std.mem.eql(u8, value.string, field.name)) return @enumFromInt(field.value);
     return null;
 }
-fn attentionProvider(value: std.json.Value) ?state_model.AttentionProvider {
+fn signalSource(value: std.json.Value) ?state_model.SignalSource {
     if (value != .string) return null;
-    inline for (std.meta.fields(state_model.AttentionProvider)) |field| if (std.mem.eql(u8, value.string, field.name)) return @enumFromInt(field.value);
+    inline for (std.meta.fields(state_model.SignalSource)) |field| if (std.mem.eql(u8, value.string, field.name)) return @enumFromInt(field.value);
+    return null;
+}
+fn signalKind(value: std.json.Value) ?state_model.SignalKind {
+    if (value != .string) return null;
+    inline for (std.meta.fields(state_model.SignalKind)) |field| if (std.mem.eql(u8, value.string, field.name)) return @enumFromInt(field.value);
     return null;
 }
 fn copyString(comptime N: usize, target: *[N]u8, source: []const u8) ?usize {
@@ -96,21 +101,22 @@ fn lifecycle(value: std.json.Value) ?state_model.Lifecycle {
     inline for (std.meta.fields(state_model.Lifecycle)) |field| if (std.mem.eql(u8, value.string, field.name)) return @enumFromInt(field.value);
     return null;
 }
-fn parseAttention(object: std.json.ObjectMap) ?state_model.Attention {
-    var item: state_model.Attention = .{
+fn parseSignal(object: std.json.ObjectMap) ?state_model.Signal {
+    var item: state_model.Signal = .{
         .id = jsonId(object, "id") orelse return null,
         .workspace_id = jsonId(object, "workspace_id") orelse return null,
         .repository_id = if (object.get("repository_id")) |v| if (v == .null) null else jsonId(object, "repository_id") orelse return null else null,
         .surface_id = if (object.get("surface_id")) |v| if (v == .null) null else jsonId(object, "surface_id") orelse return null else null,
         .predecessor_surface_id = if (object.get("predecessor_surface_id")) |v| if (v == .null) null else jsonId(object, "predecessor_surface_id") orelse return null else null,
-        .status = attentionStatus(object.get("status") orelse return null) orelse return null,
+        .kind = signalKind(object.get("kind") orelse return null) orelse return null,
+        .status = signalState(object.get("status") orelse return null) orelse return null,
         .read = jsonBool(object, "read", false) orelse return null,
     };
-    if (object.get("service_id")) |v| {
+    if (object.get("signal_id")) |v| {
         if (v != .string) return null;
-        item.service_id_len = @intCast(copyString(64, &item.service_id, v.string) orelse return null);
+        item.signal_id_len = @intCast(copyString(64, &item.signal_id, v.string) orelse return null);
     }
-    if (object.get("provider")) |v| item.provider = attentionProvider(v) orelse return null;
+    if (object.get("provider")) |v| item.provider = signalSource(v) orelse return null;
     if (object.get("title")) |v| {
         if (v != .string) return null;
         item.title_len = @intCast(copyString(160, &item.title, v.string) orelse return null);
@@ -124,6 +130,13 @@ fn parseAttention(object: std.json.ObjectMap) ?state_model.Attention {
         item.occurred_at_len = @intCast(copyString(40, &item.occurred_at, v.string) orelse return null);
     }
     return item;
+}
+fn parseSignalDismissal(object: std.json.ObjectMap) ?reducer.Action {
+    const value = object.get("signal_id") orelse return null;
+    if (value != .string or value.string.len > 64 or !std.mem.startsWith(u8, value.string, "sig_")) return null;
+    var action: reducer.Action = .{ .signal_dismissed = .{ .signal_id = [_]u8{0} ** 64, .signal_id_len = @intCast(value.string.len) } };
+    @memcpy(action.signal_dismissed.signal_id[0..value.string.len], value.string);
+    return action;
 }
 fn parseSnapshot(object: std.json.ObjectMap) ?state_model.State {
     var state: state_model.State = .{ .connection = .ready, .has_snapshot = true };
@@ -178,12 +191,12 @@ fn parseSnapshot(object: std.json.ObjectMap) ?state_model.State {
         state.pairs[state.pair_count] = pair;
         state.pair_count += 1;
     }
-    if (object.get("attention")) |items| {
-        if (items != .array or items.array.items.len > state.attention.len) return null;
+    if (object.get("signals")) |items| {
+        if (items != .array or items.array.items.len > state.signals.len) return null;
         for (items.array.items) |entry| {
             if (entry != .object) return null;
-            state.attention[state.attention_count] = parseAttention(entry.object) orelse return null;
-            state.attention_count += 1;
+            state.signals[state.signal_count] = parseSignal(entry.object) orelse return null;
+            state.signal_count += 1;
         }
     }
     return state;
@@ -234,7 +247,7 @@ export fn gs_model_dispatch_v1(model: ?*Model, input: Bytes, out_json: ?*Bytes, 
     const kind = parsed.value.object.get("type") orelse return fail(invalid_json, "invalid_request", out_error);
     if (kind != .string) return fail(invalid_json, "invalid_request", out_error);
     const object = parsed.value.object;
-    const action: reducer.Action = if (std.mem.eql(u8, kind.string, "snapshot")) .{ .snapshot = parseSnapshot(object) orelse return fail(invalid_json, "invalid_request", out_error) } else if (std.mem.eql(u8, kind.string, "attention_received")) .{ .attention_received = parseAttention(object) orelse return fail(invalid_json, "invalid_request", out_error) } else if (std.mem.eql(u8, kind.string, "disconnected")) .disconnected else if (std.mem.eql(u8, kind.string, "unknown_optional")) .unknown_optional else if (std.mem.eql(u8, kind.string, "incompatible")) .incompatible else if (std.mem.eql(u8, kind.string, "capacity_exceeded")) .{ .capacity_exceeded = .{ .kind = blk: {
+    const action: reducer.Action = if (std.mem.eql(u8, kind.string, "snapshot")) .{ .snapshot = parseSnapshot(object) orelse return fail(invalid_json, "invalid_request", out_error) } else if (std.mem.eql(u8, kind.string, "signal_received")) .{ .signal_received = parseSignal(object) orelse return fail(invalid_json, "invalid_request", out_error) } else if (std.mem.eql(u8, kind.string, "signal_dismissed")) parseSignalDismissal(object) orelse return fail(invalid_json, "invalid_request", out_error) else if (std.mem.eql(u8, kind.string, "disconnected")) .disconnected else if (std.mem.eql(u8, kind.string, "unknown_optional")) .unknown_optional else if (std.mem.eql(u8, kind.string, "incompatible")) .incompatible else if (std.mem.eql(u8, kind.string, "capacity_exceeded")) .{ .capacity_exceeded = .{ .kind = blk: {
         const v = object.get("kind") orelse return fail(invalid_json, "invalid_request", out_error);
         if (v != .string) return fail(invalid_json, "invalid_request", out_error);
         inline for (std.meta.fields(state_model.CapacityKind)) |field| if (std.mem.eql(u8, v.string, field.name)) break :blk @enumFromInt(field.value);

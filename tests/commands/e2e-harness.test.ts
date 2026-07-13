@@ -81,7 +81,6 @@ describe("e2e harness", () => {
     expect(readFileSync(join(configDir, "registry.yml"), "utf8")).toBe("[]\n")
     expect(statSync(join(configDir, "workspaces")).isDirectory()).toBe(true)
     expect(statSync(join(configDir, "templates")).isDirectory()).toBe(true)
-    expect(statSync(join(configDir, "messages")).isDirectory()).toBe(true)
   })
 
   test("label add writes to the isolated workspace yaml", () => {

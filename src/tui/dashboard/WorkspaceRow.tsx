@@ -2,15 +2,15 @@
 import { createMemo } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import { StatusIndicator } from "./StatusIndicator"
-import { formatAge } from "./messageUtils"
+import { formatSignalAge, signalText } from "./signalUtils"
 import type { WorkspaceEntry } from "./types"
-import type { MessageRecord } from "../../lib/messages"
+import type { DashboardSignal } from "./hooks/useSignals"
 
 type Props = {
   entry: WorkspaceEntry
   focused: boolean
   selected: boolean
-  messages: MessageRecord[]
+  signals: DashboardSignal[]
   tick: number
   groupPrefix?: string
 }
@@ -100,18 +100,17 @@ export function WorkspaceRow(props: Props) {
     return text ? text.length + 2 : 0
   })
 
-  const messagePreview = createMemo(() => {
+  const signalPreview = createMemo(() => {
     void props.tick  // subscribe to tick for periodic time refresh
-    const msgs = props.messages
-    if (!msgs || msgs.length === 0) return null
-    const msg = msgs[0]  // most recent (newest-first from listMessages)
-    const age = formatAge(msg.timestamp)
-    const senderPrefix = msg.from ? `${msg.from}: ` : ""
+    const signals = props.signals
+    if (!signals || signals.length === 0) return null
+    const signal = signals[0]
+    const age = formatSignalAge(signal.occurred_at)
     // Remaining space after all fixed columns
     const fixedWidth = 9 + groupPrefixWidth() + nameWidth() + 2 + branchWidth() + labelsWidth() + countsWidth()
     const ageWidth = age.length + 2  // "  age" spacing
     const available = Math.max(10, dims().width - fixedWidth - ageWidth - 2) // -2 for "  " before msg
-    const text = senderPrefix + msg.text
+    const text = `${signal.source}: ${signalText(signal)}`
     const truncated = text.length > available ? text.slice(0, available - 1) + "\u2026" : text
     return { truncated, age }
   })
@@ -146,11 +145,11 @@ export function WorkspaceRow(props: Props) {
         <text fg="gray">{`  ${labelsText()}`}</text>
       )}
       <text fg="gray">{`  ${countsText()}`}</text>
-      <text fg={messagePreview() ? "white" : "gray"}>
-        {messagePreview() ? `  ${messagePreview()!.truncated}` : `  ${formatAge(ws().created)}`}
+      <text fg={signalPreview() ? "white" : "gray"}>
+        {signalPreview() ? `  ${signalPreview()!.truncated}` : `  ${formatSignalAge(ws().created)}`}
       </text>
       <text fg="yellow">
-        {messagePreview() ? `  ${messagePreview()!.age}` : ""}
+        {signalPreview() ? `  ${signalPreview()!.age}` : ""}
       </text>
     </box>
   )

@@ -39,8 +39,8 @@ async function publishUntilConnections(input: Awaited<ReturnType<typeof harness>
       protocol: "v1" as const,
       sequence: String(index + firstSequence),
       timestamp: new Date().toISOString(),
-      type: "attention" as const,
-      attention: { workspace_id: workspaceId, code: "message", message: `${index}:${"x".repeat(payloadBytes)}` },
+      type: "signal" as const,
+      signal: { version: 1 as const, kind: "notification" as const, id: `sig_${String(index + firstSequence).padStart(16, "0")}`, source: "automation" as const, workspace_id: workspaceId, title: `${index}:${"x".repeat(payloadBytes)}`, occurred_at: new Date().toISOString() },
     }
     input.broker.publish(event)
     const bridge = input.service.sseDiagnostics[0]
@@ -66,7 +66,7 @@ describe("real loopback SSE backpressure", () => {
     const client = provisionOfficialClient("healthy-client", { serviceRoot: input.root })
     const responsePending = fetch(new URL("/v1/events?cursor=0", input.service.url), { headers: { authorization: `Bearer ${client.token}` } })
     await Bun.sleep(20)
-    input.broker.publish({ protocol: "v1", sequence: "1", timestamp: new Date().toISOString(), type: "attention", attention: { workspace_id: workspaceId, code: "message", message: "ready" } })
+    input.broker.publish({ protocol: "v1", sequence: "1", timestamp: new Date().toISOString(), type: "signal", signal: { version: 1, kind: "notification", id: "sig_0000000000000001", source: "automation", workspace_id: workspaceId, title: "ready", occurred_at: new Date().toISOString() } })
     const response = await responsePending
     const reader = response.body!.getReader()
     const draining = (async () => {

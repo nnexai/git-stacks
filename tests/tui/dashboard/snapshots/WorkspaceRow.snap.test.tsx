@@ -3,9 +3,12 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { WorkspaceRow } from "../../../../src/tui/dashboard/WorkspaceRow"
 import type { WorkspaceEntry } from "../../../../src/tui/dashboard/types"
-import type { MessageRecord } from "../../../../src/lib/messages"
+import type { DashboardSignal } from "../../../../src/tui/dashboard/hooks/useSignals"
 
 const renderOpts = { kittyKeyboard: true, width: 100, height: 1 }
+const compactFrame = (frame: string) => frame.split("\n").map((line) => line.trimEnd()).join("\n").trimEnd()
+let signalId = 0
+const notification = (title: string, source = "automation"): DashboardSignal => ({ version: 1, kind: "notification", id: `sig_${String(++signalId).padStart(16, "0")}`, source: source === "ci" || source === "ci-pipeline" ? "automation" : "other", workspace_id: "118f47f4-5ab1-7c2d-8e90-123456789abc", title, occurred_at: "2026-01-15T10:05:00Z", unread: true })
 
 const baseWorkspace = {
   name: "my-feature",
@@ -45,14 +48,14 @@ describe("WorkspaceRow snapshots", () => {
           entry={makeEntry()}
           focused={true}
           selected={false}
-          messages={[]}
+          signals={[]}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test("renders unfocused row with no messages", async () => {
@@ -62,14 +65,14 @@ describe("WorkspaceRow snapshots", () => {
           entry={makeEntry()}
           focused={false}
           selected={false}
-          messages={[]}
+          signals={[]}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test("renders selected row", async () => {
@@ -79,54 +82,50 @@ describe("WorkspaceRow snapshots", () => {
           entry={makeEntry()}
           focused={true}
           selected={true}
-          messages={[]}
+          signals={[]}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test("renders row with a message preview", async () => {
-    const messages: MessageRecord[] = [
-      { workspace: "my-feature", text: "Build succeeded", from: "ci", timestamp: "2026-01-15T10:05:00Z" },
-    ]
+    const signals = [notification("Build succeeded", "ci")]
     const { renderOnce, captureCharFrame } = await testRender(
       () => (
         <WorkspaceRow
           entry={makeEntry()}
           focused={false}
           selected={false}
-          messages={messages}
+          signals={signals}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test("renders row with system message (no sender)", async () => {
-    const messages: MessageRecord[] = [
-      { workspace: "my-feature", text: "Workspace created", timestamp: "2026-01-15T10:00:00Z" },
-    ]
+    const signals = [notification("Workspace created")]
     const { renderOnce, captureCharFrame } = await testRender(
       () => (
         <WorkspaceRow
           entry={makeEntry()}
           focused={false}
           selected={false}
-          messages={messages}
+          signals={signals}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test("renders loaded status with dirty repos", async () => {
@@ -146,14 +145,14 @@ describe("WorkspaceRow snapshots", () => {
           entry={makeEntry({}, status)}
           focused={false}
           selected={false}
-          messages={[]}
+          signals={[]}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test("renders ahead/behind indicators with stale suffix", async () => {
@@ -173,7 +172,7 @@ describe("WorkspaceRow snapshots", () => {
           entry={makeEntry({}, status)}
           focused={false}
           selected={false}
-          messages={[]}
+          signals={[]}
           tick={0}
         />
       ),
@@ -194,44 +193,40 @@ describe("WorkspaceRow snapshots", () => {
           entry={makeEntry({ name: "a-very-long-workspace-name-that-exceeds-column-width" })}
           focused={false}
           selected={false}
-          messages={[]}
+          signals={[]}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test("renders long message text truncated", async () => {
-    const messages: MessageRecord[] = [
-      { workspace: "my-feature", text: "This is a very long message that should be truncated when it exceeds the available column width in the workspace row", from: "ci-pipeline", timestamp: "2026-01-15T10:05:00Z" },
-    ]
+    const signals = [notification("This is a very long signal that should be truncated when it exceeds the available column width in the workspace row", "ci-pipeline")]
     const { renderOnce, captureCharFrame } = await testRender(
       () => (
         <WorkspaceRow
           entry={makeEntry()}
           focused={false}
           selected={false}
-          messages={messages}
+          signals={signals}
           tick={0}
         />
       ),
       renderOpts
     )
     await renderOnce()
-    expect(captureCharFrame()).toMatchSnapshot()
+    expect(compactFrame(captureCharFrame())).toMatchSnapshot()
   })
 
   test.each([
     ["narrow", 60],
     ["medium", 90],
     ["wide", 130],
-  ] as const)("renders %s width row with message attention last", async (_label, width) => {
-    const messages: MessageRecord[] = [
-      { workspace: "my-feature", text: "Needs operator attention before handoff", from: "ci", timestamp: "2026-01-15T10:05:00Z" },
-    ]
+  ] as const)("renders %s width row with signal projection last", async (_label, width) => {
+    const signals = [notification("Needs operator attention before handoff", "ci")]
     const status: WorkspaceEntry["status"] = {
       state: "loaded",
       hasDirty: true,
@@ -248,7 +243,7 @@ describe("WorkspaceRow snapshots", () => {
           entry={makeEntry({ labels: ["backend", "urgent"] } as any, status)}
           focused={true}
           selected={false}
-          messages={messages}
+          signals={signals}
           tick={0}
         />
       ),
@@ -258,8 +253,8 @@ describe("WorkspaceRow snapshots", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("↑2")
     expect(frame).toContain("↓1")
-    expect(frame).toContain("ci:")
+    if (width >= 90) expect(frame).toContain("automatio")
     if (width >= 90) expect(frame.trimEnd()).toMatch(/\d+[smhd]$/)
-    expect(frame.trimEnd()).toMatchSnapshot()
+    expect(compactFrame(frame)).toMatchSnapshot()
   })
 })

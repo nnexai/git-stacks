@@ -123,24 +123,7 @@ function buildTestProgram(): Command {
     .description("Format output")
     .addArgument(new Argument("[style]", "Output style").choices(["json", "yaml", "table"]))
 
-  // message command group (for CMPL-05, CMPL-06 testing)
-  const messageCmd = new Command("message").description("Workspace notifications")
-  messageCmd
-    .command("send <text>")
-    .description("Send a notification")
-    .option("--workspace <name>", "Target workspace")
-    .option("--from <sender>", "Sender name")
-  messageCmd
-    .command("list")
-    .description("List notifications")
-    .option("--workspace <name>", "Target workspace")
-    .option("--json", "Output as JSON")
-  messageCmd
-    .command("clear")
-    .description("Clear notifications")
-    .option("--workspace <name>", "Target workspace")
-    .option("--from <sender>", "Clear by sender")
-  program.addCommand(messageCmd)
+  program.command("inspect").description("Inspect a workspace").option("--workspace <name>", "Target workspace")
 
   // integration command tree (3-4 level nesting)
   const integrationCmd = new Command("integration").description("Manage integrations")
@@ -562,46 +545,6 @@ describe("FLAG_COMPLETIONS - --workspace flag value", () => {
   })
 })
 
-describe("message subcommand tree", () => {
-  test("bash: message case includes send list clear subcommands", () => {
-    const out = generateBash(buildTestProgram())
-    expect(out).toContain("    message)")
-    expect(out).toContain("send list clear")
-  })
-
-  test("zsh: message subcommand helper exists", () => {
-    const out = generateZsh(buildTestProgram())
-    expect(out).toContain("_git_stacks_message()")
-    expect(out).toContain("'send:Send a notification'")
-    expect(out).toContain("'list:List notifications'")
-    expect(out).toContain("'clear:Clear notifications'")
-  })
-
-  test("fish: message subcommands appear", () => {
-    const out = generateFish(buildTestProgram())
-    expect(out).toContain("__fish_seen_subcommand_from message")
-    expect(out).toContain("-a 'send'")
-    expect(out).toContain("-a 'list'")
-    expect(out).toContain("-a 'clear'")
-  })
-
-  test("bash: message subcommands include workspace lookup for --workspace", () => {
-    const out = generateBash(buildTestProgram())
-    // message subcommand case should reference workspace completion
-    expect(out).toContain("message)")
-  })
-
-  test("zsh: message top-level appears in command list", () => {
-    const out = generateZsh(buildTestProgram())
-    expect(out).toContain("'message:Workspace notifications'")
-  })
-
-  test("fish: message appears in top-level completions", () => {
-    const out = generateFish(buildTestProgram())
-    expect(out).toContain("-a message")
-  })
-})
-
 describe("COMMAND_FLAG_COMPLETIONS - per-command flag completions", () => {
   test("bash: new --from completes template names", () => {
     const out = generateBash(buildTestProgram())
@@ -652,22 +595,6 @@ describe("COMMAND_FLAG_COMPLETIONS - per-command flag completions", () => {
     )
   })
 
-  test("message send --from has no template completion in bash", () => {
-    const out = generateBash(buildTestProgram())
-    // The global --from case in bash should not appear — only per-command via COMMAND_FLAG_COMPLETIONS
-    // message.send --from is freeform, so no template lookup for it
-    // Verify there's no template lookup associated with 'message' command context
-    const messageSection = out.slice(out.indexOf("    message)"), out.indexOf("    message)") + 500)
-    expect(messageSection).not.toContain('.config/git-stacks/templates')
-  })
-
-  test("message send --from has no template completion in fish", () => {
-    const out = generateFish(buildTestProgram())
-    // There should NOT be a per-command flag completion for message.send:--from
-    expect(out).not.toContain(
-      "__fish_seen_subcommand_from message; and __fish_seen_subcommand_from send' -l from -ra \"(__git_stacks_templates)\""
-    )
-  })
 })
 
 describe("close command - workspace completions", () => {
@@ -895,7 +822,7 @@ describe("completion audit - real program", () => {
     // Every top-level command in the real CLI must appear in completion output
     for (const cmd of ["new", "clone", "open", "close", "list", "status", "clean",
       "remove", "merge", "run", "rename", "sync", "cd", "config", "manage",
-      "doctor", "repo", "template", "message", "install", "integration", "completion"]) {
+      "doctor", "repo", "template", "install", "integration", "service", "completion"]) {
       expect(out).toContain(cmd)
     }
   })

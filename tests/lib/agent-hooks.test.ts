@@ -30,7 +30,7 @@ describe("claudeCodePlugin", () => {
     expect(entries[0].command).toContain("my-workspace")
     expect(entries.map((entry) => entry.event)).toEqual(["Stop", "PostToolUseFailure", "PreToolUse", "UserPromptSubmit", "PostToolUse"])
     expect(entries.map((entry) => entry.command.match(/--state (\w+)/)?.[1])).toEqual(["completed", "failed", "waiting", "working", "idle"])
-    for (const entry of entries) expect(entry.command).toContain("git-stacks service attention publish")
+    for (const entry of entries) expect(entry.command).toContain("git-stacks service signal publish")
     expect(entries[2].matcher).toBe("AskUserQuestion")
     expect(entries[4].matcher).toBe("AskUserQuestion")
   })
@@ -125,7 +125,7 @@ describe("claudeCodePlugin", () => {
         permissions: { allow: ["Read"] },
         hooks: {
           Stop: [
-            { hooks: [{ type: "command", command: "git-stacks message send 'done' --workspace foo --from claude" }] },
+            { hooks: [{ type: "command", command: "git-stacks obsolete-hook" }] },
             { hooks: [{ type: "command", command: "echo custom-hook" }] },
           ],
         },
@@ -164,8 +164,8 @@ describe("codexPlugin", () => {
     writeFileSync(join(dir, "hooks.json"), JSON.stringify({ custom: true, hooks: {
       Stop: [{ hooks: [
         { type: "command", command: "echo user" },
-        { type: "command", command: "git-stacks service attention publish --source claude" },
-        { type: "command", command: "git-stacks service attention publish --source codex --state idle" },
+        { type: "command", command: "git-stacks service signal publish --source claude" },
+        { type: "command", command: "git-stacks service signal publish --source codex --state idle" },
       ] }],
       SessionStart: [{ hooks: [{ type: "command", command: "echo gsd" }] }],
     } }, null, 2))
@@ -178,7 +178,7 @@ describe("codexPlugin", () => {
     expect(data.hooks.Stop.flatMap((g: any) => g.hooks).some((h: any) => h.command.includes("--source claude"))).toBe(true)
     codexPlugin.remove(tmpDir)
     data = JSON.parse(readFileSync(join(dir, "hooks.json"), "utf-8"))
-    expect(data.hooks.Stop.flatMap((g: any) => g.hooks).map((h: any) => h.command)).toEqual(["echo user", "git-stacks service attention publish --source claude"])
+    expect(data.hooks.Stop.flatMap((g: any) => g.hooks).map((h: any) => h.command)).toEqual(["echo user", "git-stacks service signal publish --source claude"])
   })
 
   it("creates missing files, tolerates remove-before-install, and preserves malformed bytes", async () => {

@@ -5,9 +5,8 @@ import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
 import { useTemplates } from "./hooks/useTemplates"
 import { useRepos } from "./hooks/useRepos"
-import { useMessages } from "./hooks/useMessages"
+import { useSignals } from "./hooks/useSignals"
 import { useWorkspaceFileStatus } from "./hooks/useWorkspaceFileStatus"
-import { socketStatus } from "./ipc-state"
 import { drainCommandStream } from "./command-stream"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
@@ -21,7 +20,7 @@ import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
 import { InlineInput } from "./InlineInput"
 import { HelpOverlay } from "./HelpOverlay"
-import { MessageOverlay } from "./MessageOverlay"
+import { SignalOverlay } from "./SignalOverlay"
 import { TemplateActionMenu } from "./TemplateActionMenu"
 import { RepoActionMenu } from "./RepoActionMenu"
 import { RemoveBlockedView } from "./RemoveBlockedView"
@@ -178,7 +177,7 @@ export default function App() {
   const { entries, loading, reload } = useWorkspaces()
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
-  const { msgMap, tick, ipcCount, clearSender, reloadMessages } = useMessages()
+  const { signalMap, tick, dismiss, reloadSignals } = useSignals()
   const [refreshFlash, setRefreshFlash] = createSignal("")
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
@@ -187,8 +186,8 @@ export default function App() {
   const [templatesSelected, setTemplatesSelected] = createSignal<Set<number>>(new Set())
   const [commandOutput, setCommandOutput] = createSignal<CommandOutputState>(initialCommandOutputState())
   const [helpOpen, setHelpOpen] = createSignal(false)
-  const [messagesOpen, setMessagesOpen] = createSignal(false)
-  const [messagesWorkspace, setMessagesWorkspace] = createSignal("")
+  const [signalsOpen, setSignalsOpen] = createSignal(false)
+  const [signalsWorkspace, setSignalsWorkspace] = createSignal("")
   const [confirmContext, setConfirmContext] = createSignal<"workspace" | "template">("workspace")
   const [filterFocused, setFilterFocused] = createSignal(false)
   const [syncRows, setSyncRows] = createSignal<SyncRow[]>([])
@@ -352,7 +351,7 @@ export default function App() {
   const helpBarText = createMemo(() => {
     const w = dims().width
     const t = tab()
-    const msgShortcut = t === "workspaces" ? "  m Messages" : ""
+    const msgShortcut = t === "workspaces" ? "  m Signals" : ""
     const groupHint = t === "workspaces" ? `  g Group:${workspaceGroupingMode()}` : ""
     const scrollHint = t === "workspaces" && detailCanScroll() ? "  Pg Detail" : ""
     const clearHint = filter() ? "  esc Clear" : ""
@@ -1163,8 +1162,8 @@ export default function App() {
     }
     if (helpOpen()) return  // block all other keys when help is open (HelpOverlay handles its own)
 
-    // Message overlay guard — MessageOverlay handles its own keys
-    if (messagesOpen()) return
+    // Signal overlay handles its own keys.
+    if (signalsOpen()) return
 
     // Handle filter mode — must be before tab switching so 1/2/3/]/[ don't fire
     if (filtering()) {
@@ -1366,12 +1365,12 @@ export default function App() {
         }
       }
 
-      // Message overlay (workspaces tab only, not during batch selection)
+      // Signal overlay (workspaces tab only, not during batch selection)
       if (key.name === "m" && tab() === "workspaces" && selected().size === 0) {
         const name = currentEntry()?.workspace.name
         if (name) {
-          setMessagesWorkspace(name)
-          setMessagesOpen(true)
+          setSignalsWorkspace(name)
+          setSignalsOpen(true)
         }
         return
       }
@@ -1396,7 +1395,7 @@ export default function App() {
       if (key.name === "r") {
         if (tab() === "templates") { reloadTemplates(); setRefreshFlash("Refreshed templates"); setTimeout(() => setRefreshFlash(""), 1500); return }
         if (tab() === "repos") { reloadRepos(); setRefreshFlash("Refreshed repos"); setTimeout(() => setRefreshFlash(""), 1500); return }
-        reloadMessages()  // sync — setMsgMap fires before reload()
+        void reloadSignals()
         reload()
         setRefreshFlash("Refreshed")
         setTimeout(() => setRefreshFlash(""), 1500)
@@ -1412,22 +1411,22 @@ export default function App() {
         <HelpOverlay tab={tab()} onClose={() => setHelpOpen(false)} />
       </Show>
 
-      {/* Message overlay replaces EVERYTHING when open */}
-      <Show when={!helpOpen() && messagesOpen()}>
-        <MessageOverlay
-          workspaceName={messagesWorkspace()}
-          messages={msgMap().get(messagesWorkspace()) ?? []}
+      {/* Signal overlay replaces everything when open. */}
+      <Show when={!helpOpen() && signalsOpen()}>
+        <SignalOverlay
+          workspaceName={signalsWorkspace()}
+          signals={signalMap().get(signalsWorkspace()) ?? []}
           tick={tick()}
-          onClose={() => setMessagesOpen(false)}
-          onClearSender={(sender) => clearSender(messagesWorkspace(), sender)}
+          onClose={() => setSignalsOpen(false)}
+          onDismiss={dismiss}
         />
         <box height={1}>
-          <text fg="gray">  {"\u2191\u2193"}/jk Navigate groups  c Clear group  Esc Close</text>
+          <text fg="gray">  {"\u2191\u2193"}/jk Navigate  d Dismiss notification  Esc Close</text>
         </box>
       </Show>
 
       {/* Action menus — full-screen CenteredDialog overlays */}
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "action-menu"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "action-menu"}>
         <Switch>
           <Match when={tab() === "workspaces"}>
             <ActionMenu
@@ -1449,7 +1448,7 @@ export default function App() {
         </Switch>
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "command-picker"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "command-picker"}>
         {(() => {
           const v = view() as { view: "command-picker"; index: number; commands: string[] }
           return (
@@ -1465,7 +1464,7 @@ export default function App() {
         })()}
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "issue-picker"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "issue-picker"}>
         {(() => {
           const v = view() as { view: "issue-picker"; index: number; candidates: IssueCandidate[] }
           return (
@@ -1482,7 +1481,7 @@ export default function App() {
       </Show>
 
       {/* Repo action menu — full-screen CenteredDialog overlay */}
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "repo-action-menu"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "repo-action-menu"}>
         <RepoActionMenu
           repoName={currentRepo()?.name ?? ""}
           selectionCount={reposSelected().size}
@@ -1492,7 +1491,7 @@ export default function App() {
       </Show>
 
       {/* Confirm dialog — full-screen CenteredDialog overlay */}
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "confirm"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "confirm"}>
         {(() => {
           const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
           const repoTarget = repoRemoveTarget()
@@ -1535,7 +1534,7 @@ export default function App() {
       </Show>
 
       {/* Inline input — full-screen CenteredDialog overlay */}
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "inline-input"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "inline-input"}>
         <InlineInput
           label={inlineInputLabel()}
           prefill={(view() as any).prefill ?? ""}
@@ -1545,7 +1544,7 @@ export default function App() {
       </Show>
 
       {/* Repo remove blocked — full-screen CenteredDialog overlay */}
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "repo-remove-blocked"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "repo-remove-blocked"}>
         {(() => {
           const v = view() as { view: "repo-remove-blocked"; repoName: string }
           const refTemplates = templateEntries().filter(t => t.repos.some(r => r.repo === v.repoName))
@@ -1562,14 +1561,14 @@ export default function App() {
       </Show>
 
       {/* Medium dialog overlays — progress and wizard views */}
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "progress"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "progress"}>
         <ProgressView
           title={(view() as any).message}
           output={commandOutput()}
         />
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "sync-progress"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "sync-progress"}>
         <SyncProgressView
           rows={syncRows()}
           done={syncDone()}
@@ -1578,7 +1577,7 @@ export default function App() {
         />
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "push-progress"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "push-progress"}>
         <PushProgressView
           rows={pushRows()}
           done={pushDone()}
@@ -1587,7 +1586,7 @@ export default function App() {
         />
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "wizard-create"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "wizard-create"}>
         {(() => {
           const v = view() as { view: "wizard-create"; templateIndex: number }
           const template = filteredTemplates()[v.templateIndex]
@@ -1605,7 +1604,7 @@ export default function App() {
         })()}
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "wizard-create-adhoc"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "wizard-create-adhoc"}>
         {(() => {
           const v = view() as { view: "wizard-create-adhoc"; repoNames: string[] }
           const steps = buildAdhocWizardSteps(v.repoNames)
@@ -1620,7 +1619,7 @@ export default function App() {
         })()}
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "wizard-create-template"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "wizard-create-template"}>
         {(() => {
           const v = view() as { view: "wizard-create-template"; repoNames: string[] }
           const steps = buildCreateTemplateSteps(v.repoNames)
@@ -1635,7 +1634,7 @@ export default function App() {
         })()}
       </Show>
 
-      <Show when={!helpOpen() && !messagesOpen() && view().view === "create-progress"}>
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "create-progress"}>
         <CreateProgressView
           rows={createRows()}
           done={createDone()}
@@ -1657,7 +1656,7 @@ export default function App() {
                 selected={selected()}
                 filter={filtering() ? filter() : ""}
                 height={listHeight()}
-                allMessages={msgMap()}
+                allSignals={signalMap()}
                 tick={tick()}
               />
             </Match>
@@ -1702,7 +1701,7 @@ export default function App() {
               <Match when={tab() === "workspaces"}>
                 <WorkspaceDetail
                   entry={currentEntry()}
-                  messages={currentEntry() ? (msgMap().get(currentEntry()!.workspace.name) ?? []) : []}
+                  signals={currentEntry() ? (signalMap().get(currentEntry()!.workspace.name) ?? []) : []}
                   tick={tick()}
                   fileStatus={fileStatus.state()}
                   scrollOffset={detailScrollOffset()}
@@ -1738,7 +1737,6 @@ export default function App() {
           </text>
           <text fg="gray">{!filtering() && filter() ? " / edit · esc clear" : ""}</text>
           <box flexGrow={filtering() ? 0 : 1} />
-          <text fg={socketStatus === "bound" ? (ipcCount() > 0 ? "green" : "gray") : "red"}>{filtering() ? "" : socketStatus === "bound" ? "\u25cf" : "\u25cb"}{" "}</text>
         </box>
 
     </box>

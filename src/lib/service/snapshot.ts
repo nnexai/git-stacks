@@ -115,9 +115,9 @@ export interface SnapshotDependencies {
   listManualCommands(workspace: Workspace): string[]
   planManualCommand(workspace: Workspace, targetName: string, config?: GlobalConfig): ManualCommandStep[]
   buildWorkspaceEnv(workspace: Workspace, options: { triggeredBy: string; config: GlobalConfig; skipSecrets: boolean }): Promise<Record<string, string>>
-  prepareAgentAttention?(repoPath: string, workspaceName: string, environment: Record<string, string>): Record<string, string>
-  /** @deprecated test/embedding compatibility; production uses prepareAgentAttention. */
-  ensureAgentAttention?(repoPath: string, workspaceName: string): void
+  prepareAgentSignals?(repoPath: string, workspaceName: string, environment: Record<string, string>): Record<string, string>
+  /** @deprecated test/embedding compatibility; production uses prepareAgentSignals. */
+  ensureAgentSignals?(repoPath: string, workspaceName: string): void
   config: GlobalConfig
   revisionStore: SnapshotRevisionStore
   clock(): Date
@@ -182,7 +182,7 @@ function defaultDependencies(): SnapshotDependencies {
     listManualCommands,
     planManualCommand,
     buildWorkspaceEnv,
-    prepareAgentAttention: (repoPath, workspaceName, environment) => prepareNativeAgentEnvironment(
+    prepareAgentSignals: (repoPath, workspaceName, environment) => prepareNativeAgentEnvironment(
       repoPath,
       workspaceName,
       environment.PATH ?? process.env.PATH ?? "",
@@ -337,15 +337,15 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     if (!repository) return fail("not_found", "Repository not found in workspace")
     const base = snapshot.workspace.launch
     try {
-      dependencies.ensureAgentAttention?.(repository.path, snapshot.workspace.name)
-      const agentEnvironment = dependencies.prepareAgentAttention?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
+      dependencies.ensureAgentSignals?.(repository.path, snapshot.workspace.name)
+      const agentEnvironment = dependencies.prepareAgentSignals?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
       Object.assign(base.environment, agentEnvironment)
     } catch (error) {
       // Agent integrations are optional launch enrichment. A malformed,
       // unowned, or unwritable user-level provider config must never make the
       // authoritative repository shell unavailable.
       Object.assign(base.environment, {
-        GIT_STACKS_AGENT_ATTENTION: "degraded",
+        GIT_STACKS_AGENT_SIGNALS: "degraded",
         GIT_STACKS_AGENT_INTEGRATION_HEALTH: "setup-failed",
         GIT_STACKS_AGENT_INTEGRATION_ERROR: error instanceof Error ? error.message : String(error),
       })

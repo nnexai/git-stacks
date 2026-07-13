@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "git-stacks service signal publish --state completed --source copilot --workspace \"git-stacks\" --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\"",
+        "env": {
+          "GS_WORKSPACE_NAME": "git-stacks",
+          "GS_FROM": "copilot"
+        },
+        "timeoutSec": 10,
+        "comment": "git-stacks: Stop notification"
+      }
+    ],
+    "errorOccurred": [
+      {
+        "type": "command",
+        "bash": "git-stacks service signal publish --state failed --source copilot --workspace \"git-stacks\" --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\"",
+        "env": {
+          "GS_WORKSPACE_NAME": "git-stacks",
+          "GS_FROM": "copilot"
+        },
+        "timeoutSec": 10,
+        "comment": "git-stacks: PostToolUseFailure notification"
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "input=$(cat); toolName=$(echo \"$input\" | grep -o '\"toolName\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); if [ \"$toolName\" = \"AskUserQuestion\" ]; then git-stacks service signal publish --state waiting --source copilot --workspace \"git-stacks\" --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\"; fi",
+        "env": {
+          "GS_WORKSPACE_NAME": "git-stacks",
+          "GS_FROM": "copilot"
+        },
+        "timeoutSec": 10,
+        "comment": "git-stacks: PreToolUse (AskUserQuestion) notification"
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "git-stacks service signal publish --state working --source copilot --workspace \"git-stacks\" --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\"",
+        "env": {
+          "GS_WORKSPACE_NAME": "git-stacks",
+          "GS_FROM": "copilot"
+        },
+        "timeoutSec": 10,
+        "comment": "git-stacks: UserPromptSubmit notification"
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "input=$(cat); toolName=$(echo \"$input\" | grep -o '\"toolName\":\"[^\"]*\"' | head -1 | cut -d'\"' -f4); if [ \"$toolName\" = \"AskUserQuestion\" ]; then git-stacks service signal publish --state idle --source copilot --workspace \"git-stacks\" --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\"; fi",
+        "env": {
+          "GS_WORKSPACE_NAME": "git-stacks",
+          "GS_FROM": "copilot"
+        },
+        "timeoutSec": 10,
+        "comment": "git-stacks: PostToolUse (AskUserQuestion) notification"
+      }
+    ]
+  }
+}

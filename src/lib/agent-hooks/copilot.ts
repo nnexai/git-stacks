@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, rmSync, mkdirSync, writeFileSync, rmdirSync } from "fs"
 import { join } from "path"
-import { structuredAttentionCommand, type AgentHookPlugin, type HookEntry } from "./types"
+import { signalPublishCommand, type AgentHookPlugin, type HookEntry } from "./types"
 
 // --- Internal Copilot JSON types ---
 
@@ -83,25 +83,25 @@ export const copilotPlugin: AgentHookPlugin = {
     return [
       {
         event: "Stop",
-        command: structuredAttentionCommand("copilot", "completed", workspaceName),
+        command: signalPublishCommand("copilot", "completed", workspaceName),
       },
       {
         event: "PostToolUseFailure",
-        command: structuredAttentionCommand("copilot", "failed", workspaceName),
+        command: signalPublishCommand("copilot", "failed", workspaceName),
       },
       {
         event: "PreToolUse",
         matcher: "AskUserQuestion",
-        command: structuredAttentionCommand("copilot", "waiting", workspaceName),
+        command: signalPublishCommand("copilot", "waiting", workspaceName),
       },
       {
         event: "UserPromptSubmit",
-        command: structuredAttentionCommand("copilot", "working", workspaceName),
+        command: signalPublishCommand("copilot", "working", workspaceName),
       },
       {
         event: "PostToolUse",
         matcher: "AskUserQuestion",
-        command: structuredAttentionCommand("copilot", "idle", workspaceName),
+        command: signalPublishCommand("copilot", "idle", workspaceName),
       },
     ]
   },

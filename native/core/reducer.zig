@@ -13,7 +13,8 @@ pub const Action = union(enum) {
     relaunch: struct { new_surface_id: [36]u8 },
     terminal_ended: struct { surface_id: [36]u8, generation: u64 },
     terminal_failed_cleanup: struct { surface_id: [36]u8, generation: u64 },
-    attention_received: model.Attention,
+    signal_received: model.Signal,
+    signal_dismissed: struct { signal_id: [64]u8, signal_id_len: u8 },
     select_attention: struct { attention_id: model.Id },
     exact_tab_visible: struct { surface_id: model.Id },
     remove_attention: struct { attention_id: model.Id },
@@ -81,11 +82,11 @@ pub fn reduce(before: model.State, action: Action) Result {
                 effect = .persist;
             }
         },
-        .attention_received => |item| {
+        .signal_received => |item| {
             var received = item;
             received.resolved = if (item.repository_id) |rid| model.pairValid(&state, .{ .workspace_id = item.workspace_id, .repository_id = rid }) else model.workspaceValid(&state, item.workspace_id);
             var updated = false;
-            for (state.attention[0..state.attention_count]) |*existing| if ((item.service_id_len > 0 and existing.service_id_len == item.service_id_len and std.mem.eql(u8, existing.service_id[0..existing.service_id_len], item.service_id[0..item.service_id_len])) or std.mem.eql(u8, &existing.id, &item.id)) {
+            for (state.signals[0..state.signal_count]) |*existing| if ((item.signal_id_len > 0 and existing.signal_id_len == item.signal_id_len and std.mem.eql(u8, existing.signal_id[0..existing.signal_id_len], item.signal_id[0..item.signal_id_len])) or std.mem.eql(u8, &existing.id, &item.id)) {
                 // Structured lifecycle hooks intentionally reuse one identity
                 // as they move from working to waiting/completed/failed.
                 received.read = existing.read and model.severity(received.status) == .none;
@@ -93,24 +94,29 @@ pub fn reduce(before: model.State, action: Action) Result {
                 updated = true;
                 break;
             };
-            if (!updated and state.attention_count < state.attention.len) {
-                state.attention[state.attention_count] = received;
-                state.attention_count += 1;
+            if (!updated and state.signal_count < state.signals.len) {
+                state.signals[state.signal_count] = received;
+                state.signal_count += 1;
             } else if (!updated) {
                 var victim: ?usize = null;
-                for (state.attention[0..state.attention_count], 0..) |existing, i| if (existing.read) {
+                for (state.signals[0..state.signal_count], 0..) |existing, i| if (existing.read) {
                     victim = i;
                     break;
                 };
-                if (victim == null) for (state.attention[0..state.attention_count], 0..) |existing, i| if (existing.status == .working or existing.status == .idle) {
+                if (victim == null) for (state.signals[0..state.signal_count], 0..) |existing, i| if (existing.status == .working or existing.status == .idle) {
                     victim = i;
                     break;
                 };
-                if (victim) |i| state.attention[i] = received else state.attention_overflow_count +%= 1;
+                if (victim) |i| state.signals[i] = received else state.signal_overflow_count +%= 1;
+            }
+        },
+        .signal_dismissed => |dismissal| {
+            for (state.signals[0..state.signal_count]) |*item| {
+                if (item.kind == .notification and item.signal_id_len == dismissal.signal_id_len and std.mem.eql(u8, item.signal_id[0..item.signal_id_len], dismissal.signal_id[0..dismissal.signal_id_len])) item.read = true;
             }
         },
         .select_attention => |a| {
-            for (state.attention[0..state.attention_count]) |*item| if (std.mem.eql(u8, &item.id, &a.attention_id)) {
+            for (state.signals[0..state.signal_count]) |*item| if (std.mem.eql(u8, &item.id, &a.attention_id)) {
                 item.read = true;
                 var route: model.FocusRoute = .{ .workspace_id = item.workspace_id, .repository_id = item.repository_id, .reason = .workspace };
                 if (item.surface_id) |sid| {
@@ -131,17 +137,17 @@ pub fn reduce(before: model.State, action: Action) Result {
             };
         },
         .exact_tab_visible => |a| {
-            for (state.attention[0..state.attention_count]) |*item| if (item.surface_id) |sid| {
+            for (state.signals[0..state.signal_count]) |*item| if (item.surface_id) |sid| {
                 if (std.mem.eql(u8, &sid, &a.surface_id)) item.read = true;
             };
         },
         .remove_attention => |a| {
             var write: usize = 0;
-            for (state.attention[0..state.attention_count]) |item| if (!std.mem.eql(u8, &item.id, &a.attention_id)) {
-                state.attention[write] = item;
+            for (state.signals[0..state.signal_count]) |item| if (!std.mem.eql(u8, &item.id, &a.attention_id)) {
+                state.signals[write] = item;
                 write += 1;
             };
-            state.attention_count = @intCast(write);
+            state.signal_count = @intCast(write);
         },
         .navigate_pair => |key| {
             if (model.pairValid(&state, key)) {

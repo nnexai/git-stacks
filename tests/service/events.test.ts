@@ -1,135 +1,59 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { appendMessage } from "../../src/lib/messages"
-import { MESSAGES_DIR } from "../../src/lib/paths"
 import { readOfficialClientCredential } from "../../src/lib/service/credentials"
-import { EventJournal } from "../../src/lib/service/event-journal"
 import { startManagedService } from "../../src/service/main"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
-
 const workspaceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-function snapshot(revision = "7") {
-  return {
-    buildAll: async () => [{ workspace: { id: workspaceId, name: "alpha" } }],
-    buildWorkspace: async (name: string) => ({ workspace: { id: workspaceId, name } }),
-    currentRevision: async () => revision,
-  }
-}
+const repositoryId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+const surfaceId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+const snapshot = () => ({ buildAll: async () => [{ workspace: { id: workspaceId, name: "alpha" } }], buildWorkspace: async () => ({ workspace: { id: workspaceId, name: "alpha" } }), currentRevision: async () => "7" })
 
-describe("v1 event transport", () => {
-  test("uses the documented SSE admission constants", async () => {
-    const server = await import("../../src/service/server")
-    expect(server.SSE_HEARTBEAT_MS).toBe(15_000)
-    expect(server.SSE_MAX_PER_CREDENTIAL).toBe(8)
-    expect(server.SSE_MAX_TOTAL).toBe(32)
-  })
-
-  test("managed attention publication is durable and available over authenticated SSE", async () => {
-    const root = join(tmpdir(), `git-stacks-events-${crypto.randomUUID()}`)
+describe("v1 signal event transport", () => {
+  test("publishes, projects, dismisses, and replays one authenticated signal contract", async () => {
+    const root = join(tmpdir(), `git-stacks-signals-${crypto.randomUUID()}`)
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-    await new EventJournal({ root }).appendOperation({
-      operation_id: "op_interleave_test_x",
-      state: "accepted",
-      accepted_at: "2026-07-11T00:00:00.000Z",
-    })
     const service = await startManagedService({ serviceRoot: root, clientId: "events-client", snapshot: snapshot() as never })
     cleanup.push(() => service.stop())
-
-    mkdirSync(MESSAGES_DIR, { recursive: true })
-    cleanup.push(() => rmSync(join(MESSAGES_DIR, "events-workspace.jsonl"), { force: true }))
-    await appendMessage("events-workspace", "needs attention")
-    const records = readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
-    expect(records).toMatchObject([
-      { sequence: "1", type: "operation" },
-      { sequence: "2", type: "attention", attention: { workspace_id: workspaceId, message: "needs attention" } },
-    ])
-
     const credential = readOfficialClientCredential("events-client", { serviceRoot: root })!
-    const response = await fetch(new URL("/v1/events?cursor=0", service.descriptor.endpoint), { headers: { authorization: `Bearer ${credential.token}` } })
-    expect(response.status).toBe(200)
-    const reader = response.body!.getReader()
-    let streamed = ""
-    while (!streamed.includes('"type":"attention"')) {
-      const next = await reader.read()
-      if (next.done) break
-      streamed += new TextDecoder().decode(next.value)
-    }
-    await reader.cancel()
-    expect(streamed).toContain('"type":"operation"')
-    expect(streamed).toContain('"type":"attention"')
+    const headers = { authorization: `Bearer ${credential.token}`, "content-type": "application/json" }
+    const notification = { version: 1, kind: "notification", id: "sig_1234567890123456", source: "automation", workspace_id: workspaceId, title: "Approval required", occurred_at: new Date().toISOString() }
+    expect((await fetch(new URL("/v1/signals", service.descriptor.endpoint), { method: "POST", headers, body: JSON.stringify(notification) })).status).toBe(202)
+    const projection = await (await fetch(new URL("/v1/signals", service.descriptor.endpoint), { headers })).json() as any
+    expect(projection.data.signals).toEqual([notification])
+    expect((await fetch(new URL("/v1/signals/dismiss", service.descriptor.endpoint), { method: "POST", headers, body: JSON.stringify({ kind: "dismiss_signal", signal_id: notification.id }) })).status).toBe(202)
+    const dismissed = await (await fetch(new URL("/v1/signals", service.descriptor.endpoint), { headers })).json() as any
+    expect(dismissed.data.dismissed).toEqual([notification.id])
+    const records = readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
+    expect(records.map((record) => record.type)).toEqual(["signal", "signal"])
+  })
 
+  test("service projection coalesces one activity identity even when ingress changes its id", async () => {
+    const root = join(tmpdir(), `git-stacks-signal-coalescing-${crypto.randomUUID()}`)
+    const service = await startManagedService({ serviceRoot: root })
+    const credential = readOfficialClientCredential(service.descriptor.credential_lookup, { serviceRoot: root })!
+    const headers = { authorization: `Bearer ${credential.token}`, "content-type": "application/json" }
+    const activity = { version: 1, kind: "activity", id: "sig_0123456789abcdef", state: "working", source: "codex", workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012346", session_id: "session-a", occurred_at: "2026-07-13T00:00:00.000Z" }
+    expect((await fetch(new URL("/v1/signals", service.descriptor.endpoint), { method: "POST", headers, body: JSON.stringify(activity) })).status).toBe(202)
+    expect((await fetch(new URL("/v1/signals", service.descriptor.endpoint), { method: "POST", headers, body: JSON.stringify({ ...activity, id: "sig_1123456789abcdef", state: "completed" }) })).status).toBe(202)
+    const projection = await (await fetch(new URL("/v1/signals", service.descriptor.endpoint), { headers })).json() as any
+    expect(projection.data.signals).toHaveLength(1)
+    expect(projection.data.signals[0]).toMatchObject({ id: "sig_1123456789abcdef", state: "completed" })
     await service.stop()
-    await appendMessage("events-workspace", "legacy only after stop")
-    expect(readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n")).toHaveLength(2)
-    expect(readFileSync(join(MESSAGES_DIR, "events-workspace.jsonl"), "utf8")).toContain("legacy only after stop")
-
-    const restarted = await startManagedService({ serviceRoot: root, clientId: "events-client", snapshot: snapshot() as never })
-    cleanup.push(() => restarted.stop())
-    const replayCredential = readOfficialClientCredential("events-client", { serviceRoot: root })!
-    const replay = await fetch(new URL("/v1/events?cursor=0", restarted.descriptor.endpoint), { headers: { authorization: `Bearer ${replayCredential.token}` } })
-    const replayReader = replay.body!.getReader()
-    let replayed = ""
-    while (!replayed.includes('"type":"attention"')) {
-      const next = await replayReader.read()
-      if (next.done) break
-      replayed += new TextDecoder().decode(next.value)
-    }
-    await replayReader.cancel()
-    expect(replayed).toContain('"sequence":"1"')
-    expect(replayed).toContain('"sequence":"2"')
   })
 
-  test("authenticated hook publication writes provider-specific structured attention", async () => {
-    const root = join(tmpdir(), `git-stacks-hook-attention-${crypto.randomUUID()}`)
-    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-    const service = await startManagedService({ serviceRoot: root, clientId: "events-client", snapshot: snapshot() as never })
-    cleanup.push(() => service.stop())
-    const credential = readOfficialClientCredential("events-client", { serviceRoot: root })!
-    const attention = {
-      id: "att_12345678901234567890123456789012", state: "completed", workspace_id: workspaceId,
-      source: "copilot", title: "GitHub Copilot finished and may need your attention",
-      occurred_at: new Date().toISOString(),
-    }
-    const response = await fetch(new URL("/v1/attention", service.descriptor.endpoint), {
-      method: "POST", headers: { authorization: `Bearer ${credential.token}`, "content-type": "application/json" },
-      body: JSON.stringify(attention),
-    })
-    expect(response.status).toBe(202)
-    const records = readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
-    expect(records[0]).toMatchObject({ type: "attention", attention: { source: "copilot", title: attention.title, journal_sequence: "1" } })
-  })
-
-  test("installed hook command publishes end to end with native terminal identity", async () => {
-    const configRoot = join(tmpdir(), `git-stacks-hook-command-${crypto.randomUUID()}`)
+  test("CLI activity publication carries exact surface and stable provider session identity", async () => {
+    const configRoot = join(tmpdir(), `git-stacks-hook-signal-${crypto.randomUUID()}`)
     const root = join(configRoot, "service")
     cleanup.push(() => rmSync(configRoot, { recursive: true, force: true }))
     const service = await startManagedService({ serviceRoot: root, snapshot: snapshot() as never })
     cleanup.push(() => service.stop())
-    const child = Bun.spawn([
-      process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "attention", "publish",
-      "--state", "completed", "--source", "copilot", "--workspace", "alpha",
-    ], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
-    const exitCode = await child.exited
-    expect(exitCode).toBe(0)
-    const records = readFileSync(join(root, "events.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line))
-    expect(records[0]).toMatchObject({ type: "attention", attention: { source: "copilot", title: "GitHub Copilot finished and may need your attention" } })
-  })
-
-  test("managed replay gaps expose the authoritative snapshot revision", async () => {
-    const root = join(tmpdir(), `git-stacks-gap-${crypto.randomUUID()}`)
-    mkdirSync(root, { recursive: true })
-    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-    writeFileSync(join(root, "events.jsonl"), `${JSON.stringify({ protocol: "v1", sequence: "2", timestamp: new Date().toISOString(), type: "attention", attention: { workspace_id: workspaceId, code: "message", message: "retained" } })}\n`)
-    const service = await startManagedService({ serviceRoot: root, clientId: "gap-client", snapshot: snapshot("7") as never })
-    cleanup.push(() => service.stop())
-    const credential = readOfficialClientCredential("gap-client", { serviceRoot: root })!
-
-    const response = await fetch(new URL("/v1/events?cursor=0", service.descriptor.endpoint), { headers: { authorization: `Bearer ${credential.token}` } })
-    expect(response.status).toBe(409)
-    expect(await response.json()).toMatchObject({ error: { code: "replay_gap", details: { snapshot_revision: "7" } } })
+    const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "signal", "publish", "--state", "completed", "--source", "copilot", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "copilot-session"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
+    expect(await child.exited).toBe(0)
+    const record = JSON.parse(readFileSync(join(root, "events.jsonl"), "utf8").trim())
+    expect(record).toMatchObject({ type: "signal", signal: { kind: "activity", source: "copilot", state: "completed", repository_id: repositoryId, surface_id: surfaceId, session_id: "copilot-session" } })
   })
 })

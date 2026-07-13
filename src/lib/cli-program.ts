@@ -5,7 +5,6 @@ import { createCompletionCommand } from "../commands/completion"
 import { doctorCommand } from "../commands/doctor"
 import { repoCommand } from "../commands/repo"
 import { templateCommand } from "../commands/template"
-import { messageCommand } from "../commands/message"
 import { notesCommand } from "../commands/notes"
 import { installCommand } from "../commands/install"
 import { integrationCommand } from "../commands/integration"
@@ -40,7 +39,6 @@ export function buildCliProgram(binName = "git-stacks"): Command {
   program.addCommand(doctorCommand)
   program.addCommand(repoCommand)
   program.addCommand(templateCommand)
-  program.addCommand(messageCommand)
   program.addCommand(notesCommand)
   program.addCommand(installCommand)
   program.addCommand(integrationCommand)

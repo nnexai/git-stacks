@@ -1,9 +1,9 @@
 /** @jsxImportSource @opentui/solid */
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js"
-import { formatAge, isStale } from "./messageUtils"
+import { formatSignalAge, signalText } from "./signalUtils"
 import { formatConfigValue } from "./configUtils"
 import type { WorkspaceEntry, WorkspaceFileStatusState } from "./types"
-import type { MessageRecord } from "../../lib/messages"
+import type { DashboardSignal } from "./hooks/useSignals"
 import type { WorkspaceFileStatusEntry, WorkspaceFileStatusRepoSection } from "../../lib/workspace-file-status"
 import type { WorkspaceNoteRecord } from "../../lib/notes"
 import { listWorkspaceNotes } from "../../lib/notes"
@@ -15,7 +15,7 @@ const TRACKER_IDS = ["github", "gitlab", "gitea", "jira"] as const
 
 type Props = {
   entry: WorkspaceEntry | undefined
-  messages: MessageRecord[]
+  signals: DashboardSignal[]
   tick: number
   fileStatus?: WorkspaceFileStatusState
   scrollOffset?: number
@@ -87,11 +87,11 @@ export function WorkspaceDetail(props: Props) {
         const status = () => entry().status
         const globalConfig = readGlobalConfig()
 
-        const displayMessages = createMemo(() => {
+        const displaySignals = createMemo(() => {
           void props.tick
-          return (props.messages ?? []).slice(0, 3)
+          return (props.signals ?? []).slice(0, 3)
         })
-        const totalCount = createMemo(() => (props.messages ?? []).length)
+        const totalCount = createMemo(() => (props.signals ?? []).length)
 
         const aheadBehindStale = createMemo(() => {
           const s = status()
@@ -114,16 +114,14 @@ export function WorkspaceDetail(props: Props) {
         const rows = createMemo(() => {
           const out: any[] = []
 
-          out.push(<text fg="white">  Messages:</text>)
+          out.push(<text fg="white">  Signals:</text>)
           if (totalCount() === 0) {
-            out.push(<text fg="gray">    (no messages)</text>)
+            out.push(<text fg="gray">    (no signals)</text>)
           } else {
             out.push(<text fg="gray">    {totalCount() > 3 ? `${totalCount()} total, press m for all` : `${totalCount()} total`}</text>)
-            for (const msg of displayMessages()) {
-              const senderLabel = msg.from ? `${msg.from}: ` : ""
-              const stale = isStale(msg.timestamp)
-              const age = formatAge(msg.timestamp)
-              out.push(<text fg={stale ? "gray" : "white"}>    {senderLabel}{msg.text}  {age}</text>)
+            for (const signal of displaySignals()) {
+              const age = formatSignalAge(signal.occurred_at)
+              out.push(<text fg={signal.unread ? "white" : "gray"}>    {signal.source}: {signalText(signal)}  {age}</text>)
             }
           }
 
@@ -240,9 +238,9 @@ export function WorkspaceDetail(props: Props) {
           } else if (notes.notes.length === 0) {
             out.push(<text fg="gray">    0 notes</text>)
           } else {
-            out.push(<text fg="gray">    {notes.notes.length} shown, latest {formatAge(notes.notes[0]!.created)}</text>)
+            out.push(<text fg="gray">    {notes.notes.length} shown, latest {formatSignalAge(notes.notes[0]!.created)}</text>)
             for (const note of notes.notes) {
-              out.push(<text fg="white">    - {note.text}  {formatAge(note.created)}</text>)
+              out.push(<text fg="white">    - {note.text}  {formatSignalAge(note.created)}</text>)
             }
           }
 

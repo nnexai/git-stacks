@@ -26,7 +26,6 @@ import type { Workspace } from "@/lib/config"
 const configDir = makeTmpDir("cwd-detect")
 mkdirSync(join(configDir, "workspaces"), { recursive: true })
 mkdirSync(join(configDir, "templates"), { recursive: true })
-mkdirSync(join(configDir, "messages"), { recursive: true })
 
 const isolated = { configDir, cleanup: () => cleanup(configDir) }
 
@@ -46,7 +45,6 @@ function applyPathsMock() {
     GLOBAL_CONFIG_FILE: join(configDir, "config.yml"),
     REGISTRY_FILE: join(configDir, "registry.yml"),
     TEMPLATES_DIR: join(configDir, "templates"),
-    MESSAGES_DIR: join(configDir, "messages"),
     getMainDir: (wsRoot: string) => join(wsRoot, "main"),
     getTasksDir: (wsRoot: string) => join(wsRoot, "tasks"),
     expandHome: (p: string) => p.startsWith("~/") ? join(configDir, p.slice(2)) : p,

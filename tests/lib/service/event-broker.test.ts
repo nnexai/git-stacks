@@ -12,15 +12,16 @@ async function journal() {
 }
 afterEach(async () => { await Promise.all(roots.splice(0).map((path) => rm(path, { recursive: true, force: true }))) })
 
-const attention = (message: string) => ({ workspace_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", code: "message", message })
+let signalCounter = 0
+const signal = (message: string) => ({ version: 1 as const, kind: "notification" as const, id: `sig_${String(++signalCounter).padStart(16, "0")}`, source: "automation" as const, workspace_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", title: message.slice(0, 160), ...(message.length > 160 ? { detail: message.slice(0, 500) } : {}), occurred_at: "2026-07-13T00:00:00.000Z" })
 
 describe("EventBroker", () => {
   test("hands off replay to queued live records without gaps or duplicates", async () => {
     const store = await journal()
     const broker = new EventBroker(store)
-    broker.publish(await store.appendAttention(attention("one")))
+    broker.publish(await store.appendSignal(signal("one")))
     const pending = broker.subscribe("0")
-    broker.publish(await store.appendAttention(attention("two")))
+    broker.publish(await store.appendSignal(signal("two")))
     const subscriber = await pending
     expect((await subscriber.next()).value?.sequence).toBe("1")
     expect((await subscriber.next()).value?.sequence).toBe("2")
@@ -31,7 +32,7 @@ describe("EventBroker", () => {
     const store = await journal()
     const broker = new EventBroker(store, { maxEvents: 2, maxBytes: 1_000_000 })
     const subscriber = await broker.subscribe("0")
-    for (const message of ["one", "two", "three"]) broker.publish(await store.appendAttention(attention(message)))
+    for (const message of ["one", "two", "three"]) broker.publish(await store.appendSignal(signal(message)))
     expect(subscriber.disconnect).toEqual({ reason: "slow_consumer", last_delivered_cursor: "0" })
     expect(broker.subscriberCount).toBe(0)
   })
@@ -40,7 +41,7 @@ describe("EventBroker", () => {
     const store = await journal()
     const broker = new EventBroker(store, { maxEvents: 256, maxBytes: 200 })
     const subscriber = await broker.subscribe("0")
-    broker.publish(await store.appendAttention(attention("x".repeat(500))))
+    broker.publish(await store.appendSignal(signal("x".repeat(500))))
     expect(subscriber.disconnect?.reason).toBe("slow_consumer")
   })
 
@@ -50,7 +51,7 @@ describe("EventBroker", () => {
     const failed = await broker.subscribe("0")
     const healthy = await broker.subscribe("0")
     failed.close()
-    const event = await store.appendAttention(attention("now"))
+    const event = await store.appendSignal(signal("now"))
     const start = performance.now()
     broker.publish(event)
     expect(performance.now() - start).toBeLessThan(10)
@@ -61,7 +62,7 @@ describe("EventBroker", () => {
     const store = await journal()
     const broker = new EventBroker(store, { maxEvents: 2, maxBytes: 1_000_000 })
     const subscriber = await broker.subscribe("0")
-    const event = await store.appendAttention(attention("reserved"))
+    const event = await store.appendSignal(signal("reserved"))
     broker.publish(event)
     const queuedBytes = subscriber.pendingBytes
 
@@ -89,11 +90,11 @@ describe("EventBroker", () => {
     const store = await journal()
     const broker = new EventBroker(store, { maxEvents: 2, maxBytes: 1_000_000 })
     const subscriber = await broker.subscribe("0")
-    broker.publish(await store.appendAttention(attention("one")))
+    broker.publish(await store.appendSignal(signal("one")))
     const reservation = subscriber.reserve()!
-    broker.publish(await store.appendAttention(attention("two")))
+    broker.publish(await store.appendSignal(signal("two")))
     expect(subscriber.diagnostics).toMatchObject({ queuedEvents: 1, reservedEvents: 1, combinedEvents: 2, lastTransportAcceptedCursor: "0" })
-    broker.publish(await store.appendAttention(attention("three")))
+    broker.publish(await store.appendSignal(signal("three")))
     expect(subscriber.disconnect).toEqual({ reason: "slow_consumer", last_delivered_cursor: "0" })
     expect(subscriber.diagnostics).toMatchObject({ combinedEvents: 0, combinedBytes: 0, closed: true })
     expect(() => subscriber.ack(reservation)).not.toThrow()

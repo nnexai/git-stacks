@@ -106,7 +106,6 @@ mock.module("@/lib/paths", () => ({
   GLOBAL_CONFIG_FILE: "/tmp/phase-78-config/config.yml",
   REGISTRY_FILE: "/tmp/phase-78-config/registry.yml",
   TEMPLATES_DIR: "/tmp/phase-78-config/templates",
-  MESSAGES_DIR: "/tmp/phase-78-config/messages",
   PORTS_LOCK_FILE: "/tmp/phase-78-config/.ports.lock",
   getMainDir: (wsRoot: string) => `${wsRoot}/main`,
   // Use a unique tasks dir per test run so workspace-instance fixtures don't collide

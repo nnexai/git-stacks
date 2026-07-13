@@ -18,7 +18,7 @@ describe("user-level native agent integrations", () => {
     expect(codex.custom).toBe(true)
     expect(codex.hooks.Stop.some((group: { hooks: { command: string }[] }) => group.hooks[0]?.command === "echo mine")).toBe(true)
     expect(readFileSync(join(home, ".copilot/hooks/git-stacks.json"), "utf8")).toContain(OWNERSHIP_MARKER)
-    expect(readFileSync(join(home, ".config/opencode/plugins/git-stacks-attention.js"), "utf8")).toContain("session.idle")
+    expect(readFileSync(join(home, ".config/opencode/plugins/git-stacks-signal.js"), "utf8")).toContain("session.idle")
     expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).toContain(`hooks = true # ${OWNERSHIP_MARKER}`)
     expect(integrationStatus({ home }).providers.every((entry) => entry.state === "installed")).toBe(true)
   })
@@ -28,7 +28,7 @@ describe("user-level native agent integrations", () => {
     installAgentIntegrations({ home })
     const codexPath = join(home, ".codex/hooks.json")
     const installed = readFileSync(codexPath, "utf8")
-    expect(installed).toContain('GIT_STACKS_ATTENTION_TOKEN:-')
+    expect(installed).toContain('GIT_STACKS_SIGNAL_TOKEN:-')
     expect(installed).toContain('GIT_STACKS_SURFACE_ID:-')
     const codex = JSON.parse(installed)
     codex.hooks.Stop.push({ hooks: [{ type: "command", command: "echo foreign" }] })
@@ -39,7 +39,7 @@ describe("user-level native agent integrations", () => {
     expect(readFileSync(codexPath, "utf8")).not.toContain(OWNERSHIP_MARKER)
     expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).not.toContain(OWNERSHIP_MARKER)
     expect(existsSync(join(home, ".copilot/hooks/git-stacks.json"))).toBe(false)
-    expect(existsSync(join(home, ".config/opencode/plugins/git-stacks-attention.js"))).toBe(false)
+    expect(existsSync(join(home, ".config/opencode/plugins/git-stacks-signal.js"))).toBe(false)
   })
 
   test("reports opt-out without touching a clean home", () => {
@@ -57,11 +57,11 @@ describe("user-level native agent integrations", () => {
     const hook = codex.hooks.UserPromptSubmit[0].hooks[0].command as string
     const token = "0123456789abcdef0123456789abcdef"
     const child = Bun.spawn(["script", "-qec", hook, "/dev/null"], {
-      env: { ...process.env, GIT_STACKS_ATTENTION_TOKEN: token, GIT_STACKS_SURFACE_ID: "surface-test" },
+      env: { ...process.env, GIT_STACKS_SIGNAL_TOKEN: token, GIT_STACKS_SURFACE_ID: "surface-test", GIT_STACKS_AGENT_SESSION_ID: "codex-session" },
       stdout: "pipe", stderr: "pipe",
     })
     const output = await new Response(child.stdout).text()
     expect(await child.exited).toBe(0)
-    expect(output).toContain(`]9;git-stacks-attention:${token}:codex:working`)
+    expect(output).toContain(`]9;git-stacks-signal:${token}:codex:codex-session:working`)
   })
 })

@@ -47,7 +47,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     listManualCommands: () => ["dev"],
     planManualCommand: () => [],
     buildWorkspaceEnv: async () => ({}),
-    ensureAgentAttention: () => {},
+    ensureAgentSignals: () => {},
     config: { workspace_root: "/tasks", integrations: {}, ports: { range_start: 10000, range_end: 65000 } },
     revisionStore: new MemoryStore(),
     clock: () => new Date("2026-07-11T10:00:00.000Z"),
@@ -150,7 +150,7 @@ describe("authoritative service snapshots", () => {
     const installs: Array<[string, string]> = []
     const builder = createSnapshotBuilder(dependencies({
       planManualCommand: () => [{ bucket: "main", scope: "workspace", shell: "for i in 1 2; do echo $i; done", cwd: "/tasks/alpha", environment: {} }],
-      ensureAgentAttention: (path: string, name: string) => installs.push([path, name]),
+      ensureAgentSignals: (path: string, name: string) => installs.push([path, name]),
     }))
     const snapshot = (await builder.buildAll())[0]!
     const command = snapshot.workspace.launch.named![0]!
@@ -165,10 +165,10 @@ describe("authoritative service snapshots", () => {
     expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
   })
 
-  test("configures agent attention for shells and degrades safely when setup fails", async () => {
+  test("configures agent signals for shells and degrades safely when setup fails", async () => {
     const installs: Array<[string, string]> = []
     const builder = createSnapshotBuilder(dependencies({
-      ensureAgentAttention: (path: string, name: string) => installs.push([path, name]),
+      ensureAgentSignals: (path: string, name: string) => installs.push([path, name]),
     }))
     const snapshot = (await builder.buildAll())[0]!
     const request = {
@@ -180,13 +180,13 @@ describe("authoritative service snapshots", () => {
     expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
 
     const broken = createSnapshotBuilder(dependencies({
-      ensureAgentAttention: () => { throw new Error("Cannot safely update .codex/hooks.json") },
+      ensureAgentSignals: () => { throw new Error("Cannot safely update .codex/hooks.json") },
     }))
     const brokenSnapshot = (await broken.buildAll())[0]!
     const degraded = await broken.resolveNativeLaunch({ ...request, expected_revision: brokenSnapshot.revision })
     expect(degraded.resolved).toBe(true)
     if (degraded.resolved) expect(degraded.launch.environment).toMatchObject({
-      GIT_STACKS_AGENT_ATTENTION: "degraded",
+      GIT_STACKS_AGENT_SIGNALS: "degraded",
       GIT_STACKS_AGENT_INTEGRATION_HEALTH: "setup-failed",
       GIT_STACKS_AGENT_INTEGRATION_ERROR: "Cannot safely update .codex/hooks.json",
     })

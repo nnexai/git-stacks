@@ -31,7 +31,7 @@ export interface NativeAgentSessionAdapter {
   prepare(repoPath: string, workspaceName: string): boolean
 }
 
-export type NativeAgentAttentionSetup =
+export type NativeAgentSignalSetup =
   | { transport: "acp" | "hooks"; provider: NativeAgentProvider | string }
   | { transport: "unavailable"; provider: NativeAgentProvider; reason: string }
 
@@ -46,12 +46,12 @@ export function normalizeAgentSessionUpdate(kind: string): AgentLifecycleState |
   }
 }
 
-export function ensureNativeAgentAttention(
+export function ensureNativeAgentSignals(
   repoPath: string,
   workspaceName: string,
   adapters: readonly NativeAgentSessionAdapter[] = [],
   provider: NativeAgentProvider = "codex",
-): NativeAgentAttentionSetup {
+): NativeAgentSignalSetup {
   for (const adapter of adapters) {
     if (adapter.id === provider && adapter.prepare(repoPath, workspaceName)) return { transport: "acp", provider }
   }
@@ -102,8 +102,8 @@ export function prepareNativeAgentEnvironment(
     const target = join(wrapperDir, command)
     if (!executable || !failedProviders.has(provider)) { if (existsSync(target)) rmSync(target); continue }
     const publish = (state: "working" | "completed" | "failed") =>
-      `git-stacks service attention publish --state ${state} --source ${provider} --workspace ${shellQuote(workspaceName)} --workspace-id "$GIT_STACKS_WORKSPACE_ID" --repository-id "$GIT_STACKS_REPOSITORY_ID" --surface-id "$GIT_STACKS_SURFACE_ID" --best-effort >/dev/null 2>&1 || true`
-    const script = `#!/bin/sh\n${publish("working")}\n${shellQuote(executable)} "$@"\nstatus=$?\nif [ "$status" -eq 0 ]; then\n  ${publish("completed")}\nelse\n  ${publish("failed")}\nfi\nexit "$status"\n`
+      `git-stacks service signal publish --state ${state} --source ${provider} --workspace ${shellQuote(workspaceName)} --workspace-id "$GIT_STACKS_WORKSPACE_ID" --repository-id "$GIT_STACKS_REPOSITORY_ID" --surface-id "$GIT_STACKS_SURFACE_ID" --session-id "$GIT_STACKS_AGENT_SESSION_ID" --best-effort >/dev/null 2>&1 || true`
+    const script = `#!/bin/sh\nGIT_STACKS_AGENT_SESSION_ID="${provider}-$$"\nexport GIT_STACKS_AGENT_SESSION_ID\n${publish("working")}\n${shellQuote(executable)} "$@"\nstatus=$?\nif [ "$status" -eq 0 ]; then\n  ${publish("completed")}\nelse\n  ${publish("failed")}\nfi\nexit "$status"\n`
     const temporary = `${target}.tmp-${process.pid}`
     writeFileSync(temporary, script, { mode: 0o700 })
     chmodSync(temporary, 0o700)
@@ -112,7 +112,7 @@ export function prepareNativeAgentEnvironment(
   const failed = report?.providers.filter((entry) => entry.state === "failed") ?? []
   return {
     PATH: `${wrapperDir}${delimiter}${lookupPath}`,
-    GIT_STACKS_AGENT_ATTENTION: report ? (failed.length ? "hooks-degraded+process-fallback" : "hooks+osc") : "process",
+    GIT_STACKS_AGENT_SIGNALS: report ? (failed.length ? "hooks-degraded+process-fallback" : "hooks+osc") : "process",
     ...(report ? { GIT_STACKS_AGENT_INTEGRATION_HEALTH: failed.length ? failed.map((entry) => entry.provider).join(",") : "healthy" } : {}),
   }
 }

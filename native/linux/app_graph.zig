@@ -111,9 +111,9 @@ pub const ProductionGraph = struct {
             if (model.surfaceLocation(&self.state, surface.id) != null) self.state.surface = surface;
         }
         self.state.organization_mode = previous.organization_mode;
-        for (previous.attention[0..previous.attention_count]) |old| {
+        for (previous.signals[0..previous.signal_count]) |old| {
             var found = false;
-            for (self.state.attention[0..self.state.attention_count]) |*item| if (old.service_id_len > 0 and item.service_id_len == old.service_id_len and std.mem.eql(u8, old.service_id[0..old.service_id_len], item.service_id[0..item.service_id_len])) {
+            for (self.state.signals[0..self.state.signal_count]) |*item| if (old.signal_id_len > 0 and item.signal_id_len == old.signal_id_len and std.mem.eql(u8, old.signal_id[0..old.signal_id_len], item.signal_id[0..item.signal_id_len])) {
                 item.read = old.read;
                 found = true;
                 break;
@@ -123,11 +123,11 @@ pub const ProductionGraph = struct {
             // refreshes while their exact surface is still retained. A later
             // unified signal transport can remove this reconciliation without
             // changing the reducer or presentation model.
-            const local_osc = old.service_id_len >= 4 and std.mem.eql(u8, old.service_id[0..4], "osc:");
+            const local_osc = old.signal_id_len >= 4 and std.mem.eql(u8, old.signal_id[0..4], "osc:");
             const surface_retained = if (old.surface_id) |sid| model.surfaceLocation(&self.state, sid) != null else false;
-            if (!found and local_osc and surface_retained and self.state.attention_count < self.state.attention.len) {
-                self.state.attention[self.state.attention_count] = old;
-                self.state.attention_count += 1;
+            if (!found and local_osc and surface_retained and self.state.signal_count < self.state.signals.len) {
+                self.state.signals[self.state.signal_count] = old;
+                self.state.signal_count += 1;
             }
         }
     }

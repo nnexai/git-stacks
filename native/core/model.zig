@@ -5,11 +5,12 @@ pub const Connection = enum { disconnected_no_snapshot, connecting, ready, stale
 pub const Lifecycle = enum { live, ended, failed_cleanup };
 pub const TerminalKind = enum { shell, configured_command };
 pub const OrganizationMode = enum { simple, label, repository };
-pub const AttentionStatus = enum { failed, waiting, completed, working, idle };
-pub const AttentionProvider = enum { claude, copilot, codex, opencode, other };
+pub const SignalState = enum { failed, waiting, completed, working, idle };
+pub const SignalSource = enum { claude, copilot, codex, opencode, automation, acp, user, other };
+pub const SignalKind = enum { activity, notification };
 pub const Severity = enum(u8) { none, secondary, primary };
 pub const FallbackReason = enum { exact_surface, ended_predecessor, repository, workspace, unresolved };
-pub const CapacityKind = enum { workspaces, repositories, authoritative_pairs, live_pair_identities, orphan_tombstones, surfaces, commands, attention_items, string_bytes };
+pub const CapacityKind = enum { workspaces, repositories, authoritative_pairs, live_pair_identities, orphan_tombstones, surfaces, commands, signal_items, string_bytes };
 pub const CapacityFailure = struct { kind: CapacityKind, maximum: u32, attempted: u32 };
 
 pub const NativeModelLimits = struct {
@@ -21,7 +22,7 @@ pub const NativeModelLimits = struct {
     pub const reserved_orphan_tombstones = 32;
     pub const surfaces_per_pair = 16;
     pub const commands = 64;
-    pub const attention_items = 64;
+    pub const signal_items = 64;
     pub const workspace_name_bytes = 96;
     pub const workspace_label_bytes = 64;
     pub const repository_name_bytes = 96;
@@ -30,10 +31,10 @@ pub const NativeModelLimits = struct {
     pub const surface_command_id_bytes = 64;
     pub const surface_title_bytes = 64;
     pub const surface_cwd_bytes = 128;
-    pub const attention_id_bytes = 64;
-    pub const attention_title_bytes = 160;
-    pub const attention_detail_bytes = 500;
-    pub const attention_occurred_at_bytes = 40;
+    pub const signal_id_bytes = 64;
+    pub const signal_title_bytes = 160;
+    pub const signal_detail_bytes = 500;
+    pub const signal_occurred_at_bytes = 40;
 };
 
 pub const PairKey = struct {
@@ -59,7 +60,14 @@ pub const Workspace = struct {
 pub const Command = struct { id: [64]u8 = [_]u8{0} ** 64, id_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, name: [96]u8 = [_]u8{0} ** 96, name_len: u8 = 0 };
 pub const Surface = struct { id: Id, generation: u64 = 0, predecessor_surface_id: ?Id = null, lifecycle: Lifecycle = .ended, kind: TerminalKind = .shell, command_id: [64]u8 = [_]u8{0} ** 64, command_id_len: u8 = 0, order: u32 = 0, title: [64]u8 = [_]u8{0} ** 64, title_len: u8 = 0, title_pinned: bool = false, cwd: [128]u8 = [_]u8{0} ** 128, cwd_len: u8 = 0, last_exit_status: ?i32 = null };
 pub const PairCollection = struct { key: PairKey, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
-pub const Attention = struct { id: Id, service_id: [64]u8 = [_]u8{0} ** 64, service_id_len: u8 = 0, provider: AttentionProvider = .other, title: [160]u8 = [_]u8{0} ** 160, title_len: u8 = 0, detail: [500]u8 = [_]u8{0} ** 500, detail_len: u16 = 0, occurred_at: [40]u8 = [_]u8{0} ** 40, occurred_at_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: AttentionStatus, read: bool = false, resolved: bool = true };
+pub const Signal = struct { id: Id, signal_id: [64]u8 = [_]u8{0} ** 64, signal_id_len: u8 = 0, kind: SignalKind = .activity, provider: SignalSource = .other, title: [160]u8 = [_]u8{0} ** 160, title_len: u8 = 0, detail: [500]u8 = [_]u8{0} ** 500, detail_len: u16 = 0, occurred_at: [40]u8 = [_]u8{0} ** 40, occurred_at_len: u8 = 0, workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, predecessor_surface_id: ?Id = null, status: SignalState, read: bool = false, resolved: bool = true };
+
+pub fn utf8Prefix(value: []const u8, maximum: usize) ?[]const u8 {
+    if (!std.unicode.utf8ValidateSlice(value)) return null;
+    var end = @min(value.len, maximum);
+    while (end > 0 and !std.unicode.utf8ValidateSlice(value[0..end])) end -= 1;
+    return value[0..end];
+}
 pub const OrphanPairTombstone = struct { key: PairKey, workspace_name: [96]u8 = [_]u8{0} ** 96, workspace_name_len: u8 = 0, repository_name: [96]u8 = [_]u8{0} ** 96, repository_name_len: u8 = 0, surfaces: [16]Surface = undefined, surface_count: u8 = 0 };
 pub const Aggregate = struct { unread: u32 = 0, severity: Severity = .none };
 pub const FocusRoute = struct { workspace_id: Id, repository_id: ?Id = null, surface_id: ?Id = null, reason: FallbackReason };
@@ -89,30 +97,29 @@ pub const State = struct {
     orphan_tombstone_count: u8 = 0,
     commands: [64]Command = undefined,
     command_count: u8 = 0,
-    attention: [64]Attention = undefined,
-    attention_count: u8 = 0,
-    attention_overflow_count: u32 = 0,
+    signals: [64]Signal = undefined,
+    signal_count: u8 = 0,
+    signal_overflow_count: u32 = 0,
     capacity_failure: ?CapacityFailure = null,
 };
 
 comptime {
     const s: State = .{};
-    if (s.workspaces.len != NativeModelLimits.workspaces or s.pairs.len != NativeModelLimits.authoritative_pairs or s.live_pair_identities.len != NativeModelLimits.live_pair_identities or s.orphan_tombstones.len != NativeModelLimits.reserved_orphan_tombstones or s.commands.len != NativeModelLimits.commands or s.attention.len != NativeModelLimits.attention_items) @compileError("native model limit drift");
+    if (s.workspaces.len != NativeModelLimits.workspaces or s.pairs.len != NativeModelLimits.authoritative_pairs or s.live_pair_identities.len != NativeModelLimits.live_pair_identities or s.orphan_tombstones.len != NativeModelLimits.reserved_orphan_tombstones or s.commands.len != NativeModelLimits.commands or s.signals.len != NativeModelLimits.signal_items) @compileError("native model limit drift");
     const ws: Workspace = undefined;
     const pair: PairCollection = undefined;
     if (ws.labels.len != NativeModelLimits.labels_per_workspace or ws.repositories.len != NativeModelLimits.repositories_per_workspace or pair.surfaces.len != NativeModelLimits.surfaces_per_pair) @compileError("native nested limit drift");
 }
 
-pub fn severity(status: AttentionStatus) Severity {
+pub fn severity(status: SignalState) Severity {
     return switch (status) {
         .failed, .waiting => .primary,
-        .completed => .secondary,
-        .working, .idle => .none,
+        .completed, .working, .idle => .none,
     };
 }
 pub fn aggregate(state: *const State, workspace_id: Id, repository_id: ?Id, surface_id: ?Id) Aggregate {
     var result: Aggregate = .{};
-    for (state.attention[0..state.attention_count]) |item| {
+    for (state.signals[0..state.signal_count]) |item| {
         if (!std.mem.eql(u8, &item.workspace_id, &workspace_id)) continue;
         if (repository_id) |rid| {
             if (item.repository_id == null or !std.mem.eql(u8, &item.repository_id.?, &rid)) continue;
@@ -186,7 +193,7 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(allocator);
     const w = out.writer(allocator);
-    try w.print("{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"attention_overflow_count\":{d},\"capacity_failure\":", .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, state.attention_overflow_count });
+    try w.print("{{\"connection\":\"{s}\",\"revision\":{d},\"sequence\":{d},\"has_snapshot\":{},\"degraded_optional_count\":{d},\"duplicate_count\":{d},\"signal_overflow_count\":{d},\"capacity_failure\":", .{ @tagName(state.connection), state.revision, state.sequence, state.has_snapshot, state.degraded_optional_count, state.duplicate_count, state.signal_overflow_count });
     if (state.capacity_failure) |failure| try w.print("{{\"kind\":\"{s}\",\"maximum\":{d},\"attempted\":{d}}}", .{ @tagName(failure.kind), failure.maximum, failure.attempted }) else try w.writeAll("null");
     try w.print(",\"surface_id\":\"{s}\",\"predecessor_surface_id\":\"{s}\",\"workspaces\":[", .{ surface_id, predecessor });
     for (state.workspaces[0..state.workspace_count], 0..) |ws, i| {
@@ -222,16 +229,15 @@ pub fn canonicalAlloc(allocator: std.mem.Allocator, state: State) ![]u8 {
         if (command.repository_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
         try w.writeByte('}');
     }
-    try w.writeAll("],\"attention\":[");
-    for (state.attention[0..state.attention_count], 0..) |item, i| {
+    try w.writeAll("],\"signals\":[");
+    for (state.signals[0..state.signal_count], 0..) |item, i| {
         if (i != 0) try w.writeByte(',');
-        const attention_id = if (item.service_id_len > 0) item.service_id[0..item.service_id_len] else item.id[0..];
-        try w.print("{{\"id\":\"{s}\",\"provider\":\"{s}\",\"title\":{f},\"detail\":{f},\"occurred_at\":{f},\"workspace_id\":\"{s}\",\"repository_id\":", .{ attention_id, @tagName(item.provider), std.json.fmt(item.title[0..item.title_len], .{}), std.json.fmt(item.detail[0..item.detail_len], .{}), std.json.fmt(item.occurred_at[0..item.occurred_at_len], .{}), item.workspace_id });
+        try w.print("{{\"id\":\"{s}\",\"signal_id\":{f},\"kind\":\"{s}\",\"provider\":\"{s}\",\"title\":{f},\"detail\":{f},\"occurred_at\":{f},\"workspace_id\":\"{s}\",\"repository_id\":", .{ item.id, std.json.fmt(item.signal_id[0..item.signal_id_len], .{}), @tagName(item.kind), @tagName(item.provider), std.json.fmt(item.title[0..item.title_len], .{}), std.json.fmt(item.detail[0..item.detail_len], .{}), std.json.fmt(item.occurred_at[0..item.occurred_at_len], .{}), item.workspace_id });
         if (item.repository_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
         try w.writeAll(",\"surface_id\":");
         if (item.surface_id) |id| try w.print("\"{s}\"", .{id}) else try w.writeAll("null");
         try w.print(",\"status\":\"{s}\",\"read\":{},\"resolved\":{}}}", .{ @tagName(item.status), item.read, item.resolved });
     }
-    try w.print("],\"pair_count\":{d},\"command_count\":{d},\"attention_count\":{d}}}", .{ state.pair_count, state.command_count, state.attention_count });
+    try w.print("],\"pair_count\":{d},\"command_count\":{d},\"signal_count\":{d}}}", .{ state.pair_count, state.command_count, state.signal_count });
     return out.toOwnedSlice(allocator);
 }

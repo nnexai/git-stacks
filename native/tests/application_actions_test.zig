@@ -89,7 +89,7 @@ test "incoming attention has no focus effect and explicit activation explains fa
     var s: model.State = .{ .connection = .ready, .workspace_count = 1 };
     s.workspaces[0] = .{ .id = id('w'), .repository_count = 1 };
     s.workspaces[0].repository_ids[0] = id('r');
-    const a: model.Attention = .{ .id = id('a'), .workspace_id = id('w'), .repository_id = id('r'), .surface_id = id('q'), .status = .failed };
+    const a: model.Signal = .{ .id = id('a'), .workspace_id = id('w'), .repository_id = id('r'), .surface_id = id('q'), .status = .failed };
     const received = attention.asynchronous(s, a);
     try std.testing.expect(received.effect == .none);
     const activated = attention.activate(received.state, id('a'));

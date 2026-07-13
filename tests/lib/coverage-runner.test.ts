@@ -26,10 +26,10 @@ describe("coverage runner parallel integration contract", () => {
       workers: 2,
     })
 
-    expect(parseArgs(["--unit", "tests/lib/messages.test.ts"])).toMatchObject({
+    expect(parseArgs(["--unit", "tests/lib/service/signal-state.test.ts"])).toMatchObject({
       runUnitMode: true,
       runIntegMode: false,
-      filters: ["tests/lib/messages.test.ts"],
+      filters: ["tests/lib/service/signal-state.test.ts"],
       workers: DEFAULT_INTEGRATION_WORKERS,
     })
   })

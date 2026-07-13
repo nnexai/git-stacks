@@ -2,7 +2,7 @@
 import { For, Show, createMemo } from "solid-js"
 import { WorkspaceRow } from "./WorkspaceRow"
 import type { GroupedWorkspaceItem, WorkspaceEntry } from "./types"
-import type { MessageRecord } from "../../lib/messages"
+import type { DashboardSignal } from "./hooks/useSignals"
 
 type Props = {
   entries: WorkspaceEntry[]
@@ -12,7 +12,7 @@ type Props = {
   selected: Set<string>
   filter: string
   height: number
-  allMessages: Map<string, MessageRecord[]>
+  allSignals: Map<string, DashboardSignal[]>
   tick: number
 }
 
@@ -71,7 +71,7 @@ export function WorkspaceList(props: Props) {
                   entry={entry}
                   focused={realIndex() === props.cursor}
                   selected={props.selected.has(entry.workspace.name)}
-                  messages={props.allMessages.get(entry.workspace.name) ?? []}
+                  signals={props.allSignals.get(entry.workspace.name) ?? []}
                   tick={props.tick}
                 />
               )
@@ -106,7 +106,7 @@ export function WorkspaceList(props: Props) {
                   entry={item.entry}
                   focused={navIdx() === props.cursor}
                   selected={props.selected.has(item.entry.workspace.name)}
-                  messages={props.allMessages.get(item.entry.workspace.name) ?? []}
+                  signals={props.allSignals.get(item.entry.workspace.name) ?? []}
                   tick={props.tick}
                   groupPrefix={isLastInGroup() ? "  └─ " : "  ├─ "}
                 />

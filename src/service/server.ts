@@ -3,7 +3,7 @@ import { z } from "zod"
 import { authenticateAdmission, type AuthenticatedClient } from "../lib/service/credentials"
 import { IdempotencyConflictError, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
 import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
-import type { StructuredAttentionEvent, WorkspaceSnapshotResponse } from "../lib/service/contract"
+import { SignalDismissalSchema, SignalSchema, type Signal, type SignalDismissal, type WorkspaceSnapshotResponse } from "../lib/service/contract"
 import { NativeLaunchResolutionRequestSchema, type NativeLaunchResolution } from "../lib/service/contract"
 import { NATIVE_MODEL_LIMITS, WorkspaceCreationRequestSchema, type WorkspaceCreationCatalog } from "../lib/service/contract"
 import type { WorkspaceCreateMutation } from "../lib/service/operations"
@@ -21,13 +21,6 @@ const MutationRequestSchema = z.strictObject({
   workspace: z.string().min(1),
   options: z.record(z.string(), z.unknown()).optional(),
 })
-const AttentionPublishSchema = z.strictObject({
-  id: z.string().regex(/^att_[A-Za-z0-9_-]{16,60}$/),
-  state: z.enum(["working", "waiting", "completed", "failed", "idle"]),
-  workspace_id: z.string().uuid(), repository_id: z.string().uuid().optional(), surface_id: z.string().uuid().optional(),
-  source: z.enum(["claude", "copilot", "codex", "opencode", "other"]), title: z.string().min(1).max(160),
-  detail: z.string().max(500).optional(), occurred_at: z.string().datetime(),
-}).refine((attention) => attention.surface_id === undefined || attention.repository_id !== undefined)
 
 export type SnapshotAdapter = {
   buildAll(signal?: AbortSignal): Promise<WorkspaceSnapshotResponse[]>
@@ -41,7 +34,9 @@ export interface ServiceServerOptions {
   snapshot: SnapshotAdapter
   operations?: OperationRegistry
   broker?: EventBroker
-  publishAttention?: (attention: Omit<StructuredAttentionEvent, "journal_sequence">) => Promise<void>
+  publishSignal?: (signal: Signal) => Promise<void>
+  dismissSignal?: (dismissal: SignalDismissal) => Promise<void>
+  signalProjection?: () => Promise<{ signals: Signal[]; dismissed: string[]; sequence: string }>
   mutations?: Record<string, (request: z.infer<typeof MutationRequestSchema>, signal?: AbortSignal) => OperationExecution>
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
@@ -304,9 +299,8 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           capabilities: {
             workspace_snapshots: { available: true },
             operations: { available: Boolean(options.operations) },
-            attention_events: { available: Boolean(options.broker) },
+            signals: { available: Boolean(options.broker) },
             native_launch_resolution: { available: Boolean(options.snapshot.resolveNativeLaunch) },
-            structured_attention: { available: Boolean(options.broker) },
           },
           limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024, native_model: NATIVE_MODEL_LIMITS },
         }))
@@ -322,12 +316,23 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           const resolution = await options.snapshot.resolveNativeLaunch(parsed.data, signal)
           return resolution.resolved ? json(success(id, resolution)) : failure(id, resolution.error.code, resolution.error.message, resolution.error.code === "not_found" ? 404 : 409)
         }
-        if (request.method === "POST" && url.pathname === "/v1/attention") {
-          if (!options.publishAttention) return failure(id, "capability_unavailable", "Attention publication is unavailable", 409)
-          const parsed = AttentionPublishSchema.safeParse(await readBody(request))
-          if (!parsed.success) return failure(id, "invalid_request", "Invalid attention publication", 400)
-          await options.publishAttention(parsed.data)
+        if (request.method === "POST" && url.pathname === "/v1/signals") {
+          if (!options.publishSignal) return failure(id, "capability_unavailable", "Signal publication is unavailable", 409)
+          const parsed = SignalSchema.safeParse(await readBody(request))
+          if (!parsed.success) return failure(id, "invalid_request", "Invalid signal publication", 400)
+          await options.publishSignal(parsed.data as Signal)
           return json(success(id, { published: true }), 202)
+        }
+        if (request.method === "GET" && url.pathname === "/v1/signals") {
+          if (!options.signalProjection) return failure(id, "capability_unavailable", "Signal projection is unavailable", 409)
+          return json(success(id, await options.signalProjection()))
+        }
+        if (request.method === "POST" && url.pathname === "/v1/signals/dismiss") {
+          if (!options.dismissSignal) return failure(id, "capability_unavailable", "Signal dismissal is unavailable", 409)
+          const parsed = SignalDismissalSchema.safeParse(await readBody(request))
+          if (!parsed.success) return failure(id, "invalid_request", "Invalid signal dismissal", 400)
+          await options.dismissSignal(parsed.data)
+          return json(success(id, { dismissed: true }), 202)
         }
         const workspaceMatch = /^\/v1\/workspaces\/([^/]+)$/.exec(url.pathname)
         if (request.method === "GET" && workspaceMatch) {

@@ -123,21 +123,24 @@ test "aggregate snapshot decodes normalized workspace repository pairs into redu
     try std.testing.expectEqual(@as(u8, 1), action.snapshot.workspaces[0].label_count);
     try std.testing.expectEqualStrings("client", action.snapshot.workspaces[0].labels[0][0..action.snapshot.workspaces[0].label_lens[0]]);
 }
-test "structured SSE attention retains service identity and produces reducer action" {
+test "activity SSE signal retains service identity and valid UTF-8 content" {
     var c = service.Client.init("Bearer secret");
     c.sequence = 10;
-    const action = try c.decodeSseReducerAction("id: 11\ndata: {\"protocol\":\"v1\",\"sequence\":\"11\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"attention\",\"attention\":{\"id\":\"att_1234567890123456\",\"state\":\"failed\",\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"source\":\"codex\",\"title\":\"Needs input\",\"occurred_at\":\"2026-01-01T00:00:00Z\",\"journal_sequence\":\"11\"}}\n\n");
-    try std.testing.expect(action == .attention_received);
-    try std.testing.expectEqualStrings("att_1234567890123456", action.attention_received.service_id[0..action.attention_received.service_id_len]);
-    try std.testing.expectEqual(@as(u8, 2), @intFromEnum(action.attention_received.provider));
+    const action = try c.decodeSseReducerAction("id: 11\ndata: {\"protocol\":\"v1\",\"sequence\":\"11\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"signal\",\"signal\":{\"version\":1,\"kind\":\"activity\",\"id\":\"sig_1234567890123456\",\"state\":\"failed\",\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"repository_id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"surface_id\":\"318f47f4-5ab1-7c2d-8e90-123456789abc\",\"session_id\":\"codex-a\",\"source\":\"codex\",\"title\":\"Codex needs ✓\",\"detail\":\"Review café\",\"occurred_at\":\"2026-01-01T00:00:00Z\"}}\n\n");
+    try std.testing.expect(action == .signal_received);
+    try std.testing.expectEqualStrings("sig_1234567890123456", action.signal_received.signal_id[0..action.signal_received.signal_id_len]);
+    try std.testing.expectEqual(@as(u8, 2), @intFromEnum(action.signal_received.provider));
+    try std.testing.expectEqualStrings("Codex needs ✓", action.signal_received.title[0..action.signal_received.title_len]);
+    try std.testing.expectEqualStrings("Review café", action.signal_received.detail[0..action.signal_received.detail_len]);
+    try std.testing.expectEqualStrings("2026-01-01T00:00:00Z", action.signal_received.occurred_at[0..action.signal_received.occurred_at_len]);
 }
-test "legacy message attention becomes unread workspace notification" {
+test "notification signal becomes unread workspace notification" {
     var c = service.Client.init("Bearer secret");
     c.sequence = 20;
-    const action = try c.decodeSseReducerAction("id: 21\ndata: {\"protocol\":\"v1\",\"sequence\":\"21\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"attention\",\"attention\":{\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"code\":\"message\",\"message\":\"Agent finished\"}}\n\n");
-    try std.testing.expect(action == .attention_received);
-    try std.testing.expect(action.attention_received.status == .waiting);
-    try std.testing.expectEqualStrings("118f47f4-5ab1-7c2d-8e90-123456789abc", &action.attention_received.workspace_id);
+    const action = try c.decodeSseReducerAction("id: 21\ndata: {\"protocol\":\"v1\",\"sequence\":\"21\",\"timestamp\":\"2026-01-01T00:00:00Z\",\"type\":\"signal\",\"signal\":{\"version\":1,\"kind\":\"notification\",\"id\":\"sig_2234567890123456\",\"workspace_id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"source\":\"automation\",\"title\":\"Agent finished\",\"occurred_at\":\"2026-01-01T00:00:00Z\"}}\n\n");
+    try std.testing.expect(action == .signal_received);
+    try std.testing.expect(action.signal_received.status == .waiting);
+    try std.testing.expectEqualStrings("118f47f4-5ab1-7c2d-8e90-123456789abc", &action.signal_received.workspace_id);
 }
 test "incompatible and authentication states stay explicit" {
     var c = service.Client.init("Bearer secret");

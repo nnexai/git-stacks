@@ -3,7 +3,7 @@ export type E2EFlowType = "command" | "user-flow" | "library-backed-flow"
 
 export type E2EInventoryItem = {
   id: string
-  family: "workspace" | "template" | "repo" | "label" | "message" | "notes" | "files" | "service" | "support" | "exclude"
+  family: "workspace" | "template" | "repo" | "label" | "notes" | "files" | "service" | "support" | "exclude"
   flowType: E2EFlowType
   title: string
   commands: readonly string[]
@@ -104,10 +104,15 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     family: "service",
     flowType: "command",
     title: "Native-client service lifecycle",
-    commands: ["service start", "service status", "service attention publish"],
+    commands: ["service start", "service status", "service signal integrations", "service signal publish"],
     scopeStatus: "in-scope",
-    mappedTests: ["tests/service/discovery.test.ts", "tests/service/operations.test.ts"],
-    rationale: "Protected discovery, convergent startup, and idle lifecycle are covered through real loopback and injected lifecycle tests.",
+    mappedTests: [
+      "tests/service/discovery.test.ts",
+      "tests/service/operations.test.ts",
+      "tests/service/events.test.ts",
+      "tests/lib/agent-hooks/integration-manager.test.ts",
+    ],
+    rationale: "Protected discovery, convergent startup, signal publication, integration ownership, and idle lifecycle are covered through real loopback and injected lifecycle tests.",
   },
   {
     id: "workspace.paths",
@@ -203,16 +208,6 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     scopeStatus: "in-scope",
     mappedTests: ["tests/commands/label.test.ts", "tests/commands/e2e-harness.test.ts"],
     rationale: "Workspace labels are a shipped non-TUI command surface with persisted YAML side effects and explicit add/remove/list/clear coverage.",
-  },
-  {
-    id: "message.durable-cli",
-    family: "message",
-    flowType: "command",
-    title: "Durable message CLI",
-    commands: ["message send", "message list", "message clear"],
-    scopeStatus: "in-scope",
-    mappedTests: ["tests/commands/message.test.ts"],
-    rationale: "Message files are durable command-side effects covered through subprocess tests; live socket delivery remains best-effort and out of scope.",
   },
   {
     id: "support.config-show",

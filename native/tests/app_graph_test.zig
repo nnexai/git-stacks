@@ -40,38 +40,38 @@ test "native OSC attention survives authoritative refresh and lifecycle updates"
     defer graph.deinit();
     graph.state = stateWithSurface();
 
-    var local: model.Attention = .{ .id = id("a18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = graph.state.workspaces[0].id, .repository_id = graph.state.pairs[0].key.repository_id, .surface_id = graph.state.pairs[0].surfaces[0].id, .provider = .codex, .status = .working };
+    var local: model.Signal = .{ .id = id("a18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = graph.state.workspaces[0].id, .repository_id = graph.state.pairs[0].key.repository_id, .surface_id = graph.state.pairs[0].surfaces[0].id, .provider = .codex, .status = .working };
     const key = "osc:318f47f4-5ab1-7c2d-8e90-123456789abc:codex";
-    @memcpy(local.service_id[0..key.len], key);
-    local.service_id_len = key.len;
-    graph.state.attention[0] = local;
-    graph.state.attention_count = 1;
+    @memcpy(local.signal_id[0..key.len], key);
+    local.signal_id_len = key.len;
+    graph.state.signals[0] = local;
+    graph.state.signal_count = 1;
 
     try graph.applyAuthoritativeSnapshot(stateWithSurface());
-    try std.testing.expectEqual(@as(u8, 1), graph.state.attention_count);
-    try std.testing.expectEqual(model.AttentionStatus.working, graph.state.attention[0].status);
+    try std.testing.expectEqual(@as(u8, 1), graph.state.signal_count);
+    try std.testing.expectEqual(model.SignalState.working, graph.state.signals[0].status);
 
-    graph.state.attention[0].status = .completed;
+    graph.state.signals[0].status = .completed;
     try graph.applyAuthoritativeSnapshot(stateWithSurface());
-    try std.testing.expectEqual(@as(u8, 1), graph.state.attention_count);
-    try std.testing.expectEqual(model.AttentionStatus.completed, graph.state.attention[0].status);
+    try std.testing.expectEqual(@as(u8, 1), graph.state.signal_count);
+    try std.testing.expectEqual(model.SignalState.completed, graph.state.signals[0].status);
 }
 
 test "native OSC attention expires when its exact surface is gone" {
     var graph = try app_graph.ProductionGraph.init(std.testing.allocator, null);
     defer graph.deinit();
     graph.state = stateWithSurface();
-    var local: model.Attention = .{ .id = id("c18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = graph.state.workspaces[0].id, .surface_id = graph.state.pairs[0].surfaces[0].id, .provider = .copilot, .status = .waiting };
+    var local: model.Signal = .{ .id = id("c18f47f4-5ab1-7c2d-8e90-123456789abc"), .workspace_id = graph.state.workspaces[0].id, .surface_id = graph.state.pairs[0].surfaces[0].id, .provider = .copilot, .status = .waiting };
     const key = "osc:318f47f4-5ab1-7c2d-8e90-123456789abc:copilot";
-    @memcpy(local.service_id[0..key.len], key);
-    local.service_id_len = key.len;
-    graph.state.attention[0] = local;
-    graph.state.attention_count = 1;
+    @memcpy(local.signal_id[0..key.len], key);
+    local.signal_id_len = key.len;
+    graph.state.signals[0] = local;
+    graph.state.signal_count = 1;
     // This is the state after the explicit tab-close transaction has removed
     // the surface but before the next service refresh arrives.
     graph.state.pairs[0].surface_count = 0;
     var without_surface = stateWithSurface();
     without_surface.pairs[0].surface_count = 0;
     try graph.applyAuthoritativeSnapshot(without_surface);
-    try std.testing.expectEqual(@as(u8, 0), graph.state.attention_count);
+    try std.testing.expectEqual(@as(u8, 0), graph.state.signal_count);
 }

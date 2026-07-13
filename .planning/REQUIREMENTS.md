@@ -59,6 +59,22 @@
 - [x] **ACT-06**: Attention events never steal focus automatically and do not depend on scraping terminal output.
 - [x] **ACT-07**: Codex hooks publish the lifecycle states Codex exposes, and the native client preserves and renders provider, title, detail, unread state, and exact focus routing across snapshot refreshes.
 
+### Unified Workspace Signals
+
+- [ ] **SIG-01**: Hooks, terminal OSC, app-owned ACP sessions, and CLI automation publish one versioned provider-neutral signal envelope with explicit kind, source, scope, lifecycle, content, and occurrence time.
+- [ ] **SIG-02**: Activity signals coalesce by provider session and exact terminal surface while discrete notifications remain independently dismissible and replayable.
+- [ ] **SIG-03**: The unused legacy message store and CLI plus the duplicate structured-attention publication contract are removed with no compatibility layer.
+- [ ] **SIG-04**: The service journal, SSE stream, shared native ABI/model, and Linux client consume one signal contract, with attention implemented only as a UI projection.
+- [ ] **SIG-05**: Automated and production-native verification proves hook, OSC, ACP, automation, replay, reconnect, capacity, dismissal, and exact-surface behavior without duplicate or lost signals.
+
+### Workspace and Signal Presentation
+
+- [ ] **VIS-01**: Workspace rows expose default branch, pinned state, Git changes, agent presence, awaiting input, running work, unread notifications, pull-request/check state when available, and remote/missing state through a compact deterministic projection.
+- [ ] **VIS-02**: Sidebar Pinned and Active sections order rows by user relevance while preserving stable selection, exact navigation, user grouping, and accessible redundant text.
+- [ ] **VIS-03**: Agent/provider badges, activity pings, notification markers, Git counters, branch accents, and lifecycle icons remain legible and semantically distinct in dark, light, high-contrast, selected, unfocused, and reduced-motion states.
+- [ ] **VIS-04**: The attention/signal inbox uses clear hierarchy, grouping, lifecycle language, timestamps, provider identity, exact location, and actionable focus/dismiss controls without visual noise.
+- [ ] **VIS-05**: Automated visual-contract, accessibility, interaction, and production GTK UAT verify representative workspace/signal combinations at normal, narrow, and 200% text layouts.
+
 ### Linux Delivery
 
 - [ ] **PKG-01**: Users can install and launch the Linux client outside the source checkout with all service, native, and libghostty assets discoverable.
@@ -128,6 +144,16 @@
 | ACT-05 | Phase 106 | Complete |
 | ACT-06 | Phase 106 | Complete |
 | ACT-07 | Phase 107 | Complete |
+| SIG-01 | Phase 107.1 | Pending |
+| SIG-02 | Phase 107.1 | Pending |
+| SIG-03 | Phase 107.1 | Pending |
+| SIG-04 | Phase 107.1 | Pending |
+| SIG-05 | Phase 107.1 | Pending |
+| VIS-01 | Phase 107.2 | Pending |
+| VIS-02 | Phase 107.2 | Pending |
+| VIS-03 | Phase 107.2 | Pending |
+| VIS-04 | Phase 107.2 | Pending |
+| VIS-05 | Phase 107.2 | Pending |
 | PKG-01 | Phase 108 | Pending |
 | PKG-02 | Phase 108 | Pending |
 | PKG-03 | Phase 108 | Pending |
@@ -139,8 +165,8 @@
 | MAC-05 | Phase 108 | Pending |
 | MAC-06 | Phase 108 | Pending |
 
-**Coverage:** 46/46 requirements mapped exactly once.
+**Coverage:** 56/56 requirements mapped exactly once.
 
 ---
 *Requirements defined: 2026-07-11*
-*Last updated: 2026-07-12 after reopening Phase 107 for native-client hardening*
+*Last updated: 2026-07-13 for Phase 107.1 unified workspace signals*

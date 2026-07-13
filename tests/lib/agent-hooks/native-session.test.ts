@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, mkdtempSync, readFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
-import { ensureNativeAgentAttention, nativeAgentProviders, normalizeAgentSessionUpdate, prepareNativeAgentEnvironment } from "../../../src/lib/agent-hooks/native-session"
+import { ensureNativeAgentSignals, nativeAgentProviders, normalizeAgentSessionUpdate, prepareNativeAgentEnvironment } from "../../../src/lib/agent-hooks/native-session"
 
-describe("native agent attention setup", () => {
+describe("native agent signal setup", () => {
   test("prefers a provider-neutral ACP adapter when one claims the session", () => {
     const calls: string[] = []
-    const result = ensureNativeAgentAttention("/repo", "alpha", [{
+    const result = ensureNativeAgentSignals("/repo", "alpha", [{
       id: "codex",
       prepare(path, workspace) { calls.push(`${path}:${workspace}`); return true },
     }])
@@ -17,7 +17,7 @@ describe("native agent attention setup", () => {
 
   test("falls back to merge-safe project-local hooks for terminal Codex", () => {
     const repo = mkdtempSync(join(tmpdir(), "git-stacks-native-agent-"))
-    const result = ensureNativeAgentAttention(repo, "alpha")
+    const result = ensureNativeAgentSignals(repo, "alpha")
     expect(result).toEqual({ transport: "hooks", provider: "codex" })
     const document = JSON.parse(readFileSync(join(repo, ".codex", "hooks.json"), "utf8"))
     expect(document.hooks.PermissionRequest).toHaveLength(1)
@@ -39,9 +39,9 @@ describe("native agent attention setup", () => {
   test("falls back for Claude and Copilot and reports a missing OpenCode ACP transport", () => {
     const claude = mkdtempSync(join(tmpdir(), "git-stacks-native-claude-"))
     const copilot = mkdtempSync(join(tmpdir(), "git-stacks-native-copilot-"))
-    expect(ensureNativeAgentAttention(claude, "alpha", [], "claude").transport).toBe("hooks")
-    expect(ensureNativeAgentAttention(copilot, "alpha", [], "copilot").transport).toBe("hooks")
-    expect(ensureNativeAgentAttention("/repo", "alpha", [], "opencode")).toEqual({
+    expect(ensureNativeAgentSignals(claude, "alpha", [], "claude").transport).toBe("hooks")
+    expect(ensureNativeAgentSignals(copilot, "alpha", [], "copilot").transport).toBe("hooks")
+    expect(ensureNativeAgentSignals("/repo", "alpha", [], "opencode")).toEqual({
       transport: "unavailable", provider: "opencode", reason: "No ACP transport or project-hook fallback is available",
     })
   })

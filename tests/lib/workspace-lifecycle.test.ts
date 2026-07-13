@@ -89,7 +89,6 @@ mock.module("@/lib/paths", () => ({
   GLOBAL_CONFIG_FILE: "/tmp/phase-75-config/config.yml",
   REGISTRY_FILE: "/tmp/phase-75-config/registry.yml",
   TEMPLATES_DIR: "/tmp/phase-75-config/templates",
-  MESSAGES_DIR: "/tmp/phase-75-config/messages",
   PORTS_LOCK_FILE: "/tmp/phase-75-config/.ports.lock",
   getMainDir: (_wsRoot: string) => `${_wsRoot}/main`,
   getTasksDir: getTasksDirMock,

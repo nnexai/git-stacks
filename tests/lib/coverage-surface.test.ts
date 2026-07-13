@@ -55,23 +55,23 @@ describe("Phase 83 coverage command surface", () => {
   })
 
   test("coverage runner keeps default modes when positional filters are supplied", () => {
-    expect(parseArgs(["tests/lib/messages.test.ts"])).toMatchObject({
+    expect(parseArgs(["tests/lib/service/signal-state.test.ts"])).toMatchObject({
       runUnitMode: true,
       runIntegMode: true,
-      filters: ["tests/lib/messages.test.ts"],
+      filters: ["tests/lib/service/signal-state.test.ts"],
       workers: DEFAULT_INTEGRATION_WORKERS,
     })
 
-    expect(parseArgs(["--unit", "tests/lib/messages.test.ts"])).toMatchObject({
+    expect(parseArgs(["--unit", "tests/lib/service/signal-state.test.ts"])).toMatchObject({
       runUnitMode: true,
       runIntegMode: false,
-      filters: ["tests/lib/messages.test.ts"],
+      filters: ["tests/lib/service/signal-state.test.ts"],
     })
 
-    expect(parseArgs(["--integ", "tests/commands/message.test.ts"])).toMatchObject({
+    expect(parseArgs(["--integ", "tests/service/events.test.ts"])).toMatchObject({
       runUnitMode: false,
       runIntegMode: true,
-      filters: ["tests/commands/message.test.ts"],
+      filters: ["tests/service/events.test.ts"],
     })
 
     expect(parseArgs(["--integ", "--workers", "1", "--keep-workdir"])).toMatchObject({

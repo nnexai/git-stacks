@@ -13,7 +13,6 @@ export const WORKSPACES_DIR = join(WS_CONFIG_DIR, "workspaces")
 export const GLOBAL_CONFIG_FILE = join(WS_CONFIG_DIR, "config.yml")
 export const REGISTRY_FILE = join(WS_CONFIG_DIR, "registry.yml")
 export const TEMPLATES_DIR = join(WS_CONFIG_DIR, "templates")
-export const MESSAGES_DIR = join(WS_CONFIG_DIR, "messages")
 export const NOTES_DIR = join(WS_CONFIG_DIR, "notes")
 export const PORTS_LOCK_FILE = join(WS_CONFIG_DIR, ".ports.lock")
 

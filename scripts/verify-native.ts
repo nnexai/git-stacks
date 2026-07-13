@@ -78,7 +78,7 @@ async function pristineTreeSha(path: string): Promise<string> {
 const fixtureSource = join(ROOT, "tests", "fixtures", "service-v1")
 const fixtureExport = join(NATIVE, "tests", "fixtures")
 const fixtureNames = ["discovery.json", "request-timeout-error.json", "workspace-snapshot.json"]
-const nativeOnlyFixtureNames = ["abi-v1-attention-legacy.json"]
+const nativeOnlyFixtureNames = ["abi-v1-signal-activity.json", "abi-v1-signal-notification.json"]
 
 async function verifyFixtureExport(): Promise<void> {
   for (const name of fixtureNames) {

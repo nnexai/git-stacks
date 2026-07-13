@@ -22,7 +22,7 @@ pub fn present(state: *const model.State, workspace: model.Id, repository: ?mode
     const a = model.aggregate(state, workspace, repository, surface);
     var p: Presentation = .{ .icon = if (a.severity == .primary) "dialog-warning-symbolic" else if (a.severity == .secondary) "emblem-ok-symbolic" else "media-record-symbolic", .unread = a.unread, .severity = a.severity };
     const status = switch (a.severity) { .primary => "Needs input", .secondary => "Completed", .none => "Idle" };
-    const rendered = std.fmt.bufPrint(&p.label, "{d} unread · {s}", .{ a.unread, status }) catch "Attention";
+    const rendered = std.fmt.bufPrint(&p.label, "{d} unread · {s}", .{ a.unread, status }) catch "Signal";
     p.label_len = @intCast(rendered.len);
     return p;
 }
@@ -41,8 +41,8 @@ fn surfaceTitle(state: *const model.State, id: model.Id) ?[]const u8 {
     const surface = state.pairs[loc.pair].surfaces[loc.surface];
     return if (surface.title_len > 0) surface.title[0..surface.title_len] else "Terminal";
 }
-pub fn project(state: *const model.State, item: model.Attention) AttentionRow {
-    var row: AttentionRow = .{ .id = item.id, .provider = switch (item.provider) { .claude => "Claude", .copilot => "GitHub Copilot", .codex => "Codex", .opencode => "OpenCode", .other => "Other" }, .fallback = "Exact terminal", .unread = !item.read };
+pub fn project(state: *const model.State, item: model.Signal) AttentionRow {
+    var row: AttentionRow = .{ .id = item.id, .provider = switch (item.provider) { .claude => "Claude", .copilot => "GitHub Copilot", .codex => "Codex", .opencode => "OpenCode", .automation => "Automation", .acp => "ACP", .user => "User", .other => "Other" }, .fallback = "Exact terminal", .unread = !item.read and model.severity(item.status) != .none };
     const title = if (item.title_len > 0) item.title[0..item.title_len] else @tagName(item.status);
     @memcpy(row.title[0..title.len], title); row.title_len = @intCast(title.len);
     @memcpy(row.detail[0..item.detail_len], item.detail[0..item.detail_len]); row.detail_len = item.detail_len;
@@ -59,4 +59,4 @@ pub fn project(state: *const model.State, item: model.Attention) AttentionRow {
 }
 
 pub fn activate(state: model.State, id: model.Id) reducer.Result { return reducer.reduce(state, .{ .select_attention = .{ .attention_id = id } }); }
-pub fn asynchronous(state: model.State, item: model.Attention) reducer.Result { const result = reducer.reduce(state, .{ .attention_received = item }); std.debug.assert(result.effect == .none); return result; }
+pub fn asynchronous(state: model.State, item: model.Signal) reducer.Result { const result = reducer.reduce(state, .{ .signal_received = item }); std.debug.assert(result.effect == .none); return result; }

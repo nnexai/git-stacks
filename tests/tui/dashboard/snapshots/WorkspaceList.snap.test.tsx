@@ -68,7 +68,7 @@ describe("WorkspaceList snapshots", () => {
           selected={new Set()}
           filter=""
           height={6}
-          allMessages={new Map()}
+          allSignals={new Map()}
           tick={0}
         />
       ),
@@ -97,7 +97,7 @@ describe("WorkspaceList snapshots", () => {
           selected={new Set([entries[1]!.workspace.name])}
           filter=""
           height={6}
-          allMessages={new Map()}
+          allSignals={new Map()}
           tick={0}
         />
       ),

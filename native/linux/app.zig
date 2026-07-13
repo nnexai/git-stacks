@@ -13,7 +13,7 @@ const application = @import("application");
 const workspace_view = @import("workspace_view");
 const command_launcher = @import("command_launcher");
 const attention_view = @import("attention_view");
-const attention_osc = @import("attention_osc");
+const signal_osc = @import("signal_osc");
 const workspace_creation = @import("workspace_creation");
 const service_sync = @import("service_sync");
 const c = @cImport({
@@ -32,11 +32,11 @@ const product_css =
     ".git-stacks-sidebar button.workspace-row.selected-workspace:focus-visible { outline: 2px solid @accent_fg_color; outline-offset: -3px; }" ++
     ".git-stacks-launcher { background: @window_bg_color; padding: 12px; }" ++
     ".git-stacks-launcher row { padding: 8px 10px; border-radius: 8px; }" ++
-    ".git-stacks-attention-row { padding: 10px 12px; border-radius: 10px; }" ++
-    ".git-stacks-attention-row:hover { background: @view_bg_color; }" ++
+    ".git-stacks-signal-row { padding: 10px 12px; border-radius: 10px; }" ++
+    ".git-stacks-signal-row:hover { background: @view_bg_color; }" ++
     ".git-stacks-provider-chip { background: alpha(@accent_bg_color, .18); color: @accent_color; border-radius: 999px; padding: 2px 7px; font-weight: 700; }" ++
     ".git-stacks-status-chip { border-radius: 999px; padding: 2px 7px; font-weight: 600; }" ++
-    ".git-stacks-sidebar .attention-badge { background: @accent_bg_color; color: @accent_fg_color; border-radius: 999px; padding: 1px 7px; font-weight: 700; }" ++
+    ".git-stacks-sidebar .signals-badge { background: @accent_bg_color; color: @accent_fg_color; border-radius: 999px; padding: 1px 7px; font-weight: 700; }" ++
     ".git-stacks-sidebar expander { padding: 6px 0; }" ++
     ".git-stacks-sidebar expander > title { font-weight: 600; color: @window_fg_color; }" ++
     ".git-stacks-sidebar .title-4 { margin: 12px 6px 4px 6px; }";
@@ -187,7 +187,7 @@ fn launchSpec(state: *State, pair: model.PairKey, command_id: ?[]const u8) !surf
         random[8], random[9], random[10], random[11], random[12], random[13], random[14], random[15],
     });
     std.crypto.random.bytes(&random);
-    _ = try std.fmt.bufPrint(&spec.attention_token, "{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ random[0], random[1], random[2], random[3], random[4], random[5], random[6], random[7], random[8], random[9], random[10], random[11], random[12], random[13], random[14], random[15] });
+    _ = try std.fmt.bufPrint(&spec.signal_token, "{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}{x:0>2}", .{ random[0], random[1], random[2], random[3], random[4], random[5], random[6], random[7], random[8], random[9], random[10], random[11], random[12], random[13], random[14], random[15] });
     @memcpy(spec.cwd[0..launch.cwd_len], launch.cwdSlice());
     var command_len: usize = 0;
     for (0..launch.argv_count) |i| try appendQuoted(spec.command[0 .. spec.command.len - 1], &command_len, launch.arg(i));
@@ -226,7 +226,7 @@ fn launchSpec(state: *State, pair: model.PairKey, command_id: ?[]const u8) !surf
         @memcpy(spec.environment_values[i][0..launch.command_id_len], launch.command_id[0..launch.command_id_len]);
         spec.environment_count += 1;
     }
-    const reserved = &[_]struct { k: []const u8, v: []const u8 }{ .{ .k = "GIT_STACKS_SURFACE_ID", .v = &spec.surface_id }, .{ .k = "GIT_STACKS_TAB_ID", .v = &spec.surface_id }, .{ .k = "GIT_STACKS_WORKSPACE_ID", .v = &spec.workspace_id }, .{ .k = "GIT_STACKS_REPOSITORY_ID", .v = &spec.repository_id }, .{ .k = "GIT_STACKS_ATTENTION_TOKEN", .v = &spec.attention_token }, .{ .k = "GIT_STACKS_ATTENTION_TRANSPORT", .v = "osc9" } };
+    const reserved = &[_]struct { k: []const u8, v: []const u8 }{ .{ .k = "GIT_STACKS_SURFACE_ID", .v = &spec.surface_id }, .{ .k = "GIT_STACKS_TAB_ID", .v = &spec.surface_id }, .{ .k = "GIT_STACKS_WORKSPACE_ID", .v = &spec.workspace_id }, .{ .k = "GIT_STACKS_REPOSITORY_ID", .v = &spec.repository_id }, .{ .k = "GIT_STACKS_SIGNAL_TOKEN", .v = &spec.signal_token }, .{ .k = "GIT_STACKS_SIGNAL_TRANSPORT", .v = "osc9" } };
     for (reserved) |entry| {
         const i = spec.environment_count;
         if (i >= spec.environment_keys.len) return error.EnvironmentCapacity;
@@ -556,8 +556,9 @@ fn surfaceTitleChanged(context: *anyopaque, id: model.Id, title: []const u8) voi
     if (surface.title_pinned) return;
     const trimmed = std.mem.trim(u8, title, " \t\r\n");
     if (trimmed.len == 0) return;
-    surface.title_len = @intCast(@min(trimmed.len, surface.title.len));
-    @memcpy(surface.title[0..surface.title_len], trimmed[0..surface.title_len]);
+    const safe = model.utf8Prefix(trimmed, surface.title.len) orelse return;
+    surface.title_len = @intCast(safe.len);
+    @memcpy(surface.title[0..safe.len], safe);
     if (state.graph.state.surface) |selected| {
         if (std.mem.eql(u8, &selected.id, &id)) state.graph.state.surface = surface.*;
     }
@@ -584,12 +585,12 @@ fn surfaceTitleChanged(context: *anyopaque, id: model.Id, title: []const u8) voi
 }
 fn surfaceAttentionReceived(context: *anyopaque, id: model.Id, token: []const u8, _: []const u8, body: []const u8) void {
     const state: *State = @ptrCast(@alignCast(context));
-    const event = attention_osc.parse(body, token) orelse return;
+    const event = signal_osc.parse(body, token) orelse return;
     const loc = model.surfaceLocation(&state.graph.state, id) orelse return;
     const pair = state.graph.state.pairs[loc.pair].key;
     var attention_id = id;
     attention_id[0] = switch (event.provider) { .codex => 'a', .claude => 'b', .copilot => 'c', .opencode => 'd' };
-    var item: model.Attention = .{
+    var item: model.Signal = .{
         .id = attention_id,
         .workspace_id = pair.workspace_id,
         .repository_id = pair.repository_id,
@@ -599,11 +600,11 @@ fn surfaceAttentionReceived(context: *anyopaque, id: model.Id, token: []const u8
     };
     const provider = @tagName(event.provider);
     const status = @tagName(event.state);
-    const service_id = std.fmt.bufPrint(&item.service_id, "osc:{s}:{s}", .{ &id, provider }) catch return;
-    item.service_id_len = @intCast(service_id.len);
+    const signal_id = std.fmt.bufPrint(&item.signal_id, "osc:{s}:{s}:{s}", .{ &id, provider, event.session }) catch return;
+    item.signal_id_len = @intCast(signal_id.len);
     const title = std.fmt.bufPrint(&item.title, "{s}: {s}", .{ provider, status }) catch return;
     item.title_len = @intCast(title.len);
-    state.graph.state = reducer.reduce(state.graph.state, .{ .attention_received = item }).state;
+    state.graph.state = reducer.reduce(state.graph.state, .{ .signal_received = item }).state;
     refreshProjection(state);
 }
 fn adoptHosts(data: ?*anyopaque) callconv(.c) c.gboolean {
@@ -715,7 +716,7 @@ fn refreshLauncher(state: *State) void {
 fn refreshAttentionRows(state: *State) void {
     const list = state.attention_list orelse return;
     clearList(list);
-    for (state.graph.state.attention[0..state.graph.state.attention_count]) |item| {
+    for (state.graph.state.signals[0..state.graph.state.signal_count]) |item| {
         const projected = attention_view.project(&state.graph.state, item);
         var title_buffer: [220:0]u8 = [_:0]u8{0} ** 220;
         const title = std.fmt.bufPrintZ(&title_buffer, "{s}{s}", .{ projected.title[0..projected.title_len], if (projected.unread) " · Unread" else "" }) catch continue;
@@ -723,7 +724,7 @@ fn refreshAttentionRows(state: *State) void {
         const detail = std.fmt.bufPrintZ(&detail_buffer, "{s}\n{s}{s}{s}\n{s}", .{ projected.location[0..projected.location_len], projected.detail[0..projected.detail_len], if (projected.detail_len > 0 and projected.occurred_len > 0) " · " else "", projected.occurred[0..projected.occurred_len], projected.fallback }) catch continue;
         const button = c.gtk_button_new() orelse continue;
         c.gtk_widget_add_css_class(button, "flat");
-        c.gtk_widget_add_css_class(button, "git-stacks-attention-row");
+        c.gtk_widget_add_css_class(button, "git-stacks-signal-row");
         const box = c.gtk_box_new(c.GTK_ORIENTATION_VERTICAL, 3) orelse continue;
         const header = c.gtk_box_new(c.GTK_ORIENTATION_HORIZONTAL, 7) orelse continue;
         const provider = c.gtk_label_new(projected.provider.ptr) orelse continue;
@@ -1094,13 +1095,13 @@ fn refreshProjection(state: *State) void {
     if (state.attention_label) |label| {
         var text: [96:0]u8 = [_:0]u8{0} ** 96;
         const status = switch (severity) { .primary => "Needs input", .secondary => "Completed", .none => "Idle" };
-        const rendered = std.fmt.bufPrintZ(&text, "Attention: {d} unread · {s}", .{ unread, status }) catch "Attention";
+        const rendered = std.fmt.bufPrintZ(&text, "Signal: {d} unread · {s}", .{ unread, status }) catch "Signal";
         c.gtk_label_set_text(label, if (unread > 0) rendered.ptr else "");
         c.gtk_widget_set_tooltip_text(@ptrCast(@alignCast(label)), if (unread > 0) rendered.ptr else null);
         c.gtk_widget_set_visible(@ptrCast(@alignCast(label)), @intFromBool(unread > 0));
         setAccessible(label, c.GTK_ACCESSIBLE_ROLE_STATUS, rendered.ptr, "Hierarchical workspace, repository, and terminal attention status");
     }
-    if (state.attention_button) |button| c.gtk_widget_set_visible(@ptrCast(@alignCast(button)), @intFromBool(state.graph.state.attention_count > 0));
+    if (state.attention_button) |button| c.gtk_widget_set_visible(@ptrCast(@alignCast(button)), @intFromBool(state.graph.state.signal_count > 0));
     refreshAttentionRows(state);
     refreshLauncher(state);
 }
@@ -1510,7 +1511,7 @@ fn createTerminal(state: *State, command_id: ?[]const u8, predecessor: ?model.Id
     state.terminals[state.terminal_count] = surface;
     surface.setExitHandler(state, surfaceExited);
     surface.setTitleHandler(surfaceTitleChanged);
-    surface.setAttentionHandler(surfaceAttentionReceived);
+    surface.setSignalHandler(surfaceAttentionReceived);
     state.terminal_count += 1;
     // Ghostty does not create/register the child until its widget belongs to a
     // realized GTK hierarchy.  The page is provisional until that handshake
@@ -2126,7 +2127,7 @@ fn buildWorkspaceUi(state: *State, window: *c.GtkWindow, terminal: ?*surface_mod
     state.attention_button = @ptrCast(attention_button);
     c.gtk_menu_button_set_icon_name(@ptrCast(attention_button), "dialog-warning-symbolic");
     c.gtk_widget_set_tooltip_text(attention_button, "Open attention inbox");
-    setAccessible(attention_button, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Attention inbox", "Review terminals that need input, failed, completed, or are working");
+    setAccessible(attention_button, c.GTK_ACCESSIBLE_ROLE_BUTTON, "Signal inbox", "Review terminals that need input, failed, completed, or are working");
     const attention_popover = c.gtk_popover_new() orelse return null;
     const attention_scroll = c.gtk_scrolled_window_new() orelse return null;
     c.gtk_widget_set_size_request(attention_scroll, 420, 300);
@@ -2376,14 +2377,6 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             const group = state.action_group orelse return 1;
             state.ui_smoke_stage = 20;
             c.g_action_group_activate_action(@ptrCast(group), "new-shell", null);
-            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
-            if (pair.surface_count < 2) {
-                std.debug.print("GIT_STACKS_WORKSPACE_SMOKE failure=create-terminal\n", .{});
-                return c.G_SOURCE_REMOVE;
-            }
-            state.ui_smoke_ids[1] = pair.surfaces[pair.surface_count - 1].id;
-            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT action=new-shell realized=true registered=true tab=true\n", .{});
-            state.ui_smoke_stage = 1;
             return 1;
         },
         1 => {
@@ -2397,11 +2390,6 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             const parameter = c.g_variant_new_string(@ptrCast(command_id.ptr));
             state.ui_smoke_stage = 21;
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "activate-command", parameter);
-            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
-            if (pair.surface_count < 3) return 1;
-            state.ui_smoke_ids[2] = pair.surfaces[pair.surface_count - 1].id;
-            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT action=configured-command distinct=true registered=true tab=true\n", .{});
-            state.ui_smoke_stage = 2;
             return 1;
         },
         2 => {
@@ -2428,11 +2416,6 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             }
             state.ui_smoke_stage = 22;
             launcherActivated(list, row, state);
-            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
-            if (pair.surface_count < 4) return 1;
-            state.ui_smoke_ids[3] = pair.surfaces[pair.surface_count - 1].id;
-            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT launcher=open,search,activate result=true\n", .{});
-            state.ui_smoke_stage = 3;
             return 1;
         },
         3 => {
@@ -2462,8 +2445,6 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             @memcpy(id_text[0..36], &ended);
             state.ui_smoke_stage = 24;
             c.g_action_group_activate_action(@ptrCast(state.action_group.?), "relaunch-tab", c.g_variant_new_string(id_text[0..36 :0].ptr));
-            state.ui_smoke_ids[4] = if (state.graph.state.surface) |surface| surface.id else return 1;
-            state.ui_smoke_stage = 5;
             return 1;
         },
         5 => {
@@ -2511,7 +2492,38 @@ fn workspaceLifecycleSmoke(data: ?*anyopaque) callconv(.c) c.gboolean {
             if (state.window) |window| c.gtk_window_close(window);
             return c.G_SOURCE_REMOVE;
         },
-        20, 21, 22, 24 => return 1,
+        20 => {
+            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
+            if (pair.surface_count < 2 or state.terminal_count < 2) return 1;
+            state.ui_smoke_ids[1] = pair.surfaces[pair.surface_count - 1].id;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT action=new-shell realized=true registered=true tab=true\n", .{});
+            state.ui_smoke_stage = 1;
+            return 1;
+        },
+        21 => {
+            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
+            if (pair.surface_count < 3 or state.terminal_count < 3) return 1;
+            state.ui_smoke_ids[2] = pair.surfaces[pair.surface_count - 1].id;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT action=configured-command distinct=true registered=true tab=true\n", .{});
+            state.ui_smoke_stage = 2;
+            return 1;
+        },
+        22 => {
+            const pair = (workspace_view.View{ .state = &state.graph.state }).pair() orelse return 1;
+            if (pair.surface_count < 4 or state.terminal_count < 4) return 1;
+            state.ui_smoke_ids[3] = pair.surfaces[pair.surface_count - 1].id;
+            std.debug.print("GIT_STACKS_WORKSPACE_CHECKPOINT launcher=open,search,activate result=true\n", .{});
+            state.ui_smoke_stage = 3;
+            return 1;
+        },
+        24 => {
+            const old = state.ui_smoke_ids[2] orelse return 1;
+            const current = state.graph.state.surface orelse return 1;
+            if (std.mem.eql(u8, &old, &current.id)) return 1;
+            state.ui_smoke_ids[4] = current.id;
+            state.ui_smoke_stage = 5;
+            return 1;
+        },
         else => return c.G_SOURCE_REMOVE,
     }
 }
@@ -2577,7 +2589,7 @@ fn activate(raw: ?*c.GtkApplication, _: ?*anyopaque) callconv(.c) void {
         state.terminals[0] = initial_terminal;
         initial_terminal.setExitHandler(state, surfaceExited);
         initial_terminal.setTitleHandler(surfaceTitleChanged);
-        initial_terminal.setAttentionHandler(surfaceAttentionReceived);
+        initial_terminal.setSignalHandler(surfaceAttentionReceived);
         state.terminal_count = 1;
     }
     active = state;

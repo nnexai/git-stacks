@@ -100,7 +100,7 @@ pub fn build(b: *std.Build) void {
     attention_view_module.addImport("model", app_model_module);
     attention_view_module.addImport("reducer", app_reducer_module);
     app_module.addImport("attention_view", attention_view_module);
-    app_module.addImport("attention_osc", b.createModule(.{ .root_source_file = b.path("linux/attention_osc.zig") }));
+    app_module.addImport("signal_osc", b.createModule(.{ .root_source_file = b.path("linux/signal_osc.zig") }));
     app_module.addImport("workspace_creation", b.createModule(.{ .root_source_file = b.path("linux/workspace_creation.zig") }));
     app_module.addImport("service_sync", b.createModule(.{ .root_source_file = b.path("linux/service_sync.zig") }));
     const app = b.addExecutable(.{ .name = "git-stacks-native", .root_module = app_module });
@@ -204,7 +204,7 @@ pub fn build(b: *std.Build) void {
     attention_test_module.addImport("attention_view", attention_view_test_module);
     const attention_step = b.step("attention-test", "Run structured attention derivation and focus routing tests");
     attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = attention_test_module })).step);
-    attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("linux/attention_osc.zig"), .target = b.graph.host, .optimize = .Debug }) })).step);
+    attention_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = b.createModule(.{ .root_source_file = b.path("linux/signal_osc.zig"), .target = b.graph.host, .optimize = .Debug }) })).step);
 
     const wu_model = b.createModule(.{ .root_source_file = b.path("core/model.zig") });
     const wu_view = b.createModule(.{ .root_source_file = b.path("linux/workspace_view.zig") });

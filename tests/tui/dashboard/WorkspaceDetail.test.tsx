@@ -130,7 +130,7 @@ describe("WorkspaceDetail integration display", () => {
   test("Test 1: renders 'Integrations:' section header", async () => {
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -140,7 +140,7 @@ describe("WorkspaceDetail integration display", () => {
   test("Test 2: shows enabled integration with checkmark and [global] source when no overrides", async () => {
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -160,7 +160,7 @@ describe("WorkspaceDetail integration display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -177,7 +177,7 @@ describe("WorkspaceDetail integration display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -196,7 +196,7 @@ describe("WorkspaceDetail integration display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -206,7 +206,7 @@ describe("WorkspaceDetail integration display", () => {
   test("Test 6: shows [skipped: no matching repos] for integration where applies() returns false", async () => {
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -231,7 +231,7 @@ describe("WorkspaceDetail integration display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -255,7 +255,7 @@ describe("WorkspaceDetail integration display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -279,7 +279,7 @@ describe("WorkspaceDetail linked issues display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -290,7 +290,7 @@ describe("WorkspaceDetail linked issues display", () => {
   test("Test B: workspace with no linked issues shows compact Source/Issues zero state", async () => {
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -309,7 +309,7 @@ describe("WorkspaceDetail linked issues display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -322,7 +322,7 @@ describe("WorkspaceDetail linked issues display", () => {
     // Workspace has no jira settings at all
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -344,12 +344,12 @@ describe("WorkspaceDetail operational sections", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     await renderOnce()
     const frame = captureCharFrame()
-    const sections = ["Messages:", "Repos:", "Files:", "Source/Issues:", "Integrations:", "Notes:", "Config:"]
+    const sections = ["Signals:", "Repos:", "Files:", "Source/Issues:", "Integrations:", "Notes:", "Config:"]
     const positions = sections.map(section => frame.indexOf(section))
     expect(positions.every(position => position >= 0)).toBe(true)
     expect([...positions].sort((a, b) => a - b)).toEqual(positions)
@@ -358,7 +358,7 @@ describe("WorkspaceDetail operational sections", () => {
   test("renders notes only in detail content", async () => {
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
     )
     await renderOnce()
     await renderOnce()
@@ -399,7 +399,7 @@ describe("WorkspaceDetail operational sections", () => {
       },
     }
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} fileStatus={loadedStatus as any} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} fileStatus={loadedStatus as any} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -415,12 +415,12 @@ describe("WorkspaceDetail operational sections", () => {
   test("detail scrolling exposes content beyond the first visible page", async () => {
     const entry = makeEntry({ workspace: { labels: ["ops"], template: "my-tpl" } })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} messages={[]} tick={0} height={5} scrollOffset={20} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} height={5} scrollOffset={20} />
     )
     await renderOnce()
     await renderOnce()
     const frame = captureCharFrame()
     expect(frame).toContain("Config:")
-    expect(frame).not.toContain("Messages:")
+    expect(frame).not.toContain("Signals:")
   })
 })

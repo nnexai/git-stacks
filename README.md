@@ -394,31 +394,22 @@ When you create a workspace from a template, the template's labels are snapshot-
 
 In the TUI dashboard, label tags render after the branch name, the `/` filter matches against labels, and the `g` key toggles a group-by-label view with an `[unlabeled]` section for untagged workspaces.
 
-## Workspace Notifications
+## Workspace Signals
 
-AI agents and hook scripts can send notifications to workspaces:
+Providers, hooks, and automation publish one versioned signal contract through the authenticated local service. Activity is scoped to an exact provider session and terminal surface; notifications are discrete and independently dismissible.
 
 ```bash
-# Send a notification (auto-detects workspace from GS_WORKSPACE_NAME env var)
-git-stacks message send "Build complete"
+# Publish a discrete automation notification
+git-stacks service signal publish --kind notification --source automation \
+  --workspace my-feature --title "Build complete"
 
-# Send with an explicit sender name (useful for multi-agent setups)
-git-stacks message send "Tests passed" --from ci-bot
-
-# Target a specific workspace
-git-stacks message send "Deploy done" --workspace my-feature --from deploy-bot
-
-# List notifications for current workspace
-git-stacks message list
-
-# Clear all notifications for current workspace
-git-stacks message clear
-
-# Clear notifications from a specific sender only
-git-stacks message clear --from ci-bot
+# Publish exact-surface lifecycle activity
+git-stacks service signal publish --kind activity --state waiting --source codex \
+  --workspace my-feature --repository-id "$GIT_STACKS_REPOSITORY_ID" \
+  --surface-id "$GIT_STACKS_SURFACE_ID" --session-id "$GIT_STACKS_AGENT_SESSION_ID"
 ```
 
-Messages persist in `~/.config/git-stacks/messages/{workspace}.jsonl`. When the TUI dashboard is running, messages appear in real time via Unix socket — no manual refresh needed.
+Signals are journaled by the managed service and replayed by native and TUI clients. `working`, `completed`, and `idle` activity remains visible history without an unread badge; `waiting`, `failed`, and undismissed notifications project attention. Notification dismissal is service-authoritative and survives client restart or reconnect.
 
 ## Dashboard
 
@@ -431,10 +422,10 @@ The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs
 - Switch tabs with `1` / `2` / `3` or `[` / `]`
 - Each tab shows a split list + detail pane — detail updates as you move the cursor
 - All dialogs render as centered overlays with dimmed backgrounds
-- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; notification previews in list rows; full message history in detail pane; aggregated `↑N` / `↓N` badges in list rows plus per-repo ahead/behind badges in detail view, with `?` on stale data
+- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; service-backed signal previews in list rows; full signal history in the detail pane; aggregated `↑N` / `↓N` badges in list rows plus per-repo ahead/behind badges in detail view, with `?` on stale data
   - `s` — sync workspace (per-repo progress with 30s fetch timeout)
-  - `m` — open full-screen message overlay for selected workspace
-  - `c` — clear messages from a sender in the detail pane
+  - `m` — open the full-screen signal overlay for the selected workspace
+  - `d` — dismiss the selected notification through the service
   - `r` — reload data from disk
 - **Templates tab**: create workspace from template (`w`), edit, clone, remove; detail pane shows resolved integration overrides
 - **Repos tab**: create workspace (`n`), create template (`t`), remove; `Space` to multi-select repos
@@ -474,7 +465,7 @@ git-stacks install --hooks --copilot --claude
 git-stacks install --hooks --remove
 ```
 
-Claude Code hooks are written to `.claude/settings.json`. Copilot hooks are written to `.github/hooks/git-stacks.json`. Both hook sets bridge agent lifecycle events (task completion, user questions, prompt submission) into workspace notifications via `git-stacks message send`.
+Claude Code hooks are written to `.claude/settings.json`. Copilot hooks are written to `.github/hooks/git-stacks.json`. Managed hooks normalize lifecycle events into authenticated workspace signals with provider-session and exact-surface identity.
 
 When neither `--claude` nor `--copilot` is passed, an interactive prompt lets you choose which hook set(s) to install. The plugin system is extensible — new agent frameworks can be added as plugins in `src/lib/agent-hooks/`.
 
@@ -660,15 +651,15 @@ Lifecycle operations cascade: `remove` triggers `clean` which triggers `close`. 
 
 Hooks receive injected env vars: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path.
 
-**Using hooks with the notification system:**
+**Using hooks with workspace signals:**
 
 ```yaml
 # In a template or workspace YAML
 hooks:
   post_create:
-    - git-stacks message send "Workspace ready" --from setup
+    - git-stacks service signal publish --kind notification --source automation --workspace "$GS_WORKSPACE_NAME" --title "Workspace ready"
   post_open:
-    - git-stacks message send "Opened" --from workspace
+    - git-stacks service signal publish --kind notification --source automation --workspace "$GS_WORKSPACE_NAME" --title "Opened"
 ```
 
 ## Secrets

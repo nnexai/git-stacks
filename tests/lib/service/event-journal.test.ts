@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises"
+import { appendFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { EventJournal, publishOperationEvent } from "@/lib/service/event-journal"
@@ -72,6 +72,20 @@ describe("EventJournal", () => {
     expect(await readFile(join(path, "events.jsonl"), "utf8")).not.toContain("partial")
     await appendFile(join(path, "events.jsonl"), "not-json\n", "utf8")
     await expect(new EventJournal({ root: path }).replay("0")).rejects.toThrow(/corrupt journal/)
+  })
+
+  test("removes retired attention records while preserving valid records and cursor monotonicity", async () => {
+    const path = await root()
+    await writeFile(join(path, "events.jsonl"), [
+      JSON.stringify({ protocol: "v1", sequence: "7", timestamp: "2026-07-12T00:00:00.000Z", type: "attention", attention: {} }),
+      JSON.stringify({ protocol: "v1", sequence: "8", timestamp: "2026-07-12T00:00:01.000Z", type: "control", control: { kind: "snapshot_invalidated", revision: "3" } }),
+    ].join("\n") + "\n")
+
+    const journal = new EventJournal({ root: path })
+    expect((await journal.replay("0")).kind).toBe("replay_gap")
+    const next = await journal.appendSnapshotInvalidated("4")
+    expect(next.sequence).toBe("9")
+    expect(await readFile(join(path, "events.jsonl"), "utf8")).not.toContain('"type":"attention"')
   })
 
   test("reports replay gaps with retained bounds and current snapshot revision", async () => {

@@ -12,12 +12,12 @@ const repositoryId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 const surfaceId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 const snapshot = { buildAll: async () => [{ workspace: { id: workspaceId, name: "alpha" } }], buildWorkspace: async () => null, currentRevision: async () => "1" }
 
-describe("Codex attention publication", () => {
+describe("Codex signal publication", () => {
   test("best-effort is silent and successful without a service while strict mode fails", async () => {
     const root = join(tmpdir(), `git-stacks-codex-absent-${crypto.randomUUID()}`)
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
     const run = async (bestEffort: boolean) => {
-      const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "attention", "publish", "--state", "working", "--source", "codex", "--workspace", "alpha", ...(bestEffort ? ["--best-effort"] : [])], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: root }, stdout: "pipe", stderr: "pipe" })
+      const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "signal", "publish", "--state", "working", "--source", "codex", "--workspace", "alpha", ...(bestEffort ? ["--best-effort"] : [])], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: root }, stdout: "pipe", stderr: "pipe" })
       return { exitCode: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() }
     }
     expect(await run(true)).toEqual({ exitCode: 0, stdout: "", stderr: "" })
@@ -32,11 +32,11 @@ describe("Codex attention publication", () => {
     cleanup.push(() => rmSync(configRoot, { recursive: true, force: true }))
     const service = await startManagedService({ serviceRoot: root, snapshot: snapshot as never })
     cleanup.push(() => service.stop())
-    const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "attention", "publish", "--state", "waiting", "--source", "codex", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--title", "Codex blocked", "--detail", "Approve the command", "--best-effort"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
+    const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "signal", "publish", "--state", "waiting", "--source", "codex", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "codex-session", "--title", "Codex blocked", "--detail", "Approve the command", "--best-effort"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
     expect(await child.exited).toBe(0)
     expect(await new Response(child.stderr).text()).toBe("")
     const record = JSON.parse(readFileSync(join(root, "events.jsonl"), "utf8").trim())
-    expect(record).toMatchObject({ type: "attention", attention: { source: "codex", state: "waiting", workspace_id: workspaceId, repository_id: repositoryId, surface_id: surfaceId, title: "Codex blocked", detail: "Approve the command" } })
+    expect(record).toMatchObject({ type: "signal", signal: { kind: "activity", source: "codex", state: "waiting", workspace_id: workspaceId, repository_id: repositoryId, surface_id: surfaceId, session_id: "codex-session", title: "Codex blocked", detail: "Approve the command" } })
     const credential = readOfficialClientCredential(service.descriptor.credential_lookup, { serviceRoot: root })!
     const replay = await fetch(new URL("/v1/events?cursor=0", service.descriptor.endpoint), { headers: { authorization: `Bearer ${credential.token}` } })
     const reader = replay.body!.getReader()

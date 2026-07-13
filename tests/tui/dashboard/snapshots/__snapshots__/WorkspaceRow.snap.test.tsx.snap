@@ -1,47 +1,23 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`WorkspaceRow snapshots renders focused row with no messages (shows creation date) 1`] = `
-">[ ] · my-feature               feat/my-feature           1wt 1tr  70d                              
-"
-`;
+exports[`WorkspaceRow snapshots renders focused row with no messages (shows creation date) 1`] = `">[ ] · my-feature               feat/my-feature           1wt 1tr  70d"`;
 
-exports[`WorkspaceRow snapshots renders unfocused row with no messages 1`] = `
-" [ ] · my-feature               feat/my-feature           1wt 1tr  70d                              
-"
-`;
+exports[`WorkspaceRow snapshots renders unfocused row with no messages 1`] = `" [ ] · my-feature               feat/my-feature           1wt 1tr  70d"`;
 
-exports[`WorkspaceRow snapshots renders selected row 1`] = `
-">[x] · my-feature               feat/my-feature           1wt 1tr  70d                              
-"
-`;
+exports[`WorkspaceRow snapshots renders selected row 1`] = `">[x] · my-feature               feat/my-feature           1wt 1tr  70d"`;
 
-exports[`WorkspaceRow snapshots renders row with a message preview 1`] = `
-" [ ] · my-feature               feat/my-feature           1wt 1tr  ci: Build succeeded  69d         
-"
-`;
+exports[`WorkspaceRow snapshots renders row with a message preview 1`] = `" [ ] · my-feature               feat/my-feature           1wt 1tr  automation: Build succeeded  69d"`;
 
-exports[`WorkspaceRow snapshots renders row with system message (no sender) 1`] = `
-" [ ] · my-feature               feat/my-feature           1wt 1tr  Workspace created  70d           
-"
-`;
+exports[`WorkspaceRow snapshots renders row with system message (no sender) 1`] = `" [ ] · my-feature               feat/my-feature           1wt 1tr  other: Workspace created  69d"`;
 
-exports[`WorkspaceRow snapshots renders loaded status with dirty repos 1`] = `
-" [ ] ~ my-feature              feat/my-feature          1wt 1tr ~1  70d                             
-"
-`;
+exports[`WorkspaceRow snapshots renders loaded status with dirty repos 1`] = `" [ ] ~ my-feature              feat/my-feature          1wt 1tr ~1  70d"`;
 
-exports[`WorkspaceRow snapshots renders long workspace name truncated 1`] = `
-" [ ] · a-very-long-workspace-n… feat/my-feature           1wt 1tr  70d                              
-"
-`;
+exports[`WorkspaceRow snapshots renders long workspace name truncated 1`] = `" [ ] · a-very-long-workspace-n… feat/my-feature           1wt 1tr  70d"`;
 
-exports[`WorkspaceRow snapshots renders long message text truncated 1`] = `
-" [ ] · my-feature               feat/my-feature           1wt 1tr  ci-pipeline: This is a ver…  69d 
-"
-`;
+exports[`WorkspaceRow snapshots renders long message text truncated 1`] = `" [ ] · my-feature               feat/my-feature           1wt 1tr  automation: This is a very…  69d"`;
 
-exports[`WorkspaceRow snapshots renders narrow width row with message attention last 1`] = `">[ ~ my-     feat/   ↑2 ↓1 [backend] [   1wt      ci:"`;
+exports[`WorkspaceRow snapshots renders narrow width row with signal projection last 1`] = `">[ ~ my-     feat/   ↑2 ↓1 [backend] [   1wt"`;
 
-exports[`WorkspaceRow snapshots renders medium width row with message attention last 1`] = `">[ ]~ my-feature       feat/my-feature  ↑2 ↓1  [backend] [       1wt 1tr ~1 ci: Needs… 69d"`;
+exports[`WorkspaceRow snapshots renders medium width row with signal projection last 1`] = `">[ ]~ my-feature       feat/my-feature  ↑2 ↓1  [backend] [       1wt 1tr ~1 automatio… 69d"`;
 
-exports[`WorkspaceRow snapshots renders wide width row with message attention last 1`] = `">[ ]~ my-feature              feat/my-feature                ↑2  ↓1  [backend] [urgent] 1wt 1tr ~1  ci: Needs operator attent… 69d"`;
+exports[`WorkspaceRow snapshots renders wide width row with signal projection last 1`] = `">[ ]~ my-feature              feat/my-feature                ↑2  ↓1  [backend] [urgent] 1wt 1tr ~1  automation: Needs operato… 69d"`;

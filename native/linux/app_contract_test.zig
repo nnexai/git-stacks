@@ -100,7 +100,7 @@ test "workspace controls publish native accessible state labels and tooltips" {
     const source = @embedFile("app.zig");
     const required = [_][]const u8{
         "gtk_accessible_update_state", "GTK_ACCESSIBLE_STATE_SELECTED", "GTK_ACCESSIBLE_STATE_CHECKED",
-        "Attention inbox", "Create workspace", "Command launcher", "Workspace actions",
+        "Signal inbox", "Create workspace", "Command launcher", "Workspace actions",
         "Open attention inbox", "Create workspace (Ctrl+Shift+N)", "Search configured commands (Ctrl+Shift+P)",
     };
     for (required) |needle| try std.testing.expect(std.mem.indexOf(u8, source, needle) != null);

@@ -1,47 +1,42 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`WorkspaceDetail snapshots renders ordered detail sections with notes and file status 1`] = `
-" Messages:                                                                                          
- 1 total                                                                                            
- ci: Build failed 122d                                                                              
-                                                                                                    
- Repos:                                                                                             
- ~ api                      [feature/operator]  ↑2  ↓1                                              
- - web                      [trunk]                                                                 
-                                                                                                    
- Files:                                                                                             
- 2 entries, 1 need attention                                                                        
- workspace files                                                                                    
- ! pullable  sync    .env.local - source newer                                                      
-                                                                                                    
- Source/Issues:                                                                                     
- jira       OPS-7                                                                                   
-                                                                                                    
- Integrations:                                                                                      
- ✓ vscode     (cmd: code) [global]                                                                  
- ✓ tmux        [global]                                                                             
-                                                                                                    
- Notes:                                                                                             
- 2 shown, latest 122d                                                                               
- - Review file sync drift 122d                                                                      
- - Ping owner before merge 123d                                                                     
-                                                                                                    
- Config:                                                                                            
- Branch: feature/operator                                                                           
- Created: 2026-01-01T00:00:00.000Z                                                                  
-"
+" Signals:
+ 1 total
+ automation: Build failed 122d
+
+ Repos:
+ ~ api                      [feature/operator]  ↑2  ↓1
+ - web                      [trunk]
+
+ Files:
+ 2 entries, 1 need attention
+ workspace files
+ ! pullable  sync    .env.local - source newer
+
+ Source/Issues:
+ jira       OPS-7
+
+ Integrations:
+ ✓ vscode     (cmd: code) [global]
+ ✓ tmux        [global]
+
+ Notes:
+ 2 shown, latest 122d
+ - Review file sync drift 122d
+ - Ping owner before merge 123d
+
+ Config:
+ Branch: feature/operator
+ Created: 2026-01-01T00:00:00.000Z"
 `;
 
 exports[`WorkspaceDetail snapshots renders scrolled long detail content 1`] = `
-"                                                                                                    
- Notes:                                                                                             
- 2 shown, latest 122d                                                                               
- - Review file sync drift 122d                                                                      
- - Ping owner before merge 123d                                                                     
-                                                                                                    
- Config:                                                                                            
-                                                                                                    
-                                                                                                    
-                                                                                                    
 "
+ Notes:
+ 2 shown, latest 122d
+ - Review file sync drift 122d
+ - Ping owner before merge 123d
+
+ Config:"
 `;
