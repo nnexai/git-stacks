@@ -69,11 +69,11 @@
 
 ### Workspace and Signal Presentation
 
-- [ ] **VIS-01**: Workspace rows expose default branch, pinned state, Git changes, agent presence, awaiting input, running work, unread notifications, pull-request/check state when available, and remote/missing state through a compact deterministic projection.
-- [ ] **VIS-02**: Sidebar Pinned and Active sections order rows by user relevance while preserving stable selection, exact navigation, user grouping, and accessible redundant text.
-- [ ] **VIS-03**: Agent/provider badges, activity pings, notification markers, Git counters, branch accents, and lifecycle icons remain legible and semantically distinct in dark, light, high-contrast, selected, unfocused, and reduced-motion states.
+- [x] **VIS-01**: Workspace rows expose default branch, pinned state, Git changes, agent presence, awaiting input, running work, unread notifications, pull-request/check state when available, and remote/missing state through a compact deterministic projection.
+- [x] **VIS-02**: Sidebar Pinned and Active sections order rows by user relevance while preserving stable selection, exact navigation, user grouping, and accessible redundant text.
+- [x] **VIS-03**: Agent/provider badges, activity pings, notification markers, Git counters, branch accents, and lifecycle icons remain legible and semantically distinct in dark, light, high-contrast, selected, unfocused, and reduced-motion states.
 - [ ] **VIS-04**: The attention/signal inbox uses clear hierarchy, grouping, lifecycle language, timestamps, provider identity, exact location, and actionable focus/dismiss controls without visual noise.
-- [ ] **VIS-05**: Automated visual-contract, accessibility, interaction, and production GTK UAT verify representative workspace/signal combinations at normal, narrow, and 200% text layouts.
+- [x] **VIS-05**: Automated visual-contract, accessibility, interaction, and production GTK UAT verify representative workspace/signal combinations at normal, narrow, and 200% text layouts.
 
 ### Linux Delivery
 
@@ -149,11 +149,11 @@
 | SIG-03 | Phase 107.1 | Complete |
 | SIG-04 | Phase 107.1 | Complete |
 | SIG-05 | Phase 107.1 | Complete |
-| VIS-01 | Phase 107.2 | Pending |
-| VIS-02 | Phase 107.2 | Pending |
-| VIS-03 | Phase 107.2 | Pending |
+| VIS-01 | Phase 107.2 | Complete |
+| VIS-02 | Phase 107.2 | Complete |
+| VIS-03 | Phase 107.2 | Complete |
 | VIS-04 | Phase 107.2 | Pending |
-| VIS-05 | Phase 107.2 | Pending |
+| VIS-05 | Phase 107.2 | Complete |
 | PKG-01 | Phase 108 | Pending |
 | PKG-02 | Phase 108 | Pending |
 | PKG-03 | Phase 108 | Pending |

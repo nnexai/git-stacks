@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: milestone
-current_phase: 107
-current_phase_name: Beautify Native Workspace UI and Finalize UX
-status: Phase 107 hardening execution in progress; plans through 107-11 complete
-stopped_at: Completed 107-12-PLAN.md
-last_updated: "2026-07-12T12:09:33.530Z"
-last_activity: 2026-07-12
-last_activity_desc: completed actionable attention, keyboard launcher, and guarded live close
+current_phase: 107.2
+current_phase_name: Beautify Workspace and Signal Presence
+status: Phase 107.2 execution in progress; plan 01 complete
+stopped_at: Completed 107.2-01-PLAN.md
+last_updated: "2026-07-13T01:37:51.789Z"
+last_activity: 2026-07-13
+last_activity_desc: completed service-to-native workspace presentation contract and pure sidebar projection
 progress:
-  total_phases: 5
-  completed_phases: 3
-  total_plans: 34
-  completed_plans: 33
-  percent: 60
+  total_phases: 7
+  completed_phases: 4
+  total_plans: 45
+  completed_plans: 41
+  percent: 91
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-11)
 
 **Core value:** One command takes a user from feature intent to a fully running development environment without manual setup.
-**Current focus:** Phase 107 — native-client feature completion and polish before delivery work
+**Current focus:** Phase 107.2 — dense, accessible workspace and signal presence
 
 ## Current Position
 
-Phase: 107 — Beautify Native Workspace UI and Finalize UX
-Plan: 13 plans total — 11 complete; 107-12 through 107-13 pending
-Status: Phase 107 hardening execution in progress
-Last activity: 2026-07-12 — completed actionable attention, keyboard launcher, and guarded live close
+Phase: 107.2 — Beautify Workspace and Signal Presence
+Plan: 4 plans total — 1 complete; 107.2-02 through 107.2-04 pending
+Status: Phase 107.2 execution in progress
+Last activity: 2026-07-13 — completed service-to-native workspace presentation contract and pure sidebar projection
 
-Progress: [█████████░] 94%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [█████████░] 94%
 | Phase 107 P04 | 18min | 2 tasks | 7 files |
 | Phase 107 P06 | 12min | 2 tasks | 9 files |
 | Phase 107 P12 | 28m | 3 tasks | 7 files |
+| Phase 107.2 P01 | 18min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -136,6 +137,6 @@ See REQUIREMENTS.md Out of Scope for deferred product breadth and platform polis
 
 ## Session Continuity
 
-Last session: 2026-07-12T12:09:33.506Z
-Stopped at: Completed 107-12-PLAN.md
+Last session: 2026-07-13T01:37:51.782Z
+Stopped at: Completed 107.2-01-PLAN.md
 Resume file: None
