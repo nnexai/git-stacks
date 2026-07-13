@@ -2,3 +2,4 @@ node_modules/
 _references/
 .DS_Store
 .coverage/
+.playwright-cli/
