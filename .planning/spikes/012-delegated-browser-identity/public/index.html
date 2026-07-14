@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Delegated browser identity · Spike 012</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <div class="eyebrow">git-stacks · security spike 012</div>
+          <h1>Delegated browser identity</h1>
+          <p>A durable localhost helper delegates short-lived authority to a non-exportable browser key.</p>
+        </div>
+        <div id="status" class="badge pending">pairing</div>
+      </header>
+
+      <section class="identity-grid">
+        <div><span>Helper identity</span><code id="helper-id">—</code></div>
+        <div><span>Browser key</span><code id="browser-key">—</code></div>
+        <div><span>Service audience</span><code id="audience">—</code></div>
+        <div><span>Origin</span><code id="origin">—</code></div>
+      </section>
+
+      <section class="toolbar">
+        <button id="run" type="button">Run identity checks</button>
+        <span id="summary">waiting</span>
+      </section>
+
+      <section>
+        <h2>Security checks</h2>
+        <div id="checks" class="checks"></div>
+      </section>
+
+      <section>
+        <div class="section-heading"><h2>Forensic log</h2><button id="clear" class="text" type="button">Clear</button></div>
+        <pre id="log" aria-live="polite"></pre>
+      </section>
+      <div id="isolation-frame"></div>
+    </main>
+    <script type="module" src="/client.js"></script>
+  </body>
+</html>
