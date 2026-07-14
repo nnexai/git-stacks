@@ -26,6 +26,9 @@ export class SignalState {
     const incoming = mutation.signal
     const current = incoming.kind === "activity" ? this.activities.get(activityKey(incoming)) : this.notifications.get(incoming.id)
     if (current && seq(mutation.sequence) <= seq(current.journal_sequence)) return false
+    if (incoming.kind === "activity" && incoming.state === "idle") {
+      return this.activities.delete(activityKey(incoming))
+    }
     const stored = { ...incoming, journal_sequence: mutation.sequence }
     if (incoming.kind === "activity") this.activities.set(activityKey(incoming), stored)
     else this.notifications.set(incoming.id, stored)

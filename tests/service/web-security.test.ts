@@ -94,7 +94,7 @@ describe("web request security boundary", () => {
     expect(stalePriority.status).toBe(409)
 
     const initialSignals = await (await fetch(new URL("/web/api/signals", service.url), { headers: { cookie, "sec-fetch-site": "same-origin" } })).json() as any
-    expect(initialSignals.data.signals).toHaveLength(1)
+    expect(initialSignals.data.signals).toHaveLength(0)
     const acknowledged = await fetch(new URL("/web/api/signals/acknowledge", service.url), {
       method: "POST", headers: mutationHeaders, body: JSON.stringify({ surface_id: "33333333-3333-4333-8333-333333333333" }),
     })
@@ -103,7 +103,7 @@ describe("web request security boundary", () => {
     signalState = "completed"
     signalTime = "2026-07-14T10:00:01.000Z"
     const completedSignals = await (await fetch(new URL("/web/api/signals", service.url), { headers: { cookie, "sec-fetch-site": "same-origin" } })).json() as any
-    expect(completedSignals.data.signals).toMatchObject([{ state: "completed" }])
+    expect(completedSignals.data.signals).toHaveLength(0)
     const invalidAcknowledgement = await fetch(new URL("/web/api/signals/acknowledge", service.url), { method: "POST", headers: mutationHeaders, body: JSON.stringify({ surface_id: "not-a-surface" }) })
     expect(invalidAcknowledgement.status).toBe(400)
 

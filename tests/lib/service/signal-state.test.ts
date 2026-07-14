@@ -23,6 +23,16 @@ describe("signal state", () => {
     expect(state.projection().signals).toHaveLength(3)
   })
 
+  test("uses idle as a durable tombstone for a closed terminal activity lane", () => {
+    const state = new SignalState()
+    state.apply({ sequence: "1", signal: { ...base, kind: "activity", state: "working" } })
+    expect(state.apply({ sequence: "2", signal: { ...base, kind: "activity", state: "idle" } })).toBe(true)
+    expect(state.projection().signals).toEqual([])
+
+    state.apply({ sequence: "3", signal: { ...base, kind: "activity", state: "working", occurred_at: "2026-07-13T00:01:00.000Z" } })
+    expect(state.projection().signals).toMatchObject([{ state: "working", journal_sequence: "3" }])
+  })
+
   test("notifications are independent of completed activity and dismissal", () => {
     const state = new SignalState()
     state.apply({ sequence: "1", signal: { ...base, kind: "activity", state: "completed" } })

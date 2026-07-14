@@ -16,7 +16,7 @@ import {
   WEB_PROTOCOL,
 } from "./contract"
 import { WebPrincipalManager, type WebPrincipal } from "./principal-manager"
-import { projectWebCatalog, projectWebOperation, projectWebSignal, projectWebSnapshot } from "./projection"
+import { projectWebCatalog, projectWebOperation, projectWebSignal, projectWebSnapshot, projectWebTerminalSignals } from "./projection"
 import { WebTerminalManager, type WebSocketData } from "./terminal-manager"
 
 const WEB_BODY_BYTES = 256 * 1024
@@ -279,7 +279,7 @@ export class WebApplication {
     if (request.method === "GET" && url.pathname === "/web/api/signals") {
       if (!this.options.signalProjection) return webError("capability_unavailable", "Signals are unavailable", 409)
       const projection = await this.options.signalProjection()
-      return webJson({ ...projection, signals: this.principals.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
+      return webJson({ ...projection, signals: this.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
     }
     if (request.method === "POST" && url.pathname === "/web/api/signals/acknowledge") {
       if (!this.options.signalProjection) return webError("capability_unavailable", "Signals are unavailable", 409)
@@ -287,7 +287,7 @@ export class WebApplication {
       if (!parsed.success) return webError("invalid_request", "Invalid signal acknowledgement", 400)
       const projection = await this.options.signalProjection()
       const acknowledged = this.principals.acknowledgeSurface(principal.id, parsed.data.surface_id, projection.signals)
-      return webJson({ ...projection, acknowledged, signals: this.principals.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
+      return webJson({ ...projection, acknowledged, signals: this.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
     }
     if (request.method === "POST" && url.pathname === "/web/api/signals/dismiss") {
       if (!this.options.dismissSignal) return webError("capability_unavailable", "Signals are unavailable", 409)
@@ -329,6 +329,10 @@ export class WebApplication {
       return webJson(projectWebOperation(await this.options.operations.cancel(operation.operation_id)), 202)
     }
     return webError("not_found", "Route not found", 404)
+  }
+
+  private visibleSignals(principalId: string, signals: Signal[]): Signal[] {
+    return projectWebTerminalSignals(this.principals.visibleSignals(principalId, signals), this.terminals.surfaceIds(principalId))
   }
 
   private async submitOperation(request: Request, principal: WebPrincipal): Promise<Response> {

@@ -86,6 +86,7 @@ describe("service-owned web terminal", () => {
     expect(sent.filter((item) => item instanceof Uint8Array)).toHaveLength(0)
     expect(manager.diagnostics.streaming).toBe(0)
     await manager.close("browser-1", terminal.id)
+    expect(published.at(-1)).toMatchObject({ kind: "activity", source: "codex", session_id: "codex-hidden", state: "idle", surface_id: terminal.surface_id })
     await manager.stop()
   })
 

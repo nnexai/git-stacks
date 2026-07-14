@@ -82,3 +82,7 @@ export function projectWebSignal(signal: Signal | SignalDismissal): Signal | Sig
     ...(signal.detail ? { detail: signal.detail.slice(0, 500) } : {}),
   }
 }
+
+export function projectWebTerminalSignals(signals: Signal[], terminalSurfaceIds: ReadonlySet<string>): Signal[] {
+  return signals.filter((signal) => signal.kind === "notification" || (signal.surface_id !== undefined && terminalSurfaceIds.has(signal.surface_id)))
+}

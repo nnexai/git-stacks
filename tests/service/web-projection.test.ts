@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { WorkspaceSnapshotResponse } from "../../src/lib/service/contract"
-import { projectWebOperation, projectWebSnapshot } from "../../src/service/web/projection"
+import { projectWebOperation, projectWebSnapshot, projectWebTerminalSignals } from "../../src/service/web/projection"
 
 const workspaceId = "11111111-1111-4111-8111-111111111111"
 const repositoryId = "22222222-2222-4222-8222-222222222222"
@@ -37,5 +37,21 @@ describe("browser-safe service projection", () => {
     expect(operation.result).toEqual({ workspace_name: "demo", snapshot_changed: true })
     expect(JSON.stringify(operation)).not.toContain("secret-step")
     expect(JSON.stringify(operation)).not.toContain("/secret/result")
+  })
+
+  test("exposes activity only while its service-owned browser tab still exists", () => {
+    const liveSurface = "33333333-3333-4333-8333-333333333333"
+    const staleSurface = "44444444-4444-4444-8444-444444444444"
+    const common = { version: 1 as const, source: "codex" as const, workspace_id: workspaceId, repository_id: repositoryId, session_id: "agent", state: "working" as const, occurred_at: "2026-07-14T10:00:00.000Z" }
+    const signals = [
+      { ...common, kind: "activity" as const, id: "sig_0123456789abcdef", surface_id: liveSurface },
+      { ...common, kind: "activity" as const, id: "sig_1123456789abcdef", surface_id: staleSurface },
+      { ...common, kind: "notification" as const, id: "sig_2123456789abcdef", title: "Keep unread", surface_id: undefined, session_id: undefined, state: undefined },
+    ]
+
+    expect(projectWebTerminalSignals(signals, new Set([liveSurface])).map((signal) => signal.id)).toEqual([
+      "sig_0123456789abcdef",
+      "sig_2123456789abcdef",
+    ])
   })
 })

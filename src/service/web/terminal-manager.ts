@@ -36,6 +36,7 @@ type Session = {
   terminal: Bun.Terminal
   attachment?: Attachment
   filter: TerminalSignalFilter
+  agentSessions: Map<TerminalSignal["provider"], string>
 }
 
 export type WebSocketData = { kind: "web-terminal"; principalId: string; sessionId: string; streaming: boolean }
@@ -50,7 +51,7 @@ export type WebTerminalCreateInput = {
 }
 
 function terminalId(): string { return `term_${randomBytes(16).toString("base64url")}` }
-function activityId(session: Session, signal: TerminalSignal): string {
+function activityId(session: Session, signal: Pick<TerminalSignal, "provider" | "sessionId">): string {
   return `sig_${createHash("sha256").update(`${session.surfaceId}\0${signal.provider}\0${signal.sessionId}`).digest("hex").slice(0, 32)}`
 }
 function stateTitle(provider: string, state: TerminalSignal["state"]): string {
@@ -90,6 +91,11 @@ export class WebTerminalManager {
   list(principalId: string): WebTerminal[] {
     this.prune()
     return [...this.sessions.values()].filter((session) => session.principalId === principalId).map((session) => this.project(session))
+  }
+
+  surfaceIds(principalId: string): Set<string> {
+    this.prune()
+    return new Set([...this.sessions.values()].filter((session) => session.principalId === principalId).map((session) => session.surfaceId))
   }
 
   get(principalId: string, id: string): WebTerminal | undefined {
@@ -180,6 +186,7 @@ export class WebTerminalManager {
       process: child,
       terminal: child.terminal,
       filter,
+      agentSessions: new Map(),
     }
     this.sessions.set(id, session)
     this.notifyActive()
@@ -208,6 +215,7 @@ export class WebTerminalManager {
     if (!session || session.principalId !== principalId) return undefined
     if (session.state === "ended") {
       const terminal = this.project(session)
+      await this.clearAgentSignals(session)
       session.attachment?.socket.close(1000, "Terminal closed")
       try { session.terminal.close() } catch {}
       this.sessions.delete(id)
@@ -233,6 +241,7 @@ export class WebTerminalManager {
     this.notifyActive()
     const terminal = this.project(session)
     if (session.state === "ended") {
+      await this.clearAgentSignals(session)
       session.attachment?.socket.close(1000, "Terminal closed")
       this.sessions.delete(id)
     }
@@ -361,6 +370,7 @@ export class WebTerminalManager {
 
   private async handleSignal(session: Session, signal: TerminalSignal): Promise<void> {
     if (!this.publishSignal) return
+    session.agentSessions.set(signal.provider, signal.sessionId)
     await this.publishSignal({
       version: 1,
       kind: "activity",
@@ -374,6 +384,25 @@ export class WebTerminalManager {
       title: stateTitle(signal.provider, signal.state),
       occurred_at: new Date(this.now()).toISOString(),
     })
+  }
+
+  private async clearAgentSignals(session: Session): Promise<void> {
+    if (!this.publishSignal || !session.agentSessions.size) return
+    const agents = [...session.agentSessions]
+    session.agentSessions.clear()
+    await Promise.allSettled(agents.map(([provider, sessionId]) => this.publishSignal!({
+      version: 1,
+      kind: "activity",
+      id: activityId(session, { provider, sessionId }),
+      source: provider,
+      workspace_id: session.workspaceId,
+      repository_id: session.repositoryId,
+      surface_id: session.surfaceId,
+      session_id: sessionId,
+      state: "idle",
+      title: `${provider === "codex" ? "Codex" : provider === "claude" ? "Claude" : provider === "copilot" ? "GitHub Copilot" : "OpenCode"} terminal closed`,
+      occurred_at: new Date(this.now()).toISOString(),
+    })))
   }
 
   private prune(): void {
