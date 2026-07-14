@@ -71,12 +71,14 @@ export const WebRepositorySchema = z.strictObject({
   degraded: z.boolean(),
   remote: z.enum(["available", "missing", "not_applicable"]),
 })
+export type WebRepository = z.infer<typeof WebRepositorySchema>
 export const WebCommandSchema = z.strictObject({
   id: CommandIdSchema,
   name: utf8BoundedString(96, 1),
   scope: z.enum(["workspace", "repository"]),
   repository_id: EntityIdSchema.optional(),
 })
+export type WebCommand = z.infer<typeof WebCommandSchema>
 export const WebWorkspaceSchema = z.strictObject({
   id: EntityIdSchema,
   name: utf8BoundedString(96, 1),
@@ -90,6 +92,7 @@ export const WebWorkspaceSchema = z.strictObject({
     warnings: z.number().int().nonnegative(), errors: z.number().int().nonnegative(), attention: z.number().int().nonnegative(),
   }),
 })
+export type WebWorkspace = z.infer<typeof WebWorkspaceSchema>
 export const WebSnapshotSchema = z.strictObject({
   protocol: z.literal(WEB_PROTOCOL),
   revision: RevisionSchema,

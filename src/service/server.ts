@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto"
-import { z } from "zod"
 import { authenticateAdmission, type AuthenticatedClient } from "../lib/service/credentials"
-import { IdempotencyConflictError, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
+import { IdempotencyConflictError, type CoreMutationAdapter, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
 import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
 import { SignalDismissalSchema, SignalSchema, type Signal, type SignalDismissal } from "../lib/service/contract"
 import { CLIENT_MODEL_LIMITS, WorkspaceCreationRequestSchema, type WorkspaceCreationCatalog } from "../lib/service/contract"
@@ -10,6 +9,9 @@ import { SnapshotBusyError } from "../lib/service/snapshot"
 import type { WebApplication } from "./web/routes"
 import type { WebSocketData } from "./web/terminal-manager"
 import type { SnapshotAdapter } from "./snapshot-adapter"
+import { EditTargetRequestSchema, CoreMutationSchemas, type CoreMutationName } from "../lib/service/core-contract"
+import type { CoreStateProvider } from "../lib/service/core-state"
+import type { WorkspaceFileStatusView } from "../lib/workspace-file-status"
 export type { SnapshotAdapter } from "./snapshot-adapter"
 
 export const MAX_BODY_BYTES = 256 * 1024
@@ -20,11 +22,6 @@ export const SSE_HEARTBEAT_MS = 15_000
 export const SSE_MAX_PER_CREDENTIAL = 8
 export const SSE_MAX_TOTAL = 32
 
-const MutationRequestSchema = z.strictObject({
-  workspace: z.string().min(1),
-  options: z.record(z.string(), z.unknown()).optional(),
-})
-
 export interface ServiceServerOptions {
   serviceRoot: string
   snapshot: SnapshotAdapter
@@ -33,7 +30,10 @@ export interface ServiceServerOptions {
   publishSignal?: (signal: Signal) => Promise<void>
   dismissSignal?: (dismissal: SignalDismissal) => Promise<void>
   signalProjection?: () => Promise<{ signals: Signal[]; dismissed: string[]; sequence: string }>
-  mutations?: Record<string, (request: z.infer<typeof MutationRequestSchema>, signal?: AbortSignal) => OperationExecution>
+  eventCursor?: () => Promise<string>
+  mutations?: Partial<Record<CoreMutationName, CoreMutationAdapter>>
+  core?: CoreStateProvider
+  workspaceFileStatus?: (workspace: string) => WorkspaceFileStatusView | Promise<WorkspaceFileStatusView>
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
   hostname?: "127.0.0.1"
@@ -76,6 +76,7 @@ export class SseTransportBridge {
   private heartbeatActive = false
   private removeCloseListener: () => void
   private delivered = 0
+  private opened = false
 
   constructor(
     private readonly subscription: EventSubscription,
@@ -101,6 +102,14 @@ export class SseTransportBridge {
       type: "direct",
       pull: async (controller) => {
         try {
+          // Flush response headers immediately. First-party operation clients
+          // wait for this readiness marker before submitting, otherwise an idle
+          // stream cannot become observable until the 15s heartbeat.
+          if (!this.opened) {
+            this.opened = true
+            await controller.write(": connected\n\n")
+            await controller.flush()
+          }
           while (!this.released) {
             const available = await this.awaitEventOrHeartbeat()
             if (available === "heartbeat") {
@@ -305,6 +314,10 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           },
           limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024, client_model: CLIENT_MODEL_LIMITS },
         }))
+        if (request.method === "GET" && url.pathname === "/v1/events/cursor") {
+          if (!options.eventCursor) return failure(id, "capability_unavailable", "Event cursor is unavailable", 409)
+          return json(success(id, { cursor: await options.eventCursor() }))
+        }
         if (request.method === "POST" && url.pathname === "/v1/web-pairings") {
           if (!options.web) return failure(id, "capability_unavailable", "Web client is unavailable", 409)
           return json(success(id, options.web.issuePairing(`http://${server.hostname}:${server.port}`)), 201)
@@ -312,6 +325,26 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
         if (request.method === "GET" && url.pathname === "/v1/workspace-creation/catalog") {
           if (!options.workspaceCreationCatalog) return failure(id, "capability_unavailable", "Workspace creation catalog is unavailable", 409)
           return json(success(id, await options.workspaceCreationCatalog()))
+        }
+        if (request.method === "GET" && url.pathname === "/v1/core") {
+          if (!options.core) return failure(id, "capability_unavailable", "Core state is unavailable", 409)
+          return json(success(id, await options.core.build(signal)))
+        }
+        if (request.method === "POST" && url.pathname === "/v1/core/edit-target") {
+          if (!options.core) return failure(id, "capability_unavailable", "Core state is unavailable", 409)
+          const parsed = EditTargetRequestSchema.safeParse(await readBody(request))
+          if (!parsed.success) return failure(id, "invalid_request", "Invalid edit target request", 400)
+          return json(success(id, options.core.editTarget(parsed.data)))
+        }
+        const fileStatusMatch = /^\/v1\/core\/workspaces\/([^/]+)\/files$/.exec(url.pathname)
+        if (request.method === "GET" && fileStatusMatch) {
+          if (!options.workspaceFileStatus) return failure(id, "capability_unavailable", "Workspace file status is unavailable", 409)
+          return json(success(id, await options.workspaceFileStatus(decodeURIComponent(fileStatusMatch[1]!))))
+        }
+        const notesMatch = /^\/v1\/core\/workspaces\/([^/]+)\/notes$/.exec(url.pathname)
+        if (request.method === "GET" && notesMatch) {
+          if (!options.core) return failure(id, "capability_unavailable", "Core state is unavailable", 409)
+          return json(success(id, await options.core.notes(decodeURIComponent(notesMatch[1]!), 5)))
         }
         if (request.method === "GET" && url.pathname === "/v1/snapshot") return json(success(id, await options.snapshot.buildAll(signal)))
         if (request.method === "POST" && url.pathname === "/v1/signals") {
@@ -342,7 +375,8 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
         const mutationMatch = /^\/v1\/operations\/([^/]+)$/.exec(url.pathname)
         if (request.method === "POST" && mutationMatch && mutationMatch[1] !== "cancel") {
           const mutation = decodeURIComponent(mutationMatch[1]!)
-          const adapter = mutation === "workspace.create" ? options.workspaceCreate : options.mutations?.[mutation]
+          const mutationName = mutation as CoreMutationName
+          const adapter = mutation === "workspace.create" ? options.workspaceCreate : options.mutations?.[mutationName]
           if (!adapter || !options.operations) return failure(id, "capability_unavailable", "Mutation capability is unavailable", 409, { capability: mutation })
           const body = await readBody(request)
           const key = request.headers.get("idempotency-key")
@@ -355,10 +389,11 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
             parsedRequest = parsed.data
             execution = options.workspaceCreate(parsed.data, signal)
           } else {
-            const parsed = MutationRequestSchema.safeParse(body)
+            const schema = CoreMutationSchemas[mutationName]
+            const parsed = schema?.safeParse(body)
             if (!parsed.success) return failure(id, "invalid_request", "Invalid mutation request", 400)
             parsedRequest = parsed.data
-            execution = (adapter as (request: z.infer<typeof MutationRequestSchema>, signal?: AbortSignal) => OperationExecution)(parsed.data, signal)
+            execution = (adapter as (request: unknown, signal?: AbortSignal) => OperationExecution)(parsed.data, signal)
           }
           const operation = await options.operations.submit({ clientId: admission.client.clientId, endpoint: mutation, idempotencyKey: key, request: parsedRequest, execution })
           return json(success(id, operation), 202)

@@ -42,6 +42,9 @@ describe("v1 signal event transport", () => {
     const projection = await (await fetch(new URL("/v1/signals", service.descriptor.endpoint), { headers })).json() as any
     expect(projection.data.signals).toHaveLength(1)
     expect(projection.data.signals[0]).toMatchObject({ id: "sig_1123456789abcdef", state: "completed" })
+    expect((await fetch(new URL("/v1/signals/dismiss", service.descriptor.endpoint), { method: "POST", headers, body: JSON.stringify({ kind: "dismiss_signal", signal_id: "sig_1123456789abcdef" }) })).status).toBe(202)
+    const dismissed = await (await fetch(new URL("/v1/signals", service.descriptor.endpoint), { headers })).json() as any
+    expect(dismissed.data.dismissed).toEqual(["sig_1123456789abcdef"])
     await service.stop()
   })
 

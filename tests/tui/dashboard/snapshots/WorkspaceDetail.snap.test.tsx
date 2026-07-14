@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test"
+import { createSignal } from "solid-js"
 import { testRender } from "@opentui/solid"
-const compactFrame = (frame: string) => frame.split("\n").map((line) => line.trimEnd()).join("\n").trimEnd()
+const compactFrame = (frame: string) => frame.split("\n").map((line) => line.replace(/[█▀▄]+$/u, "").trimEnd()).join("\n").trimEnd()
 
 mock.module("../../../../src/lib/config", () => ({
   readGlobalConfig: mock(() => ({ workspace_root: "/tmp/detail-snap", integrations: { vscode: { enabled: true, cmd: "code" } } })),
@@ -31,10 +32,18 @@ mock.module("../../../../src/lib/notes", () => ({
   ]),
 }))
 
+mock.module("../../../../src/lib/service/client", () => ({
+  fetchWorkspaceNotes: mock(async () => [
+    { text: "Review file sync drift", created: "2026-01-15T10:00:00Z" },
+    { text: "Ping owner before merge", created: "2026-01-14T10:00:00Z" },
+  ]),
+}))
+
 const { WorkspaceDetail } = await import("../../../../src/tui/dashboard/WorkspaceDetail")
 
 const FROZEN_NOW = new Date("2026-01-15T10:00:00Z").getTime() + (122 * 24 * 60 * 60 * 1000)
 const originalDateNow = Date.now
+const detailConfig = { workspace_root: "/tmp/detail-snap", integrations: { vscode: { enabled: true, cmd: "code" } }, ports: { range_start: 10000, range_end: 65000 } }
 
 const entry = {
   workspace: {
@@ -100,7 +109,7 @@ describe("WorkspaceDetail snapshots", () => {
 
   test("renders ordered detail sections with notes and file status", async () => {
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[{ version: 1, kind: "notification", id: "sig_1234567890123456", source: "automation", workspace_id: "118f47f4-5ab1-7c2d-8e90-123456789abc", title: "Build failed", occurred_at: "2026-01-15T10:00:00Z", unread: true }]} tick={0} fileStatus={fileStatus as any} />,
+      () => <WorkspaceDetail entry={entry as any} signals={[{ version: 1, kind: "notification", id: "sig_1234567890123456", source: "automation", workspace_id: "118f47f4-5ab1-7c2d-8e90-123456789abc", title: "Build failed", occurred_at: "2026-01-15T10:00:00Z", unread: true }]} tick={0} fileStatus={fileStatus as any} config={detailConfig as any} />,
       { width: 100, height: 28, kittyKeyboard: true }
     )
     await renderOnce()
@@ -114,12 +123,16 @@ describe("WorkspaceDetail snapshots", () => {
   })
 
   test("renders scrolled long detail content", async () => {
+    const [scrollRequest, setScrollRequest] = createSignal({ sequence: 0, direction: 1 as -1 | 1 })
     const { renderOnce, captureCharFrame } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} fileStatus={fileStatus as any} height={7} scrollOffset={18} />,
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} fileStatus={fileStatus as any} scrollRequest={scrollRequest()} config={detailConfig as any} />,
       { width: 100, height: 10, kittyKeyboard: true }
     )
     await renderOnce()
-    await renderOnce()
+    for (let sequence = 1; sequence <= 3; sequence += 1) {
+      setScrollRequest({ sequence, direction: 1 })
+      await renderOnce()
+    }
     const frame = captureCharFrame()
     expect(frame).toContain("Notes:")
     expect(frame).not.toContain("Signals:")

@@ -1,13 +1,11 @@
 /** @jsxImportSource @opentui/solid */
-import { createEffect, createSignal, createMemo, Show, Switch, Match, For } from "solid-js"
+import { createSignal, createMemo, Show, Switch, Match, For } from "solid-js"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
-import { spawn } from "bun"
 import { useWorkspaces } from "./hooks/useWorkspaces"
 import { useTemplates } from "./hooks/useTemplates"
 import { useRepos } from "./hooks/useRepos"
 import { useSignals } from "./hooks/useSignals"
 import { useWorkspaceFileStatus } from "./hooks/useWorkspaceFileStatus"
-import { drainCommandStream } from "./command-stream"
 import { WorkspaceList } from "./WorkspaceList"
 import { WorkspaceDetail } from "./WorkspaceDetail"
 import { TemplateList } from "./TemplateList"
@@ -25,27 +23,12 @@ import { TemplateActionMenu } from "./TemplateActionMenu"
 import { RepoActionMenu } from "./RepoActionMenu"
 import { RemoveBlockedView } from "./RemoveBlockedView"
 import { CenteredDialog } from "./CenteredDialog"
-import {
-  cleanWorkspace,
-  closeWorkspace,
-  removeWorkspace,
-  mergeWorkspace,
-  openWorkspace,
-  renameWorkspace,
-} from "../../lib/workspace-ops"
-import { syncWorkspace, pushWorkspace } from "../../lib/workspace-git"
 import type { SyncRow, SyncResult, PushRow } from "../../lib/workspace-git"
-import { editRegistryYaml, editWorkspaceYaml } from "../../lib/workspace-yaml"
-import { readTemplate, writeTemplate, templateExists, templatePath, deleteTemplate, readWorkspace, readRegistry, writeRegistry, readGlobalConfig, expandBranchPattern, workspaceExists, writeWorkspace, isWorktreeRepo, type WorkspaceRepo, type Workspace, type Template } from "../../lib/config"
-import { createWorkspace } from "../../lib/workspace-lifecycle"
+import { expandBranchPattern, type Workspace, type Template } from "../../lib/config"
 import { SyncProgressView } from "./SyncProgressView"
 import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
 import { WizardView, type WizardStep } from "./WizardView"
 import { CreateProgressView, type CreateRow } from "./CreateProgressView"
-import { isRepoDirty } from "../../lib/git"
-import { getTasksDir } from "../../lib/paths"
-import { join } from "path"
-import { existsSync } from "fs"
 import type {
   GroupedWorkspaceItem,
   UIView,
@@ -57,8 +40,13 @@ import type {
   IssueCandidate,
 } from "./types"
 import { matchesLabels } from "../../lib/labels"
-import { issueTrackerLabels, openWorkspaceIssue } from "./issue-actions"
-import { listManualCommands, runManualCommand } from "../../lib/workspace-command"
+import { issueTrackerLabels } from "../../lib/service/presentation"
+import { listManualCommands } from "../../lib/workspace-command"
+import { createWorkspaceThroughService, runCoreMutation } from "../../lib/service/client"
+import type { Operation } from "../../lib/service/contract"
+import { openEditorHandoff, resolveEditorHandoff } from "./editor-handoff"
+import { useCoreState } from "./core-store"
+import { runWorkspaceShellHandoff } from "./terminal-handoff"
 import {
   appendCommandOutput,
   initialCommandOutputState,
@@ -178,6 +166,7 @@ export default function App() {
   const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
   const { entries: repoEntries, reload: reloadRepos } = useRepos()
   const { signalMap, tick, dismiss, reloadSignals } = useSignals()
+  const core = useCoreState()
   const [refreshFlash, setRefreshFlash] = createSignal("")
 
   const [view, setView] = createSignal<UIView>({ view: "list" })
@@ -201,8 +190,7 @@ export default function App() {
   const [createSummary, setCreateSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
   const [repoRemoveTarget, setRepoRemoveTarget] = createSignal<string | null>(null)
   const [workspaceGroupingMode, setWorkspaceGroupingMode] = createSignal<WorkspaceGroupingMode>("none")
-  const [detailScrollOffset, setDetailScrollOffset] = createSignal(0)
-  const [detailCanScroll, setDetailCanScroll] = createSignal(false)
+  const [detailScrollRequest, setDetailScrollRequest] = createSignal<{ sequence: number; direction: -1 | 1 }>({ sequence: 0, direction: 1 })
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -231,10 +219,6 @@ export default function App() {
   const setFilter = (v: string | ((prev: string) => string)) => tabFilter[tab()][1](v as any)
   const filtering = createMemo(() => tabFiltering[tab()][0]())
   const setFiltering = (v: boolean) => tabFiltering[tab()][1](v)
-
-  // List pane height estimate for scroll viewport
-  const listHeight = createMemo(() => Math.max(6, Math.floor(dims().height * 0.6) - 2))
-  const detailHeight = createMemo(() => Math.max(5, dims().height - listHeight() - 7))
 
   // Tab title
   const tabTitle = createMemo(() => {
@@ -291,6 +275,29 @@ export default function App() {
     return repoEntries().filter(r => r.name.toLowerCase().includes(f) || r.local_path.toLowerCase().includes(f))
   })
 
+  // Short lists only consume the rows they need. Larger lists are capped so
+  // the detail pane always retains useful space.
+  const activeListRows = createMemo(() => {
+    if (tab() === "workspaces") {
+      return workspaceGroupingMode() === "none" ? filteredEntries().length : groupedEntries().length
+    }
+    return tab() === "templates" ? filteredTemplates().length : filteredRepos().length
+  })
+  const batchBarRows = createMemo(() => {
+    if (tab() === "workspaces") return selected().size > 0 ? 1 : 0
+    if (tab() === "templates") return templatesSelected().size > 0 ? 1 : 0
+    return reposSelected().size > 0 ? 1 : 0
+  })
+  const listPaneHeight = createMemo(() => {
+    const maximum = Math.max(6, Math.floor((dims().height - 1) * 0.45))
+    return Math.min(maximum, Math.max(6, activeListRows() + batchBarRows() + 2))
+  })
+  const listHeight = createMemo(() => {
+    const available = listPaneHeight() - batchBarRows() - 2
+    const footerRows = activeListRows() > available ? 1 : 0
+    return Math.max(3, available - footerRows)
+  })
+
   const currentEntry = createMemo(() => {
     if (workspaceGroupingMode() !== "none" && tab() === "workspaces") {
       const groupedEntry = groupedNavigableEntries()[tabCursor.workspaces[0]()]
@@ -303,7 +310,7 @@ export default function App() {
 
   const allWorkspaces = createMemo(() => entries().map(e => e.workspace))
   const selectedWorkspace = createMemo(() => currentEntry()?.workspace)
-  const fileStatus = useWorkspaceFileStatus(selectedWorkspace)
+  const fileStatus = useWorkspaceFileStatus(selectedWorkspace, () => core.state()?.revision)
   const selectedIssueCandidates = createMemo(() => buildIssueCandidates(selectedWorkspace()))
   const selectedManualCommands = createMemo(() => {
     const workspace = selectedWorkspace()
@@ -315,15 +322,6 @@ export default function App() {
     return selectedIssueCandidates().length > 0 ? undefined : "none linked" as const
   })
   const commandsDisabledReason = createMemo(() => selectedManualCommands().length > 0 ? undefined : "none configured" as const)
-
-  createEffect(() => {
-    void selectedWorkspace()?.name
-    setDetailScrollOffset(0)
-  })
-
-  createEffect(() => {
-    if (!detailCanScroll()) setDetailScrollOffset(0)
-  })
 
   const selectedName = createMemo(() => {
     const t = tab()
@@ -353,7 +351,7 @@ export default function App() {
     const t = tab()
     const msgShortcut = t === "workspaces" ? "  m Signals" : ""
     const groupHint = t === "workspaces" ? `  g Group:${workspaceGroupingMode()}` : ""
-    const scrollHint = t === "workspaces" && detailCanScroll() ? "  Pg Detail" : ""
+    const scrollHint = t === "workspaces" ? "  Pg Detail" : ""
     const clearHint = filter() ? "  esc Clear" : ""
 
     if (w < 50) return "? Help  q Quit"
@@ -396,6 +394,24 @@ export default function App() {
     setCommandOutput(prev => ({ ...prev, status }))
   }
 
+  function operationProgress(operation: Operation): void {
+    if (operation.state === "running" && operation.progress.message) appendSystemLine(operation.progress.message)
+  }
+
+  async function runWorkspaceMutation(
+    mutation: "workspace.open" | "workspace.close" | "workspace.clean" | "workspace.remove" | "workspace.merge",
+    workspace: string,
+    options: Record<string, unknown> = {},
+  ): Promise<boolean> {
+    try {
+      await runCoreMutation(mutation, { workspace, options }, { onOperation: operationProgress })
+      return true
+    } catch (error) {
+      appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+      return false
+    }
+  }
+
   function buildSummary(result: SyncResult): { text: string; color: "green" | "yellow" | "red" } {
     const ns = result.synced.length
     const nsk = result.skipped.filter(s => s.reason.includes("conflict")).length
@@ -424,15 +440,7 @@ export default function App() {
     if (!name) return
     resetCommandOutput()
     setView({ view: "progress", message: `Running ${name}...` })
-    const proc = Bun.spawn(["git-stacks", "run", name], {
-      stdout: "pipe",
-      stderr: "pipe",
-    })
-    const [exitCode] = await Promise.all([
-      proc.exited,
-      drainCommandStream(proc.stdout, (text) => appendCommandLine({ text, stream: "stdout" })),
-      drainCommandStream(proc.stderr, (text) => appendCommandLine({ text, stream: "stderr" })),
-    ])
+    const exitCode = await runWorkspaceShellHandoff(name, appendCommandLine)
     finishCommandOutput(exitCode === 0 ? "success" : "failed")
   }
 
@@ -472,22 +480,16 @@ export default function App() {
     if (action === "open") {
       resetCommandOutput()
       setView({ view: "progress", message: `Opening ${name}...` })
-      const result = await openWorkspace(name, { captured: true }, (msg) =>
-        appendSystemLine(msg)
-      )
-      if (!result.ok) appendSystemLine(`ERROR: ${result.error}`)
-      finishCommandOutput(result.ok ? "success" : "failed")
+      const ok = await runWorkspaceMutation("workspace.open", name)
+      finishCommandOutput(ok ? "success" : "failed")
       return
     }
 
     if (action === "close") {
       resetCommandOutput()
       setView({ view: "progress", message: `Closing ${name}...` })
-      const result = await closeWorkspace(name, { captured: true }, (msg) =>
-        appendSystemLine(msg)
-      )
-      if (!result.ok) appendSystemLine(`ERROR: ${result.error}`)
-      finishCommandOutput(result.ok ? "success" : "failed")
+      const ok = await runWorkspaceMutation("workspace.close", name)
+      finishCommandOutput(ok ? "success" : "failed")
       return
     }
 
@@ -509,7 +511,7 @@ export default function App() {
     if (confirmContext() === "template") {
       const tmpl = filteredTemplates()[index]
       if (tmpl) {
-        try { deleteTemplate(tmpl.name) } catch {}
+        try { await runCoreMutation("template.delete", { template: tmpl.name }) } catch {}
         reloadTemplates()
       }
       setConfirmContext("workspace")
@@ -530,25 +532,11 @@ export default function App() {
     let failures = 0
     for (const wsName of names) {
       if (!wsName) continue
-      let result: { ok: boolean; error?: string }
-
-      switch (action) {
-        case "clean":
-          result = await cleanWorkspace(wsName, { force: false, captured: true }, onProgress)
-          break
-        case "remove":
-          result = await removeWorkspace(wsName, { force: false, captured: true }, onProgress)
-          break
-        case "merge":
-          result = await mergeWorkspace(wsName, { force: false, captured: true }, onProgress)
-          break
-        default:
-          result = { ok: false, error: `Unknown action: ${action}` }
-      }
-
-      if (!result.ok) {
+      const mutation = action === "clean" || action === "remove" || action === "merge" ? `workspace.${action}` as const : undefined
+      const ok = mutation ? await runWorkspaceMutation(mutation, wsName) : false
+      if (!ok) {
         failures++
-        onProgress(`ERROR [${wsName}]: ${result.error}`)
+        if (!mutation) onProgress(`ERROR [${wsName}]: Unknown action: ${action}`)
       }
     }
 
@@ -560,8 +548,8 @@ export default function App() {
   }
 
   async function executeSync(name: string) {
-    const ws = readWorkspace(name)
-    const worktreeRepos = ws.repos.filter(isWorktreeRepo)
+    const ws = entries().find((entry) => entry.workspace.name === name)?.workspace
+    const worktreeRepos = ws?.repos.filter((repo) => repo.mode === "worktree") ?? []
     const initialRows: SyncRow[] = worktreeRepos
       .map(r => ({ repo: r.name, status: "pending" as const, detail: "", conflicts: [] }))
 
@@ -570,21 +558,21 @@ export default function App() {
     setSyncSummary({ text: "", color: "green" })
     setView({ view: "sync-progress", message: `Syncing ${name}...` })
 
-    let hasDirty = false
-    for (const repo of worktreeRepos) {
-      if (existsSync(repo.task_path) && await isRepoDirty(repo.task_path)) {
-        hasDirty = true
-        break
-      }
-    }
-
-    const onProgress = (update: SyncRow) => {
-      setSyncRows(prev => prev.map(r => r.repo === update.repo ? { ...r, ...update } : r))
-    }
-
     try {
-      const result = await syncWorkspace(name, { strategy: "rebase", bestEffort: true, stash: hasDirty }, onProgress)
-      setSyncSummary(buildSummary(result))
+      const operation = await runCoreMutation("workspace.sync", { workspace: name, options: { strategy: "rebase", bestEffort: true, stash: true } }, {
+        onOperation: (current) => {
+          if (current.state !== "running" || current.progress.data?.kind !== "sync") return
+          const update = current.progress.data as SyncRow & { kind: "sync" }
+          setSyncRows(prev => prev.map(row => row.repo === update.repo ? { ...row, ...update } : row))
+        },
+      })
+      const result = operation.result ?? {}
+      setSyncSummary(buildSummary({
+        ok: true,
+        synced: Array.isArray(result.synced) ? result.synced as SyncResult["synced"] : [],
+        skipped: Array.isArray(result.skipped) ? result.skipped as SyncResult["skipped"] : [],
+        stashPopFailures: Array.isArray(result.stash_pop_failures) ? result.stash_pop_failures as NonNullable<SyncResult["stashPopFailures"]> : undefined,
+      }))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setSyncSummary({ text: `Sync failed: ${msg}. Press any key to continue.`, color: "red" })
@@ -593,8 +581,8 @@ export default function App() {
   }
 
   async function executePush(name: string) {
-    const ws = readWorkspace(name)
-    const initialRows: PushRowDisplay[] = ws.repos
+    const ws = entries().find((entry) => entry.workspace.name === name)?.workspace
+    const initialRows: PushRowDisplay[] = (ws?.repos ?? [])
       .map((repo) => repo.mode === "worktree"
         ? { repo: repo.name, status: "pending" as const, detail: "" }
         : { repo: repo.name, status: "skipped" as const, detail: repo.mode })
@@ -604,21 +592,27 @@ export default function App() {
     setPushSummary({ text: "", color: "green" })
     setView({ view: "push-progress", message: `Pushing ${name}...` })
 
-    const onProgress = (update: PushRow) => {
-      setPushRows((prev) => prev.map((row) => row.repo === update.repo ? { ...row, ...update } : row))
-    }
-
     try {
-      const result = await pushWorkspace(name, {}, onProgress)
+      const operation = await runCoreMutation("workspace.push", { workspace: name, options: {} }, {
+        onOperation: (current) => {
+          if (current.state !== "running" || current.progress.data?.kind !== "push") return
+          const update = current.progress.data as PushRow & { kind: "push" }
+          setPushRows(prev => prev.map(row => row.repo === update.repo ? { ...row, ...update } : row))
+        },
+      })
+      const result = operation.result ?? {}
+      const pushed = Array.isArray(result.pushed) ? result.pushed : []
+      const failed = Array.isArray(result.failed) ? result.failed : []
+      const skipped = Array.isArray(result.skipped) ? result.skipped : []
       const parts: string[] = []
-      if (result.pushed.length > 0) parts.push(`${result.pushed.length} pushed`)
-      if (result.failed.length > 0) parts.push(`${result.failed.length} failed`)
-      if (result.skipped.length > 0) parts.push(`${result.skipped.length} skipped`)
+      if (pushed.length > 0) parts.push(`${pushed.length} pushed`)
+      if (failed.length > 0) parts.push(`${failed.length} failed`)
+      if (skipped.length > 0) parts.push(`${skipped.length} skipped`)
       setPushSummary({
         text: parts.length > 0
           ? `${parts.join(", ")}. Press any key to continue.`
           : "Nothing to push. Press any key to continue.",
-        color: result.failed.length > 0 ? "red" : result.skipped.length > 0 ? "yellow" : "green",
+        color: failed.length > 0 ? "red" : skipped.length > 0 ? "yellow" : "green",
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -630,28 +624,45 @@ export default function App() {
   async function executeIssueOpen(workspaceName: string, candidate: IssueCandidate) {
     resetCommandOutput()
     setView({ view: "progress", message: `Opening ${candidate.label}...` })
-    const result = await openWorkspaceIssue(workspaceName, candidate)
-    for (const line of result.lines) appendCommandLine(line)
-    appendSystemLine(result.exitCode === 0
-      ? `Opened ${candidate.label}.`
-      : `ERROR: ${candidate.label} open failed with exit code ${result.exitCode}.`)
-    finishCommandOutput(result.exitCode === 0 ? "success" : "failed")
+    try {
+      await runCoreMutation("workspace.issue.open", { workspace: workspaceName, tracker: candidate.tracker }, {
+        onOperation: (operation) => {
+          if (operation.state !== "running" || operation.progress.data?.kind !== "command-output") return
+          const lines = Array.isArray(operation.progress.data.lines) ? operation.progress.data.lines : [operation.progress.data]
+          for (const line of lines) {
+            const output = line as { text?: unknown; stream?: unknown }
+            appendCommandLine({ text: String(output.text ?? ""), stream: output.stream === "stderr" ? "stderr" : "stdout" })
+          }
+        },
+      })
+      appendSystemLine(`Opened ${candidate.label}.`)
+      finishCommandOutput("success")
+    } catch (error) {
+      appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+      finishCommandOutput("failed")
+    }
   }
 
   async function executeManualCommand(workspace: Workspace, commandName: string) {
     resetCommandOutput()
     setView({ view: "progress", message: `Running command ${commandName}...` })
-    const result = await runManualCommand(workspace, commandName, {
-      config: readGlobalConfig(),
-      onOutput: (output) => appendCommandLine({ text: output.line, stream: output.stream }),
-    })
-    if (result.exitCode === 0) {
+    try {
+      await runCoreMutation("workspace.command.run", { workspace: workspace.name, command: commandName }, {
+        onOperation: (operation) => {
+          if (operation.state !== "running" || operation.progress.data?.kind !== "command-output") return
+          const lines = Array.isArray(operation.progress.data.lines) ? operation.progress.data.lines : [operation.progress.data]
+          for (const line of lines) {
+            const output = line as { text?: unknown; stream?: unknown }
+            appendCommandLine({ text: String(output.text ?? ""), stream: output.stream === "stderr" ? "stderr" : "stdout" })
+          }
+        },
+      })
       appendSystemLine(`Command ${commandName} completed.`)
-    } else {
-      appendSystemLine(`ERROR: Command ${commandName} failed with exit code ${result.exitCode}.`)
-      if (result.failedCommand) appendSystemLine(`Failed command: ${result.failedCommand}.`)
+      finishCommandOutput("success")
+    } catch (error) {
+      appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+      finishCommandOutput("failed")
     }
-    finishCommandOutput(result.exitCode === 0 ? "success" : "failed")
   }
 
   function buildIssueCandidates(workspace: Workspace | undefined): IssueCandidate[] {
@@ -668,18 +679,11 @@ export default function App() {
   }
 
   async function launchEditor(name: string) {
-    const { path, validate } = editWorkspaceYaml(name)
-    const editor = process.env.VISUAL || process.env.EDITOR || "vi"
-
+    const { path, validate } = await resolveEditorHandoff({ kind: "workspace", name })
     renderer.suspend()
 
     try {
-      const proc = spawn([editor, path], {
-        stdin: "inherit",
-        stdout: "inherit",
-        stderr: "inherit",
-      })
-      await proc.exited
+      await openEditorHandoff(path)
 
       const result = validate()
       if (!result.ok) {
@@ -692,12 +696,7 @@ export default function App() {
           read(0, buf, 0, 256, null, () => resolve())
         })
         // Re-edit
-        const proc2 = spawn([editor, path], {
-          stdin: "inherit",
-          stdout: "inherit",
-          stderr: "inherit",
-        })
-        await proc2.exited
+        await openEditorHandoff(path)
       }
     } finally {
       renderer.resume()
@@ -715,28 +714,23 @@ export default function App() {
       if (!oldName) { setView({ view: "list" }); return }
       resetCommandOutput()
       setView({ view: "progress", message: `Renaming ${oldName} → ${trimmed}...` })
-      const result = await renameWorkspace(oldName, trimmed, {}, (msg) =>
-        appendSystemLine(msg)
-      )
-      if (!result.ok) {
-        appendSystemLine(`ERROR: ${result.error}`)
+      try {
+        await runCoreMutation("workspace.rename", { workspace: oldName, new_name: trimmed, options: {} }, { onOperation: operationProgress })
+      } catch (error) {
+        appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
         finishCommandOutput("failed")
-      } else {
-        finishCommandOutput("success")
-        reload()
-        setView({ view: "list" })
+        return
       }
+      finishCommandOutput("success")
+      await reload()
+      setView({ view: "list" })
       return
     }
 
     if (v.purpose === "clone-template") {
       const srcName = filteredTemplates()[v.index]?.name
       if (!srcName) { setView({ view: "list" }); return }
-      try {
-        const src = readTemplate(srcName)
-        writeTemplate({ ...src, name: trimmed })
-        reloadTemplates()
-      } catch {}
+      try { await runCoreMutation("template.clone", { template: srcName, new_name: trimmed }); await reloadTemplates() } catch {}
       setView({ view: "list" })
       return
     }
@@ -750,8 +744,8 @@ export default function App() {
         .filter(label => /^[A-Za-z0-9._:-]+$/.test(label))
       if (newLabels.length > 0) {
         const merged = [...new Set([...(entry.workspace.labels ?? []), ...newLabels])]
-        writeWorkspace({ ...entry.workspace, labels: merged })
-        reload()
+        await runCoreMutation("workspace.labels.set", { workspace: entry.workspace.name, labels: merged })
+        await reload()
       }
       setView({ view: "list" })
       return
@@ -791,12 +785,10 @@ export default function App() {
     }
 
     if (action === "edit") {
-      const editor = process.env.VISUAL || process.env.EDITOR || "vi"
-      const { path, validate } = editRegistryYaml()
+      const { path, validate } = await resolveEditorHandoff({ kind: "registry" })
       renderer.suspend()
       try {
-        const proc = spawn([editor, path], { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
-        await proc.exited
+        await openEditorHandoff(path)
         const result = validate()
         if (!result.ok) {
           process.stdout.write(`\nValidation error: ${result.error}\n`)
@@ -835,12 +827,12 @@ export default function App() {
     }
 
     if (action === "edit") {
-      const editor = process.env.VISUAL || process.env.EDITOR || "vi"
-      const path = templatePath(name)
+      const { path, validate } = await resolveEditorHandoff({ kind: "template", name })
       renderer.suspend()
       try {
-        const proc = spawn([editor, path], { stdin: "inherit", stdout: "inherit", stderr: "inherit" })
-        await proc.exited
+        await openEditorHandoff(path)
+        const result = validate()
+        if (!result.ok) process.stdout.write(`\nValidation error: ${result.error}\n`)
       } finally {
         renderer.resume()
         reloadTemplates()
@@ -873,7 +865,7 @@ export default function App() {
         key: "name",
         validate: (v: string) => {
           if (!v.trim()) return "Required"
-          if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
+          if (entries().some((entry) => entry.workspace.name === v.trim())) return `Workspace '${v.trim()}' already exists`
           return undefined
         },
       },
@@ -905,7 +897,7 @@ export default function App() {
         key: "name" as const,
         validate: (v: string) => {
           if (!v.trim()) return "Required"
-          if (templateExists(v.trim())) return `Template "${v.trim()}" already exists`
+          if (templateEntries().some((template) => template.name === v.trim())) return `Template "${v.trim()}" already exists`
           return undefined
         },
       },
@@ -927,7 +919,7 @@ export default function App() {
         key: "name",
         validate: (v: string) => {
           if (!v.trim()) return "Required"
-          if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
+          if (entries().some((entry) => entry.workspace.name === v.trim())) return `Workspace '${v.trim()}' already exists`
           return undefined
         },
       },
@@ -947,7 +939,7 @@ export default function App() {
     ]
   }
 
-  function executeCreateTemplate(data: CreateTemplateData, repoNames: string[]) {
+  async function executeCreateTemplate(data: CreateTemplateData, repoNames: string[]) {
     const template: Template = {
       name: data.name.trim(),
       schema_version: "1",
@@ -956,7 +948,7 @@ export default function App() {
         mode: "worktree" as const,
       })),
     }
-    writeTemplate(template)
+    await runCoreMutation("template.write", { template })
     reloadTemplates().then(() => {
       const idx = templateEntries().findIndex(t => t.name === data.name.trim())
       if (idx >= 0) tabCursor.templates[1](idx)
@@ -979,101 +971,17 @@ export default function App() {
     setView({ view: "create-progress", workspaceName: wsName })
 
     try {
-      const config = readGlobalConfig()
-      const tasksDir = getTasksDir(config.workspace_root)
-      const registry = readRegistry()
-      const registryMap = new Map(registry.map(r => [r.name, r]))
-
-      // Build repos array
-      let repos: WorkspaceRepo[]
-      let wsHooks: Workspace["hooks"] | undefined
-      let wsCommands: Workspace["commands"] | undefined
-      let wsEnv: Record<string, string> | undefined
-      let wsEnvFile: string | undefined
-      let wsFiles: Workspace["files"]
-      let wsIntegrationSettings: Record<string, unknown> | undefined
-      let templateName: string | undefined
-
-      const requestedRepoNames = template ? template.repos.map((repo) => repo.repo) : repoNames ?? []
-      const missingRepoNames = requestedRepoNames.filter((name) => !registryMap.has(name))
-      if (missingRepoNames.length > 0) {
-        throw new Error(`Missing registry repos: ${[...new Set(missingRepoNames)].join(", ")}`)
-      }
-
-      if (template) {
-        // Template-based flow
-        templateName = template.name
-        repos = []
-        for (const tplRepo of template.repos) {
-          const regEntry = registryMap.get(tplRepo.repo)!
-          const mode = tplRepo.mode ?? "worktree"
-          if (mode === "worktree") {
-            repos.push({
-              name: regEntry.name,
-              repo: tplRepo.repo,
-              type: regEntry.type,
-              mode,
-              main_path: regEntry.local_path,
-              task_path: join(tasksDir, wsName, regEntry.name),
-              base_branch: tplRepo.base_branch ?? regEntry.default_branch,
-              ...(tplRepo.commands ? { commands: { ...tplRepo.commands } } : {}),
-            })
-          } else {
-            repos.push({
-              name: regEntry.name,
-              repo: tplRepo.repo,
-              type: regEntry.type,
-              mode,
-              main_path: regEntry.local_path,
-              base_branch: tplRepo.base_branch ?? regEntry.default_branch,
-              ...(tplRepo.commands ? { commands: { ...tplRepo.commands } } : {}),
-            })
-          }
-        }
-        wsHooks = template.hooks ? JSON.parse(JSON.stringify(template.hooks)) : undefined
-        wsCommands = template.commands ? { ...template.commands } : undefined
-        wsEnv = template.env ? { ...template.env } : undefined
-        wsEnvFile = template.env_file
-        wsFiles = template.files
-        wsIntegrationSettings = template.integrations ? JSON.parse(JSON.stringify(template.integrations)) : undefined
-      } else if (repoNames) {
-        // Ad-hoc flow (per D-09: all worktree mode)
-        repos = repoNames.map(name => {
-          const regEntry = registryMap.get(name)!
-          return {
-            name: regEntry.name, repo: regEntry.name, type: regEntry.type,
-            mode: "worktree" as const,
-            main_path: regEntry.local_path,
-            task_path: join(tasksDir, wsName, regEntry.name),
-            base_branch: regEntry.default_branch,
-          }
-        })
-      } else {
-        throw new Error("No template or repos provided")
-      }
-
-      // Initialize progress rows
-      const initialRows: CreateRow[] = repos.map(r => ({
-        repo: r.name,
-        status: r.mode === "worktree" ? "pending" as const : "skipped" as const,
-        detail: r.mode === "worktree" ? "" : `${r.mode} mode`,
+      const requested = template ? template.repos.map((repo) => ({ name: repo.repo, mode: repo.mode ?? "worktree" })) : (repoNames ?? []).map((name) => ({ name, mode: "worktree" as const }))
+      const initialRows: CreateRow[] = requested.map((repo) => ({
+        repo: repo.name,
+        status: repo.mode === "worktree" ? "pending" : "skipped",
+        detail: repo.mode === "worktree" ? "" : `${repo.mode} mode`,
       }))
       setCreateRows(initialRows)
-
-      // ─── Delegate all side-effects to createWorkspace() per D-02 ─────────────
-      // The hand-rolled per-repo worktree-cleanup rollback that used to live here
-      // is now provided by the operation-runner inside workspace-lifecycle.ts.
-      //
-      // We drive the per-repo CreateRow state machine by parsing onProgress string messages.
-      // Parsing contract (from Plan 02's createWorkspace):
-      //   "Creating worktree for <repo>"   → set repo.status = "creating-worktree"
-      //   "created worktree for <repo>"    → set repo.status = "done"
-      //   "Rollback: create worktree <repo>" → set repo.status = "failed", detail = "rolling back..."
-      //   "Rollback error: create worktree <repo> failed (<err>)" → append to detail
-      // Other messages (file-ops warnings, integration paths, env warnings) are not parsed.
-
       const updateRowByRepo = (repoName: string, patch: Partial<CreateRow>) => {
-        setCreateRows(prev => prev.map(r => r.repo === repoName ? { ...r, ...patch } : r))
+        setCreateRows(prev => prev.some(row => row.repo === repoName)
+          ? prev.map(row => row.repo === repoName ? { ...row, ...patch } : row)
+          : [...prev, { repo: repoName, status: "pending", detail: "", ...patch }])
       }
 
       const CREATING_RE = /^Creating worktree for (.+)$/
@@ -1081,7 +989,9 @@ export default function App() {
       const ROLLBACK_RE = /^Rollback: create worktree (.+)$/
       const ROLLBACK_ERROR_RE = /^Rollback error: create worktree (.+?) failed \((.+)\)$/
 
-      const handleProgress = (msg: string) => {
+      const handleProgress = (operation: Operation) => {
+        if (operation.state !== "running" || !operation.progress.message) return
+        const msg = operation.progress.message
         let m: RegExpMatchArray | null
         if ((m = msg.match(CREATING_RE))) {
           updateRowByRepo(m[1]!, { status: "creating-worktree", detail: "creating worktree..." })
@@ -1099,53 +1009,24 @@ export default function App() {
           updateRowByRepo(m[1]!, { status: "failed", detail: `rollback failed: ${m[2]!}` })
           return
         }
-        // Unparsed messages are silently ignored by the per-repo parser. If a future plan
-        // wants to surface them, add a separate output box to CreateProgressView.
       }
+      const request = template
+        ? { name: wsName, branch, source: { kind: "template" as const, template: template.name } }
+        : { name: wsName, branch, source: { kind: "repositories" as const, repositories: repoNames ?? [] } }
+      await createWorkspaceThroughService(request, { onOperation: handleProgress })
 
-      const result = await createWorkspace(
-        {
-          wsName,
-          branch,
-          ...(templateName ? { templateName } : {}),
-          repos,
-          ...(wsHooks ? { wsHooks } : {}),
-          ...(wsCommands ? { wsCommands } : {}),
-          ...(wsEnv ? { wsEnv } : {}),
-          ...(wsEnvFile ? { wsEnvFile } : {}),
-          ...(wsFiles ? { wsFiles } : {}),
-          ...(wsIntegrationSettings ? { wsIntegrationSettings } : {}),
-        },
-        handleProgress,
-      )
-
-      if (!result.ok) {
-        // Mark any still-pending rows as failed (matches pre-migration behavior at line 904)
-        setCreateRows(prev => prev.map(r => r.status === "pending" ? { ...r, status: "failed", detail: "aborted" } : r))
-
-        const rollbackNote = result.rollbackErrors.length > 0
-          ? ` (${result.rollbackErrors.length} rollback error${result.rollbackErrors.length === 1 ? "" : "s"})`
-          : ""
-        setCreateSummary({
-          text: `Failed: ${result.error}${rollbackNote}. Press any key to continue.`,
-          color: "red",
-        })
-        setCreateDone(true)
-        return
-      }
-
-      // Success summary
-      const nCreated = repos.filter(r => r.mode === "worktree").length
-      const nSkipped = repos.filter(r => r.mode !== "worktree").length
+      const rows = createRows()
+      const nCreated = rows.filter(row => row.status === "done").length
+      const nSkipped = rows.filter(row => row.status === "skipped").length
       const parts: string[] = []
       if (nCreated > 0) parts.push(`${nCreated} created`)
       if (nSkipped > 0) parts.push(`${nSkipped} trunk`)
       setCreateSummary({ text: `${parts.join(", ")}. Press any key to continue.`, color: "green" })
       setCreateDone(true)
-
     } catch (err) {
+      setCreateRows(prev => prev.map(row => row.status === "pending" ? { ...row, status: "failed", detail: "aborted" } : row))
       const msg = err instanceof Error ? err.message : String(err)
-      setCreateSummary({ text: `Error: ${msg}. Press any key to continue.`, color: "red" })
+      setCreateSummary({ text: `Failed: ${msg}. Press any key to continue.`, color: "red" })
       setCreateDone(true)
     }
   }
@@ -1296,9 +1177,9 @@ export default function App() {
         return
       }
 
-      if (tab() === "workspaces" && detailCanScroll() && (key.name === "pagedown" || key.name === "pageup")) {
+      if (tab() === "workspaces" && (key.name === "pagedown" || key.name === "pageup")) {
         const direction = key.name === "pagedown" ? 1 : -1
-        setDetailScrollOffset((i) => Math.max(0, i + direction * Math.max(1, Math.floor(detailHeight() / 2))))
+        setDetailScrollRequest((request) => ({ sequence: request.sequence + 1, direction }))
         return
       }
 
@@ -1421,7 +1302,7 @@ export default function App() {
           onDismiss={dismiss}
         />
         <box height={1}>
-          <text fg="gray">  {"\u2191\u2193"}/jk Navigate  d Dismiss notification  Esc Close</text>
+          <text fg="gray">  {"\u2191\u2193"}/jk Navigate  d Dismiss signal  Esc Close</text>
         </box>
       </Show>
 
@@ -1511,13 +1392,12 @@ export default function App() {
               onConfirm={() => {
                 const repoTarget = repoRemoveTarget()
                 if (repoTarget) {
-                  const registry = readRegistry()
-                  const updated = registry.filter(r => r.name !== repoTarget)
-                  writeRegistry(updated)
-                  reloadRepos()
-                  setRepoRemoveTarget(null)
-                  setView({ view: "list" })
-                  clampCursor()
+                  void runCoreMutation("repository.delete", { repository: repoTarget }).then(async () => {
+                    await reloadRepos()
+                    setRepoRemoveTarget(null)
+                    setView({ view: "list" })
+                    clampCursor()
+                  })
                   return
                 }
                 if (v.action === "sync") {
@@ -1591,13 +1471,12 @@ export default function App() {
           const v = view() as { view: "wizard-create"; templateIndex: number }
           const template = filteredTemplates()[v.templateIndex]
           if (!template) return null
-          const tpl = readTemplate(template.name)
-          const steps = buildTemplateWizardSteps(tpl)
+          const steps = buildTemplateWizardSteps(template)
           return (
             <WizardView
               title="Create Workspace"
               steps={steps}
-              onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, tpl, null)}
+              onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, template, null)}
               onCancel={() => setView({ view: "list" })}
             />
           )
@@ -1645,7 +1524,12 @@ export default function App() {
 
       {/* Split pane — always visible; dialogs overlay via absolute positioning */}
         {/* TOP BOX: list pane with tab title in border */}
-        <box border title={tabTitle()} flexDirection="column" flexGrow={3} minHeight={10}>
+        <box border title={tabTitle()} flexDirection="column" height={listPaneHeight()} minHeight={6}>
+          <Show when={core.error()}>
+            {(message) => <text fg="red">{`  Service unavailable: ${message()}\n  Press r to retry.`}</text>}
+          </Show>
+          <Show when={!core.error()}>
+          <Show when={core.state()} fallback={<text fg="gray">  Loading workspace state...</text>}>
           <Switch>
             <Match when={tab() === "workspaces"}>
               <WorkspaceList
@@ -1679,6 +1563,8 @@ export default function App() {
               />
             </Match>
           </Switch>
+          </Show>
+          </Show>
           {/* Batch bar anchored to bottom of list box */}
           <Show when={view().view === "list" && tab() === "workspaces" && selected().size > 0}>
             <box flexGrow={1} />
@@ -1695,7 +1581,7 @@ export default function App() {
         </box>
 
         {/* BOTTOM BOX: detail pane for list view only */}
-        <box border title={detailBoxTitle()} flexDirection="column" flexGrow={2} minHeight={10}>
+        <box border title={detailBoxTitle()} flexDirection="column" flexGrow={1} minHeight={10}>
           {/* Tab-specific detail — always visible (dialogs overlay via absolute positioning) */}
           <Switch>
               <Match when={tab() === "workspaces"}>
@@ -1704,13 +1590,16 @@ export default function App() {
                   signals={currentEntry() ? (signalMap().get(currentEntry()!.workspace.name) ?? []) : []}
                   tick={tick()}
                   fileStatus={fileStatus.state()}
-                  scrollOffset={detailScrollOffset()}
-                  height={detailHeight()}
-                  onOverflowChange={setDetailCanScroll}
+                  scrollRequest={detailScrollRequest()}
+                  config={core.state()?.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }}
+                  templates={templateEntries()}
                 />
               </Match>
               <Match when={tab() === "templates"}>
-                <TemplateDetail template={currentTemplate()} />
+                <TemplateDetail
+                  template={currentTemplate()}
+                  config={core.state()?.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }}
+                />
               </Match>
               <Match when={tab() === "repos"}>
                 <RepoDetail
@@ -1732,8 +1621,8 @@ export default function App() {
             width={filtering() ? undefined : 0}
             onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
           />
-          <text fg={!filtering() && filter() ? "cyan" : !filtering() && refreshFlash() ? "green" : "gray"}>
-            {filtering() ? "" : filter() ? `"${filter()}" ` : refreshFlash() ? refreshFlash() : loading() ? "(loading statuses...)" : helpBarText()}
+          <text fg={!filtering() && core.error() ? "red" : !filtering() && filter() ? "cyan" : !filtering() && refreshFlash() ? "green" : "gray"}>
+            {filtering() ? "" : core.error() ? `Service error: ${core.error()}` : filter() ? `"${filter()}" ` : refreshFlash() ? refreshFlash() : loading() ? "(loading statuses...)" : helpBarText()}
           </text>
           <text fg="gray">{!filtering() && filter() ? " / edit · esc clear" : ""}</text>
           <box flexGrow={filtering() ? 0 : 1} />

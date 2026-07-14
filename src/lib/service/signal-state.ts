@@ -19,11 +19,15 @@ export class SignalState {
   apply(mutation: SignalMutation): boolean {
     if ("dismissal" in mutation) {
       const current = this.dismissed.get(mutation.dismissal.signal_id)
-      if (!this.notifications.has(mutation.dismissal.signal_id) || (current && seq(mutation.sequence) <= seq(current))) return false
+      const signalExists = this.notifications.has(mutation.dismissal.signal_id)
+        || [...this.activities.values()].some((signal) => signal.id === mutation.dismissal.signal_id)
+      if (!signalExists || (current && seq(mutation.sequence) <= seq(current))) return false
       this.dismissed.set(mutation.dismissal.signal_id, mutation.sequence)
       return true
     }
     const incoming = mutation.signal
+    const dismissalSequence = this.dismissed.get(incoming.id)
+    if (dismissalSequence && seq(mutation.sequence) > seq(dismissalSequence)) this.dismissed.delete(incoming.id)
     const current = incoming.kind === "activity" ? this.activities.get(activityKey(incoming)) : this.notifications.get(incoming.id)
     if (current && seq(mutation.sequence) <= seq(current.journal_sequence)) return false
     if (incoming.kind === "activity" && incoming.state === "idle") {
@@ -37,7 +41,8 @@ export class SignalState {
   }
 
   private actionable(signal: JournaledSignal) {
-    if (signal.kind === "notification") return !this.dismissed.has(signal.id)
+    if (this.dismissed.has(signal.id)) return false
+    if (signal.kind === "notification") return true
     return signal.state === "waiting" || signal.state === "failed"
   }
 

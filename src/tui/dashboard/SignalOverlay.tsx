@@ -17,7 +17,7 @@ export function SignalOverlay(props: Props) {
     if (key.name === "down" || key.name === "j") return setCursor((value) => Math.min(Math.max(0, rows().length - 1), value + 1))
     if (key.name === "d") {
       const selected = rows()[cursor()]
-      if (selected?.kind === "notification" && selected.unread) void props.onDismiss(selected.id)
+      if (selected) void props.onDismiss(selected.id)
     }
   })
   const height = createMemo(() => Math.max(5, dims().height - 4))

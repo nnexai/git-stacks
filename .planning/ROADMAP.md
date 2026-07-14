@@ -9,6 +9,7 @@ This milestone establishes a secure local service, unifies workspace signals, an
 - [x] **Phase 104: Local Workspace Service and Event Contract** — Authenticated loopback service, authoritative snapshots, stable identities, operations, replayable events, bounded clients, and lifecycle management. *(completed 2026-07-11)*
 - [x] **Phase 107.1: Unified Workspace Signals** — One provider-neutral signal contract for hooks, terminal OSC, automation, journaling, replay, and client projections. *(completed 2026-07-13)*
 - [x] **Phase 107.3: Web Client and Local Terminal Bridge** — Paired browser client, workspace UI, multiple service-owned PTYs, reconnect/replay, workspace operations, signals, and resource bounds. *(completed 2026-07-14)*
+- [x] **Phase 107.4: Core-Centred Client Architecture** — One trusted core projection, typed official client, complete service operation surface, service-backed OpenTUI dashboard, shared client semantics, and enforced authority boundaries. *(completed 2026-07-14)*
 
 ### Phase 107.3 deliverables
 
@@ -21,9 +22,19 @@ This milestone establishes a secure local service, unifies workspace signals, an
 
 Plan and verification: [Phase 107.3](./phases/107.3-web-client-and-local-terminal-bridge/)
 
+### Phase 107.4 deliverables
+
+1. The service exposes one complete trusted local read model in addition to the browser-safe projection.
+2. The OpenTUI dashboard consumes service state/events and submits all domain mutations through the operation registry.
+3. Sync, push, configured commands, issue opening, creation, and lifecycle operations retain structured progress through the shared client.
+4. Browser and OpenTUI clients share contract types, signal presentation rules, priority ordering, and complete multi-step command semantics.
+5. Only explicit foreground editor and shell handoffs remain client-local, with architecture tests enforcing the boundary.
+
+Plan and verification: [Phase 107.4](./phases/107.4-core-centred-client-architecture/)
+
 ## Next
 
 No additional milestone is committed. New work should be planned from the supported CLI, TUI, service, and web surfaces described in `PROJECT.md`.
 
 ---
-*Last updated: 2026-07-14.*
+*Last updated: 2026-07-14 after Phase 107.4.*

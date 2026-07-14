@@ -3,8 +3,10 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writ
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { provisionOfficialClient, readOfficialClientCredential } from "../../src/lib/service/credentials"
+import { EventBroker } from "../../src/lib/service/event-broker"
+import { EventJournal } from "../../src/lib/service/event-journal"
 import { startServiceServer } from "../../src/service/server"
-import { createIdleLifecycle, serviceDescriptorPath, startManagedService } from "../../src/service/main"
+import { createIdleLifecycle, ensureManagedServiceProcess, serviceDescriptorPath, startManagedService } from "../../src/service/main"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
@@ -16,6 +18,46 @@ describe("v1 discovery", () => {
     expect(lifecycle.activeOperations).toBe(0)
     expect(lifecycle.connectedClients).toBe(0)
     lifecycle.dispose()
+  })
+
+  test("launches missing services detached and returns discovered state", async () => {
+    const descriptor = {
+      protocol: "v1" as const,
+      endpoint: "http://127.0.0.1:30001/",
+      pid: 123,
+      instance_id: crypto.randomUUID(),
+      server_id: crypto.randomUUID(),
+      credential_lookup: "official-client",
+      started_at: new Date().toISOString(),
+    }
+    let reads = 0
+    let command: string[] | undefined
+    let detached = false
+    let unrefCalled = false
+    let childEnvironment: Record<string, string | undefined> | undefined
+    process.env.GS_WORKSPACE_NAME = "must-not-leak"
+    process.env.GIT_STACKS_SIGNAL_TOKEN = "must-not-leak"
+    const found = await ensureManagedServiceProcess({
+      executable: "/usr/bin/bun",
+      entrypoint: "/opt/git-stacks/src/index.ts",
+      pollMs: 1,
+      readUsable: async () => ++reads >= 2 ? descriptor : null,
+      spawn: (nextCommand, options) => {
+        command = nextCommand
+        detached = options.detached
+        childEnvironment = options.env
+        return { exited: new Promise<number>(() => {}), unref: () => { unrefCalled = true } }
+      },
+    })
+    delete process.env.GS_WORKSPACE_NAME
+    delete process.env.GIT_STACKS_SIGNAL_TOKEN
+
+    expect(found).toEqual(descriptor)
+    expect(command).toEqual(["/usr/bin/bun", "/opt/git-stacks/src/index.ts", "service", "start"])
+    expect(detached).toBe(true)
+    expect(unrefCalled).toBe(true)
+    expect(childEnvironment?.GS_WORKSPACE_NAME).toBeUndefined()
+    expect(childEnvironment?.GIT_STACKS_SIGNAL_TOKEN).toBeUndefined()
   })
 
   test("binds a random loopback port and authenticates before routing", async () => {
@@ -37,6 +79,30 @@ describe("v1 discovery", () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ ok: true, protocol: "v1", data: { service_version: expect.any(String) } })
     expect(activity).toBe(1)
+  })
+
+  test("flushes SSE readiness without waiting for the heartbeat", async () => {
+    const root = join(tmpdir(), `git-stacks-sse-ready-${crypto.randomUUID()}`)
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const credential = provisionOfficialClient("sse-ready", { serviceRoot: root })
+    const broker = new EventBroker(new EventJournal({ root }))
+    const service = startServiceServer({
+      serviceRoot: root,
+      broker,
+      heartbeatMs: 60_000,
+      snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
+    })
+    cleanup.push(() => service.stop())
+
+    const response = await Promise.race([
+      fetch(new URL("/v1/events?cursor=0", service.url), { headers: { authorization: `Bearer ${credential.token}` } }),
+      Bun.sleep(250).then(() => null),
+    ])
+    expect(response).toBeInstanceOf(Response)
+    const reader = (response as Response).body!.getReader()
+    const first = await reader.read()
+    expect(new TextDecoder().decode(first.value)).toContain(": connected")
+    await reader.cancel()
   })
 
   test("publishes one owner-only secret-free descriptor and removes only its instance", async () => {

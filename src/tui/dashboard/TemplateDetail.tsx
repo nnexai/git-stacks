@@ -1,13 +1,13 @@
 /** @jsxImportSource @opentui/solid */
 import { Show, For, createMemo } from "solid-js"
 import { formatConfigValue } from "./configUtils"
-import type { Template } from "../../lib/config"
-import { readGlobalConfig } from "../../lib/config"
+import type { GlobalConfig, Template } from "../../lib/config"
 import { integrations } from "../../lib/integrations"
 import { resolveEnabledGlobally } from "../../lib/integrations/types"
 
 type Props = {
   template: Template | undefined
+  config?: GlobalConfig
 }
 
 export function TemplateDetail(props: Props) {
@@ -17,7 +17,7 @@ export function TemplateDetail(props: Props) {
       fallback={<text fg="gray">  No template selected</text>}
     >
       {(template) => {
-        const globalConfig = readGlobalConfig()
+        const globalConfig = props.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }
         const hookCounts = createMemo(() => {
           const h = template().hooks
           if (!h) return { total: 0, primary: "" }

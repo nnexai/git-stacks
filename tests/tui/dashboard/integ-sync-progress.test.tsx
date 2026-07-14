@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
+import { makeDashboardCoreState, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — MUST be set before any import that touches paths.ts
 // Each test file has its own Bun module scope, so this env override takes effect
@@ -141,13 +141,37 @@ mock.module("../../../src/lib/lifecycle", () => ({
   runHooksCaptured: mock(async () => {}),
 }))
 
+mock.module("../../../src/lib/service/client", () => ({
+  fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
+  fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
+  dismissSignal: mock(async () => {}),
+  subscribeServiceEvents: mock(async () => "0"),
+  fetchEventCursor: mock(async () => "0"),
+  fetchWorkspaceFileStatus: mock(async () => ({ workspace: { scope: "workspace", name: "sync-ws", root: "/tmp", entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] }, repos: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] })),
+  fetchWorkspaceNotes: mock(async () => []),
+  fetchEditTarget: mock(async () => ({ kind: "registry", path: "/tmp/registry.yml" })),
+  runCoreMutation: mock(async (name: string, _request: unknown, options?: { onOperation?: (operation: any) => void }) => {
+    if (name === "workspace.sync") {
+      for (const row of [
+        { repo: "sync-repo", status: "fetching", detail: "", conflicts: [] },
+        { repo: "sync-repo", status: "rebasing", detail: "", conflicts: [] },
+        { repo: "sync-repo", status: "synced", detail: "1 commit", conflicts: [] },
+      ]) options?.onOperation?.({ state: "running", progress: { data: { kind: "sync", ...row } } })
+    }
+    return { state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: { synced: [{ repo: "sync-repo", commits: 1 }], skipped: [] } }
+  }),
+  createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
 // Dynamic imports happen AFTER env is set and mocks are registered
 const { testRender } = await import("@opentui/solid")
 const { default: App } = await import("../../../src/tui/dashboard/App")
+const { setCoreStateFactoryForTests } = await import("../../../src/tui/dashboard/core-store")
+setCoreStateFactoryForTests(() => makeDashboardCoreState([syncWsFixture as any], [], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }
 
-afterAll(() => cleanup(configDir))
+afterAll(() => { setCoreStateFactoryForTests(undefined); cleanup(configDir) })
 
 describe("integration: sync progress flow", () => {
   test("action menu shows Sync option", async () => {

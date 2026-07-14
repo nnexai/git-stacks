@@ -1,13 +1,14 @@
 /** @jsxImportSource @opentui/solid */
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js"
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { formatSignalAge, signalText } from "./signalUtils"
 import { formatConfigValue } from "./configUtils"
 import type { WorkspaceEntry, WorkspaceFileStatusState } from "./types"
 import type { DashboardSignal } from "./hooks/useSignals"
 import type { WorkspaceFileStatusEntry, WorkspaceFileStatusRepoSection } from "../../lib/workspace-file-status"
 import type { WorkspaceNoteRecord } from "../../lib/notes"
-import { listWorkspaceNotes } from "../../lib/notes"
-import { readGlobalConfig, readTemplate } from "../../lib/config"
+import type { GlobalConfig, Template } from "../../lib/config"
+import { fetchWorkspaceNotes } from "../../lib/service/client"
 import { integrations } from "../../lib/integrations"
 import { isConditional, resolveEnabledGlobally } from "../../lib/integrations/types"
 
@@ -18,9 +19,9 @@ type Props = {
   signals: DashboardSignal[]
   tick: number
   fileStatus?: WorkspaceFileStatusState
-  scrollOffset?: number
-  height?: number
-  onOverflowChange?: (canScroll: boolean) => void
+  scrollRequest?: { sequence: number; direction: -1 | 1 }
+  config?: GlobalConfig
+  templates?: Template[]
 }
 
 type NoteState =
@@ -56,26 +57,58 @@ function detailRow(row: unknown) {
 
 export function WorkspaceDetail(props: Props) {
   const [notesState, setNotesState] = createSignal<NoteState | null>(null)
-  let notesRequest = 0
+  const notesCache = new Map<string, NoteState>()
+  const notesInFlight = new Map<string, Promise<void>>()
+  let currentWorkspaceName: string | undefined
+  let scrollView: ScrollBoxRenderable | undefined
+  let renderedWorkspaceName: string | undefined
+  let handledScrollSequence = 0
 
   createEffect(() => {
     const workspaceName = props.entry?.workspace.name
-    notesRequest += 1
-    const requestId = notesRequest
+    currentWorkspaceName = workspaceName
     if (!workspaceName) {
       setNotesState(null)
       return
     }
+    const cached = notesCache.get(workspaceName)
+    if (cached) {
+      setNotesState(cached)
+      return
+    }
     setNotesState({ state: "loading", workspaceName })
-    void listWorkspaceNotes(workspaceName, { limit: 5 })
-      .then((notes) => {
-        if (requestId === notesRequest) setNotesState({ state: "loaded", workspaceName, notes })
+    if (!notesInFlight.has(workspaceName)) {
+      const request = fetchWorkspaceNotes(workspaceName).then((notes) => {
+        const next: NoteState = { state: "loaded", workspaceName, notes }
+        notesCache.set(workspaceName, next)
+        if (currentWorkspaceName === workspaceName) setNotesState(next)
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
-        if (requestId === notesRequest) setNotesState({ state: "error", workspaceName, message })
+        const next: NoteState = { state: "error", workspaceName, message }
+        notesCache.set(workspaceName, next)
+        if (currentWorkspaceName === workspaceName) setNotesState(next)
       })
+      .finally(() => { notesInFlight.delete(workspaceName) })
+      notesInFlight.set(workspaceName, request)
+    }
   })
+
+  const syncScrollView = () => {
+    const workspaceName = props.entry?.workspace.name
+    const request = props.scrollRequest
+    if (!scrollView) return
+    if (workspaceName !== renderedWorkspaceName) {
+      renderedWorkspaceName = workspaceName
+      scrollView.scrollTo(0)
+    }
+    if (request && request.sequence !== handledScrollSequence) {
+      handledScrollSequence = request.sequence
+      scrollView.scrollBy(request.direction, "viewport")
+    }
+  }
+
+  createEffect(syncScrollView)
 
   return (
     <Show
@@ -85,7 +118,7 @@ export function WorkspaceDetail(props: Props) {
       {(entry) => {
         const ws = () => entry().workspace
         const status = () => entry().status
-        const globalConfig = readGlobalConfig()
+        const globalConfig = () => props.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }
 
         const displaySignals = createMemo(() => {
           void props.tick
@@ -190,22 +223,22 @@ export function WorkspaceDetail(props: Props) {
               enabled = (wsOverride as { enabled: boolean }).enabled
               source = "workspace"
             } else if (ws().template) {
-              try {
-                const tpl = readTemplate(ws().template!)
+              const tpl = props.templates?.find((template) => template.name === ws().template)
+              if (tpl) {
                 const tplOverride = tpl.integrations?.[integration.id]
                 if (tplOverride && typeof tplOverride === "object" && "enabled" in (tplOverride as object)) {
                   enabled = (tplOverride as { enabled: boolean }).enabled
                   source = "template"
                 } else {
-                  enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig)
+                  enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig())
                   source = "global"
                 }
-              } catch {
-                enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig)
+              } else {
+                enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig())
                 source = "global"
               }
             } else {
-              enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig)
+              enabled = resolveEnabledGlobally(integration.id, integration.enabledByDefault, globalConfig())
               source = "global"
             }
 
@@ -214,7 +247,7 @@ export function WorkspaceDetail(props: Props) {
             let configSummary = ""
             if (enabled) {
               const rawConfig = (ws().settings?.integrations?.[integration.id]
-                ?? globalConfig.integrations[integration.id]
+                ?? globalConfig().integrations[integration.id]
                 ?? {}) as Record<string, unknown>
               const extras = Object.entries(rawConfig)
                 .filter(([k]) => k !== "enabled" && k !== "issue")
@@ -254,21 +287,20 @@ export function WorkspaceDetail(props: Props) {
           return out
         })
 
-        const visibleRows = createMemo(() => {
-          const height = props.height ?? rows().length
-          const maxOffset = Math.max(0, rows().length - height)
-          const offset = Math.min(Math.max(0, props.scrollOffset ?? 0), maxOffset)
-          return rows().slice(offset, offset + height).map(detailRow)
-        })
-
-        createEffect(() => {
-          props.onOverflowChange?.(rows().length > (props.height ?? rows().length))
-        })
-
         return (
-          <box flexDirection="column">
-            <For each={visibleRows()}>{(row) => row}</For>
-          </box>
+          <scrollbox
+            ref={(node) => {
+              scrollView = node
+              renderedWorkspaceName = undefined
+              queueMicrotask(syncScrollView)
+            }}
+            flexGrow={1}
+            scrollY
+            scrollX={false}
+            viewportCulling
+          >
+            <For each={rows()}>{(row) => detailRow(row)}</For>
+          </scrollbox>
         )
       }}
     </Show>

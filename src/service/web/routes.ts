@@ -279,15 +279,18 @@ export class WebApplication {
     if (request.method === "GET" && url.pathname === "/web/api/signals") {
       if (!this.options.signalProjection) return webError("capability_unavailable", "Signals are unavailable", 409)
       const projection = await this.options.signalProjection()
-      return webJson({ ...projection, signals: this.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
+      const dismissed = new Set(projection.dismissed)
+      return webJson({ ...projection, signals: this.visibleSignals(principal.id, projection.signals.filter((signal) => !dismissed.has(signal.id))).map(projectWebSignal) })
     }
     if (request.method === "POST" && url.pathname === "/web/api/signals/acknowledge") {
       if (!this.options.signalProjection) return webError("capability_unavailable", "Signals are unavailable", 409)
       const parsed = WebSignalAcknowledgeSchema.safeParse(await body(request))
       if (!parsed.success) return webError("invalid_request", "Invalid signal acknowledgement", 400)
       const projection = await this.options.signalProjection()
-      const acknowledged = this.principals.acknowledgeSurface(principal.id, parsed.data.surface_id, projection.signals)
-      return webJson({ ...projection, acknowledged, signals: this.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
+      const dismissed = new Set(projection.dismissed)
+      const visible = projection.signals.filter((signal) => !dismissed.has(signal.id))
+      const acknowledged = this.principals.acknowledgeSurface(principal.id, parsed.data.surface_id, visible)
+      return webJson({ ...projection, acknowledged, signals: this.visibleSignals(principal.id, visible).map(projectWebSignal) })
     }
     if (request.method === "POST" && url.pathname === "/web/api/signals/dismiss") {
       if (!this.options.dismissSignal) return webError("capability_unavailable", "Signals are unavailable", 409)

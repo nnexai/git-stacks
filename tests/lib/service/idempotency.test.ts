@@ -94,11 +94,15 @@ describe("operation idempotency", () => {
 })
 
 describe("workspace mutation adapters", () => {
-  test("advertises only open and close and translates existing progress callbacks", async () => {
+  test("advertises the complete core mutation surface and translates existing progress callbacks", async () => {
     const open = mock(async (_workspace: string, _options: Record<string, unknown>, progress?: (message: string) => void) => { progress?.("Opened repo 1"); return { ok: true } })
     const close = mock(async (_workspace: string, _options: Record<string, unknown>, progress?: (message: string) => void) => { progress?.("Closed repo 1"); return { ok: true } })
     const adapters = createWorkspaceMutationAdapters({ openWorkspace: open, closeWorkspace: close })
-    expect(Object.keys(adapters).sort()).toEqual(["workspace.close", "workspace.create", "workspace.open"])
+    expect(Object.keys(adapters).sort()).toEqual([
+      "repository.delete", "template.clone", "template.delete", "template.write", "workspace.clean", "workspace.close",
+      "workspace.command.run", "workspace.create", "workspace.issue.open", "workspace.labels.set", "workspace.merge",
+      "workspace.open", "workspace.push", "workspace.remove", "workspace.rename", "workspace.sync",
+    ])
     const reports: string[] = []
     const operation = adapters["workspace.open"]({ workspace: "demo", options: { captured: true } })
     await operation.steps[0]!.run((progress) => { reports.push(progress.message ?? "") })

@@ -34,6 +34,12 @@ The local service owns all machine-sensitive work:
 
 The browser receives browser-safe projections and sends stable identities plus user intent. It never receives service credentials, arbitrary launch environments, or direct filesystem access. xterm.js renders terminal output; the service remains the process owner.
 
+### Shared first-party core
+
+The OpenTUI dashboard and future trusted local clients use the official typed service client and one complete core projection. They do not independently read workspace YAML, inspect Git, calculate status, execute configured commands, or perform workspace mutations. Browser DTOs remain a deliberately narrower projection of the same service-owned domain model.
+
+Client code owns rendering, navigation, and two explicit foreground handoffs only: attaching a user-visible shell to the current terminal and opening a service-resolved path in `$EDITOR`.
+
 ### Trust boundary
 
 The web surface is loopback-only and same-origin. A one-use pairing capability creates a scoped HttpOnly browser principal. Host, Origin, Fetch Metadata, quotas, bounded replay, and process cleanup are enforced by the service.
@@ -67,4 +73,4 @@ Coding-agent activity and notifications use one provider-neutral signal contract
 Unsupported product experiments are removed from the active branch and preserved through explicit archive tags. See [Native client retirement](./notes/native-client-retirement.md) for the relevant decision and recovery point.
 
 ---
-*Last updated: 2026-07-14 for the local web workspace client direction.*
+*Last updated: 2026-07-14 for the core-centred service/client architecture.*

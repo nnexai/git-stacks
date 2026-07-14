@@ -3,15 +3,10 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup } from "./presentation"
+import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, workspacePriorityOrder } from "./presentation"
+import type { WebRepository as Repository, WebSnapshot as Snapshot, WebTerminal as TerminalMeta, WebWorkspace as Workspace } from "../service/web/contract"
+import type { Signal, WorkspaceCreationCatalog as Catalog } from "../lib/service/contract"
 
-type Repository = { id: string; name: string; mode: string; exists: boolean; dirty: boolean; branch: string; ahead: number; behind: number; additions: number; removals: number; degraded: boolean }
-type Command = { id: string; name: string; scope: "workspace" | "repository"; repository_id?: string }
-type Workspace = { id: string; name: string; branch: string; priority: number; labels: string[]; repositories: Repository[]; commands: Command[]; file_status: { warnings: number; errors: number; attention: number } }
-type Snapshot = { revision: string; generated_at: string; pinned_workspace_ids: string[]; workspaces: Workspace[] }
-type TerminalMeta = { id: string; workspace_id: string; repository_id: string; command_id?: string; surface_id: string; title: string; title_pinned: boolean; state: "starting" | "running" | "ended" | "closing" | "cleanup_failed"; created_at: string; exit_code: number | null; cursor: string; earliest_cursor: string; history_available: boolean }
-type Signal = { kind: "activity" | "notification"; id: string; source: string; workspace_id: string; repository_id?: string; surface_id?: string; title?: string; detail?: string; state?: string; occurred_at: string }
-type Catalog = { templates: Array<{ name: string; description?: string }>; repositories: Array<{ name: string; type: string; default_branch: string }> }
 type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 type Pair = { workspaceId: string; repositoryId: string }
 type Organization = "label" | "repository"
@@ -381,7 +376,7 @@ class TerminalView {
   }
 }
 
-let snapshot: Snapshot = { revision: "0", generated_at: new Date().toISOString(), pinned_workspace_ids: [], workspaces: [] }
+let snapshot: Snapshot = { protocol: "web-v1", revision: "0", generated_at: new Date().toISOString(), pinned_workspace_ids: [], workspaces: [] }
 let selectedPair: Pair | undefined
 let activeTerminalId: string | undefined
 let signalRefreshGeneration = 0
@@ -462,9 +457,6 @@ async function persistPriorities(priorities: WorkspacePriority[]): Promise<void>
     renderNav()
     toast(String(error), true)
   }
-}
-function workspacePriorityOrder(left: Workspace, right: Workspace): number {
-  return right.priority - left.priority || left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
 }
 function reorderWorkspace(sourceId: string, targetId: string, after: boolean): void {
   if (sourceId === targetId) return

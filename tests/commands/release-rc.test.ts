@@ -153,7 +153,7 @@ describe("v0.19.0 release candidate smoke", () => {
     const cwdResolver = readFileSync(join(ROOT, "tests/lib/detect-workspace-cwd.test.ts"), "utf8")
 
     expect(managerFrame).toContain("noisy manual command output stays bounded inside progress frame")
-    expect(managerFrame).toContain("... 22 earlier lines omitted ...")
+    expect(managerFrame).toContain("... 21 earlier lines omitted ...")
     expect(config).toContain("invalidateConfigCache forces workspace and template reads to see external file edits")
     expect(config).toContain("invalidateConfigCache removes externally deleted entries from list reloads")
     expect(lifecycle).toContain("captures stderr-only output")

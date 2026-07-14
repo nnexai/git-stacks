@@ -42,6 +42,14 @@
 - [x] **COMP-02:** External terminal integrations continue to own their sessions independently.
 - [x] **COMP-03:** Default build, test, and publish workflows require no unsupported desktop toolchain.
 
+## Shared Client Core
+
+- [x] **CORE-01:** First-party trusted clients consume one typed core projection containing workspace definitions, authoritative status, templates, repository registrations, and global configuration.
+- [x] **CORE-02:** OpenTUI workspace lifecycle, Git, command, issue, label, template, and repository mutations execute through the service operation registry with structured progress.
+- [x] **CORE-03:** OpenTUI status, file status, notes, signals, and external invalidation updates are service-backed and event-driven rather than independently polled or inspected.
+- [x] **CORE-04:** Browser and OpenTUI clients share transport types, signal presentation semantics, and priority ordering while retaining separate rendering and browser security projections.
+- [x] **CORE-05:** Architecture tests prevent first-party renderers from regaining direct filesystem, Git, configuration-persistence, or process authority outside explicit foreground handoffs.
+
 ## Out of Scope
 
 - Remote or LAN hosting.
@@ -59,6 +67,7 @@
 | WEB-01..05 | 107.3 | Complete |
 | TERM-01..06 | 107.3 | Complete |
 | COMP-01..03 | 104, 107.3 | Complete |
+| CORE-01..05 | 107.4 | Complete |
 
 ---
-*Last updated: 2026-07-14.*
+*Last updated: 2026-07-14 after the shared-core centralization.*

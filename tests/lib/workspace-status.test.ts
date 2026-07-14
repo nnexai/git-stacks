@@ -188,6 +188,7 @@ describe("workspace-status", () => {
         additions: 0,
         removals: 0,
         degraded: false,
+        fetch_stale: false,
       },
       {
         name: "web",
@@ -200,6 +201,7 @@ describe("workspace-status", () => {
         additions: 0,
         removals: 0,
         degraded: false,
+        fetch_stale: false,
       },
       {
         name: "missing",
@@ -212,6 +214,7 @@ describe("workspace-status", () => {
         additions: 0,
         removals: 0,
         degraded: false,
+        fetch_stale: false,
       },
     ])
     expect(getCommitsAheadMock).toHaveBeenCalledWith(worktreePath(worktreeRepo), "origin/develop", "HEAD")
@@ -230,7 +233,7 @@ describe("workspace-status", () => {
     })
 
     expect(await getWorkspaceStatus(makeWorkspace([repo]))).toEqual([{
-      name: "raced", exists: false, dirty: false, branch: "—", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false,
+      name: "raced", exists: false, dirty: false, branch: "—", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false, fetch_stale: false,
     }])
   })
 

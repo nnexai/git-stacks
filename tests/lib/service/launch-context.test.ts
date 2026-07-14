@@ -92,4 +92,25 @@ describe("service launch context projection", () => {
     expect(response.workspace.launch.commands).toEqual(["dev"])
     expect(response.workspace.launch.named?.map((entry) => entry.name)).toEqual(["dev"])
   })
+
+  test("resolves the complete pre/main/post command plan for browser terminals", async () => {
+    const instance = builder()
+    const snapshot = await instance.buildWorkspace("alpha", "req_0123456789abcdef")
+    const command = snapshot.workspace.launch.named?.[0]
+    if (!command) throw new Error("expected command projection")
+    const resolution = await instance.resolveTerminalLaunch({
+      workspace_id: ws.id,
+      repository_id: ws.repos[0]!.id!,
+      command_id: command.id,
+      expected_revision: snapshot.revision,
+    })
+    expect(resolution.resolved).toBe(true)
+    if (!resolution.resolved) return
+    expect(resolution.launch.argv.slice(0, 2)).toEqual(["/bin/sh", "-lc"])
+    expect(resolution.launch.argv[2]).toContain("prepare")
+    expect(resolution.launch.argv[2]).toContain("bun dev")
+    expect(resolution.launch.argv[2]).toContain("bun test --watch")
+    expect(resolution.launch.argv[2]).toContain("cleanup")
+    expect(resolution.launch.argv[2]).toContain("/tasks/alpha/git-stacks")
+  })
 })

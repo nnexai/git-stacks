@@ -8,11 +8,30 @@ import {
   type OperationProgress,
 } from "./contract"
 import type { OperationEventPublisher } from "./event-journal"
-import { openWorkspace as openWorkspaceDirect } from "../workspace-ops"
-import { closeWorkspace as closeWorkspaceDirect } from "../workspace-lifecycle"
+import { openWorkspace as openWorkspaceDirect, renameWorkspace } from "../workspace-ops"
+import {
+  cleanWorkspace,
+  closeWorkspace as closeWorkspaceDirect,
+  mergeWorkspace,
+  removeWorkspace,
+} from "../workspace-lifecycle"
+import { pushWorkspace, syncWorkspace } from "../workspace-git"
 import { createWorkspaceFromRequest, planWorkspaceCreation, type WorkspaceCreationRequest } from "../workspace-creation"
-import { listWorkspacesUncached } from "../config"
+import {
+  deleteTemplate,
+  listRegistryEntries,
+  listTemplatesUncached,
+  listWorkspacesUncached,
+  readGlobalConfig,
+  readTemplate,
+  readWorkspace,
+  writeRegistry,
+  writeTemplate,
+  writeWorkspace,
+} from "../config"
+import { runManualCommand } from "../workspace-command"
 import { CLIENT_MODEL_LIMITS } from "./contract"
+import type { CoreMutationName, CoreMutationRequest } from "./core-contract"
 
 export const DEFAULT_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_OPERATION_TERMINAL_LIMIT = 10_000
@@ -378,10 +397,13 @@ export function canonicalRequestHash(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex")
 }
 
-type WorkspaceMutationRequest = { workspace: string; options?: Record<string, unknown> }
+type WorkspaceMutationRequest = CoreMutationRequest<"workspace.open">
 type WorkspaceMutation = (request: WorkspaceMutationRequest) => OperationExecution
 export type WorkspaceCreateMutation = (request: WorkspaceCreationRequest, signal?: AbortSignal) => OperationExecution
 type WorkspaceFunction = (workspace: string, options: any, progress?: (message: string) => void) => Promise<{ ok: boolean; error?: string }>
+
+export type CoreMutationAdapter = (request: any, signal?: AbortSignal) => OperationExecution
+export type CoreMutationAdapters = Record<CoreMutationName, CoreMutationAdapter> & { "workspace.create": WorkspaceCreateMutation }
 
 export function createWorkspaceMutationAdapters(dependencies: {
   openWorkspace?: WorkspaceFunction
@@ -389,7 +411,7 @@ export function createWorkspaceMutationAdapters(dependencies: {
   createWorkspace?: typeof createWorkspaceFromRequest
   planWorkspace?: typeof planWorkspaceCreation
   listWorkspaces?: typeof listWorkspacesUncached
-} = {}): Record<"workspace.open" | "workspace.close", WorkspaceMutation> & { "workspace.create": WorkspaceCreateMutation } {
+} = {}): CoreMutationAdapters {
   const adapt = (name: "open" | "close", invoke: WorkspaceFunction): WorkspaceMutation => (request) => ({
     steps: [{
       name: `workspace.${name}`,
@@ -404,7 +426,21 @@ export function createWorkspaceMutationAdapters(dependencies: {
         if (!result.ok) throw new Error(result.error ?? `Workspace ${name} failed`)
       },
     }],
-    result: { workspace: request.workspace },
+    result: { workspace: request.workspace, snapshot_changed: true },
+  })
+  const lifecycle = (name: "clean" | "remove" | "merge", invoke: WorkspaceFunction): WorkspaceMutation => (request) => ({
+    steps: [{
+      name: `workspace.${name}`, stage: "executing", message: `${name === "remove" ? "Removing" : name === "merge" ? "Merging" : "Cleaning"} workspace`,
+      run: async (report) => {
+        let progressQueue = Promise.resolve()
+        const result = await invoke(request.workspace, { ...request.options, captured: true }, (message) => {
+          progressQueue = progressQueue.then(() => report({ message })).then(() => undefined)
+        })
+        await progressQueue
+        if (!result.ok) throw new Error(result.error ?? `Workspace ${name} failed`)
+      },
+    }],
+    result: { workspace: request.workspace, snapshot_changed: true },
   })
   const create: WorkspaceCreateMutation = (request) => ({
     steps: [{
@@ -432,9 +468,140 @@ export function createWorkspaceMutationAdapters(dependencies: {
     }],
     result: { workspace_name: request.name, snapshot_changed: true },
   })
-  return {
+  const adapters: CoreMutationAdapters = {
     "workspace.open": adapt("open", dependencies.openWorkspace ?? openWorkspaceDirect),
     "workspace.close": adapt("close", dependencies.closeWorkspace ?? closeWorkspaceDirect),
+    "workspace.clean": lifecycle("clean", cleanWorkspace),
+    "workspace.remove": lifecycle("remove", removeWorkspace),
+    "workspace.merge": lifecycle("merge", mergeWorkspace),
+    "workspace.rename": (request: CoreMutationRequest<"workspace.rename">) => ({
+      steps: [{
+        name: "workspace.rename", stage: "executing", message: "Renaming workspace",
+        run: async (report) => {
+          let progressQueue = Promise.resolve()
+          const result = await renameWorkspace(request.workspace, request.new_name, request.options ?? {}, (message) => {
+            progressQueue = progressQueue.then(() => report({ message })).then(() => undefined)
+          })
+          await progressQueue
+          if (!result.ok) throw new Error(result.error ?? "Workspace rename failed")
+        },
+      }],
+      result: { workspace: request.new_name, previous_workspace: request.workspace, snapshot_changed: true },
+    }),
+    "workspace.sync": (request: CoreMutationRequest<"workspace.sync">) => {
+      const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
+      return { steps: [{
+        name: "workspace.sync", stage: "executing", message: "Syncing workspace",
+        run: async (report) => {
+          let progressQueue = Promise.resolve()
+          const options = request.options ?? {}
+          const outcome = await syncWorkspace(request.workspace, {
+            strategy: options.strategy === "merge" ? "merge" : "rebase",
+            bestEffort: options.bestEffort !== false,
+            stash: options.stash !== false,
+          }, (row) => {
+            progressQueue = progressQueue.then(() => report({ message: `${row.repo}: ${row.status}${row.detail ? ` (${row.detail})` : ""}`, data: { kind: "sync", ...row } })).then(() => undefined)
+          })
+          await progressQueue
+          Object.assign(result, { synced: outcome.synced, skipped: outcome.skipped, stash_pop_failures: outcome.stashPopFailures ?? [] })
+          if (!outcome.ok) throw new Error(outcome.error ?? "Workspace sync failed")
+        },
+      }], result }
+    },
+    "workspace.push": (request: CoreMutationRequest<"workspace.push">) => {
+      const result: Record<string, unknown> = { workspace: request.workspace, snapshot_changed: true }
+      return { steps: [{
+        name: "workspace.push", stage: "executing", message: "Pushing workspace",
+        run: async (report) => {
+          let progressQueue = Promise.resolve()
+          const outcome = await pushWorkspace(request.workspace, request.options ?? {}, (row) => {
+            progressQueue = progressQueue.then(() => report({ message: `${row.repo}: ${row.status}${row.detail ? ` (${row.detail})` : ""}`, data: { kind: "push", ...row } })).then(() => undefined)
+          })
+          await progressQueue
+          Object.assign(result, { pushed: outcome.pushed, skipped: outcome.skipped, failed: outcome.failed })
+          if (!outcome.ok) throw new Error(outcome.error ?? "Workspace push failed")
+        },
+      }], result }
+    },
+    "workspace.labels.set": (request: CoreMutationRequest<"workspace.labels.set">) => ({
+      steps: [{ name: "workspace.labels.set", stage: "executing", message: "Updating workspace labels", run: async () => {
+        const workspace = readWorkspace(request.workspace)
+        writeWorkspace({ ...workspace, labels: [...new Set(request.labels)] })
+      } }],
+      result: { workspace: request.workspace, snapshot_changed: true },
+    }),
+    "workspace.command.run": (request: CoreMutationRequest<"workspace.command.run">) => {
+      const result: Record<string, unknown> = { workspace: request.workspace, command: request.command }
+      return { steps: [{ name: "workspace.command.run", stage: "executing", message: `Running ${request.command}`, run: async (report) => {
+        let progressQueue = Promise.resolve()
+        let outputBatch: Array<{ stream: "stdout" | "stderr"; text: string }> = []
+        let flushTimer: ReturnType<typeof setTimeout> | undefined
+        const flushOutput = () => {
+          if (flushTimer) clearTimeout(flushTimer)
+          flushTimer = undefined
+          if (outputBatch.length === 0) return
+          const lines = outputBatch
+          outputBatch = []
+          progressQueue = progressQueue.then(() => report({
+            message: lines.at(-1)?.text,
+            data: { kind: "command-output", lines },
+          })).then(() => undefined)
+        }
+        const outcome = await runManualCommand(readWorkspace(request.workspace), request.command, {
+          config: readGlobalConfig(),
+          onOutput: (output) => {
+            outputBatch.push({ stream: output.stream, text: output.line })
+            if (outputBatch.length >= 16) flushOutput()
+            else if (!flushTimer) flushTimer = setTimeout(flushOutput, 50)
+          },
+        })
+        flushOutput()
+        await progressQueue
+        Object.assign(result, { exit_code: outcome.exitCode, failed_command: outcome.failedCommand })
+        if (outcome.exitCode !== 0) throw new Error(`Command ${request.command} failed with exit code ${outcome.exitCode}.${outcome.failedCommand ? ` Failed command: ${outcome.failedCommand}.` : ""}`)
+      } }], result }
+    },
+    "workspace.issue.open": (request: CoreMutationRequest<"workspace.issue.open">) => {
+      const result: Record<string, unknown> = { workspace: request.workspace, tracker: request.tracker }
+      return { steps: [{ name: "workspace.issue.open", stage: "executing", message: `Opening ${request.tracker} issue`, run: async (report) => {
+        const args = ["git-stacks", "integration", request.tracker, "issue", "open", request.workspace]
+        if (request.tracker !== "jira") args.push("--web")
+        const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" })
+        const [stdout, stderr, exitCode] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
+        const lines = ([...stdout.split("\n").filter(Boolean).map((text) => ({ stream: "stdout" as const, text })),
+          ...stderr.split("\n").filter(Boolean).map((text) => ({ stream: "stderr" as const, text }))])
+        if (lines.length) await report({ message: lines.at(-1)?.text, data: { kind: "command-output", lines } })
+        result.exit_code = exitCode
+        if (exitCode !== 0) throw new Error(`${request.tracker} issue open failed with exit code ${exitCode}`)
+      } }], result }
+    },
+    "template.write": (request: CoreMutationRequest<"template.write">) => ({
+      steps: [{ name: "template.write", stage: "executing", message: "Writing template", run: async () => { writeTemplate(request.template) } }],
+      result: { template: request.template.name, snapshot_changed: true },
+    }),
+    "template.clone": (request: CoreMutationRequest<"template.clone">) => ({
+      steps: [{ name: "template.clone", stage: "executing", message: "Cloning template", run: async () => {
+        if (listTemplatesUncached().some((template) => template.name === request.new_name)) throw new Error(`Template '${request.new_name}' already exists`)
+        writeTemplate({ ...readTemplate(request.template), name: request.new_name })
+      } }],
+      result: { template: request.new_name, snapshot_changed: true },
+    }),
+    "template.delete": (request: CoreMutationRequest<"template.delete">) => ({
+      steps: [{ name: "template.delete", stage: "executing", message: "Deleting template", run: async () => { deleteTemplate(request.template) } }],
+      result: { template: request.template, snapshot_changed: true },
+    }),
+    "repository.delete": (request: CoreMutationRequest<"repository.delete">) => ({
+      steps: [{ name: "repository.delete", stage: "executing", message: "Deleting repository registration", run: async () => {
+        const templates = listTemplatesUncached().filter((template) => template.repos.some((repo) => repo.repo === request.repository))
+        const workspaces = listWorkspacesUncached().filter((workspace) => workspace.repos.some((repo) => repo.repo === request.repository))
+        if (templates.length || workspaces.length) throw new Error(`Repository '${request.repository}' is still referenced`)
+        const registry = listRegistryEntries()
+        if (!registry.some((entry) => entry.name === request.repository)) throw new Error(`Repository '${request.repository}' not found`)
+        writeRegistry(registry.filter((entry) => entry.name !== request.repository))
+      } }],
+      result: { repository: request.repository, snapshot_changed: true },
+    }),
     "workspace.create": create,
   }
+  return adapters
 }

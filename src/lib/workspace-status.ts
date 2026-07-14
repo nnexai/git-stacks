@@ -135,6 +135,7 @@ export type RepoStatus = {
   additions: number
   removals: number
   degraded: boolean
+  fetch_stale?: boolean
 }
 
 export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStatus[]> {
@@ -153,16 +154,17 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
           let behind = 0
           let additions = 0
           let removals = 0
+          let fetch_stale = false
 
           if (exists && isGitRepo(repo)) {
             try {
-              const [isDirty, currentBranch, lines] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath), getGitLineChanges(repoPath)])
-              dirty = isDirty; branch = currentBranch; additions = lines.additions; removals = lines.removals
+              const [isDirty, currentBranch, lines, stale] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath), getGitLineChanges(repoPath), isFetchStale(repoPath)])
+              dirty = isDirty; branch = currentBranch; additions = lines.additions; removals = lines.removals; fetch_stale = stale
             } catch (error) {
               // A concurrently removed worktree is an expected status
               // transition. Preserve real Git failures while the path exists.
               if (existsSync(repoPath)) throw error
-              return { name: repo.name, exists: false, dirty: false, branch: "—", mode: repo.mode, ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }
+              return { name: repo.name, exists: false, dirty: false, branch: "—", mode: repo.mode, ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false, fetch_stale: false }
             }
 
             let baseRef: string
@@ -179,7 +181,7 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
             ])
           }
 
-          return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind, additions, removals, degraded: false }
+          return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind, additions, removals, degraded: false, fetch_stale }
         })
       )
   )

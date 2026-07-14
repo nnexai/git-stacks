@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.20.0
 milestone_name: Local Web Workspace Client
-current_phase: 107.3
-current_phase_name: Web Client and Local Terminal Bridge
+current_phase: 107.4
+current_phase_name: Core-Centred Client Architecture
 status: Complete; maintenance mode pending the next milestone decision
-stopped_at: Retired unsupported desktop client and retained the web/service architecture
+stopped_at: Centralized trusted clients on the service-owned core architecture
 last_updated: "2026-07-14T16:59:12+02:00"
 last_activity: 2026-07-14
-last_activity_desc: made coding-agent signal hooks opt-in and removed the superseded project-local hook system
+last_activity_desc: centralized the OpenTUI and browser clients on shared service contracts and operation authority
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 3
-  completed_plans: 3
+  total_phases: 4
+  completed_phases: 4
+  total_plans: 4
+  completed_plans: 4
   percent: 100
 ---
 
@@ -21,7 +21,7 @@ progress:
 
 ## Current Position
 
-The supported graphical product is the local browser client backed by the Bun/TypeScript service. Phase 107.3 is implemented and verified on Linux. No next milestone has been selected.
+The supported browser and OpenTUI clients are backed by one Bun/TypeScript service authority. Phase 107.4 centralizes trusted client reads, mutations, events, and shared presentation contracts. No next milestone has been selected.
 
 ## Supported Surfaces
 

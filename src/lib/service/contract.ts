@@ -151,7 +151,7 @@ export const WorkspaceSnapshotSchema = z.strictObject({
     repository_id: EntityIdSchema, name: utf8BoundedString(96, 1), exists: z.boolean(), dirty: z.boolean(), branch: utf8BoundedString(96),
     default_branch: utf8BoundedString(96, 1), mode: z.enum(["worktree", "trunk", "dir"]),
     ahead: z.number().int().nonnegative(), behind: z.number().int().nonnegative(), additions: z.number().int().nonnegative(), removals: z.number().int().nonnegative(),
-    remote: z.enum(["available", "missing", "not_applicable"]), degraded: z.boolean(),
+    remote: z.enum(["available", "missing", "not_applicable"]), degraded: z.boolean(), fetch_stale: z.boolean().optional(),
     pull_request: z.strictObject({ number: z.number().int().positive(), state: z.enum(["open", "draft", "merged", "closed"]), checks: z.enum(["pending", "passing", "failing"]).optional() }).optional(),
   })).optional(),
   file_status: z.strictObject({
@@ -212,6 +212,7 @@ export const OperationStageSchema = z.enum(["accepted", "preparing", "executing"
 export const OperationStateSchema = z.enum(["accepted", "running", "succeeded", "failed", "cancelled"])
 export const OperationProgressSchema = z.strictObject({
   stage: OperationStageSchema, message: z.string().optional(), completed: z.number().int().nonnegative().optional(), total: z.number().int().positive().optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 }).refine((v) => (v.completed === undefined) === (v.total === undefined), { message: "completed and total must be provided together" })
 export type OperationProgress = z.infer<typeof OperationProgressSchema>
 export const OperationResultSchema = z.strictObject({

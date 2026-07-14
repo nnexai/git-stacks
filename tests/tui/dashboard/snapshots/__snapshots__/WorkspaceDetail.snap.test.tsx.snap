@@ -32,11 +32,14 @@ exports[`WorkspaceDetail snapshots renders ordered detail sections with notes an
 `;
 
 exports[`WorkspaceDetail snapshots renders scrolled long detail content 1`] = `
-"
- Notes:
+" Notes:
  2 shown, latest 122d
  - Review file sync drift 122d
  - Ping owner before merge 123d
 
- Config:"
+ Config:
+ Branch: feature/operator
+ Created: 2026-01-01T00:00:00.000Z
+ Template: control
+ Labels: ops"
 `;

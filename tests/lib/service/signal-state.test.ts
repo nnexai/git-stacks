@@ -43,4 +43,16 @@ describe("signal state", () => {
     expect(state.projection().dismissed).toEqual(["sig_2123456789abcdef"])
     expect(state.projection().signals).toHaveLength(2)
   })
+
+  test("dismisses activity and allows a newer lifecycle event to reappear", () => {
+    const state = new SignalState()
+    state.apply({ sequence: "1", signal: { ...base, kind: "activity", state: "completed" } })
+    expect(state.apply({ sequence: "2", dismissal: { kind: "dismiss_signal", signal_id: base.id } })).toBe(true)
+    expect(state.projection().unread).toHaveLength(0)
+    expect(state.projection().dismissed).toEqual([base.id])
+
+    state.apply({ sequence: "3", signal: { ...base, kind: "activity", state: "waiting" } })
+    expect(state.projection().dismissed).toEqual([])
+    expect(state.projection().unread).toMatchObject([{ id: base.id, state: "waiting" }])
+  })
 })

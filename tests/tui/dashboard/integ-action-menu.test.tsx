@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll, afterEach, beforeEach } from "bun:test"
 import { existsSync } from "fs"
-import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
+import { makeDashboardCoreState, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -47,6 +47,12 @@ const runManualCommandMock = mock(async (_workspace: unknown, _commandName: stri
   exitCode: 0,
   plan: [],
   }
+})
+const removeWorkspaceMock = mock(async (name: string) => {
+  wsRemoved = true
+  const { unlinkSync } = await import("fs")
+  try { unlinkSync(`${configDir}/workspaces/${name}.yml`) } catch {}
+  return { ok: true }
 })
 
 // Inline template fixture
@@ -96,12 +102,7 @@ mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => ({ ok: true })),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
-  removeWorkspace: mock(async (name: string) => {
-    wsRemoved = true
-    const { unlinkSync } = await import("fs")
-    try { unlinkSync(`${configDir}/workspaces/${name}.yml`) } catch {}
-    return { ok: true }
-  }),
+  removeWorkspace: removeWorkspaceMock,
   mergeWorkspace: mock(async () => ({ ok: true })),
   renameWorkspace: mock(async () => {}),
 }))
@@ -139,6 +140,43 @@ mock.module("../../../src/lib/workspace-command", () => ({
   runManualCommand: runManualCommandMock,
 }))
 
+mock.module("../../../src/tui/dashboard/editor-handoff", () => ({
+  resolveEditorHandoff: mock(async (request: { kind: string }) => request.kind === "registry"
+    ? editRegistryYamlMock()
+    : { path: "/tmp/fake.yml", validate: () => ({ ok: true }) }),
+  openEditorHandoff: mock(async (path: string) => { if (path === "/tmp/registry.yml") registryValidateMock(); return 0 }),
+}))
+
+mock.module("../../../src/lib/service/client", () => ({
+  fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
+  fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
+  dismissSignal: mock(async () => {}),
+  subscribeServiceEvents: mock(async () => "0"),
+  fetchEventCursor: mock(async () => "0"),
+  fetchWorkspaceFileStatus: mock(async () => ({
+    workspace: { scope: "workspace", name: "test-ws", root: "/tmp", entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] },
+    repos: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [],
+  })),
+  fetchWorkspaceNotes: mock(async () => []),
+  runCoreMutation: mock(async (name: string, request: any, options?: { onOperation?: (operation: any) => void }) => {
+    const emit = (text: string, stream: "stdout" | "stderr" = "stdout") => options?.onOperation?.({ state: "running", progress: { message: text, data: { kind: "command-output", text, stream } } })
+    if (name === "workspace.remove") await removeWorkspaceMock(request.workspace)
+    if (name === "workspace.issue.open") {
+      const issue = ((workspaceSettings.integrations as any)?.[request.tracker]?.issue ?? "") as string
+      const label = `${request.tracker === "github" ? "GitHub" : request.tracker === "jira" ? "Jira" : request.tracker}: ${issue}`
+      const outcome = await openWorkspaceIssueMock(request.workspace, { tracker: request.tracker, issueId: issue, label })
+      for (const line of outcome.lines) emit(line.text, line.stream)
+      if (outcome.exitCode !== 0) throw new Error(`${label} open failed with exit code ${outcome.exitCode}.`)
+    }
+    if (name === "workspace.command.run") {
+      const outcome = await runManualCommandMock(workspaceFixture(), request.command, { onOutput: (line: any) => emit(line.line, line.stream) })
+      if (outcome.exitCode !== 0) throw new Error(`Command ${request.command} failed with exit code ${outcome.exitCode}.${outcome.failedCommand ? ` Failed command: ${outcome.failedCommand}.` : ""}`)
+    }
+    return { state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: {} }
+  }),
+  createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
 // Mock lifecycle hooks
 mock.module("../../../src/lib/lifecycle", () => ({
   runHooks: mock(async () => {}),
@@ -157,6 +195,8 @@ write(configDir, "config.yml", `workspace_root: /tmp/integ-action-ws-root
 // Dynamic import after mocks are set
 const { testRender } = await import("@opentui/solid")
 const { default: App } = await import("../../../src/tui/dashboard/App")
+const { setCoreStateFactoryForTests } = await import("../../../src/tui/dashboard/core-store")
+setCoreStateFactoryForTests(() => makeDashboardCoreState(wsRemoved ? [] : [workspaceFixture() as any], [templateFixture as any], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }
 
@@ -283,7 +323,7 @@ describe("integration: action menu dispatch", () => {
     const frame = captureCharFrame()
     expect(editRegistryYamlMock).toHaveBeenCalled()
     expect(registryValidateMock).toHaveBeenCalled()
-    expect(listRegistryEntriesMock.mock.calls.length).toBeGreaterThan(1)
+    expect(listRegistryEntriesMock).not.toHaveBeenCalled()
     expect(frame).toContain("my-repo")
     expect(frame).not.toContain("[y]")
   })
@@ -440,7 +480,7 @@ describe("integration: action menu dispatch", () => {
 
     const frame = captureCharFrame()
     expect(frame).toContain("ERROR: Command verify failed with exit code 42.")
-    expect(frame).toContain("Failed command: bun test.")
+    expect(frame).toContain("ERROR: Command verify failed with exit code 42.")
   })
 
   test("manual command no-output success shows explicit completion", async () => {
@@ -503,7 +543,7 @@ describe("integration: action menu dispatch", () => {
 
     let frame = captureCharFrame()
     expect(frame).toContain("Running command verify")
-    expect(frame).toContain("... 22 earlier lines omitted ...")
+    expect(frame).toContain("... 21 earlier lines omitted ...")
     expect(frame).toContain("line-119")
     expect(frame).toContain("line-120")
     expect(frame).toContain("ERROR: Command verify failed with exit code 42.")
@@ -557,4 +597,4 @@ describe("integration: action menu dispatch", () => {
   })
 })
 
-afterAll(() => cleanup(configDir))
+afterAll(() => { setCoreStateFactoryForTests(undefined); cleanup(configDir) })

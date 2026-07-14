@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll } from "bun:test"
-import { makeTmpDir, cleanup, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
+import { makeDashboardCoreState, makeTmpDir, cleanup, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 // NOTE: Bun shares module cache across test files in the same process run.
@@ -83,13 +83,28 @@ mock.module("../../../src/lib/lifecycle", () => ({
   runHooksCaptured: mock(async () => {}),
 }))
 
+mock.module("../../../src/lib/service/client", () => ({
+  fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
+  fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
+  dismissSignal: mock(async () => {}),
+  subscribeServiceEvents: mock(async () => "0"),
+  fetchEventCursor: mock(async () => "0"),
+  fetchWorkspaceFileStatus: mock(async () => { throw new Error("unused") }),
+  fetchWorkspaceNotes: mock(async () => []),
+  fetchEditTarget: mock(async () => ({ kind: "registry", path: "/tmp/registry.yml" })),
+  runCoreMutation: mock(async () => ({ state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: {} })),
+  createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
 // Dynamic imports happen AFTER env is set and mocks are registered
 const { testRender } = await import("@opentui/solid")
 const { default: App } = await import("../../../src/tui/dashboard/App")
+const { setCoreStateFactoryForTests } = await import("../../../src/tui/dashboard/core-store")
+setCoreStateFactoryForTests(() => makeDashboardCoreState([], [templateFixture as any], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }
 
-afterAll(() => cleanup(configDir))
+afterAll(() => { setCoreStateFactoryForTests(undefined); cleanup(configDir) })
 
 describe("integration: wizard entry and navigation", () => {
   test("wizard entry from Templates tab action menu", async () => {

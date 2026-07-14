@@ -2,6 +2,8 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync, rmSync } from "fs"
 import { join, dirname } from "path"
 import { execSync, type ExecSyncOptions } from "child_process"
 import { mock } from "bun:test"
+import type { CoreState } from "../src/lib/service/core-contract"
+import type { RepoRegistryEntry, Template, Workspace } from "../src/lib/config"
 
 // --- Schema stub helper ---
 
@@ -9,6 +11,48 @@ function makeSchemaStub() {
   return {
     parse: mock((x: unknown) => x),
     safeParse: mock((x: unknown) => ({ success: true, data: x })),
+  }
+}
+
+export function makeDashboardCoreState(
+  workspaces: readonly Workspace[],
+  templates: readonly Template[] = [],
+  repositories: readonly RepoRegistryEntry[] = [],
+): CoreState {
+  const generatedAt = "2026-07-14T00:00:00.000Z"
+  return {
+    revision: "1",
+    generated_at: generatedAt,
+    config: { workspace_root: "/tmp/dashboard-workspaces", integrations: {}, ports: { range_start: 10000, range_end: 65000 } },
+    workspaces: workspaces.map((workspace, workspaceIndex) => {
+      const workspaceId = `00000000-0000-4000-8000-${String(workspaceIndex + 1).padStart(12, "0")}`
+      const definition = {
+        ...workspace,
+        id: workspace.id ?? workspaceId,
+        repos: workspace.repos.map((repo, repoIndex) => ({
+          ...repo,
+          id: repo.id ?? `10000000-0000-4000-8000-${String(workspaceIndex * 100 + repoIndex + 1).padStart(12, "0")}`,
+        })),
+      }
+      return {
+        definition,
+        projection: {
+          id: definition.id,
+          name: definition.name,
+          branch: definition.branch,
+          labels: definition.labels ?? [],
+          repositories: definition.repos.map((repo) => ({ id: repo.id!, name: repo.name, mode: repo.mode, path: repo.task_path ?? repo.main_path })),
+          status: definition.repos.map((repo) => ({
+            repository_id: repo.id!, name: repo.name, exists: true, dirty: false, branch: definition.branch,
+            default_branch: repo.base_branch ?? "main", mode: repo.mode, ahead: 0, behind: 0, additions: 0, removals: 0,
+            remote: repo.mode === "dir" ? "not_applicable" as const : "available" as const, degraded: false, fetch_stale: false,
+          })),
+          launch: { commands: [], environment: {}, redacted: [], references: {}, named: [] },
+        },
+      }
+    }),
+    templates: [...templates],
+    repositories: repositories.map((repository) => ({ ...repository, disk_exists: true })),
   }
 }
 

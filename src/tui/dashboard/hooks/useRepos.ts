@@ -1,22 +1,13 @@
-import { createSignal, type Accessor } from "solid-js"
-import { existsSync } from "fs"
-import { listRegistryEntries, type RepoRegistryEntry } from "../../../lib/config"
+import { createMemo, type Accessor } from "solid-js"
+import type { CoreRepository } from "../../../lib/service/core-contract"
+import { useCoreState } from "../core-store"
 
-export type RepoEntry = RepoRegistryEntry & { diskExists: boolean }
+export type RepoEntry = Omit<CoreRepository, "disk_exists"> & { diskExists: boolean }
 
-export function useRepos(): { entries: Accessor<RepoEntry[]>; reload: () => void } {
-  const [entries, setEntries] = createSignal<RepoEntry[]>([])
-
-  function reload() {
-    try {
-      const raw = listRegistryEntries()
-      setEntries(raw.map(e => ({ ...e, diskExists: existsSync(e.local_path) })))
-    } catch {
-      setEntries([])
-    }
+export function useRepos(): { entries: Accessor<RepoEntry[]>; reload: () => Promise<void> } {
+  const core = useCoreState()
+  return {
+    entries: createMemo(() => (core.state()?.repositories ?? []).map(({ disk_exists, ...repository }) => ({ ...repository, diskExists: disk_exists }))),
+    reload: core.reload,
   }
-
-  reload() // synchronous initial load
-
-  return { entries, reload }
 }

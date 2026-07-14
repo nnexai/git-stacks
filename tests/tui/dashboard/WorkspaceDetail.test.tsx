@@ -1,5 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock } from "bun:test"
+import { createSignal } from "solid-js"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
 process.env.GIT_STACKS_CONFIG_DIR = "/tmp/ws-detail-test-config"
@@ -107,6 +108,15 @@ mock.module("../../../src/lib/notes", () => ({
   ]),
 }))
 
+const fetchWorkspaceNotesMock = mock(async () => [
+    { text: "Check rollout logs", created: "2026-01-15T10:00:00Z" },
+    { text: "Confirm workspace owner", created: "2026-01-14T10:00:00Z" },
+  ])
+
+mock.module("../../../src/lib/service/client", () => ({
+  fetchWorkspaceNotes: fetchWorkspaceNotesMock,
+}))
+
 const { testRender } = await import("@opentui/solid")
 const { WorkspaceDetail } = await import("../../../src/tui/dashboard/WorkspaceDetail")
 
@@ -130,11 +140,43 @@ describe("WorkspaceDetail integration display", () => {
   test("Test 1: renders 'Integrations:' section header", async () => {
     const entry = makeEntry()
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} templates={[{ name: "my-tpl", schema_version: "1", repos: [], integrations: { vscode: { enabled: true, cmd: "code-insiders" } } } as any]} />
     )
     await renderOnce()
     const frame = captureCharFrame()
     expect(frame).toContain("Integrations:")
+  })
+
+  test("reacts when the shared core config arrives after the first render", async () => {
+    const entry = makeEntry()
+    const [config, setConfig] = createSignal<any>({ workspace_root: "/tmp", integrations: {}, ports: { range_start: 10000, range_end: 65000 } })
+    const { captureCharFrame, renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} config={config()} />
+    )
+    await renderOnce()
+    expect(captureCharFrame()).not.toContain("cmd: code-insiders")
+
+    setConfig({ workspace_root: "/tmp", integrations: { vscode: { enabled: true, cmd: "code-insiders" } }, ports: { range_start: 10000, range_end: 65000 } })
+    await renderOnce()
+    expect(captureCharFrame()).toContain("cmd: code-insiders")
+  })
+
+  test("caches notes when revisiting a workspace", async () => {
+    fetchWorkspaceNotesMock.mockClear()
+    const [entry, setEntry] = createSignal(makeEntry({ workspace: { name: "alpha" } }))
+    const { renderOnce } = await testRender(
+      () => <WorkspaceDetail entry={entry() as any} signals={[]} tick={0} />
+    )
+    await renderOnce()
+    await Bun.sleep(5)
+    setEntry(makeEntry({ workspace: { name: "bravo" } }))
+    await renderOnce()
+    await Bun.sleep(5)
+    setEntry(makeEntry({ workspace: { name: "alpha" } }))
+    await renderOnce()
+    await Bun.sleep(5)
+
+    expect(fetchWorkspaceNotesMock.mock.calls.map((call) => call[0])).toEqual(["alpha", "bravo"])
   })
 
   test("Test 2: shows enabled integration with checkmark and [global] source when no overrides", async () => {
@@ -177,7 +219,7 @@ describe("WorkspaceDetail integration display", () => {
       },
     })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} templates={[{ name: "my-tpl", schema_version: "1", repos: [], integrations: { vscode: { enabled: true, cmd: "code-insiders" } } } as any]} />
     )
     await renderOnce()
     const frame = captureCharFrame()
@@ -414,11 +456,16 @@ describe("WorkspaceDetail operational sections", () => {
 
   test("detail scrolling exposes content beyond the first visible page", async () => {
     const entry = makeEntry({ workspace: { labels: ["ops"], template: "my-tpl" } })
+    const [scrollRequest, setScrollRequest] = createSignal({ sequence: 0, direction: 1 as -1 | 1 })
     const { captureCharFrame, renderOnce } = await testRender(
-      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} height={5} scrollOffset={20} />
+      () => <WorkspaceDetail entry={entry as any} signals={[]} tick={0} scrollRequest={scrollRequest()} />,
+      { width: 80, height: 8, kittyKeyboard: true },
     )
     await renderOnce()
-    await renderOnce()
+    for (let sequence = 1; sequence <= 4; sequence += 1) {
+      setScrollRequest({ sequence, direction: 1 })
+      await renderOnce()
+    }
     const frame = captureCharFrame()
     expect(frame).toContain("Config:")
     expect(frame).not.toContain("Signals:")

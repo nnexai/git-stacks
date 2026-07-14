@@ -7,11 +7,15 @@ import { createSnapshotBuilder } from "../lib/service/snapshot"
 import { EventJournal, publishOperationEvent } from "../lib/service/event-journal"
 import { EventBroker } from "../lib/service/event-broker"
 import { createWorkspaceMutationAdapters, OperationRegistry, type WorkspaceCreateMutation } from "../lib/service/operations"
+import { createCoreStateProvider } from "../lib/service/core-state"
 import { createWorkspaceChangeMonitor } from "../lib/service/workspace-change-monitor"
 import type { Operation, WorkspaceCreationCatalog } from "../lib/service/contract"
 import { getWorkspaceCreationCatalog } from "../lib/workspace-creation"
 import { setWorkspacePins } from "../lib/workspace-pins"
 import { setWorkspacePriorities } from "../lib/workspace-priorities"
+import { readGlobalConfig, readWorkspace } from "../lib/config"
+import { getTasksDir } from "../lib/paths"
+import { getWorkspaceFileStatusView } from "../lib/workspace-file-status"
 import { startServiceServer, type RunningServiceServer } from "./server"
 import { WebApplication } from "./web/routes"
 
@@ -189,6 +193,82 @@ async function descriptorUsable(descriptor: ServiceDescriptor, serviceRoot: stri
   } catch { return false }
 }
 
+export async function readUsableServiceDescriptor(
+  serviceRoot = join(WS_CONFIG_DIR, "service"),
+): Promise<ServiceDescriptor | null> {
+  const descriptor = readServiceDescriptor(serviceRoot)
+  return descriptor && await descriptorUsable(descriptor, serviceRoot) ? descriptor : null
+}
+
+type DetachedServiceProcess = {
+  exited: Promise<number>
+  unref(): void
+}
+
+export interface EnsureManagedServiceProcessOptions {
+  serviceRoot?: string
+  timeoutMs?: number
+  pollMs?: number
+  executable?: string
+  entrypoint?: string
+  readUsable?: () => Promise<ServiceDescriptor | null>
+  spawn?: (command: string[], options: {
+    cwd: string
+    env: Record<string, string | undefined>
+    detached: true
+    stdin: "ignore"
+    stdout: "ignore"
+    stderr: "ignore"
+  }) => DetachedServiceProcess
+}
+
+/**
+ * Discover the shared service or launch it in an independent process.
+ *
+ * Interactive clients must not host the service themselves: doing so ties the
+ * service, browser terminals, and the client's own process lifetime together.
+ */
+export async function ensureManagedServiceProcess(
+  options: EnsureManagedServiceProcessOptions = {},
+): Promise<ServiceDescriptor> {
+  const serviceRoot = options.serviceRoot ?? join(WS_CONFIG_DIR, "service")
+  const readUsable = options.readUsable ?? (() => readUsableServiceDescriptor(serviceRoot))
+  const existing = await readUsable()
+  if (existing) return existing
+
+  const executable = options.executable ?? process.execPath
+  const entrypoint = options.entrypoint ?? process.argv[1]
+  if (!entrypoint) throw new Error("Cannot determine the git-stacks service entrypoint")
+  const spawn = options.spawn ?? ((command, spawnOptions) => Bun.spawn(command, spawnOptions))
+  const environment = { ...process.env }
+  for (const key of [
+    "GS_WORKSPACE_NAME", "GS_WORKSPACE_BRANCH", "GS_WORKSPACE_PATH",
+    "GS_REPO_NAME", "GS_REPO_PATH", "GS_REPO_CLONE_PATH",
+    "GIT_STACKS_SIGNAL_TOKEN", "GIT_STACKS_SURFACE_ID",
+    "GIT_STACKS_AGENT_SESSION_ID", "GIT_STACKS_SESSION_ID",
+  ]) delete environment[key]
+  const child = spawn([executable, entrypoint, "service", "start"], {
+    cwd: process.cwd(),
+    env: environment,
+    detached: true,
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  })
+  let exitCode: number | undefined
+  void child.exited.then((code) => { exitCode = code })
+  child.unref()
+
+  const deadline = Date.now() + (options.timeoutMs ?? 5_000)
+  while (Date.now() < deadline) {
+    const descriptor = await readUsable()
+    if (descriptor) return descriptor
+    if (exitCode !== undefined) throw new Error(`git-stacks service startup exited with code ${exitCode}`)
+    await Bun.sleep(options.pollMs ?? 10)
+  }
+  throw new Error("Timed out waiting for the detached git-stacks service")
+}
+
 export async function startManagedService(options: ManagedServiceOptions = {}): Promise<ManagedService> {
   const serviceRoot = options.serviceRoot ?? join(WS_CONFIG_DIR, "service")
   const clientId = options.clientId ?? DEFAULT_OFFICIAL_CLIENT_ID
@@ -232,6 +312,11 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     let stopManaged: () => Promise<void> = async () => { await running.stop() }
     lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: () => stopManaged() })
     const mutationAdapters = createWorkspaceMutationAdapters()
+    const core = createCoreStateProvider(snapshot)
+    const workspaceFileStatus = (workspaceName: string) => {
+      const workspace = readWorkspace(workspaceName)
+      return getWorkspaceFileStatusView(workspace, join(getTasksDir(readGlobalConfig().workspace_root), workspace.name), { verbose: true })
+    }
     const publishSignal = async (signal: import("../lib/service/contract").Signal) => {
       const event = await journal.appendSignal(signal)
       broker.publish(event)
@@ -258,12 +343,15 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     })
     running = startServiceServer({
       serviceRoot, snapshot, operations, broker, web,
-      mutations: { "workspace.open": mutationAdapters["workspace.open"], "workspace.close": mutationAdapters["workspace.close"] },
+      mutations: mutationAdapters,
+      core,
+      workspaceFileStatus,
       workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
       workspaceCreationCatalog: options.workspaceCreationCatalog ?? getWorkspaceCreationCatalog,
       publishSignal,
       dismissSignal,
       signalProjection: () => journal.signalProjection(),
+      eventCursor: () => journal.highWaterCursor(),
       onConnectionChange: (count) => { apiConnections = count; lifecycle.setConnectedClients(apiConnections + webConnections) },
       onActivity: () => lifecycle.touch(),
     })

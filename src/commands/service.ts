@@ -3,7 +3,7 @@ import { createHash } from "node:crypto"
 import { join } from "node:path"
 import { WS_CONFIG_DIR } from "../lib/paths"
 import { readOfficialClientCredential } from "../lib/service/credentials"
-import { readServiceDescriptor, startManagedService } from "../service/main"
+import { readServiceDescriptor, readUsableServiceDescriptor, startManagedService } from "../service/main"
 
 export const serviceCommand = new Command("service")
   .description("Manage the local workspace service")
@@ -22,8 +22,8 @@ serviceCommand.command("start")
 
 serviceCommand.command("status")
   .description("Print the protected local service descriptor")
-  .action(() => {
-    const descriptor = readServiceDescriptor()
+  .action(async () => {
+    const descriptor = await readUsableServiceDescriptor()
     if (!descriptor) { console.error("git-stacks service is not running"); process.exitCode = 1; return }
     console.log(JSON.stringify(descriptor))
   })

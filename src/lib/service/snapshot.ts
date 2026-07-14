@@ -198,6 +198,17 @@ function repositoryPath(repo: Workspace["repos"][number]): string {
   return getRepoPath(repo)
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\"'\"'`)}'`
+}
+
+function commandSequence(steps: Array<{ command: string; cwd: string; environment: Record<string, string> }>): string {
+  return ["set -e", ...steps.map((step) => {
+    const environment = Object.entries(step.environment).map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")
+    return `(cd ${shellQuote(step.cwd)} && env ${environment} /bin/sh -lc ${shellQuote(step.command)})`
+  })].join("\n")
+}
+
 function workspaceDefinitionExists(name: string): boolean {
   try { return existsSync(workspaceFilePath(name)) } catch { return false }
 }
@@ -363,14 +374,15 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     }
     const command = base.named?.find((entry) => entry.id === request.command_id)
     if (!command || (command.scope === "repository" && command.repository_id !== repository.id)) return fail("not_found", "Command not found in repository scope")
-    if (command.steps.length !== 1) return fail("operation_failed", "Terminal launch requires exactly one configured command step")
+    if (command.steps.length === 0) return fail("operation_failed", "Configured command has no executable steps")
     const step = command.steps[0]!
+    const multiple = command.steps.length > 1
     return TerminalLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
       // Configured commands use the same POSIX-shell contract as the existing
       // CLI/TUI command runner. They must not be reparsed by the user's login
       // shell (Fish, Nushell, etc.).
-      argv: ["/bin/sh", "-lc", step.command], cwd: step.cwd,
-      environment: step.environment, ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
+      argv: ["/bin/sh", "-lc", multiple ? commandSequence(command.steps) : step.command], cwd: step.cwd,
+      environment: multiple ? base.environment : step.environment, ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
     } })
   }
 

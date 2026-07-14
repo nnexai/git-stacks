@@ -530,6 +530,13 @@ export function listTemplates(): Template[] {
   return Array.from(templateIndex.values())
 }
 
+/** Rebuild the template index from disk for authoritative service projections. */
+export function listTemplatesUncached(): Template[] {
+  templateIndex.clear()
+  templateListPopulated = false
+  return listTemplates()
+}
+
 // --- Branch pattern expansion ---
 
 export function expandBranchPattern(pattern: string, workspaceName: string): string {

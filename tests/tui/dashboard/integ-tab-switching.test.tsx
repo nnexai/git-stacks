@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock, afterAll, afterEach, beforeEach } from "bun:test"
-import { makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
+import { makeDashboardCoreState, makeTmpDir, cleanup, write, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeGitMock } from "../../helpers"
 import type { Workspace } from "../../../src/lib/config"
 
 // Config isolation — set BEFORE any import that touches paths.ts.
@@ -19,6 +19,7 @@ const wsFixtures = [
     created: "2026-01-15T00:00:00.000Z",
     repos: [] as any[],
     labels: ["backend", "sprint:14", "client:acme"],
+    priority: 1,
   },
   {
     name: "billing",
@@ -123,9 +124,29 @@ mock.module("../../../src/lib/lifecycle", () => ({
   runHooksCaptured: mock(async () => {}),
 }))
 
+mock.module("../../../src/lib/service/client", () => ({
+  fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
+  fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
+  dismissSignal: mock(async () => {}),
+  subscribeServiceEvents: mock(async () => "0"),
+  fetchEventCursor: mock(async () => "0"),
+  fetchWorkspaceFileStatus: mock(async () => ({ workspace: { scope: "workspace", name: "test", root: "/tmp", entries: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] }, repos: [], summary: { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0, sections: 1, byState: {}, byType: {} }, warnings: [], errors: [] })),
+  fetchWorkspaceNotes: mock(async () => []),
+  fetchEditTarget: mock(async () => ({ kind: "registry", path: "/tmp/registry.yml" })),
+  runCoreMutation: mock(async (name: string, request: { workspace?: string }) => {
+    if (name === "workspace.clean") await cleanWorkspaceMock(request.workspace ?? "")
+    if (name === "workspace.remove") await removeWorkspaceMock(request.workspace ?? "")
+    if (name === "workspace.merge") await mergeWorkspaceMock(request.workspace ?? "")
+    return { state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: {} }
+  }),
+  createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
+}))
+
 // Dynamic import after mocks are set
 const { testRender } = await import("@opentui/solid")
 const { default: App, matchesWorkspaceFilter, nextWorkspaceGroupingMode } = await import("../../../src/tui/dashboard/App")
+const { setCoreStateFactoryForTests } = await import("../../../src/tui/dashboard/core-store")
+setCoreStateFactoryForTests(() => makeDashboardCoreState(wsFixtures as any, [templateFixture as any], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }
 
@@ -315,4 +336,4 @@ describe("integration: tab switching", () => {
   })
 })
 
-afterAll(() => cleanup(configDir))
+afterAll(() => { setCoreStateFactoryForTests(undefined); cleanup(configDir) })

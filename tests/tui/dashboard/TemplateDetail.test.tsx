@@ -45,6 +45,10 @@ mock.module("../../../src/lib/integrations/types", () => ({
     return true
   }),
   resolveEnabled: mock(() => true),
+  isConditional: mock(() => false),
+  isGenerator: mock(() => false),
+  isCleaner: mock(() => false),
+  isWindowDetecting: mock(() => false),
 }))
 
 // Mock config module
