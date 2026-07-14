@@ -4,7 +4,7 @@ import { tmpdir } from "os"
 import { join } from "path"
 import { installAgentIntegrations, integrationStatus, OWNERSHIP_MARKER, uninstallAgentIntegrations } from "../../../src/lib/agent-hooks/integration-manager"
 
-describe("user-level native agent integrations", () => {
+describe("user-level terminal agent integrations", () => {
   test("merge-installs all providers while preserving foreign settings", () => {
     const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-home-"))
     mkdirSync(join(home, ".codex"), { recursive: true })
@@ -23,7 +23,7 @@ describe("user-level native agent integrations", () => {
     expect(integrationStatus({ home }).providers.every((entry) => entry.state === "installed")).toBe(true)
   })
 
-  test("is inert outside a native surface and uninstalls only owned entries", () => {
+  test("is inert outside a managed terminal surface and uninstalls only owned entries", () => {
     const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-uninstall-"))
     installAgentIntegrations({ home })
     const codexPath = join(home, ".codex/hooks.json")

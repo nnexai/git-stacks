@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { readFileSync } from "fs"
 import { join } from "path"
 import {
-  NativeLaunchResolutionRequestSchema,
-  NativeLaunchResolutionSchema,
+  TerminalLaunchResolutionRequestSchema,
+  TerminalLaunchResolutionSchema,
   SignalSchema,
   DiscoveryResponseSchema,
   ErrorCodeSchema,
@@ -12,7 +12,7 @@ import {
   WorkspaceSnapshotResponseSchema,
   WorkspaceCreationRequestSchema,
   WorkspaceCreationCatalogSchema,
-  NATIVE_MODEL_LIMITS,
+  CLIENT_MODEL_LIMITS,
 } from "../../../src/lib/service/contract"
 
 const fixtures = join(import.meta.dir, "../../fixtures/service-v1")
@@ -27,13 +27,6 @@ describe("service v1 contract", () => {
       const value = fixture(name)
       expect(schema.parse(value) as unknown).toEqual(value)
     }
-  })
-
-  test("round-trips the native workspace presentation fixture", () => {
-    const value = JSON.parse(readFileSync(join(import.meta.dir, "../../../native/tests/fixtures/workspace-snapshot.json"), "utf8"))
-    expect(WorkspaceSnapshotResponseSchema.parse(value)).toEqual(value)
-    expect(value.workspace.status[0]).toMatchObject({ repository_id: value.workspace.repositories[0].id, additions: 12, removals: 4, default_branch: "main" })
-    expect(value.workspace.status[1].pull_request).toBeUndefined()
   })
 
   test("rejects unknown fields and malformed opaque values", () => {
@@ -70,12 +63,12 @@ describe("service v1 contract", () => {
     expect(() => WorkspaceSnapshotResponseSchema.parse({ ...(fixture("workspace-snapshot.json") as object), workspace: { ...(fixture("workspace-snapshot.json") as any).workspace, launch: { ...(fixture("workspace-snapshot.json") as any).workspace.launch, named: [{ ...named, id: "test" }] } } })).toThrow()
   })
 
-  test("validates fresh native launch requests and forbids secret-bearing resolutions", () => {
+  test("validates fresh terminal launch requests and forbids secret-bearing resolutions", () => {
     const request = { workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", command_id: "cmd_0123456789abcdef", expected_revision: "7" }
-    expect(NativeLaunchResolutionRequestSchema.parse(request)).toEqual(request)
+    expect(TerminalLaunchResolutionRequestSchema.parse(request)).toEqual(request)
     const resolution = { resolved: true, revision: "7", launch: { argv: ["bun", "test"], cwd: "/work", environment: { NODE_ENV: "test" }, ports: {}, configuration: { command_id: request.command_id, shell: false }, redacted: ["TOKEN"] } } as const
-    expect(NativeLaunchResolutionSchema.parse(resolution)).toEqual(JSON.parse(JSON.stringify(resolution)))
-    expect(() => NativeLaunchResolutionSchema.parse({ ...resolution, launch: { ...resolution.launch, references: { TOKEN: "secret://token" } } })).toThrow()
+    expect(TerminalLaunchResolutionSchema.parse(resolution)).toEqual(JSON.parse(JSON.stringify(resolution)))
+    expect(() => TerminalLaunchResolutionSchema.parse({ ...resolution, launch: { ...resolution.launch, references: { TOKEN: "secret://token" } } })).toThrow()
   })
 
   test("validates activity states and strict signal identity nesting", () => {
@@ -85,13 +78,13 @@ describe("service v1 contract", () => {
     expect(() => SignalSchema.parse({ version: 1, kind: "activity", id: "sig_0123456789abcdef", state: "waiting", workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", session_id: "session-a", source: "claude", title: "question", occurred_at: "2026-07-11T00:00:00.000Z" })).toThrow()
   })
 
-  test("locks workspace creation sources and native capacity", () => {
+  test("locks workspace creation sources and client capacity", () => {
     expect(WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "template", template: "full" } }).source.kind).toBe("template")
     expect(WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "repositories", repositories: ["app"] } }).source.kind).toBe("repositories")
     expect(() => WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "repositories", repositories: [] } })).toThrow()
     expect(() => WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "repositories", repositories: ["app", "app"] } })).toThrow()
     expect(() => WorkspaceCreationRequestSchema.parse({ name: "demo", branch: "topic", source: { kind: "template", template: "full", local_path: "/secret" } })).toThrow()
-    expect(WorkspaceCreationCatalogSchema.parse({ templates: [], repositories: [], native_model: NATIVE_MODEL_LIMITS }).native_model).toEqual(NATIVE_MODEL_LIMITS)
+    expect(WorkspaceCreationCatalogSchema.parse({ templates: [], repositories: [], client_model: CLIENT_MODEL_LIMITS }).client_model).toEqual(CLIENT_MODEL_LIMITS)
   })
 
   test("measures workspace names by well-formed UTF-8 bytes", () => {

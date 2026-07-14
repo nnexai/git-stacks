@@ -632,7 +632,7 @@ export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<
 
 /**
  * Returns a complete mock of src/lib/workspace-ops.ts exports.
- * Only covers what workspace-ops.ts still exports: env re-exports, lifecycle re-exports, native functions.
+ * Only covers what workspace-ops.ts still exports: env re-exports, lifecycle re-exports, direct functions.
  */
 export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -647,7 +647,7 @@ export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): R
     closeWorkspace: mock(async () => ({ ok: true })),
     removeWorkspace: mock(async () => ({ ok: true })),
     mergeWorkspace: mock(async () => ({ ok: true })),
-    // Native functions
+    // Direct functions
     openWorkspace: mock(async () => ({ ok: true })),
     renameWorkspace: mock(async () => ({ ok: true })),
     renameTemplate: mock(async () => ({ ok: true })),

@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { provisionOfficialClient } from "../../src/lib/service/credentials"
 import { OperationRegistry } from "../../src/lib/service/operations"
-import { NATIVE_MODEL_LIMITS } from "../../src/lib/service/contract"
+import { CLIENT_MODEL_LIMITS } from "../../src/lib/service/contract"
 import { startServiceServer } from "../../src/service/server"
 
 const roots: string[] = []
@@ -14,13 +14,13 @@ describe("workspace creation transport", () => {
   test("authenticates the path-free catalog and accepts idempotent creation", async () => {
     const serviceRoot = join(tmpdir(), `git-stacks-create-${crypto.randomUUID()}`)
     roots.push(serviceRoot)
-    const credential = provisionOfficialClient("native", { serviceRoot })
+    const credential = provisionOfficialClient("workspace-create-test", { serviceRoot })
     let sequence = 0
     const operations = new OperationRegistry({ root: serviceRoot, publishOperationEvent: async (operation) => ({ protocol: "v1", type: "operation", sequence: String(++sequence), timestamp: new Date().toISOString(), operation }), schedule: (run) => run() })
     const service = startServiceServer({
       serviceRoot, operations,
       snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
-      workspaceCreationCatalog: () => ({ templates: [{ name: "full", repository_count: 1, command_count: 0, labels: [] }], repositories: [{ name: "app", type: "typescript", default_branch: "main" }], native_model: NATIVE_MODEL_LIMITS }),
+      workspaceCreationCatalog: () => ({ templates: [{ name: "full", repository_count: 1, command_count: 0, labels: [] }], repositories: [{ name: "app", type: "typescript", default_branch: "main" }], client_model: CLIENT_MODEL_LIMITS }),
       workspaceCreate: (request) => ({ steps: [{ name: "workspace.create", stage: "executing", message: "Creating", run: async (report) => { await report({ message: "Created" }) } }], result: { workspace_name: request.name, snapshot_changed: true } }),
     })
     try {

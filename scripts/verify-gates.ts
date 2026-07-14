@@ -66,7 +66,7 @@ const COVERAGE_SENTINELS = [
   "src/lib/service/signal-state.ts",
   "src/tui/dashboard/ActionMenu.tsx",
 ] as const
-const LEGACY_SCAN_ROOTS = ["src", "native", "docs", ".github/hooks", ".claude/settings.json", "README.md"] as const
+const LEGACY_SCAN_ROOTS = ["src", "docs", ".github/hooks", ".claude/settings.json", "README.md"] as const
 const LEGACY_SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".zig", ".c", ".h", ".json", ".md"])
 const FORBIDDEN_LEGACY_SYMBOLS = [
   "service attention",

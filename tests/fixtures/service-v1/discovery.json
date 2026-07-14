@@ -7,12 +7,11 @@
     "capabilities": {
       "workspace_snapshots": { "available": true },
       "operations": { "available": true },
-      "native_launch_resolution": { "available": true },
       "signals": { "available": true }
     },
     "limits": {
       "request_body_bytes": 262144, "subscriber_events": 1024, "subscriber_bytes": 1048576,
-      "native_model": {
+      "client_model": {
         "workspaces": 16, "labels_per_workspace": 16, "repositories_per_workspace": 8,
         "authoritative_pairs": 32, "live_pair_identities": 32, "reserved_orphan_tombstones": 32,
         "surfaces_per_pair": 16, "commands": 64, "signal_items": 64,

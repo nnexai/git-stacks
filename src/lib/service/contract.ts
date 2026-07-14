@@ -26,20 +26,20 @@ export function utf8BoundedString(maximum: number, minimum = 0) {
   }, { message: `String must contain between ${minimum} and ${maximum} UTF-8 bytes` })
 }
 
-export const NativeModelStringByteLimitsSchema = z.strictObject({
+export const ClientModelStringByteLimitsSchema = z.strictObject({
   workspace_name: z.literal(96), workspace_label: z.literal(64), repository_name: z.literal(96),
   command_id: z.literal(64), command_name: z.literal(96), surface_command_id: z.literal(64),
   surface_title: z.literal(64), surface_cwd: z.literal(128), signal_id: z.literal(64),
   signal_title: z.literal(160), signal_detail: z.literal(500), signal_occurred_at: z.literal(40),
   launch_environment_value: z.literal(4096),
 })
-export const NativeModelLimitsSchema = z.strictObject({
+export const ClientModelLimitsSchema = z.strictObject({
   workspaces: z.literal(16), labels_per_workspace: z.literal(16), repositories_per_workspace: z.literal(8),
   authoritative_pairs: z.literal(32), live_pair_identities: z.literal(32), reserved_orphan_tombstones: z.literal(32),
   surfaces_per_pair: z.literal(16), commands: z.literal(64), signal_items: z.literal(64),
-  string_bytes: NativeModelStringByteLimitsSchema,
+  string_bytes: ClientModelStringByteLimitsSchema,
 })
-export const NATIVE_MODEL_LIMITS = Object.freeze(NativeModelLimitsSchema.parse({
+export const CLIENT_MODEL_LIMITS = Object.freeze(ClientModelLimitsSchema.parse({
   workspaces: 16, labels_per_workspace: 16, repositories_per_workspace: 8, authoritative_pairs: 32,
   live_pair_identities: 32, reserved_orphan_tombstones: 32, surfaces_per_pair: 16, commands: 64, signal_items: 64,
   string_bytes: { workspace_name: 96, workspace_label: 64, repository_name: 96, command_id: 64, command_name: 96,
@@ -76,14 +76,13 @@ export const CapabilitiesSchema = z.strictObject({
   workspace_snapshots: CapabilityAvailabilitySchema,
   operations: CapabilityAvailabilitySchema,
   signals: CapabilityAvailabilitySchema,
-  native_launch_resolution: CapabilityAvailabilitySchema,
 })
 export type Capabilities = z.infer<typeof CapabilitiesSchema>
 export const ServiceLimitsSchema = z.strictObject({
   request_body_bytes: z.number().int().positive(),
   subscriber_events: z.number().int().positive(),
   subscriber_bytes: z.number().int().positive(),
-  native_model: NativeModelLimitsSchema,
+  client_model: ClientModelLimitsSchema,
 })
 export type ServiceLimits = z.infer<typeof ServiceLimitsSchema>
 export const DiscoverySchema = z.strictObject({ service_version: z.string().min(1), capabilities: CapabilitiesSchema, limits: ServiceLimitsSchema })
@@ -98,7 +97,7 @@ export const WorkspaceCreationRepositorySchema = z.strictObject({
   name: utf8BoundedString(96, 1), type: utf8BoundedString(64, 1), default_branch: utf8BoundedString(96, 1),
 })
 export const WorkspaceCreationCatalogSchema = z.strictObject({
-  templates: z.array(WorkspaceCreationTemplateSchema), repositories: z.array(WorkspaceCreationRepositorySchema), native_model: NativeModelLimitsSchema,
+  templates: z.array(WorkspaceCreationTemplateSchema), repositories: z.array(WorkspaceCreationRepositorySchema), client_model: ClientModelLimitsSchema,
 })
 const WorkspaceCreationBase = { name: utf8BoundedString(96, 1), branch: utf8BoundedString(96, 1) }
 export const WorkspaceCreationRequestSchema = z.union([
@@ -166,14 +165,14 @@ export const WorkspaceSnapshotResponseSchema = z.strictObject({
 })
 export type WorkspaceSnapshotResponse = z.infer<typeof WorkspaceSnapshotResponseSchema>
 
-export const NativeLaunchResolutionRequestSchema = z.strictObject({
+export const TerminalLaunchResolutionRequestSchema = z.strictObject({
   workspace_id: EntityIdSchema,
   repository_id: EntityIdSchema,
   command_id: CommandIdSchema.optional(),
   expected_revision: RevisionSchema,
 })
-export type NativeLaunchResolutionRequest = z.infer<typeof NativeLaunchResolutionRequestSchema>
-export const NativeLaunchSpecificationSchema = z.strictObject({
+export type TerminalLaunchResolutionRequest = z.infer<typeof TerminalLaunchResolutionRequestSchema>
+export const TerminalLaunchSpecificationSchema = z.strictObject({
   argv: z.array(z.string()).min(1),
   cwd: z.string().min(1),
   environment: z.record(z.string(), z.string()),
@@ -181,11 +180,11 @@ export const NativeLaunchSpecificationSchema = z.strictObject({
   configuration: z.strictObject({ command_id: CommandIdSchema.optional(), shell: z.boolean() }),
   redacted: z.array(z.string()),
 })
-export const NativeLaunchResolutionSchema = z.discriminatedUnion("resolved", [
-  z.strictObject({ resolved: z.literal(true), revision: RevisionSchema, launch: NativeLaunchSpecificationSchema }),
+export const TerminalLaunchResolutionSchema = z.discriminatedUnion("resolved", [
+  z.strictObject({ resolved: z.literal(true), revision: RevisionSchema, launch: TerminalLaunchSpecificationSchema }),
   z.strictObject({ resolved: z.literal(false), error: ApiErrorSchema }),
 ])
-export type NativeLaunchResolution = z.infer<typeof NativeLaunchResolutionSchema>
+export type TerminalLaunchResolution = z.infer<typeof TerminalLaunchResolutionSchema>
 
 export const SignalActivityStateSchema = z.enum(["working", "waiting", "completed", "failed", "idle"])
 export const SignalSourceSchema = z.enum(["claude", "copilot", "codex", "opencode", "automation", "acp", "user", "other"])

@@ -409,7 +409,7 @@ git-stacks service signal publish --kind activity --state waiting --source codex
   --surface-id "$GIT_STACKS_SURFACE_ID" --session-id "$GIT_STACKS_AGENT_SESSION_ID"
 ```
 
-Signals are journaled by the managed service and replayed by native, browser, and TUI clients. `working`, `completed`, and `idle` activity remains visible history without an unread badge; `waiting`, `failed`, and undismissed notifications project attention. Notification dismissal is service-authoritative and survives client restart or reconnect.
+Signals are journaled by the managed service and replayed by browser and TUI clients. `working`, `completed`, and `idle` activity remains visible history without an unread badge; `waiting`, `failed`, and undismissed notifications project attention. Notification dismissal is service-authoritative and survives client restart or reconnect.
 
 ## Browser Client
 
@@ -419,7 +419,7 @@ git-stacks web --no-open       # Print the one-use local URL
 git-stacks web --no-open --json
 ```
 
-The browser client is loopback-only and uses the same authoritative workspace snapshots, launch resolver, operations, and signals as the native client. Machine paths, commands, environment values, and service credentials stay in the TypeScript service. On verified Linux hosts, the service owns independent browser PTYs with multiple tabs, resize, reconnect/reload replay, bounded history, process-group cleanup, and explicit ended-session relaunch. Browser terminal capability remains disabled on unverified platforms.
+The browser client is loopback-only and uses authoritative workspace snapshots, launch resolution, operations, and signals from the local TypeScript service. Machine paths, commands, environment values, and service credentials stay in the service. On verified Linux hosts, the service owns independent browser PTYs with multiple tabs, resize, reconnect/reload replay, bounded history, process-group cleanup, and explicit ended-session relaunch. Browser terminal capability remains disabled on unverified platforms.
 
 ## Dashboard
 

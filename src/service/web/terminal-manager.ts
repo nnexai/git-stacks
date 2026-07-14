@@ -106,11 +106,11 @@ export class WebTerminalManager {
   async create(principalId: string, input: WebTerminalCreateInput): Promise<WebTerminal> {
     this.prune()
     if (process.platform !== "linux") throw Object.assign(new Error("Browser terminals are not verified on this platform"), { status: 409, code: "capability_unavailable" })
-    if (!this.snapshot.resolveNativeLaunch) throw Object.assign(new Error("Terminal launch is unavailable"), { status: 409, code: "capability_unavailable" })
+    if (!this.snapshot.resolveTerminalLaunch) throw Object.assign(new Error("Terminal launch is unavailable"), { status: 409, code: "capability_unavailable" })
     if (this.sessions.size >= WEB_TERMINAL_MAX_TOTAL || [...this.sessions.values()].filter((session) => session.principalId === principalId && session.state !== "ended").length >= WEB_TERMINAL_MAX_PER_PRINCIPAL) {
       throw Object.assign(new Error("Terminal capacity reached"), { status: 429, code: "capacity_exceeded" })
     }
-    const resolution = await this.snapshot.resolveNativeLaunch({
+    const resolution = await this.snapshot.resolveTerminalLaunch({
       workspace_id: input.workspace_id,
       repository_id: input.repository_id,
       ...(input.command_id ? { command_id: input.command_id } : {}),

@@ -130,7 +130,7 @@ describe("authoritative service snapshots", () => {
     expect(await builder.buildAll()).toEqual([])
   })
 
-  test("projects workspace labels for native sidebar grouping", async () => {
+  test("projects workspace labels for client sidebar grouping", async () => {
     const labeled = { ...workspace(), labels: ["client", "urgent"] }
     const builder = createSnapshotBuilder(dependencies({ ensureWorkspaceIdentity: () => labeled }))
     const snapshot = await builder.buildWorkspace("alpha", "req_labels_0123456789")
@@ -154,7 +154,7 @@ describe("authoritative service snapshots", () => {
     }))
     const snapshot = (await builder.buildAll())[0]!
     const command = snapshot.workspace.launch.named![0]!
-    const resolution = await builder.resolveNativeLaunch({
+    const resolution = await builder.resolveTerminalLaunch({
       workspace_id: snapshot.workspace.id,
       repository_id: snapshot.workspace.repositories[0]!.id,
       command_id: command.id,
@@ -176,14 +176,14 @@ describe("authoritative service snapshots", () => {
       repository_id: snapshot.workspace.repositories[0]!.id,
       expected_revision: snapshot.revision,
     }
-    expect((await builder.resolveNativeLaunch(request)).resolved).toBe(true)
+    expect((await builder.resolveTerminalLaunch(request)).resolved).toBe(true)
     expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
 
     const broken = createSnapshotBuilder(dependencies({
       ensureAgentSignals: () => { throw new Error("Cannot safely update .codex/hooks.json") },
     }))
     const brokenSnapshot = (await broken.buildAll())[0]!
-    const degraded = await broken.resolveNativeLaunch({ ...request, expected_revision: brokenSnapshot.revision })
+    const degraded = await broken.resolveTerminalLaunch({ ...request, expected_revision: brokenSnapshot.revision })
     expect(degraded.resolved).toBe(true)
     if (degraded.resolved) expect(degraded.launch.environment).toMatchObject({
       GIT_STACKS_AGENT_SIGNALS: "degraded",

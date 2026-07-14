@@ -12,7 +12,7 @@ import { openWorkspace as openWorkspaceDirect } from "../workspace-ops"
 import { closeWorkspace as closeWorkspaceDirect } from "../workspace-lifecycle"
 import { createWorkspaceFromRequest, planWorkspaceCreation, type WorkspaceCreationRequest } from "../workspace-creation"
 import { listWorkspacesUncached } from "../config"
-import { NATIVE_MODEL_LIMITS } from "./contract"
+import { CLIENT_MODEL_LIMITS } from "./contract"
 
 export const DEFAULT_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_OPERATION_TERMINAL_LIMIT = 10_000
@@ -416,9 +416,9 @@ export function createWorkspaceMutationAdapters(dependencies: {
         const repositories = current.reduce((sum, workspace) => sum + workspace.repos.length, 0) + plan.plan.inputs.repos.length
         const commands = current.reduce((sum, workspace) => sum + Object.keys(workspace.commands ?? {}).length + workspace.repos.reduce((nested, repo) => nested + Object.keys(repo.commands ?? {}).length, 0), 0)
           + Object.keys(plan.plan.inputs.wsCommands ?? {}).length + plan.plan.inputs.repos.reduce((sum, repo) => sum + Object.keys(repo.commands ?? {}).length, 0)
-        if (current.length + 1 > NATIVE_MODEL_LIMITS.workspaces) throw new Error("capacity_exceeded: workspaces")
-        if (plan.plan.inputs.repos.length > NATIVE_MODEL_LIMITS.repositories_per_workspace || repositories > NATIVE_MODEL_LIMITS.authoritative_pairs) throw new Error("capacity_exceeded: repositories")
-        if (commands > NATIVE_MODEL_LIMITS.commands) throw new Error("capacity_exceeded: commands")
+        if (current.length + 1 > CLIENT_MODEL_LIMITS.workspaces) throw new Error("capacity_exceeded: workspaces")
+        if (plan.plan.inputs.repos.length > CLIENT_MODEL_LIMITS.repositories_per_workspace || repositories > CLIENT_MODEL_LIMITS.authoritative_pairs) throw new Error("capacity_exceeded: repositories")
+        if (commands > CLIENT_MODEL_LIMITS.commands) throw new Error("capacity_exceeded: commands")
         let progressQueue = Promise.resolve()
         const result = await (dependencies.createWorkspace ?? createWorkspaceFromRequest)(request, (message) => {
           progressQueue = progressQueue.then(() => report({ stage: "executing", message })).then(() => undefined)

@@ -215,7 +215,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       },
     })
     let lifecycle: ReturnType<typeof createIdleLifecycle>
-    let nativeConnections = 0
+    let apiConnections = 0
     let webConnections = 0
     const operations = new OperationRegistry({
       root: serviceRoot,
@@ -253,7 +253,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       signalProjection: () => journal.signalProjection(),
       setWorkspacePins,
       setWorkspacePriorities,
-      onConnectionChange: (count) => { webConnections = count; lifecycle?.setConnectedClients(nativeConnections + webConnections) },
+      onConnectionChange: (count) => { webConnections = count; lifecycle?.setConnectedClients(apiConnections + webConnections) },
       onActivity: () => lifecycle?.touch(),
     })
     running = startServiceServer({
@@ -264,7 +264,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       publishSignal,
       dismissSignal,
       signalProjection: () => journal.signalProjection(),
-      onConnectionChange: (count) => { nativeConnections = count; lifecycle.setConnectedClients(nativeConnections + webConnections) },
+      onConnectionChange: (count) => { apiConnections = count; lifecycle.setConnectedClients(apiConnections + webConnections) },
       onActivity: () => lifecycle.touch(),
     })
     monitor.start()

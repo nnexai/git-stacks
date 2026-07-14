@@ -7,7 +7,7 @@ import { readServiceDescriptor, startManagedService } from "../service/main"
 import { installAgentIntegrations, integrationStatus, uninstallAgentIntegrations } from "../lib/agent-hooks/integration-manager"
 
 export const serviceCommand = new Command("service")
-  .description("Manage the internal native-client service")
+  .description("Manage the local workspace service")
 
 serviceCommand.command("start")
   .description("Start or discover the local service")
@@ -56,7 +56,7 @@ async function publishSignal(options: SignalPublishOptions, abortSignal: AbortSi
       if (!snapshotResponse.ok) throw new Error(`workspace identity resolution failed (${snapshotResponse.status})`)
       const envelope = await snapshotResponse.json() as { data?: Array<{ workspace?: { id?: string; name?: string } }> }
       workspaceId = envelope.data?.find((entry) => entry.workspace?.name === options.workspace)?.workspace?.id
-      if (!workspaceId) throw new Error(`workspace '${options.workspace}' was not found by the native service`)
+      if (!workspaceId) throw new Error(`workspace '${options.workspace}' was not found by the local service`)
     }
     const repositoryId = options.repositoryId?.trim() || undefined
     const surfaceId = options.surfaceId?.trim() || undefined

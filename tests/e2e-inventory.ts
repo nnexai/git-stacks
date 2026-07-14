@@ -103,7 +103,7 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     id: "service.lifecycle",
     family: "service",
     flowType: "command",
-    title: "Native-client service lifecycle",
+    title: "Local workspace service lifecycle",
     commands: ["service start", "service status", "service signal integrations", "service signal publish"],
     scopeStatus: "in-scope",
     mappedTests: [

@@ -27,11 +27,11 @@ import { buildWorkspaceEnv } from "../workspace-env"
 import { getWorkspaceFileStatusView, type WorkspaceFileStatusView } from "../workspace-file-status"
 import { getWorkspaceStatus, type RepoStatus } from "../workspace-status"
 import { ensureWorkspaceIdentity } from "./identity"
-import { prepareNativeAgentEnvironment } from "../agent-hooks/native-session"
+import { prepareTerminalAgentEnvironment } from "../agent-hooks/terminal-session"
 import {
-  NativeLaunchResolutionSchema,
-  type NativeLaunchResolution,
-  type NativeLaunchResolutionRequest,
+  TerminalLaunchResolutionSchema,
+  type TerminalLaunchResolution,
+  type TerminalLaunchResolutionRequest,
   WorkspaceSnapshotResponseSchema,
   type WorkspaceSnapshotResponse,
 } from "./contract"
@@ -182,11 +182,11 @@ function defaultDependencies(): SnapshotDependencies {
     listManualCommands,
     planManualCommand,
     buildWorkspaceEnv,
-    prepareAgentSignals: (repoPath, workspaceName, environment) => prepareNativeAgentEnvironment(
+    prepareAgentSignals: (repoPath, workspaceName, environment) => prepareTerminalAgentEnvironment(
       repoPath,
       workspaceName,
       environment.PATH ?? process.env.PATH ?? "",
-      join(WS_CONFIG_DIR, "native-agent-bin"),
+      join(WS_CONFIG_DIR, "terminal-agent-bin"),
       undefined,
       { installIntegrations: true },
     ),
@@ -332,11 +332,11 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     return aggregateRevision
   }
 
-  async function resolveNativeLaunch(request: NativeLaunchResolutionRequest): Promise<NativeLaunchResolution> {
+  async function resolveTerminalLaunch(request: TerminalLaunchResolutionRequest): Promise<TerminalLaunchResolution> {
     const snapshots = await buildAll()
     const snapshot = snapshots.find((entry) => entry.workspace.id === request.workspace_id)
-    const fail = (code: "not_found" | "conflict" | "operation_failed", message: string): NativeLaunchResolution =>
-      NativeLaunchResolutionSchema.parse({ resolved: false, error: { code, message } })
+    const fail = (code: "not_found" | "conflict" | "operation_failed", message: string): TerminalLaunchResolution =>
+      TerminalLaunchResolutionSchema.parse({ resolved: false, error: { code, message } })
     if (!snapshot) return fail("not_found", "Workspace not found")
     if (snapshot.revision !== request.expected_revision) return fail("conflict", "Authoritative snapshot revision is stale")
     const repository = snapshot.workspace.repositories.find((entry) => entry.id === request.repository_id)
@@ -358,16 +358,16 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     }
     if (!request.command_id) {
       const shell = process.env.SHELL || "/bin/sh"
-      return NativeLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
+      return TerminalLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
         argv: [shell], cwd: repository.path, environment: base.environment, ports: base.ports ?? {},
         configuration: { shell: true }, redacted: base.redacted,
       } })
     }
     const command = base.named?.find((entry) => entry.id === request.command_id)
     if (!command || (command.scope === "repository" && command.repository_id !== repository.id)) return fail("not_found", "Command not found in repository scope")
-    if (command.steps.length !== 1) return fail("operation_failed", "Native launch requires exactly one configured command step")
+    if (command.steps.length !== 1) return fail("operation_failed", "Terminal launch requires exactly one configured command step")
     const step = command.steps[0]!
-    return NativeLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
+    return TerminalLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
       // Configured commands use the same POSIX-shell contract as the existing
       // CLI/TUI command runner. They must not be reparsed by the user's login
       // shell (Fish, Nushell, etc.).
@@ -376,5 +376,5 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     } })
   }
 
-  return { buildWorkspace, buildAll, currentRevision, resolveNativeLaunch }
+  return { buildWorkspace, buildAll, currentRevision, resolveTerminalLaunch }
 }

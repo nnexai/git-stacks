@@ -3,8 +3,8 @@ import { z } from "zod"
 import { authenticateAdmission, type AuthenticatedClient } from "../lib/service/credentials"
 import { IdempotencyConflictError, type OperationRegistry, type OperationExecution } from "../lib/service/operations"
 import type { EventBroker, EventReservation, EventSubscription, EventSubscriptionDiagnostics } from "../lib/service/event-broker"
-import { NativeLaunchResolutionRequestSchema, SignalDismissalSchema, SignalSchema, type Signal, type SignalDismissal } from "../lib/service/contract"
-import { NATIVE_MODEL_LIMITS, WorkspaceCreationRequestSchema, type WorkspaceCreationCatalog } from "../lib/service/contract"
+import { SignalDismissalSchema, SignalSchema, type Signal, type SignalDismissal } from "../lib/service/contract"
+import { CLIENT_MODEL_LIMITS, WorkspaceCreationRequestSchema, type WorkspaceCreationCatalog } from "../lib/service/contract"
 import type { WorkspaceCreateMutation } from "../lib/service/operations"
 import { SnapshotBusyError } from "../lib/service/snapshot"
 import type { WebApplication } from "./web/routes"
@@ -267,8 +267,8 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
       if (remaining) sseByClient.set(client.clientId, remaining); else sseByClient.delete(client.clientId)
       options.onConnectionChange?.(sseTotal)
     }
-    // Native finite leases are intentionally short: application shutdown must
-    // never wait for the ordinary 15s SSE heartbeat.
+    // Finite leases are intentionally short so one-shot clients never wait for
+    // the ordinary 15s SSE heartbeat during shutdown.
     const bridge = new SseTransportBridge(subscription, finite ? Math.min(heartbeat, 200) : heartbeat, () => { bridges.delete(bridge); release() }, finite ? 1 : undefined)
     bridges.add(bridge)
     const stream = bridge.stream()
@@ -302,9 +302,8 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
             workspace_snapshots: { available: true },
             operations: { available: Boolean(options.operations) },
             signals: { available: Boolean(options.broker) },
-            native_launch_resolution: { available: Boolean(options.snapshot.resolveNativeLaunch) },
           },
-          limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024, native_model: NATIVE_MODEL_LIMITS },
+          limits: { request_body_bytes: maxBody, subscriber_events: 256, subscriber_bytes: 1024 * 1024, client_model: CLIENT_MODEL_LIMITS },
         }))
         if (request.method === "POST" && url.pathname === "/v1/web-pairings") {
           if (!options.web) return failure(id, "capability_unavailable", "Web client is unavailable", 409)
@@ -315,13 +314,6 @@ export function startServiceServer(options: ServiceServerOptions): RunningServic
           return json(success(id, await options.workspaceCreationCatalog()))
         }
         if (request.method === "GET" && url.pathname === "/v1/snapshot") return json(success(id, await options.snapshot.buildAll(signal)))
-        if (request.method === "POST" && url.pathname === "/v1/native-launch") {
-          if (!options.snapshot.resolveNativeLaunch) return failure(id, "capability_unavailable", "Native launch resolution is unavailable", 409)
-          const parsed = NativeLaunchResolutionRequestSchema.safeParse(await readBody(request))
-          if (!parsed.success) return failure(id, "invalid_request", "Invalid native launch request", 400)
-          const resolution = await options.snapshot.resolveNativeLaunch(parsed.data, signal)
-          return resolution.resolved ? json(success(id, resolution)) : failure(id, resolution.error.code, resolution.error.message, resolution.error.code === "not_found" ? 404 : 409)
-        }
         if (request.method === "POST" && url.pathname === "/v1/signals") {
           if (!options.publishSignal) return failure(id, "capability_unavailable", "Signal publication is unavailable", 409)
           const parsed = SignalSchema.safeParse(await readBody(request))

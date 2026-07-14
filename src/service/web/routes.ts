@@ -228,7 +228,7 @@ export class WebApplication {
       service_version: "1",
       capabilities: {
         snapshots: true,
-        terminals: process.platform === "linux" && Boolean(this.options.snapshot.resolveNativeLaunch),
+        terminals: process.platform === "linux" && Boolean(this.options.snapshot.resolveTerminalLaunch),
         operations: Boolean(this.options.operations),
         workspace_creation: Boolean(this.options.workspaceCreationCatalog && this.options.workspaceCreate),
         signals: Boolean(this.options.signalProjection),

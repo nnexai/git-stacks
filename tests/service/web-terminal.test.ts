@@ -6,7 +6,7 @@ function createManager(publishSignal?: (signal: Signal) => Promise<void>): WebTe
   return new WebTerminalManager({
     buildAll: async () => [],
     buildWorkspace: async () => { throw new Error("unused") },
-    resolveNativeLaunch: async () => ({ resolved: true, revision: "1", launch: {
+    resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
       argv: ["/bin/bash", "--noprofile", "--norc", "-i"], cwd: process.cwd(),
       environment: { PATH: process.env.PATH ?? "/usr/bin:/bin", PS1: "$ " }, ports: {}, configuration: { shell: true }, redacted: [],
     } }),

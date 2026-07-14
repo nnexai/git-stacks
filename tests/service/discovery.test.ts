@@ -43,15 +43,15 @@ describe("v1 discovery", () => {
     const root = join(tmpdir(), `git-stacks-managed-${crypto.randomUUID()}`)
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
     const snapshot = { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") }, currentRevision: async () => "0" }
-    const first = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })
+    const first = await startManagedService({ serviceRoot: root, clientId: "service-test", snapshot })
     cleanup.push(() => first.stop())
-    const second = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })
+    const second = await startManagedService({ serviceRoot: root, clientId: "service-test", snapshot })
     expect(second.existing).toBe(true)
     expect(second.descriptor.instance_id).toBe(first.descriptor.instance_id)
     const path = serviceDescriptorPath(root)
     expect(statSync(path).mode & 0o777).toBe(0o600)
     const raw = readFileSync(path, "utf8")
-    expect(raw).not.toContain(provisionOfficialClient("native-test", { serviceRoot: root }).token)
+    expect(raw).not.toContain(provisionOfficialClient("service-test", { serviceRoot: root }).token)
     await first.stop()
     expect(existsSync(path)).toBe(false)
   })
@@ -66,7 +66,7 @@ describe("v1 discovery", () => {
       writeFileSync(lockPath, owner, { mode: 0o600 })
       if (!owner) utimesSync(lockPath, new Date(0), new Date(0))
 
-      const service = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })
+      const service = await startManagedService({ serviceRoot: root, clientId: "service-test", snapshot })
       cleanup.push(() => service.stop())
       expect(service.existing).toBe(false)
       expect(existsSync(lockPath)).toBe(false)
@@ -74,13 +74,13 @@ describe("v1 discovery", () => {
     }
   })
 
-  test("authenticated native polling keeps the managed service alive", async () => {
+  test("authenticated API polling keeps the managed service alive", async () => {
     const root = join(tmpdir(), `git-stacks-managed-activity-${crypto.randomUUID()}`)
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
     const snapshot = { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") }, currentRevision: async () => "0" }
-    const service = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot, idleMs: 60 })
+    const service = await startManagedService({ serviceRoot: root, clientId: "service-test", snapshot, idleMs: 60 })
     cleanup.push(() => service.stop())
-    const credential = readOfficialClientCredential("native-test", { serviceRoot: root })!
+    const credential = readOfficialClientCredential("service-test", { serviceRoot: root })!
     const headers = { authorization: `Bearer ${credential.token}` }
 
     await Bun.sleep(40)

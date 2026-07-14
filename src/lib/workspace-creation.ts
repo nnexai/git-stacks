@@ -16,7 +16,7 @@ import {
   createWorkspace,
   type CreateWorkspaceInputs,
 } from "./workspace-lifecycle"
-import { NATIVE_MODEL_LIMITS, WorkspaceCreationCatalogSchema, type WorkspaceCreationCatalog } from "./service/contract"
+import { CLIENT_MODEL_LIMITS, WorkspaceCreationCatalogSchema, type WorkspaceCreationCatalog } from "./service/contract"
 
 export type WorkspaceCreationSource =
   | { kind: "template"; template: string }
@@ -88,7 +88,7 @@ export function getWorkspaceCreationCatalog(
     repositories: deps.readRegistry().map((repository) => ({
       name: repository.name, type: repository.type, default_branch: repository.default_branch,
     })).sort((a, b) => a.name.localeCompare(b.name)),
-    native_model: NATIVE_MODEL_LIMITS,
+    client_model: CLIENT_MODEL_LIMITS,
   })
 }
 
