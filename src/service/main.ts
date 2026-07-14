@@ -17,6 +17,9 @@ import { WebApplication } from "./web/routes"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
 export const DEFAULT_OFFICIAL_CLIENT_ID = "official-client"
+const STARTUP_LOCK_RETRY_MS = 5
+const STARTUP_LOCK_WAIT_MS = 2_000
+const STARTUP_LOCK_INCOMPLETE_GRACE_MS = 100
 
 const DescriptorSchema = z.strictObject({
   protocol: z.literal("v1"),
@@ -27,7 +30,13 @@ const DescriptorSchema = z.strictObject({
   credential_lookup: z.string().min(1),
   started_at: z.string().datetime(),
 })
+const StartupLockSchema = z.strictObject({
+  pid: z.number().int().positive(),
+  nonce: z.string().uuid(),
+  created_at: z.string().datetime(),
+})
 export type ServiceDescriptor = z.infer<typeof DescriptorSchema>
+type StartupLock = z.infer<typeof StartupLockSchema> & { fd: number }
 
 export function serviceDescriptorPath(serviceRoot = join(WS_CONFIG_DIR, "service")): string { return join(serviceRoot, "descriptor.json") }
 
@@ -94,6 +103,63 @@ function processAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true } catch (error) { return (error as NodeJS.ErrnoException).code === "EPERM" }
 }
 
+function readStartupLock(path: string): z.infer<typeof StartupLockSchema> | null {
+  let stat: ReturnType<typeof lstatSync>
+  try { stat = lstatSync(path) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null
+    throw error
+  }
+  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o777) !== 0o600) throw new Error("Unsafe service startup lock")
+  try { return StartupLockSchema.parse(JSON.parse(readFileSync(path, "utf8"))) } catch { return null }
+}
+
+function removeStartupLock(path: string): void {
+  try { unlinkSync(path) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+  }
+}
+
+function startupLockIsStale(path: string): boolean {
+  let stat: ReturnType<typeof lstatSync>
+  try { stat = lstatSync(path) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return true
+    throw error
+  }
+  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o777) !== 0o600) throw new Error("Unsafe service startup lock")
+  const owner = readStartupLock(path)
+  if (owner) return !processAlive(owner.pid)
+  return Date.now() - stat.mtimeMs >= STARTUP_LOCK_INCOMPLETE_GRACE_MS
+}
+
+async function acquireStartupLock(path: string): Promise<StartupLock> {
+  const owner = { pid: process.pid, nonce: crypto.randomUUID(), created_at: new Date().toISOString() }
+  const deadline = Date.now() + STARTUP_LOCK_WAIT_MS
+  while (Date.now() < deadline) {
+    try {
+      const fd = openSync(path, "wx", 0o600)
+      try {
+        writeFileSync(fd, `${JSON.stringify(owner)}\n`, "utf8")
+        fsyncSync(fd)
+      } catch (error) {
+        closeSync(fd)
+        removeStartupLock(path)
+        throw error
+      }
+      return { ...owner, fd }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+      if (startupLockIsStale(path)) { removeStartupLock(path); continue }
+      await Bun.sleep(STARTUP_LOCK_RETRY_MS)
+    }
+  }
+  throw new Error("Timed out waiting for service startup")
+}
+
+function releaseStartupLock(path: string, lock: StartupLock): void {
+  closeSync(lock.fd)
+  if (readStartupLock(path)?.nonce === lock.nonce) removeStartupLock(path)
+}
+
 export interface ManagedServiceOptions {
   serviceRoot?: string
   clientId?: string
@@ -128,14 +194,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
   const clientId = options.clientId ?? DEFAULT_OFFICIAL_CLIENT_ID
   assertRoot(serviceRoot)
   const lockPath = join(serviceRoot, "startup.lock")
-  let lock: number | undefined
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    try { lock = openSync(lockPath, "wx", 0o600); break } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
-      await Bun.sleep(5)
-    }
-  }
-  if (lock === undefined) throw new Error("Timed out waiting for service startup")
+  const lock = await acquireStartupLock(lockPath)
   try {
     const existing = readServiceDescriptor(serviceRoot)
     if (existing && await descriptorUsable(existing, serviceRoot)) return { descriptor: existing, existing: true, async stop() {} }
@@ -236,7 +295,6 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     stopManaged = stop
     return { descriptor, server: running, existing: false, stop }
   } finally {
-    closeSync(lock)
-    if (existsSync(lockPath)) unlinkSync(lockPath)
+    releaseStartupLock(lockPath, lock)
   }
 }

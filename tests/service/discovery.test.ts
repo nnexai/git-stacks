@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { existsSync, readFileSync, rmSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { provisionOfficialClient, readOfficialClientCredential } from "../../src/lib/service/credentials"
@@ -54,6 +54,24 @@ describe("v1 discovery", () => {
     expect(raw).not.toContain(provisionOfficialClient("native-test", { serviceRoot: root }).token)
     await first.stop()
     expect(existsSync(path)).toBe(false)
+  })
+
+  test("recovers legacy incomplete and dead-owner startup locks", async () => {
+    const snapshot = { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") }, currentRevision: async () => "0" }
+    for (const owner of ["", `${JSON.stringify({ pid: 2_147_483_647, nonce: crypto.randomUUID(), created_at: new Date().toISOString() })}\n`]) {
+      const root = join(tmpdir(), `git-stacks-stale-startup-${crypto.randomUUID()}`)
+      mkdirSync(root, { recursive: true, mode: 0o700 })
+      cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+      const lockPath = join(root, "startup.lock")
+      writeFileSync(lockPath, owner, { mode: 0o600 })
+      if (!owner) utimesSync(lockPath, new Date(0), new Date(0))
+
+      const service = await startManagedService({ serviceRoot: root, clientId: "native-test", snapshot })
+      cleanup.push(() => service.stop())
+      expect(service.existing).toBe(false)
+      expect(existsSync(lockPath)).toBe(false)
+      await service.stop()
+    }
   })
 
   test("authenticated native polling keeps the managed service alive", async () => {
