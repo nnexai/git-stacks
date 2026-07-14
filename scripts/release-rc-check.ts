@@ -91,7 +91,7 @@ async function main() {
   const verifyExit = await runVerifyWorkflow({ runCommand })
   if (verifyExit !== 0) process.exit(verifyExit)
 
-  const publishExit = await runCommand("bun publish --dry-run")
+  const publishExit = await runCommand("bun publish --dry-run --tag next")
   if (publishExit !== 0) process.exit(publishExit)
 
   await createTagIfNeeded(rcVersion, options)

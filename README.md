@@ -2,7 +2,7 @@
 
 Git worktree workspace manager — repo registry, templates, and multi-repo orchestration.
 
-**Why?** Switching between tasks (tickets, features, experiments) across multiple repos means juggling branches, IDE windows, and terminal sessions. `git-stacks` creates isolated worktrees for each task and opens everything in one shot. An interactive TUI dashboard lets you manage everything without leaving the terminal.
+**Why?** Switching between tasks (tickets, features, experiments) across multiple repos means juggling branches, IDE windows, and terminal sessions. `git-stacks` creates isolated worktrees for each task and opens everything in one shot. A terminal dashboard and a loopback-only browser client provide two views over the same local service-owned workspace state.
 
 ## Installation
 
@@ -125,6 +125,8 @@ git-stacks push [name]             # Push workspace branches to remote (parallel
 git-stacks label <action> <ws>     # Manage workspace labels (add/remove/list/clear)
 git-stacks env [workspace]         # Show merged env vars that would be injected at open time
 git-stacks notes add|list|clear    # Store lightweight operator notes for a workspace
+git-stacks command list [workspace]              # List resolved manual commands
+git-stacks command run [workspace] <command>     # Run a configured manual command
 ```
 
 Create a workspace from a forge change URL by pairing `--source` with the template that should own the workspace:
@@ -409,7 +411,9 @@ git-stacks service signal publish --kind activity --state waiting --source codex
   --surface-id "$GIT_STACKS_SURFACE_ID" --session-id "$GIT_STACKS_AGENT_SESSION_ID"
 ```
 
-Signals are journaled by the managed service and replayed by browser and TUI clients. `working`, `completed`, and `idle` activity remains visible history without an unread badge; `waiting`, `failed`, and undismissed notifications project attention. Notification dismissal is service-authoritative and survives client restart or reconnect.
+Signals are journaled by the managed service and replayed by browser and TUI clients. Each provider has one current lifecycle lane per terminal surface. `working` and `completed` remain visible state, `idle` removes that lane, and `waiting`, `failed`, and undismissed notifications project attention.
+
+Dismissal applies to both activity and notifications, is service-authoritative, and survives client restart or reconnect. A newer lifecycle event with the same signal identity can make that signal visible again. Opening the exact browser terminal acknowledges its surface-scoped attention; closing a terminal removes activity that can no longer lead back to a live surface.
 
 ## Browser Client
 
@@ -419,7 +423,19 @@ git-stacks web --no-open       # Print the one-use local URL
 git-stacks web --no-open --json
 ```
 
-The browser client is loopback-only and uses authoritative workspace snapshots, launch resolution, operations, and signals from the local TypeScript service. Machine paths, commands, environment values, and service credentials stay in the service. On verified Linux hosts, the service owns independent browser PTYs with multiple tabs, resize, reconnect/reload replay, bounded history, process-group cleanup, and explicit ended-session relaunch. Browser terminal capability remains disabled on unverified platforms.
+The browser client is loopback-only and receives a path- and secret-minimized projection from the local TypeScript service. Machine paths, resolved commands, environment values, and service credentials stay in the service. Pairing URLs are one-use local credentials rather than reusable API access.
+
+On verified Linux hosts, the service owns independent browser PTYs with multiple tabs, resize, bounded replay, focus restoration, inactive-tab stream suspension, and process-group cleanup. Because the shell belongs to the service rather than the page, a reload or temporary browser closure can reconnect to a live terminal while that service process remains alive. This is local process persistence, not reboot persistence: stopping the service or machine ends its PTYs. Exiting an ordinary shell removes its tab; configured command tabs stay available with their final output. Browser terminal capability remains disabled on unverified platforms.
+
+## Shared Service Architecture
+
+The TUI and browser deliberately share one machine-side core:
+
+- The Bun service owns config, filesystem and Git inspection, workspace mutations, operation state, signals, and browser PTYs.
+- `git-stacks manage` is a trusted local client of the complete typed `/v1/core` model. It renders and manages viewport state, but does not maintain a second workspace engine.
+- The browser uses the narrower `/web/api` projection and never receives trusted-only paths or launch context.
+- Both clients load an authoritative snapshot and follow server-sent events for invalidation, operations, and signal changes instead of polling the machine while navigating.
+- One-shot CLI commands continue to expose the same domain operations directly for scripting; interactive mutation paths are service-backed.
 
 ## Dashboard
 
@@ -430,13 +446,13 @@ git-stacks manage    # Interactive TUI dashboard (default when run with no args)
 The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs:
 
 - Switch tabs with `1` / `2` / `3` or `[` / `]`
-- Each tab shows a split list + detail pane — detail updates as you move the cursor
+- Each tab shows an adaptive split list + detail pane — detail updates locally as you move the cursor, and the selected pane owns scrolling
 - All dialogs render as centered overlays with dimmed backgrounds
-- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; service-backed signal previews in list rows; full signal history in the detail pane; aggregated `↑N` / `↓N` badges in list rows plus per-repo ahead/behind badges in detail view, with `?` on stale data
+- **Workspaces tab**: open, rename, sync, merge, run, clean, remove, edit YAML; service-backed signal previews in list rows; recent signals in the detail pane and the complete workspace signal list in the full-screen overlay; aggregated `↑N` / `↓N` badges in list rows plus per-repo ahead/behind badges in detail view, with `?` on stale data
   - `s` — sync workspace (per-repo progress with 30s fetch timeout)
   - `m` — open the full-screen signal overlay for the selected workspace
-  - `d` — dismiss the selected notification through the service
-  - `r` — reload data from disk
+  - `d` — dismiss the selected signal through the service
+  - `r` — request a fresh authoritative service snapshot
 - **Templates tab**: create workspace from template (`w`), edit, clone, remove; detail pane shows resolved integration overrides
 - **Repos tab**: create workspace (`n`), create template (`t`), remove; `Space` to multi-select repos
 - Detail panes show resolved integration state with source annotations (`[global]`, `[template]`, `[workspace]`)

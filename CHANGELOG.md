@@ -6,9 +6,24 @@ All notable changes to `git-stacks` are documented here.
 
 ## Unreleased
 
+No changes yet.
+
+---
+
+## [0.20.0-rc.1] - 2026-07-14
+
+### Added
+
+- An authenticated loopback service now owns revisioned workspace snapshots, typed operations, durable event replay, workspace-change monitoring, and provider-neutral signals for interactive clients.
+- `git-stacks web` provides the supported graphical workspace client. It includes workspace navigation and actions, signal attention, persistent priorities, manual commands, and service-owned multi-tab browser terminals with resize, bounded replay, focus restoration, and reconnect support.
+- Workspace `priority` is persisted in workspace YAML and applied within the same label and status groups used by the dashboards.
+- User-level signal integrations are available for Codex, Claude Code, GitHub Copilot, and OpenCode through the opt-in `git-stacks hooks` lifecycle.
+
 ### Changed
 
-- The loopback web client and Bun/TypeScript service are the supported graphical workspace path, including service-owned terminal tabs, reconnect replay, workspace operations, and unified signals.
+- The Bun service is the shared machine-side core for both interactive clients. The TUI consumes the complete trusted `/v1/core` model through a typed client, while the browser receives a narrower path- and secret-minimizing projection.
+- The TUI is now a thin presentation layer over service-owned state and mutations. It loads the complete workspace, template, repository, and integration model from the service, obtains files, notes, and signals through service endpoints, then follows server-sent invalidation and lifecycle events instead of independently rescanning the machine.
+- Browser shell processes belong to the service rather than a page. Reloading or temporarily closing the browser can reconnect to a live terminal while its service process remains alive; ordinary exited shells are removed, while configured command tabs retain their final output.
 - The unsupported GTK/Zig desktop experiment and its patched terminal dependency were retired and removed. Its final state is preserved by the `native-client-final-2026-07-14` archive tag.
 - User-level Codex, Claude Code, GitHub Copilot, and OpenCode signal hooks are now strictly opt-in. `git-stacks hooks install <provider...>`, `update`, `uninstall <provider...>`, and `status` provide an ownership-safe lifecycle; normal service and terminal startup never modify provider configuration.
 - The superseded project-local `git-stacks install --hooks` command and its separate hook-plugin implementation were removed. `git-stacks hooks` is the single supported coding-agent hook lifecycle.
@@ -17,9 +32,18 @@ All notable changes to `git-stacks` are documented here.
 
 - Workspace clone and template recreate now use transactional worktree handling: only resources created by the active operation are removed on failure, and moved local refs are restored when possible.
 - `clean --gone` fails closed when remote branch discovery is unavailable; `pull` refuses worktrees on an unexpected or detached branch.
-- Dashboard IPC preserves live socket owners, handles framed UTF-8 messages safely, and reports failed batch mutations instead of a false success.
 - Workspace recreation resolves the composed template and registry before mutation, preserves workspace identity/runtime metadata, and treats YAML write as the commit point.
 - Environment/port identifiers are validated as shell-safe names; duplicate explicit ports are rejected or deterministically reallocated with `--reallocate`.
+- TUI startup and refresh no longer show transiently empty source, issue, integration, template, or workspace sections; the service supplies complete data and the client owns only rendering and viewport state.
+- TUI detail panes use adaptive list/detail sizing and native scrolling without issuing repeated filesystem or Git requests while navigating.
+- Closing the TUI aborts its event stream and returns control immediately without tying the detached service lifetime to the dashboard process.
+- Signal dismissal now applies consistently to notifications and activity, survives reconnects, and is cleared only when a newer lifecycle event with the same signal identity arrives.
+- Browser terminal tab switching restores the correct terminal buffer and keyboard focus, and inactive tabs stop consuming streamed terminal output until visible again.
+- Orphaned terminal activity is removed when its terminal no longer exists, and sidebar provider icons are deduplicated to the currently active provider set.
+
+### Release Candidate
+
+This is the first release candidate for v0.20.0. The package version and matching tag target are `0.20.0-rc.1` / `v0.20.0-rc.1`; final `0.20.0` tagging remains separate after RC validation.
 
 ---
 

@@ -108,40 +108,26 @@ repos:
   return apiRepo
 }
 
-describe("v0.19.0 release candidate smoke", () => {
-  test("package, changelog, and README describe the RC.4 follow-up boundary", () => {
-    const rcEntry = changelogEntry("0.19.0-rc.4")
-    const rc3Entry = changelogEntry("0.19.0-rc.3")
-    const rc2Entry = changelogEntry("0.19.0-rc.2")
+describe("v0.20.0 release candidate smoke", () => {
+  test("package, changelog, and README describe the shared-core RC boundary", () => {
+    const rcEntry = changelogEntry("0.20.0-rc.1")
 
-    expect(PACKAGE_JSON.version).toBe("0.19.0-rc.4")
-    expect(CHANGELOG.indexOf("## [0.19.0-rc.4]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.3]"))
-    expect(rcEntry).toContain("v0.19.0-rc.4")
-    expect(rcEntry).toContain("Manager command-output dialog sizing")
-    expect(rcEntry).toContain("fully visible")
-    expect(rcEntry).toContain("terminal size")
-    expect(rcEntry).toContain("tails the newest output lines")
+    expect(PACKAGE_JSON.version).toBe("0.20.0-rc.1")
+    expect(CHANGELOG.indexOf("## [0.20.0-rc.1]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.4]"))
+    expect(rcEntry).toContain("v0.20.0-rc.1")
+    expect(rcEntry).toContain("shared machine-side core")
+    expect(rcEntry).toContain("git-stacks web")
+    expect(rcEntry).toContain("git-stacks hooks install")
+    expect(rcEntry).toContain("native-client-final-2026-07-14")
+    expect(rcEntry).toContain("first release candidate for v0.20.0")
 
-    expect(rc3Entry).toContain("v0.19.0-rc.3")
-    expect(rc3Entry).toContain("Manager refresh re-reads config files")
-    expect(rc3Entry).toContain("invalidates")
-    expect(rc3Entry).toContain("direct YAML edits")
-    expect(rc3Entry).toContain("separate CLI changes")
-
-    expect(rc2Entry).toContain("v0.19.0-rc.2")
-    expect(rc2Entry).toContain("Manager command-output containment")
-    expect(rc2Entry).toContain("Completion completeness repair")
-    expect(rc2Entry).toContain("Workspace-root auto-detection")
-    expect(rc2Entry.toLowerCase()).toContain("dashboard rollback progress visibility")
-    expect(rc2Entry).toContain("deferred backlog work")
-    expect(rc2Entry).not.toContain("Dashboard rollback progress visibility is now")
-
-    expect(README).toContain("git-stacks paths    # same as: git-stacks paths my-feature")
-    expect(README).toContain("The current directory may be the workspace root")
-    expect(README).toContain("Notes resolve the workspace by explicit argument first")
+    expect(README).toContain("## Shared Service Architecture")
+    expect(README).toContain("git-stacks hooks install codex")
+    expect(README).toContain("ordinary shell removes its tab")
+    expect(README).toContain("git-stacks command list [workspace]")
   })
 
-  test("release smoke names stable Phase 100-102 follow-up coverage surfaces", () => {
+  test("release smoke retains established workflow coverage surfaces", () => {
     const managerFrame = readFileSync(join(ROOT, "tests/tui/dashboard/integ-action-menu.test.tsx"), "utf8")
     const config = readFileSync(join(ROOT, "tests/lib/config.test.ts"), "utf8")
     const lifecycle = readFileSync(join(ROOT, "tests/lib/lifecycle.test.ts"), "utf8")
@@ -178,7 +164,7 @@ describe("v0.19.0 release candidate smoke", () => {
     expect(releaseScript).toContain("const rcTag = `v${rcVersion}`")
     expect(releaseScript).toContain("process.argv.includes(\"--skip-tag\")")
     expect(releaseScript).toContain("bun test tests/commands/release-rc.test.ts")
-    expect(releaseScript).toContain("bun publish --dry-run")
+    expect(releaseScript).toContain("bun publish --dry-run --tag next")
   })
 })
 

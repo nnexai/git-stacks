@@ -1,106 +1,107 @@
 # Project Direction
 
-This note captures what I would change if I were restructuring `git-stacks` end to end, based on a quick pass through the current codebase.
+`git-stacks` is a local platform for multi-repository task environments. The `0.20.0` architecture centers machine-side behavior in one Bun service and keeps interactive clients focused on presentation.
 
-I would not do a rewrite for the sake of it. The project already has a solid shape. The highest-leverage changes are structural and product-focused.
+The immediate goal is to harden this foundation through the `0.20.0` release candidates. Additional browser features can arrive incrementally afterward without creating another workspace engine.
 
-## 1. Extract A Real Core Engine
+## Architectural Direction
 
-Right now [`src/lib/workspace-ops.ts`](./src/lib/workspace-ops.ts) is the center of gravity for git, files, env, hooks, ports, and integration orchestration.
+### One Shared Machine-Side Core
 
-I would split that into domain modules such as:
+The local service is authoritative for interactive use. It owns:
 
-- `workspace-state`
-- `git-ops`
-- `env/secrets`
-- `hooks`
-- `execution`
+- complete workspace, template, repository, integration, file, and note projection
+- filesystem and Git inspection
+- workspace creation and typed mutations
+- durable operation state and progress
+- workspace-change monitoring and revision invalidation
+- provider-neutral signals and dismissal
+- browser terminal processes and replay
 
-Then both the CLI and TUI would become thin adapters over the same typed operations.
+The TUI consumes the complete trusted contract in [`src/lib/service/core-contract.ts`](./src/lib/service/core-contract.ts) through the shared client in [`src/lib/service/client.ts`](./src/lib/service/client.ts). It owns navigation, rendering, dialogs, and viewport state, but no independent persistence or Git engine.
 
-## 2. Add An Operation Runner With Rollback Semantics
+The browser uses the narrower projection under [`src/service/web`](./src/service/web). Machine paths, credentials, raw environment values, and trusted launch context stay outside that contract.
 
-This tool touches git worktrees, YAML config, ports, tmux/cmux, IDEs, and external CLIs.
+### Focused Domain Modules
 
-Failures in the middle of commands like `open`, `merge`, `clean`, or `sync` should leave behind:
+Workspace behavior is split across focused `src/lib/workspace-*.ts` modules rather than accumulating in a client or monolithic adapter. The service composes those modules into typed operations; one-shot CLI commands reuse the same behavior for scripting.
 
-- a structured operation log
-- explicit partial-success state
-- a cleanup or rollback plan
+New functionality should follow this ownership rule:
 
-The current approach is workable, but an explicit operation model would make the tool much safer at scale.
+- Machine state, persistence, Git, processes, operations, and shared policy belong in the domain core or service.
+- Client code should contain presentation, interaction, and viewport logic only.
+- Browser-safe data must be projected explicitly instead of exposing the trusted core wholesale.
+- Durable user choices belong in workspace or global YAML, not client-local storage or service-only preferences.
 
-## 3. Replace Scan-Based Config Lookup With An Indexed Store
+### Revisioned, Event-Driven Clients
 
-[`src/lib/config.ts`](./src/lib/config.ts) repeatedly scans YAML files by name. That is reasonable early on, but it becomes the wrong primitive once users have lots of repos, templates, and workspaces.
+Interactive clients load an authoritative revisioned snapshot, then follow server-sent events for invalidation, operation progress, and signals. Cursor movement, tab switching, and scrolling must not trigger repeated filesystem or Git scans.
 
-I would keep YAML as the source of truth if human-editable config remains a goal, but add an index/cache layer for:
+Events are durable enough for reconnect replay, bounded for resource safety, and supplemented by authoritative reloads after invalidation. Polling is a recovery path for interrupted operation streams, not the primary synchronization model.
 
-- fast lookup
-- consistency checks
-- duplicate detection
-- less repeated filesystem scanning
+### Explicit Process Ownership
 
-## 4. Make Integrations A First-Class Plugin Boundary
+Browser PTYs belong to the service, not the page. This allows reload and temporary browser disconnection without replacing live shells. The boundary is intentionally local and process-scoped: stopping the service or machine ends those sessions.
 
-The current integration system in [`src/lib/integrations`](./src/lib/integrations) is already one of the stronger parts of the project.
+Only visible terminal views stream output to the browser. Hidden views reconnect with bounded replay when selected. Ordinary shells disappear when their process exits; configured command tabs may retain final output as an execution record.
 
-I would push it further with:
+### Human-Editable Durable State
 
-- explicit capability contracts
-- stronger artifact typing
-- isolated failure handling
-- a path toward third-party plugins
+Repository registry, templates, workspaces, labels, and priority remain YAML source of truth under `~/.config/git-stacks/`. The service may index and cache these files, but it must preserve direct editability, schema compatibility, atomic writes, and external-change detection.
 
-The long-term value of `git-stacks` is orchestration. The integration model should be one of the strongest parts of the architecture.
+Transient service descriptors, credentials, event journals, operation records, and PTYs stay in the service-owned config area. They are implementation state, not workspace definition.
 
-## 5. Improve Onboarding And The Happy Path
+## Product Surfaces
 
-The low-level primitives are good, but the product should feel more like:
+### CLI
 
-- "start work on a ticket"
+The CLI remains the complete scriptable interface for workspace lifecycle, Git operations, files, environment inspection, notes, manual commands, integrations, hooks, diagnostics, and completion.
 
-and less like:
+### TUI
 
-- "assemble several config layers correctly"
+`git-stacks manage` remains the dense terminal-native control surface. It should retain feature depth while becoming progressively thinner over the shared service contract.
 
-I would add a more opinionated guided flow, for example:
+### Browser
 
-- `git-stacks init`
-- `git-stacks task PROJ-123`
+`git-stacks web` is the supported graphical interface. It should gain feature completeness incrementally after the core architecture is stable, using existing service operations and projections rather than browser-specific business logic.
 
-That flow could handle:
+### Native Client
 
-- repo scan
-- template creation
-- branch naming
-- labels
-- linked issue
-- open
-- push
-- PR creation
+The GTK/Zig client and patched Ghostty dependency are retired. Supporting a separate native build system and terminal fork is outside the product direction. The final implementation is archived at tag `native-client-final-2026-07-14` for historical reference only.
 
-## 6. Tighten Tests And Observability
+## Coding-Agent Integrations
 
-The custom runner in [`scripts/test-runner.ts`](./scripts/test-runner.ts) exists for real reasons, but it also signals that the internal seams could be cleaner.
+Signals are provider-neutral service state. User-level provider hooks are optional adapters and must remain strictly opt-in:
 
-I would push harder on:
+- `install` changes only providers selected by the user.
+- `update` reconciles only integrations already owned by git-stacks.
+- `uninstall` removes only selected git-stacks-owned entries.
+- Normal service, client, workspace, and terminal startup never modifies provider configuration.
 
-- dependency injection around shell, process, and filesystem boundaries
-- structured logs for every external command
-- command-level golden tests
-- clearer debugging and failure traces
+Terminal-local wrappers may provide basic lifecycle signals without installing user configuration, but they must not claim richer provider semantics than they can observe.
 
-That would reduce fragility and make it easier to evolve the product without fear.
+## `0.20.0` Release-Candidate Focus
+
+The first `0.20.0` release candidate should establish confidence in the architectural cutover rather than expand scope. Release readiness centers on:
+
+- one coherent service-owned state and mutation path for both interactive clients
+- correct TUI load, refresh, scrolling, mutation, and shutdown behavior
+- browser terminal resize, focus, reconnect, visibility streaming, exit, and cleanup behavior
+- signal lifecycle, acknowledgment, dismissal, deduplication, and stale-surface cleanup
+- loopback pairing, credential, projection, and path/secret isolation boundaries
+- opt-in and ownership-safe coding-agent hook lifecycle
+- complete packaged browser assets and release documentation
+- passing type, dependency, test, coverage-inventory, `next`-tagged publish dry-run, and RC checks
+
+## Non-Goals
+
+- A hosted control plane or remote browser service
+- Network exposure beyond loopback
+- Reintroducing a native graphical client
+- Client-specific copies of workspace, Git, operation, or signal policy
+- Implicit coding-agent configuration
+- Persisting interactive shell processes across service restart or machine reboot
 
 ## Bottom Line
 
-I would turn `git-stacks` from:
-
-- a good Bun CLI with a lot of orchestration logic
-
-into:
-
-- a small local platform for multi-repo task environments
-
-The product direction is already there. The main gap is making the core execution model more explicit, more durable, and easier to extend.
+The structural rewrite proposed by the older version of this document is now the current architecture: `git-stacks` has a shared local core, typed operations, indexed human-editable state, durable events, and thin interactive clients. The next product work should build on that center instead of adding parallel implementations.

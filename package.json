@@ -1,6 +1,6 @@
 {
   "name": "git-stacks",
-  "version": "0.19.0-rc.4",
+  "version": "0.20.0-rc.1",
   "description": "Git worktree workspace manager — templates, workspaces, and multi-repo orchestration",
   "license": "MIT",
   "author": "nnexai",

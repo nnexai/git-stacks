@@ -5,19 +5,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-bun run src/index.ts      # run the CLI (alias: bun run dev)
-bun run test              # run all tests (uses isolated test runner)
-bun test tests/lib/detect.test.ts   # run a single test file
-bun run typecheck         # type-check without emitting (tsc --noEmit)
+bun run dev                         # run the CLI from TypeScript source
+bun run test                        # run all tests with process isolation
+bun test tests/lib/detect.test.ts   # run one focused test file
+bun run typecheck                   # type-check the CLI, service, and TUI
+bun run web:typecheck               # type-check the browser client
+bun run web:build                   # build browser assets into dist/web
+bun run test:deps                   # check source dependency cycles
+bun run verify:gates                # verify command, test, and coverage inventories
+bun run scripts/release-rc-check.ts --skip-tag  # verify an RC without creating its tag
 ```
 
 **Important:** Do not use `bun test tests/` directly — it runs all test files in a shared Bun process where `mock.module()` calls from one file pollute others, producing false failures. The project's `bun run test` script (`scripts/test-runner.ts`) isolates mock-heavy files into separate processes.
 
-No build step — Bun executes TypeScript source directly. The `@/*` path alias resolves to `./src/*` but is **test-only** — production code in src/ must use relative imports (the alias is not available in the published npm package).
+The CLI, service, and TUI run directly from TypeScript. The browser client has a build step and its assets must be present in `dist/web`; `prepublishOnly` builds them and runs both typechecks plus the full test suite. The `@/*` path alias resolves to `./src/*` but is **test-only** — production code in `src/` must use relative imports because the alias is not available in the published npm package.
+
+Release-candidate verification requires a `-rc.N` package version and matching changelog heading. Its publish dry run uses npm's `next` dist-tag so a prerelease cannot accidentally validate as `latest`.
 
 ## Architecture
 
-`git-stacks` is a CLI tool that manages git worktrees across multiple repos. It has three core concepts:
+`git-stacks` is a local workspace platform for managing git worktrees across multiple repos. It has three durable concepts:
 
 **Repo Registry** — a flat list of local git repos with their names, paths, types, and default branches. Stored at `~/.config/git-stacks/registry.yml`. Managed via `git-stacks repo add|scan|list|remove`.
 
@@ -27,63 +34,70 @@ No build step — Bun executes TypeScript source directly. The `@/*` path alias 
 
 The global config is at `~/.config/git-stacks/config.yml`. The default `workspace_root` is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
 
+Interactive clients use one machine-side core. The authenticated loopback service owns complete workspace projection, mutations, operation state, events, signals, monitoring, and browser PTYs. The TUI consumes the trusted typed `/v1/core` contract. The browser consumes a narrower `/web/api` projection that excludes trusted paths, resolved commands, environment values, and credentials. One-shot CLI commands remain script-friendly adapters over the same domain modules.
+
 ### Source layout
 
 ```
 src/
-  index.ts              — commander entrypoint, registers all commands
+  index.ts                  — Commander entrypoint and version bootstrap
   commands/
-    workspace.ts        — new|clone|open|list|status|clean|close|remove|cd|merge|run|rename|sync|push|pull
-    template.ts         — template * subcommands (thin wrappers over tui/)
-    repo.ts             — repo add|scan|list|remove
-    doctor.ts           — health check and drift detection
-    config.ts           — config [show] interactive config wizard
-    completion.ts       — completion [bash|zsh|fish] shell completion output
-    install.ts          — install --hooks agent framework hook installation
-    integration.ts      — integration list|<id> config show|example
-    label.ts            — label add|remove|list|clear
-    message.ts          — message send|list|clear
+    workspace.ts            — workspace lifecycle, status, Git, shell, env, and path commands
+    command.ts              — list and run explicit manual workspace commands
+    files.ts / notes.ts     — explicit file synchronization and operator notes
+    hooks.ts                — opt-in user-level coding-agent signal hooks
+    service.ts / web.ts     — local service control, signal publication, and browser client
+    template.ts / repo.ts   — template and registry management
+    integration.ts          — integration inspection and helper commands
+    config.ts / doctor.ts   — configuration and drift checks
   lib/
-    config.ts           — Zod schemas + YAML read/write for templates, workspaces, global config
-    paths.ts            — all path constants and helpers (single source of truth)
-    git.ts              — git worktree/branch/merge/push/pull/ahead-behind via Bun `$` shell
-    workspace-ops.ts    — core business logic: open, close, clean, remove, merge, rename, sync, push, pull
-    lifecycle.ts        — runHooks() / runHooksCaptured() — shell hook execution
-    composition.ts      — template includes: recursive merge with circular dependency detection
-    files.ts            — file copy/symlink operations from templates
-    detect.ts           — repo type detection and directory scanning
-    secrets.ts          — pluggable secret resolution (${{ resolver:path }} syntax)
-    ports.ts            — file-locked port allocation across workspaces
-    messages.ts         — JSONL notifications + Unix socket IPC to TUI dashboard
-    labels.ts           — workspace label matching
-    env.ts              — env var formatting (table, shell, dotenv, json)
-    concurrency.ts      — mapLimited() async concurrency limiter
-    completion-generator.ts — auto-generates bash/zsh/fish completions from commander.js tree
-    agent-hooks/        — CI-agent hook generators (Claude Code, Copilot)
-    integrations/
-      types.ts          — Integration interface, IntegrationContext, resolveEnabled helpers
-      runner.ts         — orchestrates generate -> open -> window detection across integrations
-      vscode.ts / intellij.ts / cmux.ts / tmux.ts / niri.ts / aerospace.ts — IDE/terminal/WM plugins
-      github.ts / gitlab.ts / gitea.ts — forge plugins
-      jira.ts           — issue tracker plugin
-      forge-utils.ts / issue-utils.ts / wizard-helpers.ts — shared helpers
-      index.ts          — registry: `export const integrations = [...]`
+    cli-program.ts          — complete Commander tree shared by runtime and completion audits
+    config.ts / paths.ts    — Zod-validated YAML and path constants
+    workspace-creation.ts   — prompt-free, race-safe creation engine
+    workspace-lifecycle.ts  — open, close, clean, remove, merge, and rename
+    workspace-git.ts        — sync, push, pull, and Git status operations
+    workspace-env.ts        — workspace/repository environment construction
+    workspace-resolution.ts — indexed workspace/template resolution
+    workspace-*.ts          — focused YAML, status, recreate, source, priority, and command modules
+    operation-runner.ts     — structured operation execution and progress
+    lifecycle.ts            — declarative workspace hook execution
+    composition.ts          — recursive template composition
+    files.ts / secrets.ts   — file materialization and secret reference resolution
+    integrations/           — IDE, terminal, window-manager, forge, and issue plugins
+    agent-hooks/            — owned user-level hook lifecycle and terminal-local wrappers
+    service/
+      contract.ts           — strict public service, operation, event, and signal schemas
+      core-contract.ts      — complete trusted local-client read/mutation model
+      core-state.ts         — complete service-owned projection builder
+      client.ts             — shared authenticated client used by the TUI
+      snapshot.ts           — revisioned browser-safe workspace snapshot engine
+      operations.ts         — durable idempotent operation registry
+      event-journal.ts      — ordered durable event and signal replay
+      signal-state.ts       — current lifecycle lanes, attention, and dismissal reduction
+  service/
+    main.ts                 — discovery, startup locking, lifecycle, and subsystem composition
+    server.ts               — authenticated `/v1` HTTP and SSE transport
+    snapshot-adapter.ts     — domain-to-service projection adapter
+    web/                    — pairing, browser projection/routes, security, and PTY manager
+  web-client/               — thin browser UI and xterm presentation
   tui/
-    template-wizard.ts  — interactive prompts for `template new` and `template edit`
-    repo-wizard.ts      — interactive prompts for `repo scan`
-    workspace-wizard.ts — interactive prompts for `git-stacks new`
-    workspace-clone.ts  — interactive prompts for `git-stacks clone`
-    utils.ts            — safeText() wrapper normalising @clack/prompts empty-string quirk
-    dashboard/          — interactive TUI for `git-stacks manage` (SolidJS + OpenTUI)
+    *-wizard.ts             — interactive creation and editing prompts
+    dashboard/              — thin SolidJS/OpenTUI service client and renderer
 tests/
-  helpers.ts            — makeTmpDir/cleanup/touch/write filesystem helpers
-  lib/                  — unit tests (bun:test, Jest-compatible API)
+  commands/ / lib/ / service/ / tui/ — focused unit and integration coverage
+scripts/
+  build-web.ts              — browser asset build
+  test-runner.ts            — process-isolated test orchestration
+  verify*.ts                — local release and coverage gates
 ```
 
 ### Key patterns
 
-- All YAML I/O goes through `src/lib/config.ts`; schemas are Zod-validated on read. Atomic writes via tmp+fsync+rename.
-- Workspace/template lookups scan all YAML files and match by `name` field, not filename (handles filename drift).
+- YAML entities are Zod-validated, indexed by their in-file `name`, and atomically written with tmp+fsync+rename semantics. Preserve compatibility with existing schema version 1 files.
+- The service is authoritative for interactive state. Add machine-side reads or mutations to the service/core contract and shared client instead of reintroducing direct TUI filesystem access.
+- The browser contract must remain narrower than `CoreState`: do not expose machine paths, credentials, raw environment values, or unapproved launch details through `/web/api`.
+- Interactive clients load one complete snapshot and refresh from service invalidation events. Navigation, selection, and viewport changes must remain local and must not trigger filesystem or Git scans.
+- Browser PTYs are service-owned. Inactive views suspend output streaming; ordinary shell exit deletes the terminal, while configured command sessions may retain ended output.
 - I/O tests redirect `process.env.HOME` before dynamically importing config to isolate the config directory.
 - `src/tui/utils.ts:safeText` must be used instead of `p.text` directly because `@clack/prompts` returns `undefined` (not `""`) on empty input.
 - **Repo registry is the source of truth for repo paths**: Templates reference repos by `name` (registry key), not by path. `WorkspaceRepo.repo` stores the registry name; `main_path` and `task_path` are resolved at workspace creation time.
@@ -110,7 +124,9 @@ Templates and workspaces define hook arrays (shell commands executed in order by
 - Workspace hooks: `pre_create`, `post_create`, `pre_open`, `post_open`, `pre_close`, `post_close`, `post_merge`, `pre_remove`
 - Per-repo hooks (within workspace YAML): `pre_open`
 
-Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path; `workspace-ops.ts` calls `mergeEnv()` to combine them and `writeEnvFiles()` to write merged env to each repo at the configured path.
+Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE_BRANCH`, `GS_WORKSPACE_PATH`, `GS_REPO_NAME`, `GS_TRIGGERED_BY`, and others. Templates and workspaces can also define `env: Record<string, string>` and an optional `env_file` path; `workspace-env.ts` owns merged environment construction and file output.
+
+Coding-agent signal integrations are separate from workspace lifecycle hooks. They are user-level, ownership-marked, and strictly opt-in through `git-stacks hooks install|update|uninstall|status`. Starting the service, TUI, web client, or terminal must never install or modify provider configuration implicitly.
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
@@ -132,7 +148,7 @@ Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE
 <!-- GSD:stack-start source:codebase/STACK.md -->
 ## Technology Stack
 
-- **Runtime**: Bun (latest) — executes TypeScript directly, no build step
+- **Runtime**: Bun (latest) — executes the CLI, service, and TUI TypeScript directly
 - **CLI**: Commander.js ^14.0.3 — command tree + shell completion introspection
 - **Validation**: Zod ^4.3.6 — all YAML config validated on read
 - **YAML**: yaml ^2.8.3 — all config I/O
@@ -140,6 +156,7 @@ Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE
 - **Prompts**: @clack/prompts ^1.2.0 (use `safeText()` wrapper)
 - **TypeScript**: ^6.0.2 (type-check only via `tsc --noEmit`)
 - **Test**: bun:test + custom runner (`scripts/test-runner.ts`) for mock isolation
+- **Browser terminal**: xterm.js + fit/WebGL addons; bundled into `dist/web`
 - **Shell tools**: git >=2.24, plus optional: code, idea, tmux, cmux, niri, aerospace, gh, glab, tea, jira, secret-tool/security
 <!-- GSD:stack-end -->
 
@@ -160,18 +177,19 @@ Hooks receive injected environment variables: `GS_WORKSPACE_NAME`, `GS_WORKSPACE
 <!-- GSD:architecture-start source:ARCHITECTURE.md -->
 ## Architecture
 
-Layers: `commands/` (CLI parsing) -> `lib/workspace-ops.ts` (business logic) -> `lib/config.ts` (YAML I/O) + `lib/git.ts` (git ops). TUI in `tui/` (wizards + SolidJS dashboard). All paths from `lib/paths.ts`.
+The focused modules under `lib/workspace-*.ts` and `lib/integrations/` own domain behavior. One-shot commands call those modules through thin Commander adapters. Interactive clients go through the authenticated local service: the TUI uses the complete trusted `lib/service/core-contract.ts` model, while the browser uses the narrower projection under `service/web/`. Both clients follow revisioned snapshots and durable SSE events instead of implementing their own workspace engines.
 
 Key subsystems beyond core workspace lifecycle:
 - **Integrations** (`lib/integrations/`): 10 plugins (vscode, intellij, cmux, tmux, niri, aerospace, github, gitlab, gitea, jira) orchestrated by `runner.ts`
 - **Composition** (`lib/composition.ts`): Template `includes` with recursive merge, circular dependency detection
 - **Secrets** (`lib/secrets.ts`): `${{ resolver:path }}` env var resolution via pluggable resolvers (keychain, env, cmd)
 - **Ports** (`lib/ports.ts`): File-locked contiguous port allocation across workspaces
-- **Messages** (`lib/messages.ts`): JSONL per-workspace notifications + Unix socket IPC to running TUI
-- **Agent hooks** (`lib/agent-hooks/`): Generate CI-style hooks for Claude Code and Copilot into workspace repos
+- **Service core** (`lib/service/`, `service/`): authenticated discovery, complete trusted state, browser-safe projection, typed mutations, durable operations/events, and signals
+- **Browser terminals** (`service/web/terminal-manager.ts`): service-owned Linux PTYs with bounded replay and visible-view streaming
+- **Agent hooks** (`lib/agent-hooks/`): opt-in owned user-level integrations for Codex, Claude Code, Copilot, and OpenCode, plus service-local terminal wrappers
 - **Labels** (`lib/labels.ts`): Workspace categorization and filtering
 
-All state persisted to disk as YAML/JSONL at `~/.config/git-stacks/`. No runtime-only state.
+Durable user configuration remains human-editable YAML under `~/.config/git-stacks/`. Service descriptors, credentials, operation/event journals, and runtime PTYs live under the service-owned config area; PTYs are intentionally process-lifetime state rather than durable workspace definition.
 <!-- GSD:architecture-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->
