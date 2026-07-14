@@ -1,0 +1,8 @@
+{
+  "name": "git-stacks-spike-019-filesystem-coherency",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node probe.mjs"
+  }
+}

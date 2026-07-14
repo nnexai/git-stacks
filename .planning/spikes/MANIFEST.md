@@ -41,5 +41,6 @@ The current migration theme additionally evaluates a Node-default distribution a
 | 016 | node-pty-runtime | standard | Node PTY behavior, lifecycle, resource, dependency, and distribution parity | PARTIAL | node, terminal, pty, macos, linux, dependencies |
 | 017 | node-service-transport | standard | Node HTTP, SSE, WebSocket, backpressure, replay, auth, and shutdown parity | VALIDATED | node, service, http, sse, websocket, backpressure, dependencies |
 | 018 | node-core-packages | standard | Runtime-neutral core execution and enforceable CLI/service/web/TUI/protocol package boundaries | VALIDATED | node, core, packages, architecture, esm, dependencies |
+| 019 | filesystem-coherency | standard | Daemonless CLI writes, service watcher reconciliation, atomic replacement, and narrow concurrency boundaries | PARTIAL | node, filesystem, atomic-write, watcher, concurrency, macos, linux |
 
 Unsupported desktop-renderer experiments were removed from the active branch and remain available through repository history and the archive tag recorded in `.planning/notes/native-client-retirement.md`.
