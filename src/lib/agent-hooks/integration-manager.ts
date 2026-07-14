@@ -145,7 +145,8 @@ function dedicatedPath(home: string, provider: "copilot" | "opencode"): string {
 }
 
 function legacyDedicatedPath(home: string, provider: "copilot" | "opencode"): string | undefined {
-  return provider === "opencode" ? join(home, ".config/opencode/plugins/git-stacks-attention.js") : undefined
+  const retiredPlugin = ["git-stacks", "attention.js"].join("-")
+  return provider === "opencode" ? join(home, ".config/opencode/plugins", retiredPlugin) : undefined
 }
 
 function removeLegacyDedicatedIntegration(home: string, provider: "copilot" | "opencode"): void {

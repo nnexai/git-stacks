@@ -35,7 +35,7 @@ describe("service authentication admission", () => {
 
   test("returns one generic rejection for every unauthenticated bearer shape", () => {
     const serviceRoot = root()
-    const issued = provisionOfficialClient("linux", { serviceRoot, randomBytes: () => Buffer.alloc(32, 4) })
+    const issued = provisionOfficialClient("service-test", { serviceRoot, randomBytes: () => Buffer.alloc(32, 4) })
     const rejected = [
       undefined,
       "",
@@ -46,7 +46,7 @@ describe("service authentication admission", () => {
       `bearer ${issued.token}`,
       `Bearer ${issued.token} extra`,
     ].map((authorization) => authenticateAdmission(authorization, { serviceRoot }))
-    revokeCredential("linux", { serviceRoot })
+    revokeCredential("service-test", { serviceRoot })
     rejected.push(authenticateAdmission(`Bearer ${issued.token}`, { serviceRoot }))
 
     for (const result of rejected) expect(result).toEqual(UNAUTHENTICATED_RESPONSE)
@@ -69,10 +69,10 @@ describe("service authentication admission", () => {
 
   test("returns a stable secret-free authenticated context", () => {
     const serviceRoot = root()
-    const issued = provisionOfficialClient("linux", { serviceRoot, randomBytes: () => Buffer.alloc(32, 5) })
+    const issued = provisionOfficialClient("service-test", { serviceRoot, randomBytes: () => Buffer.alloc(32, 5) })
     expect(authenticateAdmission(`Bearer ${issued.token}`, { serviceRoot })).toEqual({
       ok: true,
-      client: { clientId: "linux", capabilities: ["service:v1"] },
+      client: { clientId: "service-test", capabilities: ["service:v1"] },
     })
     expect(JSON.stringify(authenticateAdmission(`Bearer ${issued.token}`, { serviceRoot }))).not.toContain(issued.token)
   })

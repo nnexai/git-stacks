@@ -25,30 +25,30 @@ describe("official client credentials", () => {
     const serviceRoot = root()
     const tokens = [Buffer.alloc(32, 1), Buffer.alloc(32, 2)]
     const options = { serviceRoot, randomBytes: () => tokens.shift()!, now: () => new Date("2026-07-11T00:00:00Z") }
-    const first = provisionOfficialClient("linux", options)
-    const reused = provisionOfficialClient("linux", options)
-    const other = provisionOfficialClient("macos", options)
+    const first = provisionOfficialClient("client-a", options)
+    const reused = provisionOfficialClient("client-a", options)
+    const other = provisionOfficialClient("client-b", options)
 
     expect(reused).toEqual(first)
     expect(other.token).not.toBe(first.token)
     expect(lstatSync(join(serviceRoot, "credentials")).mode & 0o777).toBe(0o700)
-    expect(lstatSync(join(serviceRoot, "credentials", "linux.json")).mode & 0o777).toBe(0o600)
-    expect(readOfficialClientCredential("linux", { serviceRoot })).toEqual(first)
+    expect(lstatSync(join(serviceRoot, "credentials", "client-a.json")).mode & 0o777).toBe(0o600)
+    expect(readOfficialClientCredential("client-a", { serviceRoot })).toEqual(first)
   })
 
   test("revokes only the selected client and requires explicit replacement", () => {
     const serviceRoot = root()
     let byte = 3
     const options = { serviceRoot, randomBytes: () => Buffer.alloc(32, byte++) }
-    const linux = provisionOfficialClient("linux", options)
-    const macos = provisionOfficialClient("macos", options)
-    revokeCredential("linux", { serviceRoot })
+    const first = provisionOfficialClient("client-a", options)
+    const second = provisionOfficialClient("client-b", options)
+    revokeCredential("client-a", { serviceRoot })
 
-    expect(verifyCredential(linux.token, { serviceRoot })).toBeNull()
-    expect(verifyCredential(macos.token, { serviceRoot })?.clientId).toBe("macos")
-    expect(() => provisionOfficialClient("linux", options)).toThrow(/replacement/i)
-    const replacement = provisionOfficialClient("linux", { ...options, replaceRevoked: true })
-    expect(replacement.token).not.toBe(linux.token)
+    expect(verifyCredential(first.token, { serviceRoot })).toBeNull()
+    expect(verifyCredential(second.token, { serviceRoot })?.clientId).toBe("client-b")
+    expect(() => provisionOfficialClient("client-a", options)).toThrow(/replacement/i)
+    const replacement = provisionOfficialClient("client-a", { ...options, replaceRevoked: true })
+    expect(replacement.token).not.toBe(first.token)
   })
 
   test("rejects corrupt, permissive, and symlinked credential paths without exposing tokens", () => {
@@ -71,9 +71,9 @@ describe("official client credentials", () => {
 
   test("uses constant-time compatible matching and returns no secret context", () => {
     const serviceRoot = root()
-    const issued = provisionOfficialClient("linux", { serviceRoot, randomBytes: () => Buffer.alloc(32, 9) })
+    const issued = provisionOfficialClient("client-a", { serviceRoot, randomBytes: () => Buffer.alloc(32, 9) })
     expect(verifyCredential(`${issued.token}x`, { serviceRoot })).toBeNull()
     expect(verifyCredential("wrong", { serviceRoot })).toBeNull()
-    expect(verifyCredential(issued.token, { serviceRoot })).toEqual({ clientId: "linux", capabilities: ["service:v1"] })
+    expect(verifyCredential(issued.token, { serviceRoot })).toEqual({ clientId: "client-a", capabilities: ["service:v1"] })
   })
 })
