@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebTransport certificate pinning · Spike 011</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <div class="eyebrow">git-stacks · security spike 011</div>
+          <h1>WebTransport certificate pinning</h1>
+          <p id="certificate-description">Real browser handshakes against a short-lived, self-signed ECDSA certificate.</p>
+        </div>
+        <div id="support" class="badge pending">checking support</div>
+      </header>
+
+      <section class="controls" aria-label="Connection tests">
+        <button id="connect-correct" type="button">Connect with correct pin</button>
+        <button id="connect-wrong" class="secondary" type="button">Try wrong pin</button>
+        <button id="reconnect" class="secondary" type="button">Close and reconnect</button>
+        <button id="run-all" class="accent" type="button">Run all checks</button>
+      </section>
+
+      <section class="facts">
+        <div><span>Bootstrap origin</span><code id="origin"></code></div>
+        <div><span>WebTransport target</span><code id="target"></code></div>
+        <div><span>SHA-256 leaf pin</span><code id="pin"></code></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <h2>Checks</h2>
+          <span id="summary">not run</span>
+        </div>
+        <div id="checks" class="checks"></div>
+      </section>
+
+      <section>
+        <div class="section-heading"><h2>Forensic log</h2><button id="clear" class="text" type="button">Clear</button></div>
+        <pre id="log" aria-live="polite"></pre>
+      </section>
+    </main>
+    <script type="module" src="/client.js"></script>
+  </body>
+</html>

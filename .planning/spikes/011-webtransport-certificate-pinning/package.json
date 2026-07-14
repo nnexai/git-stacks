@@ -1,0 +1,25 @@
+{
+  "name": "git-stacks-webtransport-certificate-pinning-spike",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types server.ts",
+    "check": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@fails-components/webtransport": "1.6.6",
+    "@fails-components/webtransport-transport-http3-quiche": "1.6.6",
+    "@peculiar/x509": "2.0.0",
+    "reflect-metadata": "0.2.2"
+  },
+  "trustedDependencies": [
+    "@fails-components/webtransport-transport-http3-quiche"
+  ],
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "^6.0.2"
+  }
+}
