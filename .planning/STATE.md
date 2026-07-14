@@ -1,53 +1,62 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.20.0
-milestone_name: Local Web Workspace Client
-current_phase: 107.4
-current_phase_name: Core-Centred Client Architecture
-status: Complete; maintenance mode pending the next milestone decision
-stopped_at: Centralized trusted clients on the service-owned core architecture
-last_updated: "2026-07-14T16:59:12+02:00"
-last_activity: 2026-07-14
-last_activity_desc: centralized the OpenTUI and browser clients on shared service contracts and operation authority
+milestone: v0.21.0
+milestone_name: Node Core and Client Architecture
+current_phase: 108
+current_phase_name: Package and Runtime Foundation
+status: Planned; ready for Phase 108 execution
+stopped_at: Full migration roadmap and implementation blueprints prepared
+last_updated: "2026-07-15T00:25:02+02:00"
+last_activity: 2026-07-15
+last_activity_desc: planned the Node-default shared-core migration after validating runtime, transport, package, and filesystem risks
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_phases: 8
+  completed_phases: 0
+  total_plans: 8
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Current Position
 
-The supported browser and OpenTUI clients are backed by one Bun/TypeScript service authority. Phase 107.4 centralizes trusted client reads, mutations, events, and shared presentation contracts. No next milestone has been selected.
+Phase: 108 of 115 (Package and Runtime Foundation)
+Plan: 108-PLAN.md
+Status: Ready to execute
+Last activity: 2026-07-15 — v0.21.0 migration milestone fully planned
 
-## Supported Surfaces
+## Decisions
 
-- CLI workspace lifecycle and integrations
-- OpenTUI dashboard
-- Loopback web client
-- Local workspace, operation, event, signal, and browser-terminal service
+- Node 24 LTS is the default runtime target for core, CLI, service, and web distribution.
+- TypeScript stays on 6.x for this migration.
+- The existing CLI remains local-only and daemonless; ordinary commands invoke the core directly.
+- The Node service owns persistent snapshots, operations, events, signals, authentication, and terminal sessions.
+- Web and optional TUI clients remain thin service clients; Bun is isolated to the optional OpenTUI package.
+- `node-pty` `1.2.0-beta.14` is accepted temporarily and must be exact-pinned, prebuild-only for supported installs, actual-host tested, and reviewed before each update.
+- Files are authoritative. Watchers provide latency; aggregate content reconciliation provides correctness.
+- No global lock is introduced. Only semantic per-target read-modify-write operations may coordinate across processes.
+- Protocol and terminal policy remain carrier-neutral so future encrypted remote clients do not require another core rewrite.
+- Migration phases cut callers over and delete old implementations; temporary shims may forward but never own behavior.
 
-## Current Constraints
+## Validated Inputs
 
-- Browser terminals are retained only for the lifetime of the managed service process.
-- Browser terminal capability is disabled on unverified platforms.
-- Remote hosting and shared terminal writing remain out of scope.
+- Spike 016: node-pty behavior and four-platform prebuild shape; beta adoption explicitly accepted.
+- Spike 017: Node HTTP, SSE, WebSocket, backpressure, auth, replay, and shutdown.
+- Spike 018: Node-compatible core and enforceable package boundaries.
+- Spike 019: filesystem-authoritative synchronization, plus required atomic-write and lost-update corrections.
+- Spikes 011-015: future remote identity, reconnect, framing, backpressure, and encrypted-carrier constraints to preserve.
 
 ## Blockers/Concerns
 
-- None for the supported Linux web-client path.
-- Future platform enablement requires actual-host PTY and process-tree cleanup evidence.
+- Actual macOS x64/arm64 PTY lifecycle and watcher behavior is a release gate, not an architecture blocker.
+- The accepted PTY version is a beta and must not float; release notes and dependency policy must make the exception explicit.
+- Current fixed `.tmp` writes and metadata-only fallback fingerprints must be replaced before concurrent Node CLI/service use is considered safe.
 
-### Quick Tasks Completed
+## Execution Boundary
 
-| # | Description | Date | Commit | Status | Directory |
-|---|---|---|---|---|---|
-| 260714-mvm | Make user-level coding-agent signal hooks opt-in with provider-selected install/uninstall and installed-only update | 2026-07-14 | 795c1219 | Verified | [260714-mvm-make-coding-agent-hook-integrations-stri](./quick/260714-mvm-make-coding-agent-hook-integrations-stri/) |
-| 260714-mez | Retire and completely remove the unsupported native GTK/libghostty client while preserving and generalizing the web service foundations | 2026-07-14 | 004b5679 | Verified | [260714-mez-retire-and-completely-remove-the-unsuppo](./quick/260714-mez-retire-and-completely-remove-the-unsuppo/) |
+Planning is complete. No migration source changes, package-version bump, tag, push, or release have been performed by this planning pass.
 
 ## Session Continuity
 
-No active phase handoff. Start the next product milestone from `PROJECT.md`, `REQUIREMENTS.md`, and `ROADMAP.md`.
+Begin with [Phase 108](./phases/108-package-and-runtime-foundation/108-PLAN.md). Do not start downstream package moves until its boundary tests and build graph pass.

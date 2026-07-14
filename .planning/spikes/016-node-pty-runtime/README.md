@@ -3,7 +3,7 @@ spike: 016
 name: node-pty-runtime
 type: standard
 validates: "Given the service terminal policy, when Bun.Terminal is replaced by Node and node-pty, then interactive I/O, resize, EOF exit, detached retention, bounded high-volume output, and process-tree cleanup remain viable on supported platforms"
-verdict: PARTIAL
+verdict: VALIDATED
 related: [010, 014]
 tags: [node, terminal, pty, macos, linux, dependencies]
 ---
@@ -18,7 +18,7 @@ Given the existing service-owned terminal policy, when `Bun.Terminal` is replace
 
 | Approach | Tool | Pros | Cons | Status |
 |---|---|---|---|---|
-| Established Node PTY binding | [`microsoft/node-pty`](https://github.com/microsoft/node-pty) | Microsoft-maintained, MIT, used by VS Code, Linux/macOS support, resize and process lifecycle API | Native addon; stable 1.1.0 lacks Linux prebuilds | Selected with release gate |
+| Established Node PTY binding | [`microsoft/node-pty`](https://github.com/microsoft/node-pty) | Microsoft-maintained, MIT, used by VS Code, Linux/macOS support, resize and process lifecycle API | Native addon; stable 1.1.0 lacks Linux prebuilds | Selected as exact-pinned temporary beta |
 | Keep Bun PTY in a sidecar | `Bun.Terminal` | Already proven by the current service | Defeats the Node-default service distribution and leaves two runtimes in the machine authority | Rejected |
 | Pure Node implementation | Node standard library | No native dependency | Node does not expose a standard pseudoterminal API | Not feasible |
 
@@ -53,8 +53,8 @@ The report includes timestamped check events, terminal and child process IDs, by
 
 ## Results
 
-**PARTIAL** — replacing `Bun.Terminal` with `node-pty` is behaviorally feasible, and the current beta demonstrates the required prebuilt Linux x64/arm64 plus macOS x64/arm64 distribution shape. The migration should not ship against stable 1.1.0 if the goal is installation without a compiler, and should not adopt a beta dependency merely to gain Linux prebuilds.
+**VALIDATED** — replacing `Bun.Terminal` with `node-pty` is behaviorally feasible, and `1.2.0-beta.14` demonstrates the required prebuilt Linux x64/arm64 plus macOS x64/arm64 distribution shape. On 2026-07-15 the product owner explicitly accepted this beta as a temporary, exact-pinned dependency for the v0.21 migration.
 
-The release gate is either a stable Microsoft `node-pty` release carrying the four required Unix prebuilds, or a consciously maintained git-stacks binary distribution process with equivalent provenance, signing, Node ABI coverage, and Linux/macOS CI. Actual macOS arm64 and x64 runtime tests remain mandatory; package contents and upstream support are evidence of feasibility, not host validation.
+The acceptance is conditional rather than open-ended: package integrity/provenance is locked, updates are deliberate, supported installs must use the four upstream prebuilds without a compiler, and actual Linux/macOS host tests remain mandatory. A stable Microsoft release with equivalent prebuilds should replace the beta when available. Package contents and upstream support establish feasibility, not host validation.
 
 The service terminal core should gain a narrow PTY adapter (`write`, `resize`, `kill`, `onData`, `onExit`, `pid`) before the runtime cutover. Replay, visibility, attachment backpressure, signal filtering, and session durability stay above that adapter and must not be reimplemented inside a Node-specific manager.

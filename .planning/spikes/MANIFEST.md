@@ -38,7 +38,7 @@ The current migration theme additionally evaluates a Node-default distribution a
 | 013 | secure-reconnect-port-takeover | horizontal | Helper epoch leases, reconnect, abrupt loss, and hostile localhost port reuse | VALIDATED | security, identity, reconnect, browser, macos |
 | 014 | terminal-stream-viability | horizontal | Framed terminal throughput, backpressure, visibility, replay, cancellation, and multiplexing | VALIDATED | security, terminal, webtransport, backpressure, macos |
 | 015 | pinned-tls-helper-relay | horizontal | Production-first encrypted helper-to-remote carrier without public PKI or browser trust changes | VALIDATED | security, tls, remote, bun, macos, dependencies |
-| 016 | node-pty-runtime | standard | Node PTY behavior, lifecycle, resource, dependency, and distribution parity | PARTIAL | node, terminal, pty, macos, linux, dependencies |
+| 016 | node-pty-runtime | standard | Node PTY behavior, lifecycle, resource, dependency, and distribution parity | VALIDATED | node, terminal, pty, macos, linux, dependencies |
 | 017 | node-service-transport | standard | Node HTTP, SSE, WebSocket, backpressure, replay, auth, and shutdown parity | VALIDATED | node, service, http, sse, websocket, backpressure, dependencies |
 | 018 | node-core-packages | standard | Runtime-neutral core execution and enforceable CLI/service/web/TUI/protocol package boundaries | VALIDATED | node, core, packages, architecture, esm, dependencies |
 | 019 | filesystem-coherency | standard | Daemonless CLI writes, service watcher reconciliation, atomic replacement, and narrow concurrency boundaries | PARTIAL | node, filesystem, atomic-write, watcher, concurrency, macos, linux |

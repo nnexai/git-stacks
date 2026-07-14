@@ -1,6 +1,6 @@
 ---
 id: SEED-001
-status: dormant
+status: promoted
 planted: 2026-07-14
 planted_during: v0.20.0 / post-Phase 107.4
 trigger_when: when planning the next architectural milestone after v0.20.0-rc.1
@@ -56,4 +56,4 @@ Surface this seed before adding substantial web feature parity or remote-client 
 
 ## Notes
 
-This is an architectural intention, not an implementation commitment. Spike the Node process/PTY/server replacements, package boundaries, filesystem coherency, and cross-platform distribution before promoting it into a milestone.
+Promoted into milestone v0.21.0 on 2026-07-15 after Spikes 016-019. The user explicitly accepted the exact-pinned `node-pty` beta as a temporary dependency; actual-host Linux/macOS validation remains a release gate.

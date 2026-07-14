@@ -1,5 +1,29 @@
 # Milestones
 
+## v0.20.0 Local Web Workspace Client (Completed: 2026-07-14)
+
+**Phases completed:** 4 foundation/delivery phases represented by 104, 107.1, 107.3, and 107.4; the retained phase archive contains the final web-client and core-centralization plans.
+
+**Key accomplishments:**
+
+- Authenticated loopback service with authoritative snapshots, stable identities, operations, replayable events, bounded clients, and managed lifecycle.
+- Provider-neutral durable workspace signals with exact terminal-surface ownership, dismissal, stale cleanup, and deduplicated active-agent presentation.
+- Thin paired browser client with workspace operations, multiple service-owned PTYs, visibility-aware streaming, bounded replay, reconnect, focus, resize, title, exit, and process cleanup.
+- Shared trusted service projection and official client used by the OpenTUI dashboard, removing independent client-side Git/config/process authority.
+- Browser security boundaries for Host, Origin, Fetch Metadata, scoped principals, quotas, projections, and local-only terminal capability.
+- Retirement and complete removal of the unsupported native GTK/libghostty client, preserved through its archive tag.
+- Opt-in install/update/uninstall management for coding-agent signal hooks.
+
+**Release boundary:**
+
+- Package preparation reached `0.20.0-rc.1`; milestone completion records architectural/product delivery and does not imply a final tag, push, or npm release.
+- Browser terminals remain process-local to the service and are not a durable multiplexer.
+- Remote access remains deferred; secure remote transport spikes 011-015 are preserved as future design evidence.
+
+**Archives:** [roadmap](./milestones/v0.20.0-ROADMAP.md), [requirements](./milestones/v0.20.0-REQUIREMENTS.md), [phase artifacts](./milestones/v0.20.0-phases/)
+
+---
+
 ## v0.19.0 Operator Control Center (Release Candidate Follow-up Active)
 
 **Phases completed:** 5 phases complete; 4 RC follow-up phases planned

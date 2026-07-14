@@ -53,6 +53,6 @@
 ## Tools and Libraries
 
 - `ws` 8.21.1 is the validated Node WebSocket adapter: MIT, no required transitive runtime dependencies, and sufficient backpressure/lifecycle APIs.
-- `node-pty` is the validated Node PTY API shape, but production adoption is gated on a stable Microsoft release carrying Linux x64/arm64 and macOS x64/arm64 prebuilds, or an explicitly maintained equivalent distribution process.
+- `node-pty@1.2.0-beta.14` is the accepted temporary Node PTY dependency. Pin it exactly, verify package integrity and the Linux x64/arm64 plus macOS x64/arm64 prebuilds, forbid compiler fallback on supported installs, run actual-host lifecycle tests, and review each update explicitly. Move to an equivalent stable Microsoft release when available.
 - esbuild is acceptable as an MIT-licensed build-time tool for project-code ESM output; runtime dependencies remain external.
 - Raw `fs.watch` plus content reconciliation is preferred initially over adding Chokidar for the small authoritative config tree.

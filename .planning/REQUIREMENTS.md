@@ -1,73 +1,97 @@
-# Requirements: git-stacks Local Web Client
+# Requirements: v0.21.0 Node Core and Client Architecture
 
-**Defined:** 2026-07-14
-**Core value:** One command creates a usable multi-repository development workspace and exposes it through local CLI, dashboard, and browser workflows.
+**Defined:** 2026-07-15
+**Core value:** One command creates a usable multi-repository development workspace while all product surfaces share one machine-side implementation.
 
-## Local Service
+## Package and Runtime Foundation
 
-- [x] **SVC-01:** The service binds to loopback, authenticates before routing, and publishes no bearer secret in discovery metadata.
-- [x] **SVC-02:** Clients consume authoritative workspace snapshots with stable workspace, repository, command, revision, and operation identities.
-- [x] **SVC-03:** Workspace mutations are idempotent, report structured progress, and are bounded by explicit capacity and timeout policies.
-- [x] **SVC-04:** Ordered events support replay, replay-gap recovery, bounded subscribers, and idle service shutdown.
-- [x] **SVC-05:** Workspace configuration changes invalidate snapshots without tearing down retained browser terminals.
+- [ ] **PKG-01:** Maintainers can install dependencies, build, typecheck, and test protocol, client, core, CLI, service, web, and TUI workspaces independently from the repository root.
+- [ ] **PKG-02:** Runtime and import-boundary gates reject core-to-UI, core-to-transport, client-to-service-implementation, web-to-machine, and CLI-to-service dependencies.
+- [ ] **PKG-03:** Production packages emit inspectable ESM for Node 24 with declared third-party dependencies external and reproducible package manifests.
+- [ ] **PKG-04:** Shared conformance fixtures verify stable identities, validation, signal reduction, ordering, and operation semantics without importing a concrete renderer or runtime.
 
-## Browser Security and Projection
+## Shared Domain Core
 
-- [x] **WEB-01:** `git-stacks web` issues a one-use pairing capability and exchanges it for a scoped HttpOnly browser principal.
-- [x] **WEB-02:** Web routes enforce same-origin Host, Origin, and Fetch Metadata rules and never expose service credentials.
-- [x] **WEB-03:** Browser DTOs omit raw launch environments, secret references, and unnecessary machine paths.
-- [x] **WEB-04:** Workspace, repository, command, operation, Git, label, priority, and signal state are projected through stable browser-safe identities.
-- [x] **WEB-05:** The web client provides workspace-first navigation, creation, command launching, context actions, responsive layout, and keyboard-accessible terminal focus.
+- [ ] **CORE-01:** The local CLI and service invoke one runtime-neutral implementation of workspace/config/template/registry parsing, resolution, validation, and mutation.
+- [ ] **CORE-02:** Git, worktree, integration, launch-planning, and command-domain behavior is separated from Commander prompts, OpenTUI rendering, service transport, and concrete process APIs.
+- [ ] **CORE-03:** Process execution, clocks, executable lookup, globbing, observation, and logging are supplied through narrow capabilities with Node production adapters and deterministic test adapters.
+- [ ] **CORE-04:** Architecture and duplicate-behavior tests prevent a migrated capability from remaining implemented in both legacy and target paths.
 
-## Browser Terminals
+## Filesystem Authority and Coherency
 
-- [x] **TERM-01:** The service creates multiple independent PTYs from trusted terminal launch resolution using only workspace, repository, command, revision, and dimensions supplied by the browser.
-- [x] **TERM-02:** Input, output, resize, title updates, close, exit, process-group cleanup, and command-shell retention have explicit lifecycle semantics.
-- [x] **TERM-03:** Hidden terminals pause bulk output streaming while lifecycle controls and signal capture remain live.
-- [x] **TERM-04:** Reattachment uses cursor-based bounded replay and reports explicit history loss instead of silently returning partial output.
-- [x] **TERM-05:** Sessions remain reconnectable after browser closure while retained by the running service, but do not claim survival across service restart or reboot.
-- [x] **TERM-06:** Terminal counts, replay bytes, socket pressure, and ended-session retention are bounded and observable.
+- [ ] **DATA-01:** Every shared-core replacement write uses a unique same-directory temporary file, exclusive creation, flush/close, atomic rename, cleanup, intended mode, and supported parent-directory durability.
+- [ ] **DATA-02:** Semantic workspace, template, registry, and configuration mutations re-read authoritative state and use narrow per-target cross-process coordination so concurrent field-level intents do not silently erase one another.
+- [ ] **DATA-03:** The service treats watcher events as invalidation hints, debounces rebuilds, rebinds replaced directories, and emits only when the aggregate content revision changes.
+- [ ] **DATA-04:** Bounded periodic content reconciliation covers every authoritative definition root and recovers dropped or coalesced watcher events without exposing file contents.
+- [ ] **DATA-05:** Local CLI operations remain correct when no service is running and require no service discovery, lock daemon, refresh RPC, or event acknowledgement.
 
-## Workspace Signals
+## Local Node CLI
 
-- [x] **SIG-01:** Hooks, terminal OSC, and automation publish one strict provider-neutral signal envelope.
-- [x] **SIG-02:** Activity coalesces by provider session and exact terminal surface while notifications remain independently dismissible.
-- [x] **SIG-03:** Sidebar provider presence is deduplicated and terminal tabs retain exact provider and lifecycle state.
-- [x] **SIG-04:** Closing a terminal removes its activity projection and publishes durable idle tombstones for future cleanup.
-- [x] **SIG-05:** Selecting the exact terminal tab acknowledges its signal without clearing unrelated principals or notifications.
+- [ ] **CLI-01:** The existing `git-stacks` command tree, arguments, exit codes, streams, prompts, completions, and local workflows run under Node 24 without Bun.
+- [ ] **CLI-02:** CLI presentation and interactive wizards live in the CLI package and call shared-core use cases rather than importing TUI or service modules.
+- [ ] **CLI-03:** CLI-only commands remain daemonless; only explicit `service`, `web`, and trusted-client launch commands start or connect to the service.
+- [ ] **CLI-04:** CLI compatibility tests prove parity for workspace lifecycle, Git operations, commands, integrations, hooks, notes, labels, templates, repositories, and diagnostics before legacy entrypoints are removed.
 
-## Compatibility
+## Node Service and Protocol
 
-- [x] **COMP-01:** Existing CLI and OpenTUI behavior remains supported alongside the service and browser client.
-- [x] **COMP-02:** External terminal integrations continue to own their sessions independently.
-- [x] **COMP-03:** Default build, test, and publish workflows require no unsupported desktop toolchain.
+- [ ] **SVC-01:** The Node service preserves the existing authenticated HTTP API, browser-safe and trusted projections, operation registry, event cursors, replay gaps, heartbeat behavior, quotas, and idle lifecycle.
+- [ ] **SVC-02:** Node `http` plus exact-pinned `ws` replaces Bun transport without changing browser/TUI protocol semantics; WebSocket compression remains disabled unless separately benchmarked.
+- [ ] **SVC-03:** Managed startup uses race-safe discovery and ownership, removes stale startup artifacts safely, and shuts down after the final managed client without leaving sockets, timers, watchers, or child processes.
+- [ ] **SVC-04:** Protocol and client packages contain no concrete service launcher or runtime implementation, and carriers remain replaceable for future encrypted remote access.
+- [ ] **SVC-05:** The service projects external CLI/file changes through normal revisions and SSE events without a special CLI refresh path.
 
-## Shared Client Core
+## Node Terminal and Signal Runtime
 
-- [x] **CORE-01:** First-party trusted clients consume one typed core projection containing workspace definitions, authoritative status, templates, repository registrations, and global configuration.
-- [x] **CORE-02:** OpenTUI workspace lifecycle, Git, command, issue, label, template, and repository mutations execute through the service operation registry with structured progress.
-- [x] **CORE-03:** OpenTUI status, file status, notes, signals, and external invalidation updates are service-backed and event-driven rather than independently polled or inspected.
-- [x] **CORE-04:** Browser and OpenTUI clients share transport types, signal presentation semantics, and priority ordering while retaining separate rendering and browser security projections.
-- [x] **CORE-05:** Architecture tests prevent first-party renderers from regaining direct filesystem, Git, configuration-persistence, or process authority outside explicit foreground handoffs.
+- [ ] **TERM-01:** A narrow PTY adapter lets the existing terminal manager own lifecycle, replay, visibility, backpressure, title, resize, process-group cleanup, and signal filtering independently of `node-pty`.
+- [ ] **TERM-02:** Exact-pinned `node-pty` `1.2.0-beta.14` passes interactive shell, command shell, exit, resize, Unicode, title, hidden-stream, reconnect, replay, pressure, cleanup, and resource tests on supported hosts.
+- [ ] **TERM-03:** Linux x64/arm64 and macOS x64/arm64 installs use trusted prebuilt PTY artifacts without a compiler; unsupported or missing artifacts fail clearly rather than silently building or degrading.
+- [ ] **SIG-01:** Signal ingestion, coalescing, exact-surface state, dismissal, stale cleanup, and provider deduplication retain the v0.20 service-owned semantics under Node.
+- [ ] **SIG-02:** Closing, exiting, hiding, reconnecting, or acknowledging terminals cannot leave stale agent activity or clear unrelated activity.
+
+## Thin Web and TUI Clients
+
+- [ ] **WEB-01:** The web package builds as browser-only static assets against protocol/client contracts and imports no core, filesystem, process, service implementation, or Node-only module.
+- [ ] **WEB-02:** `git-stacks web` serves the packaged client from the Node service with v0.20 pairing, workspace, command, signal, terminal, reconnect, focus, sizing, and context-menu parity.
+- [ ] **TUI-01:** The optional Bun/OpenTUI package consumes the trusted service projection, operations, and SSE stream through the official client package and contains no independent domain or persistence implementation.
+- [ ] **TUI-02:** TUI startup, shutdown, rendering, viewport ownership, dismissals, commands, and foreground handoffs retain parity while closing the TUI reliably releases its managed-service client.
+- [ ] **CLIENT-01:** Web and TUI reuse shared client reducers for revision/event handling, signal presentation, priority ordering, operation progress, reconnect, and replay-gap recovery while owning their own rendering.
+
+## Distribution and Cutover
+
+- [ ] **DIST-01:** The default npm package installs and runs the CLI/service/web stack on Node 24 for Linux x64/arm64 and modern macOS x64/arm64 without Bun or a native compiler.
+- [ ] **DIST-02:** The optional TUI is packaged explicitly with its Bun/OpenTUI runtime requirement and cannot pull Bun-only dependencies into default CLI/service installs.
+- [ ] **DIST-03:** Release CI verifies package contents, licenses, clean-install smoke tests, CLI/service/web behavior, PTY lifecycle, shutdown, and resource bounds on the supported platform matrix.
+- [ ] **DIST-04:** Final cutover deletes obsolete Bun CLI/service adapters, duplicate source paths, temporary compatibility shims, and stale documentation in the same milestone.
+- [ ] **DIST-05:** The release notes disclose the Node 24 minimum, optional Bun TUI, exact `node-pty` beta exception, platform matrix, migration behavior, and rollback boundary before v0.21.0-rc.1 is tagged.
+
+## Future Requirements
+
+- A dedicated local/remote CLI client over the service protocol.
+- Encrypted helper-to-remote transport and manually paired remote services.
+- Durable terminal multiplexing across service restarts.
+- Additional web feature completeness after the runtime/package foundation ships.
 
 ## Out of Scope
 
-- Remote or LAN hosting.
-- Multi-user collaboration and concurrent terminal writers.
-- Durable terminal multiplexing across service restart or machine reboot.
-- Browser PTYs on platforms without actual-host lifecycle verification.
-- Additional desktop application clients.
+- Remote server delivery or public/LAN hosting in v0.21.0.
+- New product features unrelated to migration parity.
+- Multi-user terminal writing.
+- TypeScript 7 migration.
+- Reintroduction of the retired native client.
+- Keeping Bun and Node implementations of the same CLI or service behavior after cutover.
 
 ## Traceability
 
 | Requirement group | Phase | Status |
 |---|---|---|
-| SVC-01..05 | 104 | Complete |
-| SIG-01..05 | 107.1, 107.3 | Complete |
-| WEB-01..05 | 107.3 | Complete |
-| TERM-01..06 | 107.3 | Complete |
-| COMP-01..03 | 104, 107.3 | Complete |
-| CORE-01..05 | 107.4 | Complete |
+| PKG-01..04 | 108 | Pending |
+| CORE-01..04, DATA-01..02 | 109 | Pending |
+| DATA-03..05, CLI-01..04 | 110 | Pending |
+| SVC-01..05 | 111 | Pending |
+| TERM-01..03, SIG-01..02 | 112 | Pending |
+| WEB-01..02, CLIENT-01 | 113 | Pending |
+| TUI-01..02 | 114 | Pending |
+| DIST-01..05 | 115 | Pending |
 
 ---
-*Last updated: 2026-07-14 after the shared-core centralization.*
+*Last updated: 2026-07-15 after migration risk spikes 016-019 and explicit acceptance of the temporary node-pty beta dependency.*
