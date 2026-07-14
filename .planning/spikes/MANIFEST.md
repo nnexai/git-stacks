@@ -40,5 +40,6 @@ The current migration theme additionally evaluates a Node-default distribution a
 | 015 | pinned-tls-helper-relay | horizontal | Production-first encrypted helper-to-remote carrier without public PKI or browser trust changes | VALIDATED | security, tls, remote, bun, macos, dependencies |
 | 016 | node-pty-runtime | standard | Node PTY behavior, lifecycle, resource, dependency, and distribution parity | PARTIAL | node, terminal, pty, macos, linux, dependencies |
 | 017 | node-service-transport | standard | Node HTTP, SSE, WebSocket, backpressure, replay, auth, and shutdown parity | VALIDATED | node, service, http, sse, websocket, backpressure, dependencies |
+| 018 | node-core-packages | standard | Runtime-neutral core execution and enforceable CLI/service/web/TUI/protocol package boundaries | VALIDATED | node, core, packages, architecture, esm, dependencies |
 
 Unsupported desktop-renderer experiments were removed from the active branch and remain available through repository history and the archive tag recorded in `.planning/notes/native-client-retirement.md`.

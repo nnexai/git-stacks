@@ -1,0 +1,14 @@
+{
+  "name": "git-stacks-spike-018-node-core-packages",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "analyze": "node analyze.mjs",
+    "build": "node build.mjs",
+    "check": "npm run analyze && npm run build && node dist/probe.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1",
+    "typescript": "6.0.3"
+  }
+}
