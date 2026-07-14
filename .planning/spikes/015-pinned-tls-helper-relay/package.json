@@ -1,0 +1,17 @@
+{
+  "name": "git-stacks-pinned-tls-helper-relay-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun probe.ts",
+    "check": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "@peculiar/x509": "2.0.0",
+    "reflect-metadata": "0.2.2"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^6.0.2"
+  }
+}

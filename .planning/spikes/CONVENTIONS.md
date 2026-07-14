@@ -29,6 +29,9 @@
 - Use bounded length-prefixed framing on byte-stream transports; WebTransport stream reads and writes do not preserve application message boundaries.
 - Keep PTY ownership, cursor acknowledgement, replay retention, visibility policy, and lifecycle in the shared terminal core; adapt only writing, pressure, drain, cancellation, and close behavior per carrier.
 - Await WebTransport stream writes with at most one attachment pump per terminal. A blocked or cancelled carrier must not create an unbounded queue or implicitly terminate the service-owned PTY.
+- Prefer a pinned TLS 1.3 helper-to-remote relay as the first production remote carrier; keep direct browser WebTransport replaceable until its Bun implementation passes production gates.
+- Use Bun's Node-compatible `node:tls` boundary with a connection-specific paired CA. Do not use native `Bun.connect` for private-CA enforcement unless its wrong-CA regression test passes on the exact supported runtime.
+- Treat leaf rotation under the paired private CA as routine transport maintenance; treat CA replacement as remote service identity rotation requiring explicit authorization.
 - Prefer an operating-system credential store for persistent helper keys, with an atomic mode `0600` file as an explicit portable fallback rather than a protocol dependency.
 - Require exact protocol framing, replay protection, bounded streams, backpressure, idle expiry, and revocation regardless of transport.
 - Do not adopt a native transport addon until Linux and modern macOS runtime, active-session shutdown, reconnect, rotation, vulnerability, maintenance, and license-notice gates pass.

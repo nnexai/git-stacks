@@ -29,5 +29,6 @@ Secure current and future local-network clients without public DNS or installing
 | 012 | delegated-browser-identity | horizontal | Durable helper identity and short-lived proof-of-possession browser delegation | VALIDATED | security, identity, browser, indexeddb, macos |
 | 013 | secure-reconnect-port-takeover | horizontal | Helper epoch leases, reconnect, abrupt loss, and hostile localhost port reuse | VALIDATED | security, identity, reconnect, browser, macos |
 | 014 | terminal-stream-viability | horizontal | Framed terminal throughput, backpressure, visibility, replay, cancellation, and multiplexing | VALIDATED | security, terminal, webtransport, backpressure, macos |
+| 015 | pinned-tls-helper-relay | horizontal | Production-first encrypted helper-to-remote carrier without public PKI or browser trust changes | VALIDATED | security, tls, remote, bun, macos, dependencies |
 
 Unsupported desktop-renderer experiments were removed from the active branch and remain available through repository history and the archive tag recorded in `.planning/notes/native-client-retirement.md`.
