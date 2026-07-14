@@ -4,7 +4,6 @@ import { join } from "node:path"
 import { WS_CONFIG_DIR } from "../lib/paths"
 import { readOfficialClientCredential } from "../lib/service/credentials"
 import { readServiceDescriptor, startManagedService } from "../service/main"
-import { installAgentIntegrations, integrationStatus, uninstallAgentIntegrations } from "../lib/agent-hooks/integration-manager"
 
 export const serviceCommand = new Command("service")
   .description("Manage the local workspace service")
@@ -86,16 +85,6 @@ async function publishSignal(options: SignalPublishOptions, abortSignal: AbortSi
 
 const signalCommand = serviceCommand.command("signal")
   .description("Publish provider-neutral workspace signals")
-
-signalCommand.command("integrations")
-  .description("Show app-owned coding-agent integration health")
-  .option("--install", "Install or update app-owned user integrations")
-  .option("--uninstall", "Remove only app-owned user integrations")
-  .action((options: { install?: boolean; uninstall?: boolean }) => {
-    const report = options.uninstall ? uninstallAgentIntegrations() : options.install ? installAgentIntegrations() : integrationStatus()
-    console.log(JSON.stringify(report, null, 2))
-    if (report.providers.some((entry) => entry.state === "failed")) process.exitCode = 1
-  })
 
 signalCommand.command("publish")
   .option("--kind <kind>", "activity or notification", "activity")

@@ -5,12 +5,13 @@ import { homedir } from "os"
 export const AGENT_INTEGRATION_VERSION = 2
 export const OWNERSHIP_MARKER = "git-stacks-managed-signal-v1"
 const LEGACY_OWNERSHIP_MARKERS = ["git-stacks-managed-attention-v1"] as const
-export type IntegrationProvider = "codex" | "claude" | "copilot" | "opencode"
-export type IntegrationState = "installed" | "outdated" | "not-installed" | "disabled" | "failed"
+export const INTEGRATION_PROVIDERS = ["codex", "claude", "copilot", "opencode"] as const
+export type IntegrationProvider = typeof INTEGRATION_PROVIDERS[number]
+export type IntegrationState = "installed" | "outdated" | "not-installed" | "failed"
 
 export interface IntegrationHealth { provider: IntegrationProvider; state: IntegrationState; detail?: string }
-export interface IntegrationReport { enabled: boolean; version: number; providers: IntegrationHealth[] }
-export interface IntegrationOptions { home?: string; enabled?: boolean }
+export interface IntegrationReport { version: number; providers: IntegrationHealth[] }
+export interface IntegrationOptions { home?: string; providers?: readonly IntegrationProvider[] }
 
 type JsonObject = Record<string, unknown>
 type Hook = { type: "command"; command: string; timeout?: number }
@@ -89,7 +90,11 @@ function enableCodexHooks(home: string): void {
   const output = lines.map((line) => {
     const section = /^\s*\[\s*([^\]]+)\s*\]/.exec(line)?.[1]?.trim()
     if (section) { inFeatures = section === "features"; if (inFeatures) foundSection = true; return line }
-    if (inFeatures && /^\s*hooks\s*=/.test(line)) { foundHooks = true; return `hooks = true # ${OWNERSHIP_MARKER}` }
+    if (inFeatures && /^\s*hooks\s*=/.test(line)) {
+      foundHooks = true
+      if (/^\s*hooks\s*=\s*true\b/.test(line)) return line
+      return `hooks = true # ${OWNERSHIP_MARKER} previous=${Buffer.from(line).toString("base64")}`
+    }
     return line
   })
   if (!foundSection) output.push("", "[features]", `hooks = true # ${OWNERSHIP_MARKER}`)
@@ -105,16 +110,29 @@ function uninstallMerged(home: string, provider: "codex" | "claude"): void {
   if (existsSync(path)) {
     const document = readJson(path)
     const hooks: Record<string, unknown[]> = {}
+    let changed = false
     for (const [event, value] of Object.entries((document.hooks ?? {}) as JsonObject)) {
       if (!Array.isArray(value)) throw new Error(`hooks.${event} must be an array`)
-      const kept = value.filter((entry) => !managed(entry)); if (kept.length) hooks[event] = kept
+      const kept = value.filter((entry) => !managed(entry))
+      if (kept.length !== value.length) changed = true
+      if (kept.length) hooks[event] = kept
     }
-    if (Object.keys(hooks).length) document.hooks = hooks; else delete document.hooks
-    atomicWrite(path, `${JSON.stringify(document, null, 2)}\n`)
+    if (changed) {
+      if (Object.keys(hooks).length) document.hooks = hooks; else delete document.hooks
+      atomicWrite(path, `${JSON.stringify(document, null, 2)}\n`)
+    }
   }
   if (provider === "codex") {
     const config = join(home, ".codex/config.toml")
-    if (existsSync(config)) atomicWrite(config, readFileSync(config, "utf8").split("\n").filter((line) => !(hasOwnershipMarker(line) && /^\s*hooks\s*=/.test(line))).join("\n"))
+    if (existsSync(config)) {
+      const original = readFileSync(config, "utf8")
+      const output = original.split("\n").flatMap((line) => {
+        if (!(hasOwnershipMarker(line) && /^\s*hooks\s*=/.test(line))) return [line]
+        const encoded = /\bprevious=([A-Za-z0-9+/=]+)(?:\s|$)/.exec(line)?.[1]
+        return encoded ? [Buffer.from(encoded, "base64").toString("utf8")] : []
+      }).join("\n")
+      if (output !== original) atomicWrite(config, output)
+    }
   }
 }
 
@@ -178,34 +196,66 @@ function providerState(home: string, provider: IntegrationProvider): Integration
   return actual === (provider === "copilot" ? copilotSource() : openCodeSource()) ? "installed" : "outdated"
 }
 
-export function integrationStatus(options: IntegrationOptions = {}): IntegrationReport {
-  const home = options.home ?? homedir(), enabled = options.enabled ?? process.env.GIT_STACKS_AGENT_INTEGRATIONS !== "0"
-  return { enabled, version: AGENT_INTEGRATION_VERSION, providers: (["codex", "claude", "copilot", "opencode"] as const).map((provider) => ({ provider, state: enabled ? providerState(home, provider) : "disabled" })) }
+function reconcileProvider(home: string, provider: IntegrationProvider): void {
+  if (provider === "codex" || provider === "claude") installMerged(home, provider)
+  else {
+    ownedWrite(dedicatedPath(home, provider), provider === "copilot" ? copilotSource() : openCodeSource())
+    removeLegacyDedicatedIntegration(home, provider)
+  }
+}
+
+function reportWithFailures(home: string, failures: Map<IntegrationProvider, string>): IntegrationReport {
+  const report = integrationStatus({ home })
+  report.providers = report.providers.map((entry) => failures.has(entry.provider) ? { ...entry, state: "failed", detail: failures.get(entry.provider) } : entry)
+  return report
+}
+
+export function integrationStatus(options: Pick<IntegrationOptions, "home"> = {}): IntegrationReport {
+  const home = options.home ?? homedir()
+  return { version: AGENT_INTEGRATION_VERSION, providers: INTEGRATION_PROVIDERS.map((provider) => ({ provider, state: providerState(home, provider) })) }
 }
 
 export function installAgentIntegrations(options: IntegrationOptions = {}): IntegrationReport {
-  const home = options.home ?? homedir(), enabled = options.enabled ?? process.env.GIT_STACKS_AGENT_INTEGRATIONS !== "0"
-  if (!enabled) return integrationStatus({ home, enabled })
-  const health: IntegrationHealth[] = []
-  for (const provider of ["codex", "claude", "copilot", "opencode"] as const) try {
-    if (providerState(home, provider) === "installed") { health.push({ provider, state: "installed" }); continue }
-    if (provider === "codex" || provider === "claude") installMerged(home, provider)
-    else {
-      ownedWrite(dedicatedPath(home, provider), provider === "copilot" ? copilotSource() : openCodeSource())
-      removeLegacyDedicatedIntegration(home, provider)
-    }
-    health.push({ provider, state: "installed" })
-  } catch (error) { health.push({ provider, state: "failed", detail: error instanceof Error ? error.message : String(error) }) }
-  return { enabled, version: AGENT_INTEGRATION_VERSION, providers: health }
+  const home = options.home ?? homedir()
+  const selected = new Set(options.providers ?? INTEGRATION_PROVIDERS)
+  const failures = new Map<IntegrationProvider, string>()
+  for (const provider of INTEGRATION_PROVIDERS) {
+    if (!selected.has(provider)) continue
+    try {
+      if (providerState(home, provider) === "installed") continue
+      reconcileProvider(home, provider)
+    } catch (error) { failures.set(provider, error instanceof Error ? error.message : String(error)) }
+  }
+  return reportWithFailures(home, failures)
 }
 
-export function uninstallAgentIntegrations(options: Pick<IntegrationOptions, "home"> = {}): IntegrationReport {
+export function updateAgentIntegrations(options: Pick<IntegrationOptions, "home"> = {}): IntegrationReport {
   const home = options.home ?? homedir()
-  for (const provider of ["codex", "claude"] as const) uninstallMerged(home, provider)
-  for (const provider of ["copilot", "opencode"] as const) {
-    const path = dedicatedPath(home, provider)
-    if (existsSync(path) && hasOwnershipMarker(readFileSync(path, "utf8"))) rmSync(path)
-    removeLegacyDedicatedIntegration(home, provider)
+  const failures = new Map<IntegrationProvider, string>()
+  for (const provider of INTEGRATION_PROVIDERS) {
+    try {
+      const state = providerState(home, provider)
+      if (state !== "installed" && state !== "outdated") continue
+      reconcileProvider(home, provider)
+    } catch (error) { failures.set(provider, error instanceof Error ? error.message : String(error)) }
   }
-  return integrationStatus({ home })
+  return reportWithFailures(home, failures)
+}
+
+export function uninstallAgentIntegrations(options: Pick<IntegrationOptions, "home" | "providers"> = {}): IntegrationReport {
+  const home = options.home ?? homedir()
+  const selected = new Set(options.providers ?? INTEGRATION_PROVIDERS)
+  const failures = new Map<IntegrationProvider, string>()
+  for (const provider of INTEGRATION_PROVIDERS) {
+    if (!selected.has(provider)) continue
+    try {
+      if (provider === "codex" || provider === "claude") uninstallMerged(home, provider)
+      else {
+        const path = dedicatedPath(home, provider)
+        if (existsSync(path) && hasOwnershipMarker(readFileSync(path, "utf8"))) rmSync(path)
+        removeLegacyDedicatedIntegration(home, provider)
+      }
+    } catch (error) { failures.set(provider, error instanceof Error ? error.message : String(error)) }
+  }
+  return reportWithFailures(home, failures)
 }

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
-import { installAgentIntegrations, integrationStatus, OWNERSHIP_MARKER, uninstallAgentIntegrations } from "../../../src/lib/agent-hooks/integration-manager"
+import { installAgentIntegrations, integrationStatus, OWNERSHIP_MARKER, uninstallAgentIntegrations, updateAgentIntegrations } from "../../../src/lib/agent-hooks/integration-manager"
 
 describe("user-level terminal agent integrations", () => {
   test("merge-installs all providers while preserving foreign settings", () => {
@@ -42,11 +42,57 @@ describe("user-level terminal agent integrations", () => {
     expect(existsSync(join(home, ".config/opencode/plugins/git-stacks-signal.js"))).toBe(false)
   })
 
-  test("reports opt-out without touching a clean home", () => {
-    const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-disabled-"))
-    const report = installAgentIntegrations({ home, enabled: false })
-    expect(report.providers.every((entry) => entry.state === "disabled")).toBe(true)
+  test("installs and uninstalls only explicitly selected providers", () => {
+    const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-selected-"))
+
+    const installed = installAgentIntegrations({ home, providers: ["codex", "copilot"] })
+    expect(installed.providers.find((entry) => entry.provider === "codex")?.state).toBe("installed")
+    expect(installed.providers.find((entry) => entry.provider === "copilot")?.state).toBe("installed")
+    expect(installed.providers.find((entry) => entry.provider === "claude")?.state).toBe("not-installed")
+    expect(existsSync(join(home, ".claude"))).toBe(false)
+    expect(existsSync(join(home, ".config/opencode"))).toBe(false)
+
+    uninstallAgentIntegrations({ home, providers: ["codex"] })
+    expect(integrationStatus({ home }).providers.find((entry) => entry.provider === "codex")?.state).toBe("not-installed")
+    expect(integrationStatus({ home }).providers.find((entry) => entry.provider === "copilot")?.state).toBe("installed")
+  })
+
+  test("uninstall is inert for unowned shared files and restores a changed Codex feature flag", () => {
+    const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-ownership-"))
+    mkdirSync(join(home, ".codex"), { recursive: true })
+    mkdirSync(join(home, ".claude"), { recursive: true })
+    const codexHooks = '{"custom":true,"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo mine"}]}]}}\n'
+    const claudeSettings = '{"model":"sonnet","hooks":{}}\n'
+    const codexConfig = "[features]\nhooks = false # deliberately disabled\n"
+    writeFileSync(join(home, ".codex/hooks.json"), codexHooks)
+    writeFileSync(join(home, ".codex/config.toml"), codexConfig)
+    writeFileSync(join(home, ".claude/settings.json"), claudeSettings)
+
+    uninstallAgentIntegrations({ home, providers: ["codex", "claude"] })
+    expect(readFileSync(join(home, ".codex/hooks.json"), "utf8")).toBe(codexHooks)
+    expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).toBe(codexConfig)
+    expect(readFileSync(join(home, ".claude/settings.json"), "utf8")).toBe(claudeSettings)
+
+    installAgentIntegrations({ home, providers: ["codex"] })
+    expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).toContain(OWNERSHIP_MARKER)
+    uninstallAgentIntegrations({ home, providers: ["codex"] })
+    expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).toBe(codexConfig)
+  })
+
+  test("updates every owned integration without installing absent providers", () => {
+    const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-update-"))
+    installAgentIntegrations({ home, providers: ["copilot"] })
+    const copilotPath = join(home, ".copilot/hooks/git-stacks.json")
+    writeFileSync(copilotPath, `${readFileSync(copilotPath, "utf8")}\n`)
+    expect(integrationStatus({ home }).providers.find((entry) => entry.provider === "copilot")?.state).toBe("outdated")
+
+    const report = updateAgentIntegrations({ home })
+
+    expect(report.providers.find((entry) => entry.provider === "copilot")?.state).toBe("installed")
+    expect(report.providers.filter((entry) => entry.provider !== "copilot").every((entry) => entry.state === "not-installed")).toBe(true)
     expect(existsSync(join(home, ".codex"))).toBe(false)
+    expect(existsSync(join(home, ".claude"))).toBe(false)
+    expect(existsSync(join(home, ".config/opencode"))).toBe(false)
   })
 
   test("migrates legacy attention integrations and uses one stable session per terminal surface", () => {

@@ -454,30 +454,40 @@ git-stacks doctor --fix   # Auto-repair drift
 
 Global config lives at `~/.config/git-stacks/config.yml`. Default workspace root is `~/workspaces`; clones live under `{workspace_root}/main/`, worktrees under `{workspace_root}/tasks/`.
 
-## Agent Hook Installer
+## Coding-Agent Signal Integrations
 
-Install AI agent notification hooks into the current project so the TUI dashboard shows when an agent needs your attention:
+User-level coding-agent hooks are strictly opt-in. Starting git-stacks, opening the dashboard, and creating browser terminals never install or update provider configuration. Without installed hooks, browser terminals use service-local command wrappers for basic agent start/exit signals.
 
 ```bash
-# Interactive — choose which agent frameworks to install
-git-stacks install --hooks
+# Inspect all providers without changing files
+git-stacks hooks status
 
-# Install Claude Code hooks explicitly
-git-stacks install --hooks --claude
+# Install only the providers you select (or use "all")
+git-stacks hooks install codex
+git-stacks hooks install claude copilot
+git-stacks hooks install all
 
-# Install GitHub Copilot hooks
-git-stacks install --hooks --copilot
+# Reconcile every git-stacks integration that is already installed.
+# This never installs an absent provider.
+git-stacks hooks update
 
-# Install both Claude Code and Copilot hooks simultaneously
-git-stacks install --hooks --copilot --claude
-
-# Remove installed hooks
-git-stacks install --hooks --remove
+# Remove only selected git-stacks-owned integrations
+git-stacks hooks uninstall copilot
+git-stacks hooks uninstall all
 ```
 
-Claude Code hooks are written to `.claude/settings.json`. Copilot hooks are written to `.github/hooks/git-stacks.json`. Managed hooks normalize lifecycle events into authenticated workspace signals with provider-session and exact-surface identity.
+The supported provider names and managed user files are:
 
-When neither `--claude` nor `--copilot` is passed, an interactive prompt lets you choose which hook set(s) to install. The plugin system is extensible — new agent frameworks can be added as plugins in `src/lib/agent-hooks/`.
+| Provider | Managed files |
+|----------|---------------|
+| Codex | `~/.codex/hooks.json`; the owned `hooks = true` entry in `~/.codex/config.toml` |
+| Claude Code | `~/.claude/settings.json` |
+| GitHub Copilot | `~/.copilot/hooks/git-stacks.json` |
+| OpenCode | `~/.config/opencode/plugins/git-stacks-signal.js` |
+
+Install and update preserve foreign entries in shared configuration files. Uninstall removes only entries or dedicated files carrying the git-stacks ownership marker and refuses to replace an unowned dedicated file.
+
+The older `git-stacks install --hooks` command remains available for explicitly managed, project-local Claude, Copilot, and Codex hooks. It does not replace the user-level integration lifecycle above.
 
 ## Integrations
 

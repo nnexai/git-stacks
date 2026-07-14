@@ -104,7 +104,7 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     family: "service",
     flowType: "command",
     title: "Local workspace service lifecycle",
-    commands: ["service start", "service status", "service signal integrations", "service signal publish"],
+    commands: ["service start", "service status", "service signal publish"],
     scopeStatus: "in-scope",
     mappedTests: [
       "tests/service/discovery.test.ts",
@@ -113,6 +113,16 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
       "tests/lib/agent-hooks/integration-manager.test.ts",
     ],
     rationale: "Protected discovery, convergent startup, signal publication, integration ownership, and idle lifecycle are covered through real loopback and injected lifecycle tests.",
+  },
+  {
+    id: "support.agent-hooks",
+    family: "support",
+    flowType: "command",
+    title: "Opt-in coding-agent hook lifecycle",
+    commands: ["hooks status", "hooks install", "hooks update", "hooks uninstall"],
+    scopeStatus: "in-scope",
+    mappedTests: ["tests/commands/hooks.test.ts", "tests/lib/agent-hooks/integration-manager.test.ts"],
+    rationale: "Provider-selected install/uninstall, installed-only update, read-only status, and ownership preservation are covered against isolated user homes.",
   },
   {
     id: "service.web-client",

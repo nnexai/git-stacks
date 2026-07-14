@@ -187,8 +187,6 @@ function defaultDependencies(): SnapshotDependencies {
       workspaceName,
       environment.PATH ?? process.env.PATH ?? "",
       join(WS_CONFIG_DIR, "terminal-agent-bin"),
-      undefined,
-      { installIntegrations: true },
     ),
     config,
     revisionStore: new FileSnapshotRevisionStore(),
