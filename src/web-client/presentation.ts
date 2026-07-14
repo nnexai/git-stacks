@@ -60,6 +60,30 @@ export function isBackgroundActivity(signal: PresentedSignal): boolean {
   return signal.kind === "activity" && signal.state === "working"
 }
 
+const lifecyclePriority: Record<string, number> = {
+  failed: 4,
+  waiting: 3,
+  working: 2,
+  completed: 1,
+}
+
+export function deduplicateProviderSessions(signals: PresentedSignal[]): PresentedSignal[] {
+  const providers = new Map<string, PresentedSignal>()
+  for (const signal of signals) {
+    if (!isActiveSession(signal)) continue
+    const current = providers.get(signal.source)
+    const signalPriority = lifecyclePriority[signal.state ?? ""] ?? 0
+    const currentPriority = lifecyclePriority[current?.state ?? ""] ?? 0
+    if (!current || signalPriority > currentPriority || (signalPriority === currentPriority && signal.occurred_at > current.occurred_at)) {
+      providers.set(signal.source, signal)
+    }
+  }
+  return [...providers.values()].sort((left, right) =>
+    (lifecyclePriority[right.state ?? ""] ?? 0) - (lifecyclePriority[left.state ?? ""] ?? 0)
+      || left.source.localeCompare(right.source),
+  )
+}
+
 export function matchesSignalScope(signal: PresentedSignal, workspaceId: string, repositoryId?: string, surfaceId?: string): boolean {
   return signal.workspace_id === workspaceId
     && (!repositoryId || !signal.repository_id || signal.repository_id === repositoryId)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, type PresentedSignal } from "../../src/web-client/presentation"
+import { deduplicateProviderSessions, isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, type PresentedSignal } from "../../src/web-client/presentation"
 
 const base: PresentedSignal = {
   kind: "activity",
@@ -26,6 +26,21 @@ describe("web signal presentation", () => {
     expect(isActiveSession({ ...base, state: "waiting" })).toBe(true)
     expect(isBackgroundActivity({ ...base, state: "waiting" })).toBe(false)
     expect(isActiveSession({ ...base, state: "completed" })).toBe(true)
+  })
+
+  test("deduplicates sidebar providers while retaining their most important state", () => {
+    const sessions = deduplicateProviderSessions([
+      { ...base, surface_id: "codex-old", state: "completed", occurred_at: "2026-07-13T10:03:00.000Z" },
+      { ...base, surface_id: "codex-new", state: "working", occurred_at: "2026-07-13T10:02:00.000Z" },
+      { ...base, source: "copilot", surface_id: "copilot-1", state: "waiting" },
+      { ...base, source: "copilot", surface_id: "copilot-2", state: "working", occurred_at: "2026-07-13T10:04:00.000Z" },
+      { ...base, kind: "notification", source: "claude" },
+    ])
+
+    expect(sessions.map(({ source, state }) => ({ source, state }))).toEqual([
+      { source: "copilot", state: "waiting" },
+      { source: "codex", state: "working" },
+    ])
   })
 
   test("matches hierarchical scope and provides stable labels", () => {

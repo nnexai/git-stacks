@@ -3,7 +3,7 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup } from "./presentation"
+import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup } from "./presentation"
 
 type Repository = { id: string; name: string; mode: string; exists: boolean; dirty: boolean; branch: string; ahead: number; behind: number; additions: number; removals: number; degraded: boolean }
 type Command = { id: string; name: string; scope: "workspace" | "repository"; repository_id?: string }
@@ -505,14 +505,14 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
   const item = element("li", "workspace")
   const container = element("div", `workspace-row-container${pinned ? " pinned" : ""}`)
   const pairSignals = signals.filter((signal) => matchesSignalScope(signal, workspace.id, repository.id))
-  const sessions = pairSignals.filter(isActiveSession).sort((left, right) => Number(right.state === "waiting") - Number(left.state === "waiting") || left.source.localeCompare(right.source))
+  const sessions = deduplicateProviderSessions(pairSignals)
   const notifications = pairSignals.filter((signal) => signal.kind === "notification").length
   const working = pairSignals.some(isBackgroundActivity)
   const running = [...terminalViews.values()].some((view) => view.meta.workspace_id === workspace.id && view.meta.repository_id === repository.id && Boolean(view.meta.command_id) && view.meta.state !== "ended")
   const selected = selectedPair?.workspaceId === workspace.id && selectedPair.repositoryId === repository.id
   const row = button("", `workspace-row${selected ? " active" : ""}${repository.degraded || !repository.exists ? " degraded" : ""}`)
   const title = groupKind === "repository" || workspace.repositories.length === 1 ? workspace.name : `${workspace.name} / ${repository.name}`
-  row.setAttribute("aria-label", `${title}, repository ${repository.name}, branch ${repository.branch || workspace.branch}${pinned ? ", pinned" : ""}${sessions.length ? `, ${sessions.length} agent signals` : ""}${notifications ? `, ${notifications} unread notifications` : ""}`)
+  row.setAttribute("aria-label", `${title}, repository ${repository.name}, branch ${repository.branch || workspace.branch}${pinned ? ", pinned" : ""}${sessions.length ? `, ${sessions.length} active agent${sessions.length === 1 ? "" : "s"}` : ""}${notifications ? `, ${notifications} unread notifications` : ""}`)
   const icon = element("span", `workspace-icon${repository.degraded || !repository.exists ? " warning" : ""}`)
   icon.setAttribute("aria-hidden", "true")
   icon.innerHTML = repository.degraded || !repository.exists
