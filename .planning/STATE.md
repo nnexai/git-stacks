@@ -6,9 +6,9 @@ current_phase: 107.3
 current_phase_name: Web Client and Local Terminal Bridge
 status: Complete; maintenance mode pending the next milestone decision
 stopped_at: Retired unsupported desktop client and retained the web/service architecture
-last_updated: "2026-07-14T14:08:23.380Z"
+last_updated: "2026-07-14T16:59:12+02:00"
 last_activity: 2026-07-14
-last_activity_desc: retired the unsupported desktop client from the active branch
+last_activity_desc: made coding-agent signal hooks opt-in and removed the superseded project-local hook system
 progress:
   total_phases: 3
   completed_phases: 3
@@ -45,6 +45,7 @@ The supported graphical product is the local browser client backed by the Bun/Ty
 
 | # | Description | Date | Commit | Status | Directory |
 |---|---|---|---|---|---|
+| 260714-mvm | Make user-level coding-agent signal hooks opt-in with provider-selected install/uninstall and installed-only update | 2026-07-14 | 795c1219 | Verified | [260714-mvm-make-coding-agent-hook-integrations-stri](./quick/260714-mvm-make-coding-agent-hook-integrations-stri/) |
 | 260714-mez | Retire and completely remove the unsupported native GTK/libghostty client while preserving and generalizing the web service foundations | 2026-07-14 | 004b5679 | Verified | [260714-mez-retire-and-completely-remove-the-unsuppo](./quick/260714-mez-retire-and-completely-remove-the-unsuppo/) |
 
 ## Session Continuity
