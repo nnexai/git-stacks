@@ -10,6 +10,8 @@ import { createWorkspaceMutationAdapters, OperationRegistry, type WorkspaceCreat
 import { createWorkspaceChangeMonitor } from "../lib/service/workspace-change-monitor"
 import type { Operation, WorkspaceCreationCatalog } from "../lib/service/contract"
 import { getWorkspaceCreationCatalog } from "../lib/workspace-creation"
+import { setWorkspacePins } from "../lib/workspace-pins"
+import { setWorkspacePriorities } from "../lib/workspace-priorities"
 import { startServiceServer, type RunningServiceServer } from "./server"
 import { WebApplication } from "./web/routes"
 
@@ -190,6 +192,8 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       publishSignal,
       dismissSignal,
       signalProjection: () => journal.signalProjection(),
+      setWorkspacePins,
+      setWorkspacePriorities,
       onConnectionChange: (count) => { webConnections = count; lifecycle?.setConnectedClients(nativeConnections + webConnections) },
       onActivity: () => lifecycle?.touch(),
     })

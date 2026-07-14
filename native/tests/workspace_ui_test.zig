@@ -95,6 +95,20 @@ test "repository grouping emits one shared repository group" {
     try std.testing.expect(view.firstRepositoryNameOccurrence(&s, 0, 0));
     try std.testing.expect(!view.firstRepositoryNameOccurrence(&s, 1, 0));
 }
+test "workspace priority sorts descending inside a section" {
+    var s = base();
+    @memcpy(s.workspaces[0].name[0..5], "Alpha"); s.workspaces[0].name_len = 5;
+    @memcpy(s.workspaces[1].name[0..4], "Beta"); s.workspaces[1].name_len = 4;
+    s.workspaces[0].priority = 1;
+    s.workspaces[1].priority = 20;
+    s.pair_count = 2;
+    s.pairs[0] = .{ .key = .{ .workspace_id = id('a'), .repository_id = id('1') } };
+    s.pairs[1] = .{ .key = .{ .workspace_id = id('b'), .repository_id = id('2') } };
+
+    const projection = view.project(&s, .wide);
+    try std.testing.expectEqualSlices(u8, &id('b'), &projection.rows[0].key.workspace_id);
+    try std.testing.expectEqualSlices(u8, &id('a'), &projection.rows[1].key.workspace_id);
+}
 test "signals decorate stable groups instead of moving rows into Active" {
     var s = base();
     @memcpy(s.workspaces[0].name[0..5], "Alpha"); s.workspaces[0].name_len = 5;

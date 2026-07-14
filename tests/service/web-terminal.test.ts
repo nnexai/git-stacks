@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
+import type { Signal } from "../../src/lib/service/contract"
 import { WebTerminalManager, type WebSocketData } from "../../src/service/web/terminal-manager"
 
-function createManager(): WebTerminalManager {
+function createManager(publishSignal?: (signal: Signal) => Promise<void>): WebTerminalManager {
   return new WebTerminalManager({
     buildAll: async () => [],
     buildWorkspace: async () => { throw new Error("unused") },
@@ -9,7 +10,7 @@ function createManager(): WebTerminalManager {
       argv: ["/bin/bash", "--noprofile", "--norc", "-i"], cwd: process.cwd(),
       environment: { PATH: process.env.PATH ?? "/usr/bin:/bin", PS1: "$ " }, ports: {}, configuration: { shell: true }, redacted: [],
     } }),
-  })
+  }, publishSignal)
 }
 
 function attach(manager: WebTerminalManager, terminalId: string, streaming = true): { sent: Array<string | Uint8Array>; socket: Bun.ServerWebSocket<WebSocketData> } {
@@ -56,7 +57,7 @@ describe("service-owned web terminal", () => {
     const manager = createManager()
     const terminal = await manager.create("browser-1", { workspace_id: "11111111-1111-4111-8111-111111111111", repository_id: "22222222-2222-4222-8222-222222222222", expected_revision: "1", cols: 80, rows: 24 })
     const { sent, socket } = attach(manager, terminal.id, false)
-    manager.rename("browser-1", terminal.id, "Paused shell")
+    manager.rename("browser-1", terminal.id, "Paused shell", "manual")
     manager.message(socket, JSON.stringify({ type: "input", data: "echo PAUSED_OUTPUT_MARKER\r" }))
     await Bun.sleep(150)
 
@@ -67,6 +68,54 @@ describe("service-owned web terminal", () => {
     manager.message(socket, JSON.stringify({ type: "flow", streaming: true }))
     await waitFor(() => sent.some((item) => item instanceof Uint8Array && new TextDecoder().decode(item.slice(9)).includes("PAUSED_OUTPUT_MARKER")))
     expect(manager.diagnostics.streaming).toBe(1)
+    await manager.close("browser-1", terminal.id)
+    await manager.stop()
+  })
+
+  test("captures agent lifecycle signals while terminal output streaming is paused", async () => {
+    if (process.platform !== "linux") return
+    const published: Signal[] = []
+    const manager = createManager(async (signal) => { published.push(signal) })
+    const terminal = await manager.create("browser-1", { workspace_id: "11111111-1111-4111-8111-111111111111", repository_id: "22222222-2222-4222-8222-222222222222", expected_revision: "1", cols: 80, rows: 24 })
+    const { sent, socket } = attach(manager, terminal.id, false)
+
+    manager.message(socket, JSON.stringify({ type: "input", data: "printf '\\033]9;git-stacks-signal:%s:codex:codex-hidden:working\\033\\\\' \"$GIT_STACKS_SIGNAL_TOKEN\"\r" }))
+    await waitFor(() => published.length === 1)
+
+    expect(published[0]).toMatchObject({ kind: "activity", source: "codex", session_id: "codex-hidden", state: "working", surface_id: terminal.surface_id })
+    expect(sent.filter((item) => item instanceof Uint8Array)).toHaveLength(0)
+    expect(manager.diagnostics.streaming).toBe(0)
+    await manager.close("browser-1", terminal.id)
+    await manager.stop()
+  })
+
+  test("tracks automatic titles until a manual override is pinned and restores automation when cleared", async () => {
+    if (process.platform !== "linux") return
+    const manager = createManager()
+    const terminal = await manager.create("browser-1", { workspace_id: "11111111-1111-4111-8111-111111111111", repository_id: "22222222-2222-4222-8222-222222222222", expected_revision: "1", cols: 80, rows: 24 })
+
+    expect(manager.rename("browser-1", terminal.id, "fish · project", "automatic")).toMatchObject({ title: "fish · project", title_pinned: false })
+    expect(manager.rename("browser-1", terminal.id, "Build shell", "manual")).toMatchObject({ title: "Build shell", title_pinned: true })
+    expect(manager.rename("browser-1", terminal.id, "fish · elsewhere", "automatic")).toMatchObject({ title: "Build shell", title_pinned: true })
+    expect(manager.rename("browser-1", terminal.id, "", "manual")).toMatchObject({ title: "fish · elsewhere", title_pinned: false })
+
+    await manager.close("browser-1", terminal.id)
+    await manager.stop()
+  })
+
+  test("retains an unattached shell and replays it when the browser reconnects", async () => {
+    if (process.platform !== "linux") return
+    const manager = createManager()
+    const terminal = await manager.create("browser-1", { workspace_id: "11111111-1111-4111-8111-111111111111", repository_id: "22222222-2222-4222-8222-222222222222", expected_revision: "1", cols: 80, rows: 24 })
+    const first = attach(manager, terminal.id)
+    manager.detached(first.socket)
+    manager.message(first.socket, JSON.stringify({ type: "input", data: "echo should-not-route\r" }))
+    expect(manager.diagnostics).toMatchObject({ sessions: 1, active: 1, attached: 0 })
+
+    const second = attach(manager, terminal.id)
+    manager.message(second.socket, JSON.stringify({ type: "input", data: "echo RECONNECTED_SHELL\r" }))
+    await waitFor(() => second.sent.some((item) => item instanceof Uint8Array && new TextDecoder().decode(item.slice(9)).includes("RECONNECTED_SHELL")))
+
     await manager.close("browser-1", terminal.id)
     await manager.stop()
   })

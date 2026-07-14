@@ -42,5 +42,5 @@ export interface StructuredHookContext {
 }
 
 export function signalPublishCommand(source: "claude" | "copilot" | "codex", state: AgentLifecycleState, workspaceName: string, options: { bestEffort?: boolean } = {}): string {
-  return `git-stacks service signal publish --state ${state} --source ${source} --workspace ${JSON.stringify(workspaceName)} --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\" --session-id \"\${GIT_STACKS_AGENT_SESSION_ID:-$PPID}\"${options.bestEffort ? " --best-effort" : ""}`
+  return `git-stacks service signal publish --state ${state} --source ${source} --workspace ${JSON.stringify(workspaceName)} --workspace-id \"$GIT_STACKS_WORKSPACE_ID\" --repository-id \"$GIT_STACKS_REPOSITORY_ID\" --surface-id \"$GIT_STACKS_SURFACE_ID\" --session-id \"\${GIT_STACKS_AGENT_SESSION_ID:-${source}-$GIT_STACKS_SURFACE_ID}\"${options.bestEffort ? " --best-effort" : ""}`
 }

@@ -59,6 +59,7 @@ pub const NamedRepository = struct { id: Id = [_]u8{0} ** 36, name: [96]u8 = [_]
 pub const Workspace = struct {
     id: Id,
     revision: u64 = 0,
+    priority: i32 = 0,
     name: [96]u8 = [_]u8{0} ** 96,
     name_len: u8 = 0,
     labels: [16][64]u8 = [_][64]u8{[_]u8{0} ** 64} ** 16,

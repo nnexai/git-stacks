@@ -263,6 +263,8 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
       name: workspace.name,
       branch: workspace.branch,
       labels: workspace.labels ?? [],
+      ...(workspace.pinned === true ? { pinned: true } : {}),
+      ...(workspace.priority !== undefined ? { priority: workspace.priority } : {}),
       repositories: workspace.repos.map((repo) => ({ id: repo.id!, name: repo.name, mode: repo.mode, path: repositoryPath(repo) })),
       commands,
       status: status.map((entry) => {

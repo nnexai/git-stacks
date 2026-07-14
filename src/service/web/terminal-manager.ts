@@ -21,6 +21,8 @@ type Session = {
   commandId?: string
   surfaceId: string
   title: string
+  automaticTitle: string
+  titlePinned: boolean
   state: WebTerminal["state"]
   createdAt: string
   endedAt?: number
@@ -165,6 +167,8 @@ export class WebTerminalManager {
       ...(input.command_id ? { commandId: input.command_id } : {}),
       surfaceId,
       title: input.command_id ? "Command" : "Shell",
+      automaticTitle: input.command_id ? "Command" : "Shell",
+      titlePinned: false,
       state: "running",
       createdAt: new Date(this.now()).toISOString(),
       exitCode: null,
@@ -182,11 +186,20 @@ export class WebTerminalManager {
     return this.project(session)
   }
 
-  rename(principalId: string, id: string, title: string): WebTerminal | undefined {
+  rename(principalId: string, id: string, title: string, mode: "manual" | "automatic"): WebTerminal | undefined {
     const session = this.sessions.get(id)
     if (!session || session.principalId !== principalId) return undefined
-    session.title = title
-    this.sendControl(session, { type: "renamed", title })
+    const normalized = title.replaceAll("\0", "").trim()
+    if (mode === "automatic") {
+      if (!normalized) return this.project(session)
+      session.automaticTitle = normalized
+      if (session.titlePinned) return this.project(session)
+      session.title = normalized
+    } else {
+      session.titlePinned = normalized.length > 0
+      session.title = session.titlePinned ? normalized : session.automaticTitle
+    }
+    this.sendControl(session, { type: "renamed", title: session.title, title_pinned: session.titlePinned })
     return this.project(session)
   }
 
@@ -332,6 +345,7 @@ export class WebTerminalManager {
       ...(session.commandId ? { command_id: session.commandId } : {}),
       surface_id: session.surfaceId,
       title: session.title,
+      title_pinned: session.titlePinned,
       state: session.state,
       created_at: session.createdAt,
       exit_code: session.exitCode,

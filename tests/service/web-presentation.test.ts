@@ -25,7 +25,7 @@ describe("web signal presentation", () => {
     expect(isBackgroundActivity(base)).toBe(true)
     expect(isActiveSession({ ...base, state: "waiting" })).toBe(true)
     expect(isBackgroundActivity({ ...base, state: "waiting" })).toBe(false)
-    expect(isActiveSession({ ...base, state: "completed" })).toBe(false)
+    expect(isActiveSession({ ...base, state: "completed" })).toBe(true)
   })
 
   test("matches hierarchical scope and provides stable labels", () => {

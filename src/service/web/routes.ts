@@ -7,6 +7,9 @@ import type { SnapshotAdapter } from "../snapshot-adapter"
 import {
   WebOperationMutationSchema,
   WebPairingExchangeSchema,
+  WebPinsSchema,
+  WebPrioritiesSchema,
+  WebSignalAcknowledgeSchema,
   WebSignalDismissSchema,
   WebTerminalCreateSchema,
   WebTerminalRenameSchema,
@@ -37,6 +40,8 @@ export interface WebApplicationOptions {
   onConnectionChange?: (count: number) => void
   onActivity?: () => void
   eventHeartbeatMs?: number
+  setWorkspacePins?: (ids: string[]) => void | Promise<void>
+  setWorkspacePriorities?: (priorities: Array<{ workspace_id: string; priority: number }>) => void | Promise<void>
 }
 
 function securityHeaders(contentType?: string): Headers {
@@ -168,10 +173,11 @@ export class WebApplication {
       try {
         const parsed = WebPairingExchangeSchema.safeParse(await body(request))
         if (!parsed.success) return webError("invalid_request", "Invalid pairing exchange", 400)
-        const result = this.principals.exchange(parsed.data.code)
+        const existing = this.principals.authenticate(request) ?? undefined
+        const result = this.principals.exchange(parsed.data.code, existing)
         if (!result) return webError("unauthorized", "Pairing code is invalid or expired", 401)
         this.options.onActivity?.()
-        return webJson({ paired: true }, 200, { "set-cookie": result.cookie })
+        return webJson({ paired: true, resumed: Boolean(existing) }, 200, result.cookie ? { "set-cookie": result.cookie } : undefined)
       } catch (error) {
         const status = (error as { status?: number }).status ?? 400
         return webError("invalid_request", (error as Error).message, status)
@@ -239,7 +245,33 @@ export class WebApplication {
       if (id) await this.terminals.closePrincipal(id)
       return webJson({ logged_out: true }, 200, { "set-cookie": this.principals.clearCookie() })
     }
-    if (request.method === "GET" && url.pathname === "/web/api/snapshot") return webJson(projectWebSnapshot(await this.options.snapshot.buildAll()))
+    if (request.method === "GET" && url.pathname === "/web/api/snapshot") {
+      return webJson(projectWebSnapshot(await this.options.snapshot.buildAll()))
+    }
+    if (request.method === "PUT" && url.pathname === "/web/api/pins") {
+      if (!this.options.setWorkspacePins) return webError("capability_unavailable", "Workspace pinning is unavailable", 409)
+      const parsed = WebPinsSchema.safeParse(await body(request))
+      if (!parsed.success) return webError("invalid_request", "Invalid pinned workspaces", 400)
+      const snapshots = await this.options.snapshot.buildAll()
+      const revision = snapshots[0]?.revision ?? "0"
+      if (revision !== parsed.data.expected_revision) return webError("conflict", "Authoritative snapshot revision is stale", 409)
+      const known = new Set(snapshots.map(({ workspace }) => workspace.id))
+      if (parsed.data.workspace_ids.some((id) => !known.has(id))) return webError("not_found", "Pinned workspace no longer exists", 404)
+      await this.options.setWorkspacePins(parsed.data.workspace_ids)
+      return webJson({ workspace_ids: parsed.data.workspace_ids })
+    }
+    if (request.method === "PUT" && url.pathname === "/web/api/priorities") {
+      if (!this.options.setWorkspacePriorities) return webError("capability_unavailable", "Workspace priorities are unavailable", 409)
+      const parsed = WebPrioritiesSchema.safeParse(await body(request))
+      if (!parsed.success) return webError("invalid_request", "Invalid workspace priorities", 400)
+      const snapshots = await this.options.snapshot.buildAll()
+      const revision = snapshots[0]?.revision ?? "0"
+      if (revision !== parsed.data.expected_revision) return webError("conflict", "Authoritative snapshot revision is stale", 409)
+      const known = new Set(snapshots.map(({ workspace }) => workspace.id))
+      if (parsed.data.priorities.some(({ workspace_id }) => !known.has(workspace_id))) return webError("not_found", "Workspace no longer exists", 404)
+      await this.options.setWorkspacePriorities(parsed.data.priorities)
+      return webJson({ priorities: parsed.data.priorities })
+    }
     if (request.method === "GET" && url.pathname === "/web/api/workspace-creation/catalog") {
       if (!this.options.workspaceCreationCatalog) return webError("capability_unavailable", "Workspace creation is unavailable", 409)
       return webJson(projectWebCatalog(await this.options.workspaceCreationCatalog()))
@@ -247,7 +279,15 @@ export class WebApplication {
     if (request.method === "GET" && url.pathname === "/web/api/signals") {
       if (!this.options.signalProjection) return webError("capability_unavailable", "Signals are unavailable", 409)
       const projection = await this.options.signalProjection()
-      return webJson({ ...projection, signals: projection.signals.map(projectWebSignal) })
+      return webJson({ ...projection, signals: this.principals.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
+    }
+    if (request.method === "POST" && url.pathname === "/web/api/signals/acknowledge") {
+      if (!this.options.signalProjection) return webError("capability_unavailable", "Signals are unavailable", 409)
+      const parsed = WebSignalAcknowledgeSchema.safeParse(await body(request))
+      if (!parsed.success) return webError("invalid_request", "Invalid signal acknowledgement", 400)
+      const projection = await this.options.signalProjection()
+      const acknowledged = this.principals.acknowledgeSurface(principal.id, parsed.data.surface_id, projection.signals)
+      return webJson({ ...projection, acknowledged, signals: this.principals.visibleSignals(principal.id, projection.signals).map(projectWebSignal) })
     }
     if (request.method === "POST" && url.pathname === "/web/api/signals/dismiss") {
       if (!this.options.dismissSignal) return webError("capability_unavailable", "Signals are unavailable", 409)
@@ -274,7 +314,7 @@ export class WebApplication {
     if (terminalMatch && request.method === "PATCH") {
       const parsed = WebTerminalRenameSchema.safeParse(await body(request))
       if (!parsed.success) return webError("invalid_request", "Invalid terminal title", 400)
-      const terminal = this.terminals.rename(principal.id, terminalMatch[1]!, parsed.data.title)
+      const terminal = this.terminals.rename(principal.id, terminalMatch[1]!, parsed.data.title, parsed.data.mode)
       return terminal ? webJson(terminal) : webError("not_found", "Terminal not found", 404)
     }
     if (request.method === "POST" && url.pathname === "/web/api/operations") return this.submitOperation(request, principal)

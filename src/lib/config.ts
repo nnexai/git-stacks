@@ -258,6 +258,8 @@ export const WorkspaceSchema = z.object({
   files: FilesSchema,
   ports: PortsSchema,
   labels: z.array(LabelSchema).optional(),
+  pinned: z.boolean().optional(),
+  priority: z.number().int().min(-2147483648).max(2147483647).optional(),
   commands: z.record(z.string(), z.string()).optional(),
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>

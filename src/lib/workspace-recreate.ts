@@ -65,6 +65,8 @@ export function planWorkspaceRecreate(
     ...(workspace.cmux_workspace_id ? { cmux_workspace_id: workspace.cmux_workspace_id } : {}),
     ...(workspace.source ? { source: structuredClone(workspace.source) } : {}),
     ...(workspace.labels ? { labels: structuredClone(workspace.labels) } : {}),
+    ...(workspace.pinned === true ? { pinned: true } : {}),
+    ...(workspace.priority !== undefined ? { priority: workspace.priority } : {}),
     repos: desiredRepos,
     ...(template.hooks ? { hooks: structuredClone(template.hooks) } : {}),
     ...(template.commands ? { commands: structuredClone(template.commands) } : {}),

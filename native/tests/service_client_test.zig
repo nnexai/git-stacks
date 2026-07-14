@@ -124,11 +124,12 @@ test "secure descriptor and credential discovery rejects unsafe authority" {
 }
 test "aggregate snapshot decodes normalized workspace repository pairs into reducer action" {
     var c = service.Client.init("Bearer secret");
-    const action = try c.decodeAggregateSnapshot("{\"protocol\":\"v1\",\"request_id\":\"req_1234567890123456\",\"ok\":true,\"data\":[{\"protocol\":\"v1\",\"request_id\":\"req_abcdefghijklmnop\",\"ok\":true,\"revision\":\"9\",\"generated_at\":\"2026-01-01T00:00:00Z\",\"workspace\":{\"id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"feature\",\"labels\":[\"client\"],\"repositories\":[{\"id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"repo\"}]}}]}");
+    const action = try c.decodeAggregateSnapshot("{\"protocol\":\"v1\",\"request_id\":\"req_1234567890123456\",\"ok\":true,\"data\":[{\"protocol\":\"v1\",\"request_id\":\"req_abcdefghijklmnop\",\"ok\":true,\"revision\":\"9\",\"generated_at\":\"2026-01-01T00:00:00Z\",\"workspace\":{\"id\":\"118f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"feature\",\"priority\":17,\"labels\":[\"client\"],\"repositories\":[{\"id\":\"218f47f4-5ab1-7c2d-8e90-123456789abc\",\"name\":\"repo\"}]}}]}");
     try std.testing.expect(action == .snapshot);
     try std.testing.expectEqual(@as(u8, 1), action.snapshot.workspace_count);
     try std.testing.expectEqual(@as(u8, 1), action.snapshot.pair_count);
     try std.testing.expectEqual(@as(u64, 9), action.snapshot.revision);
+    try std.testing.expectEqual(@as(i32, 17), action.snapshot.workspaces[0].priority);
     try std.testing.expectEqual(@as(u8, 1), action.snapshot.workspaces[0].label_count);
     try std.testing.expectEqualStrings("client", action.snapshot.workspaces[0].labels[0][0..action.snapshot.workspaces[0].label_lens[0]]);
 }

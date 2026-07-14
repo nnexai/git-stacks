@@ -2,8 +2,9 @@ import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, re
 import { dirname, join } from "path"
 import { homedir } from "os"
 
-export const AGENT_INTEGRATION_VERSION = 1
+export const AGENT_INTEGRATION_VERSION = 2
 export const OWNERSHIP_MARKER = "git-stacks-managed-signal-v1"
+const LEGACY_OWNERSHIP_MARKERS = ["git-stacks-managed-attention-v1"] as const
 export type IntegrationProvider = "codex" | "claude" | "copilot" | "opencode"
 export type IntegrationState = "installed" | "outdated" | "not-installed" | "disabled" | "failed"
 
@@ -23,8 +24,19 @@ const providerEvents: Record<"codex" | "claude", [string, string, string?][]> = 
 function command(provider: IntegrationProvider, state: string): string {
   const guard = '[ -n "${GIT_STACKS_SIGNAL_TOKEN:-}" ] && [ -n "${GIT_STACKS_SURFACE_ID:-}" ]'
   const tty = '__gs_tty=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d "[:space:]"); case "$__gs_tty" in *[0-9]*) __gs_tty="/dev/${__gs_tty#/dev/}";; *) __gs_tty=/dev/tty;; esac'
-  const emit = `printf '\\033]9;git-stacks-signal:%s:${provider}:%s:${state}\\033\\\\' "$GIT_STACKS_SIGNAL_TOKEN" "\${GIT_STACKS_AGENT_SESSION_ID:-$PPID}" > "$__gs_tty"`
+  // Hook commands are separate child processes, so $PPID is not a stable
+  // lifecycle identity. One provider owns one activity lane per terminal
+  // surface; an explicit adapter session id can still override this fallback.
+  const emit = `printf '\\033]9;git-stacks-signal:%s:${provider}:%s:${state}\\033\\\\' "$GIT_STACKS_SIGNAL_TOKEN" "\${GIT_STACKS_AGENT_SESSION_ID:-${provider}-$GIT_STACKS_SURFACE_ID}" > "$__gs_tty"`
   return `${guard} && { ${tty}; ${emit}; } >/dev/null 2>&1 || true # ${OWNERSHIP_MARKER}`
+}
+
+function hasOwnershipMarker(bytes: string): boolean {
+  return bytes.includes(OWNERSHIP_MARKER) || LEGACY_OWNERSHIP_MARKERS.some((marker) => bytes.includes(marker))
+}
+
+function hasLegacyOwnershipMarker(bytes: string): boolean {
+  return LEGACY_OWNERSHIP_MARKERS.some((marker) => bytes.includes(marker))
 }
 
 function readJson(path: string): JsonObject {
@@ -48,7 +60,7 @@ function atomicWrite(path: string, bytes: string): void {
 function managed(group: unknown): boolean {
   if (!group || typeof group !== "object") return false
   const hooks = (group as { hooks?: unknown }).hooks
-  return Array.isArray(hooks) && hooks.some((hook) => hook && typeof hook === "object" && typeof (hook as { command?: unknown }).command === "string" && (hook as { command: string }).command.includes(OWNERSHIP_MARKER))
+  return Array.isArray(hooks) && hooks.some((hook) => hook && typeof hook === "object" && typeof (hook as { command?: unknown }).command === "string" && hasOwnershipMarker((hook as { command: string }).command))
 }
 
 function installMerged(home: string, provider: "codex" | "claude"): void {
@@ -102,7 +114,7 @@ function uninstallMerged(home: string, provider: "codex" | "claude"): void {
   }
   if (provider === "codex") {
     const config = join(home, ".codex/config.toml")
-    if (existsSync(config)) atomicWrite(config, readFileSync(config, "utf8").split("\n").filter((line) => !(line.includes(OWNERSHIP_MARKER) && /^\s*hooks\s*=/.test(line))).join("\n"))
+    if (existsSync(config)) atomicWrite(config, readFileSync(config, "utf8").split("\n").filter((line) => !(hasOwnershipMarker(line) && /^\s*hooks\s*=/.test(line))).join("\n"))
   }
 }
 
@@ -124,12 +136,22 @@ function openCodeSource(): string {
 }
 
 function ownedWrite(path: string, source: string): void {
-  if (existsSync(path) && !readFileSync(path, "utf8").includes(OWNERSHIP_MARKER)) throw new Error("refusing to replace an unowned file")
+  if (existsSync(path) && !hasOwnershipMarker(readFileSync(path, "utf8"))) throw new Error("refusing to replace an unowned file")
   atomicWrite(path, source)
 }
 
 function dedicatedPath(home: string, provider: "copilot" | "opencode"): string {
   return provider === "copilot" ? join(home, ".copilot/hooks/git-stacks.json") : join(home, ".config/opencode/plugins/git-stacks-signal.js")
+}
+
+function legacyDedicatedPath(home: string, provider: "copilot" | "opencode"): string | undefined {
+  return provider === "opencode" ? join(home, ".config/opencode/plugins/git-stacks-attention.js") : undefined
+}
+
+function removeLegacyDedicatedIntegration(home: string, provider: "copilot" | "opencode"): void {
+  const path = legacyDedicatedPath(home, provider)
+  if (!path || !existsSync(path)) return
+  if (hasOwnershipMarker(readFileSync(path, "utf8"))) rmSync(path)
 }
 
 function providerState(home: string, provider: IntegrationProvider): IntegrationState {
@@ -138,6 +160,7 @@ function providerState(home: string, provider: IntegrationProvider): Integration
     if (!existsSync(path)) return "not-installed"
     const bytes = readFileSync(path, "utf8")
     if (!bytes.includes(OWNERSHIP_MARKER)) return "not-installed"
+    if (hasLegacyOwnershipMarker(bytes)) return "outdated"
     if (provider === "codex") {
       const config = join(home, ".codex/config.toml")
       if (!existsSync(config) || !/^\s*hooks\s*=\s*true\b/m.test(readFileSync(config, "utf8"))) return "outdated"
@@ -147,7 +170,10 @@ function providerState(home: string, provider: IntegrationProvider): Integration
   const path = dedicatedPath(home, provider)
   if (!existsSync(path)) return "not-installed"
   const actual = readFileSync(path, "utf8")
-  if (!actual.includes(OWNERSHIP_MARKER)) return "not-installed"
+  if (!hasOwnershipMarker(actual)) return "not-installed"
+  if (!actual.includes(OWNERSHIP_MARKER) || hasLegacyOwnershipMarker(actual)) return "outdated"
+  const legacyPath = legacyDedicatedPath(home, provider)
+  if (legacyPath && existsSync(legacyPath) && hasOwnershipMarker(readFileSync(legacyPath, "utf8"))) return "outdated"
   return actual === (provider === "copilot" ? copilotSource() : openCodeSource()) ? "installed" : "outdated"
 }
 
@@ -163,7 +189,10 @@ export function installAgentIntegrations(options: IntegrationOptions = {}): Inte
   for (const provider of ["codex", "claude", "copilot", "opencode"] as const) try {
     if (providerState(home, provider) === "installed") { health.push({ provider, state: "installed" }); continue }
     if (provider === "codex" || provider === "claude") installMerged(home, provider)
-    else ownedWrite(dedicatedPath(home, provider), provider === "copilot" ? copilotSource() : openCodeSource())
+    else {
+      ownedWrite(dedicatedPath(home, provider), provider === "copilot" ? copilotSource() : openCodeSource())
+      removeLegacyDedicatedIntegration(home, provider)
+    }
     health.push({ provider, state: "installed" })
   } catch (error) { health.push({ provider, state: "failed", detail: error instanceof Error ? error.message : String(error) }) }
   return { enabled, version: AGENT_INTEGRATION_VERSION, providers: health }
@@ -174,7 +203,8 @@ export function uninstallAgentIntegrations(options: Pick<IntegrationOptions, "ho
   for (const provider of ["codex", "claude"] as const) uninstallMerged(home, provider)
   for (const provider of ["copilot", "opencode"] as const) {
     const path = dedicatedPath(home, provider)
-    if (existsSync(path) && readFileSync(path, "utf8").includes(OWNERSHIP_MARKER)) rmSync(path)
+    if (existsSync(path) && hasOwnershipMarker(readFileSync(path, "utf8"))) rmSync(path)
+    removeLegacyDedicatedIntegration(home, provider)
   }
   return integrationStatus({ home })
 }

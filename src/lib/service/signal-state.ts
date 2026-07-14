@@ -5,7 +5,10 @@ export type SignalMutation = { sequence: string; signal: Signal } | { sequence: 
 export type SignalProjection = { signals: JournaledSignal[]; unread: JournaledSignal[]; dismissed: string[]; overflow: number }
 
 const seq = (value: string) => BigInt(value)
-const activityKey = (signal: ActivitySignal) => `${signal.source}\0${signal.session_id}\0${signal.surface_id}`
+// A terminal surface has one current lifecycle lane per provider. Session ids
+// remain part of the event payload for diagnostics, but must not strand an old
+// `working` state when a provider restarts or a legacy hook used an unstable id.
+const activityKey = (signal: ActivitySignal) => `${signal.source}\0${signal.surface_id}`
 
 export class SignalState {
   private readonly activities = new Map<string, JournaledSignal>()

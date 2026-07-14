@@ -49,6 +49,32 @@ describe("user-level native agent integrations", () => {
     expect(existsSync(join(home, ".codex"))).toBe(false)
   })
 
+  test("migrates legacy attention integrations and uses one stable session per terminal surface", () => {
+    const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-migrate-"))
+    mkdirSync(join(home, ".codex"), { recursive: true })
+    mkdirSync(join(home, ".copilot", "hooks"), { recursive: true })
+    mkdirSync(join(home, ".config", "opencode", "plugins"), { recursive: true })
+    writeFileSync(join(home, ".codex", "hooks.json"), JSON.stringify({ hooks: {
+      Stop: [{ hooks: [{ type: "command", command: "echo foreign" }] }, { hooks: [{ type: "command", command: "echo old # git-stacks-managed-attention-v1" }] }],
+    } }))
+    writeFileSync(join(home, ".copilot", "hooks", "git-stacks.json"), JSON.stringify({ version: 1, _git_stacks: "git-stacks-managed-attention-v1", hooks: {} }))
+    const oldOpenCode = join(home, ".config", "opencode", "plugins", "git-stacks-attention.js")
+    writeFileSync(oldOpenCode, "// git-stacks-managed-attention-v1\n")
+
+    const report = installAgentIntegrations({ home })
+
+    expect(report.version).toBe(2)
+    expect(report.providers.every((entry) => entry.state === "installed")).toBe(true)
+    const codex = readFileSync(join(home, ".codex", "hooks.json"), "utf8")
+    expect(codex).toContain("echo foreign")
+    expect(codex).not.toContain("git-stacks-managed-attention-v1")
+    expect(codex).toContain("${GIT_STACKS_AGENT_SESSION_ID:-codex-$GIT_STACKS_SURFACE_ID}")
+    const copilot = readFileSync(join(home, ".copilot", "hooks", "git-stacks.json"), "utf8")
+    expect(copilot).toContain("${GIT_STACKS_AGENT_SESSION_ID:-copilot-$GIT_STACKS_SURFACE_ID}")
+    expect(copilot).toContain('"agentStop"')
+    expect(existsSync(oldOpenCode)).toBe(false)
+  })
+
   test("ordinary inherited hook context emits authenticated OSC to its parent tty", async () => {
     if (!Bun.which("script")) return
     const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-tty-"))

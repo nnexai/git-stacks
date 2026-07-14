@@ -507,6 +507,10 @@ fn aggregateState(body: []const u8) !model.State {
         @memcpy(&ws.id, wid);
         @memcpy(ws.name[0..wname.len], wname);
         ws.name_len = @intCast(wname.len);
+        if (wo.get("priority")) |priority| {
+            if (priority != .integer) return error.Invalid;
+            ws.priority = std.math.cast(i32, priority.integer) orelse return error.Capacity;
+        }
         if (wo.get("labels")) |labels| {
             if (labels != .array or labels.array.items.len > 16) return error.Capacity;
             for (labels.array.items, 0..) |label, li| {

@@ -34,7 +34,25 @@ describe("web request security boundary", () => {
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
     const credential = provisionOfficialClient("web-security", { serviceRoot: root })
     const snapshot = { buildAll: async () => fixture(), buildWorkspace: async () => fixture()[0]! }
-    const web = new WebApplication({ assetsRoot: assets, snapshot })
+    const pinWrites: string[][] = []
+    const priorityWrites: Array<Array<{ workspace_id: string; priority: number }>> = []
+    let signalState: "working" | "completed" = "working"
+    let signalTime = "2026-07-14T10:00:00.000Z"
+    const signalProjection = async () => ({
+      signals: [{
+        version: 1 as const, kind: "activity" as const, id: "sig_0123456789abcdef", source: "codex" as const,
+        workspace_id: fixture()[0]!.workspace.id, repository_id: fixture()[0]!.workspace.repositories[0]!.id,
+        surface_id: "33333333-3333-4333-8333-333333333333", session_id: "codex-surface", state: signalState, occurred_at: signalTime,
+      }],
+      dismissed: [], sequence: "1",
+    })
+    const web = new WebApplication({
+      assetsRoot: assets,
+      snapshot,
+      signalProjection,
+      setWorkspacePins: (ids) => { pinWrites.push(ids) },
+      setWorkspacePriorities: (priorities) => { priorityWrites.push(priorities) },
+    })
     const service = startServiceServer({ serviceRoot: root, snapshot, web })
     cleanup.push(() => service.stop())
     const origin = service.url.origin
@@ -64,6 +82,30 @@ describe("web request security boundary", () => {
     expect(snapshotResponse.status).toBe(200)
     const encoded = JSON.stringify(await snapshotResponse.json())
     for (const secret of ["/secret/repository", "secret command", "secret-env", "secret-ref", "/secret/cwd", "4321"]) expect(encoded).not.toContain(secret)
+
+    const mutationHeaders = { cookie, origin, "content-type": "application/json", "sec-fetch-site": "same-origin" }
+    const pinResponse = await fetch(new URL("/web/api/pins", service.url), { method: "PUT", headers: mutationHeaders, body: JSON.stringify({ workspace_ids: [fixture()[0]!.workspace.id], expected_revision: "1" }) })
+    expect(pinResponse.status).toBe(200)
+    expect(pinWrites).toEqual([[fixture()[0]!.workspace.id]])
+    const priorityResponse = await fetch(new URL("/web/api/priorities", service.url), { method: "PUT", headers: mutationHeaders, body: JSON.stringify({ priorities: [{ workspace_id: fixture()[0]!.workspace.id, priority: 9 }], expected_revision: "1" }) })
+    expect(priorityResponse.status).toBe(200)
+    expect(priorityWrites).toEqual([[{ workspace_id: fixture()[0]!.workspace.id, priority: 9 }]])
+    const stalePriority = await fetch(new URL("/web/api/priorities", service.url), { method: "PUT", headers: mutationHeaders, body: JSON.stringify({ priorities: [], expected_revision: "0" }) })
+    expect(stalePriority.status).toBe(409)
+
+    const initialSignals = await (await fetch(new URL("/web/api/signals", service.url), { headers: { cookie, "sec-fetch-site": "same-origin" } })).json() as any
+    expect(initialSignals.data.signals).toHaveLength(1)
+    const acknowledged = await fetch(new URL("/web/api/signals/acknowledge", service.url), {
+      method: "POST", headers: mutationHeaders, body: JSON.stringify({ surface_id: "33333333-3333-4333-8333-333333333333" }),
+    })
+    expect(acknowledged.status).toBe(200)
+    expect((await acknowledged.json() as any).data).toMatchObject({ acknowledged: 1, signals: [] })
+    signalState = "completed"
+    signalTime = "2026-07-14T10:00:01.000Z"
+    const completedSignals = await (await fetch(new URL("/web/api/signals", service.url), { headers: { cookie, "sec-fetch-site": "same-origin" } })).json() as any
+    expect(completedSignals.data.signals).toMatchObject([{ state: "completed" }])
+    const invalidAcknowledgement = await fetch(new URL("/web/api/signals/acknowledge", service.url), { method: "POST", headers: mutationHeaders, body: JSON.stringify({ surface_id: "not-a-surface" }) })
+    expect(invalidAcknowledgement.status).toBe(400)
 
     const rejectedRead = await fetch(new URL("/web/api/snapshot", service.url), { headers: { cookie, "sec-fetch-site": "cross-site" } })
     expect(rejectedRead.status).toBe(403)

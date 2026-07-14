@@ -145,6 +145,8 @@ export type LaunchSpecification = z.infer<typeof LaunchSpecificationSchema>
 export const WorkspaceSnapshotSchema = z.strictObject({
   id: EntityIdSchema, name: z.string().min(1), branch: z.string(), repositories: z.array(RepositorySnapshotSchema), launch: LaunchSpecificationSchema,
   labels: z.array(z.string().min(1).max(64)).max(16).optional(),
+  pinned: z.boolean().optional(),
+  priority: z.number().int().min(-2147483648).max(2147483647).optional(),
   commands: z.array(z.string()).optional(),
   status: z.array(z.strictObject({
     repository_id: EntityIdSchema, name: utf8BoundedString(96, 1), exists: z.boolean(), dirty: z.boolean(), branch: utf8BoundedString(96),

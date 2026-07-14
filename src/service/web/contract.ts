@@ -23,8 +23,22 @@ export const WebTerminalCreateSchema = z.strictObject({
   cols: z.number().int().min(2).max(400),
   rows: z.number().int().min(1).max(240),
 })
-export const WebTerminalRenameSchema = z.strictObject({ title: utf8BoundedString(64, 1) })
+export const WebTerminalRenameSchema = z.discriminatedUnion("mode", [
+  z.strictObject({ mode: z.literal("manual"), title: utf8BoundedString(64) }),
+  z.strictObject({ mode: z.literal("automatic"), title: utf8BoundedString(64, 1) }),
+])
 export const WebTerminalIdSchema = z.string().regex(/^term_[A-Za-z0-9_-]{16,}$/)
+export const WebPinsSchema = z.strictObject({
+  workspace_ids: z.array(EntityIdSchema).max(16).refine((ids) => new Set(ids).size === ids.length),
+  expected_revision: RevisionSchema,
+})
+export const WebPrioritiesSchema = z.strictObject({
+  priorities: z.array(z.strictObject({
+    workspace_id: EntityIdSchema,
+    priority: z.number().int().min(-2147483648).max(2147483647),
+  })).max(16).refine((entries) => new Set(entries.map(({ workspace_id }) => workspace_id)).size === entries.length),
+  expected_revision: RevisionSchema,
+})
 export const WebWorkspaceMutationSchema = z.strictObject({
   workspace_id: EntityIdSchema,
   expected_revision: RevisionSchema,
@@ -34,6 +48,7 @@ export const WebOperationMutationSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.enum(["workspace.open", "workspace.close"]), request: WebWorkspaceMutationSchema }),
 ])
 export const WebSignalDismissSchema = z.strictObject({ signal_id: SignalIdSchema })
+export const WebSignalAcknowledgeSchema = z.strictObject({ surface_id: EntityIdSchema })
 export const WebTerminalSocketControlSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("input"), data: z.string().max(64 * 1024) }),
   z.strictObject({ type: z.literal("resize"), cols: z.number().int().min(2).max(400), rows: z.number().int().min(1).max(240) }),
@@ -66,6 +81,7 @@ export const WebWorkspaceSchema = z.strictObject({
   id: EntityIdSchema,
   name: utf8BoundedString(96, 1),
   branch: utf8BoundedString(96),
+  priority: z.number().int().min(-2147483648).max(2147483647),
   labels: z.array(utf8BoundedString(64, 1)).max(16),
   repositories: z.array(WebRepositorySchema),
   commands: z.array(WebCommandSchema),
@@ -78,6 +94,7 @@ export const WebSnapshotSchema = z.strictObject({
   protocol: z.literal(WEB_PROTOCOL),
   revision: RevisionSchema,
   generated_at: TimestampSchema,
+  pinned_workspace_ids: z.array(EntityIdSchema).max(16),
   workspaces: z.array(WebWorkspaceSchema),
 })
 export type WebSnapshot = z.infer<typeof WebSnapshotSchema>
@@ -89,6 +106,7 @@ export const WebTerminalSchema = z.strictObject({
   command_id: CommandIdSchema.optional(),
   surface_id: EntityIdSchema,
   title: utf8BoundedString(64, 1),
+  title_pinned: z.boolean(),
   state: z.enum(["starting", "running", "ended", "closing", "cleanup_failed"]),
   created_at: TimestampSchema,
   exit_code: z.number().int().nullable(),

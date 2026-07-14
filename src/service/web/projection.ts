@@ -8,12 +8,17 @@ export function projectWebSnapshot(snapshots: WorkspaceSnapshotResponse[]): WebS
     protocol: "web-v1",
     revision,
     generated_at: generatedAt,
+    pinned_workspace_ids: snapshots
+      .filter(({ workspace }) => workspace.pinned === true)
+      .sort((left, right) => left.workspace.name.localeCompare(right.workspace.name))
+      .map(({ workspace }) => workspace.id),
     workspaces: snapshots.map(({ workspace }) => {
       const status = new Map((workspace.status ?? []).map((entry) => [entry.repository_id, entry]))
       return {
         id: workspace.id,
         name: workspace.name,
         branch: workspace.branch,
+        priority: workspace.priority ?? 0,
         labels: workspace.labels ?? [],
         repositories: workspace.repositories.map((repository) => {
           const item = status.get(repository.id)

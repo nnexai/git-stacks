@@ -64,6 +64,7 @@ pub fn repositoryIndexForKey(ws: *const model.Workspace, repository_id: model.Id
 fn lessRow(state: *const model.State, a: WorkspaceRowProjection, b: WorkspaceRowProjection) bool {
     if (@intFromEnum(a.section) != @intFromEnum(b.section)) return @intFromEnum(a.section) < @intFromEnum(b.section);
     const aw = &state.workspaces[workspaceIndex(state, a.key.workspace_id).?]; const bw = &state.workspaces[workspaceIndex(state, b.key.workspace_id).?];
+    if (aw.priority != bw.priority) return aw.priority > bw.priority;
     const order = std.ascii.orderIgnoreCase(aw.name[0..aw.name_len], bw.name[0..bw.name_len]);
     if (order != .eq) return order == .lt;
     const id_order = std.mem.order(u8, &a.key.workspace_id, &b.key.workspace_id);

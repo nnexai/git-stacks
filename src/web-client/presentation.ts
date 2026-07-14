@@ -53,7 +53,7 @@ export function signalGroup(signal: PresentedSignal): SignalGroup {
 }
 
 export function isActiveSession(signal: PresentedSignal): boolean {
-  return signal.kind === "activity" && ["working", "waiting", "failed"].includes(signal.state ?? "")
+  return signal.kind === "activity" && ["working", "waiting", "completed", "failed"].includes(signal.state ?? "")
 }
 
 export function isBackgroundActivity(signal: PresentedSignal): boolean {
