@@ -1,0 +1,11 @@
+{
+  "name": "git-stacks-spike-017-node-service-transport",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node probe.mjs"
+  },
+  "dependencies": {
+    "ws": "8.21.1"
+  }
+}
