@@ -28,5 +28,6 @@ Secure current and future local-network clients without public DNS or installing
 | 011 | webtransport-certificate-pinning | horizontal | Self-signed encrypted browser transport without public DNS or a local CA | PARTIAL | security, webtransport, macos, dependencies |
 | 012 | delegated-browser-identity | horizontal | Durable helper identity and short-lived proof-of-possession browser delegation | VALIDATED | security, identity, browser, indexeddb, macos |
 | 013 | secure-reconnect-port-takeover | horizontal | Helper epoch leases, reconnect, abrupt loss, and hostile localhost port reuse | VALIDATED | security, identity, reconnect, browser, macos |
+| 014 | terminal-stream-viability | horizontal | Framed terminal throughput, backpressure, visibility, replay, cancellation, and multiplexing | VALIDATED | security, terminal, webtransport, backpressure, macos |
 
 Unsupported desktop-renderer experiments were removed from the active branch and remain available through repository history and the archive tag recorded in `.planning/notes/native-client-retirement.md`.
