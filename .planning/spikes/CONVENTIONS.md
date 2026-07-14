@@ -23,6 +23,9 @@
 - Let a localhost helper hold durable browser-client identity outside browser storage and delegate a short-lived, non-exportable browser session key after explicit pairing.
 - Bind each helper-signed browser delegation to the exact service audience, browser origin, browser public key, scopes, issue time, expiry, and a revocable helper-session epoch using canonical signed framing.
 - Require a fresh one-use challenge and proof of possession for every connection, including reconnects; accepting one proof must never authorize replay on another connection.
+- Revoke a helper-session epoch before releasing its localhost listener on clean shutdown; expire an abruptly disconnected epoch after a short, explicit heartbeat lease.
+- Treat expired and revoked epochs as terminal. A helper restart registers a new random epoch and issues fresh browser delegations.
+- Never accept localhost cookies, IndexedDB state, or possession of a localhost port as credentials at the remote service.
 - Prefer an operating-system credential store for persistent helper keys, with an atomic mode `0600` file as an explicit portable fallback rather than a protocol dependency.
 - Require exact protocol framing, replay protection, bounded streams, backpressure, idle expiry, and revocation regardless of transport.
 - Do not adopt a native transport addon until Linux and modern macOS runtime, active-session shutdown, reconnect, rotation, vulnerability, maintenance, and license-notice gates pass.
