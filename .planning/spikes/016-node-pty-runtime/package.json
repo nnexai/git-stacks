@@ -1,0 +1,11 @@
+{
+  "name": "git-stacks-spike-016-node-pty-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node probe.mjs"
+  },
+  "dependencies": {
+    "node-pty": "1.2.0-beta.14"
+  }
+}
