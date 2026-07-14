@@ -2,9 +2,22 @@
 
 ## Stack
 
-- Bun/TypeScript owns orchestration, service behavior, and verification.
+- The currently released implementation remains Bun/TypeScript while the next architecture is evaluated.
+- The intended default distribution uses Node 24 LTS for the local-only CLI, shared core, service, and web build; Bun remains isolated to the optional OpenTUI client.
+- Pin TypeScript 6.x during the runtime/package migration. Treat TypeScript 7 adoption as separate compatibility work.
 - xterm.js renders browser terminals while `Bun.Terminal` owns local PTYs.
 - Keep the shared service protocol independent from its carrier; TUI IPC, HTTP/SSE/WebSocket, and future WebTransport are adapters around one service core.
+
+## Node Migration Patterns
+
+- Keep the existing CLI daemonless and local-only. It calls the shared core directly; remote scripting belongs to a future dedicated client.
+- Keep protocol contracts separate from domain execution. Service, web, TUI, and future clients share protocol/client packages; CLI and service share core domain operations.
+- Put process execution, clocks/delay, globbing, executable lookup, logging, PTYs, and network carriers behind narrow adapters instead of scattering runtime substitutions through domain modules.
+- Use per-package ESM builds with declared third-party dependencies external. Do not bundle an entire dependency tree into ESM when a package contains non-analyzable CommonJS requires.
+- Use Node's standard HTTP server and `ws` with WebSocket compression disabled by default. Preserve SSE and terminal policy above transport adapters.
+- Treat filesystem notifications as latency hints. Rebuild authoritative state after debounce and use a bounded full-content reconciliation digest to recover missed events.
+- Use unique same-directory temporary paths for atomic replacement. Do not share `${path}.tmp` between processes.
+- Avoid global locks. Reserve narrow per-target serialization for demonstrated read-modify-write races that would otherwise lose valid field-level updates.
 
 ## Browser Terminal Patterns
 
@@ -36,3 +49,10 @@
 - Require exact protocol framing, replay protection, bounded streams, backpressure, idle expiry, and revocation regardless of transport.
 - Do not adopt a native transport addon until Linux and modern macOS runtime, active-session shutdown, reconnect, rotation, vulnerability, maintenance, and license-notice gates pass.
 - Preserve same-origin loopback protections for local bootstrap. A random localhost port is discovery, not durable identity or an authorization boundary.
+
+## Tools and Libraries
+
+- `ws` 8.21.1 is the validated Node WebSocket adapter: MIT, no required transitive runtime dependencies, and sufficient backpressure/lifecycle APIs.
+- `node-pty` is the validated Node PTY API shape, but production adoption is gated on a stable Microsoft release carrying Linux x64/arm64 and macOS x64/arm64 prebuilds, or an explicitly maintained equivalent distribution process.
+- esbuild is acceptable as an MIT-licensed build-time tool for project-code ESM output; runtime dependencies remain external.
+- Raw `fs.watch` plus content reconciliation is preferred initially over adding Chokidar for the small authoritative config tree.
