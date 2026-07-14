@@ -1,172 +1,64 @@
-# Requirements: git-stacks
+# Requirements: git-stacks Local Web Client
 
-**Defined:** 2026-07-11
-**Core Value:** One command takes you from "I need to work on feature X" to a fully running dev environment — right repos, right branches, right IDE/terminal open, hooks run — without manual steps.
+**Defined:** 2026-07-14
+**Core value:** One command creates a usable multi-repository development workspace and exposes it through local CLI, dashboard, and browser workflows.
 
-## v0.20.0 Native Workspace Client Requirements
+## Local Service
 
-### Workspace Service Contract
+- [x] **SVC-01:** The service binds to loopback, authenticates before routing, and publishes no bearer secret in discovery metadata.
+- [x] **SVC-02:** Clients consume authoritative workspace snapshots with stable workspace, repository, command, revision, and operation identities.
+- [x] **SVC-03:** Workspace mutations are idempotent, report structured progress, and are bounded by explicit capacity and timeout policies.
+- [x] **SVC-04:** Ordered events support replay, replay-gap recovery, bounded subscribers, and idle service shutdown.
+- [x] **SVC-05:** Workspace configuration changes invalidate snapshots without tearing down retained browser terminals.
 
-- [x] **SVC-01**: Native clients can negotiate a versioned `/v1` protocol and discover supported capabilities.
-- [x] **SVC-02**: Native clients can query workspace, repository, and named-command snapshots using stable opaque identities.
-- [x] **SVC-03**: Native clients receive git-stacks-resolved launch specifications without reading workspace YAML.
-- [x] **SVC-04**: Existing CLI and OpenTUI behavior remains compatible with the extracted service boundary.
-- [x] **SVC-05**: The local service accepts authenticated requests only from the paired native client and enforces bounded request, rate, and timeout policies.
+## Browser Security and Projection
 
-### Operations and Events
+- [x] **WEB-01:** `git-stacks web` issues a one-use pairing capability and exchanges it for a scoped HttpOnly browser principal.
+- [x] **WEB-02:** Web routes enforce same-origin Host, Origin, and Fetch Metadata rules and never expose service credentials.
+- [x] **WEB-03:** Browser DTOs omit raw launch environments, secret references, and unnecessary machine paths.
+- [x] **WEB-04:** Workspace, repository, command, operation, Git, label, priority, and signal state are projected through stable browser-safe identities.
+- [x] **WEB-05:** The web client provides workspace-first navigation, creation, command launching, context actions, responsive layout, and keyboard-accessible terminal focus.
 
-- [x] **EVT-01**: Long-running workspace mutations return operation identities and structured progress without blocking ordinary queries.
-- [x] **EVT-02**: Retried mutations use idempotency keys so destructive work is not duplicated.
-- [x] **EVT-03**: Native clients receive ordered operation and agent-attention events over SSE.
-- [x] **EVT-04**: A reconnecting client can replay retained events or detect a gap and rebuild state from an authoritative snapshot.
-- [x] **EVT-05**: Slow or disconnected clients cannot create unbounded service memory or event queues.
+## Browser Terminals
 
-### Shared Native Model
+- [x] **TERM-01:** The service creates multiple independent PTYs from trusted terminal launch resolution using only workspace, repository, command, revision, and dimensions supplied by the browser.
+- [x] **TERM-02:** Input, output, resize, title updates, close, exit, process-group cleanup, and command-shell retention have explicit lifecycle semantics.
+- [x] **TERM-03:** Hidden terminals pause bulk output streaming while lifecycle controls and signal capture remain live.
+- [x] **TERM-04:** Reattachment uses cursor-based bounded replay and reports explicit history loss instead of silently returning partial output.
+- [x] **TERM-05:** Sessions remain reconnectable after browser closure while retained by the running service, but do not claim survival across service restart or reboot.
+- [x] **TERM-06:** Terminal counts, replay bytes, socket pressure, and ended-session retention are bounded and observable.
 
-- [x] **CORE-01**: Linux and macOS clients share stable workspace, repository, command, operation, surface, and attention identities.
-- [x] **CORE-02**: A shared state reducer models connection, loading, failure, operation, tab, and attention transitions independently of platform UI types.
-- [x] **CORE-03**: Native shells access shared behavior through an opaque, versioned product-owned ABI.
-- [x] **CORE-04**: Cross-language golden fixtures verify native decoding and state transitions against the TypeScript contract.
-- [x] **CORE-05**: Restored session metadata never represents terminated processes as still running.
+## Workspace Signals
 
-### Linux Terminal Foundation
+- [x] **SIG-01:** Hooks, terminal OSC, and automation publish one strict provider-neutral signal envelope.
+- [x] **SIG-02:** Activity coalesces by provider session and exact terminal surface while notifications remain independently dismissible.
+- [x] **SIG-03:** Sidebar provider presence is deduplicated and terminal tabs retain exact provider and lifecycle state.
+- [x] **SIG-04:** Closing a terminal removes its activity projection and publishes durable idle tombstones for future cleanup.
+- [x] **SIG-05:** Selecting the exact terminal tab acknowledges its signal without clearing unrelated principals or notifications.
 
-- [x] **TERM-01**: The Linux client embeds one interactive libghostty terminal with correct keyboard, mouse, Unicode, resize, reflow, alternate-screen, clipboard, and IME behavior.
-- [x] **TERM-02**: Each terminal surface exclusively owns one PTY and process group with explicit exit, close, application-quit, and crash cleanup semantics.
-- [x] **TERM-03**: libghostty and its compatible Zig toolchain are exactly pinned behind a narrow adapter with upgrade smoke tests.
-- [x] **TERM-04**: Repeated terminal creation, resize, destruction, and GPU view lifecycle do not leak surfaces or leave orphaned processes.
-- [x] **TERM-05**: The terminal host exposes an honest native accessibility contract and documents any upstream limitations.
+## Compatibility
 
-### Linux Workspace Client
-
-- [x] **LNX-01**: Users can browse git-stacks workspaces and their repositories in a GTK4/libadwaita application.
-- [x] **LNX-02**: Users see explicit loading, empty, disconnected, incompatible, and failure states.
-- [x] **LNX-03**: Users can open multiple independent terminal tabs bound to selected workspace repositories.
-- [x] **LNX-04**: Live terminal tabs survive workspace navigation without recreation.
-- [x] **LNX-05**: Restarted clients restore tab metadata and clearly distinguish surfaces whose processes are no longer alive.
-- [x] **LNX-06**: Keyboard navigation, focus movement, IME interaction, and native accessibility work across the sidebar and terminal surfaces.
-- [x] **LNX-07**: Users can create a workspace from the native client by entering a name and branch and choosing either one template or one-or-more registered repositories.
-- [x] **LNX-08**: A running native client automatically reconciles workspace additions, updates, renames, and removals made by the CLI, TUI, or another process without reading workspace YAML or requiring restart.
-- [x] **LNX-09**: The native shell has keyboard-complete launcher and navigation behavior, truthful accessibility semantics, protected live-terminal close, adaptive layout, and actionable empty, error, and no-result states.
-
-### Commands and Attention
-
-- [x] **ACT-01**: Users can launch a shell using a service-resolved workspace/repository context.
-- [x] **ACT-02**: Users can launch a named workspace command in a new terminal tab using resolved cwd, environment, ports, and configuration.
-- [x] **ACT-03**: Agent hooks publish structured working, waiting, completed, failed, and idle states associated with workspace and surface identities.
-- [x] **ACT-04**: Users can see unread attention aggregated at workspace, repository, and terminal-tab levels.
-- [x] **ACT-05**: Selecting an attention item focuses the exact surviving surface or a documented nearest surviving context.
-- [x] **ACT-06**: Attention events never steal focus automatically and do not depend on scraping terminal output.
-- [x] **ACT-07**: Codex hooks publish the lifecycle states Codex exposes, and the native client preserves and renders provider, title, detail, unread state, and exact focus routing across snapshot refreshes.
-
-### Unified Workspace Signals
-
-- [x] **SIG-01**: Hooks, terminal OSC, app-owned ACP sessions, and CLI automation publish one versioned provider-neutral signal envelope with explicit kind, source, scope, lifecycle, content, and occurrence time.
-- [x] **SIG-02**: Activity signals coalesce by provider session and exact terminal surface while discrete notifications remain independently dismissible and replayable.
-- [x] **SIG-03**: The unused legacy message store and CLI plus the duplicate structured-attention publication contract are removed with no compatibility layer.
-- [x] **SIG-04**: The service journal, SSE stream, shared native ABI/model, and Linux client consume one signal contract, with attention implemented only as a UI projection.
-- [x] **SIG-05**: Automated and production-native verification proves hook, OSC, ACP, automation, replay, reconnect, capacity, dismissal, and exact-surface behavior without duplicate or lost signals.
-
-### Workspace and Signal Presentation
-
-- [x] **VIS-01**: Workspace rows expose default branch, pinned state, Git changes, agent presence, awaiting input, running work, unread notifications, pull-request/check state when available, and remote/missing state through a compact deterministic projection.
-- [x] **VIS-02**: Sidebar Pinned and Active sections order rows by user relevance while preserving stable selection, exact navigation, user grouping, and accessible redundant text.
-- [x] **VIS-03**: Agent/provider badges, activity pings, notification markers, Git counters, branch accents, and lifecycle icons remain legible and semantically distinct in dark, light, high-contrast, selected, unfocused, and reduced-motion states.
-- [ ] **VIS-04**: The attention/signal inbox uses clear hierarchy, grouping, lifecycle language, timestamps, provider identity, exact location, and actionable focus/dismiss controls without visual noise.
-- [x] **VIS-05**: Automated visual-contract, accessibility, interaction, and production GTK UAT verify representative workspace/signal combinations at normal, narrow, and 200% text layouts.
-
-### Linux Delivery
-
-- [ ] **PKG-01**: Users can install and launch the Linux client outside the source checkout with all service, native, and libghostty assets discoverable.
-- [ ] **PKG-02**: The supported Linux package passes clean-install smoke tests on the selected GTK/libadwaita distro floor.
-- [ ] **PKG-03**: The client passes Wayland and X11 terminal lifecycle, input, shutdown, and crash-cleanup acceptance checks.
-- [ ] **PKG-04**: Installed artifacts record pinned native dependency provenance and fail clearly on incompatible runtime dependencies.
-
-### macOS Architectural Proof
-
-- [ ] **MAC-01**: A SwiftUI client connects to the same authenticated service protocol and consumes the shared workspace model.
-- [ ] **MAC-02**: The macOS proof embeds one interactive libghostty surface through an AppKit/Metal host.
-- [ ] **MAC-03**: Users can select a workspace repository and launch one service-resolved terminal on macOS.
-- [ ] **MAC-04**: The macOS proof handles native keyboard, IME, resize, exit, attention, and teardown behavior.
-- [ ] **MAC-05**: Protocol and shared-model conformance tests run against both Linux and macOS clients.
-- [ ] **MAC-06**: macOS proof requirements are compiled and verified on a macOS CI runner or physical macOS host; Linux-only source inspection is not accepted as proof.
+- [x] **COMP-01:** Existing CLI and OpenTUI behavior remains supported alongside the service and browser client.
+- [x] **COMP-02:** External terminal integrations continue to own their sessions independently.
+- [x] **COMP-03:** Default build, test, and publish workflows require no unsupported desktop toolchain.
 
 ## Out of Scope
 
-| Feature | Reason |
-|---------|--------|
-| Split panes, terminal search, advanced layout persistence | Defer until the tab-based vertical slice is validated. |
-| Built-in editor, diff browser, PR/CI dashboard, merge automation | Separate product breadth; not required to validate the native workspace client. |
-| Agent prompt orchestration, fan-out, AI naming | git-stacks supplies neutral attention and workspace context, not agent policy. |
-| tmux/cmux session inventory and control | External-session control is distinct from the native client's owned terminals. |
-| New command palette or configuration language | Existing named workspace commands already provide the composable command model. |
-| Polished macOS parity, signing, distribution, and updates | v0.20.0 proves architecture and one terminal on an actual macOS execution environment. |
-| Windows support | Linux-first with macOS architectural proof. |
-| Replacing the CLI or OpenTUI dashboard | The native client is additive. |
+- Remote or LAN hosting.
+- Multi-user collaboration and concurrent terminal writers.
+- Durable terminal multiplexing across service restart or machine reboot.
+- Browser PTYs on platforms without actual-host lifecycle verification.
+- Additional desktop application clients.
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| SVC-01 | Phase 104 | Complete |
-| SVC-02 | Phase 104 | Complete |
-| SVC-03 | Phase 104 | Complete |
-| SVC-04 | Phase 104 | Complete |
-| SVC-05 | Phase 104 | Complete |
-| EVT-01 | Phase 104 | Complete |
-| EVT-02 | Phase 104 | Complete |
-| EVT-03 | Phase 104 | Complete |
-| EVT-04 | Phase 104 | Complete |
-| EVT-05 | Phase 104 | Complete |
-| CORE-01 | Phase 105 | Complete |
-| CORE-02 | Phase 105 | Complete |
-| CORE-03 | Phase 105 | Complete |
-| CORE-04 | Phase 105 | Complete |
-| CORE-05 | Phase 105 | Complete |
-| TERM-01 | Phase 105 | Complete |
-| TERM-02 | Phase 105 | Complete |
-| TERM-03 | Phase 105 | Complete |
-| TERM-04 | Phase 105 | Complete |
-| TERM-05 | Phase 105 | Complete |
-| LNX-01 | Phase 106 | Complete |
-| LNX-02 | Phase 106 | Complete |
-| LNX-03 | Phase 106 | Complete |
-| LNX-04 | Phase 106 | Complete |
-| LNX-05 | Phase 106 | Complete |
-| LNX-06 | Phase 106 | Complete |
-| LNX-07 | Phase 107 | Complete |
-| LNX-08 | Phase 107 | Complete |
-| LNX-09 | Phase 107 | Complete |
-| ACT-01 | Phase 106 | Complete |
-| ACT-02 | Phase 106 | Complete |
-| ACT-03 | Phase 106 | Complete |
-| ACT-04 | Phase 106 | Complete |
-| ACT-05 | Phase 106 | Complete |
-| ACT-06 | Phase 106 | Complete |
-| ACT-07 | Phase 107 | Complete |
-| SIG-01 | Phase 107.1 | Complete |
-| SIG-02 | Phase 107.1 | Complete |
-| SIG-03 | Phase 107.1 | Complete |
-| SIG-04 | Phase 107.1 | Complete |
-| SIG-05 | Phase 107.1 | Complete |
-| VIS-01 | Phase 107.2 | Complete |
-| VIS-02 | Phase 107.2 | Complete |
-| VIS-03 | Phase 107.2 | Complete |
-| VIS-04 | Phase 107.2 | Complete |
-| VIS-05 | Phase 107.2 | Complete |
-| PKG-01 | Phase 108 | Pending |
-| PKG-02 | Phase 108 | Pending |
-| PKG-03 | Phase 108 | Pending |
-| PKG-04 | Phase 108 | Pending |
-| MAC-01 | Phase 108 | Pending |
-| MAC-02 | Phase 108 | Pending |
-| MAC-03 | Phase 108 | Pending |
-| MAC-04 | Phase 108 | Pending |
-| MAC-05 | Phase 108 | Pending |
-| MAC-06 | Phase 108 | Pending |
-
-**Coverage:** 56/56 requirements mapped exactly once.
+| Requirement group | Phase | Status |
+|---|---|---|
+| SVC-01..05 | 104 | Complete |
+| SIG-01..05 | 107.1, 107.3 | Complete |
+| WEB-01..05 | 107.3 | Complete |
+| TERM-01..06 | 107.3 | Complete |
+| COMP-01..03 | 104, 107.3 | Complete |
 
 ---
-*Requirements defined: 2026-07-11*
-*Last updated: 2026-07-13 for approved Phase 107.2 workspace and signal polish*
+*Last updated: 2026-07-14.*

@@ -6,6 +6,11 @@ All notable changes to `git-stacks` are documented here.
 
 ## Unreleased
 
+### Changed
+
+- The loopback web client and Bun/TypeScript service are the supported graphical workspace path, including service-owned terminal tabs, reconnect replay, workspace operations, and unified signals.
+- The unsupported GTK/Zig desktop experiment and its patched terminal dependency were retired and removed. Its final state is preserved by the `native-client-final-2026-07-14` archive tag.
+
 ### Fixed
 
 - Workspace clone and template recreate now use transactional worktree handling: only resources created by the active operation are removed on failure, and moved local refs are restored when possible.
