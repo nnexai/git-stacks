@@ -187,20 +187,4 @@ describe("representative support command failures", () => {
     }
   })
 
-  test("install --hooks --claude outside any workspace reports bounded install-family failure", () => {
-    const baseDir = makeTmpDir("failure-install")
-    try {
-      const configDir = createConfigFixture(baseDir)
-      const result = runCli(["install", "--hooks", "--claude"], {
-        baseDir,
-        configDir,
-        cwd: baseDir,
-      })
-
-      expect(result.exitCode).toBe(1)
-      expect(result.stdout).toContain("No workspaces found. Create one first with: git-stacks new")
-    } finally {
-      cleanup(baseDir)
-    }
-  })
 })

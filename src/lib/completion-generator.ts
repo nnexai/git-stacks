@@ -336,7 +336,7 @@ function bashCaseBody(node: CommandNode, name: string): string {
     return out
   }
 
-  // No dynamic args, no enum options — but command has boolean flags (e.g. install --hooks --copilot)
+  // No dynamic args or enum options, but the command may still have boolean flags.
   if (options.length > 0) {
     const flagsStr = options.map(o => o.long).join(" ")
     return (
@@ -555,7 +555,7 @@ function zshCaseBody(node: CommandNode, id: string): string {
     return out
   }
 
-  // No dynamic args, no enum options — but command has boolean flags (e.g. install --hooks --copilot)
+  // No dynamic args or enum options, but the command may still have boolean flags.
   if (options.length > 0) {
     let out = `        _arguments \\\n`
     for (const opt of options) {

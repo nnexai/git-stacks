@@ -6,7 +6,6 @@ import { doctorCommand } from "../commands/doctor"
 import { repoCommand } from "../commands/repo"
 import { templateCommand } from "../commands/template"
 import { notesCommand } from "../commands/notes"
-import { installCommand } from "../commands/install"
 import { integrationCommand } from "../commands/integration"
 import { labelCommand } from "../commands/label"
 import { filesCommand } from "../commands/files"
@@ -42,7 +41,6 @@ export function buildCliProgram(binName = "git-stacks"): Command {
   program.addCommand(repoCommand)
   program.addCommand(templateCommand)
   program.addCommand(notesCommand)
-  program.addCommand(installCommand)
   program.addCommand(integrationCommand)
   program.addCommand(labelCommand)
   program.addCommand(filesCommand)

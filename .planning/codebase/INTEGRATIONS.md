@@ -163,18 +163,15 @@ Shared utilities: `src/lib/integrations/forge-utils.ts` (repo resolution, CWD de
 - Legacy: `service/account` (maps to `-s service -a account`)
 - New: `key=value,key=value` (arbitrary attribute pairs; Linux supports N attributes, macOS max 2)
 
-## Agent Hook System
+## Coding-Agent Signal Hooks
 
 - Location: `src/lib/agent-hooks/`
-- Registry: `src/lib/agent-hooks/index.ts` exports `agentHookPlugins` array
-- Types: `src/lib/agent-hooks/types.ts` - `AgentHookPlugin`, `HookEntry`, `HooksConfig`
-- Installer: `src/commands/install.ts` - `git-stacks install` command
+- Manager: `src/lib/agent-hooks/integration-manager.ts`
+- Terminal fallback: `src/lib/agent-hooks/terminal-session.ts`
+- CLI: `src/commands/hooks.ts` - `git-stacks hooks status|install|update|uninstall`
+- Providers: Codex, Claude Code, GitHub Copilot, and OpenCode
 
-**Plugins:**
-- `claude-code` (`src/lib/agent-hooks/claude-code.ts`) - Generates Claude Code hook entries for workspace notification
-- `copilot` (`src/lib/agent-hooks/copilot.ts`) - Generates GitHub Copilot hook entries
-
-**Hook events:** `Stop`, `PreToolUse`, `UserPromptSubmit`, `PostToolUse` with optional matcher (e.g., `AskUserQuestion`)
+User-level hooks are installed only through an explicit provider-selected command. Update reconciles only git-stacks-owned integrations that already exist, and uninstall removes only owned entries/files. Normal terminal launch reads hook health and uses service-local process wrappers for absent providers without changing user configuration.
 
 ## File System Dependencies
 

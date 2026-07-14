@@ -11,6 +11,7 @@ All notable changes to `git-stacks` are documented here.
 - The loopback web client and Bun/TypeScript service are the supported graphical workspace path, including service-owned terminal tabs, reconnect replay, workspace operations, and unified signals.
 - The unsupported GTK/Zig desktop experiment and its patched terminal dependency were retired and removed. Its final state is preserved by the `native-client-final-2026-07-14` archive tag.
 - User-level Codex, Claude Code, GitHub Copilot, and OpenCode signal hooks are now strictly opt-in. `git-stacks hooks install <provider...>`, `update`, `uninstall <provider...>`, and `status` provide an ownership-safe lifecycle; normal service and terminal startup never modify provider configuration.
+- The superseded project-local `git-stacks install --hooks` command and its separate hook-plugin implementation were removed. `git-stacks hooks` is the single supported coding-agent hook lifecycle.
 
 ### Fixed
 

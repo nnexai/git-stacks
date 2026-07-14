@@ -88,13 +88,11 @@ No build output directory -- Bun runs TypeScript source directly via shebang.
   - `aerospace.ts` -- AeroSpace window manager helpers (legacy, pre-integration)
 
 **`src/lib/agent-hooks/`:**
-- Purpose: Generate and install CI-agent-style hooks into repo directories
-- Contains: Plugin interface, Claude Code and Copilot implementations
+- Purpose: Manage opt-in user-level coding-agent signal hooks and terminal fallbacks
+- Contains: Provider ownership/reconciliation and service-local command wrapper preparation
 - Key files:
-  - `types.ts` -- `AgentHookPlugin` interface, `HookEntry`, `HooksConfig` types
-  - `claude-code.ts` -- writes `.claude/settings.json` hooks
-  - `copilot.ts` -- writes `.github/copilot-hooks.yml`
-  - `index.ts` -- exports all plugins as `agentHookPlugins` array
+  - `integration-manager.ts` -- status/install/update/uninstall for Codex, Claude, Copilot, and OpenCode user files
+  - `terminal-session.ts` -- read-only hook detection and service-local process wrappers
 
 **`src/lib/integrations/`:**
 - Purpose: Pluggable integration plugins for IDE/terminal/forge/issue tools
@@ -228,11 +226,11 @@ No build output directory -- Bun runs TypeScript source directly via shebang.
 3. Users enable via `config.secrets.resolvers` list in `config.yml`
 4. Add tests: `tests/lib/secrets.test.ts`
 
-**New Agent Hook Plugin:**
-1. Create plugin file: `src/lib/agent-hooks/{name}.ts`
-2. Implement `AgentHookPlugin` interface from `src/lib/agent-hooks/types.ts`
-3. Register in `src/lib/agent-hooks/index.ts`
-4. Add tests: `tests/lib/agent-hooks.test.ts`
+**New Coding-Agent Signal Provider:**
+1. Add the provider to `INTEGRATION_PROVIDERS` in `src/lib/agent-hooks/integration-manager.ts`
+2. Add ownership-aware status, install/update, and uninstall behavior
+3. Add a service-local fallback wrapper in `src/lib/agent-hooks/terminal-session.ts`
+4. Add isolated-home manager, CLI, and terminal-session tests
 
 **New Workspace Lifecycle Hook Event:**
 1. Add to `WorkspaceHooksSchema` and `TemplateSchema` hooks object in `src/lib/config.ts`

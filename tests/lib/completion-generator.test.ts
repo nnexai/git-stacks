@@ -822,7 +822,7 @@ describe("completion audit - real program", () => {
     // Every top-level command in the real CLI must appear in completion output
     for (const cmd of ["new", "clone", "open", "close", "list", "status", "clean",
       "remove", "merge", "run", "rename", "sync", "cd", "config", "manage",
-      "doctor", "repo", "template", "install", "integration", "service", "completion"]) {
+      "doctor", "repo", "template", "hooks", "integration", "service", "completion"]) {
       expect(out).toContain(cmd)
     }
   })

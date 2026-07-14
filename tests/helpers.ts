@@ -833,8 +833,8 @@ export function makeTmuxMock(overrides: Record<string, unknown> = {}): Record<st
 
 // --- Real module captures ---
 // Captured here at helpers.ts load time (before any test file applies mock.module).
-// helpers.ts is first imported by agent-hooks.test.ts (alphabetically first test file),
-// so these captures precede all mock.module calls from test files.
+// The test runner loads this helper before suites that apply mock.module, so
+// these captures precede module replacements from test files.
 //
 // Destructured named exports are STABLE references — they are not updated when
 // mock.module replaces the module later. This allows test files to access real

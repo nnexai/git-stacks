@@ -22,7 +22,6 @@ const requiredExclusions = [
   "exclude.wizard.template-new",
   "exclude.wizard.template-edit",
   "exclude.wizard.config",
-  "exclude.prompt.install-hooks",
 ] as const
 
 function item(overrides: Partial<E2EInventoryItem> = {}): E2EInventoryItem {

@@ -30,7 +30,7 @@
   - `src/commands/doctor.ts` -- health check and drift detection with --fix support
   - `src/commands/config.ts` -- interactive config wizard
   - `src/commands/message.ts` -- notification send, list, clear
-  - `src/commands/install.ts` -- agent framework hook installation (Copilot, Claude Code)
+  - `src/commands/hooks.ts` -- opt-in coding-agent signal hook lifecycle
   - `src/commands/integration.ts` -- per-integration config introspection and subcommands
   - `src/commands/label.ts` -- workspace label add, remove, list, clear
   - `src/commands/completion.ts` -- shell completion output (bash, zsh, fish)
@@ -127,11 +127,11 @@
 - Pattern: Injectable executor via `_exec.spawn` mutable object -- tests replace it without mock.module
 - Used by: All workspace lifecycle operations (open, close, clean, remove, merge)
 
-**Agent Hook Layer:**
-- Purpose: Generate and install CI-agent-style hooks into workspace repo directories
+**Agent Signal Hook Layer:**
+- Purpose: Manage opt-in user-level coding-agent signal hooks and service-local process fallbacks
 - Location: `src/lib/agent-hooks/`
-- Contains: `AgentHookPlugin` interface, `claudeCodePlugin`, `copilotPlugin`
-- Pattern: Plugins generate hook entries (event + matcher + command) and write them to agent-specific config files (`.claude/settings.json`, `.github/copilot-hooks.yml`)
+- Contains: ownership-aware provider integration management and terminal wrapper preparation
+- Pattern: Explicit `git-stacks hooks` mutations preserve foreign settings; normal terminal launch performs read-only health detection and uses service-local wrappers when hooks are absent
 
 **TUI Layer (Terminal User Interface):**
 - Purpose: Interactive prompts and dashboard for user-guided workflows
@@ -311,7 +311,7 @@ Hook execution order for `merge` adds steps after clean cascade:
 - `git-stacks config [show]` -- global config wizard
 - `git-stacks doctor [--fix] [--json]` -- health check and drift detection
 - `git-stacks message send|list|clear` -- workspace notifications
-- `git-stacks install --hooks` -- agent framework hook installation
+- `git-stacks hooks status|install|update|uninstall` -- opt-in coding-agent signal hook management
 - `git-stacks integration list|<id> config show|example` -- integration introspection
 - `git-stacks label add|remove|list|clear` -- workspace label management
 - `git-stacks completion [bash|zsh|fish]` -- shell completion generation

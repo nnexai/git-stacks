@@ -487,8 +487,6 @@ The supported provider names and managed user files are:
 
 Install and update preserve foreign entries in shared configuration files. Uninstall removes only entries or dedicated files carrying the git-stacks ownership marker and refuses to replace an unowned dedicated file.
 
-The older `git-stacks install --hooks` command remains available for explicitly managed, project-local Claude, Copilot, and Codex hooks. It does not replace the user-level integration lifecycle above.
-
 ## Integrations
 
 `git-stacks open` runs integrations in a defined order, passing artifacts (session names, window PIDs) between them:
