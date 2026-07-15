@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync } from "fs"
 import { join } from "path"
 import { makeConfigMock } from "../helpers"
 
+const packageModule = (path: string) => new URL(`../../packages/${path}`, import.meta.url).pathname
+
 let tmpDir: string
 let repoDir: string
 let lastWritten: unknown[] | undefined
@@ -16,52 +18,58 @@ const readRegistryMock = mock(() => [])
 const writeRegistryMock = mock((entries: unknown[]) => {
   lastWritten = entries
 })
+const updateRegistryMock = mock((updater: (entries: unknown[]) => unknown[]) => {
+  const next = updater(readRegistryMock())
+  writeRegistryMock(next)
+  return next
+})
 const detectForgeForRepoMock = mock(async (): Promise<string[]> => [])
 const detectForgeForRepoEnabledMock = mock(async (): Promise<string[]> => [])
 const selectMock = mock(async (_opts?: unknown): Promise<string> => "none")
 const detectRepoTypeMock = mock(() => "other")
 const getCurrentBranchMock = mock(async () => "main")
 
-mock.module("@/lib/config", () => makeConfigMock({
+mock.module(packageModule("core/src/config.ts"), () => makeConfigMock({
   readGlobalConfig: readGlobalConfigMock,
   readRegistry: readRegistryMock,
   writeRegistry: writeRegistryMock,
+  updateRegistry: updateRegistryMock,
 }))
 
-mock.module("@/lib/integrations/forge-utils", () => ({
+mock.module(packageModule("core/src/integrations/forge-utils.ts"), () => ({
   detectForgeForRepo: detectForgeForRepoMock,
   detectForgeForRepoEnabled: detectForgeForRepoEnabledMock,
 }))
 
-mock.module("@/tui/utils", () => ({
+mock.module(packageModule("cli/src/prompts.ts"), () => ({
   prompts: {
     select: selectMock,
     isCancel: () => false,
   },
 }))
 
-mock.module("@/lib/detect", () => ({
+mock.module(packageModule("core/src/detect.ts"), () => ({
   detectRepoType: detectRepoTypeMock,
 }))
 
-mock.module("@/lib/git", () => ({
+mock.module(packageModule("core/src/git.ts"), () => ({
   getCurrentBranch: getCurrentBranchMock,
 }))
 
-mock.module("@/lib/paths", () => ({
+mock.module(packageModule("core/src/paths.ts"), () => ({
   expandHome: (p: string) => p,
 }))
 
-mock.module("@/tui/repo-wizard", () => ({
+mock.module(packageModule("cli/src/wizards/repo-wizard.ts"), () => ({
   runRepoScan: mock(async () => {}),
 }))
 
-mock.module("@/lib/workspace-yaml", () => ({
+mock.module(packageModule("core/src/workspace-yaml.ts"), () => ({
   editRegistryYaml: mock(() => ({ path: "/tmp/registry.yml", validate: () => {} })),
   openYamlInEditor: mock(async () => {}),
 }))
 
-const { repoCommand } = await import("@/commands/repo")
+const { repoCommand } = await import("../../packages/cli/src/commands/repo")
 repoCommand.exitOverride()
 
 function latestEntry(): { forge?: "github" | "gitlab" | "gitea" } {
@@ -79,6 +87,7 @@ describe("repo add forge enablement", () => {
     readGlobalConfigMock.mockReset()
     readRegistryMock.mockReset()
     writeRegistryMock.mockReset()
+    updateRegistryMock.mockReset()
     detectForgeForRepoMock.mockReset()
     detectForgeForRepoEnabledMock.mockReset()
     selectMock.mockReset()
@@ -93,6 +102,11 @@ describe("repo add forge enablement", () => {
     readRegistryMock.mockImplementation(() => [])
     writeRegistryMock.mockImplementation((entries: unknown[]) => {
       lastWritten = entries
+    })
+    updateRegistryMock.mockImplementation((updater: (entries: unknown[]) => unknown[]) => {
+      const next = updater(readRegistryMock())
+      writeRegistryMock(next)
+      return next
     })
     detectForgeForRepoMock.mockImplementation(async () => [])
     detectForgeForRepoEnabledMock.mockImplementation(async () => [])

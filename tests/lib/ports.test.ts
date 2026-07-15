@@ -23,7 +23,7 @@ import {
   checkConflicts,
   allocatePorts,
   acquireLock,
-} from "../../src/lib/ports"
+} from "../../packages/core/src/ports"
 
 // --- Helpers ---
 

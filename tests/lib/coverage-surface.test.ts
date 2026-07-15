@@ -40,7 +40,7 @@ describe("Phase 83 coverage command surface", () => {
 
     expect(runner).toContain("runtime-root")
     expect(runner).toContain("cpSync(TESTS_DIR, RUNTIME_TESTS_DIR")
-    expect(runner).toContain("cwd: RUNTIME_ROOT")
+    expect(runner).toContain("cwd: instrument ? RUNTIME_ROOT : ROOT")
     expect(runner).toContain("GS_COVERAGE_ROOT: RUNTIME_ROOT")
     expect(runner).toContain("GS_COVERAGE_SHARD_DIR: shardDir")
     expect(preload).toContain("afterAll(writeCoverageShard)")

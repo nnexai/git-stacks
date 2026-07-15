@@ -1,9 +1,9 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, beforeAll, afterAll } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { WorkspaceRow } from "../../../../src/tui/dashboard/WorkspaceRow"
-import type { WorkspaceEntry } from "../../../../src/tui/dashboard/types"
-import type { DashboardSignal } from "../../../../src/tui/dashboard/hooks/useSignals"
+import { WorkspaceRow } from "../../../../packages/tui/src/WorkspaceRow"
+import type { WorkspaceEntry } from "../../../../packages/tui/src/types"
+import type { DashboardSignal } from "../../../../packages/tui/src/hooks/useSignals"
 
 const renderOpts = { kittyKeyboard: true, width: 100, height: 1 }
 const compactFrame = (frame: string) => frame.split("\n").map((line) => line.trimEnd()).join("\n").trimEnd()

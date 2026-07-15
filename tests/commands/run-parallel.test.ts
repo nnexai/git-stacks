@@ -71,7 +71,7 @@ function runParallel(
   // IMPORTANT: Due to passThroughOptions(), flags must come BEFORE the positional <name> arg.
   // Otherwise commander treats "--parallel" as the optional [repo] argument.
   const result = Bun.spawnSync(
-    ["bun", "run", "src/index.ts", "run", "--parallel", ...extraArgs, wsName, "--", ...cmd],
+    ["node", "packages/cli/dist/index.js", "run", "--parallel", ...extraArgs, wsName, "--", ...cmd],
     {
       env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
       cwd: PROJECT_ROOT,

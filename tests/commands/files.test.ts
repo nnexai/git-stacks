@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { existsSync, readFileSync, symlinkSync, writeFileSync } from "fs"
 import { join } from "path"
-import { getWorkspaceFileStatusView } from "../../src/lib/workspace-file-status"
-import type { Workspace } from "../../src/lib/config"
+import { getWorkspaceFileStatusView } from "../../packages/core/src/workspace-file-status"
+import type { Workspace } from "../../packages/core/src/config"
 import {
   cleanup,
   createConfigFixture,

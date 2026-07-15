@@ -10,6 +10,32 @@ No changes yet.
 
 ---
 
+## [0.21.0-rc.1] - 2026-07-15
+
+### Changed
+
+- The default product now runs on Node.js 24: the CLI, shared domain core, local service, HTTP/SSE/WebSocket transport, browser build, terminal runtime, and release tooling no longer require Bun.
+- Source is split into independently buildable `@git-stacks/protocol`, `client`, `core`, `cli`, `service`, `web`, and optional `tui` packages. The public `git-stacks` package is a small facade over the Node CLI.
+- Ordinary CLI commands remain local and daemonless. They call the same core used by the service, while service filesystem reconciliation observes atomic CLI or editor writes without a refresh RPC.
+- Interactive service transport uses Node HTTP plus `ws`; browser terminals use exact-pinned `node-pty@1.2.0-beta.14`. Service terminal ownership, visible-only streaming, bounded replay, resize, reconnect, shell-exit cleanup, and process-tree shutdown behavior are preserved.
+- The browser is a browser-only package served through a deterministic asset manifest. Shared signal, priority, event, and presentation reduction lives in the client package instead of being duplicated by renderers.
+- The OpenTUI dashboard is now the separately installed `@git-stacks/tui` Bun package. Bun and OpenTUI are absent from the default CLI/service/browser dependency graph.
+- Runtime packages target modern Linux and macOS on x64 and arm64. CI has separate Node jobs for each platform/architecture runner and an isolated optional-TUI job.
+
+### Safety and distribution
+
+- Config and workspace persistence uses atomic replacement plus cross-process leases for concurrent read-modify-write operations.
+- Package architecture gates reject forbidden cross-layer imports and Node/Bun imports in browser-safe packages.
+- Release checks verify exact internal versions, required Linux/macOS `node-pty` prebuilds, production dependency licenses, default-runtime vulnerabilities, and dry-run tarball contents for every package.
+- `node-pty` remains a deliberate exact-pinned beta dependency for this RC. Its native resize/replay/lifecycle behavior is covered by Node real-process tests and must pass the hosted platform matrix before release.
+- RC validation no longer tags by default and never publishes. Tag creation requires an explicit `--tag`; package publication remains a separate approved action using the `next` dist-tag.
+
+### Release Candidate
+
+This is the first release candidate for v0.21.0. The package version and prospective tag are `0.21.0-rc.1` / `v0.21.0-rc.1`; no tag or package release is created by this migration commit.
+
+---
+
 ## [0.20.0-rc.1] - 2026-07-14
 
 ### Added

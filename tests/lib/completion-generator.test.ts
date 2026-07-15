@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test"
 import { Command, Argument, Option } from "commander"
-import { generateBash, generateZsh, generateFish } from "../../src/lib/completion-generator"
-import { buildCliProgram, collectCommandPaths } from "../../src/lib/cli-program"
+import { generateBash, generateZsh, generateFish } from "../../packages/cli/src/lib/completion-generator"
+import { buildCliProgram, collectCommandPaths } from "../../packages/cli/src/lib/cli-program"
 
 function buildTestProgram(): Command {
   const program = new Command()
@@ -813,7 +813,7 @@ describe("completion audit - real program", () => {
   })
 
   test("bash output contains all top-level commands", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "bash"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })
@@ -828,7 +828,7 @@ describe("completion audit - real program", () => {
   })
 
   test("bash output contains integration subcommand completions at depth 3-4", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "bash"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })
@@ -849,7 +849,7 @@ describe("completion audit - real program", () => {
   })
 
   test("zsh output contains integration helper functions and providers", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "zsh"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "zsh"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })
@@ -864,7 +864,7 @@ describe("completion audit - real program", () => {
   })
 
   test("fish output contains multi-level integration completions", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "fish"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "fish"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })
@@ -880,7 +880,7 @@ describe("completion audit - real program", () => {
 
   test("all DYNAMIC_COMPLETIONS paths exist in the real Commander.js tree", async () => {
     // Run bash completion and verify all integration paths produce output
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "bash"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })
@@ -901,7 +901,7 @@ describe("completion audit - real program", () => {
 
 describe("completion audit - YAML name-field extraction", () => {
   test("bash real output uses name-field extraction for workspaces", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "bash"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "bash"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })
@@ -917,7 +917,7 @@ describe("completion audit - YAML name-field extraction", () => {
   })
 
   test("zsh real output uses name-field extraction for workspaces", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "zsh"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "zsh"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })
@@ -931,7 +931,7 @@ describe("completion audit - YAML name-field extraction", () => {
   })
 
   test("fish real output uses name-field extraction for workspaces", async () => {
-    const proc = Bun.spawn(["bun", "run", "src/index.ts", "completion", "fish"], {
+    const proc = Bun.spawn(["node", "packages/cli/dist/index.js", "completion", "fish"], {
       stdout: "pipe", stderr: "pipe",
       cwd: import.meta.dir + "/../..",
     })

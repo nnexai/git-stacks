@@ -11,7 +11,7 @@ import {
   NameSchema,
   formatZodError,
   expandBranchPattern,
-} from "../../src/lib/config"
+} from "../../packages/core/src/config"
 import {
   makeTmpDir, cleanup, useIsolatedConfig,
   realWriteWorkspace, realReadWorkspace, realListWorkspaces, realListWorkspacesUncached,

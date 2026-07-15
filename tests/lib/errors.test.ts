@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { formatError } from "../../src/lib/errors"
+import { formatError } from "../../packages/core/src/errors"
 
 describe("formatError", () => {
   test("message-only format: prefixes with 'error: '", () => {

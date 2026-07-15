@@ -26,9 +26,27 @@ const TESTS_DIR = join(ROOT, "tests")
 const COVERAGE_DIR = join(ROOT, ".coverage")
 const RUNTIME_ROOT = join(COVERAGE_DIR, "runtime-root")
 const RUNTIME_TESTS_DIR = join(RUNTIME_ROOT, "tests")
-const SRC_INST_DIR = join(RUNTIME_ROOT, "src")
+const SRC_INST_DIR = join(RUNTIME_ROOT, "packages")
 const SHARDS_DIR = join(COVERAGE_DIR, "shards")
 const BLANK_TEMPLATES_PATH = join(COVERAGE_DIR, "blank-templates.json")
+
+// Bun's process-global module mocks bind to the original source module identity.
+// These tests replace package modules directly, which cannot be preserved after
+// Istanbul copies the package graph into RUNTIME_ROOT. Keep the exception narrow:
+// the files still run and must pass, but do not contribute coverage shards.
+const NON_INSTRUMENTABLE_MOCK_TESTS = new Set([
+  "tests/commands/repo-add.test.ts",
+  "tests/commands/workspace-edit.test.ts",
+  "tests/lib/integrations/wizard-helpers.test.ts",
+  "tests/lib/paths-command.test.ts",
+  "tests/lib/service/identity.test.ts",
+  "tests/tui/dashboard/integ-action-menu.test.tsx",
+  "tests/tui/dashboard/integ-sync-progress.test.tsx",
+  "tests/tui/dashboard/integ-tab-switching.test.tsx",
+  "tests/tui/dashboard/integ-wizard.test.tsx",
+  "tests/tui/workspace-clone.test.ts",
+  "tests/tui/workspace-wizard.test.ts",
+])
 
 type TestResult = { passed: number; failed: number; mergeableShardDirs: string[] }
 export type CoverageOptions = {
@@ -141,13 +159,21 @@ function applyFilters(files: string[], filters: string[]): string[] {
   })
 }
 
+export function shouldInstrumentCoverageTest(filePath: string): boolean {
+  const normalized = filePath.replaceAll("\\", "/")
+  const testsIndex = normalized.lastIndexOf("/tests/")
+  const relPath = testsIndex >= 0 ? normalized.slice(testsIndex + 1) : relative(ROOT, filePath).replaceAll("\\", "/")
+  return !NON_INSTRUMENTABLE_MOCK_TESTS.has(relPath)
+}
+
 function instrumentSourceTree(): number {
   const glob = new Bun.Glob("**/*.{ts,tsx}")
   const blankTemplates: Record<string, unknown> = {}
   let count = 0
 
-  for (const rel of glob.scanSync({ cwd: join(ROOT, "src"), onlyFiles: true })) {
-    const absPath = join(ROOT, "src", rel)
+  for (const rel of glob.scanSync({ cwd: join(ROOT, "packages"), onlyFiles: true })) {
+    if (!/(?:^|\/)src\//.test(rel)) continue
+    const absPath = join(ROOT, "packages", rel)
     const originalPath = relative(ROOT, absPath)
     const outPath = join(SRC_INST_DIR, rel)
     const source = readFileSync(absPath, "utf8")
@@ -165,9 +191,14 @@ function instrumentSourceTree(): number {
   }
 
   copyFileSync(join(ROOT, "package.json"), join(RUNTIME_ROOT, "package.json"))
+  for (const packageName of readdirSync(join(ROOT, "packages"))) {
+    const manifest = join(ROOT, "packages", packageName, "package.json")
+    if (!existsSync(manifest)) continue
+    copyFileSync(manifest, join(SRC_INST_DIR, packageName, "package.json"))
+  }
 
   appendFileSync(
-    join(SRC_INST_DIR, "index.ts"),
+    join(SRC_INST_DIR, "cli", "src", "index.ts"),
     `
 
 // --- Coverage shard writer (appended by coverage-runner.ts) ---
@@ -209,7 +240,7 @@ function symlinkIfExists(path: string): void {
 function prepareRuntimeRoot(): void {
   mkdirSync(RUNTIME_ROOT, { recursive: true })
   cpSync(TESTS_DIR, RUNTIME_TESTS_DIR, { recursive: true })
-  for (const path of ["package.json", "tsconfig.json", "bunfig.toml", "bun.lock", ".gitignore"]) {
+  for (const path of ["package.json", "package-lock.json", "tsconfig.json", "bunfig.toml", ".gitignore"]) {
     copyIfExists(path)
   }
   symlinkIfExists("node_modules")
@@ -236,26 +267,30 @@ async function runTests(
     workers: effectiveWorkers,
     runFile: async (file) => {
       const relPath = relative(ROOT, file)
-      const runtimeFile = join(RUNTIME_ROOT, relPath)
-      const shardDir = join(SHARDS_DIR, shardNameForFile(relPath))
-      const env = {
-        ...process.env,
-        GS_COVERAGE_ROOT: RUNTIME_ROOT,
-        GS_COVERAGE_SRC_INST: SRC_INST_DIR,
-        GS_COVERAGE_SHARD_DIR: shardDir,
-        GS_COVERAGE_CLI_ENTRY: join(SRC_INST_DIR, "index.ts"),
-      }
+      const instrument = shouldInstrumentCoverageTest(file)
+      const testFile = instrument ? join(RUNTIME_ROOT, relPath) : file
+      const shardDir = instrument ? join(SHARDS_DIR, shardNameForFile(relPath)) : undefined
+      const env = instrument
+        ? {
+            ...process.env,
+            GS_COVERAGE_ROOT: RUNTIME_ROOT,
+            GS_COVERAGE_SRC_INST: SRC_INST_DIR,
+            GS_COVERAGE_SHARD_DIR: shardDir,
+            GS_COVERAGE_CLI_ENTRY: join(SRC_INST_DIR, "cli", "src", "index.ts"),
+          }
+        : process.env
 
-      const proc = Bun.spawn(
-        ["bun", "test", "--preload", "@opentui/solid/preload", "--preload", preload, runtimeFile],
-        {
-          cwd: RUNTIME_ROOT,
-          stdout: "pipe",
-          stderr: "pipe",
-          stdin: "inherit",
-          env,
-        }
-      )
+      const argv = ["bun", "test", "--preload", "@opentui/solid/preload"]
+      if (instrument) argv.push("--preload", preload)
+      argv.push(testFile)
+
+      const proc = Bun.spawn(argv, {
+        cwd: instrument ? RUNTIME_ROOT : ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+        stdin: "inherit",
+        env,
+      })
 
       let timedOut = false
       const timeout = setTimeout(() => {
@@ -274,6 +309,9 @@ async function runTests(
         timedOut && exitCode !== 0 ? `${stderr}\nTimed out after ${timeoutMs}ms: ${relPath}\n` : stderr
       const completed = { file: relPath, exitCode, stdout, stderr: nextStderr, shardDir }
       console.log(`\n--- [coverage:${label}] ${relPath} ---`)
+      if (!instrument) {
+        console.log("(executed without instrumentation: package module mocks require original module identity)")
+      }
       if (stdout.length > 0) process.stdout.write(stdout)
       if (nextStderr.length > 0) process.stderr.write(nextStderr)
       return completed

@@ -1,0 +1,20 @@
+{
+  "ids": {
+    "entity": "8ec6c4f1-ea89-4a95-aaf6-29ad5bb36f43",
+    "operation": "op_0123456789abcdef",
+    "invalid": "../escape"
+  },
+  "priorities": [
+    { "name": "zero", "priority": 0 },
+    { "name": "alpha", "priority": 10 },
+    { "name": "beta", "priority": 10 },
+    { "name": "negative", "priority": -2 }
+  ],
+  "priorityOrder": ["alpha", "beta", "zero", "negative"],
+  "signals": [
+    { "kind": "activity", "source": "codex", "workspace_id": "w", "surface_id": "s1", "state": "working", "occurred_at": "2026-07-15T00:00:00.000Z" },
+    { "kind": "activity", "source": "codex", "workspace_id": "w", "surface_id": "s2", "state": "completed", "occurred_at": "2026-07-15T00:00:01.000Z" },
+    { "kind": "activity", "source": "copilot", "workspace_id": "w", "surface_id": "s3", "state": "waiting", "occurred_at": "2026-07-15T00:00:02.000Z" }
+  ],
+  "activeProviders": ["copilot", "codex"]
+}

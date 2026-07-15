@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { WorkspaceSnapshotResponse } from "../../src/lib/service/contract"
-import { provisionOfficialClient } from "../../src/lib/service/credentials"
-import { EventBroker } from "../../src/lib/service/event-broker"
-import { EventJournal } from "../../src/lib/service/event-journal"
-import { startServiceServer } from "../../src/service/server"
-import { WebApplication } from "../../src/service/web/routes"
+import type { WorkspaceSnapshotResponse } from "../../packages/protocol/src/service"
+import { provisionOfficialClient } from "../../packages/service/src/policy/credentials"
+import { EventBroker } from "../../packages/service/src/policy/event-broker"
+import { EventJournal } from "../../packages/service/src/policy/event-journal"
+import { startServiceServer } from "../../packages/service/src/server"
+import { WebApplication } from "../../packages/service/src/web/routes"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const run of cleanup.splice(0).reverse()) await run() })
@@ -53,7 +53,7 @@ describe("web request security boundary", () => {
       setWorkspacePins: (ids) => { pinWrites.push(ids) },
       setWorkspacePriorities: (priorities) => { priorityWrites.push(priorities) },
     })
-    const service = startServiceServer({ serviceRoot: root, snapshot, web })
+    const service = await startServiceServer({ serviceRoot: root, snapshot, web })
     cleanup.push(() => service.stop())
     const origin = service.url.origin
     const official = { authorization: `Bearer ${credential.token}`, "content-type": "application/json" }
@@ -132,7 +132,7 @@ describe("web request security boundary", () => {
     const broker = new EventBroker(new EventJournal({ root }))
     const snapshot = { buildAll: async () => fixture(), buildWorkspace: async () => fixture()[0]! }
     const web = new WebApplication({ assetsRoot: assets, snapshot, broker, eventHeartbeatMs: 10 })
-    const service = startServiceServer({ serviceRoot: root, snapshot, broker, web })
+    const service = await startServiceServer({ serviceRoot: root, snapshot, broker, web })
     cleanup.push(() => service.stop())
     const origin = service.url.origin
     const official = { authorization: `Bearer ${credential.token}`, "content-type": "application/json" }

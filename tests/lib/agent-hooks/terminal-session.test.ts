@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, mkdtempSync, readFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
-import { prepareTerminalAgentEnvironment } from "../../../src/lib/agent-hooks/terminal-session"
-import { installAgentIntegrations } from "../../../src/lib/agent-hooks/integration-manager"
+import { prepareTerminalAgentEnvironment } from "../../../packages/core/src/agent-hooks/terminal-session"
+import { installAgentIntegrations } from "../../../packages/core/src/agent-hooks/integration-manager"
 
 describe("terminal agent signal setup", () => {
   test("prepares zero-preparation wrappers without dirtying a workspace", () => {

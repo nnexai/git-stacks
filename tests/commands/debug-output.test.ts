@@ -59,7 +59,7 @@ function runStatus(
   extraEnv: Record<string, string> = {}
 ): { stdout: string; stderr: string; exitCode: number } {
   const result = Bun.spawnSync(
-    ["bun", "run", "src/index.ts", "status"],
+    ["node", "packages/cli/dist/index.js", "status"],
     {
       env: { ...process.env, ...extraEnv, GIT_STACKS_CONFIG_DIR: cfgDir },
       cwd: PROJECT_ROOT,
@@ -79,7 +79,7 @@ function runClose(
   extraEnv: Record<string, string> = {}
 ): { stdout: string; stderr: string; exitCode: number } {
   const result = Bun.spawnSync(
-    ["bun", "run", "src/index.ts", "close", "test-ws"],
+    ["node", "packages/cli/dist/index.js", "close", "test-ws"],
     {
       env: { ...process.env, ...extraEnv, GIT_STACKS_CONFIG_DIR: cfgDir },
       cwd: PROJECT_ROOT,

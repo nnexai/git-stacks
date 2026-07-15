@@ -1,18 +1,18 @@
 import { expect, mock, test } from "bun:test"
 import { createRoot } from "solid-js"
-import type { ServiceEvent } from "../../../src/lib/service/contract"
+import type { ServiceEvent } from "../../../packages/protocol/src/service"
 
 const workspaceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 const fetchSignalProjection = mock(async () => ({ signals: [], dismissed: [], sequence: "0" }))
 const dismissSignal = mock(async () => {})
 let eventObserver: ((event: ServiceEvent) => void) | undefined
 
-mock.module("../../../src/lib/service/client", () => ({
+mock.module("@git-stacks/service/client", () => ({
   fetchSignalProjection,
   dismissSignal,
 }))
 
-mock.module("../../../src/tui/dashboard/core-store", () => ({
+mock.module("../../../packages/tui/src/core-store", () => ({
   useCoreState: () => ({
     state: () => ({ revision: "1", workspaces: [{ projection: { id: workspaceId, name: "demo" } }] }),
   }),
@@ -22,7 +22,7 @@ mock.module("../../../src/tui/dashboard/core-store", () => ({
   },
 }))
 
-const { useSignals } = await import("../../../src/tui/dashboard/hooks/useSignals")
+const { useSignals } = await import("../../../packages/tui/src/hooks/useSignals")
 
 test("applies signal SSE events locally without refetching the projection", async () => {
   fetchSignalProjection.mockClear()

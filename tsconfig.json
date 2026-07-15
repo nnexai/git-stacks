@@ -10,7 +10,18 @@
     "jsxImportSource": "@opentui/solid",
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/lib/service/contract": ["./packages/protocol/src/service.ts"],
+      "@/lib/service/presentation": ["./packages/client/src/presentation.ts"],
+      "@/lib/service/*": ["./packages/service/src/policy/*"],
+      "@/lib/integrations/wizard-helpers": ["./packages/cli/src/wizards/integration-helpers.ts"],
+      "@/lib/cli-program": ["./packages/cli/src/lib/cli-program.ts"],
+      "@/lib/completion-audit": ["./packages/cli/src/lib/completion-audit.ts"],
+      "@/lib/completion-generator": ["./packages/cli/src/lib/completion-generator.ts"],
+      "@/lib/*": ["./packages/core/src/*"],
+      "@/commands/*": ["./packages/cli/src/commands/*"],
+      "@/tui/dashboard/*": ["./packages/tui/src/*"],
+      "@/tui/utils": ["./packages/cli/src/prompts.ts"],
+      "@/tui/*": ["./packages/cli/src/wizards/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"]

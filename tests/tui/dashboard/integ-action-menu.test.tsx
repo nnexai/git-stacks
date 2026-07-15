@@ -67,7 +67,7 @@ let wsRemoved = false
 
 // Mock config module with inline fixtures — resilient to module cache ordering.
 // listWorkspaces returns empty array when wsRemoved to simulate post-delete state.
-mock.module("../../../src/lib/config", () => ({
+mock.module("@git-stacks/core/config", () => ({
   listWorkspaces: mock(() => (wsRemoved ? [] : [workspaceFixture()])),
   readWorkspace: mock((_name: string) => workspaceFixture()),
   writeWorkspace: mock(() => {}),
@@ -94,11 +94,11 @@ mock.module("../../../src/lib/config", () => ({
 }))
 
 // Mock git operations before App import
-mock.module("../../../src/lib/git", () => makeGitMock())
+mock.module("@git-stacks/core/git", () => makeGitMock())
 
 // Mock workspace-ops — removeWorkspace deletes the YAML file and sets wsRemoved flag
 // to satisfy D-18 side-effect assertion: workspace YAML must not exist after confirm.
-mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
+mock.module("@git-stacks/core/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => ({ ok: true })),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
@@ -107,20 +107,20 @@ mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   renameWorkspace: mock(async () => {}),
 }))
 
-mock.module("../../../src/lib/workspace-git", () => makeWorkspaceGitMock({
+mock.module("@git-stacks/core/workspace-git", () => makeWorkspaceGitMock({
   syncWorkspace: mock(async () => ({ ok: true, synced: [], skipped: [] })),
 }))
 
-mock.module("../../../src/lib/workspace-status", () => makeWorkspaceStatusMock({
+mock.module("@git-stacks/core/workspace-status", () => makeWorkspaceStatusMock({
   getWorkspaceStatus: mock(async () => []),
 }))
 
-mock.module("../../../src/lib/workspace-yaml", () => makeWorkspaceYamlMock({
+mock.module("@git-stacks/core/workspace-yaml", () => makeWorkspaceYamlMock({
   editWorkspaceYaml: mock(() => ({ path: "/tmp/fake.yml", validate: () => ({ ok: true }) })),
   editRegistryYaml: editRegistryYamlMock,
 }))
 
-mock.module("../../../src/tui/dashboard/issue-actions", () => ({
+mock.module("../../../packages/tui/src/issue-actions", () => ({
   _exec: {},
   issueTrackerLabels: {
     github: "GitHub",
@@ -131,7 +131,7 @@ mock.module("../../../src/tui/dashboard/issue-actions", () => ({
   openWorkspaceIssue: openWorkspaceIssueMock,
 }))
 
-mock.module("../../../src/lib/workspace-command", () => ({
+mock.module("@git-stacks/core/workspace-command", () => ({
   listManualCommands: mock((workspace: { commands?: Record<string, string> }, opts?: { all?: boolean }) => {
     const names = Object.keys(workspace.commands ?? {}).sort()
     return opts?.all ? names : names.filter(name => !name.startsWith("pre") && !name.startsWith("post"))
@@ -140,14 +140,14 @@ mock.module("../../../src/lib/workspace-command", () => ({
   runManualCommand: runManualCommandMock,
 }))
 
-mock.module("../../../src/tui/dashboard/editor-handoff", () => ({
+mock.module("../../../packages/tui/src/editor-handoff", () => ({
   resolveEditorHandoff: mock(async (request: { kind: string }) => request.kind === "registry"
     ? editRegistryYamlMock()
     : { path: "/tmp/fake.yml", validate: () => ({ ok: true }) }),
   openEditorHandoff: mock(async (path: string) => { if (path === "/tmp/registry.yml") registryValidateMock(); return 0 }),
 }))
 
-mock.module("../../../src/lib/service/client", () => ({
+mock.module("@git-stacks/service/client", () => ({
   fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
   fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
   dismissSignal: mock(async () => {}),
@@ -178,7 +178,7 @@ mock.module("../../../src/lib/service/client", () => ({
 }))
 
 // Mock lifecycle hooks
-mock.module("../../../src/lib/lifecycle", () => ({
+mock.module("@git-stacks/core/lifecycle", () => ({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => {}),
 }))
@@ -194,8 +194,8 @@ write(configDir, "config.yml", `workspace_root: /tmp/integ-action-ws-root
 
 // Dynamic import after mocks are set
 const { testRender } = await import("@opentui/solid")
-const { default: App } = await import("../../../src/tui/dashboard/App")
-const { setCoreStateFactoryForTests } = await import("../../../src/tui/dashboard/core-store")
+const { default: App } = await import("../../../packages/tui/src/App")
+const { setCoreStateFactoryForTests } = await import("../../../packages/tui/src/core-store")
 setCoreStateFactoryForTests(() => makeDashboardCoreState(wsRemoved ? [] : [workspaceFixture() as any], [templateFixture as any], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }

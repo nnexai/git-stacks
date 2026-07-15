@@ -1,0 +1,213 @@
+import { prompts as p, safeText, cancel } from "../prompts"
+
+import { join } from "path"
+import {
+  listWorkspaces,
+  readWorkspace,
+  workspaceExists,
+  readGlobalConfig,
+  readTemplate,
+  isWorktreeRepo,
+  type Workspace,
+  type WorkspaceRepo,
+} from "@git-stacks/core/config"
+import { getTasksDir } from "@git-stacks/core/paths"
+import { integrations, resolveEnabledGlobally } from "@git-stacks/core/integrations"
+import { promptIntegrationOverrides } from "./integration-helpers"
+import { openWorkspace } from "@git-stacks/core/workspace-ops"
+import { createWorkspace } from "@git-stacks/core/workspace-lifecycle"
+
+function cloneRepos(source: Workspace, tasksDir: string, name: string): WorkspaceRepo[] {
+  return source.repos.map((repo) =>
+    repo.mode === "worktree"
+      ? { ...repo, task_path: join(tasksDir, name, repo.name) } as WorkspaceRepo
+      : repo
+  )
+}
+
+async function createClone(
+  source: Workspace,
+  name: string,
+  branch: string,
+  tasksDir: string,
+  integrationOverrides?: Record<string, unknown>
+) {
+  const sourceStartRefs = Object.fromEntries(
+    source.repos.filter(isWorktreeRepo).map((repo) => [repo.name, source.branch])
+  )
+  return createWorkspace({
+    wsName: name,
+    branch,
+    description: source.description,
+    templateName: source.template,
+    repos: cloneRepos(source, tasksDir, name),
+    wsHooks: source.hooks,
+    wsCommands: source.commands,
+    wsEnv: source.env,
+    wsEnvFile: source.env_file,
+    wsFiles: source.files,
+    wsIntegrationSettings: integrationOverrides ?? (source.settings?.integrations as Record<string, unknown> | undefined),
+    wsPorts: source.ports,
+    labels: source.labels,
+    source: source.source,
+    sourceStartRefs,
+  })
+}
+
+export async function runWorkspaceClone(
+  sourceArg?: string,
+  opts?: { nonInteractive?: boolean; name?: string; branch?: string; open?: boolean },
+) {
+  p.intro("Clone workspace")
+  const config = readGlobalConfig()
+  const tasksDir = getTasksDir(config.workspace_root)
+
+  if (opts?.nonInteractive) {
+    const missing: string[] = []
+    if (!sourceArg?.trim()) missing.push("<workspace> (positional argument)")
+    if (!opts.name?.trim()) missing.push("--name <new-name>")
+    if (missing.length > 0) {
+      console.error(`[git-stacks] --non-interactive requires: ${missing.join(", ")}`)
+      process.exit(1)
+    }
+
+    const sourceName = sourceArg!.trim()
+    if (!workspaceExists(sourceName)) {
+      console.error(`[git-stacks] Workspace '${sourceName}' not found.`)
+      process.exit(1)
+    }
+
+    const newName = opts.name!.trim()
+    if (workspaceExists(newName)) {
+      console.error(`[git-stacks] Workspace '${newName}' already exists.`)
+      process.exit(1)
+    }
+    const newBranch = opts.branch?.trim() || `feature/${newName}`
+    const source = readWorkspace(sourceName)
+
+    const created = await createClone(source, newName, newBranch, tasksDir)
+    if (!created.ok) {
+      console.error(`[git-stacks] Failed to clone workspace: ${created.error}`)
+      process.exit(1)
+    }
+
+    if (opts.open) {
+      const result = await openWorkspace(newName, {}, (msg) => p.log.info(msg))
+      if (!result.ok) {
+        p.log.warn(`Open failed: ${result.error}`)
+      }
+    }
+
+    p.outro(`Workspace '${newName}' ready.  Run \`git-stacks open ${newName}\` to re-open.`)
+    return
+  }
+
+  const workspaces = listWorkspaces()
+  if (workspaces.length === 0) {
+    p.cancel("No workspaces to clone. Run `git-stacks new` first.")
+    process.exit(1)
+  }
+
+  // Source selection
+  let sourceName: string
+  if (sourceArg) {
+    if (!workspaceExists(sourceArg)) {
+      p.cancel(`Workspace '${sourceArg}' not found.`)
+      process.exit(1)
+    }
+    sourceName = sourceArg
+  } else {
+    const sel = await p.select({
+      message: "Source workspace",
+      options: workspaces.map((ws) => ({ value: ws.name, label: ws.name, hint: ws.branch })),
+    })
+    if (p.isCancel(sel)) cancel()
+    sourceName = sel as string
+  }
+  const source = readWorkspace(sourceName)
+
+  // New name
+  const nameRaw = await safeText({
+    message: "New workspace name",
+    validate: (v) => {
+      if (!v?.trim()) return "Required"
+      if (workspaceExists(v.trim())) return `Workspace '${v.trim()}' already exists`
+    },
+  })
+  if (p.isCancel(nameRaw)) cancel()
+  const newName = (nameRaw as string).trim()
+
+  // New branch
+  const branchRaw = await safeText({
+    message: "Branch name",
+    fallbackValue: `feature/${newName}`,
+    validate: (v) => (v?.trim() ? undefined : "Required"),
+  })
+  if (p.isCancel(branchRaw)) cancel()
+  const newBranch = (branchRaw as string).trim()
+
+  // Optional: integration overrides (D-05, D-06)
+  // Cascade: source workspace integrations -> source template integrations -> global
+  const sourceWsIntegrations = (source.settings?.integrations ?? {}) as Record<string, Record<string, unknown>>
+
+  // Build initial enabled IDs walking the full cascade per D-06
+  const initialEnabledIds = integrations.filter(i => {
+    // Level 1: source workspace override
+    const wsOverride = sourceWsIntegrations[i.id]
+    if (wsOverride && typeof wsOverride === "object" && "enabled" in wsOverride) {
+      return (wsOverride as { enabled: boolean }).enabled
+    }
+    // Level 2: source workspace's template overrides (if template-based)
+    if (source.template) {
+      try {
+        const tpl = readTemplate(source.template)
+        const tplOverride = tpl.integrations?.[i.id]
+        if (tplOverride && typeof tplOverride === "object" && "enabled" in (tplOverride as object)) {
+          return (tplOverride as { enabled: boolean }).enabled
+        }
+      } catch {
+        // Template file missing — fall through to global
+      }
+    }
+    // Level 3: global config
+    return resolveEnabledGlobally(i.id, i.enabledByDefault, config)
+  }).map(i => i.id)
+
+  // currentConfigs: merge source ws overrides over template overrides for configurePrompt pre-fill
+  const currentConfigs = (() => {
+    const base: Record<string, Record<string, unknown>> = {}
+    if (source.template) {
+      try {
+        const tpl = readTemplate(source.template)
+        if (tpl.integrations) {
+          for (const [k, v] of Object.entries(tpl.integrations)) {
+            if (v && typeof v === "object") base[k] = v as Record<string, unknown>
+          }
+        }
+      } catch { /* template missing */ }
+    }
+    // Workspace overrides take precedence over template
+    for (const [k, v] of Object.entries(sourceWsIntegrations)) {
+      base[k] = v
+    }
+    return base
+  })()
+
+  const userIntegrationOverrides = await promptIntegrationOverrides(initialEnabledIds, currentConfigs)
+
+  const created = await createClone(source, newName, newBranch, tasksDir, userIntegrationOverrides)
+  if (!created.ok) {
+    p.cancel(`Failed to clone workspace: ${created.error}`)
+    process.exit(1)
+  }
+
+  const openNow = await p.confirm({ message: "Open workspace now?", initialValue: true })
+  if (!p.isCancel(openNow) && openNow) {
+    const result = await openWorkspace(newName, {}, (msg) => p.log.info(msg))
+    if (!result.ok) {
+      p.log.warn(`Open failed: ${result.error}`)
+    }
+  }
+
+  p.outro(`Workspace '${newName}' ready.  Run \`git-stacks open ${newName}\` to re-open.`)
+}

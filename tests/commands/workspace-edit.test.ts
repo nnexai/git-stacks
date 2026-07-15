@@ -1,13 +1,7 @@
-import { afterAll, describe, test, expect, mock, beforeEach } from "bun:test"
-import { join } from "path"
-import { cleanup, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeConfigMock, makeTmpDir } from "../helpers"
+import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { makeConfigMock } from "../helpers"
 
-const fixtureRoot = makeTmpDir("workspace-edit")
-const workspaceRoot = join(fixtureRoot, "workspaces")
-const tasksRoot = join(workspaceRoot, "tasks")
-const editorTarget = join(fixtureRoot, "workspace.yml")
-
-afterAll(() => cleanup(fixtureRoot))
+const packageModule = (path: string) => new URL(`../../packages/${path}`, import.meta.url).pathname
 
 // Shared mock instances used by @/tui/utils mock below
 const mockIntro = mock(() => {})
@@ -27,7 +21,7 @@ const mockConfirm = mock(async () => false as boolean | symbol)
 const mockSafeText = mock(async () => "new description")
 const mockCancelUtil = mock((): never => { throw new Error("cancelled") })
 
-mock.module("@/tui/utils", () => ({
+mock.module(packageModule("cli/src/prompts.ts"), () => ({
   safeText: mockSafeText,
   cancel: mockCancelUtil,
   prompts: {
@@ -78,7 +72,7 @@ const mockResolveEnabledGlobally = mock((id: string, _defaultEnabled: boolean, _
   return false
 })
 
-mock.module("@/lib/integrations", () => ({
+mock.module(packageModule("core/src/integrations/index.ts"), () => ({
   integrations: fakeIntegrations,
   resolveEnabledGlobally: mockResolveEnabledGlobally,
 }))
@@ -86,7 +80,7 @@ mock.module("@/lib/integrations", () => ({
 // Mock wizard-helpers
 const mockPromptIntegrationOverrides = mock(async (_ids: string[], _configs: unknown) => undefined as Record<string, unknown> | undefined)
 
-mock.module("@/lib/integrations/wizard-helpers", () => ({
+mock.module(packageModule("cli/src/wizards/integration-helpers.ts"), () => ({
   promptIntegrationOverrides: mockPromptIntegrationOverrides,
 }))
 
@@ -107,7 +101,7 @@ const baseWorkspace = {
 const mockReadWorkspace = mock((_name: string) => ({ ...baseWorkspace }))
 const mockWriteWorkspace = mock((_ws: unknown) => {})
 const mockReadGlobalConfig = mock(() => ({
-  workspace_root: workspaceRoot,
+  workspace_root: new URL("../fixtures/workspaces", import.meta.url).pathname,
   integrations: {
     vscode: { enabled: true },
   },
@@ -121,7 +115,7 @@ const mockReadTemplate = mock(() => ({ name: "t", schema_version: "1" as const, 
 const mockListWorkspaces = mock(() => [])
 const mockExpandBranchPattern = mock((p: string) => p)
 
-mock.module("@/lib/config", () => makeConfigMock({
+mock.module(packageModule("core/src/config.ts"), () => makeConfigMock({
   readWorkspace: mockReadWorkspace,
   writeWorkspace: mockWriteWorkspace,
   readGlobalConfig: mockReadGlobalConfig,
@@ -135,66 +129,8 @@ mock.module("@/lib/config", () => makeConfigMock({
   expandBranchPattern: mockExpandBranchPattern,
 }))
 
-// Mock lib/paths, lib/git, lib/detect, lib/lifecycle, lib/files, lib/workspace-ops
-mock.module("@/lib/paths", () => ({
-  getTasksDir: mock(() => tasksRoot),
-  expandHome: mock((p: string) => p),
-}))
-
-mock.module("@/lib/git", () => ({
-  createWorktree: mock(async () => {}),
-  getCurrentBranch: mock(async () => "main"),
-  ensureUpstreamTracking: mock(async () => ({ tracked: false })),
-}))
-
-mock.module("@/lib/detect", () => ({
-  detectRepoType: mock(() => "typescript"),
-}))
-
-mock.module("@/lib/lifecycle", () => ({
-  runHooks: mock(async () => {}),
-  runHooksCaptured: mock(async () => []),
-}))
-
-mock.module("@/lib/files", () => ({
-  applyFileOpsForRepo: mock(() => ({ ok: true })),
-  applyFileOpsForWorkspace: mock(() => ({ ok: true })),
-}))
-
-mock.module("@/lib/workspace-ops", () => makeWorkspaceOpsMock({
-  openWorkspace: mock(async () => ({ ok: true })),
-  mergeEnv: mock(() => ({})),
-  writeEnvFiles: mock(() => {}),
-  cleanWorkspace: mock(async () => ({ ok: true })),
-  closeWorkspace: mock(async () => ({ ok: true })),
-  removeWorkspace: mock(async () => ({ ok: true })),
-  mergeWorkspace: mock(async () => ({ ok: true })),
-  renameWorkspace: mock(async () => ({ ok: true })),
-}))
-
-mock.module("@/lib/workspace-status", () => makeWorkspaceStatusMock({
-  getWorkspaceStatus: mock(async () => []),
-  getDirtyWorktrees: mock(async () => []),
-  getWorkspaceListInfo: mock(async () => ({
-    name: "ws",
-    branch: "main",
-    created: "2024-01-01",
-    dirty: false,
-    repoCount: 0,
-    lastOpened: "0d",
-  })),
-}))
-
-mock.module("@/lib/workspace-yaml", () => makeWorkspaceYamlMock({
-  editWorkspaceYaml: mock(() => ({ path: editorTarget, validate: () => ({ ok: true }) })),
-}))
-
-mock.module("@/lib/workspace-git", () => makeWorkspaceGitMock({
-  syncWorkspace: mock(async () => ({ ok: true, synced: [], skipped: [] })),
-}))
-
 // Import after all mocks
-const { runWorkspaceEdit } = await import("@/tui/workspace-wizard")
+const { runWorkspaceEdit } = await import("../../packages/cli/src/wizards/workspace-wizard")
 
 describe("runWorkspaceEdit", () => {
   beforeEach(() => {

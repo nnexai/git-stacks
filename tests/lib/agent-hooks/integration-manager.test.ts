@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
-import { installAgentIntegrations, integrationStatus, OWNERSHIP_MARKER, uninstallAgentIntegrations, updateAgentIntegrations } from "../../../src/lib/agent-hooks/integration-manager"
+import { installAgentIntegrations, integrationStatus, OWNERSHIP_MARKER, uninstallAgentIntegrations, updateAgentIntegrations } from "../../../packages/core/src/agent-hooks/integration-manager"
 
 describe("user-level terminal agent integrations", () => {
   test("merge-installs all providers while preserving foreign settings", () => {

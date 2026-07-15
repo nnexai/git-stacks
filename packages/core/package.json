@@ -1,0 +1,19 @@
+{
+  "name": "@git-stacks/core",
+  "version": "0.21.0-rc.1",
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "files": ["dist", "src"],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": { "types": "./src/index.ts", "bun": "./src/index.ts", "import": "./dist/index.js" },
+    "./capabilities": { "types": "./src/capabilities.ts", "bun": "./src/capabilities.ts", "import": "./dist/capabilities.js" },
+    "./integrations": { "types": "./src/integrations/index.ts", "bun": "./src/integrations/index.ts", "import": "./dist/integrations/index.js" },
+    "./integrations/*": { "types": "./src/integrations/*.ts", "bun": "./src/integrations/*.ts", "import": "./dist/integrations/*.js" },
+    "./*": { "types": "./src/*.ts", "bun": "./src/*.ts", "import": "./dist/*.js" }
+  },
+  "scripts": { "build": "node ../../scripts/build-package.mjs core", "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "dependencies": { "@logtape/logtape": "^2.0.5", "yaml": "^2.8.3", "zod": "^4.3.6" },
+  "gitStacksBuild": { "allSources": true }
+}

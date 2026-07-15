@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { WorkspaceList } from "../../../../src/tui/dashboard/WorkspaceList"
-import type { GroupedWorkspaceItem, WorkspaceEntry } from "../../../../src/tui/dashboard/types"
+import { WorkspaceList } from "../../../../packages/tui/src/WorkspaceList"
+import type { GroupedWorkspaceItem, WorkspaceEntry } from "../../../../packages/tui/src/types"
 
 const entries: WorkspaceEntry[] = [
   {

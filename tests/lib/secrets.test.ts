@@ -11,7 +11,7 @@ import {
   resolveSecrets,
   type KeychainAttr,
   type SecretResolver,
-} from "../../src/lib/secrets"
+} from "../../packages/core/src/secrets"
 
 describe("parseSecretRef", () => {
   test("matches the documented reference pattern", () => {

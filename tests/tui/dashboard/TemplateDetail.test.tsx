@@ -5,7 +5,7 @@ import { describe, test, expect, mock } from "bun:test"
 process.env.GIT_STACKS_CONFIG_DIR = "/tmp/tpl-detail-test-config"
 
 // Mock the integrations array with controlled fixtures
-mock.module("../../../src/lib/integrations", () => ({
+mock.module("@git-stacks/core/integrations", () => ({
   integrations: [
     {
       id: "vscode",
@@ -39,7 +39,7 @@ mock.module("../../../src/lib/integrations", () => ({
 }))
 
 // Mock resolveEnabledGlobally from types separately
-mock.module("../../../src/lib/integrations/types", () => ({
+mock.module("@git-stacks/core/integrations/types", () => ({
   resolveEnabledGlobally: mock((id: string, _enabledByDefault: boolean, _config: any) => {
     // vscode and tmux enabled by default
     return true
@@ -52,7 +52,7 @@ mock.module("../../../src/lib/integrations/types", () => ({
 }))
 
 // Mock config module
-mock.module("../../../src/lib/config", () => ({
+mock.module("@git-stacks/core/config", () => ({
   readGlobalConfig: mock(() => ({
     workspace_root: "/tmp/tpl-detail-root",
     integrations: {},
@@ -78,7 +78,7 @@ mock.module("../../../src/lib/config", () => ({
 }))
 
 const { testRender } = await import("@opentui/solid")
-const { TemplateDetail } = await import("../../../src/tui/dashboard/TemplateDetail")
+const { TemplateDetail } = await import("../../../packages/tui/src/TemplateDetail")
 
 function makeTemplate(overrides: any = {}) {
   return {

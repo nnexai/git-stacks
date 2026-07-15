@@ -2,7 +2,7 @@ import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { IntegrationContext } from "@/lib/integrations/types"
 import { makeConfigMock } from "../../helpers"
 
-mock.module("@/tui/utils", () => ({
+mock.module("../../../packages/core/src/prompt-capability", () => ({
   prompts: {
     spinner: () => ({ start: () => {}, stop: () => {} }),
     log: { warn: () => {} },
@@ -25,7 +25,7 @@ const getCmuxMainPaneMock = mock(async (_ref: string) => ({
 }))
 const focusCmuxSurfaceMock = mock(async (_ref: string, _surfaceRef: string) => true)
 
-mock.module("@/lib/cmux", () => ({
+mock.module("../../../packages/core/src/cmux", () => ({
   openCmuxWorkspace: openCmuxWorkspaceMock,
   addCmuxPane: addCmuxPaneMock,
   addCmuxSurface: addCmuxSurfaceMock,
@@ -38,10 +38,11 @@ const workspaceExistsMock = mock((_name: string) => true)
 const readWorkspaceMock = mock((name: string) => ({ name, cmux_workspace_id: "workspace:old" }))
 const writeWorkspaceMock = mock((_workspace: unknown) => {})
 
-mock.module("@/lib/config", () => makeConfigMock({
+mock.module("../../../packages/core/src/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
   readWorkspace: readWorkspaceMock,
   writeWorkspace: writeWorkspaceMock,
+  updateWorkspace: (_name: string, updater: (workspace: unknown) => unknown) => writeWorkspaceMock(updater(readWorkspaceMock(_name))),
 }))
 
 const { cmuxIntegration } = await import("@/lib/integrations/cmux")

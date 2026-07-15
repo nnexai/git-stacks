@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { HelpOverlay } from "../../../../src/tui/dashboard/HelpOverlay"
+import { HelpOverlay } from "../../../../packages/tui/src/HelpOverlay"
 
 const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 const noop = () => {}

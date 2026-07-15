@@ -2,29 +2,29 @@
 gsd_state_version: 1.0
 milestone: v0.21.0
 milestone_name: Node Core and Client Architecture
-current_phase: 108
-current_phase_name: Package and Runtime Foundation
-status: Planned; ready for Phase 108 execution
-stopped_at: Full migration roadmap and implementation blueprints prepared
-last_updated: "2026-07-15T00:25:02+02:00"
+current_phase: 115
+current_phase_name: Distribution Parity and Legacy Removal
+status: Implementation complete locally; hosted supported-platform matrix pending
+stopped_at: Node package cutover and local release verification complete
+last_updated: "2026-07-15T02:18:30+02:00"
 last_activity: 2026-07-15
 last_activity_desc: planned the Node-default shared-core migration after validating runtime, transport, package, and filesystem risks
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 6
   total_plans: 8
-  completed_plans: 0
-  percent: 0
+  completed_plans: 8
+  percent: 75
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 108 of 115 (Package and Runtime Foundation)
-Plan: 108-PLAN.md
-Status: Ready to execute
-Last activity: 2026-07-15 — v0.21.0 migration milestone fully planned
+Phase: 115 of 115 (Distribution Parity and Legacy Removal)
+Plan: 115-PLAN.md
+Status: Complete on the local Linux x64 host; hosted Linux ARM and macOS matrix pending
+Last activity: 2026-07-15 — cut over core, CLI, service, web, and optional TUI to the package architecture
 
 ## Decisions
 
@@ -47,16 +47,16 @@ Last activity: 2026-07-15 — v0.21.0 migration milestone fully planned
 - Spike 019: filesystem-authoritative synchronization, plus required atomic-write and lost-update corrections.
 - Spikes 011-015: future remote identity, reconnect, framing, backpressure, and encrypted-carrier constraints to preserve.
 
-## Blockers/Concerns
+## Remaining Release Evidence
 
-- Actual macOS x64/arm64 PTY lifecycle and watcher behavior is a release gate, not an architecture blocker.
-- The accepted PTY version is a beta and must not float; release notes and dependency policy must make the exception explicit.
-- Current fixed `.tmp` writes and metadata-only fallback fingerprints must be replaced before concurrent Node CLI/service use is considered safe.
+- Run the checked-in hosted matrix on Linux x64/arm64 and macOS x64/arm64 before tagging.
+- Keep `node-pty` `1.2.0-beta.14` exact-pinned and review the temporary beta exception on every dependency update.
+- Do not tag, push, publish, or release without explicit approval.
 
 ## Execution Boundary
 
-Planning is complete. No migration source changes, package-version bump, tag, push, or release have been performed by this planning pass.
+The full local implementation and package-version bump to `0.21.0-rc.1` are complete. No tag, push, publish, or release has been performed.
 
 ## Session Continuity
 
-Begin with [Phase 108](./phases/108-package-and-runtime-foundation/108-PLAN.md). Do not start downstream package moves until its boundary tests and build graph pass.
+Continue with the hosted matrix in `.github/workflows/node-runtime-matrix.yml`; if it passes, Phase 112 `TERM-03`, Phase 115 `DIST-01`/`DIST-03`, and the milestone can close before an explicitly approved tag.

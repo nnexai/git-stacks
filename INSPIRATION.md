@@ -2,7 +2,7 @@
 
 Source: <https://workmux.raine.dev/guide/>
 
-workmux is a single-repository Git worktree and tmux window manager. `git-stacks` manages multi-repository workspaces. This document records ideas inspired by that comparison and, as of the `0.20.0` release line, distinguishes shipped equivalents from ideas that remain exploratory.
+workmux is a single-repository Git worktree and tmux window manager. `git-stacks` manages multi-repository workspaces. This document records ideas inspired by that comparison and, as of the `0.21.0` release line, distinguishes shipped equivalents from ideas that remain exploratory.
 
 This is not a roadmap. Current product behavior is documented in [README.md](./README.md) and [FEATURES.md](./FEATURES.md).
 

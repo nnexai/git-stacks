@@ -14,7 +14,7 @@ const mockAddTmuxPane = mock(() => Promise.resolve(null))
 const mockSendToTmuxPane = mock(() => Promise.resolve())
 const mockGetTmuxMainPane = mock(() => Promise.resolve(null))
 const mockFocusTmuxPane = mock(() => Promise.resolve())
-mock.module("@/lib/tmux", () => makeTmuxMock({
+mock.module("../../../packages/core/src/tmux", () => makeTmuxMock({
   openTmuxSession: mockOpenTmuxSession,
   focusTmuxSession: mockFocusTmuxSession,
   addTmuxPane: mockAddTmuxPane,
@@ -25,7 +25,7 @@ mock.module("@/lib/tmux", () => makeTmuxMock({
 
 // 3. Mock @/lib/cmux
 const mockOpenCmuxWorkspace = mock(() => Promise.resolve({ ref: "workspace:42", created: false }))
-mock.module("@/lib/cmux", () => ({
+mock.module("../../../packages/core/src/cmux", () => ({
   openCmuxWorkspace: mockOpenCmuxWorkspace,
   addCmuxPane: mock(() => Promise.resolve(null)),
   addCmuxSurface: mock(() => Promise.resolve(null)),
@@ -35,25 +35,25 @@ mock.module("@/lib/cmux", () => ({
 }))
 
 // 4. Mock @/lib/config for cmux
-mock.module("@/lib/config", () => makeConfigMock({
+mock.module("../../../packages/core/src/config", () => makeConfigMock({
   workspaceExists: mock(() => false),
   readWorkspace: mock(() => ({})),
   writeWorkspace: mock(() => {}),
 }))
 
 // 5. Mock @/lib/vscode
-mock.module("@/lib/vscode", () => ({
+mock.module("../../../packages/core/src/vscode", () => ({
   generateCodeWorkspace: () => null,
 }))
 
 // 6. Mock @/lib/intellij
-mock.module("@/lib/intellij", () => ({
+mock.module("../../../packages/core/src/intellij", () => ({
   generateIntellijProject: () => null,
 }))
 
 // 7. Mock @/tui/utils — must include prompts object since production code
 // imports { prompts as p } from "@/tui/utils"
-mock.module("@/tui/utils", () => ({
+mock.module("../../../packages/core/src/prompt-capability", () => ({
   safeText: mock(() => Promise.resolve("")),
   prompts: {
     spinner: () => mockSpinner,

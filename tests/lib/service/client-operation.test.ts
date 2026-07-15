@@ -1,14 +1,14 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
 
-mock.module("../../../src/service/main", () => ({
+mock.module("../../../packages/service/src/main", () => ({
   ensureManagedServiceProcess: async () => ({ endpoint: "http://127.0.0.1:32123", credential_lookup: "test-client" }),
 }))
 
-mock.module("../../../src/lib/service/credentials", () => ({
+mock.module("../../../packages/service/src/policy/credentials", () => ({
   readOfficialClientCredential: () => ({ token: "test-token" }),
 }))
 
-const { runCoreMutation } = await import("../../../src/lib/service/client")
+const { runCoreMutation } = await import("../../../packages/service/src/policy/client")
 const originalFetch = globalThis.fetch
 const timestamp = "2026-07-14T12:00:00.000Z"
 const operationId = "op_1234567890123456"

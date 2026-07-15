@@ -42,7 +42,7 @@ const mockExecRun = mock(async (args: string[]) => {
   return { exitCode: 0, stdout: "" }
 })
 
-mock.module("@/lib/aerospace", () => ({
+mock.module("../../../packages/core/src/aerospace", () => ({
   isAerospaceRunning: mockIsAerospaceRunning,
   listWindows: mockListWindows,
   listWorkspaces: mockListWorkspaces,
@@ -56,7 +56,7 @@ mock.module("@/lib/aerospace", () => ({
 }))
 
 // Mock @/tui/utils (prompts wrapper)
-mock.module("@/tui/utils", () => ({
+mock.module("../../../packages/core/src/prompt-capability", () => ({
   prompts: {
     spinner: () => ({ start: mock(() => {}), stop: mock(() => {}) }),
     log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
@@ -77,7 +77,7 @@ mock.module("@/tui/utils", () => ({
 }))
 
 // Cache-busted import after all mocks registered
-const { aerospaceIntegration, validateAerospaceConfig } = await import(
+const { aerospaceIntegration, validateAerospaceConfig, _runtime } = await import(
   // @ts-ignore
   "@/lib/integrations/aerospace?aerospace-integration-test-v1"
 )
@@ -120,6 +120,14 @@ beforeEach(() => {
   focusedWindows = []
   execCalls = []
   mockSnapshotResult = []
+  _runtime.spawn = mock((_args: readonly string[]) => ({
+    pid: 1234,
+    exited: Promise.resolve(0),
+    stdout: null,
+    stderr: null,
+    kill: () => true,
+    unref: () => {},
+  }))
   mockIsAerospaceRunning.mockClear()
   mockListWindows.mockClear()
   mockListWorkspaces.mockClear()

@@ -44,7 +44,7 @@ function area(overrides: Partial<FunctionalReadinessArea> = {}): FunctionalReadi
     phase: "85",
     title: "Phase 85 core real-fixture coverage",
     category: "covered",
-    sourceTargets: ["src/lib/git.ts", "src/lib/config.ts"],
+    sourceTargets: ["packages/core/src/git.ts", "packages/core/src/config.ts"],
     rationale: "Synthetic readiness fixture.",
     ...overrides,
   }
@@ -54,8 +54,8 @@ describe("functional coverage readiness", () => {
   test("passes covered required areas when every source target has statement or function hits", () => {
     const root = makeRoot()
     writeCoverage(root, {
-      "src/lib/git.ts": coverageEntry("src/lib/git.ts"),
-      "src/lib/config.ts": coverageEntry("src/lib/config.ts"),
+      "packages/core/src/git.ts": coverageEntry("packages/core/src/git.ts"),
+      "packages/core/src/config.ts": coverageEntry("packages/core/src/config.ts"),
     })
 
     const report = collectFunctionalCoverageReadiness({
@@ -72,7 +72,7 @@ describe("functional coverage readiness", () => {
   test("returns required areas with zero or missing hits as must-fix-before-release", () => {
     const root = makeRoot()
     writeCoverage(root, {
-      "src/lib/git.ts": coverageEntry("src/lib/git.ts", 0),
+      "packages/core/src/git.ts": coverageEntry("packages/core/src/git.ts", 0),
     })
 
     const report = collectFunctionalCoverageReadiness({
@@ -85,8 +85,8 @@ describe("functional coverage readiness", () => {
       {
         id: "phase85.core",
         title: "Phase 85 core real-fixture coverage",
-        missingTargets: ["src/lib/config.ts"],
-        zeroHitTargets: ["src/lib/git.ts"],
+        missingTargets: ["packages/core/src/config.ts"],
+        zeroHitTargets: ["packages/core/src/git.ts"],
       },
     ])
     expect(formatFunctionalCoverageReadiness(report)).toContain("must-fix-before-release")

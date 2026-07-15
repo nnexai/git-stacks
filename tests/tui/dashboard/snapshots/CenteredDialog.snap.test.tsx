@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { CenteredDialog } from "../../../../src/tui/dashboard/CenteredDialog"
+import { CenteredDialog } from "../../../../packages/tui/src/CenteredDialog"
 
 const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 

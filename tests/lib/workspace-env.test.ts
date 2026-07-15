@@ -34,7 +34,7 @@ const {
   buildWorkspaceEnv,
   mergeEnv,
   writeEnvFiles,
-} = await import("../../src/lib/workspace-env")
+} = await import("../../packages/core/src/workspace-env")
 
 afterAll(() => {
   for (const dir of tempDirs) {

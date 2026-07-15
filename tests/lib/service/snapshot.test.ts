@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import type { Workspace } from "../../../src/lib/config"
+import type { Workspace } from "../../../packages/core/src/config"
 import {
   SnapshotBusyError,
   createSnapshotBuilder,
   type SnapshotRevisionStore,
-} from "../../../src/lib/service/snapshot"
+} from "../../../packages/service/src/policy/snapshot"
 
 const workspace = (name = "alpha"): Workspace & { id: string } => ({
   id: "018f47f4-5ab1-7c2d-8e90-123456789abc",

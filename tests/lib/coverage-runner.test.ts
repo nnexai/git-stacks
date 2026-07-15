@@ -6,6 +6,7 @@ import {
   mergeableShardDirs,
   parseArgs,
   readShardData,
+  shouldInstrumentCoverageTest,
   shouldPreserveCoverageWorkdirs,
 } from "../../scripts/coverage-runner"
 import { DEFAULT_INTEGRATION_WORKERS } from "../../scripts/test-runner-core"
@@ -32,6 +33,14 @@ describe("coverage runner parallel integration contract", () => {
       filters: ["tests/lib/service/signal-state.test.ts"],
       workers: DEFAULT_INTEGRATION_WORKERS,
     })
+  })
+
+  test("keeps package-identity mock exceptions explicit and narrow", () => {
+    expect(shouldInstrumentCoverageTest(join(process.cwd(), "tests/commands/repo-add.test.ts"))).toBe(false)
+    expect(shouldInstrumentCoverageTest(join(process.cwd(), "tests/commands/workspace-edit.test.ts"))).toBe(false)
+    expect(shouldInstrumentCoverageTest(join(process.cwd(), "tests/lib/service/identity.test.ts"))).toBe(false)
+    expect(shouldInstrumentCoverageTest(join(process.cwd(), "tests/tui/workspace-wizard.test.ts"))).toBe(false)
+    expect(shouldInstrumentCoverageTest(join(process.cwd(), "tests/lib/service/client-operation.test.ts"))).toBe(true)
   })
 
   test("successful shard directories remain mergeable after one worker fails", () => {

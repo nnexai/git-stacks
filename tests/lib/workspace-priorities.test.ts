@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { WorkspaceSchema, type Workspace } from "../../src/lib/config"
-import { setWorkspacePriorities } from "../../src/lib/workspace-priorities"
+import { WorkspaceSchema, type Workspace } from "../../packages/core/src/config"
+import { setWorkspacePriorities } from "../../packages/core/src/workspace-priorities"
 
 const workspace = (id: string, name: string, priority?: number): Workspace => ({
   id, name, schema_version: "1", branch: "main", created: "2026-07-13", repos: [],

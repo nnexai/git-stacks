@@ -6,8 +6,8 @@ import {
   OperationRegistry,
   type OperationExecution,
   type OperationStep,
-} from "../../../src/lib/service/operations"
-import type { Operation, ServiceEvent } from "../../../src/lib/service/contract"
+} from "../../../packages/service/src/policy/operations"
+import type { Operation, ServiceEvent } from "../../../packages/protocol/src/service"
 
 const roots: string[] = []
 async function root(): Promise<string> {

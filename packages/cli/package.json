@@ -1,0 +1,22 @@
+{
+  "name": "@git-stacks/cli",
+  "version": "0.21.0-rc.1",
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "files": ["dist", "src"],
+  "type": "module",
+  "bin": { "git-stacks": "./dist/index.js" },
+  "exports": { ".": { "types": "./src/index.ts", "bun": "./src/index.ts", "import": "./dist/index.js" } },
+  "scripts": { "build": "node ../../scripts/build-package.mjs cli", "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "dependencies": {
+    "@clack/prompts": "^1.2.0",
+    "@git-stacks/core": "0.21.0-rc.1",
+    "@git-stacks/protocol": "0.21.0-rc.1",
+    "@git-stacks/service": "0.21.0-rc.1",
+    "@logtape/logtape": "^2.0.5",
+    "commander": "^14.0.3",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
+  },
+  "gitStacksBuild": { "entries": ["src/index.ts"] }
+}

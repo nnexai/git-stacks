@@ -1,6 +1,6 @@
 # Current Features
 
-This document is a product-level inventory for the `0.20.0` release line. The older version of this file specified push, ahead/behind tracking, secret references, labels, and stash-assisted sync as planned work; all five are now implemented.
+This document is a product-level inventory for the `0.21.0` release line. The default CLI, shared core, local service, and browser client run on Node.js 24; the terminal dashboard is a separately installed Bun/OpenTUI package.
 
 For command syntax and configuration examples, see [README.md](./README.md). For release-specific changes, see [CHANGELOG.md](./CHANGELOG.md).
 
@@ -64,7 +64,7 @@ Workspace notes are append-only local operator context stored outside managed re
 
 ## Shared Interactive Core
 
-The terminal dashboard and browser client are two presentations over one local service:
+The terminal dashboard and browser client are two presentations over one local service, while the daemonless CLI uses the same domain core directly:
 
 - The service owns complete config, filesystem and Git projection, mutations, operation state, workspace monitoring, signals, and browser terminal processes.
 - The TUI uses the complete authenticated local-client contract and owns rendering, navigation, and viewport state only.
@@ -76,7 +76,7 @@ The terminal dashboard and browser client are two presentations over one local s
 
 `git-stacks web` opens a one-use paired URL on loopback. The browser supports workspace and repository navigation, workspace lifecycle actions, label/priority organization, commands, signals, and context menus.
 
-On verified Linux systems, terminal tabs are backed by service-owned PTYs:
+On Linux and macOS, terminal tabs are backed by service-owned `node-pty` processes:
 
 - Multiple shell and configured-command tabs can run independently.
 - Resize is derived from the actual terminal container and forwarded to the PTY.
@@ -85,7 +85,7 @@ On verified Linux systems, terminal tabs are backed by service-owned PTYs:
 - Ordinary shell exit removes the tab; ended command tabs retain their output.
 - Process groups are cleaned up when a terminal or the service is explicitly stopped.
 
-Browser terminal support is intentionally disabled on platforms that have not been verified.
+The release matrix covers current GitHub-hosted Linux and macOS x64/arm64 runners; local behavior still depends on the installed shell and platform integrations.
 
 ## Workspace Signals
 

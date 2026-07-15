@@ -2,21 +2,33 @@ import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { Workspace } from "@/lib/config"
 import { makeConfigMock } from "../../helpers"
 
-// --- Mock config module (issue-utils calls workspaceExists/readWorkspace/writeWorkspace) ---
+// --- Mock canonical core modules used by issue-utils ---
 
 const workspaceExistsMock = mock((_name: string) => false)
 const writeWorkspaceMock = mock((_ws: unknown) => {})
 let mockWorkspaceData: Record<string, unknown> = {}
 const detectWorkspaceFromCwdMock = mock((): { ok: false } | { ok: true; workspace: Workspace } => ({ ok: false }))
 
-mock.module("@/lib/config", () => makeConfigMock({
+mock.module("../../../packages/core/src/config", () => makeConfigMock({
   workspaceExists: workspaceExistsMock,
   readWorkspace: mock((_name: string) => mockWorkspaceData[_name]),
   writeWorkspace: writeWorkspaceMock,
+  updateWorkspace: (name: string, updater: (workspace: unknown) => unknown) => {
+    const next = updater(mockWorkspaceData[name])
+    mockWorkspaceData[name] = next
+    writeWorkspaceMock(next)
+    return next
+  },
 }))
 
-mock.module("@/lib/workspace-status", () => {
-  return { detectWorkspaceFromCwd: detectWorkspaceFromCwdMock }
+mock.module("../../../packages/core/src/workspace-resolution", () => {
+  return { resolveOptionalWorkspace: (name?: string) => {
+    if (name) return workspaceExistsMock(name)
+      ? { ok: true, workspace: mockWorkspaceData[name] }
+      : { ok: false, error: "workspace_not_found", name }
+    const detected = detectWorkspaceFromCwdMock()
+    return detected.ok ? detected : { ok: false, error: "cwd_not_in_workspace", cwd: process.cwd() }
+  } }
 })
 
 const {

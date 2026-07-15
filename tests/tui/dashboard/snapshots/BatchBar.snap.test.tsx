@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { BatchBar } from "../../../../src/tui/dashboard/BatchBar"
+import { BatchBar } from "../../../../packages/tui/src/BatchBar"
 
 const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 

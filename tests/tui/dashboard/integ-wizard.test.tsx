@@ -20,7 +20,7 @@ const templateFixture = {
 }
 
 // Mock config module with inline fixtures — resilient to module cache ordering
-mock.module("../../../src/lib/config", () => ({
+mock.module("@git-stacks/core/config", () => ({
   listWorkspaces: mock(() => []),
   readWorkspace: mock(() => null),
   writeWorkspace: mock(() => {}),
@@ -47,10 +47,10 @@ mock.module("../../../src/lib/config", () => ({
 }))
 
 // Mock git operations to prevent real filesystem git work
-mock.module("../../../src/lib/git", () => makeGitMock())
+mock.module("@git-stacks/core/git", () => makeGitMock())
 
 // Mock workspace-ops so executeCreateWorkspace does not attempt real git operations
-mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
+mock.module("@git-stacks/core/workspace-ops", () => makeWorkspaceOpsMock({
   openWorkspace: mock(async () => {}),
   cleanWorkspace: mock(async () => ({ ok: true })),
   closeWorkspace: mock(async () => ({ ok: true })),
@@ -59,7 +59,7 @@ mock.module("../../../src/lib/workspace-ops", () => makeWorkspaceOpsMock({
   renameWorkspace: mock(async () => {}),
 }))
 
-mock.module("../../../src/lib/workspace-git", () => makeWorkspaceGitMock({
+mock.module("@git-stacks/core/workspace-git", () => makeWorkspaceGitMock({
   syncWorkspace: mock(async (_name: string, _opts: any, _onProgress?: any) => ({
     ok: true,
     synced: [],
@@ -67,23 +67,23 @@ mock.module("../../../src/lib/workspace-git", () => makeWorkspaceGitMock({
   })),
 }))
 
-mock.module("../../../src/lib/workspace-status", () => makeWorkspaceStatusMock({
+mock.module("@git-stacks/core/workspace-status", () => makeWorkspaceStatusMock({
   getWorkspaceStatus: mock(async () => []),
   getWorkspaceListInfo: mock(async () => []),
   getDirtyWorktrees: mock(async () => []),
 }))
 
-mock.module("../../../src/lib/workspace-yaml", () => makeWorkspaceYamlMock({
+mock.module("@git-stacks/core/workspace-yaml", () => makeWorkspaceYamlMock({
   editWorkspaceYaml: mock(() => ({ path: "/tmp/fake.yml", validate: () => ({ ok: true }) })),
 }))
 
 // Mock lifecycle hooks to prevent hook execution during workspace creation
-mock.module("../../../src/lib/lifecycle", () => ({
+mock.module("@git-stacks/core/lifecycle", () => ({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => {}),
 }))
 
-mock.module("../../../src/lib/service/client", () => ({
+mock.module("@git-stacks/service/client", () => ({
   fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
   fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
   dismissSignal: mock(async () => {}),
@@ -98,8 +98,8 @@ mock.module("../../../src/lib/service/client", () => ({
 
 // Dynamic imports happen AFTER env is set and mocks are registered
 const { testRender } = await import("@opentui/solid")
-const { default: App } = await import("../../../src/tui/dashboard/App")
-const { setCoreStateFactoryForTests } = await import("../../../src/tui/dashboard/core-store")
+const { default: App } = await import("../../../packages/tui/src/App")
+const { setCoreStateFactoryForTests } = await import("../../../packages/tui/src/core-store")
 setCoreStateFactoryForTests(() => makeDashboardCoreState([], [templateFixture as any], registryFixture as any))
 
 const renderOpts = { kittyKeyboard: true }

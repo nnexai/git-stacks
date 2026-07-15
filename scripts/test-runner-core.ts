@@ -1,5 +1,5 @@
 import { availableParallelism } from "node:os"
-import { mapLimited } from "../src/lib/concurrency"
+import { mapLimited } from "../packages/core/src/concurrency"
 
 export function defaultIntegrationWorkers(coreCount = availableParallelism()): number {
   // Integration files each spawn a Bun/CLI process tree. Beyond eight workers

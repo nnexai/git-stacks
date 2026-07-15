@@ -20,7 +20,7 @@ import {
   isRepoDirty,
   pullFFOnly,
   pushBranch,
-} from "../../src/lib/git"
+} from "../../packages/core/src/git"
 
 let tmpDir: string
 let gitEnvDir: string

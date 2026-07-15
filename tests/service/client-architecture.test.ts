@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test"
 
 describe("core-centred client architecture", () => {
   test("keeps the TUI renderer free of direct machine-side authorities", async () => {
-    const glob = new Bun.Glob("src/tui/dashboard/**/*.{ts,tsx}")
+    const glob = new Bun.Glob("packages/tui/src/**/*.{ts,tsx}")
     const exceptions = new Set([
-      "src/tui/dashboard/editor-handoff.ts",
-      "src/tui/dashboard/terminal-handoff.ts",
+      "packages/tui/src/editor-handoff.ts",
+      "packages/tui/src/terminal-handoff.ts",
     ])
     const forbidden = [
       /from ["'][^"']*lib\/(workspace-ops|workspace-lifecycle|workspace-status|workspace-yaml|paths|git)["']/,
@@ -23,7 +23,7 @@ describe("core-centred client architecture", () => {
   })
 
   test("uses generated service transport types in the browser client", async () => {
-    const source = await Bun.file("src/web-client/app.ts").text()
+    const source = await Bun.file("packages/web/src/app.ts").text()
     expect(source).toContain("WebSnapshot as Snapshot")
     expect(source).toContain("WebTerminal as TerminalMeta")
     expect(source).not.toMatch(/type Snapshot\s*=/)

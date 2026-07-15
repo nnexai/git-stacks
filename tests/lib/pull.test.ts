@@ -6,8 +6,8 @@ import type { Workspace } from "@/lib/config"
 import { applyTestGitEnv, cleanup, makeTmpDir, gitExecOptions } from "../helpers"
 
 // Import real functions from git.ts (no config dependency, safe to import directly)
-import { pullFFOnly } from "../../src/lib/git"
-import { pullWorkspace } from "../../src/lib/workspace-git"
+import { pullFFOnly } from "../../packages/core/src/git"
+import { pullWorkspace } from "../../packages/core/src/workspace-git"
 
 const tmpDirs: string[] = []
 let gitEnvDir: string

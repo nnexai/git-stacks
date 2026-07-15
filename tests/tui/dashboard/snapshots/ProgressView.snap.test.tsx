@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { ProgressView } from "../../../../src/tui/dashboard/ProgressView"
+import { ProgressView } from "../../../../packages/tui/src/ProgressView"
 
 const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 

@@ -6,14 +6,17 @@ Git worktree workspace manager — repo registry, templates, and multi-repo orch
 
 ## Installation
 
-**Requires [Bun](https://bun.sh) runtime.**
+The default CLI, local service, and browser client require **Node.js 24 or newer**. Bun is only needed for the optional terminal dashboard.
 
 ```bash
 # Run directly (no install)
-bunx git-stacks --help
+npx git-stacks@next --help
 
 # Install globally
-bun add -g git-stacks
+npm install --global git-stacks@next
+
+# Optional terminal dashboard (requires Bun)
+npm install --global @git-stacks/tui@next
 ```
 
 ## Concepts
@@ -423,25 +426,29 @@ git-stacks web --no-open       # Print the one-use local URL
 git-stacks web --no-open --json
 ```
 
-The browser client is loopback-only and receives a path- and secret-minimized projection from the local TypeScript service. Machine paths, resolved commands, environment values, and service credentials stay in the service. Pairing URLs are one-use local credentials rather than reusable API access.
+The browser client is loopback-only and receives a path- and secret-minimized projection from the local Node.js service. Machine paths, resolved commands, environment values, and service credentials stay in the service. Pairing URLs are one-use local credentials rather than reusable API access.
 
-On verified Linux hosts, the service owns independent browser PTYs with multiple tabs, resize, bounded replay, focus restoration, inactive-tab stream suspension, and process-group cleanup. Because the shell belongs to the service rather than the page, a reload or temporary browser closure can reconnect to a live terminal while that service process remains alive. This is local process persistence, not reboot persistence: stopping the service or machine ends its PTYs. Exiting an ordinary shell removes its tab; configured command tabs stay available with their final output. Browser terminal capability remains disabled on unverified platforms.
+On Linux and macOS, the service owns independent browser PTYs with multiple tabs, resize, bounded replay, focus restoration, inactive-tab stream suspension, and process-group cleanup. Because the shell belongs to the service rather than the page, a reload or temporary browser closure can reconnect to a live terminal while that service process remains alive. This is local process persistence, not reboot persistence: stopping the service or machine ends its PTYs. Exiting an ordinary shell removes its tab; configured command tabs stay available with their final output.
 
 ## Shared Service Architecture
 
-The TUI and browser deliberately share one machine-side core:
+The CLI, TUI, and browser deliberately share one machine-side core:
 
-- The Bun service owns config, filesystem and Git inspection, workspace mutations, operation state, signals, and browser PTYs.
+- `@git-stacks/core` is the only workspace/config/Git implementation. The local CLI calls it directly for daemonless scripting.
+- The Node.js `@git-stacks/service` package owns interactive projection, operations, signals, SSE/WebSocket transport, and browser PTYs.
+- `@git-stacks/protocol` owns wire schemas; `@git-stacks/client` owns carrier-neutral client reduction and presentation semantics.
 - `git-stacks manage` is a trusted local client of the complete typed `/v1/core` model. It renders and manages viewport state, but does not maintain a second workspace engine.
 - The browser uses the narrower `/web/api` projection and never receives trusted-only paths or launch context.
 - Both clients load an authoritative snapshot and follow server-sent events for invalidation, operations, and signal changes instead of polling the machine while navigating.
-- One-shot CLI commands continue to expose the same domain operations directly for scripting; interactive mutation paths are service-backed.
+- The default package graph contains no Bun or OpenTUI dependency. Package ownership and dependency rules are described in [docs/architecture.md](./docs/architecture.md).
 
 ## Dashboard
 
 ```bash
-git-stacks manage    # Interactive TUI dashboard (default when run with no args)
+git-stacks manage    # Launch the separately installed optional TUI
 ```
+
+The dashboard is distributed as `@git-stacks/tui`, requires Bun, and is intentionally absent from the default Node.js install. Running `git-stacks` with no arguments still requests the dashboard and prints an actionable installation error when it is unavailable; `git-stacks web` remains available without Bun.
 
 The dashboard is a tabbed interface with **Workspaces | Templates | Repos** tabs:
 

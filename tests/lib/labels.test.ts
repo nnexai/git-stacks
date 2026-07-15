@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test"
-import { matchesLabels } from "../../src/lib/labels"
-import { WorkspaceSchema } from "../../src/lib/config"
+import { matchesLabels } from "../../packages/core/src/labels"
+import { WorkspaceSchema } from "../../packages/core/src/config"
 
 function makeWs(labels?: string[]) {
   return WorkspaceSchema.parse({

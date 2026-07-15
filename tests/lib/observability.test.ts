@@ -5,35 +5,30 @@ import {
   logDebug,
   silenceObservability,
   timeOperation,
-} from "../../src/lib/observability"
+} from "../../packages/core/src/observability"
 
-const originalWriter = Bun.stderr.writer
 const decoder = new TextDecoder()
+const originalWrite = process.stderr.write
 
 function installStderrCapture() {
   let output = ""
 
-  Bun.stderr.writer = () =>
-    ({
-      write(chunk: Uint8Array | string) {
-        output += typeof chunk === "string" ? chunk : decoder.decode(chunk)
-        return typeof chunk === "string" ? chunk.length : chunk.byteLength
-      },
-      flush() {},
-      end() {},
-    }) as ReturnType<typeof Bun.stderr.writer>
+  process.stderr.write = ((chunk: Uint8Array | string) => {
+    output += typeof chunk === "string" ? chunk : decoder.decode(chunk)
+    return true
+  }) as typeof process.stderr.write
 
   return () => output
 }
 
 describe("observability", () => {
   beforeEach(async () => {
-    Bun.stderr.writer = originalWriter
+    process.stderr.write = originalWrite
     await silenceObservability()
   })
 
   afterEach(async () => {
-    Bun.stderr.writer = originalWriter
+    process.stderr.write = originalWrite
     await silenceObservability()
   })
 
@@ -76,12 +71,12 @@ describe("observability", () => {
 
 describe("observability selectors", () => {
   beforeEach(async () => {
-    Bun.stderr.writer = originalWriter
+    process.stderr.write = originalWrite
     await silenceObservability()
   })
 
   afterEach(async () => {
-    Bun.stderr.writer = originalWriter
+    process.stderr.write = originalWrite
     await silenceObservability()
   })
 

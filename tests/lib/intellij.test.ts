@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { existsSync, readFileSync } from "fs"
-import { generateIntellijProject } from "../../src/lib/intellij"
+import { generateIntellijProject } from "../../packages/core/src/intellij"
 import { makeTmpDir, cleanup, mkdir, touch } from "../helpers"
-import type { Workspace } from "../../src/lib/config"
+import type { Workspace } from "../../packages/core/src/config"
 
 let tmp: string
 beforeEach(() => { tmp = makeTmpDir("intellij") })

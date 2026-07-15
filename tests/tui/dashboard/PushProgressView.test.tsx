@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { PushProgressView } from "../../../src/tui/dashboard/PushProgressView"
+import { PushProgressView } from "../../../packages/tui/src/PushProgressView"
 
 type PushRow = {
   repo: string

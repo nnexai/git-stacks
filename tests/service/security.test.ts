@@ -7,11 +7,11 @@ import {
   provisionOfficialClient,
   revokeCredential,
   UNAUTHENTICATED_RESPONSE,
-} from "../../src/lib/service/credentials"
-import { ErrorEnvelopeSchema } from "../../src/lib/service/contract"
-import { EventBroker } from "../../src/lib/service/event-broker"
-import { EventJournal } from "../../src/lib/service/event-journal"
-import { startServiceServer } from "../../src/service/server"
+} from "../../packages/service/src/policy/credentials"
+import { ErrorEnvelopeSchema } from "../../packages/protocol/src/service"
+import { EventBroker } from "../../packages/service/src/policy/event-broker"
+import { EventJournal } from "../../packages/service/src/policy/event-journal"
+import { startServiceServer } from "../../packages/service/src/server"
 
 const roots: string[] = []
 function root(): string {
@@ -26,7 +26,7 @@ afterEach(() => {
 
 describe("service authentication admission", () => {
   test("publishes exact HTTP resource bounds", async () => {
-    const server = await import("../../src/service/server")
+    const server = await import("../../packages/service/src/server")
     expect(server.MAX_BODY_BYTES).toBe(256 * 1024)
     expect(server.RATE_LIMIT_PER_MINUTE).toBe(60)
     expect(server.RATE_LIMIT_BURST).toBe(20)
@@ -83,7 +83,7 @@ describe("service authentication admission", () => {
     let calls = 0
     let release!: () => void
     const stalled = new Promise<void>((resolve) => { release = resolve })
-    const service = startServiceServer({
+    const service = await startServiceServer({
       serviceRoot,
       handlerTimeoutMs: 20,
       snapshot: {
@@ -122,7 +122,7 @@ describe("service authentication admission", () => {
     const serviceRoot = root()
     const credential = provisionOfficialClient("sse-deadline-client", { serviceRoot })
     const broker = new EventBroker(new EventJournal({ root: serviceRoot }))
-    const service = startServiceServer({
+    const service = await startServiceServer({
       serviceRoot,
       handlerTimeoutMs: 20,
       heartbeatMs: 10,

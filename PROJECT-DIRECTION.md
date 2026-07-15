@@ -1,107 +1,57 @@
 # Project Direction
 
-`git-stacks` is a local platform for multi-repository task environments. The `0.20.0` architecture centers machine-side behavior in one Bun service and keeps interactive clients focused on presentation.
+`git-stacks` is a local platform for multi-repository task environments. The `0.21.0` architecture has one Node.js machine core, a daemonless local CLI, a Node.js interactive service, a thin browser client, and an independently optional Bun TUI.
 
-The immediate goal is to harden this foundation through the `0.20.0` release candidates. Additional browser features can arrive incrementally afterward without creating another workspace engine.
+The migration centralizes now so later browser feature work extends one implementation instead of creating another workspace engine.
 
-## Architectural Direction
+## Package Ownership
 
-### One Shared Machine-Side Core
+- `@git-stacks/protocol` owns versioned wire schemas and transport-neutral types.
+- `@git-stacks/client` owns transport-neutral event, reconnect, priority, and signal presentation semantics shared by interactive clients.
+- `@git-stacks/core` owns config schemas, atomic persistence, filesystem/Git behavior, workspace lifecycle, integrations, commands, files, notes, labels, priorities, and opt-in agent-hook management.
+- `@git-stacks/cli` is the Node.js command surface. Ordinary commands call core directly and do not require or start the service.
+- `@git-stacks/service` is the Node.js interactive authority. It owns revisioned projections, operations, event journals, signals, monitoring, pairing, SSE/WebSocket transport, and PTYs.
+- `@git-stacks/web` is a browser-only renderer over the narrow web projection.
+- `@git-stacks/tui` is an optional Bun/OpenTUI renderer over the trusted service contract.
+- `git-stacks` is the small public facade that installs the Node CLI and its service/browser graph.
 
-The local service is authoritative for interactive use. It owns:
+Package boundaries are enforced by a source import graph and Node-only runtime tests. The default install graph must not include Bun, OpenTUI, or TUI source.
 
-- complete workspace, template, repository, integration, file, and note projection
-- filesystem and Git inspection
-- workspace creation and typed mutations
-- durable operation state and progress
-- workspace-change monitoring and revision invalidation
-- provider-neutral signals and dismissal
-- browser terminal processes and replay
+## State and Process Ownership
 
-The TUI consumes the complete trusted contract in [`src/lib/service/core-contract.ts`](./src/lib/service/core-contract.ts) through the shared client in [`src/lib/service/client.ts`](./src/lib/service/client.ts). It owns navigation, rendering, dialogs, and viewport state, but no independent persistence or Git engine.
+Repository registry, templates, workspaces, labels, and priority remain human-editable YAML under `~/.config/git-stacks/`. Core writes are atomic and use cross-process leases where read-modify-write operations need coordination. A running service watches those files and reconciles direct CLI or editor changes; CLI commands do not need a refresh RPC.
 
-The browser uses the narrower projection under [`src/service/web`](./src/service/web). Machine paths, credentials, raw environment values, and trusted launch context stay outside that contract.
+Interactive clients load one authoritative revisioned snapshot and then follow server-sent events. Navigation, selection, dialogs, and ordinary viewport changes remain client-local. Stream visibility matters only for terminal bytes: hidden terminals stop sending output and reconnect with bounded replay when selected again.
 
-### Focused Domain Modules
-
-Workspace behavior is split across focused `src/lib/workspace-*.ts` modules rather than accumulating in a client or monolithic adapter. The service composes those modules into typed operations; one-shot CLI commands reuse the same behavior for scripting.
-
-New functionality should follow this ownership rule:
-
-- Machine state, persistence, Git, processes, operations, and shared policy belong in the domain core or service.
-- Client code should contain presentation, interaction, and viewport logic only.
-- Browser-safe data must be projected explicitly instead of exposing the trusted core wholesale.
-- Durable user choices belong in workspace or global YAML, not client-local storage or service-only preferences.
-
-### Revisioned, Event-Driven Clients
-
-Interactive clients load an authoritative revisioned snapshot, then follow server-sent events for invalidation, operation progress, and signals. Cursor movement, tab switching, and scrolling must not trigger repeated filesystem or Git scans.
-
-Events are durable enough for reconnect replay, bounded for resource safety, and supplemented by authoritative reloads after invalidation. Polling is a recovery path for interrupted operation streams, not the primary synchronization model.
-
-### Explicit Process Ownership
-
-Browser PTYs belong to the service, not the page. This allows reload and temporary browser disconnection without replacing live shells. The boundary is intentionally local and process-scoped: stopping the service or machine ends those sessions.
-
-Only visible terminal views stream output to the browser. Hidden views reconnect with bounded replay when selected. Ordinary shells disappear when their process exits; configured command tabs may retain final output as an execution record.
-
-### Human-Editable Durable State
-
-Repository registry, templates, workspaces, labels, and priority remain YAML source of truth under `~/.config/git-stacks/`. The service may index and cache these files, but it must preserve direct editability, schema compatibility, atomic writes, and external-change detection.
-
-Transient service descriptors, credentials, event journals, operation records, and PTYs stay in the service-owned config area. They are implementation state, not workspace definition.
+Browser PTYs belong to the service rather than the page. Reloading or closing a browser can reconnect while the service process and retention policy keep the PTY alive. Service shutdown or machine reboot ends those sessions. Ordinary exited shells are removed; configured command tabs may retain final output.
 
 ## Product Surfaces
 
-### CLI
+The local CLI remains the complete scriptable interface and works without a daemon. Explicit `service`, `web`, and `manage` commands are the only service/client launch boundaries.
 
-The CLI remains the complete scriptable interface for workspace lifecycle, Git operations, files, environment inspection, notes, manual commands, integrations, hooks, diagnostics, and completion.
+`git-stacks web` is the supported graphical client and should gain functionality incrementally through shared protocol/client/service capabilities. It must never receive machine paths, credentials, raw environment values, or trusted launch context that are not part of its explicit projection.
 
-### TUI
+`git-stacks manage` launches the separately installed `@git-stacks/tui`. The TUI owns rendering and foreground handoffs, not authoritative workspace reads, writes, Git inspection, or command execution.
 
-`git-stacks manage` remains the dense terminal-native control surface. It should retain feature depth while becoming progressively thinner over the shared service contract.
+The retired GTK/Zig client and patched Ghostty dependency remain archived at `native-client-final-2026-07-14`; they are not part of the supported architecture.
 
-### Browser
+## Runtime and Platform Policy
 
-`git-stacks web` is the supported graphical interface. It should gain feature completeness incrementally after the core architecture is stable, using existing service operations and projections rather than browser-specific business logic.
+Node.js 24 is the minimum runtime for the CLI, core, service, and browser build. Bun is confined to the optional TUI and the existing repository test harness. Native dependencies are exact-pinned and must ship trusted prebuilds for Linux and macOS on x64 and arm64. Runtime dependencies require a license compatible with this MIT project and pass the production audit before an RC is prepared.
 
-### Native Client
-
-The GTK/Zig client and patched Ghostty dependency are retired. Supporting a separate native build system and terminal fork is outside the product direction. The final implementation is archived at tag `native-client-final-2026-07-14` for historical reference only.
+The service remains loopback-only in `0.21.0`. A future remote client/server mode must extend the authenticated protocol and pairing model deliberately; it must not expose the current local bearer channel directly to an untrusted network.
 
 ## Coding-Agent Integrations
 
-Signals are provider-neutral service state. User-level provider hooks are optional adapters and must remain strictly opt-in:
+Signals are provider-neutral service state. User-level Codex, Claude Code, GitHub Copilot, and OpenCode hooks remain strictly opt-in:
 
 - `install` changes only providers selected by the user.
 - `update` reconciles only integrations already owned by git-stacks.
 - `uninstall` removes only selected git-stacks-owned entries.
-- Normal service, client, workspace, and terminal startup never modifies provider configuration.
+- Ordinary CLI, service, browser, TUI, workspace, and terminal startup never modifies provider configuration.
 
-Terminal-local wrappers may provide basic lifecycle signals without installing user configuration, but they must not claim richer provider semantics than they can observe.
+## `0.21.0-rc.1` Boundary
 
-## `0.20.0` Release-Candidate Focus
+The first release candidate proves the architecture rather than adding product scope: Node-only default execution, package artifacts, CLI parity, service transport and PTY lifecycle, browser reconnect behavior, optional TUI lifecycle, external-file reconciliation, license/security audits, and Linux/macOS x64/arm64 CI.
 
-The first `0.20.0` release candidate should establish confidence in the architectural cutover rather than expand scope. Release readiness centers on:
-
-- one coherent service-owned state and mutation path for both interactive clients
-- correct TUI load, refresh, scrolling, mutation, and shutdown behavior
-- browser terminal resize, focus, reconnect, visibility streaming, exit, and cleanup behavior
-- signal lifecycle, acknowledgment, dismissal, deduplication, and stale-surface cleanup
-- loopback pairing, credential, projection, and path/secret isolation boundaries
-- opt-in and ownership-safe coding-agent hook lifecycle
-- complete packaged browser assets and release documentation
-- passing type, dependency, test, coverage-inventory, `next`-tagged publish dry-run, and RC checks
-
-## Non-Goals
-
-- A hosted control plane or remote browser service
-- Network exposure beyond loopback
-- Reintroducing a native graphical client
-- Client-specific copies of workspace, Git, operation, or signal policy
-- Implicit coding-agent configuration
-- Persisting interactive shell processes across service restart or machine reboot
-
-## Bottom Line
-
-The structural rewrite proposed by the older version of this document is now the current architecture: `git-stacks` has a shared local core, typed operations, indexed human-editable state, durable events, and thin interactive clients. The next product work should build on that center instead of adding parallel implementations.
+Tagging, publishing, and release creation remain explicit actions after those checks. The RC check validates by default and creates a tag only with `--tag`; publishing is separate.

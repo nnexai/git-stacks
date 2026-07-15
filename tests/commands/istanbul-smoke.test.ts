@@ -27,7 +27,7 @@ describe("Istanbul subprocess smoke", () => {
       expect(result.stderr).toBe("")
       expect(result.stdout).toContain("complete -F _git_stacks_complete git-stacks")
       expect(existsSync(result.coveragePath)).toBe(true)
-      expect(result.summary.files.some((file) => file.endsWith("src/commands/completion.ts"))).toBe(true)
+      expect(result.summary.files.some((file) => file.endsWith("packages/cli/src/commands/completion.ts"))).toBe(true)
       expect(result.summary.statementsCovered).toBeGreaterThan(0)
       expect(result.summary.functionsCovered).toBeGreaterThan(0)
     } finally {
@@ -48,7 +48,7 @@ describe("Istanbul subprocess smoke", () => {
       expect(error.kind).toBe("child-failure")
       expect(error.exitCode).not.toBe(0)
       expect(error.argv).toContain("completion")
-      expect(error.stderr).toMatch(/cannot find package|could not resolve|module not found/i)
+      expect(error.stderr).toMatch(/cannot find (?:package|module)|could not resolve|module not found/i)
       expect(error.message).toContain(`argv: ${JSON.stringify(error.argv)}`)
       expect(error.message).toContain(`exitCode: ${error.exitCode}`)
       expect(error.message).toContain(error.stderr.trim())

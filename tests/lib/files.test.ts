@@ -17,8 +17,8 @@ import {
   warnExternalFiles,
   type FileOpsRepoSource,
   type FileOpsWorkspaceSource,
-} from "../../src/lib/files"
-import type { WorkspaceRepo, Workspace } from "../../src/lib/config"
+} from "../../packages/core/src/files"
+import type { WorkspaceRepo, Workspace } from "../../packages/core/src/config"
 
 // --- applyEntry ---
 

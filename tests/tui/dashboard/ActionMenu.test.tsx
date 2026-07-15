@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { ActionMenu } from "../../../src/tui/dashboard/ActionMenu"
+import { ActionMenu } from "../../../packages/tui/src/ActionMenu"
 
 // Use kitty keyboard protocol so escape sends \x1B[27u (unambiguous CSI)
 // instead of bare \x1B which the parser holds to disambiguate from escape

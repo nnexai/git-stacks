@@ -29,21 +29,21 @@ import {
 import {
   WorkspaceSchema,
   TemplateSchema,
-} from "../../src/lib/config"
+} from "../../packages/core/src/config"
 import {
   writeEnvFiles,
   mergeEnv,
   buildWorkspaceEnv,
   openWorkspace,
-} from "../../src/lib/workspace-ops"
+} from "../../packages/core/src/workspace-ops"
 import {
   getWorkspaceListInfo,
   getWorkspaceStatus,
-} from "../../src/lib/workspace-status"
+} from "../../packages/core/src/workspace-status"
 import {
   pushWorkspace,
   syncWorkspace,
-} from "../../src/lib/workspace-git"
+} from "../../packages/core/src/workspace-git"
 
 let gitEnvDir: string
 let restoreGitEnv: (() => void) | undefined

@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect, mock } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { WizardView, type WizardStep } from "../../../src/tui/dashboard/WizardView"
+import { WizardView, type WizardStep } from "../../../packages/tui/src/WizardView"
 
 // Use kitty keyboard protocol so escape sends \x1B[27u (unambiguous CSI)
 // instead of bare \x1B which the parser holds to disambiguate from escape

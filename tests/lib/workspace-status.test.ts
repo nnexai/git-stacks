@@ -40,7 +40,7 @@ mock.module("@/lib/git", () =>
   })
 )
 
-const { getWorkspaceListInfo, getWorkspaceStatus } = await import("../../src/lib/workspace-status")
+const { getWorkspaceListInfo, getWorkspaceStatus } = await import("../../packages/core/src/workspace-status")
 
 let tempRoot = ""
 

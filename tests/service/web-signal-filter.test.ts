@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { TerminalSignalFilter } from "../../src/service/web/signal-filter"
+import { TerminalSignalFilter } from "../../packages/service/src/web/signal-filter"
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()

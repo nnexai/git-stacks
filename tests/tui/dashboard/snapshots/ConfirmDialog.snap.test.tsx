@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { ConfirmDialog } from "../../../../src/tui/dashboard/ConfirmDialog"
+import { ConfirmDialog } from "../../../../packages/tui/src/ConfirmDialog"
 
 const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 const noop = () => {}

@@ -33,7 +33,7 @@ import {
   stashPush,
   stashPop,
   hasAutoStash,
-} from "../../src/lib/git"
+} from "../../packages/core/src/git"
 
 let gitEnvDir: string
 let restoreGitEnv: (() => void) | undefined
@@ -749,7 +749,7 @@ describe("fetchOrigin", () => {
     // Source-level verification: confirm the timeout flag is baked into the implementation
     const { readFileSync } = await import("fs")
     const source = readFileSync(
-      new URL("../../src/lib/git.ts", import.meta.url).pathname,
+      new URL("../../packages/core/src/git.ts", import.meta.url).pathname,
       "utf-8"
     )
     expect(source).toContain("fetch.timeout=30")

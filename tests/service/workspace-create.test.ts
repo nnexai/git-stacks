@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { provisionOfficialClient } from "../../src/lib/service/credentials"
-import { OperationRegistry } from "../../src/lib/service/operations"
-import { CLIENT_MODEL_LIMITS } from "../../src/lib/service/contract"
-import { startServiceServer } from "../../src/service/server"
+import { provisionOfficialClient } from "../../packages/service/src/policy/credentials"
+import { OperationRegistry } from "../../packages/service/src/policy/operations"
+import { CLIENT_MODEL_LIMITS } from "../../packages/protocol/src/service"
+import { startServiceServer } from "../../packages/service/src/server"
 
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -17,7 +17,7 @@ describe("workspace creation transport", () => {
     const credential = provisionOfficialClient("workspace-create-test", { serviceRoot })
     let sequence = 0
     const operations = new OperationRegistry({ root: serviceRoot, publishOperationEvent: async (operation) => ({ protocol: "v1", type: "operation", sequence: String(++sequence), timestamp: new Date().toISOString(), operation }), schedule: (run) => run() })
-    const service = startServiceServer({
+    const service = await startServiceServer({
       serviceRoot, operations,
       snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
       workspaceCreationCatalog: () => ({ templates: [{ name: "full", repository_count: 1, command_count: 0, labels: [] }], repositories: [{ name: "app", type: "typescript", default_branch: "main" }], client_model: CLIENT_MODEL_LIMITS }),

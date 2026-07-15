@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { provisionOfficialClient } from "../../src/lib/service/credentials"
-import { EventJournal } from "../../src/lib/service/event-journal"
-import { SnapshotBusyError } from "../../src/lib/service/snapshot"
-import { startServiceServer } from "../../src/service/server"
+import { provisionOfficialClient } from "../../packages/service/src/policy/credentials"
+import { EventJournal } from "../../packages/service/src/policy/event-journal"
+import { SnapshotBusyError } from "../../packages/service/src/policy/snapshot"
+import { startServiceServer } from "../../packages/service/src/server"
 
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -31,7 +31,7 @@ describe("workspace synchronization contract", () => {
     const root = join(tmpdir(), `git-stacks-workspace-sync-${crypto.randomUUID()}`)
     roots.push(root)
     const credential = provisionOfficialClient("sync-client", { serviceRoot: root })
-    const service = startServiceServer({
+    const service = await startServiceServer({
       serviceRoot: root,
       snapshot: { buildAll: async () => { throw new SnapshotBusyError(3) }, buildWorkspace: async () => { throw new SnapshotBusyError(3) } },
     })

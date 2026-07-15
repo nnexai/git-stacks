@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { RepoActionMenu } from "../../../src/tui/dashboard/RepoActionMenu"
+import { RepoActionMenu } from "../../../packages/tui/src/RepoActionMenu"
 
 const renderOpts = { kittyKeyboard: true }
 

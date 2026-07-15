@@ -1,6 +1,23 @@
 {
   "name": "git-stacks",
-  "version": "0.20.0-rc.1",
+  "version": "0.21.0-rc.1",
+  "workspaces": [
+    "packages/protocol",
+    "packages/client",
+    "packages/core",
+    "packages/cli",
+    "packages/service",
+    "packages/web",
+    "packages/tui"
+  ],
+  "packageManager": "npm@11.17.0",
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "node-pty@1.2.0-beta.14": true
+  },
+  "engines": {
+    "node": ">=24"
+  },
   "description": "Git worktree workspace manager — templates, workspaces, and multi-repo orchestration",
   "license": "MIT",
   "author": "nnexai",
@@ -15,60 +32,63 @@
     "multi-repo",
     "template",
     "cli",
-    "bun",
     "developer-tools"
   ],
   "type": "module",
-  "bin": {
-    "git-stacks": "./src/index.ts"
-  },
+  "bin": { "git-stacks": "./bin/git-stacks.js" },
   "files": [
-    "src",
-    "dist/web",
-    "bunfig.toml",
+    "bin",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
-    "dev": "bun run src/index.ts",
+    "build": "npm run build:packages",
+    "build:packages": "node scripts/build-package.mjs --all",
+    "clean": "node scripts/clean-packages.mjs",
+    "dev": "npm run build -w @git-stacks/cli && node packages/cli/dist/index.js",
     "test": "bun run scripts/test-runner.ts",
+    "pretest": "npm run build:packages",
     "test:unit": "bun run scripts/test-runner.ts --unit",
+    "pretest:unit": "npm run build:packages",
     "test:integ": "bun run scripts/test-runner.ts --integ",
-    "test:deps": "madge --circular --extensions ts src/",
+    "pretest:integ": "npm run build:packages",
+    "test:deps": "node scripts/check-architecture.mjs --cycles",
+    "test:architecture": "node scripts/check-architecture.mjs",
+    "test:node": "npm run build:packages && node --test tests/architecture/*.test.mjs tests/conformance/*.test.mjs tests/core/*.test.mjs tests/cli/*.test.mjs tests/service-node/*.test.mjs",
+    "check:packages": "npm run build:packages && npm run tui:build && node scripts/check-packages.mjs",
+    "audit:licenses": "node scripts/check-licenses.mjs",
+    "audit:runtime": "npm audit --omit=dev --workspace @git-stacks/cli --workspace @git-stacks/service",
     "coverage": "bun run scripts/coverage-runner.ts",
     "coverage:unit": "bun run scripts/coverage-runner.ts --unit",
     "coverage:integ": "bun run scripts/coverage-runner.ts --integ",
     "verify": "bun run scripts/verify.ts",
     "verify:prereqs": "bun run scripts/verify-prereqs.ts",
     "verify:gates": "bun run scripts/verify-gates.ts",
-    "web:build": "bun run scripts/build-web.ts",
-    "web:typecheck": "tsc --noEmit -p tsconfig.web.json",
+    "web:build": "node scripts/build-web.mjs",
+    "tui:build": "npm run build -w @git-stacks/tui",
+    "web:typecheck": "npm run typecheck -w @git-stacks/web",
     "verify:functional": "bun run scripts/functional-coverage-readiness.ts",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run web:build && bun run typecheck && bun run web:typecheck && bun run test"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck:legacy": "tsc --noEmit",
+    "release:check": "node scripts/release-rc-check.mjs",
+    "prepublishOnly": "npm run build:packages && npm run typecheck && npm run test:node"
   },
   "dependencies": {
-    "@clack/prompts": "^1.2.0",
-    "@logtape/logtape": "^2.0.5",
-    "@opentui/core": "^0.1.96",
-    "@opentui/solid": "^0.1.96",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/addon-webgl": "^0.19.0",
-    "@xterm/xterm": "^6.0.0",
-    "commander": "^14.0.3",
-    "opentui-spinner": "^0.0.6",
-    "solid-js": "^1.9.12",
-    "yaml": "^2.8.3",
-    "zod": "^4.3.6"
+    "@git-stacks/cli": "0.21.0-rc.1"
   },
   "devDependencies": {
+    "@opentui/core": "0.4.3",
+    "@opentui/solid": "0.4.3",
+    "@types/node": "^24.0.0",
     "@types/bun": "latest",
     "@types/istanbul-lib-coverage": "^2.0.6",
     "@types/istanbul-lib-instrument": "^1.7.8",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-instrument": "^6.0.3",
-    "madge": "8.0.0",
+    "istanbul-lib-report": "3.0.1",
+    "istanbul-reports": "3.2.0",
+    "esbuild": "^0.25.0",
     "typescript": "^6.0.2"
   }
 }

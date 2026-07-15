@@ -3,11 +3,11 @@ import { existsSync, readFileSync, readdirSync, statSync } from "fs"
 import { join } from "path"
 import { Command } from "commander"
 import { E2E_INVENTORY, type E2EInventoryItem } from "../tests/e2e-inventory"
-import { buildCliProgram } from "../src/lib/cli-program"
+import { buildCliProgram } from "../packages/cli/src/lib/cli-program"
 import {
   auditCompletionCoverage,
   type CompletionCoverageReport,
-} from "../src/lib/completion-audit"
+} from "../packages/cli/src/lib/completion-audit"
 import {
   collectFunctionalCoverageReadiness,
   type FunctionalCoverageReadinessReport,
@@ -63,8 +63,8 @@ const JSON_COVERAGE_ARTIFACTS = [
   ".coverage/coverage-summary.json",
 ] as const
 const COVERAGE_SENTINELS = [
-  "src/lib/service/signal-state.ts",
-  "src/tui/dashboard/ActionMenu.tsx",
+  "packages/client/src/signal-state.ts",
+  "packages/tui/src/ActionMenu.tsx",
 ] as const
 const LEGACY_SCAN_ROOTS = ["src", "docs", ".github/hooks", ".claude/settings.json", "README.md"] as const
 const LEGACY_SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".zig", ".c", ".h", ".json", ".md"])
@@ -81,8 +81,8 @@ const FORBIDDEN_LEGACY_SYMBOLS = [
   "message list",
   "message clear",
   "MESSAGES_DIR",
-  "src/lib/messages",
-  "src/commands/message",
+  "packages/core/src/messages",
+  "packages/cli/src/commands/message",
   "/tmp/git-stacks.sock",
 ] as const
 
@@ -258,7 +258,7 @@ function collectCoverageSentinelProblems(root: string): CoverageSentinelProblem[
 
   const problems: CoverageSentinelProblem[] = []
   for (const path of Object.keys(coverage)) {
-    if (!path.startsWith("src/")) {
+    if (!/^packages\/(?:protocol|client|core|cli|service|web|tui)\/src\//.test(path)) {
       problems.push({ path, problem: "outside source tree" })
     }
   }

@@ -533,7 +533,7 @@ describe("CLI multi-template integration", () => {
   test("runWorkspaceNew accepts templateNames as third parameter (type-level check)", () => {
     // This verifies the function signature accepts the parameter
     // Actual execution requires interactive prompts, so we just verify the import
-    const mod = require("../../src/tui/workspace-wizard")
+    const mod = require("../../packages/cli/src/wizards/workspace-wizard")
     expect(typeof mod.runWorkspaceNew).toBe("function")
     expect(mod.runWorkspaceNew.length).toBeGreaterThanOrEqual(0) // async functions report 0 length
   })

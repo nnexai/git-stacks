@@ -1,0 +1,13 @@
+{
+  "name": "@git-stacks/protocol",
+  "version": "0.21.0-rc.1",
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "files": ["dist", "src"],
+  "type": "module",
+  "sideEffects": false,
+  "exports": { ".": { "types": "./src/index.ts", "bun": "./src/index.ts", "import": "./dist/index.js" } },
+  "scripts": { "build": "node ../../scripts/build-package.mjs protocol", "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "dependencies": { "zod": "^4.3.6" },
+  "gitStacksBuild": { "platform": "neutral", "target": "es2024" }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { deduplicateProviderSessions, isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, type PresentedSignal } from "../../src/web-client/presentation"
+import { deduplicateProviderSessions, isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, type PresentedSignal } from "../../packages/client/src/presentation"
 
 const base: PresentedSignal = {
   kind: "activity",

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createWorkspaceChangeMonitor } from "../../../src/lib/service/workspace-change-monitor"
+import { createWorkspaceChangeMonitor } from "../../../packages/service/src/policy/workspace-change-monitor"
 
 type Callback = () => void
 

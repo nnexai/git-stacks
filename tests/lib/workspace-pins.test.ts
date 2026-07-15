@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { WorkspaceSchema, type Workspace } from "../../src/lib/config"
-import { setWorkspacePins } from "../../src/lib/workspace-pins"
+import { WorkspaceSchema, type Workspace } from "../../packages/core/src/config"
+import { setWorkspacePins } from "../../packages/core/src/workspace-pins"
 
 const workspace = (id: string, name: string, pinned?: boolean): Workspace => ({
   id, name, schema_version: "1", branch: "main", created: "2026-07-13", repos: [],

@@ -2,8 +2,8 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync, rmSync } from "fs"
 import { join, dirname } from "path"
 import { execSync, type ExecSyncOptions } from "child_process"
 import { mock } from "bun:test"
-import type { CoreState } from "../src/lib/service/core-contract"
-import type { RepoRegistryEntry, Template, Workspace } from "../src/lib/config"
+import type { CoreState } from "../packages/service/src/policy/core-contract"
+import type { RepoRegistryEntry, Template, Workspace } from "../packages/core/src/config"
 
 // --- Schema stub helper ---
 
@@ -266,7 +266,7 @@ export function runCli(argv: string[], opts: RunCliOptions): RunCliResult {
     ...opts.env,
   }
 
-  const result = Bun.spawnSync(["bun", "run", join(projectRoot, "src/index.ts"), ...argv], {
+  const result = Bun.spawnSync(["node", join(projectRoot, "packages/cli/dist/index.js"), ...argv], {
     cwd,
     env,
     stdio: ["pipe", "pipe", "pipe"],
@@ -605,7 +605,8 @@ export function useIsolatedConfig(prefix = "isolated-config"): { configDir: stri
   mkdirSync(join(configDir, "templates"), { recursive: true })
   mkdirSync(join(configDir, "notes"), { recursive: true })
 
-  mock.module("@/lib/paths", () => ({
+  const corePathsModule = new URL("../packages/core/src/paths.ts", import.meta.url).pathname
+  mock.module(corePathsModule, () => ({
     HOME: configDir,
     DEFAULT_WORKSPACE_ROOT: join(configDir, "ws-root"),
     WS_CONFIG_DIR: configDir,
@@ -631,7 +632,7 @@ export function useIsolatedConfig(prefix = "isolated-config"): { configDir: stri
 // Tests spread overrides: makeConfigMock({ listWorkspaces: mock(() => myWorkspaces) })
 
 /**
- * Returns a complete mock of src/lib/config.ts exports.
+ * Returns a complete mock of packages/core/src/config.ts exports.
  * Includes all schema stubs and all function stubs.
  */
 export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -639,34 +640,55 @@ export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<
     // Schemas
     RepoTypeSchema: makeSchemaStub(),
     ForgeTypeSchema: makeSchemaStub(),
+    ForgeIntegrationConfigSchema: makeSchemaStub(),
+    ForgeRepoMetadataSchema: makeSchemaStub(),
+    FileSyncEntrySchema: makeSchemaStub(),
     FilesSchema: makeSchemaStub(),
+    ShellIdentifierSchema: makeSchemaStub(),
+    PortsSchema: makeSchemaStub(),
+    NameSchema: makeSchemaStub(),
     RepoRegistryEntrySchema: makeSchemaStub(),
     RepoRegistrySchema: makeSchemaStub(),
     TemplateRepoSchema: makeSchemaStub(),
     TemplateSchema: makeSchemaStub(),
+    WorktreeRepoSchema: makeSchemaStub(),
+    TrunkRepoSchema: makeSchemaStub(),
+    DirRepoSchema: makeSchemaStub(),
     WorkspaceRepoSchema: makeSchemaStub(),
     WorkspaceSettingsSchema: makeSchemaStub(),
+    WorkspaceSourceSchema: makeSchemaStub(),
     WorkspaceSchema: makeSchemaStub(),
     GlobalConfigSchema: makeSchemaStub(),
     // Functions
+    invalidateConfigCache: mock(() => {}),
     formatZodError: mock(() => "zod error"),
     readGlobalConfig: mock(() => ({ workspace_root: "/tmp/test-ws", integrations: {}, ports: { range_start: 10000, range_end: 65000 } })),
     writeGlobalConfig: mock(() => {}),
+    updateGlobalConfig: mock((intent: (value: Record<string, unknown>) => unknown) => intent({})),
     workspacePath: mock((name: string) => `/tmp/test-ws/workspaces/${name}.yml`),
     workspaceExists: mock(() => false),
     readWorkspace: mock(() => ({ name: "test-ws", branch: "main", repos: [], settings: {} })),
     writeWorkspace: mock(() => {}),
+    updateWorkspace: mock((_name: string, intent: (value: Record<string, unknown>) => unknown) => intent({})),
+    workspaceFilePath: mock((name: string) => `/tmp/test-ws/workspaces/${name}.yml`),
     listWorkspaces: mock(() => []),
+    listWorkspacesUncached: mock(() => []),
     readRegistry: mock(() => []),
     writeRegistry: mock(() => {}),
+    updateRegistry: mock((intent: (value: unknown[]) => unknown) => intent([])),
     listRegistryEntries: mock(() => []),
     templatePath: mock((name: string) => `/tmp/test-ws/templates/${name}.yml`),
     templateExists: mock(() => false),
     readTemplate: mock(() => ({ name: "test-template", repos: [] })),
     writeTemplate: mock(() => {}),
+    updateTemplate: mock((_name: string, intent: (value: Record<string, unknown>) => unknown) => intent({})),
     listTemplates: mock(() => []),
+    listTemplatesUncached: mock(() => []),
     expandBranchPattern: mock((pattern: string) => pattern),
     expandHome: mock((p: string) => p),
+    getRepoPath: mock((repo: { task_path?: string; main_path?: string }) => repo.task_path ?? repo.main_path ?? ""),
+    isWorktreeRepo: mock((repo: { mode?: string }) => repo.mode === "worktree"),
+    isGitRepo: mock((repo: { mode?: string }) => repo.mode === "worktree" || repo.mode === "trunk"),
     deleteWorkspace: mock(() => {}),
     deleteTemplate: mock(() => {}),
     _cache: { workspaces: new Map(), templates: new Map(), resetList: mock(() => {}) },
@@ -675,7 +697,7 @@ export function makeConfigMock(overrides: Record<string, unknown> = {}): Record<
 }
 
 /**
- * Returns a complete mock of src/lib/workspace-ops.ts exports.
+ * Returns a complete mock of packages/core/src/workspace-ops.ts exports.
  * Only covers what workspace-ops.ts still exports: env re-exports, lifecycle re-exports, direct functions.
  */
 export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -700,7 +722,7 @@ export function makeWorkspaceOpsMock(overrides: Record<string, unknown> = {}): R
 }
 
 /**
- * Returns a mock of src/lib/workspace-git.ts exports.
+ * Returns a mock of packages/core/src/workspace-git.ts exports.
  */
 export function makeWorkspaceGitMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -713,7 +735,7 @@ export function makeWorkspaceGitMock(overrides: Record<string, unknown> = {}): R
 }
 
 /**
- * Returns a mock of src/lib/workspace-status.ts exports.
+ * Returns a mock of packages/core/src/workspace-status.ts exports.
  */
 export function makeWorkspaceStatusMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -726,7 +748,7 @@ export function makeWorkspaceStatusMock(overrides: Record<string, unknown> = {})
 }
 
 /**
- * Returns a mock of src/lib/workspace-yaml.ts exports.
+ * Returns a mock of packages/core/src/workspace-yaml.ts exports.
  */
 export function makeWorkspaceYamlMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -741,7 +763,7 @@ export function makeWorkspaceYamlMock(overrides: Record<string, unknown> = {}): 
 }
 
 /**
- * Returns a complete mock of src/lib/integrations/forge-utils.ts exports.
+ * Returns a complete mock of packages/core/src/integrations/forge-utils.ts exports.
  * Includes all function stubs and the _detect injectable object.
  */
 export function makeForgeUtilsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -764,7 +786,7 @@ export function makeForgeUtilsMock(overrides: Record<string, unknown> = {}): Rec
 }
 
 /**
- * Returns a complete mock of src/lib/integrations/issue-utils.ts exports.
+ * Returns a complete mock of packages/core/src/integrations/issue-utils.ts exports.
  * Includes all function stubs.
  */
 export function makeIssueUtilsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -779,13 +801,18 @@ export function makeIssueUtilsMock(overrides: Record<string, unknown> = {}): Rec
 }
 
 /**
- * Returns a complete mock of src/lib/git.ts exports.
+ * Returns a complete mock of packages/core/src/git.ts exports.
  * Covers all exported git functions including staleness-related ones.
  */
 export function makeGitMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    isGitTrackedPathSync: mock(() => false),
+    isGitTrackedPath: mock(async () => false),
+    resolveCommonGitDirSync: mock((repoPath: string) => repoPath),
+    writeLocalGitExcludesSync: mock(() => ""),
     checkBranchExists: mock(async () => false),
     createWorktree: mock(async () => {}),
+    createWorktreeFromRef: mock(async () => ({ movedExistingBranch: false })),
     removeWorktree: mock(async () => {}),
     isWorktreeRegistered: mock(async () => false),
     isRepoDirty: mock(async () => false),
@@ -794,8 +821,13 @@ export function makeGitMock(overrides: Record<string, unknown> = {}): Record<str
     isBranchGoneOnRemote: mock(async () => ({ status: "present" })),
     getMergeConflicts: mock(async () => ({ status: "clean" })),
     mergeNoFF: mock(async () => ({ ok: true })),
+    prepareMergeCommit: mock(async () => ({ ok: true, commit: "0000000" })),
+    compareAndSwapBranch: mock(async () => ({ ok: true })),
     deleteLocalBranch: mock(async () => {}),
     fetchOrigin: mock(async () => {}),
+    fetchSourceRef: mock(async () => {}),
+    deleteRef: mock(async () => {}),
+    resolveRef: mock(async () => ({ ok: true, sha: "0000000" })),
     pullFFOnly: mock(async () => ({ ok: true })),
     checkRemoteTrackingRef: mock(async () => false),
     checkBranchExistsOnRemote: mock(async () => false),
@@ -816,7 +848,7 @@ export function makeGitMock(overrides: Record<string, unknown> = {}): Record<str
 }
 
 /**
- * Returns a complete mock of src/lib/paths.ts exports.
+ * Returns a complete mock of packages/core/src/paths.ts exports.
  * Uses /tmp/test-home as a safe test base path.
  */
 export function makePathsMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -839,7 +871,7 @@ export function makePathsMock(overrides: Record<string, unknown> = {}): Record<s
 }
 
 /**
- * Returns a complete mock of src/lib/lifecycle.ts exports.
+ * Returns a complete mock of packages/core/src/lifecycle.ts exports.
  * Includes the _exec injectable object and all function stubs.
  */
 export function makeLifecycleMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -854,7 +886,7 @@ export function makeLifecycleMock(overrides: Record<string, unknown> = {}): Reco
 }
 
 /**
- * Returns a complete mock of src/lib/tmux.ts exports.
+ * Returns a complete mock of packages/core/src/tmux.ts exports.
  * Includes the _exec injectable object and all function stubs.
  */
 export function makeTmuxMock(overrides: Record<string, unknown> = {}): Record<string, unknown> {

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
-import { detectRepoType, scanForRepos } from "../../src/lib/detect"
+import { detectRepoType, scanForRepos } from "../../packages/core/src/detect"
 import { makeTmpDir, cleanup, mkdir, touch } from "../helpers"
 
 let tmp: string

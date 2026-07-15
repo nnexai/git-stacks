@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import type { Workspace } from "../../../src/lib/config"
-import { WorkspaceSnapshotResponseSchema } from "../../../src/lib/service/contract"
-import { createSnapshotBuilder } from "../../../src/lib/service/snapshot"
+import type { Workspace } from "../../../packages/core/src/config"
+import { WorkspaceSnapshotResponseSchema } from "../../../packages/protocol/src/service"
+import { createSnapshotBuilder } from "../../../packages/service/src/policy/snapshot"
 
 const ws: Workspace & { id: string } = {
   id: "018f47f4-5ab1-7c2d-8e90-123456789abc",

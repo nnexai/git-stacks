@@ -93,11 +93,12 @@ export function runIstanbulCompletionSmoke(
 ): IstanbulSmokeResult {
   const projectRoot = join(import.meta.dir, "..", "..")
   const fixtureRoot = join(baseDir, "instrumented")
-  const fixtureSrc = join(fixtureRoot, "src")
+  const fixturePackages = join(fixtureRoot, "packages")
+  const fixtureSrc = join(fixturePackages, "cli", "src")
   const coveragePath = join(baseDir, "coverage", "completion-coverage.json")
 
   mkdirSync(dirname(coveragePath), { recursive: true })
-  cpSync(join(projectRoot, "src"), fixtureSrc, { recursive: true })
+  cpSync(join(projectRoot, "packages"), fixturePackages, { recursive: true })
   cpSync(join(projectRoot, "package.json"), join(fixtureRoot, "package.json"))
   symlinkSync(
     options.runtimeNodeModulesPath ?? join(projectRoot, "node_modules"),

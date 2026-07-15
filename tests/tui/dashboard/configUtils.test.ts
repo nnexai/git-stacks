@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { formatConfigValue } from "../../../src/tui/dashboard/configUtils"
+import { formatConfigValue } from "../../../packages/tui/src/configUtils"
 
 describe("formatConfigValue", () => {
   test("string pass-through", () => {

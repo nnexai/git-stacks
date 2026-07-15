@@ -2,7 +2,7 @@ import { describe, test, expect, mock, beforeEach } from "bun:test"
 import type { IntegrationContext } from "@/lib/integrations/types"
 
 // Mock @/tui/utils (prompts wrapper) — explicit mock replaces dead @clack/prompts mock
-mock.module("@/tui/utils", () => ({
+mock.module("../../../packages/core/src/prompt-capability", () => ({
   prompts: {
     spinner: () => ({ start: () => {}, stop: () => {} }),
     log: { info: () => {}, success: () => {}, warn: () => {}, error: () => {} },
@@ -33,7 +33,7 @@ const getTmuxMainPaneMock = mock(async (_session: string): Promise<string | null
 const focusTmuxPaneMock = mock(async (_paneId: string) => true)
 
 // Register mock BEFORE importing the integration
-mock.module("@/lib/tmux", () => ({
+mock.module("../../../packages/core/src/tmux", () => ({
   openTmuxSession: openTmuxSessionMock,
   focusTmuxSession: focusTmuxSessionMock,
   killTmuxSession: killTmuxSessionMock,

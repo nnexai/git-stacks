@@ -13,7 +13,7 @@ import {
   WorkspaceCreationRequestSchema,
   WorkspaceCreationCatalogSchema,
   CLIENT_MODEL_LIMITS,
-} from "../../../src/lib/service/contract"
+} from "../../../packages/protocol/src/service"
 
 const fixtures = join(import.meta.dir, "../../fixtures/service-v1")
 const fixture = (name: string): unknown => JSON.parse(readFileSync(join(fixtures, name), "utf8"))

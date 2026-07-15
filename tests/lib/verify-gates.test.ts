@@ -5,7 +5,7 @@ import { tmpdir } from "os"
 import { collectVerifyGateReport, formatVerifyGateReport } from "../../scripts/verify-gates"
 import type { E2EInventoryItem } from "../e2e-inventory"
 import { FUNCTIONAL_READINESS_AREAS } from "../functional-readiness-inventory"
-import type { CompletionCoverageReport } from "../../src/lib/completion-audit"
+import type { CompletionCoverageReport } from "../../packages/cli/src/lib/completion-audit"
 
 const tempRoots: string[] = []
 
@@ -34,9 +34,9 @@ function coverageEntry(path: string, hits = 1): Record<string, unknown> {
 function writeCoverageArtifacts(
   root: string,
   coverageFinal: Record<string, unknown> = {
-    "src/index.ts": coverageEntry("src/index.ts"),
-    "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
-    "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
+    "packages/cli/src/index.ts": coverageEntry("packages/cli/src/index.ts"),
+    "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
+    "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
     ...Object.fromEntries(
       FUNCTIONAL_READINESS_AREAS.flatMap((area) => area.sourceTargets).map((path) => [
         path,
@@ -52,7 +52,7 @@ function writeCoverageArtifacts(
     join(coverageDir, "coverage-summary.json"),
     JSON.stringify({ total: { statements: { total: 1, covered: 1, skipped: 0, pct: 100 } } })
   )
-  writeFileSync(join(coverageDir, "lcov.info"), "TN:\nSF:src/index.ts\nend_of_record\n")
+  writeFileSync(join(coverageDir, "lcov.info"), "TN:\nSF:packages/cli/src/index.ts\nend_of_record\n")
 }
 
 function writeTest(root: string, path: string): void {
@@ -180,8 +180,8 @@ describe("verify gate collector", () => {
   test("reports zero-hit regular TypeScript coverage sentinel", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts", 0),
-      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
+      "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts", 0),
+      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
     })
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -194,7 +194,7 @@ describe("verify gate collector", () => {
 
     expect(report.ok).toBe(false)
     expect(report.coverageSentinels).toEqual([
-      { path: "src/lib/service/signal-state.ts", problem: "zero hits" },
+      { path: "packages/client/src/signal-state.ts", problem: "zero hits" },
     ])
     expect(formatVerifyGateReport(report)).toContain("Coverage sentinel problems:")
   })
@@ -202,8 +202,8 @@ describe("verify gate collector", () => {
   test("reports zero-hit TUI TSX coverage sentinel", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
-      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx", 0),
+      "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
+      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx", 0),
     })
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -216,7 +216,7 @@ describe("verify gate collector", () => {
 
     expect(report.ok).toBe(false)
     expect(report.coverageSentinels).toEqual([
-      { path: "src/tui/dashboard/ActionMenu.tsx", problem: "zero hits" },
+      { path: "packages/tui/src/ActionMenu.tsx", problem: "zero hits" },
     ])
   })
 
@@ -226,7 +226,7 @@ describe("verify gate collector", () => {
     mkdirSync(coverageDir, { recursive: true })
     writeFileSync(
       join(coverageDir, "coverage-final.json"),
-      JSON.stringify({ "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts", 0) })
+      JSON.stringify({ "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts", 0) })
     )
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -243,19 +243,19 @@ describe("verify gate collector", () => {
       { path: ".coverage/lcov.info", problem: "missing" },
     ])
     expect(report.coverageSentinels).toEqual([
-      { path: "src/lib/service/signal-state.ts", problem: "zero hits" },
-      { path: "src/tui/dashboard/ActionMenu.tsx", problem: "missing" },
+      { path: "packages/client/src/signal-state.ts", problem: "zero hits" },
+      { path: "packages/tui/src/ActionMenu.tsx", problem: "missing" },
     ])
   })
 
   test("reports coverage entries outside the canonical source tree", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts": coverageEntry(
-        "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts"
+      "/tmp/istanbul-smoke-fixture/instrumented/packages/cli/src/commands/completion.ts": coverageEntry(
+        "/tmp/istanbul-smoke-fixture/instrumented/packages/cli/src/commands/completion.ts"
       ),
-      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
-      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
+      "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
+      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
     })
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -269,7 +269,7 @@ describe("verify gate collector", () => {
     expect(report.ok).toBe(false)
     expect(report.coverageSentinels).toEqual([
       {
-        path: "/tmp/istanbul-smoke-fixture/instrumented/src/commands/completion.ts",
+        path: "/tmp/istanbul-smoke-fixture/instrumented/packages/cli/src/commands/completion.ts",
         problem: "outside source tree",
       },
     ])
@@ -279,9 +279,9 @@ describe("verify gate collector", () => {
   test("aggregates functional readiness must-fix findings with existing gate findings", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
-      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
-      "src/lib/git.ts": coverageEntry("src/lib/git.ts", 0),
+      "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
+      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
+      "packages/core/src/git.ts": coverageEntry("packages/core/src/git.ts", 0),
     })
 
     const report = collectVerifyGateReport({
@@ -297,16 +297,16 @@ describe("verify gate collector", () => {
       id: "phase85.core-real-fixtures",
       title: "Core real-fixture workspace, git, lifecycle, files, env, secrets, ports, and config coverage",
       missingTargets: [
-        "src/lib/workspace-lifecycle.ts",
-        "src/lib/workspace-git.ts",
-        "src/lib/lifecycle.ts",
-        "src/lib/files.ts",
-        "src/lib/env.ts",
-        "src/lib/secrets.ts",
-        "src/lib/ports.ts",
-        "src/lib/config.ts",
+        "packages/core/src/workspace-lifecycle.ts",
+        "packages/core/src/workspace-git.ts",
+        "packages/core/src/lifecycle.ts",
+        "packages/core/src/files.ts",
+        "packages/core/src/env.ts",
+        "packages/core/src/secrets.ts",
+        "packages/core/src/ports.ts",
+        "packages/core/src/config.ts",
       ],
-      zeroHitTargets: ["src/lib/git.ts"],
+      zeroHitTargets: ["packages/core/src/git.ts"],
     })
     expect(formatVerifyGateReport(report)).toContain("Functional readiness problems:")
   })
@@ -314,9 +314,9 @@ describe("verify gate collector", () => {
   test("keeps accepted and deferred functional readiness items visible without failing gates", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "src/lib/service/signal-state.ts": coverageEntry("src/lib/service/signal-state.ts"),
-      "src/tui/dashboard/ActionMenu.tsx": coverageEntry("src/tui/dashboard/ActionMenu.tsx"),
-      "src/lib/git.ts": coverageEntry("src/lib/git.ts"),
+      "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
+      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
+      "packages/core/src/git.ts": coverageEntry("packages/core/src/git.ts"),
     })
     writeTest(root, "tests/commands/new.test.ts")
 

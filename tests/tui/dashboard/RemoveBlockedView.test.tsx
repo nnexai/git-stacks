@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { RemoveBlockedView } from "../../../src/tui/dashboard/RemoveBlockedView"
+import { RemoveBlockedView } from "../../../packages/tui/src/RemoveBlockedView"
 
 const renderOpts = { kittyKeyboard: true }
 

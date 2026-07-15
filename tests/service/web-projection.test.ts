@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import type { WorkspaceSnapshotResponse } from "../../src/lib/service/contract"
-import { projectWebOperation, projectWebSnapshot, projectWebTerminalSignals } from "../../src/service/web/projection"
+import type { WorkspaceSnapshotResponse } from "../../packages/protocol/src/service"
+import { projectWebOperation, projectWebSnapshot, projectWebTerminalSignals } from "../../packages/service/src/web/projection"
 
 const workspaceId = "11111111-1111-4111-8111-111111111111"
 const repositoryId = "22222222-2222-4222-8222-222222222222"

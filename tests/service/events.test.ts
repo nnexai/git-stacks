@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { readOfficialClientCredential } from "../../src/lib/service/credentials"
-import { startManagedService } from "../../src/service/main"
+import { readOfficialClientCredential } from "../../packages/service/src/policy/credentials"
+import { startManagedService } from "../../packages/service/src/main"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
@@ -54,7 +54,7 @@ describe("v1 signal event transport", () => {
     cleanup.push(() => rmSync(configRoot, { recursive: true, force: true }))
     const service = await startManagedService({ serviceRoot: root, snapshot: snapshot() as never })
     cleanup.push(() => service.stop())
-    const child = Bun.spawn([process.execPath, join(import.meta.dir, "../../src/index.ts"), "service", "signal", "publish", "--state", "completed", "--source", "copilot", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "copilot-session"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
+    const child = Bun.spawn(["node", join(import.meta.dir, "../../packages/cli/dist/index.js"), "service", "signal", "publish", "--state", "completed", "--source", "copilot", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "copilot-session"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
     expect(await child.exited).toBe(0)
     const record = JSON.parse(readFileSync(join(root, "events.jsonl"), "utf8").trim())
     expect(record).toMatchObject({ type: "signal", signal: { kind: "activity", source: "copilot", state: "completed", repository_id: repositoryId, surface_id: surfaceId, session_id: "copilot-session" } })

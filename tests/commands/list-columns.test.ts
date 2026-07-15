@@ -82,7 +82,7 @@ repos:
 
 function runList(cfgDir: string, args: string[]): { stdout: string; stderr: string; exitCode: number } {
   const result = Bun.spawnSync(
-    ["bun", "run", "src/index.ts", "list", ...args],
+    ["node", "packages/cli/dist/index.js", "list", ...args],
     {
       env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
       cwd: PROJECT_ROOT,

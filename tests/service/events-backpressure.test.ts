@@ -3,10 +3,10 @@ import { connect } from "node:net"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { provisionOfficialClient } from "../../src/lib/service/credentials"
-import { EventBroker } from "../../src/lib/service/event-broker"
-import { EventJournal } from "../../src/lib/service/event-journal"
-import { startServiceServer } from "../../src/service/server"
+import { provisionOfficialClient } from "../../packages/service/src/policy/credentials"
+import { EventBroker } from "../../packages/service/src/policy/event-broker"
+import { EventJournal } from "../../packages/service/src/policy/event-journal"
+import { startServiceServer } from "../../packages/service/src/server"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
@@ -18,7 +18,7 @@ async function harness(limits: { maxEvents: number; maxBytes: number }) {
   const journal = new EventJournal({ root })
   const broker = new EventBroker(journal, limits)
   const client = provisionOfficialClient("pressure-client", { serviceRoot: root })
-  const service = startServiceServer({
+  const service = await startServiceServer({
     serviceRoot: root, broker,
     snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
     heartbeatMs: 60_000,

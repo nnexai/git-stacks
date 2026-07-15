@@ -1,0 +1,1634 @@
+/** @jsxImportSource @opentui/solid */
+
+import { createSignal, createMemo, Show, Switch, Match, For } from "solid-js"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { useWorkspaces } from "./hooks/useWorkspaces"
+import { useTemplates } from "./hooks/useTemplates"
+import { useRepos } from "./hooks/useRepos"
+import { useSignals } from "./hooks/useSignals"
+import { useWorkspaceFileStatus } from "./hooks/useWorkspaceFileStatus"
+import { WorkspaceList } from "./WorkspaceList"
+import { WorkspaceDetail } from "./WorkspaceDetail"
+import { TemplateList } from "./TemplateList"
+import { TemplateDetail } from "./TemplateDetail"
+import { RepoList } from "./RepoList"
+import { RepoDetail } from "./RepoDetail"
+import { ActionMenu } from "./ActionMenu"
+import { ConfirmDialog } from "./ConfirmDialog"
+import { ProgressView } from "./ProgressView"
+import { BatchBar } from "./BatchBar"
+import { InlineInput } from "./InlineInput"
+import { HelpOverlay } from "./HelpOverlay"
+import { SignalOverlay } from "./SignalOverlay"
+import { TemplateActionMenu } from "./TemplateActionMenu"
+import { RepoActionMenu } from "./RepoActionMenu"
+import { RemoveBlockedView } from "./RemoveBlockedView"
+import { CenteredDialog } from "./CenteredDialog"
+import type { SyncRow, SyncResult, PushRow } from "@git-stacks/core/workspace-git"
+import { expandBranchPattern, type Workspace, type Template } from "@git-stacks/core/config"
+import { SyncProgressView } from "./SyncProgressView"
+import { PushProgressView, type PushRowDisplay } from "./PushProgressView"
+import { WizardView, type WizardStep } from "./WizardView"
+import { CreateProgressView, type CreateRow } from "./CreateProgressView"
+import type {
+  GroupedWorkspaceItem,
+  UIView,
+  Action,
+  Tab,
+  WorkspaceEntry,
+  WorkspaceGroupingMode,
+  WorkspaceStatus,
+  IssueCandidate,
+} from "./types"
+import { matchesLabels } from "@git-stacks/core/labels"
+import { issueTrackerLabels } from "@git-stacks/client"
+import { listManualCommands } from "@git-stacks/core/workspace-command"
+import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
+import type { Operation } from "@git-stacks/protocol"
+import { openEditorHandoff, resolveEditorHandoff } from "./editor-handoff"
+import { useCoreState } from "./core-store"
+import { runWorkspaceShellHandoff } from "./terminal-handoff"
+import {
+  appendCommandOutput,
+  initialCommandOutputState,
+  type CommandOutputLine,
+  type CommandOutputState,
+  type CommandOutputStatus,
+} from "./command-output"
+
+export function matchesWorkspaceFilter(workspace: Workspace, filter: string): boolean {
+  const rawFilter = filter.trim()
+  const f = rawFilter.toLowerCase()
+  if (!rawFilter) return true
+
+  const name = workspace.name.toLowerCase()
+  const labels = workspace.labels ?? []
+  if (f.startsWith("label:")) {
+    const rawLabelTerm = rawFilter.slice(6).trim()
+    const labelTerm = rawLabelTerm.toLowerCase()
+    if (!labelTerm) return true
+    return matchesLabels(workspace, [rawLabelTerm])
+      || labels.some(label => label.toLowerCase().includes(labelTerm))
+  }
+
+  return name.includes(f)
+    || matchesLabels(workspace, [rawFilter])
+    || labels.some(label => label.toLowerCase().includes(f))
+}
+
+export function nextWorkspaceGroupingMode(mode: WorkspaceGroupingMode): WorkspaceGroupingMode {
+  if (mode === "none") return "label"
+  if (mode === "label") return "state"
+  if (mode === "state") return "template"
+  return "none"
+}
+
+function workspaceStateGroup(status: WorkspaceStatus): string {
+  if (status.state === "pending" || status.state === "loading") return "state: loading"
+  if (status.state === "error") return "state: error"
+  if (status.hasMissing) return "state: missing"
+  if (status.hasDirty) return "state: dirty"
+  if (status.aheadBehindStale) return "state: stale"
+  return "state: clean"
+}
+
+function workspaceGroupLabels(entry: WorkspaceEntry, mode: WorkspaceGroupingMode): string[] {
+  if (mode === "label") {
+    const labels = entry.workspace.labels ?? []
+    return labels.length > 0 ? labels.map(label => `label: ${label}`) : ["label: [unlabeled]"]
+  }
+  if (mode === "state") return [workspaceStateGroup(entry.status)]
+  if (mode === "template") return [`template: ${entry.workspace.template ?? "[adhoc]"}`]
+  return []
+}
+
+function IssuePicker(props: {
+  candidates: IssueCandidate[]
+  onSelect: (candidate: IssueCandidate) => void
+  onCancel: () => void
+}) {
+  const [cursor, setCursor] = createSignal(0)
+  useKeyboard((key) => {
+    if (key.name === "escape") { props.onCancel(); return }
+    if (key.name === "down") { setCursor(c => Math.min(c + 1, props.candidates.length - 1)); return }
+    if (key.name === "up") { setCursor(c => Math.max(c - 1, 0)); return }
+    if (key.name === "return") {
+      const candidate = props.candidates[cursor()]
+      if (candidate) props.onSelect(candidate)
+    }
+  })
+  return (
+    <CenteredDialog title="Issue" size="medium">
+      <For each={props.candidates}>
+        {(candidate, i) => (
+          <text fg={i() === cursor() ? "cyan" : "white"}>
+            {i() === cursor() ? "> " : "  "}{candidate.label}
+          </text>
+        )}
+      </For>
+      <text fg="gray">{"\n"}  [Esc] Back</text>
+    </CenteredDialog>
+  )
+}
+
+function CommandPicker(props: {
+  commands: string[]
+  onSelect: (commandName: string) => void
+  onCancel: () => void
+}) {
+  const [cursor, setCursor] = createSignal(0)
+  useKeyboard((key) => {
+    if (key.name === "escape") { props.onCancel(); return }
+    if (key.name === "down") { setCursor(c => Math.min(c + 1, props.commands.length - 1)); return }
+    if (key.name === "up") { setCursor(c => Math.max(c - 1, 0)); return }
+    if (key.name === "return") {
+      const commandName = props.commands[cursor()]
+      if (commandName) props.onSelect(commandName)
+    }
+  })
+  return (
+    <CenteredDialog title="Commands" size="medium">
+      <For each={props.commands}>
+        {(commandName, i) => (
+          <text fg={i() === cursor() ? "cyan" : "white"}>
+            {i() === cursor() ? "> " : "  "}{commandName}
+          </text>
+        )}
+      </For>
+      <text fg="gray">{"\n"}  [Esc] Back</text>
+    </CenteredDialog>
+  )
+}
+
+export default function App() {
+  const renderer = useRenderer()
+  const dims = useTerminalDimensions()
+  const { entries, loading, reload } = useWorkspaces()
+  const { entries: templateEntries, reload: reloadTemplates } = useTemplates()
+  const { entries: repoEntries, reload: reloadRepos } = useRepos()
+  const { signalMap, tick, dismiss, reloadSignals } = useSignals()
+  const core = useCoreState()
+  const [refreshFlash, setRefreshFlash] = createSignal("")
+
+  const [view, setView] = createSignal<UIView>({ view: "list" })
+  const [selected, setSelected] = createSignal<Set<string>>(new Set())
+  const [reposSelected, setReposSelected] = createSignal<Set<number>>(new Set())
+  const [templatesSelected, setTemplatesSelected] = createSignal<Set<number>>(new Set())
+  const [commandOutput, setCommandOutput] = createSignal<CommandOutputState>(initialCommandOutputState())
+  const [helpOpen, setHelpOpen] = createSignal(false)
+  const [signalsOpen, setSignalsOpen] = createSignal(false)
+  const [signalsWorkspace, setSignalsWorkspace] = createSignal("")
+  const [confirmContext, setConfirmContext] = createSignal<"workspace" | "template">("workspace")
+  const [filterFocused, setFilterFocused] = createSignal(false)
+  const [syncRows, setSyncRows] = createSignal<SyncRow[]>([])
+  const [syncDone, setSyncDone] = createSignal(false)
+  const [syncSummary, setSyncSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
+  const [pushRows, setPushRows] = createSignal<PushRowDisplay[]>([])
+  const [pushDone, setPushDone] = createSignal(false)
+  const [pushSummary, setPushSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
+  const [createRows, setCreateRows] = createSignal<CreateRow[]>([])
+  const [createDone, setCreateDone] = createSignal(false)
+  const [createSummary, setCreateSummary] = createSignal<{ text: string; color: "green" | "yellow" | "red" }>({ text: "", color: "green" })
+  const [repoRemoveTarget, setRepoRemoveTarget] = createSignal<string | null>(null)
+  const [workspaceGroupingMode, setWorkspaceGroupingMode] = createSignal<WorkspaceGroupingMode>("none")
+  const [detailScrollRequest, setDetailScrollRequest] = createSignal<{ sequence: number; direction: -1 | 1 }>({ sequence: 0, direction: 1 })
+
+  // Tab system
+  const [tab, setTab] = createSignal<Tab>("workspaces")
+
+  // Per-tab independent cursor/filter/filtering state
+  const tabCursor = {
+    workspaces: createSignal(0),
+    templates: createSignal(0),
+    repos: createSignal(0),
+  } as const
+  const tabFilter = {
+    workspaces: createSignal(""),
+    templates: createSignal(""),
+    repos: createSignal(""),
+  } as const
+  const tabFiltering = {
+    workspaces: createSignal(false),
+    templates: createSignal(false),
+    repos: createSignal(false),
+  } as const
+
+  // Active tab accessors
+  const cursor = createMemo(() => tabCursor[tab()][0]())
+  const setCursor = (v: number | ((prev: number) => number)) => tabCursor[tab()][1](v as any)
+  const filter = createMemo(() => tabFilter[tab()][0]())
+  const setFilter = (v: string | ((prev: string) => string)) => tabFilter[tab()][1](v as any)
+  const filtering = createMemo(() => tabFiltering[tab()][0]())
+  const setFiltering = (v: boolean) => tabFiltering[tab()][1](v)
+
+  // Tab title
+  const tabTitle = createMemo(() => {
+    const t = tab()
+    const ws = t === "workspaces" ? "[1 Workspaces]" : "1 Workspaces"
+    const tm = t === "templates" ? "[2 Templates]" : "2 Templates"
+    const re = t === "repos" ? "[3 Repos]" : "3 Repos"
+    return ` ${ws}  ${tm}  ${re} `
+  })
+
+  const filteredEntries = createMemo(() => {
+    const rawFilter = tabFilter.workspaces[0]()
+    if (!rawFilter.trim()) return entries()
+    return entries().filter((entry) => matchesWorkspaceFilter(entry.workspace, rawFilter))
+  })
+
+  const groupedEntries = createMemo((): GroupedWorkspaceItem[] => {
+    const mode = workspaceGroupingMode()
+    if (mode === "none" || tab() !== "workspaces") return []
+
+    const labelMap = new Map<string, { entry: WorkspaceEntry; originalIndex: number }[]>()
+
+    filteredEntries().forEach((entry, originalIndex) => {
+      for (const label of workspaceGroupLabels(entry, mode)) {
+        const items = labelMap.get(label) ?? []
+        items.push({ entry, originalIndex })
+        labelMap.set(label, items)
+      }
+    })
+
+    const items: GroupedWorkspaceItem[] = []
+    for (const label of [...labelMap.keys()].sort()) {
+      items.push({ kind: "header", label })
+      for (const item of labelMap.get(label) ?? []) {
+        items.push({ kind: "entry", ...item })
+      }
+    }
+    return items
+  })
+
+  const groupedNavigableEntries = createMemo(() =>
+    groupedEntries().filter((item): item is Extract<GroupedWorkspaceItem, { kind: "entry" }> => item.kind === "entry")
+  )
+
+  const filteredTemplates = createMemo(() => {
+    const f = tabFilter.templates[0]().toLowerCase()
+    if (!f) return templateEntries()
+    return templateEntries().filter(t => t.name.toLowerCase().includes(f))
+  })
+
+  const filteredRepos = createMemo(() => {
+    const f = tabFilter.repos[0]().toLowerCase()
+    if (!f) return repoEntries()
+    return repoEntries().filter(r => r.name.toLowerCase().includes(f) || r.local_path.toLowerCase().includes(f))
+  })
+
+  // Short lists only consume the rows they need. Larger lists are capped so
+  // the detail pane always retains useful space.
+  const activeListRows = createMemo(() => {
+    if (tab() === "workspaces") {
+      return workspaceGroupingMode() === "none" ? filteredEntries().length : groupedEntries().length
+    }
+    return tab() === "templates" ? filteredTemplates().length : filteredRepos().length
+  })
+  const batchBarRows = createMemo(() => {
+    if (tab() === "workspaces") return selected().size > 0 ? 1 : 0
+    if (tab() === "templates") return templatesSelected().size > 0 ? 1 : 0
+    return reposSelected().size > 0 ? 1 : 0
+  })
+  const listPaneHeight = createMemo(() => {
+    const maximum = Math.max(6, Math.floor((dims().height - 1) * 0.45))
+    return Math.min(maximum, Math.max(6, activeListRows() + batchBarRows() + 2))
+  })
+  const listHeight = createMemo(() => {
+    const available = listPaneHeight() - batchBarRows() - 2
+    const footerRows = activeListRows() > available ? 1 : 0
+    return Math.max(3, available - footerRows)
+  })
+
+  const currentEntry = createMemo(() => {
+    if (workspaceGroupingMode() !== "none" && tab() === "workspaces") {
+      const groupedEntry = groupedNavigableEntries()[tabCursor.workspaces[0]()]
+      return groupedEntry ? filteredEntries()[groupedEntry.originalIndex] : undefined
+    }
+    return filteredEntries()[tabCursor.workspaces[0]()]
+  })
+  const currentTemplate = createMemo(() => filteredTemplates()[tabCursor.templates[0]()])
+  const currentRepo = createMemo(() => filteredRepos()[tabCursor.repos[0]()])
+
+  const allWorkspaces = createMemo(() => entries().map(e => e.workspace))
+  const selectedWorkspace = createMemo(() => currentEntry()?.workspace)
+  const fileStatus = useWorkspaceFileStatus(selectedWorkspace, () => core.state()?.revision)
+  const selectedIssueCandidates = createMemo(() => buildIssueCandidates(selectedWorkspace()))
+  const selectedManualCommands = createMemo(() => {
+    const workspace = selectedWorkspace()
+    return workspace ? listManualCommands(workspace) : []
+  })
+  const issueDisabledReason = createMemo(() => {
+    const workspace = selectedWorkspace()
+    if (!workspace) return "none linked" as const
+    return selectedIssueCandidates().length > 0 ? undefined : "none linked" as const
+  })
+  const commandsDisabledReason = createMemo(() => selectedManualCommands().length > 0 ? undefined : "none configured" as const)
+
+  const selectedName = createMemo(() => {
+    const t = tab()
+    if (t === "workspaces") return currentEntry()?.workspace.name ?? ""
+    if (t === "templates") return currentTemplate()?.name ?? ""
+    if (t === "repos") return currentRepo()?.name ?? ""
+    return ""
+  })
+
+  // Detail box title shows selected entity name (list view only)
+  const detailBoxTitle = createMemo(() => {
+    const name = selectedName()
+    return name ? ` ${name} ` : ""
+  })
+
+  // Contextual title for ConfirmDialog
+  const confirmTitle = createMemo(() => {
+    const repoTarget = repoRemoveTarget()
+    if (repoTarget) return repoTarget
+    if (confirmContext() === "template") return filteredTemplates()[(view() as any).index]?.name ?? "Confirm"
+    return currentEntry()?.workspace.name ?? "Confirm"
+  })
+
+  // Context-sensitive help bar text (width-tiered to fit 80-column terminals)
+  const helpBarText = createMemo(() => {
+    const w = dims().width
+    const t = tab()
+    const msgShortcut = t === "workspaces" ? "  m Signals" : ""
+    const groupHint = t === "workspaces" ? `  g Group:${workspaceGroupingMode()}` : ""
+    const scrollHint = t === "workspaces" ? "  Pg Detail" : ""
+    const clearHint = filter() ? "  esc Clear" : ""
+
+    if (w < 50) return "? Help  q Quit"
+    const core = `Enter Actions  Space Select  / Filter${msgShortcut}${clearHint}  ? Help  q Quit`
+    if (w < 65) return core
+    if (w <= 80) return `r Refresh  ${core}`
+    if (w < 100) return `1/2/3 Tabs  r Refresh  ${core}`
+    return `\u2191\u2193/jk Navigate  1/2/3 Tabs  r Refresh  ${core}${groupHint}${scrollHint}`
+  })
+
+  const inlineInputLabel = createMemo(() => {
+    const v = view()
+    if (v.view !== "inline-input") return ""
+    if (v.purpose === "rename") return "New name"
+    if (v.purpose === "add-label") return "Add labels (comma-separated)"
+    return "Clone as"
+  })
+
+  function clampCursor() {
+    const entriesList = tab() === "workspaces" && workspaceGroupingMode() !== "none" ? groupedNavigableEntries()
+      : tab() === "workspaces" ? filteredEntries()
+      : tab() === "templates" ? filteredTemplates()
+      : filteredRepos()
+    setCursor(c => Math.min(c, Math.max(0, entriesList.length - 1)))
+  }
+
+  function resetCommandOutput(status: CommandOutputStatus = "running") {
+    setCommandOutput(initialCommandOutputState(status))
+  }
+
+  function appendCommandLine(line: CommandOutputLine) {
+    setCommandOutput(prev => appendCommandOutput(prev, line))
+  }
+
+  function appendSystemLine(text: string) {
+    appendCommandLine({ text, stream: "system" })
+  }
+
+  function finishCommandOutput(status: CommandOutputStatus) {
+    setCommandOutput(prev => ({ ...prev, status }))
+  }
+
+  function operationProgress(operation: Operation): void {
+    if (operation.state === "running" && operation.progress.message) appendSystemLine(operation.progress.message)
+  }
+
+  async function runWorkspaceMutation(
+    mutation: "workspace.open" | "workspace.close" | "workspace.clean" | "workspace.remove" | "workspace.merge",
+    workspace: string,
+    options: Record<string, unknown> = {},
+  ): Promise<boolean> {
+    try {
+      await runCoreMutation(mutation, { workspace, options }, { onOperation: operationProgress })
+      return true
+    } catch (error) {
+      appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+      return false
+    }
+  }
+
+  function buildSummary(result: SyncResult): { text: string; color: "green" | "yellow" | "red" } {
+    const ns = result.synced.length
+    const nsk = result.skipped.filter(s => s.reason.includes("conflict")).length
+    const nf = result.skipped.length - nsk  // non-conflict skips are failures
+    const stashFailures = result.stashPopFailures ?? []
+
+    if (ns === 0 && nsk === 0 && nf === 0 && stashFailures.length === 0) {
+      return { text: "Nothing to sync. Press any key to continue.", color: "green" }
+    }
+    if (stashFailures.length > 0) {
+      return {
+        text: `${ns} synced. Stash pop conflict in: ${stashFailures.map(f => f.repo).join(", ")}. Press any key to continue.`,
+        color: "red",
+      }
+    }
+    if (nf > 0) {
+      return { text: `${ns} synced, ${nsk} skipped, ${nf} failed. Press any key to continue.`, color: "red" }
+    }
+    if (nsk > 0) {
+      return { text: `${ns} synced, ${nsk} skipped. Press any key to continue.`, color: "yellow" }
+    }
+    return { text: `${ns} synced. Press any key to continue.`, color: "green" }
+  }
+
+  async function handleRun(name: string) {
+    if (!name) return
+    resetCommandOutput()
+    setView({ view: "progress", message: `Running ${name}...` })
+    const exitCode = await runWorkspaceShellHandoff(name, appendCommandLine)
+    finishCommandOutput(exitCode === 0 ? "success" : "failed")
+  }
+
+  async function runAction(action: Action, index: number) {
+    const entry = filteredEntries()[index]
+    if (!entry) return
+    const name = entry.workspace.name
+
+    if (action === "rename") {
+      setView({ view: "inline-input", index, purpose: "rename", prefill: name })
+      return
+    }
+
+    if (action === "edit") {
+      await launchEditor(name)
+      return
+    }
+
+    if (action === "issue") {
+      const candidates = buildIssueCandidates(entry.workspace)
+      if (candidates.length === 0) return
+      if (candidates.length === 1) {
+        await executeIssueOpen(entry.workspace.name, candidates[0])
+      } else {
+        setView({ view: "issue-picker", index, candidates })
+      }
+      return
+    }
+
+    if (action === "commands") {
+      const commands = listManualCommands(entry.workspace)
+      if (commands.length === 0) return
+      setView({ view: "command-picker", index, commands })
+      return
+    }
+
+    if (action === "open") {
+      resetCommandOutput()
+      setView({ view: "progress", message: `Opening ${name}...` })
+      const ok = await runWorkspaceMutation("workspace.open", name)
+      finishCommandOutput(ok ? "success" : "failed")
+      return
+    }
+
+    if (action === "close") {
+      resetCommandOutput()
+      setView({ view: "progress", message: `Closing ${name}...` })
+      const ok = await runWorkspaceMutation("workspace.close", name)
+      finishCommandOutput(ok ? "success" : "failed")
+      return
+    }
+
+    if (action === "sync") {
+      setView({ view: "confirm", index, action: "sync" })
+      return
+    }
+
+    if (action === "push") {
+      await executePush(name)
+      return
+    }
+
+    // clean, remove, merge need confirmation
+    setView({ view: "confirm", index, action })
+  }
+
+  async function executeConfirmed(action: Action, index: number, batch?: boolean) {
+    if (confirmContext() === "template") {
+      const tmpl = filteredTemplates()[index]
+      if (tmpl) {
+        try { await runCoreMutation("template.delete", { template: tmpl.name }) } catch {}
+        reloadTemplates()
+      }
+      setConfirmContext("workspace")
+      setView({ view: "list" })
+      return
+    }
+
+    const names = batch
+      ? [...selected()]
+      : [filteredEntries()[index]?.workspace.name].filter((name): name is string => Boolean(name))
+
+    resetCommandOutput()
+    setView({ view: "progress", message: `${action}: ${names.join(", ")}` })
+
+    const onProgress = (msg: string) =>
+      appendSystemLine(msg)
+
+    let failures = 0
+    for (const wsName of names) {
+      if (!wsName) continue
+      const mutation = action === "clean" || action === "remove" || action === "merge" ? `workspace.${action}` as const : undefined
+      const ok = mutation ? await runWorkspaceMutation(mutation, wsName) : false
+      if (!ok) {
+        failures++
+        if (!mutation) onProgress(`ERROR [${wsName}]: Unknown action: ${action}`)
+      }
+    }
+
+    if (batch) setSelected(new Set<string>())
+    if (failures > 0) {
+      appendSystemLine(`${failures}/${names.length} ${action} operation${failures === 1 ? "" : "s"} failed.`)
+    }
+    finishCommandOutput(failures === 0 ? "success" : "failed")
+  }
+
+  async function executeSync(name: string) {
+    const ws = entries().find((entry) => entry.workspace.name === name)?.workspace
+    const worktreeRepos = ws?.repos.filter((repo) => repo.mode === "worktree") ?? []
+    const initialRows: SyncRow[] = worktreeRepos
+      .map(r => ({ repo: r.name, status: "pending" as const, detail: "", conflicts: [] }))
+
+    setSyncRows(initialRows)
+    setSyncDone(false)
+    setSyncSummary({ text: "", color: "green" })
+    setView({ view: "sync-progress", message: `Syncing ${name}...` })
+
+    try {
+      const operation = await runCoreMutation("workspace.sync", { workspace: name, options: { strategy: "rebase", bestEffort: true, stash: true } }, {
+        onOperation: (current) => {
+          if (current.state !== "running" || current.progress.data?.kind !== "sync") return
+          const update = current.progress.data as SyncRow & { kind: "sync" }
+          setSyncRows(prev => prev.map(row => row.repo === update.repo ? { ...row, ...update } : row))
+        },
+      })
+      const result = operation.result ?? {}
+      setSyncSummary(buildSummary({
+        ok: true,
+        synced: Array.isArray(result.synced) ? result.synced as SyncResult["synced"] : [],
+        skipped: Array.isArray(result.skipped) ? result.skipped as SyncResult["skipped"] : [],
+        stashPopFailures: Array.isArray(result.stash_pop_failures) ? result.stash_pop_failures as NonNullable<SyncResult["stashPopFailures"]> : undefined,
+      }))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setSyncSummary({ text: `Sync failed: ${msg}. Press any key to continue.`, color: "red" })
+    }
+    setSyncDone(true)
+  }
+
+  async function executePush(name: string) {
+    const ws = entries().find((entry) => entry.workspace.name === name)?.workspace
+    const initialRows: PushRowDisplay[] = (ws?.repos ?? [])
+      .map((repo) => repo.mode === "worktree"
+        ? { repo: repo.name, status: "pending" as const, detail: "" }
+        : { repo: repo.name, status: "skipped" as const, detail: repo.mode })
+
+    setPushRows(initialRows)
+    setPushDone(false)
+    setPushSummary({ text: "", color: "green" })
+    setView({ view: "push-progress", message: `Pushing ${name}...` })
+
+    try {
+      const operation = await runCoreMutation("workspace.push", { workspace: name, options: {} }, {
+        onOperation: (current) => {
+          if (current.state !== "running" || current.progress.data?.kind !== "push") return
+          const update = current.progress.data as PushRow & { kind: "push" }
+          setPushRows(prev => prev.map(row => row.repo === update.repo ? { ...row, ...update } : row))
+        },
+      })
+      const result = operation.result ?? {}
+      const pushed = Array.isArray(result.pushed) ? result.pushed : []
+      const failed = Array.isArray(result.failed) ? result.failed : []
+      const skipped = Array.isArray(result.skipped) ? result.skipped : []
+      const parts: string[] = []
+      if (pushed.length > 0) parts.push(`${pushed.length} pushed`)
+      if (failed.length > 0) parts.push(`${failed.length} failed`)
+      if (skipped.length > 0) parts.push(`${skipped.length} skipped`)
+      setPushSummary({
+        text: parts.length > 0
+          ? `${parts.join(", ")}. Press any key to continue.`
+          : "Nothing to push. Press any key to continue.",
+        color: failed.length > 0 ? "red" : skipped.length > 0 ? "yellow" : "green",
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setPushSummary({ text: `Push failed: ${msg}. Press any key to continue.`, color: "red" })
+    }
+    setPushDone(true)
+  }
+
+  async function executeIssueOpen(workspaceName: string, candidate: IssueCandidate) {
+    resetCommandOutput()
+    setView({ view: "progress", message: `Opening ${candidate.label}...` })
+    try {
+      await runCoreMutation("workspace.issue.open", { workspace: workspaceName, tracker: candidate.tracker }, {
+        onOperation: (operation) => {
+          if (operation.state !== "running" || operation.progress.data?.kind !== "command-output") return
+          const lines = Array.isArray(operation.progress.data.lines) ? operation.progress.data.lines : [operation.progress.data]
+          for (const line of lines) {
+            const output = line as { text?: unknown; stream?: unknown }
+            appendCommandLine({ text: String(output.text ?? ""), stream: output.stream === "stderr" ? "stderr" : "stdout" })
+          }
+        },
+      })
+      appendSystemLine(`Opened ${candidate.label}.`)
+      finishCommandOutput("success")
+    } catch (error) {
+      appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+      finishCommandOutput("failed")
+    }
+  }
+
+  async function executeManualCommand(workspace: Workspace, commandName: string) {
+    resetCommandOutput()
+    setView({ view: "progress", message: `Running command ${commandName}...` })
+    try {
+      await runCoreMutation("workspace.command.run", { workspace: workspace.name, command: commandName }, {
+        onOperation: (operation) => {
+          if (operation.state !== "running" || operation.progress.data?.kind !== "command-output") return
+          const lines = Array.isArray(operation.progress.data.lines) ? operation.progress.data.lines : [operation.progress.data]
+          for (const line of lines) {
+            const output = line as { text?: unknown; stream?: unknown }
+            appendCommandLine({ text: String(output.text ?? ""), stream: output.stream === "stderr" ? "stderr" : "stdout" })
+          }
+        },
+      })
+      appendSystemLine(`Command ${commandName} completed.`)
+      finishCommandOutput("success")
+    } catch (error) {
+      appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+      finishCommandOutput("failed")
+    }
+  }
+
+  function buildIssueCandidates(workspace: Workspace | undefined): IssueCandidate[] {
+    const integrations = workspace?.settings?.integrations as Record<string, unknown> | undefined
+    if (!integrations) return []
+    const trackers: IssueCandidate["tracker"][] = ["github", "gitlab", "gitea", "jira"]
+    return trackers.flatMap((tracker) => {
+      const value = integrations[tracker] as Record<string, unknown> | undefined
+      const issue = value?.issue
+      if (issue === undefined || issue === null || String(issue).trim() === "") return []
+      const issueId = String(issue)
+      return [{ tracker, issueId, label: `${issueTrackerLabels[tracker]}: ${issueId}` }]
+    })
+  }
+
+  async function launchEditor(name: string) {
+    const { path, validate } = await resolveEditorHandoff({ kind: "workspace", name })
+    renderer.suspend()
+
+    try {
+      await openEditorHandoff(path)
+
+      const result = validate()
+      if (!result.ok) {
+        // Print error and wait for user to press enter before resuming
+        process.stdout.write(`\nValidation error: ${result.error}\nPress Enter to re-edit, or Ctrl+C to discard changes...`)
+        // Read a line from stdin
+        const buf = Buffer.alloc(256)
+        const { read } = await import("fs")
+        await new Promise<void>((resolve) => {
+          read(0, buf, 0, 256, null, () => resolve())
+        })
+        // Re-edit
+        await openEditorHandoff(path)
+      }
+    } finally {
+      renderer.resume()
+      reload()
+    }
+  }
+
+  async function handleInlineInputConfirm(value: string) {
+    const v = view() as { view: "inline-input"; index: number; purpose: string; prefill: string }
+    const trimmed = value.trim()
+    if (!trimmed) { setView({ view: "list" }); return }
+
+    if (v.purpose === "rename") {
+      const oldName = filteredEntries()[v.index]?.workspace.name
+      if (!oldName) { setView({ view: "list" }); return }
+      resetCommandOutput()
+      setView({ view: "progress", message: `Renaming ${oldName} → ${trimmed}...` })
+      try {
+        await runCoreMutation("workspace.rename", { workspace: oldName, new_name: trimmed, options: {} }, { onOperation: operationProgress })
+      } catch (error) {
+        appendSystemLine(`ERROR: ${error instanceof Error ? error.message : String(error)}`)
+        finishCommandOutput("failed")
+        return
+      }
+      finishCommandOutput("success")
+      await reload()
+      setView({ view: "list" })
+      return
+    }
+
+    if (v.purpose === "clone-template") {
+      const srcName = filteredTemplates()[v.index]?.name
+      if (!srcName) { setView({ view: "list" }); return }
+      try { await runCoreMutation("template.clone", { template: srcName, new_name: trimmed }); await reloadTemplates() } catch {}
+      setView({ view: "list" })
+      return
+    }
+
+    if (v.purpose === "add-label") {
+      const entry = filteredEntries()[v.index]
+      if (!entry) { setView({ view: "list" }); return }
+      const newLabels = trimmed
+        .split(",")
+        .map(label => label.trim())
+        .filter(label => /^[A-Za-z0-9._:-]+$/.test(label))
+      if (newLabels.length > 0) {
+        const merged = [...new Set([...(entry.workspace.labels ?? []), ...newLabels])]
+        await runCoreMutation("workspace.labels.set", { workspace: entry.workspace.name, labels: merged })
+        await reload()
+      }
+      setView({ view: "list" })
+      return
+    }
+
+    setView({ view: "list" })
+  }
+
+  function handleInlineInputCancel() {
+    setView({ view: "list" })
+  }
+
+  async function handleRepoAction(action: "create-workspace" | "create-template" | "edit" | "remove") {
+    const v = view() as { view: "repo-action-menu"; index: number }
+    const repo = filteredRepos()[v.index]
+    if (!repo) { setView({ view: "list" }); return }
+
+    // Compute effective repo list: multi-selected or just focused
+    const selectedIndices = reposSelected()
+    let repoNames: string[]
+    if (selectedIndices.size > 0) {
+      repoNames = [...selectedIndices].map(i => filteredRepos()[i]?.name).filter(Boolean) as string[]
+    } else {
+      repoNames = [repo.name]
+    }
+
+    if (action === "create-workspace") {
+      setReposSelected(new Set<number>())
+      setView({ view: "wizard-create-adhoc", source: "repos", repoNames })
+      return
+    }
+
+    if (action === "create-template") {
+      setReposSelected(new Set<number>())
+      setView({ view: "wizard-create-template", source: "repos", repoNames })
+      return
+    }
+
+    if (action === "edit") {
+      const { path, validate } = await resolveEditorHandoff({ kind: "registry" })
+      renderer.suspend()
+      try {
+        await openEditorHandoff(path)
+        const result = validate()
+        if (!result.ok) {
+          process.stdout.write(`\nValidation error: ${result.error}\n`)
+        }
+      } finally {
+        renderer.resume()
+        reloadRepos()
+        setView({ view: "list" })
+      }
+      return
+    }
+
+    if (action === "remove") {
+      // Remove operates on focused repo only (not batch)
+      const refTemplates = templateEntries().filter(t => t.repos.some(r => r.repo === repo.name))
+      const refWorkspaces = allWorkspaces().filter(ws => ws.repos.some(r => r.repo === repo.name))
+      if (refTemplates.length > 0 || refWorkspaces.length > 0) {
+        setView({ view: "repo-remove-blocked", repoName: repo.name })
+      } else {
+        setRepoRemoveTarget(repo.name)
+        setView({ view: "confirm", index: v.index, action: "remove" })
+      }
+      return
+    }
+  }
+
+  async function handleTemplateAction(action: "edit" | "clone" | "remove" | "create-workspace") {
+    const v = view() as { view: "action-menu"; index: number }
+    const template = filteredTemplates()[v.index]
+    if (!template) { setView({ view: "list" }); return }
+    const name = template.name
+
+    if (action === "create-workspace") {
+      setView({ view: "wizard-create", source: "template", templateIndex: v.index })
+      return
+    }
+
+    if (action === "edit") {
+      const { path, validate } = await resolveEditorHandoff({ kind: "template", name })
+      renderer.suspend()
+      try {
+        await openEditorHandoff(path)
+        const result = validate()
+        if (!result.ok) process.stdout.write(`\nValidation error: ${result.error}\n`)
+      } finally {
+        renderer.resume()
+        reloadTemplates()
+        setView({ view: "list" })
+      }
+      return
+    }
+
+    if (action === "clone") {
+      setView({ view: "inline-input", index: v.index, purpose: "clone-template", prefill: name + "-copy" })
+      return
+    }
+
+    if (action === "remove") {
+      setConfirmContext("template")
+      setView({ view: "confirm", index: v.index, action: "remove" })
+      return
+    }
+  }
+
+  // Wizard types and helpers
+  type CreateWizardData = { name: string; branch: string }
+  type CreateTemplateData = { name: string }
+
+  function buildTemplateWizardSteps(template: Template): WizardStep<CreateWizardData>[] {
+    return [
+      {
+        kind: "text",
+        label: "Workspace name",
+        key: "name",
+        validate: (v: string) => {
+          if (!v.trim()) return "Required"
+          if (entries().some((entry) => entry.workspace.name === v.trim())) return `Workspace '${v.trim()}' already exists`
+          return undefined
+        },
+      },
+      {
+        kind: "text",
+        label: "Branch",
+        key: "branch",
+        prefill: (data: Partial<CreateWizardData>) => {
+          const pattern = template.repos.find(r => r.branch_pattern)?.branch_pattern
+          return pattern && data.name ? expandBranchPattern(pattern, data.name) : `feature/${data.name ?? ""}`
+        },
+        validate: (v: string) => (v.trim() ? undefined : "Required"),
+      },
+      {
+        kind: "confirm",
+        buildMessage: (data: Partial<CreateWizardData>) => {
+          const repoLines = template.repos.map(r => `  ${r.repo} (${r.mode ?? "worktree"})`).join("\n")
+          return `Template: ${template.name}\nBranch: ${data.branch}\nRepos:\n${repoLines}`
+        },
+      },
+    ]
+  }
+
+  function buildCreateTemplateSteps(repoNames: string[]): WizardStep<CreateTemplateData>[] {
+    return [
+      {
+        kind: "text" as const,
+        label: "Template name",
+        key: "name" as const,
+        validate: (v: string) => {
+          if (!v.trim()) return "Required"
+          if (templateEntries().some((template) => template.name === v.trim())) return `Template "${v.trim()}" already exists`
+          return undefined
+        },
+      },
+      {
+        kind: "confirm" as const,
+        buildMessage: (data: Partial<CreateTemplateData>) => {
+          const repoLines = repoNames.map(n => `  ${n} (worktree)`).join("\n")
+          return `Create template "${data.name}" with ${repoNames.length} repos?\n${repoLines}`
+        },
+      },
+    ]
+  }
+
+  function buildAdhocWizardSteps(repoNames: string[]): WizardStep<CreateWizardData>[] {
+    return [
+      {
+        kind: "text",
+        label: "Workspace name",
+        key: "name",
+        validate: (v: string) => {
+          if (!v.trim()) return "Required"
+          if (entries().some((entry) => entry.workspace.name === v.trim())) return `Workspace '${v.trim()}' already exists`
+          return undefined
+        },
+      },
+      {
+        kind: "text",
+        label: "Branch",
+        key: "branch",
+        validate: (v: string) => (v.trim() ? undefined : "Required"),
+      },
+      {
+        kind: "confirm",
+        buildMessage: (data: Partial<CreateWizardData>) => {
+          const repoLines = repoNames.map(n => `  ${n} (worktree)`).join("\n")
+          return `Ad-hoc workspace\nBranch: ${data.branch}\nRepos:\n${repoLines}`
+        },
+      },
+    ]
+  }
+
+  async function executeCreateTemplate(data: CreateTemplateData, repoNames: string[]) {
+    const template: Template = {
+      name: data.name.trim(),
+      schema_version: "1",
+      repos: repoNames.map(name => ({
+        repo: name,
+        mode: "worktree" as const,
+      })),
+    }
+    await runCoreMutation("template.write", { template })
+    reloadTemplates().then(() => {
+      const idx = templateEntries().findIndex(t => t.name === data.name.trim())
+      if (idx >= 0) tabCursor.templates[1](idx)
+      setTab("templates")
+      setView({ view: "list" })
+    })
+  }
+
+  async function executeCreateWorkspace(
+    data: CreateWizardData,
+    template: Template | null,
+    repoNames: string[] | null,
+  ) {
+    const wsName = data.name.trim()
+    const branch = data.branch.trim()
+
+    setCreateRows([])
+    setCreateDone(false)
+    setCreateSummary({ text: "", color: "green" })
+    setView({ view: "create-progress", workspaceName: wsName })
+
+    try {
+      const requested = template ? template.repos.map((repo) => ({ name: repo.repo, mode: repo.mode ?? "worktree" })) : (repoNames ?? []).map((name) => ({ name, mode: "worktree" as const }))
+      const initialRows: CreateRow[] = requested.map((repo) => ({
+        repo: repo.name,
+        status: repo.mode === "worktree" ? "pending" : "skipped",
+        detail: repo.mode === "worktree" ? "" : `${repo.mode} mode`,
+      }))
+      setCreateRows(initialRows)
+      const updateRowByRepo = (repoName: string, patch: Partial<CreateRow>) => {
+        setCreateRows(prev => prev.some(row => row.repo === repoName)
+          ? prev.map(row => row.repo === repoName ? { ...row, ...patch } : row)
+          : [...prev, { repo: repoName, status: "pending", detail: "", ...patch }])
+      }
+
+      const CREATING_RE = /^Creating worktree for (.+)$/
+      const CREATED_RE = /^created worktree for (.+)$/
+      const ROLLBACK_RE = /^Rollback: create worktree (.+)$/
+      const ROLLBACK_ERROR_RE = /^Rollback error: create worktree (.+?) failed \((.+)\)$/
+
+      const handleProgress = (operation: Operation) => {
+        if (operation.state !== "running" || !operation.progress.message) return
+        const msg = operation.progress.message
+        let m: RegExpMatchArray | null
+        if ((m = msg.match(CREATING_RE))) {
+          updateRowByRepo(m[1]!, { status: "creating-worktree", detail: "creating worktree..." })
+          return
+        }
+        if ((m = msg.match(CREATED_RE))) {
+          updateRowByRepo(m[1]!, { status: "done", detail: "worktree created" })
+          return
+        }
+        if ((m = msg.match(ROLLBACK_RE))) {
+          updateRowByRepo(m[1]!, { status: "failed", detail: "rolling back..." })
+          return
+        }
+        if ((m = msg.match(ROLLBACK_ERROR_RE))) {
+          updateRowByRepo(m[1]!, { status: "failed", detail: `rollback failed: ${m[2]!}` })
+          return
+        }
+      }
+      const request = template
+        ? { name: wsName, branch, source: { kind: "template" as const, template: template.name } }
+        : { name: wsName, branch, source: { kind: "repositories" as const, repositories: repoNames ?? [] } }
+      await createWorkspaceThroughService(request, { onOperation: handleProgress })
+
+      const rows = createRows()
+      const nCreated = rows.filter(row => row.status === "done").length
+      const nSkipped = rows.filter(row => row.status === "skipped").length
+      const parts: string[] = []
+      if (nCreated > 0) parts.push(`${nCreated} created`)
+      if (nSkipped > 0) parts.push(`${nSkipped} trunk`)
+      setCreateSummary({ text: `${parts.join(", ")}. Press any key to continue.`, color: "green" })
+      setCreateDone(true)
+    } catch (err) {
+      setCreateRows(prev => prev.map(row => row.status === "pending" ? { ...row, status: "failed", detail: "aborted" } : row))
+      const msg = err instanceof Error ? err.message : String(err)
+      setCreateSummary({ text: `Failed: ${msg}. Press any key to continue.`, color: "red" })
+      setCreateDone(true)
+    }
+  }
+
+  // Main keyboard handler
+  useKeyboard((key) => {
+    const v = view()
+
+    // Help overlay toggle — must be at very top
+    if (key.name === "?" && !filtering()) {
+      if (helpOpen()) { setHelpOpen(false); return }
+      setHelpOpen(true)
+      return
+    }
+    if (helpOpen()) return  // block all other keys when help is open (HelpOverlay handles its own)
+
+    // Signal overlay handles its own keys.
+    if (signalsOpen()) return
+
+    // Handle filter mode — must be before tab switching so 1/2/3/]/[ don't fire
+    if (filtering()) {
+      if (key.name === "escape") {
+        setFilterFocused(false)
+        setFiltering(false)
+        setFilter("")
+        clampCursor()
+        return
+      }
+      if (key.name === "return") {
+        setFilterFocused(false)
+        setFiltering(false)
+        clampCursor()
+        return
+      }
+      return // <input> handles typing, backspace, cursor movement natively
+    }
+
+    // Dialog/overlay guards — block ALL global keys (including tab switching) when a
+    // dialog is active. These must come before tab switching so 1/2/3 don't leak through.
+
+    // Progress view — any key returns to list
+    if (v.view === "progress" && commandOutput().status !== "running") {
+      reload()
+      setView({ view: "list" })
+      clampCursor()
+      return
+    }
+
+    if (v.view === "progress") return
+
+    // Sync progress — any key returns to list when done
+    if (v.view === "sync-progress" && syncDone()) {
+      reload()
+      setView({ view: "list" })
+      clampCursor()
+      return
+    }
+    if (v.view === "sync-progress") return  // block ALL keys during sync (D-11)
+
+    if (v.view === "push-progress" && pushDone()) {
+      reload()
+      setView({ view: "list" })
+      clampCursor()
+      return
+    }
+    if (v.view === "push-progress") return
+
+    // Confirm dialog
+    if (v.view === "confirm") return // ConfirmDialog has its own keyboard handler
+
+    // Action menu
+    if (v.view === "action-menu") return // ActionMenu has its own keyboard handler
+    if (v.view === "issue-picker") return // Issue picker handles its own keys
+    if (v.view === "command-picker") return // Command picker handles its own keys
+
+    // Inline input
+    if (v.view === "inline-input") return
+
+    // Wizard views — WizardView handles its own keyboard (escape, y, input)
+    if (v.view === "wizard-create" || v.view === "wizard-create-adhoc") return
+    if (v.view === "wizard-create-template") return  // WizardView handles its own keys
+    if (v.view === "repo-action-menu") return         // RepoActionMenu handles its own keys
+    if (v.view === "repo-remove-blocked") return      // RemoveBlockedView handles Esc
+
+    // A running create transaction owns the UI. Check this before tab shortcuts
+    // so a numeric key cannot escape the progress view and launch another mutation.
+    if (v.view === "create-progress" && !createDone()) return
+
+    // Tab switching
+    if (key.name === "1") { setTab("workspaces"); setView({ view: "list" }); return }
+    if (key.name === "2") { setTab("templates"); setView({ view: "list" }); return }
+    if (key.name === "3") { setTab("repos"); setView({ view: "list" }); return }
+    if (key.name === "]") {
+      setTab(t => t === "workspaces" ? "templates" : t === "templates" ? "repos" : "workspaces")
+      setView({ view: "list" })
+      return
+    }
+    if (key.name === "[") {
+      setTab(t => t === "workspaces" ? "repos" : t === "repos" ? "templates" : "workspaces")
+      setView({ view: "list" })
+      return
+    }
+
+    // Create progress — any key returns to list when done (same pattern as sync-progress)
+    if (v.view === "create-progress" && createDone()) {
+      const wsName = (v as { view: "create-progress"; workspaceName: string }).workspaceName
+      setTab("workspaces")
+      reload().then(() => {
+        const idx = entries().findIndex(e => e.workspace.name === wsName)
+        if (idx >= 0) tabCursor.workspaces[1](idx)
+        setView({ view: "list" })
+      })
+      return
+    }
+    if (v.view === "create-progress") return
+
+    // List view
+    if (v.view === "list") {
+      const activeEntries = tab() === "workspaces" ? filteredEntries()
+        : tab() === "templates" ? filteredTemplates()
+        : filteredRepos()
+      const len = tab() === "workspaces" && workspaceGroupingMode() !== "none"
+        ? groupedNavigableEntries().length
+        : activeEntries.length
+
+      if (key.name === "q") {
+        renderer.destroy()
+        return
+      }
+      if (key.name === "escape") {
+        if (helpOpen()) { setHelpOpen(false); return }
+        if (filtering()) { setFiltering(false); setFilter(""); clampCursor(); return }
+        if (filter()) { setFilter(""); clampCursor(); return }
+        if (selected().size > 0) { setSelected(() => new Set<string>()); return }
+        if (reposSelected().size > 0) { setReposSelected(() => new Set<number>()); return }
+        if (templatesSelected().size > 0) { setTemplatesSelected(() => new Set<number>()); return }
+        // NO-OP at top-level list — do NOT call renderer.destroy()
+        return
+      }
+
+      if (key.name === "up" || key.name === "k") {
+        setCursor((i) => Math.max(0, i - 1))
+        return
+      }
+
+      if (key.name === "down" || key.name === "j") {
+        setCursor((i) => Math.min(len - 1, i + 1))
+        return
+      }
+
+      if (tab() === "workspaces" && (key.name === "pagedown" || key.name === "pageup")) {
+        const direction = key.name === "pagedown" ? 1 : -1
+        setDetailScrollRequest((request) => ({ sequence: request.sequence + 1, direction }))
+        return
+      }
+
+      if (key.name === "return") {
+        if (tab() === "repos") {
+          if (len > 0) setView({ view: "repo-action-menu", index: cursor() })
+          return
+        }
+        if (tab() === "workspaces" && workspaceGroupingMode() !== "none") {
+          const item = groupedNavigableEntries()[cursor()]
+          if (item) setView({ view: "action-menu", index: item.originalIndex })
+          return
+        }
+        if (len > 0) setView({ view: "action-menu", index: cursor() })
+        return
+      }
+
+      if (key.name === "space" && tab() === "workspaces") {
+        setSelected((prev) => {
+          const next = new Set(prev)
+          const workspaceName = workspaceGroupingMode() !== "none"
+            ? groupedNavigableEntries()[cursor()]?.entry.workspace.name
+            : filteredEntries()[cursor()]?.workspace.name
+          if (!workspaceName) return next
+          if (next.has(workspaceName)) next.delete(workspaceName)
+          else next.add(workspaceName)
+          return next
+        })
+        setCursor((i) => Math.min(len - 1, i + 1))
+        return
+      }
+
+      if (key.name === "space" && tab() === "repos") {
+        setReposSelected((prev) => {
+          const next = new Set(prev)
+          if (next.has(cursor())) next.delete(cursor())
+          else next.add(cursor())
+          return next
+        })
+        setCursor((i) => Math.min(len - 1, i + 1))
+        return
+      }
+
+      if (key.name === "space" && tab() === "templates") {
+        setTemplatesSelected((prev) => {
+          const next = new Set(prev)
+          if (next.has(cursor())) next.delete(cursor())
+          else next.add(cursor())
+          return next
+        })
+        setCursor((i) => Math.min(len - 1, i + 1))
+        return
+      }
+
+      // Batch operations (workspaces only)
+      if (tab() === "workspaces" && selected().size > 0) {
+        if (key.name === "c") {
+          setView({ view: "confirm", index: cursor(), action: "clean", batch: true })
+          return
+        }
+        if (key.name === "r") {
+          setView({ view: "confirm", index: cursor(), action: "remove", batch: true })
+          return
+        }
+      }
+
+      // Signal overlay (workspaces tab only, not during batch selection)
+      if (key.name === "m" && tab() === "workspaces" && selected().size === 0) {
+        const name = currentEntry()?.workspace.name
+        if (name) {
+          setSignalsWorkspace(name)
+          setSignalsOpen(true)
+        }
+        return
+      }
+
+      // Filter — defer focus so the `/` keypress doesn't leak into the input
+      // If a filter is already active (indicator showing), re-enter edit mode preserving text
+      if (key.name === "/") {
+        setFiltering(true)
+        if (!filter()) setFilter("")
+        setFilterFocused(false)
+        setTimeout(() => setFilterFocused(true), 0)
+        return
+      }
+
+      if (key.name === "g" && tab() === "workspaces") {
+        setWorkspaceGroupingMode(mode => nextWorkspaceGroupingMode(mode))
+        setCursor(0)
+        return
+      }
+
+      // Refresh
+      if (key.name === "r") {
+        if (tab() === "templates") { reloadTemplates(); setRefreshFlash("Refreshed templates"); setTimeout(() => setRefreshFlash(""), 1500); return }
+        if (tab() === "repos") { reloadRepos(); setRefreshFlash("Refreshed repos"); setTimeout(() => setRefreshFlash(""), 1500); return }
+        void reloadSignals()
+        reload()
+        setRefreshFlash("Refreshed")
+        setTimeout(() => setRefreshFlash(""), 1500)
+        return
+      }
+    }
+  })
+
+  return (
+    <box flexDirection="column" height="100%">
+      {/* Help overlay replaces EVERYTHING when open */}
+      <Show when={helpOpen()}>
+        <HelpOverlay tab={tab()} onClose={() => setHelpOpen(false)} />
+      </Show>
+
+      {/* Signal overlay replaces everything when open. */}
+      <Show when={!helpOpen() && signalsOpen()}>
+        <SignalOverlay
+          workspaceName={signalsWorkspace()}
+          signals={signalMap().get(signalsWorkspace()) ?? []}
+          tick={tick()}
+          onClose={() => setSignalsOpen(false)}
+          onDismiss={dismiss}
+        />
+        <box height={1}>
+          <text fg="gray">  {"\u2191\u2193"}/jk Navigate  d Dismiss signal  Esc Close</text>
+        </box>
+      </Show>
+
+      {/* Action menus — full-screen CenteredDialog overlays */}
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "action-menu"}>
+        <Switch>
+          <Match when={tab() === "workspaces"}>
+            <ActionMenu
+              workspaceName={currentEntry()?.workspace.name ?? ""}
+              issueDisabledReason={issueDisabledReason()}
+              commandsDisabledReason={commandsDisabledReason()}
+              onAction={(action) => runAction(action, (view() as any).index)}
+              onCancel={() => setView({ view: "list" })}
+              onRun={() => handleRun(selectedName())}
+            />
+          </Match>
+          <Match when={tab() === "templates"}>
+            <TemplateActionMenu
+              templateName={currentTemplate()?.name ?? ""}
+              onAction={handleTemplateAction}
+              onCancel={() => setView({ view: "list" })}
+            />
+          </Match>
+        </Switch>
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "command-picker"}>
+        {(() => {
+          const v = view() as { view: "command-picker"; index: number; commands: string[] }
+          return (
+            <CommandPicker
+              commands={v.commands}
+              onCancel={() => setView({ view: "action-menu", index: v.index })}
+              onSelect={(commandName) => {
+                const workspace = filteredEntries()[v.index]?.workspace
+                if (workspace) void executeManualCommand(workspace, commandName)
+              }}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "issue-picker"}>
+        {(() => {
+          const v = view() as { view: "issue-picker"; index: number; candidates: IssueCandidate[] }
+          return (
+            <IssuePicker
+              candidates={v.candidates}
+              onCancel={() => setView({ view: "action-menu", index: v.index })}
+              onSelect={(candidate) => {
+                const workspace = filteredEntries()[v.index]?.workspace
+                if (workspace) void executeIssueOpen(workspace.name, candidate)
+              }}
+            />
+          )
+        })()}
+      </Show>
+
+      {/* Repo action menu — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "repo-action-menu"}>
+        <RepoActionMenu
+          repoName={currentRepo()?.name ?? ""}
+          selectionCount={reposSelected().size}
+          onAction={handleRepoAction}
+          onCancel={() => setView({ view: "list" })}
+        />
+      </Show>
+
+      {/* Confirm dialog — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "confirm"}>
+        {(() => {
+          const v = view() as { view: "confirm"; index: number; action: Action; batch?: boolean }
+          const repoTarget = repoRemoveTarget()
+          const label = repoTarget
+            ? `Remove repo "${repoTarget}" (${filteredRepos()[v.index]?.local_path})?`
+            : confirmContext() === "template"
+            ? `${v.action} template '${filteredTemplates()[v.index]?.name}'?`
+            : v.action === "sync"
+            ? `Sync '${filteredEntries()[v.index]?.workspace.name}'? (rebase from upstream)`
+            : v.batch
+            ? `${v.action} ${selected().size} workspace(s)?`
+            : `${v.action} '${filteredEntries()[v.index]?.workspace.name}'?`
+          return (
+            <ConfirmDialog
+              title={confirmTitle()}
+              message={label}
+              onConfirm={() => {
+                const repoTarget = repoRemoveTarget()
+                if (repoTarget) {
+                  void runCoreMutation("repository.delete", { repository: repoTarget }).then(async () => {
+                    await reloadRepos()
+                    setRepoRemoveTarget(null)
+                    setView({ view: "list" })
+                    clampCursor()
+                  })
+                  return
+                }
+                if (v.action === "sync") {
+                  const entry = filteredEntries()[v.index]
+                  if (entry) executeSync(entry.workspace.name)
+                } else {
+                  executeConfirmed(v.action, v.index, v.batch)
+                }
+              }}
+              onCancel={() => { setRepoRemoveTarget(null); setView({ view: "list" }) }}
+            />
+          )
+        })()}
+      </Show>
+
+      {/* Inline input — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "inline-input"}>
+        <InlineInput
+          label={inlineInputLabel()}
+          prefill={(view() as any).prefill ?? ""}
+          onConfirm={handleInlineInputConfirm}
+          onCancel={handleInlineInputCancel}
+        />
+      </Show>
+
+      {/* Repo remove blocked — full-screen CenteredDialog overlay */}
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "repo-remove-blocked"}>
+        {(() => {
+          const v = view() as { view: "repo-remove-blocked"; repoName: string }
+          const refTemplates = templateEntries().filter(t => t.repos.some(r => r.repo === v.repoName))
+          const refWorkspaces = allWorkspaces().filter(ws => ws.repos.some(r => r.repo === v.repoName))
+          return (
+            <RemoveBlockedView
+              repoName={v.repoName}
+              refTemplates={refTemplates.map(t => ({ name: t.name }))}
+              refWorkspaces={refWorkspaces.map(ws => ({ name: ws.name }))}
+              onBack={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      {/* Medium dialog overlays — progress and wizard views */}
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "progress"}>
+        <ProgressView
+          title={(view() as any).message}
+          output={commandOutput()}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "sync-progress"}>
+        <SyncProgressView
+          rows={syncRows()}
+          done={syncDone()}
+          summary={syncSummary()}
+          title={(view() as any).message}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "push-progress"}>
+        <PushProgressView
+          rows={pushRows()}
+          done={pushDone()}
+          summary={pushSummary()}
+          title={(view() as any).message}
+        />
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "wizard-create"}>
+        {(() => {
+          const v = view() as { view: "wizard-create"; templateIndex: number }
+          const template = filteredTemplates()[v.templateIndex]
+          if (!template) return null
+          const steps = buildTemplateWizardSteps(template)
+          return (
+            <WizardView
+              title="Create Workspace"
+              steps={steps}
+              onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, template, null)}
+              onCancel={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "wizard-create-adhoc"}>
+        {(() => {
+          const v = view() as { view: "wizard-create-adhoc"; repoNames: string[] }
+          const steps = buildAdhocWizardSteps(v.repoNames)
+          return (
+            <WizardView
+              title="Create Workspace"
+              steps={steps}
+              onComplete={(data) => executeCreateWorkspace(data as CreateWizardData, null, v.repoNames)}
+              onCancel={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "wizard-create-template"}>
+        {(() => {
+          const v = view() as { view: "wizard-create-template"; repoNames: string[] }
+          const steps = buildCreateTemplateSteps(v.repoNames)
+          return (
+            <WizardView
+              title="Create Template"
+              steps={steps}
+              onComplete={(data) => executeCreateTemplate(data as CreateTemplateData, v.repoNames)}
+              onCancel={() => setView({ view: "list" })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "create-progress"}>
+        <CreateProgressView
+          rows={createRows()}
+          done={createDone()}
+          summary={createSummary()}
+          title={"Creating " + (view() as any).workspaceName + "..."}
+        />
+      </Show>
+
+      {/* Split pane — always visible; dialogs overlay via absolute positioning */}
+        {/* TOP BOX: list pane with tab title in border */}
+        <box border title={tabTitle()} flexDirection="column" height={listPaneHeight()} minHeight={6}>
+          <Show when={core.error()}>
+            {(message) => <text fg="red">{`  Service unavailable: ${message()}\n  Press r to retry.`}</text>}
+          </Show>
+          <Show when={!core.error()}>
+          <Show when={core.state()} fallback={<text fg="gray">  Loading workspace state...</text>}>
+          <Switch>
+            <Match when={tab() === "workspaces"}>
+              <WorkspaceList
+                entries={filteredEntries()}
+                grouped={groupedEntries()}
+                isGrouped={workspaceGroupingMode() !== "none"}
+                cursor={cursor()}
+                selected={selected()}
+                filter={filtering() ? filter() : ""}
+                height={listHeight()}
+                allSignals={signalMap()}
+                tick={tick()}
+              />
+            </Match>
+            <Match when={tab() === "templates"}>
+              <TemplateList
+                entries={filteredTemplates()}
+                cursor={tabCursor.templates[0]()}
+                filter={tabFiltering.templates[0]() ? tabFilter.templates[0]() : ""}
+                height={listHeight()}
+                selected={templatesSelected()}
+              />
+            </Match>
+            <Match when={tab() === "repos"}>
+              <RepoList
+                entries={filteredRepos()}
+                cursor={tabCursor.repos[0]()}
+                filter={tabFiltering.repos[0]() ? tabFilter.repos[0]() : ""}
+                height={listHeight()}
+                selected={reposSelected()}
+              />
+            </Match>
+          </Switch>
+          </Show>
+          </Show>
+          {/* Batch bar anchored to bottom of list box */}
+          <Show when={view().view === "list" && tab() === "workspaces" && selected().size > 0}>
+            <box flexGrow={1} />
+            <BatchBar count={selected().size} />
+          </Show>
+          <Show when={view().view === "list" && tab() === "templates" && templatesSelected().size > 0}>
+            <box flexGrow={1} />
+            <BatchBar count={templatesSelected().size} actions="[Enter] Actions" />
+          </Show>
+          <Show when={view().view === "list" && tab() === "repos" && reposSelected().size > 0}>
+            <box flexGrow={1} />
+            <BatchBar count={reposSelected().size} actions="[Enter] Actions" />
+          </Show>
+        </box>
+
+        {/* BOTTOM BOX: detail pane for list view only */}
+        <box border title={detailBoxTitle()} flexDirection="column" flexGrow={1} minHeight={10}>
+          {/* Tab-specific detail — always visible (dialogs overlay via absolute positioning) */}
+          <Switch>
+              <Match when={tab() === "workspaces"}>
+                <WorkspaceDetail
+                  entry={currentEntry()}
+                  signals={currentEntry() ? (signalMap().get(currentEntry()!.workspace.name) ?? []) : []}
+                  tick={tick()}
+                  fileStatus={fileStatus.state()}
+                  scrollRequest={detailScrollRequest()}
+                  config={core.state()?.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }}
+                  templates={templateEntries()}
+                />
+              </Match>
+              <Match when={tab() === "templates"}>
+                <TemplateDetail
+                  template={currentTemplate()}
+                  config={core.state()?.config ?? { workspace_root: "", integrations: {}, ports: { range_start: 10000, range_end: 65000 } }}
+                />
+              </Match>
+              <Match when={tab() === "repos"}>
+                <RepoDetail
+                  entry={currentRepo()}
+                  allTemplates={templateEntries()}
+                  allWorkspaces={allWorkspaces()}
+                />
+              </Match>
+            </Switch>
+        </box>
+
+        {/* HELP BAR / FILTER LINE — single box, no DOM swapping, no height toggling */}
+        <box height={1} flexDirection="row" paddingLeft={1}>
+          <text fg="cyan">{filtering() || filter() ? "filter: " : ""}</text>
+          <input
+            focused={filterFocused()}
+            value={filter()}
+            flexGrow={filtering() ? 1 : 0}
+            width={filtering() ? undefined : 0}
+            onInput={(v) => { setFilter(typeof v === "string" ? v : ""); clampCursor() }}
+          />
+          <text fg={!filtering() && core.error() ? "red" : !filtering() && filter() ? "cyan" : !filtering() && refreshFlash() ? "green" : "gray"}>
+            {filtering() ? "" : core.error() ? `Service error: ${core.error()}` : filter() ? `"${filter()}" ` : refreshFlash() ? refreshFlash() : loading() ? "(loading statuses...)" : helpBarText()}
+          </text>
+          <text fg="gray">{!filtering() && filter() ? " / edit · esc clear" : ""}</text>
+          <box flexGrow={filtering() ? 0 : 1} />
+        </box>
+
+    </box>
+  )
+}

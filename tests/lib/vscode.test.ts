@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { readFileSync } from "fs"
-import { generateCodeWorkspace } from "../../src/lib/vscode"
+import { generateCodeWorkspace } from "../../packages/core/src/vscode"
 import { makeTmpDir, cleanup } from "../helpers"
-import type { Workspace } from "../../src/lib/config"
+import type { Workspace } from "../../packages/core/src/config"
 
 let tmp: string
 beforeEach(() => { tmp = makeTmpDir("vscode") })

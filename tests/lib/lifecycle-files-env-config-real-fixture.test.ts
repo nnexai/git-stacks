@@ -17,12 +17,12 @@ import {
   realWriteWorkspace,
   useIsolatedConfig,
 } from "../helpers"
-import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "../../src/lib/files"
-import { writeLocalGitExcludesSync } from "../../src/lib/git"
-import { buildWorkspaceEnv, mergeEnv, writeEnvFiles } from "../../src/lib/workspace-env"
-import { buildResolvers, resolveSecrets } from "../../src/lib/secrets"
-import { allocatePorts } from "../../src/lib/ports"
-import type { GlobalConfig, Workspace, WorkspaceRepo } from "../../src/lib/config"
+import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "../../packages/core/src/files"
+import { writeLocalGitExcludesSync } from "../../packages/core/src/git"
+import { buildWorkspaceEnv, mergeEnv, writeEnvFiles } from "../../packages/core/src/workspace-env"
+import { buildResolvers, resolveSecrets } from "../../packages/core/src/secrets"
+import { allocatePorts } from "../../packages/core/src/ports"
+import type { GlobalConfig, Workspace, WorkspaceRepo } from "../../packages/core/src/config"
 
 type CapturedLine = { line: string; stream: "stdout" | "stderr" }
 

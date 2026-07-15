@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
 import { createRoot } from "solid-js"
-import type { Workspace } from "../../../src/lib/config"
+import type { Workspace } from "../../../packages/core/src/config"
 
 const fetchWorkspaceFileStatus = mock((workspaceName: string) => ({
   workspace: {
@@ -37,11 +37,11 @@ const fetchWorkspaceFileStatus = mock((workspaceName: string) => ({
   errors: [],
 }))
 
-mock.module("../../../src/lib/service/client", () => ({
+mock.module("@git-stacks/service/client", () => ({
   fetchWorkspaceFileStatus,
 }))
 
-const { useWorkspaceFileStatus } = await import("../../../src/tui/dashboard/hooks/useWorkspaceFileStatus")
+const { useWorkspaceFileStatus } = await import("../../../packages/tui/src/hooks/useWorkspaceFileStatus")
 
 function workspace(name: string): Workspace {
   return {
@@ -139,8 +139,8 @@ describe("useWorkspaceFileStatus", () => {
   })
 
   test("production hook uses the official service client and no machine-side helper", async () => {
-    const source = await Bun.file("src/tui/dashboard/hooks/useWorkspaceFileStatus.ts").text()
-    expect(source).toContain("../../../lib/service/client")
+    const source = await Bun.file("packages/tui/src/hooks/useWorkspaceFileStatus.ts").text()
+    expect(source).toContain('from "@git-stacks/service/client"')
     expect(source).toContain("fetchWorkspaceFileStatus")
     expect(source).not.toContain("../../../lib/workspace-file-status")
     expect(source).not.toContain("runCli")

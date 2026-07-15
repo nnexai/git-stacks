@@ -1,0 +1,31 @@
+// Canonical implementation owned by @git-stacks/core.
+import { homedir } from "os"
+import { join } from "path"
+
+export const HOME = homedir()
+
+export const DEFAULT_WORKSPACE_ROOT = join(HOME, "workspaces")
+
+// All config and metadata lives in ~/.config/git-stacks/
+// GIT_STACKS_CONFIG_DIR env var overrides the config dir (used for test isolation)
+export const WS_CONFIG_DIR =
+  process.env.GIT_STACKS_CONFIG_DIR ?? join(HOME, ".config", "git-stacks")
+export const WORKSPACES_DIR = join(WS_CONFIG_DIR, "workspaces")
+export const GLOBAL_CONFIG_FILE = join(WS_CONFIG_DIR, "config.yml")
+export const REGISTRY_FILE = join(WS_CONFIG_DIR, "registry.yml")
+export const TEMPLATES_DIR = join(WS_CONFIG_DIR, "templates")
+export const NOTES_DIR = join(WS_CONFIG_DIR, "notes")
+export const PORTS_LOCK_FILE = join(WS_CONFIG_DIR, ".ports.lock")
+
+export function getMainDir(wsRoot: string): string {
+  return join(wsRoot, "main")
+}
+
+export function getTasksDir(wsRoot: string): string {
+  return join(wsRoot, "tasks")
+}
+
+export function expandHome(p: string): string {
+  if (p.startsWith("~/")) return join(HOME, p.slice(2))
+  return p
+}

@@ -72,7 +72,7 @@ function runEnv(
   cwd = PROJECT_ROOT
 ): { stdout: string; stderr: string; exitCode: number } {
   const result = Bun.spawnSync(
-    ["bun", "run", "src/index.ts", "env", ...args],
+    ["node", "packages/cli/dist/index.js", "env", ...args],
     {
       env: {
         ...process.env,

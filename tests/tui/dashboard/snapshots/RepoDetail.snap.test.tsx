@@ -1,9 +1,9 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { RepoDetail } from "../../../../src/tui/dashboard/RepoDetail"
-import type { Template, Workspace } from "../../../../src/lib/config"
-import type { RepoEntry } from "../../../../src/tui/dashboard/hooks/useRepos"
+import { RepoDetail } from "../../../../packages/tui/src/RepoDetail"
+import type { Template, Workspace } from "../../../../packages/core/src/config"
+import type { RepoEntry } from "../../../../packages/tui/src/hooks/useRepos"
 
 const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 

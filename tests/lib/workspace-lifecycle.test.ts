@@ -100,7 +100,7 @@ mock.module("@/lib/observability", () => ({
   logDebug: mock(() => {}),
 }))
 
-const { closeWorkspace, _exec } = await import("../../src/lib/workspace-lifecycle")
+const { closeWorkspace, _exec } = await import("../../packages/core/src/workspace-lifecycle")
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
 

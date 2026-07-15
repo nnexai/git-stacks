@@ -7,7 +7,7 @@ import {
   readOfficialClientCredential,
   revokeCredential,
   verifyCredential,
-} from "../../../src/lib/service/credentials"
+} from "../../../packages/service/src/policy/credentials"
 
 const roots: string[] = []
 function root(): string {

@@ -2,11 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { provisionOfficialClient, readOfficialClientCredential } from "../../src/lib/service/credentials"
-import { EventBroker } from "../../src/lib/service/event-broker"
-import { EventJournal } from "../../src/lib/service/event-journal"
-import { startServiceServer } from "../../src/service/server"
-import { createIdleLifecycle, ensureManagedServiceProcess, serviceDescriptorPath, startManagedService } from "../../src/service/main"
+import { provisionOfficialClient, readOfficialClientCredential } from "../../packages/service/src/policy/credentials"
+import { EventBroker } from "../../packages/service/src/policy/event-broker"
+import { EventJournal } from "../../packages/service/src/policy/event-journal"
+import { startServiceServer } from "../../packages/service/src/server"
+import { createIdleLifecycle, ensureManagedServiceProcess, serviceDescriptorPath, startManagedService } from "../../packages/service/src/main"
 
 const cleanup: Array<() => void | Promise<void>> = []
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn() })
@@ -39,7 +39,7 @@ describe("v1 discovery", () => {
     process.env.GIT_STACKS_SIGNAL_TOKEN = "must-not-leak"
     const found = await ensureManagedServiceProcess({
       executable: "/usr/bin/bun",
-      entrypoint: "/opt/git-stacks/src/index.ts",
+      entrypoint: "/opt/git-stacks/packages/cli/src/index.ts",
       pollMs: 1,
       readUsable: async () => ++reads >= 2 ? descriptor : null,
       spawn: (nextCommand, options) => {
@@ -53,7 +53,7 @@ describe("v1 discovery", () => {
     delete process.env.GIT_STACKS_SIGNAL_TOKEN
 
     expect(found).toEqual(descriptor)
-    expect(command).toEqual(["/usr/bin/bun", "/opt/git-stacks/src/index.ts", "service", "start"])
+    expect(command).toEqual(["/usr/bin/bun", "/opt/git-stacks/packages/cli/src/index.ts", "service", "start"])
     expect(detached).toBe(true)
     expect(unrefCalled).toBe(true)
     expect(childEnvironment?.GS_WORKSPACE_NAME).toBeUndefined()
@@ -65,7 +65,7 @@ describe("v1 discovery", () => {
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
     const credential = provisionOfficialClient("test-client", { serviceRoot: root })
     let activity = 0
-    const service = startServiceServer({ serviceRoot: root, snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } }, onActivity: () => { activity += 1 } })
+    const service = await startServiceServer({ serviceRoot: root, snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } }, onActivity: () => { activity += 1 } })
     cleanup.push(() => service.stop())
 
     expect(service.url.hostname).toBe("127.0.0.1")
@@ -86,7 +86,7 @@ describe("v1 discovery", () => {
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
     const credential = provisionOfficialClient("sse-ready", { serviceRoot: root })
     const broker = new EventBroker(new EventJournal({ root }))
-    const service = startServiceServer({
+    const service = await startServiceServer({
       serviceRoot: root,
       broker,
       heartbeatMs: 60_000,

@@ -4,19 +4,19 @@ import { createSignal } from "solid-js"
 import { testRender } from "@opentui/solid"
 const compactFrame = (frame: string) => frame.split("\n").map((line) => line.replace(/[█▀▄]+$/u, "").trimEnd()).join("\n").trimEnd()
 
-mock.module("../../../../src/lib/config", () => ({
+mock.module("@git-stacks/core/config", () => ({
   readGlobalConfig: mock(() => ({ workspace_root: "/tmp/detail-snap", integrations: { vscode: { enabled: true, cmd: "code" } } })),
   readTemplate: mock((name: string) => ({ name, schema_version: "1", repos: [], integrations: {} })),
 }))
 
-mock.module("../../../../src/lib/integrations", () => ({
+mock.module("@git-stacks/core/integrations", () => ({
   integrations: [
     { id: "vscode", label: "VS Code", hint: "", enabledByDefault: true, open: mock(async () => null), configurePrompt: mock(async () => null), isEnabled: mock(() => true) },
     { id: "tmux", label: "tmux", hint: "", enabledByDefault: true, open: mock(async () => null), configurePrompt: mock(async () => null), isEnabled: mock(() => true) },
   ],
 }))
 
-mock.module("../../../../src/lib/integrations/types", () => ({
+mock.module("@git-stacks/core/integrations/types", () => ({
   resolveEnabledGlobally: mock(() => true),
   resolveEnabled: mock(() => true),
   isConditional: mock(() => false),
@@ -25,21 +25,21 @@ mock.module("../../../../src/lib/integrations/types", () => ({
   isWindowDetecting: mock(() => false),
 }))
 
-mock.module("../../../../src/lib/notes", () => ({
+mock.module("@git-stacks/core/notes", () => ({
   listWorkspaceNotes: mock(async () => [
     { text: "Review file sync drift", created: "2026-01-15T10:00:00Z" },
     { text: "Ping owner before merge", created: "2026-01-14T10:00:00Z" },
   ]),
 }))
 
-mock.module("../../../../src/lib/service/client", () => ({
+mock.module("@git-stacks/service/client", () => ({
   fetchWorkspaceNotes: mock(async () => [
     { text: "Review file sync drift", created: "2026-01-15T10:00:00Z" },
     { text: "Ping owner before merge", created: "2026-01-14T10:00:00Z" },
   ]),
 }))
 
-const { WorkspaceDetail } = await import("../../../../src/tui/dashboard/WorkspaceDetail")
+const { WorkspaceDetail } = await import("../../../../packages/tui/src/WorkspaceDetail")
 
 const FROZEN_NOW = new Date("2026-01-15T10:00:00Z").getTime() + (122 * 24 * 60 * 60 * 1000)
 const originalDateNow = Date.now

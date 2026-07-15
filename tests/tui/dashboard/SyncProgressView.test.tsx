@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { SyncProgressView } from "../../../src/tui/dashboard/SyncProgressView"
+import { SyncProgressView } from "../../../packages/tui/src/SyncProgressView"
 
 type SyncRow = {
   repo: string
@@ -53,8 +53,8 @@ describe("SyncProgressView", () => {
       {
         repo: "repo-b",
         status: "skipped",
-        detail: "conflict: src/lib/git.ts",
-        conflicts: ["src/index.ts"],
+        detail: "conflict: packages/core/src/git.ts",
+        conflicts: ["packages/cli/src/index.ts"],
       },
     ]
     const { renderOnce, captureCharFrame } = await testRender(
@@ -71,7 +71,7 @@ describe("SyncProgressView", () => {
     const frame = captureCharFrame()
     expect(frame).toContain("repo-b")
     expect(frame).toContain("conflict:")
-    expect(frame).toContain("src/index.ts")
+    expect(frame).toContain("packages/cli/src/index.ts")
   })
 
   test("renders failed rows with failure detail", async () => {

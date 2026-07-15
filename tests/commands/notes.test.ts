@@ -44,7 +44,7 @@ function runNotesWithInput(
   env: Record<string, string> = {},
   stdinInput = ""
 ): { stdout: string; stderr: string; exitCode: number } {
-  const result = Bun.spawnSync(["bun", "run", "src/index.ts", "notes", ...args], {
+  const result = Bun.spawnSync(["node", "packages/cli/dist/index.js", "notes", ...args], {
     env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir, ...env },
     cwd,
     stdin: stdinInput ? Buffer.from(stdinInput) : "pipe",

@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { rmSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { provisionOfficialClient } from "../../src/lib/service/credentials"
-import { OperationRegistry } from "../../src/lib/service/operations"
-import { startServiceServer } from "../../src/service/server"
+import { provisionOfficialClient } from "../../packages/service/src/policy/credentials"
+import { OperationRegistry } from "../../packages/service/src/policy/operations"
+import { startServiceServer } from "../../packages/service/src/server"
 import { makeDashboardCoreState } from "../helpers"
 
 const roots: string[] = []
@@ -22,7 +22,7 @@ describe("first-party core API", () => {
       schedule: (run) => run(),
     })
     const state = makeDashboardCoreState([], [], [])
-    const service = startServiceServer({
+    const service = await startServiceServer({
       serviceRoot: root,
       operations,
       snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },

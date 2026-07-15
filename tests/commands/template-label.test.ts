@@ -26,7 +26,7 @@ labels:
 }
 
 function runTemplateLabel(cfgDir: string, args: string[]) {
-  const result = Bun.spawnSync(["bun", "run", "src/index.ts", "template", "label", ...args], {
+  const result = Bun.spawnSync(["node", "packages/cli/dist/index.js", "template", "label", ...args], {
     cwd: PROJECT_ROOT,
     env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
     stdio: ["pipe", "pipe", "pipe"],

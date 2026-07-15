@@ -5,8 +5,8 @@ import { parse } from "yaml"
 import { useIsolatedConfig } from "../../helpers"
 
 const isolated = useIsolatedConfig("service-identity-test")
-const config = await import("../../../src/lib/config")
-const { ensureWorkspaceIdentity } = await import("../../../src/lib/service/identity")
+const config = await import("@git-stacks/core/config")
+const { ensureWorkspaceIdentity } = await import("../../../packages/service/src/policy/identity")
 afterAll(() => isolated.cleanup())
 
 const workspaceFile = (name: string) => join(isolated.configDir, "workspaces", `${name}.yml`)

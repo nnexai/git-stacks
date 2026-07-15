@@ -1,6 +1,6 @@
 import { realRunHooks } from "../helpers"
 import { describe, expect, test } from "bun:test"
-import { buildCliProgram, collectCommandPaths } from "../../src/lib/cli-program"
+import { buildCliProgram, collectCommandPaths } from "../../packages/cli/src/lib/cli-program"
 
 // Keep this alphabetically early suite importing the shared helper first. The
 // unit runner intentionally shares one process, and helpers capture selected

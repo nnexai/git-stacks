@@ -23,7 +23,7 @@ const mockSnapshotWindowIds = mock(async (fn: () => Promise<void>) => {
   return [100]
 })
 
-mock.module("@/lib/niri", () => ({
+mock.module("../../../packages/core/src/niri", () => ({
   isNiriRunning: mockIsNiriRunning,
   listNiriWindows: mockListNiriWindows,
   listNiriWorkspaces: mockListNiriWorkspaces,
@@ -44,7 +44,7 @@ mock.module("@/lib/niri", () => ({
 }))
 
 // Mock @/tui/utils (prompts wrapper) — explicit mock replaces dead @clack/prompts mock
-mock.module("@/tui/utils", () => ({
+mock.module("../../../packages/core/src/prompt-capability", () => ({
   prompts: {
     spinner: () => ({ start: mock(() => {}), stop: mock(() => {}) }),
     log: { info: mock(() => {}), success: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
@@ -64,7 +64,7 @@ mock.module("@/tui/utils", () => ({
   safeText: mock(async () => ""),
 }))
 
-mock.module("@/lib/lifecycle", () => ({
+mock.module("../../../packages/core/src/lifecycle", () => ({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => []),
   _exec: { run: mock(async () => ({ exitCode: 0 })) },

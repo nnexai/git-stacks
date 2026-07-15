@@ -7,8 +7,8 @@ import {
   OperationRegistry,
   canonicalRequestHash,
   createWorkspaceMutationAdapters,
-} from "../../../src/lib/service/operations"
-import type { ServiceEvent } from "../../../src/lib/service/contract"
+} from "../../../packages/service/src/policy/operations"
+import type { ServiceEvent } from "../../../packages/protocol/src/service"
 
 const roots: string[] = []
 async function root(): Promise<string> {

@@ -2,7 +2,7 @@
 import { describe, test, expect } from "bun:test"
 import { readFileSync } from "fs"
 import { testRender } from "@opentui/solid"
-import { CreateProgressView, type CreateRow } from "../../../src/tui/dashboard/CreateProgressView"
+import { CreateProgressView, type CreateRow } from "../../../packages/tui/src/CreateProgressView"
 
 const renderOpts = { kittyKeyboard: true }
 
@@ -77,7 +77,7 @@ describe("CreateProgressView", () => {
   })
 
   test("does not add Phase 99 rollback file-operation rows", () => {
-    const source = readFileSync("src/tui/dashboard/CreateProgressView.tsx", "utf8")
+    const source = readFileSync("packages/tui/src/CreateProgressView.tsx", "utf8")
     expect(source).not.toContain("file-op")
     expect(source).not.toContain("workspace-file-op")
     expect(source).not.toContain("env-file")

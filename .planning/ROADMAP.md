@@ -17,13 +17,13 @@ This milestone replaces the Bun-first monolith with a Node-default package archi
                       -> 115 distribution + legacy removal
 ```
 
-- [ ] **Phase 108: Package and Runtime Foundation** — Establish the workspace graph, builds, contracts, adapters, conformance fixtures, and enforceable dependency rules without changing product behavior.
-- [ ] **Phase 109: Shared Core and Filesystem Authority** — Move domain behavior into the runtime-neutral core and make every persisted mutation atomic and concurrency-safe.
-- [ ] **Phase 110: Node Local CLI Cutover** — Run the complete daemonless CLI on Node and make the service reconcile direct filesystem changes.
-- [ ] **Phase 111: Node Service Transport and Lifecycle** — Build and prove Node HTTP/SSE/WebSocket and managed-lifecycle adapters against the existing shared service policy without switching the public service early.
+- [x] **Phase 108: Package and Runtime Foundation** — Establish the workspace graph, builds, contracts, adapters, conformance fixtures, and enforceable dependency rules without changing product behavior.
+- [x] **Phase 109: Shared Core and Filesystem Authority** — Move domain behavior into the runtime-neutral core and make every persisted mutation atomic and concurrency-safe.
+- [x] **Phase 110: Node Local CLI Cutover** — Run the complete daemonless CLI on Node and make the service reconcile direct filesystem changes.
+- [x] **Phase 111: Node Service Transport and Lifecycle** — Build and prove Node HTTP/SSE/WebSocket and managed-lifecycle adapters against the existing shared service policy without switching the public service early.
 - [ ] **Phase 112: Node Terminal and Signal Runtime** — Add the accepted exact-pinned node-pty adapter, atomically cut the complete public service to Node, and remove the Bun service/PTY runtime.
-- [ ] **Phase 113: Thin Web Package Cutover** — Package the browser client independently and serve it from the Node service without machine-side behavior in the browser.
-- [ ] **Phase 114: Optional TUI Client Package** — Isolate Bun/OpenTUI as an optional thin trusted client and remove its remaining domain/runtime authority.
+- [x] **Phase 113: Thin Web Package Cutover** — Package the browser client independently and serve it from the Node service without machine-side behavior in the browser.
+- [x] **Phase 114: Optional TUI Client Package** — Isolate Bun/OpenTUI as an optional thin trusted client and remove its remaining domain/runtime authority.
 - [ ] **Phase 115: Distribution Parity and Legacy Removal** — Prove supported Linux/macOS installs, remove compatibility paths, update release assets, and prepare v0.21.0-rc.1.
 
 ## Phase details
@@ -133,7 +133,7 @@ Plan: [Phase 113](./phases/113-thin-web-package-cutover/113-PLAN.md)
 
 **Success Criteria** (what must be TRUE):
 
-1. The TUI dependency graph contains only protocol/client and rendering dependencies, plus explicit foreground handoff adapters.
+1. The TUI uses protocol/client state, the dedicated local service-client adapter, pure core types/presentation helpers, and explicit foreground handoff adapters; it cannot import the service root or domain persistence authorities.
 2. Dashboard reads, mutations, signals, dismissals, commands, and progress pass parity tests against the Node service.
 3. Closing the TUI releases its managed client and allows the service to stop under normal lifecycle policy.
 4. Default CLI/service/web installs do not install OpenTUI, Solid, Bun types, or TUI-only assets.
@@ -161,4 +161,4 @@ Plan: [Phase 115](./phases/115-distribution-parity-and-legacy-removal/115-PLAN.m
 The phase sequence may use temporary import/export shims to keep the repository runnable, but a shim may only forward to the single target implementation and must carry a removal phase. No phase may create a second domain algorithm, persisted model, signal reducer, terminal policy, or client operation semantics for parity purposes.
 
 ---
-*Last updated: 2026-07-15 after spikes 016-019 established the migration path.*
+*Last updated: 2026-07-15 after the complete local implementation. Phases 112 and 115 remain open only for the hosted supported-platform matrix.*

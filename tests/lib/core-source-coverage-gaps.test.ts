@@ -9,14 +9,14 @@ import {
   makeRepoWithRemote,
   makeTmpDir,
 } from "../helpers"
-import { isBranchGoneOnRemote, mergeBranchFF } from "../../src/lib/git"
-import { checkConflicts, findContiguousBlock } from "../../src/lib/ports"
-import type { Workspace } from "../../src/lib/config"
+import { isBranchGoneOnRemote, mergeBranchFF } from "../../packages/core/src/git"
+import { checkConflicts, findContiguousBlock } from "../../packages/core/src/ports"
+import type { Workspace } from "../../packages/core/src/config"
 import {
   buildKeychainCommand,
   buildResolvers,
   parseKeychainPath,
-} from "../../src/lib/secrets"
+} from "../../packages/core/src/secrets"
 
 let tmpDir: string
 let gitEnvDir: string

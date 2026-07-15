@@ -7,7 +7,7 @@ const root = process.env.GS_COVERAGE_ROOT
 const instSrc = process.env.GS_COVERAGE_SRC_INST
 const shardDir = process.env.GS_COVERAGE_SHARD_DIR
 const cliEntry = process.env.GS_COVERAGE_CLI_ENTRY
-const originalCliEntry = root ? join(root, "src", "index.ts") : undefined
+const originalCliEntry = root ? join(root, "packages", "cli", "dist", "index.js") : undefined
 
 function writeCoverageShard() {
   if (!shardDir) return
@@ -29,18 +29,27 @@ function toInstrumentedPath(importPath: string, importer?: string): string | und
   if (!root || !instSrc) return undefined
 
   let resolvedPath: string | undefined
-  if (importPath.startsWith("@/")) {
-    resolvedPath = join(root, "src", importPath.slice(2))
+  if (importPath.startsWith("@git-stacks/")) {
+    const match = importPath.match(/^@git-stacks\/([^/]+)(?:\/(.*))?$/)
+    if (!match) return undefined
+    const [, packageName, subpath] = match
+    const candidate = join(instSrc, packageName, "src", (subpath ?? "index").replace(/\.js$/, ""))
+    for (const path of [candidate, `${candidate}.ts`, `${candidate}.tsx`, join(candidate, "index.ts"), join(candidate, "index.tsx")]) {
+      if (Bun.file(path).size !== 0) return path
+    }
+    return undefined
+  } else if (importPath.startsWith("@/")) {
+    return undefined
   } else if (importPath.startsWith(".")) {
     if (!importer) return undefined
-    resolvedPath = resolve(dirname(importer), importPath)
+    resolvedPath = resolve(dirname(importer), importPath).replace(/\.js$/, "")
   }
 
   if (!resolvedPath) return undefined
 
-  const relToSrc = relative(join(root, "src"), resolvedPath)
-  if (relToSrc.startsWith("..") || relToSrc === "") return undefined
-  const candidate = join(instSrc, relToSrc)
+  const relToPackages = relative(join(root, "packages"), resolvedPath)
+  if (relToPackages.startsWith("..") || relToPackages === "") return undefined
+  const candidate = join(instSrc, relToPackages)
   for (const path of [
     candidate,
     `${candidate}.ts`,
@@ -57,17 +66,14 @@ if (root && instSrc) {
   plugin({
     name: "coverage-src-redirect",
     setup(build) {
-      build.onResolve({ filter: /^@\// }, (args) => {
+      build.onResolve({ filter: /^@git-stacks\// }, (args) => {
         const redirected = toInstrumentedPath(args.path, args.importer)
         return redirected ? { path: redirected } : undefined
       })
 
-      build.onResolve({ filter: /^\.\.\/\.\.\/src\// }, (args) => {
-        const redirected = toInstrumentedPath(args.path, args.importer)
-        return redirected ? { path: redirected } : undefined
-      })
-
-      build.onResolve({ filter: /^\.\.\/src\// }, (args) => {
+      // Resolve package-source imports from tests at any depth and canonicalize
+      // NodeNext-style .js specifiers to one explicit instrumented TS module.
+      build.onResolve({ filter: /^\./ }, (args) => {
         const redirected = toInstrumentedPath(args.path, args.importer)
         return redirected ? { path: redirected } : undefined
       })
@@ -77,13 +83,15 @@ if (root && instSrc) {
 
 function rewriteCliArgv(argv: string[]): string[] {
   if (!cliEntry || !originalCliEntry || argv.length < 3) return argv
-  if (argv[0] !== "bun" || argv[1] !== "run") return argv
+  const sourceInvocation = argv[0] === "bun" && argv[1] === "run"
+  const builtNodeInvocation = argv[0] === "node"
+  if (!sourceInvocation && !builtNodeInvocation) return argv
 
-  const candidate = argv[2]
+  const candidate = argv[sourceInvocation ? 2 : 1]
   const absoluteCandidate = candidate.startsWith("/") ? candidate : join(root ?? process.cwd(), candidate)
   if (resolve(absoluteCandidate) !== resolve(originalCliEntry)) return argv
 
-  return [argv[0], argv[1], cliEntry, ...argv.slice(3)]
+  return ["bun", "run", cliEntry, ...argv.slice(sourceInvocation ? 3 : 2)]
 }
 
 function withCoverageEnv(env?: Record<string, string | undefined>): Record<string, string | undefined> {

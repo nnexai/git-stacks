@@ -108,23 +108,24 @@ repos:
   return apiRepo
 }
 
-describe("v0.20.0 release candidate smoke", () => {
-  test("package, changelog, and README describe the shared-core RC boundary", () => {
-    const rcEntry = changelogEntry("0.20.0-rc.1")
+describe("v0.21.0 release candidate smoke", () => {
+  test("package, changelog, and README describe the Node package boundary", () => {
+    const rcEntry = changelogEntry("0.21.0-rc.1")
 
-    expect(PACKAGE_JSON.version).toBe("0.20.0-rc.1")
-    expect(CHANGELOG.indexOf("## [0.20.0-rc.1]")).toBeLessThan(CHANGELOG.indexOf("## [0.19.0-rc.4]"))
-    expect(rcEntry).toContain("v0.20.0-rc.1")
-    expect(rcEntry).toContain("shared machine-side core")
-    expect(rcEntry).toContain("git-stacks web")
-    expect(rcEntry).toContain("git-stacks hooks install")
-    expect(rcEntry).toContain("native-client-final-2026-07-14")
-    expect(rcEntry).toContain("first release candidate for v0.20.0")
+    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.1")
+    expect(CHANGELOG.indexOf("## [0.21.0-rc.1]")).toBeLessThan(CHANGELOG.indexOf("## [0.20.0-rc.1]"))
+    expect(rcEntry).toContain("v0.21.0")
+    expect(rcEntry).toContain("Node.js 24")
+    expect(rcEntry).toContain("@git-stacks/protocol")
+    expect(rcEntry).toContain("node-pty@1.2.0-beta.14")
+    expect(rcEntry).toContain("separately installed `@git-stacks/tui`")
+    expect(rcEntry).toContain("first release candidate for v0.21.0")
 
     expect(README).toContain("## Shared Service Architecture")
     expect(README).toContain("git-stacks hooks install codex")
-    expect(README).toContain("ordinary shell removes its tab")
+    expect(README).toContain("Exiting an ordinary shell removes its tab")
     expect(README).toContain("git-stacks command list [workspace]")
+    expect(README).toContain("Node.js 24 or newer")
   })
 
   test("release smoke retains established workflow coverage surfaces", () => {
@@ -158,13 +159,13 @@ describe("v0.20.0 release candidate smoke", () => {
   })
 
   test("RC release script derives tag/version state from package metadata", () => {
-    const releaseScript = readFileSync(join(ROOT, "scripts/release-rc-check.ts"), "utf8")
+    const releaseScript = readFileSync(join(ROOT, "scripts/release-rc-check.mjs"), "utf8")
 
     expect(releaseScript).toContain("const rcVersion = packageVersion()")
     expect(releaseScript).toContain("const rcTag = `v${rcVersion}`")
-    expect(releaseScript).toContain("process.argv.includes(\"--skip-tag\")")
-    expect(releaseScript).toContain("bun test tests/commands/release-rc.test.ts")
-    expect(releaseScript).toContain("bun publish --dry-run --tag next")
+    expect(releaseScript).toContain("process.argv.includes(\"--tag\")")
+    expect(releaseScript).toContain("npm\", [\"run\", \"check:packages\"]")
+    expect(releaseScript).toContain("publishing is a separate manual action")
   })
 })
 

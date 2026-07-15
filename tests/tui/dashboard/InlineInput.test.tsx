@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { InlineInput } from "../../../src/tui/dashboard/InlineInput"
+import { InlineInput } from "../../../packages/tui/src/InlineInput"
 
 // Use kitty keyboard protocol so escape sends \x1B[27u (unambiguous CSI)
 // instead of bare \x1B which the parser holds to disambiguate from escape

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { WEB_PRINCIPAL_HARD_MS, WEB_PRINCIPAL_IDLE_MS, WebPrincipalManager } from "../../src/service/web/principal-manager"
+import { WEB_PRINCIPAL_HARD_MS, WEB_PRINCIPAL_IDLE_MS, WebPrincipalManager } from "../../packages/service/src/web/principal-manager"
 
 const workspaceId = "11111111-1111-4111-8111-111111111111"
 const repositoryId = "22222222-2222-4222-8222-222222222222"

@@ -45,7 +45,7 @@ function runDoctorWithInput(
   stdinInput = ""
 ): { stdout: string; stderr: string; exitCode: number } {
   const result = Bun.spawnSync(
-    ["bun", "run", "src/index.ts", "doctor", ...args],
+    ["node", "packages/cli/dist/index.js", "doctor", ...args],
     {
       env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
       cwd: PROJECT_ROOT,

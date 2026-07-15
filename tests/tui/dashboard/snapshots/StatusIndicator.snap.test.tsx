@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { StatusIndicator } from "../../../../src/tui/dashboard/StatusIndicator"
+import { StatusIndicator } from "../../../../packages/tui/src/StatusIndicator"
 
 const renderOpts = { kittyKeyboard: true, width: 80, height: 24 }
 

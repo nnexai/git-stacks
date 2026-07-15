@@ -1,0 +1,12 @@
+{
+  "name": "@git-stacks/web",
+  "version": "0.21.0-rc.1",
+  "license": "MIT",
+  "publishConfig": { "access": "public" },
+  "files": ["dist"],
+  "type": "module",
+  "exports": { "./package.json": "./package.json", "./manifest.json": "./dist/manifest.json" },
+  "scripts": { "build": "node ../../scripts/build-web.mjs", "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "dependencies": { "@git-stacks/client": "0.21.0-rc.1", "@git-stacks/protocol": "0.21.0-rc.1", "@xterm/addon-fit": "^0.11.0", "@xterm/addon-webgl": "^0.19.0", "@xterm/xterm": "^6.0.0", "solid-js": "1.9.12" },
+  "gitStacksBuild": { "entries": ["src/app.ts"], "platform": "browser", "target": "es2024" }
+}

@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test"
-import { formatEnvTable, formatEnvShell, formatEnvDotenv, formatEnvJson, formatEnv, detectRepoFromCwd } from "../../src/lib/env"
-import type { Workspace } from "../../src/lib/config"
+import { formatEnvTable, formatEnvShell, formatEnvDotenv, formatEnvJson, formatEnv, detectRepoFromCwd } from "../../packages/core/src/env"
+import type { Workspace } from "../../packages/core/src/config"
 
 // --- Helpers ---
 

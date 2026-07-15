@@ -9,7 +9,7 @@ process.env.GIT_STACKS_CONFIG_DIR = "/tmp/ws-detail-test-config"
 const mockApplies = mock(() => true)
 const mockAppliesSkipped = mock(() => false)
 
-mock.module("../../../src/lib/integrations", () => ({
+mock.module("@git-stacks/core/integrations", () => ({
   integrations: [
     {
       id: "vscode",
@@ -53,7 +53,7 @@ mock.module("../../../src/lib/integrations", () => ({
 }))
 
 // Mock resolveEnabledGlobally from types separately
-mock.module("../../../src/lib/integrations/types", () => ({
+mock.module("@git-stacks/core/integrations/types", () => ({
   resolveEnabledGlobally: mock((id: string, _enabledByDefault: boolean, _config: any) => {
     // vscode and tmux enabled by default, intellij disabled
     return id !== "intellij"
@@ -66,7 +66,7 @@ mock.module("../../../src/lib/integrations/types", () => ({
 }))
 
 // Mock config module
-mock.module("../../../src/lib/config", () => ({
+mock.module("@git-stacks/core/config", () => ({
   readGlobalConfig: mock(() => ({
     workspace_root: "/tmp/ws-detail-root",
     integrations: {
@@ -101,7 +101,7 @@ mock.module("../../../src/lib/config", () => ({
   RepoRegistryEntrySchema: {} as any,
 }))
 
-mock.module("../../../src/lib/notes", () => ({
+mock.module("@git-stacks/core/notes", () => ({
   listWorkspaceNotes: mock(async () => [
     { text: "Check rollout logs", created: "2026-01-15T10:00:00Z" },
     { text: "Confirm workspace owner", created: "2026-01-14T10:00:00Z" },
@@ -113,12 +113,12 @@ const fetchWorkspaceNotesMock = mock(async () => [
     { text: "Confirm workspace owner", created: "2026-01-14T10:00:00Z" },
   ])
 
-mock.module("../../../src/lib/service/client", () => ({
+mock.module("@git-stacks/service/client", () => ({
   fetchWorkspaceNotes: fetchWorkspaceNotesMock,
 }))
 
 const { testRender } = await import("@opentui/solid")
-const { WorkspaceDetail } = await import("../../../src/tui/dashboard/WorkspaceDetail")
+const { WorkspaceDetail } = await import("../../../packages/tui/src/WorkspaceDetail")
 
 // Base workspace fixture
 function makeEntry(overrides: any = {}) {
@@ -449,7 +449,7 @@ describe("WorkspaceDetail operational sections", () => {
     expect(frame).toContain(".env.local")
     expect(frame).toContain("source newer")
 
-    const source = await Bun.file("src/tui/dashboard/WorkspaceDetail.tsx").text()
+    const source = await Bun.file("packages/tui/src/WorkspaceDetail.tsx").text()
     expect(source).not.toContain("git-stacks files status")
     expect(source).not.toContain("Bun.spawn")
   })

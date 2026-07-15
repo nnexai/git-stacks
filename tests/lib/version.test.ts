@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { join } from "path"
 import { writeFileSync } from "fs"
 import { makeTmpDir, cleanup, makeGitRepo } from "../helpers"
-import { getVersionString } from "../../src/lib/version"
+import { getVersionString } from "../../packages/core/src/version"
 
 // Read expected version from package.json dynamically
 const pkg = await Bun.file(join(import.meta.dir, "../../package.json")).json()

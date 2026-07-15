@@ -56,7 +56,7 @@ mock.module("@/lib/git", () =>
   })
 )
 
-const { pushWorkspace, syncWorkspace, pullWorkspace, _exec } = await import("../../src/lib/workspace-git")
+const { pushWorkspace, syncWorkspace, pullWorkspace, _exec } = await import("../../packages/core/src/workspace-git")
 
 let tempRoot = ""
 

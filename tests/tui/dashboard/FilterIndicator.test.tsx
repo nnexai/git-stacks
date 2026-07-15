@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { describe, test, expect } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { FilterIndicator } from "../../../src/tui/dashboard/FilterIndicator"
+import { FilterIndicator } from "../../../packages/tui/src/FilterIndicator"
 
 describe("FilterIndicator", () => {
   test("shows filter label and input when filtering", async () => {

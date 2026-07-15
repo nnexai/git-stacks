@@ -4,7 +4,7 @@ describe("v1 operations transport", () => {
   test("idle lifecycle suppresses exit while clients or operations are active", async () => {
     const callbacks: Array<() => void> = []
     let exited = 0
-    const { createIdleLifecycle } = await import("../../src/service/main")
+    const { createIdleLifecycle } = await import("../../packages/service/src/main")
     const lifecycle = createIdleLifecycle({ idleMs: 5, setTimer: (fn: () => void) => { callbacks.push(fn); return callbacks.length as never }, clearTimer: () => {}, onIdle: () => { exited += 1 } })
     lifecycle.setConnectedClients(1)
     callbacks.at(-1)?.()
@@ -20,7 +20,7 @@ describe("v1 operations transport", () => {
   })
 
   test("exports the loopback server composition entry point", async () => {
-    const module = await import("../../src/service/server")
+    const module = await import("../../packages/service/src/server")
     expect(module.startServiceServer).toBeFunction()
   })
 })
