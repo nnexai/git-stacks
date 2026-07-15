@@ -1,6 +1,6 @@
 {
   "name": "@git-stacks/client",
-  "version": "0.21.0-rc.2",
+  "version": "0.21.0-rc.3",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@git-stacks/protocol": "0.21.0-rc.2"
+    "@git-stacks/protocol": "0.21.0-rc.3"
   },
   "gitStacksBuild": {
     "platform": "neutral",

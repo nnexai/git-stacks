@@ -8,6 +8,18 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.21.0-rc.3] - 2026-07-15
+
+### Fixed
+
+- A stale, moved, inaccessible, or otherwise invalid Git worktree no longer aborts the aggregate service snapshot. The affected repository is projected as degraded while healthy repositories and workspaces remain available to browser and TUI clients.
+
+### Release Candidate
+
+This follow-up release candidate fixes the repository-status failure exposed by macOS testing. The package version and GitHub prerelease tag are `0.21.0-rc.3` / `v0.21.0-rc.3`; npm publication uses the `next` dist-tag.
+
+---
+
 ## [0.21.0-rc.2] - 2026-07-15
 
 ### Fixed

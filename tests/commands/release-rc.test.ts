@@ -110,14 +110,14 @@ repos:
 
 describe("v0.21.0 release candidate smoke", () => {
   test("package, changelog, and README describe the Node package boundary", () => {
-    const rcEntry = changelogEntry("0.21.0-rc.2")
+    const rcEntry = changelogEntry("0.21.0-rc.3")
     const architectureEntry = changelogEntry("0.21.0-rc.1")
 
-    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.2")
+    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.3")
     expect(PACKAGE_JSON.bin["git-stacks"]).toBe("bin/git-stacks.js")
-    expect(CHANGELOG.indexOf("## [0.21.0-rc.2]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.1]"))
+    expect(CHANGELOG.indexOf("## [0.21.0-rc.3]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.2]"))
     expect(rcEntry).toContain("follow-up release candidate")
-    expect(rcEntry).toContain("too_big maximum 500")
+    expect(rcEntry).toContain("projected as degraded")
     expect(architectureEntry).toContain("v0.21.0")
     expect(architectureEntry).toContain("Node.js 24")
     expect(architectureEntry).toContain("@git-stacks/protocol")

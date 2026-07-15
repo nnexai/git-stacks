@@ -1,6 +1,6 @@
 {
   "name": "@git-stacks/core",
-  "version": "0.21.0-rc.2",
+  "version": "0.21.0-rc.3",
   "license": "MIT",
   "publishConfig": {
     "access": "public"

@@ -237,6 +237,34 @@ describe("workspace-status", () => {
     }])
   })
 
+  test("degrades an existing path that Git no longer recognizes as a repository", async () => {
+    const repo = makeRepo("broken", "worktree", {
+      task_path: join(tempRoot, "tasks", "feature-ws", "broken"),
+    })
+    mkdirSync(worktreePath(repo), { recursive: true })
+    getGitLineChangesMock.mockRejectedValue(new Error("unknown option `cached'"))
+
+    expect(await getWorkspaceStatus(makeWorkspace([repo]))).toEqual([{
+      name: "broken", exists: true, dirty: false, branch: "—", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: true, fetch_stale: false,
+    }])
+  })
+
+  test("degrades only the affected repository when ahead or behind observation fails", async () => {
+    const broken = makeRepo("broken", "worktree", { task_path: join(tempRoot, "tasks", "feature-ws", "broken") })
+    const healthy = makeRepo("healthy", "worktree", { task_path: join(tempRoot, "tasks", "feature-ws", "healthy") })
+    mkdirSync(worktreePath(broken), { recursive: true })
+    mkdirSync(worktreePath(healthy), { recursive: true })
+    getCommitsAheadMock.mockImplementation(async (repoPath: string) => {
+      if (repoPath === worktreePath(broken)) throw new Error("cannot resolve origin/main")
+      return 2
+    })
+
+    expect(await getWorkspaceStatus(makeWorkspace([broken, healthy]))).toEqual([
+      { name: "broken", exists: true, dirty: false, branch: "—", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: true, fetch_stale: false },
+      { name: "healthy", exists: true, dirty: false, branch: "main", mode: "worktree", ahead: 2, behind: 0, additions: 0, removals: 0, degraded: false, fetch_stale: false },
+    ])
+  })
+
   test("projects staged, unstaged, and untracked line totals from the Git observer", async () => {
     const repo = makeRepo("lines", "worktree", { task_path: join(tempRoot, "tasks", "feature-ws", "lines") })
     mkdirSync(worktreePath(repo), { recursive: true })

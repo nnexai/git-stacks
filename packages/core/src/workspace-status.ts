@@ -148,41 +148,38 @@ export async function getWorkspaceStatus(workspace: Workspace): Promise<RepoStat
         workspace.repos.map(async (repo) => {
           const repoPath = getRepoPath(repo)
           const exists = existsSync(repoPath)
+          const unavailable = (pathExists: boolean, degraded: boolean): RepoStatus => ({
+            name: repo.name, exists: pathExists, dirty: false, branch: "—", mode: repo.mode,
+            ahead: 0, behind: 0, additions: 0, removals: 0, degraded, fetch_stale: false,
+          })
+          if (!exists || !isGitRepo(repo)) return unavailable(exists, false)
 
-          let dirty = false
-          let branch = "—"
-          let ahead = 0
-          let behind = 0
-          let additions = 0
-          let removals = 0
-          let fetch_stale = false
-
-          if (exists && isGitRepo(repo)) {
-            try {
-              const [isDirty, currentBranch, lines, stale] = await Promise.all([isRepoDirty(repoPath), getCurrentBranch(repoPath), getGitLineChanges(repoPath), isFetchStale(repoPath)])
-              dirty = isDirty; branch = currentBranch; additions = lines.additions; removals = lines.removals; fetch_stale = stale
-            } catch (error) {
-              // A concurrently removed worktree is an expected status
-              // transition. Preserve real Git failures while the path exists.
-              if (existsSync(repoPath)) throw error
-              return { name: repo.name, exists: false, dirty: false, branch: "—", mode: repo.mode, ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false, fetch_stale: false }
-            }
-
-            let baseRef: string
-            if (repo.mode === "worktree") {
-              const baseBranch = repo.base_branch ?? "main"
-              baseRef = `origin/${baseBranch}`
-            } else {
-              // Trunk repos compare against origin/<currentBranch>
-              baseRef = `origin/${branch}`
-            };
-            [ahead, behind] = await Promise.all([
+          try {
+            const [dirty, branch, lines, fetch_stale] = await Promise.all([
+              isRepoDirty(repoPath),
+              getCurrentBranch(repoPath),
+              getGitLineChanges(repoPath),
+              isFetchStale(repoPath),
+            ])
+            const baseRef = repo.mode === "worktree"
+              ? `origin/${repo.base_branch ?? "main"}`
+              : `origin/${branch}`
+            const [ahead, behind] = await Promise.all([
               getCommitsAhead(repoPath, baseRef, "HEAD"),
               getCommitsBehind(repoPath, baseRef, "HEAD"),
             ])
+            return {
+              name: repo.name, exists: true, dirty, branch, mode: repo.mode,
+              ahead, behind, additions: lines.additions, removals: lines.removals,
+              degraded: false, fetch_stale,
+            }
+          } catch {
+            // A stale .git link, moved worktree, permissions failure, or a
+            // concurrent deletion makes only this repository unavailable.
+            // Aggregate clients still need the rest of the workspace model.
+            const pathExists = existsSync(repoPath)
+            return unavailable(pathExists, pathExists)
           }
-
-          return { name: repo.name, exists, dirty, branch, mode: repo.mode, ahead, behind, additions, removals, degraded: false, fetch_stale }
         })
       )
   )
