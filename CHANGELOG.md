@@ -37,6 +37,7 @@ All notable changes to `git-stacks` are documented here.
 - `git-stacks web` preflights the loopback WebTransport path and can recover a failed local HTTP/3 listener through the already authenticated machine channel without weakening certificate pinning or exposing a plaintext fallback.
 - Terminal creation reuses the authoritative snapshot revision already delivered to the client instead of rescanning every workspace, removing the multi-second shell startup path while retaining conflict detection for stale revisions.
 - Workspace creation bounds remote branch discovery with a hard process-tree timeout and avoids duplicate remote probes. The browser follows operation invalidations, guards against out-of-order snapshot responses, and shows newly created workspaces without a page refresh.
+- Workspace detection compares canonical filesystem paths, so macOS aliases such as `/tmp` and `/private/tmp` and equivalent symlinked workspace paths resolve consistently.
 
 ### Safety and distribution
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "@test/api"
-import { existsSync, mkdirSync, readFileSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, realpathSync } from "fs"
 import { join } from "path"
 import {
   applyTestGitEnv,
@@ -128,7 +128,7 @@ describe("workspace execution context", () => {
       const result = runCli(["open", wsName, "--no-ide", "--no-cmux"], { baseDir: tmpDir, configDir: cfgDir })
       expectSuccessful(result)
 
-      expect(readFileSync(probeFile, "utf8")).toContain(`PROBE_PWD=${repo.taskPath}`)
+      expect(readFileSync(probeFile, "utf8")).toContain(`PROBE_PWD=${realpathSync(repo.taskPath)}`)
     })
 
     test("repo hook cwd is absolute, not relative", () => {
@@ -174,7 +174,7 @@ describe("workspace execution context", () => {
 
       const result = runCli(["run", wsName, "api", "--", "pwd"], { baseDir: tmpDir, configDir: cfgDir, cwd: "/tmp" })
       expectSuccessful(result)
-      expect(result.stdout.trim()).toBe(repo.taskPath)
+      expect(result.stdout.trim()).toBe(realpathSync(repo.taskPath))
     })
 
     test("paths command returns absolute paths regardless of CLI cwd", () => {

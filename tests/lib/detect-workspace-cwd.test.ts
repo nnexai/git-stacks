@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterAll, vi } from "@test/api"
 import { join } from "path"
-import { mkdirSync, rmSync, writeFileSync } from "fs"
+import { mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "fs"
 import {
   cleanup,
   realInvalidateConfigCache,
@@ -127,6 +127,19 @@ describe("detectWorkspaceFromCwd", () => {
     const result = detectWorkspaceFromCwd("/tmp/tasks/subdir-ws/repo-a/src/components")
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.workspace.name).toBe("subdir-ws")
+  })
+
+  test("matches an existing worktree through a symlinked path alias", () => {
+    const physicalRoot = join(configDir, "physical-tasks")
+    const aliasRoot = join(configDir, "alias-tasks")
+    const physicalRepo = join(physicalRoot, "alias-ws", "repo-a")
+    mkdirSync(physicalRepo, { recursive: true })
+    symlinkSync(physicalRoot, aliasRoot, "dir")
+    writeWorkspace(makeWorktreeWorkspace("alias-ws", join(aliasRoot, "alias-ws", "repo-a")))
+
+    const result = detectWorkspaceFromCwd(realpathSync(physicalRepo))
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.workspace.name).toBe("alias-ws")
   })
 
   test("exact workspace root CWD returns that workspace", () => {

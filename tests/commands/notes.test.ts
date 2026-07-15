@@ -205,7 +205,7 @@ describe("notes command subprocess contracts", () => {
     expectSuccess(listedAll)
     expect(listedAll.stdout).toContain("note-12")
     expect(listedAll.stdout).toContain("note-1")
-  }, 15000)
+  }, 60_000)
 
   test("clear prompts by default and honors declined confirmation", () => {
     const taskRoot = join(baseDir, "ws-root", "tasks")

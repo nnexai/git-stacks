@@ -1,6 +1,6 @@
 // Canonical implementation owned by @git-stacks/core.
-import { existsSync } from "fs"
-import { resolve } from "path"
+import { existsSync, realpathSync } from "fs"
+import { resolve, sep } from "path"
 import { isRepoDirty, getCurrentBranch, getCommitsAhead, getCommitsBehind, isFetchStale, getGitLineChanges } from "./git"
 import { listWorkspaces, readGlobalConfig, getRepoPath, isGitRepo, isWorktreeRepo, type Workspace } from "./config"
 import { logDebug, timeOperation } from "./observability"
@@ -214,7 +214,11 @@ export type CwdDetectionResult =
  */
 export function detectWorkspaceFromCwd(cwd?: string): CwdDetectionResult {
   return timeOperation<CwdDetectionResult>(OBS_CATEGORY, "detectWorkspaceFromCwd", () => {
-    const currentDir = resolve(expandHome(cwd ?? process.cwd()))
+    const canonical = (path: string): string => {
+      const resolved = resolve(expandHome(path))
+      try { return realpathSync.native(resolved) } catch { return resolved }
+    }
+    const currentDir = canonical(cwd ?? process.cwd())
     const workspaces = listWorkspaces()
     const config = readGlobalConfig()
 
@@ -222,10 +226,10 @@ export function detectWorkspaceFromCwd(cwd?: string): CwdDetectionResult {
     let bestPathLen = 0
 
     function consider(ws: Workspace, candidatePath: string) {
-      const resolvedPath = resolve(expandHome(candidatePath))
+      const resolvedPath = canonical(candidatePath)
       if (
         currentDir === resolvedPath ||
-        currentDir.startsWith(resolvedPath + "/")
+        currentDir.startsWith(resolvedPath + sep)
       ) {
         if (resolvedPath.length > bestPathLen) {
           bestMatch = ws
