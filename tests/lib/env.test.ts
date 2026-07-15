@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect } from "@test/api"
 import { formatEnvTable, formatEnvShell, formatEnvDotenv, formatEnvJson, formatEnv, detectRepoFromCwd } from "../../packages/core/src/env"
 import type { Workspace } from "../../packages/core/src/config"
 

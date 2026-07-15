@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { writeFileSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"

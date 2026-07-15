@@ -1,4 +1,5 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, beforeEach, describe, expect, mock, test } from "@test/api"
+import { setTimeout as sleep } from "node:timers/promises"
 
 mock.module("../../../packages/service/src/main", () => ({
   ensureManagedServiceProcess: async () => ({ endpoint: "http://127.0.0.1:32123", credential_lookup: "test-client" }),
@@ -73,7 +74,7 @@ describe("official service client operation transport", () => {
     eventMode = "stall"
     const controller = new AbortController()
     const pending = runCoreMutation("workspace.open", { workspace: "demo" }, { signal: controller.signal, pollMs: 1 })
-    await Bun.sleep(5)
+    await sleep(5)
     controller.abort(new DOMException("Cancelled", "AbortError"))
 
     await expect(pending).rejects.toMatchObject({ name: "AbortError" })

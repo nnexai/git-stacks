@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
+import { runProcess } from "../process"
 import { readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -54,7 +55,7 @@ describe("v1 signal event transport", () => {
     cleanup.push(() => rmSync(configRoot, { recursive: true, force: true }))
     const service = await startManagedService({ serviceRoot: root, snapshot: snapshot() as never })
     cleanup.push(() => service.stop())
-    const child = Bun.spawn(["node", join(import.meta.dir, "../../packages/cli/dist/index.js"), "service", "signal", "publish", "--state", "completed", "--source", "copilot", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "copilot-session"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
+    const child = runProcess(["node", join(import.meta.dirname, "../../packages/cli/dist/index.js"), "service", "signal", "publish", "--state", "completed", "--source", "copilot", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "copilot-session"], { cwd: join(import.meta.dirname, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
     expect(await child.exited).toBe(0)
     const record = JSON.parse(readFileSync(join(root, "events.jsonl"), "utf8").trim())
     expect(record).toMatchObject({ type: "signal", signal: { kind: "activity", source: "copilot", state: "completed", repository_id: repositoryId, surface_id: surfaceId, session_id: "copilot-session" } })

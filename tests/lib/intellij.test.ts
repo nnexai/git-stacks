@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { join } from "path"
 import { existsSync, readFileSync } from "fs"
 import { generateIntellijProject } from "../../packages/core/src/intellij"
@@ -51,7 +51,7 @@ describe("generateIntellijProject", () => {
     const ws = makeWorkspace([javaRepo("auth-service", taskPath)])
     generateIntellijProject(ws, tmp)
     const modulesXml = join(tmp, "WEB-1234", ".idea", "modules.xml")
-    expect(existsSync(modulesXml)).toBeTrue()
+    expect(existsSync(modulesXml)).toBe(true)
   })
 
   test("modules.xml contains module entries for each java repo", () => {
@@ -85,7 +85,7 @@ describe("generateIntellijProject", () => {
     const ws = makeWorkspace([javaRepo("auth-service", taskPath)])
     generateIntellijProject(ws, tmp)
     const iml = join(taskPath, "auth-service.iml")
-    expect(existsSync(iml)).toBeTrue()
+    expect(existsSync(iml)).toBe(true)
     expect(readFileSync(iml, "utf-8")).toContain("JAVA_MODULE")
   })
 

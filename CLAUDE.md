@@ -4,16 +4,18 @@ Contributor guidance for this repository.
 
 ## Runtime and commands
 
-Node.js 24 and npm are the production toolchain. Bun is required only for the optional TUI and the legacy process-isolated test harness.
+Node.js 24 and npm are the default toolchain. Bun is required only to build and test the optional OpenTUI package.
 
 ```bash
 npm install
 npm run build:packages          # protocol/client/core/web/service/CLI
 npm run typecheck               # every workspace
 npm run test:architecture       # package/import boundaries
-npm run test:node               # Node-only runtime/conformance tests
-npm run test:unit               # legacy Bun unit suite, process isolated
-npm run test:integ              # legacy Bun integration suite
+npm run test:vitest             # isolated Node unit/integration suite
+npm run test:node               # native Node runtime/conformance tests
+npm run test:tui                # optional Bun/OpenTUI tests, isolated per file
+npm run coverage                # Vitest V8 coverage for Node packages
+npm test                        # complete Node and optional TUI suite
 npm run tui:build               # optional Bun/OpenTUI package
 npm run audit:licenses          # production lockfile license policy
 npm run audit:runtime           # default Node production graph
@@ -21,7 +23,7 @@ npm run check:packages          # dry-run all package tarballs
 npm run release:check           # verify RC; never tags by default
 ```
 
-Use `bun test <focused-file>` for one legacy focused test. Do not run `bun test tests/` as one process: module mocks leak across files. The custom test runner isolates mock-heavy files.
+Use `npx vitest run <focused-file>` for focused core, CLI, service, and browser-support tests. OpenTUI component tests remain under `tests/tui/dashboard`; `npm run test:tui` launches each file in its own Bun process because Bun module mocks are not file-isolated.
 
 ## Package architecture
 
@@ -57,8 +59,8 @@ The root `git-stacks` package is a facade over `@git-stacks/cli`. Internal packa
 
 ## Testing and release
 
-Production behavior needs Node tests with Bun absent from `PATH`; Bun-backed legacy tests are supplementary. Native PTY behavior requires real-process resize, replay, process-tree cleanup, and shutdown coverage. Browser-safe packages are statically rejected when they import Node or Bun built-ins.
+Production behavior needs Node tests with Bun absent from `PATH`; Bun tests cover only the optional TUI. Native PTY behavior requires real-process resize, replay, process-tree cleanup, and shutdown coverage. Browser-safe packages are statically rejected when they import Node or Bun built-ins. Node coverage uses Vitest's V8 provider directly; do not reintroduce copied/instrumented source trees or the former Istanbul/Bun runners.
 
-`npm run release:check` requires a matching `-rc.N` package version and changelog heading. It builds, type-checks, runs Node, architecture, unit, and integration checks, audits licenses/security, and dry-runs every package tarball. It does not publish and does not tag unless the operator explicitly passes `--tag`.
+`npm run release:check` requires a matching `-rc.N` package version and changelog heading. It builds, type-checks, runs Vitest, native Node, architecture, optional TUI, coverage, and verification gates, audits licenses/security, and dry-runs every package tarball. It does not publish and does not tag unless the operator explicitly passes `--tag`.
 
 Do not tag, push, publish packages, or create a release without explicit user authorization.

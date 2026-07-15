@@ -1,6 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { existsSync, readFileSync, readdirSync, statSync } from "fs"
-import { join } from "path"
+import { isAbsolute, join, relative, resolve, sep } from "path"
+import { fileURLToPath } from "node:url"
 import { Command } from "commander"
 import { E2E_INVENTORY, type E2EInventoryItem } from "../tests/e2e-inventory"
 import { buildCliProgram } from "../packages/cli/src/lib/cli-program"
@@ -57,14 +58,14 @@ type CollectOptions = {
   functionalReadinessAreas?: readonly FunctionalReadinessArea[]
 }
 
-const ROOT = join(import.meta.dir, "..")
+const ROOT = join(import.meta.dirname, "..")
 const JSON_COVERAGE_ARTIFACTS = [
   ".coverage/coverage-final.json",
   ".coverage/coverage-summary.json",
 ] as const
 const COVERAGE_SENTINELS = [
   "packages/client/src/signal-state.ts",
-  "packages/tui/src/ActionMenu.tsx",
+  "packages/service/src/web/terminal-manager.ts",
 ] as const
 const LEGACY_SCAN_ROOTS = ["src", "docs", ".github/hooks", ".claude/settings.json", "README.md"] as const
 const LEGACY_SCAN_EXTENSIONS = new Set([".ts", ".tsx", ".zig", ".c", ".h", ".json", ".md"])
@@ -240,7 +241,11 @@ function readCoverageFinal(root: string): Record<string, { s?: Record<string, nu
   const content = readFileSync(fullPath, "utf8")
   if (content.trim().length === 0) return null
   try {
-    return JSON.parse(content)
+    const parsed = JSON.parse(content) as Record<string, { s?: Record<string, number>; f?: Record<string, number> }>
+    return Object.fromEntries(Object.entries(parsed).map(([path, entry]) => [
+      isAbsolute(path) ? relative(root, path).split(sep).join("/") : path,
+      entry,
+    ]))
   } catch {
     return null
   }
@@ -258,7 +263,7 @@ function collectCoverageSentinelProblems(root: string): CoverageSentinelProblem[
 
   const problems: CoverageSentinelProblem[] = []
   for (const path of Object.keys(coverage)) {
-    if (!/^packages\/(?:protocol|client|core|cli|service|web|tui)\/src\//.test(path)) {
+    if (!/^packages\/(?:protocol|client|core|cli|service|web)\/src\//.test(path)) {
       problems.push({ path, problem: "outside source tree" })
     }
   }
@@ -419,7 +424,7 @@ export function formatVerifyGateReport(report: VerifyGateReport): string {
   return lines.join("\n")
 }
 
-if (import.meta.main) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const report = collectVerifyGateReport()
   const output = formatVerifyGateReport(report)
   if (report.ok) {

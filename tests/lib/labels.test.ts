@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect } from "@test/api"
 import { matchesLabels } from "../../packages/core/src/labels"
 import { WorkspaceSchema } from "../../packages/core/src/config"
 

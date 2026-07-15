@@ -1,4 +1,4 @@
-import { describe, test, expect, afterAll, beforeEach } from "bun:test"
+import { describe, test, expect, afterAll, beforeEach } from "@test/api"
 import { useIsolatedConfig, write } from "../helpers"
 import { stringify } from "yaml"
 
@@ -530,10 +530,10 @@ describe("CLI multi-template integration", () => {
     expect(result.name).toBe("cli-top")
   })
 
-  test("runWorkspaceNew accepts templateNames as third parameter (type-level check)", () => {
+  test("runWorkspaceNew accepts templateNames as third parameter (type-level check)", async () => {
     // This verifies the function signature accepts the parameter
     // Actual execution requires interactive prompts, so we just verify the import
-    const mod = require("../../packages/cli/src/wizards/workspace-wizard")
+    const mod = await import("../../packages/cli/src/wizards/workspace-wizard.ts")
     expect(typeof mod.runWorkspaceNew).toBe("function")
     expect(mod.runWorkspaceNew.length).toBeGreaterThanOrEqual(0) // async functions report 0 length
   })

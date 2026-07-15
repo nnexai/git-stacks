@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { readFileSync } from "fs"
 import { generateCodeWorkspace } from "../../packages/core/src/vscode"
 import { makeTmpDir, cleanup } from "../helpers"
@@ -39,7 +39,7 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
 describe("generateCodeWorkspace", () => {
   test("creates a .code-workspace file", () => {
     const outPath = generateCodeWorkspace(makeWorkspace(), tmp)
-    expect(outPath).toEndWith("WEB-1234.code-workspace")
+    expect(outPath.endsWith("WEB-1234.code-workspace")).toBe(true)
     const content = JSON.parse(readFileSync(outPath, "utf-8"))
     expect(content.folders).toHaveLength(2)
   })

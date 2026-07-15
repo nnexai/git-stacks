@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
+import { runProcess } from "../process"
 import { readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -17,7 +18,7 @@ describe("Codex signal publication", () => {
     const root = join(tmpdir(), `git-stacks-codex-absent-${crypto.randomUUID()}`)
     cleanup.push(() => rmSync(root, { recursive: true, force: true }))
     const run = async (bestEffort: boolean) => {
-      const child = Bun.spawn(["node", join(import.meta.dir, "../../packages/cli/dist/index.js"), "service", "signal", "publish", "--state", "working", "--source", "codex", "--workspace", "alpha", ...(bestEffort ? ["--best-effort"] : [])], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: root }, stdout: "pipe", stderr: "pipe" })
+      const child = runProcess(["node", join(import.meta.dirname, "../../packages/cli/dist/index.js"), "service", "signal", "publish", "--state", "working", "--source", "codex", "--workspace", "alpha", ...(bestEffort ? ["--best-effort"] : [])], { cwd: join(import.meta.dirname, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: root }, stdout: "pipe", stderr: "pipe" })
       return { exitCode: await child.exited, stdout: await new Response(child.stdout).text(), stderr: await new Response(child.stderr).text() }
     }
     expect(await run(true)).toEqual({ exitCode: 0, stdout: "", stderr: "" })
@@ -32,7 +33,7 @@ describe("Codex signal publication", () => {
     cleanup.push(() => rmSync(configRoot, { recursive: true, force: true }))
     const service = await startManagedService({ serviceRoot: root, snapshot: snapshot as never })
     cleanup.push(() => service.stop())
-    const child = Bun.spawn(["node", join(import.meta.dir, "../../packages/cli/dist/index.js"), "service", "signal", "publish", "--state", "waiting", "--source", "codex", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "codex-session", "--title", "Codex blocked", "--detail", "Approve the command", "--best-effort"], { cwd: join(import.meta.dir, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
+    const child = runProcess(["node", join(import.meta.dirname, "../../packages/cli/dist/index.js"), "service", "signal", "publish", "--state", "waiting", "--source", "codex", "--workspace", "alpha", "--repository-id", repositoryId, "--surface-id", surfaceId, "--session-id", "codex-session", "--title", "Codex blocked", "--detail", "Approve the command", "--best-effort"], { cwd: join(import.meta.dirname, "../.."), env: { ...process.env, GIT_STACKS_CONFIG_DIR: configRoot }, stdout: "pipe", stderr: "pipe" })
     expect(await child.exited).toBe(0)
     expect(await new Response(child.stderr).text()).toBe("")
     const record = JSON.parse(readFileSync(join(root, "events.jsonl"), "utf8").trim())

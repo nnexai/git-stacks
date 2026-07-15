@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { existsSync, readFileSync, lstatSync, symlinkSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
@@ -140,7 +140,7 @@ describe("expandGlob", () => {
       "secrets/sub/token.txt": "token",
     })
     const matches = expandGlob("secrets/**", tmp)
-    // Should contain the files (may also include directory entries depending on Bun.Glob)
+    // Should contain the files (directory entries may also be present).
     const matchPaths = matches.map(m => m.replace(/\\/g, "/"))
     expect(matchPaths.some(m => m.includes("key.pem"))).toBe(true)
     expect(matchPaths.some(m => m.includes("cert.pem"))).toBe(true)

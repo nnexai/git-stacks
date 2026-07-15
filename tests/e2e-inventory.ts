@@ -264,8 +264,8 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     title: "Shell completion generation",
     commands: ["completion bash", "completion zsh", "completion fish"],
     scopeStatus: "in-scope",
-    mappedTests: ["tests/commands/support-readonly.test.ts", "tests/commands/istanbul-smoke.test.ts"],
-    rationale: "Completion output has invariant shell coverage and is the isolated command used for the Istanbul subprocess proof.",
+    mappedTests: ["tests/commands/support-readonly.test.ts", "tests/lib/completion-generator.test.ts"],
+    rationale: "Completion output has invariant shell and generator coverage under the isolated Node test suite.",
   },
   {
     id: "support.version",
@@ -314,16 +314,6 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     scopeStatus: "in-scope",
     mappedTests: ["tests/commands/support-failures.test.ts"],
     rationale: "One representative case per required 82.1 failure class satisfies E2E-13 without an exhaustive matrix.",
-  },
-  {
-    id: "support.istanbul-smoke",
-    family: "support",
-    flowType: "command",
-    title: "Istanbul subprocess coverage handoff proof",
-    commands: ["completion bash"],
-    scopeStatus: "in-scope",
-    mappedTests: ["tests/commands/istanbul-smoke.test.ts"],
-    rationale: "A dedicated smoke proves Istanbul-instrumented source can emit mergeable coverage from an isolated CLI subprocess before Phase 83.",
   },
   {
     id: "exclude.tui.manage",
@@ -463,7 +453,7 @@ export const E2E_INVENTORY: readonly E2EInventoryItem[] = [
     commands: ["coverage merge", "coverage report"],
     scopeStatus: "excluded",
     mappedTests: [],
-    rationale: "82.1 proves Istanbul subprocess handoff only; report generation and merged-suite tooling remain Phase 83 scope.",
+    rationale: "Coverage is generated directly by Vitest's V8 provider; bespoke subprocess merge/report tooling is intentionally outside the product surface.",
   },
 ] as const
 

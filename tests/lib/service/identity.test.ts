@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test"
+import { afterAll, beforeEach, describe, expect, test } from "@test/api"
 import { lstatSync, readFileSync, renameSync, statSync, symlinkSync, writeFileSync } from "fs"
 import { join } from "path"
 import { parse } from "yaml"

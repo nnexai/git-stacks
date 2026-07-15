@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { planWorkspaceRecreate } from "@/lib/workspace-recreate"
 import type { RepoRegistryEntry, Template, Workspace } from "@/lib/config"
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock } from "bun:test"
+import { describe, test, expect, mock } from "@test/api"
 import { makeConfigMock, makeForgeUtilsMock, makeIssueUtilsMock, makeTmuxMock, makePathsMock } from "../helpers"
 
 // Mock issue-utils so jira integration doesn't trigger real config I/O

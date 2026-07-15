@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 
 describe("v1 operations transport", () => {
   test("idle lifecycle suppresses exit while clients or operations are active", async () => {
@@ -21,6 +21,6 @@ describe("v1 operations transport", () => {
 
   test("exports the loopback server composition entry point", async () => {
     const module = await import("../../packages/service/src/server")
-    expect(module.startServiceServer).toBeFunction()
+    expect(module.startServiceServer).toBeTypeOf("function")
   })
 })

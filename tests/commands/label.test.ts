@@ -1,8 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
+import { runProcessSync } from "../process"
 import { mkdirSync, writeFileSync, rmSync, readFileSync, mkdtempSync } from "fs"
 import { join } from "path"
 
-const PROJECT_ROOT = join(import.meta.dir, "../..")
+const PROJECT_ROOT = join(import.meta.dirname, "../..")
 
 function makeTmpDir(prefix = "label-test"): string {
   return mkdtempSync(join("/tmp", `${prefix}-`))
@@ -25,7 +26,7 @@ repos: []
 }
 
 function runLabel(cfgDir: string, args: string[]) {
-  const result = Bun.spawnSync(["node", "packages/cli/dist/index.js", "label", ...args], {
+  const result = runProcessSync(["node", "packages/cli/dist/index.js", "label", ...args], {
     cwd: PROJECT_ROOT,
     env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
     stdio: ["pipe", "pipe", "pipe"],

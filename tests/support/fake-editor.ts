@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { appendFileSync, writeFileSync } from "fs"
 
 const targetPath = process.argv[2]

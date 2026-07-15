@@ -1,5 +1,5 @@
 import { realRunHooks } from "../helpers"
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { buildCliProgram, collectCommandPaths } from "../../packages/cli/src/lib/cli-program"
 
 // Keep this alphabetically early suite importing the shared helper first. The

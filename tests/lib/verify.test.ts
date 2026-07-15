@@ -1,9 +1,9 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { getVerifyCommands, runVerifyWorkflow } from "../../scripts/verify"
 
-const root = join(import.meta.dir, "..", "..")
+const root = join(import.meta.dirname, "..", "..")
 
 describe("verify command workflow", () => {
   test("runs prerequisites, coverage, gates, and existing component commands in order", async () => {
@@ -18,12 +18,12 @@ describe("verify command workflow", () => {
 
     expect(exitCode).toBe(0)
     expect(commands).toEqual([
-      "bun run verify:prereqs",
-      "bun run coverage",
-      "bun run verify:gates",
-      "bun run test",
-      "bun run test:deps",
-      "bun run typecheck",
+      "npm run verify:prereqs",
+      "npm run coverage",
+      "npm run verify:gates",
+      "npm test",
+      "npm run test:deps",
+      "npm run typecheck",
     ])
     expect(getVerifyCommands()).toEqual(commands)
   })
@@ -33,7 +33,7 @@ describe("verify command workflow", () => {
       scripts: Record<string, string>
     }
 
-    expect(pkg.scripts["verify:prereqs"]).toBe("bun run scripts/verify-prereqs.ts")
+    expect(pkg.scripts["verify:prereqs"]).toBe("tsx scripts/verify-prereqs.ts")
   })
 
   test("package.json exposes the package-aware verification commands", () => {
@@ -41,11 +41,11 @@ describe("verify command workflow", () => {
       scripts: Record<string, string>
     }
 
-    expect(pkg.scripts.verify).toBe("bun run scripts/verify.ts")
-    expect(pkg.scripts["verify:gates"]).toBe("bun run scripts/verify-gates.ts")
-    expect(pkg.scripts.test).toBe("bun run scripts/test-runner.ts")
-    expect(pkg.scripts["test:unit"]).toBe("bun run scripts/test-runner.ts --unit")
-    expect(pkg.scripts["test:integ"]).toBe("bun run scripts/test-runner.ts --integ")
+    expect(pkg.scripts.verify).toBe("tsx scripts/verify.ts")
+    expect(pkg.scripts["verify:gates"]).toBe("tsx scripts/verify-gates.ts")
+    expect(pkg.scripts.test).toContain("npm run test:vitest")
+    expect(pkg.scripts["test:unit"]).toContain("vitest run")
+    expect(pkg.scripts["test:integ"]).toBe("vitest run tests/commands")
     expect(pkg.scripts["test:deps"]).toBe("node scripts/check-architecture.mjs --cycles")
     expect(pkg.scripts.typecheck).toBe("npm run typecheck --workspaces --if-present")
   })

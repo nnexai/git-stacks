@@ -1,11 +1,8 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
+import { setTimeout as sleep } from "node:timers/promises"
 import type { Signal } from "../../packages/protocol/src/service"
+import type { TerminalSocket } from "../../packages/service/src/carrier"
 import { WebTerminalManager, type WebSocketData } from "../../packages/service/src/web/terminal-manager"
-
-// node-pty's native event bridge is not reliable when hosted by Bun. Production
-// runs on Node and the equivalent real-PTY assertions live in
-// tests/service-node/runtime.test.mjs; keep the remaining policy coverage here.
-const realNodePtyTest = process.versions.bun ? test.skip : test
 
 function createManager(publishSignal?: (signal: Signal) => Promise<void>): WebTerminalManager {
   return new WebTerminalManager({
@@ -18,33 +15,33 @@ function createManager(publishSignal?: (signal: Signal) => Promise<void>): WebTe
   }, publishSignal)
 }
 
-function attach(manager: WebTerminalManager, terminalId: string, streaming = true): { sent: Array<string | Uint8Array>; socket: Bun.ServerWebSocket<WebSocketData> } {
+function attach(manager: WebTerminalManager, terminalId: string, streaming = true): { sent: Array<string | Uint8Array>; socket: TerminalSocket } {
   const sent: Array<string | Uint8Array> = []
   const socket = {
     data: { kind: "web-terminal", principalId: "browser-1", sessionId: terminalId, streaming } satisfies WebSocketData,
     send: (value: string | Uint8Array) => { sent.push(value); return typeof value === "string" ? value.length : value.length },
     close: () => {},
     getBufferedAmount: () => 0,
-  } as unknown as Bun.ServerWebSocket<WebSocketData>
+  } satisfies TerminalSocket
   manager.attach(socket)
   return { sent, socket }
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
-  while (!predicate() && Date.now() < deadline) await Bun.sleep(20)
+  while (!predicate() && Date.now() < deadline) await sleep(20)
   expect(predicate()).toBe(true)
 }
 
 describe("service-owned web terminal", () => {
-  realNodePtyTest("runs a real PTY roundtrip, resizes, and closes its process group", async () => {
+  test("runs a real PTY roundtrip, resizes, and closes its process group", async () => {
     if (process.platform !== "linux") return
     const manager = createManager()
     const terminal = await manager.create("browser-1", { workspace_id: "11111111-1111-4111-8111-111111111111", repository_id: "22222222-2222-4222-8222-222222222222", expected_revision: "1", cols: 80, rows: 24 })
     const { sent, socket } = attach(manager, terminal.id)
     manager.message(socket, JSON.stringify({ type: "resize", cols: 91, rows: 27 }))
     manager.message(socket, JSON.stringify({ type: "input", data: "echo WEB_PTY_MARKER; stty size\r" }))
-    await Bun.sleep(150)
+    await sleep(150)
     const output = sent.filter((item): item is Uint8Array => item instanceof Uint8Array).map((frame) => frame.slice(9))
     const text = new TextDecoder().decode(Buffer.concat(output))
     expect(text).toContain("WEB_PTY_MARKER")
@@ -64,7 +61,7 @@ describe("service-owned web terminal", () => {
     const { sent, socket } = attach(manager, terminal.id, false)
     manager.rename("browser-1", terminal.id, "Paused shell", "manual")
     manager.message(socket, JSON.stringify({ type: "input", data: "echo PAUSED_OUTPUT_MARKER\r" }))
-    await Bun.sleep(150)
+    await sleep(150)
 
     expect(manager.diagnostics).toMatchObject({ attached: 1, streaming: 0 })
     expect(sent.filter((item) => item instanceof Uint8Array)).toHaveLength(0)
@@ -77,7 +74,7 @@ describe("service-owned web terminal", () => {
     await manager.stop()
   })
 
-  realNodePtyTest("captures agent lifecycle signals while terminal output streaming is paused", async () => {
+  test("captures agent lifecycle signals while terminal output streaming is paused", async () => {
     if (process.platform !== "linux") return
     const published: Signal[] = []
     const manager = createManager(async (signal) => { published.push(signal) })
@@ -126,7 +123,7 @@ describe("service-owned web terminal", () => {
     await manager.stop()
   })
 
-  realNodePtyTest("resets to retained history when a paused terminal exceeds the replay window", async () => {
+  test("resets to retained history when a paused terminal exceeds the replay window", async () => {
     if (process.platform !== "linux") return
     const manager = createManager()
     const terminal = await manager.create("browser-1", { workspace_id: "11111111-1111-4111-8111-111111111111", repository_id: "22222222-2222-4222-8222-222222222222", expected_revision: "1", cols: 80, rows: 24 })

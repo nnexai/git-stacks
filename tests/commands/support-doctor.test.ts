@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { cleanup, createConfigFixture, formatCliFailure, makeTmpDir, runCli } from "../helpers"
 
 describe("doctor support command", () => {

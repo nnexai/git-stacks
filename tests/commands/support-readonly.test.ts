@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { cleanup, createConfigFixture, formatCliFailure, makeTmpDir, runCli } from "../helpers"
@@ -28,7 +28,7 @@ describe("support readonly commands", () => {
   test("--version writes only the package version", () => {
     const baseDir = makeTmpDir("support-version")
     try {
-      const pkg = JSON.parse(readFileSync(join(import.meta.dir, "..", "..", "package.json"), "utf8")) as { version: string }
+      const pkg = JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "package.json"), "utf8")) as { version: string }
       const result = runCli(["--version"], { baseDir })
 
       expectSuccess(result)

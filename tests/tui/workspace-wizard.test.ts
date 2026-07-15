@@ -1,6 +1,6 @@
-import { afterAll, describe, test, expect, mock, beforeEach, afterEach, spyOn } from "bun:test"
+import { afterAll, describe, test, expect, mock, beforeEach, afterEach, vi } from "@test/api"
 import { join } from "path"
-import { cleanup, makeTmpDir, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeConfigMock } from "../helpers"
+import { cleanup, makeTmpDir, makeWorkspaceOpsMock, makeWorkspaceStatusMock, makeWorkspaceYamlMock, makeWorkspaceGitMock, makeConfigMock, makeGitMock, makeLifecycleMock } from "../helpers"
 
 const fixtureRoot = makeTmpDir("workspace-wizard")
 const workspaceRoot = join(fixtureRoot, "workspaces")
@@ -31,7 +31,7 @@ const mockSafeText = mock(async () => "mock-value")
 const mockCancelUtil = mock((): never => { throw new Error("cancelled") })
 const originalExit = process.exit
 const exitMock = mock((code?: number) => { throw new Error(`process.exit(${code})`) })
-const consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
+const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
 mock.module("@/tui/utils", () => ({
   safeText: mockSafeText,
@@ -171,7 +171,7 @@ mock.module("@/lib/paths", () => ({
 }))
 
 // Mock lib/git
-mock.module("@/lib/git", () => ({
+mock.module("@/lib/git", () => makeGitMock({
   createWorktree: mock(async () => {}),
   getCurrentBranch: mock(async () => "main"),
   ensureUpstreamTracking: mock(async () => ({ tracked: false })),
@@ -183,7 +183,7 @@ mock.module("@/lib/detect", () => ({
 }))
 
 // Mock lib/lifecycle
-mock.module("@/lib/lifecycle", () => ({
+mock.module("@/lib/lifecycle", () => makeLifecycleMock({
   runHooks: mock(async () => {}),
   runHooksCaptured: mock(async () => []),
 }))

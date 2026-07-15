@@ -1,4 +1,5 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, beforeEach, describe, expect, mock, test } from "@test/api"
+import { runProcess } from "../process"
 import { cleanup, makeConfigMock, makeTmpDir } from "../helpers"
 
 const tempDirs: string[] = []
@@ -141,7 +142,7 @@ describe("workspace-lifecycle exec seam", () => {
 
     // Restore the real spawn implementation before each test
     _exec.spawn = (args: any): any => {
-      const proc = Bun.spawn(args.cmd, {
+      const proc = runProcess(args.cmd, {
         cwd: args.cwd,
         env: args.env,
         stdout: args.stdout,

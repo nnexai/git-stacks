@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { WEB_PRINCIPAL_HARD_MS, WEB_PRINCIPAL_IDLE_MS, WebPrincipalManager } from "../../packages/service/src/web/principal-manager"
 
 const workspaceId = "11111111-1111-4111-8111-111111111111"
@@ -20,7 +20,7 @@ describe("web principal manager", () => {
     const manager = new WebPrincipalManager(() => now)
     const pairing = manager.issue("http://127.0.0.1:1234")
     const code = new URL(pairing.url).hash.slice("#pair=".length)
-    expect(pairing.url).toStartWith("http://127.0.0.1:1234/web/#pair=")
+    expect(pairing.url.startsWith("http://127.0.0.1:1234/web/#pair=")).toBe(true)
     expect(JSON.stringify(manager)).not.toContain(code)
     const exchanged = manager.exchange(code)
     expect(exchanged).not.toBeNull()

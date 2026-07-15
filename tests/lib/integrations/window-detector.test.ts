@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach } from "@test/api"
 import type { IntegrationContext, ArtifactBag, WindowArtifact, WindowDetector, DetectorSnapshot } from "@/lib/integrations/types"
 
 // === TDD RED: WindowDetector interface and runner integration ===

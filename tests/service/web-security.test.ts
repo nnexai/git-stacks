@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -113,7 +113,7 @@ describe("web request security boundary", () => {
     expect(rejectedMutation.status).toBe(403)
     const rejectedSocket = await web.handle(new Request(new URL("/web/ws/terminals/term_abcdefghijklmnop", service.url), { headers: { host: service.url.host, cookie, origin: "https://evil.example" } }), service.server)
     expect(rejectedSocket?.status).toBe(403)
-    const wrongHost = await fetch(new URL("/web/api/snapshot", service.url), { headers: { cookie, host: "evil.example" } })
+    const wrongHost = await web.handle(new Request(new URL("/web/api/snapshot", service.url), { headers: { cookie, host: "evil.example" } }), service.server)
     expect(wrongHost.status).toBe(403)
     const noCors = await fetch(new URL("/web/api/snapshot", service.url), { headers: { cookie, origin: "https://evil.example" } })
     expect(noCors.headers.get("access-control-allow-origin")).toBeNull()

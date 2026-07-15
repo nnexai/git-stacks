@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { join } from "path"
 import { detectRepoType, scanForRepos } from "../../packages/core/src/detect"
 import { makeTmpDir, cleanup, mkdir, touch } from "../helpers"

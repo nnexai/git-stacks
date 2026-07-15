@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
+import { setTimeout as sleep } from "node:timers/promises"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -57,7 +58,7 @@ describe("OperationRegistry lifecycle", () => {
         const persisted = JSON.parse(await readFile(join(dir, "operations.json"), "utf8"))
         if (persisted.operations.length > 0) break
       } catch {}
-      await Bun.sleep(1)
+      await sleep(1)
     }
     expect(scheduled).toBe(false)
     const persisted = JSON.parse(await readFile(join(dir, "operations.json"), "utf8"))

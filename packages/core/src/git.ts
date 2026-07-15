@@ -174,8 +174,8 @@ export async function isWorktreeRegistered(repoPath: string, worktreePath: strin
 }
 
 export async function isRepoDirty(repoPath: string): Promise<boolean> {
-  // Capture failures instead of letting Bun's throwing `.text()` path print a
-  // ShellError before callers can classify a concurrent worktree deletion.
+  // Capture failures instead of letting the shell helper throw before callers
+  // can classify a concurrent worktree deletion.
   // The error still propagates for authoritative repositories that remain on
   // disk, so corrupt or invalid repositories are not silently accepted.
   const result = await $`git -C ${repoPath} status --porcelain`.quiet().nothrow()

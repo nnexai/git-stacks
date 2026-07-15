@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "@test/api"
 import { existsSync, mkdirSync, readFileSync } from "fs"
 import { join } from "path"
 import {
@@ -142,7 +142,7 @@ describe("workspace execution context", () => {
       expectSuccessful(result)
 
       const pwdLine = readFileSync(probeFile, "utf8").split("\n").find((line) => line.startsWith("PROBE_PWD="))
-      expect(pwdLine, readFileSync(probeFile, "utf8")).toStartWith("PROBE_PWD=/")
+      expect(pwdLine?.startsWith("PROBE_PWD=/"), readFileSync(probeFile, "utf8")).toBe(true)
     })
   })
 
@@ -183,7 +183,7 @@ describe("workspace execution context", () => {
       const result = runCli(["paths", wsName], { baseDir: tmpDir, configDir: cfgDir, cwd: "/tmp" })
       expectSuccessful(result)
       expect(result.stdout.trim()).toBe(repo.taskPath)
-      expect(result.stdout.trim()).toStartWith("/")
+      expect(result.stdout.trim().startsWith("/")).toBe(true)
     })
   })
 

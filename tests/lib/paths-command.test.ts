@@ -1,20 +1,19 @@
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test"
+import { describe, test, expect, beforeEach, afterAll } from "@test/api"
 import { join } from "path"
 import { mkdirSync, rmSync } from "fs"
-import { makeTmpDir, cleanup, realWriteWorkspace } from "../helpers"
+import { makeTmpDir, cleanup, realInvalidateConfigCache, realWriteWorkspace } from "../helpers"
 import type { Workspace } from "@/lib/config"
 
 // ============================================================
 // Isolation strategy:
 //
-// - paths mock redirects WORKSPACES_DIR to configDir/workspaces
+// - The per-file GIT_STACKS_CONFIG_DIR redirects workspace storage to a fixture
 // - Each test writes real workspace YAML files via realWriteWorkspace
-//   (captured in helpers.ts before any mock.module calls)
 // - getWorkspacePaths calls readWorkspace() which reads real YAML files
 // - Existing directories on disk are created for repos that should NOT be skipped
 // ============================================================
 
-const configDir = makeTmpDir("paths-cmd")
+const configDir = process.env.GIT_STACKS_CONFIG_DIR!
 mkdirSync(join(configDir, "workspaces"), { recursive: true })
 mkdirSync(join(configDir, "templates"), { recursive: true })
 
@@ -25,24 +24,6 @@ mkdirSync(join(testTaskDir, "test-ws", "api"), { recursive: true })
 mkdirSync(join(testMainDir, "shared"), { recursive: true })
 mkdirSync(join(testTaskDir, "test-ws", "frontend"), { recursive: true })
 
-function applyPathsMock() {
-  mock.module("@/lib/paths", () => ({
-    HOME: configDir,
-    DEFAULT_WORKSPACE_ROOT: join(configDir, "ws-root"),
-    WS_CONFIG_DIR: configDir,
-    WORKSPACES_DIR: join(configDir, "workspaces"),
-    GLOBAL_CONFIG_FILE: join(configDir, "config.yml"),
-    REGISTRY_FILE: join(configDir, "registry.yml"),
-    TEMPLATES_DIR: join(configDir, "templates"),
-    getMainDir: (wsRoot: string) => join(wsRoot, "main"),
-    getTasksDir: (wsRoot: string) => join(wsRoot, "tasks"),
-    expandHome: (p: string) => p.startsWith("~/") ? join(configDir, p.slice(2)) : p,
-  }))
-}
-
-applyPathsMock()
-
-// Dynamic import after mock is applied
 const { getWorkspacePaths } = await import("@/commands/workspace")
 
 afterAll(() => {
@@ -126,8 +107,8 @@ function clearWorkspaces() {
 
 describe("getWorkspacePaths", () => {
   beforeEach(() => {
-    applyPathsMock()
     clearWorkspaces()
+    realInvalidateConfigCache()
     // Write the test workspaces
     writeWorkspace(makeTestWorkspace())
     writeWorkspace(makeMissingPathWorkspace())

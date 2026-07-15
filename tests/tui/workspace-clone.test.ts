@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test, vi } from "@test/api"
 import { join } from "path"
 import { cleanup, makeConfigMock, makeTmpDir, makeWorkspaceOpsMock } from "../helpers"
 
@@ -24,7 +24,7 @@ const mockIsCancel = mock((value: unknown) => typeof value === "symbol")
 const mockCancel = mock(() => {})
 const originalExit = process.exit
 const exitMock = mock((code?: number) => { throw new Error(`process.exit(${code})`) })
-const consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
+const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
 mock.module("@/tui/utils", () => ({
   safeText: mockSafeText,

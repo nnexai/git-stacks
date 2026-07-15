@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { createWorkspaceChangeMonitor } from "../../../packages/service/src/policy/workspace-change-monitor"
 
 type Callback = () => void

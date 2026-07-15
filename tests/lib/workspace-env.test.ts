@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, test } from "bun:test"
+import { afterAll, describe, expect, mock, test } from "@test/api"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import type { GlobalConfig, Workspace, WorkspaceRepo } from "@/lib/config"

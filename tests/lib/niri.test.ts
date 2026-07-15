@@ -1,15 +1,10 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach, afterEach } from "@test/api"
 import { z } from "zod"
 import type { NiriWindow, NiriCmdResult, SnapshotOpts } from "@/lib/niri"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
-// integration-commands.test.ts mocks @/lib/niri (as a consumer test).
-// Because of Bun's live binding patching, the real module captures in helpers.ts
-// end up using the mock's _exec after integration-commands runs.
-//
-// Fix: re-apply mock.module("@/lib/niri", ...) with real implementations that
-// use a LOCAL _exec object. This module's own mock takes precedence and
-// _exec.run injection works cleanly.
+// This unit replaces @/lib/niri with real local implementations backed by an
+// injectable executor. Vitest isolates the replacement to this test file.
 
 // ─── Zod schemas (inlined to avoid depending on source module's unexported schemas) ───
 

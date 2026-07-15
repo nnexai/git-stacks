@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { pollForNewWindowIds } from "@/lib/integrations/window-detection"
 
 describe("pollForNewWindowIds", () => {

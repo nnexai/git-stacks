@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test, vi } from "@test/api"
+import { setTimeout as sleep } from "node:timers/promises"
 import {
   configureObservability,
   debugEnabled,
@@ -34,7 +35,7 @@ describe("observability", () => {
 
   test("returns the callback result without calling performance.now when disabled", async () => {
     let calls = 0
-    const nowSpy = spyOn(performance, "now").mockImplementation(() => {
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => {
       calls += 1
       return 123
     })
@@ -53,7 +54,7 @@ describe("observability", () => {
     await configureObservability("1")
 
     const result = timeOperation("workspace-status", "getWorkspaceListInfo", () => "ok")
-    await Bun.sleep(10)
+    await sleep(10)
 
     expect(result).toBe("ok")
     expect(getOutput()).toContain("[workspace-status]")
@@ -86,7 +87,7 @@ describe("observability selectors", () => {
     await configureObservability("1")
 
     const result = timeOperation("workspace-status", "getWorkspaceListInfo", () => "ok")
-    await Bun.sleep(10)
+    await sleep(10)
 
     expect(result).toBe("ok")
     const output = getOutput()
@@ -102,7 +103,7 @@ describe("observability selectors", () => {
     await configureObservability("true")
 
     const result = timeOperation("workspace-status", "getWorkspaceListInfo", () => "ok")
-    await Bun.sleep(10)
+    await sleep(10)
 
     expect(result).toBe("ok")
     const output = getOutput()
@@ -118,7 +119,7 @@ describe("observability selectors", () => {
     await configureObservability("git")
 
     logDebug("workspace-git", "syncWorkspace.fetch: 2 repos")
-    await Bun.sleep(10)
+    await sleep(10)
 
     const output = getOutput()
     expect(output).toContain("module=git")
@@ -130,7 +131,7 @@ describe("observability selectors", () => {
     await configureObservability("git")
 
     logDebug("workspace-lifecycle", "closeWorkspace: starting")
-    await Bun.sleep(10)
+    await sleep(10)
 
     const output = getOutput()
     expect(output).toBe("")
@@ -143,7 +144,7 @@ describe("observability selectors", () => {
 
     logDebug("workspace-lifecycle", "closeWorkspace: starting")
     logDebug("workspace-git", "syncWorkspace.fetch: 2 repos")
-    await Bun.sleep(10)
+    await sleep(10)
 
     const lifecycleOutput = getOutputLifecycle()
     expect(lifecycleOutput).toContain("module=lifecycle")
@@ -156,7 +157,7 @@ describe("observability selectors", () => {
     await configureObservability(undefined)
 
     logDebug("workspace-git", "some debug message")
-    await Bun.sleep(10)
+    await sleep(10)
 
     expect(getOutput()).toBe("")
     expect(debugEnabled()).toBe(false)
@@ -170,7 +171,7 @@ describe("observability selectors", () => {
     await configureObservability("0")
 
     logDebug("workspace-git", "some debug message")
-    await Bun.sleep(10)
+    await sleep(10)
 
     expect(getOutput()).toBe("")
     expect(debugEnabled()).toBe(false)
@@ -184,7 +185,7 @@ describe("observability selectors", () => {
     await configureObservability("false")
 
     logDebug("workspace-git", "some debug message")
-    await Bun.sleep(10)
+    await sleep(10)
 
     expect(getOutput()).toBe("")
     expect(debugEnabled()).toBe(false)

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
@@ -154,6 +154,6 @@ describe("functional coverage readiness", () => {
     expect(report.problems).toEqual([
       { path: ".coverage/coverage-final.json", problem: "missing" },
     ])
-    expect(formatFunctionalCoverageReadiness(report)).toContain("Run bun run coverage")
+    expect(formatFunctionalCoverageReadiness(report)).toContain("Run npm run coverage")
   })
 })

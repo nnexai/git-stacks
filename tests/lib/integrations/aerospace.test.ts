@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach } from "@test/api"
 import type { IntegrationContext, ArtifactBag, WindowArtifact } from "@/lib/integrations/types"
 import type { AerospaceWindow, AerospaceWorkspace } from "@/lib/aerospace"
 

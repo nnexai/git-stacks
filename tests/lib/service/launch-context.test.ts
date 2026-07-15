@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import type { Workspace } from "../../../packages/core/src/config"
 import { WorkspaceSnapshotResponseSchema } from "../../../packages/protocol/src/service"
 import { createSnapshotBuilder } from "../../../packages/service/src/policy/snapshot"

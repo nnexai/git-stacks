@@ -6,6 +6,6 @@ Local checks validate builds, typechecking, architecture, Node runtime behavior,
 
 Final local evidence:
 
-- `npm run release:check`: 16/16 Node tests, 791 legacy unit tests with 3 expected PTY skips, 87/87 integration files, 137 production-license records, zero default-runtime audit findings, and 8 package dry-runs.
-- `npm run coverage -- --all --workers 4`: 106/106 unit files and 71/71 integration files passed. Eleven Bun module-identity fixtures run as explicit non-instrumented pass/fail checks because Istanbul executes against a copied package graph; all remaining files are instrumented.
+- `npm run release:check`: 140/140 Vitest files with 1,770 tests, 17/17 native Node tests, all 162 optional TUI renderer tests, 137 production-license records, zero CLI/service runtime audit findings, and 8 package dry-runs.
+- `npm run coverage`: all 140 Node/Vitest files passed under direct V8 coverage (58.38% statements, 50.38% branches, 56.33% functions, 61.67% lines). No copied source graph, Istanbul handoff, or custom coverage runner remains.
 - `npm run verify:gates` and `git diff --check`: passed.

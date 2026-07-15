@@ -1,8 +1,11 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { spawn } from "node:child_process"
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
+import { resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 
-const ROOT = join(import.meta.dir, "..")
+const ROOT = join(import.meta.dirname, "..")
 
 type PrereqProblem = {
   surface: "inventory" | "coverage"
@@ -27,10 +30,8 @@ function collectPrereqProblems(): PrereqProblem[] {
   }
 
   const scripts = packageScripts()
-  for (const script of ["coverage", "coverage:unit", "coverage:integ"] as const) {
-    if (!scripts[script]) {
-      problems.push({ surface: "coverage", message: `missing package.json script: ${script}` })
-    }
+  if (!scripts.coverage) {
+    problems.push({ surface: "coverage", message: "missing package.json script: coverage" })
   }
 
   const gitignore = existsSync(join(ROOT, ".gitignore"))
@@ -40,29 +41,29 @@ function collectPrereqProblems(): PrereqProblem[] {
     problems.push({ surface: "coverage", message: "missing .coverage/ entry in .gitignore" })
   }
 
-  const coverageRunner = existsSync(join(ROOT, "scripts/coverage-runner.ts"))
-    ? readFileSync(join(ROOT, "scripts/coverage-runner.ts"), "utf8")
+  const vitestConfig = existsSync(join(ROOT, "vitest.config.ts"))
+    ? readFileSync(join(ROOT, "vitest.config.ts"), "utf8")
     : ""
-  for (const artifact of [
-    "coverage-final.json",
-    "coverage-summary.json",
-    "lcov.info",
-    "index.html",
-  ] as const) {
-    if (!coverageRunner.includes(artifact)) {
-      problems.push({ surface: "coverage", message: `coverage runner does not mention ${artifact}` })
-    }
+  if (!vitestConfig.includes('provider: "v8"')) {
+    problems.push({ surface: "coverage", message: "Vitest V8 coverage is not configured" })
+  }
+  const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { devDependencies?: Record<string, string> }
+  if (!pkg.devDependencies?.["@vitest/coverage-v8"]) {
+    problems.push({ surface: "coverage", message: "missing @vitest/coverage-v8 dependency" })
   }
 
   return problems
 }
 
 async function runInventoryTests(): Promise<number> {
-  const proc = Bun.spawn(["bun", "test", "tests/lib/e2e-inventory.test.ts"], {
+  const proc = spawn(process.execPath, [join(ROOT, "node_modules/vitest/vitest.mjs"), "run", "tests/lib/e2e-inventory.test.ts"], {
     cwd: ROOT,
-    stdio: ["inherit", "inherit", "inherit"],
+    stdio: "inherit",
   })
-  return proc.exited
+  return new Promise<number>((done, reject) => {
+    proc.once("error", reject)
+    proc.once("exit", (code) => done(code ?? 1))
+  })
 }
 
 function printProblems(problems: PrereqProblem[]): void {
@@ -78,7 +79,7 @@ function printProblems(problems: PrereqProblem[]): void {
   }
 }
 
-if (import.meta.main) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const problems = collectPrereqProblems()
   if (problems.length > 0) {
     printProblems(problems)

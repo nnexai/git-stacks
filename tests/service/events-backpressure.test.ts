@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
+import { setTimeout as sleep } from "node:timers/promises"
 import { connect } from "node:net"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -26,7 +27,7 @@ async function harness(limits: { maxEvents: number; maxBytes: number }) {
   cleanup.push(() => service.stop())
   const socket = connect({ host: "127.0.0.1", port: Number(service.url.port) })
   socket.write(`GET /v1/events?cursor=0 HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer ${client.token}\r\nConnection: keep-alive\r\n\r\n`)
-  await Bun.sleep(20)
+  await sleep(20)
   socket.pause()
   cleanup.push(() => { socket.destroy() })
   return { root, journal, broker, service, socket }
@@ -65,7 +66,7 @@ describe("real loopback SSE backpressure", () => {
     const input = await harness({ maxEvents: 256, maxBytes: 700 * 1024 })
     const client = provisionOfficialClient("healthy-client", { serviceRoot: input.root })
     const responsePending = fetch(new URL("/v1/events?cursor=0", input.service.url), { headers: { authorization: `Bearer ${client.token}` } })
-    await Bun.sleep(20)
+    await sleep(20)
     input.broker.publish({ protocol: "v1", sequence: "1", timestamp: new Date().toISOString(), type: "signal", signal: { version: 1, kind: "notification", id: "sig_0000000000000001", source: "automation", workspace_id: workspaceId, title: "ready", occurred_at: new Date().toISOString() } })
     const response = await responsePending
     const reader = response.body!.getReader()
@@ -80,7 +81,7 @@ describe("real loopback SSE backpressure", () => {
     })()
     expect(await draining).toContain('"sequence":"1"')
     await reader.cancel()
-    await Bun.sleep(20)
+    await sleep(20)
     await publishUntilConnections(input, 0, 300 * 1024, 2000, 2)
     expect(input.broker.subscriberCount).toBe(0)
     expect(input.service.connectedClients).toBe(0)

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock } from "bun:test"
+import { describe, test, expect, mock } from "@test/api"
 import type { CmdResult } from "@/lib/cmux"
 
 // ─── Mock setup ───────────────────────────────────────────────────────────────

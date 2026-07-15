@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "@test/api"
 import { execSync } from "child_process"
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
@@ -20,9 +20,9 @@ import {
 
 function repoRoot(): string {
   const marker = `${join(".coverage", "runtime-root")}`
-  const markerIndex = import.meta.dir.indexOf(marker)
-  if (markerIndex >= 0) return import.meta.dir.slice(0, markerIndex - 1)
-  return join(import.meta.dir, "..", "..")
+  const markerIndex = import.meta.dirname.indexOf(marker)
+  if (markerIndex >= 0) return import.meta.dirname.slice(0, markerIndex - 1)
+  return join(import.meta.dirname, "..", "..")
 }
 
 const ROOT = repoRoot()

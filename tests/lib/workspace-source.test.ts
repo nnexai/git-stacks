@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { beforeEach, describe, expect, mock, test } from "@test/api"
 import { _source, formatWorkspaceSourceError, prepareWorkspaceSource } from "@/lib/workspace-source"
 
 describe("workspace-source", () => {

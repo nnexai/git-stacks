@@ -21,6 +21,7 @@ No changes yet.
 - The browser is a browser-only package served through a deterministic asset manifest. Shared signal, priority, event, and presentation reduction lives in the client package instead of being duplicated by renderers.
 - The OpenTUI dashboard is now the separately installed `@git-stacks/tui` Bun package. Bun and OpenTUI are absent from the default CLI/service/browser dependency graph.
 - Runtime packages target modern Linux and macOS on x64 and arm64. CI has separate Node jobs for each platform/architecture runner and an isolated optional-TUI job.
+- Unit and integration tests now run in isolated Vitest workers on Node, with direct V8 coverage. The Bun test runner, copied Istanbul instrumentation tree, coverage preload hooks, and their smoke tests were removed; Bun remains only for per-file OpenTUI tests.
 
 ### Safety and distribution
 

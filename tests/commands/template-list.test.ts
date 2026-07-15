@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "@test/api"
+import { runProcessSync } from "../process"
 import { join } from "path"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs"
 
-const PROJECT_ROOT = join(import.meta.dir, "../..")
+const PROJECT_ROOT = join(import.meta.dirname, "../..")
 
 function makeTmpDir(prefix = "template-list-test"): string {
   return mkdtempSync(join("/tmp", `${prefix}-`))
@@ -45,7 +46,7 @@ labels:
 }
 
 function runTemplateList(cfgDir: string, args: string[]) {
-  const result = Bun.spawnSync(["node", "packages/cli/dist/index.js", "template", "list", ...args], {
+  const result = runProcessSync(["node", "packages/cli/dist/index.js", "template", "list", ...args], {
     cwd: PROJECT_ROOT,
     env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },
     stdio: ["pipe", "pipe", "pipe"],

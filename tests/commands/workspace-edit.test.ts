@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach } from "@test/api"
 import { makeConfigMock } from "../helpers"
 
 const packageModule = (path: string) => new URL(`../../packages/${path}`, import.meta.url).pathname

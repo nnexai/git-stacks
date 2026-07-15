@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach } from "@test/api"
 import type { IntegrationContext } from "@/lib/integrations/types"
 
 // Mock @/tui/utils (prompts wrapper) — explicit mock replaces dead @clack/prompts mock

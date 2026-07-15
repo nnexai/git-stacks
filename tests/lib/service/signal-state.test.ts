@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { SignalState } from "../../../packages/client/src/signal-state"
 
 const base = { version: 1 as const, id: "sig_0123456789abcdef", source: "codex" as const, workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012346", session_id: "session-a", occurred_at: "2026-07-13T00:00:00.000Z" }

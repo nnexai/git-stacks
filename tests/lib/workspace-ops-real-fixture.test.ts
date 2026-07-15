@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "@test/api"
+import { runProcessSync } from "../process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
@@ -135,7 +136,7 @@ describe("workspace lifecycle real fixtures", () => {
     expect(await isWorktreeRegistered(repo.mainPath, repo.taskPath)).toBe(false)
     expect(workspaceExists(wsName)).toBe(false)
     expect(execSync(`git -C ${repo.mainPath} log --oneline main`, gitExecOptions(repo.mainPath, tmpDir)).toString()).toContain("feature commit")
-    const branchLookup = Bun.spawnSync(["git", "-C", repo.mainPath, "rev-parse", "--verify", branch], {
+    const branchLookup = runProcessSync(["git", "-C", repo.mainPath, "rev-parse", "--verify", branch], {
       env: gitExecOptions(repo.mainPath, tmpDir).env,
       stdout: "pipe",
       stderr: "pipe",

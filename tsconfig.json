@@ -10,6 +10,7 @@
     "jsxImportSource": "@opentui/solid",
     "skipLibCheck": true,
     "paths": {
+      "@test/api": ["./tests/test-api-bun.ts"],
       "@/lib/service/contract": ["./packages/protocol/src/service.ts"],
       "@/lib/service/presentation": ["./packages/client/src/presentation.ts"],
       "@/lib/service/*": ["./packages/service/src/policy/*"],

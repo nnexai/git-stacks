@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach, afterAll, spyOn } from "bun:test"
+import { describe, test, expect, mock, beforeEach, afterAll, vi } from "@test/api"
 import { Command } from "commander"
 import { makeConfigMock, makeForgeUtilsMock, makeIssueUtilsMock } from "../../helpers"
 
@@ -178,7 +178,7 @@ describe("gitea pr open", () => {
       exitCode: 0,
       stdout: JSON.stringify(fakePrs),
     }))
-    const consoleSpy = spyOn(console, "log")
+    const consoleSpy = vi.spyOn(console, "log")
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "pr", "open", "my-workspace"])
     const calls = consoleSpy.mock.calls.map((c: any[]) => c[0])
@@ -345,7 +345,7 @@ describe("gitea issue commands", () => {
       exitCode: 0,
       stdout: JSON.stringify(fakeIssues),
     }))
-    const consoleSpy = spyOn(console, "log")
+    const consoleSpy = vi.spyOn(console, "log")
     const parent = buildParent()
     await parent.parseAsync(["node", "x", "issue", "open", "my-ws"])
     const calls = consoleSpy.mock.calls.map((c: any[]) => c[0])

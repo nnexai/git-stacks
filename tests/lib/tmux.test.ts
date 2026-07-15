@@ -1,16 +1,11 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach, afterEach } from "@test/api"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
 import type { CmdResult } from "@/lib/tmux"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
-// integration-commands.test.ts mocks @/lib/tmux (as a consumer test).
-// Because of Bun's live binding patching, real module captures in helpers.ts
-// end up using the mock's _exec after integration-commands runs.
-//
-// Fix: re-apply mock.module("@/lib/tmux", ...) with real implementations that
-// use a LOCAL _exec object. This module's own mock takes precedence and
-// _exec.run injection works cleanly.
+// This unit replaces @/lib/tmux with real local implementations backed by an
+// injectable executor. Vitest isolates the replacement to this test file.
 
 // ─── Local injectable executor ────────────────────────────────────────────────
 
@@ -79,8 +74,7 @@ async function focusTmuxPane(paneId: string): Promise<boolean> {
   return r.exitCode === 0
 }
 
-// Re-apply mock.module to override whatever integration-commands.test.ts set.
-// Our module uses the local _exec and local function implementations above.
+// Expose the local _exec and function implementations through the source ID.
 mock.module("@/lib/tmux", () => ({
   _exec,
   killTmuxSession,

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach } from "@test/api"
 import { z } from "zod"
 import type { AerospaceWindow, AerospaceCmdResult, SnapshotOpts } from "@/lib/aerospace"
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach, afterEach } from "@test/api"
 import type { IntegrationContext, ArtifactBag } from "@/lib/integrations/types"
 import { makeTmuxMock, makeConfigMock } from "../../helpers"
 

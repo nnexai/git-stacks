@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import type { Workspace } from "../../../packages/core/src/config"
 import {
   SnapshotBusyError,

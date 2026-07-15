@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { WorkspaceSchema, type Workspace } from "../../packages/core/src/config"
 import { setWorkspacePins } from "../../packages/core/src/workspace-pins"
 

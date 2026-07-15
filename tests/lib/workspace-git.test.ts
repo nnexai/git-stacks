@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, beforeEach, describe, expect, mock, test } from "@test/api"
 import { mkdirSync } from "fs"
 import { join } from "path"
 import type { Workspace, WorkspaceRepo } from "@/lib/config"

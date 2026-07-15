@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, test } from "@test/api"
 import { mkdtemp, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -90,6 +90,7 @@ describe("operation idempotency", () => {
     now += 101
     const second = await registry.submit(input)
     expect(second.operation_id).not.toBe(first.operation_id)
+    await registry.wait(second.operation_id)
   })
 })
 

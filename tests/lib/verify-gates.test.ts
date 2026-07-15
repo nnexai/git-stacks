@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
@@ -36,7 +36,7 @@ function writeCoverageArtifacts(
   coverageFinal: Record<string, unknown> = {
     "packages/cli/src/index.ts": coverageEntry("packages/cli/src/index.ts"),
     "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
-    "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
+    "packages/service/src/web/terminal-manager.ts": coverageEntry("packages/service/src/web/terminal-manager.ts"),
     ...Object.fromEntries(
       FUNCTIONAL_READINESS_AREAS.flatMap((area) => area.sourceTargets).map((path) => [
         path,
@@ -181,7 +181,7 @@ describe("verify gate collector", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
       "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts", 0),
-      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
+      "packages/service/src/web/terminal-manager.ts": coverageEntry("packages/service/src/web/terminal-manager.ts"),
     })
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -199,11 +199,11 @@ describe("verify gate collector", () => {
     expect(formatVerifyGateReport(report)).toContain("Coverage sentinel problems:")
   })
 
-  test("reports zero-hit TUI TSX coverage sentinel", () => {
+  test("reports zero-hit service coverage sentinel", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
       "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
-      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx", 0),
+      "packages/service/src/web/terminal-manager.ts": coverageEntry("packages/service/src/web/terminal-manager.ts", 0),
     })
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -216,7 +216,7 @@ describe("verify gate collector", () => {
 
     expect(report.ok).toBe(false)
     expect(report.coverageSentinels).toEqual([
-      { path: "packages/tui/src/ActionMenu.tsx", problem: "zero hits" },
+      { path: "packages/service/src/web/terminal-manager.ts", problem: "zero hits" },
     ])
   })
 
@@ -244,18 +244,18 @@ describe("verify gate collector", () => {
     ])
     expect(report.coverageSentinels).toEqual([
       { path: "packages/client/src/signal-state.ts", problem: "zero hits" },
-      { path: "packages/tui/src/ActionMenu.tsx", problem: "missing" },
+      { path: "packages/service/src/web/terminal-manager.ts", problem: "missing" },
     ])
   })
 
   test("reports coverage entries outside the canonical source tree", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
-      "/tmp/istanbul-smoke-fixture/instrumented/packages/cli/src/commands/completion.ts": coverageEntry(
-        "/tmp/istanbul-smoke-fixture/instrumented/packages/cli/src/commands/completion.ts"
+      "/tmp/external-coverage-fixture/packages/cli/src/commands/completion.ts": coverageEntry(
+        "/tmp/external-coverage-fixture/packages/cli/src/commands/completion.ts"
       ),
       "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
-      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
+      "packages/service/src/web/terminal-manager.ts": coverageEntry("packages/service/src/web/terminal-manager.ts"),
     })
     writeTest(root, "tests/commands/new.test.ts")
 
@@ -269,7 +269,7 @@ describe("verify gate collector", () => {
     expect(report.ok).toBe(false)
     expect(report.coverageSentinels).toEqual([
       {
-        path: "/tmp/istanbul-smoke-fixture/instrumented/packages/cli/src/commands/completion.ts",
+        path: "../external-coverage-fixture/packages/cli/src/commands/completion.ts",
         problem: "outside source tree",
       },
     ])
@@ -280,7 +280,7 @@ describe("verify gate collector", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
       "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
-      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
+      "packages/service/src/web/terminal-manager.ts": coverageEntry("packages/service/src/web/terminal-manager.ts"),
       "packages/core/src/git.ts": coverageEntry("packages/core/src/git.ts", 0),
     })
 
@@ -315,7 +315,7 @@ describe("verify gate collector", () => {
     const root = makeRoot()
     writeCoverageArtifacts(root, {
       "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
-      "packages/tui/src/ActionMenu.tsx": coverageEntry("packages/tui/src/ActionMenu.tsx"),
+      "packages/service/src/web/terminal-manager.ts": coverageEntry("packages/service/src/web/terminal-manager.ts"),
       "packages/core/src/git.ts": coverageEntry("packages/core/src/git.ts"),
     })
     writeTest(root, "tests/commands/new.test.ts")

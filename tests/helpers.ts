@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, writeFileSync, rmSync } from "fs"
 import { join, dirname } from "path"
-import { execSync, type ExecSyncOptions } from "child_process"
-import { mock } from "bun:test"
+import { execSync, spawnSync, type ExecSyncOptions } from "child_process"
+import { mock } from "@test/api"
 import type { CoreState } from "../packages/service/src/policy/core-contract"
 import type { RepoRegistryEntry, Template, Workspace } from "../packages/core/src/config"
 
@@ -258,7 +258,7 @@ function buildEnvPreview(env: NodeJS.ProcessEnv, extras: readonly string[]): Rec
 }
 
 export function runCli(argv: string[], opts: RunCliOptions): RunCliResult {
-  const projectRoot = join(import.meta.dir, "..")
+  const projectRoot = join(import.meta.dirname, "..")
   const cwd = opts.cwd ?? projectRoot
   const env = {
     ...getTestGitEnv(opts.baseDir),
@@ -266,18 +266,18 @@ export function runCli(argv: string[], opts: RunCliOptions): RunCliResult {
     ...opts.env,
   }
 
-  const result = Bun.spawnSync(["node", join(projectRoot, "packages/cli/dist/index.js"), ...argv], {
+  const result = spawnSync("node", [join(projectRoot, "packages/cli/dist/index.js"), ...argv], {
     cwd,
     env,
-    stdio: ["pipe", "pipe", "pipe"],
+    encoding: "utf8",
   })
 
   return {
     argv,
     cwd,
-    exitCode: result.exitCode ?? 0,
-    stdout: new TextDecoder().decode(result.stdout),
-    stderr: new TextDecoder().decode(result.stderr),
+    exitCode: result.status ?? 0,
+    stdout: result.stdout,
+    stderr: result.stderr,
     envPreview: buildEnvPreview(env, opts.envAllowlistExtras ?? []),
     artifactPaths: opts.artifactPaths ?? [],
   }
@@ -375,7 +375,7 @@ export function childPathWithPrependedBin(binDir: string): Record<string, string
 }
 
 export function fakeEditorPath(): string {
-  return join(import.meta.dir, "support", "fake-editor.ts")
+  return join(import.meta.dirname, "support", "fake-editor.ts")
 }
 
 export function fakeEditorEnv(capturePath: string, mode = "mutate-valid"): Record<string, string> {
@@ -600,26 +600,10 @@ export function makeGitRepo(base: string, name = "repo"): string {
  * a cache-busting query string AFTER calling this function.
  */
 export function useIsolatedConfig(prefix = "isolated-config"): { configDir: string; cleanup: () => void } {
-  const configDir = makeTmpDir(prefix)
+  const configDir = process.env.GIT_STACKS_CONFIG_DIR ?? makeTmpDir(prefix)
   mkdirSync(join(configDir, "workspaces"), { recursive: true })
   mkdirSync(join(configDir, "templates"), { recursive: true })
   mkdirSync(join(configDir, "notes"), { recursive: true })
-
-  const corePathsModule = new URL("../packages/core/src/paths.ts", import.meta.url).pathname
-  mock.module(corePathsModule, () => ({
-    HOME: configDir,
-    DEFAULT_WORKSPACE_ROOT: join(configDir, "ws-root"),
-    WS_CONFIG_DIR: configDir,
-    WORKSPACES_DIR: join(configDir, "workspaces"),
-    GLOBAL_CONFIG_FILE: join(configDir, "config.yml"),
-    REGISTRY_FILE: join(configDir, "registry.yml"),
-    TEMPLATES_DIR: join(configDir, "templates"),
-    NOTES_DIR: join(configDir, "notes"),
-    PORTS_LOCK_FILE: join(configDir, ".ports.lock"),
-    getMainDir: (wsRoot: string) => join(wsRoot, "main"),
-    getTasksDir: (wsRoot: string) => join(wsRoot, "tasks"),
-    expandHome: (p: string) => p.startsWith("~/") ? join(configDir, p.slice(2)) : p,
-  }))
 
   return {
     configDir,
@@ -908,13 +892,13 @@ export function makeTmuxMock(overrides: Record<string, unknown> = {}): Record<st
 }
 
 // --- Real module captures ---
-// Captured here at helpers.ts load time (before any test file applies mock.module).
-// The test runner loads this helper before suites that apply mock.module, so
-// these captures precede module replacements from test files.
+// Captured when helpers.ts is loaded, before the importing test file applies
+// mock.module. Vitest isolates files, so these references only need to remain
+// stable against replacements made later in the same file.
 //
 // Destructured named exports are STABLE references — they are not updated when
 // mock.module replaces the module later. This allows test files to access real
-// implementations even after other test files have mocked those modules.
+// implementations after the importing test file has mocked those modules.
 //
 // Use case: test files that need real module behavior (e.g. to test real shell
 // execution or real file I/O) import these captures instead of using cache-busting

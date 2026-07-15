@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "@test/api"
 import { readFileSync, statSync } from "fs"
 import { join } from "path"
 import {
@@ -29,13 +29,13 @@ describe("e2e harness", () => {
     const result = runCli(["label", "list", "missing"], { baseDir })
 
     expect(result.argv).toEqual(["label", "list", "missing"])
-    expect(result.cwd).toBe(join(import.meta.dir, "../.."))
+    expect(result.cwd).toBe(join(import.meta.dirname, "../.."))
     expect(typeof result.exitCode).toBe("number")
     expect(result.exitCode).not.toBe(0)
     expect(result.stdout).toBe("")
     expect(result.stderr).toContain("Workspace 'missing' not found")
     expect(result.envPreview.GIT_STACKS_CONFIG_DIR).toBe(configDir)
-    expect(result.envPreview.HOME).toStartWith(baseDir)
+    expect(result.envPreview.HOME?.startsWith(baseDir)).toBe(true)
     expect(result.envPreview.PATH).toBeDefined()
   })
 

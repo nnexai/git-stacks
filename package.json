@@ -13,6 +13,7 @@
   "packageManager": "npm@11.17.0",
   "allowScripts": {
     "esbuild@0.25.12": true,
+    "esbuild@0.28.1": true,
     "node-pty@1.2.0-beta.14": true
   },
   "engines": {
@@ -35,7 +36,9 @@
     "developer-tools"
   ],
   "type": "module",
-  "bin": { "git-stacks": "./bin/git-stacks.js" },
+  "bin": {
+    "git-stacks": "./bin/git-stacks.js"
+  },
   "files": [
     "bin",
     "README.md",
@@ -47,28 +50,27 @@
     "build:packages": "node scripts/build-package.mjs --all",
     "clean": "node scripts/clean-packages.mjs",
     "dev": "npm run build -w @git-stacks/cli && node packages/cli/dist/index.js",
-    "test": "bun run scripts/test-runner.ts",
-    "pretest": "npm run build:packages",
-    "test:unit": "bun run scripts/test-runner.ts --unit",
+    "test": "npm run build:packages && npm run test:vitest && npm run test:node && npm run test:tui",
+    "test:vitest": "vitest run",
+    "test:unit": "vitest run tests/lib tests/service tests/tui/workspace-clone.test.ts tests/tui/workspace-wizard.test.ts",
     "pretest:unit": "npm run build:packages",
-    "test:integ": "bun run scripts/test-runner.ts --integ",
+    "test:integ": "vitest run tests/commands",
     "pretest:integ": "npm run build:packages",
+    "test:tui": "node scripts/test-tui.mjs",
     "test:deps": "node scripts/check-architecture.mjs --cycles",
     "test:architecture": "node scripts/check-architecture.mjs",
-    "test:node": "npm run build:packages && node --test tests/architecture/*.test.mjs tests/conformance/*.test.mjs tests/core/*.test.mjs tests/cli/*.test.mjs tests/service-node/*.test.mjs",
+    "test:node": "node --test tests/architecture/*.test.mjs tests/conformance/*.test.mjs tests/core/*.test.mjs tests/cli/*.test.mjs tests/service-node/*.test.mjs",
     "check:packages": "npm run build:packages && npm run tui:build && node scripts/check-packages.mjs",
     "audit:licenses": "node scripts/check-licenses.mjs",
     "audit:runtime": "npm audit --omit=dev --workspace @git-stacks/cli --workspace @git-stacks/service",
-    "coverage": "bun run scripts/coverage-runner.ts",
-    "coverage:unit": "bun run scripts/coverage-runner.ts --unit",
-    "coverage:integ": "bun run scripts/coverage-runner.ts --integ",
-    "verify": "bun run scripts/verify.ts",
-    "verify:prereqs": "bun run scripts/verify-prereqs.ts",
-    "verify:gates": "bun run scripts/verify-gates.ts",
+    "coverage": "vitest run --coverage",
+    "verify": "tsx scripts/verify.ts",
+    "verify:prereqs": "tsx scripts/verify-prereqs.ts",
+    "verify:gates": "tsx scripts/verify-gates.ts",
     "web:build": "node scripts/build-web.mjs",
     "tui:build": "npm run build -w @git-stacks/tui",
     "web:typecheck": "npm run typecheck -w @git-stacks/web",
-    "verify:functional": "bun run scripts/functional-coverage-readiness.ts",
+    "verify:functional": "tsx scripts/functional-coverage-readiness.ts",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "typecheck:legacy": "tsc --noEmit",
     "release:check": "node scripts/release-rc-check.mjs",
@@ -78,17 +80,11 @@
     "@git-stacks/cli": "0.21.0-rc.1"
   },
   "devDependencies": {
-    "@opentui/core": "0.4.3",
-    "@opentui/solid": "0.4.3",
     "@types/node": "^24.0.0",
-    "@types/bun": "latest",
-    "@types/istanbul-lib-coverage": "^2.0.6",
-    "@types/istanbul-lib-instrument": "^1.7.8",
-    "istanbul-lib-coverage": "^3.2.2",
-    "istanbul-lib-instrument": "^6.0.3",
-    "istanbul-lib-report": "3.0.1",
-    "istanbul-reports": "3.2.0",
+    "@vitest/coverage-v8": "4.1.10",
     "esbuild": "^0.25.0",
-    "typescript": "^6.0.2"
+    "tsx": "4.23.1",
+    "typescript": "^6.0.2",
+    "vitest": "4.1.10"
   }
 }

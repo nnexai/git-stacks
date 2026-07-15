@@ -1,10 +1,11 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
+import { runProcessSync } from "../process"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
 import { applyTestGitEnv, gitExecOptions } from "../helpers"
 
-const PROJECT_ROOT = join(import.meta.dir, "../..")
+const PROJECT_ROOT = join(import.meta.dirname, "../..")
 
 function makeTmpDir(prefix = "list-test"): string {
   const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -81,7 +82,7 @@ repos:
 }
 
 function runList(cfgDir: string, args: string[]): { stdout: string; stderr: string; exitCode: number } {
-  const result = Bun.spawnSync(
+  const result = runProcessSync(
     ["node", "packages/cli/dist/index.js", "list", ...args],
     {
       env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },

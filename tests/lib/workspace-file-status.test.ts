@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "@test/api"
 import { existsSync, symlinkSync } from "fs"
 import { join } from "path"
 import { cleanup, makeTmpDir, mkdir, write } from "../helpers"

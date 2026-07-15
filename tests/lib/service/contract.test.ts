@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { readFileSync } from "fs"
 import { join } from "path"
 import {
@@ -15,7 +15,7 @@ import {
   CLIENT_MODEL_LIMITS,
 } from "../../../packages/protocol/src/service"
 
-const fixtures = join(import.meta.dir, "../../fixtures/service-v1")
+const fixtures = join(import.meta.dirname, "../../fixtures/service-v1")
 const fixture = (name: string): unknown => JSON.parse(readFileSync(join(fixtures, name), "utf8"))
 
 describe("service v1 contract", () => {

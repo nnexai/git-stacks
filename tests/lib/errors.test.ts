@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect } from "@test/api"
 import { formatError } from "../../packages/core/src/errors"
 
 describe("formatError", () => {

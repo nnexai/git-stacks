@@ -1,11 +1,11 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { join } from "path"
-import { writeFileSync } from "fs"
+import { readFileSync, writeFileSync } from "fs"
 import { makeTmpDir, cleanup, makeGitRepo } from "../helpers"
 import { getVersionString } from "../../packages/core/src/version"
 
 // Read expected version from package.json dynamically
-const pkg = await Bun.file(join(import.meta.dir, "../../package.json")).json()
+const pkg = JSON.parse(readFileSync(join(import.meta.dirname, "../../package.json"), "utf8"))
 const expectedVersion: string = pkg.version
 const versionPattern = new RegExp(`^${expectedVersion.replace(/\./g, "\\.")}`)
 

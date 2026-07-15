@@ -1,6 +1,7 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { existsSync, readFileSync } from "fs"
-import { join } from "path"
+import { isAbsolute, join, relative, resolve, sep } from "path"
+import { fileURLToPath } from "node:url"
 import {
   FUNCTIONAL_READINESS_AREAS,
   type FunctionalReadinessArea,
@@ -45,7 +46,7 @@ export type CollectFunctionalCoverageReadinessOptions = {
   areas?: readonly FunctionalReadinessArea[]
 }
 
-const ROOT = join(import.meta.dir, "..")
+const ROOT = join(import.meta.dirname, "..")
 const DEFAULT_COVERAGE_PATH = ".coverage/coverage-final.json"
 const CATEGORIES: readonly FunctionalReadinessCategory[] = [
   "covered",
@@ -82,7 +83,11 @@ function readCoverageMap(
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return { coverage: null, problems: [{ path: coveragePath, problem: "invalid shape" }] }
     }
-    return { coverage: parsed as Record<string, CoverageEntry>, problems: [] }
+    const coverage = Object.fromEntries(Object.entries(parsed as Record<string, CoverageEntry>).map(([path, entry]) => [
+      isAbsolute(path) ? relative(root, path).split(sep).join("/") : path,
+      entry,
+    ]))
+    return { coverage, problems: [] }
   } catch {
     return { coverage: null, problems: [{ path: coveragePath, problem: "invalid JSON" }] }
   }
@@ -198,7 +203,7 @@ export function formatFunctionalCoverageReadiness(
     for (const problem of report.problems) {
       lines.push(`  - ${problem.path}: ${problem.problem}`)
     }
-    lines.push("  - Run bun run coverage to regenerate the canonical coverage-final.json artifact.")
+    lines.push("  - Run npm run coverage to regenerate the canonical coverage-final.json artifact.")
   }
 
   if (report.mustFix.length > 0) {
@@ -221,7 +226,7 @@ export function formatFunctionalCoverageReadiness(
   return lines.join("\n")
 }
 
-if (import.meta.main) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const report = collectFunctionalCoverageReadiness()
   const output = formatFunctionalCoverageReadiness(report)
   if (report.ok) {

@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach } from "@test/api"
 import type { IntegrationContext, ArtifactBag } from "@/lib/integrations/types"
 
 // === Register ALL mocks BEFORE any integration imports ===

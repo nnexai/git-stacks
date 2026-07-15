@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { deduplicateProviderSessions, isActiveSession, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, type PresentedSignal } from "../../packages/client/src/presentation"
 
 const base: PresentedSignal = {

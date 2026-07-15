@@ -1,4 +1,8 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { spawn } from "node:child_process"
+import { resolve } from "node:path"
+import { fileURLToPath } from "node:url"
+
 export type RunCommand = (command: string) => Promise<number>
 
 export type VerifyWorkflowOptions = {
@@ -7,12 +11,12 @@ export type VerifyWorkflowOptions = {
 }
 
 const VERIFY_COMMANDS = [
-  "bun run verify:prereqs",
-  "bun run coverage",
-  "bun run verify:gates",
-  "bun run test",
-  "bun run test:deps",
-  "bun run typecheck",
+  "npm run verify:prereqs",
+  "npm run coverage",
+  "npm run verify:gates",
+  "npm test",
+  "npm run test:deps",
+  "npm run typecheck",
 ] as const
 
 export function getVerifyCommands(): string[] {
@@ -20,11 +24,14 @@ export function getVerifyCommands(): string[] {
 }
 
 async function spawnCommand(command: string): Promise<number> {
-  const proc = Bun.spawn(["sh", "-c", command], {
+  const proc = spawn("sh", ["-c", command], {
     cwd: process.cwd(),
-    stdio: ["inherit", "inherit", "inherit"],
+    stdio: "inherit",
   })
-  return proc.exited
+  return new Promise<number>((done, reject) => {
+    proc.once("error", reject)
+    proc.once("exit", (code) => done(code ?? 1))
+  })
 }
 
 export async function runVerifyWorkflow(options: VerifyWorkflowOptions = {}): Promise<number> {
@@ -40,7 +47,7 @@ export async function runVerifyWorkflow(options: VerifyWorkflowOptions = {}): Pr
   return 0
 }
 
-if (import.meta.main) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const exitCode = await runVerifyWorkflow()
   process.exit(exitCode)
 }

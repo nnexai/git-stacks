@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
+import { hasCommand, runProcess } from "../../process"
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
@@ -122,13 +123,13 @@ describe("user-level terminal agent integrations", () => {
   })
 
   test("ordinary inherited hook context emits authenticated OSC to its parent tty", async () => {
-    if (!Bun.which("script")) return
+    if (!hasCommand("script")) return
     const home = mkdtempSync(join(tmpdir(), "git-stacks-agent-tty-"))
     installAgentIntegrations({ home })
     const codex = JSON.parse(readFileSync(join(home, ".codex/hooks.json"), "utf8"))
     const hook = codex.hooks.UserPromptSubmit[0].hooks[0].command as string
     const token = "0123456789abcdef0123456789abcdef"
-    const child = Bun.spawn(["script", "-qec", hook, "/dev/null"], {
+    const child = runProcess(["script", "-qec", hook, "/dev/null"], {
       env: { ...process.env, GIT_STACKS_SIGNAL_TOKEN: token, GIT_STACKS_SURFACE_ID: "surface-test", GIT_STACKS_AGENT_SESSION_ID: "codex-session" },
       stdout: "pipe", stderr: "pipe",
     })

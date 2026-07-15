@@ -14,7 +14,7 @@
 npm run release:check
 ```
 
-This builds Node packages and the optional TUI, type-checks all workspaces, runs architecture, Node runtime, and complete compatibility suites, audits production licenses and default runtime vulnerabilities, verifies required native prebuilds, and runs `npm pack --dry-run` for the root plus every package.
+This builds Node packages and the optional TUI, type-checks all workspaces, runs the isolated Vitest suite, native Node runtime tests, optional per-file OpenTUI tests, V8 coverage and verification gates, audits production licenses and default runtime vulnerabilities, verifies required native prebuilds, and runs `npm pack --dry-run` for the root plus every package.
 
 The command is validation-only. It does not tag or publish. After explicit approval, `npm run release:check -- --tag` may create the matching annotated tag. Publishing remains a separate manual action and should use the `next` dist-tag for a release candidate.
 
@@ -22,7 +22,7 @@ Internal packages must be published in dependency order: protocol, client/core, 
 
 ## Hosted matrix
 
-`.github/workflows/node-runtime-matrix.yml` runs the Node checks on Linux and macOS, x64 and arm64. The TUI has a separate Bun job so its runtime cannot mask default-package failures. A local Linux pass does not replace the hosted macOS jobs.
+`.github/workflows/node-runtime-matrix.yml` runs the build, Vitest, native Node, architecture, type, and runtime-audit checks on Linux and macOS, x64 and arm64. The TUI has a separate Bun build/test job so its runtime cannot mask default-package failures. A local Linux pass does not replace the hosted macOS jobs.
 
 ## Rollback
 

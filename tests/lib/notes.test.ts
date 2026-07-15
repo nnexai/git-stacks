@@ -1,10 +1,10 @@
-import { afterAll, afterEach, describe, expect, test } from "bun:test"
+import { afterAll, afterEach, describe, expect, test } from "@test/api"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { useIsolatedConfig } from "../helpers"
 
 const isolated = useIsolatedConfig("notes-test")
-const notesLib = await import(`@/lib/notes?test=${Date.now()}`)
+const notesLib = await import("@/lib/notes")
 
 const { addWorkspaceNote, listWorkspaceNotes, clearWorkspaceNotes, getWorkspaceNoteSummary } = notesLib
 

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
+import { setTimeout as sleep } from "node:timers/promises"
 import { readFileSync, rmSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
@@ -101,12 +102,12 @@ describe("service authentication admission", () => {
       expect(response.status).toBe(504)
       const received = await response.json()
       expect(ErrorEnvelopeSchema.parse(received)).toEqual(received)
-      const golden = JSON.parse(readFileSync(join(import.meta.dir, "../fixtures/service-v1/request-timeout-error.json"), "utf8"))
+      const golden = JSON.parse(readFileSync(join(import.meta.dirname, "../fixtures/service-v1/request-timeout-error.json"), "utf8"))
       expect(received).toEqual({ ...golden, request_id: received.request_id })
       expect(JSON.stringify(received)).not.toContain("adapter secret")
 
       release()
-      await Bun.sleep(5)
+      await sleep(5)
       const discovery = await fetch(new URL("/v1", service.url), { headers })
       expect(discovery.status).toBe(200)
       const recovered = await fetch(new URL("/v1/snapshot", service.url), { headers })
@@ -131,12 +132,12 @@ describe("service authentication admission", () => {
     })
     try {
       const responsePending = fetch(new URL("/v1/events?cursor=0", service.url), { headers: { authorization: `Bearer ${credential.token}` } })
-      await Bun.sleep(30)
+      await sleep(30)
       broker.publish({ protocol: "v1", sequence: "1", timestamp: new Date().toISOString(), type: "control", control: { kind: "heartbeat" } })
       const response = await responsePending
       expect(response.status).toBe(200)
       const reader = response.body!.getReader()
-      await Bun.sleep(50)
+      await sleep(50)
       expect((await reader.read()).done).toBe(false)
       expect(service.connectedClients).toBe(1)
       await reader.cancel()

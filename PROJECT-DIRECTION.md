@@ -37,7 +37,7 @@ The retired GTK/Zig client and patched Ghostty dependency remain archived at `na
 
 ## Runtime and Platform Policy
 
-Node.js 24 is the minimum runtime for the CLI, core, service, and browser build. Bun is confined to the optional TUI and the existing repository test harness. Native dependencies are exact-pinned and must ship trusted prebuilds for Linux and macOS on x64 and arm64. Runtime dependencies require a license compatible with this MIT project and pass the production audit before an RC is prepared.
+Node.js 24 is the minimum runtime for the CLI, core, service, browser build, verification scripts, and the main test/coverage suite. Bun is confined to the optional TUI build and its per-file OpenTUI tests. Native dependencies are exact-pinned and must ship trusted prebuilds for Linux and macOS on x64 and arm64. Runtime dependencies require a license compatible with this MIT project and pass the production audit before an RC is prepared.
 
 The service remains loopback-only in `0.21.0`. A future remote client/server mode must extend the authenticated protocol and pairing model deliberately; it must not expose the current local bearer channel directly to an untrusted network.
 

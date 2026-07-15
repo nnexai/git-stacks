@@ -17,6 +17,8 @@ The production system has one implementation per responsibility:
 
 The source graph is enforced by `scripts/check-architecture.mjs`. Default package validation follows the internal dependency graph and fails if it reaches the optional TUI.
 
+The main test suite runs in isolated Vitest workers on Node and coverage comes directly from V8. Native Node tests separately prove package/runtime behavior with Bun absent from `PATH`. Only OpenTUI renderer tests use Bun; a small Node launcher runs those files in separate processes to contain Bun's module-mock cache.
+
 ## Data flow
 
 Ordinary CLI commands call core directly. Core persists human-editable YAML atomically. If the service is running, its filesystem monitor treats changes as invalidation hints, rebuilds the authoritative state, and emits a new revision. The CLI neither starts the service nor sends a forced-refresh request.

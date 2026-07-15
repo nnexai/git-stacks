@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "@test/api"
+import { runProcessSync } from "../process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { cleanup, createConfigFixture, formatCliFailure, makeTmpDir, runCli, writeWorkspaceFixture } from "../helpers"
 
-const PROJECT_ROOT = join(import.meta.dir, "../..")
+const PROJECT_ROOT = join(import.meta.dirname, "../..")
 
 function expectSuccess(result: ReturnType<typeof runCli>) {
   expect(result.exitCode, formatCliFailure(result)).toBe(0)
@@ -44,7 +45,7 @@ function runNotesWithInput(
   env: Record<string, string> = {},
   stdinInput = ""
 ): { stdout: string; stderr: string; exitCode: number } {
-  const result = Bun.spawnSync(["node", "packages/cli/dist/index.js", "notes", ...args], {
+  const result = runProcessSync(["node", "packages/cli/dist/index.js", "notes", ...args], {
     env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir, ...env },
     cwd,
     stdin: stdinInput ? Buffer.from(stdinInput) : "pipe",

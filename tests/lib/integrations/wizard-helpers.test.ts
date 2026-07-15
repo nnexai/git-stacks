@@ -1,5 +1,5 @@
-import { describe, test, expect, mock, beforeEach, beforeAll } from "bun:test"
-import type { Mock } from "bun:test"
+import { describe, test, expect, mock, beforeEach, beforeAll } from "@test/api"
+import type { Mock } from "@test/api"
 
 // Shared mock instances used by @/tui/utils mock below.
 // Declared here so applyTuiUtilsMock() always uses the SAME objects,

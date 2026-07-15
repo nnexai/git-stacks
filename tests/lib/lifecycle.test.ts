@@ -1,17 +1,13 @@
-import { describe, test, expect, mock, beforeEach, afterEach } from "bun:test"
-import { spawn } from "bun"
+import { describe, test, expect, mock, beforeEach, afterEach } from "@test/api"
+import { runProcess } from "../process"
 import type { HookOutputLine, HookResult, ShellOutputLine, ShellSequenceResult, SpawnHandle } from "@/lib/lifecycle"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
-// integration-commands.test.ts mocks @/lib/lifecycle (as a consumer test).
-// Because of Bun's live binding patching, the realRunHooksCaptured capture in
-// helpers.ts ends up using the mock's _exec after integration-commands runs.
-//
-// Fix: re-apply mock.module("@/lib/lifecycle", ...) at the start of this file
-// with real implementations that use a LOCAL _exec object. This file's own
-// mock takes precedence and the injection tests can replace _exec.spawn cleanly.
+// This unit replaces @/lib/lifecycle with a local injectable executor. Vitest
+// isolates the replacement to this file, and the injection tests can replace
+// _exec.spawn without affecting consumer tests.
 
-// Local injectable executor — real Bun.spawn by default
+// Local injectable executor — real Node child process by default
 const _exec = {
   spawn: (args: {
     cmd: string[]
@@ -20,7 +16,7 @@ const _exec = {
     stdout: "inherit" | "pipe"
     stderr: "inherit" | "pipe"
   }): SpawnHandle => {
-    const proc = spawn(args.cmd, {
+    const proc = runProcess(args.cmd, {
       cwd: args.cwd,
       env: args.env,
       stdout: args.stdout,
@@ -185,7 +181,7 @@ mock.module("@/lib/lifecycle", () => ({
 }))
 
 // ─── Real-shell tests ─────────────────────────────────────────────────────────
-// These use the local runHooksCaptured which calls real Bun.spawn via _exec.spawn.
+// These use the local runHooksCaptured which calls a real Node child process via _exec.spawn.
 // _exec.spawn is real by default; injection tests will swap it in beforeEach.
 
 describe("runHooksCaptured", () => {

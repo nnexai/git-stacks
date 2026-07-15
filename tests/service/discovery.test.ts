@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "@test/api"
+import { setTimeout as sleep } from "node:timers/promises"
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -96,7 +97,7 @@ describe("v1 discovery", () => {
 
     const response = await Promise.race([
       fetch(new URL("/v1/events?cursor=0", service.url), { headers: { authorization: `Bearer ${credential.token}` } }),
-      Bun.sleep(250).then(() => null),
+      sleep(250).then(() => null),
     ])
     expect(response).toBeInstanceOf(Response)
     const reader = (response as Response).body!.getReader()
@@ -149,9 +150,9 @@ describe("v1 discovery", () => {
     const credential = readOfficialClientCredential("service-test", { serviceRoot: root })!
     const headers = { authorization: `Bearer ${credential.token}` }
 
-    await Bun.sleep(40)
+    await sleep(40)
     expect((await fetch(new URL("/v1/snapshot", service.descriptor.endpoint), { headers })).status).toBe(200)
-    await Bun.sleep(40)
+    await sleep(40)
     expect((await fetch(new URL("/v1/snapshot", service.descriptor.endpoint), { headers })).status).toBe(200)
   })
 })

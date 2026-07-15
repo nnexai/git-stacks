@@ -1,8 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from "bun:test"
+import { describe, test, expect, beforeEach, afterEach } from "@test/api"
+import { runProcessSync } from "../process"
 import { mkdirSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
 
-const PROJECT_ROOT = join(import.meta.dir, "../..")
+const PROJECT_ROOT = join(import.meta.dirname, "../..")
 
 function makeTmpHome(prefix = "dr-fix-test"): string {
   const dir = join("/tmp", `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
@@ -44,7 +45,7 @@ function runDoctorWithInput(
   args: string[],
   stdinInput = ""
 ): { stdout: string; stderr: string; exitCode: number } {
-  const result = Bun.spawnSync(
+  const result = runProcessSync(
     ["node", "packages/cli/dist/index.js", "doctor", ...args],
     {
       env: { ...process.env, GIT_STACKS_CONFIG_DIR: cfgDir },

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test"
+import { beforeEach, describe, expect, mock, test } from "@test/api"
 import type { Workspace } from "@/lib/config"
 
 const buildWorkspaceEnvMock = mock(async (_workspace: Workspace, _opts: any) => ({

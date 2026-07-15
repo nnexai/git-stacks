@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test } from "@test/api"
 import { existsSync, mkdtempSync, readFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"

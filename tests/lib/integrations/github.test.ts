@@ -1,4 +1,4 @@
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test"
+import { describe, test, expect, mock, beforeEach, afterAll } from "@test/api"
 import { Command } from "commander"
 import { makeConfigMock, makeForgeUtilsMock, makeIssueUtilsMock } from "../../helpers"
 
