@@ -2,7 +2,7 @@
 created: 2026-05-15T20:39:05.857Z
 title: Add workspace notes
 area: tooling
-resolves_phase: 96
+resolves_phase: 126
 files:
   - src/commands/workspace.ts
   - src/tui/dashboard/WorkspaceDetail.tsx

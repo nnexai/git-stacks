@@ -2,6 +2,7 @@
 created: 2026-05-15T20:39:05.857Z
 title: Add workspace stale view
 area: tooling
+resolves_phase: 127
 files:
   - src/commands/workspace.ts
   - src/lib/workspace-status.ts
