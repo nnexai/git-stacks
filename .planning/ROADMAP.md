@@ -1,6 +1,8 @@
 # Roadmap: v0.22.0 Workspace Productivity
 
-## Milestone goal
+## v0.22.0 Workspace Productivity
+
+### Milestone goal
 
 Turn the shared service-backed clients into a terminal-first daily productivity surface: safe workspace lifecycle controls, user-compatible command execution, collision-aware keyboard navigation, high-value web parity, and explainable cleanup guidance.
 
