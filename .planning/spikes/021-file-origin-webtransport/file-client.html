@@ -1,0 +1,52 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; connect-src https://127.0.0.1:*; style-src 'unsafe-inline'">
+<title>git-stacks file origin WebTransport probe</title>
+<style>body { font: 16px system-ui; padding: 2rem; } pre { white-space: pre-wrap; }</style>
+<h1>File-origin WebTransport probe</h1>
+<pre id="result">starting</pre>
+<script>
+void (async () => {
+  const output = document.querySelector("#result")
+  const decoder = new TextDecoder()
+  const encoder = new TextEncoder()
+  const decodeBase64Url = (value) => {
+    const base64 = value.replaceAll("-", "+").replaceAll("_", "/")
+    return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
+  }
+  const descriptor = JSON.parse(decoder.decode(decodeBase64Url(location.hash.slice(1))))
+  history.replaceState(null, "", location.pathname)
+  try {
+    const transport = new WebTransport(descriptor.url, {
+      serverCertificateHashes: [{ algorithm: "sha-256", value: decodeBase64Url(descriptor.pin) }],
+    })
+    await transport.ready
+    const stream = await transport.createBidirectionalStream()
+    const writer = stream.writable.getWriter()
+    const reader = stream.readable.getReader()
+    const marker = `file-origin-${crypto.randomUUID()}`
+    await writer.write(encoder.encode(marker))
+    await writer.close()
+    let echoed = ""
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      echoed += decoder.decode(value, { stream: true })
+    }
+    echoed += decoder.decode()
+    output.textContent = JSON.stringify({
+      passed: echoed === marker,
+      origin: location.origin,
+      secureContext: globalThis.isSecureContext,
+      echoed,
+    }, null, 2)
+    document.body.dataset.complete = "true"
+    document.body.dataset.passed = String(echoed === marker)
+    transport.close({ closeCode: 0, reason: "probe complete" })
+  } catch (error) {
+    output.textContent = String(error?.stack ?? error)
+    document.body.dataset.complete = "true"
+    document.body.dataset.passed = "false"
+  }
+})()
+</script>

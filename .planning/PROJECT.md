@@ -6,7 +6,7 @@ git-stacks is a local-first workspace manager for multi-repository development. 
 
 ## Current Milestone: v0.21.0 Node Core and Secure Service Architecture
 
-**Goal:** Make Node.js the default runtime and distribution, then use that shared service foundation to deliver one paired local/remote service model with authenticated identities, encrypted remote transport, delegated browser access, and thin web/TUI clients.
+**Goal:** Make Node.js the default runtime and distribution, then use that shared service foundation to deliver one paired local/remote service model with authenticated identities, encrypted transport, ephemeral browser access, and thin web/TUI clients.
 
 **Core value:** One command takes a user from feature intent to a running development environment without manual repository setup.
 
@@ -18,7 +18,7 @@ git-stacks is a local-first workspace manager for multi-repository development. 
 - Atomic filesystem authority and watcher reconciliation that keeps local CLI changes and service projections coherent without refresh RPCs.
 - Node-owned PTYs and signals behind replaceable service carriers, with Linux and modern macOS distribution parity.
 - A local-helper/authority topology where local service use is the zero-configuration default and manually paired remote services use the same protocol and client semantics.
-- WebTransport service connections pinned to an explicitly paired stable service identity, plus a TLS 1.3 local TUI adapter, helper epochs, delegated browser keys, bounded streams, and adversarial reconnect protection.
+- Packaged browser code with WebTransport browser-to-helper and helper-to-authority connections, plus a TLS 1.3 local TUI adapter, ephemeral browser launches, helper/listener epochs, bounded streams, and adversarial reconnect protection.
 - A release cutover that removes obsolete Bun-first runtime paths instead of retaining parallel implementations.
 
 ## Supported Product Surfaces
@@ -52,7 +52,7 @@ The target workspace contains separately buildable protocol, client, core, CLI, 
 
 ### Paired service security
 
-Every client starts from a local git-stacks helper. In default local mode that process is also the authority and provisions trust automatically. Browser API, events, signals, and terminals use pinned WebTransport; loopback HTTP serves static assets only. The optional Bun TUI uses pinned TLS 1.3 to the local Node helper. For a remote target, the Node helper uses WebTransport and the browser may connect directly after receiving an encrypted, scope-bound delegation and signed target pin set from the helper. Remote trust is established once through explicit out-of-band pairing. Workspace, operation, signal, event, and terminal policy remain single implementations in the selected authoritative service.
+Every client starts from a local git-stacks helper. In default local mode that process is also the authority and provisions trust automatically. `git-stacks web` opens a self-contained browser client from the installed package; browser API, events, signals, and terminals then use pinned WebTransport, with no executable HTTP bootstrap. The browser has no durable identity or state and talks only to the local helper. The optional Bun TUI uses pinned TLS 1.3 to that helper. For a remote target, the Node helper is the paired principal and relays typed channels over WebTransport. Remote trust is established once through explicit out-of-band pairing. Workspace, operation, signal, event, terminal, target, and persistence policy remain in the helper/selected authoritative service.
 
 ## Current Constraints
 

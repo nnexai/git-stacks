@@ -15,13 +15,13 @@ The architecture uses a carrier-neutral authenticated session protocol with two 
 - WebTransport over HTTP/3 for browser-to-service and Node-helper-to-remote-service connections.
 - Pinned TLS 1.3 for the Bun TUI-to-local-Node-helper connection.
 
-Every request, snapshot, event, signal, operation, terminal control, terminal input byte, and terminal output byte travels inside one of those encrypted carriers. Loopback HTTP may serve immutable web assets and non-sensitive readiness only. It must never carry API data, credentials, pairing material, events, SSE, WebSockets, or terminal bytes. Unsupported secure transport fails closed; there is no plaintext fallback.
+Every request, snapshot, event, signal, operation, terminal control, terminal input byte, and terminal output byte travels inside one of those encrypted carriers. The retained integration probe used loopback HTTP for static assets, but the subsequent adversarial review and Spike 021 remove executable HTTP bootstrap from the production architecture. Unsupported secure transport fails closed; there is no plaintext fallback.
 
 ## Proven topology
 
 ```text
 local browser
-  HTTP loopback: static assets only
+  installed self-contained file client
   WebTransport: authenticated API/events/terminals
              |
              v
@@ -32,7 +32,7 @@ local Node helper/authority
 Bun/OpenTUI      paired remote Node authority
 ```
 
-In local mode the helper is also the authority. In remote mode it retains the paired target and helper identity. The browser may establish a direct pinned WebTransport connection to the selected remote authority after the local helper delegates a short-lived browser key over the encrypted local WebTransport session. The TUI remains connected to the local helper over TLS; the helper connects to the remote authority over WebTransport. Both remote paths therefore remain encrypted on every hop.
+In local mode the helper is also the authority. In remote mode it retains the paired target and helper identity. After the adversarial browser-storage review, the selected production topology keeps the browser connected only to the local helper; the helper relays typed channels to the remote authority over WebTransport. The TUI remains connected to the helper over TLS and uses the same remote connector. Both hops remain encrypted, while no durable remote trust reaches browser code.
 
 The daemonless CLI does not join this topology. Ordinary CLI commands continue calling the local core directly. Only explicit service lifecycle, target, pairing, trust, and recovery commands communicate with or configure a service.
 
@@ -49,11 +49,12 @@ Validated on Linux x64:
 5. Bun 1.3.14 connected through a private-CA-pinned TLS 1.3 stream with the `git-stacks/2` ALPN, used the same frame codec, and sent terminal-secret input. A different valid authority was rejected.
 6. The recording proxies captured about 196 KiB of QUIC traffic and 4 KiB of TLS traffic in the combined run. None of the 19 randomized classified markers appeared in captured wire bytes, while the decrypted authority accepted every marker.
 7. Browser, helper, and TUI sessions shut down cleanly. The WebTransport server and client completed under the project's Node 24 target; the Bun process contains only the TLS client adapter and never loads the native WebTransport addon.
+8. Spike 021 subsequently loaded a packaged `file:` probe as a secure Chrome context and completed a pinned bidirectional WebTransport stream, removing the retained probe's unauthenticated executable HTTP delivery from the selected architecture.
 
 The earlier focused spikes remain part of the proof set:
 
-- Spike 012 validated non-exportable browser P-256 keys, exact-origin delegations, one-use launch pairing, and challenge proof.
-- Spike 013 validated helper epochs, heartbeat expiry, clean revocation before localhost port release, and hostile old-origin takeover rejection.
+- Spike 012 validated non-exportable browser P-256 keys, exact-origin grants, one-use launch pairing, and challenge proof. Its persistent-key option is retained only as adversarial evidence, not as the selected architecture.
+- Spike 013 proved a hostile exact-origin process can recover and invoke an IndexedDB key. Its epoch rejection validated the threat, and the production design now removes browser persistence and direct remote browser authority entirely.
 - Spike 014 validated independent WebTransport terminal streams, 16–48 MiB transfer, backpressure, visible-only bulk output, bounded replay, reconnect/reset, and cancellation.
 - Spike 015 independently validated Bun `node:tls` private-CA enforcement and wrong-authority rejection.
 
@@ -67,9 +68,9 @@ Changing the stable service identity is a trust reset and requires explicit re-p
 
 ### Local bootstrap
 
-`git-stacks web` starts or discovers the local Node helper, provisions its short-lived certificate, and opens a URL whose fragment contains the one-use local bootstrap token and current certificate hash. URL fragments are not part of HTTP requests. The page reads the fragment, clears it with `history.replaceState`, establishes pinned WebTransport, consumes the token inside encryption, creates or restores a non-exportable browser key, and receives a short-lived delegation.
+`git-stacks web` starts or discovers the local Node helper, provisions its short-lived certificate, atomically binds loopback WebTransport, and opens the self-contained installed browser asset as a `file:` URL whose fragment contains the one-use local bootstrap token and current certificate hash. The page clears the fragment with `history.replaceState`, establishes pinned WebTransport, consumes the token inside encryption, creates an ephemeral non-exportable browser key in document memory, and receives a short-lived local grant. No executable browser code is fetched from the service.
 
-Every invocation may issue a fresh local bootstrap. This keeps default local use non-interactive even when the helper port or browser origin changes. IndexedDB preserves the non-exportable key across reloads on the same origin; a helper restart creates a new epoch and can automatically provision a fresh key/delegation from the new one-use launch fragment.
+Every invocation issues a fresh local bootstrap. Reload, restored history, browser restart, or a new document cannot reuse authority and must be launched again through `git-stacks web`. This remains non-interactive; shells, targets, preferences, terminal cursors, and replay state persist in the helper/service and are restored after fresh authentication.
 
 ### Remote pairing
 
@@ -77,11 +78,11 @@ Remote listening is disabled by default and is never enabled by `git-stacks web`
 
 The bundle is transferred out of band as a protected file or through stdin. It is not accepted as a command-line argument, URL query, workspace field, or log value. The local pairing command displays the same short fingerprint as the remote service for manual comparison, generates a helper key, opens the pinned encrypted carrier, consumes the token, and registers the helper public key and scopes. Subsequent connections use fresh challenges signed by the helper key; no bearer token is reused.
 
-### Browser delegation and helper epochs
+### Ephemeral browser grants and listener epochs
 
-The local helper signs short-lived browser delegations bound to the service audience, exact localhost origin, browser public key, scopes, helper epoch, issue time, and expiry. The remote authority knows the paired helper public key, independently verifies the delegation and a fresh browser proof, and rejects replay, scope expansion, wrong origin, inactive epoch, and old-port takeover.
+The local helper issues short-lived browser grants bound to the browser-listener epoch, ephemeral browser public key, target ceiling, scopes, protocol/build, issue time, and expiry. The browser proves possession against a fresh helper challenge and talks only to that helper. Its opaque request origin is checked only as defense in depth, never identity. The remote authority authenticates the paired helper, never a browser credential.
 
-The helper registers a random epoch, heartbeats it, revokes it before releasing the localhost listener on clean shutdown, and lets it expire irreversibly after a bounded abrupt-loss grace. A helper restart creates a new epoch and new delegations.
+The helper manages separate browser-listener and remote-helper epochs. Loss of the local browser WebTransport listener invalidates grants before releasing the socket; browser closure does not end the remote helper connection or service-owned shells. A helper restart creates a new remote epoch and every browser document receives a new local listener epoch/grant.
 
 ### Session and carrier boundary
 
@@ -111,13 +112,13 @@ Actual Linux arm64 and modern macOS x64/arm64 runtime jobs remain release gates.
 ## Required production rules
 
 - Classify every protocol channel. Classified channels require an authenticated `SecureSessionCarrier`; plaintext adapters cannot implement that interface.
-- Remove current HTTP API, SSE, and WebSocket classified paths after cutover. Do not retain a compatibility fallback.
-- Keep static HTTP responses immutable, CSP-restricted, non-sensitive, and free of runtime configuration endpoints.
+- Remove every current HTTP route plus classified SSE/WebSocket paths after cutover. Do not retain a compatibility or executable-bootstrap fallback.
+- Build the web client as one installed self-contained asset with restrictive CSP hashes and no remote executable resources, runtime configuration, or browser persistence.
 - Use strict canonical frames, pre-allocation size checks, stream/principal/global quotas, monotonic replay state, and bounded terminal retention.
-- Redact pairing tokens, private keys, delegations, terminal bytes, certificate material, proof signatures, and detailed authorization failures from logs.
+- Redact pairing tokens, private keys, browser grants, terminal bytes, certificate material, proof signatures, and detailed authorization failures from logs.
 - Prefer macOS Keychain and a maintained Linux secret-store adapter for durable helper/service keys; use an atomic mode-`0600` fallback with an explicit same-user threat limitation.
 - Treat endpoint compromise, browser extensions with page privileges, ptrace/debug access, and same-user malware as outside transport confidentiality. The guarantee is against passive recording and active network/localhost interception between uncompromised endpoints.
 
 ## Conclusion
 
-The complete approach is feasible. WebTransport is the primary service carrier, including Node helper-to-remote authority. Pinned TLS is a narrow local adapter required only because the optional TUI runs under Bun. Both implement one secure session contract, and neither permits classified plaintext. This supersedes Spike 015's Bun-era recommendation to make a TLS relay the first remote carrier.
+The complete approach is feasible. WebTransport is the browser-to-local-helper and Node-helper-to-remote-authority carrier. Pinned TLS is a narrow local adapter required only because the optional TUI runs under Bun. The browser is ephemeral and the local Node helper is the only paired remote principal. All adapters implement one secure session contract, and none permits classified plaintext. This supersedes Spike 015's Bun-era carrier recommendation and the earlier persistent/direct browser design.

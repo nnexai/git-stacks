@@ -23,7 +23,8 @@
 
 - Carry browser API, events, signals, operations, and terminal streams over authenticated pinned WebTransport. Never fall back to plaintext HTTP/SSE/WebSocket for classified channels.
 - Open xterm only in a visible, dimensioned pane and stream bulk output only for the visible terminal.
-- Use same-origin loopback static assets, a fragment-delivered one-use launch secret and certificate hash, a non-exportable browser key, exact-origin scoped delegation, strict Host/Origin/Fetch Metadata validation, and bounded resources.
+- Load one self-contained browser asset from the installed package, deliver a one-use secret and certificate hash in its fragment, use an ephemeral in-memory browser key, validate loopback/request shape, scope lifecycle to the browser WebTransport listener, and bound all resources. Do not serve executable browser code over HTTP.
+- Treat every browser persistence API as hostile and non-authoritative. Store no credentials, trust, targets, terminal cursors/output, or persistent UI state in cookies, IndexedDB, local/session storage, Cache Storage, OPFS, workers, or history state.
 - Treat retained raw output as cursor-based delta replay; report history loss explicitly.
 - Authenticate and strip app-owned OSC signal frames in the service before terminal bytes reach browser replay or xterm.
 - Keep external terminal integration sessions independent from service-owned browser PTYs.
@@ -33,12 +34,12 @@
 - Treat a WebTransport certificate hash as server authentication only; perform client authentication and authorization inside the encrypted framed protocol.
 - Use short-lived X.509v3 ECDSA P-256 leaf certificates with a validity comfortably below the two-week browser maximum and rotate before expiry.
 - Keep persistent service identity separate from rotating transport certificates; pairing pins identity and authorizes certificate rotation.
-- Let a localhost helper hold durable browser-client identity outside browser storage and delegate a short-lived, non-exportable browser session key after explicit pairing.
-- Bind each helper-signed browser delegation to the exact service audience, browser origin, browser public key, scopes, issue time, expiry, and a revocable helper-session epoch using canonical signed framing.
+- Let the localhost helper hold all durable remote identity and target trust. Browser identity is per-document, non-exportable, memory-only, and local to the helper.
+- Keep the browser connected only to its local helper. Bind each ephemeral browser grant to the in-memory public key, target ceiling, scopes, protocol/build, issue time, expiry, and revocable browser-listener epoch using canonical framing. Treat opaque origin as request-shape defense, not identity.
 - Require a fresh one-use challenge and proof of possession for every connection, including reconnects; accepting one proof must never authorize replay on another connection.
-- Revoke a helper-session epoch before releasing its localhost listener on clean shutdown; expire an abruptly disconnected epoch after a short, explicit heartbeat lease.
-- Treat expired and revoked epochs as terminal. A helper restart registers a new random epoch and issues fresh browser delegations.
-- Never accept localhost cookies, IndexedDB state, or possession of a localhost port as credentials at the remote service.
+- Revoke a browser-listener epoch and invalidate browser grants before releasing the local WebTransport socket; manage remote helper epochs independently so remote shells can persist after browser closure.
+- Treat expired and revoked epochs as terminal. A helper restart registers a new remote epoch; every browser document receives only a fresh local in-memory grant.
+- Never accept browser storage, possession of a localhost port, or a browser document as a remote credential. The paired Node helper is the only remote principal.
 - Use bounded length-prefixed framing on byte-stream transports; WebTransport stream reads and writes do not preserve application message boundaries.
 - Keep PTY ownership, cursor acknowledgement, replay retention, visibility policy, and lifecycle in the shared terminal core; adapt only writing, pressure, drain, cancellation, and close behavior per carrier.
 - Await WebTransport stream writes with at most one attachment pump per terminal. A blocked or cancelled carrier must not create an unbounded queue or implicitly terminate the service-owned PTY.
@@ -48,7 +49,7 @@
 - Prefer an operating-system credential store for persistent helper keys, with an atomic mode `0600` file as an explicit portable fallback rather than a protocol dependency.
 - Require exact protocol framing, replay protection, bounded streams, backpressure, idle expiry, and revocation regardless of transport.
 - Do not adopt a native transport addon until Linux and modern macOS runtime, active-session shutdown, reconnect, rotation, vulnerability, maintenance, and license-notice gates pass.
-- Preserve same-origin loopback protections for local bootstrap. A random localhost port is discovery, not durable identity or an authorization boundary.
+- Preserve exact loopback protections for local bootstrap. A random port, opaque file origin, and browser document are discovery/request context only; none is durable identity or authorization.
 
 ## Tools and Libraries
 

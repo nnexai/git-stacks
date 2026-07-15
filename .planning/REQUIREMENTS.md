@@ -69,10 +69,10 @@
 - [ ] **PROTO-01:** The protocol package defines a versioned, carrier-neutral binary frame envelope with canonical control payloads, strict pre-allocation length limits, stream identifiers, monotonic sequence/cursor fields, and deterministic rejection of malformed, unknown, or non-canonical input.
 - [ ] **PROTO-02:** Request/response, snapshot, operation, event, signal, terminal-control, and terminal-output channels multiplex without moving domain, replay, terminal, or authorization policy into a carrier.
 - [ ] **PROTO-03:** Protocol and ALPN negotiation fail closed on unsupported versions, missing mandatory capabilities, downgrade attempts, or cross-protocol input.
-- [ ] **PROTO-04:** Every channel that can carry workspace data, operations, events, signals, terminal bytes, credentials, or secrets requires an authenticated encrypted carrier; plaintext HTTP is limited to immutable static assets and non-sensitive readiness and has no classified fallback.
+- [ ] **PROTO-04:** Every channel that can carry workspace data, operations, events, signals, terminal bytes, credentials, or secrets requires an authenticated encrypted carrier; browser code loads from the installed package, and the service exposes no plaintext HTTP API, bootstrap, readiness, or classified fallback.
 - [ ] **TRUST-01:** Every service authority and client-side helper has a durable P-256 signing identity independent of rotating transport certificates. Private keys use an OS credential store when available and a permission-restricted atomic fallback otherwise.
 - [ ] **TRUST-02:** Local authority selection and trust provisioning are automatic and non-interactive, while every remote authority requires an explicit one-use pairing bundle and out-of-band service fingerprint verification.
-- [ ] **TRUST-03:** Pairing records bind service identity, endpoint, signed WebTransport certificate-hash set, helper identity, scopes, protocol version, and creation metadata without placing bearer or private-key material in query strings, process arguments, logs, workspace YAML, or exportable browser storage.
+- [ ] **TRUST-03:** Pairing records bind service identity, endpoint, signed WebTransport certificate-hash set, helper identity, scopes, protocol version, and creation metadata without placing bearer or private-key material in query strings, process arguments, logs, workspace YAML, or any browser storage.
 - [ ] **TRUST-04:** Short-lived WebTransport certificates rotate through stable-identity-signed pin sets and overlapping listeners without re-pairing; stable identity replacement, helper replacement, scope expansion, and trust reset require explicit security-sensitive actions.
 
 ## Encrypted Remote Transport and Lifecycle
@@ -85,20 +85,22 @@
 
 ## Delegation, Epochs, and Client Routing
 
-- [ ] **AUTH-01:** Each helper process registers a random epoch with the remote authority, maintains it with authenticated heartbeats, revokes it before releasing the localhost listener on clean shutdown, and permits irreversible expiry after bounded abrupt-loss grace.
-- [ ] **AUTH-02:** The browser stores a non-exportable P-256 key in origin-scoped IndexedDB and receives a short-lived helper-signed delegation bound to service audience, exact localhost origin, browser key, scopes, helper epoch, issued time, and expiry.
-- [ ] **AUTH-03:** Every browser attachment proves key possession against a fresh one-use service challenge; replayed proofs, altered scopes, expired delegations, inactive epochs, wrong origins, and old-port takeover attempts fail closed.
-- [ ] **AUTH-04:** The Bun TUI connects only to the local Node helper through private-CA-verified TLS 1.3 with hostname verification and `git-stacks/2` ALPN; the helper uses the same WebTransport remote connector as the browser/helper architecture.
-- [ ] **ROUTE-01:** Web and TUI clients use one local client endpoint and select a service target; absent selection resolves to the implicit local authority with no manual pairing or remote dependency.
-- [ ] **ROUTE-02:** For a remote target, the helper and delegated browser use authenticated secure sessions while the remote authority independently validates helper/browser identity, epoch, scopes, stream ownership, quotas, and terminal ownership.
+- [ ] **AUTH-01:** Each helper process registers a random helper-session epoch with every remote authority, maintains it with authenticated heartbeats, revokes it on clean shutdown, and permits irreversible expiry after bounded abrupt-loss grace.
+- [ ] **AUTH-02:** Every browser document loads from a self-contained installed `file:` asset, generates a non-exportable ephemeral P-256 key in memory, and receives a short-lived local session grant bound to the browser-listener epoch, key, target ceiling, scopes, protocol/build, issued time, and expiry.
+- [ ] **AUTH-03:** Every browser attachment proves possession against a fresh one-use helper challenge and maintains a short renewable connection lease; replayed proofs, concurrent reuse, altered scopes, expired grants/leases, inactive listener epochs, unexpected request origins, storage-restored state, BFCache resume, and old-port takeover attempts fail closed; origin is never client identity.
+- [ ] **AUTH-04:** The Bun TUI connects only to the local Node helper through private-CA-verified TLS 1.3 with hostname verification and `git-stacks/2` ALPN, then completes fresh application authentication from a permission-restricted one-use descriptor; the helper uses the same remote WebTransport connector as the browser.
+- [ ] **AUTH-05:** Cookies, IndexedDB, local/session storage, Cache Storage, OPFS, service/shared workers, history state, and all other browser persistence are never security or product authority; persistent preferences, targets, cursors, and reconnect state live in the helper/service, every new document requires a fresh one-use launch, and the launch fragment is consumed/expired even if history retains it.
+- [ ] **ROUTE-01:** Web and TUI clients use one local helper endpoint and select a service target; absent selection resolves to the implicit local authority with no manual pairing or remote dependency.
+- [ ] **ROUTE-02:** For a remote target, the browser remains connected to the local helper and the paired helper relays authorized typed channels over WebTransport; the remote authority validates helper identity, epoch, scopes, stream ownership, quotas, and terminal ownership.
 - [ ] **ROUTE-03:** The existing CLI remains local-only and daemonless; remote access is confined to explicit service/web/TUI client surfaces until a separately named remote CLI client is designed.
+- [ ] **ROUTE-04:** The helper computes each relayed channel's effective authorization as the intersection of the local browser/TUI grant, selected target, paired-helper scopes, operation type, and terminal ownership; local client input can never select or expand remote authority, scopes, or another client's streams.
 
 ## Remote Stream Parity and Security Closure
 
 - [ ] **STREAM-01:** Remote snapshots, operations, events, dismissals, signals, and replay gaps preserve the same observable contracts and shared reducers as local mode.
 - [ ] **STREAM-02:** Remote terminal attachments preserve PTY ownership, 1 MiB retention, 64 KiB chunks, visible-only bulk output, cursor acknowledgement, replay/reset, title, resize, cancellation, quotas, pressure, process-tree cleanup, and exact-surface signal behavior.
 - [ ] **STREAM-03:** Multiplexing enforces per-frame, per-stream, per-principal, per-target, and global limits so a slow or hostile stream cannot cause unbounded memory, starvation, or cross-stream head-of-line blocking.
-- [ ] **SEC-01:** Adversarial tests cover wire recording, MITM/wrong authority, pairing replay, helper impersonation, challenge replay, epoch takeover, localhost port takeover, malformed/oversized frames, slow readers, disconnect races, log redaction, and authorization enumeration.
+- [ ] **SEC-01:** Adversarial tests cover wire recording, MITM/wrong authority, executable-bootstrap substitution, pairing theft/replay, helper impersonation, challenge replay, helper/listener epoch takeover, exact localhost origin reuse, poisoned browser storage, stale service workers, reload/history/profile restore, malformed/oversized frames, slow readers, disconnect races, log/key-log redaction, resource exhaustion, trust/pin rollback, and authorization enumeration.
 - [ ] **SEC-02:** Linux x64/arm64 and modern macOS x64/arm64 release gates cover certificate generation/rotation, credential-store behavior and fallback permissions, remote reconnect, terminal soak, clean shutdown, dependency licenses, and runtime vulnerabilities.
 - [ ] **SEC-03:** Documentation explains the network and same-user threat boundaries, manual pairing ceremony, recovery/rotation/revocation, local-default behavior, remote exposure controls, and an emergency return-to-local procedure before release.
 
@@ -133,8 +135,8 @@
 | TRUST-01..04 | 117 | Planned |
 | REMOTE-01..05 | 118 | Planned |
 | STREAM-01..03 | 119 | Planned |
-| AUTH-01..04 | 120 | Planned |
-| ROUTE-01..03 | 121 | Planned |
+| AUTH-01..05 | 120 | Planned |
+| ROUTE-01..04 | 121 | Planned |
 | SEC-01..03 | 122 | Planned |
 
 ---

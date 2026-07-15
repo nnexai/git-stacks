@@ -4,7 +4,7 @@
 
 git-stacks will expose one authenticated, carrier-neutral service protocol. Every channel that can contain workspace data, operations, signals, events, terminal input/output, environment values, credentials, or secrets requires an encrypted carrier. There is no classified plaintext compatibility mode.
 
-WebTransport is the primary service carrier for browsers and Node helpers. The optional Bun/OpenTUI package uses private-CA-pinned TLS 1.3 only to reach its local Node helper because the accepted WebTransport addon is not safe inside Bun. The local helper then uses the same Node WebTransport connector as every other remote client.
+WebTransport is the primary service carrier for browser-to-local-helper and Node-helper-to-authority connections. Browser code loads as a self-contained asset from the installed git-stacks package, not from a plaintext localhost response. The browser never connects directly to a remote authority and never stores remote trust. The optional Bun/OpenTUI package uses private-CA-pinned TLS 1.3 only to reach its local Node helper because the accepted WebTransport addon is not safe inside Bun. Both UI clients therefore use the same Node helper remote connector.
 
 Ordinary CLI commands remain daemonless and machine-local. They call `@git-stacks/core` directly and rely on atomic persistence plus service watchers. Only explicit `service`, `pair`, `target`, `trust`, and recovery commands participate in the service security topology.
 
@@ -15,23 +15,24 @@ Ordinary CLI commands remain daemonless and machine-local. They call `@git-stack
 ```text
 git-stacks web
   -> start/discover local Node authority
-  -> static HTTP listener on 127.0.0.1
-  -> one-use launch token + current pin in URL fragment
+  -> atomically bind WebTransport on loopback
+  -> open packaged file:///.../git-stacks-web.html
+  -> one-use launch token + current pin in fragment
 browser
-  -> GET static assets (fragment is not transmitted)
+  -> self-contained installed UI (fragment is not transmitted)
   -> pinned WebTransport to local authority
-  -> encrypted pairing, delegation, API, events, terminals
+  -> ephemeral memory-only key
+  -> encrypted launch, API, events, terminals
 ```
 
 ### Remote browser
 
 ```text
-browser --WebTransport--> local helper
-  receive encrypted target record + scoped delegation
-browser --WebTransport--> paired remote authority
+browser --WebTransport(loopback)--> local helper
+local helper --WebTransport(LAN)--> paired remote authority
 ```
 
-The remote authority validates the helper-signed browser delegation, browser proof, active helper epoch, target audience, origin, scopes, quotas, and stream ownership. Closing the browser does not close service-owned shells. Reopening and authenticating reattaches through terminal cursors and bounded replay.
+The remote authority validates the paired helper identity, active helper epoch, scopes, quotas, and stream ownership. The helper validates each ephemeral local browser launch and forwards only authorized typed channels. Closing the browser does not close service-owned shells. A fresh `git-stacks web` launch authenticates a new document and reattaches through service-owned terminal cursors and bounded replay.
 
 ### Local and remote TUI
 
@@ -45,11 +46,11 @@ Every hop is encrypted and authenticated. The TUI does not load or bind the nati
 
 ## Package ownership
 
-- `@git-stacks/protocol`: frame envelope, canonical control messages, capability/version negotiation, channel classification, limits, IDs, auth transcript schemas, target/pin/delegation DTOs.
+- `@git-stacks/protocol`: frame envelope, canonical control messages, capability/version negotiation, channel classification, limits, IDs, auth transcript schemas, target/pin/local-grant DTOs.
 - `@git-stacks/client`: `SecureSessionCarrier`, authenticated session establishment, request correlation, reconnect/replay reducers, target selection, and carrier-independent client operations.
 - `@git-stacks/core`: unchanged local domain and persistence authority; no transport imports.
-- `@git-stacks/service`: service identity, pairing authority, target registry, helper epochs, authorization, WebTransport server/client adapters, TLS local listener, routing, quotas, PTYs, signals, and projections.
-- `@git-stacks/web`: static renderer, launch-fragment consumption, non-exportable browser key, WebTransport browser adapter, target UX; no machine logic.
+- `@git-stacks/service`: service identity, pairing authority, target registry, helper and browser-listener epochs, authorization, WebTransport server/client adapters, TLS local listener, routing/relay, quotas, PTYs, signals, and projections.
+- `@git-stacks/web`: self-contained packaged renderer, launch-fragment consumption, ephemeral non-exportable in-memory browser key, WebTransport browser adapter, target UX; no machine logic, HTTP bootstrap, or persistent state.
 - `@git-stacks/tui`: OpenTUI renderer plus Bun TLS carrier adapter; no service policy or remote connector.
 - `@git-stacks/cli`: local core commands plus explicitly named service/pairing setup commands; no general service fallback.
 
@@ -73,7 +74,7 @@ WebTransport uses independent bidirectional streams for control/request traffic,
 
 ## Identity, pairing, and credentials
 
-Each authority has a stable P-256 signing identity. Each paired helper has a stable P-256 signing identity. Private keys live in macOS Keychain or a maintained Linux secret-service adapter where available, with an atomic mode-`0600` file fallback that clearly documents the same-user threat boundary.
+Each authority has a stable P-256 signing identity. Each paired helper has a stable P-256 signing identity. Private keys live in macOS Keychain or a maintained Linux secret-service adapter where available, with an atomic mode-`0600` file fallback that clearly documents the same-user threat boundary. The browser has no durable identity: each launched document generates a new non-exportable key in memory.
 
 Remote pairing is explicit:
 
@@ -101,28 +102,35 @@ Rotation starts an overlapping next listener before distributing its signed stat
 
 The local TUI listener uses TLS 1.3, an automatically provisioned private local CA, hostname verification, and `git-stacks/2` ALPN. Its CA is supplied only to the TUI connection and is never installed globally. The descriptor and client credential are permission-restricted local state. Bun's `node:tls` adapter is required; native `Bun.connect` is forbidden until its wrong-CA behavior passes release tests.
 
-## Browser bootstrap and delegation
+## Packaged browser bootstrap and ephemeral authority
 
-Loopback HTTP serves immutable HTML/CSS/JS and optional non-sensitive readiness. It has no JSON configuration, API, SSE, WebSocket, terminal, pairing, or error-detail route.
+The service exposes no HTTP bootstrap, runtime configuration, API, SSE, WebSocket, terminal, pairing, or readiness route. `@git-stacks/web` produces one self-contained installed HTML asset with build-generated CSP hashes and no remote executable resources. Serving this code over plaintext loopback HTTP is forbidden because transport pinning cannot authenticate JavaScript that was already replaced before WebTransport starts.
 
-The launch fragment contains a one-use local token and current local certificate hash. The page clears it immediately, opens pinned WebTransport, and consumes the token under encryption. It creates a non-exportable P-256 key in IndexedDB and receives a short-lived helper-signed delegation bound to exact origin, key, remote service audience, scopes, helper epoch, issued time, and expiry.
+The helper atomically owns a loopback WebTransport listener before emitting a URL such as `file:///.../git-stacks-web.html#<descriptor>`. The descriptor contains only a 256-bit one-use token, listener address, current certificate hash, expected protocol/build, and expiry. It contains no remote credential or product state. The helper accepts only a loopback peer and the explicitly supported opaque-origin request shape, but never treats the serialized `Origin` as identity.
 
-Every connection uses a fresh service challenge and browser signature. A clean helper shutdown revokes its epoch before releasing the localhost listener; abrupt loss expires after bounded grace. Old IndexedDB state and a process that captures the old port cannot reactivate a revoked/expired epoch.
+The page clears the fragment synchronously, creates an ephemeral non-exportable P-256 key in document memory, opens pinned WebTransport, and consumes the token under encryption. The transcript binds browser-listener epoch, key, requested target ceiling, scopes, protocol/build, issue/expiry, and a fresh challenge. The page renders no product state and accepts no terminal input until the encrypted carrier and application authentication both succeed.
+
+No cookie, IndexedDB, local/session storage, Cache Storage, OPFS, service worker, history state, or other browser-retained value is accepted as identity, trust, target configuration, terminal cursor, or authoritative product state. Browser persistence is treated as hostile input and production code does not consult it. Persistent preferences and reconnect state live in the helper/service.
+
+The WebTransport browser listener, launch tokens, and browser sessions share one browser-listener epoch and abort tree. Listener loss invalidates launch tokens and browser grants and closes local browser sessions before releasing the socket, even when the helper remains alive for TUI or remote connector work. Each authenticated browser connection also holds a short renewable lease and a one-active-connection grant; a frozen BFCache page, crashed renderer, duplicated tab, or lost carrier expires without ending service-owned shells. Browser reload, close/reopen, history restore, BFCache resume, or a new document requires a fresh launch. Same-document carrier reconnect may prove the in-memory key only inside a short bounded grace window.
+
+The browser never receives durable remote credentials, remote pairing records, or persistable remote delegations. The local helper authenticates to the remote authority and relays the browser's typed channels.
 
 ## Confidentiality boundary
 
-The design protects against passive packet recording and active MITM or localhost-port takeover between uncompromised endpoints. Terminal keystrokes such as API keys are encrypted before leaving the browser/TUI and are not exposed to HTTP, SSE, WebSocket, or logs.
+The design protects against passive packet recording and active MITM or localhost-port takeover between uncompromised endpoints. Terminal keystrokes such as API keys are encrypted before leaving the browser/TUI and are not exposed to HTTP, SSE, WebSocket, logs, or release key-log output. Browser executable code is read from the installed package rather than from an unauthenticated network response. Service startup sanitizes or rejects known TLS/QUIC key-log and payload-tracing settings; release builds never enable them.
 
-It cannot protect secrets from a compromised authority, compromised browser renderer/extension, same-user malware able to inspect process memory, ptrace/debug privileges, or terminal applications that themselves record input. Pairing bundles also require a trusted out-of-band transfer. These boundaries must be explicit documentation, not implied exceptions.
+It cannot protect secrets from a compromised authority/helper, compromised active browser renderer/extension, browser deliberately launched with TLS key logging or debugging, same-user malware able to inspect process memory, ptrace/debug privileges, or terminal applications that themselves record input. Pairing bundles also require a trusted out-of-band transfer. Network observers still learn endpoints, timing, and approximate volume. These boundaries must be explicit documentation, not implied exceptions.
 
 ## Failure behavior
 
-- No secure carrier support: fail closed with a static compatibility message.
+- No secure carrier support: fail closed in the packaged client before requesting product state.
 - Unknown/wrong/expired pin: do not send auth or classified data.
-- Auth/delegation/epoch failure: close with a generic reason and require helper recovery or re-pairing.
+- Auth/grant/epoch failure: close with a generic reason and require a fresh launch, helper recovery, or re-pairing as appropriate.
 - Replay gap: fetch a fresh bounded snapshot; terminal gap emits explicit reset.
-- Browser close/network loss: service-owned PTY continues according to existing lifecycle; reconnect reattaches.
-- Helper clean stop: revoke epoch, close clients, release listener.
+- Browser reload/close: browser authority ends; service-owned PTY continues and a fresh launch reattaches.
+- Browser-listener loss: revoke its listener epoch, invalidate all launch/browser grants, close browser channels, then release the socket.
+- Helper clean stop: revoke browser-listener and helper epochs, close clients, release listeners.
 - Helper crash: epoch expires after grace; stale browser state remains unusable.
 - Rotation failure: retain prior listener inside rollback window; never downgrade to plaintext.
 
@@ -130,11 +138,12 @@ It cannot protect secrets from a compromised authority, compromised browser rend
 
 - Node 24 Linux x64/arm64 and macOS x64/arm64 runtime jobs for WebTransport server/client, rotation, reconnect soak, and active-session shutdown.
 - Bun/OpenTUI jobs on the same platforms for local TLS positive/wrong-CA/ALPN/shutdown behavior.
-- Browser jobs for current supported Chromium and any other browser explicitly claimed by release notes.
+- Browser jobs for current supported Chromium and any other browser explicitly claimed by release notes on Linux and modern macOS, including the actual self-contained `file:` bundle, opaque-origin request handling, hostile proxy/PAC settings, storage poisoning, stale localhost service workers, reload/history restore, and old-port takeover.
 - Packet-recording tests with randomized classified markers for every carrier.
 - MIT-compatible license inventory, exact dependency integrity, reviewed native install script, required notices, zero unsupported compiler fallback, and vulnerability/maintenance review.
 - Adversarial pairing, replay, malformed frame, resource pressure, origin takeover, log redaction, and authorization-enumeration suites.
+- A browser-bundle forbidden-API gate for cookies, IndexedDB, local/session storage, Cache Storage, OPFS, service/shared workers, and any browser-side durable credential/target store.
 
 ## Migration rule
 
-The existing HTTP/SSE/WebSocket adapters may remain only while the secure path is built behind tests. Cutover is atomic from the product perspective: once web/TUI use secure sessions, all classified old routes are deleted in the same milestone. There is no runtime flag that silently re-enables plaintext.
+The existing HTTP/SSE/WebSocket adapters may remain only while the secure path is built behind tests. Cutover is atomic from the product perspective: once web/TUI use secure sessions, all old HTTP routes and classified SSE/WebSocket routes are deleted in the same milestone. There is no runtime flag that silently re-enables plaintext or executable HTTP bootstrap.

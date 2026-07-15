@@ -2,7 +2,7 @@
 
 ## Milestone v0.21.0
 
-This milestone replaces the Bun-first monolith with a Node-default package architecture and completes the intended security rewrite: one local-helper/remote-authority model, implicit local trust, explicit remote pairing, encrypted remote transport, delegated browser identity, and thin web/TUI clients over one authoritative service implementation.
+This milestone replaces the Bun-first monolith with a Node-default package architecture and completes the intended security rewrite: one local-helper/remote-authority model, implicit local trust, explicit remote pairing, encrypted remote transport, ephemeral browser identity, and thin web/TUI clients over one authoritative service implementation.
 
 ## Dependency order
 
@@ -19,7 +19,7 @@ This milestone replaces the Bun-first monolith with a Node-default package archi
                               -> 117 identities + pairing authority
                                   -> 118 secure carriers + target registry
                                       -> 119 remote multiplexed parity
-                                          -> 120 browser delegation + epochs
+                                          -> 120 ephemeral browser + listener epochs
                                               -> 121 local-default client cutover
                                                   -> 122 adversarial closure + release
 ```
@@ -36,7 +36,7 @@ This milestone replaces the Bun-first monolith with a Node-default package archi
 - [ ] **Phase 117: Service Identity and Pairing Authority** — Add durable service/helper identities, certificate lifecycle, key storage, one-use pairing bundles, trust records, scopes, revocation, and pairing commands.
 - [ ] **Phase 118: Secure Carriers and Target Registry** — Add browser/Node WebTransport, local Bun-to-Node TLS 1.3, explicit remote listening, signed pin rollover, authenticated reconnect, and local/remote target management.
 - [ ] **Phase 119: Remote Session Routing and Multiplexed Streams** — Carry snapshots, operations, events, signals, and terminals over bounded multiplexed streams while retaining one authority implementation and local parity.
-- [ ] **Phase 120: Delegated Browser Identity and Helper Epochs** — Add non-exportable browser keys, scoped delegations, fresh proof, heartbeat/revocation semantics, and hostile localhost-port takeover protection.
+- [ ] **Phase 120: Ephemeral Browser Identity and Listener Epochs** — Add packaged browser bootstrap, memory-only keys, local grants, listener/helper epoch separation, helper-relayed remote access, and hostile browser-storage/origin protection.
 - [ ] **Phase 121: Local-Default Client Cutover and Compatibility** — Route web and TUI through one target-aware local endpoint, keep local use zero-configuration, expose deliberate remote selection/pairing, and remove transitional routing.
 - [ ] **Phase 122: Adversarial Security and Distribution Closure** — Prove the threat model, resource bounds, cross-platform key/certificate behavior, recovery, redaction, and release packaging before the v0.21 release candidate is approved.
 
@@ -185,6 +185,7 @@ Plans:
 
 - [ ] [116-PLAN.md](./phases/116-secure-protocol-and-trust-contracts/116-PLAN.md)
 - Architecture: [116-ARCHITECTURE.md](./phases/116-secure-protocol-and-trust-contracts/116-ARCHITECTURE.md)
+- Adversarial review: [116-ADVERSARIAL-REVIEW.md](./phases/116-secure-protocol-and-trust-contracts/116-ADVERSARIAL-REVIEW.md)
 
 ### Phase 117: Service Identity and Pairing Authority
 
@@ -219,21 +220,21 @@ Plans:
 
 - [ ] [119-PLAN.md](./phases/119-remote-session-routing-and-multiplexed-streams/119-PLAN.md)
 
-### Phase 120: Delegated Browser Identity and Helper Epochs
+### Phase 120: Ephemeral Browser Identity and Listener Epochs
 
-**Goal:** Add fragment bootstrap, non-exportable browser identity, scoped delegation, fresh proof, and helper epoch revocation/expiry.
-**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04
+**Goal:** Add packaged browser bootstrap, memory-only browser identity, local grants, listener epochs, helper-relayed remote access, and complete browser-persistence distrust.
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05
 **Depends on:** Phase 119
 **Plans:** 1 plan
 
 Plans:
 
-- [ ] [120-PLAN.md](./phases/120-delegated-browser-identity-and-helper-epochs/120-PLAN.md)
+- [ ] [120-PLAN.md](./phases/120-ephemeral-browser-identity-and-listener-epochs/120-PLAN.md)
 
 ### Phase 121: Local-Default Client Cutover and Compatibility
 
 **Goal:** Cut web and TUI to secure target-aware sessions, retain one-command local use, and delete classified legacy routes while the CLI stays local.
-**Requirements**: ROUTE-01, ROUTE-02, ROUTE-03
+**Requirements**: ROUTE-01, ROUTE-02, ROUTE-03, ROUTE-04
 **Depends on:** Phase 120
 **Plans:** 1 plan
 
