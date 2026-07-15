@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const registry = "https://registry.npmjs.org"
+const distTagConvergenceTimeoutMs = 5 * 60_000
 
 export function releaseDistTag(version) {
   return version.includes("-") ? "next" : "latest"
@@ -16,9 +17,19 @@ export function assertPublishedArtifact(artifact, metadata) {
   }
 }
 
+export function registryRequestUrl(path, nonce = `${Date.now()}-${Math.random()}`) {
+  const url = new URL(`${registry}/${path}`)
+  url.searchParams.set("git-stacks-cache-bust", nonce)
+  return url
+}
+
 async function registryJson(path) {
-  const response = await fetch(`${registry}/${path}`, {
-    headers: { accept: "application/json" },
+  const response = await fetch(registryRequestUrl(path), {
+    headers: {
+      accept: "application/json",
+      "cache-control": "no-cache, no-store, max-age=0",
+      pragma: "no-cache",
+    },
     cache: "no-store",
   })
   if (response.status === 404) return undefined
@@ -45,7 +56,7 @@ async function publishTarball(path, tag) {
 }
 
 async function verifyDistTags(artifacts, tag) {
-  const deadline = Date.now() + 60_000
+  const deadline = Date.now() + distTagConvergenceTimeoutMs
   let pending = artifacts
   while (pending.length > 0 && Date.now() < deadline) {
     const next = []
