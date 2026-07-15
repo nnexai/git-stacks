@@ -1,6 +1,9 @@
 import { describe, test, expect } from "@test/api"
 import { formatEnvTable, formatEnvShell, formatEnvDotenv, formatEnvJson, formatEnv, detectRepoFromCwd } from "../../packages/core/src/env"
 import type { Workspace } from "../../packages/core/src/config"
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync } from "fs"
+import { tmpdir } from "os"
+import { join } from "path"
 
 // --- Helpers ---
 
@@ -162,6 +165,31 @@ describe("detectRepoFromCwd", () => {
       ],
     })
     expect(detectRepoFromCwd(ws, "/tmp/tasks/ws/api")).toBe("api")
+  })
+
+  test("detects an existing repo through a symlinked path alias", () => {
+    const root = mkdtempSync(join(tmpdir(), "git-stacks-env-"))
+    try {
+      const physicalRoot = join(root, "physical")
+      const aliasRoot = join(root, "alias")
+      const physicalRepo = join(physicalRoot, "ws", "api")
+      mkdirSync(physicalRepo, { recursive: true })
+      symlinkSync(physicalRoot, aliasRoot, "dir")
+      const ws = makeWorkspace({
+        repos: [{
+          name: "api",
+          repo: "api",
+          type: "typescript",
+          mode: "worktree",
+          main_path: join(root, "main", "api"),
+          task_path: join(aliasRoot, "ws", "api"),
+        }],
+      })
+
+      expect(detectRepoFromCwd(ws, realpathSync(physicalRepo))).toBe("api")
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   test("returns null for unmatched CWD", () => {

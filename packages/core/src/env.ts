@@ -1,5 +1,6 @@
 // Canonical implementation owned by @git-stacks/core.
-import { resolve } from "path"
+import { realpathSync } from "fs"
+import { resolve, sep } from "path"
 import type { Workspace } from "./config"
 import { isWorktreeRepo } from "./config"
 import { expandHome } from "./paths"
@@ -79,17 +80,21 @@ export function formatEnv(env: Record<string, string>, format: EnvFormat): strin
  * @returns The matched repo's name or null if no match
  */
 export function detectRepoFromCwd(workspace: Workspace, cwd?: string): string | null {
-  const currentDir = cwd ?? process.cwd()
+  const canonical = (path: string): string => {
+    const resolved = resolve(expandHome(path))
+    try { return realpathSync.native(resolved) } catch { return resolved }
+  }
+  const currentDir = canonical(cwd ?? process.cwd())
 
   let bestMatch: string | null = null
   let bestPathLen = 0
 
   for (const repo of workspace.repos) {
     if (!isWorktreeRepo(repo)) continue
-    const resolvedTaskPath = resolve(expandHome(repo.task_path))
+    const resolvedTaskPath = canonical(repo.task_path)
     if (
       currentDir === resolvedTaskPath ||
-      currentDir.startsWith(resolvedTaskPath + "/")
+      currentDir.startsWith(resolvedTaskPath + sep)
     ) {
       if (resolvedTaskPath.length > bestPathLen) {
         bestMatch = repo.name
