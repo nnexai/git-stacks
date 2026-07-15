@@ -129,7 +129,10 @@ describe("user-level terminal agent integrations", () => {
     const codex = JSON.parse(readFileSync(join(home, ".codex/hooks.json"), "utf8"))
     const hook = codex.hooks.UserPromptSubmit[0].hooks[0].command as string
     const token = "0123456789abcdef0123456789abcdef"
-    const child = runProcess(["script", "-qec", hook, "/dev/null"], {
+    const scriptArgs = process.platform === "darwin"
+      ? ["script", "-q", "/dev/null", "/bin/sh", "-c", hook]
+      : ["script", "-qec", hook, "/dev/null"]
+    const child = runProcess(scriptArgs, {
       env: { ...process.env, GIT_STACKS_SIGNAL_TOKEN: token, GIT_STACKS_SURFACE_ID: "surface-test", GIT_STACKS_AGENT_SESSION_ID: "codex-session" },
       stdout: "pipe", stderr: "pipe",
     })

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "@test/api"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs"
-import { join } from "path"
+import { join, relative } from "path"
 import { tmpdir } from "os"
 import { collectVerifyGateReport, formatVerifyGateReport } from "../../scripts/verify-gates"
 import type { E2EInventoryItem } from "../e2e-inventory"
@@ -250,10 +250,9 @@ describe("verify gate collector", () => {
 
   test("reports coverage entries outside the canonical source tree", () => {
     const root = makeRoot()
+    const externalFixture = join(tmpdir(), "external-coverage-fixture", "packages/cli/src/commands/completion.ts")
     writeCoverageArtifacts(root, {
-      "/tmp/external-coverage-fixture/packages/cli/src/commands/completion.ts": coverageEntry(
-        "/tmp/external-coverage-fixture/packages/cli/src/commands/completion.ts"
-      ),
+      [externalFixture]: coverageEntry(externalFixture),
       "packages/client/src/signal-state.ts": coverageEntry("packages/client/src/signal-state.ts"),
       "packages/service/src/web/terminal-manager.ts": coverageEntry("packages/service/src/web/terminal-manager.ts"),
     })
@@ -269,7 +268,7 @@ describe("verify gate collector", () => {
     expect(report.ok).toBe(false)
     expect(report.coverageSentinels).toEqual([
       {
-        path: "../external-coverage-fixture/packages/cli/src/commands/completion.ts",
+        path: relative(root, externalFixture),
         problem: "outside source tree",
       },
     ])

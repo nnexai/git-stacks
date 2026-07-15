@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "@test/api"
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "fs"
 import { join } from "path"
 import { execSync } from "child_process"
 import {
@@ -54,7 +54,7 @@ describe("lifecycle hooks with real subprocesses", () => {
     ], tmpDir, { PHASE85_VALUE: "from-env" })
 
     const content = readFileSync(artifact, "utf8")
-    expect(content).toContain(`PWD=${tmpDir}`)
+    expect(content).toContain(`PWD=${realpathSync(tmpDir)}`)
     expect(content).toContain("VALUE=from-env")
   })
 

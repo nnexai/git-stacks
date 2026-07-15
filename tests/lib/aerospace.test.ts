@@ -1,6 +1,7 @@
 import { describe, test, expect, mock, beforeEach } from "@test/api"
 import { z } from "zod"
 import type { AerospaceWindow, AerospaceCmdResult, SnapshotOpts } from "@/lib/aerospace"
+import { hasCommand } from "../process"
 
 // ─── Isolation strategy ───────────────────────────────────────────────────────
 // Re-apply mock.module with real implementations that use a LOCAL _exec object.
@@ -50,9 +51,7 @@ function parseIntSafe(val: string): number {
 
 async function isAerospaceRunning(): Promise<boolean> {
   if (process.platform !== "darwin") return false
-  const { $ } = await import("bun")
-  const result = await $`which aerospace`.quiet().nothrow()
-  return result.exitCode === 0
+  return hasCommand("aerospace")
 }
 
 async function getVersion(): Promise<string | null> {
