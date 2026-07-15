@@ -1,6 +1,7 @@
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync, fsyncSync, chmodSync } from "node:fs"
 
-import { dirname, join } from "node:path"
+import { basename, dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { spawn as spawnChild } from "node:child_process"
 import { z } from "zod"
 import { WS_CONFIG_DIR } from "@git-stacks/core/paths"
@@ -232,6 +233,36 @@ export interface EnsureManagedServiceProcessOptions {
   }) => DetachedServiceProcess
 }
 
+const SERVICE_BOOTSTRAP_ENV = "GIT_STACKS_SERVICE_BOOTSTRAP"
+
+function managedServiceEntrypoint(): string {
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url))
+  const distDirectory = basename(moduleDirectory) === "src"
+    ? join(dirname(moduleDirectory), "dist")
+    : moduleDirectory
+  return join(distDirectory, "daemon.js")
+}
+
+function runningUnderBun(): boolean {
+  return Boolean((process.versions as NodeJS.ProcessVersions & { bun?: string }).bun)
+}
+
+function managedServiceCommand(options: EnsureManagedServiceProcessOptions): string[] {
+  // The TUI is intentionally the only Bun process in the architecture. Use
+  // the separately installed Node CLI to host the service so Bun's package
+  // tree never becomes the machine-side runtime authority.
+  if (runningUnderBun() && !options.executable && !options.entrypoint) {
+    return [process.env.GIT_STACKS_CLI ?? "git-stacks", "service", "start"]
+  }
+
+  const executable = options.executable ?? process.env.GIT_STACKS_NODE ?? process.execPath
+  const entrypoint = options.entrypoint ?? managedServiceEntrypoint()
+  if (!existsSync(entrypoint)) {
+    throw new Error(`The git-stacks service daemon is missing at ${entrypoint}; reinstall @git-stacks/service`)
+  }
+  return [executable, entrypoint]
+}
+
 /**
  * Discover the shared service or launch it in an independent process.
  *
@@ -246,9 +277,11 @@ export async function ensureManagedServiceProcess(
   const existing = await readUsable()
   if (existing) return existing
 
-  const executable = options.executable ?? process.execPath
-  const entrypoint = options.entrypoint ?? process.argv[1]
-  if (!entrypoint) throw new Error("Cannot determine the git-stacks service entrypoint")
+  if (process.env[SERVICE_BOOTSTRAP_ENV] === "1") {
+    throw new Error("Refusing to recursively bootstrap the git-stacks service")
+  }
+
+  const command = managedServiceCommand(options)
   const spawn = options.spawn ?? ((command, spawnOptions) => {
     const child = spawnChild(command[0]!, command.slice(1), {
       cwd: spawnOptions.cwd,
@@ -261,14 +294,17 @@ export async function ensureManagedServiceProcess(
       unref: () => child.unref(),
     }
   })
-  const environment = { ...process.env }
+  const environment: Record<string, string | undefined> = {
+    ...process.env,
+    [SERVICE_BOOTSTRAP_ENV]: "1",
+  }
   for (const key of [
     "GS_WORKSPACE_NAME", "GS_WORKSPACE_BRANCH", "GS_WORKSPACE_PATH",
     "GS_REPO_NAME", "GS_REPO_PATH", "GS_REPO_CLONE_PATH",
     "GIT_STACKS_SIGNAL_TOKEN", "GIT_STACKS_SURFACE_ID",
     "GIT_STACKS_AGENT_SESSION_ID", "GIT_STACKS_SESSION_ID",
   ]) delete environment[key]
-  const child = spawn([executable, entrypoint, "service", "start"], {
+  const child = spawn(command, {
     cwd: process.cwd(),
     env: environment,
     detached: true,
@@ -291,6 +327,9 @@ export async function ensureManagedServiceProcess(
 }
 
 export async function startManagedService(options: ManagedServiceOptions = {}): Promise<ManagedService> {
+  // The bootstrap marker is only a circuit breaker for an incorrectly
+  // launched child. Do not leak it into service-owned terminals.
+  delete process.env[SERVICE_BOOTSTRAP_ENV]
   const serviceRoot = options.serviceRoot ?? join(WS_CONFIG_DIR, "service")
   void options.clientId
   assertRoot(serviceRoot)

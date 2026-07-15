@@ -49,6 +49,14 @@ const tui = manifests.get("tui")
 if (tui.dependencies["@opentui/core"] !== "0.4.3" || tui.dependencies["@opentui/solid"] !== "0.4.3") {
   failures.push("tui: OpenTUI packages must remain exact-pinned at 0.4.3")
 }
+try {
+  const tuiBundle = await readFile(join(root, "packages", "tui", "dist", "index.js"), "utf8")
+  if (tuiBundle.includes("@opentui/solid/jsx-runtime") || tuiBundle.includes("@opentui/solid/jsx-dev-runtime")) {
+    failures.push("tui: bundle was built without the required OpenTUI Solid compiler plugin")
+  }
+} catch {
+  failures.push("tui: built entrypoint is unavailable for compiler validation")
+}
 
 function walkInternal(packageName, seen = new Set()) {
   if (seen.has(packageName)) return seen
@@ -118,6 +126,7 @@ for (const target of packTargets) {
   if (target.includes("/web") && !files.has("dist/manifest.json")) failures.push("web: asset manifest missing from tarball")
   if (target.includes("/cli") && !files.has("dist/index.js")) failures.push("cli: built entrypoint missing from tarball")
   if (target.includes("/service") && !files.has("dist/index.js")) failures.push("service: built entrypoint missing from tarball")
+  if (target.includes("/service") && !files.has("dist/daemon.js")) failures.push("service: managed daemon entrypoint missing from tarball")
   if (target.includes("/tui") && !files.has("dist/index.js")) failures.push("tui: built entrypoint missing from tarball")
   for (const path of files) {
     if (path.startsWith("src/") && target === ".") failures.push(`facade: legacy source leaked into tarball (${path})`)

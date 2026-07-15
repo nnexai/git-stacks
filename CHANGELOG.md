@@ -8,6 +8,25 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.21.0-rc.4] - 2026-07-15
+
+### Fixed
+
+- The optional TUI is now built with OpenTUI's required Solid compiler plugin. Published bundles no longer create orphan empty text nodes when conditional progress or workspace content renders.
+- TUI service discovery now delegates service hosting to the separately installed Node CLI, while Node clients launch a dedicated service daemon. A bootstrap circuit breaker prevents an incorrectly resolved child from recursively spawning more clients.
+- Empty workspace labels now resolve to `null` instead of becoming raw empty text beneath an OpenTUI layout box.
+
+### Safety and distribution
+
+- Package validation rejects TUI bundles built through the generic JSX runtime and requires the dedicated service daemon in the service tarball.
+- Managed-service tests assert the exact Node and Bun launch commands and verify that a bootstrapped child cannot spawn recursively.
+
+### Release Candidate
+
+This follow-up release candidate fixes the optional TUI packaging and service-bootstrap failures. The package version and GitHub prerelease tag are `0.21.0-rc.4` / `v0.21.0-rc.4`; npm publication uses the `next` dist-tag.
+
+---
+
 ## [0.21.0-rc.3] - 2026-07-15
 
 ### Fixed

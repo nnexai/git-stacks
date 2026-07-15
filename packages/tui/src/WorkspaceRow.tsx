@@ -142,9 +142,9 @@ export function WorkspaceRow(props: Props) {
       <text fg={behindCount() > 0 ? (isStale() ? "gray" : "yellow") : "gray"}>
         {behindCount() > 0 ? `  ↓${behindCount()}${isStale() ? "?" : ""}` : ""}
       </text>
-      {labelsText() && (
+      {labelsText() ? (
         <text fg="gray">{`  ${labelsText()}`}</text>
-      )}
+      ) : null}
       <text fg="gray">{`  ${countsText()}`}</text>
       <text fg={signalPreview() ? "white" : "gray"}>
         {signalPreview() ? `  ${signalPreview()!.truncated}` : `  ${formatSignalAge(ws().created)}`}
