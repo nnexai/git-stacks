@@ -52,4 +52,26 @@ describe("managed service process bootstrap", () => {
     }
     expect(spawned).toBe(false)
   })
+
+  test("keeps discovering after a concurrent launcher exits successfully", async () => {
+    let reads = 0
+    const result = await ensureManagedServiceProcess({
+      serviceRoot: "/tmp/git-stacks-concurrent-service-test",
+      pollMs: 1,
+      readUsable: async () => reads++ < 2 ? null : descriptor,
+      spawn: () => ({ exited: Promise.resolve(0), unref() {} }),
+    })
+
+    expect(result).toBe(descriptor)
+    expect(reads).toBe(3)
+  })
+
+  test("fails immediately when the service launcher exits unsuccessfully", async () => {
+    await expect(ensureManagedServiceProcess({
+      serviceRoot: "/tmp/git-stacks-failed-service-test",
+      pollMs: 1,
+      readUsable: async () => null,
+      spawn: () => ({ exited: Promise.resolve(7), unref() {} }),
+    })).rejects.toThrow("service startup exited with code 7")
+  })
 })

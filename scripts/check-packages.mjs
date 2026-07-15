@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { access, readFile } from "node:fs/promises"
+import { access, readFile, readdir } from "node:fs/promises"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -17,6 +17,7 @@ for (const name of names) {
 }
 const facade = await readJson(join(root, "package.json"))
 const version = facade.version
+const repositoryUrl = "git+https://github.com/nnexai/git-stacks.git"
 
 function validateBin(packageName, manifest, executable, expectedTarget) {
   const target = manifest.bin?.[executable]
@@ -33,12 +34,14 @@ for (const [name, manifest] of manifests) {
   if (manifest.license !== "MIT") failures.push(`${name}: package license must be MIT`)
   if (manifest.publishConfig?.access !== "public") failures.push(`${name}: publishConfig.access must be public`)
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) failures.push(`${name}: files allowlist is required`)
+  if (manifest.repository?.url !== repositoryUrl) failures.push(`${name}: repository.url must identify the trusted-publishing repository`)
   for (const [dependency, range] of Object.entries(manifest.dependencies ?? {})) {
     if (dependency.startsWith("@git-stacks/") && range !== version) {
       failures.push(`${name}: ${dependency} must use exact workspace version ${version}, found ${range}`)
     }
   }
 }
+if (facade.repository?.url !== repositoryUrl) failures.push("facade: repository.url must identify the trusted-publishing repository")
 
 const service = manifests.get("service")
 if (service.dependencies["node-pty"] !== "1.2.0-beta.14") failures.push("service: node-pty must remain exact-pinned at 1.2.0-beta.14")
@@ -50,9 +53,19 @@ if (tui.dependencies["@opentui/core"] !== "0.4.3" || tui.dependencies["@opentui/
   failures.push("tui: OpenTUI packages must remain exact-pinned at 0.4.3")
 }
 try {
-  const tuiBundle = await readFile(join(root, "packages", "tui", "dist", "index.js"), "utf8")
-  if (tuiBundle.includes("@opentui/solid/jsx-runtime") || tuiBundle.includes("@opentui/solid/jsx-dev-runtime")) {
-    failures.push("tui: bundle was built without the required OpenTUI Solid compiler plugin")
+  const tuiDist = join(root, "packages", "tui", "dist")
+  const launcher = await readFile(join(tuiDist, "index.js"), "utf8")
+  const preloadIndex = launcher.indexOf('await import("@opentui/solid/preload")')
+  const dashboardIndex = launcher.indexOf('await import("./run.js")')
+  if (preloadIndex < 0 || dashboardIndex < 0 || preloadIndex > dashboardIndex) {
+    failures.push("tui: launcher must await the OpenTUI preload before importing the dashboard")
+  }
+  for (const entry of await readdir(tuiDist)) {
+    if (!entry.endsWith(".js")) continue
+    const bundle = await readFile(join(tuiDist, entry), "utf8")
+    if (bundle.includes("@opentui/solid/jsx-runtime") || bundle.includes("@opentui/solid/jsx-dev-runtime")) {
+      failures.push(`tui: ${entry} was built without the required OpenTUI Solid compiler plugin`)
+    }
   }
 } catch {
   failures.push("tui: built entrypoint is unavailable for compiler validation")
@@ -128,6 +141,7 @@ for (const target of packTargets) {
   if (target.includes("/service") && !files.has("dist/index.js")) failures.push("service: built entrypoint missing from tarball")
   if (target.includes("/service") && !files.has("dist/daemon.js")) failures.push("service: managed daemon entrypoint missing from tarball")
   if (target.includes("/tui") && !files.has("dist/index.js")) failures.push("tui: built entrypoint missing from tarball")
+  if (target.includes("/tui") && !files.has("dist/run.js")) failures.push("tui: compiled dashboard missing from tarball")
   for (const path of files) {
     if (path.startsWith("src/") && target === ".") failures.push(`facade: legacy source leaked into tarball (${path})`)
     if (path.includes(".coverage") || path.includes(".planning")) failures.push(`${target}: development artifact leaked into tarball (${path})`)

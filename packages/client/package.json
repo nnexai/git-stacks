@@ -1,7 +1,11 @@
 {
   "name": "@git-stacks/client",
-  "version": "0.21.0-rc.4",
+  "version": "0.21.0-rc.5",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nnexai/git-stacks.git"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -23,7 +27,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@git-stacks/protocol": "0.21.0-rc.4"
+    "@git-stacks/protocol": "0.21.0-rc.5"
   },
   "gitStacksBuild": {
     "platform": "neutral",

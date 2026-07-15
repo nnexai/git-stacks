@@ -8,6 +8,27 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.21.0-rc.5] - 2026-07-15
+
+### Fixed
+
+- Globally installed TUI launchers now explicitly preload OpenTUI's reactive Solid runtime before importing the dashboard. This removes the cross-platform root-level orphan-text crash even when the command is run outside the installed package directory.
+- Local TUI transport verifies the descriptor's exact certificate leaf, hostname, TLS 1.3 session, and application ALPN directly, avoiding incompatible self-signed-CA handling between Bun and Node without weakening the pin.
+- OpenTUI retains a renderer-level Ctrl+C emergency exit and now ties state and secure-client cleanup to renderer destruction, so a startup or render failure restores the terminal and terminates the process instead of trapping it in alternate-screen mode.
+- Managed clients now tolerate successful concurrent service starters and allow enough time for protected-store recovery and secure-listener startup on larger workspace registries.
+
+### Safety and distribution
+
+- Published TUI artifacts are split into a preload launcher and compiler-plugin-built dashboard, with a package-level runtime probe that executes from an unrelated working directory.
+- Publishing is now driven by a published GitHub Release through npm trusted publishing. The workflow uses short-lived GitHub OIDC credentials, verifies the full release gate, publishes packages in dependency order, and safely resumes a partially completed release without storing an npm token.
+- Every published package declares the canonical GitHub repository for provenance verification.
+
+### Release Candidate
+
+This follow-up release candidate fixes global TUI runtime selection, terminal recovery, and service cold-start discovery, and introduces release-triggered trusted npm publishing. The package version and GitHub prerelease tag are `0.21.0-rc.5` / `v0.21.0-rc.5`; npm publication uses the `next` dist-tag.
+
+---
+
 ## [0.21.0-rc.4] - 2026-07-15
 
 ### Fixed

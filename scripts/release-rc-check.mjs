@@ -47,6 +47,6 @@ if (process.argv.includes("--tag")) {
   if (assertTagCanBeCreated(rcTag)) run("git", ["tag", "-a", rcTag, "-m", `git-stacks ${rcVersion} release candidate`])
   else console.log(`${rcTag} already points at the verified commit.`)
 } else {
-  console.log(`Verification only. Pass --tag explicitly to create ${rcTag}; publishing is a separate manual action.`)
+  console.log(`Verification only. Pass --tag explicitly to create ${rcTag}; publication occurs only after the matching GitHub Release is published.`)
 }
 console.log(`RC verification passed for ${rcVersion}.`)

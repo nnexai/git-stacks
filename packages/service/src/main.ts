@@ -316,11 +316,19 @@ export async function ensureManagedServiceProcess(
   void child.exited.then((code) => { exitCode = code })
   child.unref()
 
-  const deadline = Date.now() + (options.timeoutMs ?? 5_000)
+  // Cold startup includes protected-store access, operation recovery, and the
+  // secure listeners. Larger workspace registries can legitimately take more
+  // than five seconds before the descriptor is safe to publish.
+  const deadline = Date.now() + (options.timeoutMs ?? 30_000)
   while (Date.now() < deadline) {
     const descriptor = await readUsable()
     if (descriptor) return descriptor
-    if (exitCode !== undefined) throw new Error(`git-stacks service startup exited with code ${exitCode}`)
+    // A concurrent launcher may win the startup lock. In that case this child
+    // discovers the healthy service and exits 0; keep polling for its freshly
+    // published descriptor. Only a failed child is terminal here.
+    if (exitCode !== undefined && exitCode !== 0) {
+      throw new Error(`git-stacks service startup exited with code ${exitCode}`)
+    }
     await new Promise<void>((resolve) => setTimeout(resolve, options.pollMs ?? 10))
   }
   throw new Error("Timed out waiting for the detached git-stacks service")

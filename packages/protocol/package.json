@@ -1,7 +1,11 @@
 {
   "name": "@git-stacks/protocol",
-  "version": "0.21.0-rc.4",
+  "version": "0.21.0-rc.5",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nnexai/git-stacks.git"
+  },
   "publishConfig": {
     "access": "public"
   },

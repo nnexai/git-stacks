@@ -1,7 +1,11 @@
 {
   "name": "@git-stacks/cli",
-  "version": "0.21.0-rc.4",
+  "version": "0.21.0-rc.5",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nnexai/git-stacks.git"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -26,10 +30,10 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
-    "@git-stacks/core": "0.21.0-rc.4",
-    "@git-stacks/protocol": "0.21.0-rc.4",
-    "@git-stacks/service": "0.21.0-rc.4",
-    "@git-stacks/web": "0.21.0-rc.4",
+    "@git-stacks/core": "0.21.0-rc.5",
+    "@git-stacks/protocol": "0.21.0-rc.5",
+    "@git-stacks/service": "0.21.0-rc.5",
+    "@git-stacks/web": "0.21.0-rc.5",
     "@logtape/logtape": "^2.0.5",
     "commander": "^14.0.3",
     "yaml": "^2.8.3",

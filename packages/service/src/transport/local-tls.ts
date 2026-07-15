@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto"
+import { createHash, timingSafeEqual, X509Certificate } from "node:crypto"
 import { once } from "node:events"
 import { Readable, Writable } from "node:stream"
-import { connect as connectTls, createServer as createTlsServer, type TLSSocket } from "node:tls"
+import { checkServerIdentity, connect as connectTls, createServer as createTlsServer, type PeerCertificate, type TLSSocket } from "node:tls"
 
 import { promoteEncryptedCarrier, type SecureDuplex, type SecureSessionCarrier } from "@git-stacks/client"
 import { SECURE_LIMITS } from "@git-stacks/protocol"
@@ -75,20 +75,33 @@ export async function startLocalTlsListener(options: LocalTlsListenerOptions): P
 
 export async function connectLocalTls(input: { hostname: string; port: number; certificate: string; servername?: string }): Promise<SecureSessionCarrier> {
   assertSecureTransportEnvironment()
+  const servername = input.servername ?? "localhost"
+  const expectedLeaf = new X509Certificate(input.certificate).raw
   const socket = connectTls({
     host: input.hostname,
     port: input.port,
-    servername: input.servername ?? "localhost",
-    ca: input.certificate,
-    rejectUnauthorized: true,
+    servername,
+    // The owner-only descriptor is the trust anchor. Verify its exact leaf
+    // below instead of asking the runtime to interpret a self-signed leaf as
+    // a CA; Bun and Node intentionally differ on that CA-chain behavior.
+    rejectUnauthorized: false,
     minVersion: "TLSv1.3",
     maxVersion: "TLSv1.3",
     ALPNProtocols: [LOCAL_ALPN],
   })
-  await once(socket, "secureConnect")
-  if (!socket.authorized || socket.alpnProtocol !== LOCAL_ALPN) {
+  try {
+    await once(socket, "secureConnect")
+    const peer = socket.getPeerCertificate(true) as PeerCertificate
+    const actualLeaf = peer.raw
+    const hostnameError = checkServerIdentity(servername, peer)
+    if (!actualLeaf || actualLeaf.length !== expectedLeaf.length || !timingSafeEqual(actualLeaf, expectedLeaf)) {
+      throw new Error("Local TLS certificate does not match the trusted service leaf")
+    }
+    if (hostnameError) throw hostnameError
+    if (socket.alpnProtocol !== LOCAL_ALPN) throw new Error("Local TLS ALPN negotiation failed")
+  } catch (error) {
     socket.destroy()
-    throw new Error(socket.authorizationError?.message ?? "Local TLS authentication failed")
+    throw error
   }
   let opened = false
   return promoteEncryptedCarrier({

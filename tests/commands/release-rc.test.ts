@@ -110,14 +110,15 @@ repos:
 
 describe("v0.21.0 release candidate smoke", () => {
   test("package, changelog, and README describe the Node package boundary", () => {
-    const rcEntry = changelogEntry("0.21.0-rc.4")
+    const rcEntry = changelogEntry("0.21.0-rc.5")
     const architectureEntry = changelogEntry("0.21.0-rc.1")
 
-    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.4")
+    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.5")
     expect(PACKAGE_JSON.bin["git-stacks"]).toBe("bin/git-stacks.js")
-    expect(CHANGELOG.indexOf("## [0.21.0-rc.4]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.3]"))
+    expect(CHANGELOG.indexOf("## [0.21.0-rc.5]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.4]"))
     expect(rcEntry).toContain("follow-up release candidate")
-    expect(rcEntry).toContain("recursively spawning")
+    expect(rcEntry).toContain("OpenTUI's reactive Solid runtime")
+    expect(rcEntry).toContain("trusted npm publishing")
     expect(architectureEntry).toContain("v0.21.0")
     expect(architectureEntry).toContain("Node.js 24")
     expect(architectureEntry).toContain("@git-stacks/protocol")
@@ -171,7 +172,7 @@ describe("v0.21.0 release candidate smoke", () => {
     expect(releaseScript).toContain("const rcTag = `v${rcVersion}`")
     expect(releaseScript).toContain("process.argv.includes(\"--tag\")")
     expect(releaseScript).toContain("npm\", [\"run\", \"check:packages\"]")
-    expect(releaseScript).toContain("publishing is a separate manual action")
+    expect(releaseScript).toContain("matching GitHub Release is published")
     expect(packScript).toContain('npm_dist_tag: "next"')
     expect(packScript).toContain('"packages/tui"')
     expect(packScript).toContain("artifacts.length")
