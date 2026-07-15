@@ -8,6 +8,19 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.21.0-rc.6] - 2026-07-15
+
+### Fixed
+
+- TUI batch operations now multiplex operation progress and dashboard invalidations over one durable event subscription per encrypted RPC session. Sequential clean, remove, merge, and other mutations no longer consume the server's bounded subscription capacity and fail after the fourth operation.
+- Node-only Linux and macOS CI jobs no longer require optional Bun TUI build artifacts; TUI compiler and package validation remains enforced by the dedicated TUI and package-policy jobs.
+
+### Release Candidate
+
+This follow-up release candidate fixes event-subscription exhaustion during TUI batch operations and restores the intended Node/TUI CI boundary. The package version and GitHub prerelease tag are `0.21.0-rc.6` / `v0.21.0-rc.6`; npm publication uses the `next` dist-tag.
+
+---
+
 ## [0.21.0-rc.5] - 2026-07-15
 
 ### Fixed

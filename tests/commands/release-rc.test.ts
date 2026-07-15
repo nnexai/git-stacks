@@ -110,15 +110,15 @@ repos:
 
 describe("v0.21.0 release candidate smoke", () => {
   test("package, changelog, and README describe the Node package boundary", () => {
-    const rcEntry = changelogEntry("0.21.0-rc.5")
+    const rcEntry = changelogEntry("0.21.0-rc.6")
     const architectureEntry = changelogEntry("0.21.0-rc.1")
 
-    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.5")
+    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.6")
     expect(PACKAGE_JSON.bin["git-stacks"]).toBe("bin/git-stacks.js")
-    expect(CHANGELOG.indexOf("## [0.21.0-rc.5]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.4]"))
+    expect(CHANGELOG.indexOf("## [0.21.0-rc.6]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.5]"))
     expect(rcEntry).toContain("follow-up release candidate")
-    expect(rcEntry).toContain("OpenTUI's reactive Solid runtime")
-    expect(rcEntry).toContain("trusted npm publishing")
+    expect(rcEntry).toContain("event subscription")
+    expect(rcEntry).toContain("Node/TUI CI boundary")
     expect(architectureEntry).toContain("v0.21.0")
     expect(architectureEntry).toContain("Node.js 24")
     expect(architectureEntry).toContain("@git-stacks/protocol")

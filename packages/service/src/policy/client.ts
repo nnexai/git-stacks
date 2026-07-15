@@ -1,5 +1,5 @@
 import type { z } from "zod"
-import { authenticateSecureCarrier, type SecureRpcClient } from "@git-stacks/client"
+import { authenticateSecureCarrier, ensureSharedEventSubscription, type SecureRpcClient } from "@git-stacks/client"
 import {
   CoreMutationSchemas,
   CoreStateSchema,
@@ -188,7 +188,8 @@ export async function subscribeServiceEvents(
     observer(parsed.data)
   })
   try {
-    await rpc.request("events.subscribe", { cursor }, { signal, scope: "event.read" })
+    signal?.throwIfAborted()
+    await ensureSharedEventSubscription(rpc, cursor)
     onReady?.()
     if (signal?.aborted) return latest
     await Promise.race([
