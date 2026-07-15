@@ -1,143 +1,115 @@
-# Requirements: v0.21.0 Node Core and Secure Service Architecture
+# Requirements: v0.22.0 Workspace Productivity
 
 **Defined:** 2026-07-15
-**Core value:** One command creates a usable multi-repository development workspace while all product surfaces share one machine-side implementation.
+**Core value:** A developer can stay in the terminal-focused web or TUI workspace, move between active work instantly, and clean up safely without losing shell compatibility or state.
 
-## Package and Runtime Foundation
+## Workspace Archival
 
-- [x] **PKG-01:** Maintainers can install dependencies, build, typecheck, and test protocol, client, core, CLI, service, web, and TUI workspaces independently from the repository root.
-- [x] **PKG-02:** Runtime and import-boundary gates reject core-to-UI, core-to-transport, client-to-service-implementation, web-to-machine, and ordinary CLI-to-service dependencies; explicit `service` and `web` launch commands are the only CLI exceptions.
-- [x] **PKG-03:** Production packages emit inspectable ESM for Node 24 with declared third-party dependencies external and reproducible package manifests.
-- [x] **PKG-04:** Shared conformance fixtures verify stable identities, validation, signal reduction, ordering, and operation semantics without importing a concrete renderer or runtime.
+- [ ] **ARCH-01:** A workspace definition can persist `archived: true` and an `archived_at` timestamp in its existing YAML file; omitted archive fields remain backward-compatible and mean active.
+- [ ] **ARCH-02:** Web and TUI can archive an active workspace and unarchive an archived workspace through the shared core/service operation rather than independent client-side mutation.
+- [ ] **ARCH-03:** Archived workspaces are excluded from every normal workspace list, count, pin group, fuzzy switcher result, attention traversal, and default selection in web and TUI, regardless of their stored pin state.
+- [ ] **ARCH-04:** Archiving preserves repositories, worktrees, workspace files, notes, configuration, pin state, and service-owned terminal processes; unarchiving makes the same workspace usable again.
+- [ ] **ARCH-05:** Web and TUI expose a separate minimal Archived Workspaces surface containing only workspace identity, the latest relevant activity/archive timestamp, and an Unarchive action.
+- [ ] **ARCH-06:** The archived list is newest-first by `max(last_activity, archived_at)`, displays the chosen timestamp, has an explicit empty state, and never expands into the normal detailed workspace view.
 
-## Shared Domain Core
+## Confirmed Workspace Removal
 
-- [x] **CORE-01:** The local CLI and service invoke one runtime-neutral implementation of workspace/config/template/registry parsing, resolution, validation, and mutation.
-- [x] **CORE-02:** Git, worktree, integration, launch-planning, and command-domain behavior is separated from Commander prompts, OpenTUI rendering, service transport, and concrete process APIs.
-- [x] **CORE-03:** Process execution, clocks, executable lookup, globbing, observation, and logging are supplied through narrow capabilities with Node production adapters and deterministic test adapters.
-- [x] **CORE-04:** Architecture and duplicate-behavior tests prevent a migrated capability from remaining implemented in both legacy and target paths.
+- [ ] **REMOVE-01:** The destructive action is named **Remove** consistently in web and TUI and always requires confirmation that identifies the workspace and explains that its terminals, worktrees, directory, and YAML definition will be removed.
+- [ ] **REMOVE-02:** A confirmed removal closes every service-owned terminal for the workspace before filesystem deletion and fails closed without deleting anything if terminal shutdown cannot be confirmed.
+- [ ] **REMOVE-03:** After terminal shutdown, removal applies the existing dirty-worktree protection and reports the blocking repositories without bypassing or weakening that guard.
+- [ ] **REMOVE-04:** Successful removal deletes each managed Git worktree, the complete workspace directory, and the workspace YAML definition while leaving unrelated repositories and workspace definitions untouched.
+- [ ] **REMOVE-05:** Web and TUI reconcile selection, terminal tabs, signals, counts, and navigation immediately after successful removal and show actionable progress/failure feedback throughout the operation.
 
-## Filesystem Authority and Coherency
+## User Shell and Dynamic Environment
 
-- [x] **DATA-01:** Every shared-core replacement write uses a unique same-directory temporary file, exclusive creation, flush/close, atomic rename, cleanup, intended mode, and supported parent-directory durability.
-- [x] **DATA-02:** Semantic workspace, template, registry, and configuration mutations re-read authoritative state and use narrow per-target cross-process coordination so concurrent field-level intents do not silently erase one another.
-- [x] **DATA-03:** The service treats watcher events as invalidation hints, debounces rebuilds, rebinds replaced directories, and emits only when the aggregate content revision changes.
-- [x] **DATA-04:** Bounded periodic content reconciliation covers every authoritative definition root and recovers dropped or coalesced watcher events without exposing file contents.
-- [x] **DATA-05:** Local CLI operations remain correct when no service is running and require no service discovery, lock daemon, refresh RPC, or event acknowledgement.
+- [ ] **SHELL-01:** Configured commands and lifecycle hooks execute through the user's actual configured shell rather than hard-coded `/bin/sh`, with a documented per-shell invocation strategy.
+- [ ] **SHELL-02:** Supported shells load the initialization needed for the user's interactive/login environment so runtime managers, shell functions, aliases, and dynamically constructed `PATH` values are available.
+- [ ] **SHELL-03:** The command is passed as one command argument to the shell rather than interpolated into a generated wrapper, preserving the existing command text and avoiding an additional quoting layer.
+- [ ] **SHELL-04:** Global, workspace, repository, port, and `GS_*` environment overlays are applied after shell initialization so authoritative git-stacks values win over profile defaults.
+- [ ] **SHELL-05:** Trusted local launchers can refresh an explicit allowlist of dynamic values, initially `PATH` and `SSH_AUTH_SOCK`, into the long-lived helper/service; raw host environment values are never projected to browser code.
+- [ ] **SHELL-06:** Interactive PTYs and non-PTY command execution can use the refreshed SSH agent socket, and integration coverage proves `ssh-add`/agent discovery and an nvm-style profile-installed runtime work without restarting the service.
+- [ ] **SHELL-07:** Missing, unsupported, or failing shell initialization produces a diagnostic naming the shell, invocation mode, failed initialization stage, and safe recovery path without silently falling back to different semantics.
 
-## Local Node CLI
+## Keyboard-First Web Navigation
 
-- [x] **CLI-01:** The existing `git-stacks` command tree, arguments, exit codes, streams, prompts, completions, and local workflows run under Node 24 without Bun.
-- [x] **CLI-02:** CLI presentation and interactive wizards live in the CLI package and call shared-core use cases rather than importing TUI or service modules.
-- [x] **CLI-03:** CLI-only commands remain daemonless; only explicit `service`, `web`, and trusted-client launch commands start or connect to the service.
-- [x] **CLI-04:** CLI compatibility tests prove parity for workspace lifecycle, Git operations, commands, integrations, hooks, notes, labels, templates, repositories, and diagnostics before legacy entrypoints are removed.
+- [ ] **KEY-01:** The web client has one centralized, configurable shortcut registry with platform-specific defaults, conflict validation, keyboard-help presentation, and the ability to rebind or unbind every app-owned action.
+- [ ] **KEY-02:** Safe defaults use `Ctrl+Cmd+<key>` on macOS and `Ctrl+Alt+Shift+<key>` on Linux: `K` workspace switcher, `P` commands, `N` new workspace, `T` new terminal, `W` close active terminal, `J` previous terminal, `L` next terminal, and `A` next attention.
+- [ ] **KEY-03:** App shortcuts work while xterm owns focus by using xterm's pre-processing key handler; handled chords are consumed once, while every unmatched key event reaches the PTY unchanged.
+- [ ] **KEY-04:** Linux shortcut matching ignores `AltGraph` input, uses physical key codes where appropriate, and has coverage for non-US layouts and IME/composition so character entry is never mistaken for an app shortcut.
+- [ ] **KEY-05:** Browser-hard shortcuts such as new/close browser tab or window and browser-tab traversal are not shipped as web defaults; fullscreen Keyboard Lock is not required for baseline operation.
+- [ ] **KEY-06:** `Ctrl+K` and `Ctrl+Shift+P` may be configured as aliases, but defaults do not intercept common shell controls or browser-incompatible chords while a terminal is focused.
+- [ ] **KEY-07:** The workspace switcher on the `K` action searches active workspaces and their repositories using real fuzzy ranking, excludes archived workspaces, uses recency only as a tie-breaker, and switches to the highest-ranked row when Enter is pressed even for a partial query.
+- [ ] **KEY-08:** The commands overlay on the `P` action searches configured commands using the same fuzzy/top-result Enter contract and does not become a generic catalog of unrelated application actions.
+- [ ] **KEY-09:** Every overlay is a singleton: repeated shortcut or key-repeat events focus/toggle the existing instance rather than stacking DOM layers, handlers, or backdrops.
+- [ ] **KEY-10:** Palette arrow navigation, Escape, Enter, and input focus are contained within the active overlay; closing it restores focus to the previously active terminal without emitting overlay keystrokes to the PTY.
 
-## Node Service and Protocol
+## Attention Navigation
 
-- [x] **SVC-01:** The Node service owns browser-safe and trusted projections, operation registry, event cursors, replay gaps, leases, quotas, and managed lifecycle behind the carrier-neutral secure session protocol.
-- [x] **SVC-02:** Node encrypted listeners replace the transitional HTTP/SSE/WebSocket transport; the service exposes no plaintext product API or classified fallback.
-- [x] **SVC-03:** Managed startup uses race-safe discovery and ownership, removes stale startup artifacts safely, and shuts down after the final managed client without leaving sockets, timers, watchers, or child processes.
-- [x] **SVC-04:** Protocol and client packages contain no concrete service launcher or runtime implementation, and carriers remain replaceable for encrypted local/remote access.
-- [x] **SVC-05:** The service projects external CLI/file changes through normal revisions and SSE events without a special CLI refresh path.
+- [ ] **ATTN-01:** A Next Attention action moves to the next active workspace/repository/terminal carrying a current attention signal using the shared priority ordering and wraps deterministically.
+- [ ] **ATTN-02:** Archived and removed workspaces, dismissed signals, stale terminal surfaces, and inaccessible targets are skipped without clearing unrelated attention.
+- [ ] **ATTN-03:** The action is available from the safe global shortcut, visible UI, and keyboard help with a clear no-attention result.
 
-## Node Terminal and Signal Runtime
+## Web Workflow Parity
 
-- [x] **TERM-01:** A narrow PTY adapter lets the existing terminal manager own lifecycle, replay, visibility, backpressure, title, resize, process-group cleanup, and signal filtering independently of `node-pty`.
-- [x] **TERM-02:** Exact-pinned `node-pty` `1.2.0-beta.14` passes interactive shell, command shell, exit, resize, Unicode, title, hidden-stream, reconnect, replay, pressure, cleanup, and resource tests on supported hosts.
-- [x] **TERM-03:** Linux x64/arm64 and macOS x64/arm64 installs use trusted prebuilt PTY artifacts without a compiler; unsupported or missing artifacts fail clearly rather than silently building or degrading.
-- [x] **SIG-01:** Signal ingestion, coalescing, exact-surface state, dismissal, stale cleanup, and provider deduplication retain the v0.20 service-owned semantics under Node.
-- [x] **SIG-02:** Closing, exiting, hiding, reconnecting, or acknowledging terminals cannot leave stale agent activity or clear unrelated activity.
+- [ ] **PARITY-01:** Web exposes shared-service actions for archive/unarchive, confirmed remove, rename, open/close, pin/unpin, sync, pull, push, and merge with the same guards and result semantics as CLI/TUI.
+- [ ] **PARITY-02:** Web can view and edit workspace notes through the existing authoritative notes implementation without browser-local persistence.
+- [ ] **PARITY-03:** Web shows workspace/repository file-sync status and operation progress using shared projections rather than local Git inspection.
+- [ ] **PARITY-04:** Action availability, disabled reasons, confirmations, progress, cancellation, errors, and refreshed snapshots are consistent across web and TUI for the supported lifecycle and Git operations.
+- [ ] **PARITY-05:** Context menus, visible controls, and keyboard surfaces call one action registry so adding a shortcut cannot create a second implementation of the operation.
 
-## Thin Web and TUI Clients
+## Workspace Creation from Forge URLs
 
-- [x] **WEB-01:** The web package builds as browser-only static assets against protocol/client contracts and imports no core, filesystem, process, service implementation, or Node-only module.
-- [x] **WEB-02:** `git-stacks web` launches the installed self-contained browser client with secure pairing, workspace, command, signal, terminal, fresh-document reattachment, focus, sizing, and context-menu parity.
-- [x] **TUI-01:** The optional Bun/OpenTUI package consumes the trusted service projection, operations, and encrypted event stream through the public service/client API, uses core only for pure shared types and presentation helpers, and contains no independent domain or persistence authority.
-- [x] **TUI-02:** TUI startup, shutdown, rendering, viewport ownership, dismissals, commands, and foreground handoffs retain parity while closing the TUI reliably releases its managed-service client.
-- [x] **CLIENT-01:** Web and TUI reuse shared client reducers for revision/event handling, signal presentation, priority ordering, operation progress, fresh-session reattachment, and replay-gap recovery while owning their own rendering.
+- [ ] **SOURCE-01:** Web and TUI workspace creation accept a supported GitHub pull-request or GitLab merge-request URL in addition to the existing repository/template inputs.
+- [ ] **SOURCE-02:** The shared forge integration resolves the canonical repository, source/head branch, target/base branch, fork/remote requirements, and a safe suggested workspace name without browser-side forge authority.
+- [ ] **SOURCE-03:** Users review and can edit the resolved workspace name, template, repositories, and branches before creation; Enter or submission never creates from an unresolved or ambiguous source.
+- [ ] **SOURCE-04:** Missing forge tooling/authentication, inaccessible or closed changes, unsupported hosts, malformed URLs, and branch/fork conflicts produce actionable non-destructive errors.
 
-## Distribution and Cutover
+## Stale Workspace Intelligence
 
-- [x] **DIST-01:** The default npm package installs and runs the CLI/service/web stack on Node 24 for Linux x64/arm64 and modern macOS x64/arm64 without Bun or a native compiler.
-- [x] **DIST-02:** The optional TUI is packaged explicitly with its Bun/OpenTUI runtime requirement and cannot pull Bun-only dependencies into default CLI/service installs.
-- [x] **DIST-03:** Release CI verifies package contents, licenses, clean-install smoke tests, CLI/service/web behavior, PTY lifecycle, shutdown, and resource bounds on the supported platform matrix.
-- [x] **DIST-04:** Final cutover deletes obsolete Bun CLI/service adapters, duplicate source paths, temporary compatibility shims, and stale documentation in the same milestone.
-- [x] **DIST-05:** The release notes disclose the Node 24 minimum, optional Bun TUI, exact `node-pty` beta exception, platform matrix, migration behavior, and rollback boundary before v0.21.0-rc.1 is tagged.
+- [ ] **STALE-01:** A separate stale-workspace view identifies cleanup candidates using explainable signals such as merged/closed PR or MR, deleted remote branch, prolonged inactivity, or missing managed worktree.
+- [ ] **STALE-02:** Every candidate displays its triggering reasons and relevant timestamps; users can refresh evidence and open the workspace before deciding what to do.
+- [ ] **STALE-03:** Stale detection is suggestion-only and never archives, removes, closes terminals, discards worktrees, or changes workspace YAML automatically.
+- [ ] **STALE-04:** Archive and Remove are explicit follow-up actions using the same confirmation, terminal, dirty-worktree, and failure semantics defined above.
+- [ ] **STALE-05:** Forge/network failures and unavailable activity data remain visible as unknown evidence and cannot be treated as proof that a workspace is stale.
 
-## Secure Protocol and Trust
+## Release Candidate Closure
 
-- [x] **PROTO-01:** The protocol package defines a versioned, carrier-neutral binary frame envelope with canonical control payloads, strict pre-allocation length limits, stream identifiers, monotonic sequence/cursor fields, and deterministic rejection of malformed, unknown, or non-canonical input.
-- [x] **PROTO-02:** Request/response, snapshot, operation, event, signal, terminal-control, and terminal-output channels multiplex without moving domain, replay, terminal, or authorization policy into a carrier.
-- [x] **PROTO-03:** Protocol and ALPN negotiation fail closed on unsupported versions, missing mandatory capabilities, downgrade attempts, or cross-protocol input.
-- [x] **PROTO-04:** Every channel that can carry workspace data, operations, events, signals, terminal bytes, credentials, or secrets requires an authenticated encrypted carrier; browser code loads from the installed package, and the service exposes no plaintext HTTP API, bootstrap, readiness, or classified fallback.
-- [x] **TRUST-01:** Every service authority and client-side helper has a durable P-256 signing identity independent of rotating transport certificates. Private keys use an OS credential store when available and a permission-restricted atomic fallback otherwise.
-- [x] **TRUST-02:** Local authority selection and trust provisioning are automatic and non-interactive, while every remote authority requires an explicit one-use pairing bundle and out-of-band service fingerprint verification.
-- [x] **TRUST-03:** Pairing records bind service identity, endpoint, signed WebTransport certificate-hash set, helper identity, scopes, protocol version, and creation metadata without placing bearer or private-key material in query strings, process arguments, logs, workspace YAML, or any browser storage.
-- [x] **TRUST-04:** Short-lived WebTransport certificates rotate through stable-identity-signed pin sets and overlapping listeners without re-pairing; stable identity replacement, helper replacement, scope expansion, and trust reset require explicit security-sensitive actions.
-
-## Encrypted Remote Transport and Lifecycle
-
-- [x] **REMOTE-01:** Remote listening is disabled by default and can bind only an explicitly configured interface and port; enabling `git-stacks web` never exposes the service to the LAN.
-- [x] **REMOTE-02:** Browser and Node-helper service connections require WebTransport with a currently valid stable-identity-signed ECDSA P-256 certificate hash and application authorization; wrong, expired, unsigned, or downgraded pins and plaintext attempts fail before classified data is accepted.
-- [x] **REMOTE-03:** The helper authenticates with a fresh one-use challenge signed by its paired durable key and bound to the service audience, selected transport identity, protocol version, connection nonce, and helper-session epoch.
-- [x] **REMOTE-04:** A target registry and connector represent the implicit local authority and manually paired remote authorities without storing workspace state or duplicating service policy; remote carriers are isolated per authenticated local principal so one compromised session cannot inherit another principal's streams.
-- [x] **REMOTE-05:** Initial connection and fresh-session reattachment use bounded jittered backoff, replay-safe monotonic control sequences, explicit cancellation, and deterministic shutdown without leaked sockets, timers, streams, or credentials. A dropped authenticated carrier fails its local session closed rather than silently replaying non-idempotent work.
-
-## Delegation, Epochs, and Client Routing
-
-- [x] **AUTH-01:** Each helper process registers a random helper-session epoch with every remote authority, maintains it with authenticated leases, closes it on clean shutdown, and permits irreversible expiry after bounded abrupt-loss grace.
-- [x] **AUTH-02:** Every browser document loads from a self-contained installed `file:` asset, generates a non-exportable ephemeral P-256 key in memory, and receives a short-lived local session grant bound to the browser-listener epoch, key, target ceiling, scopes, protocol/build, issued time, and expiry.
-- [x] **AUTH-03:** Every browser attachment proves possession against a fresh one-use helper challenge and maintains a short renewable connection lease; replayed proofs, concurrent reuse, altered scopes, expired grants/leases, inactive listener epochs, storage-restored state, BFCache resume, and old-port takeover attempts fail closed. Origin is never client identity; the kernel loopback bind plus pinned certificate and in-channel proof form the local boundary.
-- [x] **AUTH-04:** The Bun TUI connects only to the local Node helper through directly trusted self-signed-leaf TLS 1.3 with hostname verification and `git-stacks/2` ALPN, then completes fresh application authentication from a permission-restricted one-use descriptor; the helper uses the remote WebTransport connector on behalf of thin clients.
-- [x] **AUTH-05:** Cookies, IndexedDB, local/session storage, Cache Storage, OPFS, service/shared workers, history state, and all other browser persistence are never security or product authority; persistent preferences, targets, cursors, and reattachment state live in the helper/service, every new document requires a fresh one-use launch, and the launch fragment is consumed/expired even if history retains it.
-- [x] **ROUTE-01:** Web and TUI clients use one local helper endpoint and select a service target; absent selection resolves to the implicit local authority with no manual pairing or remote dependency.
-- [x] **ROUTE-02:** For a remote target, the browser remains connected to the local helper and the paired helper relays authorized typed channels over WebTransport; the remote authority validates helper identity, epoch, scopes, stream ownership, quotas, and terminal ownership.
-- [x] **ROUTE-03:** The existing CLI remains local-only and daemonless; remote access is confined to explicit service/web/TUI client surfaces until a separately named remote CLI client is designed.
-- [x] **ROUTE-04:** The helper computes each relayed channel's effective authorization as the intersection of the local browser/TUI grant, selected target, paired-helper scopes, operation type, and terminal ownership; local client input can never select or expand remote authority, scopes, or another client's streams.
-
-## Remote Stream Parity and Security Closure
-
-- [x] **STREAM-01:** Remote snapshots, operations, events, dismissals, signals, and replay gaps preserve the same observable contracts and shared reducers as local mode.
-- [x] **STREAM-02:** Remote terminal attachments preserve PTY ownership, 1 MiB retention, 64 KiB chunks, visible-only bulk output, cursor acknowledgement, replay/reset, title, resize, cancellation, quotas, pressure, process-tree cleanup, and exact-surface signal behavior.
-- [x] **STREAM-03:** Multiplexing enforces per-frame, per-stream, per-principal, per-target, and global limits with bounded inbound/outbound queues and fair per-stream scheduling. Carrier backpressure may delay the whole authenticated session, but cannot create unbounded memory or application-level stream starvation.
-- [x] **SEC-01:** Adversarial tests cover wire recording, MITM/wrong authority, executable-bootstrap substitution, pairing theft/replay, helper impersonation, challenge replay, helper/listener epoch takeover, exact localhost origin reuse, poisoned browser storage, stale service workers, reload/history/profile restore, malformed/oversized frames, slow readers, disconnect races, log/key-log redaction, resource exhaustion, trust/pin rollback, and authorization enumeration.
-- [x] **SEC-02:** Linux x64/arm64 and modern macOS x64/arm64 release gates cover certificate generation/rotation, credential-store behavior and fallback permissions, remote reconnect, terminal soak, clean shutdown, dependency licenses, and runtime vulnerabilities.
-- [x] **SEC-03:** Documentation explains the network and same-user threat boundaries, manual pairing ceremony, recovery/rotation/revocation, local-default behavior, remote exposure controls, and an emergency return-to-local procedure before release.
+- [ ] **REL-01:** Package versions, changelog, migration notes, shortcut reference, shell compatibility documentation, and supported-host gates prepare the first v0.22 candidate as `0.22.0-rc.1` / `v0.22.0-rc.1`.
+- [ ] **REL-02:** Planning and local release preparation do not tag, push, publish, or create a release without separate explicit approval.
 
 ## Future Requirements
 
-- A dedicated local/remote CLI client over the service protocol.
-- Durable terminal multiplexing across service restarts.
-- Additional web feature completeness after the runtime/package foundation ships.
+- Optional fullscreen Keyboard Lock for users who explicitly want browser-reserved shortcuts and whose browser supports it.
+- Import/export or synchronization of personalized shortcut bindings across machines.
+- Additional stale signals learned from provider-specific review, CI, or deployment state after the explainable baseline is validated.
 
 ## Out of Scope
 
-- Public Internet hosting, relay services, NAT traversal, or automatic LAN discovery.
-- Multi-user authorities, shared tenancy, role administration, or collaborative terminal writing.
-- New product features unrelated to migration parity.
-- TypeScript 7 migration.
-- Reintroduction of the retired native client.
-- Keeping Bun and Node implementations of the same CLI or service behavior after cutover.
+- Duplicate or cloned terminal tabs; a terminal is a stateful service-owned process.
+- Archived workspaces in normal lists, counts, pins, fuzzy switching, or attention traversal.
+- Automatic archival/removal, retention policies, bulk deletion, or background destructive cleanup.
+- Bypassing dirty-worktree protection or deleting external repository roots.
+- A generic application command palette unrelated to configured workspace commands.
+- Hard dependence on fullscreen, Keyboard Lock, one browser, one keyboard layout, or one shell implementation.
+- Portable `/bin/sh` semantics that intentionally skip the user's configured shell initialization.
+- A final v0.22.0 tag, push, publish, or release without separate approval.
 
 ## Traceability
 
 | Requirement group | Phase | Status |
-|---|---|---|
-| PKG-01..04 | 108 | Complete |
-| CORE-01..04, DATA-01..02 | 109 | Complete |
-| DATA-03..05, CLI-01..04 | 110 | Complete |
-| SVC-01..05 | 111 | Complete |
-| TERM-01..03, SIG-01..02 | 112 | Complete |
-| WEB-01..02, CLIENT-01 | 113 | Complete |
-| TUI-01..02 | 114 | Complete |
-| DIST-01..05 | 115 | Complete |
-| PROTO-01..04 | 116 | Complete |
-| TRUST-01..04 | 117 | Complete |
-| REMOTE-01..05 | 118 | Complete |
-| STREAM-01..03 | 119 | Complete |
-| AUTH-01..05 | 120 | Complete |
-| ROUTE-01..04 | 121 | Complete |
-| SEC-01..03 | 122 | Complete |
+|---|---:|---|
+| ARCH-01..06, REMOVE-01..05 | 123 | Pending |
+| SHELL-01..07 | 124 | Pending |
+| KEY-01..10, ATTN-01..03 | 125 | Pending |
+| PARITY-01..05, SOURCE-01..04 | 126 | Pending |
+| STALE-01..05, REL-01..02 | 127 | Pending |
+
+## Research Basis
+
+- Native product conventions: [cmux keyboard shortcuts](https://cmux.com/docs/keyboard-shortcuts), [Supacode keyboard shortcuts](https://docs.supacode.sh/keyboard-shortcuts), and [Ghostty keybindings](https://ghostty.org/docs/config/keybind).
+- Browser collision matrices: [Chrome keyboard shortcuts](https://support.google.com/chrome/answer/157179) and [Firefox keyboard shortcuts](https://support.mozilla.org/en-US/kb/keyboard-shortcuts-perform-firefox-tasks-quickly).
+- Terminal routing capability and boundary: [xterm custom key handler](https://xtermjs.org/docs/api/terminal/classes/terminal/) and [Chrome Keyboard Lock constraints](https://developer.chrome.com/docs/capabilities/web-apis/keyboard-lock).
+- Shell collision baseline: [GNU Readline killing commands](https://www.gnu.org/s/bash/manual/html_node/Readline-Killing-Commands.html) and [zsh line editor](https://zsh.sourceforge.io/Doc/Release/Zsh-Line-Editor.html).
 
 ---
-*Last updated: 2026-07-15 after the supported hosted build/test matrix completed successfully for the shipped v0.21 implementation.*
+*Last updated: 2026-07-15 after terminal, browser, Ghostty, cmux, and Supacode shortcut-collision research.*
