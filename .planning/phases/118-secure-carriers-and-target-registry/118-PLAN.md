@@ -1,6 +1,6 @@
 ---
 phase: 118
-status: planned
+status: complete
 depends_on: [117]
 requirements: [REMOTE-01, REMOTE-02, REMOTE-03, REMOTE-04, REMOTE-05]
 ---
@@ -9,14 +9,14 @@ requirements: [REMOTE-01, REMOTE-02, REMOTE-03, REMOTE-04, REMOTE-05]
 
 ## Objective
 
-Ship the two validated encrypted adapters and one target-aware authenticated session pool.
+Ship the two validated encrypted adapters and one target-aware authenticated connector with per-principal carrier isolation.
 
 ## Work packages
 
-1. Add exact-pinned Node WebTransport server/client dependencies behind `SecureSessionCarrier`; enforce signed hashes, freshness, protocol negotiation, fresh helper proof, cancellation, pressure, reconnect, deterministic shutdown, and release-mode rejection/sanitization of TLS/QUIC key-log or payload-trace settings.
+1. Add exact-pinned Node WebTransport server/client dependencies behind `SecureSessionCarrier`; enforce signed hashes, freshness, protocol negotiation, fresh helper proof, cancellation, pressure, bounded fresh-session reconnect, deterministic shutdown, and release-mode rejection/sanitization of TLS/QUIC key-log or payload-trace settings.
 2. Add browser-native WebTransport adapter for packaged-file-to-local-helper sessions only, with equivalent conformance behavior and no HTTP fallback. Browser code must not implement remote target trust or a remote connector.
-3. Add private-CA TLS 1.3 local listener and Bun TUI adapter with hostname verification, `git-stacks/2` ALPN, and fresh application authentication from a mode-`0600` one-use descriptor. The TUI never imports WebTransport native code.
-4. Add helper-owned implicit-local plus paired-remote target registry, connector/session pooling, bounded jitter, one live helper epoch per target, rotation handoff, browser/TUI channel relay, and shutdown ownership.
+3. Add directly trusted self-signed-leaf TLS 1.3 local listener and Bun TUI adapter with hostname verification, `git-stacks/2` ALPN, and fresh application authentication from a mode-`0600` one-use descriptor. The TUI never imports WebTransport native code and no CA is installed.
+4. Add helper-owned implicit-local plus paired-remote target registry, per-authenticated-principal connector isolation, bounded jitter, one live helper epoch, rotation handoff, browser/TUI channel relay, and shutdown ownership. Do not collapse multiple principals onto one helper-authenticated carrier without a separately authenticated delegated-session protocol.
 5. Pin native artifacts/integrity, allow only the reviewed install script, retain notices, and wire supported-platform prebuild checks.
 
 ## Verification

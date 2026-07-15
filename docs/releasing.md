@@ -22,8 +22,8 @@ Internal packages must be published in dependency order: protocol, client/core, 
 
 ## Hosted matrix
 
-`.github/workflows/node-runtime-matrix.yml` runs the build, Vitest, native Node, architecture, type, and runtime-audit checks on Linux and macOS, x64 and arm64. The TUI has a separate Bun build/test job so its runtime cannot mask default-package failures. A local Linux pass does not replace the hosted macOS jobs.
+`.github/workflows/node-runtime-matrix.yml` runs the build, Vitest, secure native Node integration tests, architecture/type/dependency checks, package/native-addon validation, SPDX license audit, and runtime vulnerability audit on Linux and macOS, x64 and arm64. The TUI has a separate Bun matrix so its runtime cannot mask default-package failures. A local Linux pass does not replace hosted macOS and arm64 evidence.
 
 ## Rollback
 
-The final `0.20.0` commit/tag is the product rollback boundary. Do not reintroduce dual CLI, service, transport, or PTY implementations as a runtime switch. Revert the `0.21` migration commit or publish a corrected RC instead.
+The final `0.20.0` commit/tag is the product rollback boundary. Do not reintroduce plaintext HTTP/SSE/WebSocket routes or dual CLI, service, transport, or PTY implementations as a runtime switch. Revert the `0.21` migration commit or publish a corrected RC instead.

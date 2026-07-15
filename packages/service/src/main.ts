@@ -2,10 +2,8 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, re
 
 import { dirname, join } from "node:path"
 import { spawn as spawnChild } from "node:child_process"
-import { createRequire } from "node:module"
 import { z } from "zod"
 import { WS_CONFIG_DIR } from "@git-stacks/core/paths"
-import { provisionOfficialClient, readOfficialClientCredential } from "./policy/credentials"
 import { createSnapshotBuilder } from "./policy/snapshot"
 import { EventJournal, publishOperationEvent } from "./policy/event-journal"
 import { EventBroker } from "./policy/event-broker"
@@ -19,27 +17,25 @@ import { setWorkspacePriorities } from "@git-stacks/core/workspace-priorities"
 import { readGlobalConfig, readWorkspace } from "@git-stacks/core/config"
 import { getTasksDir } from "@git-stacks/core/paths"
 import { getWorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
-import { startServiceServer, type RunningServiceServer } from "./server"
-import { WebApplication } from "./web/routes"
+import { connectLocalTls } from "./transport/local-tls.js"
+import { readRemoteExposure } from "./security/exposure.js"
+import { readProtectedFile } from "./security/protected-store.js"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
 export const DEFAULT_OFFICIAL_CLIENT_ID = "official-client"
 const STARTUP_LOCK_RETRY_MS = 5
 const STARTUP_LOCK_WAIT_MS = 2_000
 const STARTUP_LOCK_INCOMPLETE_GRACE_MS = 100
-const require = createRequire(import.meta.url)
-
-function defaultWebAssetsRoot(): string {
-  return join(dirname(require.resolve("@git-stacks/web/package.json")), "dist")
-}
-
 const DescriptorSchema = z.strictObject({
-  protocol: z.literal("v1"),
-  endpoint: z.string().url(),
+  protocol: z.literal("git-stacks/2"),
   pid: z.number().int().positive(),
   instance_id: z.string().uuid(),
-  server_id: z.string().uuid(),
-  credential_lookup: z.string().min(1),
+  service_id: z.string().uuid(),
+  listener_epoch: z.string().uuid(),
+  webtransport: z.strictObject({ endpoint: z.string().url(), certificate_hash: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }),
+  local_tls: z.strictObject({ hostname: z.literal("127.0.0.1"), port: z.number().int().positive(), servername: z.literal("localhost"), certificate: z.string().min(1) }),
+  browser_launch: z.strictObject({ token: z.string().min(43), expires_at: z.string().datetime({ offset: true }) }),
+  tui_launch: z.strictObject({ token: z.string().min(43), expires_at: z.string().datetime({ offset: true }) }),
   started_at: z.string().datetime(),
 })
 const StartupLockSchema = z.strictObject({
@@ -104,11 +100,10 @@ function atomicDescriptor(path: string, descriptor: ServiceDescriptor): void {
 }
 
 export function readServiceDescriptor(serviceRoot = join(WS_CONFIG_DIR, "service")): ServiceDescriptor | null {
+  if (!existsSync(serviceRoot)) return null
   const path = serviceDescriptorPath(serviceRoot)
-  if (!existsSync(path)) return null
-  const stat = lstatSync(path)
-  if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o777) !== 0o600) throw new Error("Unsafe service descriptor")
-  return DescriptorSchema.parse(JSON.parse(readFileSync(path, "utf8")))
+  const value = readProtectedFile(path)
+  return value === null ? null : DescriptorSchema.parse(JSON.parse(value))
 }
 
 function processAlive(pid: number): boolean {
@@ -183,22 +178,22 @@ export interface ManagedServiceOptions {
 
 export interface ManagedService {
   descriptor: ServiceDescriptor
-  server?: RunningServiceServer
+  server?: { stop(): Promise<void>; readonly connectedClients: number }
   existing: boolean
   stop(): Promise<void>
 }
 
 async function descriptorUsable(descriptor: ServiceDescriptor, serviceRoot: string): Promise<boolean> {
   if (!processAlive(descriptor.pid)) return false
-  const credential = readOfficialClientCredential(descriptor.credential_lookup, { serviceRoot })
-  if (!credential) return false
   try {
-    const response = await fetch(new URL("/v1", descriptor.endpoint), {
-      headers: { authorization: `Bearer ${credential.token}` },
-      signal: AbortSignal.timeout(1_000),
-    })
-    return response.ok
+    const carrier = await Promise.race([
+      connectLocalTls({ ...descriptor.local_tls }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Service probe timed out")), 1_000)),
+    ])
+    await carrier.close("discovery probe")
+    return true
   } catch { return false }
+  finally { void serviceRoot }
 }
 
 export async function readUsableServiceDescriptor(
@@ -290,7 +285,7 @@ export async function ensureManagedServiceProcess(
 
 export async function startManagedService(options: ManagedServiceOptions = {}): Promise<ManagedService> {
   const serviceRoot = options.serviceRoot ?? join(WS_CONFIG_DIR, "service")
-  const clientId = options.clientId ?? DEFAULT_OFFICIAL_CLIENT_ID
+  void options.clientId
   assertRoot(serviceRoot)
   const lockPath = join(serviceRoot, "startup.lock")
   const lock = await acquireStartupLock(lockPath)
@@ -299,7 +294,6 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     if (existing && await descriptorUsable(existing, serviceRoot)) return { descriptor: existing, existing: true, async stop() {} }
     if (existing) unlinkSync(serviceDescriptorPath(serviceRoot))
 
-    provisionOfficialClient(clientId, { serviceRoot })
     const snapshot = options.snapshot ?? createSnapshotBuilder()
     const journal = new EventJournal({ root: serviceRoot, snapshotRevision: () => snapshot.currentRevision() })
     const broker = new EventBroker(journal)
@@ -314,8 +308,6 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       },
     })
     let lifecycle: ReturnType<typeof createIdleLifecycle>
-    let apiConnections = 0
-    let webConnections = 0
     const operations = new OperationRegistry({
       root: serviceRoot,
       publishOperationEvent: (operation) => publishOperationEvent(journal, operation, (event) => broker.publish(event)),
@@ -327,7 +319,8 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       },
     })
     await operations.initialize()
-    let running: RunningServiceServer
+    const { startSecureServiceRuntime } = await import("./secure/runtime.js")
+    let running: Awaited<ReturnType<typeof startSecureServiceRuntime>>
     let stopManaged: () => Promise<void> = async () => { await running.stop() }
     lifecycle = createIdleLifecycle({ idleMs: options.idleMs, onIdle: () => stopManaged() })
     const mutationAdapters = createWorkspaceMutationAdapters()
@@ -345,24 +338,32 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       broker.publish(event)
     }
     const workspaceCreationCatalog = options.workspaceCreationCatalog ?? (() => ({ ...getWorkspaceCreationCatalog(), client_model: CLIENT_MODEL_LIMITS }))
-    const web = new WebApplication({
-      assetsRoot: defaultWebAssetsRoot(),
-      snapshot,
-      operations,
-      broker,
-      mutations: { "workspace.open": mutationAdapters["workspace.open"], "workspace.close": mutationAdapters["workspace.close"] },
-      workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
-      workspaceCreationCatalog,
-      publishSignal,
-      dismissSignal,
-      signalProjection: () => journal.signalProjection(),
-      setWorkspacePins,
-      setWorkspacePriorities,
-      onConnectionChange: (count) => { webConnections = count; lifecycle?.setConnectedClients(apiConnections + webConnections) },
-      onActivity: () => lifecycle?.touch(),
-    })
-    running = await startServiceServer({
-      serviceRoot, snapshot, operations, broker, web,
+    let descriptor: ServiceDescriptor | undefined
+    const writeRotatedLaunch = (mode: "browser" | "tui", launch: import("./security/session-authority.js").LaunchToken) => {
+      if (!descriptor) return
+      descriptor = {
+        ...descriptor,
+        [mode === "browser" ? "browser_launch" : "tui_launch"]: { token: launch.token, expires_at: launch.expiresAt },
+      }
+      atomicDescriptor(serviceDescriptorPath(serviceRoot), descriptor)
+    }
+    const writeRotatedTransport = (transport: {
+      certificatePem: string
+      webTransport: { endpoint: string; certificateHash: string }
+      localTls: { hostname: "127.0.0.1"; port: number; servername: "localhost" }
+    }) => {
+      if (!descriptor) return
+      descriptor = {
+        ...descriptor,
+        webtransport: { endpoint: transport.webTransport.endpoint, certificate_hash: transport.webTransport.certificateHash },
+        local_tls: { ...transport.localTls, certificate: transport.certificatePem },
+      }
+      atomicDescriptor(serviceDescriptorPath(serviceRoot), descriptor)
+    }
+    const exposure = readRemoteExposure(serviceRoot)
+    running = await startSecureServiceRuntime({
+      serviceRoot, snapshot, operations, broker,
+      ...(exposure?.enabled ? { remoteExposure: { bindHost: exposure.bind_host, advertiseHost: exposure.advertise_host, port: exposure.port } } : {}),
       mutations: mutationAdapters,
       core,
       workspaceFileStatus,
@@ -372,17 +373,25 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       dismissSignal,
       signalProjection: () => journal.signalProjection(),
       eventCursor: () => journal.highWaterCursor(),
-      onConnectionChange: (count) => { apiConnections = count; lifecycle.setConnectedClients(apiConnections + webConnections) },
+      setWorkspacePins,
+      setWorkspacePriorities,
+      onLaunchRotated: writeRotatedLaunch,
+      onLocalTransportRotated: writeRotatedTransport,
+      onConnectionChange: (count) => lifecycle.setConnectedClients(count),
       onActivity: () => lifecycle.touch(),
     })
     monitor.start()
     const instanceId = crypto.randomUUID()
-    const descriptor: ServiceDescriptor = {
-      protocol: "v1", endpoint: running.url.toString(), pid: process.pid,
-      instance_id: instanceId, server_id: crypto.randomUUID(), credential_lookup: clientId,
+    const publishedDescriptor: ServiceDescriptor = descriptor = {
+      protocol: "git-stacks/2", pid: process.pid,
+      instance_id: instanceId, service_id: running.identity.id, listener_epoch: running.listenerEpoch,
+      webtransport: { endpoint: running.webTransport.endpoint, certificate_hash: running.webTransport.certificateHash },
+      local_tls: { ...running.localTls, certificate: running.certificatePem },
+      browser_launch: { token: running.initialBrowserLaunch.token, expires_at: running.initialBrowserLaunch.expiresAt },
+      tui_launch: { token: running.initialTuiLaunch.token, expires_at: running.initialTuiLaunch.expiresAt },
       started_at: new Date().toISOString(),
     }
-    atomicDescriptor(serviceDescriptorPath(serviceRoot), descriptor)
+    atomicDescriptor(serviceDescriptorPath(serviceRoot), publishedDescriptor)
     let stopped = false
     const stop = async () => {
       if (stopped) return
@@ -401,7 +410,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       await running.stop()
     }
     stopManaged = stop
-    return { descriptor, server: running, existing: false, stop }
+    return { descriptor: publishedDescriptor, server: running, existing: false, stop }
   } finally {
     releaseStartupLock(lockPath, lock)
   }

@@ -1,6 +1,6 @@
 ---
 phase: 120
-status: planned
+status: complete
 depends_on: [119]
 requirements: [AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05]
 ---
@@ -14,7 +14,7 @@ Make every browser document a fresh, memory-only client loaded from the installe
 ## Work packages
 
 1. Replace runtime-config/static HTTP with one self-contained installed `file:` client and fragment bootstrap. Build CSP-hashed script/style into the asset, allow no remote executable resources, atomically bind local WebTransport before emitting the file URL, consume the token inside pinned WebTransport, and clear the fragment synchronously.
-2. Generate a non-exportable ephemeral P-256 key only in document memory. Bind the local grant to browser-listener epoch, key, target ceiling, scopes, protocol/build, issue/expiry, and fresh challenge. Enforce one active connection plus a short renewable lease. Validate loopback peer and expected opaque-origin request shape as defense in depth, never identity. A new document always requires a new launch.
+2. Generate a non-exportable ephemeral P-256 key only in document memory. Bind the local grant to browser-listener epoch, key, target ceiling, scopes, protocol/build, issue/expiry, and fresh challenge. Enforce one active connection plus a short renewable lease. Enforce loopback at the kernel bind; do not treat inconsistent browser/native peer or opaque-origin metadata as identity. A new document always requires a new launch.
 3. Add one lifecycle/abort tree for the browser WebTransport listener, launch tokens, and browser sessions. Listener loss invalidates grants and closes browser channels before releasing the socket, independently of the remote helper epoch. Expire frozen, crashed, duplicated, or disconnected documents without ending service-owned shells.
 4. Keep the browser connected only to the local helper. Route remote browser channels through the same paired Node WebTransport connector used by the TUI; never send remote credentials, pairing records, durable pins, or persistable delegations to browser code.
 5. Remove all browser product persistence. Store preferences, target selection, terminal cursors, replay state, and reconnect metadata in the helper/service. Add a bundle/static-analysis gate forbidding cookies, IndexedDB, local/session storage, Cache Storage, OPFS, service/shared workers, and browser-side credential/target stores.

@@ -6,7 +6,15 @@ All notable changes to `git-stacks` are documented here.
 
 ## Unreleased
 
-No changes yet.
+### Security architecture
+
+- Replaced the transitional HTTP/SSE/WebSocket service surface with carrier-neutral `git-stacks/2` frames over authenticated encryption. The service exposes no plaintext API, executable HTTP bootstrap, readiness route, or classified fallback.
+- The browser is now a self-contained installed `file:` client with hashed CSP, ephemeral in-memory P-256 identity, owner-only launcher files that keep one-use grants out of process arguments, certificate-hash-pinned loopback WebTransport, renewable leases, and no browser product persistence.
+- The optional TUI reaches only its local helper through directly trusted self-signed-leaf TLS 1.3, hostname verification, `git-stacks/2` ALPN, and one-use application authentication. It does not load the native WebTransport addon or install a CA.
+- Added opt-in remote authorities: explicit bind configuration, out-of-band fingerprint confirmation, proof-before-commit one-use pairing, durable helper/service identities, scoped target records, signed monotonic certificate pin sets, helper process epochs, revocation, and helper-relayed browser/TUI sessions.
+- Durable identities now prefer native macOS Keychain/Linux Secret Service storage with a protected fail-closed file fallback. Ten-day WebTransport leaves roll through signed current/next pins and overlapping consecutive-port listeners without replacing the paired identity.
+- Terminal, snapshot, operation, event, signal, and dismissal traffic now share one encrypted router locally and remotely. Service-owned PTYs retain visible-only streaming, bounded replay, resize/title/focus behavior, process cleanup, and browser-close persistence.
+- Added malformed-frame, wrong-pin, launch replay, protected-store, remote relay, browser replacement, terminal replay, strict browser-bundle, license, vulnerability, native-addon, and real Chrome `file:` client validation.
 
 ---
 
@@ -14,11 +22,11 @@ No changes yet.
 
 ### Changed
 
-- The default product now runs on Node.js 24: the CLI, shared domain core, local service, HTTP/SSE/WebSocket transport, browser build, terminal runtime, and release tooling no longer require Bun.
+- The default product now runs on Node.js 24: the CLI, shared domain core, local service, encrypted transport, browser build, terminal runtime, and release tooling no longer require Bun.
 - Source is split into independently buildable `@git-stacks/protocol`, `client`, `core`, `cli`, `service`, `web`, and optional `tui` packages. The public `git-stacks` package is a small facade over the Node CLI.
 - Ordinary CLI commands remain local and daemonless. They call the same core used by the service, while service filesystem reconciliation observes atomic CLI or editor writes without a refresh RPC.
-- Interactive service transport uses Node HTTP plus `ws`; browser terminals use exact-pinned `node-pty@1.2.0-beta.14`. Service terminal ownership, visible-only streaming, bounded replay, resize, reconnect, shell-exit cleanup, and process-tree shutdown behavior are preserved.
-- The browser is a browser-only package served through a deterministic asset manifest. Shared signal, priority, event, and presentation reduction lives in the client package instead of being duplicated by renderers.
+- Interactive service transport uses the carrier-neutral secure session layer; browser terminals use exact-pinned `node-pty@1.2.0-beta.14`. Service terminal ownership, visible-only streaming, bounded replay, resize, reconnect, shell-exit cleanup, and process-tree shutdown behavior are preserved.
+- The browser is a browser-only package built as a deterministic self-contained asset. Shared signal, priority, event, and presentation reduction lives in the client package instead of being duplicated by renderers.
 - The OpenTUI dashboard is now the separately installed `@git-stacks/tui` Bun package. Bun and OpenTUI are absent from the default CLI/service/browser dependency graph.
 - Runtime packages target modern Linux and macOS on x64 and arm64. CI has separate Node jobs for each platform/architecture runner and an isolated optional-TUI job.
 - Unit and integration tests now run in isolated Vitest workers on Node, with direct V8 coverage. The Bun test runner, copied Istanbul instrumentation tree, coverage preload hooks, and their smoke tests were removed; Bun remains only for per-file OpenTUI tests.

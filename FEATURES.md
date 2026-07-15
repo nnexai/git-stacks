@@ -64,7 +64,7 @@ Workspace notes are append-only local operator context stored outside managed re
 
 ## Shared Interactive Core
 
-The terminal dashboard and browser client are two presentations over one local service, while the daemonless CLI uses the same domain core directly:
+The terminal dashboard and browser client are two presentations over one local helper/service, while the daemonless CLI uses the same domain core directly:
 
 - The service owns complete config, filesystem and Git projection, mutations, operation state, workspace monitoring, signals, and browser terminal processes.
 - The TUI uses the complete authenticated local-client contract and owns rendering, navigation, and viewport state only.
@@ -74,14 +74,14 @@ The terminal dashboard and browser client are two presentations over one local s
 
 ## Browser Client and Terminals
 
-`git-stacks web` opens a one-use paired URL on loopback. The browser supports workspace and repository navigation, workspace lifecycle actions, label/priority organization, commands, signals, and context menus.
+`git-stacks web` opens the installed self-contained client with a one-use launch fragment. The client authenticates over pinned loopback WebTransport and supports workspace and repository navigation, workspace lifecycle actions, label/priority organization, commands, signals, and context menus.
 
 On Linux and macOS, terminal tabs are backed by service-owned `node-pty` processes:
 
 - Multiple shell and configured-command tabs can run independently.
 - Resize is derived from the actual terminal container and forwarded to the PTY.
 - Only visible terminal views stream output; hidden views reconnect with bounded replay when shown again.
-- Reloading or temporarily closing a page can reconnect while the local service and PTY remain alive.
+- Closing a page leaves the service PTY alive; a fresh `git-stacks web` launch reattaches it without retaining browser authority.
 - Ordinary shell exit removes the tab; ended command tabs retain their output.
 - Process groups are cleaned up when a terminal or the service is explicitly stopped.
 
@@ -107,7 +107,7 @@ Current integrations include VS Code, IntelliJ, tmux, cmux, niri, AeroSpace, Git
 
 ## Deliberate Boundaries
 
-- The browser and service bind to loopback; this is not a hosted or remote-control product.
+- Browser and TUI clients always enter through a loopback helper. An authority may opt into a specific encrypted LAN listener and manually pair a helper; there is no public hosting, discovery, relay service, or NAT traversal.
 - Browser terminal persistence lasts only while the owning local service process is alive; it does not survive a service stop or machine reboot.
 - Coding-agent hooks are never installed implicitly.
 - The retired GTK/Zig native client is not a supported product surface. Its final state is preserved by the `native-client-final-2026-07-14` archive tag.

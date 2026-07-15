@@ -11,7 +11,7 @@ import { RevisionSchema, TimestampSchema, WorkspaceSnapshotSchema } from "@git-s
 /**
  * Trusted read model consumed by first-party machine-local clients.
  *
- * The browser intentionally does not receive this shape. Its `/web/api`
+ * The browser intentionally does not receive this shape. Its browser projection
  * projection remains a path- and secret-minimising boundary, while the TUI and
  * future first-party clients can use one complete service-owned model instead
  * of reading YAML, the filesystem, and Git independently.

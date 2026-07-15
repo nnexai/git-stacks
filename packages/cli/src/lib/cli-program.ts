@@ -27,13 +27,14 @@ export function buildCliProgram(binName = "git-stacks"): Command {
   program
     .command("manage")
     .description("Interactive workspace dashboard")
-    .action(async () => {
+    .option("--target <id>", "Connect the TUI through the local helper to a paired target")
+    .action(async (options: { target?: string }) => {
       await silenceObservability()
       const executable = which("git-stacks-tui")
       if (!executable) {
         throw new Error("The optional git-stacks TUI is not installed. Install @git-stacks/tui or use `git-stacks web`.")
       }
-      const tuiProcess = spawn([executable], { stdio: ["inherit", "inherit", "inherit"] })
+      const tuiProcess = spawn([executable], { stdio: ["inherit", "inherit", "inherit"], env: { ...process.env, ...(options.target ? { GIT_STACKS_TARGET_ID: options.target } : {}) } })
       const exitCode = await tuiProcess.exited
       if (exitCode !== 0) process.exit(exitCode)
     })

@@ -32,7 +32,9 @@ for (const [name, manifest] of manifests) {
 
 const service = manifests.get("service")
 if (service.dependencies["node-pty"] !== "1.2.0-beta.14") failures.push("service: node-pty must remain exact-pinned at 1.2.0-beta.14")
-if (service.dependencies.ws !== "8.21.1") failures.push("service: ws must remain exact-pinned at 8.21.1")
+if (service.dependencies["@fails-components/webtransport"] !== "1.6.6") failures.push("service: WebTransport must remain exact-pinned at 1.6.6")
+if (service.dependencies["@fails-components/webtransport-transport-http3-quiche"] !== "1.6.6") failures.push("service: native HTTP/3 transport must remain exact-pinned at 1.6.6")
+if (service.dependencies["@napi-rs/keyring"] !== "1.3.0") failures.push("service: native OS credential store must remain exact-pinned at 1.3.0")
 const tui = manifests.get("tui")
 if (tui.dependencies["@opentui/core"] !== "0.4.3" || tui.dependencies["@opentui/solid"] !== "0.4.3") {
   failures.push("tui: OpenTUI packages must remain exact-pinned at 0.4.3")
@@ -60,6 +62,31 @@ const requiredPrebuilds = [
 for (const path of requiredPrebuilds) {
   try { await access(join(root, "node_modules", "node-pty", path)) }
   catch { failures.push(`node-pty: missing packaged prebuild ${path}`) }
+}
+try { await access(join(root, "node_modules", "@fails-components", "webtransport-transport-http3-quiche", "build", "Release", "webtransport.node")) }
+catch { failures.push("WebTransport: native HTTP/3 addon is unavailable for the current release platform") }
+const keyringPlatform = `${process.platform}-${process.arch}`
+const keyringAddons = {
+  "linux-x64": ["keyring-linux-x64-gnu", "keyring.linux-x64-gnu.node"],
+  "linux-arm64": ["keyring-linux-arm64-gnu", "keyring.linux-arm64-gnu.node"],
+  "darwin-x64": ["keyring-darwin-x64", "keyring.darwin-x64.node"],
+  "darwin-arm64": ["keyring-darwin-arm64", "keyring.darwin-arm64.node"],
+}
+const keyringAddon = keyringAddons[keyringPlatform]
+if (!keyringAddon) failures.push(`OS credential store: unsupported release platform ${keyringPlatform}`)
+else {
+  try { await access(join(root, "node_modules", "@napi-rs", keyringAddon[0], keyringAddon[1])) }
+  catch { failures.push(`OS credential store: native addon is unavailable for ${keyringPlatform}`) }
+}
+
+if (process.argv.includes("--native-only")) {
+  if (failures.length > 0) {
+    console.error("Native runtime validation failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"))
+    process.exit(1)
+  }
+  await import("@napi-rs/keyring")
+  console.log(`Native runtime artifacts: OK (${keyringPlatform})`)
+  process.exit(0)
 }
 
 const packTargets = [".", ...names.map((name) => `packages/${name}`)]

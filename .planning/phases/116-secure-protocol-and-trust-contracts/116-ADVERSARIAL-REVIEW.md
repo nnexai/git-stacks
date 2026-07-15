@@ -39,7 +39,7 @@ local Node helper
 remote Node authority
 ```
 
-The optional TUI still uses private-CA-pinned TLS 1.3 to the same local helper. Thus both clients share the same remote connector and remote authorization principal while every hop remains encrypted.
+The optional TUI uses directly trusted self-signed-leaf TLS 1.3 to the same local helper, with no installed CA. Both clients use the same remote connector implementation, while each authenticated local principal receives an isolated remote carrier and every hop remains encrypted.
 
 ## Threat register
 
@@ -88,7 +88,7 @@ The optional TUI still uses private-CA-pinned TLS 1.3 to the same local helper. 
 - Browser storage is optional hostile input. Production code should not open it. Known legacy git-stacks databases/cookies may be cleared as hygiene, but successful clearing is never a security condition.
 - A normal reload or new document cannot reconstruct authentication. The packaged page displays a non-sensitive “run `git-stacks web` to reconnect” state.
 - The existing helper/service retains shells, terminal replay, target selection, and UI preferences. A fresh browser launch obtains an authoritative snapshot and reattaches.
-- A same-document carrier reconnect may use the in-memory key for a very short bounded window, but renewal requires the still-live local helper session. A short connection lease, one-active-connection rule, `pagehide`, listener abort, helper epoch change, or expiry terminates the grant; BFCache resume requires a fresh launch.
+- Carrier loss, reload, and BFCache resume require a fresh launch and fresh document grant. Service-owned terminals survive browser-document loss and reattach after that launch; browser authority itself is never reconstructed.
 - Closing or losing the local WebTransport listener invalidates unused launch tokens and active browser grants even if the Node helper remains alive for TUI or remote connector work.
 - The helper-to-remote connection can remain alive after browser closure so service-owned shells continue. No browser authorization survives that closure.
 

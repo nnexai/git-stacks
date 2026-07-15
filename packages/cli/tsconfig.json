@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "../..", "outDir": "dist", "module": "ESNext", "moduleResolution": "Bundler", "allowImportingTsExtensions": true, "types": ["node"] },
+  "compilerOptions": { "rootDir": "../..", "outDir": "dist", "module": "ESNext", "moduleResolution": "Bundler", "customConditions": ["node"], "allowImportingTsExtensions": true, "types": ["node"] },
   "include": ["src/**/*.ts"]
 }

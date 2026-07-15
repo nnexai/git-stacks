@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto"
 import { spawn as spawnPty } from "node-pty"
 import type { Signal } from "@git-stacks/protocol"
 import type { SnapshotAdapter } from "../snapshot-adapter"
-import type { TerminalSocket } from "../carrier"
+import type { TerminalAttachment } from "../terminal-attachment"
 import { WebTerminalSchema, WebTerminalSocketControlSchema, type WebTerminal } from "@git-stacks/protocol"
 import { TerminalSignalFilter, type TerminalSignal } from "./signal-filter"
 
@@ -14,7 +14,7 @@ export const WEB_TERMINAL_SOCKET_PRESSURE_BYTES = 512 * 1024
 export const WEB_TERMINAL_ENDED_RETENTION_MS = 60 * 60 * 1_000
 
 type OutputChunk = { cursor: bigint; bytes: Uint8Array }
-type Attachment = { socket: TerminalSocket; ack: bigint; pressured: boolean; streaming: boolean }
+type Attachment = { socket: TerminalAttachment; ack: bigint; pressured: boolean; streaming: boolean }
 
 export interface PtyProcess {
   readonly pid: number
@@ -62,7 +62,7 @@ type Session = {
   agentSessions: Map<TerminalSignal["provider"], string>
 }
 
-export type { WebSocketData } from "../carrier"
+export type { TerminalAttachmentData } from "../terminal-attachment"
 
 export type WebTerminalCreateInput = {
   workspace_id: string
@@ -268,7 +268,7 @@ export class WebTerminalManager {
     return terminal
   }
 
-  attach(socket: TerminalSocket): void {
+  attach(socket: TerminalAttachment): void {
     const session = this.sessions.get(socket.data.sessionId)
     if (!session || session.principalId !== socket.data.principalId) { socket.close(1008, "Unknown terminal"); return }
     if (session.attachment && session.attachment.socket !== socket) session.attachment.socket.close(4001, "Taken over")
@@ -277,7 +277,7 @@ export class WebTerminalManager {
     if (session.attachment.streaming) for (const chunk of session.chunks) this.sendChunk(session, chunk)
   }
 
-  message(socket: TerminalSocket, raw: string | Buffer): void {
+  message(socket: TerminalAttachment, raw: string | Buffer): void {
     this.controlsReceived += 1
     const session = this.sessions.get(socket.data.sessionId)
     if (!session || session.principalId !== socket.data.principalId || session.attachment?.socket !== socket) { socket.close(1008, "Unknown terminal"); return }
@@ -297,12 +297,12 @@ export class WebTerminalManager {
     else if (message.type === "ping") socket.send(JSON.stringify({ type: "pong" }))
   }
 
-  detached(socket: TerminalSocket): void {
+  detached(socket: TerminalAttachment): void {
     const session = this.sessions.get(socket.data.sessionId)
     if (session?.attachment?.socket === socket) session.attachment = undefined
   }
 
-  drain(socket: TerminalSocket): void {
+  drain(socket: TerminalAttachment): void {
     const session = this.sessions.get(socket.data.sessionId)
     if (!session?.attachment || session.attachment.socket !== socket || !session.attachment.pressured) return
     session.attachment.pressured = false

@@ -1,6 +1,6 @@
 ---
 phase: 117
-status: planned
+status: complete
 depends_on: [116]
 requirements: [TRUST-01, TRUST-02, TRUST-03, TRUST-04]
 ---

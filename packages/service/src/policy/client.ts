@@ -1,8 +1,5 @@
-import { join } from "node:path"
-
 import type { z } from "zod"
-import { WS_CONFIG_DIR } from "@git-stacks/core/paths"
-import { readOfficialClientCredential } from "./credentials"
+import { authenticateSecureCarrier, type SecureRpcClient } from "@git-stacks/client"
 import {
   CoreMutationSchemas,
   CoreStateSchema,
@@ -26,8 +23,11 @@ import {
   type ServiceEvent,
 } from "@git-stacks/protocol"
 import { ensureManagedServiceProcess } from "../main"
+import { connectLocalTls } from "../transport/local-tls"
 import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
 import type { WorkspaceNoteRecord } from "@git-stacks/core/notes"
+import type { PairingBundle, PairedHelper, TargetRecord } from "../security/targets"
+import type { SecureScope } from "@git-stacks/protocol"
 
 export interface SignalProjectionResponse {
   signals: Signal[]
@@ -38,26 +38,36 @@ export interface SignalProjectionResponse {
 export type OperationObserver = (operation: Operation) => void
 export type ServiceEventObserver = (event: ServiceEvent) => void
 
-type ServiceAccess = {
-  endpoint: string
-  headers: Record<string, string>
-}
+let cachedAccess: SecureRpcClient | undefined
+let accessRequest: Promise<SecureRpcClient> | undefined
 
-let cachedAccess: ServiceAccess | undefined
-let accessRequest: Promise<ServiceAccess> | undefined
+const OFFICIAL_SCOPES = [
+  "snapshot.read", "operation.write", "event.read", "signal.read", "signal.dismiss",
+  "terminal.read", "terminal.write", "terminal.create", "terminal.close", "target.select",
+] as const
 
-async function authenticatedService(): Promise<ServiceAccess> {
+async function authenticatedService(): Promise<SecureRpcClient> {
   if (cachedAccess) return cachedAccess
   if (!accessRequest) {
     accessRequest = (async () => {
       const descriptor = await ensureManagedServiceProcess()
-      const serviceRoot = join(WS_CONFIG_DIR, "service")
-      const credential = readOfficialClientCredential(descriptor.credential_lookup, { serviceRoot })
-      if (!credential) throw new Error("git-stacks service credential is unavailable")
-      return {
-        endpoint: descriptor.endpoint,
-        headers: { authorization: `Bearer ${credential.token}`, "content-type": "application/json" },
+      const authenticate = async (launchToken: string, targetId: string) => authenticateSecureCarrier(await connectLocalTls(descriptor.local_tls), {
+        mode: "tui",
+        targetId,
+        listenerEpoch: descriptor.listener_epoch,
+        launchToken,
+        requestedScopes: [...OFFICIAL_SCOPES],
+        build: "git-stacks-tui/0.21",
+      })
+      let authenticated = await authenticate(descriptor.tui_launch.token, descriptor.service_id)
+      const requestedTarget = process.env.GIT_STACKS_TARGET_ID
+      if (requestedTarget && requestedTarget !== descriptor.service_id) {
+        const launch = await authenticated.rpc.request<{ token: string }>("launch.tui", { target_id: requestedTarget }, { scope: "target.select" })
+        await authenticated.rpc.close("switching to paired target")
+        authenticated = await authenticate(launch.token, requestedTarget)
       }
+      void authenticated.rpc.closed.then(() => { if (cachedAccess === authenticated.rpc) cachedAccess = undefined })
+      return authenticated.rpc
     })().then((access) => {
       cachedAccess = access
       return access
@@ -66,62 +76,45 @@ async function authenticatedService(): Promise<ServiceAccess> {
   return accessRequest
 }
 
-function serviceError(payload: unknown, status: number): Error {
-  const envelope = payload as { error?: { code?: string; message?: string } }
-  const message = envelope.error?.message ?? `git-stacks service request failed (${status})`
-  const error = new Error(message) as Error & { code?: string; status?: number }
-  error.code = envelope.error?.code
-  error.status = status
-  return error
-}
-
-async function requestData(path: string, init: RequestInit = {}): Promise<unknown> {
-  let response: Response | undefined
+async function secureRequest<T>(
+  method: string,
+  body?: unknown,
+  options: { signal?: AbortSignal; scope?: SecureScope; idempotencyKey?: string } = {},
+): Promise<T> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const access = await authenticatedService()
     try {
-      response = await fetch(new URL(path, access.endpoint), {
-        ...init,
-        headers: { ...access.headers, ...init.headers },
-      })
-      break
+      const rpc = await authenticatedService()
+      return await rpc.request<T>(method, body, options)
     } catch (error) {
       cachedAccess = undefined
-      if (attempt === 1 || init.signal?.aborted) throw error
+      if (attempt === 1 || options.signal?.aborted) throw error
     }
   }
-  if (!response) throw new Error("git-stacks service request did not produce a response")
-  const payload = await response.json() as { ok?: boolean; data?: unknown }
-  if (!response.ok || payload.ok !== true) throw serviceError(payload, response.status)
-  return payload.data
+  throw new Error("git-stacks secure service request did not produce a response")
 }
 
 export async function fetchCoreState(signal?: AbortSignal): Promise<CoreState> {
-  return CoreStateSchema.parse(await requestData("/v1/core", { signal }))
+  return CoreStateSchema.parse(await secureRequest("core.state", undefined, { signal, scope: "snapshot.read" }))
 }
 
 export async function fetchWorkspaceFileStatus(workspace: string, signal?: AbortSignal): Promise<WorkspaceFileStatusView> {
-  return await requestData(`/v1/core/workspaces/${encodeURIComponent(workspace)}/files`, { signal }) as WorkspaceFileStatusView
+  return secureRequest("core.workspace.files", { workspace }, { signal, scope: "snapshot.read" })
 }
 
 export async function fetchWorkspaceNotes(workspace: string, signal?: AbortSignal): Promise<WorkspaceNoteRecord[]> {
-  return await requestData(`/v1/core/workspaces/${encodeURIComponent(workspace)}/notes`, { signal }) as WorkspaceNoteRecord[]
+  return secureRequest("core.workspace.notes", { workspace }, { signal, scope: "snapshot.read" })
 }
 
 export async function fetchEditTarget(request: EditTargetRequest, signal?: AbortSignal): Promise<EditTarget> {
-  return EditTargetSchema.parse(await requestData("/v1/core/edit-target", {
-    method: "POST",
-    signal,
-    body: JSON.stringify(request),
-  }))
+  return EditTargetSchema.parse(await secureRequest("core.edit-target", request, { signal, scope: "snapshot.read" }))
 }
 
 export async function fetchWorkspaceCreationCatalog(signal?: AbortSignal): Promise<WorkspaceCreationCatalog> {
-  return WorkspaceCreationCatalogSchema.parse(await requestData("/v1/workspace-creation/catalog", { signal }))
+  return WorkspaceCreationCatalogSchema.parse(await secureRequest("workspace-creation.catalog", undefined, { signal, scope: "snapshot.read" }))
 }
 
 export async function fetchSignalProjection(signal?: AbortSignal): Promise<SignalProjectionResponse> {
-  const value = await requestData("/v1/signals", { signal }) as SignalProjectionResponse
+  const value = await secureRequest<SignalProjectionResponse>("signals.list", undefined, { signal, scope: "signal.read" })
   return {
     signals: value.signals.map((item) => SignalSchema.parse(item)),
     dismissed: [...value.dismissed],
@@ -129,12 +122,51 @@ export async function fetchSignalProjection(signal?: AbortSignal): Promise<Signa
   }
 }
 
+export async function publishSignalToService(value: Signal, signal?: AbortSignal): Promise<void> {
+  await secureRequest("signals.publish", SignalSchema.parse(value), { signal, scope: "operation.write" })
+}
+
+export async function createBrowserLaunch(targetId?: string, signal?: AbortSignal): Promise<{ token: string; expiresAt: string; listenerEpoch: string; grant: { targetId: string } }> {
+  const rpc = await authenticatedService()
+  return rpc.request("launch.browser", targetId ? { target_id: targetId } : {}, { signal, scope: "target.select" })
+}
+
+export async function closeServiceClient(reason = "one-shot client complete"): Promise<void> {
+  const rpc = cachedAccess
+  cachedAccess = undefined
+  accessRequest = undefined
+  await rpc?.close(reason)
+}
+
+export async function createRemotePairing(name: string, scopes: SecureScope[], signal?: AbortSignal): Promise<PairingBundle> {
+  const rpc = await authenticatedService()
+  return rpc.request("trust.pair.create", { name, scopes }, { signal, scope: "target.select" })
+}
+
+export async function listPairedHelpers(signal?: AbortSignal): Promise<PairedHelper[]> {
+  const rpc = await authenticatedService()
+  return rpc.request("trust.pair.list", undefined, { signal, scope: "target.select" })
+}
+
+export async function revokePairedHelper(helperId: string, signal?: AbortSignal): Promise<boolean> {
+  const rpc = await authenticatedService()
+  const result = await rpc.request<{ revoked: boolean }>("trust.pair.revoke", { helper_id: helperId }, { signal, scope: "target.select" })
+  return result.revoked
+}
+
+export async function listRemoteTargets(signal?: AbortSignal): Promise<TargetRecord[]> {
+  const rpc = await authenticatedService()
+  return rpc.request("targets.list", undefined, { signal, scope: "target.select" })
+}
+
+export async function removeRemoteTarget(targetId: string, signal?: AbortSignal): Promise<boolean> {
+  const rpc = await authenticatedService()
+  const result = await rpc.request<{ removed: boolean }>("targets.remove", { target_id: targetId }, { signal, scope: "target.select" })
+  return result.removed
+}
+
 export async function dismissSignal(signalId: string, signal?: AbortSignal): Promise<void> {
-  await requestData("/v1/signals/dismiss", {
-    method: "POST",
-    signal,
-    body: JSON.stringify({ kind: "dismiss_signal", signal_id: signalId }),
-  })
+  await secureRequest("signals.dismiss", { kind: "dismiss_signal", signal_id: signalId }, { signal, scope: "signal.dismiss" })
 }
 
 export async function subscribeServiceEvents(
@@ -143,56 +175,36 @@ export async function subscribeServiceEvents(
   signal?: AbortSignal,
   onReady?: () => void,
 ): Promise<string> {
-  const access = await authenticatedService()
-  let response: Response
-  try {
-    response = await fetch(new URL(`/v1/events?cursor=${encodeURIComponent(cursor)}`, access.endpoint), { headers: access.headers, signal })
-  } catch (error) {
-    cachedAccess = undefined
-    throw error
-  }
-  if (!response.ok || !response.body) {
-    const payload = await response.json().catch(() => ({}))
-    throw serviceError(payload, response.status)
-  }
-  onReady?.()
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ""
+  const rpc = await authenticatedService()
   let latest = cursor
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true }).replaceAll("\r\n", "\n")
-    const frames = buffer.split("\n\n")
-    buffer = frames.pop() ?? ""
-    for (const frame of frames) {
-      const data = frame.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n")
-      if (!data) continue
-      let decoded: unknown
-      try { decoded = JSON.parse(data) } catch { continue }
-      const parsed = ServiceEventSchema.safeParse(decoded)
-      if (!parsed.success) continue
-      latest = parsed.data.sequence
-      observer(parsed.data)
-    }
-  }
-  return latest
+  const remove = rpc.observeEvents((value) => {
+    const parsed = ServiceEventSchema.safeParse(value)
+    if (!parsed.success) return
+    latest = parsed.data.sequence
+    observer(parsed.data)
+  })
+  try {
+    await rpc.request("events.subscribe", { cursor }, { signal, scope: "event.read" })
+    onReady?.()
+    if (signal?.aborted) return latest
+    await Promise.race([
+      rpc.closed,
+      new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true })),
+    ])
+    return latest
+  } finally { remove() }
 }
 
 export async function fetchEventCursor(signal?: AbortSignal): Promise<string> {
-  const value = await requestData("/v1/events/cursor", { signal }) as { cursor?: unknown }
+  const value = await secureRequest<{ cursor?: unknown }>("events.cursor", undefined, { signal, scope: "event.read" })
   if (typeof value.cursor !== "string" || !/^(0|[1-9][0-9]*)$/.test(value.cursor)) throw new Error("Invalid service event cursor")
   return value.cursor
 }
 
-async function submit(path: string, request: unknown, signal?: AbortSignal): Promise<Operation> {
+async function submit(mutation: string, request: unknown, signal?: AbortSignal): Promise<Operation> {
   const key = `official-${crypto.randomUUID()}`
-  return OperationSchema.parse(await requestData(path, {
-    method: "POST",
-    signal,
-    headers: { "idempotency-key": key },
-    body: JSON.stringify(request),
+  return OperationSchema.parse(await secureRequest("operation.submit", { mutation, request }, {
+    signal, scope: "operation.write", idempotencyKey: key,
   }))
 }
 
@@ -212,7 +224,9 @@ export async function waitForOperation(
     if (current.state !== "accepted" && current.state !== "running") return current
     await new Promise<void>((resolve) => setTimeout(resolve, options.pollMs ?? 1_000))
     options.signal?.throwIfAborted()
-    current = OperationSchema.parse(await requestData(`/v1/operations/${current.operation_id}`, { signal: options.signal }))
+    current = OperationSchema.parse(await secureRequest("operation.get", { operation_id: current.operation_id }, {
+      signal: options.signal, scope: "snapshot.read",
+    }))
   }
 }
 
@@ -261,7 +275,7 @@ async function submitAndStreamOperation(
     operationId = accepted.operation_id
     observe(accepted)
     for (const operation of buffered.get(operationId) ?? []) observe(operation)
-    // SSE is the fast path. If the connection closes or is interrupted, resume
+    // The encrypted event stream is the fast path. If the connection closes or is interrupted, resume
     // through the durable operation endpoint instead of leaving the client
     // waiting forever for an event that can no longer arrive.
     const result = await Promise.race([
@@ -283,7 +297,7 @@ async function submitAndStreamOperation(
 
 function assertSucceeded(operation: Operation): Operation & { state: "succeeded" } {
   if (operation.state === "succeeded") return operation
-  if (operation.state === "failed" || operation.state === "cancelled") throw serviceError({ error: operation.error }, 409)
+  if (operation.state === "failed" || operation.state === "cancelled") throw Object.assign(new Error(operation.error.message), { code: operation.error.code, status: 409 })
   throw new Error("Operation did not reach a terminal state")
 }
 
@@ -294,7 +308,7 @@ export async function runCoreMutation<Name extends CoreMutationName>(
 ): Promise<Operation & { state: "succeeded" }> {
   const parsed = CoreMutationSchemas[name].parse(request) as z.infer<(typeof CoreMutationSchemas)[Name]>
   return assertSucceeded(await submitAndStreamOperation(
-    (signal) => submit(`/v1/operations/${encodeURIComponent(name)}`, parsed, signal),
+    (signal) => submit(name, parsed, signal),
     options,
   ))
 }
@@ -305,7 +319,7 @@ export async function createWorkspaceThroughService(
 ): Promise<Operation & { state: "succeeded" }> {
   const parsed = WorkspaceCreationRequestSchema.parse(request)
   return assertSucceeded(await submitAndStreamOperation(
-    (signal) => submit("/v1/operations/workspace.create", parsed, signal),
+    (signal) => submit("workspace.create", parsed, signal),
     options,
   ))
 }

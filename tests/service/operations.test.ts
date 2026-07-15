@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@test/api"
 
-describe("v1 operations transport", () => {
+describe("secure service lifecycle", () => {
   test("idle lifecycle suppresses exit while clients or operations are active", async () => {
     const callbacks: Array<() => void> = []
     let exited = 0
@@ -19,8 +19,9 @@ describe("v1 operations transport", () => {
     lifecycle.dispose()
   })
 
-  test("exports the loopback server composition entry point", async () => {
-    const module = await import("../../packages/service/src/server")
-    expect(module.startServiceServer).toBeTypeOf("function")
+  test("does not export the removed plaintext HTTP transport", async () => {
+    const module = await import("../../packages/service/src/index")
+    expect("startServiceServer" in module).toBe(false)
+    expect("readOfficialClientCredential" in module).toBe(false)
   })
 })

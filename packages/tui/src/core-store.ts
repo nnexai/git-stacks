@@ -38,6 +38,8 @@ function startEventRefresh(): void {
             // Let it settle before deciding whether another projection is needed.
             if (active) void active.then(refreshIfNeeded, refreshIfNeeded)
             else refreshIfNeeded()
+          } else if (event.type === "control" && event.control.kind === "replay_gap") {
+            void reloadCoreState()
           }
         }, controller.signal)
       } catch {

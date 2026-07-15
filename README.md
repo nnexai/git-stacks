@@ -421,26 +421,27 @@ Dismissal applies to both activity and notifications, is service-authoritative, 
 ## Browser Client
 
 ```bash
-git-stacks web                 # Start/discover the service and open a paired browser
-git-stacks web --no-open       # Print the one-use local URL
+git-stacks web                 # Start/discover the service and open the secure packaged client
+git-stacks web --no-open       # Print an owner-only launcher file URL
 git-stacks web --no-open --json
+git-stacks web --target <id>   # Route through the local helper to a paired authority
 ```
 
-The browser client is loopback-only and receives a path- and secret-minimized projection from the local Node.js service. Machine paths, resolved commands, environment values, and service credentials stay in the service. Pairing URLs are one-use local credentials rather than reusable API access.
+The browser loads from an installed self-contained `file:` asset, then connects only to the local helper through certificate-hash-pinned WebTransport. There is no service HTTP server, executable loopback response, SSE/WebSocket fallback, cookie principal, or browser-persisted authority. A mode-0600 launcher keeps the one-use bearer out of command output and browser process arguments; the client then clears the fragment synchronously. Every document creates an ephemeral non-exportable P-256 key and authenticates inside encryption. Machine paths, resolved commands, environments, remote credentials, and trust records stay in the service.
 
-On Linux and macOS, the service owns independent browser PTYs with multiple tabs, resize, bounded replay, focus restoration, inactive-tab stream suspension, and process-group cleanup. Because the shell belongs to the service rather than the page, a reload or temporary browser closure can reconnect to a live terminal while that service process remains alive. This is local process persistence, not reboot persistence: stopping the service or machine ends its PTYs. Exiting an ordinary shell removes its tab; configured command tabs stay available with their final output.
+On Linux and macOS, the service owns independent browser PTYs with multiple tabs, resize, bounded replay, focus restoration, inactive-tab stream suspension, and process-group cleanup. Because the shell belongs to the service rather than the page, closing the page does not end it; running `git-stacks web` again creates the required fresh document grant and reattaches live terminals while the service remains alive. A plain reload intentionally has no retained authority and asks for a fresh launch. This is local process persistence, not reboot persistence: stopping the service or machine ends its PTYs. Exiting an ordinary shell removes its tab; configured command tabs stay available with their final output.
 
 ## Shared Service Architecture
 
 The CLI, TUI, and browser deliberately share one machine-side core:
 
 - `@git-stacks/core` is the only workspace/config/Git implementation. The local CLI calls it directly for daemonless scripting.
-- The Node.js `@git-stacks/service` package owns interactive projection, operations, signals, SSE/WebSocket transport, and browser PTYs.
-- `@git-stacks/protocol` owns wire schemas; `@git-stacks/client` owns carrier-neutral client reduction and presentation semantics.
-- `git-stacks manage` is a trusted local client of the complete typed `/v1/core` model. It renders and manages viewport state, but does not maintain a second workspace engine.
-- The browser uses the narrower `/web/api` projection and never receives trusted-only paths or launch context.
-- Both clients load an authoritative snapshot and follow server-sent events for invalidation, operations, and signal changes instead of polling the machine while navigating.
-- The default package graph contains no Bun or OpenTUI dependency. Package ownership and dependency rules are described in [docs/architecture.md](./docs/architecture.md).
+- The Node.js `@git-stacks/service` package owns interactive projections, operations, signals, encrypted listeners, remote relay, trust state, and browser PTYs.
+- `@git-stacks/protocol` owns canonical `git-stacks/2` frames and limits; `@git-stacks/client` owns authenticated carrier/RPC behavior and shared presentation semantics.
+- `git-stacks manage` verifies a directly trusted self-signed leaf over TLS 1.3 plus `git-stacks/2` ALPN and consumes a one-use application grant. It renders viewport state but has no second workspace engine.
+- The browser receives the narrower web projection over pinned WebTransport and never receives trusted-only paths, launch commands, or remote credentials.
+- Both clients load an authoritative snapshot and follow encrypted ordered events for invalidation, operations, and signals instead of polling the machine while navigating.
+- The default package graph contains no Bun or OpenTUI dependency. See [architecture](./docs/architecture.md), [security](./docs/security.md), and [remote setup](./docs/remote-service.md).
 
 ## Dashboard
 

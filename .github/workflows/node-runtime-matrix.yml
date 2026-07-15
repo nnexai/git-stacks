@@ -30,11 +30,17 @@ jobs:
       - run: npm run test:deps
       - run: npm run test:vitest
       - run: npm run test:node
-      - run: npm audit --omit=dev --workspace @git-stacks/cli --workspace @git-stacks/service
+      - run: node scripts/check-packages.mjs --native-only
+      - run: npm run audit:licenses
+      - run: npm run audit:runtime
 
   optional-tui:
     name: Optional Bun TUI
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,3 +54,4 @@ jobs:
       - run: npm run typecheck -w @git-stacks/tui
       - run: npm run tui:build
       - run: npm run test:tui
+      - run: npm run check:packages

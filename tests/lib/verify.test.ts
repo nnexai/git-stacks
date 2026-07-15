@@ -45,7 +45,7 @@ describe("verify command workflow", () => {
     expect(pkg.scripts["verify:gates"]).toBe("tsx scripts/verify-gates.ts")
     expect(pkg.scripts.test).toContain("npm run test:vitest")
     expect(pkg.scripts["test:unit"]).toContain("vitest run")
-    expect(pkg.scripts["test:integ"]).toBe("vitest run tests/commands")
+    expect(pkg.scripts["test:integ"]).toBe("GIT_STACKS_KEY_STORE=file vitest run tests/commands")
     expect(pkg.scripts["test:deps"]).toBe("node scripts/check-architecture.mjs --cycles")
     expect(pkg.scripts.typecheck).toBe("npm run typecheck --workspaces --if-present")
   })

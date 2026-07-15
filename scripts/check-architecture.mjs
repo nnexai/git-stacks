@@ -49,11 +49,20 @@ for (const entry of await readdir(packagesRoot, { withFileTypes: true })) {
   try { files = await sourceFiles(sourceRoot) } catch { continue }
   for (const file of files) {
     const source = await readFile(file, "utf8")
+    const relativeFile = relative(repositoryRoot, file)
+    if (importer === "web") {
+      for (const forbidden of [
+        [/(?:localStorage|sessionStorage|indexedDB|CacheStorage|caches\.|navigator\.serviceWorker|SharedWorker|new\s+Worker\s*\(|showDirectoryPicker|storage\.getDirectory)/, "durable browser storage or workers"],
+        [/\b(?:fetch|EventSource|WebSocket)\s*\(/, "classified legacy browser transport"],
+      ]) if (forbidden[0].test(source)) failures.push(`${relativeFile}: web client contains ${forbidden[1]}`)
+    }
+    if (importer === "service" && /(?:from\s+["'](?:node:http|ws)["']|text\/event-stream|\/web\/api|\/v1\/signals)/.test(source)) {
+      failures.push(`${relativeFile}: service contains a removed plaintext HTTP/SSE/WebSocket route`)
+    }
     const localImports = []
     for (const match of source.matchAll(importPattern)) {
       const specifier = match[1]
       const imported = targetPackage(specifier)
-      const relativeFile = relative(repositoryRoot, file)
       const explicitCliLauncher = importer === "cli" && imported === "service"
         && ["packages/cli/src/commands/service.ts", "packages/cli/src/commands/web.ts"].includes(relativeFile)
       const forbiddenTuiServiceRoot = importer === "tui" && imported === "service"

@@ -14,7 +14,8 @@
   "allowScripts": {
     "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
-    "node-pty@1.2.0-beta.14": true
+    "node-pty@1.2.0-beta.14": true,
+    "@fails-components/webtransport-transport-http3-quiche@1.6.6": true
   },
   "engines": {
     "node": ">=24"
@@ -51,19 +52,19 @@
     "clean": "node scripts/clean-packages.mjs",
     "dev": "npm run build -w @git-stacks/cli && node packages/cli/dist/index.js",
     "test": "npm run build:packages && npm run test:vitest && npm run test:node && npm run test:tui",
-    "test:vitest": "vitest run",
-    "test:unit": "vitest run tests/lib tests/service tests/tui/workspace-clone.test.ts tests/tui/workspace-wizard.test.ts",
+    "test:vitest": "GIT_STACKS_KEY_STORE=file vitest run",
+    "test:unit": "GIT_STACKS_KEY_STORE=file vitest run tests/lib tests/service tests/tui/workspace-clone.test.ts tests/tui/workspace-wizard.test.ts",
     "pretest:unit": "npm run build:packages",
-    "test:integ": "vitest run tests/commands",
+    "test:integ": "GIT_STACKS_KEY_STORE=file vitest run tests/commands",
     "pretest:integ": "npm run build:packages",
     "test:tui": "node scripts/test-tui.mjs",
     "test:deps": "node scripts/check-architecture.mjs --cycles",
     "test:architecture": "node scripts/check-architecture.mjs",
-    "test:node": "node --test tests/architecture/*.test.mjs tests/conformance/*.test.mjs tests/core/*.test.mjs tests/cli/*.test.mjs tests/service-node/*.test.mjs",
+    "test:node": "GIT_STACKS_KEY_STORE=file node --test tests/architecture/*.test.mjs tests/conformance/*.test.mjs tests/core/*.test.mjs tests/cli/*.test.mjs tests/service-node/*.test.mjs",
     "check:packages": "npm run build:packages && npm run tui:build && node scripts/check-packages.mjs",
     "audit:licenses": "node scripts/check-licenses.mjs",
     "audit:runtime": "npm audit --omit=dev --workspace @git-stacks/cli --workspace @git-stacks/service",
-    "coverage": "vitest run --coverage",
+    "coverage": "GIT_STACKS_KEY_STORE=file vitest run --coverage",
     "verify": "tsx scripts/verify.ts",
     "verify:prereqs": "tsx scripts/verify-prereqs.ts",
     "verify:gates": "tsx scripts/verify-gates.ts",

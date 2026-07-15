@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist", "module": "ESNext", "moduleResolution": "Bundler", "jsx": "preserve", "jsxImportSource": "@opentui/solid", "types": ["bun"] },
+  "compilerOptions": { "rootDir": "src", "outDir": "dist", "module": "ESNext", "moduleResolution": "Bundler", "customConditions": ["node"], "jsx": "preserve", "jsxImportSource": "@opentui/solid", "types": ["bun"] },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

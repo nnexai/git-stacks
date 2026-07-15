@@ -24,7 +24,7 @@ mock.module("../../../packages/tui/src/core-store", () => ({
 
 const { useSignals } = await import("../../../packages/tui/src/hooks/useSignals")
 
-test("applies signal SSE events locally without refetching the projection", async () => {
+test("applies signal events locally without refetching the projection", async () => {
   fetchSignalProjection.mockClear()
   let signals!: ReturnType<typeof useSignals>
   let dispose!: () => void

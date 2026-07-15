@@ -1,11 +1,12 @@
+import { createRequire } from "node:module"
+import { dirname, join } from "node:path"
+import { pathToFileURL } from "node:url"
 import { Command } from "commander"
 
 import { spawn } from "@git-stacks/core/node-runtime"
-import { join } from "node:path"
-import { WS_CONFIG_DIR } from "@git-stacks/core/paths"
-import { readOfficialClientCredential } from "@git-stacks/service"
+import { createProtectedBrowserLauncher } from "../lib/browser-launcher"
 
-type PairingEnvelope = { ok: true; data: { url: string; expires_at: string } } | { ok: false; error?: { message?: string } }
+const require = createRequire(import.meta.url)
 
 function openBrowser(url: string): void {
   const command = process.platform === "darwin" ? ["open", url] : process.platform === "win32" ? ["cmd.exe", "/c", "start", "", url] : ["xdg-open", url]
@@ -13,43 +14,37 @@ function openBrowser(url: string): void {
   child.unref()
 }
 
+function packagedClientUrl(): URL {
+  const packageRoot = dirname(require.resolve("@git-stacks/web/package.json"))
+  return pathToFileURL(join(packageRoot, "dist", "git-stacks.html"))
+}
+
 export const webCommand = new Command("web")
-  .description("Open the local browser workspace client")
-  .option("--no-open", "Print the pairing URL without opening a browser")
-  .option("--json", "Print machine-readable pairing details")
-  .action(async (options: { open: boolean; json?: boolean }) => {
-    const { startManagedService } = await import("@git-stacks/service")
-    const service = await startManagedService()
-    const serviceRoot = join(WS_CONFIG_DIR, "service")
-    const credential = readOfficialClientCredential(service.descriptor.credential_lookup, { serviceRoot })
-    if (!credential) {
-      await service.stop()
-      throw new Error("Official service credential is unavailable")
+  .description("Open the packaged browser client through encrypted WebTransport")
+  .option("--no-open", "Create and print a protected one-use launcher without opening a browser")
+  .option("--json", "Print machine-readable launch details")
+  .option("--target <id>", "Open a paired remote target instead of the implicit local target")
+  .action(async (options: { open: boolean; json?: boolean; target?: string }) => {
+    const { ensureManagedServiceProcess } = await import("@git-stacks/service")
+    const descriptor = await ensureManagedServiceProcess()
+    const { createBrowserLaunch, closeServiceClient } = await import("@git-stacks/service/client")
+    const browserLaunch = await createBrowserLaunch(options.target ?? descriptor.service_id)
+    const launch = {
+      version: 1,
+      endpoint: descriptor.webtransport.endpoint,
+      certificate_hash: descriptor.webtransport.certificate_hash,
+      token: browserLaunch.token,
+      expires_at: browserLaunch.expiresAt,
+      listener_epoch: descriptor.listener_epoch,
+      target_id: browserLaunch.grant.targetId,
+      build: "git-stacks-web/0.21",
     }
-    const response = await fetch(new URL("/v1/web-pairings", service.descriptor.endpoint), {
-      method: "POST",
-      headers: { authorization: `Bearer ${credential.token}`, "content-type": "application/json" },
-      body: "{}",
-    })
-    const envelope = await response.json() as PairingEnvelope
-    if (!response.ok || !envelope.ok) {
-      await service.stop()
-      throw new Error(envelope.ok ? `Pairing failed (${response.status})` : envelope.error?.message ?? `Pairing failed (${response.status})`)
-    }
-    if (options.json) console.log(JSON.stringify(envelope.data))
-    else console.log(`git-stacks web: ${envelope.data.url}`)
-    if (options.open) openBrowser(envelope.data.url)
-    if (!service.existing) {
-      await new Promise<void>((resolve) => {
-        let stopping = false
-        const stop = async () => {
-          if (stopping) return
-          stopping = true
-          await service.stop()
-          resolve()
-        }
-        process.once("SIGINT", stop)
-        process.once("SIGTERM", stop)
-      })
-    }
+    const url = packagedClientUrl()
+    url.hash = `launch=${Buffer.from(JSON.stringify(launch)).toString("base64url")}`
+    const launcher = createProtectedBrowserLauncher(url)
+    if (options.json) console.log(JSON.stringify({ launcher: launcher.toString(), expires_at: launch.expires_at, target_id: launch.target_id }))
+    else if (options.open) console.log("git-stacks web: opened the secure packaged client")
+    else console.log(`git-stacks web: ${launcher}`)
+    if (options.open) openBrowser(launcher.toString())
+    await closeServiceClient("browser launch issued")
   })

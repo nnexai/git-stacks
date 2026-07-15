@@ -4,9 +4,14 @@ import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
 import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, workspacePriorityOrder } from "@git-stacks/client"
-import type { WebRepository as Repository, WebSnapshot as Snapshot, WebTerminal as TerminalMeta, WebWorkspace as Workspace, Signal, WorkspaceCreationCatalog as Catalog } from "@git-stacks/protocol"
+import type { WebRepository as Repository, WebSnapshot as Snapshot, WebTerminal as TerminalMeta, WebWorkspace as Workspace, Signal, WorkspaceCreationCatalog as Catalog, SecureScope } from "@git-stacks/protocol"
+import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
 
-type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
+if (window.top !== window) {
+  document.documentElement.replaceChildren()
+  throw new Error("The git-stacks client cannot run inside a frame")
+}
+
 type Pair = { workspaceId: string; repositoryId: string }
 type Organization = "label" | "repository"
 
@@ -28,25 +33,22 @@ function hasAcceleratedWebgl(): boolean {
   } catch { acceleratedWebgl = false }
   return acceleratedWebgl
 }
-function stored<T>(key: string, fallback: T): T {
-  try { return JSON.parse(localStorage.getItem(key) ?? "") as T } catch { return fallback }
-}
 const preferences = {
   pins: new Set<string>(),
-  recent: stored<string[]>("git-stacks.web.recent", []),
-  tabOrder: stored<string[]>("git-stacks.web.tab-order", []),
-  theme: localStorage.getItem("git-stacks.web.theme") ?? "system",
-  organization: (localStorage.getItem("git-stacks.web.organization") ?? "label") as Organization,
-  lastPair: stored<Pair | undefined>("git-stacks.web.last-pair", undefined),
+  recent: [] as string[],
+  tabOrder: [] as string[],
+  theme: "system",
+  organization: "label" as Organization,
+  lastPair: undefined as Pair | undefined,
 }
 if (!["label", "repository"].includes(preferences.organization)) preferences.organization = "label"
 if (preferences.theme !== "system") document.documentElement.dataset.theme = preferences.theme
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { ...init, headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...(init?.headers ?? {}) } })
-  const envelope = await response.json() as Envelope<T>
-  if (!response.ok || !envelope.ok) throw new ApiRequestError(envelope.ok ? "request_failed" : envelope.error.code, envelope.ok ? `Request failed (${response.status})` : envelope.error.message, response.status)
-  return envelope.data
+async function api<T>(method: string, body?: unknown, options: { scope?: SecureScope; idempotencyKey?: string } = {}): Promise<T> {
+  try { return await secureApi<T>(method, body, options) } catch (error) {
+    const code = String((error as { code?: unknown }).code ?? "request_failed")
+    throw new ApiRequestError(code, error instanceof Error ? error.message : String(error), code === "conflict" ? 409 : 500)
+  }
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -105,15 +107,15 @@ function showContextMenu(event: MouseEvent, actions: ContextAction[]): void {
   }
   contextMenu.hidden = false
   const width = contextMenu.offsetWidth, height = contextMenu.offsetHeight
-  contextMenu.style.left = `${Math.max(6, Math.min(event.clientX, window.innerWidth - width - 6))}px`
-  contextMenu.style.top = `${Math.max(6, Math.min(event.clientY, window.innerHeight - height - 6))}px`
+  const rule = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules])
+    .find((candidate): candidate is CSSStyleRule => candidate instanceof CSSStyleRule && candidate.selectorText === ".context-menu")
+  rule?.style.setProperty("--menu-left", `${Math.max(6, Math.min(event.clientX, window.innerWidth - width - 6))}px`)
+  rule?.style.setProperty("--menu-top", `${Math.max(6, Math.min(event.clientY, window.innerHeight - height - 6))}px`)
   contextMenu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus()
 }
 function savePreferences(): void {
-  localStorage.setItem("git-stacks.web.recent", JSON.stringify(preferences.recent.slice(0, 20)))
-  localStorage.setItem("git-stacks.web.tab-order", JSON.stringify(preferences.tabOrder.slice(0, 100)))
-  localStorage.setItem("git-stacks.web.organization", preferences.organization)
-  if (preferences.lastPair) localStorage.setItem("git-stacks.web.last-pair", JSON.stringify(preferences.lastPair))
+  preferences.recent = preferences.recent.slice(0, 20)
+  preferences.tabOrder = preferences.tabOrder.slice(0, 100)
 }
 function toast(message: string, error = false): void {
   const node = element("div", `toast${error ? " error" : ""}`, message)
@@ -130,10 +132,8 @@ class TerminalView {
   private fit?: FitAddon
   private webgl?: WebglAddon
   private webglUnavailable = false
-  private socket?: WebSocket
+  private socket?: SecureTerminalChannel
   private observer?: ResizeObserver
-  private reconnectTimer?: number
-  private reconnectAttempt = 0
   private receivedCursor = 0n
   private pendingAck = 0n
   private writeGeneration = 0
@@ -172,7 +172,7 @@ class TerminalView {
 
   syncStreaming(): void {
     const streaming = this.active && !document.hidden
-    if (this.socket?.readyState !== WebSocket.OPEN || this.streaming === streaming) return
+    if (!this.socket || this.streaming === streaming) return
     this.streaming = streaming
     this.send({ type: "flow", streaming })
   }
@@ -189,7 +189,7 @@ class TerminalView {
     this.meta.state = "closing"
     renderTabs()
     try {
-      this.meta = await api<TerminalMeta>(`/web/api/terminals/${encodeURIComponent(this.meta.id)}`, { method: "DELETE" })
+      this.meta = await api<TerminalMeta>("terminal.close", { terminal_id: this.meta.id }, { scope: "terminal.close" })
       this.dispose()
       terminalViews.delete(this.meta.id)
       if (activeTerminalId === this.meta.id) activeTerminalId = visibleTerminals().find((item) => item.id !== this.meta.id)?.id
@@ -205,7 +205,7 @@ class TerminalView {
     const title = boundedUtf8(requested.trim(), 64)
     if (title === this.meta.title && this.meta.title_pinned === Boolean(title)) return
     try {
-      this.meta = await api<TerminalMeta>(`/web/api/terminals/${encodeURIComponent(this.meta.id)}`, { method: "PATCH", body: JSON.stringify({ mode: "manual", title }) })
+      this.meta = await api<TerminalMeta>("terminal.rename", { terminal_id: this.meta.id, mode: "manual", title }, { scope: "terminal.write" })
       renderTabs()
     } catch (error) { toast(String(error), true) }
   }
@@ -280,18 +280,15 @@ class TerminalView {
     this.webgl = undefined
   }
 
-  private connect(): void {
+  private connect(): void { void this.connectSecure() }
+
+  private async connectSecure(): Promise<void> {
     if (this.disposed) return
-    const protocol = location.protocol === "https:" ? "wss:" : "ws:"
     const streaming = this.active && !document.hidden
-    const socket = new WebSocket(`${protocol}//${location.host}/web/ws/terminals/${encodeURIComponent(this.meta.id)}?streaming=${streaming ? "1" : "0"}`)
-    socket.binaryType = "arraybuffer"
-    this.socket = socket
     this.streaming = streaming
-    socket.addEventListener("open", () => { this.reconnectAttempt = 0; this.resize(); this.syncStreaming(); renderTabs() })
-    socket.addEventListener("message", (event) => {
-      if (typeof event.data === "string") {
-        const message = JSON.parse(event.data) as { type?: string; terminal?: TerminalMeta; reset?: boolean; code?: number; title?: string; title_pinned?: boolean }
+    this.socket = await SecureTerminalChannel.open(this.meta.id, this.receivedCursor.toString(), streaming, (data) => {
+      if (typeof data === "string") {
+        const message = JSON.parse(data) as { type?: string; terminal?: TerminalMeta; reset?: boolean; code?: number; title?: string; title_pinned?: boolean }
         if (message.type === "ready" && message.terminal) {
           this.meta = message.terminal
           if (message.reset) { this.writeGeneration += 1; this.terminal?.reset(); this.receivedCursor = 0n; this.pendingAck = 0n }
@@ -312,7 +309,7 @@ class TerminalView {
         else if (message.type === "history_unavailable") { this.banner.textContent = "Terminal history changed while reconnecting. Reconnecting with the retained baseline…"; this.banner.classList.add("visible") }
         return
       }
-      const frame = new Uint8Array(event.data as ArrayBuffer)
+      const frame = data
       if (frame.length < 9 || frame[0] !== 1) return
       const cursor = new DataView(frame.buffer, frame.byteOffset, frame.byteLength).getBigUint64(1)
       if (cursor <= this.receivedCursor) return
@@ -323,15 +320,13 @@ class TerminalView {
         if (generation !== this.writeGeneration) return
         this.acknowledge(cursor)
       })
-    })
-    socket.addEventListener("close", (event) => {
+    }, () => {
       if (this.disposed || this.meta.state === "ended" || this.meta.state === "closing") return
       this.streaming = undefined
-      this.reconnectAttempt += 1
-      const delay = Math.min(15_000, 350 * 2 ** Math.min(this.reconnectAttempt, 6)) * (0.8 + Math.random() * 0.4)
-      this.reconnectTimer = window.setTimeout(() => this.connect(), delay)
-      if (event.code !== 4001) renderTabs()
+      this.socket = undefined
+      renderTabs()
     })
+    this.resize(); this.syncStreaming(); renderTabs()
   }
 
   private resize(): void {
@@ -356,15 +351,14 @@ class TerminalView {
       const pending = this.pendingAutomaticTitle
       this.pendingAutomaticTitle = undefined
       if (!pending || this.disposed) return
-      void api<TerminalMeta>(`/web/api/terminals/${encodeURIComponent(this.meta.id)}`, { method: "PATCH", body: JSON.stringify({ mode: "automatic", title: pending }) })
+      void api<TerminalMeta>("terminal.rename", { terminal_id: this.meta.id, mode: "automatic", title: pending }, { scope: "terminal.write" })
         .then((meta) => { this.meta = meta; renderTabs() })
         .catch(() => undefined)
     }, 120)
   }
-  private send(message: unknown): void { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify(message)) }
+  private send(message: unknown): void { this.socket?.send(message) }
   private dispose(): void {
     this.disposed = true
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     if (this.ackTimer !== undefined) clearTimeout(this.ackTimer)
     if (this.titleTimer !== undefined) clearTimeout(this.titleTimer)
     this.observer?.disconnect()
@@ -380,7 +374,7 @@ let selectedPair: Pair | undefined
 let activeTerminalId: string | undefined
 let signalRefreshGeneration = 0
 let signals: Signal[] = []
-let eventCursor = sessionStorage.getItem("git-stacks.web.cursor") ?? "0"
+let eventCursor = "0"
 const terminalViews = new Map<string, TerminalView>()
 
 app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
@@ -428,9 +422,8 @@ async function persistPins(ids: string[]): Promise<void> {
   preferences.pins = new Set(ids)
   renderNav()
   try {
-    const result = await api<{ workspace_ids: string[] }>("/web/api/pins", { method: "PUT", body: JSON.stringify({ workspace_ids: ids, expected_revision: snapshot.revision }) })
+    const result = await api<{ workspace_ids: string[] }>("workspace.pins.set", { workspace_ids: ids, expected_revision: snapshot.revision }, { scope: "operation.write" })
     preferences.pins = new Set(result.workspace_ids)
-    localStorage.removeItem("git-stacks.web.pins")
     renderNav()
     await refreshSnapshot()
   } catch (error) {
@@ -446,7 +439,7 @@ async function persistPriorities(priorities: WorkspacePriority[]): Promise<void>
   for (const workspace of snapshot.workspaces) workspace.priority = optimistic.get(workspace.id) ?? workspace.priority
   renderNav()
   try {
-    const result = await api<{ priorities: WorkspacePriority[] }>("/web/api/priorities", { method: "PUT", body: JSON.stringify({ priorities, expected_revision: snapshot.revision }) })
+    const result = await api<{ priorities: WorkspacePriority[] }>("workspace.priorities.set", { priorities, expected_revision: snapshot.revision }, { scope: "operation.write" })
     const accepted = new Map(result.priorities.map(({ workspace_id, priority }) => [workspace_id, priority]))
     for (const workspace of snapshot.workspaces) workspace.priority = accepted.get(workspace.id) ?? workspace.priority
     renderNav()
@@ -806,7 +799,7 @@ function renderAll(): void { renderNav(); renderScope(); renderSignals(); status
 async function createTerminal(commandId?: string): Promise<boolean> {
   if (!selectedPair) return false
   try {
-    const create = () => api<TerminalMeta>("/web/api/terminals", { method: "POST", body: JSON.stringify({ workspace_id: selectedPair!.workspaceId, repository_id: selectedPair!.repositoryId, ...(commandId ? { command_id: commandId } : {}), expected_revision: snapshot.revision, cols: 100, rows: 30 }) })
+    const create = () => api<TerminalMeta>("terminal.create", { workspace_id: selectedPair!.workspaceId, repository_id: selectedPair!.repositoryId, ...(commandId ? { command_id: commandId } : {}), expected_revision: snapshot.revision, cols: 100, rows: 30 }, { scope: "terminal.create" })
     let meta: TerminalMeta
     try { meta = await create() } catch (error) {
       if (!(error instanceof ApiRequestError) || error.code !== "conflict") throw error
@@ -824,12 +817,12 @@ async function createTerminal(commandId?: string): Promise<boolean> {
 }
 async function workspaceOperation(kind: "workspace.open" | "workspace.close", workspace: Workspace): Promise<void> {
   try {
-    const operation = await api<{ operation_id: string; state: string }>("/web/api/operations", { method: "POST", headers: { "idempotency-key": `${kind}-${workspace.id}-${crypto.randomUUID()}` }, body: JSON.stringify({ kind, request: { workspace_id: workspace.id, expected_revision: snapshot.revision } }) })
+    const operation = await api<{ operation_id: string; state: string }>("operation.submit", { kind, request: { workspace_id: workspace.id, expected_revision: snapshot.revision } }, { scope: "operation.write", idempotencyKey: `${kind}-${workspace.id}-${crypto.randomUUID()}` })
     toast(`${kind === "workspace.open" ? "Opening" : "Closing"} ${workspace.name} · ${operation.state}`)
   } catch (error) { toast(String(error), true) }
 }
 async function dismissSignal(id: string): Promise<void> {
-  try { await api("/web/api/signals/dismiss", { method: "POST", body: JSON.stringify({ signal_id: id }) }); await refreshSignals() } catch (error) { toast(String(error), true) }
+  try { await api("signals.dismiss", { signal_id: id }, { scope: "signal.dismiss" }); await refreshSignals() } catch (error) { toast(String(error), true) }
 }
 
 function modal(title: string): { body: HTMLElement; close: () => void } {
@@ -885,7 +878,7 @@ function showLauncher(): void {
 async function showCreation(): Promise<void> {
   const view = modal("Create workspace")
   try {
-    const catalog = await api<Catalog>("/web/api/workspace-creation/catalog")
+    const catalog = await api<Catalog>("workspace-creation.catalog", undefined, { scope: "snapshot.read" })
     const name = element("input"); name.placeholder = "Workspace name"
     const branch = element("input"); branch.placeholder = "feature/my-change"
     const source = element("select")
@@ -908,7 +901,7 @@ async function showCreation(): Promise<void> {
         const [kind, value] = source.value.split(":", 2)
         const selected = repositoryInputs.filter((input) => input.checked).map((input) => input.value)
         const requestedSource = kind === "template" ? { kind: "template", template: value } : { kind: "repositories", repositories: selected }
-        await api("/web/api/operations", { method: "POST", headers: { "idempotency-key": `workspace.create-${crypto.randomUUID()}` }, body: JSON.stringify({ kind: "workspace.create", request: { name: name.value.trim(), branch: branch.value.trim(), source: requestedSource } }) })
+        await api("operation.submit", { kind: "workspace.create", request: { name: name.value.trim(), branch: branch.value.trim(), source: requestedSource } }, { scope: "operation.write", idempotencyKey: `workspace.create-${crypto.randomUUID()}` })
         toast(`Creating ${name.value.trim()}`); view.close()
       } catch (error) { toast(String(error), true) }
     })
@@ -918,7 +911,7 @@ async function showCreation(): Promise<void> {
 }
 
 async function refreshSnapshot(): Promise<void> {
-  snapshot = await api<Snapshot>("/web/api/snapshot")
+  snapshot = await api<Snapshot>("web.snapshot", undefined, { scope: "snapshot.read" })
   preferences.pins = new Set(snapshot.pinned_workspace_ids)
   let preferencesChanged = false
   if (selectedPair && !snapshot.workspaces.some((workspace) => workspace.id === selectedPair?.workspaceId && workspace.repositories.some((repository) => repository.id === selectedPair?.repositoryId))) selectedPair = undefined
@@ -937,44 +930,32 @@ async function refreshSignals(resetCursor = false): Promise<void> {
   try {
     const active = activeTerminalId ? terminalViews.get(activeTerminalId)?.meta : undefined
     const projection = active
-      ? await api<{ signals: Signal[]; sequence: string }>("/web/api/signals/acknowledge", { method: "POST", body: JSON.stringify({ surface_id: active.surface_id }) })
-      : await api<{ signals: Signal[]; sequence: string }>("/web/api/signals")
+      ? await api<{ signals: Signal[]; sequence: string }>("signals.acknowledge", { surface_id: active.surface_id }, { scope: "signal.dismiss" })
+      : await api<{ signals: Signal[]; sequence: string }>("signals.list", undefined, { scope: "signal.read" })
     if (generation !== signalRefreshGeneration) return
     signals = projection.signals
-    if ((resetCursor || eventCursor === "0") && projection.sequence !== "0") { eventCursor = projection.sequence; sessionStorage.setItem("git-stacks.web.cursor", eventCursor) }
+    if ((resetCursor || eventCursor === "0") && projection.sequence !== "0") eventCursor = projection.sequence
     renderSignals(); renderNav()
   } catch {}
 }
 async function loadTerminals(): Promise<void> {
-  const items = await api<TerminalMeta[]>("/web/api/terminals")
-  await Promise.all(items.filter((meta) => meta.state === "ended" && !meta.command_id).map((meta) => api(`/web/api/terminals/${encodeURIComponent(meta.id)}`, { method: "DELETE" }).catch(() => undefined)))
+  const items = await api<TerminalMeta[]>("terminal.list", undefined, { scope: "terminal.read" })
+  await Promise.all(items.filter((meta) => meta.state === "ended" && !meta.command_id).map((meta) => api("terminal.close", { terminal_id: meta.id }, { scope: "terminal.close" }).catch(() => undefined)))
   for (const meta of items) if ((meta.state !== "ended" || meta.command_id) && !terminalViews.has(meta.id)) terminalViews.set(meta.id, new TerminalView(meta))
 }
 function connectEvents(): void {
   statusNode.textContent = connectionSummary()
-  const events = new EventSource(`/web/api/events?cursor=${encodeURIComponent(eventCursor)}`)
-  events.onopen = () => { statusNode.textContent = connectionSummary() }
-  for (const type of ["control", "signal", "operation"]) events.addEventListener(type, (event) => {
-    const message = event as MessageEvent<string>
-    if (message.lastEventId) { eventCursor = message.lastEventId; sessionStorage.setItem("git-stacks.web.cursor", eventCursor) }
-    const data = JSON.parse(message.data) as { type: string; control?: { kind: string } }
+  void subscribeSecureEvents(eventCursor, (value) => {
+    const data = value as { type: string; sequence?: string; control?: { kind: string } }
+    if (data.sequence) eventCursor = data.sequence
     if (data.type === "control") void refreshSnapshot()
     else if (data.type === "signal") void refreshSignals()
     else if (data.type === "operation") { void refreshSnapshot(); toast("Workspace operation updated") }
-  })
-  events.onerror = () => {
-    events.close()
-    statusNode.textContent = "Reconnecting to service events…"
-    window.setTimeout(() => { void refreshSignals(true).finally(connectEvents) }, 1200)
-  }
+  }).catch((error) => { statusNode.textContent = `Secure event channel unavailable: ${String(error)}` })
 }
 
 async function pairFromFragment(): Promise<void> {
-  const parameters = new URLSearchParams(location.hash.slice(1))
-  const code = parameters.get("pair")
-  if (!code) return
-  history.replaceState(null, "", `${location.pathname}${location.search}`)
-  await api("/web/api/pair", { method: "POST", body: JSON.stringify({ code }) })
+  await initializeWebSession()
 }
 
 document.querySelector("#launcher")!.addEventListener("click", showLauncher)
@@ -989,7 +970,6 @@ tabs.addEventListener("dblclick", (event) => { if (event.target === tabs) void c
 document.querySelector("#theme")!.addEventListener("click", () => {
   preferences.theme = preferences.theme === "system" ? "dark" : preferences.theme === "dark" ? "light" : "system"
   if (preferences.theme === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = preferences.theme
-  localStorage.setItem("git-stacks.web.theme", preferences.theme)
   toast(`Theme: ${preferences.theme}`)
 })
 document.addEventListener("keydown", (event) => {

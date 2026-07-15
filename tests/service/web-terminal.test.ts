@@ -1,8 +1,8 @@
 import { describe, expect, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Signal } from "../../packages/protocol/src/service"
-import type { TerminalSocket } from "../../packages/service/src/carrier"
-import { WebTerminalManager, type WebSocketData } from "../../packages/service/src/web/terminal-manager"
+import type { TerminalAttachment } from "../../packages/service/src/terminal-attachment"
+import { WebTerminalManager, type TerminalAttachmentData } from "../../packages/service/src/web/terminal-manager"
 
 function createManager(publishSignal?: (signal: Signal) => Promise<void>): WebTerminalManager {
   return new WebTerminalManager({
@@ -15,14 +15,14 @@ function createManager(publishSignal?: (signal: Signal) => Promise<void>): WebTe
   }, publishSignal)
 }
 
-function attach(manager: WebTerminalManager, terminalId: string, streaming = true): { sent: Array<string | Uint8Array>; socket: TerminalSocket } {
+function attach(manager: WebTerminalManager, terminalId: string, streaming = true): { sent: Array<string | Uint8Array>; socket: TerminalAttachment } {
   const sent: Array<string | Uint8Array> = []
   const socket = {
-    data: { kind: "web-terminal", principalId: "browser-1", sessionId: terminalId, streaming } satisfies WebSocketData,
+    data: { kind: "web-terminal", principalId: "browser-1", sessionId: terminalId, streaming } satisfies TerminalAttachmentData,
     send: (value: string | Uint8Array) => { sent.push(value); return typeof value === "string" ? value.length : value.length },
     close: () => {},
     getBufferedAmount: () => 0,
-  } satisfies TerminalSocket
+  } satisfies TerminalAttachment
   manager.attach(socket)
   return { sent, socket }
 }

@@ -13,6 +13,7 @@
     "@git-stacks/core": "0.21.0-rc.1",
     "@git-stacks/protocol": "0.21.0-rc.1",
     "@git-stacks/service": "0.21.0-rc.1",
+    "@git-stacks/web": "0.21.0-rc.1",
     "@logtape/logtape": "^2.0.5",
     "commander": "^14.0.3",
     "yaml": "^2.8.3",

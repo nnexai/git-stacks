@@ -34,8 +34,8 @@
 
 ## Node Service and Protocol
 
-- [x] **SVC-01:** The Node service preserves the existing authenticated HTTP API, browser-safe and trusted projections, operation registry, event cursors, replay gaps, heartbeat behavior, quotas, and idle lifecycle.
-- [x] **SVC-02:** Node `http` plus exact-pinned `ws` replaces Bun transport without changing browser/TUI protocol semantics; WebSocket compression remains disabled unless separately benchmarked.
+- [x] **SVC-01:** The Node service owns browser-safe and trusted projections, operation registry, event cursors, replay gaps, leases, quotas, and managed lifecycle behind the carrier-neutral secure session protocol.
+- [x] **SVC-02:** Node encrypted listeners replace the transitional HTTP/SSE/WebSocket transport; the service exposes no plaintext product API or classified fallback.
 - [x] **SVC-03:** Managed startup uses race-safe discovery and ownership, removes stale startup artifacts safely, and shuts down after the final managed client without leaving sockets, timers, watchers, or child processes.
 - [x] **SVC-04:** Protocol and client packages contain no concrete service launcher or runtime implementation, and carriers remain replaceable for encrypted local/remote access.
 - [x] **SVC-05:** The service projects external CLI/file changes through normal revisions and SSE events without a special CLI refresh path.
@@ -51,10 +51,10 @@
 ## Thin Web and TUI Clients
 
 - [x] **WEB-01:** The web package builds as browser-only static assets against protocol/client contracts and imports no core, filesystem, process, service implementation, or Node-only module.
-- [x] **WEB-02:** `git-stacks web` serves the packaged client from the Node service with v0.20 pairing, workspace, command, signal, terminal, reconnect, focus, sizing, and context-menu parity.
-- [x] **TUI-01:** The optional Bun/OpenTUI package consumes the trusted service projection, operations, and SSE stream through the public service/client API, uses core only for pure shared types and presentation helpers, and contains no independent domain or persistence authority.
+- [x] **WEB-02:** `git-stacks web` launches the installed self-contained browser client with secure pairing, workspace, command, signal, terminal, fresh-document reattachment, focus, sizing, and context-menu parity.
+- [x] **TUI-01:** The optional Bun/OpenTUI package consumes the trusted service projection, operations, and encrypted event stream through the public service/client API, uses core only for pure shared types and presentation helpers, and contains no independent domain or persistence authority.
 - [x] **TUI-02:** TUI startup, shutdown, rendering, viewport ownership, dismissals, commands, and foreground handoffs retain parity while closing the TUI reliably releases its managed-service client.
-- [x] **CLIENT-01:** Web and TUI reuse shared client reducers for revision/event handling, signal presentation, priority ordering, operation progress, reconnect, and replay-gap recovery while owning their own rendering.
+- [x] **CLIENT-01:** Web and TUI reuse shared client reducers for revision/event handling, signal presentation, priority ordering, operation progress, fresh-session reattachment, and replay-gap recovery while owning their own rendering.
 
 ## Distribution and Cutover
 
@@ -66,43 +66,43 @@
 
 ## Secure Protocol and Trust
 
-- [ ] **PROTO-01:** The protocol package defines a versioned, carrier-neutral binary frame envelope with canonical control payloads, strict pre-allocation length limits, stream identifiers, monotonic sequence/cursor fields, and deterministic rejection of malformed, unknown, or non-canonical input.
-- [ ] **PROTO-02:** Request/response, snapshot, operation, event, signal, terminal-control, and terminal-output channels multiplex without moving domain, replay, terminal, or authorization policy into a carrier.
-- [ ] **PROTO-03:** Protocol and ALPN negotiation fail closed on unsupported versions, missing mandatory capabilities, downgrade attempts, or cross-protocol input.
-- [ ] **PROTO-04:** Every channel that can carry workspace data, operations, events, signals, terminal bytes, credentials, or secrets requires an authenticated encrypted carrier; browser code loads from the installed package, and the service exposes no plaintext HTTP API, bootstrap, readiness, or classified fallback.
-- [ ] **TRUST-01:** Every service authority and client-side helper has a durable P-256 signing identity independent of rotating transport certificates. Private keys use an OS credential store when available and a permission-restricted atomic fallback otherwise.
-- [ ] **TRUST-02:** Local authority selection and trust provisioning are automatic and non-interactive, while every remote authority requires an explicit one-use pairing bundle and out-of-band service fingerprint verification.
-- [ ] **TRUST-03:** Pairing records bind service identity, endpoint, signed WebTransport certificate-hash set, helper identity, scopes, protocol version, and creation metadata without placing bearer or private-key material in query strings, process arguments, logs, workspace YAML, or any browser storage.
-- [ ] **TRUST-04:** Short-lived WebTransport certificates rotate through stable-identity-signed pin sets and overlapping listeners without re-pairing; stable identity replacement, helper replacement, scope expansion, and trust reset require explicit security-sensitive actions.
+- [x] **PROTO-01:** The protocol package defines a versioned, carrier-neutral binary frame envelope with canonical control payloads, strict pre-allocation length limits, stream identifiers, monotonic sequence/cursor fields, and deterministic rejection of malformed, unknown, or non-canonical input.
+- [x] **PROTO-02:** Request/response, snapshot, operation, event, signal, terminal-control, and terminal-output channels multiplex without moving domain, replay, terminal, or authorization policy into a carrier.
+- [x] **PROTO-03:** Protocol and ALPN negotiation fail closed on unsupported versions, missing mandatory capabilities, downgrade attempts, or cross-protocol input.
+- [x] **PROTO-04:** Every channel that can carry workspace data, operations, events, signals, terminal bytes, credentials, or secrets requires an authenticated encrypted carrier; browser code loads from the installed package, and the service exposes no plaintext HTTP API, bootstrap, readiness, or classified fallback.
+- [x] **TRUST-01:** Every service authority and client-side helper has a durable P-256 signing identity independent of rotating transport certificates. Private keys use an OS credential store when available and a permission-restricted atomic fallback otherwise.
+- [x] **TRUST-02:** Local authority selection and trust provisioning are automatic and non-interactive, while every remote authority requires an explicit one-use pairing bundle and out-of-band service fingerprint verification.
+- [x] **TRUST-03:** Pairing records bind service identity, endpoint, signed WebTransport certificate-hash set, helper identity, scopes, protocol version, and creation metadata without placing bearer or private-key material in query strings, process arguments, logs, workspace YAML, or any browser storage.
+- [x] **TRUST-04:** Short-lived WebTransport certificates rotate through stable-identity-signed pin sets and overlapping listeners without re-pairing; stable identity replacement, helper replacement, scope expansion, and trust reset require explicit security-sensitive actions.
 
 ## Encrypted Remote Transport and Lifecycle
 
-- [ ] **REMOTE-01:** Remote listening is disabled by default and can bind only an explicitly configured interface and port; enabling `git-stacks web` never exposes the service to the LAN.
-- [ ] **REMOTE-02:** Browser and Node-helper service connections require WebTransport with a currently valid stable-identity-signed ECDSA P-256 certificate hash and application authorization; wrong, expired, unsigned, or downgraded pins and plaintext attempts fail before classified data is accepted.
-- [ ] **REMOTE-03:** The helper authenticates with a fresh one-use challenge signed by its paired durable key and bound to the service audience, selected transport identity, protocol version, connection nonce, and helper-session epoch.
-- [ ] **REMOTE-04:** A target registry and connector pool represent the implicit local authority and manually paired remote authorities without storing workspace state or duplicating service policy.
-- [ ] **REMOTE-05:** Reconnect uses bounded jittered backoff, one active authenticated connection per target/helper epoch, replay-safe monotonic control sequences, explicit cancellation, and deterministic shutdown without leaked sockets, timers, streams, or credentials.
+- [x] **REMOTE-01:** Remote listening is disabled by default and can bind only an explicitly configured interface and port; enabling `git-stacks web` never exposes the service to the LAN.
+- [x] **REMOTE-02:** Browser and Node-helper service connections require WebTransport with a currently valid stable-identity-signed ECDSA P-256 certificate hash and application authorization; wrong, expired, unsigned, or downgraded pins and plaintext attempts fail before classified data is accepted.
+- [x] **REMOTE-03:** The helper authenticates with a fresh one-use challenge signed by its paired durable key and bound to the service audience, selected transport identity, protocol version, connection nonce, and helper-session epoch.
+- [x] **REMOTE-04:** A target registry and connector represent the implicit local authority and manually paired remote authorities without storing workspace state or duplicating service policy; remote carriers are isolated per authenticated local principal so one compromised session cannot inherit another principal's streams.
+- [x] **REMOTE-05:** Initial connection and fresh-session reattachment use bounded jittered backoff, replay-safe monotonic control sequences, explicit cancellation, and deterministic shutdown without leaked sockets, timers, streams, or credentials. A dropped authenticated carrier fails its local session closed rather than silently replaying non-idempotent work.
 
 ## Delegation, Epochs, and Client Routing
 
-- [ ] **AUTH-01:** Each helper process registers a random helper-session epoch with every remote authority, maintains it with authenticated heartbeats, revokes it on clean shutdown, and permits irreversible expiry after bounded abrupt-loss grace.
-- [ ] **AUTH-02:** Every browser document loads from a self-contained installed `file:` asset, generates a non-exportable ephemeral P-256 key in memory, and receives a short-lived local session grant bound to the browser-listener epoch, key, target ceiling, scopes, protocol/build, issued time, and expiry.
-- [ ] **AUTH-03:** Every browser attachment proves possession against a fresh one-use helper challenge and maintains a short renewable connection lease; replayed proofs, concurrent reuse, altered scopes, expired grants/leases, inactive listener epochs, unexpected request origins, storage-restored state, BFCache resume, and old-port takeover attempts fail closed; origin is never client identity.
-- [ ] **AUTH-04:** The Bun TUI connects only to the local Node helper through private-CA-verified TLS 1.3 with hostname verification and `git-stacks/2` ALPN, then completes fresh application authentication from a permission-restricted one-use descriptor; the helper uses the same remote WebTransport connector as the browser.
-- [ ] **AUTH-05:** Cookies, IndexedDB, local/session storage, Cache Storage, OPFS, service/shared workers, history state, and all other browser persistence are never security or product authority; persistent preferences, targets, cursors, and reconnect state live in the helper/service, every new document requires a fresh one-use launch, and the launch fragment is consumed/expired even if history retains it.
-- [ ] **ROUTE-01:** Web and TUI clients use one local helper endpoint and select a service target; absent selection resolves to the implicit local authority with no manual pairing or remote dependency.
-- [ ] **ROUTE-02:** For a remote target, the browser remains connected to the local helper and the paired helper relays authorized typed channels over WebTransport; the remote authority validates helper identity, epoch, scopes, stream ownership, quotas, and terminal ownership.
-- [ ] **ROUTE-03:** The existing CLI remains local-only and daemonless; remote access is confined to explicit service/web/TUI client surfaces until a separately named remote CLI client is designed.
-- [ ] **ROUTE-04:** The helper computes each relayed channel's effective authorization as the intersection of the local browser/TUI grant, selected target, paired-helper scopes, operation type, and terminal ownership; local client input can never select or expand remote authority, scopes, or another client's streams.
+- [x] **AUTH-01:** Each helper process registers a random helper-session epoch with every remote authority, maintains it with authenticated leases, closes it on clean shutdown, and permits irreversible expiry after bounded abrupt-loss grace.
+- [x] **AUTH-02:** Every browser document loads from a self-contained installed `file:` asset, generates a non-exportable ephemeral P-256 key in memory, and receives a short-lived local session grant bound to the browser-listener epoch, key, target ceiling, scopes, protocol/build, issued time, and expiry.
+- [x] **AUTH-03:** Every browser attachment proves possession against a fresh one-use helper challenge and maintains a short renewable connection lease; replayed proofs, concurrent reuse, altered scopes, expired grants/leases, inactive listener epochs, storage-restored state, BFCache resume, and old-port takeover attempts fail closed. Origin is never client identity; the kernel loopback bind plus pinned certificate and in-channel proof form the local boundary.
+- [x] **AUTH-04:** The Bun TUI connects only to the local Node helper through directly trusted self-signed-leaf TLS 1.3 with hostname verification and `git-stacks/2` ALPN, then completes fresh application authentication from a permission-restricted one-use descriptor; the helper uses the remote WebTransport connector on behalf of thin clients.
+- [x] **AUTH-05:** Cookies, IndexedDB, local/session storage, Cache Storage, OPFS, service/shared workers, history state, and all other browser persistence are never security or product authority; persistent preferences, targets, cursors, and reattachment state live in the helper/service, every new document requires a fresh one-use launch, and the launch fragment is consumed/expired even if history retains it.
+- [x] **ROUTE-01:** Web and TUI clients use one local helper endpoint and select a service target; absent selection resolves to the implicit local authority with no manual pairing or remote dependency.
+- [x] **ROUTE-02:** For a remote target, the browser remains connected to the local helper and the paired helper relays authorized typed channels over WebTransport; the remote authority validates helper identity, epoch, scopes, stream ownership, quotas, and terminal ownership.
+- [x] **ROUTE-03:** The existing CLI remains local-only and daemonless; remote access is confined to explicit service/web/TUI client surfaces until a separately named remote CLI client is designed.
+- [x] **ROUTE-04:** The helper computes each relayed channel's effective authorization as the intersection of the local browser/TUI grant, selected target, paired-helper scopes, operation type, and terminal ownership; local client input can never select or expand remote authority, scopes, or another client's streams.
 
 ## Remote Stream Parity and Security Closure
 
-- [ ] **STREAM-01:** Remote snapshots, operations, events, dismissals, signals, and replay gaps preserve the same observable contracts and shared reducers as local mode.
-- [ ] **STREAM-02:** Remote terminal attachments preserve PTY ownership, 1 MiB retention, 64 KiB chunks, visible-only bulk output, cursor acknowledgement, replay/reset, title, resize, cancellation, quotas, pressure, process-tree cleanup, and exact-surface signal behavior.
-- [ ] **STREAM-03:** Multiplexing enforces per-frame, per-stream, per-principal, per-target, and global limits so a slow or hostile stream cannot cause unbounded memory, starvation, or cross-stream head-of-line blocking.
-- [ ] **SEC-01:** Adversarial tests cover wire recording, MITM/wrong authority, executable-bootstrap substitution, pairing theft/replay, helper impersonation, challenge replay, helper/listener epoch takeover, exact localhost origin reuse, poisoned browser storage, stale service workers, reload/history/profile restore, malformed/oversized frames, slow readers, disconnect races, log/key-log redaction, resource exhaustion, trust/pin rollback, and authorization enumeration.
+- [x] **STREAM-01:** Remote snapshots, operations, events, dismissals, signals, and replay gaps preserve the same observable contracts and shared reducers as local mode.
+- [x] **STREAM-02:** Remote terminal attachments preserve PTY ownership, 1 MiB retention, 64 KiB chunks, visible-only bulk output, cursor acknowledgement, replay/reset, title, resize, cancellation, quotas, pressure, process-tree cleanup, and exact-surface signal behavior.
+- [x] **STREAM-03:** Multiplexing enforces per-frame, per-stream, per-principal, per-target, and global limits with bounded inbound/outbound queues and fair per-stream scheduling. Carrier backpressure may delay the whole authenticated session, but cannot create unbounded memory or application-level stream starvation.
+- [x] **SEC-01:** Adversarial tests cover wire recording, MITM/wrong authority, executable-bootstrap substitution, pairing theft/replay, helper impersonation, challenge replay, helper/listener epoch takeover, exact localhost origin reuse, poisoned browser storage, stale service workers, reload/history/profile restore, malformed/oversized frames, slow readers, disconnect races, log/key-log redaction, resource exhaustion, trust/pin rollback, and authorization enumeration.
 - [ ] **SEC-02:** Linux x64/arm64 and modern macOS x64/arm64 release gates cover certificate generation/rotation, credential-store behavior and fallback permissions, remote reconnect, terminal soak, clean shutdown, dependency licenses, and runtime vulnerabilities.
-- [ ] **SEC-03:** Documentation explains the network and same-user threat boundaries, manual pairing ceremony, recovery/rotation/revocation, local-default behavior, remote exposure controls, and an emergency return-to-local procedure before release.
+- [x] **SEC-03:** Documentation explains the network and same-user threat boundaries, manual pairing ceremony, recovery/rotation/revocation, local-default behavior, remote exposure controls, and an emergency return-to-local procedure before release.
 
 ## Future Requirements
 
@@ -131,13 +131,13 @@
 | WEB-01..02, CLIENT-01 | 113 | Complete |
 | TUI-01..02 | 114 | Complete |
 | DIST-01..05 | 115 | Local release checks complete; hosted platform matrix pending |
-| PROTO-01..04 | 116 | Planned |
-| TRUST-01..04 | 117 | Planned |
-| REMOTE-01..05 | 118 | Planned |
-| STREAM-01..03 | 119 | Planned |
-| AUTH-01..05 | 120 | Planned |
-| ROUTE-01..04 | 121 | Planned |
-| SEC-01..03 | 122 | Planned |
+| PROTO-01..04 | 116 | Complete |
+| TRUST-01..04 | 117 | Complete |
+| REMOTE-01..05 | 118 | Complete |
+| STREAM-01..03 | 119 | Complete |
+| AUTH-01..05 | 120 | Complete |
+| ROUTE-01..04 | 121 | Complete |
+| SEC-01..03 | 122 | Local adversarial/docs complete; hosted platform matrix pending |
 
 ---
 *Last updated: 2026-07-15 after extending the Node foundation into the paired local/remote secure service architecture.*

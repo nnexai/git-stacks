@@ -14,11 +14,15 @@ const allowed = new Set([
 
 const failures = []
 const audited = []
+function allowedExpression(expression) {
+  const normalized = expression.replace(/[()]/g, "").trim()
+  return normalized.split(/\s+OR\s+/).some((choice) => choice.split(/\s+AND\s+/).every((license) => allowed.has(license.trim())))
+}
 for (const [path, metadata] of Object.entries(lock.packages ?? {})) {
   if (!path || metadata.dev === true || metadata.link === true) continue
   const license = metadata.license
   const name = path.replace(/^.*node_modules\//, "")
-  if (typeof license !== "string" || !allowed.has(license)) {
+  if (typeof license !== "string" || !allowedExpression(license)) {
     failures.push(`${name}@${metadata.version ?? "workspace"}: unsupported or missing license ${String(license)}`)
   } else {
     audited.push(`${name}@${metadata.version ?? "workspace"} (${license})`)
