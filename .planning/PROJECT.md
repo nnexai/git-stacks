@@ -4,22 +4,21 @@
 
 git-stacks is a local-first workspace manager for multi-repository development. One workspace definition coordinates repositories, branches, environment, commands, integrations, and developer-facing status across the CLI, terminal dashboard, and browser client.
 
-## Current Milestone: v0.21.0 Node Core and Secure Service Architecture
+## Current Milestone: v0.22.0 Workspace Productivity
 
-**Goal:** Make Node.js the default runtime and distribution, then use that shared service foundation to deliver one paired local/remote service model with authenticated identities, encrypted transport, ephemeral browser access, and thin web/TUI clients.
+**Goal:** Turn the shared service-backed clients into a keyboard-first daily workspace tool with safe lifecycle controls, user-compatible shell execution, fast navigation, and actionable workspace cleanup.
 
 **Core value:** One command takes a user from feature intent to a running development environment without manual repository setup.
 
 **Target features:**
 
-- A runtime-neutral, independently testable domain core shared directly by the local CLI and service.
-- A daemonless Node.js CLI and a persistent Node.js service with one protocol and one implementation of machine behavior.
-- Separate protocol, client, core, CLI, service, web, and optional TUI packages with enforced dependency directions.
-- Atomic filesystem authority and watcher reconciliation that keeps local CLI changes and service projections coherent without refresh RPCs.
-- Node-owned PTYs and signals behind replaceable service carriers, with Linux and modern macOS distribution parity.
-- A local-helper/authority topology where local service use is the zero-configuration default and manually paired remote services use the same protocol and client semantics.
-- Packaged browser code with WebTransport browser-to-helper and helper-to-authority connections, plus a TLS 1.3 local TUI adapter, ephemeral browser launches, helper/listener epochs, bounded streams, and adversarial reconnect protection.
-- A release cutover that removes obsolete Bun-first runtime paths instead of retaining parallel implementations.
+- Archived workspace state persisted in workspace YAML, hidden from normal views, and recoverable from a minimal recency-sorted archive view in web and TUI.
+- Confirmed workspace removal in web and TUI that closes owned terminals before applying the existing dirty-worktree guard and deleting worktrees, workspace files, and the workspace directory.
+- Commands and hooks executed through the user's actual configured shell initialization so runtime managers, shell functions, aliases, `PATH`, and `SSH_AUTH_SOCK` behave like the user's terminal.
+- A singleton web workspace switcher on `Ctrl+K`, configured commands on `Ctrl+Shift+P`, fuzzy top-result execution, terminal/workspace shortcuts, next-attention navigation, and discoverable keyboard help.
+- Browser parity for high-value workspace lifecycle and Git actions, including creation from a PR/MR URL.
+- A conservative stale-workspace view that explains cleanup candidates without automatically archiving or removing anything.
+- Release-candidate preparation beginning at `v0.22.0-rc.1`; final tagging, pushing, publishing, and release remain separately approved actions.
 
 ## Supported Product Surfaces
 
@@ -62,13 +61,19 @@ Every client starts from a local git-stacks helper. In default local mode that p
 - Bun remains only for the optional OpenTUI package while OpenTUI requires it.
 - Filesystem notifications are hints; bounded content reconciliation is the correctness fallback.
 - Only narrow per-target coordination may serialize semantic read-modify-write operations. No global lock or service dependency is introduced for normal CLI use.
+- User commands and hooks favor compatibility with the configured shell over portable `/bin/sh` semantics; shell-specific failures must remain explicit and diagnosable.
+- The browser may request allowlisted environment refresh through trusted local launchers, but raw host environment values are never projected to browser code.
 
 ## Non-Goals
 
 - A remote CLI client; the existing CLI remains daemonless and machine-local.
 - Multi-user terminal collaboration or multiple terminal writers.
 - Durable terminal multiplexing across service restart or machine reboot.
-- New web or TUI product functionality unrelated to migration parity.
+- Duplicate terminal tabs or cloned terminal sessions; terminals are stateful service-owned processes.
+- Showing archived workspaces in normal lists, counts, switchers, attention navigation, or default searches.
+- Automatic archival or removal based on stale-workspace detection.
+- A generic application command palette unrelated to configured workspace commands and named product actions.
+- Portable POSIX-shell behavior that bypasses the user's configured shell initialization.
 - TypeScript 7 adoption, a general plugin architecture, or a second domain model.
 - Supporting the retired native GTK/libghostty client.
 
@@ -94,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 3. Update architecture and constraints to match shipped behavior.
 
 ---
-*Last updated: 2026-07-15 for the v0.21.0 Node core and client architecture milestone.*
+*Last updated: 2026-07-15 for the v0.22.0 Workspace Productivity milestone.*
