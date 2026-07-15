@@ -1,257 +1,112 @@
-# Roadmap: Node Core and Secure Service Architecture
+# Roadmap: v0.22.0 Workspace Productivity
 
-## Milestone v0.21.0
+## Milestone goal
 
-This milestone replaces the Bun-first monolith with a Node-default package architecture and completes the intended security rewrite: one local-helper/remote-authority model, implicit local trust, explicit remote pairing, encrypted remote transport, ephemeral browser identity, and thin web/TUI clients over one authoritative service implementation.
+Turn the shared service-backed clients into a terminal-first daily productivity surface: safe workspace lifecycle controls, user-compatible command execution, collision-aware keyboard navigation, high-value web parity, and explainable cleanup guidance.
 
 ## Dependency order
 
 ```text
-108 package contracts
-  -> 109 shared core + atomic persistence
-      -> 110 local Node CLI + service reconciliation
-          -> 111 Node service transport/lifecycle
-              -> 112 Node PTY + signals
-                  -> 113 web package
-                  -> 114 optional TUI package
-                      -> 115 Node distribution + legacy removal
-                          -> 116 secure protocol + trust contracts
-                              -> 117 identities + pairing authority
-                                  -> 118 secure carriers + target registry
-                                      -> 119 remote multiplexed parity
-                                          -> 120 ephemeral browser + listener epochs
-                                              -> 121 local-default client cutover
-                                                  -> 122 adversarial closure + release
+123 archive + terminal-aware remove
+  -> 124 user shell + dynamic environment
+      -> 125 keyboard navigation + attention
+          -> 126 web parity + forge-source creation
+              -> 127 stale intelligence + v0.22.0-rc.1 closure
 ```
 
-- [x] **Phase 108: Package and Runtime Foundation** — Establish the workspace graph, builds, contracts, adapters, conformance fixtures, and enforceable dependency rules without changing product behavior.
-- [x] **Phase 109: Shared Core and Filesystem Authority** — Move domain behavior into the runtime-neutral core and make every persisted mutation atomic and concurrency-safe.
-- [x] **Phase 110: Node Local CLI Cutover** — Run the complete daemonless CLI on Node and make the service reconcile direct filesystem changes.
-- [x] **Phase 111: Node Service Transport and Lifecycle** — Build and prove Node HTTP/SSE/WebSocket and managed-lifecycle adapters against the existing shared service policy without switching the public service early.
-- [x] **Phase 112: Node Terminal and Signal Runtime** — Add the accepted exact-pinned node-pty adapter, atomically cut the complete public service to Node, and remove the Bun service/PTY runtime.
-- [x] **Phase 113: Thin Web Package Cutover** — Package the browser client independently and serve it from the Node service without machine-side behavior in the browser.
-- [x] **Phase 114: Optional TUI Client Package** — Isolate Bun/OpenTUI as an optional thin trusted client and remove its remaining domain/runtime authority.
-- [x] **Phase 115: Distribution Parity and Legacy Removal** — Prove supported Linux/macOS installs, remove compatibility paths, update release assets, and prepare v0.21.0-rc.1.
-- [x] **Phase 116: Secure Protocol and Trust Contracts** — Freeze the carrier-neutral framed protocol, canonical authentication transcripts, limits, negotiation, and threat model before security-sensitive state is implemented.
-- [x] **Phase 117: Service Identity and Pairing Authority** — Add durable service/helper identities, certificate lifecycle, key storage, one-use pairing bundles, trust records, scopes, revocation, and pairing commands.
-- [x] **Phase 118: Secure Carriers and Target Registry** — Add browser/Node WebTransport, local Bun-to-Node TLS 1.3, explicit remote listening, signed pin rollover, bounded fresh-session reconnect, and local/remote target management.
-- [x] **Phase 119: Remote Session Routing and Multiplexed Streams** — Carry snapshots, operations, events, signals, and terminals over bounded fairly scheduled logical streams while retaining one authority implementation and local parity.
-- [x] **Phase 120: Ephemeral Browser Identity and Listener Epochs** — Add packaged browser bootstrap, memory-only keys, local grants, listener/helper epoch separation, helper-relayed remote access, and hostile browser-storage/origin protection.
-- [x] **Phase 121: Local-Default Client Cutover and Compatibility** — Route web and TUI through one target-aware local endpoint, keep local use zero-configuration, expose deliberate remote selection/pairing, and remove transitional routing.
-- [x] **Phase 122: Adversarial Security and Distribution Closure** — Prove the threat model, resource bounds, cross-platform key/certificate behavior, recovery, redaction, and release packaging before the v0.21 release candidate is approved.
+- [ ] **Phase 123: Archived Workspaces and Safe Removal** — Add the persisted archive state and terminal-aware destructive removal contract across core, service, web, and TUI.
+- [ ] **Phase 124: User Shell and Environment Authority** — Run user-authored commands through supported configured shells and refresh allowlisted dynamic environment values safely.
+- [ ] **Phase 125: Terminal-Safe Keyboard Navigation** — Deliver configurable collision-aware shortcuts, singleton fuzzy overlays, terminal switching, and next-attention navigation.
+- [ ] **Phase 126: Web Workflow and Forge-Source Parity** — Bring high-value lifecycle/Git/notes/status actions to web and create normal workspaces from PR/MR URLs.
+- [ ] **Phase 127: Stale Workspace Intelligence and RC Closure** — Add explainable, non-destructive cleanup candidates and prepare the `v0.22.0-rc.1` release candidate.
 
-## Phase details
+## Phase 123: Archived Workspaces and Safe Removal
 
-### Phase 108: Package and Runtime Foundation
+**Goal:** Make active-workspace cleanup reversible by default and destructive removal explicit, terminal-aware, and consistent across clients.
+**Depends on:** Nothing
+**Requirements:** ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, REMOVE-01, REMOVE-02, REMOVE-03, REMOVE-04, REMOVE-05
 
-**Goal**: Make package ownership and runtime direction mechanically enforceable before moving behavior.
-**Depends on**: Nothing (first phase)
+**Success criteria:**
 
-**Requirements:** PKG-01, PKG-02, PKG-03, PKG-04
+1. Archiving from web or TUI atomically writes `archived`/`archived_at`, removes the workspace from all normal projections and navigation, and leaves worktrees, files, notes, pins, and live terminal processes intact.
+2. A minimal web/TUI archived list is newest-first by relevant activity/archive time, shows that time, supports unarchive, and does not expose the normal detailed workspace surface.
+3. Confirmed Remove closes every owned terminal before applying the existing dirty-worktree guard; a close failure deletes nothing and a dirty-worktree failure names the blocking repositories.
+4. Successful Remove deletes managed worktrees, the workspace directory, and YAML definition, then reconciles client selection, signals, terminal tabs, counts, and progress without touching unrelated state.
+5. Cross-client and concurrency tests prove archive/unarchive/remove use one shared operation contract and remain correct under stale snapshots, repeated requests, partial failure, and service reconciliation.
 
-**Success Criteria** (what must be TRUE):
+## Phase 124: User Shell and Environment Authority
 
-1. Every target workspace builds and tests independently from a clean root install.
-2. Forbidden dependency edges fail an architecture test with the exact importer and importee.
-3. Shared protocol/conformance fixtures run in Node and browser-compatible environments.
-4. Existing product commands still run through temporary package entrypoint shims with no duplicated behavior.
+**Goal:** Make configured commands, hooks, and PTYs behave like the developer's initialized shell while keeping service and browser trust boundaries explicit.
+**Depends on:** Phase 123
+**Requirements:** SHELL-01, SHELL-02, SHELL-03, SHELL-04, SHELL-05, SHELL-06, SHELL-07
 
-Plan: [Phase 108](./phases/108-package-and-runtime-foundation/108-PLAN.md)
+**Success criteria:**
 
-### Phase 109: Shared Core and Filesystem Authority
+1. One shared Bash/zsh/fish adapter plans user-authored command, hook, and PTY launches; web, TUI, CLI, and service paths no longer carry independent `/bin/sh` rules for those operations.
+2. An nvm-style runtime, interactive shell function, and alias defined only by normal user initialization work in configured commands without changing command text or restarting the helper.
+3. Trusted local launches refresh bounded/redacted `PATH` and `SSH_AUTH_SOCK` values for new processes, while browser projections and persisted workspace files contain none of the raw values.
+4. Workspace/repository/port/secret/`GS_*` overlays win after initialization, and SSH-agent discovery plus `ssh-add` behavior works across a socket rotation.
+5. Supported-host tests preserve output, exit status, quoting, cancellation, process-tree cleanup, and diagnostics for broken startup files, missing executables, unsupported shells, and initialization timeouts.
 
-**Goal**: Establish one Node-compatible domain implementation and safe authoritative persistence.
-**Depends on**: Phase 108
+## Phase 125: Terminal-Safe Keyboard Navigation
 
-**Requirements:** CORE-01, CORE-02, CORE-03, CORE-04, DATA-01, DATA-02
+**Goal:** Let a user operate the web client at speed while xterm retains focus, without stealing ordinary shell/TUI input or relying on browser-hard shortcuts.
+**Depends on:** Phase 124
+**Requirements:** KEY-01, KEY-02, KEY-03, KEY-04, KEY-05, KEY-06, KEY-07, KEY-08, KEY-09, KEY-10, ATTN-01, ATTN-02, ATTN-03
 
-**Success Criteria** (what must be TRUE):
+**Success criteria:**
 
-1. Core tests run under Node without Bun, Commander, OpenTUI, service, or browser imports.
-2. CLI and service call the same core use cases rather than wrappers around legacy implementations.
-3. Crash/partial-write and concurrent field-intent tests leave complete, merged authoritative files.
-4. Deleting a migrated legacy implementation causes no behavior loss because all callers use the core package.
+1. The configurable registry ships documented macOS `Ctrl+Cmd` and Linux `Ctrl+Alt+Shift` defaults, rejects conflicts, supports rebind/unbind, and presents a current keyboard-help surface.
+2. Every registered action works with xterm focused through its pre-processing handler, while unmatched, AltGraph, composition, and non-US-layout events reach the PTY unchanged in browser tests.
+3. Workspace/repository switching and configured-command overlays use shared fuzzy ranking, execute the top partial match on Enter, and exclude archived workspaces from navigation.
+4. Repeated shortcuts and key-repeat cannot stack overlays; overlay navigation is contained and closing restores the prior terminal focus without sending palette keys to the process.
+5. New/close/previous/next terminal and Next Attention actions are single chords, use service-owned state, skip stale/archived targets, wrap deterministically, and expose clear empty/no-attention results.
 
-Plan: [Phase 109](./phases/109-shared-core-and-filesystem-authority/109-PLAN.md)
+## Phase 126: Web Workflow and Forge-Source Parity
 
-### Phase 110: Node Local CLI Cutover
+**Goal:** Make the browser a complete high-frequency workspace control surface and shorten external code-review setup to a reviewed creation form.
+**Depends on:** Phases 123 and 125
+**Requirements:** PARITY-01, PARITY-02, PARITY-03, PARITY-04, PARITY-05, SOURCE-01, SOURCE-02, SOURCE-03, SOURCE-04
 
-**Goal**: Make the public local CLI fully Node-native, daemonless, and coherent with a separately running service.
-**Depends on**: Phase 109
+**Success criteria:**
 
-**Requirements:** DATA-03, DATA-04, DATA-05, CLI-01, CLI-02, CLI-03, CLI-04
+1. Web actions cover archive/unarchive, remove, rename, open/close, pin, sync, pull, push, merge, notes, and file-sync status through the same action registry, service operations, guards, and projections as TUI/CLI.
+2. Visible buttons, context menus, and shortcuts share availability, disabled reasons, confirmations, cancellation, progress, errors, and authoritative snapshot refresh rather than duplicating operation logic.
+3. GitHub PR and GitLab MR URLs resolve through shared forge integrations into repository, head/base branches, fork/remote needs, and a safe suggested workspace name.
+4. The user reviews and may edit resolved name/template/repos/branches before creation; ambiguity, missing auth/tooling, unsupported hosts, inaccessible changes, and branch conflicts fail non-destructively with recovery guidance.
+5. Browser UAT proves complete keyboard and pointer workflows against the live service, including reconnect/progress behavior and no browser-local Git, notes, environment, or lifecycle authority.
 
-**Success Criteria** (what must be TRUE):
+## Phase 127: Stale Workspace Intelligence and RC Closure
 
-1. The complete CLI parity suite passes through the Node entrypoint with Bun unavailable.
-2. Ordinary commands neither start nor contact the service and still work when discovery state is absent or stale.
-3. A running service observes CLI/file mutations through debounce plus digest reconciliation and emits one revised snapshot.
-4. TUI prompt imports and Bun process helpers no longer appear in the CLI dependency graph.
+**Goal:** Explain which workspaces may need cleanup without acting automatically, then close the supported v0.22 release-candidate evidence.
+**Depends on:** Phase 126
+**Requirements:** STALE-01, STALE-02, STALE-03, STALE-04, STALE-05, REL-01, REL-02
 
-Plan: [Phase 110](./phases/110-node-local-cli-cutover/110-PLAN.md)
+**Success criteria:**
 
-### Phase 111: Node Service Transport and Lifecycle
+1. A separate stale view ranks candidates using explainable merged/closed change, deleted branch, inactivity, and missing-worktree signals and displays every reason and relevant timestamp.
+2. Unknown or failed forge/activity evidence stays unknown rather than becoming a stale verdict; users can refresh and open a candidate before taking action.
+3. Detection never mutates state automatically, and explicit Archive/Remove follow-ups reuse the Phase 123 terminal, confirmation, dirty-worktree, and failure contracts.
+4. Live web/TUI UAT validates archived, stale, attention, fuzzy navigation, forge-source creation, shell environment, SSH agent, and destructive-confirmation workflows on supported hosts.
+5. Versioning, changelog, migration and shortcut/shell docs, package checks, and hosted gates prepare `0.22.0-rc.1` / `v0.22.0-rc.1` without tagging, pushing, publishing, or releasing absent explicit approval.
 
-**Goal**: Prove the complete non-terminal Node carrier and managed-lifecycle implementation against shared service policy without changing the public runtime before terminal parity exists.
-**Depends on**: Phase 110
+## Progress
 
-**Requirements:** SVC-01, SVC-02, SVC-03, SVC-04, SVC-05
-
-**Success Criteria** (what must be TRUE):
-
-1. Existing protocol, security, SSE replay, operation, and projection conformance tests pass against the Node service candidate.
-2. Concurrent starts elect one service and stale discovery/lock artifacts recover without a timeout loop.
-3. Final-client shutdown leaves no sockets, subscribers, watchers, timers, or non-terminal child processes.
-4. Web and TUI client packages can connect without importing the concrete service implementation, while the shipped entrypoint still retains terminal parity until Phase 112.
-
-Plan: [Phase 111](./phases/111-node-service-transport-and-lifecycle/111-PLAN.md)
-
-### Phase 112: Node Terminal and Signal Runtime
-
-**Goal**: Move service-owned interactive terminals and exact-surface agent state to Node, switch the complete public service atomically, and remove the Bun service runtime with lifecycle and resource parity.
-**Depends on**: Phase 111
-
-**Requirements:** TERM-01, TERM-02, TERM-03, SIG-01, SIG-02
-
-**Success Criteria** (what must be TRUE):
-
-1. Shell and command-shell lifecycle, resize, title, Unicode, replay, visibility, and reconnect tests pass through the PTY adapter on the complete Node service.
-2. Closing/exiting a terminal kills its process tree and clears only its own active signals.
-3. Hidden terminal output stays bounded while lifecycle and agent signal capture remain live.
-4. Clean installs use prebuilt node-pty artifacts on the supported Linux/macOS matrix with no compiler, and no Bun service/PTY entrypoint remains.
-
-Plan: [Phase 112](./phases/112-node-terminal-and-signal-runtime/112-PLAN.md)
-
-### Phase 113: Thin Web Package Cutover
-
-**Goal**: Ship the existing browser experience as an independent, browser-only client of the Node service.
-**Depends on**: Phase 112
-
-**Requirements:** WEB-01, WEB-02, CLIENT-01
-
-**Success Criteria** (what must be TRUE):
-
-1. A browser dependency audit finds no core, filesystem, process, PTY, or service implementation imports.
-2. Pairing, workspace operations, signals, terminal tabs, focus, sizing, reconnect, and context actions pass browser UAT against Node.
-3. Shared reducers handle events, replay gaps, signals, priority, and operation progress consistently with the TUI.
-4. The CLI launches version-matched installed immutable assets and secure negotiation rejects mismatched protocol versions clearly.
-
-Plan: [Phase 113](./phases/113-thin-web-package-cutover/113-PLAN.md)
-
-### Phase 114: Optional TUI Client Package
-
-**Goal**: Make OpenTUI an optional Bun renderer with no domain or persistence authority.
-**Depends on**: Phases 112 and 113
-
-**Requirements:** TUI-01, TUI-02
-
-**Success Criteria** (what must be TRUE):
-
-1. The TUI uses protocol/client state, the dedicated local service-client adapter, pure core types/presentation helpers, and explicit foreground handoff adapters; it cannot import the service root or domain persistence authorities.
-2. Dashboard reads, mutations, signals, dismissals, commands, and progress pass parity tests against the Node service.
-3. Closing the TUI releases its managed client and allows the service to stop under normal lifecycle policy.
-4. Default CLI/service/web installs do not install OpenTUI, Solid, Bun types, or TUI-only assets.
-
-Plan: [Phase 114](./phases/114-optional-tui-client-package/114-PLAN.md)
-
-### Phase 115: Distribution Parity and Legacy Removal
-
-**Goal**: Produce a supportable v0.21.0 release candidate with one implementation per capability.
-**Depends on**: Phases 113 and 114
-
-**Requirements:** DIST-01, DIST-02, DIST-03, DIST-04, DIST-05
-
-**Success Criteria** (what must be TRUE):
-
-1. Clean-install and lifecycle matrices pass on Linux x64/arm64 and modern macOS x64/arm64.
-2. Package contents and license audits contain only intended runtime files and compatible dependencies.
-3. No Bun CLI/service entrypoint, duplicate domain implementation, migration shim, or stale Bun-first documentation remains.
-4. v0.21.0-rc.1 artifacts can be built locally and in CI, but no tag, push, or release occurs without explicit approval.
-
-Plan: [Phase 115](./phases/115-distribution-parity-and-legacy-removal/115-PLAN.md)
+| Phase | Name | Requirements | Status |
+|---:|---|---:|---|
+| 123 | Archived Workspaces and Safe Removal | 11 | Not started |
+| 124 | User Shell and Environment Authority | 7 | Not started |
+| 125 | Terminal-Safe Keyboard Navigation | 13 | Not started |
+| 126 | Web Workflow and Forge-Source Parity | 9 | Not started |
+| 127 | Stale Workspace Intelligence and RC Closure | 7 | Not started |
 
 ## Scope control
 
-The phase sequence may use temporary import/export shims to keep the repository runnable, but a shim may only forward to the single target implementation and must carry a removal phase. No phase may create a second domain algorithm, persisted model, signal reducer, terminal policy, or client operation semantics for parity purposes.
-
-### Phase 116: Secure Protocol and Trust Contracts
-
-**Goal:** Make confidentiality, authentication, canonical framing, negotiation, and limits executable protocol/type invariants before credentials or listeners are added.
-**Requirements**: PROTO-01, PROTO-02, PROTO-03, PROTO-04
-**Depends on:** Phase 115
-**Plans:** 1 plan
-
-Plans:
-
-- [x] [116-PLAN.md](./phases/116-secure-protocol-and-trust-contracts/116-PLAN.md)
-- Architecture: [116-ARCHITECTURE.md](./phases/116-secure-protocol-and-trust-contracts/116-ARCHITECTURE.md)
-- Adversarial review: [116-ADVERSARIAL-REVIEW.md](./phases/116-secure-protocol-and-trust-contracts/116-ADVERSARIAL-REVIEW.md)
-
-### Phase 117: Service Identity and Pairing Authority
-
-**Goal:** Implement durable identities, protected key storage, explicit remote exposure, short-lived certificates, signed rollover, and one-use pairing.
-**Requirements**: TRUST-01, TRUST-02, TRUST-03, TRUST-04
-**Depends on:** Phase 116
-**Plans:** 1 plan
-
-Plans:
-
-- [x] [117-PLAN.md](./phases/117-service-identity-and-pairing-authority/117-PLAN.md)
-
-### Phase 118: Secure Carriers and Target Registry
-
-**Goal:** Deliver browser/Node WebTransport, local Bun-to-Node TLS 1.3, bounded fresh-session reconnect, and one local/remote target registry.
-**Requirements**: REMOTE-01, REMOTE-02, REMOTE-03, REMOTE-04, REMOTE-05
-**Depends on:** Phase 117
-**Plans:** 1 plan
-
-Plans:
-
-- [x] [118-PLAN.md](./phases/118-secure-carriers-and-target-registry/118-PLAN.md)
-
-### Phase 119: Remote Session Routing and Multiplexed Streams
-
-**Goal:** Route all current service functionality and independent terminal streams through authenticated logical channels without duplicating policy.
-**Requirements**: STREAM-01, STREAM-02, STREAM-03
-**Depends on:** Phase 118
-**Plans:** 1 plan
-
-Plans:
-
-- [x] [119-PLAN.md](./phases/119-remote-session-routing-and-multiplexed-streams/119-PLAN.md)
-
-### Phase 120: Ephemeral Browser Identity and Listener Epochs
-
-**Goal:** Add packaged browser bootstrap, memory-only browser identity, local grants, listener epochs, helper-relayed remote access, and complete browser-persistence distrust.
-**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, AUTH-05
-**Depends on:** Phase 119
-**Plans:** 1 plan
-
-Plans:
-
-- [x] [120-PLAN.md](./phases/120-ephemeral-browser-identity-and-listener-epochs/120-PLAN.md)
-
-### Phase 121: Local-Default Client Cutover and Compatibility
-
-**Goal:** Cut web and TUI to secure target-aware sessions, retain one-command local use, and delete classified legacy routes while the CLI stays local.
-**Requirements**: ROUTE-01, ROUTE-02, ROUTE-03, ROUTE-04
-**Depends on:** Phase 120
-**Plans:** 1 plan
-
-Plans:
-
-- [x] [121-PLAN.md](./phases/121-local-default-client-cutover-and-compatibility/121-PLAN.md)
-
-### Phase 122: Adversarial Security and Distribution Closure
-
-**Goal:** Close adversarial, resource, dependency, supported-platform, recovery, and documentation gates before release-candidate approval.
-**Requirements**: SEC-01, SEC-02, SEC-03
-**Depends on:** Phase 121
-**Plans:** 1 plan
-
-Plans:
-
-- [x] [122-PLAN.md](./phases/122-adversarial-security-and-distribution-closure/122-PLAN.md)
+- Archive is reversible state; Remove is confirmed destruction. Stale detection may suggest either but never performs them automatically.
+- Terminal sessions are stateful and are not duplicated or cloned. Archive preserves them; Remove closes them before deletion.
+- User-shell compatibility applies only to user-authored commands, hooks, and interactive terminals. Internal process execution remains argv-based or deliberately deterministic.
+- The shortcut registry must treat browser, operating-system, terminal-emulator, xterm, shell, TUI, AltGraph, IME, and layout collisions as acceptance constraints, not documentation footnotes.
+- The first candidate begins again at `rc.1`; a final release remains outside automatic milestone execution.
 
 ---
-*Last updated: 2026-07-15 after implementing the encrypted local/remote service architecture. Phases 116-121 are complete locally; Phase 122 and supported-platform release evidence remain open.*
+*Roadmap created: 2026-07-15; phase numbering continues after v0.21.0 Phase 122.*

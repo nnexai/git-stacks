@@ -2,28 +2,40 @@
 gsd_state_version: 1.0
 milestone: v0.22.0
 milestone_name: Workspace Productivity
-status: planning
-last_updated: "2026-07-15T21:15:18.538Z"
+status: roadmap_ready
+last_updated: "2026-07-15T23:27:21+02:00"
 last_activity: 2026-07-15
+last_activity_desc: Defined v0.22 requirements, shell contract, shortcut collision matrix, and five-phase roadmap
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
+current_phase: 123
+current_phase_name: Archived Workspaces and Safe Removal
+stopped_at: Roadmap ready; Phase 123 needs discussion and planning
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 123 of 127 (Archived Workspaces and Safe Removal)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-15 — Milestone v0.22.0 started
+Status: Roadmap ready; phase not yet discussed or planned
+Last activity: 2026-07-15 — Defined 47 requirements across five phases
 
 ## Decisions
 
+- Archived state lives in workspace YAML as `archived` plus `archived_at`; archived workspaces stay out of all normal projections and retain their terminal/file/worktree state.
+- Remove is confirmed destruction and closes workspace terminals before the existing dirty-worktree guard and filesystem deletion.
+- User-authored commands and hooks prefer the actual configured Bash/zsh/fish environment over `/bin/sh` portability; internal machine operations do not inherit this shell contract.
+- Trusted launchers may refresh only allowlisted dynamic environment values into the helper; raw environment values never enter browser projections or workspace YAML.
+- Web shortcuts use collision-audited platform app modifiers while xterm is focused; `Ctrl+K` remains an optional alias rather than stealing the shell's default kill-line binding.
+- Fuzzy switchers and configured-command search execute the top-ranked partial match on Enter and use singleton overlays.
+- Stale detection is explainable and suggestion-only; it never archives or removes automatically.
+- The milestone prepares `v0.22.0-rc.1`; tag, push, publish, and release remain separately approved actions.
 - Node 24 LTS is the default runtime target for core, CLI, service, and web distribution.
 - TypeScript stays on 6.x for this migration.
 - The existing CLI remains local-only and daemonless; ordinary commands invoke the core directly.
@@ -48,17 +60,17 @@ Last activity: 2026-07-15 — Milestone v0.22.0 started
 - Spikes 011-015: future remote identity, reconnect, framing, backpressure, and encrypted-carrier constraints to preserve.
 - Phases 116-121: secure framing, identities, pairing, signed pin rollover, encrypted carriers, remote routing, ephemeral browser grants, and local-default client cutover.
 
-## Release Evidence
+## Previous Milestone Release Evidence
 
 - The hosted `Build and test` workflow completed successfully for shipped implementation commit `e878f964` on 2026-07-15: https://github.com/nnexai/git-stacks/actions/runs/29442095014
 - `node-pty` `1.2.0-beta.14` remains exact-pinned; its temporary beta exception must be reviewed on every dependency update.
 - No final `v0.21.0` tag, push, publish, or release was requested or performed during milestone closeout.
 
-## Execution Boundary
+## Previous Milestone Boundary
 
 The full implementation, secure transport cutover, hosted release gates, and package-version progression through `0.21.0-rc.6` are complete. Milestone closure is a planning operation only and does not imply a final `v0.21.0` release.
 
-## Verification Overrides
+## Previous Milestone Verification Overrides
 
 - Phases 116-122 were delivered and shipped through release candidates, but several phase directories lack the standard GSD `SUMMARY.md` and/or `VERIFICATION.md` artifacts.
 - Duplicate historical directory names remain for Phases 118 and 120. They are preserved in the archive rather than rewritten after delivery.
@@ -78,4 +90,4 @@ The following pre-existing backlog items remain open for explicit triage; milest
 
 ## Operator Next Steps
 
-- Start the next milestone with $gsd-new-milestone
+- Discuss Phase 123, then create its implementation plan and UI contract before execution.
