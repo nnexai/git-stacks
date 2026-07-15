@@ -8,6 +8,19 @@ All notable changes to `git-stacks` are documented here.
 
 ---
 
+## [0.21.0-rc.2] - 2026-07-15
+
+### Fixed
+
+- Secure RPC failures are now validated and bounded before transmission. Long platform or snapshot errors no longer violate the response schema and mask the original failure as `too_big maximum 500`.
+- Browser startup now distinguishes an authentication failure from a workspace snapshot failure. A failed `terminal.list` restore is reported without discarding an otherwise usable workspace view.
+
+### Release Candidate
+
+This follow-up release candidate hardens diagnostics discovered during macOS testing. The package version and GitHub prerelease tag are `0.21.0-rc.2` / `v0.21.0-rc.2`; npm publication uses the `next` dist-tag.
+
+---
+
 ## [0.21.0-rc.1] - 2026-07-15
 
 ### Security architecture

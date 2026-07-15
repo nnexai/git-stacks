@@ -989,6 +989,17 @@ async function pairFromFragment(): Promise<void> {
   await initializeWebSession()
 }
 
+function showStartupFailure(title: string, error: unknown, hint: string): void {
+  app.innerHTML = ""
+  const empty = element("div", "empty")
+  empty.append(
+    element("strong", "", title),
+    element("span", "", error instanceof Error ? error.message : String(error)),
+    element("span", "", hint),
+  )
+  app.append(empty)
+}
+
 document.querySelector("#launcher")!.addEventListener("click", showLauncher)
 document.querySelector("#create")!.addEventListener("click", () => void showCreation())
 for (const control of document.querySelectorAll<HTMLButtonElement>("[data-organization]")) control.addEventListener("click", () => {
@@ -1025,14 +1036,22 @@ window.addEventListener("offline", () => { statusNode.textContent = "Offline · 
 void (async () => {
   try {
     await pairFromFragment()
-    await Promise.all([refreshSnapshot(), loadTerminals()])
-    await refreshSignals()
-    renderAll()
-    connectEvents()
   } catch (error) {
-    app.innerHTML = ""
-    const empty = element("div", "empty")
-    empty.append(element("strong", "", "Pairing required"), element("span", "", error instanceof Error ? error.message : String(error)), element("span", "", "Run git-stacks web to open a fresh one-use link."))
-    app.append(empty)
+    showStartupFailure("Pairing required", error, "Run git-stacks web to open a fresh one-use link.")
+    return
   }
+  try {
+    await refreshSnapshot()
+  } catch (error) {
+    showStartupFailure("Workspace data unavailable", error, "The secure session is connected, but web.snapshot failed.")
+    return
+  }
+  try {
+    await loadTerminals()
+  } catch (error) {
+    toast(`terminal.list failed: ${error instanceof Error ? error.message : String(error)}`, true)
+  }
+  await refreshSignals()
+  renderAll()
+  connectEvents()
 })()

@@ -1,23 +1,46 @@
 {
   "name": "@git-stacks/tui",
-  "version": "0.21.0-rc.1",
+  "version": "0.21.0-rc.2",
   "license": "MIT",
-  "publishConfig": { "access": "public" },
-  "files": ["dist", "src", "bunfig.toml"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src",
+    "bunfig.toml"
+  ],
   "packageManager": "bun@1.3.14",
   "type": "module",
-  "bin": { "git-stacks-tui": "dist/index.js" },
-  "exports": { ".": { "types": "./src/index.ts", "bun": "./src/index.ts", "import": "./dist/index.js" } },
-  "scripts": { "build": "bun build src/index.ts --outdir dist --target bun --external @git-stacks/* --external @opentui/* --external solid-js", "typecheck": "tsc --noEmit -p tsconfig.json" },
+  "bin": {
+    "git-stacks-tui": "dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target bun --external @git-stacks/* --external @opentui/* --external solid-js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
   "dependencies": {
-    "@git-stacks/client": "0.21.0-rc.1",
-    "@git-stacks/core": "0.21.0-rc.1",
-    "@git-stacks/protocol": "0.21.0-rc.1",
-    "@git-stacks/service": "0.21.0-rc.1",
+    "@git-stacks/client": "0.21.0-rc.2",
+    "@git-stacks/core": "0.21.0-rc.2",
+    "@git-stacks/protocol": "0.21.0-rc.2",
+    "@git-stacks/service": "0.21.0-rc.2",
     "@opentui/core": "0.4.3",
     "@opentui/solid": "0.4.3",
     "solid-js": "1.9.12"
   },
-  "devDependencies": { "@types/bun": "latest" },
-  "gitStacksBuild": { "runtime": "bun", "platform": "neutral", "target": "es2024" }
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "gitStacksBuild": {
+    "runtime": "bun",
+    "platform": "neutral",
+    "target": "es2024"
+  }
 }

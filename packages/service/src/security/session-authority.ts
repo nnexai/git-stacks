@@ -6,6 +6,7 @@ import {
   SecureClientProofSchema,
   SecureFrameQueue,
   SecureRequestSchema,
+  SecureResponseSchema,
   decodeCanonical,
   encodeCanonical,
   type SecureClientHello,
@@ -135,6 +136,15 @@ async function verifyHelper(publicKeyPem: string, payload: Uint8Array, signature
   try {
     return verify("sha256", payload, { key: publicKeyPem, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url"))
   } catch { return false }
+}
+
+function boundedErrorField(value: unknown, fallback: string, maximum: number): string {
+  let rendered: string
+  try { rendered = (typeof value === "string" ? value : String(value)).toWellFormed() }
+  catch { rendered = fallback }
+  if (!rendered) rendered = fallback
+  if (rendered.length <= maximum) return rendered
+  return `${rendered.slice(0, maximum - 1).toWellFormed()}…`
 }
 
 function rawPublicKeyPem(encoded: string): string {
@@ -352,17 +362,18 @@ export class SecureSessionServer {
     try {
       response = { id: request.id, ok: true, body: await this.options.handler.request(context, request) }
     } catch (error) {
+      const candidate = error as { code?: unknown; retryable?: unknown }
       response = {
         id: request.id,
         ok: false,
         error: {
-          code: String((error as { code?: unknown }).code ?? "internal_error"),
-          message: error instanceof Error ? error.message : "Secure request failed",
-          ...((error as { retryable?: unknown }).retryable === true ? { retryable: true } : {}),
+          code: boundedErrorField(candidate.code ?? "internal_error", "internal_error", SECURE_LIMITS.responseErrorCodeLength),
+          message: boundedErrorField(error instanceof Error ? error.message : "Secure request failed", "Secure request failed", SECURE_LIMITS.responseErrorMessageLength),
+          ...(candidate.retryable === true ? { retryable: true } : {}),
         },
       }
     }
-    await context.channel.sendControl("response", response)
+    await context.channel.sendControl("response", SecureResponseSchema.parse(response))
   }
 }
 

@@ -110,17 +110,20 @@ repos:
 
 describe("v0.21.0 release candidate smoke", () => {
   test("package, changelog, and README describe the Node package boundary", () => {
-    const rcEntry = changelogEntry("0.21.0-rc.1")
+    const rcEntry = changelogEntry("0.21.0-rc.2")
+    const architectureEntry = changelogEntry("0.21.0-rc.1")
 
-    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.1")
+    expect(PACKAGE_JSON.version).toBe("0.21.0-rc.2")
     expect(PACKAGE_JSON.bin["git-stacks"]).toBe("bin/git-stacks.js")
-    expect(CHANGELOG.indexOf("## [0.21.0-rc.1]")).toBeLessThan(CHANGELOG.indexOf("## [0.20.0-rc.1]"))
-    expect(rcEntry).toContain("v0.21.0")
-    expect(rcEntry).toContain("Node.js 24")
-    expect(rcEntry).toContain("@git-stacks/protocol")
-    expect(rcEntry).toContain("node-pty@1.2.0-beta.14")
-    expect(rcEntry).toContain("separately installed `@git-stacks/tui`")
-    expect(rcEntry).toContain("first release candidate for v0.21.0")
+    expect(CHANGELOG.indexOf("## [0.21.0-rc.2]")).toBeLessThan(CHANGELOG.indexOf("## [0.21.0-rc.1]"))
+    expect(rcEntry).toContain("follow-up release candidate")
+    expect(rcEntry).toContain("too_big maximum 500")
+    expect(architectureEntry).toContain("v0.21.0")
+    expect(architectureEntry).toContain("Node.js 24")
+    expect(architectureEntry).toContain("@git-stacks/protocol")
+    expect(architectureEntry).toContain("node-pty@1.2.0-beta.14")
+    expect(architectureEntry).toContain("separately installed `@git-stacks/tui`")
+    expect(architectureEntry).toContain("first release candidate for v0.21.0")
 
     expect(README).toContain("## Shared Service Architecture")
     expect(README).toContain("git-stacks hooks install codex")

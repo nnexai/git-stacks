@@ -1,13 +1,32 @@
 {
   "name": "@git-stacks/client",
-  "version": "0.21.0-rc.1",
+  "version": "0.21.0-rc.2",
   "license": "MIT",
-  "publishConfig": { "access": "public" },
-  "files": ["dist", "src"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
   "type": "module",
   "sideEffects": false,
-  "exports": { ".": { "types": "./src/index.ts", "bun": "./src/index.ts", "import": "./dist/index.js" } },
-  "scripts": { "build": "node ../../scripts/build-package.mjs client", "typecheck": "tsc --noEmit -p tsconfig.json" },
-  "dependencies": { "@git-stacks/protocol": "0.21.0-rc.1" },
-  "gitStacksBuild": { "platform": "neutral", "target": "es2024" }
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-package.mjs client",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@git-stacks/protocol": "0.21.0-rc.2"
+  },
+  "gitStacksBuild": {
+    "platform": "neutral",
+    "target": "es2024"
+  }
 }

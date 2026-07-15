@@ -57,3 +57,39 @@ test("managed service authenticates a one-use client inside pinned TLS and rotat
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test("secure RPC preserves bounded service errors instead of masking them as schema failures", async () => {
+  const root = await mkdtemp(join(tmpdir(), "git-stacks-secure-error-"))
+  const sourceMessage = `macOS service failure: ${"x".repeat(700)}`
+  const service = await startManagedService({
+    serviceRoot: root,
+    idleMs: 60_000,
+    snapshot: {
+      currentRevision: async () => "1",
+      buildAll: async () => { throw new Error(sourceMessage) },
+      buildWorkspace: async () => { throw new Error("not used") },
+    },
+  })
+  let authenticated
+  try {
+    authenticated = await authenticateSecureCarrier(await connectLocalTls(service.descriptor.local_tls), {
+      mode: "tui",
+      targetId: service.descriptor.service_id,
+      listenerEpoch: service.descriptor.listener_epoch,
+      launchToken: service.descriptor.tui_launch.token,
+      requestedScopes: scopes,
+      build: "secure-runtime-error-test",
+    })
+    await assert.rejects(authenticated.rpc.request("web.snapshot"), (error) => {
+      assert.equal(error.code, "internal_error")
+      assert.match(error.message, /^macOS service failure:/)
+      assert.ok(error.message.length <= 500)
+      assert.match(error.message, /…$/)
+      return true
+    })
+  } finally {
+    await authenticated?.rpc.close("error test complete").catch(() => undefined)
+    await service.stop()
+    await rm(root, { recursive: true, force: true })
+  }
+})

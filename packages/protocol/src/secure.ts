@@ -22,6 +22,8 @@ export const SECURE_LIMITS = Object.freeze({
   browserLeaseMs: 30_000,
   launchTokenTtlMs: 30_000,
   pairingTokenTtlMs: 5 * 60_000,
+  responseErrorCodeLength: 96,
+  responseErrorMessageLength: 500,
 })
 
 export const SecureFrameKindSchema = z.enum([
@@ -300,7 +302,11 @@ export const SecureResponseSchema = z.strictObject({
   id: z.string().uuid(),
   ok: z.boolean(),
   body: z.unknown().optional(),
-  error: z.strictObject({ code: z.string().min(1).max(96), message: z.string().min(1).max(500), retryable: z.boolean().optional() }).optional(),
+  error: z.strictObject({
+    code: z.string().min(1).max(SECURE_LIMITS.responseErrorCodeLength),
+    message: z.string().min(1).max(SECURE_LIMITS.responseErrorMessageLength),
+    retryable: z.boolean().optional(),
+  }).optional(),
 }).refine((value) => value.ok ? value.error === undefined : value.error !== undefined)
 export type SecureResponse = z.infer<typeof SecureResponseSchema>
 
