@@ -4,3 +4,4 @@ _references/
 .DS_Store
 .coverage/
 .playwright-cli/
+/release/

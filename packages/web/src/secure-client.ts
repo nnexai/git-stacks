@@ -21,8 +21,10 @@ type WebSession = { rpc: SecureRpcClient; channel: FramedDuplex }
 let sessionPromise: Promise<WebSession> | undefined
 
 function bootstrap(): LaunchDescriptor {
-  const value = new URLSearchParams(location.hash.slice(1)).get("launch")
-  history.replaceState(null, "", `${location.pathname}${location.search}`)
+  const embedded = document.querySelector<HTMLMetaElement>('meta[name="git-stacks-launch"]')
+  const value = embedded?.content ?? new URLSearchParams(location.hash.slice(1)).get("launch")
+  embedded?.remove()
+  if (!embedded && value) history.replaceState(null, "", `${location.pathname}${location.search}`)
   if (!value) throw new Error("This browser document has no one-use launch grant. Run git-stacks web again.")
   let parsed: unknown
   try {

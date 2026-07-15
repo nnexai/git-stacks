@@ -7,7 +7,49 @@ import { createPrivateKey, createPublicKey } from "node:crypto"
 import { authenticateSecureCarrier } from "@git-stacks/client"
 import { PairingBundleSchema, TargetRegistry, targetFromBundle, type TargetRecord } from "./security/targets.js"
 import { IdentityStore } from "./security/identity.js"
-import { connectNodeWebTransportEndpoints } from "./transport/webtransport.js"
+import { connectNodeWebTransport, connectNodeWebTransportEndpoints } from "./transport/webtransport.js"
+
+type LocalBrowserDescriptor = { webtransport: { endpoint: string; certificate_hash: string } }
+type LocalBrowserLaunch = { token: string; listenerEpoch: string; grant: { targetId: string } }
+
+export async function verifyLocalBrowserTransport(
+  descriptor: LocalBrowserDescriptor,
+  launch: LocalBrowserLaunch,
+  timeoutMs = 2_000,
+): Promise<void> {
+  const carrier = await connectNodeWebTransport(descriptor.webtransport.endpoint, [descriptor.webtransport.certificate_hash], { timeoutMs })
+  let rpc: Awaited<ReturnType<typeof authenticateSecureCarrier>>["rpc"] | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const authentication = authenticateSecureCarrier(carrier, {
+      mode: "browser",
+      targetId: launch.grant.targetId,
+      listenerEpoch: launch.listenerEpoch,
+      launchToken: launch.token,
+      requestedScopes: [
+        "snapshot.read", "operation.write", "event.read", "signal.read", "signal.dismiss",
+        "terminal.read", "terminal.write", "terminal.create", "terminal.close", "target.select",
+      ],
+      build: "git-stacks-web-preflight/0.21",
+    })
+    const authenticated = await Promise.race([
+      authentication,
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Browser transport preflight timed out")), timeoutMs) }),
+    ])
+    rpc = authenticated.rpc
+  } finally {
+    if (timer) clearTimeout(timer)
+    const closing = rpc
+      ? rpc.close("browser transport preflight complete").catch(() => undefined)
+      : carrier.close("browser transport preflight failed").catch(() => undefined)
+    let closeTimer: ReturnType<typeof setTimeout> | undefined
+    await Promise.race([
+      closing,
+      new Promise<void>((resolve) => { closeTimer = setTimeout(resolve, 500) }),
+    ])
+    if (closeTimer) clearTimeout(closeTimer)
+  }
+}
 
 async function cryptoKeyPair(privateKeyPem: string, publicKeyPem: string): Promise<CryptoKeyPair> {
   const privateDer = createPrivateKey(privateKeyPem).export({ type: "pkcs8", format: "der" })

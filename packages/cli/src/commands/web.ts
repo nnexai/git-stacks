@@ -25,10 +25,21 @@ export const webCommand = new Command("web")
   .option("--json", "Print machine-readable launch details")
   .option("--target <id>", "Open a paired remote target instead of the implicit local target")
   .action(async (options: { open: boolean; json?: boolean; target?: string }) => {
-    const { ensureManagedServiceProcess } = await import("@git-stacks/service")
-    const descriptor = await ensureManagedServiceProcess()
-    const { createBrowserLaunch, closeServiceClient } = await import("@git-stacks/service/client")
-    const browserLaunch = await createBrowserLaunch(options.target ?? descriptor.service_id)
+    const { ensureManagedServiceProcess, readUsableServiceDescriptor } = await import("@git-stacks/service")
+    let descriptor = await ensureManagedServiceProcess()
+    const { createBrowserLaunch, closeServiceClient, recoverLocalWebTransport } = await import("@git-stacks/service/client")
+    const targetId = options.target ?? descriptor.service_id
+    const probeLaunch = await createBrowserLaunch(targetId)
+    try {
+      const { verifyLocalBrowserTransport } = await import("@git-stacks/service/remote")
+      await verifyLocalBrowserTransport(descriptor, probeLaunch)
+    } catch {
+      await recoverLocalWebTransport()
+      const recovered = await readUsableServiceDescriptor()
+      if (!recovered) throw new Error("The local service transport could not be recovered")
+      descriptor = recovered
+    }
+    const browserLaunch = await createBrowserLaunch(targetId)
     const launch = {
       version: 1,
       endpoint: descriptor.webtransport.endpoint,

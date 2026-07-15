@@ -1,5 +1,5 @@
 // Canonical implementation owned by @git-stacks/core.
-import { $, spawnSync } from "./node-runtime"
+import { $, spawn, spawnSync } from "./node-runtime"
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "fs"
 import { isAbsolute, join, resolve } from "path"
 
@@ -88,12 +88,13 @@ export async function createWorktree(
 
   const branchExists = await checkBranchExists(repoPath, branch)
   const remoteRef = "origin/" + branch
+  let hasRemoteRef = false
   let result: Awaited<ReturnType<typeof $>>
 
   if (branchExists) {
     result = await $`git -C ${repoPath} worktree add ${worktreePath} ${branch}`.quiet().nothrow()
   } else {
-    let hasRemoteRef = await checkRemoteTrackingRef(repoPath, branch)
+    hasRemoteRef = await checkRemoteTrackingRef(repoPath, branch)
     if (!hasRemoteRef && await checkBranchExistsOnRemote(repoPath, branch)) {
       const fetchRefspec = `refs/heads/${branch}:refs/remotes/origin/${branch}`
       const fetchResult = await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} -c fetch.timeout=30 fetch origin ${fetchRefspec}`
@@ -119,7 +120,9 @@ export async function createWorktree(
     throw new Error(`Failed to create worktree at '${worktreePath}': ${stderr}`)
   }
 
-  await ensureUpstreamTracking(worktreePath, branch)
+  // A brand-new branch was already proven absent remotely above. Avoid a
+  // second network probe; existing or fetched branches still receive tracking.
+  if (branchExists || hasRemoteRef) await ensureUpstreamTracking(worktreePath, branch)
   return { createdWorktree: true, createdBranch: !branchExists }
 }
 
@@ -547,12 +550,16 @@ export async function checkRemoteTrackingRef(repoPath: string, branch: string): 
   return result.exitCode === 0
 }
 
-/** Returns true when <branch> exists on the remote origin (network call with 10s timeout). */
-export async function checkBranchExistsOnRemote(repoPath: string, branch: string): Promise<boolean> {
-  const result = await $`GIT_TERMINAL_PROMPT=0 git -C ${repoPath} -c fetch.timeout=10 ls-remote --exit-code --heads origin ${branch}`
-    .quiet()
-    .nothrow()
-  return result.exitCode === 0
+/** Returns true when <branch> exists on origin, with a hard process-tree timeout. */
+export async function checkBranchExistsOnRemote(repoPath: string, branch: string, timeoutMs = 5_000): Promise<boolean> {
+  const probe = spawn(["git", "-C", repoPath, "ls-remote", "--exit-code", "--heads", "origin", branch], {
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+    timeoutMs,
+  })
+  return await probe.exited === 0
 }
 
 /** Returns true when branch.<name>.remote git config is set (branch has upstream configured). */

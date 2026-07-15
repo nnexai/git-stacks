@@ -185,15 +185,22 @@ export interface ManagedService {
 
 async function descriptorUsable(descriptor: ServiceDescriptor, serviceRoot: string): Promise<boolean> {
   if (!processAlive(descriptor.pid)) return false
+  let timeout: NodeJS.Timeout | undefined
   try {
     const carrier = await Promise.race([
       connectLocalTls({ ...descriptor.local_tls }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Service probe timed out")), 1_000)),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("Service probe timed out")), 1_000)
+        timeout.unref()
+      }),
     ])
     await carrier.close("discovery probe")
     return true
   } catch { return false }
-  finally { void serviceRoot }
+  finally {
+    if (timeout) clearTimeout(timeout)
+    void serviceRoot
+  }
 }
 
 export async function readUsableServiceDescriptor(

@@ -120,7 +120,7 @@ export interface SnapshotDependencies {
   prepareAgentSignals?(repoPath: string, workspaceName: string, environment: Record<string, string>): Record<string, string>
   /** @deprecated test/embedding compatibility; production uses prepareAgentSignals. */
   ensureAgentSignals?(repoPath: string, workspaceName: string): void
-  config: GlobalConfig
+  config: GlobalConfig | (() => GlobalConfig)
   revisionStore: SnapshotRevisionStore
   clock(): Date
 }
@@ -173,7 +173,6 @@ function defaultFingerprint(workspace: IdentityWorkspace): string {
 }
 
 function defaultDependencies(): SnapshotDependencies {
-  const config = readGlobalConfig()
   return {
     listWorkspaceNames: () => listWorkspacesUncached().map((workspace) => workspace.name).sort((a, b) => a.localeCompare(b)),
     ensureWorkspaceIdentity,
@@ -189,7 +188,7 @@ function defaultDependencies(): SnapshotDependencies {
       environment.PATH ?? process.env.PATH ?? "",
       join(WS_CONFIG_DIR, "terminal-agent-bin"),
     ),
-    config,
+    config: readGlobalConfig,
     revisionStore: new FileSnapshotRevisionStore(),
     clock: () => new Date(),
   }
@@ -216,14 +215,16 @@ function workspaceDefinitionExists(name: string): boolean {
 
 export function createSnapshotBuilder(dependencies: SnapshotDependencies = defaultDependencies()) {
   let aggregateRevision = "0"
-  async function project(workspace: IdentityWorkspace) {
+  let latestAggregate: WorkspaceSnapshotResponse[] | undefined
+  const loadConfig = (): GlobalConfig => typeof dependencies.config === "function" ? dependencies.config() : dependencies.config
+  async function project(workspace: IdentityWorkspace, config: GlobalConfig) {
     const status = await dependencies.getWorkspaceStatus(workspace)
-    const root = join(getTasksDir(dependencies.config.workspace_root), workspace.name)
+    const root = join(getTasksDir(config.workspace_root), workspace.name)
     const fileStatus = dependencies.getWorkspaceFileStatus(workspace, root)
     const commands = dependencies.listManualCommands(workspace)
     const resolvedEnvironment = await dependencies.buildWorkspaceEnv(workspace, {
       triggeredBy: "service:snapshot",
-      config: dependencies.config,
+      config,
       skipSecrets: true,
     })
     const redacted: string[] = []
@@ -238,7 +239,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     const environment = Object.fromEntries(Object.entries(resolvedEnvironment).filter(([key]) => !redacted.includes(key)))
     const repoByName = new Map(workspace.repos.map((repo) => [repo.name, repo]))
     const named = commands.map((name) => {
-      const steps = dependencies.planManualCommand(workspace, name, dependencies.config)
+      const steps = dependencies.planManualCommand(workspace, name, config)
       const repositoryIds = [...new Set(steps.flatMap((step) => {
         const repo = step.repo ?? (step.repoName ? repoByName.get(step.repoName) : undefined)
         return step.scope === "repo" && repo?.id ? [repo.id] : []
@@ -293,12 +294,12 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     }
   }
 
-  async function projectStable(name: string): Promise<Awaited<ReturnType<typeof project>> | null> {
+  async function projectStable(name: string, config: GlobalConfig): Promise<Awaited<ReturnType<typeof project>> | null> {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const workspace = dependencies.ensureWorkspaceIdentity(name)
         const before = await dependencies.fingerprint(workspace)
-        const projection = await project(workspace)
+        const projection = await project(workspace, config)
         const after = await dependencies.fingerprint(workspace)
         if (before !== after) continue
         return projection
@@ -313,7 +314,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
   }
 
   async function buildWorkspace(name: string, requestId = `req_${randomUUID().replaceAll("-", "")}`): Promise<WorkspaceSnapshotResponse> {
-    const projection = await projectStable(name)
+    const projection = await projectStable(name, loadConfig())
     if (!projection) throw new Error(`Workspace '${name}' not found.`)
     const revision = await dependencies.revisionStore.update(digest(projection))
     return WorkspaceSnapshotResponseSchema.parse({ protocol: "v1", request_id: requestId, ok: true, revision, generated_at: dependencies.clock().toISOString(), workspace: projection })
@@ -321,20 +322,25 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
 
   async function buildAll(): Promise<WorkspaceSnapshotResponse[]> {
     const names = [...dependencies.listWorkspaceNames()].sort((a, b) => a.localeCompare(b))
+    const config = loadConfig()
     // One aggregate generation owns one revision. Per-workspace concurrent
     // writes to a shared revision store made revision depend on build order.
     const projections = []
     for (const name of names) {
-      const projection = await projectStable(name)
+      const projection = await projectStable(name, config)
       if (projection) projections.push(projection)
     }
     const revision = await dependencies.revisionStore.update(digest(projections))
     aggregateRevision = revision
-    if (projections.length === 0) return []
+    if (projections.length === 0) {
+      latestAggregate = []
+      return latestAggregate
+    }
     const generated_at = dependencies.clock().toISOString()
-    return projections.map((workspace) => WorkspaceSnapshotResponseSchema.parse({
+    latestAggregate = projections.map((workspace) => WorkspaceSnapshotResponseSchema.parse({
       protocol: "v1", request_id: `req_${randomUUID().replaceAll("-", "")}`, ok: true, revision, generated_at, workspace,
     }))
+    return latestAggregate
   }
 
   async function currentRevision(): Promise<string> {
@@ -343,7 +349,13 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
   }
 
   async function resolveTerminalLaunch(request: TerminalLaunchResolutionRequest): Promise<TerminalLaunchResolution> {
-    const snapshots = await buildAll()
+    // The client can only request a terminal from a snapshot it already
+    // received. Reuse that exact aggregate instead of running Git status for
+    // every workspace again on the latency-sensitive shell creation path.
+    // A missing or mismatched generation still forces an authoritative rebuild.
+    const snapshots = latestAggregate !== undefined && aggregateRevision === request.expected_revision
+      ? latestAggregate
+      : await buildAll()
     const snapshot = snapshots.find((entry) => entry.workspace.id === request.workspace_id)
     const fail = (code: "not_found" | "conflict" | "operation_failed", message: string): TerminalLaunchResolution =>
       TerminalLaunchResolutionSchema.parse({ resolved: false, error: { code, message } })
@@ -352,24 +364,25 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
     const repository = snapshot.workspace.repositories.find((entry) => entry.id === request.repository_id)
     if (!repository) return fail("not_found", "Repository not found in workspace")
     const base = snapshot.workspace.launch
+    let agentEnvironment: Record<string, string> = {}
     try {
       dependencies.ensureAgentSignals?.(repository.path, snapshot.workspace.name)
-      const agentEnvironment = dependencies.prepareAgentSignals?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
-      Object.assign(base.environment, agentEnvironment)
+      agentEnvironment = dependencies.prepareAgentSignals?.(repository.path, snapshot.workspace.name, base.environment) ?? {}
     } catch (error) {
       // Agent integrations are optional launch enrichment. A malformed,
       // unowned, or unwritable user-level provider config must never make the
       // authoritative repository shell unavailable.
-      Object.assign(base.environment, {
+      agentEnvironment = {
         GIT_STACKS_AGENT_SIGNALS: "degraded",
         GIT_STACKS_AGENT_INTEGRATION_HEALTH: "setup-failed",
         GIT_STACKS_AGENT_INTEGRATION_ERROR: error instanceof Error ? error.message : String(error),
-      })
+      }
     }
+    const shellEnvironment = { ...base.environment, ...agentEnvironment }
     if (!request.command_id) {
       const shell = process.env.SHELL || "/bin/sh"
       return TerminalLaunchResolutionSchema.parse({ resolved: true, revision: snapshot.revision, launch: {
-        argv: [shell], cwd: repository.path, environment: base.environment, ports: base.ports ?? {},
+        argv: [shell], cwd: repository.path, environment: shellEnvironment, ports: base.ports ?? {},
         configuration: { shell: true }, redacted: base.redacted,
       } })
     }
@@ -383,7 +396,7 @@ export function createSnapshotBuilder(dependencies: SnapshotDependencies = defau
       // CLI/TUI command runner. They must not be reparsed by the user's login
       // shell (Fish, Nushell, etc.).
       argv: ["/bin/sh", "-lc", multiple ? commandSequence(command.steps) : step.command], cwd: step.cwd,
-      environment: multiple ? base.environment : step.environment, ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
+      environment: multiple ? shellEnvironment : { ...step.environment, ...agentEnvironment }, ports: base.ports ?? {}, configuration: { command_id: command.id, shell: false }, redacted: base.redacted,
     } })
   }
 

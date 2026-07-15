@@ -37,7 +37,7 @@ optional Bun TUI ------ trusted-leaf TLS 1.3 on loopback -+
 
 All product state and terminal bytes travel only after encrypted carrier setup and the in-channel challenge/proof handshake. There is no HTTP server, executable loopback bootstrap, REST API, SSE endpoint, WebSocket endpoint, cookie principal, or plaintext fallback.
 
-The browser connects only to `127.0.0.1`. `git-stacks web` first starts or discovers the helper, obtains a one-use launch grant over the authenticated local client, and opens the installed self-contained HTML file with that grant in the fragment. The document clears the fragment synchronously, creates a non-exportable ephemeral P-256 key, pins the WebTransport certificate hash, and proves the grant inside encryption. Browser storage and localhost origins are not authority.
+The browser connects only to `127.0.0.1`. `git-stacks web` first starts or discovers the helper, preflights and if necessary recovers its local WebTransport listener, then obtains a one-use launch grant over the authenticated local client. It writes an owner-only copy of the installed self-contained HTML containing the grant in a removable meta element and opens only that random file path. The document removes the element, creates a non-exportable ephemeral P-256 key, pins the WebTransport certificate hash, and proves the grant inside encryption. Browser URLs, history, storage, and localhost origins are not authority.
 
 The TUI reads a mode-0600 descriptor, directly trusts the advertised self-signed leaf for one TLS 1.3 connection, verifies its hostname and `git-stacks/2` ALPN, then consumes a one-use application grant. It never imports the native WebTransport addon, and no CA is installed into the operating system or browser.
 

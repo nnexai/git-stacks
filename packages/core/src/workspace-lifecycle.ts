@@ -18,7 +18,6 @@ import {
   createWorktree,
   createWorktreeFromRef,
   removeWorktree,
-  ensureUpstreamTracking,
   getMergeConflicts,
   deleteLocalBranch,
   prepareMergeCommit,
@@ -699,19 +698,7 @@ export async function createWorkspace(
         )
       }
 
-      // ─── D-12 step 3: ensureUpstreamTracking (NOT tracked, best-effort) ─────
-      // Wrapped in try/catch so a tracking failure does not abort creation.
-      try {
-        const trackingResults = await Promise.all(
-          worktreeRepos.map(repo => ensureUpstreamTracking(repo.main_path, inputs.branch))
-        )
-        const tracked = trackingResults.filter(r => r.tracked).length
-        if (tracked > 0) onProgress?.(`Upstream tracking set for ${tracked} repo(s)`)
-      } catch (err) {
-        onProgress?.(`⚠ ensureUpstreamTracking failed: ${err instanceof Error ? err.message : String(err)}`)
-      }
-
-      // ─── D-12 step 4: per-repo file ops (TRACKED) ───────────────────────────
+      // ─── D-12 step 3: per-repo file ops (TRACKED) ───────────────────────────
       for (const wsRepo of worktreeRepos) {
         if (!wsRepo.files) continue
         await runner.do(
@@ -729,7 +716,7 @@ export async function createWorkspace(
         )
       }
 
-      // ─── D-12 step 5: workspace-instance file ops (TRACKED) ─────────────────
+      // ─── D-12 step 4: workspace-instance file ops (TRACKED) ─────────────────
       if (inputs.wsFiles) {
         await runner.do(
           `apply workspace file ops`,
@@ -751,7 +738,7 @@ export async function createWorkspace(
         )
       }
 
-      // ─── D-12 step 6: env-file writes (TRACKED) ─────────────────────────────
+      // ─── D-12 step 5: env-file writes (TRACKED) ─────────────────────────────
       if (inputs.wsEnvFile) {
         await runner.do(
           `write env files`,
@@ -766,7 +753,7 @@ export async function createWorkspace(
         )
       }
 
-      // ─── D-12 step 7: post_create hooks (NOT tracked, D-09) ─────────────────
+      // ─── D-12 step 6: post_create hooks (NOT tracked, D-09) ─────────────────
       // Hook failures throw and are caught below. The catch block forces the
       // runner into failure state via a synthetic do() call (Approach A — see
       // Plan 78-02 "CRITICAL implementation detail" section), which triggers
@@ -813,11 +800,11 @@ export async function createWorkspace(
       return { ok: false, error: runnerResult.error, rollbackErrors: runnerResult.rollbackErrors }
     }
 
-    // ─── D-12 step 8: COMMIT POINT (D-10) — writeWorkspace OUTSIDE the runner ──
+    // ─── D-12 step 7: COMMIT POINT (D-10) — writeWorkspace OUTSIDE the runner ──
     writeWorkspace(workspaceObj)
     onProgress?.(`wrote ${inputs.wsName}.yml`)
 
-    // ─── D-12 step 9: integration generation POST-COMMIT (D-11) ────────────────
+    // ─── D-12 step 8: integration generation POST-COMMIT (D-11) ────────────────
     // Failures here are surfaced through onProgress and do NOT roll back —
     // the workspace is already committed.
     try {

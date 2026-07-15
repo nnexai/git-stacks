@@ -20,9 +20,19 @@ The command is validation-only. It does not tag or publish. After explicit appro
 
 Internal packages must be published in dependency order: protocol, client/core, web, service, CLI, optional TUI, then the `git-stacks` facade. Inspect every generated tarball before publication. The default facade must resolve without Bun/OpenTUI.
 
+To build the exact tarball set without publishing it:
+
+```bash
+npm run pack:release
+```
+
+The tarballs and their integrity manifest are written to the ignored `release/npm/` directory. npm authentication and ownership of the `@git-stacks` scope are external preconditions; the packaging command deliberately does not require or modify registry credentials.
+
 ## Hosted matrix
 
 `.github/workflows/node-runtime-matrix.yml` runs the build, Vitest, secure native Node integration tests, architecture/type/dependency checks, package/native-addon validation, SPDX license audit, and runtime vulnerability audit on Linux and macOS, x64 and arm64. The TUI has a separate Bun matrix so its runtime cannot mask default-package failures. A local Linux pass does not replace hosted macOS and arm64 evidence.
+
+Pushing a `v*` tag starts `.github/workflows/release-artifacts.yml`. It verifies that the tag exactly matches the root package version, runs the complete RC gate, packs all eight npm artifacts, and uploads the tarballs plus integrity manifest for inspection. It never publishes to npm or creates a GitHub release.
 
 ## Rollback
 

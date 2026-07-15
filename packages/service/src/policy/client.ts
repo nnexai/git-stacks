@@ -131,6 +131,10 @@ export async function createBrowserLaunch(targetId?: string, signal?: AbortSigna
   return rpc.request("launch.browser", targetId ? { target_id: targetId } : {}, { signal, scope: "target.select" })
 }
 
+export async function recoverLocalWebTransport(signal?: AbortSignal): Promise<{ endpoint: string; certificate_hash: string }> {
+  return secureRequest("service.transport.recover", undefined, { signal, scope: "target.select" })
+}
+
 export async function closeServiceClient(reason = "one-shot client complete"): Promise<void> {
   const rpc = cachedAccess
   cachedAccess = undefined

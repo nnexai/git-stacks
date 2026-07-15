@@ -19,6 +19,28 @@ npm install --global git-stacks@next
 npm install --global @git-stacks/tui@next
 ```
 
+### Development checkout
+
+From a source checkout, build every package before running the browser client. `npm run dev` deliberately opens the web client; it does not invoke the no-argument CLI/TUI shortcut.
+
+```bash
+npm ci
+npm run dev                         # Build and open the local web client
+npm run dev -- --no-open            # Build and print a protected launcher URL
+
+# Run without creating a global command
+npm run build:packages
+npm exec -- git-stacks --version
+npm exec -- git-stacks web
+
+# Or create/refresh the global command for this checkout
+npm link
+git-stacks --version
+git-stacks web
+```
+
+If this checkout was linked before the Node package split, rerun `npm link` so npm refreshes the executable from the removed `src/index.ts` entrypoint to `bin/git-stacks.js`.
+
 ## Concepts
 
 **Repo Registry** — a flat list of local git repos and directories with names, paths, types, and default branches. Stored at `~/.config/git-stacks/registry.yml`. Managed via `git-stacks repo add|scan|list|show|remove|rename`.
@@ -427,7 +449,7 @@ git-stacks web --no-open --json
 git-stacks web --target <id>   # Route through the local helper to a paired authority
 ```
 
-The browser loads from an installed self-contained `file:` asset, then connects only to the local helper through certificate-hash-pinned WebTransport. There is no service HTTP server, executable loopback response, SSE/WebSocket fallback, cookie principal, or browser-persisted authority. A mode-0600 launcher keeps the one-use bearer out of command output and browser process arguments; the client then clears the fragment synchronously. Every document creates an ephemeral non-exportable P-256 key and authenticates inside encryption. Machine paths, resolved commands, environments, remote credentials, and trust records stay in the service.
+The browser loads an owner-only generated copy of the installed self-contained `file:` asset, then connects only to the local helper through certificate-hash-pinned WebTransport. There is no service HTTP server, executable loopback response, SSE/WebSocket fallback, cookie principal, URL bearer, or browser-persisted authority. The mode-0600 document embeds and removes the one-use grant before connecting, while command output and browser process arguments contain only its random path. Every document creates an ephemeral non-exportable P-256 key and authenticates inside encryption. Machine paths, resolved commands, environments, remote credentials, and trust records stay in the service.
 
 On Linux and macOS, the service owns independent browser PTYs with multiple tabs, resize, bounded replay, focus restoration, inactive-tab stream suspension, and process-group cleanup. Because the shell belongs to the service rather than the page, closing the page does not end it; running `git-stacks web` again creates the required fresh document grant and reattaches live terminals while the service remains alive. A plain reload intentionally has no retained authority and asks for a fresh launch. This is local process persistence, not reboot persistence: stopping the service or machine ends its PTYs. Exiting an ordinary shell removes its tab; configured command tabs stay available with their final output.
 

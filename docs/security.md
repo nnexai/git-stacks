@@ -4,7 +4,7 @@
 
 Snapshots, operations, events, signals, terminal input/output, credentials typed into terminals, and remote pairing traffic are never sent through a plaintext product transport. Local browser traffic uses pinned WebTransport. TUI traffic uses TLS 1.3 with hostname verification against a directly trusted self-signed service leaf plus application authentication. Helper-to-authority traffic uses certificate-hash-pinned WebTransport plus a durable helper-key proof.
 
-The service has no HTTP, SSE, WebSocket, readiness, or executable-bootstrap route. The browser UI is an installed self-contained `file:` asset with hashed script/style CSP, no external executable resources, no workers, and no product persistence.
+The service has no HTTP, SSE, WebSocket, readiness, or executable-bootstrap route. The browser UI is an installed self-contained `file:` asset with a hash-pinned script CSP, runtime styling limited to style elements and attributes required by the terminal renderer, no external executable resources, no workers, and no product persistence. Inline scripts and dynamic code evaluation remain forbidden.
 
 ## Trust boundaries
 
@@ -21,7 +21,7 @@ A process running as the same user can generally read process memory, protected 
 
 ## Browser storage and localhost
 
-Cookies, local/session storage, IndexedDB, Cache Storage, OPFS, service/shared workers, browser profiles, and localhost origin ownership are never authentication or product authority. Every new document needs a fresh one-use fragment and creates a new non-exportable key in memory. The CLI places that fragment only in a mode-0600 launcher file; stdout and the browser-opening process receive the random launcher path, not the bearer. The client clears the fragment before connection. Durable targets, pins, credentials, terminal state, signals, and workspace preferences remain in the helper/service or workspace files.
+Cookies, local/session storage, IndexedDB, Cache Storage, OPFS, service/shared workers, browser profiles, and localhost origin ownership are never authentication or product authority. Every new document needs a fresh one-use grant and creates a new non-exportable key in memory. The CLI writes an owner-only generated copy of the installed client containing that grant in a removable meta element; stdout, browser history, the address bar, and the browser-opening process receive only the random mode-0600 file path. Durable targets, pins, credentials, terminal state, signals, and workspace preferences remain in the helper/service or workspace files.
 
 ## Protected machine state
 

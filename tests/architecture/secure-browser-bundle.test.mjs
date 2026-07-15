@@ -10,7 +10,11 @@ test("packaged browser client is self-contained and has no durable authority or 
   assert.match(html, /Content-Security-Policy/)
   assert.match(html, /connect-src https:\/\/127\.0\.0\.1:\*/)
   assert.match(html, /style-src 'sha256-/)
-  assert.doesNotMatch(html, /unsafe-inline|unsafe-eval/)
+  assert.match(html, /style-src-elem 'unsafe-inline'/)
+  assert.match(html, /style-src-attr 'unsafe-inline'/)
+  assert.equal(html.match(/'unsafe-inline'/g)?.length, 2)
+  assert.doesNotMatch(html, /script-src[^;]*(?:unsafe-inline|unsafe-eval)/)
+  assert.doesNotMatch(html, /unsafe-eval/)
   assert.doesNotMatch(html, /<(?:script|link)[^>]+(?:src|href)=["'](?!data:)/i)
   for (const forbidden of [
     "localStorage", "sessionStorage", "indexedDB", "serviceWorker", "SharedWorker",

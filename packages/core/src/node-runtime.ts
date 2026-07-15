@@ -79,6 +79,7 @@ type StdioMode = "pipe" | "inherit" | "ignore"
 export type SpawnOptions = {
   cwd?: string
   env?: Record<string, string | undefined>
+  timeoutMs?: number
   stdin?: StdioMode
   stdout?: StdioMode
   stderr?: StdioMode
@@ -96,15 +97,27 @@ export type SpawnedProcess = {
 
 export function spawn(argv: readonly string[], options: SpawnOptions = {}): SpawnedProcess {
   const stdio = options.stdio ?? [options.stdin ?? "ignore", options.stdout ?? "pipe", options.stderr ?? "pipe"]
+  const isolatedProcessGroup = options.timeoutMs !== undefined && process.platform !== "win32"
   const child = nodeSpawn(argv[0], argv.slice(1), {
     cwd: options.cwd,
     env: options.env as NodeJS.ProcessEnv | undefined,
     stdio,
-    detached: false,
+    detached: isolatedProcessGroup,
   })
+  let timeout: NodeJS.Timeout | undefined
+  const clearProcessTimeout = () => { if (timeout) clearTimeout(timeout); timeout = undefined }
+  if (options.timeoutMs !== undefined) {
+    timeout = setTimeout(() => {
+      if (isolatedProcessGroup && child.pid) {
+        try { process.kill(-child.pid, "SIGKILL"); return } catch { /* process may already have exited */ }
+      }
+      child.kill("SIGKILL")
+    }, options.timeoutMs)
+    timeout.unref()
+  }
   const exited = new Promise<number>((resolve, reject) => {
-    child.once("error", reject)
-    child.once("close", (code) => resolve(code ?? 1))
+    child.once("error", (error) => { clearProcessTimeout(); reject(error) })
+    child.once("close", (code) => { clearProcessTimeout(); resolve(code ?? 1) })
   })
   return {
     pid: child.pid ?? -1,

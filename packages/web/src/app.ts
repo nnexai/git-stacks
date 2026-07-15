@@ -370,12 +370,14 @@ class TerminalView {
 }
 
 let snapshot: Snapshot = { protocol: "web-v1", revision: "0", generated_at: new Date().toISOString(), pinned_workspace_ids: [], workspaces: [] }
+let snapshotRefreshGeneration = 0
 let selectedPair: Pair | undefined
 let activeTerminalId: string | undefined
 let signalRefreshGeneration = 0
 let signals: Signal[] = []
 let eventCursor = "0"
 const terminalViews = new Map<string, TerminalView>()
+const pendingWorkspaceCreations = new Map<string, string>()
 
 app.innerHTML = `<div class="app"><header class="topbar"><div class="brand"><span class="brand-mark">gs</span><span>git-stacks</span></div><button class="header-signal" id="signal-toggle" type="button" aria-label="Signal inbox" aria-haspopup="dialog" aria-expanded="false"><span class="signal-glyph" aria-hidden="true">!</span><span id="signal-label">Signals</span><span class="header-badge" id="signal-count" hidden></span></button><div class="top-status" id="status" role="status"></div><div class="toolbar"><button class="button icon" id="theme" title="Change theme" aria-label="Change theme">◐</button><button class="button primary" id="launcher" aria-label="Configured commands"><span aria-hidden="true">⌘</span><span class="wide">Commands</span></button></div></header><div class="workspace-grid"><nav class="sidebar" aria-label="Workspaces"><div class="sidebar-tools"><div class="organization-switch" role="group" aria-label="Organize workspaces"><button type="button" data-organization="label">Labels</button><button type="button" data-organization="repository">Repositories</button></div><button class="button sidebar-create" id="create" type="button"><span aria-hidden="true">＋</span> Create workspace</button></div><div class="sidebar-summary"><span>Workspaces</span><span id="workspace-count"></span></div><ul class="nav-list" id="nav"></ul></nav><main class="main"><div class="scopebar" id="scope"></div><div class="tabs" id="tabs" role="tablist" aria-label="Repository terminals"></div><div class="terminal-deck" id="terminal-deck"></div></main></div></div><section class="signal-popover" id="signal-inbox" role="dialog" aria-modal="false" aria-labelledby="signal-inbox-title" hidden><header class="signal-popover-head"><div><strong id="signal-inbox-title">Signals</strong><span>Workspace and terminal activity</span></div><button class="button icon" id="signal-close" type="button" aria-label="Close signals">×</button></header><div class="signal-list" id="signals"></div></section><div class="context-menu" id="context-menu" role="menu" hidden></div><div class="toast-region" id="toasts" aria-live="polite"></div>`
 const statusNode = document.querySelector<HTMLElement>("#status")!
@@ -901,8 +903,10 @@ async function showCreation(): Promise<void> {
         const [kind, value] = source.value.split(":", 2)
         const selected = repositoryInputs.filter((input) => input.checked).map((input) => input.value)
         const requestedSource = kind === "template" ? { kind: "template", template: value } : { kind: "repositories", repositories: selected }
-        await api("operation.submit", { kind: "workspace.create", request: { name: name.value.trim(), branch: branch.value.trim(), source: requestedSource } }, { scope: "operation.write", idempotencyKey: `workspace.create-${crypto.randomUUID()}` })
-        toast(`Creating ${name.value.trim()}`); view.close()
+        const workspaceName = name.value.trim()
+        const operation = await api<{ operation_id: string }>("operation.submit", { kind: "workspace.create", request: { name: workspaceName, branch: branch.value.trim(), source: requestedSource } }, { scope: "operation.write", idempotencyKey: `workspace.create-${crypto.randomUUID()}` })
+        pendingWorkspaceCreations.set(operation.operation_id, workspaceName)
+        toast(`Creating ${workspaceName}`); view.close()
       } catch (error) { toast(String(error), true) }
     })
     view.body.append(wrap("Name", name), wrap("Branch", branch), wrap("Source", source), repositoryPicker, create)
@@ -911,7 +915,10 @@ async function showCreation(): Promise<void> {
 }
 
 async function refreshSnapshot(): Promise<void> {
-  snapshot = await api<Snapshot>("web.snapshot", undefined, { scope: "snapshot.read" })
+  const generation = ++snapshotRefreshGeneration
+  const refreshed = await api<Snapshot>("web.snapshot", undefined, { scope: "snapshot.read" })
+  if (generation !== snapshotRefreshGeneration) return
+  snapshot = refreshed
   preferences.pins = new Set(snapshot.pinned_workspace_ids)
   let preferencesChanged = false
   if (selectedPair && !snapshot.workspaces.some((workspace) => workspace.id === selectedPair?.workspaceId && workspace.repositories.some((repository) => repository.id === selectedPair?.repositoryId))) selectedPair = undefined
@@ -946,11 +953,35 @@ async function loadTerminals(): Promise<void> {
 function connectEvents(): void {
   statusNode.textContent = connectionSummary()
   void subscribeSecureEvents(eventCursor, (value) => {
-    const data = value as { type: string; sequence?: string; control?: { kind: string } }
+    const data = value as {
+      type: string
+      sequence?: string
+      control?: { kind: string }
+      operation?: {
+        operation_id: string
+        state: "accepted" | "running" | "succeeded" | "failed" | "cancelled"
+        progress?: { message?: string }
+        result?: { snapshot_changed?: boolean }
+        error?: { message?: string }
+      }
+    }
     if (data.sequence) eventCursor = data.sequence
-    if (data.type === "control") void refreshSnapshot()
+    if (data.type === "control" && data.control?.kind === "snapshot_invalidated") void refreshSnapshot()
     else if (data.type === "signal") void refreshSignals()
-    else if (data.type === "operation") { void refreshSnapshot(); toast("Workspace operation updated") }
+    else if (data.type === "operation" && data.operation) {
+      const operation = data.operation
+      const workspaceName = pendingWorkspaceCreations.get(operation.operation_id)
+      if (operation.state === "succeeded") {
+        pendingWorkspaceCreations.delete(operation.operation_id)
+        if (operation.result?.snapshot_changed) void refreshSnapshot()
+        toast(workspaceName ? `Created ${workspaceName}` : "Workspace operation completed")
+      } else if (operation.state === "failed" || operation.state === "cancelled") {
+        pendingWorkspaceCreations.delete(operation.operation_id)
+        toast(operation.error?.message ?? `${workspaceName ?? "Workspace operation"} ${operation.state}`, true)
+      } else if (operation.progress?.message) {
+        toast(operation.progress.message)
+      }
+    }
   }).catch((error) => { statusNode.textContent = `Secure event channel unavailable: ${String(error)}` })
 }
 

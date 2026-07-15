@@ -1,6 +1,6 @@
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, unlinkSync, writeFileSync } from "node:fs"
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { pathToFileURL } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { WS_CONFIG_DIR } from "@git-stacks/core/paths"
 
@@ -20,8 +20,17 @@ export function createProtectedBrowserLauncher(target: URL, root = join(WS_CONFI
     } catch {}
   }
   const path = join(root, `launch-${crypto.randomUUID()}.html`)
-  const escaped = target.toString().replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-  const html = `<!doctype html><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; navigate-to file:"><meta http-equiv="refresh" content="0;url=${escaped}"><title>Opening git-stacks</title>\n`
+  if (target.protocol !== "file:") throw new Error("The protected browser client must be an installed file asset")
+  const launch = new URLSearchParams(target.hash.slice(1)).get("launch")
+  if (!launch || launch.length > 8_192 || !/^[A-Za-z0-9_-]+$/.test(launch)) throw new Error("The protected browser launch grant is malformed")
+  const client = new URL(target)
+  client.hash = ""
+  client.search = ""
+  const source = readFileSync(fileURLToPath(client), "utf8")
+  const head = source.indexOf("<head>")
+  if (head < 0) throw new Error("The installed browser client is malformed")
+  const insertAt = head + "<head>".length
+  const html = `${source.slice(0, insertAt)}\n    <meta name="git-stacks-launch" content="${launch}">${source.slice(insertAt)}`
   const fd = openSync(path, "wx", 0o600)
   try { writeFileSync(fd, html, "utf8") } finally { closeSync(fd) }
   return pathToFileURL(path)

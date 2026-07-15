@@ -54,6 +54,7 @@ export interface SecureServiceRouterOptions {
   revokePairedHelper?: (id: string) => boolean
   listTargets?: () => TargetRecord[]
   removeTarget?: (id: string) => boolean
+  recoverLocalWebTransport?: () => Promise<{ endpoint: string; certificate_hash: string }>
 }
 
 type SessionResources = {
@@ -94,10 +95,11 @@ const methodScopes: Record<string, SecureScope> = {
   "trust.pair.revoke": "target.select",
   "targets.list": "target.select",
   "targets.remove": "target.select",
+  "service.transport.recover": "target.select",
 }
 
 const localAdministration = new Set([
-  "launch.browser", "launch.tui", "trust.pair.create", "trust.pair.list", "trust.pair.revoke", "targets.list", "targets.remove",
+  "launch.browser", "launch.tui", "trust.pair.create", "trust.pair.list", "trust.pair.revoke", "targets.list", "targets.remove", "service.transport.recover",
 ])
 
 export class SecureServiceRouter implements SecureSessionHandler {
@@ -115,6 +117,9 @@ export class SecureServiceRouter implements SecureSessionHandler {
     if (!required) throw coded("Unknown secure service method", "not_found")
     if (localAdministration.has(request.method) && (context.mode === "helper" || context.mode === "pairing")) {
       throw coded("Secure service administration is local-only", "unauthorized")
+    }
+    if (request.method === "service.transport.recover" && context.mode !== "tui") {
+      throw coded("Local transport recovery requires the trusted machine client", "unauthorized")
     }
     if (!context.scopes.includes(required)) throw coded("Secure service method is not authorized", "unauthorized")
     const body = request.body as Record<string, unknown> | undefined
@@ -146,6 +151,10 @@ export class SecureServiceRouter implements SecureSessionHandler {
       case "targets.remove": {
         if (!this.options.removeTarget || typeof body?.target_id !== "string") throw coded("Invalid target removal", "invalid_request")
         return { removed: this.options.removeTarget(body.target_id) }
+      }
+      case "service.transport.recover": {
+        if (!this.options.recoverLocalWebTransport) throw coded("Local transport recovery is unavailable", "capability_unavailable")
+        return this.options.recoverLocalWebTransport()
       }
       case "core.state": {
         if (!this.options.core) throw coded("Core state is unavailable", "capability_unavailable")

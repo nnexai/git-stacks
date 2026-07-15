@@ -28,7 +28,7 @@ function repoRoot(): string {
 const ROOT = repoRoot()
 const README = readFileSync(join(ROOT, "README.md"), "utf8")
 const CHANGELOG = readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")
-const PACKAGE_JSON = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { version: string }
+const PACKAGE_JSON = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { version: string; bin: Record<string, string> }
 
 function changelogEntry(version: string): string {
   const heading = `## [${version}]`
@@ -113,6 +113,7 @@ describe("v0.21.0 release candidate smoke", () => {
     const rcEntry = changelogEntry("0.21.0-rc.1")
 
     expect(PACKAGE_JSON.version).toBe("0.21.0-rc.1")
+    expect(PACKAGE_JSON.bin["git-stacks"]).toBe("bin/git-stacks.js")
     expect(CHANGELOG.indexOf("## [0.21.0-rc.1]")).toBeLessThan(CHANGELOG.indexOf("## [0.20.0-rc.1]"))
     expect(rcEntry).toContain("v0.21.0")
     expect(rcEntry).toContain("Node.js 24")
@@ -160,12 +161,20 @@ describe("v0.21.0 release candidate smoke", () => {
 
   test("RC release script derives tag/version state from package metadata", () => {
     const releaseScript = readFileSync(join(ROOT, "scripts/release-rc-check.mjs"), "utf8")
+    const packScript = readFileSync(join(ROOT, "scripts/pack-release.mjs"), "utf8")
+    const releaseWorkflow = readFileSync(join(ROOT, ".github/workflows/release-artifacts.yml"), "utf8")
 
     expect(releaseScript).toContain("const rcVersion = packageVersion()")
     expect(releaseScript).toContain("const rcTag = `v${rcVersion}`")
     expect(releaseScript).toContain("process.argv.includes(\"--tag\")")
     expect(releaseScript).toContain("npm\", [\"run\", \"check:packages\"]")
     expect(releaseScript).toContain("publishing is a separate manual action")
+    expect(packScript).toContain('npm_dist_tag: "next"')
+    expect(packScript).toContain('"packages/tui"')
+    expect(packScript).toContain("artifacts.length")
+    expect(releaseWorkflow).toContain("npm run release:check")
+    expect(releaseWorkflow).toContain("node scripts/pack-release.mjs")
+    expect(releaseWorkflow).not.toContain("npm publish")
   })
 })
 

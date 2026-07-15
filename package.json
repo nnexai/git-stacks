@@ -38,7 +38,7 @@
   ],
   "type": "module",
   "bin": {
-    "git-stacks": "./bin/git-stacks.js"
+    "git-stacks": "bin/git-stacks.js"
   },
   "files": [
     "bin",
@@ -50,7 +50,8 @@
     "build": "npm run build:packages",
     "build:packages": "node scripts/build-package.mjs --all",
     "clean": "node scripts/clean-packages.mjs",
-    "dev": "npm run build -w @git-stacks/cli && node packages/cli/dist/index.js",
+    "dev": "npm run build:packages && node packages/cli/dist/index.js web",
+    "dev:web": "npm run build:packages && node packages/cli/dist/index.js web",
     "test": "npm run build:packages && npm run test:vitest && npm run test:node && npm run test:tui",
     "test:vitest": "GIT_STACKS_KEY_STORE=file vitest run",
     "test:unit": "GIT_STACKS_KEY_STORE=file vitest run tests/lib tests/service tests/tui/workspace-clone.test.ts tests/tui/workspace-wizard.test.ts",
@@ -75,6 +76,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "typecheck:legacy": "tsc --noEmit",
     "release:check": "node scripts/release-rc-check.mjs",
+    "pack:release": "npm run check:packages && node scripts/pack-release.mjs",
     "prepublishOnly": "npm run build:packages && npm run typecheck && npm run test:node"
   },
   "dependencies": {

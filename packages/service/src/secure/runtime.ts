@@ -55,6 +55,7 @@ export async function startSecureServiceRuntime(options: SecureServiceRuntimeOpt
   let remoteSessionServer: SecureSessionServer | undefined
   let routing: TargetRoutingHandler | undefined
   let activePinSet: SignedPinSet | undefined
+  let recoverLocalWebTransport: (() => Promise<{ endpoint: string; certificate_hash: string }>) | undefined
   const issueLaunch = (mode: "browser" | "tui", targetId: string) => {
     const target = targetId === identity.id ? undefined : targets.get(targetId)
     if (targetId !== identity.id && !target) throw new Error("Paired target not found")
@@ -80,6 +81,10 @@ export async function startSecureServiceRuntime(options: SecureServiceRuntimeOpt
       const removed = targets.remove(id)
       if (removed) void routing?.closeTarget(id)
       return removed
+    },
+    recoverLocalWebTransport: () => {
+      if (!recoverLocalWebTransport) throw new Error("Local transport recovery is not ready")
+      return recoverLocalWebTransport()
     },
   })
   routing = new TargetRoutingHandler(identity.id, router, new RemoteTargetConnector(options.serviceRoot))
@@ -156,6 +161,36 @@ export async function startSecureServiceRuntime(options: SecureServiceRuntimeOpt
       localRotationTimer.unref?.()
     }
     await reconcileLocal()
+    let localRecovery: Promise<{ endpoint: string; certificate_hash: string }> | undefined
+    recoverLocalWebTransport = () => {
+      if (localRecovery) return localRecovery
+      localRecovery = (async () => {
+        const rollover = await localCertificateStore.loadRollover()
+        const current = localListeners.get(rollover.current.generation)
+        if (!current) throw new Error("Current local transport listener is unavailable")
+        const previous = current.webTransport
+        if (options.webTransportPort) await previous.close()
+        const replacement = await startWebTransportListener({
+          hostname: "127.0.0.1",
+          port: options.webTransportPort ? localPortFor(rollover.current.generation) : 0,
+          certificate: rollover.current.certPem,
+          privateKey: rollover.current.keyPem,
+          loopbackOnly: true,
+          onControl: (duplex) => localSessionServer.accept(duplex),
+        })
+        const listeners = { ...current, webTransport: replacement }
+        localListeners.set(rollover.current.generation, listeners)
+        currentLocal = listeners
+        options.onLocalTransportRotated?.({
+          certificatePem: rollover.current.certPem,
+          webTransport: { endpoint: replacement.endpoint, certificateHash: rollover.current.hash },
+          localTls: { hostname: "127.0.0.1", port: current.localTls.port, servername: "localhost" },
+        })
+        if (!options.webTransportPort) await previous.close()
+        return { endpoint: replacement.endpoint, certificate_hash: rollover.current.hash }
+      })().finally(() => { localRecovery = undefined })
+      return localRecovery
+    }
     if (options.remoteExposure) {
       const store = new CertificateStore(options.serviceRoot, [options.remoteExposure.advertiseHost], "remote-transport")
       const portFor = (generation: number) => options.remoteExposure!.port

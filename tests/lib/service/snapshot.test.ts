@@ -146,6 +146,27 @@ describe("authoritative service snapshots", () => {
     expect(await builder.currentRevision()).toBe("1")
   })
 
+  test("reloads global config between aggregate generations", async () => {
+    let workspaceRoot = "/tasks-one"
+    const builder = createSnapshotBuilder(dependencies({
+      config: () => ({ workspace_root: workspaceRoot, integrations: {}, ports: { range_start: 10000, range_end: 65000 } }),
+      planManualCommand: (_workspace: Workspace, _name: string, config: { workspace_root: string }) => [{
+        bucket: "main", scope: "workspace", commandName: "dev", shell: "echo dev",
+        cwd: `${config.workspace_root}/tasks/alpha`,
+      }],
+    }))
+
+    const first = (await builder.buildAll())[0]!
+    expect(first.workspace.launch.cwd).toBe("/tasks-one/tasks/alpha")
+    expect(first.workspace.launch.named?.[0]?.steps[0]?.cwd).toBe("/tasks-one/tasks/alpha")
+
+    workspaceRoot = "/tasks-two"
+    const second = (await builder.buildAll())[0]!
+    expect(second.workspace.launch.cwd).toBe("/tasks-two/tasks/alpha")
+    expect(second.workspace.launch.named?.[0]?.steps[0]?.cwd).toBe("/tasks-two/tasks/alpha")
+    expect(second.revision).not.toBe(first.revision)
+  })
+
   test("resolves configured commands through the POSIX shell contract", async () => {
     const installs: Array<[string, string]> = []
     const builder = createSnapshotBuilder(dependencies({
@@ -163,6 +184,34 @@ describe("authoritative service snapshots", () => {
     expect(resolution.resolved).toBe(true)
     if (resolution.resolved) expect(resolution.launch.argv).toEqual(["/bin/sh", "-lc", "for i in 1 2; do echo $i; done"])
     expect(installs).toEqual([["/tasks/alpha/git-stacks", "alpha"]])
+  })
+
+  test("reuses the delivered aggregate when launching a terminal from its revision", async () => {
+    let statusReads = 0
+    const builder = createSnapshotBuilder(dependencies({
+      getWorkspaceStatus: async () => {
+        statusReads++
+        return [{ name: "git-stacks", exists: true, dirty: false, branch: "feature/alpha", mode: "worktree", ahead: 0, behind: 0, additions: 0, removals: 0, degraded: false }]
+      },
+    }))
+    const snapshot = (await builder.buildAll())[0]!
+    expect(statusReads).toBe(1)
+
+    const resolved = await builder.resolveTerminalLaunch({
+      workspace_id: snapshot.workspace.id,
+      repository_id: snapshot.workspace.repositories[0]!.id,
+      expected_revision: snapshot.revision,
+    })
+
+    expect(resolved.resolved).toBe(true)
+    expect(statusReads).toBe(1)
+
+    await builder.resolveTerminalLaunch({
+      workspace_id: snapshot.workspace.id,
+      repository_id: snapshot.workspace.repositories[0]!.id,
+      expected_revision: "999",
+    })
+    expect(statusReads).toBe(2)
   })
 
   test("configures agent signals for shells and degrades safely when setup fails", async () => {

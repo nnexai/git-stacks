@@ -18,6 +18,16 @@ for (const name of names) {
 const facade = await readJson(join(root, "package.json"))
 const version = facade.version
 
+function validateBin(packageName, manifest, executable, expectedTarget) {
+  const target = manifest.bin?.[executable]
+  if (target !== expectedTarget) failures.push(`${packageName}: ${executable} bin must be ${expectedTarget}, found ${String(target)}`)
+  if (typeof target === "string" && target.startsWith("./")) failures.push(`${packageName}: npm publish rejects bin targets beginning with ./`)
+}
+
+validateBin("facade", facade, "git-stacks", "bin/git-stacks.js")
+validateBin("cli", manifests.get("cli"), "git-stacks", "dist/index.js")
+validateBin("tui", manifests.get("tui"), "git-stacks-tui", "dist/index.js")
+
 for (const [name, manifest] of manifests) {
   if (manifest.version !== version) failures.push(`${name}: version ${manifest.version} does not match ${version}`)
   if (manifest.license !== "MIT") failures.push(`${name}: package license must be MIT`)

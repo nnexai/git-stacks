@@ -48,5 +48,7 @@ describe("verify command workflow", () => {
     expect(pkg.scripts["test:integ"]).toBe("GIT_STACKS_KEY_STORE=file vitest run tests/commands")
     expect(pkg.scripts["test:deps"]).toBe("node scripts/check-architecture.mjs --cycles")
     expect(pkg.scripts.typecheck).toBe("npm run typecheck --workspaces --if-present")
+    expect(pkg.scripts.dev).toBe("npm run build:packages && node packages/cli/dist/index.js web")
+    expect(pkg.scripts["dev:web"]).toBe(pkg.scripts.dev)
   })
 })

@@ -6,6 +6,10 @@ All notable changes to `git-stacks` are documented here.
 
 ## Unreleased
 
+---
+
+## [0.21.0-rc.1] - 2026-07-15
+
 ### Security architecture
 
 - Replaced the transitional HTTP/SSE/WebSocket service surface with carrier-neutral `git-stacks/2` frames over authenticated encryption. The service exposes no plaintext API, executable HTTP bootstrap, readiness route, or classified fallback.
@@ -15,10 +19,6 @@ All notable changes to `git-stacks` are documented here.
 - Durable identities now prefer native macOS Keychain/Linux Secret Service storage with a protected fail-closed file fallback. Ten-day WebTransport leaves roll through signed current/next pins and overlapping consecutive-port listeners without replacing the paired identity.
 - Terminal, snapshot, operation, event, signal, and dismissal traffic now share one encrypted router locally and remotely. Service-owned PTYs retain visible-only streaming, bounded replay, resize/title/focus behavior, process cleanup, and browser-close persistence.
 - Added malformed-frame, wrong-pin, launch replay, protected-store, remote relay, browser replacement, terminal replay, strict browser-bundle, license, vulnerability, native-addon, and real Chrome `file:` client validation.
-
----
-
-## [0.21.0-rc.1] - 2026-07-15
 
 ### Changed
 
@@ -31,17 +31,25 @@ All notable changes to `git-stacks` are documented here.
 - Runtime packages target modern Linux and macOS on x64 and arm64. CI has separate Node jobs for each platform/architecture runner and an isolated optional-TUI job.
 - Unit and integration tests now run in isolated Vitest workers on Node, with direct V8 coverage. The Bun test runner, copied Istanbul instrumentation tree, coverage preload hooks, and their smoke tests were removed; Bun remains only for per-file OpenTUI tests.
 
+### Fixed
+
+- Browser launch now uses an owner-only generated copy of the self-contained client, keeping one-use authority out of URLs, history, process arguments, browser storage, and reusable installed assets. The CSP permits only the runtime style operations required by the terminal renderer while continuing to forbid inline scripts and dynamic evaluation.
+- `git-stacks web` preflights the loopback WebTransport path and can recover a failed local HTTP/3 listener through the already authenticated machine channel without weakening certificate pinning or exposing a plaintext fallback.
+- Terminal creation reuses the authoritative snapshot revision already delivered to the client instead of rescanning every workspace, removing the multi-second shell startup path while retaining conflict detection for stale revisions.
+- Workspace creation bounds remote branch discovery with a hard process-tree timeout and avoids duplicate remote probes. The browser follows operation invalidations, guards against out-of-order snapshot responses, and shows newly created workspaces without a page refresh.
+
 ### Safety and distribution
 
 - Config and workspace persistence uses atomic replacement plus cross-process leases for concurrent read-modify-write operations.
 - Package architecture gates reject forbidden cross-layer imports and Node/Bun imports in browser-safe packages.
 - Release checks verify exact internal versions, required Linux/macOS `node-pty` prebuilds, production dependency licenses, default-runtime vulnerabilities, and dry-run tarball contents for every package.
+- GitHub Actions builds and tests the default Node runtime on Linux and macOS x64/arm64, tests the optional Bun TUI separately, and turns a version tag into inspectable npm tarball artifacts only after the full RC gate passes.
 - `node-pty` remains a deliberate exact-pinned beta dependency for this RC. Its native resize/replay/lifecycle behavior is covered by Node real-process tests and must pass the hosted platform matrix before release.
 - RC validation no longer tags by default and never publishes. Tag creation requires an explicit `--tag`; package publication remains a separate approved action using the `next` dist-tag.
 
 ### Release Candidate
 
-This is the first release candidate for v0.21.0. The package version and prospective tag are `0.21.0-rc.1` / `v0.21.0-rc.1`; no tag or package release is created by this migration commit.
+This is the first release candidate for v0.21.0. The package version and GitHub prerelease tag are `0.21.0-rc.1` / `v0.21.0-rc.1`. npm publication remains a separate approved action and must use the `next` dist-tag.
 
 ---
 

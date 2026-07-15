@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "@test/api"
 import { join } from "path"
 import { execSync } from "child_process"
-import { readFileSync, writeFileSync, utimesSync } from "fs"
+import { chmodSync, readFileSync, writeFileSync, utimesSync } from "fs"
 import {
   makeTmpDir,
   cleanup,
@@ -837,6 +837,27 @@ describe("checkBranchExistsOnRemote", () => {
     )
     const result = await checkBranchExistsOnRemote(repoPath, "feature-remote")
     expect(result).toBe(false)
+  })
+
+  test("kills an unresponsive SSH probe at the hard timeout", async () => {
+    const ssh = join(tmp, "sleeping-ssh")
+    writeFileSync(ssh, "#!/bin/sh\nsleep 30\n", "utf8")
+    chmodSync(ssh, 0o755)
+    execSync("git remote set-url origin ssh://git@example.invalid/repository.git", gitExecOptions(repoPath, tmp))
+    const previousCommand = process.env.GIT_SSH_COMMAND
+    const previousVariant = process.env.GIT_SSH_VARIANT
+    process.env.GIT_SSH_COMMAND = ssh
+    process.env.GIT_SSH_VARIANT = "ssh"
+    const started = performance.now()
+    try {
+      expect(await checkBranchExistsOnRemote(repoPath, "feature-remote", 100)).toBe(false)
+      expect(performance.now() - started).toBeLessThan(1_500)
+    } finally {
+      if (previousCommand === undefined) delete process.env.GIT_SSH_COMMAND
+      else process.env.GIT_SSH_COMMAND = previousCommand
+      if (previousVariant === undefined) delete process.env.GIT_SSH_VARIANT
+      else process.env.GIT_SSH_VARIANT = previousVariant
+    }
   })
 })
 
