@@ -15,6 +15,12 @@ test("release publication uses GitHub OIDC without a durable npm token", async (
   assert.doesNotMatch(workflow, /NPM_TOKEN|NODE_AUTH_TOKEN/)
 })
 
+test("the Node runtime matrix does not require optional TUI build artifacts", async () => {
+  const source = await readFile(resolve(root, "scripts/check-packages.mjs"), "utf8")
+  assert.match(source, /const nativeOnly = process\.argv\.includes\("--native-only"\)/)
+  assert.match(source, /if \(!nativeOnly\) \{\s*try \{\s*const tuiDist/)
+})
+
 test("release versions select locked npm dist-tags", () => {
   assert.equal(releaseDistTag("0.21.0-rc.5"), "next")
   assert.equal(releaseDistTag("0.21.0"), "latest")

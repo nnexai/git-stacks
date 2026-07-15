@@ -7,6 +7,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const names = ["protocol", "client", "core", "web", "service", "cli", "tui"]
 const manifests = new Map()
 const failures = []
+const nativeOnly = process.argv.includes("--native-only")
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"))
@@ -52,23 +53,25 @@ const tui = manifests.get("tui")
 if (tui.dependencies["@opentui/core"] !== "0.4.3" || tui.dependencies["@opentui/solid"] !== "0.4.3") {
   failures.push("tui: OpenTUI packages must remain exact-pinned at 0.4.3")
 }
-try {
-  const tuiDist = join(root, "packages", "tui", "dist")
-  const launcher = await readFile(join(tuiDist, "index.js"), "utf8")
-  const preloadIndex = launcher.indexOf('await import("@opentui/solid/preload")')
-  const dashboardIndex = launcher.indexOf('await import("./run.js")')
-  if (preloadIndex < 0 || dashboardIndex < 0 || preloadIndex > dashboardIndex) {
-    failures.push("tui: launcher must await the OpenTUI preload before importing the dashboard")
-  }
-  for (const entry of await readdir(tuiDist)) {
-    if (!entry.endsWith(".js")) continue
-    const bundle = await readFile(join(tuiDist, entry), "utf8")
-    if (bundle.includes("@opentui/solid/jsx-runtime") || bundle.includes("@opentui/solid/jsx-dev-runtime")) {
-      failures.push(`tui: ${entry} was built without the required OpenTUI Solid compiler plugin`)
+if (!nativeOnly) {
+  try {
+    const tuiDist = join(root, "packages", "tui", "dist")
+    const launcher = await readFile(join(tuiDist, "index.js"), "utf8")
+    const preloadIndex = launcher.indexOf('await import("@opentui/solid/preload")')
+    const dashboardIndex = launcher.indexOf('await import("./run.js")')
+    if (preloadIndex < 0 || dashboardIndex < 0 || preloadIndex > dashboardIndex) {
+      failures.push("tui: launcher must await the OpenTUI preload before importing the dashboard")
     }
+    for (const entry of await readdir(tuiDist)) {
+      if (!entry.endsWith(".js")) continue
+      const bundle = await readFile(join(tuiDist, entry), "utf8")
+      if (bundle.includes("@opentui/solid/jsx-runtime") || bundle.includes("@opentui/solid/jsx-dev-runtime")) {
+        failures.push(`tui: ${entry} was built without the required OpenTUI Solid compiler plugin`)
+      }
+    }
+  } catch {
+    failures.push("tui: built entrypoint is unavailable for compiler validation")
   }
-} catch {
-  failures.push("tui: built entrypoint is unavailable for compiler validation")
 }
 
 function walkInternal(packageName, seen = new Set()) {
@@ -110,7 +113,7 @@ else {
   catch { failures.push(`OS credential store: native addon is unavailable for ${keyringPlatform}`) }
 }
 
-if (process.argv.includes("--native-only")) {
+if (nativeOnly) {
   if (failures.length > 0) {
     console.error("Native runtime validation failed:\n" + failures.map((failure) => `- ${failure}`).join("\n"))
     process.exit(1)
