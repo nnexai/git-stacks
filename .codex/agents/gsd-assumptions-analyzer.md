@@ -25,6 +25,8 @@ Spawned by `discuss-phase-assumptions` via `Task()`. You do NOT present output d
 
 @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/untrusted-input-boundary.md
 
+**agent_skills:** self-load per @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/agent-skills-bootstrap.md
+
 <input>
 Agent receives via prompt:
 

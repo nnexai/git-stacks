@@ -1,7 +1,7 @@
 name = "gsd-advisor-researcher"
 description = "Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode."
 sandbox_mode = "read-only"
-model = "gpt-5.4"
+model = "gpt-5.6-luna"
 model_reasoning_effort = "high"
 developer_instructions = '''
 <role>
@@ -17,6 +17,8 @@ Spawned by `discuss-phase` via `Task()`. You do NOT present output directly to t
 </role>
 
 @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/untrusted-input-boundary.md
+
+**agent_skills:** self-load per @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/agent-skills-bootstrap.md
 
 <documentation_lookup>
 @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/research-documentation-lookup.md

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"/home/linuxbrew/.linuxbrew/Cellar/node/26.5.0/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-check-update.js\""
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-check-update.js\""
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"/home/linuxbrew/.linuxbrew/Cellar/node/26.5.0/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
             "timeout": 10
           }
         ]
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"/home/linuxbrew/.linuxbrew/Cellar/node/26.5.0/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
             "timeout": 10
           }
         ]
@@ -37,7 +37,73 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"/home/linuxbrew/.linuxbrew/Cellar/node/26.5.0/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/linuxbrew/.linuxbrew/bin/node\" \"/home/nnex/dev/prj/git-stacks/.codex/hooks/gsd-context-monitor.js\"",
             "timeout": 10
           }
         ]

@@ -8,6 +8,9 @@ hooks = true
 
 # GSD Agent Configuration — managed by gsd-core installer
 
+[agents]
+max_depth = 1
+
 [agents.gsd-advisor-researcher]
 description = "Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode."
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-advisor-researcher.toml"
@@ -121,7 +124,7 @@ description = "Creates project roadmaps with phase breakdown, requirement mappin
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-roadmapper.toml"
 
 [agents.gsd-security-auditor]
-description = "Verifies threat mitigations from PLAN.md threat model exist in implemented code. Produces SECURITY.md. Spawned by $gsd-secure-phase."
+description = "Verifies threat mitigations from PLAN.md threat model exist in implemented code. Returns structured security verdict (SECURED / OPEN_THREATS / ESCALATE). Spawned by $gsd-secure-phase."
 config_file = "/home/nnex/dev/prj/git-stacks/.codex/agents/gsd-security-auditor.toml"
 
 [agents.gsd-ui-auditor]

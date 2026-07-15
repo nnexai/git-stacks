@@ -5,7 +5,7 @@ description: "Researches a single gray area decision and returns a structured co
 
 <codex_agent_role>
 role: gsd-advisor-researcher
-tools: Read, Bash, Grep, Glob, Skill, WebSearch, WebFetch, mcp__context7__*
+tools: Read, Bash, Grep, Glob, Skill, WebSearch, WebFetch, mcp__context7__*, mcp__plugin_context7_context7__*
 purpose: Researches a single gray area decision and returns a structured comparison table with rationale. Spawned by discuss-phase advisor mode.
 </codex_agent_role>
 
@@ -23,6 +23,8 @@ Spawned by `discuss-phase` via `Task()`. You do NOT present output directly to t
 </role>
 
 @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/untrusted-input-boundary.md
+
+**agent_skills:** self-load per @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/agent-skills-bootstrap.md
 
 <documentation_lookup>
 @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/research-documentation-lookup.md

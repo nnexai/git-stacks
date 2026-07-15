@@ -33,5 +33,48 @@
   "hooks": {
     "context_warnings": true,
     "workflow_guard": true
+  },
+  "models": {
+    "planning": "opus",
+    "verification": "opus",
+    "execution": "opus",
+    "research": "haiku"
+  },
+  "effort": {
+    "agent_overrides": {
+      "gsd-planner": "high",
+      "gsd-roadmapper": "high",
+      "gsd-pattern-mapper": "high",
+      "gsd-eval-planner": "high",
+      "gsd-framework-selector": "high",
+      "gsd-verifier": "high",
+      "gsd-plan-checker": "high",
+      "gsd-integration-checker": "high",
+      "gsd-nyquist-auditor": "high",
+      "gsd-ui-checker": "high",
+      "gsd-ui-auditor": "high",
+      "gsd-doc-verifier": "high",
+      "gsd-code-reviewer": "high",
+      "gsd-eval-auditor": "high",
+      "gsd-security-auditor": "high",
+      "gsd-executor": "medium",
+      "gsd-debugger": "medium",
+      "gsd-doc-writer": "medium",
+      "gsd-code-fixer": "medium",
+      "gsd-debug-session-manager": "medium",
+      "gsd-phase-researcher": "high",
+      "gsd-project-researcher": "high",
+      "gsd-research-synthesizer": "high",
+      "gsd-codebase-mapper": "high",
+      "gsd-ui-researcher": "high",
+      "gsd-advisor-researcher": "high",
+      "gsd-ai-researcher": "high",
+      "gsd-doc-classifier": "high",
+      "gsd-doc-synthesizer": "high",
+      "gsd-domain-researcher": "high",
+      "gsd-intel-updater": "high",
+      "gsd-mempalace-curator": "high",
+      "gsd-user-profiler": "high"
+    }
   }
 }

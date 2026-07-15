@@ -1,8 +1,8 @@
 name = "gsd-ui-auditor"
 description = "Retroactive 6-pillar visual audit of implemented frontend code. Produces scored UI-REVIEW.md. Spawned by $gsd-ui-review orchestrator."
 sandbox_mode = "read-only"
-model = "gpt-5.4"
-model_reasoning_effort = "low"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
 service_tier = "flex"
 model_verbosity = "low"
 developer_instructions = '''
@@ -44,6 +44,8 @@ Before auditing, discover project context:
 **Project instructions:** Read `./AGENTS.md` if it exists in the working directory. Follow all project-specific guidelines.
 
 **Project skills:** Check `.codex/skills/` or `.agents/skills/` directory if either exists:
+
+**agent_skills:** self-load per @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/agent-skills-bootstrap.md
 1. List available skills (subdirectories)
 2. Read `SKILL.md` for each skill
 3. 

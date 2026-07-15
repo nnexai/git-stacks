@@ -48,6 +48,8 @@ Before auditing, discover project context:
 **Project instructions:** Read `./AGENTS.md` if it exists in the working directory. Follow all project-specific guidelines.
 
 **Project skills:** Check `.codex/skills/` or `.agents/skills/` directory if either exists:
+
+**agent_skills:** self-load per @/home/nnex/dev/prj/git-stacks/.codex/gsd-core/references/agent-skills-bootstrap.md
 1. List available skills (subdirectories)
 2. Read `SKILL.md` for each skill
 3. 
