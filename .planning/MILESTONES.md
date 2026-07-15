@@ -1,5 +1,30 @@
 # Milestones
 
+## v0.21.0 Node Core and Secure Service Architecture (Shipped: 2026-07-15)
+
+**Phases completed:** 17 phases, 15 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Replaced the Bun-first CLI/service runtime with separately buildable Node 24 protocol, client, core, CLI, service, and web packages while keeping Bun isolated to the optional OpenTUI client.
+- Centralized workspace behavior and atomic filesystem authority in one runtime-neutral core shared by the daemonless local CLI and persistent service.
+- Shipped service-owned PTYs, signals, revisions, replay, operations, managed lifecycle, and thin web/TUI projections through one client contract.
+- Replaced transitional plaintext carriers with authenticated encrypted local and paired-remote transports, durable service/helper identities, ephemeral browser grants, bounded streams, and adversarial lifecycle controls.
+- Completed supported-host package, PTY, clean-install, lifecycle, security, and distribution gates through the hosted `Build and test` workflow for implementation commit `e878f964`.
+
+**Accepted closeout debt:**
+
+- Several Phase 116-122 directories lack standard GSD summaries and/or verification files; duplicate historical names for Phases 118 and 120 are preserved unchanged in the archive.
+- Seven pre-existing todo artifacts remain open for explicit later triage and are not counted as v0.21 delivery.
+
+**Release boundary:**
+
+- Package preparation progressed through `0.21.0-rc.6`. Milestone completion records delivered planning scope only; no final `v0.21.0` tag, push, publish, or release was requested or performed.
+
+**Archives:** [roadmap](./milestones/v0.21.0-ROADMAP.md), [requirements](./milestones/v0.21.0-REQUIREMENTS.md), [audit](./milestones/v0.21.0-MILESTONE-AUDIT.md), [phase artifacts](./milestones/v0.21.0-phases/)
+
+---
+
 ## v0.20.0 Local Web Workspace Client (Completed: 2026-07-14)
 
 **Phases completed:** 4 foundation/delivery phases represented by 104, 107.1, 107.3, and 107.4; the retained phase archive contains the final web-client and core-centralization plans.

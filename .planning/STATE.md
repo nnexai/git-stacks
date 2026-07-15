@@ -1,30 +1,30 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.21.0
-milestone_name: Node Core and Client Architecture
-current_phase: 122
-current_phase_name: Adversarial Security and Distribution Closure
-status: Secure migration and adversarial closure complete locally; hosted supported-platform evidence pending
-stopped_at: Secure local/remote cutover and local RC verification complete
-last_updated: "2026-07-15T11:37:14+02:00"
+milestone_name: "This milestone replaces the Bun-first monolith with a Node-default package architecture and completes the intended security rewrite: one local-helper/remote-authority model, implicit local trust, explicit remote pairing, encrypted remote transport, ephemeral browser identity, and thin web/TUI clients over one authoritative service implementation."
+status: Awaiting next milestone
+last_updated: "2026-07-15T21:14:21.706Z"
 last_activity: 2026-07-15
-last_activity_desc: planned the Node-default shared-core migration after validating runtime, transport, package, and filesystem risks
+last_activity_desc: Milestone v0.21.0 completed and archived
 progress:
   total_phases: 15
-  completed_phases: 12
-  total_plans: 15
-  completed_plans: 14
-  percent: 80
+  completed_phases: 8
+  total_plans: 13
+  completed_plans: 8
+  percent: 53
+stopped_at: v0.21.0 archived without creating a final tag or release
+current_phase: 122
+current_phase_name: Adversarial Security and Distribution Closure
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 122 of 122 (Adversarial Security and Distribution Closure)
-Plan: 122-PLAN.md
-Status: Secure architecture and adversarial closure complete on the local Linux x64 host; hosted Linux ARM/macOS matrix pending
-Last activity: 2026-07-15 — cut web, TUI, local helper, and paired remote authorities to authenticated encrypted carriers
+Phase: Milestone v0.21.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-15 — Milestone v0.21.0 completed and archived
 
 ## Decisions
 
@@ -52,16 +52,34 @@ Last activity: 2026-07-15 — cut web, TUI, local helper, and paired remote auth
 - Spikes 011-015: future remote identity, reconnect, framing, backpressure, and encrypted-carrier constraints to preserve.
 - Phases 116-121: secure framing, identities, pairing, signed pin rollover, encrypted carriers, remote routing, ephemeral browser grants, and local-default client cutover.
 
-## Remaining Release Evidence
+## Release Evidence
 
-- Run the checked-in hosted matrix on Linux x64/arm64 and macOS x64/arm64 before tagging.
-- Keep `node-pty` `1.2.0-beta.14` exact-pinned and review the temporary beta exception on every dependency update.
-- Do not tag, push, publish, or release without explicit approval.
+- The hosted `Build and test` workflow completed successfully for shipped implementation commit `e878f964` on 2026-07-15: https://github.com/nnexai/git-stacks/actions/runs/29442095014
+- `node-pty` `1.2.0-beta.14` remains exact-pinned; its temporary beta exception must be reviewed on every dependency update.
+- No final `v0.21.0` tag, push, publish, or release was requested or performed during milestone closeout.
 
 ## Execution Boundary
 
-The full local implementation, secure transport cutover, and package-version bump to `0.21.0-rc.1` are complete. No tag, push, publish, or release has been performed.
+The full implementation, secure transport cutover, hosted release gates, and package-version progression through `0.21.0-rc.6` are complete. Milestone closure is a planning operation only and does not imply a final `v0.21.0` release.
 
-## Session Continuity
+## Verification Overrides
 
-Run `.github/workflows/node-runtime-matrix.yml`; if it passes, Phase 112 `TERM-03`, Phase 115 `DIST-01`/`DIST-03`, Phase 122 `SEC-02`, and the milestone can close before an explicitly approved tag.
+- Phases 116-122 were delivered and shipped through release candidates, but several phase directories lack the standard GSD `SUMMARY.md` and/or `VERIFICATION.md` artifacts.
+- Duplicate historical directory names remain for Phases 118 and 120. They are preserved in the archive rather than rewritten after delivery.
+- The successful hosted workflow above closes `TERM-03`, `DIST-01`, `DIST-03`, and `SEC-02`; the missing standard phase artifacts are accepted as planning debt by explicit user choice.
+
+## Deferred Items
+
+The following pre-existing backlog items remain open for explicit triage; milestone closure does not claim they were delivered:
+
+- `2026-05-15-add-manual-workspace-commands.md`
+- `2026-05-15-add-workspace-notes.md`
+- `2026-05-15-add-workspace-stale-view.md`
+- `2026-05-15-create-workspace-from-forge-source.md`
+- `2026-05-15-improve-template-composition-understanding.md`
+- `2026-05-15-improve-tui-dashboard-experience.md`
+- `2026-07-09-plan-broader-code-quality-improvement-run.md`
+
+## Operator Next Steps
+
+- Start the next milestone with $gsd-new-milestone
