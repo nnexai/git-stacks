@@ -1,8 +1,8 @@
-# Roadmap: Node Core and Client Architecture
+# Roadmap: Node Core and Secure Service Architecture
 
 ## Milestone v0.21.0
 
-This milestone replaces the Bun-first monolith with a Node-default package architecture while preserving one domain implementation, a daemonless local CLI, service-owned interactive state, and thin web/TUI clients.
+This milestone replaces the Bun-first monolith with a Node-default package architecture and completes the intended security rewrite: one local-helper/remote-authority model, implicit local trust, explicit remote pairing, encrypted remote transport, delegated browser identity, and thin web/TUI clients over one authoritative service implementation.
 
 ## Dependency order
 
@@ -14,7 +14,14 @@ This milestone replaces the Bun-first monolith with a Node-default package archi
               -> 112 Node PTY + signals
                   -> 113 web package
                   -> 114 optional TUI package
-                      -> 115 distribution + legacy removal
+                      -> 115 Node distribution + legacy removal
+                          -> 116 secure protocol + trust contracts
+                              -> 117 identities + pairing authority
+                                  -> 118 secure carriers + target registry
+                                      -> 119 remote multiplexed parity
+                                          -> 120 browser delegation + epochs
+                                              -> 121 local-default client cutover
+                                                  -> 122 adversarial closure + release
 ```
 
 - [x] **Phase 108: Package and Runtime Foundation** — Establish the workspace graph, builds, contracts, adapters, conformance fixtures, and enforceable dependency rules without changing product behavior.
@@ -25,6 +32,13 @@ This milestone replaces the Bun-first monolith with a Node-default package archi
 - [x] **Phase 113: Thin Web Package Cutover** — Package the browser client independently and serve it from the Node service without machine-side behavior in the browser.
 - [x] **Phase 114: Optional TUI Client Package** — Isolate Bun/OpenTUI as an optional thin trusted client and remove its remaining domain/runtime authority.
 - [ ] **Phase 115: Distribution Parity and Legacy Removal** — Prove supported Linux/macOS installs, remove compatibility paths, update release assets, and prepare v0.21.0-rc.1.
+- [ ] **Phase 116: Secure Protocol and Trust Contracts** — Freeze the carrier-neutral framed protocol, canonical authentication transcripts, limits, negotiation, and threat model before security-sensitive state is implemented.
+- [ ] **Phase 117: Service Identity and Pairing Authority** — Add durable service/helper identities, certificate lifecycle, key storage, one-use pairing bundles, trust records, scopes, revocation, and pairing commands.
+- [ ] **Phase 118: Secure Carriers and Target Registry** — Add browser/Node WebTransport, local Bun-to-Node TLS 1.3, explicit remote listening, signed pin rollover, authenticated reconnect, and local/remote target management.
+- [ ] **Phase 119: Remote Session Routing and Multiplexed Streams** — Carry snapshots, operations, events, signals, and terminals over bounded multiplexed streams while retaining one authority implementation and local parity.
+- [ ] **Phase 120: Delegated Browser Identity and Helper Epochs** — Add non-exportable browser keys, scoped delegations, fresh proof, heartbeat/revocation semantics, and hostile localhost-port takeover protection.
+- [ ] **Phase 121: Local-Default Client Cutover and Compatibility** — Route web and TUI through one target-aware local endpoint, keep local use zero-configuration, expose deliberate remote selection/pairing, and remove transitional routing.
+- [ ] **Phase 122: Adversarial Security and Distribution Closure** — Prove the threat model, resource bounds, cross-platform key/certificate behavior, recovery, redaction, and release packaging before the v0.21 release candidate is approved.
 
 ## Phase details
 
@@ -160,5 +174,83 @@ Plan: [Phase 115](./phases/115-distribution-parity-and-legacy-removal/115-PLAN.m
 
 The phase sequence may use temporary import/export shims to keep the repository runnable, but a shim may only forward to the single target implementation and must carry a removal phase. No phase may create a second domain algorithm, persisted model, signal reducer, terminal policy, or client operation semantics for parity purposes.
 
+### Phase 116: Secure Protocol and Trust Contracts
+
+**Goal:** Make confidentiality, authentication, canonical framing, negotiation, and limits executable protocol/type invariants before credentials or listeners are added.
+**Requirements**: PROTO-01, PROTO-02, PROTO-03, PROTO-04
+**Depends on:** Phase 115
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] [116-PLAN.md](./phases/116-secure-protocol-and-trust-contracts/116-PLAN.md)
+- Architecture: [116-ARCHITECTURE.md](./phases/116-secure-protocol-and-trust-contracts/116-ARCHITECTURE.md)
+
+### Phase 117: Service Identity and Pairing Authority
+
+**Goal:** Implement durable identities, protected key storage, explicit remote exposure, short-lived certificates, signed rollover, and one-use pairing.
+**Requirements**: TRUST-01, TRUST-02, TRUST-03, TRUST-04
+**Depends on:** Phase 116
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] [117-PLAN.md](./phases/117-service-identity-and-pairing-authority/117-PLAN.md)
+
+### Phase 118: Secure Carriers and Target Registry
+
+**Goal:** Deliver browser/Node WebTransport, local Bun-to-Node TLS 1.3, authenticated reconnect, and one local/remote target registry.
+**Requirements**: REMOTE-01, REMOTE-02, REMOTE-03, REMOTE-04, REMOTE-05
+**Depends on:** Phase 117
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] [118-PLAN.md](./phases/118-secure-carriers-and-target-registry/118-PLAN.md)
+
+### Phase 119: Remote Session Routing and Multiplexed Streams
+
+**Goal:** Route all current service functionality and independent terminal streams through authenticated logical channels without duplicating policy.
+**Requirements**: STREAM-01, STREAM-02, STREAM-03
+**Depends on:** Phase 118
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] [119-PLAN.md](./phases/119-remote-session-routing-and-multiplexed-streams/119-PLAN.md)
+
+### Phase 120: Delegated Browser Identity and Helper Epochs
+
+**Goal:** Add fragment bootstrap, non-exportable browser identity, scoped delegation, fresh proof, and helper epoch revocation/expiry.
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04
+**Depends on:** Phase 119
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] [120-PLAN.md](./phases/120-delegated-browser-identity-and-helper-epochs/120-PLAN.md)
+
+### Phase 121: Local-Default Client Cutover and Compatibility
+
+**Goal:** Cut web and TUI to secure target-aware sessions, retain one-command local use, and delete classified legacy routes while the CLI stays local.
+**Requirements**: ROUTE-01, ROUTE-02, ROUTE-03
+**Depends on:** Phase 120
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] [121-PLAN.md](./phases/121-local-default-client-cutover-and-compatibility/121-PLAN.md)
+
+### Phase 122: Adversarial Security and Distribution Closure
+
+**Goal:** Close adversarial, resource, dependency, supported-platform, recovery, and documentation gates before release-candidate approval.
+**Requirements**: SEC-01, SEC-02, SEC-03
+**Depends on:** Phase 121
+**Plans:** 1 plan
+
+Plans:
+
+- [ ] [122-PLAN.md](./phases/122-adversarial-security-and-distribution-closure/122-PLAN.md)
+
 ---
-*Last updated: 2026-07-15 after the complete local implementation. Phases 112 and 115 remain open only for the hosted supported-platform matrix.*
+*Last updated: 2026-07-15 after validating and planning the encrypted local/remote service architecture. Existing Node migration work is complete locally; secure-service phases 116-122 remain planned.*

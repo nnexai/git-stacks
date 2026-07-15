@@ -4,9 +4,9 @@
 
 git-stacks is a local-first workspace manager for multi-repository development. One workspace definition coordinates repositories, branches, environment, commands, integrations, and developer-facing status across the CLI, terminal dashboard, and browser client.
 
-## Current Milestone: v0.21.0 Node Core and Client Architecture
+## Current Milestone: v0.21.0 Node Core and Secure Service Architecture
 
-**Goal:** Make Node.js the default runtime and distribution for the shared core, local CLI, service, and web application while isolating the optional Bun/OpenTUI dashboard as a thin service client.
+**Goal:** Make Node.js the default runtime and distribution, then use that shared service foundation to deliver one paired local/remote service model with authenticated identities, encrypted remote transport, delegated browser access, and thin web/TUI clients.
 
 **Core value:** One command takes a user from feature intent to a running development environment without manual repository setup.
 
@@ -16,7 +16,9 @@ git-stacks is a local-first workspace manager for multi-repository development. 
 - A daemonless Node.js CLI and a persistent Node.js service with one protocol and one implementation of machine behavior.
 - Separate protocol, client, core, CLI, service, web, and optional TUI packages with enforced dependency directions.
 - Atomic filesystem authority and watcher reconciliation that keeps local CLI changes and service projections coherent without refresh RPCs.
-- Node-owned PTYs, signals, SSE, and WebSockets with Linux and modern macOS distribution parity.
+- Node-owned PTYs and signals behind replaceable service carriers, with Linux and modern macOS distribution parity.
+- A local-helper/authority topology where local service use is the zero-configuration default and manually paired remote services use the same protocol and client semantics.
+- WebTransport service connections pinned to an explicitly paired stable service identity, plus a TLS 1.3 local TUI adapter, helper epochs, delegated browser keys, bounded streams, and adversarial reconnect protection.
 - A release cutover that removes obsolete Bun-first runtime paths instead of retaining parallel implementations.
 
 ## Supported Product Surfaces
@@ -48,9 +50,9 @@ The browser and optional TUI consume typed service contracts and shared client-s
 
 The target workspace contains separately buildable protocol, client, core, CLI, service, web, and TUI packages. Import and conformance gates enforce dependency direction and prohibit duplicate domain implementations.
 
-### Security continuity
+### Paired service security
 
-The existing loopback pairing, browser projection, origin validation, bounded replay, and terminal ownership contracts remain intact during the runtime migration. Protocol and terminal policy stay carrier-neutral so the validated future encrypted remote transport can be added without another core rewrite.
+Every client starts from a local git-stacks helper. In default local mode that process is also the authority and provisions trust automatically. Browser API, events, signals, and terminals use pinned WebTransport; loopback HTTP serves static assets only. The optional Bun TUI uses pinned TLS 1.3 to the local Node helper. For a remote target, the Node helper uses WebTransport and the browser may connect directly after receiving an encrypted, scope-bound delegation and signed target pin set from the helper. Remote trust is established once through explicit out-of-band pairing. Workspace, operation, signal, event, and terminal policy remain single implementations in the selected authoritative service.
 
 ## Current Constraints
 
@@ -63,7 +65,7 @@ The existing loopback pairing, browser projection, origin validation, bounded re
 
 ## Non-Goals
 
-- Remote hosting, remote CLI access, or implementation of the future encrypted remote carrier.
+- A remote CLI client; the existing CLI remains daemonless and machine-local.
 - Multi-user terminal collaboration or multiple terminal writers.
 - Durable terminal multiplexing across service restart or machine reboot.
 - New web or TUI product functionality unrelated to migration parity.

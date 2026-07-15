@@ -6,7 +6,7 @@
 - The intended default distribution uses Node 24 LTS for the local-only CLI, shared core, service, and web build; Bun remains isolated to the optional OpenTUI client.
 - Pin TypeScript 6.x during the runtime/package migration. Treat TypeScript 7 adoption as separate compatibility work.
 - xterm.js renders browser terminals while `Bun.Terminal` owns local PTYs.
-- Keep the shared service protocol independent from its carrier; TUI IPC, HTTP/SSE/WebSocket, and future WebTransport are adapters around one service core.
+- Keep the shared service protocol independent from its carrier. WebTransport is the service carrier; pinned TLS 1.3 is the optional Bun TUI's local carrier. Plaintext HTTP is static web bootstrap only.
 
 ## Node Migration Patterns
 
@@ -21,9 +21,9 @@
 
 ## Browser Terminal Patterns
 
-- Keep the HTTP/SSE workspace control plane separate from the WebSocket terminal data plane.
+- Carry browser API, events, signals, operations, and terminal streams over authenticated pinned WebTransport. Never fall back to plaintext HTTP/SSE/WebSocket for classified channels.
 - Open xterm only in a visible, dimensioned pane and stream bulk output only for the visible terminal.
-- Use same-origin loopback access, one-use pairing, a scoped HttpOnly principal, strict Host/Origin/Fetch Metadata validation, and bounded resources.
+- Use same-origin loopback static assets, a fragment-delivered one-use launch secret and certificate hash, a non-exportable browser key, exact-origin scoped delegation, strict Host/Origin/Fetch Metadata validation, and bounded resources.
 - Treat retained raw output as cursor-based delta replay; report history loss explicitly.
 - Authenticate and strip app-owned OSC signal frames in the service before terminal bytes reach browser replay or xterm.
 - Keep external terminal integration sessions independent from service-owned browser PTYs.
@@ -42,9 +42,9 @@
 - Use bounded length-prefixed framing on byte-stream transports; WebTransport stream reads and writes do not preserve application message boundaries.
 - Keep PTY ownership, cursor acknowledgement, replay retention, visibility policy, and lifecycle in the shared terminal core; adapt only writing, pressure, drain, cancellation, and close behavior per carrier.
 - Await WebTransport stream writes with at most one attachment pump per terminal. A blocked or cancelled carrier must not create an unbounded queue or implicitly terminate the service-owned PTY.
-- Prefer a pinned TLS 1.3 helper-to-remote relay as the first production remote carrier; keep direct browser WebTransport replaceable until its Bun implementation passes production gates.
-- Use Bun's Node-compatible `node:tls` boundary with a connection-specific paired CA. Do not use native `Bun.connect` for private-CA enforcement unless its wrong-CA regression test passes on the exact supported runtime.
-- Treat leaf rotation under the paired private CA as routine transport maintenance; treat CA replacement as remote service identity rotation requiring explicit authorization.
+- Use WebTransport for browser-to-service and Node-helper-to-remote-authority connections. Keep it behind the secure session interface and never load its native addon in Bun.
+- Use Bun's Node-compatible `node:tls` boundary only for the TUI-to-local-Node-helper connection. Require TLS 1.3, private-CA verification, hostname verification, and `git-stacks/2` ALPN; do not use native `Bun.connect` unless its wrong-CA regression passes.
+- Rotate short-lived WebTransport certificates through stable-service-identity-signed endpoint/pin sets and overlapping listeners. Treat stable identity replacement as a trust reset requiring explicit re-pairing.
 - Prefer an operating-system credential store for persistent helper keys, with an atomic mode `0600` file as an explicit portable fallback rather than a protocol dependency.
 - Require exact protocol framing, replay protection, bounded streams, backpressure, idle expiry, and revocation regardless of transport.
 - Do not adopt a native transport addon until Linux and modern macOS runtime, active-session shutdown, reconnect, rotation, vulnerability, maintenance, and license-notice gates pass.

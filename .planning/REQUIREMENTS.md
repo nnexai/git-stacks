@@ -1,4 +1,4 @@
-# Requirements: v0.21.0 Node Core and Client Architecture
+# Requirements: v0.21.0 Node Core and Secure Service Architecture
 
 **Defined:** 2026-07-15
 **Core value:** One command creates a usable multi-repository development workspace while all product surfaces share one machine-side implementation.
@@ -37,7 +37,7 @@
 - [x] **SVC-01:** The Node service preserves the existing authenticated HTTP API, browser-safe and trusted projections, operation registry, event cursors, replay gaps, heartbeat behavior, quotas, and idle lifecycle.
 - [x] **SVC-02:** Node `http` plus exact-pinned `ws` replaces Bun transport without changing browser/TUI protocol semantics; WebSocket compression remains disabled unless separately benchmarked.
 - [x] **SVC-03:** Managed startup uses race-safe discovery and ownership, removes stale startup artifacts safely, and shuts down after the final managed client without leaving sockets, timers, watchers, or child processes.
-- [x] **SVC-04:** Protocol and client packages contain no concrete service launcher or runtime implementation, and carriers remain replaceable for future encrypted remote access.
+- [x] **SVC-04:** Protocol and client packages contain no concrete service launcher or runtime implementation, and carriers remain replaceable for encrypted local/remote access.
 - [x] **SVC-05:** The service projects external CLI/file changes through normal revisions and SSE events without a special CLI refresh path.
 
 ## Node Terminal and Signal Runtime
@@ -64,18 +64,55 @@
 - [x] **DIST-04:** Final cutover deletes obsolete Bun CLI/service adapters, duplicate source paths, temporary compatibility shims, and stale documentation in the same milestone.
 - [x] **DIST-05:** The release notes disclose the Node 24 minimum, optional Bun TUI, exact `node-pty` beta exception, platform matrix, migration behavior, and rollback boundary before v0.21.0-rc.1 is tagged.
 
+## Secure Protocol and Trust
+
+- [ ] **PROTO-01:** The protocol package defines a versioned, carrier-neutral binary frame envelope with canonical control payloads, strict pre-allocation length limits, stream identifiers, monotonic sequence/cursor fields, and deterministic rejection of malformed, unknown, or non-canonical input.
+- [ ] **PROTO-02:** Request/response, snapshot, operation, event, signal, terminal-control, and terminal-output channels multiplex without moving domain, replay, terminal, or authorization policy into a carrier.
+- [ ] **PROTO-03:** Protocol and ALPN negotiation fail closed on unsupported versions, missing mandatory capabilities, downgrade attempts, or cross-protocol input.
+- [ ] **PROTO-04:** Every channel that can carry workspace data, operations, events, signals, terminal bytes, credentials, or secrets requires an authenticated encrypted carrier; plaintext HTTP is limited to immutable static assets and non-sensitive readiness and has no classified fallback.
+- [ ] **TRUST-01:** Every service authority and client-side helper has a durable P-256 signing identity independent of rotating transport certificates. Private keys use an OS credential store when available and a permission-restricted atomic fallback otherwise.
+- [ ] **TRUST-02:** Local authority selection and trust provisioning are automatic and non-interactive, while every remote authority requires an explicit one-use pairing bundle and out-of-band service fingerprint verification.
+- [ ] **TRUST-03:** Pairing records bind service identity, endpoint, signed WebTransport certificate-hash set, helper identity, scopes, protocol version, and creation metadata without placing bearer or private-key material in query strings, process arguments, logs, workspace YAML, or exportable browser storage.
+- [ ] **TRUST-04:** Short-lived WebTransport certificates rotate through stable-identity-signed pin sets and overlapping listeners without re-pairing; stable identity replacement, helper replacement, scope expansion, and trust reset require explicit security-sensitive actions.
+
+## Encrypted Remote Transport and Lifecycle
+
+- [ ] **REMOTE-01:** Remote listening is disabled by default and can bind only an explicitly configured interface and port; enabling `git-stacks web` never exposes the service to the LAN.
+- [ ] **REMOTE-02:** Browser and Node-helper service connections require WebTransport with a currently valid stable-identity-signed ECDSA P-256 certificate hash and application authorization; wrong, expired, unsigned, or downgraded pins and plaintext attempts fail before classified data is accepted.
+- [ ] **REMOTE-03:** The helper authenticates with a fresh one-use challenge signed by its paired durable key and bound to the service audience, selected transport identity, protocol version, connection nonce, and helper-session epoch.
+- [ ] **REMOTE-04:** A target registry and connector pool represent the implicit local authority and manually paired remote authorities without storing workspace state or duplicating service policy.
+- [ ] **REMOTE-05:** Reconnect uses bounded jittered backoff, one active authenticated connection per target/helper epoch, replay-safe monotonic control sequences, explicit cancellation, and deterministic shutdown without leaked sockets, timers, streams, or credentials.
+
+## Delegation, Epochs, and Client Routing
+
+- [ ] **AUTH-01:** Each helper process registers a random epoch with the remote authority, maintains it with authenticated heartbeats, revokes it before releasing the localhost listener on clean shutdown, and permits irreversible expiry after bounded abrupt-loss grace.
+- [ ] **AUTH-02:** The browser stores a non-exportable P-256 key in origin-scoped IndexedDB and receives a short-lived helper-signed delegation bound to service audience, exact localhost origin, browser key, scopes, helper epoch, issued time, and expiry.
+- [ ] **AUTH-03:** Every browser attachment proves key possession against a fresh one-use service challenge; replayed proofs, altered scopes, expired delegations, inactive epochs, wrong origins, and old-port takeover attempts fail closed.
+- [ ] **AUTH-04:** The Bun TUI connects only to the local Node helper through private-CA-verified TLS 1.3 with hostname verification and `git-stacks/2` ALPN; the helper uses the same WebTransport remote connector as the browser/helper architecture.
+- [ ] **ROUTE-01:** Web and TUI clients use one local client endpoint and select a service target; absent selection resolves to the implicit local authority with no manual pairing or remote dependency.
+- [ ] **ROUTE-02:** For a remote target, the helper and delegated browser use authenticated secure sessions while the remote authority independently validates helper/browser identity, epoch, scopes, stream ownership, quotas, and terminal ownership.
+- [ ] **ROUTE-03:** The existing CLI remains local-only and daemonless; remote access is confined to explicit service/web/TUI client surfaces until a separately named remote CLI client is designed.
+
+## Remote Stream Parity and Security Closure
+
+- [ ] **STREAM-01:** Remote snapshots, operations, events, dismissals, signals, and replay gaps preserve the same observable contracts and shared reducers as local mode.
+- [ ] **STREAM-02:** Remote terminal attachments preserve PTY ownership, 1 MiB retention, 64 KiB chunks, visible-only bulk output, cursor acknowledgement, replay/reset, title, resize, cancellation, quotas, pressure, process-tree cleanup, and exact-surface signal behavior.
+- [ ] **STREAM-03:** Multiplexing enforces per-frame, per-stream, per-principal, per-target, and global limits so a slow or hostile stream cannot cause unbounded memory, starvation, or cross-stream head-of-line blocking.
+- [ ] **SEC-01:** Adversarial tests cover wire recording, MITM/wrong authority, pairing replay, helper impersonation, challenge replay, epoch takeover, localhost port takeover, malformed/oversized frames, slow readers, disconnect races, log redaction, and authorization enumeration.
+- [ ] **SEC-02:** Linux x64/arm64 and modern macOS x64/arm64 release gates cover certificate generation/rotation, credential-store behavior and fallback permissions, remote reconnect, terminal soak, clean shutdown, dependency licenses, and runtime vulnerabilities.
+- [ ] **SEC-03:** Documentation explains the network and same-user threat boundaries, manual pairing ceremony, recovery/rotation/revocation, local-default behavior, remote exposure controls, and an emergency return-to-local procedure before release.
+
 ## Future Requirements
 
 - A dedicated local/remote CLI client over the service protocol.
-- Encrypted helper-to-remote transport and manually paired remote services.
 - Durable terminal multiplexing across service restarts.
 - Additional web feature completeness after the runtime/package foundation ships.
 
 ## Out of Scope
 
-- Remote server delivery or public/LAN hosting in v0.21.0.
+- Public Internet hosting, relay services, NAT traversal, or automatic LAN discovery.
+- Multi-user authorities, shared tenancy, role administration, or collaborative terminal writing.
 - New product features unrelated to migration parity.
-- Multi-user terminal writing.
 - TypeScript 7 migration.
 - Reintroduction of the retired native client.
 - Keeping Bun and Node implementations of the same CLI or service behavior after cutover.
@@ -92,6 +129,13 @@
 | WEB-01..02, CLIENT-01 | 113 | Complete |
 | TUI-01..02 | 114 | Complete |
 | DIST-01..05 | 115 | Local release checks complete; hosted platform matrix pending |
+| PROTO-01..04 | 116 | Planned |
+| TRUST-01..04 | 117 | Planned |
+| REMOTE-01..05 | 118 | Planned |
+| STREAM-01..03 | 119 | Planned |
+| AUTH-01..04 | 120 | Planned |
+| ROUTE-01..03 | 121 | Planned |
+| SEC-01..03 | 122 | Planned |
 
 ---
-*Last updated: 2026-07-15 after the Node package cutover and local verification; hosted Linux ARM and macOS matrix proof remains pending.*
+*Last updated: 2026-07-15 after extending the Node foundation into the paired local/remote secure service architecture.*

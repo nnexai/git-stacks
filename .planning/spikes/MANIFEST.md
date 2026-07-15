@@ -24,6 +24,8 @@ The current migration theme additionally evaluates a Node-default distribution a
 - Treat persisted workspace/config files as authoritative; service watchers reconcile external atomic changes and emit normal events.
 - Avoid global locking. Add narrow concurrency protection only for demonstrated read-modify-write races or multi-step semantic conflicts.
 - Do not require compilers on supported Linux x64/arm64 or modern macOS x64/arm64 installations.
+- Encrypt every protocol channel that can carry workspace data, operations, events, signals, terminal bytes, credentials, or secrets; plaintext loopback HTTP is static bootstrap only.
+- Keep local use non-interactive, require one explicit out-of-band ceremony for each remote authority, and make subsequent remote reconnect equivalent to local target selection.
 
 ## Spikes
 
@@ -42,5 +44,6 @@ The current migration theme additionally evaluates a Node-default distribution a
 | 017 | node-service-transport | standard | Node HTTP, SSE, WebSocket, backpressure, replay, auth, and shutdown parity | VALIDATED | node, service, http, sse, websocket, backpressure, dependencies |
 | 018 | node-core-packages | standard | Runtime-neutral core execution and enforceable CLI/service/web/TUI/protocol package boundaries | VALIDATED | node, core, packages, architecture, esm, dependencies |
 | 019 | filesystem-coherency | standard | Daemonless CLI writes, service watcher reconciliation, atomic replacement, and narrow concurrency boundaries | PARTIAL | node, filesystem, atomic-write, watcher, concurrency, macos, linux |
+| 020 | secure-service-transport-convergence | vertical | One encrypted browser/TUI/local/remote topology, shared framing, pairing, rotation, wire secrecy, Node 24, and resource cleanup | VALIDATED | security, webtransport, tls, browser, tui, remote, node24 |
 
 Unsupported desktop-renderer experiments were removed from the active branch and remain available through repository history and the archive tag recorded in `.planning/notes/native-client-retirement.md`.
