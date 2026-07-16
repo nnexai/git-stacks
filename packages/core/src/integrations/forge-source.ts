@@ -187,7 +187,23 @@ export function parseReviewedForgeSourceUrl(
   return { ok: false, error: "unsupported_host" }
 }
 
-export function parseForgeSourceUrl(raw: string): ForgeSourceParseResult {
+export function parseForgeSourceUrl(
+  raw: string,
+  configuredHosts: ReviewedForgeHostConfig = {},
+): ForgeSourceParseResult {
+  const reviewed = parseReviewedForgeSourceUrl(raw, configuredHosts)
+  if (reviewed.ok) {
+    return {
+      ok: true,
+      forge: reviewed.provider,
+      changeType: reviewed.provider === "gitlab" ? "mr" : "pr",
+      changeNumber: reviewed.change_number,
+      baseUrl: reviewed.base_url,
+      repoPath: reviewed.target_repository_path,
+      webUrl: reviewed.canonical_url,
+    }
+  }
+
   let url: URL
   try {
     url = new URL(raw)

@@ -115,7 +115,7 @@ export type TrustedForgeChange = {
     ref: string
     sha: string
   }
-  target: { repository: ForgeRepositoryIdentity; branch: string; sha: string }
+  target: { repository: ForgeRepositoryIdentity; branch: string; sha?: string }
   cross_repository: boolean
 }
 
@@ -207,12 +207,14 @@ function registryConfidence(
 ): ForgeSourceMatchConfidence | null {
   const metadata = entry.forge_metadata
   const targetPath = change.target.repository.path.toLowerCase()
-  if (metadata?.forge === change.provider && metadata.repo_path?.toLowerCase() === targetPath) {
+  if (metadata) {
+    if (metadata.forge !== change.provider || metadata.repo_path?.toLowerCase() !== targetPath) return null
     const metadataHost = canonicalHost(metadata.base_url)
     if (metadataHost === change.host) return "explicit-metadata"
     const integration = configuredIntegration(input, change.provider)
     if (!metadata.base_url && integration.enabled && integration.host === change.host) return "integration-base-url"
     if (!metadata.base_url && change.host === `${change.provider}.com`) return "integration-base-url"
+    return null
   }
 
   const integration = configuredIntegration(input, change.provider)
@@ -273,11 +275,14 @@ export function matchForgeSourceRepository(
     .filter((repo) => repo.repo === repositoryMatch.entry.name)
     .map((repo) => ({ template, repo })))
   if (matchingTemplateRepos.length === 0) return { ok: false, error: "template_repo_missing" }
-  if (matchingTemplateRepos.some(({ repo }) => repositoryMatch.entry.is_dir || (repo.mode ?? "worktree") !== "worktree")) {
+  if (repositoryMatch.entry.is_dir) {
     return { ok: false, error: "not_worktree_mode" }
   }
 
-  const candidates = matchingTemplateRepos.map(({ template, repo }) => ({
+  const eligibleTemplateRepos = matchingTemplateRepos.filter(({ repo }) => (repo.mode ?? "worktree") === "worktree")
+  if (eligibleTemplateRepos.length === 0) return { ok: false, error: "not_worktree_mode" }
+
+  const candidates = eligibleTemplateRepos.map(({ template, repo }) => ({
     registry_name: repositoryMatch.entry.name,
     template_name: template.name,
     template_repository_name: repo.repo,
@@ -326,7 +331,10 @@ const gitlabMrPayload = z.object({
   source_project_id: z.number().int().positive().nullable(),
   target_branch: z.string().min(1),
   target_project_id: z.number().int().positive(),
-  diff_refs: z.object({ head_sha: fullSha, base_sha: fullSha }).nullable().optional(),
+  diff_refs: z.object({
+    head_sha: fullSha.nullish(),
+    base_sha: fullSha.nullish(),
+  }).nullable().optional(),
 })
 const gitlabProjectPayload = z.object({
   id: z.number().int().positive(),
@@ -485,10 +493,10 @@ async function resolveGitLab(
   if (!mrDecoded.success) return failure("provider_response_invalid", "gitlab")
   const mr = mrDecoded.data
   if (mr.state !== "opened") return failure("change_closed", "gitlab")
-  if (!mr.source_project_id || mr.iid !== parsed.change_number || !mr.diff_refs) {
+  if (!mr.source_project_id || mr.iid !== parsed.change_number) {
     return failure("provider_response_invalid", "gitlab")
   }
-  if (mr.diff_refs.head_sha !== mr.sha || !canonicalChangeIdentity(mr.web_url, parsed.canonical_url)) {
+  if ((mr.diff_refs?.head_sha && mr.diff_refs.head_sha !== mr.sha) || !canonicalChangeIdentity(mr.web_url, parsed.canonical_url)) {
     return failure("provider_response_invalid", "gitlab")
   }
 
@@ -526,7 +534,7 @@ async function resolveGitLab(
       target: {
         repository: { host: parsed.host, path: parsed.target_repository_path, web_url: parsed.base_url + "/" + parsed.target_repository_path },
         branch: mr.target_branch,
-        sha: mr.diff_refs.base_sha,
+        ...(mr.diff_refs?.base_sha ? { sha: mr.diff_refs.base_sha } : {}),
       },
       cross_repository: mr.source_project_id !== mr.target_project_id,
     },

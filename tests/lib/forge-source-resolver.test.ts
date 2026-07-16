@@ -124,11 +124,11 @@ describe("provider-backed forge resolver", () => {
     expect(scripted.calls.flatMap((call) => call.argv)).not.toContain("mr")
   })
 
-  test("accepts an open GitLab MR before diff refs are populated and trusts top-level head SHA", async () => {
+  test.each([undefined, null, {}])("accepts an open GitLab MR before diff refs are populated (%j) and trusts top-level head SHA", async (diff_refs) => {
     const scripted = runner((request) => ({
       exit_code: 0,
       stdout: request.argv.at(-1)?.includes("merge_requests")
-        ? gitlabMrJson({ diff_refs: undefined })
+        ? gitlabMrJson({ diff_refs })
         : gitlabProjectJson,
     }))
     const result = await resolveForgeChangeSource({

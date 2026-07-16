@@ -277,7 +277,13 @@ export function formatWorkspaceSourceError(failure: WorkspaceSourceFailure): str
 }
 
 export async function prepareWorkspaceSource(inputs: PrepareWorkspaceSourceInputs): Promise<PreparedWorkspaceSource | WorkspaceSourceFailure> {
-  const parsed = parseForgeSourceUrl(inputs.sourceUrl)
+  const configuredHosts = inputs.registry.reduce<{ github: string[]; gitlab: string[] }>((hosts, entry) => {
+    const forge = entry.forge_metadata?.forge
+    const baseUrl = entry.forge_metadata?.base_url
+    if (baseUrl && (forge === "github" || forge === "gitlab")) hosts[forge].push(baseUrl)
+    return hosts
+  }, { github: [], gitlab: [] })
+  const parsed = parseForgeSourceUrl(inputs.sourceUrl, configuredHosts)
   if (!parsed.ok) {
     return {
       ok: false,
@@ -290,12 +296,6 @@ export async function prepareWorkspaceSource(inputs: PrepareWorkspaceSourceInput
   if (!match.ok) return match
 
   if (parsed.forge !== "gitea") {
-    const configuredHosts = inputs.registry.reduce<{ github: string[]; gitlab: string[] }>((hosts, entry) => {
-      const forge = entry.forge_metadata?.forge
-      const baseUrl = entry.forge_metadata?.base_url
-      if (baseUrl && (forge === "github" || forge === "gitlab")) hosts[forge].push(baseUrl)
-      return hosts
-    }, { github: [], gitlab: [] })
     const resolved = await _source.resolveForgeChangeSource({
       url: inputs.sourceUrl,
       configured_hosts: configuredHosts,
