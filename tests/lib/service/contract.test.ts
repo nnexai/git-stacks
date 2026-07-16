@@ -172,6 +172,19 @@ describe("service v1 contract", () => {
     expect(() => TerminalLaunchResolutionSchema.parse(commandResolution), "PHASE124_RED terminal steps SSH rotation contract").not.toThrow()
   })
 
+  test("accepts a PATH at the dynamic 16KiB boundary in terminal launch environments", () => {
+    const resolution = (path: string) => ({
+      resolved: true,
+      revision: "7",
+      launch: {
+        steps: [{ bucket: "main", scope: "workspace", command: "run", cwd: "/work", environment: { PATH: path } }],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: [],
+      },
+    })
+    expect(() => TerminalLaunchResolutionSchema.parse(resolution("p".repeat(16 * 1024)))).not.toThrow()
+    expect(() => TerminalLaunchResolutionSchema.parse(resolution("p".repeat(16 * 1024 + 1)))).toThrow()
+  })
+
   test("validates activity states and strict signal identity nesting", () => {
     for (const state of ["working", "waiting", "completed", "failed", "idle"] as const) {
       expect(SignalSchema.parse({ version: 1, kind: "activity", id: `sig_0123456789abcde${state.length}`, state, workspace_id: "018f47f4-5ab1-7c2d-8e90-123456789abc", repository_id: "018f47f4-5ab1-7c2d-8e90-abcdef012345", surface_id: "018f47f4-5ab1-7c2d-8e90-abcdef012346", session_id: "session-a", source: "claude", title: state, occurred_at: "2026-07-11T00:00:00.000Z" }).state).toBe(state)

@@ -141,8 +141,21 @@ export const RepositorySnapshotSchema = z.strictObject({
 export type RepositorySnapshot = z.infer<typeof RepositorySnapshotSchema>
 const LaunchEnvironmentSchema = z.record(
   z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
-  utf8BoundedString(CLIENT_MODEL_LIMITS.string_bytes.launch_environment_value),
-).refine((environment) => Object.keys(environment).length <= 128, { message: "Launch environment exceeds 128 entries" })
+  z.string(),
+).superRefine((environment, context) => {
+  if (Object.keys(environment).length > 128) {
+    context.addIssue({ code: "custom", message: "Launch environment exceeds 128 entries" })
+  }
+  for (const [key, value] of Object.entries(environment)) {
+    const maximum = key === "PATH"
+      ? DYNAMIC_ENVIRONMENT_LIMITS.PATH
+      : CLIENT_MODEL_LIMITS.string_bytes.launch_environment_value
+    const parsed = utf8BoundedString(maximum).safeParse(value)
+    if (!parsed.success) {
+      context.addIssue({ code: "custom", path: [key], message: parsed.error.issues[0]?.message ?? "Invalid launch environment value" })
+    }
+  }
+})
 export const LaunchStepSchema = z.strictObject({
   bucket: z.enum(["pre", "main", "post"]),
   scope: z.enum(["workspace", "repo"]),
