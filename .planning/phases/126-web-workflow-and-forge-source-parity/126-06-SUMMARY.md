@@ -124,9 +124,19 @@ status: complete
 
 None.
 
+## Reviewed Repair Evidence
+
+A subsequent independent review found authority and recovery gaps in the original implementation. The repair was developed RED/GREEN on `codex/phase126-06` without claiming review closure:
+
+- `6ad1dcf1` adds failing regressions for fail-closed inventory states, shared action policy wiring, adapted legacy-only rows, submit-unknown Back, note rejection handling, and reviewed-create recovery.
+- `5a648e3d` routes canonical menu invocations through `createWorkspaceActionRegistry`, restores Merge confirmation, removes the local menu latch, preserves Edit/Clean/Run/Issue/Commands rows, makes Pin/Unpin shortcuts unique, handles note mutation rejections, allows submit-unknown Back, and delegates reviewed terminal failures to `forgeReview.observeOperation`.
+- Focused OpenTUI suites pass: WorkspaceParity 13/13, ForgeSourceReview 5/5, and ActionMenu 17/17.
+- TUI, client, and service package typechecks pass; TUI build, dependency cycle gate, and package architecture gate pass.
+- `npm run test:tui` was attempted. Component suites passed, but pre-existing App integration fixtures that intentionally throw from `fetchWorkspaceActionInventory` now fail because the repaired UI correctly fails closed instead of exposing the old legacy menu. Those fixtures must be migrated to authoritative inventory mocks before the full suite is green.
+
 ## Next Phase Readiness
 
-Plan 126-06 is complete and ready for milestone integration and manual verification.
+The reviewed findings are repaired and focused gates pass. Do not merge until the stale full-suite App fixtures are migrated and the branch receives an independent re-review.
 
 ---
 *Phase: 126-web-workflow-and-forge-source-parity*
