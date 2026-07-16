@@ -90,3 +90,19 @@ Fifth-pass focused verification:
 - `npm run typecheck -w @git-stacks/service` — pass.
 - `npm run test:deps` — package architecture pass.
 - `git diff --check` — pass.
+
+## Sixth adversarial repair pass
+
+Fish PTY initialization now cleans its private value files even when PTY allocation itself throws:
+
+- Interactive initialized launches enter the initialization-root `finally` before invoking the PTY factory. Allocation failure therefore removes the mode-0700 root and all mode-0600, NUL-terminated value files before the capability error is returned.
+- Command-step PTYs use the same allocation boundary for every step. A spawn exception still flows through the logical terminal's existing initialization diagnostic and exit-126 behavior, but no raw overlay value or temporary root remains.
+- The existing inner termination path is unchanged. If a spawned process group cannot be proven gone, the command terminal still retains its active process and refuses to fabricate logical completion; initialization assets are cleaned independently of that retryable process ownership.
+- Both regressions select fish, force the PTY factory to throw, locate the raw sentinel in the private value file at the allocation boundary, and then assert that both the captured root and any sentinel-bearing PTY root are absent after settlement.
+
+Sixth-pass focused verification:
+
+- `npx vitest run tests/service/web-terminal.test.ts tests/lib/user-shell-adapter.test.ts tests/commands/user-shell-host-fixture.test.ts` — 41 passed, 1 explicit local zsh capability skip.
+- `npm run typecheck -w @git-stacks/service` — pass.
+- `npm run test:deps` — package architecture pass.
+- `git diff --check` — pass.
