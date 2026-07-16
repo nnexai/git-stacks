@@ -7,7 +7,6 @@ import {
   ForgeReviewTokenSchema,
   ForgeSourceIdentitySchema,
   OperationIdSchema,
-  OperationCancellationViewSchema,
   RevisionSchema,
   SignalIdSchema,
   TimestampSchema,
@@ -73,7 +72,7 @@ export const WebWorkspaceActionDisabledReasonSchema = z.enum([
 export type WebWorkspaceActionDisabledReason = z.infer<typeof WebWorkspaceActionDisabledReasonSchema>
 
 function containsHostPath(value: string): boolean {
-  return /(?:^|[\s"'])(?:\/(?:home|Users|tmp|var|etc|opt|private)\/|[A-Za-z]:\\|file:\/\/)|\\(?:Users|home|tmp)\\/u.test(value)
+  return /(?:^|[\s"'([{])(?:file:\/\/|~\/|\/(?!\/)|[A-Za-z]:[\\/]|\\{1,2})[^\s"'<>)]*/u.test(value)
 }
 
 const SafeBrowserMessageSchema = utf8BoundedString(500, 1).refine((value) => !containsHostPath(value), {
@@ -109,7 +108,7 @@ export const WebWorkspaceActionSchema = z.strictObject({
   availability: WebWorkspaceActionAvailabilitySchema,
   confirmation: WebWorkspaceActionConfirmationSchema,
   pending_operation_id: OperationIdSchema.optional(),
-}).superRefine(({ action_id, subject, confirmation }, context) => {
+}).superRefine(({ action_id, subject, availability, confirmation, pending_operation_id }, context) => {
   if ((action_id === "operation.cancel") !== (subject.kind === "operation")) {
     context.addIssue({ code: "custom", path: ["subject"], message: "Only operation.cancel uses an operation subject" })
   }
@@ -121,16 +120,43 @@ export const WebWorkspaceActionSchema = z.strictObject({
   if (confirmation !== requiredConfirmation) {
     context.addIssue({ code: "custom", path: ["confirmation"], message: `Expected ${requiredConfirmation} confirmation` })
   }
+  const operationPending = !availability.available && availability.reason === "operation_in_progress"
+  if ((pending_operation_id !== undefined) !== operationPending) {
+    context.addIssue({
+      code: "custom",
+      path: ["pending_operation_id"],
+      message: "Pending operation identity is required exactly when an operation blocks the action",
+    })
+  }
 })
 export type WebWorkspaceAction = z.infer<typeof WebWorkspaceActionSchema>
+const WEB_WORKSPACE_BASE_ACTION_IDS = WEB_WORKSPACE_ACTION_IDS.filter((actionId) => actionId !== "operation.cancel")
 export const WebWorkspaceActionInventorySchema = z.array(WebWorkspaceActionSchema)
-  .length(WEB_WORKSPACE_ACTION_IDS.length)
+  .min(WEB_WORKSPACE_BASE_ACTION_IDS.length)
+  .max(WEB_WORKSPACE_ACTION_IDS.length)
   .superRefine((rows, context) => {
     const ids = new Set(rows.map(({ action_id }) => action_id))
-    for (const actionId of WEB_WORKSPACE_ACTION_IDS) {
+    for (const actionId of WEB_WORKSPACE_BASE_ACTION_IDS) {
       if (!ids.has(actionId)) context.addIssue({ code: "custom", message: `Missing workspace action ${actionId}` })
     }
     if (ids.size !== rows.length) context.addIssue({ code: "custom", message: "Workspace actions must be unique" })
+    const cancel = rows.find(({ action_id }) => action_id === "operation.cancel")
+    if (cancel) {
+      const cancelSubject = cancel.subject.kind === "operation" ? cancel.subject : undefined
+      const matchingPendingAction = cancelSubject !== undefined && rows.some((row) => (
+        row.action_id !== "operation.cancel"
+        && row.subject.kind === "workspace"
+        && row.subject.workspace_id === cancelSubject.workspace_id
+        && row.pending_operation_id === cancelSubject.operation_id
+      ))
+      if (!cancel.availability.available || !matchingPendingAction) {
+        context.addIssue({
+          code: "custom",
+          path: [rows.indexOf(cancel)],
+          message: "Cancel is present only for a matching pending cancellable operation",
+        })
+      }
+    }
   })
 export type WebWorkspaceActionInventory = z.infer<typeof WebWorkspaceActionInventorySchema>
 
@@ -336,47 +362,76 @@ export const WebOperationSchema = z.strictObject({
 })
 export type WebOperation = z.infer<typeof WebOperationSchema>
 
-export const WebOperationSummarySchema = z.strictObject({
+const WebOperationSummaryIdentitySchema = {
   operation_id: OperationIdSchema,
   action_id: WebWorkspaceActionIdSchema.exclude(["operation.cancel"]),
   workspace_id: EntityIdSchema,
   workspace_name: utf8BoundedString(96, 1),
-  state: z.enum(["accepted", "running", "succeeded", "failed", "cancelled"]),
   accepted_at: TimestampSchema,
-  started_at: TimestampSchema.optional(),
-  finished_at: TimestampSchema.optional(),
-  progress: z.strictObject({
-    stage: z.enum(["accepted", "preparing", "executing", "rolling_back", "completed"]),
-    message: SafeBrowserMessageSchema.optional(),
-    completed: z.number().int().nonnegative().optional(),
-    total: z.number().int().positive().optional(),
-  }).refine((progress) => (progress.completed === undefined) === (progress.total === undefined), {
-    message: "completed and total must be provided together",
-  }).optional(),
-  cancellation: OperationCancellationViewSchema.optional(),
-  result: z.strictObject({
-    workspace_name: utf8BoundedString(96, 1).optional(),
-    revision: RevisionSchema.optional(),
-    snapshot_changed: z.boolean().optional(),
-    terminals_stopped: z.boolean().optional(),
-  }).optional(),
-  error: z.strictObject({
-    code: utf8BoundedString(96, 1),
-    message: SafeBrowserMessageSchema,
-    retryable: z.boolean(),
-  }).optional(),
-}).superRefine(({ action_id, state, started_at, finished_at, progress, cancellation, result, error }, context) => {
-  const terminal = state === "succeeded" || state === "failed" || state === "cancelled"
-  if (state === "running" && (!started_at || !progress || !cancellation)) {
-    context.addIssue({ code: "custom", message: "Running operations require start, progress, and cancellation state" })
-  }
-  if (terminal && !finished_at) context.addIssue({ code: "custom", path: ["finished_at"], message: "Terminal operations require finished_at" })
-  if (!terminal && finished_at) context.addIssue({ code: "custom", path: ["finished_at"], message: "Non-terminal operations cannot be finished" })
-  if (terminal && cancellation && (cancellation.state !== "unavailable" || cancellation.reason !== "finished")) {
-    context.addIssue({ code: "custom", path: ["cancellation"], message: "Terminal operations may only report finished cancellation" })
-  }
-  if (state === "succeeded" && !result) context.addIssue({ code: "custom", path: ["result"], message: "Successful operations require a bounded result" })
-  if ((state === "failed" || state === "cancelled") && !error) context.addIssue({ code: "custom", path: ["error"], message: "Failed operations require a bounded error" })
+}
+const WebPendingCancellationSchema = z.discriminatedUnion("state", [
+  z.strictObject({ state: z.literal("available") }),
+  z.strictObject({ state: z.literal("requested") }),
+  z.strictObject({ state: z.literal("unavailable"), reason: z.enum(["committed", "not-cancellable"]) }),
+])
+const WebFinishedCancellationSchema = z.strictObject({ state: z.literal("unavailable"), reason: z.literal("finished") })
+const WebOperationProgressSummarySchema = z.strictObject({
+  stage: z.enum(["preparing", "executing", "rolling_back"]),
+  message: SafeBrowserMessageSchema.optional(),
+  completed: z.number().int().nonnegative().optional(),
+  total: z.number().int().positive().optional(),
+}).refine((progress) => (progress.completed === undefined) === (progress.total === undefined), {
+  message: "completed and total must be provided together",
+})
+const WebOperationResultSummarySchema = z.strictObject({
+  workspace_name: utf8BoundedString(96, 1).optional(),
+  revision: RevisionSchema.optional(),
+  snapshot_changed: z.boolean().optional(),
+  terminals_stopped: z.boolean().optional(),
+})
+const WebOperationErrorSummarySchema = z.strictObject({
+  code: utf8BoundedString(96, 1),
+  message: SafeBrowserMessageSchema,
+  retryable: z.boolean(),
+})
+export const WebOperationSummarySchema = z.discriminatedUnion("state", [
+  z.strictObject({
+    ...WebOperationSummaryIdentitySchema,
+    state: z.literal("accepted"),
+    cancellation: WebPendingCancellationSchema.optional(),
+  }),
+  z.strictObject({
+    ...WebOperationSummaryIdentitySchema,
+    state: z.literal("running"),
+    started_at: TimestampSchema,
+    progress: WebOperationProgressSummarySchema,
+    cancellation: WebPendingCancellationSchema,
+  }),
+  z.strictObject({
+    ...WebOperationSummaryIdentitySchema,
+    state: z.literal("succeeded"),
+    started_at: TimestampSchema,
+    finished_at: TimestampSchema,
+    cancellation: WebFinishedCancellationSchema,
+    result: WebOperationResultSummarySchema,
+  }),
+  z.strictObject({
+    ...WebOperationSummaryIdentitySchema,
+    state: z.literal("failed"),
+    started_at: TimestampSchema.optional(),
+    finished_at: TimestampSchema,
+    cancellation: WebFinishedCancellationSchema,
+    error: WebOperationErrorSummarySchema,
+  }),
+  z.strictObject({
+    ...WebOperationSummaryIdentitySchema,
+    state: z.literal("cancelled"),
+    started_at: TimestampSchema.optional(),
+    finished_at: TimestampSchema,
+    cancellation: WebFinishedCancellationSchema,
+    error: WebOperationErrorSummarySchema,
+  }),
+]).superRefine(({ action_id, cancellation }, context) => {
   if ((action_id === "workspace.notes.list" || action_id === "workspace.files.inspect") && cancellation?.state === "available") {
     context.addIssue({ code: "custom", path: ["cancellation"], message: "Read actions cannot expose durable-operation cancellation" })
   }
@@ -462,15 +517,17 @@ export const WebFileEntrySchema = z.strictObject({
   counts: WebFileCountsSchema.optional(),
 }).superRefine(({ type, state, severity, needs_attention, reason, counts }, context) => {
   if ((type === "sync") !== (counts !== undefined)) context.addIssue({ code: "custom", path: ["counts"], message: "Only sync entries carry aggregate counts" })
-  const healthy = state === "materialized" || state === "ok"
-  if (healthy !== (severity === "ok" && !needs_attention && reason === "none")) {
-    context.addIssue({ code: "custom", message: "File health, severity, attention, and reason must agree" })
-  }
-  if ((state === "missing" || state === "pullable" || state === "pushable") && severity !== "warning") {
-    context.addIssue({ code: "custom", path: ["severity"], message: "Missing and one-way file changes are warnings" })
-  }
-  if ((state === "diverged" || state === "error") && severity !== "error") {
-    context.addIssue({ code: "custom", path: ["severity"], message: "Diverged and failed file checks are errors" })
+  const expected = {
+    materialized: { severity: "ok", attention: false, reasons: ["none"] },
+    ok: { severity: "ok", attention: false, reasons: ["none"] },
+    missing: { severity: "warning", attention: true, reasons: ["target_missing", "source_missing"] },
+    pullable: { severity: "warning", attention: true, reasons: ["source_missing", "content_differs"] },
+    pushable: { severity: "warning", attention: true, reasons: ["target_missing", "content_differs"] },
+    diverged: { severity: "error", attention: true, reasons: ["diverged"] },
+    error: { severity: "error", attention: true, reasons: ["comparison_failed", "repo_root_missing"] },
+  }[state]
+  if (severity !== expected.severity || needs_attention !== expected.attention || !expected.reasons.includes(reason)) {
+    context.addIssue({ code: "custom", message: "File state, severity, attention, and reason must agree" })
   }
 })
 export type WebFileEntry = z.infer<typeof WebFileEntrySchema>
@@ -488,10 +545,28 @@ const WebFileGroupCommon = {
   summary: WebFileSummarySchema,
   entries: z.array(WebFileEntrySchema).max(128),
 }
+function summarizeFileEntries(entries: Array<z.infer<typeof WebFileEntrySchema>>) {
+  return entries.reduce((summary, entry) => {
+    summary.total += 1
+    if (entry.severity === "ok") summary.ok += 1
+    else if (entry.severity === "warning") summary.warnings += 1
+    else summary.errors += 1
+    if (entry.needs_attention) summary.attention += 1
+    return summary
+  }, { total: 0, ok: 0, warnings: 0, errors: 0, attention: 0 })
+}
 export const WebFileGroupSchema = z.discriminatedUnion("scope", [
   z.strictObject({ scope: z.literal("workspace"), ...WebFileGroupCommon }),
   z.strictObject({ scope: z.literal("repository"), repository_id: EntityIdSchema, ...WebFileGroupCommon }),
-])
+]).superRefine(({ summary, entries }, context) => {
+  const actual = summarizeFileEntries(entries)
+  if (Object.keys(actual).some((key) => actual[key as keyof typeof actual] !== summary[key as keyof typeof actual])) {
+    context.addIssue({ code: "custom", path: ["summary"], message: "File group summary must equal its entries" })
+  }
+  if (new Set(entries.map(({ id }) => id)).size !== entries.length) {
+    context.addIssue({ code: "custom", path: ["entries"], message: "File entries must be unique within a group" })
+  }
+})
 export type WebFileGroup = z.infer<typeof WebFileGroupSchema>
 export const WebFileStatusResponseSchema = z.strictObject({
   workspace_id: EntityIdSchema,
@@ -531,8 +606,8 @@ const ForgeUrlSchema = utf8BoundedString(2048, 1).superRefine((raw, context) => 
     context.addIssue({ code: "custom", message: "Forge URL must be absolute" })
     return
   }
-  if (url.protocol !== "https:" || url.username || url.password || !url.hostname) {
-    context.addIssue({ code: "custom", message: "Forge URL must be credential-free HTTPS" })
+  if (url.protocol !== "https:" || url.username || url.password || !url.hostname || url.search || url.hash) {
+    context.addIssue({ code: "custom", message: "Forge URL must be credential-free canonical HTTPS without query or fragment" })
   }
 })
 export const WebForgeResolveRequestSchema = z.strictObject({ url: ForgeUrlSchema })
@@ -573,10 +648,24 @@ export const WebForgeRepositoryCandidateSchema = z.strictObject({
 export const WebForgeTemplateCandidateSchema = z.strictObject({
   name: utf8BoundedString(96, 1),
   repositories: z.array(WebForgeRepositoryCandidateSchema).min(1).max(8),
+}).superRefine(({ repositories }, context) => {
+  if (new Set(repositories.map(({ repository_id }) => repository_id)).size !== repositories.length) {
+    context.addIssue({ code: "custom", path: ["repositories"], message: "Template repository candidates must be unique" })
+  }
 })
 export const WebForgeCandidatesSchema = z.strictObject({
   templates: z.array(WebForgeTemplateCandidateSchema).min(1).max(32),
   source_repositories: z.array(WebForgeRepositoryCandidateSchema).min(1).max(32),
+}).superRefine(({ templates, source_repositories }, context) => {
+  if (new Set(templates.map(({ name }) => name)).size !== templates.length) {
+    context.addIssue({ code: "custom", path: ["templates"], message: "Forge template candidates must be unique" })
+  }
+  if (new Set(source_repositories.map(({ repository_id }) => repository_id)).size !== source_repositories.length) {
+    context.addIssue({ code: "custom", path: ["source_repositories"], message: "Forge source repository candidates must be unique" })
+  }
+  if (source_repositories.filter(({ matched_source }) => matched_source).length !== 1) {
+    context.addIssue({ code: "custom", path: ["source_repositories"], message: "Exactly one source repository candidate must be matched" })
+  }
 })
 export type WebForgeCandidates = z.infer<typeof WebForgeCandidatesSchema>
 export const WebForgeTerminologySchema = z.discriminatedUnion("provider", [
@@ -657,9 +746,31 @@ const WebForgeResolvedResponseSchema = z.strictObject({
     terminology: WebForgeTerminologySchema,
     candidates: WebForgeCandidatesSchema,
     draft: WebReviewedWorkspaceDraftSchema,
-  }).superRefine(({ source, terminology }, context) => {
+  }).superRefine(({ source, terminology, candidates, draft }, context) => {
     if (source.provider !== terminology.provider) {
       context.addIssue({ code: "custom", path: ["terminology"], message: "Provider terminology must match source identity" })
+    }
+    const selectedTemplate = candidates.templates.find(({ name }) => name === draft.template_name)
+    if (!selectedTemplate) {
+      context.addIssue({ code: "custom", path: ["draft", "template_name"], message: "Reviewed draft must select an available template" })
+      return
+    }
+    const matchedCandidate = candidates.source_repositories.find(({ matched_source }) => matched_source)
+    if (!matchedCandidate || matchedCandidate.repository_id !== draft.matched_source_repository_id) {
+      context.addIssue({ code: "custom", path: ["draft", "matched_source_repository_id"], message: "Reviewed draft must select the resolved source repository" })
+    }
+    const templateIds = new Set(selectedTemplate.repositories.map(({ repository_id }) => repository_id))
+    const draftIds = new Set(draft.repositories.map(({ repository_id }) => repository_id))
+    if (templateIds.size !== draftIds.size || [...templateIds].some((repositoryId) => !draftIds.has(repositoryId))) {
+      context.addIssue({ code: "custom", path: ["draft", "repositories"], message: "Reviewed draft repositories must match the selected template" })
+    }
+    const templateMatch = selectedTemplate.repositories.find(({ repository_id }) => repository_id === draft.matched_source_repository_id)
+    if (!templateMatch || !templateMatch.matched_source) {
+      context.addIssue({ code: "custom", path: ["candidates", "templates"], message: "Selected template must contain the matched source repository" })
+    }
+    const reviewedMatch = draft.repositories.find(({ repository_id }) => repository_id === draft.matched_source_repository_id)
+    if (reviewedMatch?.branch.base_branch !== source.target_branch) {
+      context.addIssue({ code: "custom", path: ["draft", "repositories"], message: "Matched repository base branch must match the resolved source target" })
     }
   })
 export const WebForgeResolveResponseSchema = z.union([

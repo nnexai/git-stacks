@@ -436,7 +436,7 @@ export const ForgeSourceIdentitySchema = z.strictObject({
   head_sha: z.string().regex(/^[0-9a-f]{40,64}$/),
   cross_repository: z.boolean(),
   confidence: ForgeResolutionConfidenceSchema,
-}).superRefine(({ provider, change_kind, web_url, host }, context) => {
+}).superRefine(({ provider, change_kind, web_url, host, target_repository, source_repository, change_number, cross_repository }, context) => {
   if ((provider === "github") !== (change_kind === "pull_request")) {
     context.addIssue({ code: "custom", path: ["change_kind"], message: "GitHub uses pull requests and GitLab uses merge requests" })
   }
@@ -447,11 +447,21 @@ export const ForgeSourceIdentitySchema = z.strictObject({
     context.addIssue({ code: "custom", path: ["web_url"], message: "Forge source URL must be absolute" })
     return
   }
-  if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
-    context.addIssue({ code: "custom", path: ["web_url"], message: "Forge source URL must be credential-free HTTPS" })
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    context.addIssue({ code: "custom", path: ["web_url"], message: "Forge source URL must be credential-free canonical HTTPS without query or fragment" })
   }
   if (parsed.hostname.toLowerCase() !== host.toLowerCase()) {
     context.addIssue({ code: "custom", path: ["host"], message: "Forge host must match the canonical web URL" })
+  }
+  const repositoriesDiffer = target_repository.toLowerCase() !== source_repository.toLowerCase()
+  if (cross_repository !== repositoriesDiffer) {
+    context.addIssue({ code: "custom", path: ["cross_repository"], message: "Cross-repository state must match the logical repository identities" })
+  }
+  const expectedPath = provider === "github"
+    ? `/${target_repository}/pull/${change_number}`
+    : `/${target_repository}/-/merge_requests/${change_number}`
+  if (parsed.pathname.replace(/\/$/u, "") !== expectedPath) {
+    context.addIssue({ code: "custom", path: ["web_url"], message: "Forge source URL must match its provider, repository, and change identity" })
   }
 })
 export type ForgeSourceIdentity = z.infer<typeof ForgeSourceIdentitySchema>
