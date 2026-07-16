@@ -19,6 +19,7 @@ import { readWebShortcutSettings, updateWebShortcutSettings } from "@git-stacks/
 import { readGlobalConfig, readWorkspace } from "@git-stacks/core/config"
 import { getTasksDir } from "@git-stacks/core/paths"
 import { getWorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
+import { getWorkspaceNotesSnapshot } from "@git-stacks/core/notes"
 import { connectLocalTls } from "./transport/local-tls.js"
 import { readRemoteExposure } from "./security/exposure.js"
 import { readProtectedFile } from "./security/protected-store.js"
@@ -471,6 +472,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       mutations: mutationAdapters,
       core,
       workspaceFileStatus,
+      workspaceNotes: (workspaceName, limit) => getWorkspaceNotesSnapshot(workspaceName, { limit }),
       workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
       workspaceCreationCatalog,
       publishSignal,

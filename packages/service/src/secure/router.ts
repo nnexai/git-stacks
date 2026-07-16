@@ -1,5 +1,6 @@
 import {
   DynamicEnvironmentRefreshSchema,
+  OperationCancelRequestSchema,
   WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE,
   WEB_SHORTCUT_STALE_REVISION_ERROR_CODE,
   SignalDismissalSchema,
@@ -8,12 +9,15 @@ import {
   WebShortcutMutationSchema,
   WebShortcutSettingsSchema,
   WebOperationMutationSchema,
+  WebFileStatusRequestSchema,
+  WebNotesListRequestSchema,
   WebPinsSchema,
   WebPrioritiesSchema,
   WebSignalAcknowledgeSchema,
   WebSignalDismissSchema,
   WebTerminalCreateSchema,
   WebTerminalRenameSchema,
+  WebWorkspaceMutationSchema,
   WorkspaceCreationRequestSchema,
   WorkspaceLifecycleMutationSchema,
   type Signal,
@@ -23,6 +27,7 @@ import {
   type DynamicEnvironmentRefreshResult,
 } from "@git-stacks/protocol"
 import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
+import type { WorkspaceNotesSnapshot } from "@git-stacks/core/notes"
 import {
   WebShortcutConflictError,
   WebShortcutStaleRevisionError,
@@ -43,17 +48,32 @@ import type { SecureSessionContext, SecureSessionHandler } from "../security/ses
 import type { LaunchToken } from "../security/session-authority.js"
 import type { PairingBundle, PairedHelper, TargetRecord } from "../security/targets.js"
 import { SignalVisibilityTracker } from "../web/signal-visibility.js"
-import { projectWebCatalog, projectWebOperation, projectWebSignal, projectWebSnapshot, projectWebTerminalSignals } from "../web/projection.js"
+import {
+  projectWebActionInventory,
+  projectWebCatalog,
+  projectWebFileStatus,
+  projectWebNotes,
+  projectWebOperation,
+  projectWebSignal,
+  projectWebSnapshot,
+  projectWebTerminalSignals,
+} from "../web/projection.js"
 import { WebTerminalManager } from "../web/terminal-manager.js"
 import type { createWorkspaceLifecycleCoordinator } from "../policy/workspace-lifecycle.js"
 import type { WorkspaceLifecycleAdmission } from "../policy/workspace-lifecycle-admission.js"
 import type { DynamicEnvironmentStore } from "../policy/dynamic-environment.js"
+import { deriveWorkspaceActionInventory } from "../policy/workspace-actions.js"
 
 type DynamicEnvironmentParseResult =
   | { success: true; data: DynamicEnvironmentRefresh }
   | { success: false }
 
-type Mutation = (request: { workspace: string; options?: Record<string, unknown> }, signal?: AbortSignal) => OperationExecution
+type Mutation = (request: {
+  workspace: string
+  options?: Record<string, unknown>
+  expected_notes_revision?: string
+  text?: string
+}, signal?: AbortSignal) => OperationExecution
 
 export interface SecureServiceRouterOptions {
   snapshot: SnapshotAdapter
@@ -62,6 +82,7 @@ export interface SecureServiceRouterOptions {
   mutations?: Partial<Record<CoreMutationName, CoreMutationAdapter>> & Record<string, Mutation | CoreMutationAdapter | undefined>
   core?: CoreStateProvider
   workspaceFileStatus?: (workspace: string) => WorkspaceFileStatusView | Promise<WorkspaceFileStatusView>
+  workspaceNotes?: (workspace: string, limit: number) => WorkspaceNotesSnapshot | Promise<WorkspaceNotesSnapshot>
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
   publishSignal?: (signal: Signal) => Promise<void>
@@ -103,6 +124,9 @@ const methodScopes: Record<string, SecureScope> = {
   "core.state": "snapshot.read",
   "core.workspace.files": "snapshot.read",
   "core.workspace.notes": "snapshot.read",
+  "workspace.actions": "snapshot.read",
+  "workspace.notes.list": "snapshot.read",
+  "workspace.files.inspect": "snapshot.read",
   "core.edit-target": "snapshot.read",
   "snapshot.all": "snapshot.read",
   "web.snapshot": "snapshot.read",
@@ -207,13 +231,18 @@ export class SecureServiceRouter implements SecureSessionHandler {
         return this.options.core.build()
       }
       case "core.workspace.files": {
+        if (context.mode === "browser") throw coded("Rich workspace file status is unavailable to browsers", "unauthorized")
         if (!this.options.workspaceFileStatus || typeof body?.workspace !== "string") throw coded("Workspace file status is unavailable", "capability_unavailable")
         return this.options.workspaceFileStatus(body.workspace)
       }
       case "core.workspace.notes": {
+        if (context.mode === "browser") throw coded("Name-based workspace notes are unavailable to browsers", "unauthorized")
         if (!this.options.core || typeof body?.workspace !== "string") throw coded("Workspace notes are unavailable", "capability_unavailable")
         return this.options.core.notes(body.workspace, 5)
       }
+      case "workspace.actions": return this.workspaceActions(body)
+      case "workspace.notes.list": return this.workspaceNotes(body)
+      case "workspace.files.inspect": return this.workspaceFiles(body)
       case "core.edit-target": {
         if (!this.options.core) throw coded("Core state is unavailable", "capability_unavailable")
         const parsed = EditTargetRequestSchema.safeParse(body)
@@ -482,6 +511,60 @@ export class SecureServiceRouter implements SecureSessionHandler {
     if (ids.some((id) => !known.has(id))) throw coded("Workspace no longer exists", "not_found")
   }
 
+  private async resolveWorkspaceTarget(body: Record<string, unknown> | undefined, schema: typeof WebWorkspaceMutationSchema | typeof WebNotesListRequestSchema | typeof WebFileStatusRequestSchema) {
+    const parsed = schema.safeParse(body)
+    if (!parsed.success) throw coded("Invalid workspace detail request", "invalid_request")
+    const catalog = this.options.snapshot.buildCatalog
+      ? await this.options.snapshot.buildCatalog()
+      : undefined
+    const snapshots = catalog?.workspaces ?? await this.options.snapshot.buildAll()
+    const revision = catalog?.revision ?? snapshots[0]?.revision ?? "0"
+    if (revision !== parsed.data.expected_revision) throw coded("Authoritative snapshot revision is stale", "conflict")
+    const selected = snapshots.find((item) => item.workspace.id === parsed.data.workspace_id)
+    if (!selected) throw coded("Workspace not found", "not_found")
+    return { parsed: parsed.data, selected, revision, generatedAt: catalog?.generated_at ?? selected.generated_at }
+  }
+
+  private async workspaceActions(body?: Record<string, unknown>): Promise<unknown> {
+    const parsed = WebWorkspaceMutationSchema.safeParse(body)
+    if (!parsed.success) throw coded("Invalid workspace action request", "invalid_request")
+    if (!this.options.core) throw coded("Workspace actions are unavailable", "capability_unavailable")
+    const state = await this.options.core.build()
+    if (state.revision !== parsed.data.expected_revision) throw coded("Authoritative snapshot revision is stale", "conflict")
+    if (!state.workspaces.some(({ definition, projection }) => definition.id === parsed.data.workspace_id || projection.id === parsed.data.workspace_id)
+      && !state.archived_workspaces.some(({ id }) => id === parsed.data.workspace_id)) {
+      throw coded("Workspace not found", "not_found")
+    }
+    return projectWebActionInventory(deriveWorkspaceActionInventory({ state, workspaceId: parsed.data.workspace_id }))
+  }
+
+  private async workspaceNotes(body?: Record<string, unknown>): Promise<unknown> {
+    const target = await this.resolveWorkspaceTarget(body, WebNotesListRequestSchema)
+    if (!this.options.workspaceNotes) throw coded("Workspace notes are unavailable", "capability_unavailable")
+    try {
+      const notes = await this.options.workspaceNotes(target.selected.workspace.name, 50)
+      return projectWebNotes({ workspaceId: target.parsed.workspace_id, revision: target.revision, notes })
+    } catch {
+      throw coded("Workspace notes could not be read", "operation_failed")
+    }
+  }
+
+  private async workspaceFiles(body?: Record<string, unknown>): Promise<unknown> {
+    const target = await this.resolveWorkspaceTarget(body, WebFileStatusRequestSchema)
+    if (!this.options.workspaceFileStatus) throw coded("Workspace file status is unavailable", "capability_unavailable")
+    try {
+      const status = await this.options.workspaceFileStatus(target.selected.workspace.name)
+      return projectWebFileStatus(status, {
+        workspaceId: target.parsed.workspace_id,
+        revision: target.revision,
+        generatedAt: target.generatedAt,
+        repositoryIds: new Map(target.selected.workspace.repositories.map(({ name, id }) => [name, id])),
+      })
+    } catch {
+      throw coded("Workspace file status could not be inspected", "operation_failed")
+    }
+  }
+
   private async submitOperation(context: SecureSessionContext, request: SecureRequest): Promise<unknown> {
     if (!this.options.operations || !request.idempotency_key) throw coded("Operations or idempotency key unavailable", "capability_unavailable")
     const requestBody = request.body as { mutation?: unknown; request?: unknown } | undefined
@@ -533,7 +616,23 @@ export class SecureServiceRouter implements SecureSessionHandler {
         const adapter = this.options.mutations?.[mutation] as Mutation | undefined
         if (!adapter) throw coded("Workspace operation is unavailable", "capability_unavailable")
         parsedRequest = mutationRequest
-        execution = adapter({ workspace: selected.workspace.name })
+        switch (web.data.kind) {
+          case "workspace.notes.add":
+            execution = adapter({
+              workspace: selected.workspace.name,
+              expected_notes_revision: web.data.request.expected_notes_revision,
+              text: web.data.request.text,
+            })
+            break
+          case "workspace.notes.clear":
+            execution = adapter({
+              workspace: selected.workspace.name,
+              expected_notes_revision: web.data.request.expected_notes_revision,
+            })
+            break
+          default:
+            execution = adapter({ workspace: selected.workspace.name })
+        }
       }
     } else {
       const body = requestBody
@@ -565,9 +664,11 @@ export class SecureServiceRouter implements SecureSessionHandler {
   }
 
   private async cancelOperation(context: SecureSessionContext, body?: Record<string, unknown>): Promise<unknown> {
-    if (!this.options.operations || typeof body?.operation_id !== "string") throw coded("Invalid operation id", "invalid_request")
-    if (!this.options.operations.getForClient(body.operation_id, context.principalId)) throw coded("Operation not found", "not_found")
-    return this.options.operations.cancel(body.operation_id)
+    const parsed = OperationCancelRequestSchema.safeParse(body)
+    if (!parsed.success) throw coded("Invalid operation id", "invalid_request")
+    if (!this.options.operations) throw coded("Operation cancellation is unavailable", "capability_unavailable")
+    if (!this.options.operations.getForClient(parsed.data.operation_id, context.principalId)) throw coded("Operation not found", "not_found")
+    return this.options.operations.cancel(parsed.data.operation_id)
   }
 
   private notifyConnections(): void {
