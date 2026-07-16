@@ -164,8 +164,7 @@ Each task followed RED then GREEN TDD:
 
 ## Issues Encountered
 
-- The secure browser route currently returns the bounded legacy `WebOperation` carrier while the shared tracker consumes `WebOperationSummary`. The web layer adapts only typed safe fields and binds descriptor/workspace identity already known to the client; Plan 08 should verify this carrier seam together with cross-client operation copy.
-- `workspace.rename` is present in the canonical action inventory but absent from `WebOperationMutationSchema`; the browser therefore delegates rename to the existing service-owned legacy mutation shape. Plan 08 should decide whether to add the stable ID/revision web mutation arm so rename gains the same stale-revision transport contract as the other parity mutations.
+- Post-plan review found that the browser operation carrier and rename transport were still relying on client-reconstructed context and a legacy mutation seam. Both were repaired before milestone UAT: browser submit/get now return one strict path-free `WebOperationSummary`, operation context is persisted server-side for ID-only hydration, and rename uses stable workspace ID/revision authority.
 
 ## Known Stubs
 
@@ -178,6 +177,19 @@ None. Initial empty arrays/strings are runtime state before authoritative loads,
 - `npm run typecheck --workspace @git-stacks/web` — passed.
 - `npm run test:deps` — package architecture passed.
 - `git diff --check 9ffa4b07..HEAD` — passed.
+
+## Post-plan Review Resolution
+
+The review repair followed an additional adversarial RED/GREEN cycle: `75bea09a` locked all six regressions and `bacb6adc` repaired them.
+
+- Workspace action registries are cached by workspace ID, authoritative inventory key, and inventory generation. Row, direct, and menu placements share one callback/latch instance until selection, revision, or inventory changes invalidate it.
+- Browser operation submit/get now use one strict path-free summary. The service persists bounded action context, `hydrate(operationId)` and reconnect perform ID-only reads, duplicate pending IDs coalesce, and neither path can replay submission.
+- Generic failed/cancelled reviewed-source operations enter an explicit terminal error state with Back to review, Change URL, and Close recovery instead of leaving the overlay trapped in accepted state.
+- Rename now submits stable workspace ID, expected revision, and new name; the service resolves current workspace authority before invoking the trusted adapter.
+- Overlay/context-menu return focus keeps the actual invoking element, while validation and recovery focus the real invalid input after render.
+- Dirty force-removal is reachable only through the canonical exact-name descriptor confirmation. The legacy browser removal/force bypass functions were removed.
+
+Review verification passed 16 focused files / 188 tests, `npm run web:build`, `npm run test:deps`, package typechecks, and `git diff --check`. In the isolated worktree, service/web were additionally typechecked through temporary local-path configs because its shared `node_modules` link resolved workspace packages from the parent checkout; those temporary configs and the link were removed before commit. Standard workspace typechecks should be rerun after integration.
 
 ## User Setup Required
 
