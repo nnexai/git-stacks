@@ -222,8 +222,7 @@ export interface ManagedService {
   stop(): Promise<void>
 }
 
-async function descriptorUsable(descriptor: ServiceDescriptor, serviceRoot: string): Promise<boolean> {
-  if (!processAlive(descriptor.pid)) return false
+async function probeServiceDescriptor(descriptor: ServiceDescriptor): Promise<boolean> {
   let timeout: NodeJS.Timeout | undefined
   try {
     const carrier = await Promise.race([
@@ -238,15 +237,40 @@ async function descriptorUsable(descriptor: ServiceDescriptor, serviceRoot: stri
   } catch { return false }
   finally {
     if (timeout) clearTimeout(timeout)
-    void serviceRoot
   }
+}
+
+export async function resolveExistingServiceDescriptor(
+  descriptor: ServiceDescriptor | null,
+  options: {
+    processAlive?: (pid: number) => boolean
+    probe?: (descriptor: ServiceDescriptor) => Promise<boolean>
+    removeStale?: () => void
+  } = {},
+): Promise<ServiceDescriptor | null> {
+  if (!descriptor) return null
+  const isAlive = options.processAlive ?? processAlive
+  if (!isAlive(descriptor.pid)) {
+    options.removeStale?.()
+    return null
+  }
+  let reachable = false
+  try {
+    reachable = await (options.probe ?? probeServiceDescriptor)(descriptor)
+  } catch {
+    reachable = false
+  }
+  if (reachable) return descriptor
+  throw Object.assign(
+    new Error("The existing git-stacks service is running but unreachable. Stop the service and retry."),
+    { code: "service_unreachable" },
+  )
 }
 
 export async function readUsableServiceDescriptor(
   serviceRoot = join(WS_CONFIG_DIR, "service"),
 ): Promise<ServiceDescriptor | null> {
-  const descriptor = readServiceDescriptor(serviceRoot)
-  return descriptor && await descriptorUsable(descriptor, serviceRoot) ? descriptor : null
+  return resolveExistingServiceDescriptor(readServiceDescriptor(serviceRoot))
 }
 
 type DetachedServiceProcess = {
@@ -382,9 +406,10 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
   const lockPath = join(serviceRoot, "startup.lock")
   const lock = await acquireStartupLock(lockPath)
   try {
-    const existing = readServiceDescriptor(serviceRoot)
-    if (existing && await descriptorUsable(existing, serviceRoot)) return { descriptor: existing, existing: true, async stop() {} }
-    if (existing) unlinkSync(serviceDescriptorPath(serviceRoot))
+    const existing = await resolveExistingServiceDescriptor(readServiceDescriptor(serviceRoot), {
+      removeStale: () => unlinkSync(serviceDescriptorPath(serviceRoot)),
+    })
+    if (existing) return { descriptor: existing, existing: true, async stop() {} }
 
     const dynamicEnvironment = options.dynamicEnvironment ?? createDynamicEnvironmentStore({
       ...(process.env.PATH !== undefined ? { PATH: process.env.PATH } : {}),

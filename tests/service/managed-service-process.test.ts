@@ -1,6 +1,15 @@
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
 import { describe, expect, test } from "@test/api"
 import type { ServiceDescriptor } from "../../packages/service/src/main"
-import { ensureManagedServiceProcess, resolveExistingServiceDescriptor } from "../../packages/service/src/main"
+import {
+  ensureManagedServiceProcess,
+  resolveExistingServiceDescriptor,
+  serviceDescriptorPath,
+  startManagedService,
+} from "../../packages/service/src/main"
 
 const descriptor = { service_id: "test-service" } as ServiceDescriptor
 
@@ -56,6 +65,44 @@ describe("managed service descriptor process lifetime", () => {
     expect(removed).toBe(false)
     expect(continued).toBe(false)
     expect(JSON.stringify(failure)).not.toMatch(/private|TOKEN|credential-canary/)
+  })
+
+  test("locked startup preserves an unreachable live descriptor and does not initialize replacement state", async () => {
+    const root = mkdtempSync(join(tmpdir(), "git-stacks-live-unreachable-"))
+    const now = new Date().toISOString()
+    const liveDescriptor: ServiceDescriptor = {
+      protocol: "git-stacks/2",
+      pid: process.pid,
+      instance_id: "11111111-1111-4111-8111-111111111111",
+      service_id: "22222222-2222-4222-8222-222222222222",
+      listener_epoch: "33333333-3333-4333-8333-333333333333",
+      webtransport: { endpoint: "https://127.0.0.1:1", certificate_hash: "a".repeat(43) },
+      local_tls: { hostname: "127.0.0.1", port: 1, servername: "localhost", certificate: "invalid-certificate" },
+      browser_launch: { token: "b".repeat(43), expires_at: now },
+      tui_launch: { token: "c".repeat(43), expires_at: now },
+      started_at: now,
+    }
+    const descriptorPath = serviceDescriptorPath(root)
+    writeFileSync(descriptorPath, `${JSON.stringify(liveDescriptor)}\n`, { mode: 0o600 })
+    let snapshotReads = 0
+    try {
+      await expect(startManagedService({
+        serviceRoot: root,
+        snapshot: {
+          currentRevision: async () => { snapshotReads += 1; return "1" },
+          buildAll: async () => [],
+          buildWorkspace: async () => { throw new Error("not used") },
+        },
+      })).rejects.toMatchObject({
+        code: "service_unreachable",
+        message: "The existing git-stacks service is running but unreachable. Stop the service and retry.",
+      })
+      expect(JSON.parse(readFileSync(descriptorPath, "utf8"))).toEqual(liveDescriptor)
+      expect(readdirSync(root)).toEqual(["descriptor.json"])
+      expect(snapshotReads).toBe(0)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 
