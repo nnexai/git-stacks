@@ -5,20 +5,20 @@
 
 ## Workspace Archival
 
-- [ ] **ARCH-01:** A workspace definition can persist `archived: true` and an `archived_at` timestamp in its existing YAML file; omitted archive fields remain backward-compatible and mean active.
-- [ ] **ARCH-02:** Web and TUI can archive an active workspace and unarchive an archived workspace through the shared core/service operation rather than independent client-side mutation.
-- [ ] **ARCH-03:** Archived workspaces are excluded from every normal workspace list, count, pin group, fuzzy switcher result, attention traversal, and default selection in web and TUI, regardless of their stored pin state.
-- [ ] **ARCH-04:** Archiving first stops and confirms every service-owned terminal, then preserves repositories, worktrees, workspace files, notes, configuration, and pin state; an unconfirmed terminal exit leaves persisted archive state unchanged, and unarchiving makes the same non-terminal resources usable again without recreating stopped terminals.
-- [ ] **ARCH-05:** Web and TUI expose a separate minimal Archived Workspaces surface containing only workspace identity, the latest relevant activity/archive timestamp, and an Unarchive action.
-- [ ] **ARCH-06:** The archived list is newest-first by `max(last_activity, archived_at)`, displays the chosen timestamp, has an explicit empty state, and never expands into the normal detailed workspace view.
+- [x] **ARCH-01:** A workspace definition can persist `archived: true` and an `archived_at` timestamp in its existing YAML file; omitted archive fields remain backward-compatible and mean active.
+- [x] **ARCH-02:** Web and TUI can archive an active workspace and unarchive an archived workspace through the shared core/service operation rather than independent client-side mutation.
+- [x] **ARCH-03:** Archived workspaces are excluded from every normal workspace list, count, pin group, fuzzy switcher result, attention traversal, and default selection in web and TUI, regardless of their stored pin state.
+- [x] **ARCH-04:** Archiving first stops and confirms every service-owned terminal, then preserves repositories, worktrees, workspace files, notes, configuration, and pin state; an unconfirmed terminal exit leaves persisted archive state unchanged, and unarchiving makes the same non-terminal resources usable again without recreating stopped terminals.
+- [x] **ARCH-05:** Web and TUI expose a separate minimal Archived Workspaces surface containing only workspace identity, the latest relevant activity/archive timestamp, and an Unarchive action.
+- [x] **ARCH-06:** The archived list is newest-first by `max(last_activity, archived_at)`, displays the chosen timestamp, has an explicit empty state, and never expands into the normal detailed workspace view.
 
 ## Confirmed Workspace Removal
 
-- [ ] **REMOVE-01:** The destructive action is named **Remove** consistently in web and TUI and always requires confirmation that identifies the workspace and explains that its terminals, worktrees, directory, and YAML definition will be removed.
-- [ ] **REMOVE-02:** A confirmed removal closes every service-owned terminal for the workspace before filesystem deletion and fails closed without deleting anything if terminal shutdown cannot be confirmed.
-- [ ] **REMOVE-03:** After terminal shutdown, normal removal applies the existing dirty-worktree protection and reports every blocking repository; only a fresh typed dirty-worktree result may expose web/TUI Force Remove, which requires exact current-name confirmation and never bypasses terminal, stale-revision, not-found, parse, hook, or other non-dirty failures.
-- [ ] **REMOVE-04:** Successful removal deletes each managed Git worktree, the complete workspace directory, and the workspace YAML definition while leaving unrelated repositories and workspace definitions untouched.
-- [ ] **REMOVE-05:** Web and TUI reconcile selection, terminal tabs, signals, counts, and navigation immediately after successful removal and show actionable progress/failure feedback throughout the operation.
+- [x] **REMOVE-01:** The destructive action is named **Remove** consistently in web and TUI and always requires confirmation that identifies the workspace and explains that its terminals, worktrees, directory, and YAML definition will be removed.
+- [x] **REMOVE-02:** A confirmed removal closes every service-owned terminal for the workspace before filesystem deletion and fails closed without deleting anything if terminal shutdown cannot be confirmed.
+- [x] **REMOVE-03:** After terminal shutdown, normal removal applies the existing dirty-worktree protection and reports every blocking repository; only a fresh typed dirty-worktree result may expose web/TUI Force Remove, which requires exact current-name confirmation and never bypasses terminal, stale-revision, not-found, parse, hook, or other non-dirty failures.
+- [x] **REMOVE-04:** Successful removal deletes each managed Git worktree, the complete workspace directory, and the workspace YAML definition while leaving unrelated repositories and workspace definitions untouched.
+- [x] **REMOVE-05:** Web and TUI reconcile selection, terminal tabs, signals, counts, and navigation immediately after successful removal and show actionable progress/failure feedback throughout the operation.
 
 ## User Shell and Dynamic Environment
 
@@ -98,7 +98,7 @@
 
 | Requirement group | Phase | Status |
 |---|---:|---|
-| ARCH-01..06, REMOVE-01..05 | 123 | Pending |
+| ARCH-01..06, REMOVE-01..05 | 123 | Complete |
 | SHELL-01..07 | 124 | Pending |
 | KEY-01..10, ATTN-01..03 | 125 | Pending |
 | PARITY-01..05, SOURCE-01..04 | 126 | Pending |
