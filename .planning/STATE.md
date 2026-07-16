@@ -5,15 +5,15 @@ milestone_name: Workspace Productivity
 current_phase: 123
 current_phase_name: Archived Workspaces and Safe Removal
 status: executing
-stopped_at: Completed 123-04-PLAN.md
-last_updated: "2026-07-16T06:50:02.820Z"
+stopped_at: Completed 123-05-PLAN.md
+last_updated: "2026-07-16T07:03:46.309Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 123 (Archived Workspaces and Safe Removal) — EXECUTING
-Plan: 5 of 8
+Plan: 6 of 8
 Status: Ready to execute
 Last activity: 2026-07-16 — Phase 123 execution started
 
@@ -63,6 +63,9 @@ Last activity: 2026-07-16 — Phase 123 execution started
 - [Phase 123]: The stable workspace lease begins before execution-time catalog validation and is released only after authoritative reconciliation or failure cleanup. — This prevents target-local TOCTOU without introducing a global workspace lock.
 - [Phase 123]: Force Remove derives allow_dirty only from its own fresh workspace_dirty inspection and checks the exact current authoritative name before commit. — A stale client or clean/non-dirty failure cannot manufacture destructive force authority.
 - [Phase 123]: Typed lifecycle details live on durable failed operations instead of being reconstructed from error text. — Thin clients need blocker and force eligibility data without owning or parsing lifecycle policy.
+- [Phase 123]: Lifecycle schemas stay separate from legacy name-based core mutations; service clients carry stable-ID/revision intent while daemonless CLI authority remains unchanged. — Prevents a second destructive transport shape from owning lifecycle policy.
+- [Phase 123]: Trusted operation.submit is single-attempt; reconnection resumes observation only after a durable operation ID is received. — A transport retry must never replay destructive intent.
+- [Phase 123]: The router constructs the sole terminal manager with shared admission, then the composition factory creates the coordinator from that exact manager and aggregate snapshot. — Preserves terminal idle accounting and one lifecycle authority.
 
 ## Validated Inputs
 
@@ -131,9 +134,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 123 P02 | 10 min | 2 tasks | 12 files |
 | Phase 123 P03 | 7 min | 2 tasks | 3 files |
 | Phase 123 P04 | 7 min | 2 tasks | 5 files |
+| Phase 123 P05 | 10 min | 2 tasks | 6 files |
 
 ## Session
 
-**Last session:** 2026-07-16T06:49:38.153Z
-**Stopped at:** Completed 123-04-PLAN.md
+**Last session:** 2026-07-16T07:03:46.301Z
+**Stopped at:** Completed 123-05-PLAN.md
 **Resume file:** None
