@@ -141,6 +141,15 @@ test("secure routing preserves catalog, idempotent operations, ownership, events
     assert.deepEqual({ refreshParses, refreshReplacements, dynamicSnapshot }, {
       refreshParses: 3, refreshReplacements: 2, dynamicSnapshot: { PATH: "/phase124/replacement/bin" },
     })
+    const disclosureTranscript = JSON.stringify({
+      descriptor: JSON.parse(await readFile(join(root, "descriptor.json"), "utf8")),
+      webSnapshot: await browser.rpc.request("web.snapshot"),
+      catalog: await browser.rpc.request("workspace-creation.catalog"),
+      events,
+    })
+    for (const canary of [refresh.PATH, refresh.SSH_AUTH_SOCK, "/phase124/replacement/bin"]) {
+      assert.equal(disclosureTranscript.includes(canary), false)
+    }
     await assert.rejects(tui.rpc.request("operation.get", { operation_id: first.operation_id }), (error) => error.code === "not_found")
     await tui.rpc.close("ownership verified")
     await browser.rpc.close("contract verified")

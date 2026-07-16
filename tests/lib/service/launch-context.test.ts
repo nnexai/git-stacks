@@ -2,6 +2,7 @@ import { describe, expect, test } from "@test/api"
 import type { Workspace } from "../../../packages/core/src/config"
 import { WorkspaceSnapshotResponseSchema } from "../../../packages/protocol/src/service"
 import { createSnapshotBuilder } from "../../../packages/service/src/policy/snapshot"
+import { createDynamicEnvironmentStore } from "../../../packages/service/src/policy/dynamic-environment"
 
 const ws: Workspace & { id: string } = {
   id: "018f47f4-5ab1-7c2d-8e90-123456789abc",
@@ -53,6 +54,28 @@ function builder(overrides: Record<string, unknown> = {}) {
 }
 
 describe("service launch context projection", () => {
+  test("atomically replaces volatile launch values while prior child snapshots remain immutable", () => {
+    const agentA = { PATH: "/phase124/agent-a/bin", SSH_AUTH_SOCK: "/tmp/phase124-agent-a.sock" }
+    const agentB = { PATH: "/phase124/agent-b/bin", SSH_AUTH_SOCK: "/tmp/phase124-agent-b.sock" }
+    const store = createDynamicEnvironmentStore(agentA)
+    const existingChild = store.snapshot()
+
+    expect(store.replace(agentB)).toEqual({ updated: ["PATH", "SSH_AUTH_SOCK"], cleared: [] })
+    const futureChild = store.snapshot()
+    expect(existingChild).toEqual(agentA)
+    expect(futureChild).toEqual(agentB)
+    expect(existingChild).not.toBe(futureChild)
+    expect(Object.isFrozen(existingChild)).toBe(true)
+    expect(Object.isFrozen(futureChild)).toBe(true)
+
+    expect(() => store.replace({ PATH: `${"x".repeat(16 * 1024)}x` })).toThrow()
+    expect(store.snapshot()).toEqual(agentB)
+    expect(store.replace({ PATH: "/phase124/path-only" })).toEqual({ updated: ["PATH"], cleared: ["SSH_AUTH_SOCK"] })
+    expect(store.snapshot()).toEqual({ PATH: "/phase124/path-only" })
+    expect(store.replace({})).toEqual({ updated: [], cleared: ["PATH", "SSH_AUTH_SOCK"] })
+    expect(store.snapshot()).toEqual({})
+  })
+
   test("projects ordered workspace and repository command steps without executing them", async () => {
     let planned = 0
     const instance = builder({
