@@ -403,6 +403,27 @@ describe("integration: archived workspaces and safe removal", () => {
     expect(lifecycleMutationMock).not.toHaveBeenCalled()
   })
 
+  test("does not collapse a multi-workspace Remove selection to one arbitrary target", async () => {
+    const initial = coreState([
+      workspace({ id: UUIDS.target, name: "remove-alpha" }),
+      workspace({ id: UUIDS.other, name: "remove-beta" }),
+    ], [], "12")
+    const { mockInput, renderOnce, captureCharFrame } = await renderApp(initial)
+
+    mockInput.pressKey(" ")
+    await renderOnce()
+    mockInput.pressKey(" ")
+    await renderOnce()
+
+    expect(captureCharFrame()).toContain("2 selected")
+    expect(captureCharFrame()).toContain("Remove one workspace at a time")
+    mockInput.pressKey("r")
+    await renderOnce()
+    expect(lifecycleMutationMock).not.toHaveBeenCalled()
+    expect(captureCharFrame()).not.toContain("Remove remove-alpha")
+    expect(captureCharFrame()).not.toContain("Remove remove-beta")
+  })
+
   test("offers exact-name Force Remove only for a typed dirty result", async () => {
     const initial = coreState([workspace({ id: UUIDS.target, name: "dirty-demo" })], [], "20")
     reloadedState = coreState([workspace({ id: UUIDS.target, name: "dirty-demo" })], [], "21")

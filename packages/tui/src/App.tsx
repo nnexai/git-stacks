@@ -1393,6 +1393,7 @@ export default function App() {
           return
         }
         if (key.name === "r") {
+          if (selected().size > 1) return
           const selectedName = [...selected()][0]
           const target = lifecycleTarget(entries().find((entry) => entry.workspace.name === selectedName))
           if (target) setView({ view: "remove-confirm", target })
@@ -1830,7 +1831,10 @@ export default function App() {
           {/* Batch bar anchored to bottom of list box */}
           <Show when={view().view === "list" && tab() === "workspaces" && selected().size > 0}>
             <box flexGrow={1} />
-            <BatchBar count={selected().size} />
+            <BatchBar
+              count={selected().size}
+              actions={selected().size > 1 ? "[c] Clean All  Remove one workspace at a time" : undefined}
+            />
           </Show>
           <Show when={view().view === "list" && tab() === "templates" && templatesSelected().size > 0}>
             <box flexGrow={1} />
