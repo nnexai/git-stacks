@@ -87,3 +87,70 @@ jobs:
       - run: npm run typecheck -w @git-stacks/tui
       - run: npm run tui:build
       - run: npm run test:tui
+
+  shell-hosted:
+    name: Required shell host / ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    env:
+      GIT_STACKS_REQUIRE_SHELLS: bash,zsh,fish
+      GIT_STACKS_REQUIRE_SSH_AGENT: "1"
+      GIT_STACKS_SHELL_RECEIPT: shell-host-receipt.json
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install required Ubuntu shell capabilities
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bash zsh fish openssh-client
+      - name: Install required macOS shell capabilities
+        if: runner.os == 'macOS'
+        run: brew list fish >/dev/null 2>&1 || brew install fish
+      - name: Verify required host capabilities
+        run: |
+          set -euo pipefail
+          for capability in bash zsh fish ssh-agent ssh-add ssh-keygen; do
+            command -v "$capability" >/dev/null || { echo "missing required capability: $capability" >&2; exit 1; }
+          done
+      - run: npm install --global npm@11.17.0
+      - run: npm ci
+      - run: npm run build:packages
+      - name: Run fail-on-skip shell and SSH acceptance
+        run: GIT_STACKS_KEY_STORE=file ./node_modules/.bin/vitest run tests/commands/user-shell-host-fixture.test.ts tests/service/managed-service-process.test.ts tests/service/web-terminal.test.ts
+      - name: Validate machine-readable zero-skip receipt
+        if: always()
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict"
+          import { readFile } from "node:fs/promises"
+          const receipt = JSON.parse(await readFile(process.env.GIT_STACKS_SHELL_RECEIPT, "utf8"))
+          assert.equal(receipt.schema_version, 1)
+          for (const field of ["os", "arch", "runner", "commit_sha"]) assert.equal(typeof receipt.host?.[field], "string")
+          assert.deepEqual(new Set(receipt.shells.map((entry) => entry.shell)), new Set(["bash", "zsh", "fish"]))
+          for (const shell of receipt.shells) {
+            assert.match(shell.executable, /^\//)
+            assert.equal(typeof shell.version, "string")
+            for (const field of ["profile", "quoting", "runtime_path", "exit", "pty"]) assert.ok(shell.case_counts?.[field] > 0)
+          }
+          assert.ok(receipt.ssh?.agent_cases > 0)
+          assert.ok(receipt.ssh?.ssh_add_cases >= 2)
+          assert.ok(receipt.process_tree?.case_count > 0)
+          assert.equal(receipt.skip_count, 0)
+          assert.equal(receipt.status, "pass")
+          assert.ok(Number.isFinite(Date.parse(receipt.timestamp)))
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: shell-host-receipt-${{ matrix.runner }}-${{ github.sha }}
+          path: shell-host-receipt.json
+          if-no-files-found: error
+          retention-days: 14
