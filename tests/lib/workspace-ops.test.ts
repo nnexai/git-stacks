@@ -803,8 +803,8 @@ describe("removeWorkspace", () => {
     cleanupFixture(wsName, stackName, tmp)
   })
 
-  // Test: removeWorkspace --force with malformed YAML succeeds (D-12)
-  test("removeWorkspace --force with malformed YAML succeeds (D-12)", async () => {
+  // Phase 123: force bypasses only a typed dirty-worktree guard.
+  test("removeWorkspace --force rejects malformed YAML without mutation", async () => {
     const wsName = uniqueWsName("remove-malformed-force")
     const stackName = uniqueRegistryName()
 
@@ -820,12 +820,12 @@ describe("removeWorkspace", () => {
     expect(existsSync(wsDir)).toBe(true)
 
     const result = await removeWorkspace(wsName, { force: true })
-    expect(result.ok).toBe(true)
-    // YAML file is deleted
-    expect(existsSync(workspacePath(wsName))).toBe(false)
-    // Workspace folder is deleted
-    expect(existsSync(wsDir)).toBe(false)
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/Cannot parse/)
+    expect(existsSync(workspacePath(wsName))).toBe(true)
+    expect(existsSync(wsDir)).toBe(true)
 
+    try { unlinkSync(workspacePath(wsName)) } catch { /* ignore */ }
     cleanupFixture(wsName, stackName, tmp)
   })
 
@@ -842,7 +842,7 @@ describe("removeWorkspace", () => {
     const result = await removeWorkspace(wsName, { force: false })
     expect(result.ok).toBe(false)
     expect(result.error).toMatch(/Cannot parse/)
-    expect(result.error).toMatch(/--force/)
+    expect(result.error).not.toMatch(/--force/)
 
     // Manually clean up since we have a corrupt file
     try { unlinkSync(workspacePath(wsName)) } catch { /* ignore */ }

@@ -249,6 +249,8 @@ export const WorkspaceSchema = z.object({
   branch: z.string(),
   created: z.string(),
   last_opened: z.string().optional(),   // ISO timestamp, updated by openWorkspace
+  archived: z.literal(true).optional(),
+  archived_at: z.string().datetime({ offset: true }).optional(),
   template: z.string().optional(),      // informational: source template name
   cmux_workspace_id: z.string().optional(),
   hooks: WorkspaceHooksSchema.optional(),
@@ -263,6 +265,15 @@ export const WorkspaceSchema = z.object({
   pinned: z.boolean().optional(),
   priority: z.number().int().min(-2147483648).max(2147483647).optional(),
   commands: z.record(z.string(), z.string()).optional(),
+}).superRefine((workspace, context) => {
+  const archived = workspace.archived === true
+  const hasArchivedAt = workspace.archived_at !== undefined
+  if (archived === hasArchivedAt) return
+  context.addIssue({
+    code: "custom",
+    path: archived ? ["archived_at"] : ["archived"],
+    message: "archived and archived_at must either both be present or both be omitted",
+  })
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 
@@ -401,7 +412,7 @@ export function writeWorkspace(workspace: Workspace) {
 }
 
 export function updateWorkspace(name: string, intent: (current: Workspace) => Workspace): Workspace {
-  const path = workspacePath(name)
+  const path = workspaceFilePath(name)
   return withMutationLeaseSync(path, () => {
     const current = readYaml(path, WorkspaceSchema)
     const next = WorkspaceSchema.parse(intent(current))
@@ -421,9 +432,12 @@ export function workspaceFilePath(name: string): string {
 }
 
 export function deleteWorkspace(name: string): void {
-  unlinkSync(workspacePath(name))
-  workspaceIndex.delete(name)
-  workspaceListPopulated = false
+  const path = workspaceFilePath(name)
+  withMutationLeaseSync(path, () => {
+    unlinkSync(path)
+    workspaceIndex.delete(name)
+    workspaceListPopulated = false
+  })
 }
 
 function scanWorkspaces(): Workspace[] {

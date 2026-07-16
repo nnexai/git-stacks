@@ -17,11 +17,12 @@ export function setWorkspacePins(
   },
 ): void {
   const workspaces = dependencies.listWorkspaces()
-  const known = new Set(workspaces.map((workspace) => workspace.id).filter((id): id is string => Boolean(id)))
+  const activeWorkspaces = workspaces.filter((workspace) => workspace.archived !== true)
+  const known = new Set(activeWorkspaces.map((workspace) => workspace.id).filter((id): id is string => Boolean(id)))
   for (const id of workspaceIds) if (!known.has(id)) throw new Error(`Unknown workspace identity: ${id}`)
   const pinned = new Set(workspaceIds)
 
-  for (const workspace of workspaces) {
+  for (const workspace of activeWorkspaces) {
     const { pinned: _pinned, ...definition } = workspace
     const shouldPin = Boolean(workspace.id && pinned.has(workspace.id))
     if (shouldPin === (workspace.pinned === true) && workspace.pinned !== false) continue
