@@ -16,6 +16,17 @@ const readGlobalConfigMock = mock(() => ({
 }))
 const deleteWorkspaceMock = mock((_name: string) => {})
 const workspaceFilePathMock = mock((name: string) => `/tmp/phase-75-config/workspaces/${name}.yml`)
+class WorkspaceDefinitionConflictErrorMock extends Error {}
+const inspectWorkspaceDefinitionMock = mock((name: string, expectedId?: string) => {
+  const workspace = readWorkspaceMock(name)
+  if (expectedId !== undefined && workspace.id !== expectedId) throw new WorkspaceDefinitionConflictErrorMock("identity changed")
+  return { id: workspace.id, name, path: workspaceFilePathMock(name), fingerprint: "test-fingerprint", workspace }
+})
+const acquireWorkspaceDefinitionGuardMock = mock((guard: any) => ({
+  workspace: guard.workspace,
+  deleteDefinition: () => deleteWorkspaceMock(guard.name),
+  release() {},
+}))
 
 // ─── Git mocks ────────────────────────────────────────────────────────────────
 const getMergeConflictsMock = mock(async () => ({ status: "clean" } as any))
@@ -50,6 +61,9 @@ mock.module("@/lib/config", () =>
     readGlobalConfig: readGlobalConfigMock,
     deleteWorkspace: deleteWorkspaceMock,
     workspaceFilePath: workspaceFilePathMock,
+    inspectWorkspaceDefinition: inspectWorkspaceDefinitionMock,
+    acquireWorkspaceDefinitionGuard: acquireWorkspaceDefinitionGuardMock,
+    WorkspaceDefinitionConflictError: WorkspaceDefinitionConflictErrorMock,
     isWorktreeRepo: mock((repo: any) => repo.mode === "worktree"),
   })
 )
@@ -143,6 +157,8 @@ describe("workspace-lifecycle exec seam", () => {
     removeWorktreeMock.mockReset()
     deleteWorkspaceMock.mockReset()
     workspaceFilePathMock.mockReset()
+    inspectWorkspaceDefinitionMock.mockReset()
+    acquireWorkspaceDefinitionGuardMock.mockReset()
     buildBaseEnvMock.mockReset()
 
     workspaceExistsMock.mockImplementation(() => true)
@@ -151,6 +167,16 @@ describe("workspace-lifecycle exec seam", () => {
     removeWorktreeMock.mockImplementation(async () => {})
     deleteWorkspaceMock.mockImplementation(() => {})
     workspaceFilePathMock.mockImplementation((name: string) => `/tmp/phase-75-config/workspaces/${name}.yml`)
+    inspectWorkspaceDefinitionMock.mockImplementation((name: string, expectedId?: string) => {
+      const workspace = readWorkspaceMock(name)
+      if (expectedId !== undefined && workspace.id !== expectedId) throw new WorkspaceDefinitionConflictErrorMock("identity changed")
+      return { id: workspace.id, name, path: workspaceFilePathMock(name), fingerprint: "test-fingerprint", workspace }
+    })
+    acquireWorkspaceDefinitionGuardMock.mockImplementation((guard: any) => ({
+      workspace: guard.workspace,
+      deleteDefinition: () => deleteWorkspaceMock(guard.name),
+      release() {},
+    }))
     buildBaseEnvMock.mockImplementation((_workspace: any, _tasksDir: string, triggeredBy: string) => ({
       GS_WORKSPACE_NAME: "test-ws",
       GS_WORKSPACE_BRANCH: "feature/test",
@@ -281,6 +307,81 @@ describe("workspace-lifecycle exec seam", () => {
     expect(existsSync(taskPath)).toBe(true)
   })
 
+  test("normal removal rechecks dirtiness after pre-remove hooks and performs zero destructive calls", async () => {
+    const taskPath = join(tempRoot, "tasks", "test-ws", "api")
+    mkdirSync(taskPath, { recursive: true })
+    getTasksDirMock.mockImplementation(() => join(tempRoot, "tasks"))
+    const workspace = {
+      ...makeTestWorkspace({}),
+      hooks: { pre_remove: ["mark-dirty"] },
+      repos: [{ name: "api", repo: "api", type: "other", mode: "worktree", main_path: join(tempRoot, "main", "api"), task_path: taskPath }],
+    }
+    readWorkspaceMock.mockImplementation(() => workspace)
+    let dirty = false
+    getDirtyWorktreesMock.mockImplementation(async () => dirty ? ["api"] : [])
+    _exec.spawn = () => {
+      dirty = true
+      return { exited: Promise.resolve(0), stdout: null, stderr: null } as any
+    }
+
+    const inspected = await inspectWorkspaceRemoval("test-ws")
+    expect(inspected.ok).toBe(true)
+    if (!inspected.ok) throw new Error("expected clean inspection")
+
+    const committed = await commitWorkspaceRemoval(inspected.plan)
+
+    expect(committed).toMatchObject({ ok: false, code: "workspace_dirty", blocking_repositories: ["api"] })
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(deleteWorkspaceMock).not.toHaveBeenCalled()
+    expect(existsSync(taskPath)).toBe(true)
+  })
+
+  test("Force Remove is the only removal path that passes force to Git", async () => {
+    const taskPath = join(tempRoot, "tasks", "test-ws", "api")
+    mkdirSync(taskPath, { recursive: true })
+    getTasksDirMock.mockImplementation(() => join(tempRoot, "tasks"))
+    readWorkspaceMock.mockImplementation(() => ({
+      ...makeTestWorkspace({}),
+      repos: [{ name: "api", repo: "api", type: "other", mode: "worktree", main_path: join(tempRoot, "main", "api"), task_path: taskPath }],
+    }))
+    getDirtyWorktreesMock.mockImplementation(async () => ["api"])
+
+    const inspected = await inspectWorkspaceRemoval("test-ws")
+    expect(inspected.ok).toBe(false)
+    if (inspected.ok || inspected.code !== "workspace_dirty") throw new Error("expected dirty inspection")
+
+    await expect(commitWorkspaceRemoval(inspected.plan, { allow_dirty: true })).resolves.toEqual({ ok: true })
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      join(tempRoot, "main", "api"),
+      taskPath,
+      { force: true },
+    )
+    expect(deleteWorkspaceMock).toHaveBeenCalledWith("test-ws")
+  })
+
+  test("definition conflicts abort before any destructive removal call", async () => {
+    const taskPath = join(tempRoot, "tasks", "test-ws", "api")
+    mkdirSync(taskPath, { recursive: true })
+    getTasksDirMock.mockImplementation(() => join(tempRoot, "tasks"))
+    readWorkspaceMock.mockImplementation(() => ({
+      ...makeTestWorkspace({}),
+      id: "11111111-1111-4111-8111-111111111111",
+      repos: [{ name: "api", repo: "api", type: "other", mode: "worktree", main_path: join(tempRoot, "main", "api"), task_path: taskPath }],
+    }))
+
+    const inspected = await inspectWorkspaceRemoval("test-ws", { expectedId: "11111111-1111-4111-8111-111111111111" })
+    expect(inspected.ok).toBe(true)
+    if (!inspected.ok) throw new Error("expected clean inspection")
+    acquireWorkspaceDefinitionGuardMock.mockImplementation(() => { throw new WorkspaceDefinitionConflictErrorMock("same-name replacement") })
+
+    const committed = await commitWorkspaceRemoval(inspected.plan)
+
+    expect(committed).toMatchObject({ ok: false, code: "conflict" })
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(deleteWorkspaceMock).not.toHaveBeenCalled()
+    expect(existsSync(taskPath)).toBe(true)
+  })
+
   test("commitWorkspaceRemoval reports phases immediately before their destructive calls", async () => {
     const taskPath = join(tempRoot, "tasks", "test-ws", "api")
     mkdirSync(taskPath, { recursive: true })
@@ -302,6 +403,11 @@ describe("workspace-lifecycle exec seam", () => {
     })
 
     expect(committed.ok).toBe(true)
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      join(tempRoot, "main", "api"),
+      taskPath,
+      { force: false },
+    )
     expect(calls).toEqual([
       "removing_worktrees",
       "removeWorktree",

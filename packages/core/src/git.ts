@@ -167,7 +167,15 @@ export async function createWorktreeFromRef(
   }
 }
 
-export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
+export async function removeWorktree(
+  repoPath: string,
+  worktreePath: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  if (options.force === false) {
+    await $`git -C ${repoPath} worktree remove ${worktreePath}`
+    return
+  }
   await $`git -C ${repoPath} worktree remove ${worktreePath} --force`
 }
 

@@ -12,7 +12,8 @@ import {
   TEMPLATES_DIR,
   expandHome,
 } from "./paths"
-import { atomicReplaceSync, withMutationLeaseSync } from "./persistence"
+import { createHash } from "node:crypto"
+import { atomicReplaceSync, acquireMutationLeaseSync, withMutationLeaseSync } from "./persistence"
 
 // --- In-memory index (ENGN-04/05/06) ---
 
@@ -277,6 +278,22 @@ export const WorkspaceSchema = z.object({
 })
 export type Workspace = z.infer<typeof WorkspaceSchema>
 
+export type WorkspaceDefinitionGuard = {
+  readonly id: string | undefined
+  readonly name: string
+  readonly path: string
+  readonly fingerprint: string
+  readonly workspace: Workspace
+}
+
+export class WorkspaceDefinitionConflictError extends Error {
+  readonly code = "workspace_definition_conflict" as const
+  constructor(message: string) {
+    super(message)
+    this.name = "WorkspaceDefinitionConflictError"
+  }
+}
+
 export const GlobalConfigSchema = z.object({
   workspace_root: z.string().default(DEFAULT_WORKSPACE_ROOT).transform(expandHome),
   /** Per-integration config keyed by integration id, e.g. { vscode: { enabled: true, cmd: "code" } } */
@@ -429,6 +446,97 @@ export function workspaceFilePath(name: string): string {
   const found = findWorkspaceFile(name)
   if (!found) throw new Error(`Workspace '${name}' not found.`)
   return found.filePath
+}
+
+function definitionFingerprint(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex")
+}
+
+function readGuardedWorkspace(guard: WorkspaceDefinitionGuard): { workspace: Workspace; raw: string } {
+  let raw: string
+  let workspace: Workspace
+  try {
+    raw = readFileSync(guard.path, "utf-8")
+    workspace = WorkspaceSchema.parse(parse(raw))
+  } catch {
+    throw new WorkspaceDefinitionConflictError(`Workspace definition changed or disappeared: ${guard.path}`)
+  }
+  if (
+    workspace.name !== guard.name
+    || workspace.id !== guard.id
+    || definitionFingerprint(raw) !== guard.fingerprint
+  ) {
+    throw new WorkspaceDefinitionConflictError(`Workspace definition changed since inspection: ${guard.name}`)
+  }
+  return { workspace, raw }
+}
+
+export function inspectWorkspaceDefinition(name: string, expectedId?: string): WorkspaceDefinitionGuard {
+  let path: string
+  let raw: string
+  let workspace: Workspace
+  try {
+    path = workspaceFilePath(name)
+    raw = readFileSync(path, "utf-8")
+    workspace = WorkspaceSchema.parse(parse(raw))
+  } catch (error) {
+    if (expectedId !== undefined) {
+      throw new WorkspaceDefinitionConflictError(`Workspace definition changed or disappeared before mutation: ${name}`)
+    }
+    throw error
+  }
+  if (workspace.name !== name || (expectedId !== undefined && workspace.id !== expectedId)) {
+    throw new WorkspaceDefinitionConflictError(`Workspace identity changed before mutation: ${name}`)
+  }
+  return { id: workspace.id, name, path, fingerprint: definitionFingerprint(raw), workspace }
+}
+
+export type WorkspaceDefinitionLease = {
+  readonly workspace: Workspace
+  deleteDefinition(): void
+  release(): void
+}
+
+export function acquireWorkspaceDefinitionGuard(guard: WorkspaceDefinitionGuard): WorkspaceDefinitionLease {
+  const lease = acquireMutationLeaseSync(guard.path)
+  try {
+    const workspace = readGuardedWorkspace(guard).workspace
+    let deleted = false
+    return {
+      workspace,
+      deleteDefinition() {
+        if (deleted) return
+        readGuardedWorkspace(guard)
+        unlinkSync(guard.path)
+        workspaceIndex.delete(guard.name)
+        workspaceListPopulated = false
+        deleted = true
+      },
+      release: () => lease.release(),
+    }
+  } catch (error) {
+    lease.release()
+    throw error
+  }
+}
+
+export function updateWorkspaceGuarded(
+  guard: WorkspaceDefinitionGuard,
+  intent: (current: Workspace) => Workspace,
+): Workspace {
+  const lease = acquireWorkspaceDefinitionGuard(guard)
+  try {
+    const next = WorkspaceSchema.parse(intent(lease.workspace))
+    if (next.name !== guard.name || next.id !== guard.id) {
+      throw new WorkspaceDefinitionConflictError("A guarded workspace mutation cannot change identity")
+    }
+    writeYaml(guard.path, next)
+    workspaceIndex.set(next.name, next)
+    workspaceListPopulated = false
+    return next
+  } finally {
+    lease.release()
+  }
 }
 
 export function deleteWorkspace(name: string): void {

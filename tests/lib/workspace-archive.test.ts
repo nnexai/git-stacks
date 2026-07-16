@@ -2,8 +2,10 @@ import { afterEach, describe, expect, test } from "@test/api"
 import { existsSync, unlinkSync } from "fs"
 
 import {
+  inspectWorkspaceDefinition,
   WorkspaceSchema,
   readWorkspace,
+  updateWorkspaceGuarded,
   workspacePath,
   writeWorkspace,
   type Workspace,
@@ -71,5 +73,65 @@ describe("workspace archive persistence", () => {
     const active = unarchiveWorkspace(original.name)
     expect(active).toEqual(original)
     expect(readWorkspace(original.name)).toEqual(original)
+  })
+
+  test("archive rejects a same-name replacement with a different stable ID", async () => {
+    const { archiveWorkspace } = await import("../../packages/core/src/workspace-archive")
+    const original = remember(WorkspaceSchema.parse({
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "phase123-same-name-replacement",
+      branch: "feature/original",
+      created: "2026-07-16",
+    }))
+    const replacement = WorkspaceSchema.parse({
+      ...original,
+      id: "33333333-3333-4333-8333-333333333333",
+      branch: "feature/replacement",
+    })
+    writeWorkspace(replacement)
+
+    expect(() => archiveWorkspace(original.name, { expectedId: original.id })).toThrow("identity changed")
+    expect(readWorkspace(original.name)).toEqual(replacement)
+    expect(readWorkspace(original.name)).not.toHaveProperty("archived")
+  })
+
+  test("guarded mutation rejects a same-ID definition edit after inspection", () => {
+    const original = remember(WorkspaceSchema.parse({
+      id: "44444444-4444-4444-8444-444444444444",
+      name: "phase123-fingerprint-guard",
+      branch: "feature/original",
+      created: "2026-07-16",
+    }))
+    const guard = inspectWorkspaceDefinition(original.name, original.id)
+    const externallyEdited = { ...original, description: "edited after inspection" }
+    writeWorkspace(externallyEdited)
+
+    expect(() => updateWorkspaceGuarded(guard, (workspace) => ({
+      ...workspace,
+      archived: true,
+      archived_at: "2026-07-16T12:00:00.000Z",
+    }))).toThrow("changed since inspection")
+    expect(readWorkspace(original.name)).toEqual(externallyEdited)
+    expect(readWorkspace(original.name)).not.toHaveProperty("archived")
+  })
+
+  test("guarded mutation never follows a stable ID to a renamed definition", () => {
+    const original = remember(WorkspaceSchema.parse({
+      id: "55555555-5555-4555-8555-555555555555",
+      name: "phase123-rename-original",
+      branch: "feature/original",
+      created: "2026-07-16",
+    }))
+    const guard = inspectWorkspaceDefinition(original.name, original.id)
+    unlinkSync(workspacePath(original.name))
+    const renamed = remember({ ...original, name: "phase123-rename-successor" })
+
+    expect(() => updateWorkspaceGuarded(guard, (workspace) => ({
+      ...workspace,
+      archived: true,
+      archived_at: "2026-07-16T12:00:00.000Z",
+    }))).toThrow("changed or disappeared")
+    expect(readWorkspace(renamed.name)).toEqual(renamed)
+    expect(readWorkspace(renamed.name)).not.toHaveProperty("archived")
   })
 })

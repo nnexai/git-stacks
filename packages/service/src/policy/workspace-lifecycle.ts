@@ -34,9 +34,9 @@ export interface WorkspaceLifecycleCoordinatorOptions {
   terminals: { closeWorkspace(workspaceId: string): Promise<WorkspaceTerminalCloseResult> }
   snapshot: SnapshotAdapter & { buildCatalog(signal?: AbortSignal): Promise<WorkspaceCatalog> }
   operations?: Pick<OperationRegistry, "submit">
-  archiveWorkspace?(name: string, options?: { clock?: () => Date }): Workspace
-  unarchiveWorkspace?(name: string): Workspace
-  inspectWorkspaceRemoval?(name: string): Promise<WorkspaceRemovalInspection>
+  archiveWorkspace?(name: string, options?: { clock?: () => Date; expectedId?: string }): Workspace
+  unarchiveWorkspace?(name: string, options?: { expectedId?: string }): Workspace
+  inspectWorkspaceRemoval?(name: string, options?: { expectedId?: string }): Promise<WorkspaceRemovalInspection>
   commitWorkspaceRemoval?(
     plan: WorkspaceRemovalPlan,
     options: { allow_dirty?: boolean; onPhase?: (phase: "removing_worktrees" | "deleting_workspace_files") => void | Promise<void> },
@@ -142,16 +142,16 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
               }
 
               if (mutation.kind === "workspace.archive") {
-                options.archiveWorkspace(target.name, { clock: options.clock })
+                options.archiveWorkspace(target.name, { clock: options.clock, expectedId: target.id })
               } else if (mutation.kind === "workspace.unarchive") {
-                options.unarchiveWorkspace(target.name)
+                options.unarchiveWorkspace(target.name, { expectedId: target.id })
               } else {
                 await progress(report, "checking_worktrees")
-                const inspected = await options.inspectWorkspaceRemoval(target.name)
+                const inspected = await options.inspectWorkspaceRemoval(target.name, { expectedId: target.id })
                 if (mutation.kind === "workspace.remove") {
                   if (!inspected.ok) {
                     throw failure(
-                      inspected.code === "not_found" ? "not_found" : "operation_failed",
+                      inspected.code === "not_found" ? "not_found" : inspected.code === "conflict" ? "conflict" : "operation_failed",
                       inspected.error,
                       inspected.code,
                       terminalsStopped,
@@ -163,14 +163,21 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
                     onPhase: (phase) => progress(report, phase),
                   })
                   if (!committed.ok) {
-                    throw failure(committed.code === "not_found" ? "not_found" : "operation_failed", committed.error, committed.code, terminalsStopped, committed.blocking_repositories)
+                    throw failure(
+                      committed.code === "not_found" ? "not_found" : committed.code === "conflict" ? "conflict" : "operation_failed",
+                      committed.error,
+                      committed.code,
+                      terminalsStopped,
+                      committed.blocking_repositories,
+                      committed.code === "workspace_dirty",
+                    )
                   }
                 } else {
                   if (inspected.ok) {
                     throw failure("operation_failed", "Force Remove is available only for dirty workspaces", "force_not_eligible", terminalsStopped)
                   }
                   if (inspected.code !== "workspace_dirty") {
-                    throw failure(inspected.code === "not_found" ? "not_found" : "operation_failed", inspected.error, inspected.code, terminalsStopped)
+                    throw failure(inspected.code === "not_found" ? "not_found" : inspected.code === "conflict" ? "conflict" : "operation_failed", inspected.error, inspected.code, terminalsStopped)
                   }
                   if (mutation.confirmation_name !== target.name) {
                     throw failure("conflict", "Workspace name confirmation does not match", "confirmation_mismatch", terminalsStopped)
@@ -180,7 +187,7 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
                     onPhase: (phase) => progress(report, phase),
                   })
                   if (!committed.ok) {
-                    throw failure(committed.code === "not_found" ? "not_found" : "operation_failed", committed.error, committed.code, terminalsStopped, committed.blocking_repositories)
+                    throw failure(committed.code === "not_found" ? "not_found" : committed.code === "conflict" ? "conflict" : "operation_failed", committed.error, committed.code, terminalsStopped, committed.blocking_repositories)
                   }
                 }
               }
@@ -200,6 +207,9 @@ export function createWorkspaceLifecycleCoordinator(_options: WorkspaceLifecycle
               })
             } catch (caught) {
               if (caught instanceof WorkspaceLifecycleError) throw caught
+              if ((caught as { code?: unknown })?.code === "workspace_definition_conflict") {
+                throw failure("conflict", caught instanceof Error ? caught.message : String(caught), "workspace_definition_conflict", terminalsStopped)
+              }
               throw failure("operation_failed", caught instanceof Error ? caught.message : String(caught), "operation_failed", terminalsStopped)
             } finally {
               lease.release()

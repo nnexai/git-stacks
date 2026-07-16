@@ -1,10 +1,15 @@
-import { updateWorkspace, type Workspace } from "./config"
+import {
+  inspectWorkspaceDefinition,
+  updateWorkspaceGuarded,
+  type Workspace,
+} from "./config"
 
 export function archiveWorkspace(
   name: string,
-  options: { clock?: () => Date } = {},
+  options: { clock?: () => Date; expectedId?: string } = {},
 ): Workspace {
-  return updateWorkspace(name, (current) => {
+  const guard = inspectWorkspaceDefinition(name, options.expectedId)
+  return updateWorkspaceGuarded(guard, (current) => {
     if (current.archived === true) return current
     return {
       ...current,
@@ -14,8 +19,9 @@ export function archiveWorkspace(
   })
 }
 
-export function unarchiveWorkspace(name: string): Workspace {
-  return updateWorkspace(name, (current) => {
+export function unarchiveWorkspace(name: string, options: { expectedId?: string } = {}): Workspace {
+  const guard = inspectWorkspaceDefinition(name, options.expectedId)
+  return updateWorkspaceGuarded(guard, (current) => {
     if (current.archived !== true) return current
     const { archived: _archived, archived_at: _archivedAt, ...active } = current
     return active

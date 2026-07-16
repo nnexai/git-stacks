@@ -7,12 +7,16 @@ import {
   readGlobalConfig,
   readWorkspace,
   workspaceExists,
-  workspaceFilePath,
   workspacePath,
   writeWorkspace,
+  acquireWorkspaceDefinitionGuard,
+  inspectWorkspaceDefinition,
+  WorkspaceDefinitionConflictError,
   deleteWorkspace,
   type GlobalConfig,
   type Workspace,
+  type WorkspaceDefinitionGuard,
+  type WorkspaceDefinitionLease,
   type WorkspaceRepo,
 } from "./config"
 import {
@@ -137,6 +141,7 @@ type WorkspaceRemovalPlanData = {
   config: GlobalConfig
   tasksDir: string
   definitionPath: string
+  definitionGuard: WorkspaceDefinitionGuard
   blockingRepositories: string[]
 }
 
@@ -155,13 +160,13 @@ export type WorkspaceRemovalInspection =
       blocking_repositories: string[]
       plan: WorkspaceRemovalPlan
     }
-  | { ok: false; code: "not_found" | "workspace_invalid" | "inspection_failed"; error: string }
+  | { ok: false; code: "not_found" | "workspace_invalid" | "inspection_failed" | "conflict"; error: string }
 
 export type WorkspaceRemovalResult =
   | { ok: true }
   | {
       ok: false
-      code: "not_found" | "workspace_invalid" | "inspection_failed" | "workspace_dirty" | "removal_failed"
+      code: "not_found" | "workspace_invalid" | "inspection_failed" | "workspace_dirty" | "removal_failed" | "conflict"
       error: string
       blocking_repositories?: string[]
     }
@@ -279,64 +284,74 @@ async function commitCleanup(
     deleteFolder?: boolean
     deleteConfig?: boolean
     onRemovalPhase?: (phase: CoreWorkspaceRemovalPhase) => void | Promise<void>
+    acquireDestructiveLease?: () => Promise<WorkspaceDefinitionLease>
+    forceWorktreeRemoval?: boolean
   },
   onProgress?: ProgressCallback
 ): Promise<{ ok: boolean; error?: string }> {
   const closeResult = await commitClose(workspace, config, tasksDir, opts, onProgress)
   if (!closeResult.ok) return closeResult
 
-  const failures: string[] = []
-  if (opts.onRemovalPhase) {
-    try {
-      await opts.onRemovalPhase("removing_worktrees")
-    } catch (err) {
-      return { ok: false, error: `removal phase callback failed (${err})` }
-    }
-  }
-  for (const repo of workspace.repos.filter(isWorktreeRepo)) {
-    if (!existsSync(repo.task_path)) continue
-    try {
-      await removeWorktree(repo.main_path, repo.task_path)
-      onProgress?.(`removed  ${repo.name}`)
-    } catch (err) {
-      failures.push(`${repo.name} (${err})`)
-    }
-  }
-  if (failures.length > 0) {
-    return { ok: false, error: `Could not clean worktrees:\n  ${failures.join("\n  ")}` }
-  }
+  let definitionLease: WorkspaceDefinitionLease | undefined
+  try {
+    definitionLease = await opts.acquireDestructiveLease?.()
 
-  const env = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
-  await runPostHookWarning("post_clean", workspace.hooks?.post_clean, tasksDir, env, opts, onProgress)
-
-  if ((opts.deleteFolder || opts.deleteConfig) && opts.onRemovalPhase) {
-    try {
-      await opts.onRemovalPhase("deleting_workspace_files")
-    } catch (err) {
-      return { ok: false, error: `removal phase callback failed (${err})` }
-    }
-  }
-
-  if (opts.deleteFolder) {
-    try {
-      const wsDir = join(tasksDir, workspace.name)
-      if (existsSync(wsDir)) {
-        rmSync(wsDir, { recursive: true, force: true })
-        onProgress?.(`deleted  tasks/${workspace.name}/`)
+    const failures: string[] = []
+    if (opts.onRemovalPhase) {
+      try {
+        await opts.onRemovalPhase("removing_worktrees")
+      } catch (err) {
+        return { ok: false, error: `removal phase callback failed (${err})` }
       }
-    } catch (err) {
-      return { ok: false, error: `workspace folder cleanup failed (${err})` }
     }
-  }
+    for (const repo of workspace.repos.filter(isWorktreeRepo)) {
+      if (!existsSync(repo.task_path)) continue
+      try {
+        await removeWorktree(repo.main_path, repo.task_path, { force: opts.forceWorktreeRemoval })
+        onProgress?.(`removed  ${repo.name}`)
+      } catch (err) {
+        failures.push(`${repo.name} (${err})`)
+      }
+    }
+    if (failures.length > 0) {
+      return { ok: false, error: `Could not clean worktrees:\n  ${failures.join("\n  ")}` }
+    }
 
-  if (opts.deleteConfig) {
-    try {
-      deleteWorkspace(workspace.name)
-    } catch (err) {
-      return { ok: false, error: `workspace config deletion failed (${err})` }
+    const env = buildBaseEnv(workspace, tasksDir, opts.triggeredBy)
+    await runPostHookWarning("post_clean", workspace.hooks?.post_clean, tasksDir, env, opts, onProgress)
+
+    if ((opts.deleteFolder || opts.deleteConfig) && opts.onRemovalPhase) {
+      try {
+        await opts.onRemovalPhase("deleting_workspace_files")
+      } catch (err) {
+        return { ok: false, error: `removal phase callback failed (${err})` }
+      }
     }
+
+    if (opts.deleteFolder) {
+      try {
+        const wsDir = join(tasksDir, workspace.name)
+        if (existsSync(wsDir)) {
+          rmSync(wsDir, { recursive: true, force: true })
+          onProgress?.(`deleted  tasks/${workspace.name}/`)
+        }
+      } catch (err) {
+        return { ok: false, error: `workspace folder cleanup failed (${err})` }
+      }
+    }
+
+    if (opts.deleteConfig) {
+      try {
+        if (definitionLease) definitionLease.deleteDefinition()
+        else deleteWorkspace(workspace.name)
+      } catch (err) {
+        return { ok: false, error: `workspace config deletion failed (${err})` }
+      }
+    }
+    return { ok: true }
+  } finally {
+    definitionLease?.release()
   }
-  return { ok: true }
 }
 
 export async function cleanWorkspace(
@@ -399,8 +414,21 @@ function removalPlanData(plan: WorkspaceRemovalPlan): WorkspaceRemovalPlanData {
   return data
 }
 
-export async function inspectWorkspaceRemoval(name: string): Promise<WorkspaceRemovalInspection> {
+class WorkspaceRemovalDirtyBoundaryError extends Error {
+  constructor(readonly blockingRepositories: string[]) {
+    super(`Dirty worktrees: ${blockingRepositories.join(", ")}`)
+    this.name = "WorkspaceRemovalDirtyBoundaryError"
+  }
+}
+
+export async function inspectWorkspaceRemoval(
+  name: string,
+  options: { expectedId?: string } = {},
+): Promise<WorkspaceRemovalInspection> {
   if (!workspaceExists(name) && !existsSync(workspacePath(name))) {
+    if (options.expectedId !== undefined) {
+      return { ok: false, code: "conflict", error: `Workspace definition changed or disappeared before removal: ${name}` }
+    }
     return { ok: false, code: "not_found", error: `Workspace '${name}' not found.` }
   }
 
@@ -408,10 +436,15 @@ export async function inspectWorkspaceRemoval(name: string): Promise<WorkspaceRe
   _cache.workspaces.delete(name)
   let workspace: Workspace
   let definitionPath: string
+  let definitionGuard: WorkspaceDefinitionGuard
   try {
-    workspace = readWorkspace(name)
-    definitionPath = workspaceFilePath(name)
-  } catch {
+    definitionGuard = inspectWorkspaceDefinition(name, options.expectedId)
+    workspace = definitionGuard.workspace
+    definitionPath = definitionGuard.path
+  } catch (error) {
+    if (error instanceof WorkspaceDefinitionConflictError) {
+      return { ok: false, code: "conflict", error: error.message }
+    }
     return { ok: false, code: "workspace_invalid", error: `Cannot parse workspace YAML for '${name}'.` }
   }
 
@@ -427,7 +460,7 @@ export async function inspectWorkspaceRemoval(name: string): Promise<WorkspaceRe
       error: `Could not inspect workspace worktrees (${err}).`,
     }
   }
-  const plan = removalPlan({ workspace, config, tasksDir, definitionPath, blockingRepositories })
+  const plan = removalPlan({ workspace, config, tasksDir, definitionPath, definitionGuard, blockingRepositories })
   if (blockingRepositories.length > 0) {
     return {
       ok: false,
@@ -449,7 +482,7 @@ async function commitWorkspaceRemovalInternal(
   },
   onProgress?: ProgressCallback,
 ): Promise<WorkspaceRemovalResult> {
-  const { workspace, config, tasksDir, blockingRepositories } = removalPlanData(plan)
+  const { workspace, config, tasksDir, definitionGuard, blockingRepositories } = removalPlanData(plan)
   if (blockingRepositories.length > 0 && options.allow_dirty !== true) {
     return {
       ok: false,
@@ -470,12 +503,44 @@ async function commitWorkspaceRemovalInternal(
   }, onProgress)
   if (!prepared.ok) return { ok: false, code: "removal_failed", error: prepared.error ?? "Removal preparation failed." }
 
-  const committed = await commitCleanup(workspace, config, tasksDir, {
-    ...lifecycleOpts,
-    deleteFolder: true,
-    deleteConfig: true,
-    onRemovalPhase: options.onPhase,
-  }, onProgress)
+  let committed: Awaited<ReturnType<typeof commitCleanup>>
+  try {
+    committed = await commitCleanup(workspace, config, tasksDir, {
+      ...lifecycleOpts,
+      deleteFolder: true,
+      deleteConfig: true,
+      onRemovalPhase: options.onPhase,
+      forceWorktreeRemoval: options.allow_dirty === true,
+      acquireDestructiveLease: async () => {
+        const lease = acquireWorkspaceDefinitionGuard(definitionGuard)
+        try {
+          if (options.allow_dirty !== true) {
+            const freshBlockingRepositories = await getDirtyWorktrees(workspace)
+            if (freshBlockingRepositories.length > 0) {
+              throw new WorkspaceRemovalDirtyBoundaryError(freshBlockingRepositories)
+            }
+          }
+          return lease
+        } catch (error) {
+          lease.release()
+          throw error
+        }
+      },
+    }, onProgress)
+  } catch (error) {
+    if (error instanceof WorkspaceRemovalDirtyBoundaryError) {
+      return {
+        ok: false,
+        code: "workspace_dirty",
+        error: `Dirty worktrees: ${error.blockingRepositories.join(", ")}`,
+        blocking_repositories: [...error.blockingRepositories],
+      }
+    }
+    if (error instanceof WorkspaceDefinitionConflictError) {
+      return { ok: false, code: "conflict", error: error.message }
+    }
+    return { ok: false, code: "removal_failed", error: `Removal boundary failed (${error}).` }
+  }
   if (!committed.ok) return { ok: false, code: "removal_failed", error: committed.error ?? "Removal failed." }
 
   await runPostHookWarning("post_remove", workspace.hooks?.post_remove, tasksDir,

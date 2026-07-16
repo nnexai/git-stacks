@@ -71,6 +71,10 @@ export interface MutationLeaseOptions {
   now?: () => number
 }
 
+export interface MutationLease {
+  release(): void
+}
+
 function processIsAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false
   try { process.kill(pid, 0); return true } catch (error) {
@@ -103,7 +107,7 @@ function recoverStaleLease(path: string, now: number, staleMs: number): boolean 
   }
 }
 
-export function withMutationLeaseSync<T>(target: string, run: () => T, options: MutationLeaseOptions = {}): T {
+export function acquireMutationLeaseSync(target: string, options: MutationLeaseOptions = {}): MutationLease {
   const lockPath = `${target}.lock`
   const now = options.now ?? Date.now
   const timeoutMs = options.timeoutMs ?? 5_000
@@ -134,14 +138,24 @@ export function withMutationLeaseSync<T>(target: string, run: () => T, options: 
     throw new Error(`Timed out waiting for mutation lease on ${target}${owner ? ` (owner pid ${owner.pid})` : ""}`)
   }
 
-  try { return run() } finally {
-    const current = readLease(lockPath)
-    if (current?.nonce === record.nonce) {
-      try { unlinkSync(lockPath) } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+  let released = false
+  return {
+    release() {
+      if (released) return
+      released = true
+      const current = readLease(lockPath)
+      if (current?.nonce === record.nonce) {
+        try { unlinkSync(lockPath) } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+        }
       }
-    }
+    },
   }
+}
+
+export function withMutationLeaseSync<T>(target: string, run: () => T, options: MutationLeaseOptions = {}): T {
+  const lease = acquireMutationLeaseSync(target, options)
+  try { return run() } finally { lease.release() }
 }
 
 export function replaceJsonSync(path: string, value: unknown, options: AtomicReplaceOptions = {}): void {

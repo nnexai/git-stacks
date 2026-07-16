@@ -172,6 +172,43 @@ describe("service workspace lifecycle coordinator", () => {
     expect(state.calls.some((call) => call.startsWith("commit:"))).toBe(false)
   })
 
+  test("carries the catalog stable ID into archive and removal core boundaries", async () => {
+    const expectedIds: string[] = []
+    const state = harness({
+      archiveWorkspace(name, options) {
+        expectedIds.push(`archive:${options?.expectedId}`)
+        state.targets.find((entry) => entry.name === name)!.archived = true
+        state.setRevision("2")
+        return {} as never
+      },
+      async inspectWorkspaceRemoval(name, options) {
+        expectedIds.push(`remove:${options?.expectedId}`)
+        return { ok: true, plan: { name } as never }
+      },
+    })
+
+    await runExecution(state.coordinator, mutation("workspace.archive"))
+    state.targets[0]!.archived = false
+    state.setRevision("1")
+    await runExecution(state.coordinator, mutation("workspace.remove"))
+
+    expect(expectedIds).toEqual([`archive:${WORKSPACE_A}`, `remove:${WORKSPACE_A}`])
+  })
+
+  test("reports a stable-definition conflict without reconciling it as an operation failure", async () => {
+    const state = harness({
+      archiveWorkspace() {
+        throw Object.assign(new Error("same-name replacement"), { code: "workspace_definition_conflict" })
+      },
+    })
+
+    await expect(runExecution(state.coordinator, mutation("workspace.archive"))).rejects.toMatchObject({
+      code: "conflict",
+      details: { kind: "workspace_definition_conflict", terminals_stopped: true, force_allowed: false },
+    })
+    expect(state.calls.filter((call) => call.startsWith("catalog:"))).toEqual(["catalog:1"])
+  })
+
   test("normal dirty removal returns every blocker after terminals stop and never commits", async () => {
     const state = harness({
       async inspectWorkspaceRemoval(name) {
@@ -188,6 +225,23 @@ describe("service workspace lifecycle coordinator", () => {
     })
     expect(phases).toEqual(["stopping_terminals", "checking_worktrees"])
     expect(state.calls.some((call) => call.startsWith("commit:"))).toBe(false)
+  })
+
+  test("a fresh dirty blocker returned at commit remains eligible for typed Force Remove", async () => {
+    const state = harness({
+      async commitWorkspaceRemoval() {
+        return { ok: false, code: "workspace_dirty", error: "became dirty", blocking_repositories: ["api"] }
+      },
+    })
+
+    await expect(runExecution(state.coordinator, mutation("workspace.remove"))).rejects.toMatchObject({
+      details: {
+        kind: "workspace_dirty",
+        blocking_repositories: ["api"],
+        terminals_stopped: true,
+        force_allowed: true,
+      },
+    })
   })
 
   test.each([
