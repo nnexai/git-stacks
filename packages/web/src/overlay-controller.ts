@@ -16,17 +16,17 @@ import {
   type WebShortcutPlatform,
   type WebShortcutSettings,
 } from "@git-stacks/protocol"
-import { WebShortcutConflictRecoveryError, WebShortcutConflictRefreshError, WebShortcutOwnerConflictError } from "./navigation"
+import { isCoordinatedReturnTarget, WebShortcutConflictRecoveryError, WebShortcutConflictRefreshError, WebShortcutOwnerConflictError, type OverlayFocusOwnership, type WebOverlayReturnTarget } from "./navigation"
 
 type OverlayControllerOptions = {
-  restoreFocus(target: string | HTMLElement | undefined): void
+  restoreFocus(target: WebOverlayReturnTarget | undefined, ownsFocus: OverlayFocusOwnership): void
 }
 
 export type OverlayOpenOptions = {
   id: string
   title: string
   closeLabel: string
-  returnTarget?: string | HTMLElement
+  returnTarget?: WebOverlayReturnTarget
   exclusive?: boolean
 }
 
@@ -45,7 +45,7 @@ export type OverlayOpenResult =
 type ActiveOverlay = {
   id: string
   exclusive: boolean
-  returnTarget?: string | HTMLElement
+  returnTarget?: WebOverlayReturnTarget
   backdrop: HTMLElement
   dialog: HTMLElement
   body: HTMLElement
@@ -71,6 +71,7 @@ function control(document: Document, label: string, className = "button"): HTMLB
 
 export function createSingletonOverlayController(document: Document, options: OverlayControllerOptions) {
   let active: ActiveOverlay | undefined
+  let focusGeneration = 0
 
   const containedKeydown = (event: KeyboardEvent) => {
     if (!active) return
@@ -108,10 +109,13 @@ export function createSingletonOverlayController(document: Document, options: Ov
     if (active?.exclusive) return { kind: "unavailable" }
 
     const preservedReturnTarget = active?.returnTarget ?? request.returnTarget
+    const focusBeforeOpen = document.activeElement
+    const overlayGeneration = ++focusGeneration
     if (active) {
       active.backdrop.remove()
       active = undefined
     }
+    if (isCoordinatedReturnTarget(preservedReturnTarget)) preservedReturnTarget.activate()
 
     const backdrop = node(document, "div", "modal-backdrop")
     const dialog = node(document, "section", "modal")
@@ -136,7 +140,18 @@ export function createSingletonOverlayController(document: Document, options: Ov
       closed = true
       backdrop.remove()
       if (active?.close === close) active = undefined
-      if (restoreFocus) options.restoreFocus(preservedReturnTarget)
+      if (restoreFocus) {
+        const ownsFocus: OverlayFocusOwnership = () => {
+          if (focusGeneration !== overlayGeneration || active) return false
+          const focused = document.activeElement
+          return focused === focusBeforeOpen
+            || focused === document.body
+            || !focused
+            || !(focused as Node).isConnected
+            || dialog.contains(focused)
+        }
+        options.restoreFocus(preservedReturnTarget, ownsFocus)
+      }
     }
     const view: OverlayView = {
       body,

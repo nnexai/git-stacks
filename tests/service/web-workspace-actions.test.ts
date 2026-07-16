@@ -2,8 +2,6 @@ import { describe, expect, test } from "@test/api"
 import { createWorkspaceActionRegistry } from "../../packages/client/src/workspace-actions"
 import {
   WEB_WORKSPACE_ACTION_GROUPS,
-  invokeWithTransientOverlayInvoker,
-  isUsableOverlayReturnTarget,
   validateWorkspaceNoteDraft,
   workspaceActionMenuRows,
 } from "../../packages/web/src/navigation"
@@ -110,52 +108,22 @@ describe("web canonical workspace action surface", () => {
     expect(appSource).not.toMatch(/operation\.get[\s\S]{0,500}summarizeOperation/)
   })
 
-  test("uses stable rename intent and restores concrete context-menu and overlay nodes", () => {
+  test("uses stable rename intent and production-wired overlay focus coordination", () => {
     expect(appSource).toContain('kind: "workspace.rename"')
     expect(appSource).toContain("new_name: nextName")
     expect(appSource).not.toContain('request: { workspace: workspace.name, new_name: nextName }')
     expect(appSource).toContain("contextMenuInvoker")
-    expect(appSource).toContain("requestAnimationFrame")
+    expect(appSource).toContain("createWebOverlayFocusCoordinator")
+    expect(appSource).toContain("bindScopeMenuOverlayAction(overlayFocusCoordinator")
+    expect(appSource).toContain("returnTarget: overlayFocusCoordinator.takeReturnTarget(activeTerminalId)")
+    expect(appSource).toContain("overlayFocusCoordinator.invokeFromElement(createWorkspaceButton")
+    expect(appSource).toContain('row.setAttribute("data-workspace-id", workspace.id)')
+    expect(appSource).toContain("findWorkspaceRow(document, workspace.id, repository.id)")
+    expect(appSource).toContain("terminal.focusInput(attempt)")
+    expect(appSource).toContain('retry.addEventListener("click", () => { void reload() })')
+    expect(appSource).not.toContain("view.close(false); void showWorkspaceNotes(workspace)")
+    expect(appSource).not.toContain("pendingOverlayInvoker")
     expect(appSource).toContain("focusInvalidForgeField")
-  })
-
-  test("restores a scope-menu overlay to the concrete Notes item", async () => {
-    const scopeNotes = { isConnected: true, hidden: false, closest: () => null, focused: false }
-    let pending: typeof scopeNotes | undefined
-    let overlayReturnTarget: typeof scopeNotes | undefined
-
-    invokeWithTransientOverlayInvoker(scopeNotes, () => {
-      overlayReturnTarget = pending
-      pending = undefined
-    }, { get: () => pending, set: (value) => { pending = value } })
-    await Promise.resolve()
-
-    if (overlayReturnTarget && isUsableOverlayReturnTarget(overlayReturnTarget)) overlayReturnTarget.focused = true
-    expect(overlayReturnTarget).toBe(scopeNotes)
-    expect(scopeNotes.focused).toBe(true)
-    expect(pending).toBeUndefined()
-  })
-
-  test("clears a cancelled Rename invoker before a later Create overlay restores focus", async () => {
-    const hiddenScopeRename = { isConnected: true, hidden: false, closest: () => ({ hidden: true }), focused: false }
-    const createButton = { isConnected: true, hidden: false, closest: () => null, focused: false }
-    let pending: typeof hiddenScopeRename | typeof createButton | undefined
-
-    invokeWithTransientOverlayInvoker(hiddenScopeRename, () => undefined, {
-      get: () => pending,
-      set: (value) => { pending = value },
-    })
-    await Promise.resolve()
-    expect(pending).toBeUndefined()
-    expect(isUsableOverlayReturnTarget(hiddenScopeRename)).toBe(false)
-
-    pending = createButton
-    const overlayReturnTarget = pending
-    pending = undefined
-    if (isUsableOverlayReturnTarget(overlayReturnTarget)) overlayReturnTarget.focused = true
-
-    expect(createButton.focused).toBe(true)
-    expect(hiddenScopeRename.focused).toBe(false)
   })
 })
 

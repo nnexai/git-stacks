@@ -26,8 +26,10 @@ key-files:
     - tests/service/web-forge-review.test.ts
   modified:
     - packages/web/src/navigation.ts
+    - packages/web/src/overlay-controller.ts
     - packages/web/src/app.ts
     - packages/web/src/app.css
+    - tests/service/web-keyboard-overlays.test.ts
 
 key-decisions:
   - "Every active-workspace row, scope-menu, direct pin, and optional invoker resolves a shared descriptor callback; unavailable menu rows remain focusable and announce the authoritative reason without transport."
@@ -97,7 +99,7 @@ status: complete
 - **Started:** 2026-07-16T19:03:00Z
 - **Completed:** 2026-07-16T19:24:59Z
 - **Tasks:** 3
-- **Files modified:** 5
+- **Files modified:** 7
 
 ## Accomplishments
 
@@ -116,10 +118,12 @@ Each task followed RED then GREEN TDD:
 
 ## Files Created/Modified
 
-- `packages/web/src/navigation.ts` — Canonical workspace action grouping/menu adapter and UTF-8 note validation.
-- `packages/web/src/app.ts` — Descriptor dispatch, durable cards, authoritative note/file overlays, and reviewed forge UI.
+- `packages/web/src/navigation.ts` — Canonical workspace action grouping/menu adapter, coordinated overlay focus restoration, and UTF-8 note validation.
+- `packages/web/src/overlay-controller.ts` — Preserves coordinated return callbacks through singleton overlay replacement and close.
+- `packages/web/src/app.ts` — Descriptor dispatch, production scope/context/Create focus wiring, durable cards, authoritative note/file overlays, and reviewed forge UI.
 - `packages/web/src/app.css` — Operation/detail/review hierarchy, safe wrapping, sticky regions, and narrow viewport behavior.
-- `tests/service/web-workspace-actions.test.ts` — Action identity, disabled-reason, operation, notes, and redacted file-detail sentinels.
+- `tests/service/web-workspace-actions.test.ts` — Action identity, production coordinator wiring, disabled-reason, operation, notes, and redacted file-detail sentinels.
+- `tests/service/web-keyboard-overlays.test.ts` — Integration DOM/controller coverage for scope-menu restoration, unusable targets, terminal fallback, confirmations, and stale invoker expiry.
 - `tests/service/web-forge-review.test.ts` — Resolve/review/create separation, immutable anchor, and responsive source assertions.
 
 ## Decisions Made
@@ -191,13 +195,17 @@ The review repair followed an additional adversarial RED/GREEN cycle: `75bea09a`
 
 Review verification passed 16 focused files / 188 tests, `npm run web:build`, `npm run test:deps`, package typechecks, and `git diff --check`. In the isolated worktree, service/web were additionally typechecked through temporary local-path configs because its shared `node_modules` link resolved workspace packages from the parent checkout; those temporary configs and the link were removed before commit. Standard workspace typechecks should be rerun after integration.
 
-## Residual Scope-Menu Focus Repair
+## Production-Wired Focus Lifecycle Repair
 
-The first residual repair (`c368a1ec`) made the scope placement explicit but its source-slicing assertion was too weak: assigning every enabled scope action to `pendingOverlayInvoker` could leave a stale hidden item after a non-overlay action such as a cancelled Rename. Independent re-review identified this as blocker BL-01, so the earlier claim that the placement was fully repaired is retracted.
+The earlier residual repairs (`c368a1ec`, `17ec414b`) fixed placement and transient-slot expiry but did not cover the production lifecycle. Scope actions hid the menu before overlay capture, row context menus captured a row detached by selection rerender, terminal focus reported success before xterm's nested animation frame ran, and queued restore frames could outlive their overlay. Helper-only tests therefore did not justify the earlier focus-restoration claim.
 
-Behavioral RED coverage now exercises both lifecycles: Notes synchronously consumes the concrete scope item as the overlay return target, while cancelled Rename leaves no candidate for a later Create overlay. Scope invocation uses a transient invoker slot that clears in a microtask only when no synchronous overlay consumed it. Focus restoration also rejects hidden, hidden-ancestor, and disconnected elements before falling back to the requested terminal, active terminal, or actual visible invoker.
+This repair replaces the loose slot with a production-wired focus coordinator shared by scope menus, row context menus, Create, the singleton overlay controller, and terminal fallback. Scope restoration reopens the originating menu, restores `aria-expanded="true"`, reacquires the concrete action by stable action ID, revalidates it at application time, and accepts success only when the usable target actually owns `document.activeElement`. Disconnected, disabled, inert, hidden/CSS-hidden/hidden-ancestor, and focus-failing targets close the menu and fall through to a visible scope origin, requested terminal, current terminal, then a visible global invoker. Workspace rows now carry stable workspace/repository identity so the context-menu path reacquires the visible post-selection row instead of retaining `event.currentTarget` after rerender.
 
-The behavioral RED run failed exactly 2 of 11 workspace-action tests before implementation. GREEN verification passed 45 focused tests across `web-workspace-actions`, `web-keyboard-navigation`, and `web-keyboard-overlays`; `npm run web:build`; branch-local web source typecheck; client and protocol package typechecks; `npm run test:deps`; and `git diff --check`. The isolated worktree uses a temporary link to the parent dependency installation and a temporary source-alias web typecheck config; both are removed after each run. Real browser/xterm focus observation remains part of the explicitly deferred Phase 127 manual verification boundary and is not claimed here.
+Overlay generations and focus-ownership predicates cancel stale primary and terminal restore frames when a newer overlay or deliberate focus owner appears. Terminal focus is an asynchronous completion attempt: the coordinator waits for the nested xterm frame, verifies focus inside the terminal host, and only then suppresses fallback. Scope actions that open no overlay restore a visible toggle/origin, native Rename cancellation cannot contaminate a later Create-button overlay, compatible overlay replacement preserves the original coordinated return target, and Notes Retry reloads inside the existing overlay instead of discarding that target.
+
+Integration DOM/controller coverage executes the production binder, canonical workspace registry callback, stable row resolver, coordinator, and singleton overlay API. It covers Notes, Files, and safe-cancel confirmation close from both scope and rerendered row origins; replacement item reacquisition; removed item/menu/group/row fallback; unusable and focus-failing targets; requested-to-current terminal fallback; nested terminal cancellation; stale restore ownership; non-overlay scope actions; compatible replacement; and Rename-cancel followed by Create.
+
+Final automated evidence: 53 focused tests passed across `web-workspace-actions`, `web-keyboard-navigation`, and `web-keyboard-overlays`; `npm run web:build` passed; web, client, and protocol workspace typechecks passed; both `npm run test:deps` and `npm run test:architecture` passed; and `git diff --check` passed. An isolated file-keystore browser fixture additionally observed scope Notes, Files, and Remove-cancel restoring the exact originating item/menu state, right-click Notes restoring the connected replacement row with the same stable identities, and rapid Notes-close followed by Create retaining the newer modal/input focus. The fixture, browser session, service, screenshot, and temporary dependency links were removed before commit. Broader physical-keyboard and real-xterm approval remains the Phase 127 manual verification boundary.
 
 ## User Setup Required
 

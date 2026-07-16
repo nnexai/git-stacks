@@ -6,7 +6,7 @@ import "./app.css"
 import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
 import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, invokeWithTransientOverlayInvoker, isUsableOverlayReturnTarget, overlayAwareActionAvailability, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { bindScopeMenuOverlayAction, classifyWebShortcutMutationConflict, createWebActionRegistry, createWebOverlayFocusCoordinator, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, findWorkspaceRow, overlayAwareActionAvailability, setMenuExpanded, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type OverlayTerminalFocusAttempt, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration, type WebOverlayReturnTarget } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
@@ -95,18 +95,28 @@ function providerBadge(source: string, className = "provider-chip"): HTMLElement
 }
 
 type ContextAction = { label: string; run: () => void; disabled?: boolean; disabledReason?: string; destructive?: boolean; group?: string }
+type CanonicalContextAction = ContextAction & { actionId: WebWorkspaceActionId }
 let contextMenuInvoker: HTMLElement | undefined
-let pendingOverlayInvoker: HTMLElement | undefined
+let contextMenuInvokerResolver: (() => HTMLElement | undefined) | undefined
 function hideContextMenu(restoreFocus = false): void {
+  const invoker = contextMenuInvoker
+  const resolveInvoker = contextMenuInvokerResolver
   contextMenu.hidden = true
   contextMenu.replaceChildren()
-  if (restoreFocus && contextMenuInvoker?.isConnected) contextMenuInvoker.focus()
-  if (restoreFocus) contextMenuInvoker = undefined
+  contextMenuInvoker = undefined
+  contextMenuInvokerResolver = undefined
+  if (restoreFocus) overlayFocusCoordinator.invokeFromElement(invoker, () => undefined, resolveInvoker)
 }
-function showContextMenu(event: MouseEvent, actions: ContextAction[]): void {
+function showContextMenu(
+  event: MouseEvent,
+  actions: ContextAction[],
+  invoker = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined,
+  resolveInvoker?: () => HTMLElement | undefined,
+): void {
   event.preventDefault()
   event.stopPropagation()
-  contextMenuInvoker = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined
+  contextMenuInvoker = invoker
+  contextMenuInvokerResolver = resolveInvoker
   contextMenu.replaceChildren()
   let group = ""
   for (const action of actions) {
@@ -124,8 +134,10 @@ function showContextMenu(event: MouseEvent, actions: ContextAction[]): void {
     if (disabledReason) control.append(element("span", "context-menu-reason", disabledReason))
     control.addEventListener("click", () => {
       if (disabledReason) { toast(`${action.label} unavailable — ${disabledReason}`, true); return }
-      pendingOverlayInvoker = contextMenuInvoker
-      hideContextMenu(); action.run()
+      const invoker = contextMenuInvoker
+      const resolveInvoker = contextMenuInvokerResolver
+      hideContextMenu()
+      overlayFocusCoordinator.invokeFromElement(invoker, action.run, resolveInvoker)
     })
     contextMenu.append(control)
   }
@@ -220,11 +232,18 @@ class TerminalView {
     this.send({ type: "flow", streaming })
   }
 
-  focusInput(): void {
+  focusInput(attempt?: OverlayTerminalFocusAttempt): void {
     requestAnimationFrame(() => {
-      if (!this.active || this.disposed) return
-      if (!this.opened) this.open()
-      this.terminal?.focus()
+      if (attempt && !attempt.isCurrent()) return
+      if (!this.active || this.disposed) { attempt?.complete(false); return }
+      try {
+        if (!this.opened) this.open()
+        this.terminal?.focus()
+      } catch {
+        attempt?.complete(false)
+        return
+      }
+      attempt?.complete(Boolean(this.terminal && this.host.contains(document.activeElement)))
     })
   }
 
@@ -550,24 +569,25 @@ const toastRegion = document.querySelector<HTMLElement>("#toasts")!
 const contextMenu = document.querySelector<HTMLElement>("#context-menu")!
 const operationRegion = document.querySelector<HTMLElement>("#operations")!
 
-function restoreOverlayFocus(target: string | HTMLElement | undefined): void {
-  if (target instanceof HTMLElement && isUsableOverlayReturnTarget(target)) {
-    requestAnimationFrame(() => target.focus())
-    return
-  }
-  const terminalId = typeof target === "string" ? target : undefined
-  const terminal = terminalId ? terminalViews.get(terminalId) : undefined
-  if (terminal) {
+const overlayFocusCoordinator = createWebOverlayFocusCoordinator({
+  document,
+  requestFrame: (callback) => { requestAnimationFrame(callback) },
+  focusTerminal: (terminalId, attempt) => {
+    const terminal = terminalViews.get(terminalId)
+    if (!terminal) { attempt.complete(false); return }
+    if (!attempt.isCurrent()) return
     const { workspace_id: workspaceId, repository_id: repositoryId } = terminal.meta
     if (selectedPair?.workspaceId !== workspaceId || selectedPair.repositoryId !== repositoryId) selectPair({ workspaceId, repositoryId })
-    selectTerminal(terminal.meta.id)
-    return
-  }
-  if (activeTerminalId && terminalViews.has(activeTerminalId)) {
-    terminalViews.get(activeTerminalId)?.focusInput()
-    return
-  }
-  document.querySelector<HTMLElement>("#keyboard-shortcuts, #launcher, #create, .workspace-row")?.focus()
+    if (!attempt.isCurrent()) return
+    selectTerminal(terminal.meta.id, false)
+    terminal.focusInput(attempt)
+  },
+  currentTerminalId: () => activeTerminalId,
+  visibleInvoker: () => document.querySelector<HTMLElement>("#keyboard-shortcuts, #launcher, #create, .workspace-row") ?? undefined,
+})
+
+function restoreOverlayFocus(target: WebOverlayReturnTarget | undefined, ownsFocus: () => boolean): void {
+  overlayFocusCoordinator.restore(target, ownsFocus)
 }
 
 overlayController = createSingletonOverlayController(document, { restoreFocus: restoreOverlayFocus })
@@ -863,8 +883,9 @@ function invokeWorkspaceAction(workspace: Workspace, actionId: WebWorkspaceActio
   }).catch(() => toast(`${entry.label} could not be submitted. Refresh before trying again.`, true))
 }
 
-function canonicalContextActions(workspace: Workspace): ContextAction[] {
+function canonicalContextActions(workspace: Workspace): CanonicalContextAction[] {
   return workspaceActionMenuRows(actionRegistryFor(workspace)).map((row) => ({
+    actionId: row.actionId,
     label: row.label,
     group: row.group,
     destructive: row.destructive,
@@ -952,6 +973,8 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
   const running = [...terminalViews.values()].some((view) => view.meta.workspace_id === workspace.id && view.meta.repository_id === repository.id && Boolean(view.meta.command_id) && view.meta.state !== "ended")
   const selected = selectedPair?.workspaceId === workspace.id && selectedPair.repositoryId === repository.id
   const row = button("", `workspace-row${selected ? " active" : ""}${repository.degraded || !repository.exists ? " degraded" : ""}`)
+  row.setAttribute("data-workspace-id", workspace.id)
+  row.setAttribute("data-repository-id", repository.id)
   const title = groupKind === "repository" || workspace.repositories.length === 1 ? workspace.name : `${workspace.name} / ${repository.name}`
   row.setAttribute("aria-label", `${title}, repository ${repository.name}, branch ${repository.branch || workspace.branch}${pinned ? ", pinned" : ""}${sessions.length ? `, ${sessions.length} active agent${sessions.length === 1 ? "" : "s"}` : ""}${notifications ? `, ${notifications} unread notifications` : ""}`)
   const icon = element("span", `workspace-icon${repository.degraded || !repository.exists ? " warning" : ""}`)
@@ -1019,9 +1042,15 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
   })
   row.addEventListener("click", () => selectPair({ workspaceId: workspace.id, repositoryId: repository.id }))
   row.addEventListener("contextmenu", (event) => {
+    const resolveInvoker = () => findWorkspaceRow(document, workspace.id, repository.id)
     selectPair({ workspaceId: workspace.id, repositoryId: repository.id })
     const canonical = canonicalContextActions(workspace)
-    showContextMenu(event, canonical.length ? canonical : [{ label: "Workspace actions", disabledReason: "Actions are still loading.", run: () => undefined }])
+    showContextMenu(
+      event,
+      canonical.length ? canonical : [{ label: "Workspace actions", disabledReason: "Actions are still loading.", run: () => undefined }],
+      resolveInvoker(),
+      resolveInvoker,
+    )
   })
   const pin = button(pinned ? "★" : "☆", `pin-button${pinned ? " pin" : ""}`)
   pin.setAttribute("aria-label", `${pinned ? "Unpin" : "Pin"} workspace ${workspace.name}`)
@@ -1096,14 +1125,15 @@ function renderScope(): void {
       control.setAttribute("aria-disabled", String(Boolean(row.disabledReason)))
       control.tabIndex = 0
       if (row.disabledReason) control.append(element("span", "scope-menu-reason", row.disabledReason))
-      control.addEventListener("click", () => {
-        if (row.disabledReason) { toast(`${row.label} unavailable — ${row.disabledReason}`, true); return }
-        menu.hidden = true
-        toggle.setAttribute("aria-expanded", "false")
-        invokeWithTransientOverlayInvoker(control, row.run, {
-          get: () => pendingOverlayInvoker,
-          set: (value) => { pendingOverlayInvoker = value },
-        })
+      bindScopeMenuOverlayAction(overlayFocusCoordinator, {
+        actionId: row.actionId,
+        item: control,
+        menu,
+        toggle,
+        visibleOrigin: () => document.querySelector<HTMLElement>(".workspace-actions-toggle") ?? undefined,
+        disabledReason: row.disabledReason,
+        unavailable: () => toast(`${row.label} unavailable — ${row.disabledReason}`, true),
+        invoke: row.run,
       })
       menu.append(control)
     }
@@ -1119,9 +1149,9 @@ function renderScope(): void {
       else if (event.key === "End") { controls.at(-1)?.focus(); event.preventDefault() }
     })
     toggle.addEventListener("click", () => {
-      menu.hidden = !menu.hidden
-      toggle.setAttribute("aria-expanded", String(!menu.hidden))
-      if (!menu.hidden) menu.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus()
+      const expanded = Boolean(menu.hidden)
+      setMenuExpanded(menu, toggle, expanded)
+      if (expanded) menu.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus()
     })
     actions.append(toggle, menu)
     scope.append(shell, actions)
@@ -1202,10 +1232,10 @@ function renderTabs(): void {
   }
 }
 
-function selectTerminal(id: string): void {
+function selectTerminal(id: string, focus = true): void {
   activeTerminalId = id
   renderTabs()
-  terminalViews.get(id)?.focusInput()
+  if (focus) terminalViews.get(id)?.focusInput()
   void refreshSignals()
 }
 
@@ -1318,11 +1348,10 @@ function modal(title: string, shortcutAction?: WebShortcutActionId): OverlayView
     id: shortcutAction ?? `exclusive:${title}`,
     title,
     closeLabel: `Close ${title.toLocaleLowerCase()}`,
-    returnTarget: pendingOverlayInvoker ?? activeTerminalId,
+    returnTarget: overlayFocusCoordinator.takeReturnTarget(activeTerminalId),
     exclusive: shortcutAction === undefined,
   })
   if (opened.kind === "unavailable") return undefined
-  pendingOverlayInvoker = undefined
   return opened.view
 }
 
@@ -1706,16 +1735,22 @@ async function showWorkspaceNotes(workspace: Workspace): Promise<void> {
     view.setPrimaryFocus(() => input.focus())
   }
 
-  view.body.append(element("div", "detail-loading", "Loading workspace notes…"))
-  try { notes = await load(); render() }
-  catch {
-    view.body.replaceChildren()
-    const error = element("div", "detail-error", "Workspace notes could not be loaded. Retry without changing stored notes.")
-    const retry = button("Retry workspace notes", "button primary")
-    retry.addEventListener("click", () => { view.close(false); void showWorkspaceNotes(workspace) })
-    view.body.append(error, retry)
-    retry.focus()
+  const reload = async () => {
+    view.body.replaceChildren(element("div", "detail-loading", "Loading workspace notes…"))
+    try {
+      notes = await load()
+      render()
+    } catch {
+      view.body.replaceChildren()
+      const error = element("div", "detail-error", "Workspace notes could not be loaded. Retry without changing stored notes.")
+      const retry = button("Retry workspace notes", "button primary")
+      retry.addEventListener("click", () => { void reload() })
+      view.body.append(error, retry)
+      view.setPrimaryFocus(() => retry.focus())
+      retry.focus()
+    }
   }
+  await reload()
 }
 
 async function showWorkspaceFileStatus(workspace: Workspace): Promise<void> {
@@ -2219,7 +2254,10 @@ function showStartupFailure(title: string, error: unknown, hint: string): void {
 document.querySelector("#launcher")!.addEventListener("click", () => invokeRegisteredAction("commands.open"))
 document.querySelector("#next-attention")!.addEventListener("click", () => invokeRegisteredAction("attention.next"))
 document.querySelector("#keyboard-shortcuts")!.addEventListener("click", showKeyboardHelp)
-document.querySelector("#create")!.addEventListener("click", () => invokeRegisteredAction("workspace.new"))
+const createWorkspaceButton = document.querySelector<HTMLButtonElement>("#create")!
+createWorkspaceButton.addEventListener("click", () => {
+  overlayFocusCoordinator.invokeFromElement(createWorkspaceButton, () => invokeRegisteredAction("workspace.new"))
+})
 document.querySelector("#archived")!.addEventListener("click", showArchivedWorkspaces)
 for (const control of document.querySelectorAll<HTMLButtonElement>("[data-organization]")) control.addEventListener("click", () => {
   preferences.organization = control.dataset.organization as Organization

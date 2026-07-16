@@ -21,28 +21,278 @@ export type WorkspaceNoteDraftValidation =
   | { valid: true; text: string }
   | { valid: false; message: string }
 
-export function invokeWithTransientOverlayInvoker<T>(
-  invoker: T,
-  invoke: () => void,
-  slot: { get: () => T | undefined; set: (value: T | undefined) => void },
-  defer: (callback: () => void) => void = queueMicrotask,
-): void {
-  slot.set(invoker)
-  try {
-    invoke()
-  } finally {
-    defer(() => {
-      if (slot.get() === invoker) slot.set(undefined)
+type ScopeMenuOverlayFocusTarget = {
+  kind: "scope-menu"
+  actionId: WebWorkspaceActionId
+  item: HTMLButtonElement
+  menu: HTMLElement
+  toggle: HTMLButtonElement
+  visibleOrigin?(): HTMLElement | undefined
+}
+
+type ElementOverlayFocusTarget = {
+  kind: "element"
+  element: HTMLElement
+  resolve?(): HTMLElement | undefined
+}
+
+type OverlayFocusTarget = ScopeMenuOverlayFocusTarget | ElementOverlayFocusTarget
+export type OverlayFocusOwnership = () => boolean
+
+export type CoordinatedOverlayFocusReturnTarget = {
+  readonly kind: "coordinated-overlay-focus"
+  activate(): void
+  restore(ownsFocus?: OverlayFocusOwnership): void
+}
+
+export type WebOverlayReturnTarget = string | HTMLElement | CoordinatedOverlayFocusReturnTarget
+
+export type OverlayTerminalFocusAttempt = {
+  isCurrent(): boolean
+  complete(focused: boolean): void
+}
+
+export type WebOverlayFocusCoordinator = {
+  invokeFromElement(invoker: HTMLElement | undefined, invoke: () => void, resolve?: () => HTMLElement | undefined): void
+  invokeFromScopeMenu(target: Omit<ScopeMenuOverlayFocusTarget, "kind">, invoke: () => void): void
+  takeReturnTarget(requestedTerminalId?: string): CoordinatedOverlayFocusReturnTarget
+  restore(target: WebOverlayReturnTarget | undefined, ownsFocus?: OverlayFocusOwnership): void
+}
+
+type WebOverlayFocusCoordinatorOptions = {
+  document: Document
+  requestFrame(callback: () => void): void
+  focusTerminal(terminalId: string, attempt: OverlayTerminalFocusAttempt): void
+  currentTerminalId(): string | undefined
+  visibleInvoker(): HTMLElement | undefined
+  defer?(callback: () => void): void
+}
+
+type ScopeMenuOverlayActionOptions = Omit<ScopeMenuOverlayFocusTarget, "kind"> & {
+  disabledReason?: string
+  invoke(): void
+  unavailable?(): void
+}
+
+function isElementReturnTarget(target: unknown): target is HTMLElement {
+  return typeof target === "object"
+    && target !== null
+    && "ownerDocument" in target
+    && typeof (target as { focus?: unknown }).focus === "function"
+}
+
+export function isCoordinatedReturnTarget(target: unknown): target is CoordinatedOverlayFocusReturnTarget {
+  return typeof target === "object"
+    && target !== null
+    && (target as { kind?: unknown }).kind === "coordinated-overlay-focus"
+    && typeof (target as { activate?: unknown }).activate === "function"
+    && typeof (target as { restore?: unknown }).restore === "function"
+}
+
+export function setMenuExpanded(menu: HTMLElement, toggle: HTMLElement, expanded: boolean): void {
+  if (menu.isConnected) menu.hidden = !expanded
+  if (toggle.isConnected) toggle.setAttribute("aria-expanded", String(expanded))
+}
+
+export function findWorkspaceRow(root: ParentNode, workspaceId: string, repositoryId: string): HTMLElement | undefined {
+  return [...root.querySelectorAll<HTMLElement>("[data-workspace-id]")].find((candidate) =>
+    candidate.getAttribute("data-workspace-id") === workspaceId
+      && candidate.getAttribute("data-repository-id") === repositoryId
+      && isUsableOverlayReturnTarget(candidate),
+  )
+}
+
+export function isUsableOverlayReturnTarget(target: HTMLElement): boolean {
+  if (!target.isConnected) return false
+  const view = target.ownerDocument.defaultView
+  for (let current: HTMLElement | null = target; current; current = current.parentElement) {
+    const stateful = current as HTMLElement & { disabled?: boolean; inert?: boolean }
+    if (current.hidden
+      || current.hasAttribute("hidden")
+      || stateful.disabled
+      || current.hasAttribute("disabled")
+      || current.getAttribute("aria-disabled") === "true"
+      || stateful.inert
+      || current.hasAttribute("inert")
+      || current.getAttribute("aria-hidden") === "true") return false
+    try {
+      const style = view?.getComputedStyle(current)
+      if (style && (style.display === "none"
+        || style.visibility === "hidden"
+        || style.visibility === "collapse"
+        || style.contentVisibility === "hidden"
+        || style.opacity === "0")) return false
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
+export function focusUsableOverlayReturnTarget(target: HTMLElement, document = target.ownerDocument): boolean {
+  if (!isUsableOverlayReturnTarget(target)) return false
+  try { target.focus() } catch { return false }
+  return document.activeElement === target && isUsableOverlayReturnTarget(target)
+}
+
+export function createWebOverlayFocusCoordinator(options: WebOverlayFocusCoordinatorOptions): WebOverlayFocusCoordinator {
+  let pending: { target: OverlayFocusTarget; epoch: number } | undefined
+  let focusEpoch = 0
+  const defer = options.defer ?? queueMicrotask
+  const alwaysOwnsFocus: OverlayFocusOwnership = () => true
+
+  const closeScopeMenu = (target: ScopeMenuOverlayFocusTarget): void => {
+    setMenuExpanded(target.menu, target.toggle, false)
+  }
+
+  const scopeOrigin = (target: ScopeMenuOverlayFocusTarget): HTMLElement | undefined => {
+    if (focusUsableOverlayReturnTarget(target.toggle, options.document)) return target.toggle
+    const visible = target.visibleOrigin?.()
+    return visible && focusUsableOverlayReturnTarget(visible, options.document) ? visible : undefined
+  }
+
+  const focusPrimary = (target: OverlayFocusTarget | undefined): boolean => {
+    if (!target) return false
+    if (target.kind === "element") {
+      if (focusUsableOverlayReturnTarget(target.element, options.document)) return true
+      const concrete = target.resolve?.()
+      return Boolean(concrete && concrete !== target.element && focusUsableOverlayReturnTarget(concrete, options.document))
+    }
+
+    const canReopen = target.menu.isConnected
+      && target.toggle.isConnected
+      && isUsableOverlayReturnTarget(target.toggle)
+    if (canReopen) {
+      setMenuExpanded(target.menu, target.toggle, true)
+      const concrete = target.menu.querySelector<HTMLElement>(`[data-workspace-action-id="${target.actionId}"]`)
+      if (concrete && focusUsableOverlayReturnTarget(concrete, options.document)) return true
+    }
+
+    closeScopeMenu(target)
+    return Boolean(scopeOrigin(target))
+  }
+
+  const scheduleRestore = (
+    primary: OverlayFocusTarget | undefined,
+    requestedTerminalId: string | undefined,
+    epoch: number,
+    ownsFocus: OverlayFocusOwnership,
+  ): void => {
+    const isCurrent = () => epoch === focusEpoch && ownsFocus()
+    const focusFallback = () => {
+      if (!isCurrent()) return
+      const fallback = options.visibleInvoker()
+      if (fallback) focusUsableOverlayReturnTarget(fallback, options.document)
+    }
+    const focusTerminal = (terminalId: string | undefined, onFailure: () => void): void => {
+      if (!isCurrent()) return
+      if (!terminalId) { onFailure(); return }
+      let completed = false
+      const complete = (focused: boolean) => {
+        if (completed) return
+        completed = true
+        if (!isCurrent()) return
+        if (focused) return
+        onFailure()
+      }
+      try {
+        options.focusTerminal(terminalId, { isCurrent, complete })
+      } catch {
+        complete(false)
+      }
+    }
+    const focusCurrentTerminal = () => {
+      const currentTerminalId = options.currentTerminalId()
+      if (currentTerminalId === requestedTerminalId) { focusFallback(); return }
+      focusTerminal(currentTerminalId, focusFallback)
+    }
+
+    options.requestFrame(() => {
+      if (!isCurrent()) return
+      if (focusPrimary(primary)) return
+      focusTerminal(requestedTerminalId, focusCurrentTerminal)
     })
+  }
+
+  const beginInvocation = (target: OverlayFocusTarget, invoke: () => void): void => {
+    const epoch = ++focusEpoch
+    pending = { target, epoch }
+    try {
+      invoke()
+    } finally {
+      defer(() => {
+        if (pending?.target !== target || pending.epoch !== epoch) return
+        pending = undefined
+        const visibleTarget: OverlayFocusTarget = target.kind === "scope-menu"
+          ? { kind: "element", element: target.toggle, resolve: target.visibleOrigin }
+          : target
+        scheduleRestore(visibleTarget, undefined, epoch, alwaysOwnsFocus)
+      })
+    }
+  }
+
+  return {
+    invokeFromElement(invoker, invoke, resolve) {
+      if (!invoker) {
+        focusEpoch += 1
+        invoke()
+        return
+      }
+      beginInvocation({ kind: "element", element: invoker, resolve }, invoke)
+    },
+    invokeFromScopeMenu(target, invoke) {
+      setMenuExpanded(target.menu, target.toggle, false)
+      beginInvocation({ kind: "scope-menu", ...target }, invoke)
+    },
+    takeReturnTarget(requestedTerminalId) {
+      const captured = pending
+      if (captured) pending = undefined
+      let epoch = captured?.epoch
+      let activated = false
+      return {
+        kind: "coordinated-overlay-focus",
+        activate() {
+          if (activated) return
+          activated = true
+          if (epoch === undefined) epoch = ++focusEpoch
+        },
+        restore(ownsFocus = alwaysOwnsFocus) {
+          if (!activated) this.activate()
+          scheduleRestore(captured?.target, requestedTerminalId, epoch!, ownsFocus)
+        },
+      }
+    },
+    restore(target, ownsFocus = alwaysOwnsFocus) {
+      if (isCoordinatedReturnTarget(target)) {
+        target.restore(ownsFocus)
+        return
+      }
+      const epoch = ++focusEpoch
+      scheduleRestore(
+        isElementReturnTarget(target) ? { kind: "element", element: target } : undefined,
+        typeof target === "string" ? target : undefined,
+        epoch,
+        ownsFocus,
+      )
+    },
   }
 }
 
-export function isUsableOverlayReturnTarget(target: {
-  isConnected: boolean
-  hidden: boolean | string
-  closest: (selector: string) => unknown
-}): boolean {
-  return target.isConnected && !target.hidden && target.closest("[hidden]") === null
+export function bindScopeMenuOverlayAction(
+  coordinator: WebOverlayFocusCoordinator,
+  options: ScopeMenuOverlayActionOptions,
+): void {
+  options.item.setAttribute("data-workspace-action-id", options.actionId)
+  options.item.addEventListener("click", () => {
+    if (options.disabledReason) { options.unavailable?.(); return }
+    coordinator.invokeFromScopeMenu({
+      actionId: options.actionId,
+      item: options.item,
+      menu: options.menu,
+      toggle: options.toggle,
+      visibleOrigin: options.visibleOrigin,
+    }, options.invoke)
+  })
 }
 
 export function validateWorkspaceNoteDraft(value: string): WorkspaceNoteDraftValidation {

@@ -1,14 +1,15 @@
 import { describe, expect, test } from "@test/api"
-import { defaultShortcutSettings } from "../../packages/client/src/index"
-import type { WebShortcutMutation } from "../../packages/protocol/src/web"
+import { createWorkspaceActionRegistry, defaultShortcutSettings } from "../../packages/client/src/index"
+import type { WebShortcutMutation, WebWorkspaceAction, WebWorkspaceActionId } from "../../packages/protocol/src/web"
 import { readFile } from "node:fs/promises"
 import {
   createSingletonOverlayController,
   mountFuzzyOverlay,
   mountShortcutHelp,
   mountShortcutSettings,
+  type OverlayView,
 } from "../../packages/web/src/overlay-controller"
-import { overlayAwareActionAvailability, WebShortcutConflictRecoveryError, WebShortcutOwnerConflictError } from "../../packages/web/src/navigation"
+import { bindScopeMenuOverlayAction, createWebOverlayFocusCoordinator, findWorkspaceRow, overlayAwareActionAvailability, WebShortcutConflictRecoveryError, WebShortcutOwnerConflictError, workspaceActionMenuRows, type WebOverlayReturnTarget } from "../../packages/web/src/navigation"
 
 type Listener = (event: FakeEvent) => void
 
@@ -43,6 +44,13 @@ class FakeElement {
   value = ""
   hidden = false
   disabled = false
+  inert = false
+  cssDisplay = "block"
+  cssVisibility = "visible"
+  cssContentVisibility = "visible"
+  cssOpacity = "1"
+  focusBlocked = false
+  focusAttempts = 0
   type = ""
   placeholder = ""
   id = ""
@@ -66,6 +74,15 @@ class FakeElement {
 
   constructor(readonly ownerDocument: FakeDocument, readonly tagName: string) {}
 
+  get isConnected(): boolean {
+    let current: FakeElement | undefined = this
+    while (current) {
+      if (current === this.ownerDocument.body) return true
+      current = current.parentElement
+    }
+    return false
+  }
+
   append(...nodes: FakeElement[]): void {
     for (const node of nodes) {
       node.remove()
@@ -84,7 +101,10 @@ class FakeElement {
     if (index >= 0) this.parentElement.children.splice(index, 1)
     this.parentElement = undefined
   }
-  focus(): void { this.ownerDocument.activeElement = this }
+  focus(): void {
+    this.focusAttempts += 1
+    if (!this.focusBlocked) this.ownerDocument.activeElement = this
+  }
   contains(target: FakeElement): boolean { return target === this || this.children.some((child) => child.contains(target)) }
   setAttribute(name: string, value: string): void {
     this.attributes.set(name, value)
@@ -111,7 +131,8 @@ class FakeElement {
     if (selector.startsWith(".")) return descendants.filter((node) => node.className.split(" ").includes(selector.slice(1)))
     if (selector.startsWith("[")) {
       const [name, value] = selector.slice(1, -1).split("=")
-      return descendants.filter((node) => node.getAttribute(name!) === value?.replaceAll(/["']/g, ""))
+      if (value === undefined) return descendants.filter((node) => node.hasAttribute(name!))
+      return descendants.filter((node) => node.getAttribute(name!) === value.replaceAll(/["']/g, ""))
     }
     return descendants.filter((node) => node.tagName === selector.toUpperCase())
   }
@@ -122,9 +143,19 @@ class FakeElement {
 class FakeDocument {
   readonly body = new FakeElement(this, "BODY")
   activeElement: FakeElement = this.body
+  readonly defaultView = {
+    getComputedStyle: (target: FakeElement) => ({
+      display: target.cssDisplay,
+      visibility: target.cssVisibility,
+      contentVisibility: target.cssContentVisibility,
+      opacity: target.cssOpacity,
+    }),
+  }
   private readonly listeners = new Map<string, Listener[]>()
 
   createElement(tag: string): FakeElement { return new FakeElement(this, tag.toUpperCase()) }
+  querySelectorAll(selector: string): FakeElement[] { return this.body.querySelectorAll(selector) }
+  querySelector(selector: string): FakeElement | undefined { return this.body.querySelector(selector) }
   addEventListener(type: string, listener: Listener): void {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
   }
@@ -143,7 +174,7 @@ function harness() {
   terminal.textContent = "terminal"
   document.body.append(terminal)
   terminal.focus()
-  const restores: string[] = []
+  const restores: WebOverlayReturnTarget[] = []
   const controller = createSingletonOverlayController(document as unknown as Document, {
     restoreFocus: (target) => {
       restores.push(target ?? "fallback")
@@ -151,6 +182,127 @@ function harness() {
     },
   })
   return { document, terminal, restores, controller }
+}
+
+const focusWorkspaceId = "018f47f4-5ab1-7c2d-8e90-123456789abc"
+
+function focusDescriptor(
+  actionId: WebWorkspaceActionId,
+  confirmation: WebWorkspaceAction["confirmation"] = "none",
+): WebWorkspaceAction {
+  return {
+    action_id: actionId,
+    subject: { kind: "workspace", workspace_id: focusWorkspaceId },
+    availability: { available: true },
+    confirmation,
+  }
+}
+
+function scopeFocusHarness() {
+  const document = new FakeDocument()
+  const requestedTerminal = document.createElement("button")
+  requestedTerminal.textContent = "requested terminal"
+  const currentTerminal = document.createElement("button")
+  currentTerminal.textContent = "current terminal"
+  const fallbackInvoker = document.createElement("button")
+  fallbackInvoker.textContent = "fallback invoker"
+  document.body.append(requestedTerminal, currentTerminal, fallbackInvoker)
+
+  const frames: Array<() => void> = []
+  const terminalFocuses: string[] = []
+  const terminals = new Map([
+    ["term-requested", requestedTerminal],
+    ["term-current", currentTerminal],
+  ])
+  const focusCoordinator = createWebOverlayFocusCoordinator({
+    document: document as unknown as Document,
+    requestFrame: (callback) => { frames.push(callback) },
+    focusTerminal: (terminalId, attempt) => {
+      terminalFocuses.push(terminalId)
+      const terminal = terminals.get(terminalId)
+      if (!terminal) { attempt.complete(false); return }
+      frames.push(() => {
+        if (!attempt.isCurrent()) return
+        terminal.focus()
+        attempt.complete(document.activeElement === terminal)
+      })
+    },
+    currentTerminalId: () => "term-current",
+    visibleInvoker: () => fallbackInvoker as unknown as HTMLElement,
+  })
+  const controller = createSingletonOverlayController(document as unknown as Document, {
+    restoreFocus: (target, ownsFocus) => focusCoordinator.restore(target, ownsFocus),
+  })
+
+  const actions = document.createElement("div")
+  const toggle = document.createElement("button")
+  toggle.textContent = "Workspace actions"
+  toggle.setAttribute("aria-expanded", "false")
+  toggle.setAttribute("data-scope-toggle", "true")
+  const menu = document.createElement("div")
+  menu.hidden = true
+  const item = document.createElement("button")
+  menu.append(item)
+  actions.append(toggle, menu)
+  document.body.append(actions)
+
+  const bind = (actionId: WebWorkspaceActionId, invoke: () => void) => {
+    item.textContent = actionId
+    bindScopeMenuOverlayAction(focusCoordinator, {
+      actionId,
+      item: item as unknown as HTMLButtonElement,
+      menu: menu as unknown as HTMLElement,
+      toggle: toggle as unknown as HTMLButtonElement,
+      visibleOrigin: () => document.querySelector("[data-scope-toggle='true']") as unknown as HTMLElement | undefined,
+      invoke,
+    })
+  }
+  const flushFrame = () => { frames.shift()?.() }
+  const flushFrames = () => {
+    while (frames.length) flushFrame()
+  }
+
+  return {
+    document,
+    requestedTerminal,
+    currentTerminal,
+    fallbackInvoker,
+    terminalFocuses,
+    focusCoordinator,
+    controller,
+    actions,
+    toggle,
+    menu,
+    item,
+    bind,
+    flushFrame,
+    flushFrames,
+  }
+}
+
+function openScopeOverlay(
+  fixture: ReturnType<typeof scopeFocusHarness>,
+  actionId: WebWorkspaceActionId = "workspace.notes.list",
+) {
+  let view: OverlayView | undefined
+  fixture.bind(actionId, () => {
+    const opened = fixture.controller.open({
+      id: `scope:${actionId}`,
+      title: actionId,
+      closeLabel: `Close ${actionId}`,
+      returnTarget: fixture.focusCoordinator.takeReturnTarget("term-requested"),
+    })
+    if (opened.kind === "opened") {
+      view = opened.view
+      const modalControl = fixture.document.createElement("button")
+      opened.view.body.append(modalControl as unknown as HTMLElement)
+      modalControl.focus()
+    }
+  })
+  fixture.item.focus()
+  fixture.item.dispatch("click")
+  if (!view) throw new Error("Scope overlay did not open")
+  return view
 }
 
 describe("web singleton keyboard overlays", () => {
@@ -193,6 +345,403 @@ describe("web singleton keyboard overlays", () => {
     const escape = cancel.dispatch("keydown", { key: "Escape" })
     expect(escape.defaultPrevented).toBe(true)
     expect(controller.activeSurface()).toBeUndefined()
+  })
+
+  test("restores a production-wired scope Notes overlay to its concrete menu item", () => {
+    const fixture = scopeFocusHarness()
+    let notesView: OverlayView | undefined
+    const registry = createWorkspaceActionRegistry([
+      focusDescriptor("workspace.notes.list"),
+    ], {
+      "workspace.notes.list": async () => {
+        const opened = fixture.controller.open({
+          id: "workspace-notes",
+          title: "Workspace notes",
+          closeLabel: "Close workspace notes",
+          returnTarget: fixture.focusCoordinator.takeReturnTarget("term-requested"),
+        })
+        if (opened.kind !== "opened") throw new Error("Notes overlay did not open")
+        notesView = opened.view
+        const composer = fixture.document.createElement("textarea")
+        opened.view.body.append(composer as unknown as HTMLElement)
+        composer.focus()
+        return { kind: "terminal" }
+      },
+    } as never)
+    const row = workspaceActionMenuRows(registry)[0]!
+    fixture.bind(row.actionId, () => { void row.callback() })
+
+    fixture.item.focus()
+    fixture.item.dispatch("click")
+    expect(notesView).toBeDefined()
+    expect(fixture.menu.hidden).toBe(true)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("false")
+
+    notesView!.close()
+    expect(fixture.menu.hidden).toBe(true)
+    fixture.flushFrames()
+
+    expect(fixture.menu.hidden).toBe(false)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("true")
+    expect(fixture.document.activeElement).toBe(fixture.item)
+    expect(fixture.terminalFocuses).toEqual([])
+  })
+
+  test("preserves the originating scope item through compatible overlay replacement", () => {
+    const fixture = scopeFocusHarness()
+    openScopeOverlay(fixture)
+    const replacement = fixture.controller.open({
+      id: "workspace-notes-retry",
+      title: "Workspace notes retry",
+      closeLabel: "Close workspace notes retry",
+      returnTarget: fixture.focusCoordinator.takeReturnTarget("term-current"),
+    })
+    expect(replacement.kind).toBe("opened")
+    if (replacement.kind !== "opened") throw new Error("Replacement overlay did not open")
+    const retry = fixture.document.createElement("button")
+    replacement.view.body.append(retry as unknown as HTMLElement)
+    retry.focus()
+    replacement.view.close()
+    fixture.flushFrames()
+
+    expect(fixture.menu.hidden).toBe(false)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("true")
+    expect(fixture.document.activeElement).toBe(fixture.item)
+    expect(fixture.terminalFocuses).toEqual([])
+  })
+
+  test("restores a production-wired scope confirmation after safe cancellation", async () => {
+    const fixture = scopeFocusHarness()
+    let keep: FakeElement | undefined
+    let submitted = 0
+    const registry = createWorkspaceActionRegistry([
+      focusDescriptor("workspace.remove", "confirm"),
+    ], {
+      "workspace.remove": async () => {
+        submitted += 1
+        return { kind: "terminal" }
+      },
+    } as never, {
+      confirm: () => new Promise<boolean>((resolve) => {
+        const opened = fixture.controller.open({
+          id: "remove-workspace",
+          title: "Remove workspace?",
+          closeLabel: "Close remove workspace",
+          returnTarget: fixture.focusCoordinator.takeReturnTarget("term-requested"),
+          exclusive: true,
+        })
+        if (opened.kind !== "opened") { resolve(false); return }
+        keep = fixture.document.createElement("button")
+        keep.textContent = "Keep workspace"
+        keep.addEventListener("click", () => {
+          opened.view.close()
+          resolve(false)
+        })
+        opened.view.body.append(keep as unknown as HTMLElement)
+        keep.focus()
+      }),
+    })
+    const row = workspaceActionMenuRows(registry)[0]!
+    fixture.bind(row.actionId, () => { void row.callback() })
+
+    fixture.item.focus()
+    fixture.item.dispatch("click")
+    expect(fixture.controller.isExclusive()).toBe(true)
+    keep?.dispatch("click")
+    await Promise.resolve()
+    fixture.flushFrames()
+
+    expect(submitted).toBe(0)
+    expect(fixture.controller.activeSurface()).toBeUndefined()
+    expect(fixture.menu.hidden).toBe(false)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("true")
+    expect(fixture.document.activeElement).toBe(fixture.item)
+  })
+
+  test("reacquires rerendered workspace-row invokers for Notes, Files, and confirmation close", async () => {
+    for (const actionId of ["workspace.notes.list", "workspace.files.inspect", "workspace.remove"] as const) {
+      const fixture = scopeFocusHarness()
+      const navigation = fixture.document.createElement("nav")
+      const original = fixture.document.createElement("button")
+      original.setAttribute("data-workspace-id", focusWorkspaceId)
+      original.setAttribute("data-repository-id", "repo-stable")
+      navigation.append(original)
+      fixture.document.body.append(navigation)
+
+      original.remove()
+      const replacement = fixture.document.createElement("button")
+      replacement.setAttribute("data-workspace-id", focusWorkspaceId)
+      replacement.setAttribute("data-repository-id", "repo-stable")
+      navigation.append(replacement)
+      const resolveInvoker = () => findWorkspaceRow(
+        fixture.document as unknown as Document,
+        focusWorkspaceId,
+        "repo-stable",
+      )
+      expect(resolveInvoker()).toBe(replacement)
+
+      let view: OverlayView | undefined
+      let resolveConfirmation: ((accepted: boolean) => void) | undefined
+      const open = (exclusive = false) => {
+        const opened = fixture.controller.open({
+          id: `row:${actionId}`,
+          title: actionId,
+          closeLabel: `Close ${actionId}`,
+          returnTarget: fixture.focusCoordinator.takeReturnTarget("term-requested"),
+          exclusive,
+        })
+        if (opened.kind !== "opened") throw new Error("Row overlay did not open")
+        view = opened.view
+        const control = fixture.document.createElement("button")
+        opened.view.body.append(control as unknown as HTMLElement)
+        control.focus()
+      }
+      const registry = createWorkspaceActionRegistry([
+        focusDescriptor(actionId, actionId === "workspace.remove" ? "confirm" : "none"),
+      ], {
+        [actionId]: async () => {
+          if (actionId !== "workspace.remove") open()
+          return { kind: "terminal" }
+        },
+      } as never, actionId === "workspace.remove" ? {
+        confirm: () => new Promise<boolean>((resolve) => {
+          resolveConfirmation = resolve
+          open(true)
+        }),
+      } : undefined)
+      const row = workspaceActionMenuRows(registry)[0]!
+      fixture.focusCoordinator.invokeFromElement(
+        resolveInvoker(),
+        () => { void row.callback() },
+        resolveInvoker,
+      )
+      expect(view).toBeDefined()
+
+      const removedBeforeClose = actionId === "workspace.files.inspect"
+      if (removedBeforeClose) replacement.remove()
+      view!.close()
+      resolveConfirmation?.(false)
+      await Promise.resolve()
+      fixture.flushFrames()
+
+      if (removedBeforeClose) {
+        expect(fixture.document.activeElement).toBe(fixture.requestedTerminal)
+        expect(fixture.terminalFocuses).toEqual(["term-requested"])
+      } else {
+        expect(fixture.document.activeElement).toBe(replacement)
+        expect(fixture.terminalFocuses).toEqual([])
+      }
+    }
+  })
+
+  test("falls back from removed scope items and menus to the visible toggle or requested terminal", () => {
+    const removedItem = scopeFocusHarness()
+    const removedItemView = openScopeOverlay(removedItem)
+    removedItem.item.remove()
+    removedItemView.close()
+    removedItem.flushFrames()
+    expect(removedItem.menu.hidden).toBe(true)
+    expect(removedItem.toggle.getAttribute("aria-expanded")).toBe("false")
+    expect(removedItem.document.activeElement).toBe(removedItem.toggle)
+
+    const replacedItem = scopeFocusHarness()
+    const replacedItemView = openScopeOverlay(replacedItem)
+    replacedItem.item.remove()
+    const replacement = replacedItem.document.createElement("button")
+    replacement.setAttribute("data-workspace-action-id", "workspace.notes.list")
+    replacedItem.menu.append(replacement)
+    replacedItemView.close()
+    replacedItem.flushFrames()
+    expect(replacedItem.menu.hidden).toBe(false)
+    expect(replacedItem.toggle.getAttribute("aria-expanded")).toBe("true")
+    expect(replacedItem.document.activeElement).toBe(replacement)
+    expect(replacement.focusAttempts).toBe(1)
+
+    const removedMenu = scopeFocusHarness()
+    const removedMenuView = openScopeOverlay(removedMenu)
+    removedMenu.menu.remove()
+    removedMenuView.close()
+    removedMenu.flushFrames()
+    expect(removedMenu.toggle.getAttribute("aria-expanded")).toBe("false")
+    expect(removedMenu.document.activeElement).toBe(removedMenu.toggle)
+
+    const removedGroup = scopeFocusHarness()
+    const removedGroupView = openScopeOverlay(removedGroup)
+    removedGroup.actions.remove()
+    removedGroupView.close()
+    removedGroup.flushFrames()
+    expect(removedGroup.terminalFocuses).toEqual(["term-requested"])
+    expect(removedGroup.document.activeElement).toBe(removedGroup.requestedTerminal)
+
+    const currentFallback = scopeFocusHarness()
+    const currentFallbackView = openScopeOverlay(currentFallback)
+    currentFallback.actions.remove()
+    currentFallback.requestedTerminal.focusBlocked = true
+    currentFallbackView.close()
+    currentFallback.flushFrames()
+    expect(currentFallback.terminalFocuses).toEqual(["term-requested", "term-current"])
+    expect(currentFallback.document.activeElement).toBe(currentFallback.currentTerminal)
+  })
+
+  test("rejects disabled, inert, CSS-hidden, hidden-ancestor, and focus-failing scope targets", () => {
+    const cases: Array<{
+      mutate(fixture: ReturnType<typeof scopeFocusHarness>): void
+    }> = [
+      { mutate: (fixture) => { fixture.item.disabled = true } },
+      { mutate: (fixture) => { fixture.item.inert = true } },
+      { mutate: (fixture) => { fixture.item.cssDisplay = "none" } },
+      { mutate: (fixture) => {
+        const ancestor = fixture.document.createElement("div")
+        fixture.item.remove()
+        ancestor.hidden = true
+        ancestor.append(fixture.item)
+        fixture.menu.append(ancestor)
+      } },
+      { mutate: (fixture) => {
+        const ancestor = fixture.document.createElement("div")
+        fixture.item.remove()
+        ancestor.cssVisibility = "hidden"
+        ancestor.append(fixture.item)
+        fixture.menu.append(ancestor)
+      } },
+      { mutate: (fixture) => { fixture.item.focusBlocked = true } },
+    ]
+
+    for (const scenario of cases) {
+      const fixture = scopeFocusHarness()
+      const view = openScopeOverlay(fixture)
+      scenario.mutate(fixture)
+      view.close()
+      fixture.flushFrames()
+
+      expect(fixture.menu.hidden).toBe(true)
+      expect(fixture.toggle.getAttribute("aria-expanded")).toBe("false")
+      expect(fixture.document.activeElement).toBe(fixture.toggle)
+      expect(fixture.terminalFocuses).toEqual([])
+    }
+  })
+
+  test("cancels stale restore frames before they reopen an old menu or escape a newer modal", () => {
+    const fixture = scopeFocusHarness()
+    const oldView = openScopeOverlay(fixture)
+    oldView.close()
+
+    const newer = fixture.controller.open({
+      id: "newer-modal",
+      title: "Newer modal",
+      closeLabel: "Close newer modal",
+      returnTarget: "term-current",
+    })
+    expect(newer.kind).toBe("opened")
+    if (newer.kind !== "opened") throw new Error("Newer modal did not open")
+    const newerControl = fixture.document.createElement("button")
+    newer.view.body.append(newerControl as unknown as HTMLElement)
+    newerControl.focus()
+    fixture.flushFrames()
+
+    expect(fixture.menu.hidden).toBe(true)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("false")
+    expect(fixture.document.activeElement).toBe(newerControl)
+    expect(fixture.terminalFocuses).toEqual([])
+  })
+
+  test("cancels nested terminal focus when a newer overlay claims focus", () => {
+    const fixture = scopeFocusHarness()
+    const oldView = openScopeOverlay(fixture)
+    fixture.actions.remove()
+    oldView.close()
+    fixture.flushFrame()
+    expect(fixture.terminalFocuses).toEqual(["term-requested"])
+
+    const newer = fixture.controller.open({
+      id: "rapid-overlay",
+      title: "Rapid overlay",
+      closeLabel: "Close rapid overlay",
+      returnTarget: "term-current",
+    })
+    expect(newer.kind).toBe("opened")
+    if (newer.kind !== "opened") throw new Error("Rapid overlay did not open")
+    const newerControl = fixture.document.createElement("button")
+    newer.view.body.append(newerControl as unknown as HTMLElement)
+    newerControl.focus()
+    fixture.flushFrames()
+
+    expect(fixture.requestedTerminal.focusAttempts).toBe(0)
+    expect(fixture.document.activeElement).toBe(newerControl)
+    expect(fixture.terminalFocuses).toEqual(["term-requested"])
+  })
+
+  test("restores non-overlay scope actions and native Rename cancellation to a visible toggle", async () => {
+    const rename = scopeFocusHarness()
+    rename.bind("workspace.rename", () => undefined)
+    rename.item.focus()
+    rename.item.dispatch("click")
+    await Promise.resolve()
+    rename.flushFrames()
+    expect(rename.menu.hidden).toBe(true)
+    expect(rename.toggle.getAttribute("aria-expanded")).toBe("false")
+    expect(rename.document.activeElement).toBe(rename.toggle)
+
+    const rerender = scopeFocusHarness()
+    let replacementToggle: FakeElement | undefined
+    rerender.bind("workspace.pin", () => {
+      rerender.actions.remove()
+      const nextActions = rerender.document.createElement("div")
+      replacementToggle = rerender.document.createElement("button")
+      replacementToggle.setAttribute("data-scope-toggle", "true")
+      nextActions.append(replacementToggle)
+      rerender.document.body.append(nextActions)
+    })
+    rerender.item.focus()
+    rerender.item.dispatch("click")
+    await Promise.resolve()
+    rerender.flushFrames()
+    expect(rerender.document.activeElement).toBe(replacementToggle)
+    expect(rerender.terminalFocuses).toEqual([])
+  })
+
+  test("expires a cancelled Rename scope target before a later Create-button overlay", async () => {
+    const fixture = scopeFocusHarness()
+    let renameCalls = 0
+    const registry = createWorkspaceActionRegistry([
+      focusDescriptor("workspace.rename"),
+    ], {
+      "workspace.rename": async () => {
+        renameCalls += 1
+        return { kind: "terminal" }
+      },
+    } as never)
+    const row = workspaceActionMenuRows(registry)[0]!
+    fixture.bind(row.actionId, () => { void row.callback() })
+
+    fixture.item.focus()
+    fixture.item.dispatch("click")
+    await Promise.resolve()
+    expect(renameCalls).toBe(1)
+
+    const createButton = fixture.document.createElement("button")
+    fixture.document.body.append(createButton)
+    let create: ReturnType<typeof fixture.controller.open> | undefined
+    fixture.focusCoordinator.invokeFromElement(createButton as unknown as HTMLElement, () => {
+      create = fixture.controller.open({
+        id: "create-workspace",
+        title: "Create workspace",
+        closeLabel: "Close create workspace",
+        returnTarget: fixture.focusCoordinator.takeReturnTarget("term-requested"),
+      })
+    })
+    expect(create?.kind).toBe("opened")
+    if (!create || create.kind !== "opened") throw new Error("Create overlay did not open")
+    const name = fixture.document.createElement("input")
+    create.view.body.append(name as unknown as HTMLElement)
+    name.focus()
+    create.view.close()
+    fixture.flushFrames()
+
+    expect(fixture.menu.hidden).toBe(true)
+    expect(fixture.toggle.getAttribute("aria-expanded")).toBe("false")
+    expect(fixture.document.activeElement).toBe(createButton)
+    expect(fixture.terminalFocuses).toEqual([])
   })
 
   test("lets compatible shortcut surfaces replace each other while dynamic capture exclusivity blocks replacement", () => {
