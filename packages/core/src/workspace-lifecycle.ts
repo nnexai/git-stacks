@@ -31,7 +31,12 @@ import {
 } from "./git"
 import { type IntegrationContext } from "./integrations"
 import { runIntegrationCleanup, runIntegrationGenerate } from "./integrations/runner"
-import { _exec as lifecycleExec, type SpawnHandle } from "./lifecycle"
+import {
+  _exec as lifecycleExec,
+  runHooksCapturedWithExecutor,
+  runHooksWithExecutor,
+  type ShellExecutor,
+} from "./lifecycle"
 import { applyFileOpsForRepo, applyFileOpsForWorkspace, warnExternalFiles } from "./files"
 import { timeOperation } from "./observability"
 import { getTasksDir } from "./paths"
@@ -45,7 +50,7 @@ const OBS_CATEGORY = "workspace-lifecycle"
 // ─── Injectable executor ──────────────────────────────────────────────────────
 // Reuses the SpawnHandle contract from lifecycle.ts. Tests can replace _exec.spawn
 // to intercept hook subprocess launches without starting real processes.
-export const _exec: { spawn: typeof lifecycleExec.spawn } = {
+export const _exec: ShellExecutor = {
   spawn: lifecycleExec.spawn,
 }
 
@@ -59,23 +64,7 @@ async function runWorkspaceHooks(
   env: Record<string, string>,
   abortOnFailure = true
 ): Promise<void> {
-  if (!commands || commands.length === 0) return
-
-  const mergedEnv = { ...process.env, ...env } as Record<string, string>
-
-  for (const cmd of commands) {
-    const handle = _exec.spawn({
-      cmd: ["/bin/sh", "-c", cmd],
-      cwd,
-      env: mergedEnv,
-      stdout: "inherit",
-      stderr: "inherit",
-    })
-    const exitCode = await handle.exited
-    if (abortOnFailure && exitCode !== 0) {
-      throw new Error(`Hook failed (exit ${exitCode}): ${cmd}`)
-    }
-  }
+  return runHooksWithExecutor(_exec, commands, cwd, env, abortOnFailure)
 }
 
 async function runWorkspaceHooksCaptured(
@@ -85,50 +74,7 @@ async function runWorkspaceHooksCaptured(
   onOutput: (output: { line: string; stream: "stdout" | "stderr" }) => void,
   abortOnFailure = true
 ): Promise<void> {
-  if (!commands || commands.length === 0) return
-
-  const mergedEnv = { ...process.env, ...env } as Record<string, string>
-
-  for (const cmd of commands) {
-    const handle: SpawnHandle = _exec.spawn({
-      cmd: ["/bin/sh", "-c", cmd],
-      cwd,
-      env: mergedEnv,
-      stdout: "pipe",
-      stderr: "pipe",
-    })
-
-    const readStream = async (
-      reader: ReadableStreamDefaultReader<Uint8Array>,
-      stream: "stdout" | "stderr"
-    ) => {
-      const decoder = new TextDecoder()
-      let buf = ""
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-          if (buf) { onOutput({ line: buf, stream }); buf = "" }
-          break
-        }
-        buf += decoder.decode(value)
-        const lines = buf.split("\n")
-        buf = lines.pop() ?? ""
-        for (const line of lines) {
-          if (line) onOutput({ line, stream })
-        }
-      }
-    }
-
-    await Promise.all([
-      readStream(handle.stdout!.getReader(), "stdout"),
-      readStream(handle.stderr!.getReader(), "stderr"),
-    ])
-
-    const exitCode = await handle.exited
-    if (abortOnFailure && exitCode !== 0) {
-      throw new Error(`Hook failed (exit ${exitCode}): ${cmd}`)
-    }
-  }
+  await runHooksCapturedWithExecutor(_exec, commands, cwd, env, onOutput, abortOnFailure)
 }
 
 type ProgressCallback = (message: string) => void

@@ -21,6 +21,7 @@ export type ManualCommandStep = {
 export type RunManualCommandOptions = {
   config?: GlobalConfig
   skipSecrets?: boolean
+  signal?: AbortSignal
   onOutput?: (output: ShellOutputLine & { step: ManualCommandStep }) => void
 }
 
@@ -109,8 +110,14 @@ export async function runManualCommand(
   for (const step of plan) {
     const env = step.scope === "repo" && step.repo ? buildRepoEnv(baseEnv, step.repo) : baseEnv
     const result = opts?.onOutput
-      ? await runShellSequenceCaptured([step.shell], step.cwd, env, (output) => opts.onOutput?.({ ...output, step }))
-      : await runShellSequence([step.shell], step.cwd, env)
+      ? await runShellSequenceCaptured(
+          [step.shell],
+          step.cwd,
+          env,
+          (output) => opts.onOutput?.({ ...output, step }),
+          opts.signal,
+        )
+      : await runShellSequence([step.shell], step.cwd, env, opts?.signal)
     if (result.exitCode !== 0) {
       return {
         exitCode: result.exitCode,

@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "@test/api"
 import { existsSync, mkdirSync } from "fs"
 import { join } from "path"
-import { runProcess } from "../process"
 import { cleanup, makeConfigMock, makeTmpDir } from "../helpers"
 
 const tempDirs: string[] = []
@@ -128,6 +127,7 @@ const {
   commitWorkspaceRemoval,
   _exec,
 } = await import("../../packages/core/src/workspace-lifecycle")
+const adapterSpawn = _exec.spawn
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
 
@@ -184,20 +184,7 @@ describe("workspace-lifecycle exec seam", () => {
       GS_TRIGGERED_BY: triggeredBy,
     }))
 
-    // Restore the real spawn implementation before each test
-    _exec.spawn = (args: any): any => {
-      const proc = runProcess(args.cmd, {
-        cwd: args.cwd,
-        env: args.env,
-        stdout: args.stdout,
-        stderr: args.stderr,
-      })
-      return {
-        exited: proc.exited,
-        stdout: args.stdout === "pipe" ? (proc.stdout ?? null) : null,
-        stderr: args.stderr === "pipe" ? (proc.stderr ?? null) : null,
-      }
-    }
+    _exec.spawn = adapterSpawn
   })
 
   afterAll(() => {
@@ -206,7 +193,7 @@ describe("workspace-lifecycle exec seam", () => {
     }
   })
 
-  test("closeWorkspace calls _exec.spawn with cmd=['/bin/sh', '-c', hook] stdout=inherit stderr=inherit and GS_TRIGGERED_BY=close", async () => {
+  test("closeWorkspace delegates the exact hook command with GS_TRIGGERED_BY=close", async () => {
     const workspace = makeTestWorkspace({ pre_close: ["echo PRE_CLOSE"] })
     readWorkspaceMock.mockImplementation(() => workspace)
 
@@ -224,9 +211,9 @@ describe("workspace-lifecycle exec seam", () => {
 
     expect(result.ok).toBe(true)
     expect(spawnCalls.length).toBeGreaterThanOrEqual(1)
-    const hookCall = spawnCalls.find((c) => c.cmd[2] === "echo PRE_CLOSE")
+    const hookCall = spawnCalls.find((c) => c.command === "echo PRE_CLOSE")
     expect(hookCall).toBeDefined()
-    expect(hookCall.cmd).toEqual(["/bin/sh", "-c", "echo PRE_CLOSE"])
+    expect(hookCall.command).toBe("echo PRE_CLOSE")
     expect(hookCall.stdout).toBe("inherit")
     expect(hookCall.stderr).toBe("inherit")
     expect(hookCall.env.GS_TRIGGERED_BY).toBe("close")
