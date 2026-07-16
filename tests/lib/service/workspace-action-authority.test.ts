@@ -1,13 +1,27 @@
-import { describe, expect, test } from "@test/api"
+import { afterEach, describe, expect, test } from "@test/api"
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 import type { CoreState } from "../../../packages/service/src/policy/core-contract"
 import {
   CANONICAL_WORKSPACE_ACTION_IDS,
   deriveWorkspaceActionInventory,
 } from "../../../packages/service/src/policy/workspace-actions"
+import {
+  WorkspaceNotesRevisionConflictError,
+  addWorkspaceNote,
+  clearWorkspaceNotes,
+  getWorkspaceNotesSnapshot,
+} from "../../../packages/core/src/notes"
 
 const ACTIVE_ID = "11111111-1111-4111-8111-111111111111"
 const ARCHIVED_ID = "22222222-2222-4222-8222-222222222222"
+const noteRoots: string[] = []
+
+afterEach(async () => {
+  await Promise.all(noteRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+})
 
 function state(overrides: {
   dirty?: boolean
@@ -191,5 +205,52 @@ describe("canonical workspace action authority", () => {
     expect(tui).toEqual(web)
     expect(Object.isFrozen(web)).toBe(true)
     expect(web.every(Object.isFrozen)).toBe(true)
+  })
+})
+
+describe("revision-bound append-only notes authority", () => {
+  test("fingerprints records deterministically and rejects stale Add/Clear without mutation", async () => {
+    const root = await mkdtemp(join(tmpdir(), "git-stacks-notes-revision-"))
+    noteRoots.push(root)
+    const initial = await getWorkspaceNotesSnapshot("demo", { root })
+
+    await addWorkspaceNote("demo", "older", {
+      root,
+      expectedRevision: initial.revision,
+      clock: () => new Date("2026-07-15T12:00:00.000Z"),
+    })
+    const afterFirst = await getWorkspaceNotesSnapshot("demo", { root })
+    await addWorkspaceNote("demo", "newer", {
+      root,
+      expectedRevision: afterFirst.revision,
+      clock: () => new Date("2026-07-16T12:00:00.000Z"),
+    })
+    const current = await getWorkspaceNotesSnapshot("demo", { root })
+    expect(current.records.map(({ text }) => text)).toEqual(["newer", "older"])
+    expect(current.revision).not.toBe(initial.revision)
+
+    const path = join(root, "demo.jsonl")
+    const before = await readFile(path, "utf8")
+    await expect(addWorkspaceNote("demo", "stale", { root, expectedRevision: initial.revision }))
+      .rejects.toBeInstanceOf(WorkspaceNotesRevisionConflictError)
+    await expect(clearWorkspaceNotes("demo", { root, expectedRevision: initial.revision }))
+      .rejects.toBeInstanceOf(WorkspaceNotesRevisionConflictError)
+    expect(await readFile(path, "utf8")).toBe(before)
+
+    await clearWorkspaceNotes("demo", { root, expectedRevision: current.revision })
+    expect(await getWorkspaceNotesSnapshot("demo", { root })).toMatchObject({ count: 0, records: [] })
+  })
+
+  test("malformed JSONL fails before revision-bound Add/Clear can append or delete", async () => {
+    const root = await mkdtemp(join(tmpdir(), "git-stacks-notes-malformed-"))
+    noteRoots.push(root)
+    await mkdir(root, { recursive: true })
+    const path = join(root, "demo.jsonl")
+    const malformed = "{\"text\":\"ok\",\"created\":\"2026-01-01T00:00:00.000Z\"}\n{bad-json}\n"
+    await writeFile(path, malformed)
+
+    await expect(addWorkspaceNote("demo", "later", { root, expectedRevision: "0" })).rejects.toThrow(/malformed/i)
+    await expect(clearWorkspaceNotes("demo", { root, expectedRevision: "0" })).rejects.toThrow(/malformed/i)
+    expect(await readFile(path, "utf8")).toBe(malformed)
   })
 })

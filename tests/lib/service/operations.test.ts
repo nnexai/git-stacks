@@ -1,16 +1,18 @@
-import { afterEach, describe, expect, test } from "@test/api"
+import { afterEach, describe, expect, mock, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import {
   OperationRegistry,
+  createWorkspaceMutationAdapters,
   type OperationExecution,
   type OperationStep,
 } from "../../../packages/service/src/policy/operations"
 import type { Operation, ServiceEvent } from "../../../packages/protocol/src/service"
 import { WorkspaceLifecycleMutationSchema } from "../../../packages/protocol/src/service"
 import { WorkspaceLifecycleMutationSchemas } from "../../../packages/service/src/policy/core-contract"
+import { CoreMutationSchemas } from "../../../packages/service/src/policy/core-contract"
 
 const roots: string[] = []
 async function root(): Promise<string> {
@@ -187,5 +189,74 @@ describe("workspace lifecycle operation contract", () => {
     )
     expect(WorkspaceLifecycleMutationSchemas["workspace.archive"].safeParse({ ...archive, confirmation_name: "demo" }).success).toBe(false)
     expect(WorkspaceLifecycleMutationSchemas["workspace.force-remove"].safeParse(archive).success).toBe(false)
+  })
+})
+
+describe("Pull and notes mutation adapters", () => {
+  test("exposes strict Pull and revision-bound notes schemas", () => {
+    expect(CoreMutationSchemas["workspace.pull"].parse({ workspace: "demo" })).toEqual({ workspace: "demo" })
+    expect(CoreMutationSchemas["workspace.notes.add"].parse({
+      workspace: "demo",
+      expected_notes_revision: "3",
+      text: "Remember this",
+    })).toEqual({ workspace: "demo", expected_notes_revision: "3", text: "Remember this" })
+    expect(CoreMutationSchemas["workspace.notes.clear"].safeParse({ workspace: "demo" }).success).toBe(false)
+  })
+
+  test("Pull reuses core progress but never places raw errors or paths in progress/results", async () => {
+    const pullWorkspace = mock(async (_workspace: string, progress?: (row: {
+      repo: string
+      status: "failed"
+      detail: string
+    }) => void) => {
+      progress?.({ repo: "repo", status: "failed", detail: "/home/person/private/repo: credentials leaked" })
+      return {
+        ok: false,
+        pulled: [],
+        skipped: [],
+        failed: [{ repo: "repo", reason: "/home/person/private/repo: credentials leaked" }],
+        error: "/home/person/private/repo: credentials leaked",
+      }
+    })
+    const adapters = createWorkspaceMutationAdapters({ pullWorkspace })
+    const execution = adapters["workspace.pull"]({ workspace: "demo" })
+    const progress: unknown[] = []
+    await expect(execution.steps[0]!.run((row) => { progress.push(row) })).rejects.toThrow("Workspace pull failed")
+
+    expect(pullWorkspace).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(progress)).not.toContain("/home/person")
+    expect(JSON.stringify(execution.result)).not.toContain("/home/person")
+  })
+
+  test("notes adapters bind revisions, return newest-first refresh data, and request terminal reconciliation", async () => {
+    const addWorkspaceNote = mock(async () => ({ text: "new", created: "2026-07-16T12:00:00.000Z" }))
+    const clearWorkspaceNotes = mock(async () => undefined)
+    const getWorkspaceNotesSnapshot = mock(async () => ({
+      revision: "4",
+      count: 2,
+      records: [
+        { text: "new", created: "2026-07-16T12:00:00.000Z" },
+        { text: "old", created: "2026-07-15T12:00:00.000Z" },
+      ],
+    }))
+    const refresh = mock(async () => undefined)
+    const adapters = createWorkspaceMutationAdapters({
+      addWorkspaceNote,
+      clearWorkspaceNotes,
+      getWorkspaceNotesSnapshot,
+      refreshWorkspace: refresh,
+    })
+
+    const add = adapters["workspace.notes.add"]({ workspace: "demo", expected_notes_revision: "3", text: "new" })
+    await add.steps[0]!.run(async () => undefined)
+    await add.finalize?.()
+    expect(addWorkspaceNote).toHaveBeenCalledWith("demo", "new", { expectedRevision: "3" })
+    expect(add.result).toMatchObject({ notes_revision: "4", note_count: 2 })
+    expect((add.result?.notes as Array<{ text: string }>).map(({ text }) => text)).toEqual(["new", "old"])
+    expect(refresh).toHaveBeenCalledWith("demo")
+
+    const clear = adapters["workspace.notes.clear"]({ workspace: "demo", expected_notes_revision: "4" })
+    await clear.steps[0]!.run(async () => undefined)
+    expect(clearWorkspaceNotes).toHaveBeenCalledWith("demo", { expectedRevision: "4" })
   })
 })
