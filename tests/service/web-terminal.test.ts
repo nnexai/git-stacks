@@ -193,6 +193,90 @@ describe("service-owned web terminal", () => {
     }
   })
 
+  test("keeps authoritative PTY overlay values out of captured output when profiles enable tracing", () => {
+    const fixtures = ([
+      {
+        family: "bash" as const,
+        executable: "/usr/bin/bash",
+        profileName: "bashrc",
+        profile: [
+          "exec 9>&2",
+          "export BASH_XTRACEFD=9",
+          "set -x",
+          "shopt -s expand_aliases",
+          "alias export='false'",
+          "alias source='false'",
+          "alias printf='false'",
+          "function builtin { return 91; }",
+          "function . { return 94; }",
+          "function export { return 91; }",
+          "function source { return 92; }",
+          "function printf { return 93; }",
+        ].join("\n"),
+        argv: (profile: string, command: string) => ["--noprofile", "--rcfile", profile, "-i", "-c", command],
+        environment: (_root: string) => ({}),
+      },
+      {
+        family: "zsh" as const,
+        executable: "/usr/bin/zsh",
+        profileName: ".zshrc",
+        profile: [
+          "set -x",
+          "alias export=false",
+          "alias source=false",
+          "alias printf=false",
+          "function builtin { return 90 }",
+          "function export { return 91 }",
+          "function . { return 94 }",
+          "function source { return 92 }",
+          "function printf { return 93 }",
+        ].join("\n"),
+        argv: (_profile: string, command: string) => ["-i", "-c", command],
+        environment: (root: string) => ({ ZDOTDIR: root }),
+      },
+      {
+        family: "fish" as const,
+        executable: "/usr/bin/fish",
+        profileName: "fish/config.fish",
+        profile: [
+          "set -g fish_trace 1",
+          "function source; return 92; end",
+          "function printf; return 93; end",
+        ].join("\n"),
+        argv: (_profile: string, command: string) => ["--interactive", "--command", command],
+        environment: (root: string) => ({ XDG_CONFIG_HOME: root }),
+      },
+    ]).filter(({ executable }) => existsSync(executable))
+
+    expect(fixtures.map(({ family }) => family)).toContain("bash")
+    expect(fixtures.map(({ family }) => family)).toContain("fish")
+    for (const fixture of fixtures) {
+      const root = mkdtempSync(join(tmpdir(), `git-stacks-trace-${fixture.family}-`))
+      const profilePath = join(root, fixture.profileName)
+      mkdirSync(dirname(profilePath), { recursive: true })
+      writeFileSync(profilePath, fixture.profile)
+      const sentinel = `phase-124-trace-secret-${fixture.family}`
+      const marker = `command-output-${fixture.family}`
+      const initialization = createPtyInitialization(fixture.family, { AUTHORITATIVE_OVERLAY: sentinel })
+      try {
+        expect(initialization.bootstrap).not.toContain(sentinel)
+        const result = spawnSync(fixture.executable, fixture.argv(profilePath, `${initialization.bootstrap}; /usr/bin/printf '%s' '${marker}'`), {
+          encoding: "utf8",
+          env: { ...process.env, HOME: root, AUTHORITATIVE_OVERLAY: "pre-profile", ...initialization.environment, ...fixture.environment(root) },
+          timeout: 3_000,
+        })
+        const capturedOutput = `${result.stdout}${result.stderr}`
+        expect(result.status, `${fixture.family}: ${capturedOutput}`).toBe(0)
+        expect(result.stdout).toContain(marker)
+        expect(capturedOutput).not.toContain(sentinel)
+        expect(existsSync(initialization.readyPath)).toBe(true)
+      } finally {
+        rmSync(initialization.root, { force: true, recursive: true })
+        rmSync(root, { force: true, recursive: true })
+      }
+    }
+  })
+
   test("runs typed command steps separately in one logical terminal and stops on the exact failing step", async () => {
     const calls: Array<{ command: string; cwd: string; overlay?: Record<string, string> }> = []
     const runner: TerminalCommandStepRunner = async (request) => {

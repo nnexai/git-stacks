@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto"
-import { chmodSync, existsSync, mkdtempSync, rmSync } from "node:fs"
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -87,23 +87,36 @@ export function createPtyInitialization(
   const overlay = ptyOverlay(environment)
   const ok = `__GS_PTY_OK_${randomBytes(12).toString("hex")}`
   const bootstrap = shell === "fish"
-    ? [
-        `builtin set -l ${ok} 1`,
-        ...overlay.entries.flatMap(({ key, shadow }) => [
-          `builtin set -gx ${key} $${shadow}`,
-          `builtin test \"$${key}\" = \"$${shadow}\"; or builtin set ${ok} 0`,
-        ]),
-        `builtin test \"$${ok}\" = 1; and builtin printf '' > ${shellQuote(readyPath)}`,
-      ].join("; ")
-    : [
-        `${ok}=1`,
-        ...overlay.entries.flatMap(({ key, shadow }) => [
-          `${key}=\"$${shadow}\"`,
-          `case \"\${${key}-}\" in \"$${shadow}\") ;; *) ${ok}= ;; esac`,
-        ]),
-        `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`,
-      ].join("; ")
-  return { root, readyPath, statusPathPrefix, bootstrap, environment: overlay.environment, ...(command === undefined ? {} : { command }) }
+    ? (() => {
+        const valuePaths = overlay.entries.map(({ key }, index) => {
+          const valuePath = join(root, `value.${index}`)
+          writeFileSync(valuePath, `${environment[key]}\0`, { mode: 0o600 })
+          return valuePath
+        })
+        return [
+          "begin",
+          `builtin set -l ${ok} 1`,
+          ...overlay.entries.map(({ key }, index) =>
+            `builtin read --null --global --export ${key} < ${shellQuote(valuePaths[index]!)}; or builtin set ${ok} 0`),
+          `builtin test \"$${ok}\" = 1; and builtin printf '' > ${shellQuote(readyPath)}`,
+          "end > /dev/null 2>&1",
+        ].join("; ")
+      })()
+    : (() => {
+        const body = [
+          `${ok}=1`,
+          ...overlay.entries.flatMap(({ key, shadow }) => [
+            `${key}=\"$${shadow}\"`,
+            `case \"\${${key}-}\" in \"$${shadow}\") ;; *) ${ok}= ;; esac`,
+          ]),
+          `case \"$${ok}\" in 1) > ${shellQuote(readyPath)} ;; esac`,
+        ].join("; ")
+        if (shell === "zsh") return `{ ${body}; } > /dev/null 2>&1`
+        const traceFd = `__GS_PTY_TRACE_FD_${randomBytes(12).toString("hex")}`
+        const silentBody = `{ ${body}; BASH_XTRACEFD=\"$${traceFd}\"; } > /dev/null 2>&1`
+        return `${traceFd}=\"\${BASH_XTRACEFD-2}\"; BASH_XTRACEFD=2; case \"\${BASH_XTRACEFD-}\" in 2) ${silentBody} ;; esac`
+      })()
+  return { root, readyPath, statusPathPrefix, bootstrap, environment: shell === "fish" ? {} : overlay.environment, ...(command === undefined ? {} : { command }) }
 }
 
 function ptyCommandBatch(shell: "bash" | "zsh" | "fish", command: string, statusPathPrefix: string): string {
