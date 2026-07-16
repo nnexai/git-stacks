@@ -299,7 +299,7 @@ describe("service workspace lifecycle coordinator", () => {
     await registry.wait(missing.operation_id)
     expect(registry.get(missing.operation_id)).toMatchObject({ state: "failed", error: { code: "not_found" } })
 
-    state.targets.push({ id: WORKSPACE_A, name: "recreated", archived: false })
+    state.targets.push({ id: "33333333-3333-4333-8333-333333333333", name: "alpha", archived: false })
     const recreated = await state.coordinator.submit({ clientId: "client-a", idempotencyKey: "key-c", mutation: request })
     await registry.wait(recreated.operation_id)
     expect(registry.get(recreated.operation_id)).toMatchObject({ state: "failed", error: { code: "not_found" } })
@@ -324,5 +324,25 @@ describe("service workspace lifecycle coordinator", () => {
       force_allowed: false,
     })
     expect(failure).toMatchObject({ code: "conflict", message: "stale", details: { kind: "stale_revision" } })
+  })
+
+  test("persists typed lifecycle failure details on the durable operation", async () => {
+    const dir = await operationRoot()
+    const registry = new OperationRegistry({
+      root: dir,
+      id: () => "op_typedfailure1234",
+      publishOperationEvent: async () => ({} as never),
+    })
+    const state = harness({
+      operations: registry,
+      terminals: { async closeWorkspace() { return { ok: false, status: "cleanup_failed", requested: 1, closed: 0, failed: 1 } } },
+    })
+    const accepted = await state.coordinator.submit({ clientId: "client-a", idempotencyKey: "key-a", mutation: mutation("workspace.remove") })
+    await registry.wait(accepted.operation_id)
+    expect(registry.get(accepted.operation_id)).toMatchObject({
+      state: "failed",
+      error: { code: "operation_failed" },
+      lifecycle: { kind: "terminal_cleanup_failed", terminals_stopped: false, force_allowed: false },
+    })
   })
 })

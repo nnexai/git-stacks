@@ -287,7 +287,8 @@ export const OperationResultSchema = z.strictObject({
 export const OperationFailureSchema = z.strictObject({
   operation_id: OperationIdSchema, state: z.enum(["failed", "cancelled"]), accepted_at: TimestampSchema,
   started_at: TimestampSchema.optional(), finished_at: TimestampSchema, completed_steps: z.array(z.string()),
-  error: ApiErrorSchema, rollback_attempted: z.boolean(), rollback_succeeded: z.boolean(), rollback_errors: z.array(ApiErrorSchema),
+  error: ApiErrorSchema, lifecycle: WorkspaceLifecycleFailureDetailsSchema.optional(),
+  rollback_attempted: z.boolean(), rollback_succeeded: z.boolean(), rollback_errors: z.array(ApiErrorSchema),
 })
 export const OperationSchema = z.discriminatedUnion("state", [
   z.strictObject({ operation_id: OperationIdSchema, state: z.literal("accepted"), accepted_at: TimestampSchema }),

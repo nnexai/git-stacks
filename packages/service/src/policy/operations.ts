@@ -4,10 +4,13 @@ import { createHash, randomBytes } from "node:crypto"
 import { join } from "node:path"
 import { spawn as spawnChild } from "node:child_process"
 import {
+  ErrorCodeSchema,
   OperationSchema,
+  WorkspaceLifecycleFailureDetailsSchema,
   type ApiError,
   type Operation,
   type OperationProgress,
+  type WorkspaceLifecycleFailureDetails,
 } from "@git-stacks/protocol"
 import type { OperationEventPublisher } from "./event-journal"
 import { openWorkspace as openWorkspaceDirect, renameWorkspace } from "@git-stacks/core/workspace-ops"
@@ -349,12 +352,20 @@ export class OperationRegistry {
       }))
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught)
+      const candidate = caught && typeof caught === "object" ? caught as {
+        code?: unknown
+        details?: unknown
+      } : undefined
+      const parsedCode = ErrorCodeSchema.safeParse(candidate?.code)
+      const parsedLifecycle = WorkspaceLifecycleFailureDetailsSchema.safeParse(candidate?.details)
+      const lifecycle: WorkspaceLifecycleFailureDetails | undefined = parsedLifecycle.success ? parsedLifecycle.data : undefined
       if (current.state === "running" && !this.get(accepted.operation_id)?.state.includes("failed")) {
         await this.rollback(accepted, startedAt, completed, rollbackErrors)
         await this.visible(OperationSchema.parse({
           operation_id: accepted.operation_id, state: "failed", accepted_at: accepted.accepted_at, started_at: startedAt,
           finished_at: this.timestamp(), completed_steps: completed.map((step) => step.name),
-          error: error(message === "journal unavailable" ? "internal_error" : "operation_failed", message),
+          error: error(message === "journal unavailable" ? "internal_error" : parsedCode.success ? parsedCode.data : "operation_failed", message),
+          ...(lifecycle ? { lifecycle } : {}),
           rollback_attempted: completed.some((step) => step.rollback),
           rollback_succeeded: rollbackErrors.length === 0,
           rollback_errors: rollbackErrors,
