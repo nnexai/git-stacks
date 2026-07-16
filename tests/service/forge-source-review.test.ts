@@ -373,4 +373,61 @@ describe("reviewed forge source creation admission", () => {
     })
     expect(retry.ok).toBe(true)
   })
+
+  test("releases an execution-time branch conflict only after private-ref cleanup succeeds", async () => {
+    let cleanupAttempts = 0
+    const authority = new ForgeSourceReviewAuthority({
+      catalog: async () => catalog as any,
+      resolve: async () => ({ ok: true, change: trusted }),
+      planWorkspace: async (request) => ({
+        ok: true,
+        plan: {
+          request,
+          inputs: {
+            wsName: request.name,
+            branch: request.branch,
+            templateName: "review",
+            repos: [{
+              id: repositoryId, name: "api", repo: "api", type: "typescript", mode: "worktree",
+              main_path: "/private/repos/api", task_path: "/private/tasks/review/api", base_branch: "main",
+            }],
+          },
+        },
+      } as any),
+      prepareSource: async () => ({
+        ok: false as const,
+        error: "branch_conflict" as const,
+        message: "raw conflict /private/path",
+        cleanup: async () => {
+          cleanupAttempts += 1
+          if (cleanupAttempts === 1) throw new Error("transient cleanup failure")
+        },
+      }),
+    })
+    const resolved = await resolveDraft(authority)
+    const first = await authority.admit({
+      principalId: "principal-a", token: resolved.token, expectedRevision: "7", draft: resolved.draft,
+      idempotencyKey: "first-key",
+    })
+    expect(first.ok).toBe(true)
+    if (!first.ok) return
+    await expect(first.execution.steps[0]!.run(async () => {})).rejects.toMatchObject({
+      details: expect.objectContaining({ reason: "branch_conflict", recovery: "change_branch" }),
+    })
+    expect(cleanupAttempts).toBe(1)
+
+    const blocked = await authority.admit({
+      principalId: "principal-a", token: resolved.token, expectedRevision: "7",
+      draft: { ...resolved.draft, workspace_name: "corrected-name" }, idempotencyKey: "second-key",
+    })
+    expect(blocked).toMatchObject({ ok: false, failure: { code: "review_expired" } })
+
+    await first.execution.finalize?.()
+    expect(cleanupAttempts).toBe(2)
+    const retry = await authority.admit({
+      principalId: "principal-a", token: resolved.token, expectedRevision: "7",
+      draft: { ...resolved.draft, workspace_name: "corrected-name" }, idempotencyKey: "second-key",
+    })
+    expect(retry.ok).toBe(true)
+  })
 })

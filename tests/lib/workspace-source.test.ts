@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "@test/api"
 
 import {
   _source,
+  cleanupReviewedWorkspaceSourceRefs,
   formatWorkspaceSourceError,
   prepareWorkspaceSource,
   prepareReviewedWorkspaceSource,
@@ -250,6 +251,24 @@ describe("trusted reviewed workspace source preparation", () => {
     await expect(result.cleanup()).resolves.toBeUndefined()
     await expect(result.cleanup()).resolves.toBeUndefined()
     expect(deletionCalls).toBe(2)
+  })
+
+  test("startup recovery deletes only the reserved reviewed-source ref namespace", async () => {
+    _source.listRefsByPrefix = mock(async () => [
+      "refs/git-stacks/review/api/first",
+      "refs/git-stacks/review/api/second",
+      "refs/git-stacks/sources/gitlab/42/api",
+      "refs/heads/review/api/first",
+    ])
+    const deleted: string[] = []
+    _source.deleteRef = mock(async (_repoPath: string, ref: string) => { deleted.push(ref) })
+
+    await expect(cleanupReviewedWorkspaceSourceRefs(repo.main_path)).resolves.toBe(2)
+    expect(_source.listRefsByPrefix).toHaveBeenCalledWith(repo.main_path, "refs/git-stacks/review/")
+    expect(deleted).toEqual([
+      "refs/git-stacks/review/api/first",
+      "refs/git-stacks/review/api/second",
+    ])
   })
 
   test.each(["trunk", "dir"])("rejects %s repositories before fetch", async (mode) => {
