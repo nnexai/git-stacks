@@ -294,6 +294,30 @@ export class WorkspaceDefinitionConflictError extends Error {
   }
 }
 
+const WebShortcutBindingConfigSchema = z.strictObject({
+  code: z.string().regex(/^Key[A-Z]$/),
+  ctrl: z.boolean(),
+  alt: z.boolean(),
+  shift: z.boolean(),
+  meta: z.boolean(),
+})
+
+const WebShortcutOverrideConfigSchema = z.strictObject({
+  primary: WebShortcutBindingConfigSchema.nullable().optional(),
+  aliases: z.array(WebShortcutBindingConfigSchema).max(4).optional(),
+})
+
+const WebShortcutPlatformOverridesConfigSchema = z.strictObject({
+  "workspace.switch": WebShortcutOverrideConfigSchema.optional(),
+  "commands.open": WebShortcutOverrideConfigSchema.optional(),
+  "workspace.new": WebShortcutOverrideConfigSchema.optional(),
+  "terminal.new": WebShortcutOverrideConfigSchema.optional(),
+  "terminal.close": WebShortcutOverrideConfigSchema.optional(),
+  "terminal.previous": WebShortcutOverrideConfigSchema.optional(),
+  "terminal.next": WebShortcutOverrideConfigSchema.optional(),
+  "attention.next": WebShortcutOverrideConfigSchema.optional(),
+})
+
 export const GlobalConfigSchema = z.object({
   workspace_root: z.string().default(DEFAULT_WORKSPACE_ROOT).transform(expandHome),
   /** Per-integration config keyed by integration id, e.g. { vscode: { enabled: true, cmd: "code" } } */
@@ -304,6 +328,12 @@ export const GlobalConfigSchema = z.object({
   }).default(() => ({ range_start: 10000, range_end: 65000 })),
   secrets: z.object({
     resolvers: z.array(z.string()).optional(),
+  }).optional(),
+  web: z.strictObject({
+    shortcuts: z.strictObject({
+      macos: WebShortcutPlatformOverridesConfigSchema.optional(),
+      linux: WebShortcutPlatformOverridesConfigSchema.optional(),
+    }).optional(),
   }).optional(),
 })
 export type GlobalConfig = z.infer<typeof GlobalConfigSchema>
