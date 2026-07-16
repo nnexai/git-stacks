@@ -107,6 +107,26 @@ describe("trusted reviewed workspace source preparation", () => {
     expect((_source.fetchSourceRef as any).mock.calls[0].join(" ")).not.toContain("origin")
   })
 
+  test("routes configured GitHub Enterprise pull URLs through authoritative resolution", async () => {
+    const sourceUrl = "https://github.enterprise.test/acme/api/pull/9"
+    const result = await prepareWorkspaceSource({
+      sourceUrl,
+      repos: [repo],
+      registry: [{
+        name: "api", schema_version: "1", local_path: repo.main_path, default_branch: "main",
+        type: "typescript", is_dir: false, forge: "github",
+        forge_metadata: { forge: "github", base_url: "https://github.enterprise.test", repo_path: "acme/api" },
+      }],
+      workspaceName: "review-9",
+    })
+    expect(result.ok).toBe(true)
+    expect(_source.resolveForgeChangeSource).toHaveBeenCalledWith(expect.objectContaining({
+      url: sourceUrl,
+      configured_hosts: expect.objectContaining({ github: ["https://github.enterprise.test"] }),
+    }))
+    expect((_source.fetchSourceRef as any).mock.calls[0].join(" ")).not.toContain("origin")
+  })
+
   test("rejects a moved or mismatched fetched head and deletes the private ref", async () => {
     _source.resolveRef = mock(async () => ({ ok: true as const, sha: "c".repeat(40) }))
     const result = await prepareReviewedWorkspaceSource({

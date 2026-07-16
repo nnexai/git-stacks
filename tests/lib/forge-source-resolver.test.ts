@@ -124,6 +124,26 @@ describe("provider-backed forge resolver", () => {
     expect(scripted.calls.flatMap((call) => call.argv)).not.toContain("mr")
   })
 
+  test("accepts an open GitLab MR before diff refs are populated and trusts top-level head SHA", async () => {
+    const scripted = runner((request) => ({
+      exit_code: 0,
+      stdout: request.argv.at(-1)?.includes("merge_requests")
+        ? gitlabMrJson({ diff_refs: undefined })
+        : gitlabProjectJson,
+    }))
+    const result = await resolveForgeChangeSource({
+      url: "https://gitlab.example.com/group/sub/api/-/merge_requests/42",
+      configured_hosts: { gitlab: ["gitlab.example.com"] },
+      runner: scripted.run,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.change.source.sha).toBe(SHA)
+    expect(result.change.target.sha).toBeUndefined()
+    expect(scripted.calls).toHaveLength(2)
+  })
+
   test.each([
     ["credentialed", "https://user:secret@github.com/acme/api/pull/7", "malformed_url"],
     ["wrong GitHub kind", "https://github.com/acme/api/issues/7", "malformed_url"],
@@ -233,6 +253,21 @@ describe("authoritative source repository matching", () => {
     expect(result.candidates).toHaveLength(1)
   })
 
+  test.each([
+    ["provider", { forge: "github" as const, base_url: "https://gitlab.example.com", repo_path: "group/api" }],
+    ["repository", { forge: "gitlab" as const, base_url: "https://gitlab.example.com", repo_path: "other/api" }],
+    ["host", { forge: "gitlab" as const, base_url: "https://other.example.com", repo_path: "group/api" }],
+  ])("fails closed when explicit %s metadata disagrees instead of using matching remotes", (_label, forge_metadata) => {
+    const result = matchForgeSourceRepository(change, {
+      registry: [{ ...explicit, forge_metadata }],
+      templates: [template],
+      config: { integrations: { gitlab: { enabled: true, base_url: "https://gitlab.example.com" } } } as any,
+      remote_urls: { api: ["https://gitlab.example.com/group/api.git"] },
+      template_name: "review",
+    })
+    expect(result).toEqual({ ok: false, error: "repo_not_matched" })
+  })
+
   test("integration base URL matches forge/path metadata without a repo base override", () => {
     const registry = [{ ...explicit, forge_metadata: { forge: "gitlab" as const, repo_path: "group/api" } }]
     const result = matchForgeSourceRepository(change, {
@@ -273,6 +308,21 @@ describe("authoritative source repository matching", () => {
   ])("rejects %s authoritatively", async (_label, templates, template_name, error) => {
     const result = matchForgeSourceRepository(change, { registry: [explicit], templates, template_name })
     expect(result).toEqual({ ok: false, error })
+  })
+
+  test("returns eligible worktree candidates when another matching template uses trunk mode", () => {
+    const result = matchForgeSourceRepository(change, {
+      registry: [explicit],
+      templates: [
+        { ...template, name: "legacy", repos: [{ repo: "api", mode: "trunk" }] },
+        { ...template, name: "review", repos: [{ repo: "api", mode: "worktree" }] },
+      ],
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      match: { template_name: "review" },
+      candidates: [{ template_name: "review" }],
+    })
   })
 
   test("never matches the fork identity in place of the target repository", () => {
