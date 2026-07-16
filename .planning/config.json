@@ -1,7 +1,7 @@
 {
   "mode": "yolo",
   "granularity": "coarse",
-  "parallelization": false,
+  "parallelization": true,
   "commit_docs": true,
   "runtime": "codex",
   "model_profile": "balanced",
