@@ -2,6 +2,9 @@ import {
   DynamicEnvironmentRefreshSchema,
   SignalDismissalSchema,
   SignalSchema,
+  WebShortcutGetRequestSchema,
+  WebShortcutMutationSchema,
+  WebShortcutSettingsSchema,
   WebOperationMutationSchema,
   WebPinsSchema,
   WebPrioritiesSchema,
@@ -18,6 +21,14 @@ import {
   type DynamicEnvironmentRefreshResult,
 } from "@git-stacks/protocol"
 import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
+import {
+  WebShortcutConflictError,
+  WebShortcutStaleRevisionError,
+  WebShortcutValidationError,
+  type WebShortcutBinding as CoreWebShortcutBinding,
+  type WebShortcutMutationIntent,
+  type WebShortcutSettings as CoreWebShortcutSettings,
+} from "@git-stacks/core/web-shortcuts"
 
 import type { EventBroker, EventSubscription } from "../policy/event-broker.js"
 import { CoreMutationSchemas, EditTargetRequestSchema, type CoreMutationName } from "../policy/core-contract.js"
@@ -57,6 +68,8 @@ export interface SecureServiceRouterOptions {
   eventCursor?: () => Promise<string>
   setWorkspacePins?: (ids: string[]) => void | Promise<void>
   setWorkspacePriorities?: (priorities: Array<{ workspace_id: string; priority: number }>) => void | Promise<void>
+  readWebShortcutSettings?: (platform: "macos" | "linux") => CoreWebShortcutSettings | Promise<CoreWebShortcutSettings>
+  updateWebShortcutSettings?: (intent: WebShortcutMutationIntent) => CoreWebShortcutSettings | Promise<CoreWebShortcutSettings>
   onConnectionChange?: (count: number) => void
   onActivity?: () => void
   issueLaunch?: (mode: "browser" | "tui", targetId: string) => LaunchToken
@@ -92,6 +105,8 @@ const methodScopes: Record<string, SecureScope> = {
   "workspace-creation.catalog": "snapshot.read",
   "workspace.pins.set": "operation.write",
   "workspace.priorities.set": "operation.write",
+  "shortcuts.get": "snapshot.read",
+  "shortcuts.set": "operation.write",
   "signals.list": "signal.read",
   "signals.acknowledge": "signal.dismiss",
   "signals.dismiss": "signal.dismiss",
@@ -211,6 +226,8 @@ export class SecureServiceRouter implements SecureSessionHandler {
       }
       case "workspace.pins.set": return this.setPins(body)
       case "workspace.priorities.set": return this.setPriorities(body)
+      case "shortcuts.get": return this.getShortcutSettings(body)
+      case "shortcuts.set": return this.setShortcutSettings(body)
       case "signals.list": return this.signals(context.principalId)
       case "signals.acknowledge": return this.acknowledgeSignals(context.principalId, body)
       case "signals.dismiss": return this.dismissSignal(body)
@@ -432,6 +449,28 @@ export class SecureServiceRouter implements SecureSessionHandler {
     return { priorities: parsed.data.priorities }
   }
 
+  private async getShortcutSettings(body?: Record<string, unknown>): Promise<unknown> {
+    if (!this.options.readWebShortcutSettings) throw coded("Shortcut settings are unavailable", "capability_unavailable")
+    const parsed = WebShortcutGetRequestSchema.safeParse(body)
+    if (!parsed.success) throw coded("Invalid shortcut settings request", "invalid_request")
+    try {
+      return projectShortcutSettings(await this.options.readWebShortcutSettings(parsed.data.platform))
+    } catch (error) {
+      throw mapShortcutError(error)
+    }
+  }
+
+  private async setShortcutSettings(body?: Record<string, unknown>): Promise<unknown> {
+    if (!this.options.updateWebShortcutSettings) throw coded("Shortcut settings are unavailable", "capability_unavailable")
+    const parsed = WebShortcutMutationSchema.safeParse(body)
+    if (!parsed.success) throw coded("Invalid shortcut settings mutation", "invalid_request")
+    try {
+      return projectShortcutSettings(await this.options.updateWebShortcutSettings(toCoreShortcutIntent(parsed.data)))
+    } catch (error) {
+      throw mapShortcutError(error)
+    }
+  }
+
   private async assertRevisionAndWorkspaces(revision: string, ids: string[]): Promise<void> {
     const snapshots = await this.options.snapshot.buildAll()
     if ((snapshots[0]?.revision ?? "0") !== revision) throw coded("Authoritative snapshot revision is stale", "conflict")
@@ -527,4 +566,59 @@ export class SecureServiceRouter implements SecureSessionHandler {
     const subscriptions = [...this.resources.values()].reduce((total, item) => total + item.subscriptions.size, 0)
     this.options.onConnectionChange?.(this.resources.size + subscriptions + this.terminals.activeCount)
   }
+}
+
+function toCoreShortcutBinding(binding: {
+  code: string
+  ctrl: boolean
+  alt: boolean
+  shift: boolean
+  meta: boolean
+}): CoreWebShortcutBinding {
+  return {
+    code: binding.code as `Key${string}`,
+    ctrl: binding.ctrl,
+    alt: binding.alt,
+    shift: binding.shift,
+    meta: binding.meta,
+  }
+}
+
+function toCoreShortcutIntent(parsed: ReturnType<typeof WebShortcutMutationSchema.parse>): WebShortcutMutationIntent {
+  const common = {
+    platform: parsed.platform,
+    action_id: parsed.action_id,
+    expected_revision: parsed.expected_revision,
+  }
+  switch (parsed.intent) {
+    case "set-primary": return { ...common, intent: "set-primary", binding: toCoreShortcutBinding(parsed.binding) }
+    case "set-aliases": return { ...common, intent: "set-aliases", aliases: parsed.aliases.map(toCoreShortcutBinding) }
+    case "unbind": return { ...common, intent: "unbind" }
+    case "reset": return { ...common, intent: "reset" }
+  }
+}
+
+function projectShortcutSettings(settings: CoreWebShortcutSettings): unknown {
+  return WebShortcutSettingsSchema.parse({
+    platform: settings.platform,
+    revision: settings.revision,
+    bindings: settings.bindings.map((row) => ({
+      action_id: row.action_id,
+      primary: row.primary ? toCoreShortcutBinding(row.primary) : null,
+      aliases: row.aliases.map(toCoreShortcutBinding),
+    })),
+  })
+}
+
+function mapShortcutError(error: unknown): Error {
+  if (error instanceof WebShortcutStaleRevisionError) {
+    return coded("Shortcut settings changed since they were loaded", "conflict")
+  }
+  if (error instanceof WebShortcutConflictError) {
+    return coded(`Shortcut conflicts with ${error.conflictActionId}`, "conflict")
+  }
+  if (error instanceof WebShortcutValidationError) {
+    return coded("Invalid shortcut settings", "invalid_request")
+  }
+  return coded("Shortcut settings could not be updated", "internal_error")
 }

@@ -15,6 +15,7 @@ import { CLIENT_MODEL_LIMITS, type Operation, type Signal, type SignalDismissal,
 import { getWorkspaceCreationCatalog } from "@git-stacks/core/workspace-creation"
 import { setWorkspacePins } from "@git-stacks/core/workspace-pins"
 import { setWorkspacePriorities } from "@git-stacks/core/workspace-priorities"
+import { readWebShortcutSettings, updateWebShortcutSettings } from "@git-stacks/core/web-shortcuts"
 import { readGlobalConfig, readWorkspace } from "@git-stacks/core/config"
 import { getTasksDir } from "@git-stacks/core/paths"
 import { getWorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
@@ -183,6 +184,10 @@ export interface ManagedServiceOptions {
   workspaceCreate?: WorkspaceCreateMutation
   dynamicEnvironment?: DynamicEnvironmentStore
   parseDynamicEnvironmentRefresh?: SecureServiceRouterOptions["parseDynamicEnvironmentRefresh"]
+}
+
+export function createWebShortcutRuntimeComposition() {
+  return { readWebShortcutSettings, updateWebShortcutSettings }
 }
 
 export function createWorkspaceLifecycleRuntimeComposition(input: {
@@ -478,6 +483,7 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       eventCursor: () => journal.highWaterCursor(),
       setWorkspacePins,
       setWorkspacePriorities,
+      ...createWebShortcutRuntimeComposition(),
       onLaunchRotated: writeRotatedLaunch,
       onLocalTransportRotated: writeRotatedTransport,
       onConnectionChange: (count) => lifecycle.setConnectedClients(count),
