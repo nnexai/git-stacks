@@ -37,13 +37,30 @@ class FakeElement {
   readonly listeners = new Map<string, Listener[]>()
   parentElement?: FakeElement
   className = ""
-  textContent = ""
+  private ownText = ""
   value = ""
   hidden = false
   disabled = false
   type = ""
   placeholder = ""
   id = ""
+  title = ""
+
+  get textContent(): string { return this.ownText + this.children.map((child) => child.textContent).join("") }
+  set textContent(value: string) {
+    this.ownText = value
+    for (const child of this.children) child.parentElement = undefined
+    this.children.length = 0
+  }
+  get classList() {
+    return {
+      toggle: (name: string, enabled: boolean) => {
+        const names = new Set(this.className.split(/\s+/).filter(Boolean))
+        if (enabled) names.add(name); else names.delete(name)
+        this.className = [...names].join(" ")
+      },
+    }
+  }
 
   constructor(readonly ownerDocument: FakeDocument, readonly tagName: string) {}
 
@@ -72,6 +89,8 @@ class FakeElement {
     if (name === "id") this.id = value
   }
   getAttribute(name: string): string | null { return this.attributes.get(name) ?? null }
+  hasAttribute(name: string): boolean { return this.attributes.has(name) || (name === "disabled" && this.disabled) }
+  removeAttribute(name: string): void { this.attributes.delete(name) }
   addEventListener(type: string, listener: Listener): void {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener])
   }
@@ -167,7 +186,7 @@ describe("web singleton keyboard overlays", () => {
 
     const tab = confirm.dispatch("keydown", { key: "Tab" })
     expect(tab.defaultPrevented).toBe(true)
-    expect(document.activeElement).toBe(cancel)
+    expect(document.activeElement.getAttribute("aria-label")).toBe("Close remove")
     const escape = cancel.dispatch("keydown", { key: "Escape" })
     expect(escape.defaultPrevented).toBe(true)
     expect(controller.activeSurface()).toBeUndefined()
@@ -280,7 +299,7 @@ describe("web authoritative shortcut overlays", () => {
     unbind?.dispatch("click")
     await settings.idle()
     expect(mutations[0]).toMatchObject({ intent: "unbind", expected_revision: "7", action_id: "workspace.switch" })
-    expect(accepted).toEqual(["8"])
+    expect(accepted).toEqual(["7", "8"])
 
     const reset = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.textContent === "Reset shortcut to default" && !node.disabled)
     reset?.dispatch("click")
@@ -303,17 +322,20 @@ describe("web authoritative shortcut overlays", () => {
     await settings.ready
     const primary = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-shortcut-primary") === "workspace.switch")
     primary?.dispatch("click")
-    primary?.dispatch("keydown", { code: "KeyZ", key: "z" })
+    let capture = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-capture") === "workspace.switch")
+    capture?.dispatch("keydown", { code: "KeyZ", key: "z" })
     expect(opened.view?.body.textContent).toContain("Add Ctrl, Alt, or Command so terminal typing stays available.")
-    primary?.dispatch("keydown", { code: "KeyP", key: "p", ctrlKey: true, altKey: true, shiftKey: true })
+    capture = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-capture") === "workspace.switch")
+    capture?.dispatch("keydown", { code: "KeyP", key: "p", ctrlKey: true, altKey: true, shiftKey: true })
     expect(opened.view?.body.textContent).toContain("Already assigned to Configured commands.")
-    expect(accepted).toEqual([])
+    expect(accepted).toEqual(["10"])
 
-    primary?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, shiftKey: true })
+    capture = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-capture") === "workspace.switch")
+    capture?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, shiftKey: true })
     await settings.idle()
     expect(opened.view?.body.textContent).toContain("Shortcut changes were not saved. Your previous bindings are still active.")
     expect(opened.view?.body.textContent).toContain("Retry saving shortcut")
-    expect(accepted).toEqual([])
+    expect(accepted).toEqual(["10"])
   })
 
   test("ignores pure modifiers, composition, and AltGraph during capture", async () => {
@@ -330,9 +352,10 @@ describe("web authoritative shortcut overlays", () => {
     await settings.ready
     const primary = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-shortcut-primary") === "workspace.switch")
     primary?.dispatch("click")
-    primary?.dispatch("keydown", { code: "ControlLeft", key: "Control", ctrlKey: true })
-    primary?.dispatch("keydown", { code: "KeyZ", key: "Process", isComposing: true, ctrlKey: true })
-    primary?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, altGraph: true } as Partial<FakeEvent>)
+    const capture = opened.view?.body.querySelectorAll("BUTTON").find((node) => node.getAttribute("data-capture") === "workspace.switch")
+    capture?.dispatch("keydown", { code: "ControlLeft", key: "Control", ctrlKey: true })
+    capture?.dispatch("keydown", { code: "KeyZ", key: "Process", isComposing: true, ctrlKey: true })
+    capture?.dispatch("keydown", { code: "KeyZ", key: "z", ctrlKey: true, altKey: true, altGraph: true } as Partial<FakeEvent>)
     expect(mutations).toBe(0)
     expect(opened.view?.body.textContent).toContain("Press shortcut…")
   })
