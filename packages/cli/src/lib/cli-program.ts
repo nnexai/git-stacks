@@ -34,6 +34,8 @@ export function buildCliProgram(binName = "git-stacks"): Command {
       if (!executable) {
         throw new Error("The optional git-stacks TUI is not installed. Install @git-stacks/tui or use `git-stacks web`.")
       }
+      const { prepareLocalServiceEnvironment } = await import("@git-stacks/service/client")
+      await prepareLocalServiceEnvironment()
       const tuiProcess = spawn([executable], { stdio: ["inherit", "inherit", "inherit"], env: { ...process.env, ...(options.target ? { GIT_STACKS_TARGET_ID: options.target } : {}) } })
       const exitCode = await tuiProcess.exited
       if (exitCode !== 0) process.exit(exitCode)

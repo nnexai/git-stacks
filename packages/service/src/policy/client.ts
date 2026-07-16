@@ -50,11 +50,25 @@ const OFFICIAL_SCOPES = [
   "terminal.read", "terminal.write", "terminal.create", "terminal.close", "target.select",
 ] as const
 
+async function authenticateLocalService() {
+  const descriptor = await ensureManagedServiceProcess()
+  const authenticated = await authenticateSecureCarrier(await connectLocalTls(descriptor.local_tls), {
+    mode: "tui",
+    targetId: descriptor.service_id,
+    listenerEpoch: descriptor.listener_epoch,
+    launchToken: descriptor.tui_launch.token,
+    requestedScopes: [...OFFICIAL_SCOPES],
+    build: "git-stacks-tui/0.21",
+  })
+  return { rpc: authenticated.rpc, descriptor }
+}
+
 async function authenticatedService(): Promise<SecureRpcClient> {
   if (cachedAccess) return cachedAccess
   if (!accessRequest) {
     accessRequest = (async () => {
-      const descriptor = await ensureManagedServiceProcess()
+      const local = await authenticateLocalService()
+      const descriptor = local.descriptor
       const authenticate = async (launchToken: string, targetId: string) => authenticateSecureCarrier(await connectLocalTls(descriptor.local_tls), {
         mode: "tui",
         targetId,
@@ -63,7 +77,7 @@ async function authenticatedService(): Promise<SecureRpcClient> {
         requestedScopes: [...OFFICIAL_SCOPES],
         build: "git-stacks-tui/0.21",
       })
-      let authenticated = await authenticate(descriptor.tui_launch.token, descriptor.service_id)
+      let authenticated: { rpc: SecureRpcClient } = local
       const requestedTarget = process.env.GIT_STACKS_TARGET_ID
       if (requestedTarget && requestedTarget !== descriptor.service_id) {
         const launch = await authenticated.rpc.request<{ token: string }>("launch.tui", { target_id: requestedTarget }, { scope: "target.select" })
@@ -156,7 +170,36 @@ export async function refreshDynamicEnvironment(
     ...(environment.PATH !== undefined ? { PATH: environment.PATH } : {}),
     ...(environment.SSH_AUTH_SOCK !== undefined ? { SSH_AUTH_SOCK: environment.SSH_AUTH_SOCK } : {}),
   }
-  return DynamicEnvironmentRefreshResultSchema.parse(await secureRequest("environment.refresh", request, { signal, retry: false }))
+  const local = await authenticateLocalService()
+  try {
+    return DynamicEnvironmentRefreshResultSchema.parse(await local.rpc.request("environment.refresh", request, { signal }))
+  } finally {
+    await local.rpc.close("local environment refresh complete")
+  }
+}
+
+export class LocalEnvironmentPreparationError extends Error {
+  readonly code = "environment_refresh_failed" as const
+  readonly stage = "local-launch-preparation" as const
+  readonly recovery = "Retry from the same local user after confirming the managed service is available."
+
+  constructor() {
+    super("The local service environment could not be prepared; no dependent launch was started.")
+    this.name = "LocalEnvironmentPreparationError"
+  }
+}
+
+export async function prepareLocalServiceEnvironment(
+  environment: Partial<Record<"PATH" | "SSH_AUTH_SOCK", string | undefined>> = process.env as Partial<Record<"PATH" | "SSH_AUTH_SOCK", string | undefined>>,
+  signal?: AbortSignal,
+): Promise<DynamicEnvironmentRefreshResult> {
+  try {
+    return await refreshDynamicEnvironment(environment, signal)
+  } catch {
+    // Do not include PATH, socket, transport, or authentication details in a
+    // launcher-facing error. The recovery metadata is intentionally static.
+    throw new LocalEnvironmentPreparationError()
+  }
 }
 
 export async function createRemotePairing(name: string, scopes: SecureScope[], signal?: AbortSignal): Promise<PairingBundle> {

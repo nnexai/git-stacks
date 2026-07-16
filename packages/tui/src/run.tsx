@@ -1,7 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 
 import { render } from "@opentui/solid"
-import { closeServiceClient } from "@git-stacks/service/client"
+import { closeServiceClient, prepareLocalServiceEnvironment } from "@git-stacks/service/client"
 import App from "./App"
 import { stopCoreState } from "./core-store"
 
@@ -9,6 +9,7 @@ export async function runDashboard() {
   let destroyed!: () => void
   const rendererDestroyed = new Promise<void>((resolve) => { destroyed = resolve })
   try {
+    await prepareLocalServiceEnvironment()
     await render(() => <App />, {
       targetFps: 30,
       // Keep a renderer-level emergency exit even if App fails before its

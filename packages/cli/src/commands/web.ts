@@ -27,7 +27,8 @@ export const webCommand = new Command("web")
   .action(async (options: { open: boolean; json?: boolean; target?: string }) => {
     const { ensureManagedServiceProcess, readUsableServiceDescriptor } = await import("@git-stacks/service")
     let descriptor = await ensureManagedServiceProcess()
-    const { createBrowserLaunch, closeServiceClient, recoverLocalWebTransport } = await import("@git-stacks/service/client")
+    const { createBrowserLaunch, closeServiceClient, prepareLocalServiceEnvironment, recoverLocalWebTransport } = await import("@git-stacks/service/client")
+    await prepareLocalServiceEnvironment()
     const targetId = options.target ?? descriptor.service_id
     const probeLaunch = await createBrowserLaunch(targetId)
     try {
