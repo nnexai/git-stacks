@@ -32,8 +32,12 @@ function deferred<T = void>() {
   return { promise, resolve, reject }
 }
 
-function execution(steps: OperationStep[]): OperationExecution {
-  return { steps, result: { workspace: "demo" } }
+function execution(
+  steps: OperationStep[],
+  cancellation: OperationExecution["cancellation"] = "none",
+  finalize?: () => void | Promise<void>,
+): OperationExecution {
+  return { steps, result: { workspace: "demo" }, cancellation, finalize }
 }
 
 describe("OperationRegistry lifecycle", () => {
@@ -99,7 +103,7 @@ describe("OperationRegistry lifecycle", () => {
         rollback: async () => { calls.push("rollback:first"); throw new Error("rollback failed") },
       },
       { name: "open.integrations", stage: "executing", message: "Opening integrations", run: async () => { calls.push("run:second") } },
-    ]))
+    ], "safe-boundaries"))
     await firstDone.promise
     await registry.cancel(accepted.operation_id)
     expect(registry.get(accepted.operation_id)?.state).toBe("running")
@@ -172,6 +176,128 @@ describe("OperationRegistry lifecycle", () => {
     expect(operation?.state).toBe("failed")
     if (operation?.state === "failed") expect(operation.error.details?.reason).toBe("interrupted")
     expect(recoveredEvents).toHaveLength(1)
+    await expect(recovered.cancel("op_restart123456789")).resolves.toMatchObject({
+      outcome: "already-finished",
+      operation_state: "failed",
+    })
+  })
+
+  test("serializes cancellation before start, during safe work, duplicate requests, and terminal refresh", async () => {
+    const dir = await root()
+    let scheduled: (() => void) | undefined
+    const started = deferred()
+    const release = deferred()
+    let finalized = 0
+    const registry = new OperationRegistry({
+      root: dir,
+      id: () => "op_safe123456789012",
+      publishOperationEvent: async () => ({} as ServiceEvent),
+      schedule: (run) => { scheduled = run },
+    })
+    const accepted = await registry.accept(execution([{
+      name: "safe",
+      stage: "executing",
+      message: "Safe work",
+      run: async (_report, cancellation) => {
+        started.resolve()
+        await release.promise
+        cancellation?.throwIfCancelled()
+      },
+    }], "safe-boundaries", () => { finalized += 1 }))
+
+    expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "available" })
+    expect(await registry.cancel(accepted.operation_id)).toMatchObject({ outcome: "requested", operation_state: "accepted" })
+    expect(await registry.cancel(accepted.operation_id)).toMatchObject({ outcome: "requested", operation_state: "accepted" })
+    expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "requested" })
+
+    scheduled?.()
+    await started.promise
+    release.resolve()
+    await registry.wait(accepted.operation_id)
+    expect(registry.get(accepted.operation_id)?.state).toBe("cancelled")
+    expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "unavailable", reason: "finished" })
+    expect(await registry.cancel(accepted.operation_id)).toMatchObject({ outcome: "already-finished", operation_state: "cancelled" })
+    expect(finalized).toBe(1)
+  })
+
+  test("makes commit visible before irreversible work and reports too-late without rollback claims", async () => {
+    const dir = await root()
+    const committed = deferred()
+    const release = deferred()
+    const registry = new OperationRegistry({
+      root: dir,
+      id: () => "op_commit12345678901",
+      publishOperationEvent: async () => ({} as ServiceEvent),
+    })
+    const accepted = await registry.accept(execution([{
+      name: "irreversible",
+      stage: "executing",
+      message: "Committing",
+      run: async (_report, cancellation) => {
+        cancellation?.commit()
+        committed.resolve()
+        await release.promise
+      },
+    }], "safe-boundaries"))
+    await committed.promise
+
+    expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "unavailable", reason: "committed" })
+    expect(await registry.cancel(accepted.operation_id)).toEqual({
+      operation_id: accepted.operation_id,
+      outcome: "too-late",
+      operation_state: "running",
+    })
+    release.resolve()
+    await registry.wait(accepted.operation_id)
+    const terminal = registry.get(accepted.operation_id)
+    expect(terminal?.state).toBe("succeeded")
+    if (terminal?.state === "succeeded") expect(terminal).not.toHaveProperty("rollback_attempted")
+  })
+
+  test("never advertises or accepts cancellation for non-cancellable work", async () => {
+    const dir = await root()
+    const started = deferred()
+    const release = deferred()
+    const registry = new OperationRegistry({
+      root: dir,
+      id: () => "op_none123456789012",
+      publishOperationEvent: async () => ({} as ServiceEvent),
+    })
+    const accepted = await registry.accept(execution([{
+      name: "core",
+      stage: "executing",
+      message: "Core work",
+      run: async (_report, cancellation) => {
+        expect(cancellation).toBeUndefined()
+        started.resolve()
+        await release.promise
+      },
+    }]))
+    await started.promise
+    expect(registry.cancellationView(accepted.operation_id)).toEqual({ state: "unavailable", reason: "not-cancellable" })
+    expect(await registry.cancel(accepted.operation_id)).toMatchObject({ outcome: "not-cancellable", operation_state: "running" })
+    release.resolve()
+    await registry.wait(accepted.operation_id)
+    expect(registry.get(accepted.operation_id)?.state).toBe("succeeded")
+  })
+
+  test("runs terminal reconciliation once after failure", async () => {
+    const dir = await root()
+    let finalized = 0
+    const registry = new OperationRegistry({
+      root: dir,
+      id: () => "op_finalize123456789",
+      publishOperationEvent: async () => ({} as ServiceEvent),
+    })
+    const accepted = await registry.accept(execution([{
+      name: "fail",
+      stage: "executing",
+      message: "Fail",
+      run: async () => { throw new Error("failed") },
+    }], "none", () => { finalized += 1 }))
+    await registry.wait(accepted.operation_id)
+    expect(registry.get(accepted.operation_id)?.state).toBe("failed")
+    expect(finalized).toBe(1)
   })
 })
 
