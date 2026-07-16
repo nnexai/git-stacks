@@ -27,7 +27,7 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 **Goal:** Make active-workspace cleanup reversible by default and destructive removal explicit, terminal-aware, and consistent across clients.
 **Depends on:** Nothing
 **Requirements:** ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, REMOVE-01, REMOVE-02, REMOVE-03, REMOVE-04, REMOVE-05
-**Plans:** 6/8 plans executed
+**Plans:** 7/8 plans executed
 
 Plans:
 **Wave 1**
@@ -53,7 +53,7 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 123-06-PLAN.md — Web archive, remove, force, and reconciliation surface
-- [ ] 123-07-PLAN.md — TUI archive, remove, force, and reconciliation surface
+- [x] 123-07-PLAN.md — TUI archive, remove, force, and reconciliation surface
 
 **Wave 7** *(blocked on Wave 6 completion)*
 

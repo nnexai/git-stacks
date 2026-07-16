@@ -118,9 +118,9 @@ status: complete
 
 Each task was committed atomically:
 
-1. **Task 1: Create the Wave 0 rendered TUI lifecycle interaction suite** - `91e7cc0c` (test)
-2. **Task 2: Add explicit archived and removal TUI view states** - `18062eb5` (feat)
-3. **Task 3: Wire shared lifecycle operations and authoritative TUI reconciliation** - `f8446051` (feat)
+1. **Task 1: Create the Wave 0 rendered TUI lifecycle interaction suite** - `2ba1982c` (test)
+2. **Task 2: Add explicit archived and removal TUI view states** - `8f764475` (feat)
+3. **Task 3: Wire shared lifecycle operations and authoritative TUI reconciliation** - `7797603f` (feat)
 
 ## Verification
 
@@ -129,6 +129,7 @@ Each task was committed atomically:
 - Directly affected ActionMenu unit/integration and lifecycle integration files pass 35/35 tests.
 - `npm run typecheck` passes for protocol, client, core, CLI, service, web, and TUI workspaces.
 - `npm run test:deps` reports `Package architecture: OK`.
+- The post-integration `npm test` gate passes 136 Vitest files / 1,787 tests, all 42 Node tests, and the complete OpenTUI matrix.
 - Final live TUI and real-service interaction review remains intentionally deferred to the milestone-end Phase 127 checklist before tagging.
 
 ## Files Created/Modified
@@ -186,7 +187,7 @@ Each task was committed atomically:
 ## Issues Encountered
 
 - Reopening the exact-name dialog initially allowed typed characters to arrive before the input regained focus. The dialog now uses the established deferred-focus pattern and its test settles that transition before typing.
-- The broader `npm run test:tui` sweep still encounters pre-existing isolated harness/build issues outside this plan, including incomplete config mocks in other integration files and an absent prebuilt TUI launcher artifact. The three directly affected test files pass independently, and the plan-mandated rendered, type, and dependency gates are green.
+- The isolated worktree initially exposed incomplete unrelated mocks and a missing built launcher artifact; after rebasing and integrating with the completed web/runtime wave, the full repository `npm test` gate—including the complete OpenTUI matrix—passes.
 
 ## User Setup Required
 
@@ -200,7 +201,7 @@ None - no external service configuration required.
 
 ## Self-Check: PASSED
 
-- Task commits `91e7cc0c`, `18062eb5`, and `f8446051` exist in history.
+- Integrated task commits `2ba1982c`, `8f764475`, and `7797603f` exist in history after the worktree branch was rebased onto the completed web mainline.
 - All nine created/modified source and test files exist.
 - Every coverage deliverable has current passing automated evidence.
 - No TUI lifecycle component imports filesystem, Git, process, or terminal authority, and no lifecycle branch parses error-message text.

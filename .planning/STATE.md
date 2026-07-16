@@ -5,15 +5,15 @@ milestone_name: Workspace Productivity
 current_phase: 123
 current_phase_name: Archived Workspaces and Safe Removal
 status: executing
-stopped_at: Completed 123-06-PLAN.md
-last_updated: "2026-07-16T07:18:52.037Z"
+stopped_at: Completed 123-07-PLAN.md
+last_updated: "2026-07-16T07:41:06.440Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 123 (Archived Workspaces and Safe Removal) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-07-16 — Phase 123 execution started
 
@@ -69,6 +69,9 @@ Last activity: 2026-07-16 — Phase 123 execution started
 - [Phase 123]: Browser lifecycle submission is attempted once; only the returned durable operation ID is observed afterward. — Prevents destructive intent from being replayed after reconnect or stale state.
 - [Phase 123]: Every lifecycle terminal state refreshes authoritative catalog, terminal, and signal replacement sets before presentation settles. — Service-side terminal state may change even when persisted workspace mutation fails.
 - [Phase 123]: The browser web.snapshot route consumes the aggregate catalog. — Archive-only and all-archived revisions must not fall back to zero.
+- [Phase 123]: TUI lifecycle intent uses stable projection ID plus the current authoritative core revision. — Authoritative reload settles signals and selection before completion.
+- [Phase 123]: Force Remove exists only for typed dirty state with stopped terminals and exact current-name confirmation. — Prevents message parsing and client-side privilege elevation.
+- [Phase 123]: TUI active ordering consumes the shared workspaceSuccessorOrder seam. — Web and TUI use the same pin priority activity name and stable-ID ordering.
 
 ## Validated Inputs
 
@@ -139,9 +142,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 123 P04 | 7 min | 2 tasks | 5 files |
 | Phase 123 P05 | 10 min | 2 tasks | 6 files |
 | Phase 123 P06 | 9 min | 3 tasks | 6 files |
+| Phase 123 P07 | 25 min | 3 tasks | 9 files |
 
 ## Session
 
-**Last session:** 2026-07-16T07:18:52.021Z
-**Stopped at:** Completed 123-06-PLAN.md
+**Last session:** 2026-07-16T07:41:06.422Z
+**Stopped at:** Completed 123-07-PLAN.md
 **Resume file:** None
