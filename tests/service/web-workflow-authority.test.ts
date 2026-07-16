@@ -36,13 +36,13 @@ function snapshot(): SnapshotAdapter {
   }
 }
 
-function context(scopes: string[], principalId = "principal-a") {
+function context(scopes: string[], principalId = "principal-a", mode = "browser") {
   return {
     sessionId: "session-a",
     principalId,
     targetId: "00000000-0000-4000-8000-000000000003",
     origin: "local",
-    mode: "browser",
+    mode,
     scopes,
   } as never
 }
@@ -52,6 +52,34 @@ function request(method: string, body: unknown, idempotencyKey?: string) {
 }
 
 describe("secure web workflow authority", () => {
+  test("blocks browser access to rich core and snapshot methods while retaining trusted TUI access", async () => {
+    const raw = {
+      config: { workspace_root: "/private/root" },
+      environment: { TOKEN: "credential-canary" },
+    }
+    const router = new SecureServiceRouter({
+      snapshot: {
+        ...snapshot(),
+        buildAll: async () => [{ ...workspace, ...raw }] as never,
+      },
+      core: {
+        build: async () => raw,
+        notes: async () => [],
+        editTarget: async () => ({ path: "/private/edit-target", environment: raw.environment }),
+      } as never,
+    })
+
+    for (const [method, body] of [
+      ["core.state", undefined],
+      ["core.edit-target", { kind: "workspace", workspace: "demo" }],
+      ["snapshot.all", undefined],
+    ] as const) {
+      await expect(router.request(context(["snapshot.read"]), request(method, body)))
+        .rejects.toMatchObject({ code: "unauthorized" })
+    }
+    expect(await router.request(context(["snapshot.read"], "principal-a", "tui"), request("core.state", undefined))).toEqual(raw)
+  })
+
   test("exposes a complete service-derived action inventory under snapshot scope", async () => {
     const coreState = {
       revision: "7",
@@ -164,6 +192,31 @@ describe("secure web workflow authority", () => {
     expect(cancelCalls).toBe(1)
   })
 
+  test("strictly validates operation reads before consulting the registry", async () => {
+    let reads = 0
+    const router = new SecureServiceRouter({
+      snapshot: snapshot(),
+      operations: {
+        getForClient: () => {
+          reads += 1
+          return { operation_id: "op_0123456789abcdef", state: "accepted", accepted_at: generatedAt }
+        },
+      } as never,
+    })
+    const valid = { operation_id: "op_0123456789abcdef" }
+    expect(await router.request(context(["snapshot.read"]), request("operation.get", valid)))
+      .toMatchObject({ operation_id: valid.operation_id })
+    for (const body of [
+      { ...valid, path: "/private/canary" },
+      { operation_id: "malformed" },
+      {},
+    ]) {
+      await expect(router.request(context(["snapshot.read"]), request("operation.get", body)))
+        .rejects.toMatchObject({ code: "invalid_request" })
+    }
+    expect(reads).toBe(1)
+  })
+
   test("binds forge resolution to the authenticated principal and operation scope", async () => {
     const calls: unknown[] = []
     const router = new SecureServiceRouter({
@@ -183,6 +236,93 @@ describe("secure web workflow authority", () => {
     await expect(router.request(context(["operation.write"]), request("forge.source.resolve", { ...body, token: "secret" })))
       .rejects.toMatchObject({ code: "invalid_request" })
     expect(calls).toHaveLength(1)
+  })
+
+  test("maps thrown forge authority failures to fixed safe transport errors", async () => {
+    const canary = "/private/provider TOKEN=credential-canary"
+    const resolveRouter = new SecureServiceRouter({
+      snapshot: snapshot(),
+      forgeSourceReview: { resolve: async () => { throw new Error(canary) } },
+    })
+    const body = { url: "https://github.com/acme/api/pull/42" }
+    await expect(resolveRouter.request(context(["operation.write"]), request("forge.source.resolve", body)))
+      .rejects.toMatchObject({ code: "operation_failed", message: "Forge source could not be resolved" })
+
+    const token = `review_${"a".repeat(43)}`
+    const submitRouter = new SecureServiceRouter({
+      snapshot: snapshot(),
+      operations: { submit: async () => { throw new Error("must not register") } } as never,
+      forgeSourceReview: {
+        resolve: async () => { throw new Error("unused") },
+        admit: async () => { throw new Error(canary) },
+      },
+    })
+    await expect(submitRouter.request(context(["operation.write"]), request("operation.submit", {
+      kind: "workspace.create.reviewed",
+      request: {
+        token,
+        expected_revision: "7",
+        draft: {
+          workspace_name: "api-pr-42",
+          template_name: "review",
+          matched_source_repository_id: repositoryId,
+          repositories: [{
+            repository_id: repositoryId,
+            included: true,
+            branch: { base_branch: "main", workspace_branch: "feature-topic" },
+          }],
+        },
+      },
+    }, "review-key"))).rejects.toMatchObject({
+      code: "operation_failed",
+      message: "Reviewed workspace creation could not be prepared",
+    })
+  })
+
+  test("serializes only typed forge recovery details for reviewed admission failures", async () => {
+    const token = `review_${"a".repeat(43)}`
+    const router = new SecureServiceRouter({
+      snapshot: snapshot(),
+      operations: {} as never,
+      forgeSourceReview: {
+        resolve: async () => { throw new Error("unused") },
+        admit: async () => ({
+          ok: false as const,
+          failure: {
+            code: "source_changed" as const,
+            recovery: "resolve_again" as const,
+            message: "The provider source changed after review. Resolve the change again.",
+            details: { kind: "provider" as const, provider: "github" as const },
+          },
+        }),
+      },
+    })
+    const pending = router.request(context(["operation.write"]), request("operation.submit", {
+      kind: "workspace.create.reviewed",
+      request: {
+        token,
+        expected_revision: "7",
+        draft: {
+          workspace_name: "api-pr-42",
+          template_name: "review",
+          matched_source_repository_id: repositoryId,
+          repositories: [{
+            repository_id: repositoryId,
+            included: true,
+            branch: { base_branch: "main", workspace_branch: "feature-topic" },
+          }],
+        },
+      },
+    }, "review-key"))
+    await expect(pending).rejects.toMatchObject({
+      code: "conflict",
+      details: {
+        kind: "forge_failure",
+        reason: "source_changed",
+        recovery: "resolve_again",
+        context: { kind: "provider", provider: "github" },
+      },
+    })
   })
 
   test("admits reviewed creation for the authenticated principal and cleans up rejected registration", async () => {

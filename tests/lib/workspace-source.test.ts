@@ -75,6 +75,23 @@ describe("trusted reviewed workspace source preparation", () => {
     expect(result.sourceMetadata.source_ref).toBe("refs/heads/feature/review")
   })
 
+  test("rejects plaintext HTTP fetch coordinates before invoking Git credential helpers", async () => {
+    const result = await prepareReviewedWorkspaceSource({
+      trusted_source: {
+        ...trusted,
+        source: {
+          ...trusted.source,
+          fetch: { https: "http://github.com/contrib/api.git" },
+        },
+      },
+      matched_repo: repo,
+      workspace_name: "review-9",
+      operation_id: "plaintext-http",
+    })
+    expect(result).toMatchObject({ ok: false, error: "fork_unreachable" })
+    expect(_source.fetchSourceRef).not.toHaveBeenCalled()
+  })
+
   test("dry run previews trusted metadata without Git side effects", async () => {
     const result = await prepareReviewedWorkspaceSource({
       trusted_source: trusted,
@@ -213,6 +230,26 @@ describe("trusted reviewed workspace source preparation", () => {
     await result.cleanup()
     await result.cleanup()
     expect(_source.deleteRef).toHaveBeenCalledTimes(1)
+  })
+
+  test("retries private-ref deletion until cleanup durably succeeds", async () => {
+    let deletionCalls = 0
+    _source.deleteRef = mock(async () => {
+      deletionCalls += 1
+      if (deletionCalls === 1) throw new Error("transient cleanup failure")
+    })
+    const result = await prepareReviewedWorkspaceSource({
+      trusted_source: trusted,
+      matched_repo: repo,
+      workspace_name: "review-9",
+      operation_id: "retry-cleanup",
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    await expect(result.cleanup()).rejects.toThrow("transient cleanup failure")
+    await expect(result.cleanup()).resolves.toBeUndefined()
+    await expect(result.cleanup()).resolves.toBeUndefined()
+    expect(deletionCalls).toBe(2)
   })
 
   test.each(["trunk", "dir"])("rejects %s repositories before fetch", async (mode) => {

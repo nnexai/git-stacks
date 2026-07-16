@@ -214,7 +214,7 @@ describe("reviewed forge source creation admission", () => {
     expect({ providerCalls, prepareCalls, createCalls }).toEqual({ providerCalls: 2, prepareCalls: 0, createCalls: 0 })
   })
 
-  test.each(["source_changed", "fork_unreachable"] as const)("returns typed %s when SHA-safe private-ref preparation rejects", async (failureCode) => {
+  test.each(["source_changed", "fork_unreachable"] as const)("defers typed %s preparation until the durable execution boundary", async (failureCode) => {
     let cleanupCalls = 0
     let createCalls = 0
     const authority = new ForgeSourceReviewAuthority({
@@ -233,9 +233,16 @@ describe("reviewed forge source creation admission", () => {
       principalId: "principal-a", token: resolved.token, expectedRevision: "7", draft: resolved.draft,
       idempotencyKey: `create-${failureCode}`,
     })
-    expect(admission).toMatchObject({ ok: false, failure: { code: failureCode } })
-    expect(JSON.stringify(admission)).not.toContain("/private/path")
-    expect(JSON.stringify(admission)).not.toContain("TOKEN")
+    expect(admission.ok).toBe(true)
+    expect(cleanupCalls).toBe(0)
+    expect(createCalls).toBe(0)
+    if (!admission.ok) return
+    await expect(admission.execution.steps[0]!.run(async () => {})).rejects.toMatchObject({
+      code: "operation_failed",
+      message: failureCode === "source_changed"
+        ? "The provider source changed after review. Resolve the change again."
+        : "The source repository could not be fetched with the current provider access.",
+    })
     expect(cleanupCalls).toBe(1)
     expect(createCalls).toBe(0)
   })
@@ -289,6 +296,7 @@ describe("reviewed forge source creation admission", () => {
     expect(admission.ok).toBe(true)
     if (!admission.ok) return
     expect(admission.execution.cancellation).toBe("none")
+    expect(calls).toEqual([])
     await admission.execution.steps[0]!.run(async () => {})
     expect(calls.map(({ kind }) => kind)).toEqual(["prepare", "create", "cleanup"])
     expect(calls.find(({ kind }) => kind === "prepare")?.value).toMatchObject({
@@ -321,5 +329,48 @@ describe("reviewed forge source creation admission", () => {
     expect(admission).toMatchObject({ ok: false, failure: { code: "template_repo_missing" } })
     expect(providerCalls).toBe(1)
     expect(prepareCalls).toBe(0)
+  })
+
+  test("releases a binding only after an explicitly correctable pre-commit failure", async () => {
+    const authority = new ForgeSourceReviewAuthority({
+      catalog: async () => catalog as any,
+      resolve: async () => ({ ok: true, change: trusted }),
+      planWorkspace: async (request) => request.name === "conflicting-name"
+        ? { ok: false, code: "already_exists", message: "raw /private/conflict" } as any
+        : {
+            ok: true,
+            plan: {
+              request,
+              inputs: {
+                wsName: request.name,
+                branch: request.branch,
+                templateName: "review",
+                repos: [{
+                  id: repositoryId, name: "api", repo: "api", type: "typescript", mode: "worktree",
+                  main_path: "/private/repos/api", task_path: "/private/tasks/review/api", base_branch: "main",
+                }],
+              },
+            },
+          } as any,
+      prepareSource: async () => { throw new Error("must remain behind operation registration") },
+    })
+    const resolved = await resolveDraft(authority)
+    const first = await authority.admit({
+      principalId: "principal-a",
+      token: resolved.token,
+      expectedRevision: "7",
+      draft: { ...resolved.draft, workspace_name: "conflicting-name" },
+      idempotencyKey: "first-key",
+    })
+    expect(first).toMatchObject({ ok: false, failure: { code: "branch_conflict", recovery: "change_branch" } })
+
+    const retry = await authority.admit({
+      principalId: "principal-a",
+      token: resolved.token,
+      expectedRevision: "7",
+      draft: { ...resolved.draft, workspace_name: "corrected-name" },
+      idempotencyKey: "second-key",
+    })
+    expect(retry.ok).toBe(true)
   })
 })

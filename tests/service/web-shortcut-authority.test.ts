@@ -78,6 +78,31 @@ describe("secure web shortcut authority", () => {
       ...base,
       error: { ...base.error, details: { path: "/private/path" } },
     }).success).toBe(false)
+
+    expect(SecureResponseSchema.safeParse({
+      ...base,
+      error: {
+        ...base.error,
+        details: {
+          kind: "forge_failure",
+          reason: "source_changed",
+          recovery: "resolve_again",
+          context: { kind: "provider", provider: "github" },
+        },
+      },
+    }).success).toBe(true)
+    expect(SecureResponseSchema.safeParse({
+      ...base,
+      error: {
+        ...base.error,
+        details: {
+          kind: "forge_failure",
+          reason: "source_changed",
+          recovery: "resolve_again",
+          path: "/private/path",
+        },
+      },
+    }).success).toBe(false)
   })
 
   test("reads a complete projected registry under snapshot scope without disclosing core state", async () => {
