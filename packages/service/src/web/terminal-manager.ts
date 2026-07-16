@@ -33,6 +33,7 @@ type Attachment = { socket: TerminalAttachment; ack: bigint; pressured: boolean;
 
 export interface PtyProcess {
   readonly pid: number
+  cancelSequence?(): void
   write(data: string): void
   resize(columns: number, rows: number): void
   kill(signal?: string): void
@@ -134,6 +135,7 @@ function bufferPty(processHandle: PtyProcess): PtyProcess {
   })
   return {
     pid: processHandle.pid,
+    cancelSequence: () => processHandle.cancelSequence?.(),
     write: (data) => processHandle.write(data),
     resize: (columns, rows) => processHandle.resize(columns, rows),
     kill: (signal) => processHandle.kill(signal),
@@ -530,6 +532,7 @@ export class WebTerminalManager {
 
     return {
       get pid() { return active?.pid ?? lastPid },
+      cancelSequence() { cancelled = true },
       write(data) {
         if (active && acceptsInput) active.write(data)
         else pendingInput.push(data)
@@ -805,6 +808,7 @@ export class WebTerminalManager {
   }
 
   private killGroup(session: Session, signal: NodeJS.Signals): void {
+    session.process.cancelSequence?.()
     if (session.process.pid <= 0) { session.process.kill(signal); return }
     try { process.kill(-session.process.pid, signal) } catch { session.process.kill(signal) }
   }

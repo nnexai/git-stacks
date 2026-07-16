@@ -473,6 +473,27 @@ describe("service-owned web terminal", () => {
     expect(groupExists).toBe(false)
   })
 
+  test("marks a logical PTY sequence cancelled before signaling its active process group", async () => {
+    const ptys = createPtyFactory(["term"])
+    let cancellations = 0
+    const spawn: PtyFactory = (argv, options) => {
+      const child = ptys.spawn(argv, options)
+      child.cancelSequence = () => { cancellations += 1 }
+      return child
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, spawn, undefined, 10)
+
+    const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await manager.close("browser-1", terminal.id)
+    expect(cancellations).toBe(1)
+  })
+
   test("shares concurrent close settlement and closes a workspace across principals without metadata", async () => {
     const ptys = createPtyFactory(["kill", "term", "term", "term"])
     const manager = new WebTerminalManager({
