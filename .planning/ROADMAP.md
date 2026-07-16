@@ -27,7 +27,7 @@ Turn the shared service-backed clients into a terminal-first daily productivity 
 **Goal:** Make active-workspace cleanup reversible by default and destructive removal explicit, terminal-aware, and consistent across clients.
 **Depends on:** Nothing
 **Requirements:** ARCH-01, ARCH-02, ARCH-03, ARCH-04, ARCH-05, ARCH-06, REMOVE-01, REMOVE-02, REMOVE-03, REMOVE-04, REMOVE-05
-**Plans:** 3/8 plans executed
+**Plans:** 4/8 plans executed
 
 Plans:
 **Wave 1**
@@ -44,7 +44,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 123-04-PLAN.md — Revision-bound lifecycle coordinator and honest progress
+- [x] 123-04-PLAN.md — Revision-bound lifecycle coordinator and honest progress
 
 **Wave 5** *(blocked on Wave 4 completion)*
 

@@ -5,15 +5,15 @@ milestone_name: Workspace Productivity
 current_phase: 123
 current_phase_name: Archived Workspaces and Safe Removal
 status: executing
-stopped_at: Completed 123-03-PLAN.md
-last_updated: "2026-07-16T06:36:29.456Z"
+stopped_at: Completed 123-04-PLAN.md
+last_updated: "2026-07-16T06:50:02.820Z"
 last_activity: 2026-07-16
 last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 8
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 123 (Archived Workspaces and Safe Removal) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-07-16 — Phase 123 execution started
 
@@ -60,6 +60,9 @@ Last activity: 2026-07-16 — Phase 123 execution started
 - [Phase 123]: A queued same-workspace lifecycle lease keeps admission continuously blocked while unrelated workspace leases remain independent. — Prevents an allocation gap between sequential lifecycle mutations without a global lock.
 - [Phase 123]: SIGTERM and SIGKILL are attempts only; the shared PTY exit promise is the sole successful close signal. — Signal delivery cannot prove process exit or authorize filesystem mutation.
 - [Phase 123]: Internal workspace shutdown returns only status and counts, never cross-principal session metadata. — Lifecycle cleanup needs cross-principal authority without client-visible enumeration authority.
+- [Phase 123]: The stable workspace lease begins before execution-time catalog validation and is released only after authoritative reconciliation or failure cleanup. — This prevents target-local TOCTOU without introducing a global workspace lock.
+- [Phase 123]: Force Remove derives allow_dirty only from its own fresh workspace_dirty inspection and checks the exact current authoritative name before commit. — A stale client or clean/non-dirty failure cannot manufacture destructive force authority.
+- [Phase 123]: Typed lifecycle details live on durable failed operations instead of being reconstructed from error text. — Thin clients need blocker and force eligibility data without owning or parsing lifecycle policy.
 
 ## Validated Inputs
 
@@ -127,9 +130,10 @@ The following pre-existing backlog items remain open for explicit triage; milest
 | Phase 123 P01 | 11 min | 2 tasks | 10 files |
 | Phase 123 P02 | 10 min | 2 tasks | 12 files |
 | Phase 123 P03 | 7 min | 2 tasks | 3 files |
+| Phase 123 P04 | 7 min | 2 tasks | 5 files |
 
 ## Session
 
-**Last session:** 2026-07-16T06:36:29.448Z
-**Stopped at:** Completed 123-03-PLAN.md
+**Last session:** 2026-07-16T06:49:38.153Z
+**Stopped at:** Completed 123-04-PLAN.md
 **Resume file:** None
