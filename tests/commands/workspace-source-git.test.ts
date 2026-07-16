@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "@test/api"
 import { execSync } from "child_process"
 import { mkdirSync, writeFileSync } from "fs"
 import { join } from "path"
-import { cleanup, createConfigFixture, formatCliFailure, makeTmpDir, runCli, writeRegistryFixture, writeTemplateFixture } from "../helpers"
+import { cleanup, createConfigFixture, fakeGitLabProviderEnv, formatCliFailure, gitExecOptions, makeTmpDir, runCli, writeRegistryFixture, writeTemplateFixture } from "../helpers"
 
 function git(cwd: string, cmd: string): string {
   return execSync(`git ${cmd}`, { cwd, encoding: "utf8" }).trim()
@@ -14,6 +14,7 @@ describe("workspace source git handoff", () => {
   let apiMain: string
   let webMain: string
   let apiBare: string
+  let providerEnv: Record<string, string>
 
   beforeEach(() => {
     baseDir = makeTmpDir("workspace-source-git")
@@ -42,6 +43,15 @@ describe("workspace source git handoff", () => {
     git(apiMain, "commit -q -m source")
     git(apiMain, "push -q origin source/gitlab-mr-42")
     git(apiMain, "checkout -q main")
+    const sourceSha = git(apiMain, "rev-parse source/gitlab-mr-42")
+    const targetSha = git(apiMain, "rev-parse main")
+    execSync(`git config --global url.file://${apiBare}.insteadOf https://gitlab.example.com/org/api.git`, gitExecOptions(apiMain, baseDir))
+    providerEnv = fakeGitLabProviderEnv(baseDir, {
+      targetPath: "org/api",
+      sourceBranch: "source/gitlab-mr-42",
+      sourceSha,
+      targetSha,
+    })
 
     git(webMain, "init -q")
     git(webMain, "config user.name 'Test User'")
@@ -96,7 +106,7 @@ repos:
         "--source",
         "https://gitlab.example.com/org/api/-/merge_requests/42",
       ],
-      { baseDir, configDir },
+      { baseDir, configDir, env: providerEnv },
     )
     expect(result.exitCode, formatCliFailure(result)).toBe(0)
 

@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "@test/api"
-import { execSync } from "child_process"
+import { execFileSync, execSync } from "child_process"
 import { existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import {
   applyHostileGlobalGitEnv,
   cleanup,
   createConfigFixture,
+  fakeGitLabProviderEnv,
   formatCliFailure,
   gitExecOptions,
   makeGitRepo,
@@ -15,8 +16,16 @@ import {
   writeTemplateFixture,
 } from "../helpers"
 
-function setupWorkspaceSourceFixture(baseDir: string, configDir: string): string {
+function setupWorkspaceSourceFixture(baseDir: string, configDir: string): { apiRepo: string; sourceSha: string; targetSha: string } {
   const apiRepo = makeGitRepo(join(baseDir, "repos"), "api")
+  const opts = gitExecOptions(apiRepo, baseDir)
+  const targetSha = execSync("git rev-parse HEAD", opts).toString().trim()
+  execSync("git checkout -q -b feature/review", opts)
+  writeFileSync(join(apiRepo, "review-source.txt"), "review source\n")
+  execSync("git add review-source.txt", opts)
+  execSync('git commit -q -m "review source"', opts)
+  const sourceSha = execSync("git rev-parse HEAD", opts).toString().trim()
+  execSync("git checkout -q main", opts)
   writeRegistryFixture(configDir, `- schema_version: "1"
   name: api
   local_path: ${apiRepo}
@@ -36,17 +45,29 @@ repos:
 labels:
   - template:review
 `)
-  return apiRepo
+  return { apiRepo, sourceSha, targetSha }
 }
 
 describe("workspace source command contracts", () => {
   let baseDir: string
   let configDir: string
+  let providerEnv: Record<string, string>
 
   beforeEach(() => {
     baseDir = makeTmpDir("workspace-source-cmd")
     configDir = createConfigFixture(baseDir)
-    setupWorkspaceSourceFixture(baseDir, configDir)
+    const fixture = setupWorkspaceSourceFixture(baseDir, configDir)
+    execFileSync("git", [
+      "config", "--global",
+      `url.file://${fixture.apiRepo}.insteadOf`,
+      "https://gitlab.example.com/org/api.git",
+    ], gitExecOptions(fixture.apiRepo, baseDir))
+    providerEnv = fakeGitLabProviderEnv(baseDir, {
+      targetPath: "org/api",
+      sourceBranch: "feature/review",
+      sourceSha: fixture.sourceSha,
+      targetSha: fixture.targetSha,
+    })
   })
 
   afterEach(() => cleanup(baseDir))
@@ -57,7 +78,7 @@ describe("workspace source command contracts", () => {
     const restoreHostileEnv = applyHostileGlobalGitEnv(fixtureBase)
 
     try {
-      const apiRepo = setupWorkspaceSourceFixture(fixtureBase, fixtureConfig)
+      const { apiRepo } = setupWorkspaceSourceFixture(fixtureBase, fixtureConfig)
       writeFileSync(join(apiRepo, "source.txt"), "source fixture\n")
       const opts = gitExecOptions(apiRepo, fixtureBase)
       execSync("git add source.txt", opts)
@@ -81,7 +102,7 @@ describe("workspace source command contracts", () => {
   test("--source rejects --from combination", () => {
     const result = runCli(
       ["new", "src-ws", "--source", "https://gitlab.example.com/org/api/-/merge_requests/1", "--from", "review", "--non-interactive"],
-      { baseDir, configDir },
+      { baseDir, configDir, env: providerEnv },
     )
     expect(result.exitCode, formatCliFailure(result)).toBe(1)
     expect(result.stderr).toContain("--from and --source")
@@ -99,7 +120,7 @@ describe("workspace source command contracts", () => {
         "https://gitlab.example.com/org/api/-/merge_requests/42",
         "--dry-run",
       ],
-      { baseDir, configDir },
+      { baseDir, configDir, env: providerEnv },
     )
     expect(result.exitCode, formatCliFailure(result)).toBe(0)
     expect(result.stdout).toContain("source: https://gitlab.example.com/org/api/-/merge_requests/42")
@@ -127,7 +148,7 @@ describe("workspace source command contracts", () => {
       {
         baseDir,
         configDir,
-        env: { GS_TEST_SKIP_SOURCE_FETCH: "1" },
+        env: providerEnv,
       },
     )
     expect(result.exitCode, formatCliFailure(result)).toBe(0)

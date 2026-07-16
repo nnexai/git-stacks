@@ -374,6 +374,50 @@ export function childPathWithPrependedBin(binDir: string): Record<string, string
   }
 }
 
+export function fakeGitLabProviderEnv(baseDir: string, input: {
+  targetPath: string
+  sourcePath?: string
+  sourceBranch: string
+  sourceSha: string
+  targetBranch?: string
+  targetSha?: string
+  changeNumber?: number
+}): Record<string, string> {
+  const binDir = join(baseDir, "forge-bin")
+  const sourcePath = input.sourcePath ?? input.targetPath
+  const changeNumber = input.changeNumber ?? 42
+  const sourceProjectId = 91
+  const targetProjectId = sourcePath === input.targetPath ? sourceProjectId : 90
+  const mr = JSON.stringify({
+    iid: changeNumber,
+    state: "opened",
+    web_url: `https://gitlab.example.com/${input.targetPath}/-/merge_requests/${changeNumber}`,
+    sha: input.sourceSha,
+    source_branch: input.sourceBranch,
+    source_project_id: sourceProjectId,
+    target_branch: input.targetBranch ?? "main",
+    target_project_id: targetProjectId,
+    diff_refs: {
+      head_sha: input.sourceSha,
+      ...(input.targetSha ? { base_sha: input.targetSha } : {}),
+    },
+  })
+  const project = JSON.stringify({
+    id: sourceProjectId,
+    path_with_namespace: sourcePath,
+    ssh_url_to_repo: `git@gitlab.example.com:${sourcePath}.git`,
+    http_url_to_repo: `https://gitlab.example.com/${sourcePath}.git`,
+    web_url: `https://gitlab.example.com/${sourcePath}`,
+  })
+  writeExecutable(binDir, "glab", `#!/usr/bin/env node
+const endpoint = process.argv.at(-1) ?? ""
+if (endpoint.includes("/merge_requests/")) process.stdout.write(${JSON.stringify(mr)})
+else if (endpoint === "projects/${sourceProjectId}") process.stdout.write(${JSON.stringify(project)})
+else { process.stderr.write("unsupported fake glab endpoint"); process.exitCode = 1 }
+`)
+  return childPathWithPrependedBin(binDir)
+}
+
 export function fakeEditorPath(): string {
   return join(import.meta.dirname, "support", "fake-editor.ts")
 }
