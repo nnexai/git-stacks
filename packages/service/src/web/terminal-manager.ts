@@ -521,8 +521,13 @@ export class WebTerminalManager {
             try {
               await waitForPtyInitialization(child, initialization, this.timing.ptyInitializationTimeoutMs)
             } catch (error) {
-              await this.terminatePtyProcessGroup(child, childExited)
-              active = undefined
+              try {
+                await this.terminatePtyProcessGroup(child, childExited)
+                active = undefined
+              } catch (cleanupError) {
+                dataListener(`\r\n[git-stacks shell cleanup] ${(cleanupError as Error).message}\r\n`)
+                return
+              }
               throw error
             }
             if (cancelled) {

@@ -39,7 +39,10 @@ function createPtyFactory(behaviors: FakeExitBehavior[]): {
   const spawn: PtyFactory = () => {
     const behavior = behaviors[allocations] ?? behaviors.at(-1) ?? "term"
     allocations += 1
-    let exitListener: ((event: { exitCode: number; signal?: number }) => void) | undefined
+    const exitListeners = new Set<(event: { exitCode: number; signal?: number }) => void>()
+    const emitExit = (event: { exitCode: number; signal?: number }) => {
+      for (const listener of exitListeners) listener(event)
+    }
     const process = {
       pid: 900_000 + allocations,
       signals: [] as string[],
@@ -47,14 +50,17 @@ function createPtyFactory(behaviors: FakeExitBehavior[]): {
       resize: () => {},
       kill: (signal = "SIGTERM") => {
         process.signals.push(signal)
-        if (behavior === "term" && signal === "SIGTERM") queueMicrotask(() => exitListener?.({ exitCode: 0 }))
-        if (behavior === "kill" && signal === "SIGKILL") queueMicrotask(() => exitListener?.({ exitCode: 137, signal: 9 }))
+        if (behavior === "term" && signal === "SIGTERM") queueMicrotask(() => emitExit({ exitCode: 0 }))
+        if (behavior === "kill" && signal === "SIGKILL") queueMicrotask(() => emitExit({ exitCode: 137, signal: 9 }))
         if (behavior === "retry-term" && signal === "SIGTERM" && process.signals.filter((item) => item === "SIGTERM").length === 2) {
-          queueMicrotask(() => exitListener?.({ exitCode: 0 }))
+          queueMicrotask(() => emitExit({ exitCode: 0 }))
         }
       },
       onData: () => ({ dispose: () => {} }),
-      onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => { exitListener = listener; return { dispose: () => {} } },
+      onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
+        exitListeners.add(listener)
+        return { dispose: () => { exitListeners.delete(listener) } }
+      },
     } satisfies PtyProcess & { signals: string[] }
     processes.push(process)
     return process
@@ -597,12 +603,43 @@ describe("service-owned web terminal", () => {
       cols: 80,
       rows: 24,
     })
-    await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
+    await waitFor(() => (ptys.processes[0]?.signals.length ?? 0) >= 2)
+    await sleep(30)
     expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
     expect(groupExists).toBe(false)
+    await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
     expect(manager.activeCount).toBe(0)
     expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "ended", exit_code: 126 })
     await manager.close("browser-1", terminal.id)
+  })
+
+  test("does not logically finish a command PTY while initialization cleanup leaves its group alive", async () => {
+    const ptys = createPtyFactory(["kill"])
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [{ bucket: "main", scope: "workspace", command: "never-starts", cwd: process.cwd(), environment: {} }],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, ptys.spawn, undefined, 10, { ptyInitializationTimeoutMs: 5 }, undefined, () => true)
+
+    const terminal = await manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      command_id: "cmd_0123456789abcdef",
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    await waitFor(() => (ptys.processes[0]?.signals.length ?? 0) >= 2)
+    await sleep(30)
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+    expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "running", exit_code: null })
+    expect(manager.activeCount).toBe(1)
+
+    await expect(manager.close("browser-1", terminal.id)).resolves.toMatchObject({ state: "cleanup_failed", exit_code: null })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL", "SIGTERM", "SIGKILL"])
   })
 
   test("marks a logical PTY sequence cancelled before signaling its active process group", async () => {
