@@ -232,9 +232,10 @@ describe("web keyboard navigation boundary", () => {
 
   test("connects terminal and attention actions with exact empty feedback", async () => {
     const source = await readFile(new URL("../../packages/web/src/app.ts", import.meta.url), "utf8")
+    const navigation = await readFile(new URL("../../packages/web/src/navigation.ts", import.meta.url), "utf8")
     expect(source).toContain("Select a repository before starting a terminal.")
     expect(source).toContain("No active terminal to close.")
-    expect(source).toContain("No other terminal is available.")
+    expect(source + navigation).toContain("No other terminal is available.")
     expect(source).toContain("No workspace needs attention.")
     expect(source).toContain("selectNextAttentionTarget")
     expect(source).toContain("selectPair({ workspaceId: target.workspaceId, repositoryId: target.repositoryId })")

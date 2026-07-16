@@ -141,6 +141,17 @@ export async function loadAuthoritativeWebActionSettings(
   }
 }
 
+export function terminalTraversalTarget(
+  terminalIds: readonly string[],
+  activeTerminalId: string | undefined,
+  direction: -1 | 1,
+): { terminalId: string } | { message: "No other terminal is available." } {
+  if (terminalIds.length < 2) return { message: "No other terminal is available." }
+  const activeIndex = terminalIds.indexOf(activeTerminalId ?? "")
+  const current = activeIndex === -1 ? 0 : activeIndex
+  return { terminalId: terminalIds[(current + direction + terminalIds.length) % terminalIds.length]! }
+}
+
 export function createWebShortcutDispatcher(registry: WebActionRegistry): WebShortcutDispatcher {
   const owners = new WeakMap<object, WebActionSource>()
 

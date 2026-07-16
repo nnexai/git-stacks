@@ -3,10 +3,10 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebglAddon } from "@xterm/addon-webgl"
 import "@xterm/xterm/css/xterm.css"
 import "./app.css"
-import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
+import { deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder } from "@git-stacks/client"
 import { WEB_SHORTCUT_ACTION_IDS, type WebOperation, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { createWebActionRegistry, createWebShortcutDispatcher, loadAuthoritativeWebActionSettings, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { createWebActionRegistry, createWebShortcutDispatcher, loadAuthoritativeWebActionSettings, terminalTraversalTarget, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 
 if (window.top !== window) {
   document.documentElement.replaceChildren()
@@ -415,15 +415,27 @@ function shortcutAvailability(actionId: WebShortcutActionId): WebActionAvailabil
   if ((actionId === "workspace.switch" || actionId === "commands.open") && !overlayShortcutActions.has(actionId)) {
     return { available: false, disabledReason: "This navigation surface is not available yet." }
   }
-  if (actionId === "attention.next") return { available: false, disabledReason: "Attention navigation is not available yet." }
   return { available: true }
 }
 
 function moveVisibleTerminal(direction: -1 | 1): void {
-  const items = visibleTerminals()
-  if (!items.length) return
-  const current = Math.max(0, items.findIndex((item) => item.id === activeTerminalId))
-  selectTerminal(items[(current + direction + items.length) % items.length]!.id)
+  const target = terminalTraversalTarget(visibleTerminals().map(({ id }) => id), activeTerminalId, direction)
+  if ("message" in target) { toast(target.message); return }
+  selectTerminal(target.terminalId)
+}
+
+function selectNextAttention(): void {
+  const candidate = selectNextAttentionTarget({
+    workspaces: snapshot.workspaces.map((workspace) => ({ ...workspace, pinned: preferences.pins.has(workspace.id) })),
+    signals,
+    terminals: [...terminalViews.values()].map(({ meta }) => meta),
+    tabOrder: preferences.tabOrder,
+    current: selectedPair ? { ...selectedPair, terminalId: activeTerminalId } : undefined,
+  })
+  if (!candidate) { toast("No workspace needs attention."); return }
+  const target = candidate.target
+  selectPair({ workspaceId: target.workspaceId, repositoryId: target.repositoryId })
+  if (target.terminalId) selectTerminal(target.terminalId)
 }
 
 const actionRegistrations = Object.fromEntries(WEB_SHORTCUT_ACTION_IDS.map((actionId) => [actionId, {
@@ -434,13 +446,17 @@ const actionRegistrations = Object.fromEntries(WEB_SHORTCUT_ACTION_IDS.map((acti
     } else if (actionId === "workspace.new") {
       void showCreation()
     } else if (actionId === "terminal.new") {
-      void createTerminal()
+      if (!selectedPair) toast("Select a repository before starting a terminal.")
+      else void createTerminal()
     } else if (actionId === "terminal.close") {
-      if (activeTerminalId) void terminalViews.get(activeTerminalId)?.close()
+      if (!activeTerminalId) toast("No active terminal to close.")
+      else void terminalViews.get(activeTerminalId)?.close()
     } else if (actionId === "terminal.previous") {
       moveVisibleTerminal(-1)
     } else if (actionId === "terminal.next") {
       moveVisibleTerminal(1)
+    } else if (actionId === "attention.next") {
+      selectNextAttention()
     }
   },
 } satisfies WebActionRegistration])) as Record<WebShortcutActionId, WebActionRegistration>
