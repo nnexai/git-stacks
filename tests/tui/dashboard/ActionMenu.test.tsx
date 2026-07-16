@@ -21,6 +21,7 @@ describe("ActionMenu", () => {
     expect(frame).toContain("Rename")
     expect(frame).toContain("Edit")
     expect(frame).toContain("Clean")
+    expect(frame).toContain("Archive")
     expect(frame).toContain("Remove")
     expect(frame).toContain("Merge")
     expect(frame).toContain("Sync")
@@ -122,6 +123,18 @@ describe("ActionMenu", () => {
     mockInput.pressKey("r")
     await renderOnce()
     expect(received).toBe("remove")
+  })
+
+  test("letter shortcut a dispatches archive", async () => {
+    let received = ""
+    const { mockInput, renderOnce } = await testRender(
+      () => <ActionMenu workspaceName="ws" onAction={(a) => { received = a }} onCancel={() => {}} />,
+      renderOpts
+    )
+    await renderOnce()
+    mockInput.pressKey("a")
+    await renderOnce()
+    expect(received).toBe("archive")
   })
 
   test("letter shortcut o dispatches open", async () => {
@@ -256,7 +269,7 @@ describe("ActionMenu", () => {
       renderOpts
     )
     await renderOnce()
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 10; i++) {
       mockInput.pressArrow("down")
       await renderOnce()
     }

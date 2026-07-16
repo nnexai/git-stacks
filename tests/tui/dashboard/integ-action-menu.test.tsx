@@ -54,6 +54,22 @@ const removeWorkspaceMock = mock(async (name: string) => {
   try { unlinkSync(`${configDir}/workspaces/${name}.yml`) } catch {}
   return { ok: true }
 })
+const workspaceLifecycleMutationMock = mock(async (request: {
+  kind: string
+  workspace_id: string
+  expected_revision: string
+}) => {
+  if (request.kind === "workspace.remove") await removeWorkspaceMock("test-ws")
+  return {
+    operation_id: "op_1234567890123456",
+    state: "succeeded",
+    accepted_at: "2026-07-16T00:00:00.000Z",
+    started_at: "2026-07-16T00:00:00.000Z",
+    finished_at: "2026-07-16T00:00:01.000Z",
+    completed_steps: ["workspace-lifecycle"],
+    result: { revision: "2", terminals_stopped: true },
+  }
+})
 
 // Inline template fixture
 const templateFixture = {
@@ -69,10 +85,14 @@ let wsRemoved = false
 // listWorkspaces returns empty array when wsRemoved to simulate post-delete state.
 mock.module("@git-stacks/core/config", () => ({
   listWorkspaces: mock(() => (wsRemoved ? [] : [workspaceFixture()])),
+  listWorkspacesUncached: mock(() => (wsRemoved ? [] : [workspaceFixture()])),
   readWorkspace: mock((_name: string) => workspaceFixture()),
+  updateWorkspace: mock((_name: string, update: (workspace: typeof wsFixture) => typeof wsFixture) => update(workspaceFixture() as any)),
   writeWorkspace: mock(() => {}),
   workspaceExists: mock((name: string) => !wsRemoved && name === "test-ws"),
   workspacePath: mock((name: string) => `${configDir}/workspaces/${name}.yml`),
+  workspaceFilePath: mock((name: string) => `${configDir}/workspaces/${name}.yml`),
+  invalidateConfigCache: mock(() => {}),
   readRegistry: mock(() => registryFixture),
   writeRegistry: mock(() => {}),
   listRegistryEntries: listRegistryEntriesMock,
@@ -87,10 +107,15 @@ mock.module("@git-stacks/core/config", () => ({
   })),
   writeGlobalConfig: mock(() => {}),
   expandBranchPattern: mock((pattern: string, name: string) => pattern.replace("{name}", name)),
+  getRepoPath: mock((repo: { task_path?: string; main_path: string }) => repo.task_path ?? repo.main_path),
+  isGitRepo: mock((repo: { mode?: string }) => repo.mode !== "dir"),
+  isWorktreeRepo: mock((repo: { mode?: string }) => repo.mode === "worktree"),
   formatZodError: mock(() => ""),
   WorkspaceSchema: {} as any,
   TemplateSchema: {} as any,
   RepoRegistryEntrySchema: {} as any,
+  RepoRegistrySchema: {} as any,
+  ShellIdentifierSchema: {} as any,
 }))
 
 // Mock git operations before App import
@@ -148,7 +173,7 @@ mock.module("../../../packages/tui/src/editor-handoff", () => ({
 }))
 
 mock.module("@git-stacks/service/client", () => ({
-  fetchCoreState: mock(async () => { throw new Error("core state must be injected") }),
+  fetchCoreState: mock(async () => makeDashboardCoreState(wsRemoved ? [] : [workspaceFixture() as any], [templateFixture as any], registryFixture as any)),
   fetchSignalProjection: mock(async () => ({ signals: [], dismissed: [], sequence: "0" })),
   dismissSignal: mock(async () => {}),
   subscribeServiceEvents: mock(async () => "0"),
@@ -174,6 +199,7 @@ mock.module("@git-stacks/service/client", () => ({
     }
     return { state: "succeeded", operation_id: "op_1234567890123456", accepted_at: "2026-07-14T00:00:00.000Z", started_at: "2026-07-14T00:00:00.000Z", finished_at: "2026-07-14T00:00:00.000Z", completed_steps: [], result: {} }
   }),
+  runWorkspaceLifecycleMutation: workspaceLifecycleMutationMock,
   createWorkspaceThroughService: mock(async () => ({ state: "succeeded" })),
 }))
 
@@ -213,6 +239,7 @@ beforeEach(() => {
   editRegistryYamlMock.mockClear()
   openWorkspaceIssueMock.mockClear()
   runManualCommandMock.mockClear()
+  workspaceLifecycleMutationMock.mockClear()
   process.env.EDITOR = "true"
   write(configDir, "workspaces/test-ws.yml", `name: test-ws
 branch: feature/test
@@ -247,7 +274,7 @@ describe("integration: action menu dispatch", () => {
     expect(frame).toContain("Remove")
   })
 
-  test("selecting Remove shows confirm dialog and deletes workspace YAML on confirm", async () => {
+  test("selecting Remove confirms through the lifecycle service and deletes workspace YAML", async () => {
     const { renderer, mockInput, renderOnce, captureCharFrame } = await testRender(
       () => <App />, renderOpts
     )
@@ -272,8 +299,12 @@ describe("integration: action menu dispatch", () => {
     await renderOnce()
     await renderOnce()
 
-    // D-18 side-effect assertion: workspace YAML file must no longer exist after confirm.
-    // The mock's removeWorkspace deletes the seeded file from configDir.
+    expect(workspaceLifecycleMutationMock).toHaveBeenCalledWith({
+      kind: "workspace.remove",
+      workspace_id: "00000000-0000-4000-8000-000000000001",
+      expected_revision: "1",
+    }, expect.any(Object))
+    // The lifecycle service owns the full delete, including the YAML definition.
     expect(existsSync(wsYamlPath)).toBe(false)
   })
 

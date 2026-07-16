@@ -5,6 +5,7 @@ import { useKeyboard } from "@opentui/solid"
 import type { ArchivedWorkspaceSummary } from "@git-stacks/protocol"
 
 import { CenteredDialog } from "./CenteredDialog"
+import type { WorkspaceLifecycleTarget } from "./types"
 
 type Props = {
   rows: ArchivedWorkspaceSummary[]
@@ -47,6 +48,26 @@ export function ArchivedWorkspacesDialog(props: Props) {
           </For>
         </Show>
         <text fg="gray">{"\n"}  [Enter/u] Unarchive  [Esc] Close</text>
+      </box>
+    </CenteredDialog>
+  )
+}
+
+export function ArchivedWorkspaceUndoDialog(props: {
+  target: WorkspaceLifecycleTarget
+  onUndo: () => void
+  onClose: () => void
+}) {
+  useKeyboard((key) => {
+    if (key.name === "u") { props.onUndo(); return }
+    if (key.name === "escape" || key.name === "return") props.onClose()
+  })
+
+  return (
+    <CenteredDialog title={`Archived ${props.target.name}`} size="small">
+      <box flexDirection="column" paddingTop={1} paddingLeft={1}>
+        <text fg="green">  {props.target.name} was archived and its terminals were stopped.</text>
+        <text fg="cyan">{"\n"}  [u] Undo  [Enter/Esc] Close</text>
       </box>
     </CenteredDialog>
   )

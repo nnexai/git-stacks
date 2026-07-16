@@ -2,7 +2,7 @@ import { createMemo } from "solid-js"
 
 import { useCoreState } from "../core-store"
 import type { WorkspaceEntry } from "../types"
-import { workspacePriorityOrder } from "@git-stacks/client"
+import { workspaceSuccessorOrder } from "@git-stacks/client"
 
 export function useWorkspaces() {
   const core = useCoreState()
@@ -12,6 +12,8 @@ export function useWorkspaces() {
     }))
     return {
       workspace: definition,
+      workspaceId: projection.id,
+      activityAt: projection.activity_at,
       status: {
         state: "loaded" as const,
         repos,
@@ -20,6 +22,21 @@ export function useWorkspaces() {
         aheadBehindStale: (projection.status ?? []).some((repo) => repo.fetch_stale === true),
       },
     }
-  }).sort((left, right) => workspacePriorityOrder(left.workspace, right.workspace)))
+  }).sort((left, right) => workspaceSuccessorOrder(
+    {
+      id: left.workspaceId,
+      name: left.workspace.name,
+      pinned: left.workspace.pinned,
+      priority: left.workspace.priority,
+      activity_at: left.activityAt,
+    },
+    {
+      id: right.workspaceId,
+      name: right.workspace.name,
+      pinned: right.workspace.pinned,
+      priority: right.workspace.priority,
+      activity_at: right.activityAt,
+    },
+  )))
   return { entries, loading: core.loading, reload: core.reload }
 }

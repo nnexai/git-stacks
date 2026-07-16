@@ -22,6 +22,7 @@ const actions: ActionItem[] = [
   { key: "n", action: "rename", label: "Rename" },
   { key: "e", action: "edit", label: "Edit ($EDITOR)" },
   { key: "c", action: "clean", label: "Clean" },
+  { key: "a", action: "archive", label: "Archive" },
   { key: "r", action: "remove", label: "Remove" },
   { key: "m", action: "merge", label: "Merge" },
   { key: "s", action: "sync", label: "Sync" },

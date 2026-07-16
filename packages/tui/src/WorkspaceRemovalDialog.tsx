@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/solid */
 
-import { For, createSignal } from "solid-js"
+import { For, createSignal, onMount } from "solid-js"
 import { useKeyboard } from "@opentui/solid"
 
 import { CenteredDialog } from "./CenteredDialog"
@@ -70,7 +70,13 @@ type ForceProps = {
 
 export function WorkspaceForceRemoveDialog(props: ForceProps) {
   const [confirmation, setConfirmation] = createSignal("")
+  const [inputFocused, setInputFocused] = createSignal(false)
   const exact = () => confirmation() === props.workspaceName
+
+  onMount(() => {
+    // Keep the key that opened this dialog out of the confirmation input.
+    setTimeout(() => setInputFocused(true), 0)
+  })
 
   useKeyboard((key) => {
     if (key.name === "escape") props.onCancel()
@@ -87,10 +93,13 @@ export function WorkspaceForceRemoveDialog(props: ForceProps) {
         <box flexDirection="row">
           <text fg="cyan">  Name: </text>
           <input
-            focused
+            focused={inputFocused()}
             value={confirmation()}
             onInput={(value) => setConfirmation(typeof value === "string" ? value : "")}
-            onSubmit={() => { if (exact()) props.onConfirm(confirmation()) }}
+            onSubmit={() => {
+              if (exact()) props.onConfirm(confirmation())
+              else setConfirmation("")
+            }}
           />
         </box>
         <text fg={exact() ? "red" : "gray"}>

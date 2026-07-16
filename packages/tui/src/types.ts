@@ -21,6 +21,8 @@ export type WorkspaceStatus =
 
 export type WorkspaceEntry = {
   workspace: Workspace
+  workspaceId: string
+  activityAt: string
   status: WorkspaceStatus
 }
 
@@ -63,6 +65,7 @@ export type UIView =
   | { view: "list" }
   | { view: "action-menu"; index: number }
   | { view: "archived-workspaces"; rows: ArchivedWorkspaceSummary[] }
+  | { view: "archive-undo"; target: WorkspaceLifecycleTarget }
   | { view: "remove-confirm"; target: WorkspaceLifecycleTarget }
   | { view: "dirty-remove-blocked"; target: WorkspaceLifecycleTarget; details: DirtyRemovalContext }
   | { view: "force-remove-name"; target: WorkspaceLifecycleTarget; details: DirtyRemovalContext }

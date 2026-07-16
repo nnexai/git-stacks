@@ -24,6 +24,12 @@ import { TemplateActionMenu } from "./TemplateActionMenu"
 import { RepoActionMenu } from "./RepoActionMenu"
 import { RemoveBlockedView } from "./RemoveBlockedView"
 import { CenteredDialog } from "./CenteredDialog"
+import { ArchivedWorkspacesDialog, ArchivedWorkspaceUndoDialog } from "./ArchivedWorkspacesDialog"
+import {
+  WorkspaceDirtyBlockedDialog,
+  WorkspaceForceRemoveDialog,
+  WorkspaceRemovalDialog,
+} from "./WorkspaceRemovalDialog"
 import type { SyncRow, SyncResult, PushRow } from "@git-stacks/core/workspace-git"
 import { expandBranchPattern, type Workspace, type Template } from "@git-stacks/core/config"
 import { SyncProgressView } from "./SyncProgressView"
@@ -39,12 +45,16 @@ import type {
   WorkspaceGroupingMode,
   WorkspaceStatus,
   IssueCandidate,
+  DirtyRemovalContext,
+  LifecycleAction,
+  WorkspaceLifecycleTarget,
 } from "./types"
 import { matchesLabels } from "@git-stacks/core/labels"
 import { issueTrackerLabels } from "@git-stacks/client"
 import { listManualCommands } from "@git-stacks/core/workspace-command"
 import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
-import type { Operation } from "@git-stacks/protocol"
+import * as serviceClient from "@git-stacks/service/client"
+import type { Operation, WorkspaceLifecycleFailureDetails, WorkspaceLifecycleMutation } from "@git-stacks/protocol"
 import { openEditorHandoff, resolveEditorHandoff } from "./editor-handoff"
 import { useCoreState } from "./core-store"
 import { runWorkspaceShellHandoff } from "./terminal-handoff"
@@ -399,6 +409,122 @@ export default function App() {
     if (operation.state === "running" && operation.progress.message) appendSystemLine(operation.progress.message)
   }
 
+  function lifecycleTarget(entry: WorkspaceEntry | undefined): WorkspaceLifecycleTarget | undefined {
+    const revision = core.state()?.revision
+    if (!entry || !revision) return undefined
+    return { id: entry.workspaceId, name: entry.workspace.name, expectedRevision: revision }
+  }
+
+  function currentLifecycleTarget(id: string): WorkspaceLifecycleTarget | undefined {
+    const state = core.state()
+    if (!state) return undefined
+    const entry = state.workspaces.find((candidate) => candidate.projection.id === id)
+    if (!entry) return undefined
+    return { id, name: entry.definition.name, expectedRevision: state.revision }
+  }
+
+  function lifecycleFailure(error: unknown): { code?: string; message: string; details?: WorkspaceLifecycleFailureDetails } {
+    if (!(error instanceof Error)) return { message: String(error) }
+    const value = error as Error & { code?: unknown; lifecycle?: unknown }
+    const details = value.lifecycle && typeof value.lifecycle === "object"
+      ? value.lifecycle as WorkspaceLifecycleFailureDetails
+      : undefined
+    return {
+      message: value.message,
+      ...(typeof value.code === "string" ? { code: value.code } : {}),
+      ...(details ? { details } : {}),
+    }
+  }
+
+  function dirtyRemovalContext(details: WorkspaceLifecycleFailureDetails | undefined): DirtyRemovalContext | undefined {
+    if (
+      details?.kind !== "workspace_dirty"
+      || details.terminals_stopped !== true
+      || details.force_allowed !== true
+      || !Array.isArray(details.blocking_repositories)
+    ) return undefined
+    return {
+      kind: "workspace_dirty",
+      blockingRepositories: [...details.blocking_repositories],
+      terminalsStopped: true,
+      forceAllowed: true,
+    }
+  }
+
+  async function reconcileLifecycleState(): Promise<void> {
+    await reload()
+    await reloadSignals()
+    setSelected(new Set<string>())
+    tabCursor.workspaces[1](0)
+  }
+
+  async function executeWorkspaceLifecycle(
+    action: LifecycleAction,
+    target: WorkspaceLifecycleTarget,
+    confirmationName?: string,
+  ): Promise<void> {
+    const request: WorkspaceLifecycleMutation = action === "force-remove"
+      ? {
+          kind: "workspace.force-remove",
+          workspace_id: target.id,
+          expected_revision: target.expectedRevision,
+          confirmation_name: confirmationName ?? "",
+        }
+      : {
+          kind: action === "archive"
+            ? "workspace.archive"
+            : action === "unarchive"
+            ? "workspace.unarchive"
+            : "workspace.remove",
+          workspace_id: target.id,
+          expected_revision: target.expectedRevision,
+        }
+    setView({ view: "lifecycle-progress", target, action, message: `${action}: ${target.name}` })
+    try {
+      await serviceClient.runWorkspaceLifecycleMutation(request, {
+        onOperation: (operation) => {
+          if (operation.state !== "running") return
+          setView({
+            view: "lifecycle-progress",
+            target,
+            action,
+            message: operation.progress.message ?? `${action}: ${target.name}`,
+          })
+        },
+      })
+    } catch (error) {
+      const failure = lifecycleFailure(error)
+      const shouldReload = failure.code === "conflict" || failure.details?.terminals_stopped === true
+      if (shouldReload) await reconcileLifecycleState()
+      const freshTarget = currentLifecycleTarget(target.id)
+      const dirty = dirtyRemovalContext(failure.details)
+      if ((action === "remove" || action === "force-remove") && dirty && freshTarget) {
+        setView({ view: "dirty-remove-blocked", target: freshTarget, details: dirty })
+        return
+      }
+      if (failure.code === "conflict") {
+        setRefreshFlash("Workspace changed; confirm the action again.")
+        setView({ view: "list" })
+        return
+      }
+      setView({
+        view: "lifecycle-failure",
+        target: freshTarget ?? target,
+        action,
+        message: failure.message,
+      })
+      return
+    }
+
+    await reconcileLifecycleState()
+    const currentRevision = core.state()?.revision ?? target.expectedRevision
+    if (action === "archive") {
+      setView({ view: "archive-undo", target: { ...target, expectedRevision: currentRevision } })
+    } else {
+      setView({ view: "list" })
+    }
+  }
+
   async function runWorkspaceMutation(
     mutation: "workspace.open" | "workspace.close" | "workspace.clean" | "workspace.remove" | "workspace.merge",
     workspace: string,
@@ -494,6 +620,18 @@ export default function App() {
       return
     }
 
+    if (action === "archive") {
+      const target = lifecycleTarget(entry)
+      if (target) await executeWorkspaceLifecycle("archive", target)
+      return
+    }
+
+    if (action === "remove") {
+      const target = lifecycleTarget(entry)
+      if (target) setView({ view: "remove-confirm", target })
+      return
+    }
+
     if (action === "sync") {
       setView({ view: "confirm", index, action: "sync" })
       return
@@ -504,7 +642,7 @@ export default function App() {
       return
     }
 
-    // clean, remove, merge need confirmation
+    // clean and merge need confirmation
     setView({ view: "confirm", index, action })
   }
 
@@ -1095,6 +1233,19 @@ export default function App() {
     }
     if (v.view === "push-progress") return
 
+    if (v.view === "lifecycle-progress") return
+    if (v.view === "lifecycle-failure") {
+      setView({ view: "list" })
+      return
+    }
+    if (
+      v.view === "archived-workspaces"
+      || v.view === "archive-undo"
+      || v.view === "remove-confirm"
+      || v.view === "dirty-remove-blocked"
+      || v.view === "force-remove-name"
+    ) return
+
     // Confirm dialog
     if (v.view === "confirm") return // ConfirmDialog has its own keyboard handler
 
@@ -1242,7 +1393,9 @@ export default function App() {
           return
         }
         if (key.name === "r") {
-          setView({ view: "confirm", index: cursor(), action: "remove", batch: true })
+          const selectedName = [...selected()][0]
+          const target = lifecycleTarget(entries().find((entry) => entry.workspace.name === selectedName))
+          if (target) setView({ view: "remove-confirm", target })
           return
         }
       }
@@ -1270,6 +1423,11 @@ export default function App() {
       if (key.name === "g" && tab() === "workspaces") {
         setWorkspaceGroupingMode(mode => nextWorkspaceGroupingMode(mode))
         setCursor(0)
+        return
+      }
+
+      if (key.name === "a" && tab() === "workspaces" && selected().size === 0) {
+        setView({ view: "archived-workspaces", rows: [...(core.state()?.archived_workspaces ?? [])] })
         return
       }
 
@@ -1342,6 +1500,108 @@ export default function App() {
                 if (workspace) void executeManualCommand(workspace, commandName)
               }}
             />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "archived-workspaces"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "archived-workspaces" }>
+          return (
+            <ArchivedWorkspacesDialog
+              rows={v.rows}
+              onCancel={() => setView({ view: "list" })}
+              onUnarchive={(row) => {
+                const revision = core.state()?.revision
+                if (revision) void executeWorkspaceLifecycle("unarchive", {
+                  id: row.id,
+                  name: row.name,
+                  expectedRevision: revision,
+                })
+              }}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "archive-undo"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "archive-undo" }>
+          return (
+            <ArchivedWorkspaceUndoDialog
+              target={v.target}
+              onClose={() => setView({ view: "list" })}
+              onUndo={() => void executeWorkspaceLifecycle("unarchive", v.target)}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "remove-confirm"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "remove-confirm" }>
+          return (
+            <WorkspaceRemovalDialog
+              workspaceName={v.target.name}
+              onCancel={() => setView({ view: "list" })}
+              onConfirm={() => void executeWorkspaceLifecycle("remove", v.target)}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "dirty-remove-blocked"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "dirty-remove-blocked" }>
+          return (
+            <WorkspaceDirtyBlockedDialog
+              workspaceName={v.target.name}
+              details={v.details}
+              onCancel={() => setView({ view: "list" })}
+              onForce={() => setView({ view: "force-remove-name", target: v.target, details: v.details })}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "force-remove-name"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "force-remove-name" }>
+          return (
+            <WorkspaceForceRemoveDialog
+              workspaceName={v.target.name}
+              details={v.details}
+              onCancel={() => setView({ view: "dirty-remove-blocked", target: v.target, details: v.details })}
+              onConfirm={(confirmationName) => void executeWorkspaceLifecycle("force-remove", v.target, confirmationName)}
+            />
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "lifecycle-progress"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "lifecycle-progress" }>
+          return (
+            <CenteredDialog title={`${v.action}: ${v.target.name}`} size="medium">
+              <box flexDirection="column" paddingTop={1} paddingLeft={1}>
+                <text fg="cyan">  {v.message}</text>
+                <text fg="gray">{"\n"}  Waiting for authoritative reconciliation...</text>
+              </box>
+            </CenteredDialog>
+          )
+        })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "lifecycle-failure"}>
+        {(() => {
+          const v = view() as Extract<UIView, { view: "lifecycle-failure" }>
+          return (
+            <CenteredDialog title={`${v.action} failed: ${v.target.name}`} size="medium">
+              <box flexDirection="column" paddingTop={1} paddingLeft={1}>
+                <text fg="red">  {v.message}</text>
+                <text fg="gray">{"\n"}  Press any key to continue.</text>
+              </box>
+            </CenteredDialog>
           )
         })()}
       </Show>
@@ -1523,7 +1783,8 @@ export default function App() {
         />
       </Show>
 
-      {/* Split pane — always visible; dialogs overlay via absolute positioning */}
+      <Show when={view().view !== "archived-workspaces"}>
+      {/* Split pane — always visible except while the intentionally minimal archive surface is open */}
         {/* TOP BOX: list pane with tab title in border */}
         <box border title={tabTitle()} flexDirection="column" height={listPaneHeight()} minHeight={6}>
           <Show when={core.error()}>
@@ -1628,6 +1889,7 @@ export default function App() {
           <text fg="gray">{!filtering() && filter() ? " / edit · esc clear" : ""}</text>
           <box flexGrow={filtering() ? 0 : 1} />
         </box>
+      </Show>
 
     </box>
   )

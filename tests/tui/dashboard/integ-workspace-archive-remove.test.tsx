@@ -241,7 +241,6 @@ let activeRenderer: { destroy(): void } | null = null
 
 async function renderApp(state = currentState) {
   currentState = state
-  reloadedState = state
   setCoreStateForTests(state)
   const rendered = await testRender(() => <App />, renderOptions)
   activeRenderer = rendered.renderer
@@ -422,7 +421,7 @@ describe("integration: archived workspaces and safe removal", () => {
     expect(callOrder).toEqual(["submit:workspace.remove:20", "reload:21"])
 
     mockInput.pressKey("f")
-    await renderOnce()
+    await settle(renderOnce)
     frame = captureCharFrame()
     expect(frame).toContain("Type dirty-demo")
 
@@ -434,7 +433,7 @@ describe("integration: archived workspaces and safe removal", () => {
     mockInput.pressEscape()
     await renderOnce()
     mockInput.pressKey("f")
-    await renderOnce()
+    await settle(renderOnce)
     await mockInput.typeText("Dirty-demo")
     mockInput.pressEnter()
     await renderOnce()
@@ -443,10 +442,12 @@ describe("integration: archived workspaces and safe removal", () => {
     mockInput.pressEscape()
     await renderOnce()
     mockInput.pressKey("f")
-    await renderOnce()
+    await settle(renderOnce)
     lifecycleScenario = "success"
     reloadedState = coreState([], [], "22")
     await mockInput.typeText("dirty-demo")
+    await renderOnce()
+    expect(captureCharFrame()).toContain("[Enter] Force Remove")
     mockInput.pressEnter()
     await settle(renderOnce)
     expect(lifecycleMutationMock.mock.calls[1]?.[0]).toEqual({
