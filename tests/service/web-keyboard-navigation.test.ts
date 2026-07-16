@@ -109,6 +109,7 @@ describe("web keyboard navigation boundary", () => {
 
   test("suppresses recognized direct repeats while keeping them consumed at both boundaries", () => {
     for (const action of [
+      ["workspace.new", "KeyN"],
       ["terminal.new", "KeyT"],
       ["terminal.close", "KeyW"],
       ["terminal.previous", "KeyJ"],
