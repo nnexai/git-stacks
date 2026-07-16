@@ -9,6 +9,10 @@ import {
   WebShortcutPlatformSchema,
   WebShortcutSettingsSchema,
 } from "../../packages/protocol/src/web"
+import {
+  WEB_SHORTCUT_ACTION_IDS as CORE_WEB_SHORTCUT_ACTION_IDS,
+  WEB_SHORTCUT_DEFAULTS,
+} from "../../packages/core/src/web-shortcuts"
 
 const binding = (code: `Key${string}`, modifiers: Partial<Record<"ctrl" | "alt" | "shift" | "meta", boolean>> = {}) => ({
   code,
@@ -45,6 +49,12 @@ describe("web shortcut protocol contract", () => {
     expect(WebShortcutPlatformSchema.parse("macos")).toBe("macos")
     expect(WebShortcutPlatformSchema.parse("linux")).toBe("linux")
     expect(WebShortcutPlatformSchema.safeParse("windows").success).toBe(false)
+  })
+
+  test("keeps protocol inventory and core-owned defaults in literal agreement", () => {
+    expect(CORE_WEB_SHORTCUT_ACTION_IDS).toEqual(WEB_SHORTCUT_ACTION_IDS)
+    expect(Object.keys(WEB_SHORTCUT_DEFAULTS.macos)).toEqual(WEB_SHORTCUT_ACTION_IDS)
+    expect(Object.keys(WEB_SHORTCUT_DEFAULTS.linux)).toEqual(WEB_SHORTCUT_ACTION_IDS)
   })
 
   test("accepts only normalized physical letter bindings", () => {
