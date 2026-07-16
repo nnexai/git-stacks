@@ -58,7 +58,7 @@ export interface SecureServiceRouterOptions {
   listTargets?: () => TargetRecord[]
   removeTarget?: (id: string) => boolean
   recoverLocalWebTransport?: () => Promise<{ endpoint: string; certificate_hash: string }>
-  workspaceLifecycleAdmission?: Pick<WorkspaceLifecycleAdmission, "assertTerminalAdmission">
+  workspaceLifecycleAdmission?: Pick<WorkspaceLifecycleAdmission, "admitTerminal">
   createWorkspaceLifecycle?: (terminals: WebTerminalManager) => Pick<ReturnType<typeof createWorkspaceLifecycleCoordinator>, "submit">
   workspaceLifecycle?: Pick<ReturnType<typeof createWorkspaceLifecycleCoordinator>, "submit">
 }

@@ -113,7 +113,7 @@ export class WebTerminalManager {
     private readonly onActiveChange?: (count: number) => void,
     private readonly now: () => number = Date.now,
     private readonly spawn: PtyFactory = productionPty,
-    private readonly workspaceLifecycleAdmission: Pick<WorkspaceLifecycleAdmission, "assertTerminalAdmission"> = createWorkspaceLifecycleAdmission(),
+    private readonly workspaceLifecycleAdmission: Pick<WorkspaceLifecycleAdmission, "admitTerminal"> = createWorkspaceLifecycleAdmission(),
     private readonly closeTimeoutMs = 1_000,
   ) {}
 
@@ -144,51 +144,52 @@ export class WebTerminalManager {
     if (this.sessions.size >= WEB_TERMINAL_MAX_TOTAL || [...this.sessions.values()].filter((session) => session.principalId === principalId && session.state !== "ended").length >= WEB_TERMINAL_MAX_PER_PRINCIPAL) {
       throw Object.assign(new Error("Terminal capacity reached"), { status: 429, code: "capacity_exceeded" })
     }
-    const resolution = await this.snapshot.resolveTerminalLaunch({
-      workspace_id: input.workspace_id,
-      repository_id: input.repository_id,
-      ...(input.command_id ? { command_id: input.command_id } : {}),
-      expected_revision: input.expected_revision,
-    })
-    if (!resolution.resolved) throw Object.assign(new Error(resolution.error.message), { status: resolution.error.code === "not_found" ? 404 : 409, code: resolution.error.code })
-
-    const id = terminalId()
-    const surfaceId = crypto.randomUUID()
-    const signalToken = randomBytes(32).toString("base64url")
-    let session: Session | undefined
-    const filter = new TerminalSignalFilter(signalToken, (signal) => { if (session) void this.handleSignal(session, signal) })
-    const argv = resolution.launch.argv
-    let resolveExit!: (code: number) => void
-    const exited = new Promise<number>((resolve) => { resolveExit = resolve })
-    let child: PtyProcess
-    this.workspaceLifecycleAdmission.assertTerminalAdmission(input.workspace_id)
+    const admission = this.workspaceLifecycleAdmission.admitTerminal(input.workspace_id)
     try {
-      child = this.spawn(argv, {
-        cwd: resolution.launch.cwd,
-        env: {
-        ...resolution.launch.environment,
-        TERM: resolution.launch.environment.TERM ?? "xterm-256color",
-        COLORTERM: resolution.launch.environment.COLORTERM ?? "truecolor",
-        GIT_STACKS_SURFACE_ID: surfaceId,
-        GIT_STACKS_TAB_ID: surfaceId,
-        GIT_STACKS_WORKSPACE_ID: input.workspace_id,
-        GIT_STACKS_REPOSITORY_ID: input.repository_id,
-        GIT_STACKS_SIGNAL_TOKEN: signalToken,
-        GIT_STACKS_SIGNAL_TRANSPORT: "osc9",
-        },
-        cols: input.cols,
-        rows: input.rows,
-        name: "xterm-256color",
+      const resolution = await this.snapshot.resolveTerminalLaunch({
+        workspace_id: input.workspace_id,
+        repository_id: input.repository_id,
+        ...(input.command_id ? { command_id: input.command_id } : {}),
+        expected_revision: input.expected_revision,
       })
-    } catch (error) {
-      throw Object.assign(new Error(`PTY allocation failed: ${(error as Error).message}`), { status: 409, code: "capability_unavailable" })
-    }
-    child.onData((data) => {
-      if (!session) return
-      const sanitized = filter.push(new TextEncoder().encode(data))
-      if (sanitized.length) this.output(session, sanitized)
-    })
-    child.onExit(({ exitCode }) => {
+      if (!resolution.resolved) throw Object.assign(new Error(resolution.error.message), { status: resolution.error.code === "not_found" ? 404 : 409, code: resolution.error.code })
+
+      const id = terminalId()
+      const surfaceId = crypto.randomUUID()
+      const signalToken = randomBytes(32).toString("base64url")
+      let session: Session | undefined
+      const filter = new TerminalSignalFilter(signalToken, (signal) => { if (session) void this.handleSignal(session, signal) })
+      const argv = resolution.launch.argv
+      let resolveExit!: (code: number) => void
+      const exited = new Promise<number>((resolve) => { resolveExit = resolve })
+      let child: PtyProcess
+      try {
+        child = this.spawn(argv, {
+          cwd: resolution.launch.cwd,
+          env: {
+            ...resolution.launch.environment,
+            TERM: resolution.launch.environment.TERM ?? "xterm-256color",
+            COLORTERM: resolution.launch.environment.COLORTERM ?? "truecolor",
+            GIT_STACKS_SURFACE_ID: surfaceId,
+            GIT_STACKS_TAB_ID: surfaceId,
+            GIT_STACKS_WORKSPACE_ID: input.workspace_id,
+            GIT_STACKS_REPOSITORY_ID: input.repository_id,
+            GIT_STACKS_SIGNAL_TOKEN: signalToken,
+            GIT_STACKS_SIGNAL_TRANSPORT: "osc9",
+          },
+          cols: input.cols,
+          rows: input.rows,
+          name: "xterm-256color",
+        })
+      } catch (error) {
+        throw Object.assign(new Error(`PTY allocation failed: ${(error as Error).message}`), { status: 409, code: "capability_unavailable" })
+      }
+      child.onData((data) => {
+        if (!session) return
+        const sanitized = filter.push(new TextEncoder().encode(data))
+        if (sanitized.length) this.output(session, sanitized)
+      })
+      child.onExit(({ exitCode }) => {
         resolveExit(exitCode)
         if (!session) return
         const remaining = filter.flush()
@@ -198,33 +199,36 @@ export class WebTerminalManager {
         session.endedAt = this.now()
         this.sendControl(session, { type: "exit", code: exitCode })
         this.notifyActive()
-    })
-    session = {
-      id,
-      principalId,
-      workspaceId: input.workspace_id,
-      repositoryId: input.repository_id,
-      ...(input.command_id ? { commandId: input.command_id } : {}),
-      surfaceId,
-      title: input.command_id ? "Command" : "Shell",
-      automaticTitle: input.command_id ? "Command" : "Shell",
-      titlePinned: false,
-      state: "running",
-      createdAt: new Date(this.now()).toISOString(),
-      exitCode: null,
-      cursor: 0n,
-      earliestCursor: 0n,
-      historyAvailable: true,
-      chunks: [],
-      replayBytes: 0,
-      process: child,
-      exited,
-      filter,
-      agentSessions: new Map(),
+      })
+      session = {
+        id,
+        principalId,
+        workspaceId: input.workspace_id,
+        repositoryId: input.repository_id,
+        ...(input.command_id ? { commandId: input.command_id } : {}),
+        surfaceId,
+        title: input.command_id ? "Command" : "Shell",
+        automaticTitle: input.command_id ? "Command" : "Shell",
+        titlePinned: false,
+        state: "running",
+        createdAt: new Date(this.now()).toISOString(),
+        exitCode: null,
+        cursor: 0n,
+        earliestCursor: 0n,
+        historyAvailable: true,
+        chunks: [],
+        replayBytes: 0,
+        process: child,
+        exited,
+        filter,
+        agentSessions: new Map(),
+      }
+      this.sessions.set(id, session)
+      this.notifyActive()
+      return this.project(session)
+    } finally {
+      admission.release()
     }
-    this.sessions.set(id, session)
-    this.notifyActive()
-    return this.project(session)
   }
 
   rename(principalId: string, id: string, title: string, mode: "manual" | "automatic"): WebTerminal | undefined {

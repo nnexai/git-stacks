@@ -69,7 +69,7 @@ function harness(overrides: Partial<WorkspaceLifecycleCoordinatorOptions> = {}) 
         calls.push(`acquire:${id}`)
         return { workspaceId: id, release: () => { calls.push(`release:${id}`) } }
       },
-      assertTerminalAdmission() {},
+      admitTerminal(id) { return { workspaceId: id, release() {} } },
     },
     terminals: {
       async closeWorkspace(id) {

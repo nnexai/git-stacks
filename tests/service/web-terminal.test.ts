@@ -106,6 +106,53 @@ describe("service-owned web terminal", () => {
     secondLease.release()
   })
 
+  test("holds lifecycle behind an in-flight terminal resolve and closes the registered PTY before lifecycle completes", async () => {
+    const admission = createWorkspaceLifecycleAdmission()
+    const ptys = createPtyFactory(["term"])
+    let resumeResolution!: () => void
+    const resolutionPaused = new Promise<void>((resolve) => { resumeResolution = resolve })
+    let resolutionStarted!: () => void
+    const started = new Promise<void>((resolve) => { resolutionStarted = resolve })
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => {
+        resolutionStarted()
+        await resolutionPaused
+        return { resolved: true, revision: "1", launch: {
+          argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+        } }
+      },
+    }, undefined, undefined, Date.now, ptys.spawn, admission, 10)
+
+    const creating = manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })
+    await started
+
+    let lifecycleGranted = false
+    const lifecycle = admission.acquire(WORKSPACE_A).then((lease) => {
+      lifecycleGranted = true
+      return lease
+    })
+    await Promise.resolve()
+    expect(lifecycleGranted).toBe(false)
+    await expect(manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })).rejects.toMatchObject({ code: "workspace_lifecycle_in_progress" })
+
+    resumeResolution()
+    const terminal = await creating
+    const lease = await lifecycle
+    expect(ptys.allocations()).toBe(1)
+    await expect(manager.closeWorkspace(WORKSPACE_A)).resolves.toEqual({ ok: true, status: "closed", requested: 1, closed: 1, failed: 0 })
+    expect(terminal.workspace_id).toBe(WORKSPACE_A)
+    expect(manager.activeCount).toBe(0)
+    lease.release()
+  })
+
   test("confirms TERM and KILL exits and reports a never-exiting PTY honestly", async () => {
     const ptys = createPtyFactory(["term", "kill", "never"])
     const manager = new WebTerminalManager({

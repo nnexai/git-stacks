@@ -3,13 +3,19 @@ export interface WorkspaceLifecycleLease {
   release(): void
 }
 
+export interface WorkspaceTerminalAdmission {
+  readonly workspaceId: string
+  release(): void
+}
+
 export interface WorkspaceLifecycleAdmission {
   acquire(workspaceId: string): Promise<WorkspaceLifecycleLease>
-  assertTerminalAdmission(workspaceId: string): void
+  admitTerminal(workspaceId: string): WorkspaceTerminalAdmission
 }
 
 type TargetState = {
   held: boolean
+  terminalCreates: number
   waiters: Array<(lease: WorkspaceLifecycleLease) => void>
 }
 
@@ -23,6 +29,17 @@ function blocked(): Error & { status: number; code: string } {
 export function createWorkspaceLifecycleAdmission(): WorkspaceLifecycleAdmission {
   const targets = new Map<string, TargetState>()
 
+  const grantNextLifecycle = (workspaceId: string, state: TargetState): void => {
+    if (state.held || state.terminalCreates > 0) return
+    const next = state.waiters.shift()
+    if (!next) {
+      targets.delete(workspaceId)
+      return
+    }
+    state.held = true
+    next(grant(workspaceId, state))
+  }
+
   const grant = (workspaceId: string, state: TargetState): WorkspaceLifecycleLease => {
     let released = false
     return {
@@ -30,13 +47,8 @@ export function createWorkspaceLifecycleAdmission(): WorkspaceLifecycleAdmission
       release() {
         if (released) return
         released = true
-        const next = state.waiters.shift()
-        if (next) {
-          next(grant(workspaceId, state))
-          return
-        }
         state.held = false
-        targets.delete(workspaceId)
+        grantNextLifecycle(workspaceId, state)
       },
     }
   }
@@ -45,17 +57,36 @@ export function createWorkspaceLifecycleAdmission(): WorkspaceLifecycleAdmission
     acquire(workspaceId) {
       let state = targets.get(workspaceId)
       if (!state) {
-        state = { held: false, waiters: [] }
+        state = { held: false, terminalCreates: 0, waiters: [] }
         targets.set(workspaceId, state)
       }
-      if (!state.held) {
+      if (!state.held && state.terminalCreates === 0) {
         state.held = true
         return Promise.resolve(grant(workspaceId, state))
       }
       return new Promise((resolve) => state!.waiters.push(resolve))
     },
-    assertTerminalAdmission(workspaceId) {
-      if (targets.get(workspaceId)?.held) throw blocked()
+    admitTerminal(workspaceId) {
+      let state = targets.get(workspaceId)
+      if (!state) {
+        state = { held: false, terminalCreates: 0, waiters: [] }
+        targets.set(workspaceId, state)
+      }
+      // Once lifecycle is held or queued, later terminal creates must not enter
+      // ahead of it. This both closes the resolve/spawn ABA window and prevents
+      // a stream of creates from starving an archive/remove request.
+      if (state.held || state.waiters.length > 0) throw blocked()
+      state.terminalCreates += 1
+      let released = false
+      return {
+        workspaceId,
+        release() {
+          if (released) return
+          released = true
+          state!.terminalCreates -= 1
+          grantNextLifecycle(workspaceId, state!)
+        },
+      }
     },
   }
 }
