@@ -88,15 +88,41 @@ function cloneDraft(draft: WebReviewedWorkspaceDraft): WebReviewedWorkspaceDraft
   return structuredClone(draft)
 }
 
-export function validateForgeReviewDraft(draft: WebReviewedWorkspaceDraft): ForgeReviewValidation {
+export function validateForgeReviewDraft(
+  draft: WebReviewedWorkspaceDraft,
+  anchor?: ForgeReviewAnchor,
+): ForgeReviewValidation {
   const parsed = WebReviewedWorkspaceDraftSchema.safeParse(draft)
-  if (parsed.success) return { valid: true, fields: {} }
   const fields: Record<string, string> = {}
-  for (const issue of parsed.error.issues) {
-    const path = issue.path.length > 0 ? issue.path.join(".") : "draft"
-    fields[path] ??= issue.message
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "draft"
+      fields[path] ??= issue.message
+    }
   }
-  return { valid: false, fields }
+  if (anchor) {
+    const template = anchor.candidates.templates.find(({ name }) => name === draft.template_name)
+    if (!template) {
+      fields.template_name = "Select a resolved template."
+    } else {
+      const expected = new Set(template.repositories.map(({ repository_id }) => repository_id))
+      const reviewed = new Set(draft.repositories.map(({ repository_id }) => repository_id))
+      if (expected.size !== reviewed.size || [...expected].some((repositoryId) => !reviewed.has(repositoryId))) {
+        fields.repositories = "Reviewed repositories must match the selected template."
+      }
+      if (!expected.has(draft.matched_source_repository_id)) {
+        fields.matched_source_repository_id = "Select a source repository from the chosen template."
+      }
+    }
+    if (!anchor.candidates.source_repositories.some(({ repository_id }) => repository_id === draft.matched_source_repository_id)) {
+      fields.matched_source_repository_id = "Select a resolved source repository."
+    }
+    const matched = draft.repositories.find(({ repository_id }) => repository_id === draft.matched_source_repository_id)
+    if (matched && matched.branch.base_branch !== anchor.source.target_branch) {
+      fields[`repositories.${draft.repositories.indexOf(matched)}.branch.base_branch`] = "Use the resolved target branch."
+    }
+  }
+  return { valid: Object.keys(fields).length === 0, fields }
 }
 
 /** Convert only schema-validated transport details into reducer recovery. */
@@ -169,8 +195,8 @@ function editDraft(
             repository_id: repository.repository_id,
             included: true,
             branch: {
-              base_branch: repository.matched_source ? anchor.source.target_branch : anchor.source.target_branch,
-              workspace_branch: repository.matched_source ? anchor.source.source_branch : anchor.source.source_branch,
+              base_branch: repository.matched_source ? anchor.source.target_branch : "",
+              workspace_branch: repository.matched_source ? anchor.source.source_branch : "",
             },
           }
     }),
@@ -209,7 +235,7 @@ export function createForgeReviewCoordinator(
       }
       const anchor = anchorFrom(response)
       const draft = cloneDraft(response.draft)
-      current = { phase: "review", url, anchor, draft, validation: validateForgeReviewDraft(draft) }
+      current = { phase: "review", url, anchor, draft, validation: validateForgeReviewDraft(draft, anchor) }
       return { status: "review" }
     } catch (error) {
       if (operationGeneration !== generation) return { status: "ignored", reason: "superseded" }
@@ -223,7 +249,7 @@ export function createForgeReviewCoordinator(
   const create = async () => {
     if (current.phase === "creating") return { status: "pending" }
     if (current.phase !== "review") return { status: "ignored", reason: "review-required" }
-    const validation = validateForgeReviewDraft(current.draft)
+    const validation = validateForgeReviewDraft(current.draft, current.anchor)
     if (!validation.valid) {
       current = { ...current, validation }
       return { status: "invalid", validation }
@@ -264,7 +290,7 @@ export function createForgeReviewCoordinator(
     edit(action) {
       if (current.phase !== "review") return
       const draft = editDraft(current.draft, current.anchor, action)
-      current = { ...current, draft, validation: validateForgeReviewDraft(draft), failure: undefined }
+      current = { ...current, draft, validation: validateForgeReviewDraft(draft, current.anchor), failure: undefined }
     },
     create,
     observeOperation(operation) {
@@ -280,7 +306,7 @@ export function createForgeReviewCoordinator(
             url: accepted.url,
             anchor: accepted.anchor,
             draft: accepted.draft,
-            validation: validateForgeReviewDraft(accepted.draft),
+            validation: validateForgeReviewDraft(accepted.draft, accepted.anchor),
             failure,
           }
     },
