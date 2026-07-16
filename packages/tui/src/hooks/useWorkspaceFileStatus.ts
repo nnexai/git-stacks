@@ -1,6 +1,6 @@
 import { createSignal, onCleanup, type Accessor } from "solid-js"
 
-import { fetchWorkspaceFileStatusProjection } from "@git-stacks/service/client"
+import * as serviceClient from "@git-stacks/service/client"
 import type { WorkspaceFileStatusState } from "../types"
 
 function errorMessage(err: unknown): string {
@@ -49,7 +49,7 @@ export function useWorkspaceFileStatus(
     setState({ state: "loading", workspaceName })
     let request = inFlight.get(key)
     if (!request || options.force) {
-      request = Promise.resolve().then(() => fetchWorkspaceFileStatusProjection({
+      request = Promise.resolve().then(() => serviceClient.fetchWorkspaceFileStatusProjection({
         workspace_id: workspace.workspaceId,
         expected_revision: revision ?? "0",
       })).then((view) => {

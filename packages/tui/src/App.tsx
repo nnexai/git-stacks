@@ -17,6 +17,7 @@ import { ActionMenu } from "./ActionMenu"
 import { WorkspaceOperationView } from "./WorkspaceOperationView"
 import { WorkspaceNotesDialog } from "./WorkspaceNotesDialog"
 import { WorkspaceFileStatusDialog } from "./WorkspaceFileStatusDialog"
+import { ForgeSourceReviewDialog } from "./ForgeSourceReviewDialog"
 import { ConfirmDialog } from "./ConfirmDialog"
 import { ProgressView } from "./ProgressView"
 import { BatchBar } from "./BatchBar"
@@ -53,7 +54,7 @@ import type {
   WorkspaceLifecycleTarget,
 } from "./types"
 import { matchesLabels } from "@git-stacks/core/labels"
-import { createOperationTracker, issueTrackerLabels, type OperationTracker, type OperationTrackerState } from "@git-stacks/client"
+import { createForgeReviewCoordinator, createOperationTracker, issueTrackerLabels, type OperationTracker, type OperationTrackerState } from "@git-stacks/client"
 import { listManualCommands } from "@git-stacks/core/workspace-command"
 import { createWorkspaceThroughService, runCoreMutation } from "@git-stacks/service/client"
 import * as serviceClient from "@git-stacks/service/client"
@@ -271,6 +272,13 @@ export default function App() {
   const [notesLoading, setNotesLoading] = createSignal(false)
   const [notesError, setNotesError] = createSignal("")
   const [notesMutationError, setNotesMutationError] = createSignal("")
+  const forgeReview = createForgeReviewCoordinator({
+    resolve: (request) => serviceClient.resolveForgeSourceReview(request),
+    create: async (request) => {
+      const operation = await serviceClient.submitWebOperation({ kind: "workspace.create.reviewed", request })
+      return { operationId: operation.operation_id }
+    },
+  })
 
   // Tab system
   const [tab, setTab] = createSignal<Tab>("workspaces")
@@ -433,7 +441,7 @@ export default function App() {
   const helpBarText = createMemo(() => {
     const w = dims().width
     const t = tab()
-    const msgShortcut = t === "workspaces" ? "  m Signals" : ""
+    const msgShortcut = t === "workspaces" ? "  m Signals  u PR/MR" : ""
     const groupHint = t === "workspaces" ? `  g Group:${workspaceGroupingMode()}` : ""
     const scrollHint = t === "workspaces" ? "  Pg Detail" : ""
     const clearHint = filter() ? "  esc Clear" : ""
@@ -725,6 +733,39 @@ export default function App() {
     }
     if (current.state !== "succeeded") throw new Error(current.error?.message ?? "Workspace operation failed.")
     return current
+  }
+
+  async function observeReviewedWorkspaceCreate(operationId: string, workspaceName: string): Promise<void> {
+    setCreateRows([{ repo: "Reviewed workspace", status: "pending", detail: "Operation accepted" }])
+    setCreateDone(false)
+    setCreateSummary({ text: "", color: "green" })
+    setView({ view: "create-progress", workspaceName })
+    try {
+      let operation = await serviceClient.fetchWebOperation(operationId)
+      while (operation.state === "accepted" || operation.state === "running") {
+        const detail = operation.progress?.message ?? (operation.state === "accepted" ? "Waiting to start" : "Creating from reviewed source")
+        setCreateRows([{ repo: "Reviewed workspace", status: "creating-worktree", detail }])
+        await new Promise<void>((resolve) => setTimeout(resolve, 250))
+        operation = await serviceClient.fetchWebOperation(operationId)
+      }
+      if (operation.state !== "succeeded") {
+        throw new Error(operation.error?.message ?? "Reviewed workspace creation did not complete.")
+      }
+      const createdName = operation.result?.workspace_name ?? workspaceName
+      setCreateRows([{ repo: "Reviewed workspace", status: "done", detail: `Created ${createdName}` }])
+      await reload()
+      await reloadSignals()
+      forgeReview.reconcile()
+      setCreateSummary({ text: `Created ${createdName}. Press any key to continue.`, color: "green" })
+    } catch (error) {
+      setCreateRows([{ repo: "Reviewed workspace", status: "failed", detail: "Creation failed" }])
+      setCreateSummary({
+        text: `${error instanceof Error ? error.message : "Reviewed workspace creation failed."} Press any key to continue.`,
+        color: "red",
+      })
+    } finally {
+      setCreateDone(true)
+    }
   }
 
   async function loadWorkspaceNotes(entry: WorkspaceEntry): Promise<void> {
@@ -1479,7 +1520,7 @@ export default function App() {
     if (v.view === "push-progress") return
 
     if (v.view === "workspace-operation") return
-    if (v.view === "workspace-notes" || v.view === "workspace-files") return
+    if (v.view === "workspace-notes" || v.view === "workspace-files" || v.view === "forge-source-review") return
 
     if (v.view === "lifecycle-progress") return
     if (v.view === "lifecycle-failure") {
@@ -1672,6 +1713,12 @@ export default function App() {
       if (key.name === "g" && tab() === "workspaces") {
         setWorkspaceGroupingMode(mode => nextWorkspaceGroupingMode(mode))
         setCursor(0)
+        return
+      }
+
+      if (key.name === "u" && tab() === "workspaces" && selected().size === 0) {
+        forgeReview.setUrl("")
+        setView({ view: "forge-source-review" })
         return
       }
 
@@ -1919,6 +1966,14 @@ export default function App() {
             />
           )
         })()}
+      </Show>
+
+      <Show when={!helpOpen() && !signalsOpen() && view().view === "forge-source-review"}>
+        <ForgeSourceReviewDialog
+          coordinator={forgeReview}
+          onAccepted={(operationId, workspaceName) => { void observeReviewedWorkspaceCreate(operationId, workspaceName) }}
+          onBack={() => setView({ view: "list" })}
+        />
       </Show>
 
       <Show when={!helpOpen() && !signalsOpen() && view().view === "issue-picker"}>

@@ -73,6 +73,7 @@ export type UIView =
   | { view: "workspace-operation" }
   | { view: "workspace-notes"; workspaceId: string; workspaceName: string; initialMode?: "list" | "add" | "clear" }
   | { view: "workspace-files"; workspaceId: string; workspaceName: string }
+  | { view: "forge-source-review" }
   | { view: "confirm"; index: number; action: Action; batch?: boolean }
   | { view: "progress"; message: string }
   | { view: "sync-progress"; message: string }
