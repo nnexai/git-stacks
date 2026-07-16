@@ -14,7 +14,7 @@ const WORKSPACE_A = "11111111-1111-4111-8111-111111111111"
 const WORKSPACE_B = "33333333-3333-4333-8333-333333333333"
 const REPOSITORY = "22222222-2222-4222-8222-222222222222"
 
-type FakeExitBehavior = "term" | "kill" | "never"
+type FakeExitBehavior = "term" | "kill" | "never" | "retry-term"
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -42,6 +42,9 @@ function createPtyFactory(behaviors: FakeExitBehavior[]): {
         process.signals.push(signal)
         if (behavior === "term" && signal === "SIGTERM") queueMicrotask(() => exitListener?.({ exitCode: 0 }))
         if (behavior === "kill" && signal === "SIGKILL") queueMicrotask(() => exitListener?.({ exitCode: 137, signal: 9 }))
+        if (behavior === "retry-term" && signal === "SIGTERM" && process.signals.filter((item) => item === "SIGTERM").length === 2) {
+          queueMicrotask(() => exitListener?.({ exitCode: 0 }))
+        }
       },
       onData: () => ({ dispose: () => {} }),
       onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => { exitListener = listener; return { dispose: () => {} } },
@@ -279,6 +282,25 @@ describe("service-owned web terminal", () => {
     expect(manager.list("browser-1")).toEqual([expect.objectContaining({ id: unrelated.id, workspace_id: WORKSPACE_B })])
     expect(manager.list("browser-2")).toEqual([])
     await manager.close("browser-1", unrelated.id)
+  })
+
+  test("retries TERM and KILL cleanup after a failed close attempt", async () => {
+    const ptys = createPtyFactory(["retry-term"])
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, ptys.spawn, undefined, 10)
+
+    await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await expect(manager.closeWorkspace(WORKSPACE_A)).resolves.toEqual({ ok: false, status: "cleanup_failed", requested: 1, closed: 0, failed: 1 })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+
+    await expect(manager.closeWorkspace(WORKSPACE_A)).resolves.toEqual({ ok: true, status: "closed", requested: 1, closed: 1, failed: 0 })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM", "SIGKILL", "SIGTERM"])
+    expect(manager.activeCount).toBe(0)
   })
 
   test("runs a real PTY roundtrip, resizes, and closes its process group", async () => {

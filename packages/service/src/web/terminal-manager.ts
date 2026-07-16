@@ -320,8 +320,15 @@ export class WebTerminalManager {
     if (session.closePromise) return session.closePromise
     session.state = "closing"
     this.sendControl(session, { type: "closing" })
-    session.closePromise = this.closeConfirmed(session)
-    return session.closePromise
+    const pending = this.closeConfirmed(session)
+    session.closePromise = pending
+    const clearFailedAttempt = () => {
+      if (session.closePromise === pending && session.state === "cleanup_failed") {
+        session.closePromise = undefined
+      }
+    }
+    void pending.then(clearFailedAttempt, clearFailedAttempt)
+    return pending
   }
 
   private async closeConfirmed(session: Session): Promise<WebTerminal> {
