@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 
 import { createForgeReviewCoordinator, validateForgeReviewDraft } from "@git-stacks/client"
-import type { WebForgeErrorDetails, WebForgeFailure, WebForgeResolveResponse } from "@git-stacks/protocol"
+import type { WebForgeErrorDetails, WebForgeFailure, WebForgeResolveResponse, WebOperationSummary } from "@git-stacks/protocol"
 
 const url = "https://github.com/acme/repo/pull/42"
 const resolution: Extract<WebForgeResolveResponse, { resolved: true }> = {
@@ -114,5 +114,40 @@ describe("forge resolve-review-create coordinator", () => {
     expect(coordinator.state()).toMatchObject({ phase: "accepted", reconciled: false, operationId: "op_1234567890abcdef" })
     coordinator.reconcile()
     expect(coordinator.state()).toMatchObject({ phase: "accepted", reconciled: true })
+  })
+
+  test("maps a durable typed branch conflict back to editable Review", async () => {
+    const coordinator = createForgeReviewCoordinator({
+      resolve: vi.fn(async () => resolution),
+      create: vi.fn(async () => ({ operationId: "op_1234567890abcdef" })),
+    })
+    coordinator.setUrl(url)
+    await coordinator.resolve()
+    coordinator.edit({ kind: "workspace_name", value: "kept-after-conflict" })
+    await coordinator.create()
+    const failed: WebOperationSummary = {
+      operation_id: "op_1234567890abcdef",
+      action_id: "workspace.open",
+      workspace_id: "11111111-1111-4111-8111-111111111111",
+      workspace_name: "kept-after-conflict",
+      accepted_at: "2026-07-16T12:00:00.000Z",
+      state: "failed",
+      started_at: "2026-07-16T12:00:01.000Z",
+      finished_at: "2026-07-16T12:00:02.000Z",
+      cancellation: { state: "unavailable", reason: "finished" },
+      error: {
+        code: "conflict",
+        message: "Choose another workspace branch.",
+        retryable: false,
+        forge: { kind: "forge_failure", reason: "branch_conflict", recovery: "change_branch" },
+      },
+    }
+
+    coordinator.observeOperation(failed)
+    expect(coordinator.state()).toMatchObject({
+      phase: "review",
+      draft: { workspace_name: "kept-after-conflict" },
+      failure: { code: "branch_conflict", recovery: "change_branch" },
+    })
   })
 })
