@@ -1,8 +1,63 @@
 import { describe, expect, test } from "@test/api"
 import type { ServiceDescriptor } from "../../packages/service/src/main"
-import { ensureManagedServiceProcess } from "../../packages/service/src/main"
+import { ensureManagedServiceProcess, resolveExistingServiceDescriptor } from "../../packages/service/src/main"
 
 const descriptor = { service_id: "test-service" } as ServiceDescriptor
+
+describe("managed service descriptor process lifetime", () => {
+  test("reuses a healthy live service without removing its descriptor or continuing startup", async () => {
+    let removed = false
+    let continued = false
+    const resolved = await resolveExistingServiceDescriptor(descriptor, {
+      processAlive: () => true,
+      probe: async () => true,
+      removeStale: () => { removed = true },
+    })
+    if (!resolved) continued = true
+
+    expect(resolved).toBe(descriptor)
+    expect(removed).toBe(false)
+    expect(continued).toBe(false)
+  })
+
+  test("removes a dead process descriptor and permits normal replacement recovery", async () => {
+    let removed = false
+    let probed = false
+    const resolved = await resolveExistingServiceDescriptor(descriptor, {
+      processAlive: () => false,
+      probe: async () => { probed = true; return true },
+      removeStale: () => { removed = true },
+    })
+
+    expect(resolved).toBeNull()
+    expect(removed).toBe(true)
+    expect(probed).toBe(false)
+  })
+
+  test("fails closed on an unreachable live process before descriptor removal or replacement startup", async () => {
+    let removed = false
+    let continued = false
+    let failure: unknown
+    try {
+      const resolved = await resolveExistingServiceDescriptor(descriptor, {
+        processAlive: () => true,
+        probe: async () => { throw new Error("/private/socket TOKEN=credential-canary") },
+        removeStale: () => { removed = true },
+      })
+      if (!resolved) continued = true
+    } catch (error) {
+      failure = error
+    }
+
+    expect(failure).toMatchObject({
+      code: "service_unreachable",
+      message: "The existing git-stacks service is running but unreachable. Stop the service and retry.",
+    })
+    expect(removed).toBe(false)
+    expect(continued).toBe(false)
+    expect(JSON.stringify(failure)).not.toMatch(/private|TOKEN|credential-canary/)
+  })
+})
 
 describe("managed service process bootstrap", () => {
   test("preserves launcher PATH and SSH socket while stripping workspace authority from daemon bootstrap", async () => {
