@@ -1,6 +1,6 @@
 import { describe, expect, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { spawnSync } from "node:child_process"
@@ -95,6 +95,26 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<voi
   const deadline = Date.now() + timeoutMs
   while (!predicate() && Date.now() < deadline) await sleep(20)
   expect(predicate()).toBe(true)
+}
+
+function findPtyInitializationRootContaining(sentinel: string): string | undefined {
+  try {
+    for (const entry of readdirSync(tmpdir(), { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith("git-stacks-pty-")) continue
+      const root = join(tmpdir(), entry.name)
+      try {
+        for (const name of readdirSync(root)) {
+          if (!name.startsWith("value.")) continue
+          if (readFileSync(join(root, name)).includes(Buffer.from(sentinel))) return root
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+      }
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+  }
+  return undefined
 }
 
 describe("service-owned web terminal", () => {
@@ -276,6 +296,77 @@ describe("service-owned web terminal", () => {
         rmSync(initialization.root, { force: true, recursive: true })
         rmSync(root, { force: true, recursive: true })
       }
+    }
+  })
+
+  test("removes fish initialization value files when interactive PTY allocation throws", async () => {
+    const sentinel = "phase-124-interactive-allocation-secret"
+    let allocatedRoot: string | undefined
+    const spawn: PtyFactory = () => {
+      allocatedRoot = findPtyInitializationRootContaining(sentinel)
+      throw new Error("forced interactive allocation failure")
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/usr/bin/fish", "--interactive"], cwd: process.cwd(),
+        environment: { RAW_ALLOCATION_SENTINEL: sentinel },
+        initialization: { kind: "post-init-environment", shell: "fish" },
+        ports: {}, configuration: { shell: true }, redacted: ["RAW_ALLOCATION_SENTINEL"],
+      } }),
+    }, undefined, undefined, Date.now, spawn)
+
+    await expect(manager.create("browser-1", {
+      workspace_id: WORKSPACE_A,
+      repository_id: REPOSITORY,
+      expected_revision: "1",
+      cols: 80,
+      rows: 24,
+    })).rejects.toMatchObject({ code: "capability_unavailable", message: expect.stringContaining("forced interactive allocation failure") })
+    expect(allocatedRoot).toBeDefined()
+    expect(existsSync(allocatedRoot!)).toBe(false)
+    expect(findPtyInitializationRootContaining(sentinel)).toBeUndefined()
+  })
+
+  test("removes fish initialization value files when command PTY allocation throws", async () => {
+    const fish = ["/usr/bin/fish", "/bin/fish"].find((candidate) => existsSync(candidate))
+    expect(fish).toBeDefined()
+    const previousShell = process.env.SHELL
+    const sentinel = "phase-124-command-allocation-secret"
+    let allocatedRoot: string | undefined
+    const spawn: PtyFactory = () => {
+      allocatedRoot = findPtyInitializationRootContaining(sentinel)
+      throw new Error("forced command allocation failure")
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [{ bucket: "main", scope: "workspace", command: "never-starts", cwd: process.cwd(), environment: { RAW_ALLOCATION_SENTINEL: sentinel } }],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: ["RAW_ALLOCATION_SENTINEL"],
+      } }),
+    }, undefined, undefined, Date.now, spawn)
+
+    try {
+      process.env.SHELL = fish
+      const terminal = await manager.create("browser-1", {
+        workspace_id: WORKSPACE_A,
+        repository_id: REPOSITORY,
+        command_id: "cmd_0123456789abcdef",
+        expected_revision: "1",
+        cols: 80,
+        rows: 24,
+      })
+      await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
+      expect(manager.get("browser-1", terminal.id)).toMatchObject({ state: "ended", exit_code: 126 })
+      expect(allocatedRoot).toBeDefined()
+      expect(existsSync(allocatedRoot!)).toBe(false)
+      expect(findPtyInitializationRootContaining(sentinel)).toBeUndefined()
+      await manager.close("browser-1", terminal.id)
+    } finally {
+      if (previousShell === undefined) delete process.env.SHELL
+      else process.env.SHELL = previousShell
     }
   })
 

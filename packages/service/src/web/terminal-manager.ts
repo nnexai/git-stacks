@@ -347,7 +347,8 @@ export class WebTerminalManager {
                 ...terminalEnvironment,
               })
             : undefined
-          const spawned = bufferPty(this.spawn(launch.argv, {
+          try {
+            const spawned = bufferPty(this.spawn(launch.argv, {
               cwd: launch.cwd,
               env: {
                 ...launch.environment,
@@ -360,18 +361,19 @@ export class WebTerminalManager {
               rows: input.rows,
               name: "xterm-256color",
             }))
-          if (initialization) {
-            const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
-            try {
-              await waitForPtyInitialization(spawned, initialization, this.timing.ptyInitializationTimeoutMs)
-            } catch (error) {
-              await this.terminatePtyProcessGroup(spawned, spawnedExited)
-              throw error
-            } finally {
-              rmSync(initialization.root, { force: true, recursive: true })
+            if (initialization) {
+              const spawnedExited = new Promise<number>((resolve) => spawned.onExit(({ exitCode }) => resolve(exitCode)))
+              try {
+                await waitForPtyInitialization(spawned, initialization, this.timing.ptyInitializationTimeoutMs)
+              } catch (error) {
+                await this.terminatePtyProcessGroup(spawned, spawnedExited)
+                throw error
+              }
             }
+            child = spawned
+          } finally {
+            if (initialization) rmSync(initialization.root, { force: true, recursive: true })
           }
-          child = spawned
         } else {
           child = this.createCommandProcess(launch.steps, terminalEnvironment, input.cols, input.rows)
         }
@@ -524,28 +526,28 @@ export class WebTerminalManager {
             ...step.environment,
             ...terminalEnvironment,
           }, step.command)
-          const child = this.spawn([...plan.argv], {
-            cwd: step.cwd,
-            env: {
-              ...process.env,
-              ...step.environment,
-              ...initialization.environment,
-              ...terminalEnvironment,
-              TERM: process.env.TERM ?? "xterm-256color",
-              COLORTERM: process.env.COLORTERM ?? "truecolor",
-            },
-            cols: columns,
-            rows,
-            name: "xterm-256color",
-          })
-          active = child
-          lastPid = child.pid
-          acceptsInput = false
-          child.onData((data) => dataListener(data))
-          let resolveExit!: (event: { exitCode: number; signal?: number }) => void
-          const childExited = new Promise<{ exitCode: number; signal?: number }>((resolve) => { resolveExit = resolve })
-          child.onExit(resolveExit)
           try {
+            const child = this.spawn([...plan.argv], {
+              cwd: step.cwd,
+              env: {
+                ...process.env,
+                ...step.environment,
+                ...initialization.environment,
+                ...terminalEnvironment,
+                TERM: process.env.TERM ?? "xterm-256color",
+                COLORTERM: process.env.COLORTERM ?? "truecolor",
+              },
+              cols: columns,
+              rows,
+              name: "xterm-256color",
+            })
+            active = child
+            lastPid = child.pid
+            acceptsInput = false
+            child.onData((data) => dataListener(data))
+            let resolveExit!: (event: { exitCode: number; signal?: number }) => void
+            const childExited = new Promise<{ exitCode: number; signal?: number }>((resolve) => { resolveExit = resolve })
+            child.onExit(resolveExit)
             try {
               await waitForPtyInitialization(child, initialization, this.timing.ptyInitializationTimeoutMs)
             } catch (error) {
