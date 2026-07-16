@@ -1,7 +1,13 @@
 import { createHash, randomBytes } from "node:crypto"
 
 import { spawn as spawnPty } from "node-pty"
-import type { Signal, TerminalLaunchResolution } from "@git-stacks/protocol"
+import type { Signal, TerminalLaunchResolution, TerminalLaunchStep } from "@git-stacks/protocol"
+import {
+  executeUserShellCommand,
+  UserShellError,
+  type ExecuteUserShellCommandRequest,
+  type ExecuteUserShellCommandResult,
+} from "@git-stacks/core/user-shell"
 import type { SnapshotAdapter } from "../snapshot-adapter"
 import type { TerminalAttachment } from "../terminal-attachment"
 import {
@@ -34,6 +40,10 @@ export type PtyFactory = (
   argv: string[],
   options: { cwd: string; env: Record<string, string | undefined>; cols: number; rows: number; name: string },
 ) => PtyProcess
+
+export type TerminalCommandStepRunner = (
+  request: ExecuteUserShellCommandRequest,
+) => Promise<ExecuteUserShellCommandResult>
 
 const productionPty: PtyFactory = (argv, options) => {
   const [file, ...args] = argv
@@ -123,6 +133,7 @@ export class WebTerminalManager {
     private readonly workspaceLifecycleAdmission: Pick<WorkspaceLifecycleAdmission, "admitTerminal"> = createWorkspaceLifecycleAdmission(),
     private readonly closeTimeoutMs = 1_000,
     private readonly timing: WebTerminalManagerTiming = {},
+    private readonly runCommandStep: TerminalCommandStepRunner = executeUserShellCommand,
   ) {}
 
   get activeCount(): number { return [...this.sessions.values()].filter((session) => session.state === "starting" || session.state === "running" || session.state === "closing").length }
@@ -167,28 +178,33 @@ export class WebTerminalManager {
       const signalToken = randomBytes(32).toString("base64url")
       let session: Session | undefined
       const filter = new TerminalSignalFilter(signalToken, (signal) => { if (session) void this.handleSignal(session, signal) })
-      const argv = resolution.launch.argv
       let resolveExit!: (code: number) => void
       const exited = new Promise<number>((resolve) => { resolveExit = resolve })
       let child: PtyProcess
       try {
-        child = this.spawn(argv, {
-          cwd: resolution.launch.cwd,
-          env: {
-            ...resolution.launch.environment,
-            TERM: resolution.launch.environment.TERM ?? "xterm-256color",
-            COLORTERM: resolution.launch.environment.COLORTERM ?? "truecolor",
-            GIT_STACKS_SURFACE_ID: surfaceId,
-            GIT_STACKS_TAB_ID: surfaceId,
-            GIT_STACKS_WORKSPACE_ID: input.workspace_id,
-            GIT_STACKS_REPOSITORY_ID: input.repository_id,
-            GIT_STACKS_SIGNAL_TOKEN: signalToken,
-            GIT_STACKS_SIGNAL_TRANSPORT: "osc9",
-          },
-          cols: input.cols,
-          rows: input.rows,
-          name: "xterm-256color",
-        })
+        const terminalEnvironment = {
+          GIT_STACKS_SURFACE_ID: surfaceId,
+          GIT_STACKS_TAB_ID: surfaceId,
+          GIT_STACKS_WORKSPACE_ID: input.workspace_id,
+          GIT_STACKS_REPOSITORY_ID: input.repository_id,
+          GIT_STACKS_SIGNAL_TOKEN: signalToken,
+          GIT_STACKS_SIGNAL_TRANSPORT: "osc9",
+        }
+        const launch = resolution.launch
+        child = "argv" in launch
+          ? this.spawn(launch.argv, {
+              cwd: launch.cwd,
+              env: {
+                ...launch.environment,
+                TERM: launch.environment.TERM ?? "xterm-256color",
+                COLORTERM: launch.environment.COLORTERM ?? "truecolor",
+                ...terminalEnvironment,
+              },
+              cols: input.cols,
+              rows: input.rows,
+              name: "xterm-256color",
+            })
+          : this.createCommandProcess(launch.steps, terminalEnvironment)
       } catch (error) {
         throw Object.assign(new Error(`PTY allocation failed: ${(error as Error).message}`), { status: 409, code: "capability_unavailable" })
       }
@@ -236,6 +252,52 @@ export class WebTerminalManager {
       return this.project(session)
     } finally {
       admission.release()
+    }
+  }
+
+  private createCommandProcess(
+    steps: TerminalLaunchStep[],
+    terminalEnvironment: Record<string, string>,
+  ): PtyProcess {
+    const controller = new AbortController()
+    let dataListener: (data: string) => void = () => undefined
+    let exitListener: (event: { exitCode: number; signal?: number }) => void = () => undefined
+    let exited = false
+    const finish = (exitCode: number, signal?: number) => {
+      if (exited) return
+      exited = true
+      exitListener({ exitCode, ...(signal === undefined ? {} : { signal }) })
+    }
+    queueMicrotask(() => void (async () => {
+      try {
+        for (const step of steps) {
+          const result = await this.runCommandStep({
+            command: step.command,
+            cwd: step.cwd,
+            shellEnvironment: process.env,
+            inheritedEnvironment: process.env,
+            overlay: { ...step.environment, ...terminalEnvironment },
+            signal: controller.signal,
+            onOutput: ({ chunk }) => dataListener(new TextDecoder().decode(chunk)),
+          })
+          if (result.exitCode !== 0) { finish(result.exitCode); return }
+        }
+        finish(0)
+      } catch (error) {
+        const diagnostic = error instanceof UserShellError ? error.diagnostic : undefined
+        dataListener(diagnostic
+          ? `\r\n[git-stacks shell ${diagnostic.category}] ${diagnostic.message} Recovery: ${diagnostic.recovery}\r\n`
+          : "\r\n[git-stacks shell execution] Command execution failed. Retry after checking shell configuration.\r\n")
+        finish(controller.signal.aborted ? 130 : 126, controller.signal.aborted ? 15 : undefined)
+      }
+    })())
+    return {
+      pid: 0,
+      write: () => undefined,
+      resize: () => undefined,
+      kill: () => controller.abort(new Error("terminal command cancelled")),
+      onData(listener) { dataListener = listener; return { dispose: () => { dataListener = () => undefined } } },
+      onExit(listener) { exitListener = listener; return { dispose: () => { exitListener = () => undefined } } },
     }
   }
 
@@ -495,6 +557,7 @@ export class WebTerminalManager {
   }
 
   private killGroup(session: Session, signal: NodeJS.Signals): void {
+    if (session.process.pid <= 0) { session.process.kill(signal); return }
     try { process.kill(-session.process.pid, signal) } catch { session.process.kill(signal) }
   }
 

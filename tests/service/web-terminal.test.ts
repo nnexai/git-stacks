@@ -7,6 +7,7 @@ import {
   WebTerminalManager,
   type PtyFactory,
   type PtyProcess,
+  type TerminalCommandStepRunner,
   type TerminalAttachmentData,
 } from "../../packages/service/src/web/terminal-manager"
 
@@ -85,6 +86,47 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<voi
 }
 
 describe("service-owned web terminal", () => {
+  test("runs typed command steps separately in one logical terminal and stops on the exact failing step", async () => {
+    const calls: Array<{ command: string; cwd: string; overlay?: Record<string, string> }> = []
+    const runner: TerminalCommandStepRunner = async (request) => {
+      calls.push({ command: request.command, cwd: request.cwd, overlay: request.overlay })
+      request.onOutput?.({ stream: "stdout", chunk: Buffer.from(`step:${request.command}\n`) })
+      const exitCode = request.command === "repo-fails" ? 23 : 0
+      return {
+        exitCode,
+        shell: { executable: "/bin/bash", family: "bash" },
+        stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), initializationDiagnostics: Buffer.alloc(0),
+        ...(exitCode === 0 ? {} : { diagnostic: { category: "execution" as const, shell: "/bin/bash", mode: "command" as const, stage: "command-exit", message: "exit 23", recovery: "fix command" } }),
+      }
+    }
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        steps: [
+          { bucket: "pre", scope: "workspace", command: "prepare", cwd: "/workspace", environment: { PHASE: "pre" } },
+          { bucket: "main", scope: "workspace", command: "main", cwd: "/workspace", environment: { PHASE: "main" } },
+          { bucket: "main", scope: "repo", command: "repo-fails", cwd: "/workspace/repo", repository_id: REPOSITORY, repository_name: "repo", environment: { PHASE: "repo" } },
+          { bucket: "post", scope: "workspace", command: "must-not-run", cwd: "/workspace", environment: { PHASE: "post" } },
+        ],
+        ports: {}, configuration: { command_id: "cmd_0123456789abcdef", shell: false }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, undefined, undefined, 10, {}, runner)
+
+    const terminal = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, command_id: "cmd_0123456789abcdef", expected_revision: "1", cols: 80, rows: 24 })
+    await waitFor(() => manager.get("browser-1", terminal.id)?.state === "ended")
+    expect(manager.list("browser-1")).toHaveLength(1)
+    expect(calls.map(({ command, cwd }) => ({ command, cwd }))).toEqual([
+      { command: "prepare", cwd: "/workspace" },
+      { command: "main", cwd: "/workspace" },
+      { command: "repo-fails", cwd: "/workspace/repo" },
+    ])
+    expect(calls.map((call) => call.overlay?.PHASE)).toEqual(["pre", "main", "repo"])
+    expect(calls.every((call) => call.overlay?.GIT_STACKS_SURFACE_ID === terminal.surface_id)).toBe(true)
+    expect(manager.get("browser-1", terminal.id)).toMatchObject({ exit_code: 23, state: "ended" })
+    await manager.close("browser-1", terminal.id)
+  })
+
   test("passes resolved PTY argv, cwd, and environment without reparsing", async () => {
     const launches: Array<{ argv: string[]; cwd: string; env: Record<string, string | undefined> }> = []
     const ptys = createPtyFactory(["term"])

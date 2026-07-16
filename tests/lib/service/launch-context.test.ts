@@ -129,8 +129,10 @@ describe("service launch context projection", () => {
     })
     expect(resolution.resolved).toBe(true)
     if (!resolution.resolved) return
-    const typedSteps = (resolution.launch as unknown as { steps?: Array<Record<string, unknown>> }).steps
-    expect(typedSteps, "PHASE124_RED terminal steps SSH rotation contract").toEqual(command.steps)
+    const typedSteps = (resolution.launch as unknown as { steps?: Array<Record<string, unknown> & { environment: Record<string, string> }> }).steps
+    const withoutEnvironment = (steps: typeof typedSteps) => steps?.map(({ environment: _, ...step }) => step)
+    expect(withoutEnvironment(typedSteps), "PHASE124_RED terminal steps SSH rotation contract").toEqual(withoutEnvironment(command.steps))
+    expect(typedSteps?.every((step) => step.environment.API_TOKEN === "resolved-super-secret")).toBe(true)
     expect(resolution.launch).not.toHaveProperty("argv")
   })
 })

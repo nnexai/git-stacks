@@ -154,6 +154,7 @@ export const LaunchStepSchema = z.strictObject({
 }).refine((step) => step.scope === "repo" ? Boolean(step.repository_id && step.repository_name) : !step.repository_id && !step.repository_name, {
   message: "repository identity is required only for repository-scoped steps",
 })
+export type TerminalLaunchStep = z.infer<typeof LaunchStepSchema>
 export const NamedLaunchSpecificationSchema = z.strictObject({
   id: CommandIdSchema,
   name: z.string().min(1),
