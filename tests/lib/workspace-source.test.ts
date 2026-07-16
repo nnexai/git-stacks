@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "@test/api"
 import {
   _source,
   formatWorkspaceSourceError,
+  prepareWorkspaceSource,
   prepareReviewedWorkspaceSource,
 } from "@/lib/workspace-source"
 import type { TrustedForgeChange } from "@/lib/integrations/forge-source-resolver"
@@ -45,6 +46,7 @@ describe("trusted reviewed workspace source preparation", () => {
     _source.deleteRef = mock(async () => {})
     _source.resolveRef = mock(async () => ({ ok: true as const, sha: SHA }))
     _source.checkBranchExists = mock(async () => false)
+    _source.resolveForgeChangeSource = mock(async () => ({ ok: true as const, change: trusted }))
   })
 
   test("fetches the real fork branch into an operation-private ref and verifies full SHA", async () => {
@@ -86,6 +88,23 @@ describe("trusted reviewed workspace source preparation", () => {
     expect(_source.resolveRef).not.toHaveBeenCalled()
     expect(_source.deleteRef).not.toHaveBeenCalled()
     if (result.ok) expect(result.preview.sourceRef).toBe("refs/heads/feature/review")
+  })
+
+  test("routes the existing GitHub CLI source entrypoint through provider resolution", async () => {
+    const result = await prepareWorkspaceSource({
+      sourceUrl: trusted.canonical_url,
+      repos: [repo],
+      registry: [{
+        name: "api", schema_version: "1", local_path: repo.main_path, default_branch: "main",
+        type: "typescript", is_dir: false, forge: "github",
+        forge_metadata: { forge: "github", repo_path: "acme/api" },
+      }],
+      workspaceName: "review-9",
+    })
+    expect(result.ok).toBe(true)
+    expect(_source.resolveForgeChangeSource).toHaveBeenCalledTimes(1)
+    expect((_source.fetchSourceRef as any).mock.calls[0][1]).toBe("https://github.com/contrib/api.git")
+    expect((_source.fetchSourceRef as any).mock.calls[0].join(" ")).not.toContain("origin")
   })
 
   test("rejects a moved or mismatched fetched head and deletes the private ref", async () => {

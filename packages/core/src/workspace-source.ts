@@ -3,7 +3,7 @@ import { createHash } from "node:crypto"
 
 import { checkBranchExists, deleteRef, fetchSourceRef, resolveRef } from "./git"
 import { parseForgeSourceUrl, type ForgeSourceId, type ForgeSourceResolutionError } from "./integrations/forge-source"
-import type { TrustedForgeChange } from "./integrations/forge-source-resolver"
+import { resolveForgeChangeSource, type TrustedForgeChange } from "./integrations/forge-source-resolver"
 
 export type PrepareReviewedWorkspaceSourceInputs = {
   trusted_source: TrustedForgeChange
@@ -56,6 +56,7 @@ export const _source = {
   deleteRef,
   resolveRef,
   checkBranchExists,
+  resolveForgeChangeSource,
 }
 
 function sanitizeBranch(raw: string): string | null {
@@ -288,6 +289,40 @@ export async function prepareWorkspaceSource(inputs: PrepareWorkspaceSourceInput
   const match = findRepoMatch(parsed.repoPath, inputs.repos, inputs.registry, inputs.repoOverride)
   if (!match.ok) return match
 
+  if (parsed.forge !== "gitea") {
+    const configuredHosts = inputs.registry.reduce<{ github: string[]; gitlab: string[] }>((hosts, entry) => {
+      const forge = entry.forge_metadata?.forge
+      const baseUrl = entry.forge_metadata?.base_url
+      if (baseUrl && (forge === "github" || forge === "gitlab")) hosts[forge].push(baseUrl)
+      return hosts
+    }, { github: [], gitlab: [] })
+    const resolved = await _source.resolveForgeChangeSource({
+      url: inputs.sourceUrl,
+      configured_hosts: configuredHosts,
+    })
+    if (!resolved.ok) {
+      const error: ForgeSourceResolutionError = resolved.error === "cli_unavailable"
+        ? "cli_unavailable"
+        : resolved.error === "auth_required"
+          ? "auth_required"
+          : resolved.error === "malformed_url"
+            ? "url_parse_failed"
+            : resolved.error === "unsupported_host"
+              ? "unsupported_forge"
+              : "metadata_unavailable"
+      return { ok: false, error, message: `Could not resolve the ${parsed.forge} change source.` }
+    }
+    return prepareReviewedWorkspaceSource({
+      trusted_source: resolved.change,
+      matched_repo: match.repo,
+      workspace_name: inputs.workspaceName,
+      operation_id: `${inputs.workspaceName}\0${resolved.change.canonical_url}`,
+      branch: inputs.branch,
+      dry_run: inputs.dryRun,
+    })
+  }
+
+  // Legacy Gitea CLI behavior remains intentionally outside the Phase 126 reviewed resolver.
   const sourceBranch = `source/${parsed.forge}-${parsed.changeType}-${parsed.changeNumber}`
   const sourceRef = `refs/heads/${sourceBranch}`
   const targetBranchRaw = inputs.branch?.trim() || sourceBranch
