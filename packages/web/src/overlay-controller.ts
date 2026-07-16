@@ -16,9 +16,10 @@ import {
   type WebShortcutPlatform,
   type WebShortcutSettings,
 } from "@git-stacks/protocol"
-import { isCoordinatedReturnTarget, WebShortcutConflictRecoveryError, WebShortcutConflictRefreshError, WebShortcutOwnerConflictError, type OverlayFocusOwnership, type WebOverlayReturnTarget } from "./navigation"
+import { createWebOverlayFocusCoordinator, WebShortcutConflictRecoveryError, WebShortcutConflictRefreshError, WebShortcutOwnerConflictError, type OverlayFocusOwnership, type WebOverlayFocusCoordinatorOptions, type WebOverlayReturnTarget } from "./navigation"
 
 type OverlayControllerOptions = {
+  activateFocus(target: WebOverlayReturnTarget | undefined): void
   restoreFocus(target: WebOverlayReturnTarget | undefined, ownsFocus: OverlayFocusOwnership): void
 }
 
@@ -115,7 +116,7 @@ export function createSingletonOverlayController(document: Document, options: Ov
       active.backdrop.remove()
       active = undefined
     }
-    if (isCoordinatedReturnTarget(preservedReturnTarget)) preservedReturnTarget.activate()
+    options.activateFocus(preservedReturnTarget)
 
     const backdrop = node(document, "div", "modal-backdrop")
     const dialog = node(document, "section", "modal")
@@ -188,6 +189,15 @@ export function createSingletonOverlayController(document: Document, options: Ov
     focusPrimary: () => active?.primaryFocus(),
     isExclusive: () => active?.exclusive ?? false,
   }
+}
+
+export function createWebOverlayRuntime(document: Document, options: WebOverlayFocusCoordinatorOptions) {
+  const focusCoordinator = createWebOverlayFocusCoordinator(options)
+  const overlayController = createSingletonOverlayController(document, {
+    activateFocus: (target) => focusCoordinator.activate(target),
+    restoreFocus: (target, ownsFocus) => focusCoordinator.restore(target, ownsFocus),
+  })
+  return { focusCoordinator, overlayController }
 }
 
 export type FuzzyOverlayOptions<T> = {

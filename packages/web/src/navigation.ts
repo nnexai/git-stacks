@@ -53,13 +53,14 @@ export type OverlayTerminalFocusAttempt = {
 }
 
 export type WebOverlayFocusCoordinator = {
+  activate(target: WebOverlayReturnTarget | undefined): void
   invokeFromElement(invoker: HTMLElement | undefined, invoke: () => void, resolve?: () => HTMLElement | undefined): void
   invokeFromScopeMenu(target: Omit<ScopeMenuOverlayFocusTarget, "kind">, invoke: () => void): void
   takeReturnTarget(requestedTerminalId?: string): CoordinatedOverlayFocusReturnTarget
   restore(target: WebOverlayReturnTarget | undefined, ownsFocus?: OverlayFocusOwnership): void
 }
 
-type WebOverlayFocusCoordinatorOptions = {
+export type WebOverlayFocusCoordinatorOptions = {
   document: Document
   requestFrame(callback: () => void): void
   focusTerminal(terminalId: string, attempt: OverlayTerminalFocusAttempt): void
@@ -94,10 +95,16 @@ export function setMenuExpanded(menu: HTMLElement, toggle: HTMLElement, expanded
   if (toggle.isConnected) toggle.setAttribute("aria-expanded", String(expanded))
 }
 
-export function findWorkspaceRow(root: ParentNode, workspaceId: string, repositoryId: string): HTMLElement | undefined {
+export function findWorkspaceRow(
+  root: ParentNode,
+  workspaceId: string,
+  repositoryId: string,
+  placementId?: string,
+): HTMLElement | undefined {
   return [...root.querySelectorAll<HTMLElement>("[data-workspace-id]")].find((candidate) =>
     candidate.getAttribute("data-workspace-id") === workspaceId
       && candidate.getAttribute("data-repository-id") === repositoryId
+      && (placementId === undefined || candidate.getAttribute("data-workspace-placement") === placementId)
       && isUsableOverlayReturnTarget(candidate),
   )
 }
@@ -232,6 +239,14 @@ export function createWebOverlayFocusCoordinator(options: WebOverlayFocusCoordin
   }
 
   return {
+    activate(target) {
+      if (isCoordinatedReturnTarget(target)) {
+        target.activate()
+        return
+      }
+      pending = undefined
+      focusEpoch += 1
+    },
     invokeFromElement(invoker, invoke, resolve) {
       if (!invoker) {
         focusEpoch += 1

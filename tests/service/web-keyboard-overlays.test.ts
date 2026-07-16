@@ -4,12 +4,13 @@ import type { WebShortcutMutation, WebWorkspaceAction, WebWorkspaceActionId } fr
 import { readFile } from "node:fs/promises"
 import {
   createSingletonOverlayController,
+  createWebOverlayRuntime,
   mountFuzzyOverlay,
   mountShortcutHelp,
   mountShortcutSettings,
   type OverlayView,
 } from "../../packages/web/src/overlay-controller"
-import { bindScopeMenuOverlayAction, createWebOverlayFocusCoordinator, findWorkspaceRow, overlayAwareActionAvailability, WebShortcutConflictRecoveryError, WebShortcutOwnerConflictError, workspaceActionMenuRows, type WebOverlayReturnTarget } from "../../packages/web/src/navigation"
+import { bindScopeMenuOverlayAction, findWorkspaceRow, overlayAwareActionAvailability, WebShortcutConflictRecoveryError, WebShortcutOwnerConflictError, workspaceActionMenuRows, type WebOverlayReturnTarget } from "../../packages/web/src/navigation"
 
 type Listener = (event: FakeEvent) => void
 
@@ -176,6 +177,7 @@ function harness() {
   terminal.focus()
   const restores: WebOverlayReturnTarget[] = []
   const controller = createSingletonOverlayController(document as unknown as Document, {
+    activateFocus: () => undefined,
     restoreFocus: (target) => {
       restores.push(target ?? "fallback")
       terminal.focus()
@@ -214,7 +216,7 @@ function scopeFocusHarness() {
     ["term-requested", requestedTerminal],
     ["term-current", currentTerminal],
   ])
-  const focusCoordinator = createWebOverlayFocusCoordinator({
+  const runtime = createWebOverlayRuntime(document as unknown as Document, {
     document: document as unknown as Document,
     requestFrame: (callback) => { frames.push(callback) },
     focusTerminal: (terminalId, attempt) => {
@@ -230,9 +232,7 @@ function scopeFocusHarness() {
     currentTerminalId: () => "term-current",
     visibleInvoker: () => fallbackInvoker as unknown as HTMLElement,
   })
-  const controller = createSingletonOverlayController(document as unknown as Document, {
-    restoreFocus: (target, ownsFocus) => focusCoordinator.restore(target, ownsFocus),
-  })
+  const { focusCoordinator, overlayController: controller } = runtime
 
   const actions = document.createElement("div")
   const toggle = document.createElement("button")
@@ -458,6 +458,23 @@ describe("web singleton keyboard overlays", () => {
     expect(fixture.document.activeElement).toBe(fixture.item)
   })
 
+  test("reacquires the exact duplicate-label workspace-row placement", () => {
+    const fixture = scopeFocusHarness()
+    const navigation = fixture.document.createElement("nav")
+    const labelA = fixture.document.createElement("button")
+    const labelB = fixture.document.createElement("button")
+    for (const [row, placement] of [[labelA, "label:A"], [labelB, "label:B"]] as const) {
+      row.setAttribute("data-workspace-id", focusWorkspaceId)
+      row.setAttribute("data-repository-id", "repo-stable")
+      row.setAttribute("data-workspace-placement", placement)
+      navigation.append(row)
+    }
+    fixture.document.body.append(navigation)
+
+    expect(findWorkspaceRow(fixture.document as unknown as Document, focusWorkspaceId, "repo-stable", "label:B")).toBe(labelB)
+    expect(findWorkspaceRow(fixture.document as unknown as Document, focusWorkspaceId, "repo-stable", "label:A")).toBe(labelA)
+  })
+
   test("reacquires rerendered workspace-row invokers for Notes, Files, and confirmation close", async () => {
     for (const actionId of ["workspace.notes.list", "workspace.files.inspect", "workspace.remove"] as const) {
       const fixture = scopeFocusHarness()
@@ -669,6 +686,28 @@ describe("web singleton keyboard overlays", () => {
     expect(fixture.requestedTerminal.focusAttempts).toBe(0)
     expect(fixture.document.activeElement).toBe(newerControl)
     expect(fixture.terminalFocuses).toEqual(["term-requested"])
+  })
+
+  test("direct overlay activation invalidates queued non-overlay scope restoration", async () => {
+    for (const id of ["shortcut-help", "commands.open", "workspace.switch"] as const) {
+      const fixture = scopeFocusHarness()
+      fixture.bind("workspace.rename", () => undefined)
+      fixture.item.focus()
+      fixture.item.dispatch("click")
+      await Promise.resolve()
+
+      const opened = fixture.controller.open({ id, title: id, closeLabel: `Close ${id}`, returnTarget: "term-current" })
+      expect(opened.kind).toBe("opened")
+      if (opened.kind !== "opened") throw new Error("Direct overlay did not open")
+      const modalControl = fixture.document.createElement("button")
+      opened.view.body.append(modalControl as unknown as HTMLElement)
+      modalControl.focus()
+      fixture.flushFrames()
+
+      expect(fixture.menu.hidden).toBe(true)
+      expect(fixture.toggle.getAttribute("aria-expanded")).toBe("false")
+      expect(fixture.document.activeElement).toBe(modalControl)
+    }
   })
 
   test("restores non-overlay scope actions and native Rename cancellation to a visible toggle", async () => {
@@ -1128,7 +1167,7 @@ describe("web authoritative shortcut overlays", () => {
   test("wires the executable overlay implementation to service authority without browser persistence", async () => {
     const source = await readFile(new URL("../../packages/web/src/app.ts", import.meta.url), "utf8")
     const css = await readFile(new URL("../../packages/web/src/app.css", import.meta.url), "utf8")
-    expect(source).toContain("createSingletonOverlayController")
+    expect(source).toContain("createWebOverlayRuntime")
     expect(source).toContain("mountFuzzyOverlay")
     expect(source).toContain("mountShortcutHelp")
     expect(source).toContain("mountShortcutSettings")

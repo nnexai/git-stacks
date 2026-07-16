@@ -6,8 +6,8 @@ import "./app.css"
 import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
 import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { bindScopeMenuOverlayAction, classifyWebShortcutMutationConflict, createWebActionRegistry, createWebOverlayFocusCoordinator, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, findWorkspaceRow, overlayAwareActionAvailability, setMenuExpanded, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type OverlayTerminalFocusAttempt, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration, type WebOverlayReturnTarget } from "./navigation"
-import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
+import { bindScopeMenuOverlayAction, classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, findWorkspaceRow, overlayAwareActionAvailability, setMenuExpanded, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type OverlayTerminalFocusAttempt, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { createWebOverlayRuntime, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
   document.documentElement.replaceChildren()
@@ -455,7 +455,7 @@ let workspaceActionInventoryKey = ""
 let workspaceActionLoadingKey = ""
 let inventoryGeneration = 0
 const workspaceActionRegistryCache = new Map<string, { generation: number; registry: ReturnType<typeof createWorkspaceActionRegistry> }>()
-let overlayController: ReturnType<typeof createSingletonOverlayController>
+let overlayController: ReturnType<typeof createWebOverlayRuntime>["overlayController"]
 let shortcutSettings: WebShortcutSettings | undefined
 
 const shortcutPlatform: WebShortcutPlatform = /Mac(?:intosh| OS X)/i.test(navigator.userAgent) ? "macos" : "linux"
@@ -569,7 +569,7 @@ const toastRegion = document.querySelector<HTMLElement>("#toasts")!
 const contextMenu = document.querySelector<HTMLElement>("#context-menu")!
 const operationRegion = document.querySelector<HTMLElement>("#operations")!
 
-const overlayFocusCoordinator = createWebOverlayFocusCoordinator({
+const overlayRuntime = createWebOverlayRuntime(document, {
   document,
   requestFrame: (callback) => { requestAnimationFrame(callback) },
   focusTerminal: (terminalId, attempt) => {
@@ -585,12 +585,8 @@ const overlayFocusCoordinator = createWebOverlayFocusCoordinator({
   currentTerminalId: () => activeTerminalId,
   visibleInvoker: () => document.querySelector<HTMLElement>("#keyboard-shortcuts, #launcher, #create, .workspace-row") ?? undefined,
 })
-
-function restoreOverlayFocus(target: WebOverlayReturnTarget | undefined, ownsFocus: () => boolean): void {
-  overlayFocusCoordinator.restore(target, ownsFocus)
-}
-
-overlayController = createSingletonOverlayController(document, { restoreFocus: restoreOverlayFocus })
+const overlayFocusCoordinator = overlayRuntime.focusCoordinator
+overlayController = overlayRuntime.overlayController
 
 function selectedWorkspace(): Workspace | undefined { return snapshot.workspaces.find((item) => item.id === selectedPair?.workspaceId) }
 function selectedRepository(): Repository | undefined { return selectedWorkspace()?.repositories.find((item) => item.id === selectedPair?.repositoryId) }
@@ -962,7 +958,7 @@ function closeSignalInbox(restoreFocus = true): void {
   signalToggle.setAttribute("aria-expanded", "false")
   if (restoreFocus) signalToggle.focus()
 }
-function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarGroupKind): HTMLLIElement {
+function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarGroupKind, placementId: string): HTMLLIElement {
   const { workspace, repository } = entry
   const item = element("li", "workspace")
   const container = element("div", `workspace-row-container${pinned ? " pinned" : ""}`)
@@ -975,6 +971,7 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
   const row = button("", `workspace-row${selected ? " active" : ""}${repository.degraded || !repository.exists ? " degraded" : ""}`)
   row.setAttribute("data-workspace-id", workspace.id)
   row.setAttribute("data-repository-id", repository.id)
+  row.setAttribute("data-workspace-placement", placementId)
   const title = groupKind === "repository" || workspace.repositories.length === 1 ? workspace.name : `${workspace.name} / ${repository.name}`
   row.setAttribute("aria-label", `${title}, repository ${repository.name}, branch ${repository.branch || workspace.branch}${pinned ? ", pinned" : ""}${sessions.length ? `, ${sessions.length} active agent${sessions.length === 1 ? "" : "s"}` : ""}${notifications ? `, ${notifications} unread notifications` : ""}`)
   const icon = element("span", `workspace-icon${repository.degraded || !repository.exists ? " warning" : ""}`)
@@ -1042,7 +1039,7 @@ function workspaceItem(entry: SidebarEntry, pinned: boolean, groupKind: SidebarG
   })
   row.addEventListener("click", () => selectPair({ workspaceId: workspace.id, repositoryId: repository.id }))
   row.addEventListener("contextmenu", (event) => {
-    const resolveInvoker = () => findWorkspaceRow(document, workspace.id, repository.id)
+    const resolveInvoker = () => findWorkspaceRow(document, workspace.id, repository.id, placementId)
     selectPair({ workspaceId: workspace.id, repositoryId: repository.id })
     const canonical = canonicalContextActions(workspace)
     showContextMenu(
@@ -1064,7 +1061,8 @@ function navGroup(title: string, entries: SidebarEntry[], groupKind: SidebarGrou
   if (!entries.length) return
   const heading = element("li", `nav-group ${groupKind}`, title)
   heading.setAttribute("role", "heading"); heading.setAttribute("aria-level", "2"); nav.append(heading)
-  for (const entry of entries) nav.append(workspaceItem(entry, groupKind === "pinned", groupKind))
+  const placementId = `${groupKind}:${title}`
+  for (const entry of entries) nav.append(workspaceItem(entry, groupKind === "pinned", groupKind, placementId))
 }
 function renderNav(): void {
   nav.replaceChildren()
