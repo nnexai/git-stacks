@@ -2,7 +2,61 @@ import { describe, expect, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Signal } from "../../packages/protocol/src/service"
 import type { TerminalAttachment } from "../../packages/service/src/terminal-attachment"
-import { WebTerminalManager, type TerminalAttachmentData } from "../../packages/service/src/web/terminal-manager"
+import {
+  WebTerminalManager,
+  type PtyFactory,
+  type PtyProcess,
+  type TerminalAttachmentData,
+} from "../../packages/service/src/web/terminal-manager"
+
+const WORKSPACE_A = "11111111-1111-4111-8111-111111111111"
+const WORKSPACE_B = "33333333-3333-4333-8333-333333333333"
+const REPOSITORY = "22222222-2222-4222-8222-222222222222"
+
+type FakeExitBehavior = "term" | "kill" | "never"
+
+function createPtyFactory(behaviors: FakeExitBehavior[]): {
+  spawn: PtyFactory
+  processes: Array<PtyProcess & { signals: string[] }>
+  allocations: () => number
+} {
+  const processes: Array<PtyProcess & { signals: string[] }> = []
+  let allocations = 0
+  const spawn: PtyFactory = () => {
+    const behavior = behaviors[allocations] ?? behaviors.at(-1) ?? "term"
+    allocations += 1
+    let exitListener: ((event: { exitCode: number; signal?: number }) => void) | undefined
+    const process = {
+      pid: 900_000 + allocations,
+      signals: [] as string[],
+      write: () => {},
+      resize: () => {},
+      kill: (signal = "SIGTERM") => {
+        process.signals.push(signal)
+        if (behavior === "term" && signal === "SIGTERM") queueMicrotask(() => exitListener?.({ exitCode: 0 }))
+        if (behavior === "kill" && signal === "SIGKILL") queueMicrotask(() => exitListener?.({ exitCode: 137, signal: 9 }))
+      },
+      onData: () => ({ dispose: () => {} }),
+      onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => { exitListener = listener; return { dispose: () => {} } },
+    } satisfies PtyProcess & { signals: string[] }
+    processes.push(process)
+    return process
+  }
+  return { spawn, processes, allocations: () => allocations }
+}
+
+function createAdmissionFake() {
+  const blocked = new Set<string>()
+  return {
+    block: (workspaceId: string) => blocked.add(workspaceId),
+    unblock: (workspaceId: string) => blocked.delete(workspaceId),
+    authority: {
+      assertTerminalAdmission(workspaceId: string) {
+        if (blocked.has(workspaceId)) throw Object.assign(new Error("Workspace lifecycle is in progress"), { status: 409, code: "workspace_lifecycle_in_progress" })
+      },
+    },
+  }
+}
 
 function createManager(publishSignal?: (signal: Signal) => Promise<void>): WebTerminalManager {
   return new WebTerminalManager({
@@ -34,6 +88,74 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<voi
 }
 
 describe("service-owned web terminal", () => {
+  test("PHASE123_RED terminal barrier contract", async () => {
+    const admission = createAdmissionFake()
+    const ptys = createPtyFactory(["term", "term"])
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, ptys.spawn, admission.authority, 10)
+
+    admission.block(WORKSPACE_A)
+    await expect(manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })).rejects.toMatchObject({ code: "workspace_lifecycle_in_progress" })
+    expect(ptys.allocations()).toBe(0)
+
+    const other = await manager.create("browser-1", { workspace_id: WORKSPACE_B, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    expect(other.workspace_id).toBe(WORKSPACE_B)
+    expect(ptys.allocations()).toBe(1)
+    await manager.close("browser-1", other.id)
+  })
+
+  test("confirms TERM and KILL exits and reports a never-exiting PTY honestly", async () => {
+    const ptys = createPtyFactory(["term", "kill", "never"])
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, ptys.spawn, undefined, 10)
+
+    const term = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await expect(manager.close("browser-1", term.id)).resolves.toMatchObject({ state: "ended" })
+    expect(ptys.processes[0]?.signals).toEqual(["SIGTERM"])
+
+    const killed = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await expect(manager.close("browser-1", killed.id)).resolves.toMatchObject({ state: "ended" })
+    expect(ptys.processes[1]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+
+    const stuck = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await expect(manager.close("browser-1", stuck.id)).resolves.toMatchObject({ state: "cleanup_failed" })
+    expect(ptys.processes[2]?.signals).toEqual(["SIGTERM", "SIGKILL"])
+    expect(manager.get("browser-1", stuck.id)).toMatchObject({ state: "cleanup_failed" })
+  })
+
+  test("shares concurrent close settlement and closes a workspace across principals without metadata", async () => {
+    const ptys = createPtyFactory(["kill", "term", "term"])
+    const manager = new WebTerminalManager({
+      buildAll: async () => [],
+      buildWorkspace: async () => { throw new Error("unused") },
+      resolveTerminalLaunch: async () => ({ resolved: true, revision: "1", launch: {
+        argv: ["/bin/bash"], cwd: process.cwd(), environment: {}, ports: {}, configuration: { shell: true }, redacted: [],
+      } }),
+    }, undefined, undefined, Date.now, ptys.spawn, undefined, 10)
+
+    const shared = await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    const firstClose = manager.close("browser-1", shared.id)
+    const secondClose = manager.close("browser-1", shared.id)
+    expect(firstClose).toBe(secondClose)
+    expect(await firstClose).toMatchObject({ state: "ended" })
+
+    await manager.create("browser-1", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await manager.create("browser-2", { workspace_id: WORKSPACE_A, repository_id: REPOSITORY, expected_revision: "1", cols: 80, rows: 24 })
+    await expect(manager.closeWorkspace(WORKSPACE_A)).resolves.toEqual({ ok: true, status: "closed", requested: 2, closed: 2, failed: 0 })
+    expect(manager.list("browser-1")).toEqual([])
+    expect(manager.list("browser-2")).toEqual([])
+  })
+
   test("runs a real PTY roundtrip, resizes, and closes its process group", async () => {
     if (process.platform !== "linux") return
     const manager = createManager()
