@@ -18,6 +18,26 @@ export type ForgeSourceParseError =
 
 export type ForgeSourceParseResult = ForgeSourceParsed | ForgeSourceParseError
 
+export type ReviewedForgeProvider = "github" | "gitlab"
+
+export type ReviewedForgeUrl = {
+  ok: true
+  provider: ReviewedForgeProvider
+  change_kind: "pull_request" | "merge_request"
+  change_number: number
+  host: string
+  base_url: string
+  target_repository_path: string
+  canonical_url: string
+}
+
+export type ReviewedForgeUrlFailure = {
+  ok: false
+  error: "malformed_url" | "unsupported_host"
+}
+
+export type ReviewedForgeHostConfig = Partial<Record<ReviewedForgeProvider, readonly string[]>>
+
 export type ForgeSourceResolutionError =
   | "unsupported_forge"
   | "url_parse_failed"
@@ -77,6 +97,92 @@ function parsePositiveInt(raw: string): number | null {
   if (!/^\d+$/.test(raw)) return null
   const n = Number(raw)
   return Number.isSafeInteger(n) && n > 0 ? n : null
+}
+
+function configuredHostSet(hosts: readonly string[] | undefined): Set<string> {
+  const result = new Set<string>()
+  for (const value of hosts ?? []) {
+    try {
+      const parsed = value.includes("://") ? new URL(value) : new URL(`https://${value}`)
+      if (!parsed.username && !parsed.password && parsed.pathname === "/") result.add(parsed.host.toLowerCase())
+    } catch {
+      // Invalid configuration never widens the host allowlist.
+    }
+  }
+  return result
+}
+
+function safePathSegments(pathname: string): string[] | null {
+  try {
+    const segments = pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment))
+    if (segments.some((segment) => !segment || segment === "." || segment === ".." || segment.includes("/"))) return null
+    return segments
+  } catch {
+    return null
+  }
+}
+
+/** Strict GitHub/GitLab URL parser for the service-backed reviewed-create flow. */
+export function parseReviewedForgeSourceUrl(
+  raw: string,
+  configuredHosts: ReviewedForgeHostConfig = {},
+): ReviewedForgeUrl | ReviewedForgeUrlFailure {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return { ok: false, error: "malformed_url" }
+  }
+  if ((url.protocol !== "https:" && url.protocol !== "http:") || url.username || url.password) {
+    return { ok: false, error: "malformed_url" }
+  }
+  const parts = safePathSegments(url.pathname)
+  if (!parts) return { ok: false, error: "malformed_url" }
+
+  const host = url.host.toLowerCase()
+  const githubHosts = configuredHostSet(configuredHosts.github)
+  githubHosts.add("github.com")
+  const gitlabHosts = configuredHostSet(configuredHosts.gitlab)
+  gitlabHosts.add("gitlab.com")
+
+  if (githubHosts.has(host)) {
+    if (parts.length !== 4 || parts[2] !== "pull") return { ok: false, error: "malformed_url" }
+    const changeNumber = parsePositiveInt(parts[3])
+    if (!changeNumber) return { ok: false, error: "malformed_url" }
+    const path = `${parts[0]}/${parts[1]}`
+    return {
+      ok: true,
+      provider: "github",
+      change_kind: "pull_request",
+      change_number: changeNumber,
+      host,
+      base_url: `${url.protocol}//${url.host}`,
+      target_repository_path: path,
+      canonical_url: `${url.protocol}//${url.host}/${path}/pull/${changeNumber}`,
+    }
+  }
+
+  if (gitlabHosts.has(host)) {
+    const marker = parts.lastIndexOf("-")
+    if (marker < 1 || marker + 3 !== parts.length || parts[marker + 1] !== "merge_requests") {
+      return { ok: false, error: "malformed_url" }
+    }
+    const changeNumber = parsePositiveInt(parts[marker + 2])
+    if (!changeNumber) return { ok: false, error: "malformed_url" }
+    const path = parts.slice(0, marker).join("/")
+    return {
+      ok: true,
+      provider: "gitlab",
+      change_kind: "merge_request",
+      change_number: changeNumber,
+      host,
+      base_url: `${url.protocol}//${url.host}`,
+      target_repository_path: path,
+      canonical_url: `${url.protocol}//${url.host}/${path}/-/merge_requests/${changeNumber}`,
+    }
+  }
+
+  return { ok: false, error: "unsupported_host" }
 }
 
 export function parseForgeSourceUrl(raw: string): ForgeSourceParseResult {
