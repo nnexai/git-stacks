@@ -21,6 +21,30 @@ export type WorkspaceNoteDraftValidation =
   | { valid: true; text: string }
   | { valid: false; message: string }
 
+export function invokeWithTransientOverlayInvoker<T>(
+  invoker: T,
+  invoke: () => void,
+  slot: { get: () => T | undefined; set: (value: T | undefined) => void },
+  defer: (callback: () => void) => void = queueMicrotask,
+): void {
+  slot.set(invoker)
+  try {
+    invoke()
+  } finally {
+    defer(() => {
+      if (slot.get() === invoker) slot.set(undefined)
+    })
+  }
+}
+
+export function isUsableOverlayReturnTarget(target: {
+  isConnected: boolean
+  hidden: boolean | string
+  closest: (selector: string) => unknown
+}): boolean {
+  return target.isConnected && !target.hidden && target.closest("[hidden]") === null
+}
+
 export function validateWorkspaceNoteDraft(value: string): WorkspaceNoteDraftValidation {
   const text = value.trim()
   if (!text) return { valid: false, message: "Enter a workspace note." }

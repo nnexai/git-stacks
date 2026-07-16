@@ -2,6 +2,8 @@ import { describe, expect, test } from "@test/api"
 import { createWorkspaceActionRegistry } from "../../packages/client/src/workspace-actions"
 import {
   WEB_WORKSPACE_ACTION_GROUPS,
+  invokeWithTransientOverlayInvoker,
+  isUsableOverlayReturnTarget,
   validateWorkspaceNoteDraft,
   workspaceActionMenuRows,
 } from "../../packages/web/src/navigation"
@@ -117,21 +119,43 @@ describe("web canonical workspace action surface", () => {
     expect(appSource).toContain("focusInvalidForgeField")
   })
 
-  test("restores overlays to the concrete scope-menu control rather than the row context-menu invoker", () => {
-    const contextMenuClick = appSource.slice(
-      appSource.indexOf('control.addEventListener("click", () => {'),
-      appSource.indexOf("contextMenu.append(control)"),
-    )
-    const scopeMenuStart = appSource.indexOf('const menu = element("div", "scope-menu")')
-    const scopeMenuClick = appSource.slice(
-      appSource.indexOf('control.addEventListener("click", () => {', scopeMenuStart),
-      appSource.indexOf("menu.append(control)", scopeMenuStart),
-    )
+  test("restores a scope-menu overlay to the concrete Notes item", async () => {
+    const scopeNotes = { isConnected: true, hidden: false, closest: () => null, focused: false }
+    let pending: typeof scopeNotes | undefined
+    let overlayReturnTarget: typeof scopeNotes | undefined
 
-    expect(contextMenuClick).toContain("pendingOverlayInvoker = contextMenuInvoker")
-    expect(scopeMenuClick).toContain("pendingOverlayInvoker = control")
-    expect(scopeMenuClick.indexOf("pendingOverlayInvoker = control")).toBeLessThan(scopeMenuClick.indexOf("row.run()"))
-    expect(appSource).toContain("returnTarget: pendingOverlayInvoker ?? activeTerminalId")
+    invokeWithTransientOverlayInvoker(scopeNotes, () => {
+      overlayReturnTarget = pending
+      pending = undefined
+    }, { get: () => pending, set: (value) => { pending = value } })
+    await Promise.resolve()
+
+    if (overlayReturnTarget && isUsableOverlayReturnTarget(overlayReturnTarget)) overlayReturnTarget.focused = true
+    expect(overlayReturnTarget).toBe(scopeNotes)
+    expect(scopeNotes.focused).toBe(true)
+    expect(pending).toBeUndefined()
+  })
+
+  test("clears a cancelled Rename invoker before a later Create overlay restores focus", async () => {
+    const hiddenScopeRename = { isConnected: true, hidden: false, closest: () => ({ hidden: true }), focused: false }
+    const createButton = { isConnected: true, hidden: false, closest: () => null, focused: false }
+    let pending: typeof hiddenScopeRename | typeof createButton | undefined
+
+    invokeWithTransientOverlayInvoker(hiddenScopeRename, () => undefined, {
+      get: () => pending,
+      set: (value) => { pending = value },
+    })
+    await Promise.resolve()
+    expect(pending).toBeUndefined()
+    expect(isUsableOverlayReturnTarget(hiddenScopeRename)).toBe(false)
+
+    pending = createButton
+    const overlayReturnTarget = pending
+    pending = undefined
+    if (isUsableOverlayReturnTarget(overlayReturnTarget)) overlayReturnTarget.focused = true
+
+    expect(createButton.focused).toBe(true)
+    expect(hiddenScopeRename.focused).toBe(false)
   })
 })
 

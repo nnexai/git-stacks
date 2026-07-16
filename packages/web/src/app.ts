@@ -6,7 +6,7 @@ import "./app.css"
 import { FUZZY_FIELD_WEIGHT, createForgeReviewCoordinator, createOperationTracker, createWorkspaceActionRegistry, deduplicateProviderSessions, isBackgroundActivity, lifecycleLabel, matchesSignalScope, providerLetter, providerName, relativeTime, selectNextAttentionTarget, signalGroup, workspacePriorityOrder, workspaceSuccessorOrder, type ForgeReviewState, type WorkspaceActionCallback } from "@git-stacks/client"
 import { WEB_SHORTCUT_ACTION_IDS, WEB_SHORTCUT_OWNER_CONFLICT_ERROR_CODE, WEB_SHORTCUT_STALE_REVISION_ERROR_CODE, type OperationCancelResult, type WebFileStatusResponse, type WebForgeResolveResponse, type WebNotesResponse, type WebOperationSummary, type WebRepository as Repository, type WebShortcutActionId, type WebShortcutPlatform, type WebShortcutSettings, type WebSnapshot as Snapshot, type WebTerminal as TerminalMeta, type WebWorkspace as Workspace, type WebWorkspaceAction, type WebWorkspaceActionId, type Signal, type WorkspaceCreationCatalog as Catalog, type SecureScope, type WorkspaceLifecycleFailureDetails } from "@git-stacks/protocol"
 import { initializeWebSession, secureApi, SecureTerminalChannel, subscribeSecureEvents } from "./secure-client"
-import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, overlayAwareActionAvailability, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
+import { classifyWebShortcutMutationConflict, createWebActionRegistry, createWebShortcutDispatcher, createWebShortcutSettingsCoordinator, invokeWithTransientOverlayInvoker, isUsableOverlayReturnTarget, overlayAwareActionAvailability, terminalTraversalTarget, validateWorkspaceNoteDraft, workspaceActionMenuRows, type WebActionAvailability, type WebActionInvocation, type WebActionRegistration } from "./navigation"
 import { createSingletonOverlayController, mountFuzzyOverlay, mountShortcutHelp, mountShortcutSettings, type OverlayView } from "./overlay-controller"
 
 if (window.top !== window) {
@@ -551,7 +551,7 @@ const contextMenu = document.querySelector<HTMLElement>("#context-menu")!
 const operationRegion = document.querySelector<HTMLElement>("#operations")!
 
 function restoreOverlayFocus(target: string | HTMLElement | undefined): void {
-  if (target instanceof HTMLElement && target.isConnected) {
+  if (target instanceof HTMLElement && isUsableOverlayReturnTarget(target)) {
     requestAnimationFrame(() => target.focus())
     return
   }
@@ -1100,8 +1100,10 @@ function renderScope(): void {
         if (row.disabledReason) { toast(`${row.label} unavailable — ${row.disabledReason}`, true); return }
         menu.hidden = true
         toggle.setAttribute("aria-expanded", "false")
-        pendingOverlayInvoker = control
-        row.run()
+        invokeWithTransientOverlayInvoker(control, row.run, {
+          get: () => pendingOverlayInvoker,
+          set: (value) => { pendingOverlayInvoker = value },
+        })
       })
       menu.append(control)
     }
