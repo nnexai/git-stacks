@@ -2,6 +2,8 @@ import { describe, expect, test } from "@test/api"
 import { readFileSync } from "fs"
 import { join } from "path"
 import * as serviceProtocol from "../../../packages/protocol/src/service"
+import { SecureServiceRouter } from "../../../packages/service/src/secure/router"
+import type { SecureSessionContext } from "../../../packages/service/src/security/session-authority"
 import {
   TerminalLaunchResolutionRequestSchema,
   TerminalLaunchResolutionSchema,
@@ -57,6 +59,47 @@ describe("service v1 contract", () => {
       rejects_control_bytes: true,
       metadata_only_result: true,
     })
+  })
+
+  test("rejects every non-local refresh origin before parsing or storage", async () => {
+    let parses = 0
+    let replacements = 0
+    const router = new SecureServiceRouter({
+      snapshot: { buildAll: async () => [], buildWorkspace: async () => { throw new Error("unused") } },
+      localTargetId: "local-service",
+      parseDynamicEnvironmentRefresh: (value) => {
+        parses += 1
+        return serviceProtocol.DynamicEnvironmentRefreshSchema.safeParse(value)
+      },
+      dynamicEnvironment: {
+        replace(value) {
+          replacements += 1
+          return {
+            updated: (["PATH", "SSH_AUTH_SOCK"] as const).filter((key) => value[key] !== undefined),
+            cleared: (["PATH", "SSH_AUTH_SOCK"] as const).filter((key) => value[key] === undefined),
+          }
+        },
+      },
+    })
+    const context = (mode: SecureSessionContext["mode"], origin: SecureSessionContext["origin"], targetId = "local-service") => ({
+      mode, origin, targetId, scopes: [], principalId: "test", sessionId: crypto.randomUUID(),
+    }) as unknown as SecureSessionContext
+    const request = (body: unknown) => ({ id: crypto.randomUUID(), method: "environment.refresh", body })
+    for (const candidate of [
+      context("browser", "local"),
+      context("helper", "remote"),
+      context("pairing", "remote"),
+      context("tui", "remote"),
+      context("tui", "local", "paired-remote"),
+    ]) {
+      await expect(router.request(candidate, request({ PATH: 42, TOKEN: "must-not-parse" }))).rejects.toMatchObject({ code: "unauthorized" })
+    }
+    expect({ parses, replacements }).toEqual({ parses: 0, replacements: 0 })
+    await expect(router.request(context("tui", "local"), request({ PATH: "/trusted/bin" }))).resolves.toEqual({
+      updated: ["PATH"], cleared: ["SSH_AUTH_SOCK"],
+    })
+    expect({ parses, replacements }).toEqual({ parses: 1, replacements: 1 })
+    await router.stop()
   })
 
   test("parses and exactly round-trips golden fixtures", () => {

@@ -241,6 +241,9 @@ export const SecureScopeSchema = z.enum([
 export type SecureScope = z.infer<typeof SecureScopeSchema>
 export const SecureScopesSchema = z.array(SecureScopeSchema).max(32).refine((scopes) => new Set(scopes).size === scopes.length)
 
+export const SecureConnectionOriginSchema = z.enum(["local", "remote"])
+export type SecureConnectionOrigin = z.infer<typeof SecureConnectionOriginSchema>
+
 const ByteStringSchema = z.string().regex(/^[A-Za-z0-9_-]+$/)
 const IsoTimestampSchema = z.string().datetime({ offset: true })
 

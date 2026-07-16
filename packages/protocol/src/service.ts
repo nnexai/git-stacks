@@ -49,6 +49,32 @@ export const CLIENT_MODEL_LIMITS = Object.freeze(ClientModelLimitsSchema.parse({
     signal_detail: 500, signal_occurred_at: 40, launch_environment_value: 4096 },
 }))
 
+export const DYNAMIC_ENVIRONMENT_LIMITS = Object.freeze({
+  PATH: 16 * 1024,
+  SSH_AUTH_SOCK: 4 * 1024,
+})
+
+function dynamicEnvironmentValue(maximum: number) {
+  return utf8BoundedString(maximum).refine((value) => !/[\u0000-\u001f\u007f]/u.test(value), {
+    message: "Dynamic environment values must not contain control characters",
+  })
+}
+
+export const DynamicEnvironmentKeySchema = z.enum(["PATH", "SSH_AUTH_SOCK"])
+export type DynamicEnvironmentKey = z.infer<typeof DynamicEnvironmentKeySchema>
+export const DynamicEnvironmentRefreshSchema = z.strictObject({
+  PATH: dynamicEnvironmentValue(DYNAMIC_ENVIRONMENT_LIMITS.PATH).optional(),
+  SSH_AUTH_SOCK: dynamicEnvironmentValue(DYNAMIC_ENVIRONMENT_LIMITS.SSH_AUTH_SOCK).optional(),
+})
+export type DynamicEnvironmentRefresh = z.infer<typeof DynamicEnvironmentRefreshSchema>
+export const DynamicEnvironmentRefreshResultSchema = z.strictObject({
+  updated: z.array(DynamicEnvironmentKeySchema).max(2).refine((keys) => new Set(keys).size === keys.length),
+  cleared: z.array(DynamicEnvironmentKeySchema).max(2).refine((keys) => new Set(keys).size === keys.length),
+}).refine((result) => !result.updated.some((key) => result.cleared.includes(key)), {
+  message: "A dynamic environment key cannot be both updated and cleared",
+})
+export type DynamicEnvironmentRefreshResult = z.infer<typeof DynamicEnvironmentRefreshResultSchema>
+
 export const ErrorCodeSchema = z.enum([
   "invalid_request", "unauthorized", "not_found", "conflict", "rate_limited",
   "capability_unavailable", "replay_gap", "snapshot_busy", "internal_error", "operation_failed", "idempotency_conflict",

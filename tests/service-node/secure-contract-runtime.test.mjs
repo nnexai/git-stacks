@@ -5,7 +5,7 @@ import { join } from "node:path"
 import test from "node:test"
 
 import { authenticateSecureCarrier } from "../../packages/client/dist/index.js"
-import { CLIENT_MODEL_LIMITS } from "../../packages/protocol/dist/index.js"
+import { CLIENT_MODEL_LIMITS, DynamicEnvironmentRefreshSchema } from "../../packages/protocol/dist/index.js"
 import { connectLocalTls, startManagedService } from "../../packages/service/dist/index.js"
 
 const scopes = [
@@ -45,6 +45,20 @@ async function waitFor(predicate, timeoutMs = 2_000) {
 test("secure routing preserves catalog, idempotent operations, ownership, events, and signals", async () => {
   const root = await mkdtemp(join(tmpdir(), "git-stacks-secure-contract-"))
   let workspaceCreated = false
+  let refreshParses = 0
+  let refreshReplacements = 0
+  let dynamicSnapshot = Object.freeze({})
+  const dynamicEnvironment = {
+    replace(value) {
+      refreshReplacements += 1
+      dynamicSnapshot = Object.freeze({ ...value })
+      return {
+        updated: ["PATH", "SSH_AUTH_SOCK"].filter((key) => dynamicSnapshot[key] !== undefined),
+        cleared: ["PATH", "SSH_AUTH_SOCK"].filter((key) => dynamicSnapshot[key] === undefined),
+      }
+    },
+    snapshot: () => Object.freeze({ ...dynamicSnapshot }),
+  }
   const snapshot = {
     currentRevision: async () => "7",
     buildAll: async () => workspaceCreated ? [activeSnapshot()] : [],
@@ -52,6 +66,11 @@ test("secure routing preserves catalog, idempotent operations, ownership, events
   }
   const service = await startManagedService({
     serviceRoot: root, snapshot, idleMs: 60_000,
+    dynamicEnvironment,
+    parseDynamicEnvironmentRefresh: (value) => {
+      refreshParses += 1
+      return DynamicEnvironmentRefreshSchema.safeParse(value)
+    },
     workspaceCreationCatalog: () => ({
       templates: [{ name: "full", repository_count: 1, command_count: 0, labels: [] }],
       repositories: [{ name: "app", type: "typescript", default_branch: "main" }],
@@ -111,6 +130,17 @@ test("secure routing preserves catalog, idempotent operations, ownership, events
     if (!("error" in browserRefresh)) assert.fail("browser environment refresh must never be accepted")
     assert.deepEqual(tuiRefresh, { updated: ["PATH", "SSH_AUTH_SOCK"], cleared: [] }, "PHASE124_RED refresh authorization TUI ordering contract")
     assert.deepEqual(browserRefresh, { error: "unauthorized" })
+    assert.deepEqual({ refreshParses, refreshReplacements }, { refreshParses: 1, refreshReplacements: 1 })
+    await assert.rejects(tui.rpc.request("environment.refresh", { PATH: 42, SSH_AUTH_SOCK: refresh.SSH_AUTH_SOCK }), (error) => error.code === "invalid_request")
+    assert.deepEqual({ refreshParses, refreshReplacements, dynamicSnapshot }, {
+      refreshParses: 2, refreshReplacements: 1, dynamicSnapshot: refresh,
+    })
+    assert.deepEqual(await tui.rpc.request("environment.refresh", { PATH: "/phase124/replacement/bin" }), {
+      updated: ["PATH"], cleared: ["SSH_AUTH_SOCK"],
+    })
+    assert.deepEqual({ refreshParses, refreshReplacements, dynamicSnapshot }, {
+      refreshParses: 3, refreshReplacements: 2, dynamicSnapshot: { PATH: "/phase124/replacement/bin" },
+    })
     await assert.rejects(tui.rpc.request("operation.get", { operation_id: first.operation_id }), (error) => error.code === "not_found")
     await tui.rpc.close("ownership verified")
     await browser.rpc.close("contract verified")

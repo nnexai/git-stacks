@@ -12,6 +12,7 @@ import {
 } from "./core-contract"
 import {
   OperationSchema,
+  DynamicEnvironmentRefreshResultSchema,
   SignalSchema,
   WorkspaceCreationCatalogSchema,
   WorkspaceCreationRequestSchema,
@@ -21,6 +22,7 @@ import {
   type WorkspaceCreationCatalog,
   type WorkspaceCreationRequest,
   type WorkspaceLifecycleMutation,
+  type DynamicEnvironmentRefreshResult,
   ServiceEventSchema,
   type ServiceEvent,
 } from "@git-stacks/protocol"
@@ -144,6 +146,17 @@ export async function closeServiceClient(reason = "one-shot client complete"): P
   cachedAccess = undefined
   accessRequest = undefined
   await rpc?.close(reason)
+}
+
+export async function refreshDynamicEnvironment(
+  environment: Partial<Record<"PATH" | "SSH_AUTH_SOCK", string | undefined>> = process.env as Partial<Record<"PATH" | "SSH_AUTH_SOCK", string | undefined>>,
+  signal?: AbortSignal,
+): Promise<DynamicEnvironmentRefreshResult> {
+  const request = {
+    ...(environment.PATH !== undefined ? { PATH: environment.PATH } : {}),
+    ...(environment.SSH_AUTH_SOCK !== undefined ? { SSH_AUTH_SOCK: environment.SSH_AUTH_SOCK } : {}),
+  }
+  return DynamicEnvironmentRefreshResultSchema.parse(await secureRequest("environment.refresh", request, { signal, retry: false }))
 }
 
 export async function createRemotePairing(name: string, scopes: SecureScope[], signal?: AbortSignal): Promise<PairingBundle> {

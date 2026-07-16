@@ -1,4 +1,5 @@
 import {
+  DynamicEnvironmentRefreshSchema,
   SignalDismissalSchema,
   SignalSchema,
   WebOperationMutationSchema,
@@ -13,6 +14,8 @@ import {
   type Signal,
   type SignalDismissal,
   type WorkspaceCreationCatalog,
+  type DynamicEnvironmentRefresh,
+  type DynamicEnvironmentRefreshResult,
 } from "@git-stacks/protocol"
 import type { WorkspaceFileStatusView } from "@git-stacks/core/workspace-file-status"
 
@@ -31,6 +34,11 @@ import { projectWebCatalog, projectWebOperation, projectWebSignal, projectWebSna
 import { WebTerminalManager } from "../web/terminal-manager.js"
 import type { createWorkspaceLifecycleCoordinator } from "../policy/workspace-lifecycle.js"
 import type { WorkspaceLifecycleAdmission } from "../policy/workspace-lifecycle-admission.js"
+import type { DynamicEnvironmentStore } from "../policy/dynamic-environment.js"
+
+type DynamicEnvironmentParseResult =
+  | { success: true; data: DynamicEnvironmentRefresh }
+  | { success: false }
 
 type Mutation = (request: { workspace: string; options?: Record<string, unknown> }, signal?: AbortSignal) => OperationExecution
 
@@ -61,6 +69,9 @@ export interface SecureServiceRouterOptions {
   workspaceLifecycleAdmission?: Pick<WorkspaceLifecycleAdmission, "admitTerminal">
   createWorkspaceLifecycle?: (terminals: WebTerminalManager) => Pick<ReturnType<typeof createWorkspaceLifecycleCoordinator>, "submit">
   workspaceLifecycle?: Pick<ReturnType<typeof createWorkspaceLifecycleCoordinator>, "submit">
+  localTargetId?: string
+  dynamicEnvironment?: Pick<DynamicEnvironmentStore, "replace">
+  parseDynamicEnvironmentRefresh?: (value: unknown) => DynamicEnvironmentParseResult
 }
 
 type SessionResources = {
@@ -128,6 +139,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
 
   async request(context: SecureSessionContext, request: SecureRequest): Promise<unknown> {
     this.options.onActivity?.()
+    if (request.method === "environment.refresh") return this.refreshDynamicEnvironment(context, request.body)
     const required = methodScopes[request.method]
     if (!required) throw coded("Unknown secure service method", "not_found")
     if (localAdministration.has(request.method) && (context.mode === "helper" || context.mode === "pairing")) {
@@ -229,6 +241,17 @@ export class SecureServiceRouter implements SecureSessionHandler {
         return terminal
       }
     }
+  }
+
+  private refreshDynamicEnvironment(context: SecureSessionContext, body: unknown): DynamicEnvironmentRefreshResult {
+    if (context.origin !== "local" || context.mode !== "tui" || context.helperId !== undefined
+      || !this.options.localTargetId || context.targetId !== this.options.localTargetId) {
+      throw coded("Dynamic environment refresh requires a same-user local launcher", "unauthorized")
+    }
+    const parsed = (this.options.parseDynamicEnvironmentRefresh ?? ((value) => DynamicEnvironmentRefreshSchema.safeParse(value)))(body)
+    if (!parsed.success) throw coded("Invalid dynamic environment refresh", "invalid_request")
+    if (!this.options.dynamicEnvironment) throw coded("Dynamic environment refresh is unavailable", "capability_unavailable")
+    return this.options.dynamicEnvironment.replace(parsed.data)
   }
 
   terminalControl(context: SecureSessionContext, streamId: number, value: unknown): void {

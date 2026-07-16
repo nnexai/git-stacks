@@ -25,6 +25,8 @@ import { createWorkspaceLifecycleAdmission, type WorkspaceLifecycleAdmission } f
 import { createWorkspaceLifecycleCoordinator } from "./policy/workspace-lifecycle"
 import type { SnapshotAdapter } from "./snapshot-adapter"
 import type { WebTerminalManager } from "./web/terminal-manager"
+import { createDynamicEnvironmentStore, type DynamicEnvironmentStore } from "./policy/dynamic-environment"
+import type { SecureServiceRouterOptions } from "./secure/router"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
 export const DEFAULT_OFFICIAL_CLIENT_ID = "official-client"
@@ -179,6 +181,8 @@ export interface ManagedServiceOptions {
   snapshot?: import("./snapshot-adapter").SnapshotAdapter & { currentRevision(): Promise<string> }
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
+  dynamicEnvironment?: DynamicEnvironmentStore
+  parseDynamicEnvironmentRefresh?: SecureServiceRouterOptions["parseDynamicEnvironmentRefresh"]
 }
 
 export function createWorkspaceLifecycleRuntimeComposition(input: {
@@ -375,6 +379,10 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     if (existing) unlinkSync(serviceDescriptorPath(serviceRoot))
 
     const snapshot = options.snapshot ?? createSnapshotBuilder()
+    const dynamicEnvironment = options.dynamicEnvironment ?? createDynamicEnvironmentStore({
+      ...(process.env.PATH !== undefined ? { PATH: process.env.PATH } : {}),
+      ...(process.env.SSH_AUTH_SOCK !== undefined ? { SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK } : {}),
+    })
     const journal = new EventJournal({ root: serviceRoot, snapshotRevision: () => snapshot.currentRevision() })
     const broker = new EventBroker(journal)
     const active = new Set<string>()
@@ -449,6 +457,8 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
     const exposure = readRemoteExposure(serviceRoot)
     running = await startSecureServiceRuntime({
       serviceRoot, snapshot, operations, broker,
+      dynamicEnvironment,
+      ...(options.parseDynamicEnvironmentRefresh ? { parseDynamicEnvironmentRefresh: options.parseDynamicEnvironmentRefresh } : {}),
       ...(exposure?.enabled ? { remoteExposure: { bindHost: exposure.bind_host, advertiseHost: exposure.advertise_host, port: exposure.port } } : {}),
       mutations: mutationAdapters,
       core,

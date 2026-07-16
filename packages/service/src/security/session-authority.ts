@@ -13,6 +13,7 @@ import {
   type SecureRequest,
   type SecureResponse,
   type SecureScope,
+  type SecureConnectionOrigin,
 } from "@git-stacks/protocol"
 import { FramedDuplex, type SecureDuplex } from "@git-stacks/client"
 
@@ -91,6 +92,7 @@ export interface SessionAdmission {
 export interface SecureSessionContext extends SessionAdmission {
   sessionId: string
   mode: SecureClientHello["mode"]
+  origin: SecureConnectionOrigin
   channel: FramedDuplex
   sendEvent(value: unknown): Promise<void>
   sendTerminalControl(streamId: number, value: unknown): Promise<void>
@@ -108,6 +110,7 @@ export interface SecureSessionHandler {
 export interface SecureSessionServerOptions {
   serviceId: string
   listenerEpoch: string
+  origin: SecureConnectionOrigin
   eventCursor(): Promise<string>
   admit(hello: SecureClientHello): SessionAdmission | null | Promise<SessionAdmission | null>
   handler: SecureSessionHandler
@@ -248,6 +251,7 @@ export class SecureSessionServer {
         ...admission,
         sessionId,
         mode: hello.mode,
+        origin: this.options.origin,
         channel,
         sendEvent: (value) => channel.sendControl("event", value),
         sendTerminalControl: (streamId, value) => channel.sendControl("terminal_control", value, streamId),

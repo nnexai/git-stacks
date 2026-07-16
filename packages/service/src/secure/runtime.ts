@@ -65,6 +65,7 @@ export async function startSecureServiceRuntime(options: SecureServiceRuntimeOpt
   }
   const router = new SecureServiceRouter({
     ...options,
+    localTargetId: identity.id,
     issueLaunch,
     createPairingBundle: ({ name, scopes }) => {
       if (!activePinSet) throw new Error("Remote listener is not ready")
@@ -91,6 +92,7 @@ export async function startSecureServiceRuntime(options: SecureServiceRuntimeOpt
   const localSessionServer = new SecureSessionServer({
     serviceId: identity.id,
     listenerEpoch: authority.listenerEpoch,
+    origin: "local",
     eventCursor: options.eventCursor ?? (async () => "0"),
     sessionOpened: (context) => context.mode === "browser" ? authority.registerBrowserSession(context) : undefined,
     sessionClosed: (context) => { if (context.mode === "browser") authority.clearBrowserSession(context) },
@@ -107,6 +109,7 @@ export async function startSecureServiceRuntime(options: SecureServiceRuntimeOpt
   remoteSessionServer = new SecureSessionServer({
     serviceId: identity.id,
     listenerEpoch: remoteListenerEpoch,
+    origin: "remote",
     eventCursor: options.eventCursor ?? (async () => "0"),
     pairingAuthority: pairing,
     currentPinSet: () => activePinSet,
