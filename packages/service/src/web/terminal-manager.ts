@@ -68,7 +68,7 @@ function serializePtyEnvironment(environment: Record<string, string>): Buffer {
   return Buffer.concat(entries.map(([key, value]) => Buffer.from(`${key}=${value}\0`, "utf8")))
 }
 
-function createPtyInitialization(
+export function createPtyInitialization(
   shell: "bash" | "zsh" | "fish",
   environment: Record<string, string>,
   command?: string,
@@ -83,23 +83,21 @@ function createPtyInitialization(
     const commandPath = join(root, shell === "fish" ? "command.fish" : "command.sh")
     writeFileSync(commandPath, command, { mode: 0o600 })
     runCommand = shell === "fish"
-      ? `source ${shellQuote(commandPath)}; set -l __gs_status $status; command rm -rf -- ${shellQuote(root)}; exit $__gs_status`
-      : `. ${shellQuote(commandPath)}; __gs_status=$?; command rm -rf -- ${shellQuote(root)}; exit "$__gs_status"`
+      ? `builtin source ${shellQuote(commandPath)}; builtin set -l __gs_status $status; builtin exit $__gs_status`
+      : `builtin source ${shellQuote(commandPath)}; __gs_status=$?; builtin exit "$__gs_status"`
   }
   const bootstrap = shell === "fish"
     ? [
-        `for __gs_entry in (string split0 < ${shellQuote(environmentPath)})`,
-        "set -l __gs_pair (string split -m 1 = -- $__gs_entry)",
-        "test (count $__gs_pair) -eq 2; or exit 126",
-        "set -gx $__gs_pair[1] $__gs_pair[2]",
+        `for __gs_entry in (builtin string split0 < ${shellQuote(environmentPath)})`,
+        "builtin set -l __gs_pair (builtin string split -m 1 = -- $__gs_entry)",
+        "builtin test (builtin count $__gs_pair) -eq 2; or builtin exit 126",
+        "builtin set -gx $__gs_pair[1] $__gs_pair[2]",
         "end",
-        `command rm -f -- ${shellQuote(environmentPath)}`,
-        `command touch -- ${shellQuote(readyPath)}`,
+        `builtin printf '' > ${shellQuote(readyPath)}`,
       ].join("; ")
     : [
-        `while IFS= read -r -d '' __gs_entry; do export "$__gs_entry" || return 126; done < ${shellQuote(environmentPath)}`,
-        `command rm -f -- ${shellQuote(environmentPath)}`,
-        `: > ${shellQuote(readyPath)}`,
+        `while IFS= builtin read -r -d '' __gs_entry; do builtin export "$__gs_entry" || builtin return 126; done < ${shellQuote(environmentPath)}`,
+        `builtin printf '' > ${shellQuote(readyPath)}`,
       ].join("; ")
   return { root, readyPath, bootstrap, ...(runCommand ? { runCommand } : {}) }
 }

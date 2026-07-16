@@ -1,12 +1,16 @@
 import { describe, expect, test } from "@test/api"
 import { setTimeout as sleep } from "node:timers/promises"
-import { writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { dirname, join } from "node:path"
+import { spawnSync } from "node:child_process"
 import { UserShellError } from "../../packages/core/src/user-shell"
 import type { Signal, TerminalLaunchResolution } from "../../packages/protocol/src/service"
 import { createWorkspaceLifecycleAdmission } from "../../packages/service/src/policy/workspace-lifecycle-admission"
 import type { TerminalAttachment } from "../../packages/service/src/terminal-attachment"
 import {
   WebTerminalManager,
+  createPtyInitialization,
   type PtyFactory,
   type PtyProcess,
   type TerminalCommandStepRunner,
@@ -88,6 +92,75 @@ async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<voi
 }
 
 describe("service-owned web terminal", () => {
+  test("applies the authoritative PTY overlay and sources commands despite hostile profile aliases and functions", () => {
+    const fixtures = ([
+      {
+        family: "bash" as const,
+        executable: "/usr/bin/bash",
+        profileName: "bashrc",
+        profile: [
+          "shopt -s expand_aliases",
+          "alias export='false'",
+          "alias source='false'",
+          "alias printf='false'",
+          "function export { return 91; }",
+          "function source { return 92; }",
+          "function printf { return 93; }",
+        ].join("\n"),
+        argv: (profile: string, command: string) => ["--noprofile", "--rcfile", profile, "-i", "-c", command],
+        environment: (_root: string) => ({}),
+      },
+      {
+        family: "zsh" as const,
+        executable: "/usr/bin/zsh",
+        profileName: ".zshrc",
+        profile: [
+          "alias export=false",
+          "alias source=false",
+          "alias printf=false",
+          "function export { return 91 }",
+          "function source { return 92 }",
+          "function printf { return 93 }",
+        ].join("\n"),
+        argv: (_profile: string, command: string) => ["-i", "-c", command],
+        environment: (root: string) => ({ ZDOTDIR: root }),
+      },
+      {
+        family: "fish" as const,
+        executable: "/usr/bin/fish",
+        profileName: "fish/config.fish",
+        profile: [
+          "function source; return 92; end",
+          "function printf; return 93; end",
+        ].join("\n"),
+        argv: (_profile: string, command: string) => ["--interactive", "--command", command],
+        environment: (root: string) => ({ XDG_CONFIG_HOME: root }),
+      },
+    ]).filter(({ executable }) => existsSync(executable))
+
+    expect(fixtures.map(({ family }) => family)).toContain("bash")
+    for (const fixture of fixtures) {
+      const root = mkdtempSync(join(tmpdir(), `git-stacks-hostile-${fixture.family}-`))
+      const profilePath = join(root, fixture.profileName)
+      mkdirSync(dirname(profilePath), { recursive: true })
+      writeFileSync(profilePath, fixture.profile)
+      const initialization = createPtyInitialization(fixture.family, { AUTHORITATIVE_OVERLAY: `ready-${fixture.family}` }, "builtin printf '%s' \"$AUTHORITATIVE_OVERLAY\"")
+      try {
+        const result = spawnSync(fixture.executable, fixture.argv(profilePath, `${initialization.bootstrap}; ${initialization.runCommand}`), {
+          encoding: "utf8",
+          env: { ...process.env, HOME: root, ...fixture.environment(root) },
+          timeout: 3_000,
+        })
+        expect(result.status, `${fixture.family}: ${result.stderr}`).toBe(0)
+        expect(result.stdout).toContain(`ready-${fixture.family}`)
+        expect(existsSync(initialization.readyPath)).toBe(true)
+      } finally {
+        rmSync(initialization.root, { force: true, recursive: true })
+        rmSync(root, { force: true, recursive: true })
+      }
+    }
+  })
+
   test("runs typed command steps separately in one logical terminal and stops on the exact failing step", async () => {
     const calls: Array<{ command: string; cwd: string; overlay?: Record<string, string> }> = []
     const runner: TerminalCommandStepRunner = async (request) => {
