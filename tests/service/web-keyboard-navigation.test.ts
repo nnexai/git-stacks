@@ -1,4 +1,5 @@
 import { describe, expect, test } from "@test/api"
+import { readFile } from "node:fs/promises"
 import {
   WEB_SHORTCUT_ACTION_METADATA,
   defaultShortcutSettings,
@@ -7,6 +8,7 @@ import { WEB_SHORTCUT_ACTION_IDS, type WebShortcutActionId } from "../../package
 import {
   createWebActionRegistry,
   createWebShortcutDispatcher,
+  loadAuthoritativeWebActionSettings,
   type WebActionInvocation,
   type WebActionRegistration,
 } from "../../packages/web/src/navigation"
@@ -187,5 +189,36 @@ describe("web keyboard navigation boundary", () => {
     expect(dispatcher.handleXterm(event)).toBe(true)
     expect(event.prevented).toBe(0)
     expect(event.stopped).toBe(0)
+  })
+
+  test("loads authoritative settings without flashing defaults and fails closed on reload errors", async () => {
+    const { registry, dispatcher, calls } = harness()
+    registry.setSettings(undefined)
+    const before = linuxEvent("KeyT")
+    expect(dispatcher.handleXterm(before)).toBe(true)
+
+    await expect(loadAuthoritativeWebActionSettings(registry, async () => defaultShortcutSettings("linux", "service")))
+      .resolves.toMatchObject({ revision: "service" })
+    expect(dispatcher.handleXterm(linuxEvent("KeyT"))).toBe(false)
+    expect(calls).toHaveLength(1)
+
+    await expect(loadAuthoritativeWebActionSettings(registry, async () => { throw new Error("offline") })).rejects.toThrow("offline")
+    const afterFailure = linuxEvent("KeyT")
+    expect(dispatcher.handleXterm(afterFailure)).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(afterFailure.prevented).toBe(0)
+  })
+
+  test("wires authoritative loading and xterm preprocessing before PTY forwarding without legacy handlers", async () => {
+    const source = await readFile(new URL("../../packages/web/src/app.ts", import.meta.url), "utf8")
+    expect(source).toContain('"shortcuts.get"')
+    expect(source).toContain("createWebActionRegistry")
+    expect(source).toContain("createWebShortcutDispatcher")
+    expect(source.indexOf("attachCustomKeyEventHandler")).toBeGreaterThan(-1)
+    expect(source.indexOf("attachCustomKeyEventHandler")).toBeLessThan(source.indexOf("terminal.onData"))
+    expect(source).not.toMatch(/event\.key\.toLowerCase\(\) === ["']k["']/)
+    expect(source).not.toMatch(/event\.key\.toLowerCase\(\) === ["']t["']/)
+    expect(source).not.toContain('event.key === "PageDown"')
+    expect(source).not.toContain('event.key === "PageUp"')
   })
 })
