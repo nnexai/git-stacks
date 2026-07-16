@@ -28,6 +28,8 @@ key-files:
     - packages/service/src/policy/core-contract.ts
     - packages/service/src/policy/core-state.ts
     - packages/service/src/web/projection.ts
+    - tests/fixtures/service-v1/workspace-snapshot.json
+    - tests/service-node/secure-contract-runtime.test.mjs
 
 key-decisions:
   - "Catalog revision digests both active projections and minimal archived summaries, including all-archived state."
@@ -73,6 +75,9 @@ coverage:
       - kind: unit
         ref: "tests/service/web-projection.test.ts#omits paths, commands, environment, secret references, ports, and launch details"
         status: pass
+      - kind: integration
+        ref: "tests/lib/service/contract.test.ts#parses and exactly round-trips golden fixtures"
+        status: pass
     human_judgment: false
   - id: D4
     description: "Both clients receive one successor comparator with independent pinned, priority, activity recency, name, and stable-ID tie tiers."
@@ -101,7 +106,7 @@ status: complete
 - **Started:** 2026-07-16T06:08:00Z
 - **Completed:** 2026-07-16T06:18:59Z
 - **Tasks:** 2
-- **Files modified:** 12
+- **Files modified:** 14
 
 ## Accomplishments
 
@@ -117,6 +122,10 @@ Each task was committed atomically:
 1. **Task 1: Lock active activity, catalog, lifecycle schema, and successor ordering contracts** - `58e8a14b` (test)
 2. **Task 2: Implement the aggregate catalog and shared lifecycle/presentation contract** - `4f6cf0a8` (feat)
 
+Post-wave integration repair:
+
+- **Align trusted and browser golden snapshots with the required catalog fields** - `98a351c7` (fix)
+
 ## Verification
 
 - RED gate: the focused command exited nonzero for five intended missing behaviors, passed 17 existing tests, and reported the exact `PHASE123_RED catalog activity ordering contract` sentinel.
@@ -125,6 +134,7 @@ Each task was committed atomically:
 - Built conformance: 4/4 Node contract tests pass.
 - Workspace typecheck: every package passes.
 - Architecture: `npm run test:deps` reports `Package architecture: OK`.
+- Full post-wave gate: `npm test` passes 135 Vitest files / 1766 tests, 42 Node contract/runtime tests, and the complete OpenTUI test matrix.
 
 ## Deviations from Plan
 
@@ -138,9 +148,17 @@ Each task was committed atomically:
 - **Verification:** Web projection tests pass 3/3 and workspace typecheck is green.
 - **Committed in:** `4f6cf0a8`
 
+**2. [Rule 1 - Integration Regression] Aligned golden snapshots with the strict required fields**
+- **Found during:** Wave 2 post-merge `npm test`
+- **Issue:** The service-v1 trusted workspace golden omitted canonical persisted `activity_at`, while the secure runtime's inline empty browser golden omitted the required archived collection.
+- **Fix:** Added an offset-aware persisted activity timestamp to the trusted fixture and `archived_workspaces: []` to the empty browser contract expectation without relaxing either schema.
+- **Files modified:** `tests/fixtures/service-v1/workspace-snapshot.json`, `tests/service-node/secure-contract-runtime.test.mjs`
+- **Verification:** The focused service contract suite passes 9/9, secure runtime passes 1/1, and the complete `npm test` gate passes.
+- **Committed in:** `98a351c7`
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 missing critical compatibility seam). **Impact:** The strict contract is usable immediately without implementing the later archived browser UI ahead of Plan 06.
+**Total deviations:** 2 auto-fixed (1 missing critical compatibility seam, 1 integration fixture regression). **Impact:** The strict contract is usable immediately and every golden transport fixture now records its required bounded catalog fields without implementing the later archived browser UI ahead of Plan 06.
 
 ## Known Stubs
 
@@ -163,7 +181,7 @@ None - no external service configuration required.
 
 ## Self-Check: PASSED
 
-- Task commits `58e8a14b` and `4f6cf0a8` exist in history.
+- Task commits `58e8a14b`, `4f6cf0a8`, and integration repair `98a351c7` exist in history.
 - Every modified source and test file exists.
 - All four coverage deliverables have current passing automated evidence.
 
