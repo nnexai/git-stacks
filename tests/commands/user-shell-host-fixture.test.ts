@@ -167,6 +167,38 @@ describe("host user-shell fixtures", () => {
     })
   }
 
+  test.skipIf(!executable("bash"))("Bash rejects imported bootstrap-function interception while preserving profile commands", async () => {
+    const bash = executable("bash")!
+    const home = await root("git-stacks-bash-imported-functions-")
+    await copyFile(join(fixtures, "bash-init.sh"), join(home, ".bash_profile"))
+    const interceptionMarker = join(home, "intercepted")
+    const environment = {
+      ...process.env,
+      HOME: home,
+      "BASH_FUNC_command%%": `() { printf command >> ${quote(interceptionMarker)}; return 0; }`,
+      "BASH_FUNC_read%%": `() { printf read >> ${quote(interceptionMarker)}; return 0; }`,
+      "BASH_FUNC_export%%": `() { printf export >> ${quote(interceptionMarker)}; return 0; }`,
+      "BASH_FUNC_rm%%": `() { printf rm >> ${quote(interceptionMarker)}; return 0; }`,
+      "BASH_FUNC_sleep%%": `() { printf sleep >> ${quote(interceptionMarker)}; return 0; }`,
+      "BASH_FUNC_eval%%": `() { printf eval >> ${quote(interceptionMarker)}; return 0; }`,
+      "BASH_FUNC_exit%%": `() { printf exit >> ${quote(interceptionMarker)}; return 0; }`,
+      "BASH_FUNC_unrelated%%": `() { printf unrelated >> ${quote(interceptionMarker)}; return 0; }`,
+    }
+    const result = await executeUserShellCommand({
+      command: "phase124_alias; phase124_function imported-safe; printf 'overlay:%s\\n' \"$PHASE124_IMPORTED_OVERLAY\"; exit 23",
+      cwd: home,
+      shellEnvironment: { ...environment, SHELL: bash },
+      inheritedEnvironment: environment,
+      overlay: { PHASE124_IMPORTED_OVERLAY: "authoritative" },
+    })
+
+    expect(result.exitCode).toBe(23)
+    expect(result.stdout.toString("utf8")).toContain("alias:bash")
+    expect(result.stdout.toString("utf8")).toContain("function:bash:imported-safe")
+    expect(result.stdout.toString("utf8")).toContain("overlay:authoritative")
+    expect(existsSync(interceptionMarker)).toBe(false)
+  })
+
   if (!sshToolsAvailable && !requiredSshAgent) console.warn("CAPABILITY_SKIP ssh-agent reason=openssh-tools-unavailable")
   test.skipIf(!sshToolsAvailable && !requiredSshAgent)("two real agents preserve process A while future PTY and non-PTY launches rotate to process B", async () => {
     expect(sshToolsAvailable, "OpenSSH host fixtures are required").toBe(true)

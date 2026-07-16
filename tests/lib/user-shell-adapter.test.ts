@@ -266,6 +266,48 @@ describe("Phase 124 user-shell adapter RED contract", () => {
     await expect(execution).resolves.toMatchObject({ exitCode: 0 })
   })
 
+  test("removes parent-exported Bash functions without changing ordinary inherited environment", async () => {
+    if (!existsSync(ADAPTER_PATH)) return
+    const { executeUserShellCommand } = await import("../../packages/core/src/user-shell")
+    let spawnedEnvironment: Record<string, string | undefined> | undefined
+    let resolveExit!: (exitCode: number) => void
+    const exited = new Promise<number>((resolve) => { resolveExit = resolve })
+    const inheritedEnvironment = {
+      ORDINARY_PARENT_VALUE: "preserved",
+      "BASH_FUNC_command%%": "() { return 91; }",
+      "BASH_FUNC_eval%%": "() { return 92; }",
+      "BASH_FUNC_unrelated%%": "() { return 93; }",
+      BASH_FUNC_malformed_parent_input: "not an exported function",
+    }
+
+    const execution = executeUserShellCommand({
+      command: hostileCommand,
+      cwd: fixtureRoot,
+      shellEnvironment: { SHELL: shellFixtures[0].executable },
+      inheritedEnvironment,
+    }, {
+      spawn: (argv, options) => {
+        spawnedEnvironment = options?.env
+        writeFileSync(argv.at(-4)!, "ready", "utf8")
+        return {
+          pid: 4245,
+          exited,
+          stdout: null,
+          stderr: null,
+          kill: () => true,
+          killGroup: () => true,
+          unref: () => undefined,
+        }
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(spawnedEnvironment).toEqual({ ORDINARY_PARENT_VALUE: "preserved" })
+    resolveExit(0)
+    await expect(execution).resolves.toMatchObject({ exitCode: 0 })
+  })
+
   test("cancels a real TERM-resistant command tree and waits for its process group to disappear", async () => {
     if (process.platform !== "linux" || !existsSync("/usr/bin/bash")) return
     const { executeUserShellCommand } = await import("../../packages/core/src/user-shell")

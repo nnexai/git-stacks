@@ -114,12 +114,12 @@ const POSIX_BOOTSTRAP = [
   "__gs_ack=$2",
   "__gs_environment=$3",
   "__gs_command=$4",
-  "while IFS= read -r -d '' __gs_entry; do export \"$__gs_entry\" || exit 126; done < \"$__gs_environment\"",
-  "rm -f -- \"$__gs_environment\" || exit 126",
-  ": > \"$__gs_ready\" || exit 126",
-  "while [ ! -e \"$__gs_ack\" ]; do sleep 0.01; done",
-  "rm -f -- \"$__gs_ready\" \"$__gs_ack\"",
-  "eval -- \"$__gs_command\"",
+  "while IFS= command read -r -d '' __gs_entry; do command export \"$__gs_entry\" || command exit 126; done < \"$__gs_environment\"",
+  "command rm -f -- \"$__gs_environment\" || command exit 126",
+  "> \"$__gs_ready\" || command exit 126",
+  "while [[ ! -e \"$__gs_ack\" ]]; do command sleep 0.01; done",
+  "command rm -f -- \"$__gs_ready\" \"$__gs_ack\"",
+  "command eval -- \"$__gs_command\"",
 ].join("\n")
 
 const FISH_BOOTSTRAP = [
@@ -286,6 +286,22 @@ function serializeEnvironment(environment: Record<string, string>): Buffer {
     chunks.push(Buffer.from(`${key}=${value}\0`, "utf8"))
   }
   return Buffer.concat(chunks)
+}
+
+function sanitizeInheritedEnvironment(
+  shell: ValidatedUserShell,
+  environment: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  if (shell.family !== "bash") return environment
+
+  // Bash imports exported functions from BASH_FUNC_<name>%% environment
+  // entries before startup files run. That parent-controlled namespace cannot
+  // be allowed to replace bootstrap primitives such as `command` or `eval`.
+  // Real interactive-login startup files still run and define their own shell
+  // functions normally.
+  return Object.fromEntries(
+    Object.entries(environment).filter(([key]) => !key.startsWith("BASH_FUNC_")),
+  )
 }
 
 function appendBounded(target: Buffer[], chunk: Uint8Array): void {
@@ -474,7 +490,7 @@ export async function executeUserShellCommand(
   try {
     processHandle = dependencies.spawn(plan.argv, {
       cwd: request.cwd,
-      env: request.inheritedEnvironment ?? process.env,
+      env: sanitizeInheritedEnvironment(shell, request.inheritedEnvironment ?? process.env),
       isolatedProcessGroup: true,
       stdin: "ignore",
       stdout: "pipe",

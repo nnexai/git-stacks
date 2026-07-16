@@ -106,3 +106,21 @@ Sixth-pass focused verification:
 - `npm run typecheck -w @git-stacks/service` — pass.
 - `npm run test:deps` — package architecture pass.
 - `git diff --check` — pass.
+
+## Seventh adversarial repair pass
+
+The core Bash command adapter now rejects inherited exported-function dispatch before the real login shell starts:
+
+- Bash-only launch sanitation removes the complete `BASH_FUNC_*` environment namespace. This closes the deterministic parent-process attack in which imported functions named `eval`, `export`, `command`, `read`, `rm`, `sleep`, or `exit` could fabricate initialization success, defeat the authoritative overlay, or skip the configured command. Ordinary inherited variables are preserved; zsh and fish environments are unchanged.
+- The POSIX bootstrap routes its remaining command lookups through the shell's `command` builtin, uses grammar-level `[[ ... ]]` for acknowledgement polling, and creates readiness with a redirection-only command. Imported functions therefore cannot replace individual bootstrap primitives even if a future Bash accepts another exported-function encoding beneath the reserved prefix.
+- A deterministic spawn-seam regression proves every `BASH_FUNC_*` key, including a malformed non-`%%` variant, is absent while an ordinary inherited value survives. A real Bash regression imports poisoned versions of every bootstrap primitive plus an unrelated function and proves none executes, the startup profile's alias and function remain available, the post-profile overlay wins, and the configured command's exit 23 is preserved.
+
+This boundary intentionally does not inherit parent-exported Bash functions. User startup files remain the authority for interactive-login initialization and may define ordinary aliases and functions. Like any executed startup code, a startup file can deliberately redefine `command` or terminate the shell; such behavior is trusted user initialization rather than an untrusted inherited-environment channel and fails or alters the user's own launch by design.
+
+Seventh-pass focused verification:
+
+- `npx vitest run tests/service/web-terminal.test.ts tests/lib/user-shell-adapter.test.ts tests/commands/user-shell-host-fixture.test.ts` — 43 passed, 1 explicit local zsh capability skip.
+- `npm run typecheck -w @git-stacks/core` — pass.
+- `npm run typecheck -w @git-stacks/service` — pass.
+- `npm run test:deps` — package architecture pass.
+- `git diff --check` — pass.
