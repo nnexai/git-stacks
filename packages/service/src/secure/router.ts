@@ -9,6 +9,7 @@ import {
   WebTerminalCreateSchema,
   WebTerminalRenameSchema,
   WorkspaceCreationRequestSchema,
+  WorkspaceLifecycleMutationSchema,
   type Signal,
   type SignalDismissal,
   type WorkspaceCreationCatalog,
@@ -28,6 +29,8 @@ import type { PairingBundle, PairedHelper, TargetRecord } from "../security/targ
 import { SignalVisibilityTracker } from "../web/signal-visibility.js"
 import { projectWebCatalog, projectWebOperation, projectWebSignal, projectWebSnapshot, projectWebTerminalSignals } from "../web/projection.js"
 import { WebTerminalManager } from "../web/terminal-manager.js"
+import type { createWorkspaceLifecycleCoordinator } from "../policy/workspace-lifecycle.js"
+import type { WorkspaceLifecycleAdmission } from "../policy/workspace-lifecycle-admission.js"
 
 type Mutation = (request: { workspace: string; options?: Record<string, unknown> }, signal?: AbortSignal) => OperationExecution
 
@@ -55,6 +58,9 @@ export interface SecureServiceRouterOptions {
   listTargets?: () => TargetRecord[]
   removeTarget?: (id: string) => boolean
   recoverLocalWebTransport?: () => Promise<{ endpoint: string; certificate_hash: string }>
+  workspaceLifecycleAdmission?: Pick<WorkspaceLifecycleAdmission, "assertTerminalAdmission">
+  createWorkspaceLifecycle?: (terminals: WebTerminalManager) => Pick<ReturnType<typeof createWorkspaceLifecycleCoordinator>, "submit">
+  workspaceLifecycle?: Pick<ReturnType<typeof createWorkspaceLifecycleCoordinator>, "submit">
 }
 
 type SessionResources = {
@@ -104,11 +110,20 @@ const localAdministration = new Set([
 
 export class SecureServiceRouter implements SecureSessionHandler {
   readonly terminals: WebTerminalManager
+  private readonly workspaceLifecycle?: Pick<ReturnType<typeof createWorkspaceLifecycleCoordinator>, "submit">
   private readonly principals = new SignalVisibilityTracker()
   private readonly resources = new Map<string, SessionResources>()
 
   constructor(private readonly options: SecureServiceRouterOptions) {
-    this.terminals = new WebTerminalManager(options.snapshot, options.publishSignal, () => this.notifyConnections())
+    this.terminals = new WebTerminalManager(
+      options.snapshot,
+      options.publishSignal,
+      () => this.notifyConnections(),
+      Date.now,
+      undefined,
+      options.workspaceLifecycleAdmission,
+    )
+    this.workspaceLifecycle = options.workspaceLifecycle ?? options.createWorkspaceLifecycle?.(this.terminals)
   }
 
   async request(context: SecureSessionContext, request: SecureRequest): Promise<unknown> {
@@ -383,6 +398,31 @@ export class SecureServiceRouter implements SecureSessionHandler {
 
   private async submitOperation(context: SecureSessionContext, request: SecureRequest): Promise<unknown> {
     if (!this.options.operations || !request.idempotency_key) throw coded("Operations or idempotency key unavailable", "capability_unavailable")
+    const requestBody = request.body as { mutation?: unknown; request?: unknown } | undefined
+    const directLifecycle = WorkspaceLifecycleMutationSchema.safeParse(request.body)
+    const namedLifecycle = typeof requestBody?.mutation === "string"
+      && requestBody.mutation.startsWith("workspace.")
+      ? WorkspaceLifecycleMutationSchema.safeParse(requestBody.request)
+      : undefined
+    const lifecycle = directLifecycle.success
+      ? directLifecycle.data
+      : namedLifecycle?.success && namedLifecycle.data.kind === requestBody?.mutation
+        ? namedLifecycle.data
+        : undefined
+    const lifecycleIntent = directLifecycle.success
+      || (typeof requestBody?.mutation === "string" && [
+        "workspace.archive", "workspace.unarchive", "workspace.remove", "workspace.force-remove",
+      ].includes(requestBody.mutation))
+    if (lifecycleIntent) {
+      if (!lifecycle) throw coded("Invalid workspace lifecycle request", "invalid_request")
+      if (!this.workspaceLifecycle) throw coded("Workspace lifecycle is unavailable", "capability_unavailable")
+      const operation = await this.workspaceLifecycle.submit({
+        clientId: context.principalId,
+        idempotencyKey: request.idempotency_key,
+        mutation: lifecycle,
+      })
+      return context.mode === "browser" ? projectWebOperation(operation) : operation
+    }
     const web = WebOperationMutationSchema.safeParse(request.body)
     let mutation: string
     let parsedRequest: unknown
@@ -405,7 +445,7 @@ export class SecureServiceRouter implements SecureSessionHandler {
         execution = adapter({ workspace: selected.workspace.name })
       }
     } else {
-      const body = request.body as { mutation?: unknown; request?: unknown }
+      const body = requestBody
       if (typeof body?.mutation !== "string") throw coded("Invalid operation request", "invalid_request")
       mutation = body.mutation
       if (mutation === "workspace.create") {

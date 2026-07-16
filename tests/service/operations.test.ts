@@ -1,4 +1,4 @@
-import { describe, expect, test } from "@test/api"
+import { afterEach, describe, expect, mock, test } from "@test/api"
 import type { Operation } from "../../packages/protocol/src/service"
 import type { SnapshotAdapter } from "../../packages/service/src/snapshot-adapter"
 import { SecureServiceRouter } from "../../packages/service/src/secure/router"
@@ -36,6 +36,8 @@ function snapshot(): SnapshotAdapter {
     currentRevision: async () => "7",
   } as unknown as SnapshotAdapter
 }
+
+afterEach(() => mock.restore())
 
 describe("secure service lifecycle", () => {
   test("idle lifecycle suppresses exit while clients or operations are active", async () => {
@@ -106,5 +108,41 @@ describe("secure service lifecycle", () => {
     expect(composed.terminalAdmission).toBe(composed.admission)
     expect(composed.coordinatorAdmission).toBe(composed.admission)
     expect(composed.coordinatorSnapshot).toBe(composed.snapshot)
+  })
+
+  test("trusted lifecycle submission never replays destructive intent after transport failure", async () => {
+    const requests: string[] = []
+    const rpc = {
+      closed: new Promise<void>(() => {}),
+      observeEvents: () => () => {},
+      close: async () => {},
+      request: async (method: string) => {
+        requests.push(method)
+        if (method === "events.cursor") return { cursor: "0" }
+        if (method === "operation.submit") throw Object.assign(new Error("connection lost after submit"), { code: "conflict" })
+        throw new Error(`Unexpected request ${method}`)
+      },
+    }
+    mock.module("@git-stacks/client", () => ({
+      authenticateSecureCarrier: async () => ({ rpc }),
+      ensureSharedEventSubscription: async () => {},
+    }))
+    mock.module("../../packages/service/src/main", () => ({
+      ensureManagedServiceProcess: async () => ({
+        service_id: "22222222-2222-4222-8222-222222222222",
+        listener_epoch: "33333333-3333-4333-8333-333333333333",
+        tui_launch: { token: "launch-token" },
+        local_tls: {},
+      }),
+    }))
+    mock.module("../../packages/service/src/transport/local-tls", () => ({ connectLocalTls: async () => ({}) }))
+
+    const { runWorkspaceLifecycleMutation } = await import("../../packages/service/src/policy/client")
+    await expect(runWorkspaceLifecycleMutation({
+      kind: "workspace.remove",
+      workspace_id: WORKSPACE_ID,
+      expected_revision: "7",
+    })).rejects.toMatchObject({ code: "conflict" })
+    expect(requests.filter((method) => method === "operation.submit")).toHaveLength(1)
   })
 })

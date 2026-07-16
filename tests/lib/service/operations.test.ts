@@ -10,7 +10,7 @@ import {
 } from "../../../packages/service/src/policy/operations"
 import type { Operation, ServiceEvent } from "../../../packages/protocol/src/service"
 import { WorkspaceLifecycleMutationSchema } from "../../../packages/protocol/src/service"
-import { CoreMutationSchemas } from "../../../packages/service/src/policy/core-contract"
+import { WorkspaceLifecycleMutationSchemas } from "../../../packages/service/src/policy/core-contract"
 
 const roots: string[] = []
 async function root(): Promise<string> {
@@ -179,13 +179,13 @@ describe("workspace lifecycle operation contract", () => {
     const archive = { kind: "workspace.archive", workspace_id: id, expected_revision: "7" } as const
     const forceRemove = { ...archive, kind: "workspace.force-remove", confirmation_name: "demo" } as const
 
-    expect(CoreMutationSchemas["workspace.archive"].parse(archive)).toEqual(
+    expect(WorkspaceLifecycleMutationSchemas["workspace.archive"].parse(archive)).toEqual(
       WorkspaceLifecycleMutationSchema.parse(archive),
     )
-    expect(CoreMutationSchemas["workspace.force-remove"].parse(forceRemove)).toEqual(
+    expect(WorkspaceLifecycleMutationSchemas["workspace.force-remove"].parse(forceRemove)).toEqual(
       WorkspaceLifecycleMutationSchema.parse(forceRemove),
     )
-    expect(CoreMutationSchemas["workspace.archive"].safeParse({ ...archive, confirmation_name: "demo" }).success).toBe(false)
-    expect(CoreMutationSchemas["workspace.force-remove"].safeParse(archive).success).toBe(false)
+    expect(WorkspaceLifecycleMutationSchemas["workspace.archive"].safeParse({ ...archive, confirmation_name: "demo" }).success).toBe(false)
+    expect(WorkspaceLifecycleMutationSchemas["workspace.force-remove"].safeParse(archive).success).toBe(false)
   })
 })

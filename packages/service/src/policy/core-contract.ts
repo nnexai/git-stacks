@@ -6,7 +6,14 @@ import {
   TemplateSchema,
   WorkspaceSchema,
 } from "@git-stacks/core/config"
-import { ArchivedWorkspaceSummarySchema, RevisionSchema, TimestampSchema, WorkspaceSnapshotSchema } from "@git-stacks/protocol"
+import {
+  ArchivedWorkspaceSummarySchema,
+  RevisionSchema,
+  TimestampSchema,
+  WorkspaceLifecycleMutationSchema,
+  WorkspaceSnapshotSchema,
+  type WorkspaceLifecycleMutation,
+} from "@git-stacks/protocol"
 
 /**
  * Trusted read model consumed by first-party machine-local clients.
@@ -83,6 +90,20 @@ export const TemplateCloneRequestSchema = z.strictObject({
 })
 export const TemplateDeleteRequestSchema = z.strictObject({ template: z.string().min(1) })
 export const RepositoryDeleteRequestSchema = z.strictObject({ repository: z.string().min(1) })
+
+function lifecycleMutationSchema<Kind extends WorkspaceLifecycleMutation["kind"]>(kind: Kind) {
+  return WorkspaceLifecycleMutationSchema.refine(
+    (mutation): mutation is Extract<WorkspaceLifecycleMutation, { kind: Kind }> => mutation.kind === kind,
+    { message: `Expected ${kind} lifecycle mutation` },
+  )
+}
+
+export const WorkspaceLifecycleMutationSchemas = {
+  "workspace.archive": lifecycleMutationSchema("workspace.archive"),
+  "workspace.unarchive": lifecycleMutationSchema("workspace.unarchive"),
+  "workspace.remove": lifecycleMutationSchema("workspace.remove"),
+  "workspace.force-remove": lifecycleMutationSchema("workspace.force-remove"),
+} as const
 
 export const CoreMutationSchemas = {
   "workspace.open": WorkspaceMutationRequestSchema,

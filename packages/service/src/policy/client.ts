@@ -15,10 +15,12 @@ import {
   SignalSchema,
   WorkspaceCreationCatalogSchema,
   WorkspaceCreationRequestSchema,
+  WorkspaceLifecycleMutationSchema,
   type Operation,
   type Signal,
   type WorkspaceCreationCatalog,
   type WorkspaceCreationRequest,
+  type WorkspaceLifecycleMutation,
   ServiceEventSchema,
   type ServiceEvent,
 } from "@git-stacks/protocol"
@@ -79,15 +81,17 @@ async function authenticatedService(): Promise<SecureRpcClient> {
 async function secureRequest<T>(
   method: string,
   body?: unknown,
-  options: { signal?: AbortSignal; scope?: SecureScope; idempotencyKey?: string } = {},
+  options: { signal?: AbortSignal; scope?: SecureScope; idempotencyKey?: string; retry?: boolean } = {},
 ): Promise<T> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  const { retry = true, ...requestOptions } = options
+  const attempts = retry ? 2 : 1
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const rpc = await authenticatedService()
-      return await rpc.request<T>(method, body, options)
+      return await rpc.request<T>(method, body, requestOptions)
     } catch (error) {
       cachedAccess = undefined
-      if (attempt === 1 || options.signal?.aborted) throw error
+      if (attempt === attempts - 1 || options.signal?.aborted) throw error
     }
   }
   throw new Error("git-stacks secure service request did not produce a response")
@@ -209,7 +213,7 @@ export async function fetchEventCursor(signal?: AbortSignal): Promise<string> {
 async function submit(mutation: string, request: unknown, signal?: AbortSignal): Promise<Operation> {
   const key = `official-${crypto.randomUUID()}`
   return OperationSchema.parse(await secureRequest("operation.submit", { mutation, request }, {
-    signal, scope: "operation.write", idempotencyKey: key,
+    signal, scope: "operation.write", idempotencyKey: key, retry: false,
   }))
 }
 
@@ -302,7 +306,13 @@ async function submitAndStreamOperation(
 
 function assertSucceeded(operation: Operation): Operation & { state: "succeeded" } {
   if (operation.state === "succeeded") return operation
-  if (operation.state === "failed" || operation.state === "cancelled") throw Object.assign(new Error(operation.error.message), { code: operation.error.code, status: 409 })
+  if (operation.state === "failed" || operation.state === "cancelled") {
+    throw Object.assign(new Error(operation.error.message), {
+      code: operation.error.code,
+      status: 409,
+      ...(operation.lifecycle ? { lifecycle: operation.lifecycle } : {}),
+    })
+  }
   throw new Error("Operation did not reach a terminal state")
 }
 
@@ -325,6 +335,17 @@ export async function createWorkspaceThroughService(
   const parsed = WorkspaceCreationRequestSchema.parse(request)
   return assertSucceeded(await submitAndStreamOperation(
     (signal) => submit("workspace.create", parsed, signal),
+    options,
+  ))
+}
+
+export async function runWorkspaceLifecycleMutation(
+  request: WorkspaceLifecycleMutation,
+  options: { signal?: AbortSignal; onOperation?: OperationObserver; pollMs?: number } = {},
+): Promise<Operation & { state: "succeeded" }> {
+  const parsed = WorkspaceLifecycleMutationSchema.parse(request)
+  return assertSucceeded(await submitAndStreamOperation(
+    (signal) => submit(parsed.kind, parsed, signal),
     options,
   ))
 }

@@ -21,6 +21,10 @@ import { getWorkspaceFileStatusView } from "@git-stacks/core/workspace-file-stat
 import { connectLocalTls } from "./transport/local-tls.js"
 import { readRemoteExposure } from "./security/exposure.js"
 import { readProtectedFile } from "./security/protected-store.js"
+import { createWorkspaceLifecycleAdmission, type WorkspaceLifecycleAdmission } from "./policy/workspace-lifecycle-admission"
+import { createWorkspaceLifecycleCoordinator } from "./policy/workspace-lifecycle"
+import type { SnapshotAdapter } from "./snapshot-adapter"
+import type { WebTerminalManager } from "./web/terminal-manager"
 
 export const SERVICE_IDLE_MS = 5 * 60 * 1_000
 export const DEFAULT_OFFICIAL_CLIENT_ID = "official-client"
@@ -175,6 +179,28 @@ export interface ManagedServiceOptions {
   snapshot?: import("./snapshot-adapter").SnapshotAdapter & { currentRevision(): Promise<string> }
   workspaceCreationCatalog?: () => WorkspaceCreationCatalog | Promise<WorkspaceCreationCatalog>
   workspaceCreate?: WorkspaceCreateMutation
+}
+
+export function createWorkspaceLifecycleRuntimeComposition(input: {
+  snapshot: SnapshotAdapter & { buildCatalog: NonNullable<SnapshotAdapter["buildCatalog"]> }
+  operations: OperationRegistry
+  createAdmission?: () => WorkspaceLifecycleAdmission
+}) {
+  const admission = input.createAdmission?.() ?? createWorkspaceLifecycleAdmission()
+  const createCoordinator = (terminals: WebTerminalManager) => createWorkspaceLifecycleCoordinator({
+    admission,
+    terminals,
+    snapshot: input.snapshot,
+    operations: input.operations,
+  })
+  return {
+    admission,
+    createCoordinator,
+    snapshot: input.snapshot,
+    terminalAdmission: admission,
+    coordinatorAdmission: admission,
+    coordinatorSnapshot: input.snapshot,
+  }
 }
 
 export interface ManagedService {
@@ -391,6 +417,12 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       const event = await journal.appendSignalDismissal(dismissal)
       broker.publish(event)
     }
+    const workspaceLifecycle = snapshot.buildCatalog
+      ? createWorkspaceLifecycleRuntimeComposition({
+          snapshot: snapshot as SnapshotAdapter & { buildCatalog: NonNullable<SnapshotAdapter["buildCatalog"]> },
+          operations,
+        })
+      : undefined
     const workspaceCreationCatalog = options.workspaceCreationCatalog ?? (() => ({ ...getWorkspaceCreationCatalog(), client_model: CLIENT_MODEL_LIMITS }))
     let descriptor: ServiceDescriptor | undefined
     const writeRotatedLaunch = (mode: "browser" | "tui", launch: import("./security/session-authority.js").LaunchToken) => {
@@ -424,6 +456,10 @@ export async function startManagedService(options: ManagedServiceOptions = {}): 
       workspaceCreate: options.workspaceCreate ?? mutationAdapters["workspace.create"],
       workspaceCreationCatalog,
       publishSignal,
+      ...(workspaceLifecycle ? {
+        workspaceLifecycleAdmission: workspaceLifecycle.admission,
+        createWorkspaceLifecycle: workspaceLifecycle.createCoordinator,
+      } : {}),
       dismissSignal,
       signalProjection: () => journal.signalProjection(),
       eventCursor: () => journal.highWaterCursor(),
