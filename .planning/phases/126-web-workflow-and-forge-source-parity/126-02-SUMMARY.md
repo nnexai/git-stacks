@@ -104,6 +104,8 @@ status: complete
 6. **Task 3 GREEN: Immutable source preparation** - `ac420452` (feat)
 7. **Security hardening: Provider identity and cleanup failures** - `00e37025` (fix)
 8. **Legacy supported-source migration to the resolver** - `eed751bb` (fix)
+9. **Review RED: Adversarial provider/matching/routing coverage** - `845bac4b` (test)
+10. **Review GREEN: Fail-closed forge source authority** - `451690de` (fix)
 
 ## Files Created/Modified
 
@@ -148,9 +150,29 @@ status: complete
 - **Verification:** Legacy-entrypoint test proves provider resolution and the real fork URL are used; CLI typecheck passes.
 - **Committed in:** `eed751bb`
 
+**4. [Review] Fail closed on explicit metadata disagreement**
+- **Issue:** Registry entries with explicit forge metadata could disagree on provider, repository, or host and still fall through to matching remote inference.
+- **Fix:** Explicit metadata now owns the decision for that entry; any disagreement rejects it without consulting remotes.
+- **Verification:** Provider, repository, and host disagreement fixtures all return `repo_not_matched` despite matching remote URLs.
+
+**5. [Review] Accept safe GitLab head authority before diff refs populate**
+- **Issue:** Open GitLab merge requests were rejected when optional `diff_refs` were absent, null, or empty.
+- **Fix:** The documented top-level `sha` is the required head SHA; a populated `diff_refs.head_sha` is a consistency check, while target SHA remains absent rather than being invented when `base_sha` is unavailable.
+- **Verification:** Missing, null, and empty diff-ref fixtures resolve with the full top-level head SHA.
+
+**6. [Review] Filter mixed template modes to eligible worktrees**
+- **Issue:** One matching trunk/dir template entry rejected otherwise valid worktree candidates.
+- **Fix:** Matching now returns only eligible worktree candidates and reports `not_worktree_mode` only when none exist or the registry entry itself is directory-backed.
+- **Verification:** A mixed trunk/worktree fixture selects only the worktree template.
+
+**7. [Review] Route configured GitHub Enterprise pulls authoritatively**
+- **Issue:** The legacy parser classified every non-github.com `/pull/` URL as Gitea before configured GitHub hosts could reach the resolver.
+- **Fix:** Legacy source preparation supplies registry-derived host configuration to URL parsing, so configured GitHub Enterprise pulls use provider resolution while existing Gitea behavior remains unchanged.
+- **Verification:** A configured enterprise pull fixture invokes `resolveForgeChangeSource()` and never fetches from `origin`.
+
 ---
 
-**Total deviations:** 3 auto-fixed (2 missing critical, 1 bug).
+**Total deviations:** 3 auto-fixed (2 missing critical, 1 bug) plus 4 independent review findings resolved.
 **Impact on plan:** All changes strengthen the planned trust boundary and rollback guarantee without adding client or protocol authority.
 
 ## Issues Encountered
@@ -163,8 +185,7 @@ None - provider authentication is intentionally exercised through injected tests
 
 ## Verification
 
-- `./node_modules/.bin/vitest run tests/lib/workspace-source.test.ts tests/lib/forge-source-resolver.test.ts` - 2 files, 41 tests passed on the final implementation.
-- Focused legacy parser plus resolver/source run - 3 files, 47 tests passed.
+- `./node_modules/.bin/vitest run tests/lib/workspace-source.test.ts tests/lib/forge-source-resolver.test.ts tests/lib/integrations/forge-source.test.ts` - 3 files, 55 tests passed after review repairs.
 - `npm run typecheck --workspace @git-stacks/core` - passed.
 - `npm run typecheck --workspace @git-stacks/cli` - passed.
 - `npm run test:deps` - package architecture and cycles passed.
