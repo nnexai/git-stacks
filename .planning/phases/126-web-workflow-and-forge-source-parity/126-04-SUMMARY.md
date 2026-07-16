@@ -2,7 +2,7 @@
 phase: 126-web-workflow-and-forge-source-parity
 plan: "04"
 subsystem: service-security
-tags: [web-projection, forge-review, opaque-tokens, toctou, operation-authority]
+tags: [web-projection, forge-review, opaque-tokens, toctou, operation-authority, process-lifetime]
 requires:
   - phase: 126-web-workflow-and-forge-source-parity
     provides: strict web protocol contracts, SHA-safe private-ref preparation, and canonical service action/operation authority from Plans 01-03
@@ -11,6 +11,7 @@ provides:
   - Principal/revision/source/body/idempotency-bound 256-bit expiring review-token authority
   - Submit-time catalog/provider revalidation, full-SHA verification, normal workspace creation, and private-ref cleanup
   - Startup recovery for interrupted reviewed-source refs before the service accepts new work
+  - Live-process ownership guard that prevents replacement startup and ref GC when an existing service is temporarily unreachable
 affects: [126-05, 126-06, 126-07, 126-08, 127-live-web-tui-uat]
 tech-stack:
   added: []
@@ -30,6 +31,7 @@ key-decisions:
   - "A review token is an expiring server-side capability bound to one principal, canonical source, catalog revision, canonical draft body, and idempotency key."
   - "Reviewed creation is non-cancellable and private-ref preparation starts only inside the durably registered operation; cleanup remains pending until deletion succeeds."
   - "Only explicitly correctable pre-commit draft failures release the token body binding; accepted/unsafe paths remain one-shot."
+  - "An unreachable descriptor is stale only when its recorded process is dead; a live owner fails discovery and startup closed until it is stopped or becomes reachable."
 patterns-established:
   - "Provider and system failures cross the client boundary only as fixed typed code, recovery, and message tuples."
   - "Reviewed source authority rechecks current catalog and provider identity, then delegates SHA verification and creation to existing core seams."
@@ -121,7 +123,7 @@ status: complete
 - **Started:** 2026-07-16T19:59:17+02:00
 - **Completed:** 2026-07-16T20:20:46+02:00
 - **Tasks:** 3
-- **Files modified:** 21 in the independent review repairs, in addition to the original Plan 04 implementation
+- **Files modified:** 22 in the independent review repairs, in addition to the original Plan 04 implementation
 
 ## Accomplishments
 
@@ -130,6 +132,7 @@ status: complete
 - Revalidated current template/repository membership and provider identity, verified the fetched private ref against the immutable full head SHA, then invoked normal workspace creation with idempotent cleanup on all exits.
 - Closed the independent security review by blocking raw browser snapshots, deferring Git refs until durable registration, enforcing HTTPS/validated SSH fetches, preserving strict forge recovery details, and making correctable review retries safe.
 - Closed the residual restart window by settling interrupted operations first, then garbage-collecting only reviewed-source private refs across authoritative Git repositories before the service starts accepting work.
+- Guarded that restart recovery with process-lifetime ownership: a live but unreachable existing service now blocks discovery and replacement startup before descriptor removal, operation recovery, private-ref GC, listener binding, or publication.
 
 ## Task Commits
 
@@ -141,16 +144,19 @@ status: complete
 6. **Independent review: authoritative CLI provider fixtures** - `a50f2cb1` (regression repair)
 7. **Residual review: restart cleanup and runtime retry coverage** - `97a59f2c` (RED)
 8. **Residual review: reviewed-ref recovery and exact runtime binding release** - `aa5eedd7` (GREEN)
+9. **Final residual: live unreachable service ownership coverage** - `193c7e84` (RED)
+10. **Final residual: fail-closed service process lifetime guard** - `1b6645fc` (GREEN)
 
 ## Files Created/Modified
 
 - `packages/service/src/policy/forge-source-review.ts` - Trusted review-token store, safe resolve projection, atomic reservation, provider/catalog recheck, SHA-safe source admission, and cleanup.
 - `packages/service/src/web/projection.ts` - Fixed allowlist projections for actions, notes, files, and operation state.
 - `packages/service/src/secure/router.ts` - Strict scoped workflow reads/mutations, forge resolve, reviewed create admission, and registration-failure cleanup.
-- `packages/service/src/main.ts` - Authoritative notes, file-status, catalog, and forge-review runtime composition.
+- `packages/service/src/main.ts` - Authoritative notes, file-status, catalog, forge-review runtime composition, and process-lifetime-safe startup discovery.
 - `tests/service/forge-source-review.test.ts` - Entropy, expiry, replay, revision, atomic reservation, provider movement, SHA-preparation failure, creation, and cleanup coverage.
 - `tests/service/web-safe-detail.test.ts` - POSIX/Windows path, credential, clone/fetch, argv/output, environment, and raw-error canary coverage.
 - `tests/service/web-workflow-authority.test.ts` - Route scope, strict-body, ownership, notes/file lookup, cancellation, principal binding, and reviewed registration coverage.
+- `tests/service/managed-service-process.test.ts` - Healthy reuse, dead-PID replacement, and live-unreachable fail-closed startup coverage.
 - `packages/protocol/src/secure.ts`, `packages/protocol/src/web.ts`, and `packages/service/src/security/session-authority.ts` - Strict union of shortcut and forge transport recovery details, including durable browser operation summaries.
 - `packages/core/src/workspace-source.ts` - HTTPS/validated-SSH fetch admission and retry-safe private-ref deletion.
 - `packages/core/src/git.ts` - Checked ref deletion and fixed-error ref enumeration for the reserved reviewed-source namespace.
@@ -176,6 +182,7 @@ status: complete
 8. Startup recovery marks interrupted operations failed before enumerating authoritative Git repositories, skips directory-only entries, and deletes only refs under the constant `refs/git-stacks/review/` prefix. Listing or deletion failure prevents runtime startup with a fixed safe error.
 9. An execution-time `branch_conflict` keeps its exact token/body/admission binding until private-ref cleanup succeeds. Once cleanup completes, only that matching binding is released so an edited draft can retry; cleanup failure keeps the retry blocked, while `source_changed` and other unsafe paths remain consumed.
 10. Durable browser operation summaries retain the same strict typed forge reason/recovery/context detail as direct failures, allowing later clients to offer `change_branch` after an accepted operation fails without exposing arbitrary fields.
+11. Descriptor probing now distinguishes a dead stale PID from a live unreachable owner. Dead descriptors retain normal replacement recovery, healthy descriptors are reused, and live unreachable descriptors return the fixed `service_unreachable` stop-and-retry error without exposing the raw probe failure or starting recovery/runtime side effects.
 
 ## Deviations from Plan
 
@@ -200,7 +207,7 @@ None - existing provider CLI authentication and configured forge metadata remain
 
 ## Self-Check: PASSED
 
-- Plan 04 plus source/resolver/operation/protocol/session/router/restart regression matrix passed: 18 files, 175 tests.
+- Plan 04 plus service startup/source/resolver/operation/protocol/session/router/restart regression matrix passed: 19 files, 184 tests.
 - Full Node architecture/conformance/secure-runtime matrix passed: 46 tests.
 - Core, protocol, and service typechecks passed; package architecture/dependency cycles passed.
 - Full package build and `git diff --check` passed.
