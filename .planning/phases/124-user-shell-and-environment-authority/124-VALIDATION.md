@@ -44,7 +44,7 @@ This probe is inventory only; it is not implementation evidence.
 - **After each core/service integration task:** run the focused integration command plus `npm run test:deps`.
 - **After local-launcher/TUI changes:** run the TUI command and `tests/service/managed-service-process.test.ts` together.
 - **After each plan wave:** run every Phase 124 focused command; no three consecutive tasks may rely only on typecheck/static inspection.
-- **Before phase verification:** the full gate and both hosted OS jobs must be green, with every supported shell executed rather than skipped.
+- **Before Phase 124 local verification:** focused/full local gates must be green, and fail-on-skip Linux/macOS jobs plus their machine-readable receipt contract must be implemented and architecture-tested. Actual green receipts from both hosted OS jobs are durable **Phase 127 milestone-end pre-tag blockers**; Phase 124 must not claim them from a local run.
 - **Maximum focused feedback target:** 120 seconds; real SSH-agent/process-tree fixture may run separately but must remain under the test runner timeout.
 
 ---
@@ -87,8 +87,8 @@ Wave numbers are validation dependencies; the planner may split implementation p
 | **2 — Core command/hook fidelity** | Lifecycle/workspace-command/CLI tests fail on hard-coded `/bin/sh`, concatenated steps, precedence, and process-tree cleanup. | User-authored call sites delegate; separate steps, cwd/env, non-zero stop, TERM/KILL cleanup pass. | Focused core/CLI suite green; static user-shell scan has only documented deterministic exceptions. |
 | **3 — Volatile local refresh authority** | Local refresh replacement/clear, same-user scope, remote/browser denial, non-disclosure, and new-process-only cases fail. | Strict bounded protocol/router/client context and volatile service memory make cases green. | SHELL-04/05 contract and security tests green; raw sentinels absent from serialized/persisted outputs. |
 | **4 — PTY and live service integration** | PTY shell mode, refreshed PATH/socket, wrapper PATH, existing-process retention, startup diagnostics, and cancellation fixtures fail. | Snapshot launch resolution and terminal manager consume shared adapter/effective launch context. | Service/PTY/managed-service/TUI bootstrap focused commands green. |
-| **5 — Hosted shells and host parity** | Required-shell mode intentionally fails when any shell or fixture is skipped. | CI installs/verifies Bash/zsh/fish and runs real profile/SSH/process-tree fixtures on Linux and macOS. | Every shell × host required cell emits a green evidence record; zero skips. |
-| **6 — Full regression and closure** | Run architecture/full gates to catch internal-process scope creep and package drift. | Repair tests/implementation within plan scope only. | `npm test`, typecheck, dependency, architecture, and verify gates green; validation receipt attached to phase summary. |
+| **5 — Hosted shells and host parity** | Required-shell mode intentionally fails when any shell or fixture is skipped. | CI installs/verifies Bash/zsh/fish, runs real profile/SSH/process-tree fixtures on Linux and macOS, and uploads a machine-readable receipt. | Workflow/receipt architecture tests pass locally; actual zero-skip Linux/macOS receipts remain Phase 127 pre-tag blockers. |
+| **6 — Full regression and closure** | Run architecture/full gates to catch internal-process scope creep and package drift. | Repair tests/implementation within plan scope only. | `npm test`, typecheck, dependency, architecture, and verify gates green; local validation receipt attached to phase summary without claiming hosted execution. |
 
 ### Wave 0 Required Files
 
@@ -249,14 +249,14 @@ An assertion showing implementation behavior violates the locked contract is a *
 
 - [ ] Every SHELL-01..07 row has at least one RED behavioral test before implementation.
 - [ ] RED failures are behavioral, not missing-import/fixture syntax failures.
-- [ ] Every supported shell executes required fixtures on Linux and macOS with zero hosted skips.
+- [ ] Phase 127 pre-tag handoff records that every supported shell executed required fixtures on Linux and macOS with zero hosted skips.
 - [ ] Real alias, function, nvm-style PATH, two-agent rotation, PTY, non-PTY, and process-tree cases are green.
 - [ ] Exact command argument and separate-step assertions are green.
 - [ ] Browser/remote denial and persistence/log non-disclosure sentinels are green.
 - [ ] Initialization timeout is bounded while user commands have no new runtime timeout.
 - [ ] Internal deterministic process paths remain outside user-shell initialization.
 - [ ] Focused, TUI, Node/conformance, full, type, dependency, architecture, and verify gates are green.
-- [ ] Hosted matrix receipts are attached to the phase summary before verification.
+- [ ] Hosted matrix receipt schema/upload is verified in Phase 124; actual Linux/macOS receipts are attached as blocking Phase 127 pre-tag evidence.
 - [ ] No manual-only claim substitutes for an automatable shell/service behavior.
 
 **Approval:** validation strategy is plan-ready; all behavioral evidence remains pending implementation and RED/GREEN execution.
