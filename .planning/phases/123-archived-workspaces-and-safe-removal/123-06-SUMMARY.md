@@ -27,6 +27,8 @@ key-files:
     - packages/web/src/app.css
     - tests/service/web-projection.test.ts
     - tests/service/web-presentation.test.ts
+    - tests/service-node/secure-contract-runtime.test.mjs
+    - tests/service-node/secure-remote-runtime.test.mjs
 
 key-decisions:
   - "Browser lifecycle submission is attempted once; only the returned durable operation ID is observed afterward."
@@ -49,6 +51,12 @@ coverage:
         status: pass
       - kind: unit
         ref: "tests/service/web-projection.test.ts#allowlists operation progress, result, and error fields"
+        status: pass
+      - kind: integration
+        ref: "tests/service-node/secure-contract-runtime.test.mjs#secure routing preserves catalog, idempotent operations, ownership, events, and signals"
+        status: pass
+      - kind: integration
+        ref: "tests/service-node/secure-remote-runtime.test.mjs#a paired helper relays an authenticated target session and rejects a wrong pin"
         status: pass
     human_judgment: false
   - id: D2
@@ -100,7 +108,7 @@ status: complete
 - **Started:** 2026-07-16T07:09:00Z
 - **Completed:** 2026-07-16T07:17:45Z
 - **Tasks:** 3
-- **Files modified:** 6
+- **Files modified:** 8
 
 ## Accomplishments
 
@@ -117,6 +125,8 @@ Each task was committed atomically:
 2. **Task 2: Project bounded lifecycle state and authoritative active-only signals** - `61c5f128` (feat)
 3. **Task 3: Implement web archive, remove, force, and replacement reconciliation flows** - `5dcb42ea` (feat)
 
+**Post-merge integration repair:** `ec71a6c0` (test)
+
 ## Verification
 
 - RED reached the exact `PHASE123_RED web lifecycle contract` sentinel through missing behavior, with no import, syntax, fixture, or environment failure.
@@ -124,6 +134,8 @@ Each task was committed atomically:
 - Workspace typecheck passes for protocol, client, core, CLI, service, web, and TUI.
 - Package dependency/cycle gate reports `Package architecture: OK`.
 - Production browser assets build with `npm run web:build`.
+- Focused secure local/remote runtime tests pass 3/3 after their signal targets were established in the authoritative active catalog.
+- Full `npm test` passes 136 Vitest files / 1787 tests, all Node architecture/conformance/core/CLI/service runtime tests, and the complete OpenTUI matrix.
 - Automated/static evidence does not claim live browser focus, pointer, keyboard, modal, or terminal-rendering approval; that checklist remains at the Phase 127 milestone-end boundary before release side effects.
 
 ## Files Created/Modified
@@ -134,6 +146,8 @@ Each task was committed atomically:
 - `packages/web/src/app.css` - Existing-token styling for lifecycle inventory, blockers, archive rows, actions, and Undo toast.
 - `tests/service/web-projection.test.ts` - Exact-shape, encoded-negative, lifecycle, archive-empty, and signal-filter coverage.
 - `tests/service/web-presentation.test.ts` - Static browser lifecycle, confirmation, successor, no-replay, and disposal contract.
+- `tests/service-node/secure-contract-runtime.test.mjs` - Activates the created workspace before publishing its browser signal.
+- `tests/service-node/secure-remote-runtime.test.mjs` - Exposes the remote signal/terminal target through authoritative snapshot state.
 
 ## Decisions Made
 
@@ -153,13 +167,22 @@ Each task was committed atomically:
 - **Verification:** Focused projection and router operation suites, workspace typecheck, dependency gate, and web build pass.
 - **Committed in:** `61c5f128`
 
+**2. [Rule 3 - Blocking Fixture Drift] Establish authoritative active workspaces in secure signal runtime fixtures**
+- **Found during:** Wave 6 post-merge `npm test`
+- **Issue:** Two secure runtime fixtures published signals for workspace IDs while their snapshot adapters returned no active workspaces. The new active-only projection correctly suppressed both signals, timing out the local event assertion and returning an empty remote signal list.
+- **Fix:** The local creation contract now adds its workspace to authoritative snapshot state when the create step completes. The remote runtime now exposes the same active workspace/repository used by its signal and terminal requests.
+- **Files modified:** `tests/service-node/secure-contract-runtime.test.mjs`, `tests/service-node/secure-remote-runtime.test.mjs`
+- **Verification:** Both focused Node files pass 3/3, and full `npm test` passes including the complete TUI matrix.
+- **Committed in:** `ec71a6c0`
+
 ---
 
-**Total deviations:** 1 auto-fixed (1 missing critical integration). **Impact:** Required to make the planned projection effective in the actual secure browser route; no new endpoint, authority, or product scope was added.
+**Total deviations:** 2 auto-fixed (1 missing critical integration, 1 blocking fixture drift). **Impact:** Production active-only filtering remains strict; the repair makes test fixtures obey the same catalog authority without weakening behavior or adding product scope.
 
 ## Issues Encountered
 
 - The pre-implementation projection accepted only active arrays, so the RED archive fixture failed at the intended behavior boundary. The catalog signature and route were updated together.
+- Post-merge Node fixtures assumed signals for nonexistent workspace IDs remained browser-visible. They now model active workspace authority explicitly.
 
 ## User Setup Required
 
@@ -173,8 +196,8 @@ None - no external service configuration required.
 
 ## Self-Check: PASSED
 
-- Task commits `71f48dc1`, `61c5f128`, and `5dcb42ea` exist in history.
-- All six modified source/test files exist.
+- Task commits `71f48dc1`, `61c5f128`, `5dcb42ea`, and repair `ec71a6c0` exist in history.
+- All eight modified source/test files exist.
 - All four coverage deliverables have current passing automated evidence.
 
 ---
